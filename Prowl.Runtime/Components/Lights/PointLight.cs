@@ -45,7 +45,7 @@ public class PointLight : Light
 
     public override LightType GetLightType() => LightType.Point;
 
-    public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
+    public override void RenderShadows(RenderPipeline pipeline, in ShadowFitView fitView, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
     {
         if (!DoCastShadows())
         {
@@ -123,7 +123,7 @@ public class PointLight : Light
             Graphics.Submit(cmd);
 
             // Store face data for shader
-            _shadowMatrices[faceIndex] = projection * view;
+            _shadowMatrices[faceIndex] = RenderPipeline.ToGLClipDepth(projection * view);
             _shadowFaceParams[faceIndex] = new Float4(viewportX, viewportY, res, 2f / res);
         }
     }

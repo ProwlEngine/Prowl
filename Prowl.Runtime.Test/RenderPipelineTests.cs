@@ -189,4 +189,34 @@ public class RenderPipelineTests
         Assert.False(camera.HasCustomProjectionMatrix);
         Assert.False(camera.HasCustomNonJitteredProjectionMatrix);
     }
+
+    private static Float3 ClipToNdc(Float4x4 clip, Float3 viewPos)
+    {
+        Float4 c = clip * new Float4(viewPos, 1f);
+        return new Float3(c.X, c.Y, c.Z) / c.W;
+    }
+
+    [Fact]
+    public void ToGLClipDepth_SpansWholeDepthRange()
+    {
+        const float near = 0.3f, far = 500f;
+        Float4x4[] projections =
+        [
+            Float4x4.CreatePerspectiveFov(1.2f, 1.6f, near, far),
+            Float4x4.CreateOrtho(20f, 12f, near, far),
+        ];
+
+        foreach (Float4x4 projection in projections)
+        {
+            Float4x4 gl = RenderPipeline.ToGLClipDepth(projection);
+
+            // OpenGL clips and maps depth over -1 to 1, so the near plane has to land on -1, not halfway
+            Assert.Equal(-1f, ClipToNdc(gl, new Float3(1f, 0.5f, near)).Z, 4);
+            Assert.Equal(1f, ClipToNdc(gl, new Float3(1f, 0.5f, far)).Z, 3);
+
+            Float3 mid = new(2f, -1f, 40f);
+            Assert.Equal(ClipToNdc(projection, mid).X, ClipToNdc(gl, mid).X, 5);
+            Assert.Equal(ClipToNdc(projection, mid).Y, ClipToNdc(gl, mid).Y, 5);
+        }
+    }
 }

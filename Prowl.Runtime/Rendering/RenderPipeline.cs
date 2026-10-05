@@ -126,6 +126,7 @@ public struct ForwardLightData
     public float ShadowDistance;
     public Float4x4[] CascadeShadowMatrices; // [4]
     public Float4[] CascadeAtlasParams;      // [4]
+    public Float4[] CascadeSpheres;          // [4] xyz = center, w = radius
 
     // Point shadow data (6 faces)
     public Float4x4[] PointShadowMatrices; // [6]
@@ -151,6 +152,101 @@ public interface IRenderableLight
     public ForwardLightData GetForwardLightData();
 }
 
+/// <summary>
+/// The view volume directional shadow cascades are fitted to: a frustum from <see cref="Origin"/> along
+/// <see cref="Forward"/>, made symmetric so the sphere around each slice keeps its size while the camera turns.
+/// </summary>
+public readonly struct ShadowFitView
+{
+    public readonly Float3 Origin;
+    public readonly Float3 Forward;
+    public readonly bool Orthographic;
+
+    /// <summary>Perspective: tangents of the half angles. Orthographic: half width and height.</summary>
+    public readonly float ExtentX, ExtentY;
+
+    /// <summary>Extra radius for eyes that sit away from <see cref="Origin"/>.</summary>
+    public readonly float Padding;
+
+    public readonly float Near;
+
+    public ShadowFitView(Float3 origin, Float3 forward, bool orthographic, float extentX, float extentY, float padding, float near)
+    {
+        Origin = origin;
+        Forward = forward;
+        Orthographic = orthographic;
+        ExtentX = extentX;
+        ExtentY = extentY;
+        Padding = padding;
+        Near = near;
+    }
+
+    /// <summary>The view of a camera at <paramref name="origin"/> looking through <paramref name="projection"/>.
+    /// An off center projection is widened to its larger side.</summary>
+    public static ShadowFitView FromProjection(Float3 origin, Quaternion rotation, Float4x4 projection, float near)
+    {
+        bool orthographic = projection.c3.W > 0.5f;
+        float offsetX = orthographic ? projection.c3.X : projection.c2.X;
+        float offsetY = orthographic ? projection.c3.Y : projection.c2.Y;
+        float extentX = (1f + MathF.Abs(offsetX)) / projection.c0.X;
+        float extentY = (1f + MathF.Abs(offsetY)) / projection.c1.Y;
+        return new ShadowFitView(origin, rotation * Float3.UnitZ, orthographic, extentX, extentY, 0f, near);
+    }
+
+    /// <summary>One view holding every eye of a head at <paramref name="origin"/>. Eye poses are relative to the
+    /// head, <paramref name="headToWorld"/> places them in the world.</summary>
+    public static ShadowFitView FromEyes(Float3 origin, Quaternion rotation, float near, ReadOnlySpan<XRView> eyes, Float4x4 headToWorld)
+    {
+        float extentX = 0f, extentY = 0f, padding = 0f;
+        foreach (XRView eye in eyes)
+        {
+            foreach (float x in (ReadOnlySpan<float>)[eye.TanLeft, eye.TanRight])
+            {
+                foreach (float y in (ReadOnlySpan<float>)[eye.TanDown, eye.TanUp])
+                {
+                    Float3 corner = eye.Rotation * new Float3(x, y, 1f);
+                    float depth = MathF.Max(corner.Z, 1e-3f);
+                    extentX = MathF.Max(extentX, MathF.Abs(corner.X / depth));
+                    extentY = MathF.Max(extentY, MathF.Abs(corner.Y / depth));
+                }
+            }
+            padding = MathF.Max(padding, Float3.Length(Float4x4.TransformPoint(eye.Position, headToWorld) - origin));
+        }
+        return new ShadowFitView(origin, rotation * Float3.UnitZ, false, extentX, extentY, padding, near);
+    }
+
+    /// <summary>The smallest sphere around the slice of the view between two depths. Its radius depends only on
+    /// the depths and the view's extents, never on where the camera points.</summary>
+    public void GetSliceSphere(float near, float far, out Float3 center, out float radius)
+    {
+        float centerDepth;
+        if (Orthographic)
+        {
+            centerDepth = (near + far) * 0.5f;
+            float halfDepth = (far - near) * 0.5f;
+            radius = MathF.Sqrt(halfDepth * halfDepth + ExtentX * ExtentX + ExtentY * ExtentY);
+        }
+        else
+        {
+            // k is the squared distance of a slice corner from the axis per unit of depth
+            float k = ExtentX * ExtentX + ExtentY * ExtentY;
+            centerDepth = (near + far) * (1f + k) * 0.5f;
+            if (centerDepth >= far)
+            {
+                centerDepth = far;
+                radius = far * MathF.Sqrt(k);
+            }
+            else
+            {
+                float toFar = far - centerDepth;
+                radius = MathF.Sqrt(toFar * toFar + far * far * k);
+            }
+        }
+        center = Origin + Forward * centerDepth;
+        radius += Padding;
+    }
+}
+
 public abstract class RenderPipeline : EngineObject
 {
     private static Shader? s_blitShader;
@@ -173,9 +269,8 @@ public abstract class RenderPipeline : EngineObject
 
         public Float3 CameraPosition = camera.ViewPosition;
 
-        /// <summary>World-space center for directional shadow cascades this render: the camera's
-        /// <see cref="Camera.ShadowFocus"/> position when set, otherwise <see cref="CameraPosition"/>.</summary>
-        public Float3 ShadowFocusPosition = camera.GetShadowFocusPosition();
+        /// <summary>The view directional cascades are fitted to. Stereo renders replace it with one covering both eyes.</summary>
+        public ShadowFitView ShadowView = ShadowFitView.FromProjection(camera.ViewPosition, camera.ViewRotation, camera.NonJitteredProjectionMatrix, camera.NearClipPlane);
 
         public Float3 CameraRight = camera.ViewRotation * Float3.UnitX;
         public Float3 CameraUp = Quaternion.Up(camera.ViewRotation);
@@ -456,13 +551,13 @@ public abstract class RenderPipeline : EngineObject
 
         // Previous-frame VP for motion vectors (jitter-free). Fall back to the current
         // non-jittered VP on the first frame so motion reads zero instead of garbage.
-        GlobalUniforms.SetPrevViewProj(css.HasPreviousViewProj
+        GlobalUniforms.SetPrevViewProj(ToGLClipDepth(css.HasPreviousViewProj
             ? css.PreviousViewProj
-            : css.NonJitteredProjection * css.View);
+            : css.NonJitteredProjection * css.View));
 
         // Current-frame VP without TAA jitter, so the prepass can compute motion vectors
         // jitter-free while still rasterizing with the jittered projection.
-        GlobalUniforms.SetMatrixVPNonJittered(css.NonJitteredProjection * css.View);
+        GlobalUniforms.SetMatrixVPNonJittered(ToGLClipDepth(css.NonJitteredProjection * css.View));
 
         // Setup Default Uniforms for this frame
         // Camera
@@ -481,8 +576,23 @@ public abstract class RenderPipeline : EngineObject
         GlobalUniforms.Upload();
     }
 
+    /// <summary>
+    /// Remaps clip depth from the 0 to w range Prowl's projections produce to the -w to w range OpenGL
+    /// clips and maps onto the depth buffer, so depth fills the whole buffer instead of its far half.
+    /// Every projection or view projection handed to the GPU goes through this, CPU side math stays as is.
+    /// </summary>
+    public static Float4x4 ToGLClipDepth(Float4x4 clip)
+    {
+        clip.c0.Z = 2f * clip.c0.Z - clip.c0.W;
+        clip.c1.Z = 2f * clip.c1.Z - clip.c1.W;
+        clip.c2.Z = 2f * clip.c2.Z - clip.c2.W;
+        clip.c3.Z = 2f * clip.c3.Z - clip.c3.W;
+        return clip;
+    }
+
     public void AssignCameraMatrices(Float4x4 view, Float4x4 projection)
     {
+        projection = ToGLClipDepth(projection);
         Float4x4 viewProj = projection * view;
 
         GlobalUniforms.SetMatrixV(view);

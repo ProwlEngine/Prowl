@@ -16,7 +16,6 @@ public class DirectionalLight : Light
         _512 = 512,
         _1024 = 1024,
         _2048 = 2048,
-        _4096 = 4096,
     }
 
     public enum CascadeCount : int
@@ -26,15 +25,22 @@ public class DirectionalLight : Light
         Four = 4,
     }
 
-    public Resolution ShadowResolution = Resolution._2048;
+    public Resolution ShadowResolution = Resolution._1024;
     public CascadeCount Cascades = CascadeCount.Two;
 
-    /// <summary>How far from the shadow focus point shadows reach, in world units. They fade out over the last tenth.</summary>
+    /// <summary>How far along the view shadows reach, in world units. They fade out over the last tenth.</summary>
     public float ShadowDistance = 50f;
+
+    // Blend between a logarithmic and an even spread of the cascade splits, the log side keeps the near slice short
+    private const float CascadeSplitLogBlend = 0.75f;
+
+    // Log splits from a tiny near plane would shrink the first cascade to a sliver
+    private const float MinSplitNear = 0.1f;
 
     // Cascade data (max 4 cascades)
     private Float4x4[] _cascadeShadowMatrices = new Float4x4[4];
     private Float4[] _cascadeAtlasParams = new Float4[4]; // xy = atlas pos, z = atlas size, w = cascade radius
+    private Float4[] _cascadeSpheres = new Float4[4]; // xyz = center, w = radius
     private int _activeCascades = 0;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
@@ -80,6 +86,16 @@ public class DirectionalLight : Light
 
     public override LightType GetLightType() => LightType.Directional;
 
+    /// <summary>View depth where the cascade <paramref name="index"/> ends, out of <paramref name="count"/>.</summary>
+    internal static float GetCascadeSplit(int index, int count, float near, float distance)
+    {
+        if (index >= count) return distance;
+        float t = index / (float)count;
+        float log = near * Maths.Pow(distance / near, t);
+        float even = near + (distance - near) * t;
+        return Maths.Lerp(even, log, CascadeSplitLogBlend);
+    }
+
     /// <summary>
     /// The cascade's view and projection: a box around the snapped focus point that holds every receiver
     /// within <paramref name="cascadeRadius"/> of it. Casters further toward the light than the box are
@@ -123,7 +139,7 @@ public class DirectionalLight : Light
         return frustum;
     }
 
-    public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
+    public override void RenderShadows(RenderPipeline pipeline, in ShadowFitView fitView, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
     {
         if (!DoCastShadows())
         {
@@ -136,7 +152,10 @@ public class DirectionalLight : Light
         int numCascades = (int)Cascades;
         _activeCascades = numCascades;
 
-        float cascadeInterval = Maths.Max(ShadowDistance, 0.01f) / numCascades;
+        float distance = Maths.Max(ShadowDistance, 0.01f);
+        float splitNear = Maths.Min(Maths.Max(fitView.Near, MinSplitNear), distance * 0.5f);
+        // Scenes saved with a larger size than the enum now offers still load that value
+        int res = Maths.Min((int)ShadowResolution, (int)Resolution._2048);
 
 
         // Light direction vectors
@@ -147,14 +166,10 @@ public class DirectionalLight : Light
         // Render each cascade
         for (int cascadeIndex = 0; cascadeIndex < numCascades; cascadeIndex++)
         {
-            float cascadeRadius = cascadeInterval * (cascadeIndex + 1);
-
-            // Get shadow resolution per cascade
-            int res = (int)ShadowResolution;
-            // Half resolution for each cascade beyond the first
-            if (cascadeIndex > 0)
-                res /= cascadeIndex + 1;
-
+            float sliceNear = cascadeIndex == 0 ? fitView.Near : GetCascadeSplit(cascadeIndex, numCascades, splitNear, distance);
+            float sliceFar = GetCascadeSplit(cascadeIndex + 1, numCascades, splitNear, distance);
+            fitView.GetSliceSphere(sliceNear, sliceFar, out Float3 cascadeCenter, out float cascadeRadius);
+            _cascadeSpheres[cascadeIndex] = new Float4(cascadeCenter, cascadeRadius);
 
             // Reserve space in shadow atlas for this cascade
             Int2? slot = ShadowAtlas.ReserveTiles(res, res, GetLightID() + cascadeIndex);
@@ -164,7 +179,7 @@ public class DirectionalLight : Light
                 int atlasX = slot.Value.X;
                 int atlasY = slot.Value.Y;
 
-                GetShadowMatrix(shadowFocusPosition, res, cascadeRadius, out Float4x4 view, out Float4x4 proj);
+                GetShadowMatrix(cascadeCenter, res, cascadeRadius, out Float4x4 view, out Float4x4 proj);
 
                 bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, GetCasterFrustum(view, proj), LayerMask.Everything);
 
@@ -184,7 +199,7 @@ public class DirectionalLight : Light
                 Graphics.Submit(cmd);
 
                 // Store cascade data for shader
-                _cascadeShadowMatrices[cascadeIndex] = proj * view;
+                _cascadeShadowMatrices[cascadeIndex] = RenderPipeline.ToGLClipDepth(proj * view);
                 _cascadeAtlasParams[cascadeIndex] = new Float4(atlasX, atlasY, res, cascadeRadius);
             }
             else
@@ -219,6 +234,7 @@ public class DirectionalLight : Light
             ShadowDistance = Maths.Max(ShadowDistance, 0.01f),
             CascadeShadowMatrices = _cascadeShadowMatrices,
             CascadeAtlasParams = _cascadeAtlasParams,
+            CascadeSpheres = _cascadeSpheres,
         };
     }
 }

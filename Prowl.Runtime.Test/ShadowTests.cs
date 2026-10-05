@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
 using Xunit;
@@ -160,5 +161,122 @@ public class ShadowTests : RuntimeTestBase
 
         light.CastShadows = false;
         Assert.False(light.GetForwardLightData().ShadowEnabled);
+    }
+
+    /// <summary>World space corners of a view slice, from the frustum tangents of a camera at origin.</summary>
+    private static Float3[] SliceCorners(Float3 origin, Quaternion rotation, float tanLeft, float tanRight, float tanDown, float tanUp, float near, float far)
+    {
+        var corners = new Float3[8];
+        int i = 0;
+        foreach (float depth in new[] { near, far })
+            foreach (float x in new[] { tanLeft, tanRight })
+                foreach (float y in new[] { tanDown, tanUp })
+                    corners[i++] = origin + rotation * new Float3(x * depth, y * depth, depth);
+        return corners;
+    }
+
+    private static void AssertInside(Float3[] points, Float3 center, float radius)
+    {
+        foreach (Float3 p in points)
+        {
+            float d = Float3.Length(p - center);
+            Assert.True(d <= radius + 1e-3f, $"Point {p} is {d} from the sphere center, radius {radius}.");
+        }
+    }
+
+    [Fact]
+    public void ShadowFitView_Perspective_SphereHoldsWholeSlice()
+    {
+        Quaternion rotation = Quaternion.FromEuler(new Float3(20f, 135f, 0f));
+        Float3 origin = new(3f, 2f, -5f);
+        Float4x4 projection = Float4x4.CreatePerspectiveFov(70f * Maths.Deg2Rad, 16f / 9f, 0.1f, 1000f);
+        ShadowFitView view = ShadowFitView.FromProjection(origin, rotation, projection, 0.1f);
+
+        float tanY = MathF.Tan(35f * Maths.Deg2Rad), tanX = tanY * 16f / 9f;
+        foreach ((float near, float far) in new[] { (0.1f, 4f), (4f, 15f), (15f, 50f) })
+        {
+            view.GetSliceSphere(near, far, out Float3 center, out float radius);
+            AssertInside(SliceCorners(origin, rotation, -tanX, tanX, -tanY, tanY, near, far), center, radius);
+        }
+    }
+
+    [Fact]
+    public void ShadowFitView_Orthographic_SphereHoldsWholeSlice()
+    {
+        Quaternion rotation = Quaternion.FromEuler(new Float3(-30f, 40f, 0f));
+        Float3 origin = new(-1f, 8f, 2f);
+        ShadowFitView view = ShadowFitView.FromProjection(origin, rotation, Float4x4.CreateOrtho(24f, 12f, 0.1f, 100f), 0.1f);
+
+        view.GetSliceSphere(5f, 30f, out Float3 center, out float radius);
+        var corners = new Float3[8];
+        int i = 0;
+        foreach (float depth in new[] { 5f, 30f })
+            foreach (float x in new[] { -12f, 12f })
+                foreach (float y in new[] { -6f, 6f })
+                    corners[i++] = origin + rotation * new Float3(x, y, depth);
+        AssertInside(corners, center, radius);
+    }
+
+    [Fact]
+    public void ShadowFitView_SphereRadius_DoesNotChangeAsTheCameraTurns()
+    {
+        Float4x4 projection = Float4x4.CreatePerspectiveFov(60f * Maths.Deg2Rad, 1.5f, 0.1f, 1000f);
+        ShadowFitView a = ShadowFitView.FromProjection(Float3.Zero, Quaternion.Identity, projection, 0.1f);
+        ShadowFitView b = ShadowFitView.FromProjection(new Float3(40f, 3f, 9f), Quaternion.FromEuler(new Float3(15f, 77f, 5f)), projection, 0.1f);
+
+        // A radius that follows the view direction would resize the cascade every frame and make its edges crawl
+        a.GetSliceSphere(3f, 12f, out _, out float radiusA);
+        b.GetSliceSphere(3f, 12f, out _, out float radiusB);
+        Assert.Equal(radiusA, radiusB);
+    }
+
+    [Fact]
+    public void ShadowFitView_Stereo_SphereHoldsBothEyes()
+    {
+        Float3 head = new(1f, 1.7f, 4f);
+        Quaternion headRotation = Quaternion.FromEuler(new Float3(0f, 30f, 0f));
+        Float4x4 headToWorld = Float4x4.CreateTRS(head, headRotation, Float3.One);
+
+        // Canted, asymmetric eyes like a wide field of view headset
+        XRView left = new() { Position = new Float3(-0.032f, 0f, 0f), Rotation = Quaternion.FromEuler(new Float3(0f, -10f, 0f)), TanLeft = -1.4f, TanRight = 1.0f, TanDown = -1.2f, TanUp = 1.1f };
+        XRView right = new() { Position = new Float3(0.032f, 0f, 0f), Rotation = Quaternion.FromEuler(new Float3(0f, 10f, 0f)), TanLeft = -1.0f, TanRight = 1.4f, TanDown = -1.2f, TanUp = 1.1f };
+
+        ShadowFitView view = ShadowFitView.FromEyes(head, headRotation, 0.05f, [left, right], headToWorld);
+
+        view.GetSliceSphere(2f, 10f, out Float3 center, out float radius);
+        Float3 headForward = headRotation * Float3.UnitZ;
+        foreach (XRView eye in new[] { left, right })
+        {
+            Float3 eyeOrigin = Float4x4.TransformPoint(eye.Position, headToWorld);
+            Quaternion eyeRotation = headRotation * eye.Rotation;
+            foreach (float x in new[] { eye.TanLeft, eye.TanRight })
+                foreach (float y in new[] { eye.TanDown, eye.TanUp })
+                {
+                    // Each corner ray of the eye, cut where it crosses the slice's near and far depth along the head
+                    Float3 dir = eyeRotation * new Float3(x, y, 1f);
+                    foreach (float depth in new[] { 2f, 10f })
+                    {
+                        float t = (depth - Float3.Dot(eyeOrigin - head, headForward)) / Float3.Dot(dir, headForward);
+                        AssertInside([eyeOrigin + dir * t], center, radius);
+                    }
+                }
+        }
+    }
+
+    [Fact]
+    public void DirectionalLight_CascadeSplits_EndAtShadowDistanceAndFavourTheNearSlice()
+    {
+        const float near = 0.1f, distance = 50f;
+        float previous = near;
+        for (int i = 1; i <= 4; i++)
+        {
+            float split = DirectionalLight.GetCascadeSplit(i, 4, near, distance);
+            Assert.True(split > previous);
+            previous = split;
+        }
+        Assert.Equal(distance, DirectionalLight.GetCascadeSplit(4, 4, near, distance), 3);
+
+        // The first slice is much shorter than an even split, it is the one right in front of the camera
+        Assert.True(DirectionalLight.GetCascadeSplit(1, 4, near, distance) < distance / 4f * 0.5f);
     }
 }

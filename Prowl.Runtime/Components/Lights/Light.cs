@@ -97,11 +97,9 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     /// </para>
     /// </summary>
     /// <param name="pipeline">The current render pipeline.</param>
-    /// <param name="shadowFocusPosition">World-space point shadows are prioritized around: the
-    /// rendering camera's position, or the camera's <see cref="Camera.ShadowFocus"/> position when
-    /// set. Directional lights center their cascades on it; point and spot lights ignore it.</param>
+    /// <param name="view">The view directional cascades are fitted to. Point and spot lights ignore it.</param>
     /// <param name="renderables">List of all renderables that could cast shadows.</param>
-    public abstract void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
+    public abstract void RenderShadows(RenderPipeline pipeline, in ShadowFitView view, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
 
     public abstract ForwardLightData GetForwardLightData();
 }

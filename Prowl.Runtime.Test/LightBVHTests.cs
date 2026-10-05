@@ -375,7 +375,7 @@ public class SceneLightSystemTests : RuntimeTestBase
 
         public override LightType GetLightType() => Data.Type;
         public override Float3 GetLightPosition() => Data.Position;
-        public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables) { }
+        public override void RenderShadows(RenderPipeline pipeline, in ShadowFitView view, System.Collections.Generic.IReadOnlyList<IRenderable> renderables) { }
         public override ForwardLightData GetForwardLightData() => Data;
     }
 

@@ -83,7 +83,7 @@ public class SpotLight : Light
         view = Float4x4.CreateLookTo(position, forward, Transform.Up);
     }
 
-    public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
+    public override void RenderShadows(RenderPipeline pipeline, in ShadowFitView fitView, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
     {
         if (!DoCastShadows())
         {
@@ -119,7 +119,7 @@ public class SpotLight : Light
             Graphics.Submit(cmd);
 
             // Store shadow data for shader
-            _shadowMatrix = proj * view;
+            _shadowMatrix = RenderPipeline.ToGLClipDepth(proj * view);
             float halfAngle = Maths.Clamp(SpotAngle, 1f, MaxShadowHalfAngle) * Maths.Deg2Rad;
             _shadowAtlasParams = new Float4(atlasX, atlasY, res, 2f * Maths.Tan(halfAngle) / res);
         }

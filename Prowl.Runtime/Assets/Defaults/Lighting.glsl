@@ -25,7 +25,7 @@ uniform float _DirectionalLightIntensity;
 uniform int   _DirectionalLightShadowEnabled;
 uniform float _DirectionalLightShadowDepthBias;    // shadow texels
 uniform float _DirectionalLightShadowNormalBias;   // shadow texels
-uniform float _DirectionalLightShadowDistance;     // radius around _ShadowFocusPos, equals the last cascade radius
+uniform float _DirectionalLightShadowDistance;     // view depth where shadows end
 uniform float _DirectionalLightShadowStrength;
 uniform float _DirectionalLightShadowQuality;
 
@@ -60,11 +60,14 @@ uniform vec4 _CascadeAtlasParams0;
 uniform vec4 _CascadeAtlasParams1;
 uniform vec4 _CascadeAtlasParams2;
 uniform vec4 _CascadeAtlasParams3;   // xy: atlasPos, z: tileSize, w: cascade radius
+uniform vec4 _CascadeSphere0;        // xyz: center, w: radius
+uniform vec4 _CascadeSphere1;
+uniform vec4 _CascadeSphere2;
+uniform vec4 _CascadeSphere3;
 
-// World-space point this frame's cascades were centered on (the camera position, or the
-// camera's shadow focus target when set). Cascade selection must measure distance from the
-// same point the cascade boxes were built around, or selection disagrees with placement.
-uniform vec3 _ShadowFocusPos;
+// The view the cascades were fitted to, shadows fade out by depth along it
+uniform vec3 _ShadowViewOrigin;
+uniform vec3 _ShadowViewForward;
 
 // Point shadows (6 faces per light). A point light occupying slot s uses indices [s*6 .. s*6+5].
 uniform mat4 _PointShadowMatrices[MAX_SHADOW_CASTERS * 6];
@@ -118,31 +121,43 @@ vec3 GetTangentViewDir(vec3 worldPos, vec3 worldNormal, vec3 worldTangent, vec3 
 // Each returns the fraction of light blocked, 0 to 1. geomNormal is the interpolated surface normal
 // before normal mapping (zero for points in the air), quality 0 is hard and 1 soft.
 
+// Whether p sits inside a cascade, at least inset texels in from its edge
+bool InCascade(vec3 p, vec4 sphere, vec4 params, float inset)
+{
+    vec3 d = p - sphere.xyz;
+    float r = sphere.w * (1.0 - 2.0 * inset / max(params.z, 1.0));
+    return params.z > 0.0 && dot(d, d) <= r * r;
+}
+
+// The sharpest cascade holding p, -1 for none
+int SelectCascade(vec3 p, float inset)
+{
+    if (InCascade(p, _CascadeSphere0, _CascadeAtlasParams0, inset)) return 0;
+    if (_CascadeCount > 1 && InCascade(p, _CascadeSphere1, _CascadeAtlasParams1, inset)) return 1;
+    if (_CascadeCount > 2 && InCascade(p, _CascadeSphere2, _CascadeAtlasParams2, inset)) return 2;
+    if (_CascadeCount > 3 && InCascade(p, _CascadeSphere3, _CascadeAtlasParams3, inset)) return 3;
+    return -1;
+}
+
 float DirectionalShadow(vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
     if (_CascadeCount == 0) return 0.0;
 
-    vec3 toFocus = worldPos - _ShadowFocusPos;
-    float distSq = dot(toFocus, toFocus);
-    if (distSq > _DirectionalLightShadowDistance * _DirectionalLightShadowDistance) return 0.0;
+    float viewDepth = dot(worldPos - _ShadowViewOrigin, _ShadowViewForward);
+    if (viewDepth > _DirectionalLightShadowDistance) return 0.0;
+
+    // Three texels of room keeps the bias offset and the filter inside the map, points right at a
+    // cascade's outer corners take whichever cascade holds them at all
+    int cascade = SelectCascade(worldPos, 3.0);
+    if (cascade < 0) cascade = SelectCascade(worldPos, 0.0);
+    if (cascade < 0) return 0.0;
 
     mat4 cascadeMatrix;
     vec4 cascadeParams;
-    if (_CascadeCount == 1 || distSq <= _CascadeAtlasParams0.w * _CascadeAtlasParams0.w) {
-        cascadeMatrix = _CascadeShadowMatrix0;
-        cascadeParams = _CascadeAtlasParams0;
-    } else if (_CascadeCount == 2 || distSq <= _CascadeAtlasParams1.w * _CascadeAtlasParams1.w) {
-        cascadeMatrix = _CascadeShadowMatrix1;
-        cascadeParams = _CascadeAtlasParams1;
-    } else if (_CascadeCount == 3 || distSq <= _CascadeAtlasParams2.w * _CascadeAtlasParams2.w) {
-        cascadeMatrix = _CascadeShadowMatrix2;
-        cascadeParams = _CascadeAtlasParams2;
-    } else {
-        cascadeMatrix = _CascadeShadowMatrix3;
-        cascadeParams = _CascadeAtlasParams3;
-    }
-
-    if (cascadeParams.z <= 0.0) return 0.0;
+    if (cascade == 0)      { cascadeMatrix = _CascadeShadowMatrix0; cascadeParams = _CascadeAtlasParams0; }
+    else if (cascade == 1) { cascadeMatrix = _CascadeShadowMatrix1; cascadeParams = _CascadeAtlasParams1; }
+    else if (cascade == 2) { cascadeMatrix = _CascadeShadowMatrix2; cascadeParams = _CascadeAtlasParams2; }
+    else                   { cascadeMatrix = _CascadeShadowMatrix3; cascadeParams = _CascadeAtlasParams3; }
 
     float texelWorld = 2.0 * cascadeParams.w / cascadeParams.z;
     vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, normalize(_DirectionalLightDirection), texelWorld,
@@ -153,7 +168,7 @@ float DirectionalShadow(vec3 worldPos, vec3 geomNormal, float normalBias, float 
     float shadow = SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, cascadeParams, quality);
 
     // Fades out over the last tenth of the shadow distance
-    float fade = smoothstep(_DirectionalLightShadowDistance * 0.9, _DirectionalLightShadowDistance, sqrt(distSq));
+    float fade = smoothstep(_DirectionalLightShadowDistance * 0.9, _DirectionalLightShadowDistance, viewDepth);
     return shadow * _DirectionalLightShadowStrength * (1.0 - fade);
 }
 

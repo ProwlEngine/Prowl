@@ -135,6 +135,8 @@ public class DefaultRenderPipeline : RenderPipeline
         (StereoEye.Right, StereoTargetEyeMask.Right),
     ];
 
+    private static readonly XRView[] s_eyeViews = new XRView[2];
+
     /// <summary>
     /// Renders the camera once per headset eye into the XR eye textures, then mirrors the first eye to where
     /// the camera would normally draw, with the screen space UI on top. Screen space UI has no place in a
@@ -163,6 +165,14 @@ public class DefaultRenderPipeline : RenderPipeline
     /// <summary>Renders the camera into each headset eye it targets, returning the first eye drawn.</summary>
     private RenderTexture? RenderEyes(Camera camera, in RenderingData data)
     {
+        // Both eyes share one shadow atlas, so the cascades are fitted to all the eyes drawn this frame
+        int eyeCount = 0;
+        foreach (var (eye, mask) in s_eyes)
+            if ((camera.StereoTargetEye & mask) != 0)
+                s_eyeViews[eyeCount++] = XR.GetEyeView(eye);
+        ShadowFitView shadowView = ShadowFitView.FromEyes(camera.Transform.Position, camera.Transform.Rotation, camera.NearClipPlane,
+            s_eyeViews.AsSpan(0, eyeCount), camera.Transform.LocalToWorldMatrix);
+
         RenderTexture? mirror = null;
         foreach (var (eye, mask) in s_eyes)
         {
@@ -177,7 +187,7 @@ public class DefaultRenderPipeline : RenderPipeline
             try
             {
                 BeginMotionTracking(camera);
-                Internal_Render(camera, eyeData, secondEye: mirror.IsValid());
+                Internal_Render(camera, eyeData, secondEye: mirror.IsValid(), shadowView);
                 EndMotionTracking();
             }
             finally
@@ -259,7 +269,7 @@ public class DefaultRenderPipeline : RenderPipeline
     /// transform, which both eyes of a headset share, so the <paramref name="secondEye"/> reuses what the first
     /// one built. Renderables are gathered for each eye, since particles cull and face their billboards per view.
     /// </summary>
-    private void Internal_Render(Camera camera, in RenderingData data, bool secondEye = false)
+    private void Internal_Render(Camera camera, in RenderingData data, bool secondEye = false, ShadowFitView? stereoShadowView = null)
     {
         // =======================================================
         // 0. Setup
@@ -285,6 +295,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // 2. Camera snapshot and global uniforms
         CameraSnapshot css = new(camera);
         SetupGlobalUniforms(css);
+        ShadowFitView shadowView = stereoShadowView ?? css.ShadowView;
 
         // =======================================================
         // 3. Collect and Cull Renderables
@@ -334,7 +345,7 @@ public class DefaultRenderPipeline : RenderPipeline
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
         if (!secondEye)
         {
-            lightSystem.Reconcile(lights, css.ShadowFocusPosition, css.CullingMask);
+            lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
 
             // ─── Shadow atlas setup (clear) ───
             // Done in its own CB and submitted before the lights start so the depth/stencil
@@ -363,12 +374,12 @@ public class DefaultRenderPipeline : RenderPipeline
             }
 
             RenderStats.BeginShadowPass();
-            lightSystem.RenderShadows(this, css.ShadowFocusPosition, shadowCasters);
+            lightSystem.RenderShadows(this, shadowView, shadowCasters);
             RenderStats.EndShadowPass();
         }
 
         AssignCameraMatrices(css.View, css.Projection);
-        lightSystem.UploadGlobalUniforms(css.ShadowFocusPosition);
+        lightSystem.UploadGlobalUniforms(shadowView);
 
         UploadFogUniforms(css.Scene);
         UploadAmbientUniforms(css.Scene);

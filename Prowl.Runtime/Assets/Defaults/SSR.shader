@@ -70,7 +70,7 @@ Pass "RayCast"
         {
             vec4 clip = PROWL_MATRIX_P * vec4(viewPos, 1.0);
             clip.xyz /= clip.w;
-            return vec3(clip.xy * 0.5 + 0.5, clip.z);
+            return clip.xyz * 0.5 + 0.5;
         }
 
         // March in screen space: step until the ray passes behind the depth buffer, then refine.

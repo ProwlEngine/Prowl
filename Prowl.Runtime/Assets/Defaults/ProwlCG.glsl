@@ -42,24 +42,23 @@ bool isPerspective(mat4 proj) { return proj[3][3] <= 0.5; }
 bool isOrthographic() { return isOrthographic(prowl_MatP); }
 bool isPerspective() { return isPerspective(prowl_MatP); }
 
-// Depth as sampled is what OpenGL's viewport transform wrote. Prowl's projections are DirectX style
-// and emit clip z in [0, w], so that transform lands them in [0.5, 1] rather than filling the buffer;
-// undoing it is the first step of reconstructing anything from a depth sample, and it is the same
+// Depth as sampled is what OpenGL's viewport transform wrote. The matrices in the uniforms emit GL clip
+// depth (-w to w), so the near plane samples as 0 and the far plane as 1; undoing the viewport
+// transform is the first step of reconstructing anything from a depth sample, and it is the same
 // remap getNDCFromScreenPos applies.
 float screenDepthToNDC(float depth) { return depth * 2.0 - 1.0; }
 
 // Perspective depth is hyperbolic, spending most of its range close to the camera.
 float linearizeDepth(float depth, float near, float far)
 {
-    float ndc = screenDepthToNDC(depth);
-    return (near * far) / (far - ndc * (far - near));
+    return (near * far) / (far - depth * (far - near));
 }
 
 // Orthographic depth is already linear in view space, so it only needs its range put back. Running
 // it through the perspective reconstruction instead reports a curve where the buffer holds a line.
 float linearizeDepthOrtho(float depth, float near, float far)
 {
-    return near + screenDepthToNDC(depth) * (far - near);
+    return near + depth * (far - near);
 }
 
 float linearizeDepthFromProjection(float depth)
@@ -277,7 +276,7 @@ vec3 SampleCosineHemisphere(vec3 normal, vec2 xy) {
 // Convert screen-space depth to view-space depth
 float ScreenToViewDepth(float depth) {
 	float z = depth * 2.0 - 1.0; // Back to NDC
-	return -PROWL_MATRIX_P[3].z / (PROWL_MATRIX_P[2].z + z);
+	return PROWL_MATRIX_P[3].z / (z - PROWL_MATRIX_P[2].z);
 }
 
 // ----------------------------------------------------------------------------

@@ -37,9 +37,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     private const string HandTrackingExtension = "XR_EXT_hand_tracking";
     private const string EyeGazeExtension = "XR_EXT_eye_gaze_interaction";
 
-    // Prowl's projections put depth in 0 to 1 and GL maps that onto window depth 0.5 to 1, which is what a
-    // standard GL projection with the same planes would land in a glDepthRange(0.5, 1) viewport.
-    private const float MinWindowDepth = 0.5f;
+    // Projections reach the GPU remapped to GL's clip depth (RenderPipeline.ToGLClipDepth), so the near
+    // and far planes span the whole window depth range.
+    private const float MinWindowDepth = 0f;
     private const float MaxWindowDepth = 1f;
     private const long InfiniteDuration = long.MaxValue;
 
