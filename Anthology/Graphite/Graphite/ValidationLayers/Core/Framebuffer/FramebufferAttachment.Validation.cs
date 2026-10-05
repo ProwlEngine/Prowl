@@ -1,8 +1,8 @@
 namespace Prowl.Graphite;
 
-public partial struct FramebufferAttachmentDescription
+public readonly partial struct FramebufferAttachment
 {
-    private static void FramebufferAttachmentDescription_CheckLayerAndMip(Texture target, uint arrayLayer, uint mipLevel)
+    private static void FramebufferAttachment_CheckLayerAndMip(Texture target, uint arrayLayer, uint mipLevel)
     {
         uint effectiveArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(target);
         if (arrayLayer >= effectiveArrayLayers)

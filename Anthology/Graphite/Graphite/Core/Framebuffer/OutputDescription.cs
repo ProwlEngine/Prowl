@@ -4,18 +4,18 @@ using System.Diagnostics;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Output attachments and formats.
+/// Output attachment formats.
 /// </summary>
 public record struct OutputDescription
 {
     /// <summary>
-    /// Depth attachment or null.
+    /// Depth attachment format or null.
     /// </summary>
-    public OutputAttachmentDescription? DepthAttachment;
+    public PixelFormat? DepthFormat;
     /// <summary>
-    /// Color attachment descriptions (can be empty).
+    /// Color attachment formats (can be empty).
     /// </summary>
-    public OutputAttachmentDescription[] ColorAttachments;
+    public PixelFormat[] ColorFormats;
     /// <summary>
     /// Samples per target attachment.
     /// </summary>
@@ -24,57 +24,57 @@ public record struct OutputDescription
     /// <summary>
     /// New OutputDescription.
     /// </summary>
-    /// <param name="depthAttachment">Depth attachment.</param>
-    /// <param name="colorAttachments">Color attachment descriptions.</param>
-    public OutputDescription(OutputAttachmentDescription? depthAttachment, params OutputAttachmentDescription[] colorAttachments)
+    /// <param name="depthFormat">Depth attachment format.</param>
+    /// <param name="colorFormats">Color attachment formats.</param>
+    public OutputDescription(PixelFormat? depthFormat, params PixelFormat[] colorFormats)
     {
-        DepthAttachment = depthAttachment;
-        ColorAttachments = colorAttachments ?? Array.Empty<OutputAttachmentDescription>();
+        DepthFormat = depthFormat;
+        ColorFormats = colorFormats ?? Array.Empty<PixelFormat>();
         SampleCount = TextureSampleCount.Count1;
     }
 
     /// <summary>
     /// New OutputDescription.
     /// </summary>
-    /// <param name="depthAttachment">Depth attachment.</param>
-    /// <param name="colorAttachments">Color attachment descriptions.</param>
+    /// <param name="depthFormat">Depth attachment format.</param>
+    /// <param name="colorFormats">Color attachment formats.</param>
     /// <param name="sampleCount">Samples per target attachment.</param>
     public OutputDescription(
-        OutputAttachmentDescription? depthAttachment,
-        OutputAttachmentDescription[] colorAttachments,
+        PixelFormat? depthFormat,
+        PixelFormat[] colorFormats,
         TextureSampleCount sampleCount)
     {
-        DepthAttachment = depthAttachment;
-        ColorAttachments = colorAttachments ?? Array.Empty<OutputAttachmentDescription>();
+        DepthFormat = depthFormat;
+        ColorFormats = colorFormats ?? Array.Empty<PixelFormat>();
         SampleCount = sampleCount;
     }
 
     internal static OutputDescription CreateFromFramebuffer(Framebuffer fb)
     {
         TextureSampleCount sampleCount = 0;
-        OutputAttachmentDescription? depthAttachment = null;
+        PixelFormat? depthFormat = null;
         if (fb.DepthTarget != null)
         {
-            depthAttachment = new OutputAttachmentDescription(fb.DepthTarget.Value.Target.Format);
+            depthFormat = fb.DepthTarget.Value.Target.Format;
             sampleCount = fb.DepthTarget.Value.Target.SampleCount;
         }
-        OutputAttachmentDescription[] colorAttachments = new OutputAttachmentDescription[fb.ColorTargets.Count];
-        for (int i = 0; i < colorAttachments.Length; i++)
+        PixelFormat[] colorFormats = new PixelFormat[fb.ColorTargets.Count];
+        for (int i = 0; i < colorFormats.Length; i++)
         {
-            colorAttachments[i] = new OutputAttachmentDescription(fb.ColorTargets[i].Target.Format);
+            colorFormats[i] = fb.ColorTargets[i].Target.Format;
             sampleCount = fb.ColorTargets[i].Target.SampleCount;
         }
 
-        return new OutputDescription(depthAttachment, colorAttachments, sampleCount);
+        return new OutputDescription(depthFormat, colorFormats, sampleCount);
     }
 
     /// <inheritdoc/>
     public readonly bool Equals(OutputDescription other)
-        => DepthAttachment == other.DepthAttachment
+        => DepthFormat == other.DepthFormat
         && SampleCount == other.SampleCount
-        && Util.ArrayEqualsEquatable(ColorAttachments, other.ColorAttachments);
+        && ColorFormats.AsSpan().SequenceEqual(other.ColorFormats);
 
     /// <inheritdoc/>
     public override readonly int GetHashCode()
-        => HashCode.Combine(DepthAttachment, SampleCount, ColorAttachments.ArrayHash());
+        => HashCode.Combine(DepthFormat, SampleCount, ColorFormats.ArrayHash());
 }

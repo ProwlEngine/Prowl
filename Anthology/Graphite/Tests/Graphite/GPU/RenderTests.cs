@@ -488,7 +488,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Texture target = RF.CreateTexture(TextureDescription.Texture2D(
             size, size, 1, layerCount, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(
-            null, [new FramebufferAttachmentDescription(target, targetLayer)]));
+            null, [new FramebufferAttachment(target, targetLayer)]));
 
         Texture sampled = RF.CreateTexture(TextureDescription.Texture2D(
             size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));

@@ -1,12 +1,12 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Framebuffer output (color or depth).
+/// Framebuffer attachment (color or depth).
 /// </summary>
-public readonly struct FramebufferAttachment
+public readonly partial struct FramebufferAttachment
 {
     /// <summary>
-    /// Texture being rendered to.
+    /// Render target (RenderTarget for color, DepthStencil for depth).
     /// </summary>
     public Texture Target { get; }
     /// <summary>
@@ -24,11 +24,8 @@ public readonly struct FramebufferAttachment
     /// <param name="target">Texture to render to.</param>
     /// <param name="arrayLayer">Target array layer.</param>
     public FramebufferAttachment(Texture target, uint arrayLayer)
-    {
-        Target = target;
-        ArrayLayer = arrayLayer;
-        MipLevel = 0;
-    }
+        : this(target, arrayLayer, 0)
+    { }
 
     /// <summary>
     /// New attachment.
@@ -38,6 +35,7 @@ public readonly struct FramebufferAttachment
     /// <param name="mipLevel">Target mip level.</param>
     public FramebufferAttachment(Texture target, uint arrayLayer, uint mipLevel)
     {
+        FramebufferAttachment_CheckLayerAndMip(target, arrayLayer, mipLevel);
         Target = target;
         ArrayLayer = arrayLayer;
         MipLevel = mipLevel;
