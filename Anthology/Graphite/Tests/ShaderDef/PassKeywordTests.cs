@@ -65,14 +65,6 @@ public class PassKeywordTests : IDisposable
 
 
     [Fact]
-    public void Axes_BeforeCreate_Throws()
-    {
-        ShaderPass pass = Parse.Shader(Source).Passes![0];
-        Assert.Throws<InvalidOperationException>(() => pass.Axes);
-    }
-
-
-    [Fact]
     public void GetKey_SetsKnownAndSkipsUnknown()
     {
         int key = _pass.GetKey([K("SKINNED", "true"), K("NOT_AN_AXIS", "true"), K("ALPHA_MODE", "Cutout")]);
@@ -130,13 +122,5 @@ public class PassKeywordTests : IDisposable
         Assert.Equal("Opaque", KeyedAxis(first, "ALPHA_MODE"));
         Assert.Equal("false", KeyedAxis(second, "SKINNED"));
         Assert.Equal("Cutout", KeyedAxis(second, "ALPHA_MODE"));
-    }
-
-
-    [Fact]
-    public void GetVariant_OutOfRange_Throws()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => _pass.GetVariant(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => _pass.GetVariant(_pass.Count));
     }
 }

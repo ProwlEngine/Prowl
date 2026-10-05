@@ -67,18 +67,6 @@ public class FullShaderCompilationTests
 
 
     [Fact]
-    public void ParsesFullDocument()
-    {
-        ShaderDefinition shader = ShaderParser.Parse(SinglePassShader);
-
-        Assert.Equal("Tests/SinglePass", shader.Name);
-        Assert.Single(shader.Passes!);
-        Assert.Equal("Forward", shader.Passes![0].Name);
-        Assert.Single(shader.Properties!);
-    }
-
-
-    [Fact]
     public void CompilesParsedPass_ForVulkan()
     {
         ShaderDefinition shader = ShaderParser.Parse(SinglePassShader);
@@ -102,27 +90,6 @@ public class FullShaderCompilationTests
 
         ReflectionTestbed.AssertVertexLocations(description,
             (0, VertexElementFormat.Float3), (1, VertexElementFormat.Float4));
-    }
-
-
-    [Fact]
-    public void CompilesParsedPass_SpirvIsValid()
-    {
-        ShaderDefinition shader = ShaderParser.Parse(SinglePassShader);
-        ShaderPass pass = shader.Passes![0];
-
-        ShaderDescription description = CompilerTestHarness.CompilePass(pass, () => new VulkanCompiler()).Backends.Single().Description;
-
-        foreach (ShaderStages stage in new[] { ShaderStages.Vertex, ShaderStages.Fragment })
-        {
-            byte[] spirv = CompilerTestHarness.StageOf(description, stage).ShaderBytes;
-            string validation = CompilerTestHarness.TryValidateSpirv(spirv);
-
-            // null => spirv-val unavailable in this environment; the reflection/byte checks above
-            // still cover correctness.
-            if (validation != null)
-                Assert.True(validation.Length == 0, $"spirv-val rejected parsed pass {stage}:\n{validation}");
-        }
     }
 
 

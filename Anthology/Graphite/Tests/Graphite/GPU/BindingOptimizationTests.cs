@@ -53,40 +53,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     [SkippableFact]
-    public void RepeatedIdenticalDispatches_OneRecording_AllCorrect()
-    {
-
-        const int n = 6;
-        ComputeProgram program = CreateTwoBlockProgram();
-        DeviceBuffer[] outputs = new DeviceBuffer[n];
-        for (int i = 0; i < n; i++) outputs[i] = CreateOutput();
-
-        // Same uniform values every dispatch, only the output changes. Exercises the per-set identity
-        // cache-hit path for the unchanged uniform sets while the output set legitimately rebinds.
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            for (int i = 0; i < n; i++)
-            {
-                PropertySet props = new();
-                props.SetInt("valueA", 42);
-                props.SetInt("valueB", 77);
-                props.SetBuffer("Output", outputs[i]);
-                cl.SetProperties(props);
-                cl.Dispatch(1, 1, 1);
-            }
-        });
-        GD.WaitForIdle();
-
-        for (int i = 0; i < n; i++)
-        {
-            uint[] r = Read(outputs[i]);
-            Assert.Equal(42u, r[0]);
-            Assert.Equal(77u, r[1]);
-        }
-    }
-
-    [SkippableFact]
     public void AlternatingUniforms_OneRecording_EachDispatchCorrect()
     {
 

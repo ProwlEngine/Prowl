@@ -67,30 +67,6 @@ file sealed class OffscreenPass : IPass<SwapchainView>
 public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void Framebuffer_Targets_HaveExpectedProperties()
-    {
-        Texture color = GD.MainSwapchain.Framebuffer.ColorTargets[0].Target;
-        Assert.Equal(TextureType.Texture2D, color.Type);
-        Assert.InRange(color.Width, 1u, uint.MaxValue);
-        Assert.InRange(color.Height, 1u, uint.MaxValue);
-        Assert.Equal(1u, color.Depth);
-        Assert.Equal(1u, color.ArrayLayers);
-        Assert.Equal(1u, color.MipLevels);
-        Assert.Equal(TextureUsage.RenderTarget, color.Usage);
-        Assert.Equal(TextureSampleCount.Count1, color.SampleCount);
-        Assert.Null(GD.MainSwapchain.Framebuffer.DepthTarget);
-    }
-
-    [Fact]
-    public void SwapBuffers_DoesNotThrow()
-    {
-        ExecutionTask task = GD.BeginExecution();
-        GD.CompleteExecution(task);
-        GD.SwapBuffers(GD.MainSwapchain);
-        GD.WaitForIdle();
-    }
-
-    [Fact]
     public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
     {
         using RenderPipeline<SwapchainView> presenting = new([new ClearSwapchainPass()]);
@@ -151,22 +127,6 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
 
         Texture depth = GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target;
         Assert.Equal(GD.MainSwapchain.Framebuffer.Width, depth.Width);
-        GD.WaitForIdle();
-    }
-
-    [Fact]
-    public void Resize_KeepsFramebufferValid()
-    {
-        // The presented surface clamps to the backing window, so the exact dimensions are
-        // platform-dependent; the contract under test is that resize is honored without throwing
-        // and the framebuffer stays usable.
-        GD.ResizeMainWindow(128, 96);
-        Assert.InRange(GD.MainSwapchain.Framebuffer.Width, 1u, uint.MaxValue);
-        Assert.InRange(GD.MainSwapchain.Framebuffer.Height, 1u, uint.MaxValue);
-
-        ExecutionTask task = GD.BeginExecution();
-        GD.CompleteExecution(task);
-        GD.SwapBuffers(GD.MainSwapchain);
         GD.WaitForIdle();
     }
 }

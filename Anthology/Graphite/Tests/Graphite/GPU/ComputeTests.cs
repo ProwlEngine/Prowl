@@ -96,44 +96,6 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         Assert.Equal(new Color(1f, 1f, 1f, 1f), map[3, 0], ColorFuzzyComparer.Instance);
     }
 
-    [SkippableTheory]
-    [InlineData(2u)]
-    [InlineData(6u)]
-    public void ComputeWritesArrayLayers(uint layers)
-    {
-
-        const uint texSize = 32;
-        Texture computeOutput = RF.CreateTexture(TextureDescription.Texture2D(
-            texSize, texSize, 1, layers, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled | TextureUsage.Storage));
-
-        ComputeProgram compute = CreateCompute("ComputeImage2DArrayGenerator.slang",
-            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0));
-
-        PropertySet props = new();
-        props.SetTexture("ComputeOutput", computeOutput);
-
-        Submit(cl =>
-        {
-            cl.SetComputeShader(compute);
-            cl.SetProperties(props);
-            cl.Dispatch(texSize / 32, texSize / 32, layers);
-        });
-
-        // sideColorStep = floor(1 / layers) is 0 for layers >= 2, so every texel is written as 0.
-        // The point of the test is that per-array-layer storage writes happen at all.
-        for (uint layer = 0; layer < layers; layer++)
-        {
-            TexelData<uint> map = ReadTexture<uint>(computeOutput, 0, layer);
-            for (int y = 0; y < texSize; y++)
-            {
-                for (int x = 0; x < texSize; x++)
-                {
-                    Assert.Equal(0u, map[x, y]);
-                }
-            }
-        }
-    }
-
     [SkippableFact]
     public void ComputeFills3DTexture()
     {

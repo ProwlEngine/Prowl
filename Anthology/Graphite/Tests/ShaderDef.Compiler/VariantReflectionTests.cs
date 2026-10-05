@@ -5,12 +5,6 @@ using Xunit;
 namespace Prowl.Graphite.ShaderDef.Compiler.Tests;
 
 
-// VariantCompilationTests and EnumVariantCompilationTests prove every variant produces valid SPIR-V,
-// but their shared shaders declare no resources, so they never prove reflection (vertex layouts,
-// resource layouts) stays correct once a real resource-bound shader is specialized. This suite closes
-// that gap: VariantsWithResources declares a variant axis alongside a ParameterBlock, so every
-// permutation's ShaderDescription can be checked for the same reflection a real application would bind
-// against, not just non-empty bytes.
 public class VariantReflectionTests
 {
     const ShaderStages VF = ShaderStages.Vertex | ShaderStages.Fragment;

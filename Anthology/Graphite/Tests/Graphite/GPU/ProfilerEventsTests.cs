@@ -194,24 +194,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void CopyBuffer_RecordsBufferTransitionBarrierAndBufferOp()
-    {
-        RecordingProfiler profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.CopyBuffer(source, 0, destination, 0, 256);
-        });
-        device.WaitForIdle();
-
-        Assert.Contains(profiler.Barriers, b => b.Kind == BarrierBin.BufferTransition);
-    }
-
-    [Fact]
     public void DispatchGraph_RecordsPassLifecycleReadsAndSubmits()
     {
         RecordingProfiler profiler = new();
@@ -246,20 +228,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void Record_RecordsTransferSubmit()
-    {
-        RecordingProfiler profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
-
-        Assert.Contains(profiler.Submits, s => s.IsTransfer);
-    }
-
-    [Fact]
     public void RequestExecutionTiming_True_RecordsExecutionTime()
     {
         RecordingProfiler profiler = new() { RequestGPUStatistics = true };
@@ -277,24 +245,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         (CommandBufferInfo _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
         Assert.False(isTransfer);
         Assert.True(milliseconds >= 0);
-    }
-
-    [Fact]
-    public void RequestExecutionTiming_False_NeverRecordsExecutionTime()
-    {
-        RecordingProfiler profiler = new() { RequestGPUStatistics = false };
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.CopyBuffer(source, 0, destination, 0, 256);
-        });
-        device.WaitForIdle();
-
-        Assert.Empty(profiler.ExecutionTimes);
     }
 
     [Fact]

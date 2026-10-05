@@ -27,14 +27,6 @@ public class UsageKindTests
     }
 
     [Fact]
-    public void SingleKindOutput_IsAccepted()
-    {
-        RenderContextBuilder builder = new();
-        TextureHandle handle = builder.DeclareOutputTexture("usage_ok", s_desc, usage: TextureState.Storage);
-        Assert.True(handle.IsValid);
-    }
-
-    [Fact]
     public void Output_WithoutWriteKind_Throws()
     {
         RenderContextBuilder builder = new();

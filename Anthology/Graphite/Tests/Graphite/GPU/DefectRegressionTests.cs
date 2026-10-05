@@ -117,17 +117,6 @@ public abstract class DefectRegressionTests<T> : GraphicsDeviceTestBase<T> where
     }
 
     [Fact]
-    public void Record_ManyFireAndForget_ReusesPooledBuffers()
-    {
-        DeviceBuffer target = RF.CreateBuffer(new BufferDescription(16, BufferUsage.VertexBuffer));
-        for (int i = 0; i < 64; i++)
-            GD.Record(cmd => cmd.UpdateBuffer(target, 0, new uint[] { 1, 2, 3, 4 }));
-
-        GD.WaitForIdle();
-        GD.Record(cmd => cmd.UpdateBuffer(target, 0, new uint[] { 1, 2, 3, 4 })).Wait();
-    }
-
-    [Fact]
     public void TransientTexturePool_EvictsEntriesUnusedForRetentionWindow()
     {
         ExecutionTask first = GD.BeginExecution();

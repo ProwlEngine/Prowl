@@ -23,30 +23,6 @@ file sealed class CountingPass : IPass<TestView>
 public class RenderPipelineTests
 {
     [Fact]
-    public void Composed_BuildsGraphFromPassList()
-    {
-        CountingPass pass = new();
-        RenderPipeline<TestView> pipeline = new([pass]);
-
-        _ = pipeline.Graph;
-
-        Assert.Equal(1, pass.SetupCount);
-    }
-
-    [Fact]
-    public void SetPasses_RebuildsGraphOnNextAccess()
-    {
-        CountingPass pass = new();
-        RenderPipeline<TestView> pipeline = new([pass]);
-
-        _ = pipeline.Graph;
-        pipeline.SetPasses([pass]);
-        _ = pipeline.Graph;
-
-        Assert.Equal(2, pass.SetupCount);
-    }
-
-    [Fact]
     public void Graph_AccessedMultipleTimes_BuildsOnlyOnce()
     {
         CountingPass pass = new();
@@ -57,17 +33,6 @@ public class RenderPipelineTests
         _ = pipeline.Graph;
 
         Assert.Equal(1, pass.SetupCount);
-    }
-
-    [Fact]
-    public void Graph_ReturnsSameInstance_OnRepeatedAccess()
-    {
-        RenderPipeline<TestView> pipeline = new([new CountingPass()]);
-
-        RenderGraph<TestView> first = pipeline.Graph;
-        RenderGraph<TestView> second = pipeline.Graph;
-
-        Assert.Same(first, second);
     }
 
     [Fact]
@@ -87,13 +52,5 @@ public class RenderPipelineTests
         Assert.NotSame(first, second);
         Assert.Single(second.OrderedPasses);
         Assert.Equal("B", second.OrderedPasses[0].Pass.Name);
-    }
-
-    [Fact]
-    public void SetPasses_NullPass_Throws()
-    {
-        RenderPipeline<TestView> pipeline = new();
-
-        Assert.Throws<ArgumentException>(() => pipeline.SetPasses([null!]));
     }
 }

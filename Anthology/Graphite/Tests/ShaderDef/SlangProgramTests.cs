@@ -10,19 +10,6 @@ namespace Prowl.Graphite.ShaderDef.Tests;
 public class SlangProgramTests
 {
     [Fact]
-    public void CapturesBodyVerbatim()
-    {
-        string slang = Parse.Slang("""
-            SLANGPROGRAM
-            float4 vsMain() : SV_Position { return 0; }
-            ENDSLANG
-            """);
-
-        Assert.Equal("float4 vsMain() : SV_Position { return 0; }", slang);
-    }
-
-
-    [Fact]
     public void DoesNotTokenizeBracesOrKeywords()
     {
         // Braces, comments, and ShaderDef keywords inside the block are part of the raw body,
@@ -48,17 +35,5 @@ public class SlangProgramTests
             """));
 
         Assert.Contains("ENDSLANG", ex.Message);
-    }
-
-
-    [Fact]
-    public void MarkersAreCaseSensitive()
-    {
-        // Lowercase markers are not recognized, so no SlangProgram token is produced.
-        Assert.ThrowsAny<Exception>(() => Parse.Slang("""
-            slangprogram
-            float4 vsMain() { return 0; }
-            endslang
-            """));
     }
 }

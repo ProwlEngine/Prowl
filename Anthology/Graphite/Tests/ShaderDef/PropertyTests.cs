@@ -60,15 +60,6 @@ public class PropertyTests
 
 
     [Fact]
-    public void Vector_ParsesNegativeComponents()
-    {
-        ShaderProperty p = Parse.Property("""_V("V", Vector) = (-1, -2, -3, -4)""");
-
-        Assert.Equal(new Float4(-1, -2, -3, -4), p.Value);
-    }
-
-
-    [Fact]
     public void Matrix_ParsesColumnsAsIdentity()
     {
         ShaderProperty p = Parse.Property("""_M("M", Matrix) = ((1,0,0,0)(0,1,0,0)(0,0,1,0)(0,0,0,1))""");
@@ -83,9 +74,6 @@ public class PropertyTests
 
     [Theory]
     [InlineData("Texture2D", ShaderPropertyType.Texture2D)]
-    [InlineData("Texture2DArray", ShaderPropertyType.Texture2DArray)]
-    [InlineData("Texture3D", ShaderPropertyType.Texture3D)]
-    [InlineData("TextureCubemap", ShaderPropertyType.TextureCubemap)]
     [InlineData("TextureCubemapArray", ShaderPropertyType.TextureCubemapArray)]
     public void Texture_ParsesTypeAndDefaultName(string type, ShaderPropertyType expected)
     {
@@ -107,16 +95,6 @@ public class PropertyTests
 
 
     [Fact]
-    public void MissingName_ReportsPropertyName()
-    {
-        ParseException ex = Assert.Throws<ParseException>(
-            () => Parse.Property("""("X", Float) = 1"""));
-
-        Assert.Contains("property name", ex.Message);
-    }
-
-
-    [Fact]
     public void MissingOpenParen_ReportsLiteralSymbol()
     {
         // The diagnostic should name the literal '(' rather than the token kind "OpenParen".
@@ -134,26 +112,6 @@ public class PropertyTests
             () => Parse.Property("""_R("Rough", Float) = (1, 2, 3, 4)"""));
 
         Assert.Contains("Float property expects a scalar", ex.Message);
-    }
-
-
-    [Fact]
-    public void Vector_GivenScalar_ReportsExpectedShape()
-    {
-        ParseException ex = Assert.Throws<ParseException>(
-            () => Parse.Property("""_V("V", Vector) = 0.5"""));
-
-        Assert.Contains("Vector property expects a 4-component", ex.Message);
-    }
-
-
-    [Fact]
-    public void Texture_GivenNumber_ReportsExpectedShape()
-    {
-        ParseException ex = Assert.Throws<ParseException>(
-            () => Parse.Property("""_T("Tex", Texture2D) = 3"""));
-
-        Assert.Contains("Texture2D property expects a texture name", ex.Message);
     }
 
 

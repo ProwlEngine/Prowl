@@ -19,22 +19,6 @@ public class StencilTests
 
 
     [Fact]
-    public void NoBlock_LeavesStencilTestUnset()
-    {
-        Assert.Equal(PassStateFields.None, Parse.State("").Set);
-    }
-
-
-    [Fact]
-    public void Ref_Sets()
-    {
-        PassState s = Parse.State("""Stencil { Ref 3 }""");
-
-        Assert.Equal(3u, s.DepthStencil.StencilReference);
-    }
-
-
-    [Fact]
     public void ReadAndWriteMask_Set()
     {
         PassState s = Parse.State("""

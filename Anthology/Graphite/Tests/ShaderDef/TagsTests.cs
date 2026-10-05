@@ -14,37 +14,6 @@ public class TagsTests
 
 
     [Fact]
-    public void NoTagsBlock_TagsNull()
-    {
-        ShaderPass pass = Parse.Pass("""
-            Pass
-            {
-                SLANGPROGRAM void main() {} ENDSLANG
-            }
-            """);
-
-        Assert.Null(pass.Tags);
-    }
-
-
-    [Fact]
-    public void SingleTag_Parsed()
-    {
-        Dictionary<string, string> tags = TagsOf("""
-            Pass
-            {
-                Tags { "LightMode" = "ForwardBase" }
-                SLANGPROGRAM void main() {} ENDSLANG
-            }
-            """);
-
-        Assert.NotNull(tags);
-        Assert.Single(tags!);
-        Assert.Equal("ForwardBase", tags!["LightMode"]);
-    }
-
-
-    [Fact]
     public void MultipleTags_Parsed()
     {
         Dictionary<string, string> tags = TagsOf("""

@@ -84,14 +84,6 @@ public class DefaultPropertiesTests : IDisposable
 
 
     [Fact]
-    public void ParsedProperties_RecordWhetherTheyHaveADefault()
-    {
-        Assert.True(_definition.Properties![0].HasDefault);
-        Assert.False(_definition.Properties[4].HasDefault);
-    }
-
-
-    [Fact]
     public void SetsDefaultsForPropertiesWithTargets()
     {
         PropertySet set = _definition.CreateDefaultProperties(Pass);

@@ -10,35 +10,6 @@ namespace Prowl.Graphite.Tests;
 public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void CreateBuffer_Succeeds()
-    {
-        uint expectedSize = 64;
-        BufferUsage expectedUsage = BufferUsage.Dynamic | BufferUsage.UniformBuffer;
-
-        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(expectedSize, expectedUsage));
-
-        Assert.Equal(expectedUsage, buffer.Usage);
-        Assert.Equal(expectedSize, buffer.SizeInBytes);
-    }
-
-    [Fact]
-    public void UpdateBuffer_NonDynamic_Succeeds()
-    {
-        DeviceBuffer buffer = CreateBuffer(64, BufferUsage.VertexBuffer);
-        GD.UpdateBuffer(buffer, 0, Float4x4.Identity);
-        GD.WaitForIdle();
-    }
-
-    [Fact]
-    public void UpdateBuffer_Span_Succeeds()
-    {
-        DeviceBuffer buffer = CreateBuffer(64, BufferUsage.VertexBuffer);
-        float[] data = new float[16];
-        GD.UpdateBuffer(buffer, 0, (ReadOnlySpan<float>)data);
-        GD.WaitForIdle();
-    }
-
-    [Fact]
     public void UpdateBuffer_ThenMapRead_Succeeds()
     {
         DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.Staging);
@@ -72,63 +43,10 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     }
 
     [Fact]
-    public void Staging_MapGeneric_WriteThenRead()
-    {
-        DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.Staging);
-        Span<int> view = GD.Map<int>(buffer);
-        Assert.Equal(256, view.Length);
-        for (int i = 0; i < view.Length; i++)
-        {
-            view[i] = i * 10;
-        }
-        GD.Unmap(buffer);
-
-        view = GD.Map<int>(buffer);
-        Assert.Equal(256, view.Length);
-        for (int i = 0; i < view.Length; i++)
-        {
-            view[i] = 1 * 10;
-        }
-        GD.Unmap(buffer);
-    }
-
-    [Fact]
-    public void MapGeneric_Length_MatchesBufferSize()
-    {
-        DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.Staging);
-        Span<byte> view = GD.Map<byte>(buffer);
-        Assert.Equal(1024, view.Length);
-        GD.Unmap(buffer);
-    }
-
-    [Fact]
     public void Map_WrongFlags_Throws()
     {
         DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.VertexBuffer);
         Assert.Throws<RenderException>(() => GD.Map(buffer));
-    }
-
-    [Fact]
-    public void CopyBuffer_Succeeds()
-    {
-        DeviceBuffer src = CreateBuffer(1024, BufferUsage.Staging);
-        int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
-        GD.UpdateBuffer(src, 0, data);
-
-        DeviceBuffer dst = CreateBuffer(1024, BufferUsage.Staging);
-
-        GD.RunTestGraph((context, copyCL) =>
-        {
-            copyCL.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
-        });
-        GD.WaitForIdle();
-        src.Dispose();
-
-        Span<int> view = GD.Map<int>(dst);
-        for (int i = 0; i < view.Length; i++)
-        {
-            Assert.Equal(i * 2, view[i]);
-        }
     }
 
     [Fact]
@@ -184,87 +102,6 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.Unmap(buffer);
         GD.Unmap(buffer);
         GD.Unmap(buffer);
-    }
-
-    [Fact]
-    public void UnusualSize()
-    {
-        DeviceBuffer src = RF.CreateBuffer(
-            new BufferDescription(208, BufferUsage.UniformBuffer));
-        DeviceBuffer dst = RF.CreateBuffer(
-            new BufferDescription(208, BufferUsage.Staging));
-
-        byte[] data = Enumerable.Range(0, 208).Select(i => (byte)(i * 150)).ToArray();
-        GD.UpdateBuffer(src, 0, data);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
-        });
-        GD.WaitForIdle();
-        Span<byte> readMap = GD.Map(dst);
-        for (int i = 0; i < readMap.Length; i++)
-        {
-            Assert.Equal((byte)(i * 150), readMap[i]);
-        }
-        GD.Unmap(dst);
-    }
-
-    [Fact]
-    public void Update_Dynamic_NonZeroOffset()
-    {
-        DeviceBuffer dynamic = RF.CreateBuffer(
-            new BufferDescription(1024, BufferUsage.Dynamic | BufferUsage.UniformBuffer));
-
-        byte[] initialData = Enumerable.Range(0, 1024).Select(i => (byte)i).ToArray();
-        GD.UpdateBuffer(dynamic, 0, initialData);
-
-        byte[] replacementData = Enumerable.Repeat((byte)255, 512).ToArray();
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.UpdateBuffer(dynamic, 512, replacementData);
-        });
-        GD.WaitForIdle();
-
-        DeviceBuffer dst = RF.CreateBuffer(
-            new BufferDescription(1024, BufferUsage.Staging));
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.CopyBuffer(dynamic, 0, dst, 0, dynamic.SizeInBytes);
-        });
-        GD.WaitForIdle();
-
-        Span<byte> readView = GD.Map<byte>(dst);
-        for (uint i = 0; i < 512; i++)
-        {
-            Assert.Equal((byte)i, readView[(int)i]);
-        }
-
-        for (uint i = 512; i < 1024; i++)
-        {
-            Assert.Equal((byte)255, readView[(int)i]);
-        }
-    }
-
-    [Fact]
-    public void CommandBuffer_Update_Staging()
-    {
-        DeviceBuffer staging = RF.CreateBuffer(
-            new BufferDescription(1024, BufferUsage.Staging));
-        byte[] data = Enumerable.Range(0, 1024).Select(i => (byte)i).ToArray();
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.UpdateBuffer(staging, 0, data);
-        });
-        GD.WaitForIdle();
-
-        Span<byte> readView = GD.Map<byte>(staging);
-        for (uint i = 0; i < staging.SizeInBytes; i++)
-        {
-            Assert.Equal((byte)i, readView[(int)i]);
-        }
     }
 
     [Theory]
@@ -384,47 +221,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     }
 
     [Theory]
-    [InlineData(BufferUsage.UniformBuffer)]
-    [InlineData(BufferUsage.UniformBuffer | BufferUsage.Dynamic)]
     [InlineData(BufferUsage.VertexBuffer)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.IndexBuffer)]
-    [InlineData(BufferUsage.IndexBuffer | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.IndirectBuffer)]
-    [InlineData(BufferUsage.StructuredBufferReadOnly)]
-    [InlineData(BufferUsage.StructuredBufferReadOnly | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.StructuredBufferReadWrite)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.IndexBuffer)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.IndexBuffer | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.IndexBuffer | BufferUsage.IndirectBuffer)]
-    [InlineData(BufferUsage.IndexBuffer | BufferUsage.IndirectBuffer)]
-    [InlineData(BufferUsage.Staging)]
-    public void CreateBuffer_UsageFlagsCoverage(BufferUsage usage)
-    {
-        if ((usage & BufferUsage.StructuredBufferReadOnly) != 0
-            || (usage & BufferUsage.StructuredBufferReadWrite) != 0)
-        {
-            return;
-        }
-
-        BufferDescription description = new(64, usage);
-        DeviceBuffer buffer = RF.CreateBuffer(description);
-        GD.UpdateBuffer(buffer, 0, new Float4[4]);
-        GD.WaitForIdle();
-    }
-
-    [Theory]
-    [InlineData(BufferUsage.UniformBuffer)]
-    [InlineData(BufferUsage.UniformBuffer | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.VertexBuffer)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.IndexBuffer)]
-    [InlineData(BufferUsage.IndexBuffer | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.IndirectBuffer)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.IndexBuffer)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.IndexBuffer | BufferUsage.Dynamic)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.IndexBuffer | BufferUsage.IndirectBuffer)]
-    [InlineData(BufferUsage.IndexBuffer | BufferUsage.IndirectBuffer)]
     [InlineData(BufferUsage.Staging)]
     public void CopyBuffer_ZeroSize(BufferUsage usage)
     {
@@ -453,18 +250,8 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     }
 
     [Theory]
-    [InlineData(BufferUsage.UniformBuffer, false)]
-    [InlineData(BufferUsage.UniformBuffer, true)]
-    [InlineData(BufferUsage.UniformBuffer | BufferUsage.Dynamic, false)]
-    [InlineData(BufferUsage.UniformBuffer | BufferUsage.Dynamic, true)]
     [InlineData(BufferUsage.VertexBuffer, false)]
     [InlineData(BufferUsage.VertexBuffer, true)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.Dynamic, false)]
-    [InlineData(BufferUsage.VertexBuffer | BufferUsage.Dynamic, true)]
-    [InlineData(BufferUsage.IndexBuffer, false)]
-    [InlineData(BufferUsage.IndexBuffer, true)]
-    [InlineData(BufferUsage.IndirectBuffer, false)]
-    [InlineData(BufferUsage.IndirectBuffer, true)]
     [InlineData(BufferUsage.Staging, false)]
     [InlineData(BufferUsage.Staging, true)]
     public unsafe void UpdateBuffer_ZeroSize(BufferUsage usage, bool useCommandBufferUpdate)

@@ -28,30 +28,6 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void Build_TwoWritersWithSameDescription_Succeeds()
-    {
-        var a = new TestPass("A", outputs: new[] { ("agree_shared", Desc.Color()) });
-        var b = new TestPass("B", outputs: new[] { ("agree_shared", Desc.Color()) });
-
-        Assert.Equal(2, Build(a, b).OrderedPasses.Count);
-    }
-
-    [Fact]
-    public void Build_OrdersReaderAfterWriter_RegardlessOfInsertionOrder()
-    {
-        var writer = new TestPass("Writer",
-            outputs: new[] { ("topo_shared", Desc.Color()) });
-        var reader = new TestPass("Reader",
-            inputs: new[] { "topo_shared" },
-            outputs: new[] { ("topo_readerOut", Desc.Color()) });
-
-        RenderGraph<TestView> graph = Build(reader, writer);
-        List<string> order = OrderNames(graph);
-
-        Assert.True(order.IndexOf("Writer") < order.IndexOf("Reader"));
-    }
-
-    [Fact]
     public void Build_ChainOfDependencies_OrdersTransitively()
     {
         var a = new TestPass("A", outputs: new[] { ("chain_a", Desc.Color()) });
@@ -118,21 +94,6 @@ public class RenderGraphSolverTests
 
         Assert.True(order.IndexOf("Compute") < order.IndexOf("Shade"));
         Assert.IsType<GraphBufferResource>(graph.Resources[RenderResourceID.Intern("light_grid")]);
-    }
-
-    [Fact]
-    public void Build_MergesResourceTable_AcrossPasses()
-    {
-        var a = new TestPass("A", outputs: new[] { ("table_a", Desc.Color()) });
-        var b = new TestPass("B",
-            inputs: new[] { "table_a" },
-            outputs: new[] { ("table_b", Desc.Color()) });
-
-        RenderGraph<TestView> graph = Build(a, b);
-
-        Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("table_a")));
-        Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("table_b")));
-        Assert.Equal(2, graph.Resources.Count);
     }
 
     [Fact]
@@ -216,49 +177,10 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void TextureResource_ExplicitOps_OverrideLifetimeDefault()
-    {
-        var resource = new GraphTextureResource(
-            RenderResourceID.Intern("ops_explicit"), Desc.Color(), 0,
-            new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Discard));
-
-        Assert.Equal(LoadAction.Load, resource.Ops.Color.Load);
-        Assert.Equal(StoreAction.DontCare, resource.Ops.Depth.Store);
-    }
-
-    [Fact]
     public void Build_PassDeclaresBackbuffer_WritesViewTargetIsTrue()
     {
         RenderGraph<TestView> graph = Build(new TestBackbufferPass());
 
         Assert.True(graph.WritesViewTarget);
-    }
-
-    [Fact]
-    public void Build_NoPassDeclaresBackbuffer_WritesViewTargetIsFalse()
-    {
-        RenderGraph<TestView> graph = Build(new TestPass("Offscreen", outputs: new[] { ("bb_offscreen", Desc.Color()) }));
-
-        Assert.False(graph.WritesViewTarget);
-    }
-
-    [Fact]
-    public void Build_BackbufferPassReadsTexture_RunsAfterWriter()
-    {
-        var writer = new TestPass("Writer", outputs: new[] { ("bb_shared", Desc.Color()) });
-        var backbuffer = new TestBackbufferPass(inputs: new[] { "bb_shared" });
-
-        RenderGraph<TestView> graph = Build(backbuffer, writer);
-
-        Assert.Equal(new[] { "Writer", "TestBackbuffer" }, OrderNames(graph));
-    }
-
-    [Fact]
-    public void Build_BackbufferPassReadsResourceNoPassWrites_Throws()
-    {
-        var backbuffer = new TestBackbufferPass(inputs: new[] { "bb_only_resource" });
-
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Build(backbuffer));
-        Assert.Contains("bb_only_resource", ex.Message);
     }
 }

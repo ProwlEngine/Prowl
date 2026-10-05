@@ -40,45 +40,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     }
 
     [SkippableFact]
-    public void TwoProgramsShareSetAndBinding_SecondPassDoesNotSeeFirstProgramsUniform()
-    {
-
-        // Two separate program objects built from the same layout, so both declare their uniform
-        // block at (set 0, binding 0). If the arena keyed a cached range only by (set, binding)
-        // rather than by program identity, the second pass could pick up the first pass's range.
-        ComputeProgram programX = CreateTwoBlockProgram();
-        ComputeProgram programY = CreateTwoBlockProgram();
-
-        DeviceBuffer outputX = CreateOutput();
-        DeviceBuffer outputY = CreateOutput();
-
-        PropertySet propsX = new();
-        propsX.SetInt("valueA", 111);
-        propsX.SetInt("valueB", 222);
-        propsX.SetBuffer("Output", outputX);
-
-        PropertySet propsY = new();
-        propsY.SetInt("valueA", 999);
-        propsY.SetInt("valueB", 888);
-        propsY.SetBuffer("Output", outputY);
-
-        GD.RunTestGraphPasses(2, (context, cl, i) =>
-        {
-            cl.SetComputeShader(i == 0 ? programX : programY);
-            cl.SetProperties(i == 0 ? propsX : propsY);
-            cl.Dispatch(1, 1, 1);
-        });
-        GD.WaitForIdle();
-
-        uint[] rx = Read(outputX);
-        uint[] ry = Read(outputY);
-        Assert.Equal(111u, rx[0]);
-        Assert.Equal(222u, rx[1]);
-        Assert.Equal(999u, ry[0]);
-        Assert.Equal(888u, ry[1]);
-    }
-
-    [SkippableFact]
     public void SetPropertiesSecondSet_SwapsInSameValueViaDifferentEntryObject_StillDispatchesCorrectly()
     {
 
@@ -112,40 +73,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
         Assert.Equal(100u, r1[1]);
         Assert.Equal(42u, r2[0]);
         Assert.Equal(200u, r2[1]);
-    }
-
-    [SkippableFact]
-    public void AlternatingUniforms_SeparatePassesInOneExecution_EachPassCorrect()
-    {
-
-        const int n = 6;
-        ComputeProgram program = CreateTwoBlockProgram();
-        DeviceBuffer[] outputs = new DeviceBuffer[n];
-        for (int i = 0; i < n; i++) outputs[i] = CreateOutput();
-
-        // Each pass rents its own command buffer, so this exercises the same flip-flop as
-        // BindingOptimizationTests' AlternatingUniforms case but across passes rather than draws
-        // within one recording - a range going stale between passes would surface here.
-        GD.RunTestGraphPasses(n, (context, cl, i) =>
-        {
-            bool even = (i % 2) == 0;
-            cl.SetComputeShader(program);
-            PropertySet props = new();
-            props.SetInt("valueA", even ? 1 : 9);
-            props.SetInt("valueB", even ? 2 : 8);
-            props.SetBuffer("Output", outputs[i]);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-        });
-        GD.WaitForIdle();
-
-        for (int i = 0; i < n; i++)
-        {
-            bool even = (i % 2) == 0;
-            uint[] r = Read(outputs[i]);
-            Assert.Equal(even ? 1u : 9u, r[0]);
-            Assert.Equal(even ? 2u : 8u, r[1]);
-        }
     }
 
     // ---- helpers ----

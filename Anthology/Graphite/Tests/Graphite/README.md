@@ -2,45 +2,35 @@
 
 ## Layout
 
-- **`CPU/`** holds pure value-type tests (identifiers, interner, profiling value types,
-  `PropertySet`, format helpers, the render graph solver, and `RenderPipeline` pass wiring). They
+- **`CPU/`** holds pure value-type tests (interner, `PropertySet`, format helpers, the render
+  graph solver, and `RenderPipeline` pass wiring). They
   touch no graphics device and run in parallel.
 - **`GPU/`** holds tests that require a graphics device. They share one device per backend and
   must not run concurrently, so every GPU test class joins the `"GPU Tests"` collection
   (`[CollectionDefinition("GPU Tests", DisableParallelization = true)]` in `XunitAssemblyOptions.cs`).
   This keeps the GPU tests serialized while leaving the CPU tests parallel.
-- **`GPU/Baseline/`** holds the representative smoke tests against the current
-  `GraphicsProgram` / `PropertySet` / `ExecutionTask` API (render, compute, execution-ring
-  lifecycle, transient allocation, fences, disposal, profiler counters) - the built-in ring that
-  replaces Veldrid's caller-managed `Fence`/`SubmitCommands` model. Tests exercise
-  `BeginExecution`/`CompleteExecution` and the `RunTestGraph` helper.
+- **`GPU/Baseline/`** holds the end-to-end smoke tests against the current
+  `GraphicsProgram` / `PropertySet` / `ExecutionTask` API: one draw and one dispatch, each read
+  back through the `RunTestGraph` helper.
 - The remaining `GPU/` suites are the deeper feature coverage, organized by feature rather than
   mirroring the old Veldrid suites:
-  - `RenderTests` - vertex attribute formats (uint / ushort / normalized ushort / half), blend
+  - `RenderTests` - vertex attribute formats (ushort / normalized ushort / half), blend
     factor, color write mask, fragment depth writes, texture binding across passes, framebuffer
     array layers.
-  - `ComputeTests` - compute-fed graphics, compute-written storage textures (2D, 2D-array, 3D),
+  - `ComputeTests` - compute-fed graphics, compute-written storage textures (2D, 3D),
     and indirect dispatch.
-  - `GraphicsDeviceTests` - device identity/features, the `BeginExecution`/`CompleteExecution`
-    ring lifecycle, `MaxExecutingTasks` throttling, transient allocation and its hard cap, fences,
-    and `ShaderProgram` lifetime.
-  - `PropertySetBindingTests` - end-to-end `PropertySet` binding through `CommandBuffer`:
-    transient vs. read-only vs. writable uniform buffers, structured buffers, and
-    the missing-property handler.
+  - `PropertySetBindingTests` / `ExplicitWritableUniformBufferTests` - read-only and writable
+    user-provided uniform buffers bound through `PropertySet`.
   - `CrossSetBindingTests` - binding spread across three descriptor sets: a structured buffer
     outside set 0, a texture/sampler pair in a third set, descriptor-set cache reuse and
-    non-aliasing, sub-ranges of one buffer, and `ClearProperties`.
-  - `MultiParameterBlockBindingTests` - regression coverage for a binding-point aliasing bug
-    where two buffers with the same local parameter-set binding could resolve to the same
-    shader-wide binding by accident.
+    non-aliasing, sub-ranges of one buffer, `ClearProperties`, and the missing-property handler.
   - `BindingOptimizationTests` - the per-draw binding optimizations: draw-to-draw descriptor-set
     dedup, value-based transient-UBO reuse, resolve-once, and command-buffer pooling.
-  - `FrameLifecycleTests` - the execution ring mechanics: ring slot cycling and repeating, the
-    completion fence recycled per slot, in-flight tracking, and the `MaxExecutingTasks` backstop
-    enforcing the ceiling.
+  - `FrameLifecycleTests` - the execution ring mechanics: monotonic ids mapping onto ring slots,
+    in-flight tracking, and the `MaxExecutingTasks` backstop enforcing the ceiling.
   - `TransientAllocationTests` - the per-execution bump allocator: offset alignment, non-overlap,
-    per-execution head reset, and the overflow spill path (growth rule, cumulative hard cap, the
-    one-shot soft-cap warning).
+    per-execution head reset, and the overflow spill path (growth rule, single and cumulative
+    hard cap).
   - `TransientTexturePoolTests` - the device-level transient render-texture pool
     (`GraphicsDevice.RentGraphTransientRenderTexture`): desc-keyed reuse once an
     execution's fence signals, no reuse while a bundle is still in flight, and leak-free disposal.
@@ -52,14 +42,13 @@
     creation, mapping, and copy behavior, plus a dedicated file for regressions guarding specific
     fixed bugs.
   - `FramebufferTests` / `SwapchainTests` - offscreen framebuffers and `OutputDescription`, plus
-    the main swapchain's framebuffer, presentation, resize, and sRGB creation.
-  - `DispatchRenderGraphTests` - the high-level `GraphicsDevice.DispatchGraph` entry point: one
-    execution per dispatch, the pass loop running once per view against a fresh per-view context,
-    the returned task completing, transient acquisition surviving many dispatches, and the present
-    pass arming the swap only when a swapchain target is available.
+    swapchain presentation, resize, view-target depth, and sRGB creation.
+  - `DispatchRenderGraphTests` - the high-level `GraphicsDevice.DispatchGraph` entry point: the
+    pass loop running once per view against a fresh per-view context, and the view-target pass
+    resolving to the swapchain or framebuffer target only when one is available.
   - `RenderContextResourceTests` - `RenderContext.GetRenderTexture`: the resolution/caching seam,
-    view-size wiring for graph resources, isolation of resolved resources across views and across
-    dispatches, and the profiler capture path.
+    view-size wiring for graph resources, isolation of resolved resources across views, imported
+    textures, and the profiler capture path.
   - `DisposalTests` - resource disposal and dependency lifetimes.
 - **`CPU/RenderGraphSolverTests`** / **`CPU/RenderPipelineTests`** (namespace
   `Prowl.Graphite.RenderGraph.Tests`, backed by `CPU/TestPasses.cs`) - pure value-type coverage of

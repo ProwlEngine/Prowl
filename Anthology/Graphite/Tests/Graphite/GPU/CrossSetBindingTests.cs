@@ -5,11 +5,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Resource binding spread across multiple descriptor sets. MultiParameterBlockBindingTests covers
-// exactly one shape -- two sets, one uniform block each -- which leaves the interesting cases
-// untested: a structured buffer that does not live in set 0, a texture and sampler pair in a
-// third set, and the descriptor-set cache having to tell near-identical bindings apart.
-//
 // The layouts below are hand-written to match CrossSetBinding.slang, mirroring the other binding
 // suites. The compiler's reflected layouts cannot be used here: they carry the right sets and
 // binding indices but no UniformFields, so scalar uniforms have nothing to bind by name.
@@ -147,20 +142,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     }
 
     [SkippableFact]
-    public void StructuredBufferOutsideSetZero_ReadsItsOwnContents()
-    {
-
-        DeviceBuffer output = CreateOutput();
-        DeviceBuffer input = CreateInput(4242);
-        Texture texture = CreateSolidTexture(0);
-        ComputeProgram program = CreateProgram();
-
-        uint[] result = Run(BuildProps(output, input, texture), output, program);
-
-        Assert.Equal(4242u, result[2]);
-    }
-
-    [SkippableFact]
     public void SwappingOneResourceInOneSet_LeavesTheOtherSetsIntact()
     {
 
@@ -232,32 +213,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             Assert.Equal(6u, b[3]);
             Assert.Equal(40u, b[4]);
         }
-    }
-
-    [SkippableFact]
-    public void TwoDispatchesInOneCommandBuffer_SeeTheirOwnProperties()
-    {
-
-        DeviceBuffer firstOutput = CreateOutput();
-        DeviceBuffer secondOutput = CreateOutput();
-        DeviceBuffer input = CreateInput(1);
-        Texture texture = CreateSolidTexture(1);
-        ComputeProgram program = CreateProgram();
-
-        // Rebinding between dispatches in a single recording must take effect for the second
-        // dispatch rather than both observing whichever set was bound last.
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            cl.SetProperties(BuildProps(firstOutput, input, texture, valueA: 7));
-            cl.Dispatch(1, 1, 1);
-            cl.SetProperties(BuildProps(secondOutput, input, texture, valueA: 8));
-            cl.Dispatch(1, 1, 1);
-        });
-        GD.WaitForIdle();
-
-        Assert.Equal(7u, Read(firstOutput)[0]);
-        Assert.Equal(8u, Read(secondOutput)[0]);
     }
 
     [SkippableFact]

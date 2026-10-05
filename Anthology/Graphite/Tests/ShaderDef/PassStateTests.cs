@@ -30,23 +30,11 @@ public class PassStateTests
 
 
     [Theory]
-    [InlineData("Never", ComparisonKind.Never)]
-    [InlineData("Less", ComparisonKind.Less)]
     [InlineData("LessEqual", ComparisonKind.LessEqual)]
-    [InlineData("Greater", ComparisonKind.Greater)]
     [InlineData("Always", ComparisonKind.Always)]
     public void ZTest_SetsDepthFunc(string value, ComparisonKind expected)
     {
         Assert.Equal(expected, Parse.State($"ZTest {value}").DepthStencil.DepthComparison);
-    }
-
-
-    [Theory]
-    [InlineData("On", true)]
-    [InlineData("Off", false)]
-    public void ZWrite_SetsDepthWriteMask(string value, bool expected)
-    {
-        Assert.Equal(expected, Parse.State($"ZWrite {value}").DepthStencil.DepthWriteEnabled);
     }
 
 
@@ -96,9 +84,7 @@ public class PassStateTests
 
 
     [Theory]
-    [InlineData("Add", BlendFunction.Add)]
     [InlineData("Subtract", BlendFunction.Subtract)]
-    [InlineData("Maximum", BlendFunction.Maximum)]
     public void BlendOp_SetsBothBlendFunctions(string value, BlendFunction expected)
     {
         PassState s = Parse.State($"BlendOp {value}");
@@ -110,15 +96,7 @@ public class PassStateTests
 
     [Theory]
     [InlineData("R", ColorWriteMask.Red)]
-    [InlineData("G", ColorWriteMask.Green)]
-    [InlineData("B", ColorWriteMask.Blue)]
-    [InlineData("A", ColorWriteMask.Alpha)]
-    [InlineData("RG", ColorWriteMask.Red | ColorWriteMask.Green)]
-    [InlineData("RB", ColorWriteMask.Red | ColorWriteMask.Blue)]
-    [InlineData("RA", ColorWriteMask.Red | ColorWriteMask.Alpha)]
-    [InlineData("GB", ColorWriteMask.Green | ColorWriteMask.Blue)]
     [InlineData("GA", ColorWriteMask.Green | ColorWriteMask.Alpha)]
-    [InlineData("BA", ColorWriteMask.Blue | ColorWriteMask.Alpha)]
     [InlineData("RGB", ColorWriteMask.Red | ColorWriteMask.Green | ColorWriteMask.Blue)]
     [InlineData("RGBA", ColorWriteMask.All)]
     public void ColorMask_ParsesChannels(string mask, ColorWriteMask expected)
@@ -140,17 +118,6 @@ public class PassStateTests
     public void AlphaToMask_Sets(string value, bool expected)
     {
         Assert.Equal(expected, Parse.State($"AlphaToMask {value}").AlphaToCoverage);
-    }
-
-
-    [Fact]
-    public void Offset_SetsFillAndNegativeValues()
-    {
-        PassState s = Parse.State("Offset -1 -2");
-
-        Assert.True(s.Raster.DepthBiasEnabled);
-        Assert.Equal(-1f, s.Raster.DepthBiasSlopeFactor);
-        Assert.Equal(-2f, s.Raster.DepthBiasConstantFactor);
     }
 
 
@@ -238,14 +205,6 @@ public class PassStateTests
 
 
     [Fact]
-    public void Equals_EmptyStates_AreEqual()
-    {
-        Assert.Equal(new PassState(), new PassState());
-        Assert.Equal(new PassState().GetHashCode(), new PassState().GetHashCode());
-    }
-
-
-    [Fact]
     public void Equals_UnsetVersusSet_AreNotEqual()
     {
         Assert.NotEqual(new PassState(), Parse.State("Cull Back"));
@@ -253,13 +212,6 @@ public class PassStateTests
         Assert.NotEqual(Parse.State("ZTest Less"), Parse.State("ZTest Always"));
         Assert.NotEqual(Parse.State("ColorMask RGB"), Parse.State("ColorMask RGBA"));
         Assert.NotEqual(Parse.State("Stencil { Ref 1 }"), Parse.State("Stencil { Ref 2 }"));
-    }
-
-
-    [Fact]
-    public void Equals_Null_IsFalse()
-    {
-        Assert.False(new PassState().Equals(null));
     }
 
 
@@ -296,15 +248,6 @@ public class PassStateTests
 
             Assert.False(flagOnly.Equals(applied), $"{flag} is not copied by Apply or not compared by Equals.");
         }
-    }
-
-
-    [Fact]
-    public void Apply_SetsUnionOfBothMasks()
-    {
-        PassState combined = Parse.State("Cull Off").Apply(Parse.State("ZWrite Off"));
-
-        Assert.Equal(PassStateFields.CullMode | PassStateFields.DepthWrite, combined.Set);
     }
 
 

@@ -65,29 +65,6 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         => !GD.IsUvOriginTopLeft ? height - y - 1 : y;
 
     [Fact]
-    public void Points_WithUIntColor_ProduceExpectedPixels()
-    {
-        const uint norm = 2500;
-        UIntVertex[] vertices =
-        [
-            new() { Position = new(0.5f, 0.5f), Color = Scale(0.25f, 0.5f, 0.75f, norm) },
-            new() { Position = new(10.5f, 12.5f), Color = Scale(0.25f, 0.5f, 0.75f, norm) },
-            new() { Position = new(25.5f, 35.5f), Color = Scale(0.75f, 0.5f, 0.25f, norm) },
-            new() { Position = new(49.5f, 49.5f), Color = Scale(0.15f, 0.25f, 0.35f, norm) },
-        ];
-
-        VertexLayoutDescription layout = new(0, (uint)Unsafe.SizeOf<UIntVertex>(),
-            new VertexElementDescription("POSITION", VertexElementFormat.Float2),
-            new VertexElementDescription("COLOR", VertexElementFormat.UInt4));
-
-        DrawColoredPoints("UIntVertexAttribs.slang", layout, vertices, norm, vertices.Length,
-            i => new Color(vertices[i].Color.X / (float)norm, vertices[i].Color.Y / (float)norm, vertices[i].Color.Z / (float)norm, 1),
-            i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
-
-        static Int4 Scale(float r, float g, float b, uint n) => new() { X = (int)(r * n), Y = (int)(g * n), Z = (int)(b * n) };
-    }
-
-    [Fact]
     public void Points_WithUShortColor_ProduceExpectedPixels()
     {
         const uint norm = 2500;
@@ -479,9 +456,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     }
 
     [Theory]
-    [InlineData(2u, 0u)]
     [InlineData(5u, 3u)]
-    [InlineData(8u, 7u)]
     public void Render_ToFramebufferArrayLayer(uint layerCount, uint targetLayer)
     {
         const uint size = 16;

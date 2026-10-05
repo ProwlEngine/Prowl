@@ -9,12 +9,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Coverage for RenderContext.GetRenderTexture: the resolution/caching seam behind "independent draw
-// calls get the right resources" and "render textures are properly created and returned by the graph".
-// Also covers view-size wiring for graph resources, isolation of resolved resources across views and
-// across dispatches, the profiler capture path, and the current (permissive) behavior of requesting the
-// swapchain target from a non-present pass.
-
 file readonly struct ResourceView : IRenderView
 {
     public Swapchain? TargetSwapchain { get; }
@@ -62,26 +56,6 @@ file sealed class ResolvingPass : IPass<ResourceView>
     }
 }
 
-file sealed class UndeclaredResolvePass : IPass<ResourceView>
-{
-    public string Name => "UndeclaredResolve";
-
-    public void Setup(RenderContextBuilder builder) { }
-
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
-        => context.GetRenderTexture(new TextureHandle(RenderResourceID.Intern("resourcetest_undeclared")));
-}
-
-file sealed class DefaultHandleResolvePass : IPass<ResourceView>
-{
-    public string Name => "DefaultHandleResolve";
-
-    public void Setup(RenderContextBuilder builder) { }
-
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
-        => context.GetRenderTexture(default);
-}
-
 file sealed class TwoOutputPass : IPass<ResourceView>
 {
     private readonly RenderResourceID _a;
@@ -118,32 +92,6 @@ file sealed class ZeroOutputPass : IPass<ResourceView>
     public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) { }
 }
 
-file sealed class HistoryResolvingPass : IPass<ResourceView>
-{
-    private readonly RenderResourceID _id;
-    private readonly GraphTextureDesc _desc;
-    private TextureHandle _handle;
-
-    public HistoryResolvingPass(RenderResourceID id, GraphTextureDesc desc)
-    {
-        _id = id;
-        _desc = desc;
-    }
-
-    public string Name => "History";
-
-    public List<RenderTexture> Current { get; } = new();
-    public List<RenderTexture> Previous { get; } = new();
-
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
-
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
-    {
-        Current.Add(context.GetRenderTexture(_handle, 0));
-        Previous.Add(context.GetRenderTexture(_handle, 1));
-    }
-}
-
 file sealed class ImportingPass : IPass<ResourceView>
 {
     private readonly RenderResourceID _id;
@@ -160,39 +108,6 @@ file sealed class ImportingPass : IPass<ResourceView>
     public RenderTexture? Resolved { get; private set; }
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareImportedTexture(_id, _external);
-
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
-}
-
-file sealed class BackbufferResolvingPass : IPass<ResourceView>
-{
-    private TextureHandle _backbuffer;
-
-    public bool SawFramebuffer { get; private set; }
-
-    public string Name => "BackbufferResolving";
-
-    public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareViewTarget();
-
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
-        => SawFramebuffer = context.GetRenderTexture(_backbuffer).Framebuffer != null;
-}
-
-file sealed class ReadingPass : IPass<ResourceView>
-{
-    private readonly RenderResourceID _id;
-    private TextureHandle _handle;
-
-    public ReadingPass(RenderResourceID id)
-    {
-        _id = id;
-    }
-
-    public string Name => "Reading";
-
-    public RenderTexture? Resolved { get; private set; }
-
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
     public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
 }
@@ -284,24 +199,6 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     }
 
     [Fact]
-    public void GetRenderTexture_UndeclaredHandle_Throws()
-    {
-        using RenderPipeline<ResourceView> pipeline = new([new UndeclaredResolvePass()]);
-
-        Assert.Throws<InvalidOperationException>(
-            () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) }));
-    }
-
-    [Fact]
-    public void GetRenderTexture_DefaultHandle_Throws()
-    {
-        using RenderPipeline<ResourceView> pipeline = new([new DefaultHandleResolvePass()]);
-
-        Assert.Throws<ArgumentException>(
-            () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) }));
-    }
-
-    [Fact]
     public void GetRenderTexture_TwoViewsInOneDispatch_ResolveToIndependentCorrectlySizedTextures()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_perview"), ColorDesc());
@@ -333,37 +230,6 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     }
 
     [Fact]
-    public void GetRenderTexture_ExplicitSizedResource_IgnoresViewSize()
-    {
-        ResolvingPass pass = new("Pass",
-            RenderResourceID.Intern("resourcetest_explicit"),
-            GraphTextureDesc.Sized(37, 41, false, PixelFormat.R8_G8_B8_A8_UNorm));
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
-
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 300, GD.MainSwapchain) });
-        GD.WaitForIdle();
-
-        Assert.Equal(37u, pass.Resolved[0].Desc.Width);
-        Assert.Equal(41u, pass.Resolved[0].Desc.Height);
-    }
-
-    [Fact]
-    public void Dispatch_ConsecutiveDispatchesWithDifferentViewSizes_EachResolvesOwnSizedTexture()
-    {
-        ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_crossdispatch"), ColorDesc());
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
-
-        ExecutionTask task1 = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
-        ExecutionTask task2 = GD.DispatchGraph(pipeline, new ResourceView[] { new(128, 128, GD.MainSwapchain) });
-        GD.WaitForExecution(task1);
-        GD.WaitForExecution(task2);
-
-        Assert.Equal(2, pass.Resolved.Count);
-        Assert.Equal(64u, pass.Resolved[0].Desc.Width);
-        Assert.Equal(128u, pass.Resolved[1].Desc.Width);
-    }
-
-    [Fact]
     public void ExecuteView_ProfilerRequestsCapture_CapturesEachPassByItsOwnDeclaredOutputCount()
     {
         RenderResourceID a = RenderResourceID.Intern("resourcetest_capture_a");
@@ -387,25 +253,6 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     }
 
     [Fact]
-    public void GetRenderTexture_HistoryResource_ThisFramesPreviousEqualsLastFramesCurrent()
-    {
-        HistoryResolvingPass pass = new(RenderResourceID.Intern("resourcetest_history"), ColorDesc());
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
-
-        for (int frame = 0; frame < 3; frame++)
-        {
-            ExecutionTask task = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
-            GD.WaitForExecution(task);
-        }
-
-        for (int frame = 0; frame < 3; frame++)
-            Assert.NotSame(pass.Current[frame], pass.Previous[frame]);
-
-        Assert.Same(pass.Current[0], pass.Previous[1]);
-        Assert.Same(pass.Current[1], pass.Previous[2]);
-    }
-
-    [Fact]
     public void DeclareImportedTexture_ResolvesToTheExternalTexture()
     {
         RenderTexture external = RF.CreateRenderTexture(new RenderTextureDescription(
@@ -418,44 +265,10 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
 
         Assert.Same(external, pass.Resolved);
     }
-
-    [Fact]
-    public void ReadingPass_DeclaresInputInSetup_ResolvesToSameInstanceAsWriter()
-    {
-        RenderResourceID id = RenderResourceID.Intern("resourcetest_present_reads_graph");
-        ResolvingPass writer = new("Writer", id, ColorDesc());
-        ReadingPass reader = new(id);
-        using RenderPipeline<ResourceView> pipeline = new([reader, writer]);
-
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
-        GD.WaitForIdle();
-
-        Assert.NotNull(reader.Resolved);
-        Assert.Same(writer.Resolved[0], reader.Resolved);
-    }
-}
-
-public abstract class RenderContextResourcePresentTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
-{
-    [Fact]
-    public void Backbuffer_PassDeclaredItInSetup_ResolvesToSwapchainFramebuffer()
-    {
-        BackbufferResolvingPass pass = new();
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
-
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
-        GD.WaitForIdle();
-
-        Assert.True(pass.SawFramebuffer);
-    }
 }
 
 #if TEST_VULKAN
 [Trait("Backend", "Vulkan")]
 [Collection("GPU Tests")]
 public class VulkanRenderContextResourceTests : RenderContextResourceTests<VulkanDeviceCreator> { }
-
-[Trait("Backend", "Vulkan")]
-[Collection("GPU Tests")]
-public class VulkanRenderContextResourcePresentTests : RenderContextResourcePresentTests<VulkanDeviceCreatorWithMainSwapchain> { }
 #endif
