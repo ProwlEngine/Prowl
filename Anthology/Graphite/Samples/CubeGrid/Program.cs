@@ -33,7 +33,6 @@ internal sealed class CubeGridPass : RasterPass<SceneView>
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
         CubeGrid.Draw(_time, cmd);
     }
 

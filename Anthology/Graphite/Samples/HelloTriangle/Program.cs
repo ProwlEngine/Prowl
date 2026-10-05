@@ -41,7 +41,6 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();

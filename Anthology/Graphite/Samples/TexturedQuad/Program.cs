@@ -56,7 +56,6 @@ internal sealed class TexturedQuadPass : RasterPass<SceneView>
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
         cmd.SetShader(_shader);
 
         cmd.SetProperties(_leftProperties);

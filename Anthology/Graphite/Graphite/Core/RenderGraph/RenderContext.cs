@@ -251,6 +251,28 @@ public sealed class RenderContext<TView>
         return cb;
     }
 
+    internal void BindDeclaredTarget(CommandBuffer cmd, ResourceAccess[] accesses)
+    {
+        RenderResourceID target = default;
+        bool found = false;
+        foreach (ResourceAccess access in accesses)
+        {
+            if (!access.IsTexture || !access.IsOutput || access.TextureUsage != TextureState.Attachment)
+                continue;
+
+            if (found && access.Id != target)
+                return;
+
+            target = access.Id;
+            found = true;
+        }
+
+        if (!found)
+            return;
+
+        cmd.SetFramebuffer(GetRenderTexture(new TextureHandle(target)).Framebuffer, GetTargetOps(target));
+    }
+
     internal void EndCommandBuffer(CommandBuffer cmd) => _task.SubmitRecorded(cmd);
 
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>

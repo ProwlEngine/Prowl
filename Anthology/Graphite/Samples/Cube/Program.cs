@@ -31,7 +31,6 @@ internal sealed class CubePass : RasterPass<SceneView>
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
         Cube.Draw(cmd);
     }
 }

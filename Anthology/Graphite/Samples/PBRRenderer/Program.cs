@@ -67,7 +67,6 @@ internal sealed class ScenePass : RasterPass<SceneView>
         Float4x4 view = Float4x4.CreateLookAt(eye, _center, Float3.UnitY);
         _properties.SetMatrix("MatrixMVP", projection * view);
 
-        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_model.Mesh);
         cmd.SetProperties(_properties);
@@ -105,7 +104,6 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
 
-        BindTarget(context, cmd);
 
         _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomHalf.Desc.Width, 0.5f / bloomHalf.Desc.Height));
@@ -148,7 +146,6 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
-        BindTarget(context, cmd);
 
         _properties.SetTexture("sourceTexture", bloomHalf.ColorTextures[0], _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomFull.Desc.Width, 0.5f / bloomFull.Desc.Height));
@@ -191,7 +188,6 @@ internal sealed class CompositePass : RasterPass<SceneView>
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
-        BindTarget(context, cmd);
 
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
         _properties.SetTexture("bloomTexture", bloomFull.ColorTextures[0], _sampler);
