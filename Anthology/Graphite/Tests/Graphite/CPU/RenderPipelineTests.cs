@@ -1,6 +1,6 @@
 #nullable enable
 
-using System.Collections.Generic;
+using System;
 using Xunit;
 
 namespace Prowl.Graphite.RenderGraph.Tests;
@@ -20,37 +20,6 @@ file sealed class CountingPass : IPass<TestView>
     public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
 }
 
-file sealed class CountingPipeline : RenderPipeline<TestView>
-{
-    private readonly CountingPass _pass;
-
-    public CountingPipeline(CountingPass pass) => _pass = pass;
-
-    protected override void InitializePasses() => AddPass(_pass);
-}
-
-file sealed class ReconfigurablePipeline : RenderPipeline<TestView>
-{
-    public IPass<TestView> ActivePass { get; set; }
-
-    public ReconfigurablePipeline(IPass<TestView> initialPass)
-        => ActivePass = initialPass;
-
-    protected override void InitializePasses()
-    {
-        AddPass(ActivePass);
-    }
-
-    public void PublicInvalidateGraph() => InvalidateGraph();
-}
-
-file sealed class ComposedInvalidatable : RenderPipeline<TestView>
-{
-    public ComposedInvalidatable(IEnumerable<IPass<TestView>> passes) : base(passes) { }
-
-    public void PublicInvalidateGraph() => InvalidateGraph();
-}
-
 public class RenderPipelineTests
 {
     [Fact]
@@ -65,13 +34,13 @@ public class RenderPipelineTests
     }
 
     [Fact]
-    public void Composed_InvalidateGraph_ReaddsPasses()
+    public void SetPasses_RebuildsGraphOnNextAccess()
     {
         CountingPass pass = new();
-        ComposedInvalidatable pipeline = new([pass]);
+        RenderPipeline<TestView> pipeline = new([pass]);
 
         _ = pipeline.Graph;
-        pipeline.PublicInvalidateGraph();
+        pipeline.SetPasses([pass]);
         _ = pipeline.Graph;
 
         Assert.Equal(2, pass.SetupCount);
@@ -81,7 +50,7 @@ public class RenderPipelineTests
     public void Graph_AccessedMultipleTimes_BuildsOnlyOnce()
     {
         CountingPass pass = new();
-        CountingPipeline pipeline = new(pass);
+        RenderPipeline<TestView> pipeline = new([pass]);
 
         _ = pipeline.Graph;
         _ = pipeline.Graph;
@@ -93,7 +62,7 @@ public class RenderPipelineTests
     [Fact]
     public void Graph_ReturnsSameInstance_OnRepeatedAccess()
     {
-        CountingPipeline pipeline = new(new CountingPass());
+        RenderPipeline<TestView> pipeline = new([new CountingPass()]);
 
         RenderGraph<TestView> first = pipeline.Graph;
         RenderGraph<TestView> second = pipeline.Graph;
@@ -102,22 +71,29 @@ public class RenderPipelineTests
     }
 
     [Fact]
-    public void InvalidateGraph_RebuildsWithPassesFromNextInitializePasses()
+    public void SetPasses_ReplacesPassesAndGraph()
     {
         var passA = new TestPass("A", outputs: new[] { ("res", Desc.Color()) });
         var passB = new TestPass("B", outputs: new[] { ("res", Desc.Color()) });
 
-        ReconfigurablePipeline pipeline = new(passA);
+        RenderPipeline<TestView> pipeline = new([passA]);
 
         RenderGraph<TestView> first = pipeline.Graph;
         Assert.Equal("A", first.OrderedPasses[0].Pass.Name);
 
-        pipeline.PublicInvalidateGraph();
-        pipeline.ActivePass = passB;
+        pipeline.SetPasses([passB]);
 
         RenderGraph<TestView> second = pipeline.Graph;
         Assert.NotSame(first, second);
         Assert.Single(second.OrderedPasses);
         Assert.Equal("B", second.OrderedPasses[0].Pass.Name);
+    }
+
+    [Fact]
+    public void SetPasses_NullPass_Throws()
+    {
+        RenderPipeline<TestView> pipeline = new();
+
+        Assert.Throws<ArgumentException>(() => pipeline.SetPasses([null!]));
     }
 }

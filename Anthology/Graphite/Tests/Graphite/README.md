@@ -65,7 +65,7 @@
   `Prowl.Graphite.RenderGraph.Tests`, backed by `CPU/TestPasses.cs`) - pure value-type coverage of
   `RenderGraph<TView, TDrawCommand>.Build`: pass ordering from declared inputs/outputs, dependency
   cycle detection, and presentation-source selection; plus `RenderPipeline` behavior like lazy,
-  once-only `InitializePasses`.
+  `SetPasses` rebuilds.
 
 ### Shaders
 

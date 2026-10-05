@@ -69,15 +69,6 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     }
 }
-
-internal sealed class TrianglePipeline : RenderPipeline<SceneView>
-{
-    private readonly TrianglePass _pass;
-
-    public TrianglePipeline(TrianglePass pass) => _pass = pass;
-
-    protected override void InitializePasses() => AddPass(_pass);
-}
 ```
 
 Creating a device and dispatching the pipeline each frame:
@@ -101,7 +92,7 @@ GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescriptio
 
 GraphicsProgram shader = /* load + create a ShaderProgram */;
 Mesh triangle = /* create vertex/index buffers */;
-TrianglePipeline pipeline = new(new TrianglePass(triangle, shader));
+RenderPipeline<SceneView> pipeline = new([new TrianglePass(triangle, shader)]);
 SceneView[] views = { new SceneView(600, 600, device.MainSwapchain) };
 
 // Per-frame render loop: builds an ExecutionTask internally, runs the pipeline for every view, and

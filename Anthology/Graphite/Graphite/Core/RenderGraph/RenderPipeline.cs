@@ -4,81 +4,49 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Graph-driven render pipeline. Pass a pass list to the constructor, or subclass and add passes in InitializePasses;
-/// gets solved into an ordered graph and run per view via ExecuteView.
+/// Graph-driven render pipeline. Set passes with SetPasses or the constructor; solved into an ordered graph and run per view via ExecuteView.
 /// </summary>
 public class RenderPipeline<TView> : IDisposable
     where TView : IRenderView
 {
     private readonly List<IPass<TView>> _passes = new();
-    private readonly IPass<TView>[] _composedPasses;
     private RenderGraph<TView>? _graph;
-    private bool _initialized;
     private bool _executingView;
 
-    /// <summary>Creates a pipeline to subclass; add passes in InitializePasses.</summary>
-    protected RenderPipeline()
+    /// <summary>Creates an empty pipeline. Call SetPasses before the first dispatch.</summary>
+    public RenderPipeline()
     {
-        _composedPasses = Array.Empty<IPass<TView>>();
     }
 
-    /// <summary>Creates a pipeline from a fixed pass list. Read/write declarations decide order.</summary>
-    /// <param name="passes">Passes to run. Re-added after InvalidateGraph.</param>
+    /// <summary>Creates a pipeline from a pass list. Read/write declarations decide order.</summary>
+    /// <param name="passes">Passes to run.</param>
     public RenderPipeline(IEnumerable<IPass<TView>> passes)
+    {
+        SetPasses(passes);
+    }
+
+    /// <summary>Replaces the pass list; the graph rebuilds on next use. Not callable mid-dispatch.</summary>
+    /// <param name="passes">Passes to run.</param>
+    public void SetPasses(IEnumerable<IPass<TView>> passes)
     {
         if (passes == null)
             throw new ArgumentNullException(nameof(passes));
+
+        if (_executingView)
+            throw new InvalidOperationException("SetPasses cannot be called while a view is executing.");
 
         List<IPass<TView>> list = new();
         foreach (IPass<TView> pass in passes)
             list.Add(pass ?? throw new ArgumentException("Pass list contains null.", nameof(passes)));
 
-        _composedPasses = list.ToArray();
-    }
-
-    /// <summary>
-    /// Runs once lazily before first execution. Override to add passes.
-    /// Read/write declarations decide order.
-    /// </summary>
-    protected virtual void InitializePasses()
-    {
-    }
-
-    /// <summary>Adds a pass. Call from InitializePasses.</summary>
-    protected void AddPass(IPass<TView> pass)
-        => _passes.Add(pass ?? throw new ArgumentNullException(nameof(pass)));
-
-    /// <summary>The solved graph, built on first use from the added passes.</summary>
-    public RenderGraph<TView> Graph
-    {
-        get
-        {
-            EnsureInitialized();
-            return _graph ??= RenderGraph<TView>.Build(_passes);
-        }
-    }
-
-    private void EnsureInitialized()
-    {
-        if (_initialized)
-            return;
-
-        _passes.AddRange(_composedPasses);
-        InitializePasses();
-        _initialized = true;
-    }
-
-    /// <summary>Disposes the current graph and re-runs InitializePasses lazily on next access. Not callable mid-dispatch.</summary>
-    protected void InvalidateGraph()
-    {
-        if (_executingView)
-            throw new InvalidOperationException("InvalidateGraph cannot be called while a view is executing.");
-
         _graph?.Dispose();
         _graph = null;
         _passes.Clear();
-        _initialized = false;
+        _passes.AddRange(list);
     }
+
+    /// <summary>The solved graph, built on first use from the current passes.</summary>
+    public RenderGraph<TView> Graph => _graph ??= RenderGraph<TView>.Build(_passes);
 
     /// <summary>
     /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view that set TargetSwapchain.
