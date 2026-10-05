@@ -71,6 +71,7 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
     private readonly RenderTexture?[] _focus = new RenderTexture?[2];
     private int _focusIndex;
     private bool _focusValid;
+    private long _focusedFrame = -1;
 
     public override void OnRenderEffect(RenderContext context)
     {
@@ -102,18 +103,24 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         for (int i = 0; i < 2; i++)
             if (_focus[i].IsNotValid()) { _focus[i] = new RenderTexture(1, 1, false, FocusFormat); _focusValid = false; }
 
-        RenderTexture prevFocus = _focus[_focusIndex]!;
-        _focusIndex ^= 1;
-        RenderTexture focus = _focus[_focusIndex]!;
+        // Focusing once a frame, so both eyes of a headset share one focus: the second eye uses what the first eased to.
+        if (_focusedFrame != Time.FrameCount || !_focusValid)
+        {
+            _focusedFrame = Time.FrameCount;
+            RenderTexture prevFocus = _focus[_focusIndex]!;
+            _focusIndex ^= 1;
+            RenderTexture nextFocus = _focus[_focusIndex]!;
 
-        float speed = FocusSpeed;
-        _mat.SetFloat("_UseAutoFocus", UseAutoFocus ? 1f : 0f);
-        _mat.SetFloat("_ManualFocusPoint", MathF.Max(ManualFocusPoint, 0.01f));
-        _mat.SetFloat("_FocusBlend", speed > 0f ? 1f - MathF.Exp(-speed * Time.UnscaledDeltaTime) : 1f);
-        _mat.SetFloat("_FocusHistoryValid", _focusValid ? 1f : 0f);
-        _mat.SetTexture("_PrevFocusTex", prevFocus.MainTexture);
-        cmd.Blit(focus, _mat, FocusPass);
-        _focusValid = true;
+            float speed = FocusSpeed;
+            _mat.SetFloat("_UseAutoFocus", UseAutoFocus ? 1f : 0f);
+            _mat.SetFloat("_ManualFocusPoint", MathF.Max(ManualFocusPoint, 0.01f));
+            _mat.SetFloat("_FocusBlend", speed > 0f ? 1f - MathF.Exp(-speed * Time.UnscaledDeltaTime) : 1f);
+            _mat.SetFloat("_FocusHistoryValid", _focusValid ? 1f : 0f);
+            _mat.SetTexture("_PrevFocusTex", prevFocus.MainTexture);
+            cmd.Blit(nextFocus, _mat, FocusPass);
+            _focusValid = true;
+        }
+        RenderTexture focus = _focus[_focusIndex]!;
         _mat.SetTexture("_FocusTex", focus.MainTexture);
 
         // CoC at full resolution.

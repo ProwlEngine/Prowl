@@ -44,40 +44,49 @@ public sealed class TAAEffect : ImageEffect
     /// <summary>Number of Halton samples in the jitter sequence before repeating.</summary>
     public int JitterSpread = 8;
 
+    private sealed class EyeHistory
+    {
+        public RenderTexture History;
+        public bool HistoryValid;
+        public int FrameIndex;
+        public Float2 Jitter;
+        public Float2 PreviousJitter;
+        public Float4x4? UserProjection;
+        public Float4x4? UserNonJitteredProjection;
+    }
+
     private Material _mat;
-    private RenderTexture _history;
-    private bool _historyValid;
-    private int _frameIndex;
     private Float2 _jitter;
     private Float2 _previousJitter;
-    private Float4x4? _userProjection;
-    private Float4x4? _userNonJitteredProjection;
 
     /// <summary>
-    /// Current sub-pixel jitter offset in pixel coordinates.
+    /// Current sub-pixel jitter offset in pixel coordinates, of the view rendered last.
     /// </summary>
     public Float2 Jitter => _jitter;
 
     /// <summary>
-    /// Previous frame's jitter offset in pixel coordinates.
+    /// Previous frame's jitter offset in pixel coordinates, of the view rendered last.
     /// </summary>
     public Float2 PreviousJitter => _previousJitter;
 
     public override void OnPreCull(Camera camera)
     {
-        _previousJitter = _jitter;
+        EyeHistory eye = GetEyeState<EyeHistory>(camera);
+        eye.PreviousJitter = eye.Jitter;
 
         // Compute Halton jitter for this frame
-        int index = _frameIndex % Math.Max(1, JitterSpread);
+        int index = eye.FrameIndex % Math.Max(1, JitterSpread);
         float haltonX = HaltonSequence(index + 1, 2);
         float haltonY = HaltonSequence(index + 1, 3);
 
         // Map from [0,1] to [-0.5, 0.5] pixel offset
-        _jitter = new Float2(haltonX - 0.5f, haltonY - 0.5f);
+        eye.Jitter = new Float2(haltonX - 0.5f, haltonY - 0.5f);
+        _jitter = eye.Jitter;
+        _previousJitter = eye.PreviousJitter;
 
         // Remember any projection the user set by hand so OnPostRender can put it back.
-        _userProjection = camera.HasCustomProjectionMatrix ? camera.ProjectionMatrix : null;
-        _userNonJitteredProjection = camera.HasCustomNonJitteredProjectionMatrix ? camera.NonJitteredProjectionMatrix : null;
+        eye.UserProjection = camera.HasCustomProjectionMatrix ? camera.ProjectionMatrix : null;
+        eye.UserNonJitteredProjection = camera.HasCustomNonJitteredProjectionMatrix ? camera.NonJitteredProjectionMatrix : null;
 
         // Save the unjittered projection before applying jitter.
         // NonJitteredProjectionMatrix is used by the pipeline for motion vectors.
@@ -90,8 +99,8 @@ public sealed class TAAEffect : ImageEffect
         // the offset by depth in an orthographic view, which shears the image along z instead of
         // nudging it by a fraction of a pixel.
         Float4x4 proj = camera.ProjectionMatrix;
-        float offsetX = _jitter.X * (2.0f / camera.PixelWidth);
-        float offsetY = _jitter.Y * (2.0f / camera.PixelHeight);
+        float offsetX = eye.Jitter.X * (2.0f / camera.PixelWidth);
+        float offsetY = eye.Jitter.Y * (2.0f / camera.PixelHeight);
 
         if (camera.IsOrthographic)
         {
@@ -106,50 +115,52 @@ public sealed class TAAEffect : ImageEffect
         camera.ProjectionMatrix = proj;
 
         // Upload jitter to global uniforms so shaders can unjitter if needed
-        GlobalUniforms.SetCameraJitter(_jitter);
-        GlobalUniforms.SetCameraPreviousJitter(_previousJitter);
+        GlobalUniforms.SetCameraJitter(eye.Jitter);
+        GlobalUniforms.SetCameraPreviousJitter(eye.PreviousJitter);
 
-        _frameIndex++;
+        eye.FrameIndex++;
     }
 
     public override void OnPostRender(Camera camera)
     {
         // Reset the projection matrix back to unjittered so other systems
         // (picking, gizmos, etc.) don't see the jittered matrix, keeping one the user set by hand.
+        EyeHistory eye = GetEyeState<EyeHistory>(camera);
         camera.ResetProjectionMatrix();
-        if (_userProjection is { } projection) camera.ProjectionMatrix = projection;
-        if (_userNonJitteredProjection is { } nonJittered) camera.NonJitteredProjectionMatrix = nonJittered;
+        if (eye.UserProjection is { } projection) camera.ProjectionMatrix = projection;
+        if (eye.UserNonJitteredProjection is { } nonJittered) camera.NonJitteredProjectionMatrix = nonJittered;
     }
 
     public override void OnRenderEffect(RenderContext context)
     {
         if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.TAA));
 
+        EyeHistory eye = GetEyeState<EyeHistory>(context.Camera);
         int w = context.Width;
         int h = context.Height;
         var format = context.SceneColor.MainTexture.ImageFormat;
 
         // Invalidate history if resolution changed
-        if (_history != null && (_history.Width != w || _history.Height != h))
+        if (eye.History != null && (eye.History.Width != w || eye.History.Height != h))
         {
-            _history.Dispose();
-            _history = null;
-            _historyValid = false;
+            eye.History.Dispose();
+            eye.History = null;
+            eye.HistoryValid = false;
         }
 
-        if (_history.IsNotValid()) _history = new RenderTexture(w, h, false, [format]);
+        if (eye.History.IsNotValid()) eye.History = new RenderTexture(w, h, false, [format]);
 
         // A camera cut (Camera.ResetMotionHistory) or a freshly enabled camera has nothing to reproject from.
-        if (!context.Camera.HasPreviousViewProjectionMatrix) _historyValid = false;
+        if (!context.Camera.HasPreviousViewProjectionMatrix) eye.HistoryValid = false;
 
         // Set uniforms
         _mat.SetVector("_Resolution", new Float2(w, h));
-        _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
+        _mat.SetFloat("_HistoryValid", eye.HistoryValid ? 1.0f : 0.0f);
         _mat.SetFloat("_BlendFactor", Maths.Clamp(BlendFactor, 0.0f, 0.99f));
         _mat.SetFloat("_MotionBlendFactor", Maths.Clamp(MotionBlendFactor, 0.0f, 0.99f));
         _mat.SetFloat("_MotionScale", Math.Max(0.0f, MotionScale));
         _mat.SetFloat("_Sharpness", Maths.Clamp(Sharpness, 0.0f, 1.0f));
-        _mat.SetTexture("_HistoryTex", _history.MainTexture);
+        _mat.SetTexture("_HistoryTex", eye.History.MainTexture);
 
         // Bind motion vectors and depth these are globals set by the pipeline,
         // but the shader uses its own uniform names so we must bind explicitly.
@@ -164,8 +175,8 @@ public sealed class TAAEffect : ImageEffect
         cmd.Blit(context.SceneColor, resolved, _mat, 0);
 
         // Store resolved result as history for next frame
-        cmd.Blit(resolved, _history, null, 0);
-        _historyValid = true;
+        cmd.Blit(resolved, eye.History, null, 0);
+        eye.HistoryValid = true;
 
         // Sharpen on the way back to scene color, after the history copy so it never feeds back.
         if (Sharpness > 0f)
@@ -180,10 +191,10 @@ public sealed class TAAEffect : ImageEffect
     {
         if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
-        if (_history.IsValid()) _history.Dispose();
-        _history = null;
-        _historyValid = false;
-        _frameIndex = 0;
+        ReleaseEyeStates<EyeHistory>(eye =>
+        {
+            if (eye.History.IsValid()) eye.History.Dispose();
+        });
     }
 
     /// <summary>

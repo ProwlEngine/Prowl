@@ -66,20 +66,25 @@ public sealed class GTAOEffect : ImageEffect
     public EffectResolution Resolution = EffectResolution.Quarter;
 
     // Private fields
+    private sealed class EyeHistory
+    {
+        public RenderTexture AOHistory;
+        public bool HistoryValid;
+        public int FrameIndex;
+        public Float2 Jitter;
+    }
+
     private Material _mat;
     private Texture2D _noise;
-    private RenderTexture _aoHistory;
-    private bool _historyValid;
-    private int _frameIndex;
-    private Float2 _jitter;
 
     public override RenderStage Stage => RenderStage.AfterOpaques;
 
     public override void OnPreCull(Camera camera)
     {
         // Per-frame Halton offset to scroll the blue-noise dither so temporal accumulation converges.
-        _jitter = new Float2(Halton(_frameIndex + 1, 2), Halton(_frameIndex + 1, 3));
-        _frameIndex = (_frameIndex + 1) % 64;
+        EyeHistory eye = GetEyeState<EyeHistory>(camera);
+        eye.Jitter = new Float2(Halton(eye.FrameIndex + 1, 2), Halton(eye.FrameIndex + 1, 3));
+        eye.FrameIndex = (eye.FrameIndex + 1) % 64;
     }
 
     public override void OnRenderEffect(RenderContext context)
@@ -90,16 +95,19 @@ public sealed class GTAOEffect : ImageEffect
         if (!context.DepthNormals.IsValid())
             return;
 
+        EyeHistory eye = GetEyeState<EyeHistory>(context.Camera);
+
         // Scaled resolution for the AO + blur passes (composite stays full-res below).
         float scale = Resolution.Scale();
         int width = Maths.Max(1, (int)(context.Width * scale));
         int height = Maths.Max(1, (int)(context.Height * scale));
 
         // Persistent AO history (at AO resolution). Free it when temporal is off or on resize.
-        if ((!UseTemporal || (_aoHistory != null && (_aoHistory.Width != width || _aoHistory.Height != height))))
-            ReleaseHistory();
-        if (UseTemporal && _aoHistory.IsNotValid())
-            _aoHistory = new RenderTexture(width, height, false, [TextureImageFormat.Color4b]);
+        if ((!UseTemporal || (eye.AOHistory != null && (eye.AOHistory.Width != width || eye.AOHistory.Height != height))))
+            ReleaseHistory(eye);
+        if (!context.Camera.HasPreviousViewProjectionMatrix) eye.HistoryValid = false;
+        if (UseTemporal && eye.AOHistory.IsNotValid())
+            eye.AOHistory = new RenderTexture(width, height, false, [TextureImageFormat.Color4b]);
 
         RenderTexture aoRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
 
@@ -116,7 +124,7 @@ public sealed class GTAOEffect : ImageEffect
         _mat.SetFloat("_Intensity", Intensity);
         _mat.SetTexture("_Noise", _noise);
         _mat.SetVector("_NoiseScale", new Float2(width / (float)_noise.Width, height / (float)_noise.Height));
-        _mat.SetVector("_JitterOffset", _jitter);
+        _mat.SetVector("_JitterOffset", eye.Jitter);
         _mat.SetTexture("_CameraNormalsTexture", context.DepthNormals.InternalTextures[0]);
 
         using var cmd = Graphics.GetCommandBuffer("GTAO");
@@ -133,16 +141,16 @@ public sealed class GTAOEffect : ImageEffect
         RenderTexture temporalRT = null;
         if (UseTemporal)
         {
-            if (_historyValid)
+            if (eye.HistoryValid)
             {
                 temporalRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
-                _mat.SetTexture("_PreviousBuffer", _aoHistory.MainTexture);
+                _mat.SetTexture("_PreviousBuffer", eye.AOHistory.MainTexture);
                 _mat.SetTexture("_CameraMotionVectorsTexture", context.MotionVectors);
                 _mat.SetFloat("_TResponse", TemporalResponse);
                 cmd.Blit(aoRT, temporalRT, _mat, 3);
                 ao = temporalRT;
             }
-            cmd.Blit(ao, _aoHistory, null, 0); // store before the spatial blur
+            cmd.Blit(ao, eye.AOHistory, null, 0); // store before the spatial blur
         }
 
         // Pass 1: spatial bilateral blur (writes back into ao).
@@ -164,7 +172,7 @@ public sealed class GTAOEffect : ImageEffect
         cmd.Blit(context.SceneColor, temp, _mat, 2);
         cmd.Blit(temp, context.SceneColor, null, 0);
         Graphics.Submit(cmd);
-        if (UseTemporal) _historyValid = true;
+        if (UseTemporal) eye.HistoryValid = true;
 
         RenderTexture.ReleaseTemporaryRT(temp);
         if (blurTempRT != null) RenderTexture.ReleaseTemporaryRT(blurTempRT);
@@ -173,19 +181,18 @@ public sealed class GTAOEffect : ImageEffect
         RenderTexture.ReleaseTemporaryRT(aoRT);
     }
 
-    private void ReleaseHistory()
+    private static void ReleaseHistory(EyeHistory eye)
     {
-        if (_aoHistory.IsValid()) _aoHistory.Dispose();
-        _aoHistory = null;
-        _historyValid = false;
+        if (eye.AOHistory.IsValid()) eye.AOHistory.Dispose();
+        eye.AOHistory = null;
+        eye.HistoryValid = false;
     }
 
     public override void OnDisable()
     {
         if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
-        ReleaseHistory();
-        _frameIndex = 0;
+        ReleaseEyeStates<EyeHistory>(ReleaseHistory);
     }
 
     private static float Halton(int index, int b)

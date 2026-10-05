@@ -58,21 +58,25 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
     private Material _mat;
     private Texture2D _noise;
 
-    // Persistent history (full res). _prevCombined feeds last frame's result back in (one bounce);
-    // _reflHistory accumulates the resolved reflection for temporal stability.
-    private RenderTexture _prevCombined;
-    private RenderTexture _reflHistory;
-    private bool _historyValid;
-    private int _frameIndex;
-    private Float2 _jitter;
+    // Persistent history (full res). PrevCombined feeds last frame's result back in (one bounce);
+    // ReflHistory accumulates the resolved reflection for temporal stability.
+    private sealed class EyeHistory
+    {
+        public RenderTexture PrevCombined;
+        public RenderTexture ReflHistory;
+        public bool HistoryValid;
+        public int FrameIndex;
+        public Float2 Jitter;
+    }
 
     public override RenderStage Stage => RenderStage.AfterOpaques;
 
     public override void OnPreCull(Camera camera)
     {
         // Per-frame Halton offset to scroll the blue-noise sampling.
-        _jitter = new Float2(Halton(_frameIndex + 1, 2), Halton(_frameIndex + 1, 3));
-        _frameIndex = (_frameIndex + 1) % 64;
+        EyeHistory eye = GetEyeState<EyeHistory>(camera);
+        eye.Jitter = new Float2(Halton(eye.FrameIndex + 1, 2), Halton(eye.FrameIndex + 1, 3));
+        eye.FrameIndex = (eye.FrameIndex + 1) % 64;
     }
 
     public override void OnRenderEffect(RenderContext context)
@@ -83,6 +87,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         if (!context.DepthNormals.IsValid())
             return;
 
+        EyeHistory eye = GetEyeState<EyeHistory>(context.Camera);
         int w = context.Width, h = context.Height;
         var format = context.SceneColor.MainTexture.ImageFormat;
 
@@ -91,10 +96,10 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         int rayH = Maths.Max(1, (int)(h * rayScale));
 
         // Invalidate persistent buffers on resize.
-        if (_prevCombined != null && (_prevCombined.Width != w || _prevCombined.Height != h))
-            ReleaseHistory();
-        if (_prevCombined.IsNotValid()) _prevCombined = new RenderTexture(w, h, false, [format]);
-        if (_reflHistory.IsNotValid()) _reflHistory = new RenderTexture(w, h, false, [format]);
+        if (eye.PrevCombined != null && (eye.PrevCombined.Width != w || eye.PrevCombined.Height != h))
+            ReleaseHistory(eye);
+        if (eye.PrevCombined.IsNotValid()) eye.PrevCombined = new RenderTexture(w, h, false, [format]);
+        if (eye.ReflHistory.IsNotValid()) eye.ReflHistory = new RenderTexture(w, h, false, [format]);
 
         // Shared uniforms.
         _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
@@ -102,7 +107,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         _mat.SetTexture("_CameraMotionVectorsTexture", context.MotionVectors);
         _mat.SetTexture("_Noise", _noise);
         _mat.SetVector("_NoiseSize", new Float2(_noise.Width, _noise.Height));
-        _mat.SetVector("_JitterSizeAndOffset", new Float4(rayW / (float)_noise.Width, rayH / (float)_noise.Height, _jitter.X, _jitter.Y));
+        _mat.SetVector("_JitterSizeAndOffset", new Float4(rayW / (float)_noise.Width, rayH / (float)_noise.Height, eye.Jitter.X, eye.Jitter.Y));
         _mat.SetVector("_ResolveSize", new Float2(w, h));
         _mat.SetFloat("_NumSteps", RayDistance);
         _mat.SetFloat("_BRDFBias", BRDFBias);
@@ -114,7 +119,9 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         _mat.SetInt("_UseFresnel", UseFresnel ? 1 : 0);
         _mat.SetInt("_ReflectionVelocity", ReflectionVelocity ? 1 : 0);
 
-        bool feedback = UseTemporal && _historyValid;
+        // A camera cut (Camera.ResetMotionHistory) or a freshly enabled camera has nothing to reproject from.
+        if (!context.Camera.HasPreviousViewProjectionMatrix) eye.HistoryValid = false;
+        bool feedback = UseTemporal && eye.HistoryValid;
 
         using var cmd = Graphics.GetCommandBuffer("SSR");
 
@@ -125,7 +132,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         if (feedback)
         {
             sourceRT = RenderTexture.GetTemporaryRT(w, h, false, [format]);
-            cmd.Blit(_prevCombined, sourceRT, _mat, 4); // Reproject (Blit binds _MainTex = _prevCombined)
+            cmd.Blit(eye.PrevCombined, sourceRT, _mat, 4); // Reproject (Blit binds _MainTex = eye.PrevCombined)
             source = sourceRT;
         }
         else
@@ -186,11 +193,11 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         if (UseTemporal)
         {
             temporal = RenderTexture.GetTemporaryRT(w, h, false, [format]);
-            _mat.SetTexture("_PreviousBuffer", _reflHistory.MainTexture);
+            _mat.SetTexture("_PreviousBuffer", eye.ReflHistory.MainTexture);
             _mat.SetFloat("_TScale", TemporalScale);
             _mat.SetFloat("_TResponse", TemporalResponse);
             cmd.Blit(reflection, temporal, _mat, 3); // Blit binds _MainTex = current reflection
-            cmd.Blit(temporal, _reflHistory, null, 0); // store history
+            cmd.Blit(temporal, eye.ReflHistory, null, 0); // store history
             reflFinal = temporal;
         }
 
@@ -200,10 +207,10 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         cmd.Blit(context.SceneColor, combined, _mat, 5); // Blit binds _MainTex = scene color
 
         // 7) Store for next frame's feedback, then output.
-        cmd.Blit(combined, _prevCombined, null, 0);
+        cmd.Blit(combined, eye.PrevCombined, null, 0);
         cmd.Blit(combined, context.SceneColor, null, 0);
         Graphics.Submit(cmd);
-        _historyValid = true;
+        eye.HistoryValid = true;
 
         // Cleanup.
         RenderTexture.ReleaseTemporaryRT(combined);
@@ -231,19 +238,18 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         cmd.Blit(scratchSameRes, dst, _mat, 1);
     }
 
-    private void ReleaseHistory()
+    private static void ReleaseHistory(EyeHistory eye)
     {
-        if (_prevCombined.IsValid()) _prevCombined.Dispose(); _prevCombined = null;
-        if (_reflHistory.IsValid()) _reflHistory.Dispose(); _reflHistory = null;
-        _historyValid = false;
+        if (eye.PrevCombined.IsValid()) eye.PrevCombined.Dispose(); eye.PrevCombined = null;
+        if (eye.ReflHistory.IsValid()) eye.ReflHistory.Dispose(); eye.ReflHistory = null;
+        eye.HistoryValid = false;
     }
 
     public override void OnDisable()
     {
         if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
-        ReleaseHistory();
-        _frameIndex = 0;
+        ReleaseEyeStates<EyeHistory>(ReleaseHistory);
     }
 
     private static float Halton(int index, int b)

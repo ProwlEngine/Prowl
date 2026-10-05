@@ -39,6 +39,7 @@ public sealed class AutoExposureEffect : ImageEffect
     private Material _mat;
     private RenderTexture _adaptedLuminance;
     private bool _historyValid;
+    private long _adaptedFrame = -1;
 
     public override void OnRenderEffect(RenderContext context)
     {
@@ -49,44 +50,52 @@ public sealed class AutoExposureEffect : ImageEffect
 
         using var cmd = Graphics.GetCommandBuffer("AutoExposure");
 
-        // ---- Step 1: Extract log-luminance at half resolution ----
-        var lumRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
-        cmd.Blit(context.SceneColor, lumRT, _mat, 0);
-
-        // ---- Step 2: Downsample chain until we reach a small enough size ----
-        var mipChain = new List<RenderTexture>();
-        mipChain.Add(lumRT);
-
-        var current = lumRT;
-        while (w > 2 || h > 2)
-        {
-            w = Math.Max(1, w / 2);
-            h = Math.Max(1, h / 2);
-
-            var downRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
-            cmd.Blit(current, downRT, _mat, 1);
-            mipChain.Add(downRT);
-            current = downRT;
-        }
-
-        // ---- Step 3: Temporal adaptation ----
         if (_adaptedLuminance != null && _adaptedLuminance.IsDisposed)
         {
             _adaptedLuminance = null;
             _historyValid = false;
         }
 
-        if (_adaptedLuminance.IsNotValid()) _adaptedLuminance = new RenderTexture(1, 1, false, [TextureImageFormat.Short]);
+        // Adapting once a frame, so both eyes of a headset share one exposure: the second eye applies what the first adapted to.
+        bool adapt = _adaptedFrame != Time.FrameCount || !_historyValid;
+        _adaptedFrame = Time.FrameCount;
 
-        var newAdapted = RenderTexture.GetTemporaryRT(1, 1, false, [TextureImageFormat.Short]);
-        _mat.SetTexture("_AdaptedTex", _adaptedLuminance.MainTexture);
-        _mat.SetFloat("_AdaptSpeedUp", Math.Max(0.01f, AdaptSpeedUp));
-        _mat.SetFloat("_AdaptSpeedDown", Math.Max(0.01f, AdaptSpeedDown));
-        _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
-        cmd.Blit(current, newAdapted, _mat, 2);
+        var mipChain = new List<RenderTexture>();
+        RenderTexture newAdapted = null;
+        if (adapt)
+        {
+            // ---- Step 1: Extract log-luminance at half resolution ----
+            var lumRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
+            cmd.Blit(context.SceneColor, lumRT, _mat, 0);
 
-        cmd.Blit(newAdapted, _adaptedLuminance, null, 0);
-        _historyValid = true;
+            // ---- Step 2: Downsample chain until we reach a small enough size ----
+            mipChain.Add(lumRT);
+
+            var current = lumRT;
+            while (w > 2 || h > 2)
+            {
+                w = Math.Max(1, w / 2);
+                h = Math.Max(1, h / 2);
+
+                var downRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
+                cmd.Blit(current, downRT, _mat, 1);
+                mipChain.Add(downRT);
+                current = downRT;
+            }
+
+            // ---- Step 3: Temporal adaptation ----
+            if (_adaptedLuminance.IsNotValid()) _adaptedLuminance = new RenderTexture(1, 1, false, [TextureImageFormat.Short]);
+
+            newAdapted = RenderTexture.GetTemporaryRT(1, 1, false, [TextureImageFormat.Short]);
+            _mat.SetTexture("_AdaptedTex", _adaptedLuminance.MainTexture);
+            _mat.SetFloat("_AdaptSpeedUp", Math.Max(0.01f, AdaptSpeedUp));
+            _mat.SetFloat("_AdaptSpeedDown", Math.Max(0.01f, AdaptSpeedDown));
+            _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
+            cmd.Blit(current, newAdapted, _mat, 2);
+
+            cmd.Blit(newAdapted, _adaptedLuminance, null, 0);
+            _historyValid = true;
+        }
 
         // ---- Step 4: Apply exposure to scene color ----
         _mat.SetTexture("_AdaptedTex", _adaptedLuminance.MainTexture);
@@ -100,7 +109,7 @@ public sealed class AutoExposureEffect : ImageEffect
         Graphics.Submit(cmd);
 
         RenderTexture.ReleaseTemporaryRT(temp);
-        RenderTexture.ReleaseTemporaryRT(newAdapted);
+        if (newAdapted != null) RenderTexture.ReleaseTemporaryRT(newAdapted);
         foreach (var rt in mipChain)
             RenderTexture.ReleaseTemporaryRT(rt);
     }

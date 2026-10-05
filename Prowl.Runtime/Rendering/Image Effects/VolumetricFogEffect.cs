@@ -82,8 +82,11 @@ public sealed class VolumetricFogEffect : ImageEffect
     private Material _mat;
 
     // Persistent low-res history for temporal reprojection. Recreated on resolution change.
-    private RenderTexture _history;
-    private bool _historyValid;
+    private sealed class EyeHistory
+    {
+        public RenderTexture History;
+        public bool HistoryValid;
+    }
 
     public override void OnRenderEffect(RenderContext context)
     {
@@ -116,18 +119,19 @@ public sealed class VolumetricFogEffect : ImageEffect
         UploadFogVolumes(context);
 
         var format = context.SceneColor.MainTexture.ImageFormat;
+        EyeHistory eye = GetEyeState<EyeHistory>(context.Camera);
 
         // Drop history if the low-res size changed reprojecting against a
         // differently-sized history is garbage and a one-frame flash is fine.
-        if (_history != null && (_history.Width != lowW || _history.Height != lowH))
+        if (eye.History != null && (eye.History.Width != lowW || eye.History.Height != lowH))
         {
-            _history.Dispose();
-            _history = null;
-            _historyValid = false;
+            eye.History.Dispose();
+            eye.History = null;
+            eye.HistoryValid = false;
         }
 
         // A camera cut (Camera.ResetMotionHistory) or a freshly enabled camera has nothing to reproject from.
-        if (!context.Camera.HasPreviousViewProjectionMatrix) _historyValid = false;
+        if (!context.Camera.HasPreviousViewProjectionMatrix) eye.HistoryValid = false;
 
         using var cmd = Graphics.GetCommandBuffer("VolumetricFog");
 
@@ -138,22 +142,22 @@ public sealed class VolumetricFogEffect : ImageEffect
         RenderTexture blendedLow;
         if (EnableTemporalReprojection)
         {
-            if (_history.IsNotValid()) _history = new RenderTexture(lowW, lowH, false, [format]);
+            if (eye.History.IsNotValid()) eye.History = new RenderTexture(lowW, lowH, false, [format]);
 
             blendedLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
             _mat.SetTexture("_FogCurrentTex", currentLow.MainTexture);
-            _mat.SetTexture("_FogHistoryTex", _history.MainTexture);
-            _mat.SetFloat("_FogHistoryValid", _historyValid ? 1f : 0f);
+            _mat.SetTexture("_FogHistoryTex", eye.History.MainTexture);
+            _mat.SetFloat("_FogHistoryValid", eye.HistoryValid ? 1f : 0f);
             _mat.SetFloat("_FogTemporalBlend", Math.Clamp(TemporalBlendWeight, 0f, 0.99f));
             cmd.Blit(currentLow, blendedLow, _mat, 1);
 
-            cmd.Blit(blendedLow, _history, null, 0);
-            _historyValid = true;
+            cmd.Blit(blendedLow, eye.History, null, 0);
+            eye.HistoryValid = true;
         }
         else
         {
             blendedLow = currentLow;
-            _historyValid = false;
+            eye.HistoryValid = false;
         }
 
         // Pass 2 Bilateral upsample + composite onto scene color.
@@ -173,9 +177,10 @@ public sealed class VolumetricFogEffect : ImageEffect
     {
         if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
-        if (_history.IsValid()) _history.Dispose();
-        _history = null;
-        _historyValid = false;
+        ReleaseEyeStates<EyeHistory>(eye =>
+        {
+            if (eye.History.IsValid()) eye.History.Dispose();
+        });
     }
 
     /// <summary>
