@@ -158,7 +158,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         const uint side = 16;
         const uint count = side * side;
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         float[] initial = new float[count];
         for (int i = 0; i < count; i++)
             initial[i] = i;
@@ -209,7 +209,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         const uint size = 16;
         const int floats = (int)(size / 4);
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(size, BufferUsage.StructuredBufferReadWrite, 4));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(size, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer readback = RF.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
         BufferHistoryPass pass = new(RenderResourceID.Intern("bufres_history"), size, source, readback);
         using RenderPipeline<BufferView> pipeline = new([pass]);

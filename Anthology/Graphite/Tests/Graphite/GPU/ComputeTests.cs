@@ -33,7 +33,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
         uint stride = (uint)Unsafe.SizeOf<ColoredVertex>();
         DeviceBuffer vertices = RF.CreateBuffer(new BufferDescription(
-            stride * 4, BufferUsage.StructuredBufferReadWrite, stride));
+            stride * 4, BufferUsage.StructuredBufferReadWrite));
 
         ComputeProgram compute = CreateCompute("ComputeColoredQuadGenerator.slang",
             new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0));
@@ -177,8 +177,8 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         const uint side = 16;
         const uint count = side * side;
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         float[] initial = new float[count];
         for (int i = 0; i < count; i++) initial[i] = i;
         GD.UpdateBuffer(source, 0, initial);

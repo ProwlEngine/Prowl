@@ -32,8 +32,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
-                sources[i] = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
-                destinations[i] = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+                sources[i] = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+                destinations[i] = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
 
                 float[] seed = new float[Count];
                 for (int j = 0; j < Count; j++) seed[j] = i * 1000 + j;
@@ -61,8 +61,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         GD.UpdateBuffer(ubo, 0, new uint[] { 0, 0, 0, 0 });
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
 
         PropertySet props = new();
         props.SetUniformBuffer("Params", ubo);
@@ -107,8 +107,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         uint sentinel = 0xAAAAAAAA;
         GD.UpdateBuffer(ubo, 0, new uint[] { sentinel, sentinel, sentinel, sentinel });
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         float[] seed = new float[Count];
         for (int i = 0; i < Count; i++) seed[i] = i;
         GD.UpdateBuffer(source, 0, seed);
@@ -151,8 +151,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         uint sentinel = 0xAAAAAAAA;
         GD.UpdateBuffer(ubo, 0, new uint[] { sentinel, sentinel, sentinel, sentinel });
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         float[] seed = new float[Count];
         for (int i = 0; i < Count; i++) seed[i] = i;
         GD.UpdateBuffer(source, 0, seed);

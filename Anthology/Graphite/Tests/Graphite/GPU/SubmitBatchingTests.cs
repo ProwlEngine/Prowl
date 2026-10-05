@@ -63,7 +63,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
 {
     private DeviceBuffer CreateValueBuffer(uint value)
     {
-        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
         GD.UpdateBuffer(buffer, 0, new[] { value });
         return buffer;
     }
@@ -76,7 +76,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceA = CreateValueBuffer(1);
         DeviceBuffer sourceB = CreateValueBuffer(2);
         DeviceBuffer sourceC = CreateValueBuffer(3);
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
         using RenderPipeline<SubmitBatchingView> pipeline = new([
             new BufferWritePass("PassA", sourceA, destination),
@@ -97,7 +97,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceA = CreateValueBuffer(11);
         DeviceBuffer sourceB = CreateValueBuffer(22);
         DeviceBuffer sourceC = CreateValueBuffer(33);
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
         using RenderPipeline<SubmitBatchingView> pipeline = new([
             new BufferWritePass("PassA", sourceA, destination),
@@ -119,7 +119,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
     public void TransferMidExecution_IsOrderedAfterPriorPasses()
     {
         DeviceBuffer source = CreateValueBuffer(777);
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer staging = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.Staging));
 
         using RenderPipeline<SubmitBatchingView> pipeline = new([

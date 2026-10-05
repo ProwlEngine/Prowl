@@ -368,7 +368,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ];
         uint stride = (uint)Unsafe.SizeOf<ColoredVertex>();
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly, stride));
+            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly));
         GD.UpdateBuffer(buffer, 0, vertices);
         return buffer;
     }

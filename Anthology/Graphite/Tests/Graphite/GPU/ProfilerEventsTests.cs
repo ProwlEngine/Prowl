@@ -138,9 +138,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         const uint count = width * height;
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
 
         ShaderStageDescription stage = TestShaderLoader.LoadCompute(device.BackendType, "BasicComputeTest.slang");
         ResourceLayoutDescription[] layouts =
@@ -201,8 +201,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RecordingProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.RunTestGraph(context =>
         {
@@ -255,8 +255,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RecordingProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
 
@@ -269,8 +269,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RecordingProfiler profiler = new() { RequestGPUStatistics = true };
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.RunTestGraph(context =>
         {
@@ -291,8 +291,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RecordingProfiler profiler = new() { RequestGPUStatistics = false };
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.RunTestGraph(context =>
         {
@@ -314,8 +314,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
             _ => throw new NotSupportedException(),
         };
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         void RunCopyGraph()
         {
@@ -351,8 +351,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RecordingProfiler profiler = new() { RequestGPUStatistics = true };
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
 

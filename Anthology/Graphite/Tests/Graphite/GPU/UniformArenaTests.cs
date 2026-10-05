@@ -176,7 +176,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     // ---- helpers ----
 
     private DeviceBuffer CreateOutput()
-        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
     private uint[] Read(DeviceBuffer output)
     {

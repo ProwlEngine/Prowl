@@ -68,12 +68,12 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
     private DeviceBuffer CreateOutput()
         => RF.CreateBuffer(new BufferDescription(
-            OutputCount * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+            OutputCount * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
     private DeviceBuffer CreateInput(uint value)
     {
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            4 * sizeof(uint), BufferUsage.StructuredBufferReadOnly, sizeof(uint)));
+            4 * sizeof(uint), BufferUsage.StructuredBufferReadOnly));
         GD.UpdateBuffer(buffer, 0, new uint[] { value, 0, 0, 0 });
         return buffer;
     }
@@ -274,7 +274,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         uint stride = GD.StructuredBufferMinOffsetAlignment;
         DeviceBuffer input = RF.CreateBuffer(new BufferDescription(
-            stride * 2, BufferUsage.StructuredBufferReadOnly, sizeof(uint)));
+            stride * 2, BufferUsage.StructuredBufferReadOnly));
 
         uint[] contents = new uint[stride * 2 / sizeof(uint)];
         contents[0] = 1234;

@@ -13,7 +13,7 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
     {
 
         DeviceBuffer output = RF.CreateBuffer(new BufferDescription(
-            2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+            2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
         ComputeProgram program = CreateProgram();
 

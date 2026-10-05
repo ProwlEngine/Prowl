@@ -16,9 +16,9 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
         const uint count = width * height;
 
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
 
         float[] initial = new float[count];
         for (int i = 0; i < count; i++)

@@ -63,20 +63,11 @@ public abstract partial class ResourceFactory
         if ((usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
             || (usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
         {
-            if (description.StructureByteStride == 0)
-            {
-                throw new RenderException("Structured Buffer objects must have a non-zero StructureByteStride.");
-            }
-
             if ((usage & BufferUsage.UniformBuffer) != 0)
             {
                 throw new RenderException(
                     $"Structured Buffer objects cannot specify {nameof(BufferUsage)}.{nameof(BufferUsage.UniformBuffer)}.");
             }
-        }
-        else if (description.StructureByteStride != 0)
-        {
-            throw new RenderException("Non-structured Buffers must have a StructureByteStride of zero.");
         }
         if ((usage & BufferUsage.Staging) != 0 && usage != BufferUsage.Staging)
         {

@@ -118,9 +118,9 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     private float[] RunCompute(Action<PropertySet, DeviceBuffer, DeviceBuffer> configure)
     {
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(
-            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(
-            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
 
         float[] initial = new float[Count];
         for (int i = 0; i < Count; i++) initial[i] = i;

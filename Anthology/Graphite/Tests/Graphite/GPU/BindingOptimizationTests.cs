@@ -473,7 +473,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         ];
         uint stride = (uint)Unsafe.SizeOf<ColoredVertex>();
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly, stride));
+            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly));
         GD.UpdateBuffer(buffer, 0, vertices);
         return buffer;
     }
@@ -499,7 +499,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     private DeviceBuffer CreateOutput()
-        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct UIntPointVertex
