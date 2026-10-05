@@ -45,18 +45,9 @@ public sealed class RenderContext<TView>
     /// <summary>Execution this context records into.</summary>
     public ExecutionTask Task => _task;
 
-    internal Swapchain? PresentSwapchain => _graph.WritesViewTarget ? _view.TargetSwapchain : null;
+    internal Swapchain? PresentSwapchain => _graph.WritesViewTarget ? _view.Target?.OwningSwapchain : null;
 
-    internal bool HasViewTarget
-    {
-        get
-        {
-            if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
-                throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
-
-            return _view.TargetSwapchain != null || _view.TargetFramebuffer != null;
-        }
-    }
+    internal bool HasViewTarget => _view.Target != null;
 
     /// <summary>View being rendered.</summary>
     public TView View => _view;
@@ -306,14 +297,12 @@ public sealed class RenderContext<TView>
             case GraphViewTargetResource viewTargetResource:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), "The view target has no history.");
-                if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
-                    throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
-                if (_view.TargetSwapchain != null && viewTargetResource.DepthFormat is PixelFormat requiredDepth)
-                    _view.TargetSwapchain.RequireDepth(requiredDepth);
-                Framebuffer viewTarget = (_view.TargetSwapchain?.Framebuffer ?? _view.TargetFramebuffer)
+                Framebuffer viewTarget = _view.Target
                     ?? throw new InvalidOperationException($"A pass resolved the view target, but view '{_view.Name}' has none.");
+                if (viewTargetResource.DepthFormat is PixelFormat requiredDepth)
+                    viewTarget.OwningSwapchain?.RequireDepth(requiredDepth);
                 if (viewTargetResource.DepthFormat != null && viewTarget.DepthTarget == null)
-                    throw new InvalidOperationException($"A pass declared a view target depth attachment, but view '{_view.Name}' has a TargetFramebuffer without one.");
+                    throw new InvalidOperationException($"A pass declared a view target depth attachment, but view '{_view.Name}' has a Target without one.");
                 RenderTexture target = new(viewTarget);
                 _resolved[handle.Id] = target;
                 return target;

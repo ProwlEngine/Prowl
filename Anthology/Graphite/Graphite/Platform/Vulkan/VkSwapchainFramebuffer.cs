@@ -51,6 +51,8 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     public VkSwapchain Swapchain => _swapchain;
 
+    internal override Swapchain? OwningSwapchain => _swapchain;
+
     public VkSwapchainFramebuffer(
         VkGraphicsDevice gd,
         VkSwapchain swapchain,

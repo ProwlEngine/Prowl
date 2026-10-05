@@ -73,10 +73,9 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
-    /// Declares a write to the current view's target: <see cref="IRenderView.TargetFramebuffer"/>, or the main swapchain image
-    /// when <see cref="IRenderView.TargetSwapchain"/> is set, which presents after dispatch. The pass is skipped for a view with
-    /// neither. Clears by default; pass Loaded ops for a pass that draws over an earlier view target pass.
-    /// A depth format gives the target a depth attachment, created for the swapchain on demand. A TargetFramebuffer must already have one.
+    /// Declares a write to the current view's target: <see cref="IRenderView.Target"/>, which presents after dispatch
+    /// when it is a swapchain framebuffer. The pass is skipped for a view with no target. Clears by default; pass Loaded ops for a pass that draws over an earlier view target pass.
+    /// A depth format gives the target a depth attachment, created for a swapchain on demand. Any other Target must already have one.
     /// </summary>
     public TextureHandle DeclareViewTarget(
         TargetLoadStoreOps? ops = null,

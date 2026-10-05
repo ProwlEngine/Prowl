@@ -57,7 +57,7 @@ public sealed class RenderGraph<TView> : IDisposable
     /// <summary>All declared resources by ID (first declaration wins).</summary>
     public IReadOnlyDictionary<RenderResourceID, GraphResource> Resources { get; }
 
-    /// <summary>True if any pass writes the view target, so views with a target draw and views with <see cref="IRenderView.TargetSwapchain"/> present.</summary>
+    /// <summary>True if any pass writes the view target, so views with a target draw and views targeting a swapchain present.</summary>
     public bool WritesViewTarget { get; }
 
     private RenderGraph(

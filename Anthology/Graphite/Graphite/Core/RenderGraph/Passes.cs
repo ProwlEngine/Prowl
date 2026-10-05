@@ -20,16 +20,10 @@ public interface IRenderView
     string Name => GetType().Name;
 
     /// <summary>
-    /// Framebuffer that passes declaring the view target draw into, or null. Write-only to passes: they can neither
-    /// sample nor transition it. Should match <see cref="PixelWidth"/> and <see cref="PixelHeight"/>. Setting this and
-    /// <see cref="TargetSwapchain"/> together throws at dispatch.
+    /// Framebuffer that passes declaring the view target draw into, or null. A swapchain's framebuffer is valid and is presented after dispatch.
+    /// Write-only to passes. Should match <see cref="PixelWidth"/> and <see cref="PixelHeight"/>.
     /// </summary>
-    Framebuffer? TargetFramebuffer => null;
-
-    /// <summary>
-    /// Swapchain this view owns, or null. Passes that declare the view target draw into its image and the dispatch presents it.
-    /// </summary>
-    Swapchain? TargetSwapchain => null;
+    Framebuffer? Target => null;
 }
 
 /// <summary>

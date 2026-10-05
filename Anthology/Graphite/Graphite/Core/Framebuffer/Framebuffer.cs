@@ -22,6 +22,8 @@ public abstract class Framebuffer : GraphicsResource
     public virtual uint Height { get; }
 
 
+    internal virtual Swapchain? OwningSwapchain => null;
+
     internal Framebuffer() { }
 
 

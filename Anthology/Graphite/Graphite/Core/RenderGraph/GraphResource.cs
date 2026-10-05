@@ -245,8 +245,8 @@ public sealed class GraphImportedTextureResource : GraphResource
 }
 
 /// <summary>
-/// The view's target for this execution: its <see cref="IRenderView.TargetFramebuffer"/> or the main swapchain image
-/// when <see cref="IRenderView.TargetSwapchain"/> is set. Write-only. Passes that write it are skipped for views with neither.
+/// The view's target for this execution: its <see cref="IRenderView.Target"/>. Write-only.
+/// Passes that write it are skipped for views with no target.
 /// </summary>
 public sealed class GraphViewTargetResource : GraphResource
 {

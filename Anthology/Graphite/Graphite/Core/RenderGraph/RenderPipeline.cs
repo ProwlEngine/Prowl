@@ -49,7 +49,7 @@ public class RenderPipeline<TView> : IDisposable
     public RenderGraph<TView> Graph => _graph ??= RenderGraph<TView>.Build(_passes);
 
     /// <summary>
-    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view that set TargetSwapchain.
+    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view whose Target is a swapchain framebuffer.
     /// Once per view per dispatch.
     /// </summary>
     public void ExecuteView(RenderContext<TView> context)
