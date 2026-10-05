@@ -6,13 +6,12 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.
 /// </summary>
-public sealed class RenderContext<TView>
-    where TView : IRenderView
+public sealed class RenderContext
 {
     private readonly GraphicsDevice _device;
     private readonly ExecutionTask _task;
-    private readonly RenderGraph<TView> _graph;
-    private readonly TView _view;
+    private readonly RenderGraph _graph;
+    private readonly IRenderView _view;
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
@@ -33,8 +32,8 @@ public sealed class RenderContext<TView>
     internal RenderContext(
         GraphicsDevice device,
         ExecutionTask task,
-        RenderGraph<TView> graph,
-        TView view)
+        RenderGraph graph,
+        IRenderView view)
     {
         _device = device;
         _task = task;
@@ -50,7 +49,10 @@ public sealed class RenderContext<TView>
     internal bool HasViewTarget => _view.Target != null;
 
     /// <summary>View being rendered.</summary>
-    public TView View => _view;
+    public IRenderView View => _view;
+
+    /// <summary>View being rendered as its concrete type.</summary>
+    public T ViewAs<T>() where T : IRenderView => (T)_view;
 
     /// <summary>Device's profiler, null if none.</summary>
     public IProfiler? Profiler => _device.Profiler;

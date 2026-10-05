@@ -4,14 +4,13 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>Solved render graph: passes ordered readers-after-writers, plus merged resource table. Built from a pipeline's passes and centrally declared resources.</summary>
-public sealed class RenderGraph<TView> : IDisposable
-    where TView : IRenderView
+public sealed class RenderGraph : IDisposable
 {
     /// <summary>A pass plus its declared resource accesses.</summary>
     public readonly struct PassNode
     {
         /// <summary>The pass.</summary>
-        public readonly IPass<TView> Pass;
+        public readonly IPass Pass;
 
         internal readonly ResourceAccess[] Accesses;
 
@@ -29,7 +28,7 @@ public sealed class RenderGraph<TView> : IDisposable
             }
         }
 
-        internal PassNode(IPass<TView> pass, ResourceAccess[] accesses)
+        internal PassNode(IPass pass, ResourceAccess[] accesses)
         {
             Pass = pass;
             Accesses = accesses;
@@ -79,8 +78,8 @@ public sealed class RenderGraph<TView> : IDisposable
     /// <summary>
     /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Throws if an input has no producer, or on a dependency cycle.
     /// </summary>
-    public static RenderGraph<TView> Build(
-        IReadOnlyList<IPass<TView>> passes)
+    public static RenderGraph Build(
+        IReadOnlyList<IPass> passes)
     {
         int count = passes.Count;
         var nodes = new PassNode[count];
@@ -89,7 +88,7 @@ public sealed class RenderGraph<TView> : IDisposable
         var builder = new RenderContextBuilder();
         for (int i = 0; i < count; i++)
         {
-            IPass<TView> pass = passes[i];
+            IPass pass = passes[i];
 
             builder.Reset();
             pass.Setup(builder);
@@ -117,7 +116,7 @@ public sealed class RenderGraph<TView> : IDisposable
         for (int i = 0; i < ordered.Length; i++)
             orderedNodes[i] = nodes[ordered[i]];
 
-        return new RenderGraph<TView>(orderedNodes, resources);
+        return new RenderGraph(orderedNodes, resources);
     }
 
     private static bool SameDeclaration(GraphResource existing, GraphResource declared) => (existing, declared) switch

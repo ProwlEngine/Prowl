@@ -6,11 +6,10 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Graph-driven render pipeline. Set passes with SetPasses or the constructor; solved into an ordered graph and run per view via ExecuteView.
 /// </summary>
-public class RenderPipeline<TView> : IDisposable
-    where TView : IRenderView
+public class RenderPipeline : IDisposable
 {
-    private readonly List<IPass<TView>> _passes = new();
-    private RenderGraph<TView>? _graph;
+    private readonly List<IPass> _passes = new();
+    private RenderGraph? _graph;
     private bool _executingView;
 
     /// <summary>Creates an empty pipeline. Call SetPasses before the first dispatch.</summary>
@@ -20,14 +19,14 @@ public class RenderPipeline<TView> : IDisposable
 
     /// <summary>Creates a pipeline from a pass list. Read/write declarations decide order.</summary>
     /// <param name="passes">Passes to run.</param>
-    public RenderPipeline(IEnumerable<IPass<TView>> passes)
+    public RenderPipeline(IEnumerable<IPass> passes)
     {
         SetPasses(passes);
     }
 
     /// <summary>Replaces the pass list; the graph rebuilds on next use. Not callable mid-dispatch.</summary>
     /// <param name="passes">Passes to run.</param>
-    public void SetPasses(IEnumerable<IPass<TView>> passes)
+    public void SetPasses(IEnumerable<IPass> passes)
     {
         if (passes == null)
             throw new ArgumentNullException(nameof(passes));
@@ -35,8 +34,8 @@ public class RenderPipeline<TView> : IDisposable
         if (_executingView)
             throw new InvalidOperationException("SetPasses cannot be called while a view is executing.");
 
-        List<IPass<TView>> list = new();
-        foreach (IPass<TView> pass in passes)
+        List<IPass> list = new();
+        foreach (IPass pass in passes)
             list.Add(pass ?? throw new ArgumentException("Pass list contains null.", nameof(passes)));
 
         _graph?.Dispose();
@@ -46,18 +45,18 @@ public class RenderPipeline<TView> : IDisposable
     }
 
     /// <summary>The solved graph, built on first use from the current passes.</summary>
-    public RenderGraph<TView> Graph => _graph ??= RenderGraph<TView>.Build(_passes);
+    public RenderGraph Graph => _graph ??= RenderGraph.Build(_passes);
 
     /// <summary>
     /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view whose Target is a swapchain framebuffer.
     /// Once per view per dispatch.
     /// </summary>
-    public void ExecuteView(RenderContext<TView> context)
+    public void ExecuteView(RenderContext context)
     {
         if (context == null)
             throw new ArgumentNullException(nameof(context));
 
-        RenderGraph<TView> graph = Graph;
+        RenderGraph graph = Graph;
         IProfiler? profiler = context.Profiler;
 
         _executingView = true;
@@ -65,7 +64,7 @@ public class RenderPipeline<TView> : IDisposable
         {
             int index = 0;
             bool hasViewTarget = context.HasViewTarget;
-            foreach (RenderGraph<TView>.PassNode node in graph.OrderedPasses)
+            foreach (RenderGraph.PassNode node in graph.OrderedPasses)
             {
                 if (node.WritesViewTarget && !hasViewTarget)
                     continue;
@@ -114,7 +113,7 @@ public class RenderPipeline<TView> : IDisposable
         }
     }
 
-    private static void CapturePassOutputs(RenderContext<TView> context, IProfiler profiler, in PassInfo passInfo, RenderGraph<TView>.PassNode node)
+    private static void CapturePassOutputs(RenderContext context, IProfiler profiler, in PassInfo passInfo, RenderGraph.PassNode node)
     {
         var framebuffers = new List<Framebuffer>();
         foreach (RenderResourceID output in node.OutputIds())
@@ -141,7 +140,7 @@ public class RenderPipeline<TView> : IDisposable
     /// <summary>Disposes passes that are disposable.</summary>
     public virtual void Dispose()
     {
-        foreach (IPass<TView> pass in _passes)
+        foreach (IPass pass in _passes)
             (pass as IDisposable)?.Dispose();
 
         _graph?.Dispose();

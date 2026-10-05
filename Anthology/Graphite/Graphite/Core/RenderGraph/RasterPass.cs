@@ -6,8 +6,7 @@ namespace Prowl.Graphite.RenderGraph;
 /// Base for a raster pass with one declared target: declare it in Setup and draw in Render.
 /// The graph binds the target with its declared ops and submits the buffer. Need full control? Use raw IPass instead.
 /// </summary>
-public abstract class RasterPass<TView> : IPass<TView>
-    where TView : IRenderView
+public abstract class RasterPass : IPass
 {
     /// <summary>Pass name for debugging.</summary>
     public abstract string Name { get; }
@@ -16,7 +15,7 @@ public abstract class RasterPass<TView> : IPass<TView>
     public abstract void Setup(RenderContextBuilder builder);
 
     /// <summary>Draw into the already bound target on cmd. The graph submits cmd.</summary>
-    public abstract void Render(RenderContext<TView> context, CommandBuffer cmd);
+    public abstract void Render(RenderContext context, CommandBuffer cmd);
 
     /// <summary>
     /// Declares a single-target framebuffer with load/store ops. Handle resolves to the render target in Render.

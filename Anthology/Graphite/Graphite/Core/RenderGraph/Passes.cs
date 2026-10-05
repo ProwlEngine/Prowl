@@ -29,8 +29,7 @@ public interface IRenderView
 /// <summary>
 /// One pipeline pass. Declares texture in/out via Setup so the graph can order and resolve deps. Pipeline calls Render to execute.
 /// </summary>
-public interface IPass<TView>
-    where TView : IRenderView
+public interface IPass
 {
     /// <summary>Debug name.</summary>
     string Name { get; }
@@ -39,5 +38,5 @@ public interface IPass<TView>
     void Setup(RenderContextBuilder builder);
 
     /// <summary>Record rendering into cmd, already begun. The graph submits it after Render returns. Get textures via context.GetRenderTexture.</summary>
-    void Render(RenderContext<TView> context, CommandBuffer cmd);
+    void Render(RenderContext context, CommandBuffer cmd);
 }

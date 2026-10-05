@@ -12,14 +12,14 @@ public abstract partial class GraphicsDevice
     /// <param name="pipeline">Pipeline to run.</param>
     /// <param name="views">Views to render.</param>
     public ExecutionTask DispatchGraph<T>(
-        RenderPipeline<T> pipeline,
+        RenderPipeline pipeline,
         IReadOnlyList<T> views)
         where T : IRenderView
     {
         ValidationHelpers.RequireNotNull(this, pipeline, nameof(pipeline), nameof(DispatchGraph));
         ValidationHelpers.RequireNotNull(this, views, nameof(views), nameof(DispatchGraph));
 
-        RenderGraph<T> graph = pipeline.Graph;
+        RenderGraph.RenderGraph graph = pipeline.Graph;
 
         ExecutionTask task = BeginExecution();
         List<Swapchain>? presents = null;
@@ -27,7 +27,7 @@ public abstract partial class GraphicsDevice
         int index = 0;
         foreach (T view in views)
         {
-            var context = new RenderContext<T>(
+            var context = new RenderContext(
                 this, task, graph, view);
 
             var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
