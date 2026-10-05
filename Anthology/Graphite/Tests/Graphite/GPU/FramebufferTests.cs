@@ -16,11 +16,9 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             TextureDescription.Texture2D(1024, 1024, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, colorTarget));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -38,10 +36,9 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             TextureDescription.Texture2D(1024, 1024, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, colorTarget));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
+                        cl.SetFramebuffer(fb);
             Assert.Throws<RenderException>(() => cl.ClearDepthStencil(1f));
         });
     }
@@ -53,10 +50,9 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             TextureDescription.Texture2D(1024, 1024, 1, 1, PixelFormat.R16_UNorm, TextureUsage.DepthStencil));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depthTarget));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
+                        cl.SetFramebuffer(fb);
             Assert.Throws<RenderException>(() => cl.ClearColorTarget(0, Color.Red));
         });
     }
@@ -70,10 +66,9 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         Texture colorTarget1 = RF.CreateTexture(desc);
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, colorTarget0, colorTarget1));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
+                        cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
             cl.ClearColorTarget(1, Color.Red);
             Assert.Throws<RenderException>(() => cl.ClearColorTarget(2, Color.Red));
             Assert.Throws<RenderException>(() => cl.ClearColorTarget(3, Color.Red));
@@ -93,15 +88,13 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
                 new FramebufferDescription(null, [new FramebufferAttachment(testTex, 0, level)]));
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             for (uint level = 0; level < 11; level++)
             {
                 cl.SetFramebuffer(framebuffers[level]);
                 cl.ClearColorTarget(0, new Color(level, level, level, 1));
             }
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -163,11 +156,9 @@ public abstract class SwapchainFramebufferTests<T> : GraphicsDeviceTestBase<T> w
     [Fact]
     public void ClearSwapchainFramebuffer_Succeeds()
     {
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(GD.MainSwapchain.Framebuffer, TargetLoadStoreOps.Clear(Color.Red, 1f));
-            context.SubmitCommandBuffer(cl);
         });
     }
 }

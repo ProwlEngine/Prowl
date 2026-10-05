@@ -26,9 +26,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         props.SetInt("Width", (int)Side);
         props.SetInt("Height", (int)Side);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -45,7 +44,6 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -69,9 +67,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         props.SetBuffer("Source", source);
         props.SetBuffer("Destination", destination);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
 
             props.SetInt("Width", 3);
@@ -84,7 +81,6 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
 
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -120,14 +116,12 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         props.SetBuffer("Source", source);
         props.SetBuffer("Destination", destination);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
             cl.Dispatch(1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -164,13 +158,11 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         props.SetBuffer("Source", source);
         props.SetBuffer("Destination", destination);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

@@ -114,7 +114,7 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
             new BufferDescription(sizeof(uint) * 2, BufferUsage.Staging));
 
         DeviceBufferRange a = default, b = default;
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
             a = context.AllocateTransient(sizeof(uint));
             b = context.AllocateTransient(sizeof(uint));
@@ -122,10 +122,8 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
             WriteUInt(a, 0xAAAAAAAA);
             WriteUInt(b, 0xBBBBBBBB);
 
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyBuffer(a.Buffer, a.Offset, staging, 0, sizeof(uint));
             cl.CopyBuffer(b.Buffer, b.Offset, staging, sizeof(uint), sizeof(uint));
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

@@ -61,13 +61,11 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         props.SetBuffer("Source", source);
         props.SetBuffer("Output", output);
 
-        return GD.RunTestGraph(context =>
+        return GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
     }
 

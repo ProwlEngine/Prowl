@@ -22,13 +22,11 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
         props.SetInt("valueB", 222);
         props.SetBuffer("Output", output);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

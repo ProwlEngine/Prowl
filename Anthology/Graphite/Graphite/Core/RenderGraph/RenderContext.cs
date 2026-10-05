@@ -245,11 +245,7 @@ public sealed class RenderContext<TView>
         public BufferAccess Visible = BufferAccess.None;
     }
 
-    /// <summary>
-    /// Rents an extra command buffer, already begun, for passes that need more than the one Render receives. Submit via SubmitCommandBuffer. Do not begin or end it yourself.
-    /// </summary>
-    /// <param name="name">Optional debug name.</param>
-    public CommandBuffer GetCommandBuffer(string name = "")
+    internal CommandBuffer GetCommandBuffer(string name = "")
     {
         CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
 
@@ -280,9 +276,7 @@ public sealed class RenderContext<TView>
             SubmitCommandBuffer(cmd);
     }
 
-    /// <summary>Queues a command buffer rented here for this execution's submit. Do not record into it afterwards.</summary>
-    /// <param name="cmd">Command buffer to submit.</param>
-    public void SubmitCommandBuffer(CommandBuffer cmd)
+    internal void SubmitCommandBuffer(CommandBuffer cmd)
     {
         if (_barrierHost != null)
         {

@@ -29,9 +29,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
         // Distinct (valueA, valueB) per dispatch in a single recording. Value-based transient reuse
         // must NOT alias dispatch i's uniforms onto dispatch i+1 just because entry versions coincide.
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -42,7 +41,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -65,9 +63,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
         // Same uniform values every dispatch, only the output changes. Exercises the per-set identity
         // cache-hit path for the unchanged uniform sets while the output set legitimately rebinds.
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -78,7 +75,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -101,9 +97,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
         // Flip-flop between two uniform configs. A set going back to a prior identity must resolve to
         // its own value, never to the one bound in between.
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -115,7 +110,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -146,9 +140,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         PropertySet props = new();
         props.SetBuffer("InputVertices", vb);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
@@ -156,7 +149,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             cl.SetProperties(props);
             for (int i = 0; i < 5; i++)
                 cl.Draw(4);
-            context.SubmitCommandBuffer(cl);
         });
 
         TexelData<Color> map = ReadTexture<Color>(target);
@@ -185,9 +177,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
         props.SetInt("ColorNormalizationFactor", (int)norm);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
@@ -197,7 +188,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetVertexSource((i % 2) == 0 ? sourceA : sourceB);
                 cl.Draw(1);
             }
-            context.SubmitCommandBuffer(cl);
         });
 
         TexelData<Color> map = ReadTexture<Color>(target);
@@ -228,9 +218,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
         props.SetInt("ColorNormalizationFactor", (int)norm);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
@@ -239,7 +228,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             cl.Draw(1);
             source.SetBuffer("POSITION", bufferB);
             cl.Draw(1);
-            context.SubmitCommandBuffer(cl);
         });
 
         TexelData<Color> map = ReadTexture<Color>(target);
@@ -268,9 +256,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
         props.SetInt("ColorNormalizationFactor", (int)norm);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
@@ -280,7 +267,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             props.SetInt("ColorNormalizationFactor", (int)norm * 2);
             cl.SetVertexSource(sourceB);
             cl.Draw(1);
-            context.SubmitCommandBuffer(cl);
         });
 
         TexelData<Color> map = ReadTexture<Color>(target);
@@ -306,9 +292,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         Float4 color = new(0.1f, 0.5f, 0.9f, 1f);
         DeviceBuffer vb = CreateQuad(color);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
@@ -320,7 +305,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(iterProps);
                 cl.Draw(4);
             }
-            context.SubmitCommandBuffer(cl);
         });
 
         TexelData<Color> map = ReadTexture<Color>(target);
@@ -341,9 +325,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
         // Set 0 (BlockA.fixedValue) never changes across the recording; only set 1 (BlockB.valueB +
         // Output) changes every dispatch. Exercises the narrowed firstSet path (rebind starts at 1).
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -354,7 +337,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -383,9 +365,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
         // Flip-flop between two distinct ComputeProgram instances every dispatch. Each switch must
         // force a full rebind (program-change invalidation), never reusing the other program's sets.
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             for (int i = 0; i < n; i++)
             {
                 bool useX = (i % 2) == 0;
@@ -398,7 +379,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -424,10 +404,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         int graphs = (int)GD.MaxExecutingTasks * 8;
         for (int i = 0; i < graphs; i++)
         {
-            GD.RunTestGraph(context =>
+            GD.RunTestGraph((context, cl) =>
             {
-                CommandBuffer cl = context.GetCommandBuffer();
-                context.SubmitCommandBuffer(cl);
             });
             GD.WaitForIdle();
         }

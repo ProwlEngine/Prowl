@@ -161,13 +161,11 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         Texture target = RF.CreateTexture(TextureDescription.Texture2D(4, 1, 1, 1, Format, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cmd) =>
         {
-            CommandBuffer cmd = context.GetCommandBuffer();
             cmd.CopyTexture(source, target);
             cmd.SetFramebuffer(fb);
             cmd.SetFullViewport();
-            context.SubmitCommandBuffer(cmd);
         });
         GD.WaitForIdle();
 
@@ -219,11 +217,9 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, output));
         GraphicsProgram program = CreateSampleProgram();
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cmd) =>
         {
-            CommandBuffer cmd = context.GetCommandBuffer();
             DrawSampled(cmd, program, fb, fresh, PointSampler);
-            context.SubmitCommandBuffer(cmd);
         });
         GD.WaitForIdle();
 
@@ -514,68 +510,6 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         GD.WaitForIdle();
 
         Assert.Single(errors);
-    }
-
-    [Fact]
-    public void FirstPass_SubmitsOutOfOrder_Throws()
-    {
-        RenderResourceID id = RenderResourceID.Intern("barrier_first_order");
-        GraphTextureDesc desc = GraphTextureDesc.Sized(4, 4, false, Format);
-
-        List<Exception> errors = new();
-        LambdaPass pass = new(
-            "FirstOrder",
-            builder => builder.DeclareOutputTexture(id, desc),
-            (context, cmd) =>
-            {
-                CommandBuffer first = cmd;
-                CommandBuffer second = context.GetCommandBuffer("Second");
-                try
-                {
-                    context.SubmitCommandBuffer(second);
-                }
-                catch (InvalidOperationException e)
-                {
-                    errors.Add(e);
-                }
-                context.SubmitCommandBuffer(first);
-                context.SubmitCommandBuffer(second);
-            });
-
-        using RenderPipeline<BarrierView> pipeline = new([pass]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
-        GD.WaitForIdle();
-
-        Assert.Single(errors);
-    }
-
-    [Fact]
-    public void LaterPass_SubmitsOutOfOrder_KeepsTexels()
-    {
-        Texture source = CreateSourceTexels();
-        DeviceBuffer staging = CreateStaging(4, 1);
-        RenderResourceID id = RenderResourceID.Intern("barrier_later_order");
-        GraphTextureDesc desc = GraphTextureDesc.Sized(4, 1, false, Format);
-
-        TextureHandle loadHandle = default;
-        LambdaPass load = new(
-            "Load",
-            builder => loadHandle = builder.DeclareOutputTexture(id, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded)),
-            (context, cmd) =>
-            {
-                CommandBuffer first = cmd;
-                CommandBuffer second = context.GetCommandBuffer("LoadSecond");
-                second.SetFramebuffer(context.GetRenderTexture(loadHandle).Framebuffer);
-                second.SetFullViewport();
-                context.SubmitCommandBuffer(second);
-                context.SubmitCommandBuffer(first);
-            });
-
-        using RenderPipeline<BarrierView> pipeline = new([BarrierPasses.Upload(id, desc, source), load, BarrierPasses.Readback(id, staging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
-        GD.WaitForIdle();
-
-        AssertTexels(staging);
     }
 
     [Fact]

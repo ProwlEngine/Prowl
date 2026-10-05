@@ -91,11 +91,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(src, (IntPtr)dataPtr, 256 * 256 * sizeof(ushort), new TextureRegion(0, 0, 0, 256, 256, 1, 2, 0));
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(src, dst, 2, 0);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -218,11 +216,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(src, data, new TextureRegion(0, 0, 0, TexSize, TexSize, 1, 0, face));
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(src, dst);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -265,12 +261,10 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(src, data, new TextureRegion(0, 0, 0, TexSize, TexSize, 1, 0, face));
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             for (uint face = 0; face < 6; face++)
                 cl.CopyTexture(src, dst, 0, face);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -318,12 +312,10 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             for (uint face = 0; face < 6; face++)
                 cl.CopyTexture(src, dst, CopiedMip, face);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -366,11 +358,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(src, dst);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -418,12 +408,10 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             for (uint mip = 0; mip < MipLevels; mip++)
                 cl.CopyTexture(src, dst, mip, CopiedArrayLayer);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -481,11 +469,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.GenerateMipmaps(tex);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -595,11 +581,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(tex, readback);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -675,14 +659,12 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(copySrc, (IntPtr)dataPtr, totalDataSize, new TextureRegion(srcX, srcY, 0, copyWidth, copyHeight, 1));
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(
                 copySrc, srcX, srcY, 0, 0, 0,
                 copyDst, 0, 0, 0, 0, 0,
                 copyWidth, copyHeight, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -720,9 +702,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(copySrc, data, new TextureRegion(0, 0, 0, 16, 16, 1, 0, layer));
         }
 
-        GD.WaitForExecution(GD.RunTestGraph(context =>
+        GD.WaitForExecution(GD.RunTestGraph((context, copyCL) =>
         {
-            CommandBuffer copyCL = context.GetCommandBuffer();
             if (separateLayerCopies)
             {
                 for (uint layer = 0; layer < copySrc.ArrayLayers; layer++)
@@ -734,7 +715,6 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             {
                 copyCL.CopyTexture(copySrc, 0, 0, 0, 0, 0, copyDst, 0, 0, 0, 0, 0, 16, 16, 1, copySrc.ArrayLayers);
             }
-            context.SubmitCommandBuffer(copyCL);
         }));
 
         for (uint layer = 0; layer < copyDst.ArrayLayers; layer++)
@@ -807,14 +787,12 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         ushort[] data = Enumerable.Range(0, (int)tex1D.Width).Select(i => (ushort)(i * 2)).ToArray();
         GD.UpdateTexture(tex1D, data, new TextureRegion(tex1D.Width));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(
                 tex1D, 0, 0, 0, 0, 0,
                 dst1D, 25, 0, 0, 0, 0,
                 tex1D.Width, 1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -865,14 +843,12 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         ushort[] data = Enumerable.Range(0, 100).Select(i => (ushort)(i * 2)).ToArray();
         GD.UpdateTexture(tex1D, data, new TextureRegion(0, 0, 0, 100, 1, 1, 1, 0));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(
                 tex1D, 0, 0, 0, 1, 0,
                 dst1D, 0, 0, 0, 0, 0,
                 dst1D.Width, 1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -901,16 +877,14 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         GD.UpdateTexture(src, srcData, new TextureRegion(0, 0, 0, src.Width, src.Height, 1));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(
                 src,
                 50, 50, 0, 0, 0,
                 dst,
                 10, 10, 0, 0, 0,
                 50, 50, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -938,14 +912,12 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         GD.UpdateTexture(src, writeData, new TextureRegion(0, 0, 0, src.Width, src.Height, 1, 0, 5));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(
                 src, 0, 0, 0, 0, 5,
                 dst, 0, 0, 0, 0, 0,
                 10, 10, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -1071,11 +1043,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture copy = RF.CreateTexture(TextureDescription.Texture3D(
             16, 16, 16, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(tex3D, copy);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -1107,11 +1077,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(dst, (IntPtr)dataPtr2, (uint)data2.Length, new TextureRegion(0, 0, 0, dst.Width, dst.Height, 1));
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(src, dst);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -1173,16 +1141,14 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             dstWidth, dstHeight, dstDepth, dstMipLevels, dstArrayLayers,
             format, TextureUsage.Sampled, dstType));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
 
             cl.CopyTexture(
                 srcTex, srcX, srcY, srcZ, srcMipLevel, srcArrayLayer,
                 dstTex, dstX, dstY, dstZ, dstMipLevel, dstArrayLayer,
                 copyWidth, copyHeight, copyDepth, 1);
 
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -1247,11 +1213,9 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(tex, (IntPtr)pixelDataPtr, 1024 * 1024 * 16, new TextureRegion(0, 0, 0, 1024, 1024, 1));
         }
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.GenerateMipmaps(tex);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -1270,14 +1234,12 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture src = RF.CreateTexture(TextureDescription.Texture2D(16, 16, 4, 1, PixelFormat.BC3_UNorm, TextureUsage.Sampled));
         Texture dst = RF.CreateTexture(TextureDescription.Texture2D(16, 16, 4, 1, PixelFormat.BC3_UNorm, TextureUsage.Sampled));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyTexture(
                 src, 0, 0, 0, 3, 0,
                 dst, 0, 0, 0, 3, 0,
                 4, 4, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
     }

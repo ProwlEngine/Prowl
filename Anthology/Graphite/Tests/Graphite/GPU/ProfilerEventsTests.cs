@@ -171,13 +171,11 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         props.SetBuffer("Source", source);
         props.SetBuffer("Destination", destination);
 
-        device.RunTestGraph(context =>
+        device.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         device.WaitForIdle();
 
@@ -204,11 +202,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
-        device.RunTestGraph(context =>
+        device.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyBuffer(source, 0, destination, 0, 256);
-            context.SubmitCommandBuffer(cl);
         });
         device.WaitForIdle();
 
@@ -272,11 +268,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
-        device.RunTestGraph(context =>
+        device.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyBuffer(source, 0, destination, 0, 256);
-            context.SubmitCommandBuffer(cl);
         });
         device.WaitForIdle();
 
@@ -294,11 +288,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
-        device.RunTestGraph(context =>
+        device.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyBuffer(source, 0, destination, 0, 256);
-            context.SubmitCommandBuffer(cl);
         });
         device.WaitForIdle();
 
@@ -319,11 +311,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         void RunCopyGraph()
         {
-            device.RunTestGraph(context =>
+            device.RunTestGraph((context, cl) =>
             {
-                CommandBuffer cl = context.GetCommandBuffer();
                 cl.CopyBuffer(source, 0, destination, 0, 256);
-                context.SubmitCommandBuffer(cl);
             });
             device.WaitForIdle();
         }

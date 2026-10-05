@@ -10,10 +10,8 @@ public abstract class FrameCoreTests<T> : GraphicsDeviceTestBase<T> where T : Gr
     [Fact]
     public void Execution_CompletesAndSignalsFence()
     {
-        ExecutionTask task = GD.RunTestGraph(context =>
+        ExecutionTask task = GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
-            context.SubmitCommandBuffer(cl);
         });
 
         GD.WaitForExecution(task);

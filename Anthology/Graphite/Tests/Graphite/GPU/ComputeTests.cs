@@ -246,11 +246,9 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
     private void Submit(Action<CommandBuffer> record)
     {
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             record(cl);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
     }

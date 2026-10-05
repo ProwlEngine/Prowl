@@ -43,10 +43,8 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void CompleteExecution_CompletesAndAdvancesLastCompleted()
     {
-        ExecutionTask task = GD.RunTestGraph(context =>
+        ExecutionTask task = GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
-            context.SubmitCommandBuffer(cl);
         });
         ulong id = task.Id;
 
@@ -65,10 +63,8 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
         uint executionCount = GD.MaxExecutingTasks * 3 + 1;
         for (uint i = 0; i < executionCount; i++)
         {
-            last = GD.RunTestGraph(context =>
+            last = GD.RunTestGraph((context, cl) =>
             {
-                CommandBuffer cl = context.GetCommandBuffer();
-                context.SubmitCommandBuffer(cl);
             });
         }
 

@@ -280,13 +280,11 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         RenderTextureDescription desc = new(size, size, ColorFormat, depth: false);
 
         Framebuffer fb = null;
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
             fb = RentFramebuffer(GD, context.Task, desc);
 
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

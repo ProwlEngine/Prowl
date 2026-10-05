@@ -575,11 +575,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     // property binding allocates transient memory at record time.
     private void Submit(Action<CommandBuffer> record)
     {
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             record(cl);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
     }

@@ -12,7 +12,7 @@ namespace Prowl.Graphite.Tests;
 // A RenderContext is normally only handed to a pass while the render graph executes it. Low-level
 // GPU tests have no passes, so this harness stands up a throwaway single-view graph with no passes
 // and hands the caller its RenderContext directly, giving tests the same recording/submission surface
-// (GetCommandBuffer, SubmitCommandBuffer, AllocateTransient) real passes use.
+// (the per-pass command buffer, AllocateTransient) real passes use.
 public readonly struct TestRenderView : IRenderView
 {
     public uint PixelWidth => 256;
@@ -22,6 +22,33 @@ public readonly struct TestRenderView : IRenderView
 
 public static class TestGraphExtensions
 {
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView>, CommandBuffer> record)
+        => gd.RunTestGraphPasses(1, (context, cmd, _) => record(context, cmd));
+
+    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext<TestRenderView>, CommandBuffer, int> record)
+    {
+        ExecutionTask task = gd.BeginExecution();
+        RenderGraph<TestRenderView> graph = RenderGraph<TestRenderView>.Build(
+            Array.Empty<IPass<TestRenderView>>());
+        var context = new RenderContext<TestRenderView>(gd, task, graph, default);
+
+        try
+        {
+            for (int i = 0; i < passCount; i++)
+            {
+                CommandBuffer cmd = context.BeginPassCommandBuffer($"Pass{i}");
+                record(context, cmd, i);
+                context.EndPassCommandBuffer(cmd);
+            }
+        }
+        finally
+        {
+            gd.CompleteExecution(task);
+        }
+
+        return task;
+    }
+
     public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView>> record)
     {
         ExecutionTask task = gd.BeginExecution();
@@ -223,11 +250,9 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         else
         {
             readback = RF.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-            GD.RunTestGraph(context =>
+            GD.RunTestGraph((context, cl) =>
             {
-                CommandBuffer cl = context.GetCommandBuffer();
                 cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
-                context.SubmitCommandBuffer(cl);
             });
             GD.WaitForIdle();
         }
