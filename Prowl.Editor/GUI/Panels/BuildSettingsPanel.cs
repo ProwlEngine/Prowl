@@ -7,6 +7,7 @@ using System.Drawing;
 using System.Linq;
 
 using Prowl.Editor.Build;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.SceneView;
@@ -255,6 +256,12 @@ public class BuildSettingsPanel : DockPanel
     private void AddOpenScene()
     {
         var db = EditorAssetBackend.Instance;
+        if (EditorSceneManager.CurrentScenePath == null && !Application.IsPlaying)
+        {
+            EditorApplication.PromptSaveAs(AddOpenScene);
+            return;
+        }
+
         var entry = EditorSceneManager.CurrentScenePath != null ? db?.GetEntry(EditorSceneManager.CurrentScenePath) : null;
         if (entry == null)
         {
