@@ -21,7 +21,7 @@ public enum BufferUsage : byte
     /// </summary>
     UniformBuffer = 1 << 2,
     /// <summary>
-    /// Compute shader writable.
+    /// Shader read-only structured buffer.
     /// </summary>
     StructuredBufferReadOnly = 1 << 3,
     /// <summary>
@@ -33,11 +33,11 @@ public enum BufferUsage : byte
     /// </summary>
     IndirectBuffer = 1 << 5,
     /// <summary>
-    /// Frequently updated; cannot combine with StructuredBufferReadWrite or IndirectBuffer.
+    /// Host-visible, persistently mapped memory for frequent CPU writes. Cannot combine with StructuredBufferReadWrite or IndirectBuffer.
     /// </summary>
     Dynamic = 1 << 6,
     /// <summary>
-    /// Staging buffer for CPU transfers; cannot combine with other flags.
+    /// Host-visible memory, cached when available, for CPU upload and readback. Cannot combine with other flags.
     /// </summary>
     Staging = 1 << 7,
 }
