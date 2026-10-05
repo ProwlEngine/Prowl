@@ -85,10 +85,10 @@ public class RenderPipeline<TView> : IDisposable
                 }
 
                 context.SetCurrentPass(passInfo, node.Accesses, node.Pass.Name);
-                context.TransitionForAccesses(node.Pass.Name, node.Accesses);
+                context.TransitionForAccesses(node.Accesses);
                 CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
                 node.Pass.Render(context, passCommands);
-                context.EndPassCommandBuffer(passCommands);
+                context.EndCommandBuffer(passCommands);
                 context.SetCurrentPass(null);
 
                 profiler?.EndPass(passInfo);
@@ -100,8 +100,6 @@ public class RenderPipeline<TView> : IDisposable
                         profiler.RecordPassWrite(passInfo, output, texture, buffer);
                     }
                 }
-
-                context.ReclaimUnsubmittedCommandBuffers(node.Pass.Name);
 
                 if (profiler != null && profiler.RequestCapture)
                     CapturePassOutputs(context, profiler, passInfo, node);
@@ -128,14 +126,14 @@ public class RenderPipeline<TView> : IDisposable
             return;
 
         Framebuffer[] outputs = framebuffers.ToArray();
-        CommandBuffer capture = context.GetCommandBuffer($"{node.Pass.Name} Capture");
+        CommandBuffer capture = context.BeginCommandBuffer($"{node.Pass.Name} Capture");
         try
         {
             profiler.Capture(passInfo, outputs, capture);
         }
         finally
         {
-            context.SubmitCommandBuffer(capture);
+            context.EndCommandBuffer(capture);
         }
     }
 

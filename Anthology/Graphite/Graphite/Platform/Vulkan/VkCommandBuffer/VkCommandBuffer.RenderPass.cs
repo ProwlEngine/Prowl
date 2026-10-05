@@ -148,7 +148,7 @@ internal unsafe partial class VkCommandBuffer
         VkBarriers.Record(_gd, _cb, textures, bufferSrc, bufferDst);
     }
 
-    internal override void SealRenderPass()
+    private void SealRenderPass()
     {
         if (_activeRenderPass.Handle == default && !_currentFramebufferEverActive && _currentFramebuffer != null)
             BeginCurrentRenderPass();

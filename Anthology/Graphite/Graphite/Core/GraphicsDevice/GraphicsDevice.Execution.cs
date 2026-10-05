@@ -87,7 +87,6 @@ public abstract partial class GraphicsDevice
     public void CompleteExecution(ExecutionTask task)
     {
         ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(CompleteExecution));
-        task.CloseTail();
         CompleteExecutionCore(task);
     }
 

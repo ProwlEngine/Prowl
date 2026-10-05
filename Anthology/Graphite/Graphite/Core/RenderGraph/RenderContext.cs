@@ -15,7 +15,6 @@ public sealed class RenderContext<TView>
     private readonly TView _view;
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
-    private readonly List<CommandBuffer> _pendingCommandBuffers = new();
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
     private GraphTextureStates? _stateSnapshot;
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
@@ -26,10 +25,8 @@ public sealed class RenderContext<TView>
     private PassInfo? _currentPass;
     private ResourceAccess[]? _currentAccesses;
     private string? _currentScopeName;
-    private TextureBarrier[]? _deferredBarriers;
-    private BufferAccess _deferredBufferSrc;
-    private BufferAccess _deferredBufferDst;
-    private CommandBuffer? _barrierHost;
+    private BufferAccess _pendingBufferSrc;
+    private BufferAccess _pendingBufferDst;
 
     private static long s_nextCommandBufferRentalId;
 
@@ -76,7 +73,7 @@ public sealed class RenderContext<TView>
         _currentScopeName = scopeName;
     }
 
-    internal void TransitionForAccesses(string scopeName, ResourceAccess[] accesses)
+    internal void TransitionForAccesses(ResourceAccess[] accesses)
     {
         _barriers.Clear();
         BufferAccess bufferSrc = BufferAccess.None;
@@ -104,7 +101,8 @@ public sealed class RenderContext<TView>
             }
         }
 
-        RecordBarriers(scopeName, bufferSrc, bufferDst);
+        _pendingBufferSrc = bufferSrc;
+        _pendingBufferDst = bufferDst;
     }
 
     internal void RestoreRestingStates(string scopeName)
@@ -120,8 +118,15 @@ public sealed class RenderContext<TView>
         _discardedTextures.Clear();
         _enteredTransients.Clear();
         _stateSnapshot = null;
-        RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
-        FlushDeferredBarriers(scopeName);
+        _pendingBufferSrc = BufferAccess.None;
+        _pendingBufferDst = BufferAccess.None;
+        if (_barriers.Count == 0)
+            return;
+
+        CommandBuffer cb = BeginCommandBuffer($"{scopeName} Barriers");
+        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), BufferAccess.None, BufferAccess.None);
+        _barriers.Clear();
+        EndCommandBuffer(cb);
     }
 
     private static bool HasTextureOutput(ResourceAccess[] accesses, RenderResourceID id)
@@ -195,32 +200,6 @@ public sealed class RenderContext<TView>
         sync.ReadsSinceWrite |= reads;
     }
 
-    private void RecordBarriers(string scopeName, BufferAccess bufferSrc, BufferAccess bufferDst)
-    {
-        if (_barriers.Count == 0 && bufferSrc == BufferAccess.None)
-            return;
-
-        if (_task.OpenTail is { } tail)
-        {
-            tail.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), bufferSrc, bufferDst);
-            CommitBarrierStates();
-            return;
-        }
-
-        _deferredBarriers = _barriers.ToArray();
-        _deferredBufferSrc = bufferSrc;
-        _deferredBufferDst = bufferDst;
-        CommitBarrierStates();
-    }
-
-    private void FlushDeferredBarriers(string scopeName)
-    {
-        if (_deferredBarriers == null || _barrierHost != null)
-            return;
-
-        SubmitCommandBuffer(GetCommandBuffer($"{scopeName} Barriers"));
-    }
-
     private void CheckDeclared(RenderResourceID id)
     {
         if (_currentAccesses == null)
@@ -243,7 +222,7 @@ public sealed class RenderContext<TView>
         public BufferAccess Visible = BufferAccess.None;
     }
 
-    internal CommandBuffer GetCommandBuffer(string name = "")
+    internal CommandBuffer BeginCommandBuffer(string name)
     {
         CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
 
@@ -255,60 +234,24 @@ public sealed class RenderContext<TView>
 
         cb.Begin();
         cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
-        _pendingCommandBuffers.Add(cb);
-
-        if (_deferredBarriers != null && _barrierHost == null)
-        {
-            cb.RecordBarriers(_deferredBarriers, _deferredBufferSrc, _deferredBufferDst);
-            _barrierHost = cb;
-        }
-
         return cb;
     }
 
-    internal CommandBuffer BeginPassCommandBuffer(string passName) => GetCommandBuffer(passName);
-
-    internal void EndPassCommandBuffer(CommandBuffer cmd)
+    internal CommandBuffer BeginPassCommandBuffer(string passName)
     {
-        if (_pendingCommandBuffers.Contains(cmd))
-            SubmitCommandBuffer(cmd);
+        CommandBuffer cb = BeginCommandBuffer(passName);
+        if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
+            return cb;
+
+        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
+        _pendingBufferSrc = BufferAccess.None;
+        _pendingBufferDst = BufferAccess.None;
+        CommitBarrierStates();
+        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+        return cb;
     }
 
-    internal void SubmitCommandBuffer(CommandBuffer cmd)
-    {
-        if (_barrierHost != null)
-        {
-            if (!ReferenceEquals(_barrierHost, cmd))
-            {
-                throw new InvalidOperationException(
-                    $"Pass '{_currentScopeName}' must submit its first rented command buffer first, because it carries the barriers the pass starts with.");
-            }
-
-            _barrierHost = null;
-            _deferredBarriers = null;
-        }
-
-        _pendingCommandBuffers.Remove(cmd);
-        _task.QueueOpen(cmd);
-    }
-
-    /// <summary>
-    /// Warns and drops command buffers rented in this scope but never submitted. Ring disposes them on recycle. Called after each pass.
-    /// </summary>
-    /// <param name="scopeName">Pass name for the warning.</param>
-    internal void ReclaimUnsubmittedCommandBuffers(string scopeName)
-    {
-        foreach (CommandBuffer cb in _pendingCommandBuffers)
-        {
-            _device.OnWarning?.Invoke(
-                $"Command buffer '{cb.Name}' rented by pass '{scopeName}' was never submitted. " +
-                "Rent a command buffer only when you intend to submit it through the render context.");
-        }
-
-        _pendingCommandBuffers.Clear();
-        _barrierHost = null;
-        FlushDeferredBarriers(scopeName);
-    }
+    internal void EndCommandBuffer(CommandBuffer cmd) => _task.SubmitRecorded(cmd);
 
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>

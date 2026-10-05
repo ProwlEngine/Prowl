@@ -38,7 +38,7 @@ public static class TestGraphExtensions
             {
                 CommandBuffer cmd = context.BeginPassCommandBuffer($"Pass{i}");
                 record(context, cmd, i);
-                context.EndPassCommandBuffer(cmd);
+                context.EndCommandBuffer(cmd);
             }
         }
         finally
