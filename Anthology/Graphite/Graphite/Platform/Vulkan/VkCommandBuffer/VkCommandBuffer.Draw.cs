@@ -95,7 +95,7 @@ internal unsafe partial class VkCommandBuffer
 
         bool needBind = _descriptorBinder.Prepare(
             _currentComputeProgram,
-            reportProgram: _currentShaderProgram,
+            reportProgram: _currentComputeProgram,
             isGraphics: false);
 
         if (needBind)
