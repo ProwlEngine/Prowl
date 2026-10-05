@@ -417,6 +417,12 @@ public class Camera : MonoBehaviour
         int width = camTarget.IsValid() ? camTarget.Width : Window.InternalWindow.FramebufferSize.X;
         int height = camTarget.IsValid() ? camTarget.Height : Window.InternalWindow.FramebufferSize.Y;
 
+        // Screen points use the same space Input.MousePosition reports: target pixels when drawing into a
+        // target (the editor's Game view included), window coordinates when drawing to the backbuffer.
+        _screenSize = camTarget.IsValid()
+            ? new Float2(camTarget.Width, camTarget.Height)
+            : new Float2(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
+
         float renderScale = Maths.Clamp(RenderScale, 0.1f, 2.0f);
         PixelWidth = (uint)Maths.Max(1, (int)(width * renderScale));
         PixelHeight = (uint)Maths.Max(1, (int)(height * renderScale));
@@ -509,6 +515,64 @@ public class Camera : MonoBehaviour
         Array.Clear(_hasPreviousViewProjectionMatrix);
     }
 
+    private Float2 _screenSize;
+
+    /// <summary>
+    /// The size of the space screen points are measured in, from the top left: the camera's target in pixels
+    /// when it draws into one (including the editor's Game view), otherwise the window in window coordinates.
+    /// Matches <see cref="Input.MousePosition"/>. Taken from the camera's last render, or the window before then.
+    /// </summary>
+    public Float2 ScreenSize
+    {
+        get
+        {
+            if (_screenSize.X > 0 && _screenSize.Y > 0) return _screenSize;
+            if (Window.InternalWindow != null) return new Float2(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
+            return Float2.One;
+        }
+    }
+
+    /// <summary>The ray from the camera through <paramref name="screenPoint"/>, in <see cref="ScreenSize"/> space.</summary>
+    public Ray ScreenPointToRay(Float2 screenPoint) => ScreenPointToRay(screenPoint, ScreenSize);
+
+    /// <summary>
+    /// Converts a world point to a screen point. X and Y are pixels from the top left of <see cref="ScreenSize"/>,
+    /// Z is the distance in front of the camera along its forward axis, negative when the point is behind it.
+    /// </summary>
+    public Float3 WorldToScreenPoint(Float3 worldPoint) => WorldToScreenPoint(worldPoint, ScreenSize);
+
+    /// <inheritdoc cref="WorldToScreenPoint(Float3)"/>
+    public Float3 WorldToScreenPoint(Float3 worldPoint, Float2 screenSize)
+    {
+        Float4 clip = Float4x4.TransformPoint(new Float4(worldPoint, 1f), ScreenViewProjection(screenSize));
+        float w = Maths.Abs(clip.W) < 1e-6f ? 1e-6f : clip.W;
+        float depth = Float3.Dot(worldPoint - Transform.Position, Transform.Forward);
+
+        return new Float3(
+            (clip.X / w + 1f) * 0.5f * screenSize.X,
+            (1f - clip.Y / w) * 0.5f * screenSize.Y,
+            depth);
+    }
+
+    /// <summary>
+    /// Converts a screen point to a world point. X and Y are pixels from the top left of <see cref="ScreenSize"/>,
+    /// Z is how far in front of the camera along its forward axis the world point lies.
+    /// </summary>
+    public Float3 ScreenToWorldPoint(Float3 screenPoint) => ScreenToWorldPoint(screenPoint, ScreenSize);
+
+    /// <inheritdoc cref="ScreenToWorldPoint(Float3)"/>
+    public Float3 ScreenToWorldPoint(Float3 screenPoint, Float2 screenSize)
+    {
+        Ray ray = ScreenPointToRay(new Float2(screenPoint.X, screenPoint.Y), screenSize);
+        Float3 forward = Transform.Forward;
+        float startDepth = Float3.Dot(ray.Origin - Transform.Position, forward);
+        float along = Float3.Dot(ray.Direction, forward);
+        return ray.Origin + ray.Direction * ((screenPoint.Z - startDepth) / along);
+    }
+
+    // Unjittered, from the transform, so it matches what the player sees rather than a TAA sample.
+    private Float4x4 ScreenViewProjection(Float2 screenSize) => GetProjectionMatrix(screenSize.X / screenSize.Y) * GetViewMatrix();
+
     public Ray ScreenPointToRay(Float2 screenPoint, Float2 screenSize)
     {
         // Normalize screen coordinates to [-1, 1]
@@ -521,10 +585,7 @@ public class Camera : MonoBehaviour
         Float4 nearPointNDC = new(ndc.X, ndc.Y, 0.0f, 1.0f);
         Float4 farPointNDC = new(ndc.X, ndc.Y, 1.0f, 1.0f);
 
-        // Calculate the inverse view-projection matrix using unjittered projection
-        float aspect = screenSize.X / screenSize.Y;
-        Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * GetViewMatrix();
-        Float4x4 inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
+        Float4x4 inverseViewProjectionMatrix = ScreenViewProjection(screenSize).Invert();
 
         // Unproject the near and far points to world space
         Float4 nearPointWorld = Float4x4.TransformPoint(nearPointNDC, inverseViewProjectionMatrix);
