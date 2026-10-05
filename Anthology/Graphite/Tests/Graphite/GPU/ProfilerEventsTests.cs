@@ -29,7 +29,6 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
     public readonly List<(CommandBufferInfo info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
-    public bool RequestGPUStatistics { get; set; }
     public bool RequestCapture => false;
 
     public void Allocate(AllocBin type, long bytes) { }
@@ -227,9 +226,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void RequestExecutionTiming_True_RecordsExecutionTime()
+    public void ExecutionTiming_RecordsExecutionTime()
     {
-        RecordingProfiler profiler = new() { RequestGPUStatistics = true };
+        RecordingProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
@@ -287,7 +286,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void Record_WithTiming_RecordsExecutionTime()
     {
-        RecordingProfiler profiler = new() { RequestGPUStatistics = true };
+        RecordingProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));

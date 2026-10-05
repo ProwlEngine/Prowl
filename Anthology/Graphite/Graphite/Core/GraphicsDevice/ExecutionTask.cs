@@ -20,7 +20,7 @@ public abstract partial class ExecutionTask
 
     internal void SubmitRecorded(CommandBuffer commandBuffer)
     {
-        Device.Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
+        Device.CommandProfiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
         commandBuffer.End();
         SubmitCommandsInternal(commandBuffer);
     }

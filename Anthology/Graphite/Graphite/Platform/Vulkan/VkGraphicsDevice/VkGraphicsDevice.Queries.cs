@@ -27,7 +27,7 @@ internal unsafe partial class VkGraphicsDevice
     internal GpuQueries BeginQueries(Silk.NET.Vulkan.CommandBuffer cb)
     {
         GpuQueries queries = default;
-        if (Profiler is not { RequestGPUStatistics: true })
+        if (GpuStatsProfiler == null)
             return queries;
 
         QueryPool timing = GetPool(_availableTimingPools, QueryType.Timestamp, 2, 0);
@@ -68,7 +68,7 @@ internal unsafe partial class VkGraphicsDevice
 
             double ticks = timestamps[1] > timestamps[0] ? timestamps[1] - timestamps[0] : 0;
             double milliseconds = ticks * _physicalDeviceProperties.Limits.TimestampPeriod / 1_000_000.0;
-            Profiler?.RecordExecutionTime(info, isTransfer, milliseconds);
+            GpuStatsProfiler?.RecordExecutionTime(info, isTransfer, milliseconds);
         }
 
         if (queries.Stats is { } stats)
@@ -81,7 +81,7 @@ internal unsafe partial class VkGraphicsDevice
             _availableStatsPools.Enqueue(stats);
 
             GpuVertexStats vertexStats = new(results[0], results[1], results[2], results[3], results[4]);
-            Profiler?.RecordGpuVertexStats(info, in vertexStats);
+            GpuStatsProfiler?.RecordGpuVertexStats(info, in vertexStats);
         }
     }
 

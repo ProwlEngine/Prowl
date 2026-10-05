@@ -57,7 +57,8 @@ public class RenderPipeline : IDisposable
             throw new ArgumentNullException(nameof(context));
 
         RenderGraph graph = Graph;
-        IProfiler? profiler = context.Profiler;
+        IGraphProfiler? profiler = context.GraphProfiler;
+        IProfiler? capturer = context.Profiler;
 
         _executingView = true;
         try
@@ -101,8 +102,8 @@ public class RenderPipeline : IDisposable
                     }
                 }
 
-                if (profiler != null && profiler.RequestCapture)
-                    CapturePassOutputs(context, profiler, passInfo, node);
+                if (capturer is { RequestCapture: true })
+                    CapturePassOutputs(context, capturer, passInfo, node);
             }
 
             context.RestoreRestingStates("View");

@@ -16,7 +16,7 @@ public abstract partial class CommandBuffer
         Draw_PreDrawValidation();
         DrawCore(vertexCount, instanceCount, vertexStart, instanceStart);
 
-        Execution?.Device.Profiler?.RecordDraw(
+        Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
@@ -38,7 +38,7 @@ public abstract partial class CommandBuffer
 
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
 
-        Execution?.Device.Profiler?.RecordDraw(
+        Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
@@ -102,7 +102,7 @@ public abstract partial class CommandBuffer
 
         DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
 
-        Execution?.Device.Profiler?.RecordDraw(
+        Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
@@ -130,7 +130,7 @@ public abstract partial class CommandBuffer
 
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
 
-        Execution?.Device.Profiler?.RecordDraw(
+        Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
@@ -151,7 +151,7 @@ public abstract partial class CommandBuffer
     {
         DispatchCore(groupCountX, groupCountY, groupCountZ);
 
-        Execution?.Device.Profiler?.RecordDispatch(
+        Execution?.Device.CommandProfiler?.RecordDispatch(
             ProfilerInfo, new DispatchCallInfo(groupCountX, groupCountY, groupCountZ, isIndirect: false));
     }
 
@@ -166,7 +166,7 @@ public abstract partial class CommandBuffer
         DrawIndirect_CheckOffset(offset);
         DispatchIndirectCore(indirectBuffer, offset);
 
-        Execution?.Device.Profiler?.RecordDispatch(
+        Execution?.Device.CommandProfiler?.RecordDispatch(
             ProfilerInfo, new DispatchCallInfo(0, 0, 0, isIndirect: true));
     }
 

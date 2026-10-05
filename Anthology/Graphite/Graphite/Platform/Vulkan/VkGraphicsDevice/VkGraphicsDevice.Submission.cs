@@ -244,7 +244,7 @@ internal unsafe partial class VkGraphicsDevice
         Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
         ulong serial = Submit(new System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer>(in handle), new System.ReadOnlySpan<VkCommandBuffer>(in cb), submission);
         TagImmediatePool(cb.CommandPool, serial);
-        Profiler?.RecordSubmit(cb.ProfilerInfo, isTransfer: true);
+        CommandProfiler?.RecordSubmit(cb.ProfilerInfo, isTransfer: true);
         return submission;
     }
 

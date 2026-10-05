@@ -21,31 +21,41 @@ public abstract partial class GraphicsDevice
 
         RenderGraph.RenderGraph graph = pipeline.Graph;
 
-        ExecutionTask task = BeginExecution();
         List<Swapchain>? presents = null;
+        ExecutionTask task;
 
-        int index = 0;
-        foreach (T view in views)
+        _graphDispatchDepth++;
+        try
         {
-            var context = new RenderContext(
-                this, task, graph, view);
+            task = BeginExecution();
 
-            var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
-
-            Profiler?.BeginView(viewInfo);
-            pipeline.ExecuteView(context);
-            Profiler?.EndView(viewInfo);
-
-            Swapchain? swapchain = context.PresentSwapchain;
-            if (swapchain != null)
+            int index = 0;
+            foreach (T view in views)
             {
-                presents ??= [];
-                if (!presents.Contains(swapchain))
-                    presents.Add(swapchain);
-            }
-        }
+                var context = new RenderContext(
+                    this, task, graph, view);
 
-        CompleteExecution(task);
+                var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
+
+                GraphProfiler?.BeginView(viewInfo);
+                pipeline.ExecuteView(context);
+                GraphProfiler?.EndView(viewInfo);
+
+                Swapchain? swapchain = context.PresentSwapchain;
+                if (swapchain != null)
+                {
+                    presents ??= [];
+                    if (!presents.Contains(swapchain))
+                        presents.Add(swapchain);
+                }
+            }
+
+            CompleteExecution(task);
+        }
+        finally
+        {
+            _graphDispatchDepth--;
+        }
 
         if (presents != null)
         {

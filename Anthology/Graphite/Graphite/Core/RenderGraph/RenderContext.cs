@@ -57,6 +57,8 @@ public sealed class RenderContext
     /// <summary>Device's profiler, null if none.</summary>
     public IProfiler? Profiler => _device.Profiler;
 
+    internal IGraphProfiler? GraphProfiler => _device.GraphProfiler;
+
     internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
     internal void SetCurrentPass(in PassInfo? pass, ResourceAccess[]? accesses, string? scopeName)

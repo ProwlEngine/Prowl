@@ -53,7 +53,6 @@ public sealed class BenchProfiler : IProfiler
     public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
 
-    public bool RequestGPUStatistics => false;
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) { }
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 

@@ -32,7 +32,7 @@ public struct GraphicsDeviceOptions
     /// <summary>
     /// Profiler to report events to, or null for none. No default impl shipped - bring your own.
     /// </summary>
-    public IProfiler? Profiler;
+    public object? Profiler;
 
     /// <summary>
     /// Options for a device with no main Swapchain.

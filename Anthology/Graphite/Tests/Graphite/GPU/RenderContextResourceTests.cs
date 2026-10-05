@@ -147,7 +147,6 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordBarrier(BarrierBin kind, uint count) { }
     public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) { }
 
-    public bool RequestGPUStatistics => false;
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) { }
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 }
