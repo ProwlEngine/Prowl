@@ -22,7 +22,7 @@ internal static unsafe class VkPipelineCacheFactory
         PipelineColorBlendStateCreateInfo blendStateCI = new() { SType = StructureType.PipelineColorBlendStateCreateInfo };
         BlendStateDescription programBlendState = program.BlendState;
         int declaredCount = programBlendState.AttachmentStates.Length;
-        int attachmentsCount = Math.Max(declaredCount, outputDesc.ColorAttachments.Length);
+        int attachmentsCount = Math.Max(declaredCount, outputDesc.ColorFormats.Length);
         PipelineColorBlendAttachmentState* attachmentsPtr
             = stackalloc PipelineColorBlendAttachmentState[attachmentsCount];
         for (int i = 0; i < attachmentsCount; i++)
@@ -37,18 +37,13 @@ internal static unsafe class VkPipelineCacheFactory
             attachmentState.SrcAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceAlphaFactor);
             attachmentState.DstAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationAlphaFactor);
             attachmentState.AlphaBlendOp = VkFormats.ToVkBlendOp(vdDesc.AlphaFunction);
-            attachmentState.ColorWriteMask = VkFormats.ToVkColorWriteMask(vdDesc.ColorWriteMask ?? ColorWriteMask.All);
+            attachmentState.ColorWriteMask = VkFormats.ToVkColorWriteMask(vdDesc.ColorWriteMask);
             attachmentState.BlendEnable = vdDesc.BlendEnabled;
             attachmentsPtr[i] = attachmentState;
         }
 
         blendStateCI.AttachmentCount = (uint)attachmentsCount;
         blendStateCI.PAttachments = attachmentsPtr;
-        Color blendFactor = programBlendState.BlendFactor;
-        blendStateCI.BlendConstants[0] = blendFactor.R;
-        blendStateCI.BlendConstants[1] = blendFactor.G;
-        blendStateCI.BlendConstants[2] = blendFactor.B;
-        blendStateCI.BlendConstants[3] = blendFactor.A;
 
         pipelineCI.PColorBlendState = &blendStateCI;
 
@@ -69,10 +64,12 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Dynamic State
         PipelineDynamicStateCreateInfo dynamicStateCI = new() { SType = StructureType.PipelineDynamicStateCreateInfo };
-        DynamicState* dynamicStates = stackalloc DynamicState[2];
+        DynamicState* dynamicStates = stackalloc DynamicState[4];
         dynamicStates[0] = DynamicState.Viewport;
         dynamicStates[1] = DynamicState.Scissor;
-        dynamicStateCI.DynamicStateCount = 2;
+        dynamicStates[2] = DynamicState.StencilReference;
+        dynamicStates[3] = DynamicState.BlendConstants;
+        dynamicStateCI.DynamicStateCount = 4;
         dynamicStateCI.PDynamicStates = dynamicStates;
 
         pipelineCI.PDynamicState = &dynamicStateCI;
@@ -91,7 +88,6 @@ internal static unsafe class VkPipelineCacheFactory
         dssCI.Front.CompareOp = VkFormats.ToVkCompareOp(vdDssDesc.StencilFront.Comparison);
         dssCI.Front.CompareMask = vdDssDesc.StencilReadMask;
         dssCI.Front.WriteMask = vdDssDesc.StencilWriteMask;
-        dssCI.Front.Reference = vdDssDesc.StencilReference;
 
         dssCI.Back.FailOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilBack.Fail);
         dssCI.Back.PassOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilBack.Pass);
@@ -99,7 +95,6 @@ internal static unsafe class VkPipelineCacheFactory
         dssCI.Back.CompareOp = VkFormats.ToVkCompareOp(vdDssDesc.StencilBack.Comparison);
         dssCI.Back.CompareMask = vdDssDesc.StencilReadMask;
         dssCI.Back.WriteMask = vdDssDesc.StencilWriteMask;
-        dssCI.Back.Reference = vdDssDesc.StencilReference;
 
         pipelineCI.PDepthStencilState = &dssCI;
 
@@ -137,7 +132,7 @@ internal static unsafe class VkPipelineCacheFactory
             bindingDescs[binding] = new VertexInputBindingDescription()
             {
                 Binding = (uint)binding,
-                InputRate = (inputDesc.InstanceStepRate != 0) ? VertexInputRate.Instance : VertexInputRate.Vertex,
+                InputRate = (inputDesc.StepRate == VertexStepRate.PerInstance) ? VertexInputRate.Instance : VertexInputRate.Vertex,
                 Stride = inputDesc.Stride
             };
 
@@ -207,14 +202,14 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Compatibility RenderPass
         RenderPassCreateInfo renderPassCI = new() { SType = StructureType.RenderPassCreateInfo };
-        AttachmentDescription* attachments = stackalloc AttachmentDescription[outputDesc.ColorAttachments.Length + 1];
+        AttachmentDescription* attachments = stackalloc AttachmentDescription[outputDesc.ColorFormats.Length + 1];
         uint attachmentCount = 0;
 
-        AttachmentDescription* colorAttachmentDescs = stackalloc AttachmentDescription[outputDesc.ColorAttachments.Length];
-        AttachmentReference* colorAttachmentRefs = stackalloc AttachmentReference[outputDesc.ColorAttachments.Length];
-        for (uint i = 0; i < outputDesc.ColorAttachments.Length; i++)
+        AttachmentDescription* colorAttachmentDescs = stackalloc AttachmentDescription[outputDesc.ColorFormats.Length];
+        AttachmentReference* colorAttachmentRefs = stackalloc AttachmentReference[outputDesc.ColorFormats.Length];
+        for (uint i = 0; i < outputDesc.ColorFormats.Length; i++)
         {
-            colorAttachmentDescs[i].Format = VkFormats.ToVkPixelFormat(outputDesc.ColorAttachments[i].Format);
+            colorAttachmentDescs[i].Format = VkFormats.ToVkPixelFormat(outputDesc.ColorFormats[i]);
             colorAttachmentDescs[i].Samples = vkSampleCount;
             colorAttachmentDescs[i].LoadOp = AttachmentLoadOp.DontCare;
             colorAttachmentDescs[i].StoreOp = AttachmentStoreOp.Store;
@@ -230,11 +225,11 @@ internal static unsafe class VkPipelineCacheFactory
 
         AttachmentDescription depthAttachmentDesc = new();
         AttachmentReference depthAttachmentRef = new();
-        if (outputDesc.DepthAttachment != null)
+        if (outputDesc.DepthFormat != null)
         {
-            PixelFormat depthFormat = outputDesc.DepthAttachment.Value.Format;
+            PixelFormat depthFormat = outputDesc.DepthFormat.Value;
             bool hasStencil = FormatHelpers.IsStencilFormat(depthFormat);
-            depthAttachmentDesc.Format = VkFormats.ToVkPixelFormat(outputDesc.DepthAttachment.Value.Format, toDepthFormat: true);
+            depthAttachmentDesc.Format = VkFormats.ToVkPixelFormat(outputDesc.DepthFormat.Value, toDepthFormat: true);
             depthAttachmentDesc.Samples = vkSampleCount;
             depthAttachmentDesc.LoadOp = AttachmentLoadOp.DontCare;
             depthAttachmentDesc.StoreOp = AttachmentStoreOp.Store;
@@ -243,16 +238,16 @@ internal static unsafe class VkPipelineCacheFactory
             depthAttachmentDesc.InitialLayout = ImageLayout.Undefined;
             depthAttachmentDesc.FinalLayout = ImageLayout.DepthStencilAttachmentOptimal;
 
-            depthAttachmentRef.Attachment = (uint)outputDesc.ColorAttachments.Length;
+            depthAttachmentRef.Attachment = (uint)outputDesc.ColorFormats.Length;
             depthAttachmentRef.Layout = ImageLayout.DepthStencilAttachmentOptimal;
         }
 
         SubpassDescription subpass = new();
         subpass.PipelineBindPoint = PipelineBindPoint.Graphics;
-        subpass.ColorAttachmentCount = (uint)outputDesc.ColorAttachments.Length;
+        subpass.ColorAttachmentCount = (uint)outputDesc.ColorFormats.Length;
         subpass.PColorAttachments = colorAttachmentRefs;
 
-        if (outputDesc.DepthAttachment != null)
+        if (outputDesc.DepthFormat != null)
         {
             subpass.PDepthStencilAttachment = &depthAttachmentRef;
             attachments[attachmentCount++] = depthAttachmentDesc;
@@ -279,8 +274,6 @@ internal static unsafe class VkPipelineCacheFactory
 
         return new VkPipelineCacheEntry(
             pipeline,
-            renderPass,
-            pipelineLayout,
-            program.ResourceSetCount);
+            renderPass);
     }
 }

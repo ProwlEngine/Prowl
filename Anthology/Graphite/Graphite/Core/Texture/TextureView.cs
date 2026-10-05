@@ -22,7 +22,7 @@ public abstract class TextureView : GraphicsResource
     /// </summary>
     public uint BaseArrayLayer { get; }
     /// <summary>
-    /// Visible layer count.
+    /// Visible layer count. For cube textures, the number of cubes.
     /// </summary>
     public uint ArrayLayers { get; }
     /// <summary>

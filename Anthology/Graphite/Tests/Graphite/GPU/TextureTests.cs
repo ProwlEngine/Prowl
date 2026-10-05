@@ -141,8 +141,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         const uint TexSize = 4;
         const uint MipLevels = 3;
 
-        TextureDescription texDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap);
+        TextureDescription texDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, 0);
         Texture tex = RF.CreateTexture(texDesc);
 
         for (uint mip = 0; mip < MipLevels; mip++)
@@ -181,8 +181,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         const uint TexSize = 4;
         const uint MipLevels = 3;
 
-        TextureDescription texDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap | TextureUsage.Sampled);
+        TextureDescription texDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Sampled);
         Texture tex = RF.CreateTexture(texDesc);
 
         for (uint mip = 0; mip < MipLevels; mip++)
@@ -205,8 +205,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         const uint TexSize = 64;
         const uint MipLevels = 1;
 
-        TextureDescription srcDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap);
+        TextureDescription srcDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, 0);
         TextureDescription dstDesc = TextureDescription.Texture2D(
             TexSize, TexSize, MipLevels, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled);
         Texture src = RF.CreateTexture(srcDesc);
@@ -254,8 +254,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         TextureDescription srcDesc = TextureDescription.Texture2D(
             TexSize, TexSize, MipLevels, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled);
-        TextureDescription dstDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Sampled | TextureUsage.Cubemap);
+        TextureDescription dstDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Sampled);
         Texture src = RF.CreateTexture(srcDesc);
         Texture dst = RF.CreateTexture(dstDesc);
 
@@ -301,8 +301,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         const uint MipLevels = 3;
         const uint CopiedMip = 1;
 
-        TextureDescription srcDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap);
+        TextureDescription srcDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, 0);
         TextureDescription dstDesc = TextureDescription.Texture2D(
             TexSize, TexSize, MipLevels, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled);
         Texture src = RF.CreateTexture(srcDesc);
@@ -349,8 +349,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         const uint TexSize = 64;
         const uint MipLevels = 2;
 
-        TextureDescription srcDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap);
+        TextureDescription srcDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, 0);
         TextureDescription dstDesc = TextureDescription.Texture2D(
             TexSize, TexSize, MipLevels, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled);
         Texture src = RF.CreateTexture(srcDesc);
@@ -401,8 +401,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         const uint MipLevels = 2;
         const uint CopiedArrayLayer = 3;
 
-        TextureDescription srcDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap);
+        TextureDescription srcDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, 0);
         TextureDescription dstDesc = TextureDescription.Texture2D(
             TexSize, TexSize, MipLevels, CopiedArrayLayer + 1, PixelFormat.R8_UNorm, TextureUsage.Sampled);
         Texture src = RF.CreateTexture(srcDesc);
@@ -455,8 +455,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     [InlineData(2, 2)]
     public void CubeMap_GenerateMipmaps(uint TexSize, uint MipLevels)
     {
-        TextureDescription texDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap | TextureUsage.GenerateMipmaps);
+        TextureDescription texDesc = TextureDescription.CreateCube(
+            TexSize, MipLevels, 1, PixelFormat.R8_UNorm, 0);
         Texture tex = RF.CreateTexture(texDesc);
 
         for (uint face = 0; face < 6; face++)
@@ -1229,10 +1229,10 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Theory]
-    [InlineData(TextureUsage.Sampled | TextureUsage.GenerateMipmaps)]
-    [InlineData(TextureUsage.RenderTarget | TextureUsage.GenerateMipmaps)]
-    [InlineData(TextureUsage.Storage | TextureUsage.GenerateMipmaps)]
-    [InlineData(TextureUsage.Sampled | TextureUsage.RenderTarget | TextureUsage.GenerateMipmaps)]
+    [InlineData(TextureUsage.Sampled)]
+    [InlineData(TextureUsage.RenderTarget)]
+    [InlineData(TextureUsage.Storage)]
+    [InlineData(TextureUsage.Sampled | TextureUsage.RenderTarget)]
     public unsafe void GenerateMipmaps(TextureUsage usage)
     {
         TextureDescription texDesc = TextureDescription.Texture2D(

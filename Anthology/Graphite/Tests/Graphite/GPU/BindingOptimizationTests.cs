@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Vk;
 
 using Prowl.Vector;
@@ -37,7 +38,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 PropertySet props = new();
                 props.SetInt("valueA", 100 + i);
                 props.SetInt("valueB", 200 + i);
-                props.SetBuffer("Output", outputs[i], readOnly: false);
+                props.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
@@ -73,7 +74,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 PropertySet props = new();
                 props.SetInt("valueA", 42);
                 props.SetInt("valueB", 77);
-                props.SetBuffer("Output", outputs[i], readOnly: false);
+                props.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
@@ -110,7 +111,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 PropertySet props = new();
                 props.SetInt("valueA", even ? 1 : 9);
                 props.SetInt("valueB", even ? 2 : 8);
-                props.SetBuffer("Output", outputs[i], readOnly: false);
+                props.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
@@ -143,13 +144,12 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         DeviceBuffer vb = CreateQuad(color);
 
         PropertySet props = new();
-        props.SetBuffer("InputVertices", vb, readOnly: true);
+        props.SetBuffer("InputVertices", vb);
 
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
@@ -188,8 +188,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
@@ -232,8 +231,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
@@ -273,8 +271,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
@@ -312,15 +309,14 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             for (int i = 0; i < 5; i++)
             {
                 PropertySet iterProps = new();
-                iterProps.SetBuffer("InputVertices", vb, readOnly: true);
+                iterProps.SetBuffer("InputVertices", vb);
                 cl.SetProperties(iterProps);
                 cl.Draw(4);
             }
@@ -354,7 +350,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 PropertySet props = new();
                 props.SetInt("fixedValue", (int)fixedValue);
                 props.SetInt("valueB", 300 + i);
-                props.SetBuffer("Output", outputs[i], readOnly: false);
+                props.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
@@ -398,7 +394,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 PropertySet props = new();
                 props.SetInt("valueA", useX ? 10 + i : 20 + i);
                 props.SetInt("valueB", useX ? 30 + i : 40 + i);
-                props.SetBuffer("Output", useX ? outputsX[i] : outputsY[i], readOnly: false);
+                props.SetBuffer("Output", useX ? outputsX[i] : outputsY[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
@@ -477,7 +473,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         ];
         uint stride = (uint)Unsafe.SizeOf<ColoredVertex>();
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly, stride));
+            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly));
         GD.UpdateBuffer(buffer, 0, vertices);
         return buffer;
     }
@@ -503,7 +499,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     private DeviceBuffer CreateOutput()
-        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct UIntPointVertex

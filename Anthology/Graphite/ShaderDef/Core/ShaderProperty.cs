@@ -40,6 +40,11 @@ public struct ShaderProperty
     /// Default texture name. Only set for texture types.
     /// </summary>
     public string TextureValue;
+
+    /// <summary>
+    /// True when the source gave a default value with an equals sign.
+    /// </summary>
+    public bool HasDefault;
 }
 
 

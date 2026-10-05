@@ -14,10 +14,6 @@ public class GraphicsDeviceFeatures
     /// </summary>
     public bool TessellationShaders { get; }
     /// <summary>
-    /// Multiple viewports can be set at once. If not, only viewport 0 is used for all outputs.
-    /// </summary>
-    public bool MultipleViewports { get; }
-    /// <summary>
     /// Indirect draw structs can have non-zero FirstInstance.
     /// </summary>
     public bool DrawIndirectBaseInstance { get; }
@@ -45,7 +41,6 @@ public class GraphicsDeviceFeatures
     internal GraphicsDeviceFeatures(
         bool geometryShader,
         bool tessellationShaders,
-        bool multipleViewports,
         bool drawIndirectBaseInstance,
         bool samplerAnisotropy,
         bool depthClipDisable,
@@ -55,7 +50,6 @@ public class GraphicsDeviceFeatures
     {
         GeometryShader = geometryShader;
         TessellationShaders = tessellationShaders;
-        MultipleViewports = multipleViewports;
         DrawIndirectBaseInstance = drawIndirectBaseInstance;
         SamplerAnisotropy = samplerAnisotropy;
         DepthClipDisable = depthClipDisable;

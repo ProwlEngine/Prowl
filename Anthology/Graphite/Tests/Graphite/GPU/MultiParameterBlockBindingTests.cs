@@ -13,14 +13,14 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
     {
 
         DeviceBuffer output = RF.CreateBuffer(new BufferDescription(
-            2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+            2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
         ComputeProgram program = CreateProgram();
 
         PropertySet props = new();
         props.SetInt("valueA", 111);
         props.SetInt("valueB", 222);
-        props.SetBuffer("Output", output, readOnly: false);
+        props.SetBuffer("Output", output);
 
         GD.RunTestGraph(context =>
         {

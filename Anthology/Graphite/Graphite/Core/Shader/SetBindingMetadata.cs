@@ -1,25 +1,14 @@
 using System;
-using System.Collections.Concurrent;
-using System.Threading;
 
 namespace Prowl.Graphite;
 
 internal sealed class SetBindingMetadata
 {
-    private static int s_nextUniformBlockSlot;
-    private static readonly ConcurrentBag<int> s_freeUniformBlockSlots = [];
-
     /// <summary>UBO element indices sorted by binding; needed for Vulkan dynamic offsets.</summary>
     public readonly int[] SortedUboElementIndices;
 
     /// <summary>True if texture shares name in set; optimizes sampler lookup.</summary>
     public readonly bool[] HasSameNamedTexture;
-
-    /// <summary>
-    /// Process-unique slot per element declaring loose uniform fields, -1 otherwise. Identifies the block
-    /// across programs so a per-execution uniform cache can be a flat array instead of a keyed lookup.
-    /// </summary>
-    public readonly int[] UniformBlockSlots;
 
     /// <summary>Packed byte size of each element's loose uniform block, 0 if it declares none.</summary>
     public readonly uint[] UniformBlockSizes;
@@ -31,12 +20,11 @@ internal sealed class SetBindingMetadata
     public readonly bool HasStorageTexture;
 
     private SetBindingMetadata(
-        int[] sortedUboElementIndices, bool[] hasSameNamedTexture, int[] uniformBlockSlots, uint[] uniformBlockSizes,
+        int[] sortedUboElementIndices, bool[] hasSameNamedTexture, uint[] uniformBlockSizes,
         System.Collections.Generic.HashSet<PropertyID> names, bool hasStorageTexture)
     {
         SortedUboElementIndices = sortedUboElementIndices;
         HasSameNamedTexture = hasSameNamedTexture;
-        UniformBlockSlots = uniformBlockSlots;
         UniformBlockSizes = uniformBlockSizes;
         Names = names;
         HasStorageTexture = hasStorageTexture;
@@ -94,20 +82,13 @@ internal sealed class SetBindingMetadata
                 }
             }
 
-            int[] blockSlots = new int[elements.Length];
             uint[] blockSizes = new uint[elements.Length];
             for (int i = 0; i < elements.Length; i++)
             {
                 UniformBlockField[] fields = elements[i].UniformFields;
                 if (elements[i].Kind != ResourceKind.UniformBuffer || fields == null || fields.Length == 0)
-                {
-                    blockSlots[i] = -1;
                     continue;
-                }
 
-                blockSlots[i] = s_freeUniformBlockSlots.TryTake(out int free)
-                    ? free
-                    : Interlocked.Increment(ref s_nextUniformBlockSlot) - 1;
                 blockSizes[i] = UniformBlockSize(fields);
             }
 
@@ -125,20 +106,10 @@ internal sealed class SetBindingMetadata
                 }
             }
 
-            result[s] = new SetBindingMetadata(sortedUbo, hasSameNamedTexture, blockSlots, blockSizes, names, hasStorageTexture);
+            result[s] = new SetBindingMetadata(sortedUbo, hasSameNamedTexture, blockSizes, names, hasStorageTexture);
         }
 
         return result;
-    }
-
-    /// <summary>Returns this set's block slots for reuse. Call once, when the owning program is disposed.</summary>
-    public void ReleaseUniformBlockSlots()
-    {
-        foreach (int slot in UniformBlockSlots)
-        {
-            if (slot >= 0)
-                s_freeUniformBlockSlots.Add(slot);
-        }
     }
 
     private static uint UniformBlockSize(UniformBlockField[] fields)

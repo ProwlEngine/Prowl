@@ -80,7 +80,7 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Marks execution done; fence signals when GPU work finishes. Non-blocking, stays in flight till the slot's reclaimed. Replaces old EndFrame.
+    /// Marks execution done; it completes when its GPU work finishes. Non-blocking, stays in flight till the slot's reclaimed. Replaces old EndFrame.
     /// </summary>
     /// <param name="task">Execution to complete, from BeginExecution.</param>
     /// <exception cref="ArgumentNullException">Thrown if task is null.</exception>
@@ -92,7 +92,7 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Whether the execution finished on the GPU. Polls in-flight fences once.
+    /// Whether the execution finished on the GPU. Polls once.
     /// </summary>
     /// <param name="task">Execution to check.</param>
     /// <returns>True if complete, false if still in flight.</returns>

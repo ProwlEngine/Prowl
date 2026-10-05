@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using Silk.NET.Core;
 using Silk.NET.Vulkan;
 
-using VkFenceHandle = Silk.NET.Vulkan.Fence;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Graphite.Vk;
@@ -66,7 +65,7 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         if (existingSurface.Handle == default)
         {
-            _surface = Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(description.Source).GetSurface(gd.Instance);
+            _surface = description.Source.GetSurface(gd.Instance);
         }
         else
         {
@@ -79,11 +78,13 @@ internal unsafe partial class VkSwapchain : Swapchain
         }
         _gd.Vk.GetDeviceQueue(_gd.Device, _presentQueueIndex, 0, out _presentQueue);
 
-        _framebuffer = new VkSwapchainFramebuffer(gd, this, _surface, description.Width, description.Height, description.DepthFormat);
+        _framebuffer = new VkSwapchainFramebuffer(gd, this, _surface, description.Width, description.Height);
 
         if (CreateSwapchain(description.Width, description.Height))
             AcquireNextImage();
     }
+
+    internal override void RequireDepth(PixelFormat format) => _framebuffer.RequireDepth(format);
 
     public override void Resize(uint width, uint height)
     {

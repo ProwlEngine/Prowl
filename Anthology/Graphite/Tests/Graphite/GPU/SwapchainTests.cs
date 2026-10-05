@@ -35,6 +35,23 @@ file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
     }
 }
 
+file sealed class DepthSwapchainPass : RasterPass<SwapchainView>
+{
+    private readonly PixelFormat _depthFormat;
+
+    public DepthSwapchainPass(PixelFormat depthFormat) => _depthFormat = depthFormat;
+
+    public override string Name => "DepthSwapchain";
+
+    public override void Setup(RenderContextBuilder builder)
+        => SetViewTarget(builder, TargetLoadStoreOps.Clear(Color.Blue), _depthFormat);
+
+    public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
+    {
+        BindTarget(context, cmd);
+    }
+}
+
 file sealed class OffscreenPass : IPass<SwapchainView>
 {
     public string Name => "Offscreen";
@@ -61,13 +78,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
         Assert.Equal(1u, color.MipLevels);
         Assert.Equal(TextureUsage.RenderTarget, color.Usage);
         Assert.Equal(TextureSampleCount.Count1, color.SampleCount);
-
-        // The test swapchain is created with an R16_UNorm depth format.
-        Assert.NotNull(GD.MainSwapchain.Framebuffer.DepthTarget);
-        Texture depth = GD.MainSwapchain.Framebuffer.DepthTarget.Value.Target;
-        Assert.Equal(color.Width, depth.Width);
-        Assert.Equal(color.Height, depth.Height);
-        Assert.Equal(TextureUsage.DepthStencil, depth.Usage);
+        Assert.Null(GD.MainSwapchain.Framebuffer.DepthTarget);
     }
 
     [Fact]
@@ -99,6 +110,47 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
             GD.DispatchGraph(presenting, views);
         }
 
+        GD.WaitForIdle();
+    }
+
+    [Fact]
+    public void DispatchGraph_ViewTargetDepth_CreatesSwapchainDepth()
+    {
+        using RenderPipeline<SwapchainView> pipeline = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
+        SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
+
+        GD.DispatchGraph(pipeline, views);
+        GD.WaitForIdle();
+
+        Framebuffer fb = GD.MainSwapchain.Framebuffer;
+        Assert.NotNull(fb.DepthTarget);
+        Texture depth = fb.DepthTarget.Value.Target;
+        Assert.Equal(PixelFormat.R16_UNorm, depth.Format);
+        Assert.Equal(fb.ColorTargets[0].Target.Width, depth.Width);
+        Assert.Equal(fb.ColorTargets[0].Target.Height, depth.Height);
+        Assert.Equal(PixelFormat.R16_UNorm, fb.OutputDescription.DepthFormat);
+    }
+
+    [Fact]
+    public void DispatchGraph_ViewTargetDepth_SurvivesResizeAndFormatChange()
+    {
+        using RenderPipeline<SwapchainView> shallow = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
+        using RenderPipeline<SwapchainView> deep = new([new DepthSwapchainPass(PixelFormat.R32_Float)]);
+        SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
+
+        for (int frame = 0; frame < 6; frame++)
+            GD.DispatchGraph(shallow, views);
+
+        GD.DispatchGraph(deep, views);
+        Assert.Equal(PixelFormat.R32_Float, GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target.Format);
+
+        GD.ResizeMainWindow(128, 96);
+        views[0] = new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain);
+        for (int frame = 0; frame < 6; frame++)
+            GD.DispatchGraph(deep, views);
+
+        Texture depth = GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target;
+        Assert.Equal(GD.MainSwapchain.Framebuffer.Width, depth.Width);
         GD.WaitForIdle();
     }
 
@@ -135,7 +187,6 @@ public class SwapchainRegressionTests
         GraphicsDeviceOptions options = new(true);
         SwapchainDescription swapchain = new()
         {
-            DepthFormat = PixelFormat.R16_UNorm,
             ColorSrgb = true,
         };
 

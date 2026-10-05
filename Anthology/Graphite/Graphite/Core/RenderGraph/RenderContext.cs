@@ -6,7 +6,7 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.
 /// </summary>
-public sealed class RenderContext<TView> : IGraphStateSource
+public sealed class RenderContext<TView>
     where TView : IRenderView
 {
     private readonly GraphicsDevice _device;
@@ -17,12 +17,7 @@ public sealed class RenderContext<TView> : IGraphStateSource
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
     private readonly List<CommandBuffer> _pendingCommandBuffers = new();
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
-    private int _stateVersion;
-
-    int IGraphStateSource.StateVersion => _stateVersion;
-
-    TextureState IGraphStateSource.StateOf(Texture texture)
-        => _textureStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
+    private GraphTextureStates? _stateSnapshot;
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
     private readonly List<TextureBarrier> _barriers = new();
     private readonly HashSet<RenderResourceID> _enteredTransients = new();
@@ -126,7 +121,7 @@ public sealed class RenderContext<TView> : IGraphStateSource
         _textureStates.Clear();
         _discardedTextures.Clear();
         _enteredTransients.Clear();
-        _stateVersion++;
+        _stateSnapshot = null;
         RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
         FlushDeferredBarriers(scopeName);
     }
@@ -169,7 +164,7 @@ public sealed class RenderContext<TView> : IGraphStateSource
         foreach (TextureBarrier barrier in _barriers)
             _textureStates[barrier.Texture] = barrier.After;
         if (_barriers.Count > 0)
-            _stateVersion++;
+            _stateSnapshot = null;
         _barriers.Clear();
     }
 
@@ -251,36 +246,21 @@ public sealed class RenderContext<TView> : IGraphStateSource
     }
 
     /// <summary>
-    /// True if profiler wants metadata via RecordPassMetadata. Check before building one, it's wasted work otherwise.
-    /// </summary>
-    public bool WantsMetadata => Profiler?.RequestMetadata ?? false;
-
-    /// <summary>
-    /// Attaches caller metadata to the open pass. Only valid mid-pass; no-op otherwise.
-    /// </summary>
-    public void RecordPassMetadata(object metadata)
-    {
-        if (_currentPass is { } pass)
-            Profiler?.RecordPassMetadata(pass, metadata);
-    }
-
-    /// <summary>
     /// Rents an extra command buffer, already begun, for passes that need more than the one Render receives. Submit via SubmitCommandBuffer. Do not begin or end it yourself.
     /// </summary>
     /// <param name="name">Optional debug name.</param>
     public CommandBuffer GetCommandBuffer(string name = "")
     {
-        CommandBuffer cb = _device.RentGraphCommandBuffer();
+        CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
 
         cb.Execution = _task;
         cb.Pass = _currentPass;
         cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
-        _task.TrackRentedCommandBuffer(cb);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
 
         cb.Begin();
-        cb.GraphState = this;
+        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
         _pendingCommandBuffers.Add(cb);
 
         if (_deferredBarriers != null && _barrierHost == null)
@@ -366,13 +346,17 @@ public sealed class RenderContext<TView> : IGraphStateSource
 
         switch (resource)
         {
-            case GraphViewTargetResource:
+            case GraphViewTargetResource viewTargetResource:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), "The view target has no history.");
                 if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
                     throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
+                if (_view.TargetSwapchain != null && viewTargetResource.DepthFormat is PixelFormat requiredDepth)
+                    _view.TargetSwapchain.RequireDepth(requiredDepth);
                 Framebuffer viewTarget = (_view.TargetSwapchain?.Framebuffer ?? _view.TargetFramebuffer)
                     ?? throw new InvalidOperationException($"A pass resolved the view target, but view '{_view.Name}' has none.");
+                if (viewTargetResource.DepthFormat != null && viewTarget.DepthTarget == null)
+                    throw new InvalidOperationException($"A pass declared a view target depth attachment, but view '{_view.Name}' has a TargetFramebuffer without one.");
                 RenderTexture target = new(viewTarget);
                 _resolved[handle.Id] = target;
                 return target;

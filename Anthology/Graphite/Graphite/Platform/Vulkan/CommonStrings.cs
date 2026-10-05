@@ -19,23 +19,11 @@ internal static unsafe class CommonStrings
 
     public const string VK_MVK_IOS_SURFACE_EXTENSION_NAME = "VK_MVK_ios_surface";
 
-    public const string VK_EXT_DEBUG_REPORT_EXTENSION_NAME = "VK_EXT_debug_report";
-    public static byte* VK_EXT_DEBUG_REPORT_EXTENSION_NAMEUtf8 => Utf8("VK_EXT_debug_report"u8);
-
-    public const string VK_EXT_DEBUG_MARKER_EXTENSION_NAME = "VK_EXT_debug_marker";
-    public static byte* VK_EXT_DEBUG_MARKER_EXTENSION_NAMEUtf8 => Utf8("VK_EXT_debug_marker"u8);
-
-    public const string StandardValidationLayerName = "VK_LAYER_LUNARG_standard_validation";
-    public static byte* StandardValidationLayerNameUtf8 => Utf8("VK_LAYER_LUNARG_standard_validation"u8);
+    public const string VK_EXT_DEBUG_UTILS_EXTENSION_NAME = "VK_EXT_debug_utils";
+    public static byte* VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8 => Utf8("VK_EXT_debug_utils"u8);
 
     public const string KhronosValidationLayerName = "VK_LAYER_KHRONOS_validation";
     public static byte* KhronosValidationLayerNameUtf8 => Utf8("VK_LAYER_KHRONOS_validation"u8);
-
-    public const string main = "main";
-    public static byte* mainUtf8 => Utf8("main"u8);
-
-    public const string VK_KHR_get_physical_device_properties2 = "VK_KHR_get_physical_device_properties2";
-    public static byte* VK_KHR_get_physical_device_properties2Utf8 => Utf8("VK_KHR_get_physical_device_properties2"u8);
 
     public const string VK_KHR_portability_subset = "VK_KHR_portability_subset";
     public static byte* VK_KHR_portability_subsetUtf8 => Utf8("VK_KHR_portability_subset"u8);

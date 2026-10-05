@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -56,8 +57,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(framebuffer);
-            cl.ClearColorTarget(0, new Color(0, 0, 0, 1));
+            cl.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0, 0, 0, 1)), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(source);

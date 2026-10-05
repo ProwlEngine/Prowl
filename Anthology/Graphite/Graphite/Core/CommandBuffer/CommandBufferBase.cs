@@ -20,12 +20,10 @@ public abstract class CommandBufferBase : GraphicsResource
         Device = device;
     }
 
-    internal IGraphStateSource? GraphState { get; set; }
-
-    internal int GraphStateVersion => GraphState?.StateVersion ?? 0;
+    internal GraphTextureStates? GraphStates { get; set; }
 
     internal TextureState StateOf(Texture texture)
-        => GraphState != null ? GraphState.StateOf(texture) : TextureState.Resting;
+        => GraphStates != null ? GraphStates.StateOf(texture) : TextureState.Resting;
 
     /// <summary>Updates buffer region with a single value. T must be blittable.</summary>
     /// <typeparam name="T">Upload type.</typeparam>
@@ -230,14 +228,13 @@ public abstract class CommandBufferBase : GraphicsResource
         uint destinationOffset,
         in TextureRegion region);
 
-    /// <summary>Generates lower mip levels from the largest mip. Needs the GenerateMipmaps usage flag.</summary>
+    /// <summary>Generates lower mip levels from the largest mip. Needs a texture with MipLevels above 1.</summary>
     /// <param name="texture">Texture to mipmap.</param>
     public void GenerateMipmaps(Texture texture)
     {
-        if ((texture.Usage & TextureUsage.GenerateMipmaps) == 0)
+        if ((texture.Usage & TextureUsage.DepthStencil) != 0)
         {
-            throw new RenderException(
-                $"{nameof(GenerateMipmaps)} requires a target Texture with {nameof(TextureUsage)}.{nameof(TextureUsage.GenerateMipmaps)}");
+            throw new RenderException($"{nameof(GenerateMipmaps)} cannot be used on a Texture with {nameof(TextureUsage)}.{nameof(TextureUsage.DepthStencil)}.");
         }
 
         if (texture.MipLevels > 1)

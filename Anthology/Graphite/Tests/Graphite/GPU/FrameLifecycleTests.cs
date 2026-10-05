@@ -108,25 +108,6 @@ public abstract class FrameLifecycleTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void CompletionFence_IsRecycledPerRingSlot()
-    {
-        Dictionary<uint, Fence> fencesBySlot = [];
-        for (uint i = 0; i < GD.MaxExecutingTasks * 2; i++)
-        {
-            ExecutionTask task = GD.BeginExecution();
-            if (fencesBySlot.TryGetValue(task.RingSlot, out Fence previous))
-                Assert.Same(previous, task.CompletionFence);
-            else
-                fencesBySlot[task.RingSlot] = task.CompletionFence;
-
-            GD.CompleteExecution(task);
-            GD.WaitForExecution(task);
-        }
-
-        Assert.Equal(GD.MaxExecutingTasks, (uint)fencesBySlot.Count);
-    }
-
-    [Fact]
     public void BeginExecution_NeverExceedsMaxExecutingTasks()
     {
         uint max = GD.MaxExecutingTasks;

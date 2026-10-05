@@ -26,27 +26,15 @@ public abstract class Framebuffer : GraphicsResource
 
 
     internal Framebuffer(
-        FramebufferAttachmentDescription? depthTargetDesc,
-        IReadOnlyList<FramebufferAttachmentDescription> colorTargetDescs)
+        FramebufferAttachment? depthTarget,
+        IReadOnlyList<FramebufferAttachment> colorTargets)
     {
-        if (depthTargetDesc != null)
-        {
-            FramebufferAttachmentDescription depthAttachment = depthTargetDesc.Value;
-            DepthTarget = new FramebufferAttachment(
-                depthAttachment.Target,
-                depthAttachment.ArrayLayer,
-                depthAttachment.MipLevel);
-        }
-        FramebufferAttachment[] colorTargets = new FramebufferAttachment[colorTargetDescs.Count];
-        for (int i = 0; i < colorTargets.Length; i++)
-        {
-            colorTargets[i] = new FramebufferAttachment(
-                colorTargetDescs[i].Target,
-                colorTargetDescs[i].ArrayLayer,
-                colorTargetDescs[i].MipLevel);
-        }
+        DepthTarget = depthTarget;
+        FramebufferAttachment[] colorCopy = new FramebufferAttachment[colorTargets.Count];
+        for (int i = 0; i < colorCopy.Length; i++)
+            colorCopy[i] = colorTargets[i];
 
-        ColorTargets = colorTargets;
+        ColorTargets = colorCopy;
 
         Texture dimTex;
         uint mipLevel;

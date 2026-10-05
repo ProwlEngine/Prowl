@@ -41,7 +41,7 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void CompleteExecution_SignalsCompletionFenceAndAdvancesLastCompleted()
+    public void CompleteExecution_CompletesAndAdvancesLastCompleted()
     {
         ExecutionTask task = GD.RunTestGraph(context =>
         {
@@ -53,7 +53,6 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
         GD.WaitForExecution(task);
 
         Assert.True(GD.IsExecutionComplete(task));
-        Assert.True(task.CompletionFence.Signaled);
         Assert.True(GD.LastCompletedExecutionId >= id);
     }
 

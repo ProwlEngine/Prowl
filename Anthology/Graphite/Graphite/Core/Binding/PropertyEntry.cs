@@ -19,14 +19,13 @@ internal sealed class PropertyEntry
 {
     public PropertyEntryKind Kind;
     public UniformScalarType UniformType;
-    public bool ReadOnly;
     public bool BackedBlock;
 
 
     public unsafe struct UniformPayload
     {
-        // inline 128 bytes (a double4x4) to dodge a heap alloc per entry. you aren't binding a million of these.
-        public fixed byte _e0[128];
+        // inline 64 bytes (a float4x4) to dodge a heap alloc per entry. you aren't binding a million of these.
+        public fixed byte _e0[64];
 
         public ref T As<T>() where T : unmanaged
             => ref Unsafe.As<byte, T>(ref _e0[0]);
@@ -52,10 +51,9 @@ internal sealed class PropertyEntry
     }
 
 
-    public void SetBuffer(DeviceBufferRange buffer, bool readOnly, bool backedBlock = false)
+    public void SetBuffer(DeviceBufferRange buffer, bool backedBlock = false)
     {
         Kind = PropertyEntryKind.Buffer;
-        ReadOnly = readOnly;
         BackedBlock = backedBlock;
         Buffer = buffer;
         Texture = null;

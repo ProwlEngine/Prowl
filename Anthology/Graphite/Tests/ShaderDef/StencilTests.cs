@@ -13,7 +13,7 @@ public class StencilTests
     {
         PassState s = Parse.State("""Stencil { Ref 3 }""");
 
-        Assert.True(s.EnableStencilTest);
+        Assert.True(s.DepthStencil.StencilTestEnabled);
         Assert.True(s.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyLessEqual).StencilTestEnabled);
     }
 
@@ -21,7 +21,7 @@ public class StencilTests
     [Fact]
     public void NoBlock_LeavesStencilTestUnset()
     {
-        Assert.Null(Parse.State("").EnableStencilTest);
+        Assert.Equal(PassStateFields.None, Parse.State("").Set);
     }
 
 
@@ -30,7 +30,7 @@ public class StencilTests
     {
         PassState s = Parse.State("""Stencil { Ref 3 }""");
 
-        Assert.Equal(3, s.StencilRef);
+        Assert.Equal(3u, s.DepthStencil.StencilReference);
     }
 
 
@@ -45,8 +45,8 @@ public class StencilTests
             }
             """);
 
-        Assert.Equal(15u, s.StencilReadMask);
-        Assert.Equal(7u, s.StencilWriteMask);
+        Assert.Equal(15, s.DepthStencil.StencilReadMask);
+        Assert.Equal(7, s.DepthStencil.StencilWriteMask);
     }
 
 
@@ -55,8 +55,8 @@ public class StencilTests
     {
         PassState s = Parse.State("""Stencil { Comp Equal }""");
 
-        Assert.Equal(ComparisonKind.Equal, s.StencilFrontFunc);
-        Assert.Equal(ComparisonKind.Equal, s.StencilBackFunc);
+        Assert.Equal(ComparisonKind.Equal, s.DepthStencil.StencilFront.Comparison);
+        Assert.Equal(ComparisonKind.Equal, s.DepthStencil.StencilBack.Comparison);
     }
 
 
@@ -71,8 +71,8 @@ public class StencilTests
             }
             """);
 
-        Assert.Equal(ComparisonKind.Less, s.StencilFrontFunc);
-        Assert.Equal(ComparisonKind.Greater, s.StencilBackFunc);
+        Assert.Equal(ComparisonKind.Less, s.DepthStencil.StencilFront.Comparison);
+        Assert.Equal(ComparisonKind.Greater, s.DepthStencil.StencilBack.Comparison);
     }
 
 
@@ -88,12 +88,12 @@ public class StencilTests
             }
             """);
 
-        Assert.Equal(StencilOperation.Replace, s.StencilFrontPassOp);
-        Assert.Equal(StencilOperation.Replace, s.StencilBackPassOp);
-        Assert.Equal(StencilOperation.Keep, s.StencilFrontFailOp);
-        Assert.Equal(StencilOperation.Keep, s.StencilBackFailOp);
-        Assert.Equal(StencilOperation.Invert, s.StencilFrontDepthFailOp);
-        Assert.Equal(StencilOperation.Invert, s.StencilBackDepthFailOp);
+        Assert.Equal(StencilOperation.Replace, s.DepthStencil.StencilFront.Pass);
+        Assert.Equal(StencilOperation.Replace, s.DepthStencil.StencilBack.Pass);
+        Assert.Equal(StencilOperation.Keep, s.DepthStencil.StencilFront.Fail);
+        Assert.Equal(StencilOperation.Keep, s.DepthStencil.StencilBack.Fail);
+        Assert.Equal(StencilOperation.Invert, s.DepthStencil.StencilFront.DepthFail);
+        Assert.Equal(StencilOperation.Invert, s.DepthStencil.StencilBack.DepthFail);
     }
 
 
@@ -112,22 +112,21 @@ public class StencilTests
             }
             """);
 
-        Assert.Equal(StencilOperation.Replace, s.StencilFrontPassOp);
-        Assert.Equal(StencilOperation.Keep, s.StencilBackPassOp);
-        Assert.Equal(StencilOperation.Zero, s.StencilFrontFailOp);
-        Assert.Equal(StencilOperation.Invert, s.StencilBackFailOp);
-        Assert.Equal(StencilOperation.IncrementAndClamp, s.StencilFrontDepthFailOp);
-        Assert.Equal(StencilOperation.DecrementAndClamp, s.StencilBackDepthFailOp);
+        Assert.Equal(StencilOperation.Replace, s.DepthStencil.StencilFront.Pass);
+        Assert.Equal(StencilOperation.Keep, s.DepthStencil.StencilBack.Pass);
+        Assert.Equal(StencilOperation.Zero, s.DepthStencil.StencilFront.Fail);
+        Assert.Equal(StencilOperation.Invert, s.DepthStencil.StencilBack.Fail);
+        Assert.Equal(StencilOperation.IncrementAndClamp, s.DepthStencil.StencilFront.DepthFail);
+        Assert.Equal(StencilOperation.DecrementAndClamp, s.DepthStencil.StencilBack.DepthFail);
     }
 
 
     [Fact]
-    public void EmptyBlock_LeavesUnset()
+    public void EmptyBlock_OnlyEnablesStencilTest()
     {
         PassState s = Parse.State("""Stencil { }""");
 
-        Assert.Null(s.StencilRef);
-        Assert.Null(s.StencilFrontFunc);
+        Assert.Equal(PassStateFields.StencilTest, s.Set);
     }
 
 

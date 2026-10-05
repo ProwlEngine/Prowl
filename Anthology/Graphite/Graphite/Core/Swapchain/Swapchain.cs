@@ -11,4 +11,6 @@ public abstract class Swapchain : GraphicsResource
     public abstract void Resize(uint width, uint height);
     /// <summary>Whether presentation syncs to vblank.</summary>
     public abstract bool SyncToVerticalBlank { get; set; }
+
+    internal abstract void RequireDepth(PixelFormat format);
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -284,8 +285,7 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
             fb = RentFramebuffer(GD, context.Task, desc);
 
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Red);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

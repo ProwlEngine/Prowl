@@ -85,7 +85,9 @@ public sealed class VertexSource : IVertexSource
         return this;
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Resolves a slot by its first element name only: one buffer per first-element name, interleaved elements share it.
+    /// </summary>
     public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
     {
         VertexAttributeID wanted = layout.Elements[0].Name;

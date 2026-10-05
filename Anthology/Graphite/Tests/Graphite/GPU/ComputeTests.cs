@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -32,7 +33,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
         uint stride = (uint)Unsafe.SizeOf<ColoredVertex>();
         DeviceBuffer vertices = RF.CreateBuffer(new BufferDescription(
-            stride * 4, BufferUsage.StructuredBufferReadWrite, stride));
+            stride * 4, BufferUsage.StructuredBufferReadWrite));
 
         ComputeProgram compute = CreateCompute("ComputeColoredQuadGenerator.slang",
             new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0));
@@ -40,10 +41,10 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         GraphicsProgram graphics = CreateColoredQuadRenderer();
 
         PropertySet computeProps = new();
-        computeProps.SetBuffer("OutputVertices", vertices, readOnly: false);
+        computeProps.SetBuffer("OutputVertices", vertices);
 
         PropertySet graphicsProps = new();
-        graphicsProps.SetBuffer("InputVertices", vertices, readOnly: true);
+        graphicsProps.SetBuffer("InputVertices", vertices);
 
         Submit(cl =>
         {
@@ -51,8 +52,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
             cl.SetProperties(computeProps);
             cl.Dispatch(1, 1, 1);
 
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(graphics);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
@@ -177,8 +177,8 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         const uint side = 16;
         const uint count = side * side;
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         float[] initial = new float[count];
         for (int i = 0; i < count; i++) initial[i] = i;
         GD.UpdateBuffer(source, 0, initial);
@@ -202,8 +202,8 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         PropertySet props = new();
         props.SetInt("Width", (int)side);
         props.SetInt("Height", (int)side);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
 
         Submit(cl =>
         {

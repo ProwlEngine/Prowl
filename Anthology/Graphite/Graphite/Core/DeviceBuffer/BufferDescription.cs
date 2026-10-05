@@ -15,10 +15,6 @@ public record struct BufferDescription
     /// Buffer usage.
     /// </summary>
     public BufferUsage Usage;
-    /// <summary>
-    /// Element size for structured buffers, else zero.
-    /// </summary>
-    public uint StructureByteStride;
 
     /// <summary>
     /// Non-dynamic buffer description.
@@ -29,19 +25,5 @@ public record struct BufferDescription
     {
         SizeInBytes = sizeInBytes;
         Usage = usage;
-        StructureByteStride = 0;
-    }
-
-    /// <summary>
-    /// Buffer description.
-    /// </summary>
-    /// <param name="sizeInBytes">Size in bytes.</param>
-    /// <param name="usage">Usage.</param>
-    /// <param name="structureByteStride">Element size for structured buffers, else zero.</param>
-    public BufferDescription(uint sizeInBytes, BufferUsage usage, uint structureByteStride)
-    {
-        SizeInBytes = sizeInBytes;
-        Usage = usage;
-        StructureByteStride = structureByteStride;
     }
 }

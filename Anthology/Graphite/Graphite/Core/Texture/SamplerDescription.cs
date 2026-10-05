@@ -20,29 +20,37 @@ public struct SamplerDescription
     /// </summary>
     public SamplerAddressMode AddressModeW;
     /// <summary>
-    /// Sample filter.
+    /// Filter when the texture is minified.
     /// </summary>
-    public SamplerFilter Filter;
+    public FilterMode MinFilter;
+    /// <summary>
+    /// Filter when the texture is magnified.
+    /// </summary>
+    public FilterMode MagFilter;
+    /// <summary>
+    /// Filter between mip levels.
+    /// </summary>
+    public FilterMode MipFilter;
     /// <summary>
     /// Comparison kind. Null = off.
     /// </summary>
     public ComparisonKind? ComparisonKind;
     /// <summary>
-    /// Max anisotropy. Ignored unless anisotropic filtering.
+    /// Max anisotropy. Values above 1 enable anisotropic filtering.
     /// </summary>
     public uint MaximumAnisotropy;
     /// <summary>
     /// Min LOD.
     /// </summary>
-    public uint MinimumLod;
+    public float MinimumLod;
     /// <summary>
     /// Max LOD.
     /// </summary>
-    public uint MaximumLod;
+    public float MaximumLod;
     /// <summary>
     /// LOD bias.
     /// </summary>
-    public int LodBias;
+    public float LodBias;
     /// <summary>
     /// Border color, Border mode only.
     /// </summary>
@@ -54,7 +62,9 @@ public struct SamplerDescription
     /// <param name="addressModeU">U address mode.</param>
     /// <param name="addressModeV">V address mode.</param>
     /// <param name="addressModeW">W address mode.</param>
-    /// <param name="filter">Sample filter.</param>
+    /// <param name="minFilter">Min filter.</param>
+    /// <param name="magFilter">Mag filter.</param>
+    /// <param name="mipFilter">Mip filter.</param>
     /// <param name="comparisonKind">Comparison kind. Null = off.</param>
     /// <param name="maximumAnisotropy">Max anisotropy.</param>
     /// <param name="minimumLod">Min LOD.</param>
@@ -65,18 +75,22 @@ public struct SamplerDescription
         SamplerAddressMode addressModeU,
         SamplerAddressMode addressModeV,
         SamplerAddressMode addressModeW,
-        SamplerFilter filter,
+        FilterMode minFilter,
+        FilterMode magFilter,
+        FilterMode mipFilter,
         ComparisonKind? comparisonKind,
         uint maximumAnisotropy,
-        uint minimumLod,
-        uint maximumLod,
-        int lodBias,
+        float minimumLod,
+        float maximumLod,
+        float lodBias,
         SamplerBorderColor borderColor)
     {
         AddressModeU = addressModeU;
         AddressModeV = addressModeV;
         AddressModeW = addressModeW;
-        Filter = filter;
+        MinFilter = minFilter;
+        MagFilter = magFilter;
+        MipFilter = mipFilter;
         ComparisonKind = comparisonKind;
         MaximumAnisotropy = maximumAnisotropy;
         MinimumLod = minimumLod;
@@ -91,10 +105,10 @@ public struct SamplerDescription
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
     ///     AddressModeW = SamplerAddressMode.Wrap
-    ///     Filter = SamplerFilter.MinPoint_MagPoint_MipPoint
+    ///     MinFilter, MagFilter, MipFilter = FilterMode.Point
     ///     LodBias = 0
     ///     MinimumLod = 0
-    ///     MaximumLod = uint.MaxValue
+    ///     MaximumLod = 1000f
     ///     MaximumAnisotropy = 0
     /// </summary>
     public static readonly SamplerDescription Point = new()
@@ -102,10 +116,12 @@ public struct SamplerDescription
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
         AddressModeW = SamplerAddressMode.Wrap,
-        Filter = SamplerFilter.MinPoint_MagPoint_MipPoint,
+        MinFilter = FilterMode.Point,
+        MagFilter = FilterMode.Point,
+        MipFilter = FilterMode.Point,
         LodBias = 0,
         MinimumLod = 0,
-        MaximumLod = uint.MaxValue,
+        MaximumLod = 1000f,
         MaximumAnisotropy = 0,
     };
 
@@ -115,10 +131,10 @@ public struct SamplerDescription
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
     ///     AddressModeW = SamplerAddressMode.Wrap
-    ///     Filter = SamplerFilter.MinLinear_MagLinear_MipLinear
+    ///     MinFilter, MagFilter, MipFilter = FilterMode.Linear
     ///     LodBias = 0
     ///     MinimumLod = 0
-    ///     MaximumLod = uint.MaxValue
+    ///     MaximumLod = 1000f
     ///     MaximumAnisotropy = 0
     /// </summary>
     public static readonly SamplerDescription Linear = new()
@@ -126,10 +142,12 @@ public struct SamplerDescription
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
         AddressModeW = SamplerAddressMode.Wrap,
-        Filter = SamplerFilter.MinLinear_MagLinear_MipLinear,
+        MinFilter = FilterMode.Linear,
+        MagFilter = FilterMode.Linear,
+        MipFilter = FilterMode.Linear,
         LodBias = 0,
         MinimumLod = 0,
-        MaximumLod = uint.MaxValue,
+        MaximumLod = 1000f,
         MaximumAnisotropy = 0,
     };
 
@@ -139,10 +157,10 @@ public struct SamplerDescription
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
     ///     AddressModeW = SamplerAddressMode.Wrap
-    ///     Filter = SamplerFilter.Anisotropic
+    ///     MinFilter, MagFilter, MipFilter = FilterMode.Linear
     ///     LodBias = 0
     ///     MinimumLod = 0
-    ///     MaximumLod = uint.MaxValue
+    ///     MaximumLod = 1000f
     ///     MaximumAnisotropy = 4
     /// </summary>
     public static readonly SamplerDescription Aniso4x = new()
@@ -150,10 +168,12 @@ public struct SamplerDescription
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
         AddressModeW = SamplerAddressMode.Wrap,
-        Filter = SamplerFilter.Anisotropic,
+        MinFilter = FilterMode.Linear,
+        MagFilter = FilterMode.Linear,
+        MipFilter = FilterMode.Linear,
         LodBias = 0,
         MinimumLod = 0,
-        MaximumLod = uint.MaxValue,
+        MaximumLod = 1000f,
         MaximumAnisotropy = 4,
     };
 }

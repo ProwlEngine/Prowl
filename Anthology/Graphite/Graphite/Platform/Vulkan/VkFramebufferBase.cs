@@ -29,8 +29,8 @@ internal readonly record struct RenderPassOps(
 internal abstract class VkFramebufferBase : Framebuffer
 {
     public VkFramebufferBase(
-        FramebufferAttachmentDescription? depthTexture,
-        IReadOnlyList<FramebufferAttachmentDescription> colorTextures)
+        FramebufferAttachment? depthTexture,
+        IReadOnlyList<FramebufferAttachment> colorTextures)
         : base(depthTexture, colorTextures)
     {
     }

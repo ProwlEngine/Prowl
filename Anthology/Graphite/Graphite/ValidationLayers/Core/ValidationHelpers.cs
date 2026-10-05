@@ -31,7 +31,7 @@ internal static class ValidationHelpers
     /// Array layer count for a texture, x6 for cubemap faces.
     /// </summary>
     internal static uint GetEffectiveArrayLayers(Texture texture)
-        => (texture.Usage & TextureUsage.Cubemap) != 0 ? texture.ArrayLayers * 6 : texture.ArrayLayers;
+        => texture.Type == TextureType.TextureCube ? texture.ArrayLayers * 6 : texture.ArrayLayers;
 
     internal static void CopyTextureCheckNotNull(GraphicsDevice? device, Texture source, Texture destination)
     {

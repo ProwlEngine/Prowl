@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -181,8 +182,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Submit(cl =>
         {
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(source);
@@ -265,8 +265,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Submit(cl =>
         {
-            cl.SetFramebuffer(fb);
-            cl.ClearDepthStencil(0f);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Clear(0f)));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(VertexSource.None);
@@ -369,7 +368,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ];
         uint stride = (uint)Unsafe.SizeOf<ColoredVertex>();
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly, stride));
+            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly));
         GD.UpdateBuffer(buffer, 0, vertices);
         return buffer;
     }
@@ -397,12 +396,11 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     private void DrawColoredQuad(Framebuffer fb, GraphicsProgram program, DeviceBuffer vertexStorage, Color clear)
     {
         PropertySet props = new();
-        props.SetBuffer("InputVertices", vertexStorage, readOnly: true);
+        props.SetBuffer("InputVertices", vertexStorage);
 
         Submit(cl =>
         {
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, clear);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(clear), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
@@ -442,8 +440,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         {
 
             // Pass 1: sample target2 into target1.
-            cl.SetFramebuffer(fb1);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb1, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(texProgram);
             cl.SetVertexSource(VertexSource.None);
@@ -452,16 +449,14 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.CopyTextureToBuffer(target1, s1, 0, TextureRegion.Whole(target1));
 
             // Pass 2: an unrelated shader that uses no textures, into target2.
-            cl.SetFramebuffer(fb2);
-            cl.ClearColorTarget(0, Color.Blue);
+            cl.SetFramebuffer(fb2, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Blue), AttachmentOps.Loaded));
             cl.SetShader(quadProgram);
             cl.SetVertexSource(new VertexSource().SetBuffer("POSITION", quadVb));
             cl.ClearProperties();
             cl.Draw(3);
 
             // Pass 3: the texture shader again. Its binding must survive the intervening pass.
-            cl.SetFramebuffer(fb1);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb1, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetShader(texProgram);
             cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(texProps);
@@ -493,7 +488,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Texture target = RF.CreateTexture(TextureDescription.Texture2D(
             size, size, 1, layerCount, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(
-            null, [new FramebufferAttachmentDescription(target, targetLayer)]));
+            null, [new FramebufferAttachment(target, targetLayer)]));
 
         Texture sampled = RF.CreateTexture(TextureDescription.Texture2D(
             size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
@@ -508,8 +503,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Submit(cl =>
         {
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(VertexSource.None);

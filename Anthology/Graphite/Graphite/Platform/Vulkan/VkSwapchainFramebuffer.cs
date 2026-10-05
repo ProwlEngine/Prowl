@@ -13,7 +13,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
     private readonly VkGraphicsDevice _gd;
     private readonly VkSwapchain _swapchain;
     private readonly SurfaceKHR _surface;
-    private readonly PixelFormat? _depthFormat;
+    private PixelFormat? _depthFormat;
     private uint _currentImageIndex;
 
     private VkFramebuffer[] _scFramebuffers = [];
@@ -47,7 +47,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     public override OutputDescription OutputDescription => _outputDescription;
 
-    public override uint AttachmentCount { get; }
+    public override uint AttachmentCount => _depthFormat.HasValue ? 2u : 1u;
 
     public VkSwapchain Swapchain => _swapchain;
 
@@ -56,16 +56,26 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         VkSwapchain swapchain,
         SurfaceKHR surface,
         uint width,
-        uint height,
-        PixelFormat? depthFormat)
+        uint height)
         : base()
     {
         _gd = gd;
         _swapchain = swapchain;
         _surface = surface;
-        _depthFormat = depthFormat;
+    }
 
-        AttachmentCount = depthFormat.HasValue ? 2u : 1u; // 1 Color + 1 Depth
+    internal void RequireDepth(PixelFormat format)
+    {
+        if (_depthFormat == format)
+            return;
+
+        _depthFormat = format;
+        if (_scImages.Length == 0)
+            return;
+
+        CreateDepthTexture();
+        CreateFramebuffers();
+        _outputDescription = OutputDescription.CreateFromFramebuffer(this);
     }
 
     internal void SetImageIndex(uint index)

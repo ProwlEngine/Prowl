@@ -15,7 +15,6 @@ internal unsafe partial class VkSampler : Sampler
     public VkSampler(VkGraphicsDevice gd, in SamplerDescription description)
     {
         _gd = gd;
-        VkFormats.GetFilterParams(description.Filter, out Filter minFilter, out Filter magFilter, out SamplerMipmapMode mipmapMode);
 
         SamplerCreateInfo samplerCI = new()
         {
@@ -23,14 +22,14 @@ internal unsafe partial class VkSampler : Sampler
             AddressModeU = VkFormats.ToVkSamplerAddressMode(description.AddressModeU),
             AddressModeV = VkFormats.ToVkSamplerAddressMode(description.AddressModeV),
             AddressModeW = VkFormats.ToVkSamplerAddressMode(description.AddressModeW),
-            MinFilter = minFilter,
-            MagFilter = magFilter,
-            MipmapMode = mipmapMode,
+            MinFilter = VkFormats.ToVkFilter(description.MinFilter),
+            MagFilter = VkFormats.ToVkFilter(description.MagFilter),
+            MipmapMode = VkFormats.ToVkMipmapMode(description.MipFilter),
             CompareEnable = description.ComparisonKind != null,
             CompareOp = description.ComparisonKind != null
                 ? VkFormats.ToVkCompareOp(description.ComparisonKind.Value)
                 : CompareOp.Never,
-            AnisotropyEnable = description.Filter == SamplerFilter.Anisotropic,
+            AnisotropyEnable = description.MaximumAnisotropy > 1,
             MaxAnisotropy = description.MaximumAnisotropy,
             MinLod = description.MinimumLod,
             MaxLod = description.MaximumLod,

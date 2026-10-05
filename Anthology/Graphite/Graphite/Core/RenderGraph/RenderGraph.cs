@@ -113,10 +113,9 @@ public sealed class RenderGraph<TView> : IDisposable
         (GraphTextureResource a, GraphTextureResource b) => a.HistoryDepth == b.HistoryDepth && SameTextureDesc(a.Description, b.Description),
         (GraphBufferResource a, GraphBufferResource b) => a.HistoryDepth == b.HistoryDepth
             && a.Description.SizeInBytes == b.Description.SizeInBytes
-            && a.Description.Usage == b.Description.Usage
-            && a.Description.StructureByteStride == b.Description.StructureByteStride,
+            && a.Description.Usage == b.Description.Usage,
         (GraphImportedTextureResource a, GraphImportedTextureResource b) => ReferenceEquals(a.Texture, b.Texture),
-        (GraphViewTargetResource, GraphViewTargetResource) => true,
+        (GraphViewTargetResource a, GraphViewTargetResource b) => a.DepthFormat == b.DepthFormat,
         _ => false,
     };
 

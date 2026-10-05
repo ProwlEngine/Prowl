@@ -92,8 +92,7 @@ file sealed class BackbufferPass : IPass<DispatchView>
         RenderCount++;
         Resolved = context.GetRenderTexture(_backbuffer).Framebuffer;
         SawFramebuffer = Resolved != null;
-        cmd.SetFramebuffer(Resolved!);
-        cmd.ClearColorTarget(0, new Color(0.25f, 0.5f, 0.75f, 1f));
+        cmd.SetFramebuffer(Resolved!, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0.25f, 0.5f, 0.75f, 1f)), AttachmentOps.Loaded));
     }
 }
 

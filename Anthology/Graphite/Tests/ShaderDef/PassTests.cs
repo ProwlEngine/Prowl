@@ -24,7 +24,7 @@ public class PassTests
 
         Assert.Equal("Forward", pass.Name);
         Assert.NotNull(pass.Tags);
-        Assert.Equal(FaceCullMode.Back, pass.State.CullMode);
+        Assert.Equal(FaceCullMode.Back, pass.State.Raster.CullMode);
         Assert.Equal("float4 vsMain() : SV_Position { return 0; }", pass.InlineSlang);
     }
 

@@ -68,12 +68,12 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
     private DeviceBuffer CreateOutput()
         => RF.CreateBuffer(new BufferDescription(
-            OutputCount * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+            OutputCount * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
     private DeviceBuffer CreateInput(uint value)
     {
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            4 * sizeof(uint), BufferUsage.StructuredBufferReadOnly, sizeof(uint)));
+            4 * sizeof(uint), BufferUsage.StructuredBufferReadOnly));
         GD.UpdateBuffer(buffer, 0, new uint[] { value, 0, 0, 0 });
         return buffer;
     }
@@ -119,8 +119,8 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         props.SetInt("valueA", (int)valueA);
         props.SetInt("valueB", (int)valueB);
         props.SetInt("valueC", (int)valueC);
-        props.SetBuffer("Output", output, readOnly: false);
-        props.SetBuffer("Input", input, readOnly: true);
+        props.SetBuffer("Output", output);
+        props.SetBuffer("Input", input);
         props.SetTexture("Tex", texture, GD.LinearSampler);
         return props;
     }
@@ -274,7 +274,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         uint stride = GD.StructuredBufferMinOffsetAlignment;
         DeviceBuffer input = RF.CreateBuffer(new BufferDescription(
-            stride * 2, BufferUsage.StructuredBufferReadOnly, sizeof(uint)));
+            stride * 2, BufferUsage.StructuredBufferReadOnly));
 
         uint[] contents = new uint[stride * 2 / sizeof(uint)];
         contents[0] = 1234;
@@ -284,11 +284,11 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         // Same buffer, different windows. The descriptor cache identity includes the range's
         // offset and size, so these must not collapse onto one cached set.
         PropertySet first = BuildProps(output, input, texture);
-        first.SetBuffer("Input", new DeviceBufferRange(input, 0, stride), readOnly: true);
+        first.SetBuffer("Input", new DeviceBufferRange(input, 0, stride));
         Assert.Equal(1234u, Run(first, output, program)[2]);
 
         PropertySet second = BuildProps(output, input, texture);
-        second.SetBuffer("Input", new DeviceBufferRange(input, stride, stride), readOnly: true);
+        second.SetBuffer("Input", new DeviceBufferRange(input, stride, stride));
         Assert.Equal(5678u, Run(second, output, program)[2]);
     }
 
@@ -332,7 +332,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         uint reportedSet = uint.MaxValue;
         MissingPropertyHandler previous = GD.OnMissingProperty;
-        GD.OnMissingProperty = (shader, compute, name, kind, set, binding) =>
+        GD.OnMissingProperty = (program, name, kind, set, binding) =>
         {
             if (name == (PropertyID)"Input") reportedSet = set;
         };
@@ -344,7 +344,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             props.SetInt("valueA", 1);
             props.SetInt("valueB", 2);
             props.SetInt("valueC", 3);
-            props.SetBuffer("Output", output, readOnly: false);
+            props.SetBuffer("Output", output);
             props.SetTexture("Tex", texture, GD.LinearSampler);
             Run(props, output, program);
         }
@@ -370,8 +370,8 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         props.SetInt("valueA", 11);
         props.SetInt("valueB", 22);
         props.SetInt("valueC", 33);
-        props.SetBuffer("Output", output, readOnly: false);
-        props.SetBuffer("Input", input, readOnly: true);
+        props.SetBuffer("Output", output);
+        props.SetBuffer("Input", input);
 
         uint[] result = Run(props, output, program);
 
@@ -391,7 +391,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         PropertySet frame = new();
         frame.SetInt("valueB", 202);
         frame.SetInt("valueC", 303);
-        frame.SetBuffer("Input", input, readOnly: true);
+        frame.SetBuffer("Input", input);
         frame.SetTexture("Tex", texture, GD.LinearSampler);
 
         DeviceBuffer[] outputs = new DeviceBuffer[n];
@@ -401,7 +401,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             outputs[i] = CreateOutput();
             items[i] = new PropertySet();
             items[i].SetInt("valueA", 10 + i);
-            items[i].SetBuffer("Output", outputs[i], readOnly: false);
+            items[i].SetBuffer("Output", outputs[i]);
         }
         items[2].SetInt("valueC", 999);
 
@@ -431,43 +431,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             Assert.Equal(i == 2 ? 999u : 303u, result[3]);
             Assert.Equal(128u, result[4]);
         }
-    }
-
-    [Fact]
-    public void ReapplyingUnchangedActiveSet_KeepsThePropertyEpoch()
-    {
-        DeviceBuffer output = CreateOutput();
-        PropertySet frame = new();
-        frame.SetInt("valueB", 1);
-        PropertySet item = new();
-        item.SetInt("valueA", 2);
-        item.SetBuffer("Output", output, readOnly: false);
-
-        uint afterItem = 0;
-        uint afterReapply = 0;
-        uint afterOverride = 0;
-        GD.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetProperties(frame);
-            cl.SetProperties(item);
-            afterItem = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
-
-            cl.SetProperties(frame);
-            afterReapply = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
-
-            PropertySet overriding = new();
-            overriding.SetInt("valueB", 3);
-            cl.SetProperties(overriding);
-            cl.SetProperties(frame);
-            afterOverride = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
-
-            context.SubmitCommandBuffer(cl);
-        });
-        GD.WaitForIdle();
-
-        Assert.Equal(afterItem, afterReapply);
-        Assert.Equal(afterItem + 2, afterOverride);
     }
 }
 

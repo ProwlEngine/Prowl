@@ -54,10 +54,10 @@ public sealed class ShaderPass
     private Dictionary<ProgramKey, GraphicsProgram> _fallbackProgramCache = new();
     private bool _created;
 
-    private PassState? _defaultSnapshot;
-    private BlendStateDescription _defaultBlend;
-    private DepthStencilStateDescription _defaultDepth;
-    private RasterizerStateDescription _defaultRaster;
+    private int _lastKey = -1;
+    private PassState? _lastPassState;
+    private PassState? _lastOverride;
+    private GraphicsProgram? _lastProgram;
 
 
     /// <summary>
@@ -75,6 +75,8 @@ public sealed class ShaderPass
         _failures = new CompileFailure?[_combos.Length];
         _programCache = new();
         _fallbackProgramCache = new();
+        _lastKey = -1;
+        _lastProgram = null;
 
         _axisByName = new();
         _valueIndices = new Dictionary<string, int>[axes.Length];
@@ -263,6 +265,19 @@ public sealed class ShaderPass
     }
 
 
+    internal ShaderDescription GetDescription(int key)
+    {
+        EnsureCreated();
+        if ((uint)key >= (uint)_combos.Length)
+            throw new ArgumentOutOfRangeException(nameof(key));
+
+        if (!Resolve(key).TryGetDescription(_backend, out ShaderDescription description))
+            throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
+
+        return description;
+    }
+
+
     internal GraphicsProgram ResolveProgram(int key, BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
         => ResolveProgram(key, State, baseBlend, baseDepth, baseRaster);
 
@@ -275,19 +290,29 @@ public sealed class ShaderPass
     }
 
 
-    internal GraphicsProgram ResolveDefaultProgram(int key)
+    internal GraphicsProgram ResolveDefaultProgram(int key, PassState? overrideState = null)
     {
         EnsureCreated();
 
-        if (_defaultSnapshot == null || !_defaultSnapshot.Equals(State))
+        if (_lastProgram != null && key == _lastKey && State.Equals(_lastPassState) && Equals(overrideState, _lastOverride))
+            return _lastProgram;
+
+        PassState effective = overrideState is null ? State : overrideState.Apply(State);
+        GraphicsProgram program = GetOrCreateProgram(
+            key,
+            effective.ToBlendState(CommandBufferExtensions.DefaultBlend),
+            effective.ToDepthStencilState(CommandBufferExtensions.DefaultDepth),
+            effective.ToRasterizerState(CommandBufferExtensions.DefaultRaster));
+
+        if (_variants[key] is { } resolved && resolved.IsCompiledFor(_backend))
         {
-            _defaultBlend = State.ToBlendState(CommandBufferExtensions.DefaultBlend);
-            _defaultDepth = State.ToDepthStencilState(CommandBufferExtensions.DefaultDepth);
-            _defaultRaster = State.ToRasterizerState(CommandBufferExtensions.DefaultRaster);
-            _defaultSnapshot = State.Apply(new PassState());
+            _lastKey = key;
+            _lastPassState = State.Clone();
+            _lastOverride = overrideState?.Clone();
+            _lastProgram = program;
         }
 
-        return GetOrCreateProgram(key, _defaultBlend, _defaultDepth, _defaultRaster);
+        return program;
     }
 
 

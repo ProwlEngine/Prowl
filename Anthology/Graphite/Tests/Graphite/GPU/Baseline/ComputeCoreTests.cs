@@ -16,9 +16,9 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
         const uint count = width * height;
 
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
 
         float[] initial = new float[count];
         for (int i = 0; i < count; i++)
@@ -32,8 +32,8 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
         PropertySet props = new();
         props.SetInt("Width", (int)width);
         props.SetInt("Height", (int)height);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
 
         GD.RunTestGraph(context =>
         {

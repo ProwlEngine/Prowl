@@ -24,7 +24,7 @@ public struct TextureViewDescription
     /// </summary>
     public uint BaseArrayLayer;
     /// <summary>
-    /// Visible array layers.
+    /// Visible array layers. For cube textures, the number of cubes.
     /// </summary>
     public uint ArrayLayers;
     /// <summary>

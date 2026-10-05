@@ -51,7 +51,7 @@ public static class TestUtils
     // Each device gets its own profiler instance - state must not leak across devices/tests.
     private static GraphicsDeviceOptions HeadlessOptions() => new(true) { Profiler = new TestCountingProfiler() };
     private static GraphicsDeviceOptions SwapchainOptions() => new(true) { Profiler = new TestCountingProfiler() };
-    private static SwapchainDescription SwapchainConfig() => new() { DepthFormat = PixelFormat.R16_UNorm };
+    private static SwapchainDescription SwapchainConfig() => new();
 
     public static GraphicsDevice CreateVulkanDevice()
         => GraphicsDevice.CreateVulkan(HeadlessOptions());
@@ -357,10 +357,6 @@ public sealed class TestCountingProfiler : IProfiler
     public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
     public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
-
-    public bool RequestMetadata => false;
-    public void RecordPassMetadata(in PassInfo pass, object metadata) { }
-    public void RecordDrawMetadata(in CommandBufferInfo commandBuffer, object metadata) { }
 
     public void RecordResourceSetBind(uint setCount) { }
     public void RecordBarrier(BarrierBin kind, uint count) { }

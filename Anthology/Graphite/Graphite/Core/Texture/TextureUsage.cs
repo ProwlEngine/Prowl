@@ -24,12 +24,4 @@ public enum TextureUsage : byte
     /// Usable as framebuffer depth target.
     /// </summary>
     DepthStencil = 1 << 3,
-    /// <summary>
-    /// 2D cubemap.
-    /// </summary>
-    Cubemap = 1 << 4,
-    /// <summary>
-    /// Supports auto mipmap generation.
-    /// </summary>
-    GenerateMipmaps = 1 << 6,
 }

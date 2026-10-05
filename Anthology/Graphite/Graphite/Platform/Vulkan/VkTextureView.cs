@@ -36,7 +36,7 @@ internal unsafe partial class VkTextureView : TextureView
             description.BaseArrayLayer,
             description.ArrayLayers);
 
-        if ((tex.Usage & TextureUsage.Cubemap) == TextureUsage.Cubemap)
+        if (tex.Type == TextureType.TextureCube)
         {
             imageViewCI.ViewType = description.ArrayLayers == 1 ? ImageViewType.TypeCube : ImageViewType.TypeCubeArray;
             imageViewCI.SubresourceRange.LayerCount *= 6;

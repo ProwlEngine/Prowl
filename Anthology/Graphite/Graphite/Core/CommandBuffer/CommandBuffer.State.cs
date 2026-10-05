@@ -58,7 +58,7 @@ public abstract partial class CommandBuffer
 
     /// <summary>
     /// Merges properties into bind table, last write wins, sticks until ClearProperties or Begin.
-    /// <para>No-op when the set is unchanged and its entries are still the active ones.</para>
+    /// <para>No-op when the same set was applied last and is unchanged.</para>
     /// </summary>
     /// <param name="properties">Set to merge in.</param>
     public void SetProperties(PropertySet properties)
@@ -68,21 +68,27 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(properties, _lastAppliedSource) && properties.Version == _lastAppliedSourceVersion)
             return;
 
-        if (_mergedSourceVersions.TryGetValue(properties, out uint mergedVersion)
-            && mergedVersion == properties.Version
-            && properties.EntriesActiveIn(_activeProperties))
-        {
-            _lastAppliedSource = properties;
-            _lastAppliedSourceVersion = properties.Version;
-            return;
-        }
-
-        _activeProperties.MergeFrom(properties, _changedPropertyKeys);
-        _mergedSourceVersions[properties] = properties.Version;
+        _activeProperties.MergeFrom(properties, _changedPropertyKeys, _defaultPropertyKeys);
         _lastAppliedSource = properties;
         _lastAppliedSourceVersion = properties.Version;
-        unchecked { _activePropertiesEpoch++; }
         SetPropertiesCore(properties);
+    }
+
+    /// <summary>
+    /// Merges defaults into the bind table without replacing any key already set through SetProperties.
+    /// <para>Later SetProperties calls replace defaults, and a new defaults set replaces earlier defaults only.</para>
+    /// </summary>
+    /// <param name="defaults">Default values to merge in.</param>
+    public void SetDefaultProperties(PropertySet defaults)
+    {
+        ValidationHelpers.RequireNotNull(Device, defaults, nameof(defaults), nameof(SetDefaultProperties));
+
+        if (ReferenceEquals(defaults, _lastAppliedDefaults) && defaults.Version == _lastAppliedDefaultsVersion)
+            return;
+
+        _activeProperties.MergeDefaults(defaults, _changedPropertyKeys, _defaultPropertyKeys);
+        _lastAppliedDefaults = defaults;
+        _lastAppliedDefaultsVersion = defaults.Version;
     }
 
     /// <summary>Backend work for a property merge. Base table already updated.</summary>
@@ -97,49 +103,52 @@ public abstract partial class CommandBuffer
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
-        _mergedSourceVersions.Clear();
+        _lastAppliedDefaults = null;
+        _lastAppliedDefaultsVersion = 0;
+        _defaultPropertyKeys.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
-        unchecked { _activePropertiesEpoch++; }
         ClearPropertiesCore();
     }
 
     /// <summary>Backend work for clearing properties.</summary>
     private protected abstract void ClearPropertiesCore();
 
-    /// <summary>Sets render target framebuffer. Must match active shader's output count/formats.</summary>
+    /// <summary>Sets render target framebuffer with load/store ops for the pass it starts. Defaults to load and store.</summary>
     /// <param name="fb">Framebuffer to set.</param>
-    public void SetFramebuffer(Framebuffer fb)
+    /// <param name="ops">Load/store/clear ops, or null to load and store.</param>
+    public void SetFramebuffer(Framebuffer fb, TargetLoadStoreOps? ops = null)
     {
         RequireGraphExecution(nameof(SetFramebuffer));
-        if (_framebuffer != fb)
+        bool changed = _framebuffer != fb;
+        if (!changed && !ops.HasValue)
+            return;
+
+        _framebuffer = fb;
+        SetFramebufferCore(fb, ops ?? new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+        if (!changed)
+            return;
+
+        _framebufferOutputs = fb != null ? fb.OutputDescription : default;
+        if (fb != null)
         {
-            _framebuffer = fb;
-            SetFramebufferCore(fb);
-            _framebufferOutputs = fb != null ? fb.OutputDescription : default;
-            if (fb != null)
-            {
-                SetViewport(new Viewport(0, 0, fb.Width, fb.Height, 0, 1));
-                SetScissorRect(0, 0, fb.Width, fb.Height);
-            }
+            SetViewport(new Viewport(0, 0, fb.Width, fb.Height, 0, 1));
+            SetScissor(0, 0, fb.Width, fb.Height);
         }
     }
 
     /// <summary>Backend framebuffer set.</summary>
     /// <param name="fb">Framebuffer.</param>
-    private protected abstract void SetFramebufferCore(Framebuffer fb);
-
-    internal void SetAttachmentOps(in TargetLoadStoreOps ops)
-        => SetAttachmentOpsCore(ops.Color.Load, ops.Color.Store, ops.Depth.Load, ops.Depth.Store);
-
-    private protected abstract void SetAttachmentOpsCore(LoadAction colorLoad, StoreAction colorStore, LoadAction depthLoad, StoreAction depthStore);
+    /// <param name="ops">Load/store/clear ops for the pass.</param>
+    private protected abstract void SetFramebufferCore(Framebuffer fb, in TargetLoadStoreOps ops);
 
     /// <summary>Sets render texture's framebuffer as render target.</summary>
     /// <param name="renderTexture">Render texture.</param>
-    public void SetFramebuffer(RenderTexture renderTexture)
-        => SetFramebuffer(renderTexture.Framebuffer);
+    /// <param name="ops">Load/store/clear ops, or null to load and store.</param>
+    public void SetFramebuffer(RenderTexture renderTexture, TargetLoadStoreOps? ops = null)
+        => SetFramebuffer(renderTexture.Framebuffer, ops);
 
-    /// <summary>Clears one color target. Index must be within framebuffer's color attachment count.</summary>
+    /// <summary>Clears one color target inside the current pass. Index must be within framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
     /// <param name="clearColor">Clear value.</param>
     public void ClearColorTarget(uint index, Color clearColor)
@@ -151,17 +160,10 @@ public abstract partial class CommandBuffer
 
     private protected abstract void ClearColorTargetCore(uint index, Color clearColor);
 
-    /// <summary>Clears depth-stencil target, stencil to 0. Needs a depth attachment.</summary>
-    /// <param name="depth">Depth clear value.</param>
-    public void ClearDepthStencil(float depth)
-    {
-        ClearDepthStencil(depth, 0);
-    }
-
-    /// <summary>Clears depth-stencil target. Needs a depth attachment.</summary>
+    /// <summary>Clears depth-stencil target inside the current pass. Needs a depth attachment.</summary>
     /// <param name="depth">Depth clear value.</param>
     /// <param name="stencil">Stencil clear value.</param>
-    public void ClearDepthStencil(float depth, byte stencil)
+    public void ClearDepthStencil(float depth, byte stencil = 0)
     {
         RequireGraphExecution(nameof(ClearDepthStencil));
         ClearDepthStencil_CheckFramebuffer();
@@ -186,5 +188,13 @@ public abstract partial class CommandBuffer
     /// <param name="y">Rect Y.</param>
     /// <param name="width">Rect width.</param>
     /// <param name="height">Rect height.</param>
-    public abstract void SetScissorRect(uint x, uint y, uint width, uint height);
+    public abstract void SetScissor(uint x, uint y, uint width, uint height);
+
+    /// <summary>Sets stencil reference for subsequent draws. Applied from the program on SetShader.</summary>
+    /// <param name="reference">Stencil reference value.</param>
+    public abstract void SetStencilReference(uint reference);
+
+    /// <summary>Sets blend constants for subsequent draws. Applied from the program on SetShader.</summary>
+    /// <param name="constants">Blend constant color.</param>
+    public abstract void SetBlendConstants(Color constants);
 }

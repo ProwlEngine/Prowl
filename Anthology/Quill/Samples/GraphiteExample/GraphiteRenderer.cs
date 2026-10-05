@@ -284,8 +284,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             RenderTexture scene = context.GetRenderTexture(_sceneHandle);
 
-            cmd.SetFramebuffer(scene.Framebuffer);
-            cmd.ClearColorTarget(0, ClearColor);
+            cmd.SetFramebuffer(scene.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(ClearColor), AttachmentOps.Loaded));
 
             if (hasGeometry)
             {

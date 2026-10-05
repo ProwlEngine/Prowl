@@ -21,13 +21,16 @@ internal unsafe partial class VkCommandBuffer
     private bool _hasResolvedPipeline;
     private PrimitiveTopology _resolvedTopology;
 
-    private Rect2D[] _scissorRects = Array.Empty<Rect2D>();
-    private Viewport[] _viewports = Array.Empty<Viewport>();
+    private Rect2D _scissor;
+    private Viewport _viewport;
+    private uint _stencilReference;
+    private Color _blendConstants;
+    private bool _stencilReferenceValid;
+    private bool _blendConstantsValid;
 
     private readonly List<VkTexture> _temporaryStorageImages = [];
 
     internal PropertySet ActiveProperties => _activeProperties;
-    internal uint ActivePropertiesEpoch => _activePropertiesEpoch;
 
     internal bool IsTemporaryStorage(VkTexture tex) => _temporaryStorageImages.Contains(tex);
 
@@ -54,8 +57,12 @@ internal unsafe partial class VkCommandBuffer
         _currentResolvedPipeline = default;
         _hasResolvedPipeline = false;
         _resolvedTopology = default;
-        Util.ClearArray(_scissorRects);
-        Util.ClearArray(_viewports);
+        _scissor = default;
+        _viewport = default;
+        _stencilReference = default;
+        _blendConstants = default;
+        _stencilReferenceValid = false;
+        _blendConstantsValid = false;
         _vbCacheSource = null;
         _vbCacheProgram = null;
         _vbCacheCount = 0;
@@ -71,6 +78,9 @@ internal unsafe partial class VkCommandBuffer
 
         _currentShaderProgram = sp;
         _hasResolvedPipeline = false;
+
+        SetStencilReference(sp.DepthStencilState.StencilReference);
+        SetBlendConstants(sp.BlendState.BlendFactor);
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)
@@ -87,19 +97,19 @@ internal unsafe partial class VkCommandBuffer
     // Sets are content-addressed in the cache, so clearing needs no invalidation here.
     private protected override void ClearPropertiesCore() { }
 
-    public override void SetScissorRect(uint x, uint y, uint width, uint height)
+    public override void SetScissor(uint x, uint y, uint width, uint height)
     {
         Rect2D scissor = new(new Offset2D((int)x, (int)y), new Extent2D(width, height));
-        if (scissor.Equals(_scissorRects[0])) return;
+        if (scissor.Equals(_scissor)) return;
 
-        _scissorRects[0] = scissor;
+        _scissor = scissor;
         _gd.Vk.CmdSetScissor(_cb, 0, 1, in scissor);
     }
 
     public override void SetViewport(Viewport viewport)
     {
-        if (viewport.Equals(_viewports[0])) return;
-        _viewports[0] = viewport;
+        if (viewport.Equals(_viewport)) return;
+        _viewport = viewport;
 
         Silk.NET.Vulkan.Viewport vkViewport = new()
         {
@@ -112,5 +122,24 @@ internal unsafe partial class VkCommandBuffer
         };
 
         _gd.Vk.CmdSetViewport(_cb, 0, 1, in vkViewport);
+    }
+
+    public override void SetStencilReference(uint reference)
+    {
+        if (_stencilReferenceValid && reference == _stencilReference) return;
+
+        _stencilReferenceValid = true;
+        _stencilReference = reference;
+        _gd.Vk.CmdSetStencilReference(_cb, StencilFaceFlags.FaceFrontAndBack, reference);
+    }
+
+    public override void SetBlendConstants(Color constants)
+    {
+        if (_blendConstantsValid && constants.Equals(_blendConstants)) return;
+
+        _blendConstantsValid = true;
+        _blendConstants = constants;
+        float* values = stackalloc float[4] { constants.R, constants.G, constants.B, constants.A };
+        _gd.Vk.CmdSetBlendConstants(_cb, values);
     }
 }

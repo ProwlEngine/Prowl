@@ -8,7 +8,7 @@ namespace Prowl.Graphite.Tests;
 // End-to-end coverage of the PropertySet binding API through CommandBuffer.SetProperties. The
 // value-type plumbing is covered by CPU/PropertySetTests; this suite verifies the binding
 // actually reaches the GPU: transient vs. read-only vs. writable uniform buffers, structured
-// buffers, ApplyOther merging, and the missing-property handler. Everything runs through the
+// buffers, and the missing-property handler. Everything runs through the
 // BasicComputeTest kernel (Destination[i] = Source[i]; Source[i] *= 2) so results are
 // deterministic and easy to read back.
 public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -24,8 +24,8 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         {
             props.SetInt("Width", (int)Side);
             props.SetInt("Height", (int)Side);
-            props.SetBuffer("Source", source, readOnly: false);
-            props.SetBuffer("Destination", destination, readOnly: false);
+            props.SetBuffer("Source", source);
+            props.SetBuffer("Destination", destination);
         });
 
         AssertCopiedSource(result);
@@ -42,11 +42,11 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
         float[] result = RunCompute((props, source, destination) =>
         {
-            props.SetBuffer("Params", ubo, readOnly: true);
+            props.SetBuffer("Params", ubo);
             props.SetInt("Width", 1);
             props.SetInt("Height", 1);
-            props.SetBuffer("Source", source, readOnly: false);
-            props.SetBuffer("Destination", destination, readOnly: false);
+            props.SetBuffer("Source", source);
+            props.SetBuffer("Destination", destination);
         });
 
         AssertCopiedSource(result);
@@ -65,8 +65,8 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
             props.SetUniformBuffer("Params", ubo);
             props.SetInt("Width", (int)Side);
             props.SetInt("Height", (int)Side);
-            props.SetBuffer("Source", source, readOnly: false);
-            props.SetBuffer("Destination", destination, readOnly: false);
+            props.SetBuffer("Source", source);
+            props.SetBuffer("Destination", destination);
         });
 
         AssertCopiedSource(result);
@@ -80,30 +80,12 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [SkippableFact]
-    public void ApplyOther_MergesEntriesFromBothSets()
-    {
-
-        float[] result = RunCompute((props, source, destination) =>
-        {
-            PropertySet other = new();
-            other.SetInt("Height", (int)Side);
-            other.SetBuffer("Source", source, readOnly: false);
-            other.SetBuffer("Destination", destination, readOnly: false);
-
-            props.SetInt("Width", (int)Side);
-            props.ApplyOther(other);
-        });
-
-        AssertCopiedSource(result);
-    }
-
-    [SkippableFact]
     public void MissingProperty_InvokesHandler()
     {
 
         HashSet<PropertyID> missing = [];
         MissingPropertyHandler previous = GD.OnMissingProperty;
-        GD.OnMissingProperty = (shader, compute, name, kind, set, binding) => missing.Add(name);
+        GD.OnMissingProperty = (program, name, kind, set, binding) => missing.Add(name);
 
         try
         {
@@ -112,7 +94,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
             {
                 props.SetInt("Width", (int)Side);
                 props.SetInt("Height", (int)Side);
-                props.SetBuffer("Source", source, readOnly: false);
+                props.SetBuffer("Source", source);
             });
         }
         finally
@@ -136,9 +118,9 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     private float[] RunCompute(Action<PropertySet, DeviceBuffer, DeviceBuffer> configure)
     {
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(
-            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(
-            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+            Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
 
         float[] initial = new float[Count];
         for (int i = 0; i < Count; i++) initial[i] = i;

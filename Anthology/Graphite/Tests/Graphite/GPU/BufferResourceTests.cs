@@ -92,8 +92,8 @@ file sealed class ComputeWriteReadbackPass : IPass<BufferView>
         PropertySet props = new();
         props.SetInt("Width", (int)_side);
         props.SetInt("Height", (int)_side);
-        props.SetBuffer("Source", _source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", _source);
+        props.SetBuffer("Destination", destination);
 
         cl.SetComputeShader(_compute);
         cl.SetProperties(props);
@@ -158,7 +158,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         const uint side = 16;
         const uint count = side * side;
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         float[] initial = new float[count];
         for (int i = 0; i < count; i++)
             initial[i] = i;
@@ -209,7 +209,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         const uint size = 16;
         const int floats = (int)(size / 4);
 
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(size, BufferUsage.StructuredBufferReadWrite, 4));
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(size, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer readback = RF.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
         BufferHistoryPass pass = new(RenderResourceID.Intern("bufres_history"), size, source, readback);
         using RenderPipeline<BufferView> pipeline = new([pass]);

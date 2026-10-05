@@ -7,7 +7,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private readonly object _initLock = new();
-    private SharedCommandPool? _initPool;
+    private CommandPool _initPool;
     private Silk.NET.Vulkan.CommandBuffer _initCb;
 
     internal void ClearColorTexture(VkTexture texture, ClearColorValue color)
@@ -21,7 +21,7 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_initLock)
         {
-            Silk.NET.Vulkan.CommandBuffer cb = BeginInitCommands(texture, out SharedCommandPool? immediatePool);
+            Silk.NET.Vulkan.CommandBuffer cb = BeginInitCommands(texture, out CommandPool immediatePool);
             VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, ImageLayout.TransferDstOptimal);
             Vk.CmdClearColorImage(cb, texture.OptimalDeviceImage, ImageLayout.TransferDstOptimal, &color, 1, &range);
             VkBarriers.Transition(this, cb, texture, ImageLayout.TransferDstOptimal, VkBarriers.RestingLayout(texture));
@@ -40,7 +40,7 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_initLock)
         {
-            Silk.NET.Vulkan.CommandBuffer cb = BeginInitCommands(texture, out SharedCommandPool? immediatePool);
+            Silk.NET.Vulkan.CommandBuffer cb = BeginInitCommands(texture, out CommandPool immediatePool);
             VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, ImageLayout.TransferDstOptimal);
             Vk.CmdClearDepthStencilImage(
                 cb,
@@ -58,7 +58,7 @@ internal unsafe partial class VkGraphicsDevice
     {
         lock (_initLock)
         {
-            Silk.NET.Vulkan.CommandBuffer cb = BeginInitCommands(texture, out SharedCommandPool? immediatePool);
+            Silk.NET.Vulkan.CommandBuffer cb = BeginInitCommands(texture, out CommandPool immediatePool);
             VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, layout);
             EndInitCommands(cb, immediatePool);
         }
@@ -68,34 +68,36 @@ internal unsafe partial class VkGraphicsDevice
     {
         lock (_initLock)
         {
-            if (_initPool is not { } pool)
+            if (_initPool.Handle == 0)
                 return;
 
-            _initPool = null;
-            pool.EndAndSubmit(_initCb, waitAcquire: false);
+            CommandPool pool = _initPool;
+            _initPool = default;
+            EndAndSubmitImmediate(pool, _initCb);
         }
     }
 
-    private Silk.NET.Vulkan.CommandBuffer BeginInitCommands(VkTexture texture, out SharedCommandPool? immediatePool)
+    private Silk.NET.Vulkan.CommandBuffer BeginInitCommands(VkTexture texture, out CommandPool immediatePool)
     {
         if (texture.IsSwapchainTexture)
         {
-            immediatePool = GetFreeCommandPool();
-            return immediatePool.BeginNewCommandBuffer();
+            immediatePool = AcquireImmediatePool();
+            return BeginImmediateCommandBuffer(immediatePool);
         }
 
-        immediatePool = null;
-        if (_initPool == null)
+        immediatePool = default;
+        if (_initPool.Handle == 0)
         {
-            _initPool = GetFreeCommandPool();
-            _initCb = _initPool.BeginNewCommandBuffer();
+            _initPool = AcquireImmediatePool();
+            _initCb = BeginImmediateCommandBuffer(_initPool);
         }
 
         return _initCb;
     }
 
-    private static void EndInitCommands(Silk.NET.Vulkan.CommandBuffer cb, SharedCommandPool? immediatePool)
+    private void EndInitCommands(Silk.NET.Vulkan.CommandBuffer cb, CommandPool immediatePool)
     {
-        immediatePool?.EndAndSubmit(cb);
+        if (immediatePool.Handle != 0)
+            EndAndSubmitImmediate(immediatePool, cb);
     }
 }

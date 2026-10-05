@@ -256,6 +256,12 @@ public sealed class GraphViewTargetResource : GraphResource
     /// <summary>Load/store ops applied when bound as a raster target. Clears by default.</summary>
     public TargetLoadStoreOps Ops { get; }
 
-    internal GraphViewTargetResource(TargetLoadStoreOps? ops = null) : base(ViewTargetId)
-        => Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: false);
+    /// <summary>Depth format the target needs, null for color only.</summary>
+    public PixelFormat? DepthFormat { get; }
+
+    internal GraphViewTargetResource(TargetLoadStoreOps? ops = null, PixelFormat? depthFormat = null) : base(ViewTargetId)
+    {
+        Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: false);
+        DepthFormat = depthFormat;
+    }
 }

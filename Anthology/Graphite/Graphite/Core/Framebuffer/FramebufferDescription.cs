@@ -10,12 +10,12 @@ public struct FramebufferDescription
     /// <summary>
     /// Depth texture, needs DepthStencil flag. Null ok.
     /// </summary>
-    public FramebufferAttachmentDescription? DepthTarget;
+    public FramebufferAttachment? DepthTarget;
 
     /// <summary>
     /// Color textures, need RenderTarget flag. Null or empty ok.
     /// </summary>
-    public FramebufferAttachmentDescription[] ColorTargets;
+    public FramebufferAttachment[] ColorTargets;
 
     /// <summary>
     /// Creates new FramebufferDescription.
@@ -26,16 +26,16 @@ public struct FramebufferDescription
     {
         if (depthTarget != null)
         {
-            DepthTarget = new FramebufferAttachmentDescription(depthTarget, 0);
+            DepthTarget = new FramebufferAttachment(depthTarget, 0);
         }
         else
         {
             DepthTarget = null;
         }
-        ColorTargets = new FramebufferAttachmentDescription[colorTargets.Length];
+        ColorTargets = new FramebufferAttachment[colorTargets.Length];
         for (int i = 0; i < colorTargets.Length; i++)
         {
-            ColorTargets[i] = new FramebufferAttachmentDescription(colorTargets[i], 0);
+            ColorTargets[i] = new FramebufferAttachment(colorTargets[i], 0);
         }
     }
 
@@ -45,8 +45,8 @@ public struct FramebufferDescription
     /// <param name="depthTarget">Depth attachment; null if none.</param>
     /// <param name="colorTargets">Color attachments; empty if none.</param>
     public FramebufferDescription(
-        FramebufferAttachmentDescription? depthTarget,
-        FramebufferAttachmentDescription[] colorTargets)
+        FramebufferAttachment? depthTarget,
+        FramebufferAttachment[] colorTargets)
     {
         DepthTarget = depthTarget;
         ColorTargets = colorTargets;

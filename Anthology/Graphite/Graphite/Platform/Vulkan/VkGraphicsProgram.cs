@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 
 using Silk.NET.Vulkan;
@@ -14,29 +13,7 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
     VkDescriptorSetCache IVkDescriptorProgram.DescriptorCache => DescriptorCache;
 
     private readonly VkGraphicsDevice _gd;
-    private readonly Dictionary<ShaderStages, ShaderModule> _modules = [];
-    private readonly Dictionary<ShaderStages, string> _entryPoints = [];
-
-    /// <summary>
-    /// Descriptor-set layouts by set index. Empty DSL fills gaps.
-    /// </summary>
-    internal readonly DescriptorSetLayout[] DescriptorSetLayouts;
-
-    /// <summary>
-    /// Per-set descriptor resource counts, parallel to DescriptorSetLayouts. Sizes the per-frame pool.
-    /// </summary>
-    internal readonly DescriptorResourceCounts[] PerSetCounts;
-
-    internal readonly PipelineLayout PipelineLayout;
-
-    /// <summary>Set slot count (max set index + 1).</summary>
-    internal readonly uint ResourceSetCount;
-
-
-    /// <summary>
-    /// Cross-frame descriptor set cache, content-addressed by bound resources.
-    /// </summary>
-    internal readonly VkDescriptorSetCache DescriptorCache;
+    private readonly VkShader _shader;
 
     /// <summary>
     /// Cache of resolved pipelines keyed on (OutputDescription, PrimitiveTopology). Lock guards against
@@ -45,9 +22,21 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
     private readonly Dictionary<VkPipelineCacheKey, VkPipelineCacheEntry> _pipelineCache = [];
     private readonly object _pipelineCacheLock = new();
 
-    private readonly DescriptorSetLayout _emptyDescriptorSetLayout;
+    internal DescriptorSetLayout[] DescriptorSetLayouts => _shader.DescriptorSetLayouts;
 
-    internal IReadOnlyDictionary<ShaderStages, ShaderModule> Modules => _modules;
+    internal DescriptorResourceCounts[] PerSetCounts => _shader.PerSetCounts;
+
+    internal PipelineLayout PipelineLayout => _shader.PipelineLayout;
+
+    /// <summary>Set slot count (max set index + 1).</summary>
+    internal uint ResourceSetCount => _shader.ResourceSetCount;
+
+    /// <summary>
+    /// Cross-frame descriptor set cache, shared by every program using the same shader.
+    /// </summary>
+    internal VkDescriptorSetCache DescriptorCache => _shader.DescriptorCache;
+
+    internal IReadOnlyDictionary<ShaderStages, ShaderModule> Modules => _shader.Modules;
 
     /// <summary>
     /// Gets the cached pipeline for key, building and inserting one if missing. Lives for the program's lifetime.
@@ -66,44 +55,15 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
         }
     }
 
-    internal ShaderModule GetModule(ShaderStages stage)
-    {
-        if (!_modules.TryGetValue(stage, out ShaderModule module))
-            throw new RenderException($"GraphicsProgram does not contain a module for stage {stage}.");
-        return module;
-    }
+    internal ShaderModule GetModule(ShaderStages stage) => _shader.GetModule(stage);
 
-    internal string GetEntryPoint(ShaderStages stage) => _entryPoints[stage];
+    internal string GetEntryPoint(ShaderStages stage) => _shader.GetEntryPoint(stage);
 
     public VkGraphicsProgram(VkGraphicsDevice gd, in ShaderDescription description)
         : base(description)
     {
         _gd = gd;
-
-        ShaderStageDescription[] stages = description.Stages;
-        for (int i = 0; i < stages.Length; i++)
-        {
-            ShaderStageDescription sd = stages[i];
-            ShaderModuleCreateInfo shaderModuleCI = new()
-            {
-                SType = StructureType.ShaderModuleCreateInfo
-            };
-            fixed (byte* codePtr = sd.ShaderBytes)
-            {
-                shaderModuleCI.CodeSize = (UIntPtr)sd.ShaderBytes.Length;
-                shaderModuleCI.PCode = (uint*)codePtr;
-                _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out ShaderModule module).CheckResult();
-                _modules[sd.Stage] = module;
-                _entryPoints[sd.Stage] = sd.EntryPoint;
-            }
-        }
-
-        (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
-            = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray);
-
-        DescriptorCache = new VkDescriptorSetCache(_gd);
-
-        Constructor_RecordShaderAllocation(stages);
+        _shader = gd.ShaderCache.Acquire(description.Stages, ResourceLayoutsArray);
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
@@ -121,11 +81,6 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
         _pipelineCache.Clear();
         DisposeCore_RecordFrees(pipelineCount);
 
-        DescriptorCache.Destroy();
-
-        foreach (ShaderModule m in _modules.Values)
-            _gd.Vk.DestroyShaderModule(_gd.Device, m, null);
-
-        VkDescriptorLayoutBuilder.Destroy(_gd, DescriptorSetLayouts, _emptyDescriptorSetLayout, PipelineLayout);
+        _gd.ShaderCache.Release(_shader);
     }
 }

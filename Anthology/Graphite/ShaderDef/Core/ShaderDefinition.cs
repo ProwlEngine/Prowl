@@ -134,6 +134,65 @@ public sealed class ShaderDefinition
     }
 
 
+    /// <summary>
+    /// Builds a set from properties that have a default and a target in the pass variant.
+    /// </summary>
+    public PropertySet CreateDefaultProperties(ShaderPass pass, int variantKey = 0, DefaultTextureResolver? resolveTexture = null)
+    {
+        ArgumentNullException.ThrowIfNull(pass);
+
+        PropertySet set = new();
+        if (Properties == null)
+            return set;
+
+        HashSet<PropertyID> targets = new();
+        foreach (ResourceLayoutDescription layout in pass.GetDescription(variantKey).ResourceLayouts)
+        {
+            foreach (ResourceLayoutElementDescription element in layout.Elements)
+            {
+                targets.Add(element.Name);
+                if (element.UniformFields is { } fields)
+                {
+                    foreach (UniformBlockField field in fields)
+                        targets.Add(field.Name);
+                }
+            }
+        }
+
+        for (int i = 0; i < Properties.Length; i++)
+        {
+            ShaderProperty property = Properties[i];
+            PropertyID id = property.Name;
+
+            if (!property.HasDefault || !targets.Contains(id))
+                continue;
+
+            switch (property.PropertyType)
+            {
+                case ShaderPropertyType.Float:
+                    set.SetFloat(id, property.Value.X);
+                    break;
+                case ShaderPropertyType.Integer:
+                    set.SetInt(id, (int)property.Value.X);
+                    break;
+                case ShaderPropertyType.Color:
+                case ShaderPropertyType.Vector:
+                    set.SetFloat4(id, property.Value);
+                    break;
+                case ShaderPropertyType.Matrix:
+                    set.SetMatrix(id, property.MatrixValue);
+                    break;
+                default:
+                    if (resolveTexture?.Invoke(property.TextureValue, property.PropertyType) is { } view)
+                        set.SetTexture(id, view);
+                    break;
+            }
+        }
+
+        return set;
+    }
+
+
     /// <summary>True if pass carries tag, optionally matching a specific value.</summary>
     public static bool PassHasTag(ShaderPass pass, string tag, string? tagValue = null)
     {

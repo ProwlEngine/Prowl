@@ -236,73 +236,73 @@ public static class ShaderParser
         {
             case "Ref":
                 t.Next();
-                state = new() { StencilRef = ParserUtility.Integer(ref t) };
+                state = new() { Set = PassStateFields.StencilReference, DepthStencil = new() { StencilReference = (uint)ParserUtility.Integer(ref t) } };
                 return true;
 
             case "ReadMask":
                 t.Next();
-                state = new() { StencilReadMask = (uint)ParserUtility.Integer(ref t) };
+                state = new() { Set = PassStateFields.StencilReadMask, DepthStencil = new() { StencilReadMask = (byte)(uint)ParserUtility.Integer(ref t) } };
                 return true;
 
             case "WriteMask":
                 t.Next();
-                state = new() { StencilWriteMask = (uint)ParserUtility.Integer(ref t) };
+                state = new() { Set = PassStateFields.StencilWriteMask, DepthStencil = new() { StencilWriteMask = (byte)(uint)ParserUtility.Integer(ref t) } };
                 return true;
 
             case "Comp":
                 t.Next();
                 ComparisonKind comp = ParserUtility.Keywords<ComparisonKind>(ref t);
-                state = new() { StencilBackFunc = comp, StencilFrontFunc = comp };
+                state = StencilFaces(PassStateFields.StencilFrontComparison | PassStateFields.StencilBackComparison, new() { Comparison = comp }, new() { Comparison = comp });
                 return true;
             case "CompBack":
                 t.Next();
-                state = new() { StencilBackFunc = ParserUtility.Keywords<ComparisonKind>(ref t) };
+                state = StencilFaces(PassStateFields.StencilBackComparison, back: new() { Comparison = ParserUtility.Keywords<ComparisonKind>(ref t) });
                 return true;
             case "CompFront":
                 t.Next();
-                state = new() { StencilFrontFunc = ParserUtility.Keywords<ComparisonKind>(ref t) };
+                state = StencilFaces(PassStateFields.StencilFrontComparison, front: new() { Comparison = ParserUtility.Keywords<ComparisonKind>(ref t) });
                 return true;
 
             case "Pass":
                 t.Next();
                 StencilOperation pass = ParserUtility.Keywords<StencilOperation>(ref t);
-                state = new() { StencilBackPassOp = pass, StencilFrontPassOp = pass };
+                state = StencilFaces(PassStateFields.StencilFrontPass | PassStateFields.StencilBackPass, new() { Pass = pass }, new() { Pass = pass });
                 return true;
             case "PassBack":
                 t.Next();
-                state = new() { StencilBackPassOp = ParserUtility.Keywords<StencilOperation>(ref t) };
+                state = StencilFaces(PassStateFields.StencilBackPass, back: new() { Pass = ParserUtility.Keywords<StencilOperation>(ref t) });
                 return true;
             case "PassFront":
                 t.Next();
-                state = new() { StencilFrontPassOp = ParserUtility.Keywords<StencilOperation>(ref t) };
+                state = StencilFaces(PassStateFields.StencilFrontPass, front: new() { Pass = ParserUtility.Keywords<StencilOperation>(ref t) });
                 return true;
 
             case "Fail":
                 t.Next();
                 StencilOperation fail = ParserUtility.Keywords<StencilOperation>(ref t);
-                state = new() { StencilBackFailOp = fail, StencilFrontFailOp = fail };
+                state = StencilFaces(PassStateFields.StencilFrontFail | PassStateFields.StencilBackFail, new() { Fail = fail }, new() { Fail = fail });
                 return true;
             case "FailBack":
                 t.Next();
-                state = new() { StencilBackFailOp = ParserUtility.Keywords<StencilOperation>(ref t) };
+                state = StencilFaces(PassStateFields.StencilBackFail, back: new() { Fail = ParserUtility.Keywords<StencilOperation>(ref t) });
                 return true;
             case "FailFront":
                 t.Next();
-                state = new() { StencilFrontFailOp = ParserUtility.Keywords<StencilOperation>(ref t) };
+                state = StencilFaces(PassStateFields.StencilFrontFail, front: new() { Fail = ParserUtility.Keywords<StencilOperation>(ref t) });
                 return true;
 
             case "ZFail":
                 t.Next();
                 StencilOperation zfail = ParserUtility.Keywords<StencilOperation>(ref t);
-                state = new() { StencilBackDepthFailOp = zfail, StencilFrontDepthFailOp = zfail };
+                state = StencilFaces(PassStateFields.StencilFrontDepthFail | PassStateFields.StencilBackDepthFail, new() { DepthFail = zfail }, new() { DepthFail = zfail });
                 return true;
             case "ZFailBack":
                 t.Next();
-                state = new() { StencilBackDepthFailOp = ParserUtility.Keywords<StencilOperation>(ref t) };
+                state = StencilFaces(PassStateFields.StencilBackDepthFail, back: new() { DepthFail = ParserUtility.Keywords<StencilOperation>(ref t) });
                 return true;
             case "ZFailFront":
                 t.Next();
-                state = new() { StencilFrontDepthFailOp = ParserUtility.Keywords<StencilOperation>(ref t) };
+                state = StencilFaces(PassStateFields.StencilFrontDepthFail, front: new() { DepthFail = ParserUtility.Keywords<StencilOperation>(ref t) });
                 return true;
 
             default:
@@ -310,6 +310,10 @@ public static class ShaderParser
                 return false;
         }
     }
+
+
+    static PassState StencilFaces(PassStateFields set, StencilBehaviorDescription front = default, StencilBehaviorDescription back = default)
+        => new() { Set = set, DepthStencil = new() { StencilFront = front, StencilBack = back } };
 
 
     static PassState ParseStencil(ref Tokenizer<ShaderToken> t)
@@ -333,7 +337,7 @@ public static class ShaderParser
             throw Exceptions.UnknownCommand(ParserUtility.Text(ref t, after), after);
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
-        states.Add(new() { EnableStencilTest = true });
+        states.Add(new() { Set = PassStateFields.StencilTest, DepthStencil = new() { StencilTestEnabled = true } });
         return FromSeveral(states);
     }
 
@@ -347,23 +351,23 @@ public static class ShaderParser
         {
             case "AlphaToMask":
                 t.Next();
-                state = new() { AlphaToMask = ParserUtility.Keywords(ref t, OnStateMap) };
+                state = new() { Set = PassStateFields.AlphaToCoverage, AlphaToCoverage = ParserUtility.Keywords(ref t, OnStateMap) };
                 return true;
 
             case "BlendOp":
                 t.Next();
                 BlendFunction blendop = ParserUtility.Keywords<BlendFunction>(ref t);
-                state = new() { BlendFunctionRgb = blendop, BlendFunctionAlpha = blendop };
+                state = new() { Set = PassStateFields.ColorFunction | PassStateFields.AlphaFunction, Blend = new() { ColorFunction = blendop, AlphaFunction = blendop } };
                 return true;
 
             case "Cull":
                 t.Next();
-                state = new() { CullMode = ParserUtility.Keywords(ref t, FaceCullModeMap) };
+                state = new() { Set = PassStateFields.CullMode, Raster = new() { CullMode = ParserUtility.Keywords(ref t, FaceCullModeMap) } };
                 return true;
 
             case "ZClip":
                 t.Next();
-                state = new() { EnableDepthClamp = !ParserUtility.Keywords(ref t, OnStateMap) };
+                state = new() { Set = PassStateFields.DepthClip, Raster = new() { DepthClipEnabled = ParserUtility.Keywords(ref t, OnStateMap) } };
                 return true;
 
             case "ZTest":
@@ -371,23 +375,27 @@ public static class ShaderParser
                 if (ParserUtility.PeekKeyword(ref t, "Disabled"))
                 {
                     t.Next();
-                    state = new() { EnableDepthTest = false };
+                    state = new() { Set = PassStateFields.DepthTest, DepthStencil = new() { DepthTestEnabled = false } };
                 }
                 else
                 {
-                    state = new() { EnableDepthTest = true, DepthFunc = ParserUtility.Keywords<ComparisonKind>(ref t) };
+                    state = new()
+                    {
+                        Set = PassStateFields.DepthTest | PassStateFields.DepthComparison,
+                        DepthStencil = new() { DepthTestEnabled = true, DepthComparison = ParserUtility.Keywords<ComparisonKind>(ref t) }
+                    };
                 }
                 return true;
 
             case "ZWrite":
                 t.Next();
-                state = new() { DepthWriteMask = ParserUtility.Keywords(ref t, OnStateMap) };
+                state = new() { Set = PassStateFields.DepthWrite, DepthStencil = new() { DepthWriteEnabled = ParserUtility.Keywords(ref t, OnStateMap) } };
                 return true;
 
             case "ColorMask":
                 t.Next();
                 Token<ShaderToken> mask = ParserUtility.Expect(ref t, ShaderToken.Identifier);
-                state = new() { WriteMask = ParseMask(ref t, mask) };
+                state = new() { Set = PassStateFields.ColorWriteMask, Blend = new() { ColorWriteMask = ParseMask(ref t, mask) } };
                 return true;
 
             case "Offset":
@@ -396,9 +404,8 @@ public static class ShaderParser
                 float units = ParserUtility.Float(ref t);
                 state = new()
                 {
-                    EnablePolygonOffsetFill = true,
-                    PolygonOffsetFactor = factor,
-                    PolygonOffsetUnits = units
+                    Set = PassStateFields.DepthBias | PassStateFields.DepthBiasSlope | PassStateFields.DepthBiasConstant,
+                    Raster = new() { DepthBiasEnabled = true, DepthBiasSlopeFactor = factor, DepthBiasConstantFactor = units }
                 };
                 return true;
 
@@ -408,11 +415,16 @@ public static class ShaderParser
                 BlendFactor dst = ParserUtility.Keywords<BlendFactor>(ref t);
                 state = new()
                 {
-                    EnableBlend = true,
-                    BlendSrcRgb = src,
-                    BlendSrcAlpha = src,
-                    BlendDstRgb = dst,
-                    BlendDstAlpha = dst
+                    Set = PassStateFields.BlendEnabled | PassStateFields.SourceColorFactor | PassStateFields.SourceAlphaFactor
+                        | PassStateFields.DestinationColorFactor | PassStateFields.DestinationAlphaFactor,
+                    Blend = new()
+                    {
+                        BlendEnabled = true,
+                        SourceColorFactor = src,
+                        SourceAlphaFactor = src,
+                        DestinationColorFactor = dst,
+                        DestinationAlphaFactor = dst
+                    }
                 };
                 return true;
 
@@ -420,14 +432,22 @@ public static class ShaderParser
                 t.Next();
                 BlendFactor srcRgb = ParserUtility.Keywords<BlendFactor>(ref t);
                 BlendFactor dstRgb = ParserUtility.Keywords<BlendFactor>(ref t);
-                state = new() { EnableBlend = true, BlendSrcRgb = srcRgb, BlendDstRgb = dstRgb };
+                state = new()
+                {
+                    Set = PassStateFields.BlendEnabled | PassStateFields.SourceColorFactor | PassStateFields.DestinationColorFactor,
+                    Blend = new() { BlendEnabled = true, SourceColorFactor = srcRgb, DestinationColorFactor = dstRgb }
+                };
                 return true;
 
             case "BlendAlpha":
                 t.Next();
                 BlendFactor srcA = ParserUtility.Keywords<BlendFactor>(ref t);
                 BlendFactor dstA = ParserUtility.Keywords<BlendFactor>(ref t);
-                state = new() { EnableBlend = true, BlendSrcAlpha = srcA, BlendDstAlpha = dstA };
+                state = new()
+                {
+                    Set = PassStateFields.BlendEnabled | PassStateFields.SourceAlphaFactor | PassStateFields.DestinationAlphaFactor,
+                    Blend = new() { BlendEnabled = true, SourceAlphaFactor = srcA, DestinationAlphaFactor = dstA }
+                };
                 return true;
 
             case "Stencil":
@@ -573,7 +593,9 @@ public static class ShaderParser
 
             MatrixValue = value is Float4x4 m ? m : Float4x4.Zero,
 
-            TextureValue = value as string ?? ""
+            TextureValue = value as string ?? "",
+
+            HasDefault = value != null
         };
     }
 }

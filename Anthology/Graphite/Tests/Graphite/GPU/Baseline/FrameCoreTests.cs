@@ -19,7 +19,6 @@ public abstract class FrameCoreTests<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.WaitForExecution(task);
 
         Assert.True(GD.IsExecutionComplete(task));
-        Assert.True(task.CompletionFence.Signaled);
     }
 
     [Fact]

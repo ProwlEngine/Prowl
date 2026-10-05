@@ -106,15 +106,14 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         if (uboEntry is { BackedBlock: true } && elem.UniformFields is { Length: > 0 })
         {
-            return GetOrBuildBackedUbo(
-                elem.Name, elem.UniformFields, meta.UniformBlockSlots[elemIndex], meta.UniformBlockSizes[elemIndex], uboEntry.Buffer!.Value);
+            return BuildBackedUbo(elem.Name, elem.UniformFields, meta.UniformBlockSizes[elemIndex], uboEntry.Buffer!.Value);
         }
 
         if (uboEntry != null)
             return uboEntry.Buffer!.Value;
 
         if (elem.UniformFields is { Length: > 0 })
-            return GetOrBuildTransientUbo(elem.UniformFields, meta.UniformBlockSlots[elemIndex], meta.UniformBlockSizes[elemIndex]);
+            return BuildTransientUbo(elem.UniformFields, meta.UniformBlockSizes[elemIndex]);
 
         missing = true;
         return AllocateExecutionTransient(16);
@@ -132,13 +131,13 @@ internal unsafe sealed partial class VkDescriptorBinder
             if (texEntry.Texture != null)
             {
                 missing = false;
-                return _gd.GetOrCreateDefaultView((VkTexture)texEntry.Texture);
+                return ((VkTexture)texEntry.Texture).DefaultView;
             }
         }
 
         missing = true;
         VkTexture fallback = (VkTexture)(elem.Kind == ResourceKind.TextureReadWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D);
-        return _gd.GetOrCreateDefaultView(fallback);
+        return fallback.DefaultView;
     }
 
     private VkSampler ResolveSampler(in ResourceLayoutElementDescription elem, SetBindingMetadata meta, int elemIndex)
@@ -171,37 +170,19 @@ internal unsafe sealed partial class VkDescriptorBinder
         return range;
     }
 
-    private DeviceBufferRange GetOrBuildBackedUbo(
-        PropertyID name, UniformBlockField[] fields, int blockSlot, uint blockSize, DeviceBufferRange target)
+    private DeviceBufferRange BuildBackedUbo(PropertyID name, UniformBlockField[] fields, uint blockSize, DeviceBufferRange target)
     {
         if (_gd.ValidationEnabled)
             ValidateBackedUbo(name, blockSize, target);
 
-        VkUniformArena.Block block = CurrentExecution().UniformArena.GetBlock(blockSlot, fields, blockSize);
+        if (_uboScratch.Length < blockSize)
+            _uboScratch = new byte[blockSize];
 
-        if (ExplicitTargetUnchanged(fields, block, target))
-            return target;
+        PackUniformFields(fields, _uboScratch.AsSpan(0, (int)blockSize));
 
-        Span<byte> scratch = block.Scratch.AsSpan(0, (int)blockSize);
-        scratch.Clear();
-
-        for (int i = 0; i < fields.Length; i++)
-        {
-            ref UniformBlockField field = ref fields[i];
-            PropertyEntry? uEntry = FindProperty(field.Name, PropertyEntryKind.Uniform);
-            block.ExplicitSources[i] = uEntry;
-            block.ExplicitVersions[i] = uEntry?.Version ?? 0;
-
-            if (uEntry != null)
-                CopyUniform(uEntry, scratch.Slice((int)field.Offset, (int)field.Size));
-        }
-
-        fixed (byte* scratchPtr = block.Scratch)
+        fixed (byte* scratchPtr = _uboScratch)
             _gd.UpdateBuffer(target.Buffer, target.Offset, (IntPtr)scratchPtr, blockSize);
 
-        block.ExplicitBuffer = target.Buffer;
-        block.ExplicitOffset = target.Offset;
-        block.ExplicitContentVersion = target.Buffer.ContentVersion;
         return target;
     }
 
@@ -216,74 +197,20 @@ internal unsafe sealed partial class VkDescriptorBinder
             throw new RenderException($"Uniform block '{label}' is backed at offset {target.Offset}, which is not a multiple of the device's uniform offset alignment {_gd.UniformBufferMinOffsetAlignment}.");
     }
 
-    private bool ExplicitTargetUnchanged(UniformBlockField[] fields, VkUniformArena.Block block, DeviceBufferRange target)
+    private DeviceBufferRange BuildTransientUbo(UniformBlockField[] fields, uint blockSize)
     {
-        if (!ReferenceEquals(block.ExplicitBuffer, target.Buffer)
-            || block.ExplicitOffset != target.Offset
-            || block.ExplicitContentVersion != target.Buffer.ContentVersion)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < fields.Length; i++)
-        {
-            PropertyEntry? entry = FindProperty(fields[i].Name, PropertyEntryKind.Uniform);
-            if (!ReferenceEquals(entry, block.ExplicitSources[i]) || (entry != null && entry.Version != block.ExplicitVersions[i]))
-                return false;
-        }
-        return true;
-    }
-
-
-    // The packed block is memoized for the whole execution, so a block whose sources are untouched is
-    // packed, allocated and uploaded once no matter how many draws or command buffers reference it.
-    private DeviceBufferRange GetOrBuildTransientUbo(UniformBlockField[] fields, int blockSlot, uint blockSize)
-    {
-        VkExecutionTask execution = CurrentExecution();
-        ulong executionId = execution.Id;
-        VkUniformArena.Block block = execution.UniformArena.GetBlock(blockSlot, fields, blockSize);
-
-        bool live = block.ExecutionId == executionId;
-        if (live && SourcesUnchanged(fields, block))
-            return block.Range;
-
-        Span<byte> packed = block.Scratch.AsSpan(0, (int)blockSize);
-        PackUniformFields(fields, packed, block);
-
-        // A different entry object can still hold identical bytes; that must not cost a new range.
-        if (live && packed.SequenceEqual(block.Packed))
-            return block.Range;
-
-        Span<byte> mapped = execution.AllocateTransientMapped(blockSize, out DeviceBufferRange range);
-        packed.CopyTo(mapped);
-
-        block.CommitScratch();
-        block.Range = range;
-        block.ExecutionId = executionId;
+        Span<byte> mapped = CurrentExecution().AllocateTransientMapped(blockSize, out DeviceBufferRange range);
+        PackUniformFields(fields, mapped);
         return range;
     }
 
-    private bool SourcesUnchanged(UniformBlockField[] fields, VkUniformArena.Block block)
-    {
-        for (int i = 0; i < fields.Length; i++)
-        {
-            PropertyEntry? entry = FindProperty(fields[i].Name, PropertyEntryKind.Uniform);
-            if (!ReferenceEquals(entry, block.Sources[i]) || (entry != null && entry.Version != block.Versions[i]))
-                return false;
-        }
-        return true;
-    }
-
-    private void PackUniformFields(UniformBlockField[] fields, Span<byte> dst, VkUniformArena.Block block)
+    private void PackUniformFields(UniformBlockField[] fields, Span<byte> dst)
     {
         dst.Clear();
         for (int i = 0; i < fields.Length; i++)
         {
             ref UniformBlockField field = ref fields[i];
             PropertyEntry? uEntry = FindProperty(field.Name, PropertyEntryKind.Uniform);
-            block.Sources[i] = uEntry;
-            block.Versions[i] = uEntry?.Version ?? 0;
-
             if (uEntry == null)
                 continue;
 
@@ -301,12 +228,9 @@ internal unsafe sealed partial class VkDescriptorBinder
     private static uint UniformSize(UniformScalarType type) => type switch
     {
         UniformScalarType.Float1 or UniformScalarType.Int1 => 4,
-        UniformScalarType.Float2 or UniformScalarType.Int2 or UniformScalarType.Double1 => 8,
+        UniformScalarType.Float2 or UniformScalarType.Int2 => 8,
         UniformScalarType.Float3 or UniformScalarType.Int3 => 12,
-        UniformScalarType.Float4 or UniformScalarType.Int4 or UniformScalarType.Double2 => 16,
-        UniformScalarType.Double3 => 24,
-        UniformScalarType.Double4 => 32,
-        UniformScalarType.Float4x4 => 64,
-        _ => 128,
+        UniformScalarType.Float4 or UniformScalarType.Int4 => 16,
+        _ => 64,
     };
 }

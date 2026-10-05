@@ -16,27 +16,19 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
     private readonly ulong _bufferImageGranularity;
     private readonly Silk.NET.Vulkan.Vk _vk;
     private readonly object _lock = new();
-    private ulong _totalAllocatedBytes;
     private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryTypeUnmapped = [];
     private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryType = [];
-
-    private readonly vkGetBufferMemoryRequirements2_t? _getBufferMemoryRequirements2;
-    private readonly vkGetImageMemoryRequirements2_t? _getImageMemoryRequirements2;
 
     public VkDeviceMemoryManager(
         Silk.NET.Vulkan.Vk vk,
         Device device,
         PhysicalDevice physicalDevice,
-        ulong bufferImageGranularity,
-        vkGetBufferMemoryRequirements2_t? getBufferMemoryRequirements2,
-        vkGetImageMemoryRequirements2_t? getImageMemoryRequirements2)
+        ulong bufferImageGranularity)
     {
         _vk = vk;
         _device = device;
         _physicalDevice = physicalDevice;
         _bufferImageGranularity = bufferImageGranularity;
-        _getBufferMemoryRequirements2 = getBufferMemoryRequirements2;
-        _getImageMemoryRequirements2 = getImageMemoryRequirements2;
     }
 
     public VkMemoryBlock Allocate(
@@ -50,43 +42,10 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
         Image dedicatedImage = default,
         VkBufferHandle dedicatedBuffer = default)
     {
-        if (dedicated)
+        if (!dedicated)
         {
-            if (dedicatedImage.Handle != 0 && _getImageMemoryRequirements2 != null)
-            {
-                ImageMemoryRequirementsInfo2KHR requirementsInfo = new()
-                {
-                    SType = StructureType.ImageMemoryRequirementsInfo2
-                };
-                requirementsInfo.Image = dedicatedImage;
-                MemoryRequirements2KHR requirements = new()
-                {
-                    SType = StructureType.MemoryRequirements2
-                };
-                _getImageMemoryRequirements2(_device, &requirementsInfo, &requirements);
-                size = requirements.MemoryRequirements.Size;
-            }
-            else if (dedicatedBuffer.Handle != 0 && _getBufferMemoryRequirements2 != null)
-            {
-                BufferMemoryRequirementsInfo2KHR requirementsInfo = new()
-                {
-                    SType = StructureType.BufferMemoryRequirementsInfo2
-                };
-                requirementsInfo.Buffer = dedicatedBuffer;
-                MemoryRequirements2KHR requirements = new()
-                {
-                    SType = StructureType.MemoryRequirements2
-                };
-                _getBufferMemoryRequirements2(_device, &requirementsInfo, &requirements);
-                size = requirements.MemoryRequirements.Size;
-            }
-        }
-        else
-        {
-            // Round up to the nearest multiple of bufferImageGranularity.
             size = (size + _bufferImageGranularity - 1) / _bufferImageGranularity * _bufferImageGranularity;
         }
-        _totalAllocatedBytes += size;
 
         lock (_lock)
         {
@@ -108,10 +67,10 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
                 allocateInfo.AllocationSize = size;
                 allocateInfo.MemoryTypeIndex = memoryTypeIndex;
 
-                MemoryDedicatedAllocateInfoKHR dedicatedAI;
+                MemoryDedicatedAllocateInfo dedicatedAI;
                 if (dedicated)
                 {
-                    dedicatedAI = new MemoryDedicatedAllocateInfoKHR
+                    dedicatedAI = new MemoryDedicatedAllocateInfo
                     {
                         SType = StructureType.MemoryDedicatedAllocateInfo
                     };
@@ -136,7 +95,7 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
                     }
                 }
 
-                return new VkMemoryBlock(memory, 0, size, memoryTypeBits, mappedPtr, true);
+                return new VkMemoryBlock(memory, 0, size, memoryTypeIndex, mappedPtr, true);
             }
             else
             {
@@ -154,7 +113,6 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
 
     public void Free(VkMemoryBlock block)
     {
-        _totalAllocatedBytes -= block.Size;
         lock (_lock)
         {
             if (block.DedicatedAllocation)

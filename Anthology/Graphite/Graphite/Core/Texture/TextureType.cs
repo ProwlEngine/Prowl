@@ -9,4 +9,6 @@ public enum TextureType
     Texture1D,
     /// <summary>3D.</summary>
     Texture3D,
+    /// <summary>Cube. ArrayLayers counts cubes; each has 6 faces.</summary>
+    TextureCube,
 }

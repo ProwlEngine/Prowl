@@ -24,7 +24,7 @@ public struct TextureDescription
     /// </summary>
     public uint MipLevels;
     /// <summary>
-    /// Array layer count.
+    /// Array layer count. For cube textures, the number of cubes; each has 6 faces.
     /// </summary>
     public uint ArrayLayers;
     /// <summary>
@@ -32,7 +32,7 @@ public struct TextureDescription
     /// </summary>
     public PixelFormat Format;
     /// <summary>
-    /// Allowed usages: sampled, depth, render target, cubemap.
+    /// Allowed usages: sampled, storage, render target, depth.
     /// </summary>
     public TextureUsage Usage;
     /// <summary>
@@ -227,6 +227,34 @@ public struct TextureDescription
             format,
             usage,
             TextureType.Texture3D,
+            TextureSampleCount.Count1);
+    }
+
+    /// <summary>
+    /// Non-multisampled cube texture desc.
+    /// </summary>
+    /// <param name="size">Width and height of each face.</param>
+    /// <param name="mipLevels">Mip count.</param>
+    /// <param name="arrayLayers">Cube count; each cube has 6 faces.</param>
+    /// <param name="format">Texel format.</param>
+    /// <param name="usage">Allowed usages.</param>
+    /// <returns>Cube texture desc.</returns>
+    public static TextureDescription CreateCube(
+        uint size,
+        uint mipLevels,
+        uint arrayLayers,
+        PixelFormat format,
+        TextureUsage usage)
+    {
+        return new TextureDescription(
+            size,
+            size,
+            1,
+            mipLevels,
+            arrayLayers,
+            format,
+            usage,
+            TextureType.TextureCube,
             TextureSampleCount.Count1);
     }
 }

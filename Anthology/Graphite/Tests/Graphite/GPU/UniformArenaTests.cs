@@ -28,7 +28,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
             {
                 CommandBuffer cl = context.GetCommandBuffer($"Pass{i}");
                 cl.SetComputeShader(program);
-                shared.SetBuffer("Output", outputs[i], readOnly: false);
+                shared.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(shared);
                 cl.Dispatch(1, 1, 1);
                 context.SubmitCommandBuffer(cl);
@@ -60,12 +60,12 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
         PropertySet propsX = new();
         propsX.SetInt("valueA", 111);
         propsX.SetInt("valueB", 222);
-        propsX.SetBuffer("Output", outputX, readOnly: false);
+        propsX.SetBuffer("Output", outputX);
 
         PropertySet propsY = new();
         propsY.SetInt("valueA", 999);
         propsY.SetInt("valueB", 888);
-        propsY.SetBuffer("Output", outputY, readOnly: false);
+        propsY.SetBuffer("Output", outputY);
 
         GD.RunTestGraph(context =>
         {
@@ -92,7 +92,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     }
 
     [SkippableFact]
-    public void ApplyOther_SwapsInSameValueViaDifferentEntryObject_StillDispatchesCorrectly()
+    public void SetPropertiesSecondSet_SwapsInSameValueViaDifferentEntryObject_StillDispatchesCorrectly()
     {
 
         ComputeProgram program = CreateTwoBlockProgram();
@@ -102,15 +102,12 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
         PropertySet props = new();
         props.SetInt("valueA", 42);
         props.SetInt("valueB", 100);
-        props.SetBuffer("Output", output1, readOnly: false);
+        props.SetBuffer("Output", output1);
 
-        // A fresh PropertySet carries a brand new PropertyEntry for valueA with the exact same
-        // value, plus a genuinely different valueB. ApplyOther merges both into props, swapping
-        // the valueA entry's object identity without changing its bytes.
         PropertySet other = new();
         other.SetInt("valueA", 42);
         other.SetInt("valueB", 200);
-        other.SetBuffer("Output", output2, readOnly: false);
+        other.SetBuffer("Output", output2);
 
         GD.RunTestGraph(context =>
         {
@@ -120,11 +117,10 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
             cl1.Dispatch(1, 1, 1);
             context.SubmitCommandBuffer(cl1);
 
-            props.ApplyOther(other);
-
             CommandBuffer cl2 = context.GetCommandBuffer("AfterMerge");
             cl2.SetComputeShader(program);
             cl2.SetProperties(props);
+            cl2.SetProperties(other);
             cl2.Dispatch(1, 1, 1);
             context.SubmitCommandBuffer(cl2);
         });
@@ -160,7 +156,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
                 PropertySet props = new();
                 props.SetInt("valueA", even ? 1 : 9);
                 props.SetInt("valueB", even ? 2 : 8);
-                props.SetBuffer("Output", outputs[i], readOnly: false);
+                props.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
                 context.SubmitCommandBuffer(cl);
@@ -180,7 +176,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     // ---- helpers ----
 
     private DeviceBuffer CreateOutput()
-        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
     private uint[] Read(DeviceBuffer output)
     {

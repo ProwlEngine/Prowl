@@ -234,7 +234,6 @@ public static class Program
 
         SwapchainDescription swapchain = new()
         {
-            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
             SyncToVerticalBlank = false
         };
 
@@ -267,7 +266,9 @@ public static class Program
             AddressModeU = SamplerAddressMode.Clamp,
             AddressModeV = SamplerAddressMode.Clamp,
             AddressModeW = SamplerAddressMode.Clamp,
-            Filter = SamplerFilter.MinLinear_MagLinear_MipLinear,
+            MinFilter = FilterMode.Linear,
+            MagFilter = FilterMode.Linear,
+            MipFilter = FilterMode.Linear,
         };
         bloomSampler = device.ResourceFactory.CreateSampler(clampLinear);
         compositeSampler = device.ResourceFactory.CreateSampler(clampLinear);

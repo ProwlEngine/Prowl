@@ -81,13 +81,12 @@ internal unsafe partial class VkCommandBuffer
         bool needBind = _descriptorBinder.Prepare(
             _currentShaderProgram,
             reportProgram: _currentShaderProgram,
-            isGraphics: true,
-            renderPassActive: _activeRenderPass.Handle != default);
+            isGraphics: true);
 
         EnsureRenderPassActive();
 
         if (needBind)
-            _descriptorBinder.EmitBind(_currentResolvedPipeline.PipelineLayout, PipelineBindPoint.Graphics);
+            _descriptorBinder.EmitBind(_currentShaderProgram.PipelineLayout, PipelineBindPoint.Graphics);
     }
 
     private void PreDispatchCommand()
@@ -97,8 +96,7 @@ internal unsafe partial class VkCommandBuffer
         bool needBind = _descriptorBinder.Prepare(
             _currentComputeProgram,
             reportProgram: _currentShaderProgram,
-            isGraphics: false,
-            renderPassActive: _activeRenderPass.Handle != default);
+            isGraphics: false);
 
         if (needBind)
             _descriptorBinder.EmitBind(_currentComputeProgram.PipelineLayout, PipelineBindPoint.Compute);

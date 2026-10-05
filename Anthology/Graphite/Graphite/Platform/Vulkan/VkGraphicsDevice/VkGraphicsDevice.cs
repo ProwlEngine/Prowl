@@ -8,7 +8,6 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
 
 using VkApi = Silk.NET.Vulkan.Vk;
-using VkFenceHandle = Silk.NET.Vulkan.Fence;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Graphite.Vk;
@@ -20,18 +19,15 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     private readonly BackendInfoVulkan _vulkanInfo;
     private readonly VkSwapchain _mainSwapchain;
-    private readonly VkGraphCommandBufferPool _graphCommandBufferPool;
-    private readonly VkGraphCommandBufferPool _recordCommandBufferPool;
     private readonly VkDescriptorSetCacheRegistry _descriptorSetCaches = new();
-    private readonly VkDefaultTextureViewCache _defaultTextureViews;
+    private VkShaderCache? _shaderCache;
 
     public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc)
         : this(options, scDesc, new VulkanDeviceOptions()) { }
 
     public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc, VulkanDeviceOptions vkOptions)
     {
-        VkSurfaceSwapchainSource? surfaceSource = scDesc != null ?
-            Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(scDesc.Value.Source) : null;
+        SwapchainSource? surfaceSource = scDesc?.Source;
 
         CreateInstance(options.VulkanValidationLayers, vkOptions, surfaceSource);
 
@@ -46,25 +42,19 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             Vk,
             Device,
             PhysicalDevice,
-            _physicalDeviceProperties.Limits.BufferImageGranularity,
-            GetBufferMemoryRequirements2,
-            GetImageMemoryRequirements2);
+            _physicalDeviceProperties.Limits.BufferImageGranularity);
 
         Features = new GraphicsDeviceFeatures(
             geometryShader: _physicalDeviceFeatures.GeometryShader,
             tessellationShaders: _physicalDeviceFeatures.TessellationShader,
-            multipleViewports: _physicalDeviceFeatures.MultiViewport,
             drawIndirectBaseInstance: _physicalDeviceFeatures.DrawIndirectFirstInstance,
             samplerAnisotropy: _physicalDeviceFeatures.SamplerAnisotropy,
             depthClipDisable: _physicalDeviceFeatures.DepthClamp,
             independentBlend: _physicalDeviceFeatures.IndependentBlend,
-            commandBufferDebugMarkers: _debugMarkerEnabled,
+            commandBufferDebugMarkers: _debugUtilsEnabled,
             shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
 
         ResourceFactory = new VkResourceFactory(this);
-        _graphCommandBufferPool = new VkGraphCommandBufferPool(this);
-        _recordCommandBufferPool = new VkGraphCommandBufferPool(this);
-        _defaultTextureViews = new VkDefaultTextureViewCache(ResourceFactory);
 
         InitializeFrameOptions(options);
 
@@ -82,11 +72,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         };
         Vk.CreatePipelineCache(Device, in pcCI, null, out DriverPipelineCache).CheckResult();
 
-        for (int i = 0; i < SharedCommandPoolCount; i++)
-        {
-            _sharedGraphicsCommandPools.Push(new SharedCommandPool(this, true));
-        }
-
         _vulkanInfo = new BackendInfoVulkan(this);
 
         InitializeSlots();
@@ -99,19 +84,35 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     internal void UnregisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Unregister(cache);
 
-    /// <summary>
-    /// Gets or creates full-range view for texture. Device-owned, lives til dispose.
-    /// </summary>
-    internal VkTextureView GetOrCreateDefaultView(VkTexture texture) => _defaultTextureViews.GetOrCreate(texture);
+    internal override CommandBuffer RentGraphCommandBuffer(ExecutionTask task)
+    {
+        ref SlotState slot = ref _slots[task.RingSlot];
+        lock (slot.Wrappers)
+        {
+            if (slot.WrappersInUse < slot.Wrappers.Count)
+                return slot.Wrappers[slot.WrappersInUse++];
 
-    internal void ReleaseDefaultView(VkTexture texture) => _defaultTextureViews.Remove(texture);
-
-    internal override CommandBuffer RentGraphCommandBuffer() => _graphCommandBufferPool.Rent();
-
-    internal void ReturnGraphCommandBuffer(VkCommandBuffer cb) => _graphCommandBufferPool.Return(cb);
+            VkCommandBuffer cb = new(this, slot.Pool);
+            slot.Wrappers.Add(cb);
+            slot.WrappersInUse++;
+            return cb;
+        }
+    }
 
     /// <summary>Test hook: total distinct graph command buffers ever allocated.</summary>
-    internal int PooledGraphCommandBufferCount => _graphCommandBufferPool.AllocatedCount;
+    internal int PooledGraphCommandBufferCount
+    {
+        get
+        {
+            int total = 0;
+            foreach (ref SlotState slot in _slots.AsSpan())
+            {
+                lock (slot.Wrappers)
+                    total += slot.Wrappers.Count;
+            }
+            return total;
+        }
+    }
 
     private protected override void SwapBuffersCore(Swapchain swapchain)
     {
@@ -156,29 +157,22 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             Vk.QueueWaitIdle(GraphicsQueue);
         }
 
-        CheckSubmittedFences();
+        PollSubmissions();
         FlushValidationErrors();
     }
+
+    internal VkShaderCache ShaderCache => System.Threading.LazyInitializer.EnsureInitialized(ref _shaderCache, () => new VkShaderCache(this));
 
     protected override void PlatformDispose()
     {
         DisposeSlots();
 
-        Debug.Assert(_submittedFences.Count == 0);
-        foreach (VkFenceHandle fence in _availableSubmissionFences)
-        {
-            Vk.DestroyFence(Device, fence, null);
-        }
+        Debug.Assert(_pending.Count == 0);
 
         _mainSwapchain?.Dispose();
         DestroyDebugCallback();
 
-        _graphCommandBufferPool.Dispose();
-        _recordCommandBufferPool.Dispose();
-
-        _defaultTextureViews.Dispose();
-
-        DisposeStagingResources();
+        DisposeCommandPools();
 
         WaitForGraphicsQueueIdle();
         FlushAllRetired();
@@ -189,6 +183,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         Vk.DeviceWaitIdle(Device).CheckResult();
 
+        Vk.DestroySemaphore(Device, _timelineSemaphore, null);
         Vk.DestroyDevice(Device, null);
         Vk.DestroyInstance(Instance, null);
     }

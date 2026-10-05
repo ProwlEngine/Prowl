@@ -43,14 +43,14 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
 
     private DeviceBuffer CreateSourceBuffer()
     {
-        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(sizeof(uint) * 4, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(sizeof(uint) * 4, BufferUsage.StructuredBufferReadWrite));
         buffer.Name = "WriteSource";
         GD.UpdateBuffer(buffer, 0, new uint[] { OldValue, 0, 0, 0 });
         return buffer;
     }
 
     private DeviceBuffer CreateOutputBuffer()
-        => RF.CreateBuffer(new BufferDescription(sizeof(uint) * 4, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        => RF.CreateBuffer(new BufferDescription(sizeof(uint) * 4, BufferUsage.StructuredBufferReadWrite));
 
     // Submits a slow dispatch that reads `source`, and returns with the frame ended but still
     // executing on the GPU.
@@ -58,8 +58,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     {
         PropertySet props = new();
         props.SetInt("Iterations", (int)SpinIterations);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Output", output, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Output", output);
 
         return GD.RunTestGraph(context =>
         {

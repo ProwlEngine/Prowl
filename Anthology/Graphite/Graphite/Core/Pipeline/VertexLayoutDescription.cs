@@ -20,34 +20,34 @@ public struct VertexLayoutDescription
     /// </summary>
     public VertexElementDescription[] Elements;
     /// <summary>
-    /// Instance advance rate. 0 for per-vertex elements.
+    /// Whether the buffer advances per vertex or per instance.
     /// </summary>
-    public uint InstanceStepRate;
+    public VertexStepRate StepRate;
 
     /// <summary>
     /// Makes a VertexLayoutDescription.
     /// </summary>
     public VertexLayoutDescription(uint location, uint stride, params VertexElementDescription[] elements)
-        : this(location, stride, 0, elements)
+        : this(location, stride, VertexStepRate.PerVertex, elements)
     {
     }
 
     /// <summary>
     /// Makes a VertexLayoutDescription.
     /// </summary>
-    public VertexLayoutDescription(uint location, uint stride, uint instanceStepRate, params VertexElementDescription[] elements)
+    public VertexLayoutDescription(uint location, uint stride, VertexStepRate stepRate, params VertexElementDescription[] elements)
     {
         Location = location;
         Stride = stride;
         Elements = elements;
-        InstanceStepRate = instanceStepRate;
+        StepRate = stepRate;
     }
 
     /// <summary>
     /// Makes a VertexLayoutDescription; stride computed from element sizes.
     /// </summary>
     public VertexLayoutDescription(uint location, params VertexElementDescription[] elements)
-        : this(location, ComputeStride(elements), 0, elements)
+        : this(location, ComputeStride(elements), VertexStepRate.PerVertex, elements)
     {
     }
 

@@ -6,7 +6,7 @@ internal unsafe partial class VkGraphicsDevice
 {
     public override MemoryBudgetInfo GetMemoryBudget()
     {
-        if (_getPhysicalDeviceMemoryProperties2 == null)
+        if (!_memoryBudgetSupported)
             return default;
 
         PhysicalDeviceMemoryBudgetPropertiesEXT budget = new(sType: StructureType.PhysicalDeviceMemoryBudgetPropertiesExt);
@@ -15,7 +15,7 @@ internal unsafe partial class VkGraphicsDevice
             PNext = &budget
         };
 
-        _getPhysicalDeviceMemoryProperties2(PhysicalDevice, &props2);
+        Vk.GetPhysicalDeviceMemoryProperties2(PhysicalDevice, &props2);
 
         ulong totalBudget = 0;
         ulong totalUsage = 0;

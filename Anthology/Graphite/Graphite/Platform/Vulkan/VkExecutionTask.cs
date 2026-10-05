@@ -9,42 +9,28 @@ internal sealed class VkExecutionTask : ExecutionTask
     private readonly ulong _id;
     private readonly uint _ringSlot;
 
-    private readonly VkFence _slotFenceWrapper;
     private readonly VkUniformArena _uniformArena;
-    private readonly List<VkCommandBuffer> _rentedCommandBuffers;
     private readonly List<VkCommandBuffer> _queuedCommandBuffers;
 
     public override ulong Id => _id;
     public override uint RingSlot => _ringSlot;
-    internal override Fence CompletionFence => _slotFenceWrapper;
     public override GraphicsDevice Device => _gd;
 
     internal VkExecutionTask(
         VkGraphicsDevice gd,
         ulong id,
         uint ringSlot,
-        VkFence slotFenceWrapper,
         VkUniformArena uniformArena,
-        List<VkCommandBuffer> rentedCommandBuffers,
         List<VkCommandBuffer> queuedCommandBuffers)
     {
         _gd = gd;
         _id = id;
         _ringSlot = ringSlot;
-        _slotFenceWrapper = slotFenceWrapper;
         _uniformArena = uniformArena;
-        _rentedCommandBuffers = rentedCommandBuffers;
         _queuedCommandBuffers = queuedCommandBuffers;
     }
 
     internal VkUniformArena UniformArena => _uniformArena;
-
-
-    /// <inheritdoc/>
-    internal override void TrackRentedCommandBuffer(CommandBuffer commandBuffer)
-    {
-        _rentedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandBuffer));
-    }
 
 
     /// <inheritdoc/>
@@ -61,16 +47,17 @@ internal sealed class VkExecutionTask : ExecutionTask
         if (_queuedCommandBuffers.Count == 0)
             return;
 
-        _gd.SubmitExecutionBatch(_queuedCommandBuffers, null);
+        _gd.SubmitExecutionBatch(_queuedCommandBuffers, isFinal: false);
         _queuedCommandBuffers.Clear();
     }
 
 
-    /// <summary>Submits whatever is still queued and signals the execution's slot fence.</summary>
-    internal void FinalSubmit(Silk.NET.Vulkan.Fence slotFence)
+    /// <summary>Submits whatever is still queued and returns the serial that marks the execution complete.</summary>
+    internal ulong FinalSubmit()
     {
-        _gd.SubmitExecutionBatch(_queuedCommandBuffers, slotFence);
+        ulong serial = _gd.SubmitExecutionBatch(_queuedCommandBuffers, isFinal: true);
         _queuedCommandBuffers.Clear();
+        return serial;
     }
 
 

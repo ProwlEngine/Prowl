@@ -24,13 +24,13 @@ public abstract partial class CommandBuffer : CommandBufferBase
     /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
 
-    /// <summary>Bumps on every active property change. Backend uses it to skip redundant work.</summary>
-    private protected uint _activePropertiesEpoch;
-
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
-    private readonly System.Collections.Generic.Dictionary<PropertySet, uint> _mergedSourceVersions = new();
+    private PropertySet? _lastAppliedDefaults;
+    private uint _lastAppliedDefaultsVersion;
+    private readonly System.Collections.Generic.HashSet<PropertyID> _defaultPropertyKeys = new();
+
     private readonly System.Collections.Generic.List<PropertyID> _changedPropertyKeys = new();
     private bool _allPropertiesChanged = true;
 
@@ -59,10 +59,11 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
-        _mergedSourceVersions.Clear();
+        _lastAppliedDefaults = null;
+        _lastAppliedDefaultsVersion = 0;
+        _defaultPropertyKeys.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
-        unchecked { _activePropertiesEpoch++; }
     }
 
     /// <summary>Resets and starts recording. Context calls on rent, not passes.</summary>

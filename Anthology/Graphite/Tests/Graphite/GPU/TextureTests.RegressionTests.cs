@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -38,12 +39,11 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(3f, 5f, 999f, 7777f)), AttachmentOps.Loaded));
             // 999f and 7777f are deliberately distinctive sentinels for the B and A channels.
             // The target is R32_G32_Float, so by the contract those two values must be ignored
             // and every pixel must read back as exactly (3, 5). The sentinels ensure that any
             // accidental leakage of B/A into the readback is loud and unambiguous.
-            cl.ClearColorTarget(0, new Color(3f, 5f, 999f, 7777f));
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -74,14 +74,13 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(1f, 2f, 999f, 7777f)), AttachmentOps.Loaded));
             // 999f and 7777f are deliberately distinctive sentinels for the B and A channels:
             // the target is R16_G16_Float, so by the contract those two values must be ignored
             // and every pixel must read back as exactly (1, 2). All four values are exactly
             // representable in IEEE-754 binary16, so the float32 -> float16 narrowing the clear
             // path performs is lossless and would faithfully preserve the sentinels if a bug
             // ever let them leak into the readback.
-            cl.ClearColorTarget(0, new Color(1f, 2f, 999f, 7777f));
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

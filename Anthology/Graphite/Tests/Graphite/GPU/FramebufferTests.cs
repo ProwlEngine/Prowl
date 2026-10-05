@@ -1,5 +1,6 @@
 ﻿using System;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -18,8 +19,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Red);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -73,8 +73,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Red);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
             cl.ClearColorTarget(1, Color.Red);
             Assert.Throws<RenderException>(() => cl.ClearColorTarget(2, Color.Red));
             Assert.Throws<RenderException>(() => cl.ClearColorTarget(3, Color.Red));
@@ -91,7 +90,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         for (uint level = 0; level < 11; level++)
         {
             framebuffers[level] = RF.CreateFramebuffer(
-                new FramebufferDescription(null, [new FramebufferAttachmentDescription(testTex, 0, level)]));
+                new FramebufferDescription(null, [new FramebufferAttachment(testTex, 0, level)]));
         }
 
         GD.RunTestGraph(context =>
@@ -137,9 +136,9 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         Assert.Single(fb.ColorTargets);
 
         OutputDescription output = fb.OutputDescription;
-        Assert.Null(output.DepthAttachment);
-        Assert.Single(output.ColorAttachments);
-        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, output.ColorAttachments[0].Format);
+        Assert.Null(output.DepthFormat);
+        Assert.Single(output.ColorFormats);
+        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, output.ColorFormats[0]);
         Assert.Equal(TextureSampleCount.Count1, output.SampleCount);
     }
 
@@ -153,9 +152,9 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depth, color));
 
         OutputDescription output = fb.OutputDescription;
-        Assert.NotNull(output.DepthAttachment);
-        Assert.Equal(PixelFormat.R16_UNorm, output.DepthAttachment.Value.Format);
-        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, output.ColorAttachments[0].Format);
+        Assert.NotNull(output.DepthFormat);
+        Assert.Equal(PixelFormat.R16_UNorm, output.DepthFormat.Value);
+        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, output.ColorFormats[0]);
     }
 }
 
@@ -167,9 +166,7 @@ public abstract class SwapchainFramebufferTests<T> : GraphicsDeviceTestBase<T> w
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(GD.MainSwapchain.Framebuffer);
-            cl.ClearColorTarget(0, Color.Red);
-            cl.ClearDepthStencil(1f);
+            cl.SetFramebuffer(GD.MainSwapchain.Framebuffer, TargetLoadStoreOps.Clear(Color.Red, 1f));
             context.SubmitCommandBuffer(cl);
         });
     }

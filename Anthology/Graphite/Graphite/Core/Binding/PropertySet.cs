@@ -14,7 +14,6 @@ public sealed partial class PropertySet
 {
     private readonly Dictionary<PropertyID, PropertyEntry> _entries;
 
-    private uint _resourceVersion;
     private uint _version;
 
 
@@ -32,12 +31,6 @@ public sealed partial class PropertySet
     {
         _entries = new(initialEntryCapacity);
     }
-
-
-    /// <summary>
-    /// Bumps on resource setter calls. Uniform writes don't bump it.
-    /// </summary>
-    public uint ResourceVersion => _resourceVersion;
 
 
     internal uint Version => _version;
@@ -68,36 +61,25 @@ public sealed partial class PropertySet
     /// <summary>Sets int4 uniform.</summary>
     public void SetInt4(PropertyID name, Int4 v) => WriteUniform(name, v, UniformScalarType.Int4);
 
-    /// <summary>Sets double uniform.</summary>
-    public void SetDouble(PropertyID name, double v) => WriteUniform(name, v, UniformScalarType.Double1);
-    /// <summary>Sets double2 uniform.</summary>
-    public void SetDouble2(PropertyID name, Double2 v) => WriteUniform(name, v, UniformScalarType.Double2);
-    /// <summary>Sets double3 uniform.</summary>
-    public void SetDouble3(PropertyID name, Double3 v) => WriteUniform(name, v, UniformScalarType.Double3);
-    /// <summary>Sets double4 uniform.</summary>
-    public void SetDouble4(PropertyID name, Double4 v) => WriteUniform(name, v, UniformScalarType.Double4);
-
     /// <summary>Sets float4x4 matrix uniform.</summary>
     public void SetMatrix(PropertyID name, Float4x4 v) => WriteUniform(name, v, UniformScalarType.Float4x4);
-    /// <summary>Sets double4x4 matrix uniform.</summary>
-    public void SetDoubleMatrix(PropertyID name, Double4x4 v) => WriteUniform(name, v, UniformScalarType.Double4x4);
 
 
-    /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange, bool)"/>
-    public void SetBuffer(PropertyID name, DeviceBuffer buffer, bool readOnly = true)
+    /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange)"/>
+    public void SetBuffer(PropertyID name, DeviceBuffer buffer)
     {
         ValidationHelpers.RequireNotNull(null, buffer, nameof(buffer), nameof(SetBuffer));
-        SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes), readOnly);
+        SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes));
     }
 
     /// <summary>
     /// Binds buffer to slot as is. On a uniform block it never receives loose uniforms; use SetUniformBuffer for that.
     /// </summary>
-    public void SetBuffer(PropertyID name, DeviceBufferRange range, bool readOnly = true)
+    public void SetBuffer(PropertyID name, DeviceBufferRange range)
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetBuffer));
-        GetOrCreate(name).SetBuffer(range, readOnly);
-        unchecked { _resourceVersion++; _version++; }
+        GetOrCreate(name).SetBuffer(range);
+        unchecked { _version++; }
     }
 
 
@@ -114,8 +96,8 @@ public sealed partial class PropertySet
     public void SetUniformBuffer(PropertyID name, DeviceBufferRange range)
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetUniformBuffer));
-        GetOrCreate(name).SetBuffer(range, readOnly: false, backedBlock: true);
-        unchecked { _resourceVersion++; _version++; }
+        GetOrCreate(name).SetBuffer(range, backedBlock: true);
+        unchecked { _version++; }
     }
 
 
@@ -124,7 +106,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, texture, nameof(texture), nameof(SetTexture));
         GetOrCreate(name).SetTexture(texture, null, sampler);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
     /// <summary>
@@ -134,18 +116,8 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, view, nameof(view), nameof(SetTexture));
         GetOrCreate(name).SetTexture(null, view, sampler);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
-
-    /// <summary>
-    /// Binds render texture's first color texture to slot, optional sampler.
-    /// </summary>
-    public void SetTexture(PropertyID name, RenderTexture renderTexture, Sampler? sampler = null)
-    {
-        ValidationHelpers.RequireNotNull(null, renderTexture, nameof(renderTexture), nameof(SetTexture));
-        SetTexture(name, renderTexture.ColorTextures[0], sampler);
-    }
-
 
     /// <summary>
     /// Binds sampler to slot, independent of texture.
@@ -154,66 +126,46 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, sampler, nameof(sampler), nameof(SetSampler));
         GetOrCreate(name).SetSampler(sampler);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
 
     /// <summary>
-    /// Clears everything, bumps resource version.
+    /// Clears everything.
     /// </summary>
     public void Clear()
     {
         _entries.Clear();
-        unchecked { _resourceVersion++; _version++; }
-    }
-
-
-    /// <summary>
-    /// Merges other set in, overwrites matches.
-    /// </summary>
-    public void ApplyOther(PropertySet other)
-    {
-        bool dirtyResources = false;
-
-        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
-        {
-            PropertyEntry entry = kv.Value;
-            bool isUniform = entry.Kind == PropertyEntryKind.Uniform;
-
-            _entries[kv.Key] = entry;
-
-            if (!isUniform) dirtyResources = true;
-        }
-
-        if (dirtyResources) unchecked { _resourceVersion++; }
         unchecked { _version++; }
     }
 
 
-    internal void MergeFrom(PropertySet other, System.Collections.Generic.List<PropertyID> changedKeys)
+    internal void MergeFrom(PropertySet other, List<PropertyID> changedKeys, HashSet<PropertyID> defaultKeys)
     {
-        bool dirtyResources = false;
-
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
         {
             _entries[kv.Key] = kv.Value;
             changedKeys.Add(kv.Key);
-            if (kv.Value.Kind != PropertyEntryKind.Uniform)
-                dirtyResources = true;
+            defaultKeys.Remove(kv.Key);
         }
 
-        if (dirtyResources) unchecked { _resourceVersion++; }
         unchecked { _version++; }
     }
 
-    internal bool EntriesActiveIn(PropertySet active)
+
+    internal void MergeDefaults(PropertySet defaults, List<PropertyID> changedKeys, HashSet<PropertyID> defaultKeys)
     {
-        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _entries)
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in defaults.Entries)
         {
-            if (!active._entries.TryGetValue(kv.Key, out PropertyEntry? current) || !ReferenceEquals(current, kv.Value))
-                return false;
+            if (_entries.ContainsKey(kv.Key) && !defaultKeys.Contains(kv.Key))
+                continue;
+
+            _entries[kv.Key] = kv.Value;
+            changedKeys.Add(kv.Key);
+            defaultKeys.Add(kv.Key);
         }
-        return true;
+
+        unchecked { _version++; }
     }
 
 
