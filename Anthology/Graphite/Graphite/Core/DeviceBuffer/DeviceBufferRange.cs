@@ -5,25 +5,25 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Slice of a buffer; bind via PropertySet to expose part to shaders.
 /// </summary>
-public struct DeviceBufferRange
+public readonly struct DeviceBufferRange
 {
     /// <summary>
     /// Buffer this range points into.
     /// </summary>
-    public DeviceBuffer Buffer;
+    public readonly DeviceBuffer Buffer;
     /// <summary>
     /// Byte offset from the start of the buffer.
     /// </summary>
-    public uint Offset;
+    public readonly uint Offset;
     /// <summary>
     /// Size of the range in bytes.
     /// </summary>
-    public uint SizeInBytes;
+    public readonly uint SizeInBytes;
 
     /// <summary>
     /// True if this range covers the whole buffer.
     /// </summary>
-    public readonly bool IsFullRange => Offset == 0 && SizeInBytes == Buffer.SizeInBytes;
+    public bool IsFullRange => Offset == 0 && SizeInBytes == Buffer.SizeInBytes;
 
     /// <summary>
     /// New DeviceBufferRange.
