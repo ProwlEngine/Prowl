@@ -6,38 +6,24 @@ using Silk.NET.Vulkan;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Platform-specific renderable surface; use static factory methods to create.
+/// Platform-specific renderable surface.
 /// </summary>
-public abstract class SwapchainSource
+public sealed class SwapchainSource
 {
-    internal SwapchainSource() { }
-
 #if !EXCLUDE_VULKAN_BACKEND
+    internal IVkSurface VkSurface { get; }
+
     /// <summary>
     /// Create Vulkan swapchain source from Silk.NET surface.
     /// </summary>
-    public static SwapchainSource CreateVulkan(IVkSurface surface)
-        => new VkSurfaceSwapchainSource(surface);
-#endif
-}
-
-#if !EXCLUDE_VULKAN_BACKEND
-
-
-internal class VkSurfaceSwapchainSource : SwapchainSource
-{
-    public IVkSurface VkSurface { get; }
-
-
-    public VkSurfaceSwapchainSource(IVkSurface surface)
+    public SwapchainSource(IVkSurface surface)
     {
         VkSurface = surface;
     }
-
 
     internal unsafe SurfaceKHR GetSurface(Instance instance)
     {
         return VkSurface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
     }
-}
 #endif
+}

@@ -14,7 +14,7 @@ internal unsafe partial class VkGraphicsDevice
 
     private bool _khronosValidationSupported;
 
-    private void CreateInstance(bool debug, VulkanDeviceOptions options, VkSurfaceSwapchainSource? surface)
+    private void CreateInstance(bool debug, VulkanDeviceOptions options, SwapchainSource? surface)
     {
         HashSet<string> availableInstanceLayers = [.. Vk.EnumerateInstanceLayers((LayerProperties*)0)];
         HashSet<string> availableInstanceExtensions = [.. Vk.EnumerateInstanceExtensionProperties((byte*)0)];

@@ -90,7 +90,7 @@ public static class DeviceCreateUtilities
                 SwapchainDescription vkDescription = swapchain;
                 vkDescription.Width = (uint)window.FramebufferSize.X;
                 vkDescription.Height = (uint)window.FramebufferSize.Y;
-                vkDescription.Source = SwapchainSource.CreateVulkan(window.VkSurface!);
+                vkDescription.Source = new SwapchainSource(window.VkSurface!);
 
                 return GraphicsDevice.CreateVulkan(options, vkDescription, vkOptions);
         }

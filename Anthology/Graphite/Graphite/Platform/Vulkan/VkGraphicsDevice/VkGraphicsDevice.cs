@@ -27,8 +27,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc, VulkanDeviceOptions vkOptions)
     {
-        VkSurfaceSwapchainSource? surfaceSource = scDesc != null ?
-            Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(scDesc.Value.Source) : null;
+        SwapchainSource? surfaceSource = scDesc?.Source;
 
         CreateInstance(options.VulkanValidationLayers, vkOptions, surfaceSource);
 
