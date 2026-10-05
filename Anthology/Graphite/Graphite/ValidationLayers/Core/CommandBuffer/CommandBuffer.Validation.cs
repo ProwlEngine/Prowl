@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 
 namespace Prowl.Graphite;
 
@@ -137,12 +136,6 @@ public abstract partial class CommandBuffer
             throw new RenderException(
                 $"The {nameof(destination)} parameter of {nameof(ResolveTexture)} must be a non-multisample texture. Instead, it is a texture with {FormatHelpers.GetSampleCountUInt32(source.SampleCount)} samples.");
         }
-    }
-
-    private protected static void DrawIndexed_AssertIndexBufferResolved(bool resolved)
-    {
-        Debug.Assert(resolved,
-            $"Validation in {nameof(DrawIndexed)} must have already trapped a missing index buffer on indexed-draw paths.");
     }
 
     private void Draw_PreDrawValidation()

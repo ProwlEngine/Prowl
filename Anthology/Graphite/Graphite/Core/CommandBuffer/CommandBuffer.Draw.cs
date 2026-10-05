@@ -43,6 +43,16 @@ public abstract partial class CommandBuffer
         RecordDrawBuffersIfRequested();
     }
 
+    private protected static void DrawIndexed_CheckIndexBufferResolved(bool resolved)
+    {
+        if (!resolved)
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
+    }
+
     private void DrawIndexed_CheckIndexBuffer(uint indexStart)
     {
         if (_currentVertexSource == null)
