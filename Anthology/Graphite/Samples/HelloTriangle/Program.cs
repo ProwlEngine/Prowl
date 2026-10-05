@@ -24,7 +24,7 @@ internal readonly struct SceneView : IRenderView
 
 // The whole demo is one draw, so it needs no offscreen passes to order or textures to share between
 // passes: one pass clears and draws straight into the backbuffer.
-internal sealed class TrianglePass : RasterPass<SceneView>
+internal sealed class TrianglePass : RasterPass
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
@@ -39,7 +39,7 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
@@ -54,7 +54,7 @@ public static class Program
     static Mesh triangle;
     static GraphicsProgram shader;
     static RenderMSTracker tracker;
-    static RenderPipeline<SceneView> pipeline;
+    static RenderPipeline pipeline;
     static SceneView[] views;
 
 

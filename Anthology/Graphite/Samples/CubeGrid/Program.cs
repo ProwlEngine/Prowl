@@ -23,7 +23,7 @@ internal readonly struct SceneView : IRenderView
 
 
 // One draw, no dependencies between passes: the pass clears and draws straight into the backbuffer.
-internal sealed class CubeGridPass : RasterPass<SceneView>
+internal sealed class CubeGridPass : RasterPass
 {
     private float _time;
 
@@ -31,7 +31,7 @@ internal sealed class CubeGridPass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
         CubeGrid.Draw(_time, cmd);
     }
@@ -44,7 +44,7 @@ public static class Program
 {
     static GraphicsDevice device;
     static RenderMSTracker tracker;
-    static RenderPipeline<SceneView> pipeline;
+    static RenderPipeline pipeline;
     static CubeGridPass gridPass;
     static SceneView[] views;
 
