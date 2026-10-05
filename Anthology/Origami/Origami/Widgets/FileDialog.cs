@@ -589,7 +589,10 @@ public static class FileDialog
                             st.FileName = Path.GetFileName(st.Selected);
                         }
                         else
-                            st.Selected = v;
+                        {
+                            st.FileName = v;
+                            st.Selected = "";
+                        }
                     })
                         .Width(UnitValue.Stretch()).Show());
                 VC($"{id}_cwrap", UnitValue.Auto, footH, () =>
