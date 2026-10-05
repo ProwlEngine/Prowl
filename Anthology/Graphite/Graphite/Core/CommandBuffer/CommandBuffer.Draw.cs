@@ -33,7 +33,7 @@ public abstract partial class CommandBuffer
     /// <param name="instanceStart">First instance.</param>
     public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        DrawIndexed_CheckIndexBuffer();
+        DrawIndexed_CheckIndexBuffer(indexStart);
         Draw_PreDrawValidation();
 
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);

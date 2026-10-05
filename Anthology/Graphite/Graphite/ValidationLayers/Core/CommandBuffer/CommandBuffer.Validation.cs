@@ -145,7 +145,7 @@ public abstract partial class CommandBuffer
             $"Validation in {nameof(DrawIndexed)} must have already trapped a missing index buffer on indexed-draw paths.");
     }
 
-    private void DrawIndexed_CheckIndexBuffer()
+    private void DrawIndexed_CheckIndexBuffer(uint indexStart)
     {
         if (!Device.ValidationEnabled)
             return;
@@ -162,7 +162,7 @@ public abstract partial class CommandBuffer
         }
 
         uint indexFormatSize = fmt == IndexFormat.UInt16 ? 2u : 4u;
-        uint bytesNeeded = indexCount * indexFormatSize;
+        ulong bytesNeeded = ((ulong)indexStart + indexCount) * indexFormatSize;
         if (ib.SizeInBytes < bytesNeeded)
         {
             throw new RenderException(
