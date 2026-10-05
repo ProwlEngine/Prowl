@@ -2,83 +2,22 @@ using System;
 
 namespace Prowl.Graphite.RenderGraph;
 
-/// <summary>How a pass uses a declared texture. A declaration names exactly one kind.</summary>
-[Flags]
-public enum TextureUsageKind
-{
-    /// <summary>Read through a sampled or read-only texture binding.</summary>
-    Sampled = 1 << 0,
-
-    /// <summary>Read and written through a storage binding. Color only.</summary>
-    Storage = 1 << 1,
-
-    /// <summary>Rendered into as a framebuffer attachment. Output only.</summary>
-    Attachment = 1 << 2,
-
-    /// <summary>Source of a copy, resolve or blit.</summary>
-    TransferSrc = 1 << 3,
-
-    /// <summary>Destination of a copy, resolve or blit. Output only.</summary>
-    TransferDst = 1 << 4,
-
-    /// <summary>Depth attachment that is tested but not written, and can be sampled at the same time. Depth only.</summary>
-    DepthReadOnly = 1 << 5,
-}
-
-/// <summary>How a pass uses a declared buffer. Combine flags when a pass uses a buffer several ways.</summary>
-[Flags]
-public enum BufferUsageKind
-{
-    /// <summary>Read through a read-only structured buffer binding.</summary>
-    ShaderRead = 1 << 0,
-
-    /// <summary>Read as a uniform buffer.</summary>
-    Uniform = 1 << 1,
-
-    /// <summary>Read as a vertex buffer.</summary>
-    Vertex = 1 << 2,
-
-    /// <summary>Read as an index buffer.</summary>
-    Index = 1 << 3,
-
-    /// <summary>Read as indirect draw or dispatch arguments.</summary>
-    Indirect = 1 << 4,
-
-    /// <summary>Source of a copy.</summary>
-    TransferSrc = 1 << 5,
-
-    /// <summary>Read and written through a storage binding. Output only.</summary>
-    Storage = 1 << 6,
-
-    /// <summary>Destination of a copy. Output only.</summary>
-    TransferDst = 1 << 7,
-
-    /// <summary>Every read kind. Default for buffer inputs.</summary>
-    AnyRead = ShaderRead | Uniform | Vertex | Index | Indirect | TransferSrc,
-}
-
 internal readonly struct ResourceAccess
 {
-    private const TextureUsageKind ColorKinds = TextureUsageKind.Sampled | TextureUsageKind.Storage
-        | TextureUsageKind.Attachment | TextureUsageKind.TransferSrc | TextureUsageKind.TransferDst;
-    private const TextureUsageKind TextureWrites = TextureUsageKind.Storage | TextureUsageKind.Attachment | TextureUsageKind.TransferDst;
-    private const TextureUsageKind TextureReads = TextureUsageKind.Sampled | TextureUsageKind.Storage
-        | TextureUsageKind.TransferSrc | TextureUsageKind.DepthReadOnly;
-
     public readonly RenderResourceID Id;
     public readonly bool IsTexture;
     public readonly bool IsOutput;
-    public readonly TextureUsageKind TextureUsage;
-    public readonly TextureUsageKind? DepthUsage;
-    public readonly BufferUsageKind BufferUsage;
+    public readonly TextureState TextureUsage;
+    public readonly TextureState? DepthUsage;
+    public readonly BufferAccess BufferUsage;
 
     private ResourceAccess(
         RenderResourceID id,
         bool isTexture,
         bool isOutput,
-        TextureUsageKind textureUsage,
-        TextureUsageKind? depthUsage,
-        BufferUsageKind bufferUsage)
+        TextureState textureUsage,
+        TextureState? depthUsage,
+        BufferAccess bufferUsage)
     {
         Id = id;
         IsTexture = isTexture;
@@ -90,76 +29,54 @@ internal readonly struct ResourceAccess
 
     public static ResourceAccess Texture(
         RenderResourceID id,
-        TextureUsageKind usage,
-        TextureUsageKind? depthUsage,
+        TextureState usage,
+        TextureState? depthUsage,
         bool isOutput)
     {
         string role = isOutput ? "output" : "input";
-        if (!IsSingleKind(usage) || (usage & ~ColorKinds) != 0)
-            throw new ArgumentException($"Texture usage {usage} is not valid for color, name exactly one kind; DepthReadOnly belongs in depthUsage.", nameof(usage));
-        if (isOutput && (usage & TextureWrites) == 0)
-            throw new ArgumentException($"Texture output usage {usage} must include Attachment, Storage or TransferDst.", nameof(usage));
-        if (!isOutput && (usage & ~TextureReads) != 0)
+        if (!Enum.IsDefined(usage) || usage == TextureState.DepthReadOnly)
+            throw new ArgumentException($"Texture usage {usage} is not valid for color, name exactly one state; DepthReadOnly belongs in depthUsage.", nameof(usage));
+        if (isOutput && !IsWrite(usage))
+            throw new ArgumentException($"Texture output usage {usage} must be Attachment, Storage or TransferDst.", nameof(usage));
+        if (!isOutput && !IsRead(usage))
             throw new ArgumentException($"Texture usage {usage} writes, declare it with DeclareOutputTexture.", nameof(usage));
 
-        if (depthUsage is TextureUsageKind depth)
+        if (depthUsage is TextureState depth)
         {
-            bool validDepth = IsSingleKind(depth)
-                && depth is not TextureUsageKind.Storage
-                && (isOutput || (depth & ~TextureReads) == 0);
+            bool validDepth = Enum.IsDefined(depth)
+                && depth != TextureState.Storage
+                && (isOutput || IsRead(depth));
             if (!validDepth)
                 throw new ArgumentException($"Depth usage {depth} is not valid for a pass {role}.", nameof(depthUsage));
         }
 
-        return new ResourceAccess(id, true, isOutput, usage, depthUsage, 0);
+        return new ResourceAccess(id, true, isOutput, usage, depthUsage, BufferAccess.None);
     }
 
-    public static ResourceAccess Buffer(RenderResourceID id, BufferUsageKind usage, bool isOutput)
+    public static ResourceAccess Buffer(RenderResourceID id, BufferAccess usage, bool isOutput)
     {
-        const BufferUsageKind writes = BufferUsageKind.Storage | BufferUsageKind.TransferDst;
-        if (usage == 0)
-            throw new ArgumentException("Buffer usage must name at least one kind.", nameof(usage));
-        if (!isOutput && (usage & writes) != 0)
+        if (usage == BufferAccess.None)
+            throw new ArgumentException("Buffer usage must name at least one access.", nameof(usage));
+        if ((usage & ~(BufferAccess.AllReads | BufferAccess.AllWrites)) != 0)
+            throw new ArgumentException($"Buffer usage {usage} contains undefined flags.", nameof(usage));
+        if (!isOutput && (usage & BufferAccess.AllWrites) != 0)
             throw new ArgumentException($"Buffer usage {usage} writes, declare it with DeclareOutputBuffer.", nameof(usage));
-        if (isOutput && (usage & writes) == 0)
-            throw new ArgumentException($"Buffer output usage {usage} must include Storage or TransferDst.", nameof(usage));
+        if (isOutput && (usage & BufferAccess.AllWrites) == 0)
+            throw new ArgumentException($"Buffer output usage {usage} must include ShaderWrite or TransferWrite.", nameof(usage));
 
-        return new ResourceAccess(id, false, isOutput, 0, null, usage);
+        return new ResourceAccess(id, false, isOutput, default, null, usage);
     }
 
-    private static bool IsSingleKind(TextureUsageKind kind) => kind != 0 && (kind & (kind - 1)) == 0;
+    private static bool IsWrite(TextureState state)
+        => state is TextureState.Storage or TextureState.Attachment or TextureState.TransferDst;
 
-    public static TextureState ToState(TextureUsageKind kind) => kind switch
-    {
-        TextureUsageKind.Sampled => Graphite.TextureState.Sampled,
-        TextureUsageKind.Storage => Graphite.TextureState.Storage,
-        TextureUsageKind.Attachment => Graphite.TextureState.Attachment,
-        TextureUsageKind.TransferSrc => Graphite.TextureState.TransferSrc,
-        TextureUsageKind.TransferDst => Graphite.TextureState.TransferDst,
-        _ => Graphite.TextureState.DepthReadOnly,
-    };
+    private static bool IsRead(TextureState state)
+        => state is TextureState.Sampled or TextureState.Storage or TextureState.TransferSrc or TextureState.DepthReadOnly;
 
-    public TextureState? DepthState(TextureUsageKind colorKind)
+    public TextureState? DepthState(TextureState colorState)
     {
-        if (DepthUsage is TextureUsageKind depth)
-            return ToState(depth);
-        return colorKind == TextureUsageKind.Storage ? null : ToState(colorKind);
-    }
-
-    public BufferAccess BufferAccess
-    {
-        get
-        {
-            BufferAccess access = Graphite.BufferAccess.None;
-            if ((BufferUsage & BufferUsageKind.ShaderRead) != 0) access |= Graphite.BufferAccess.ShaderRead;
-            if ((BufferUsage & BufferUsageKind.Uniform) != 0) access |= Graphite.BufferAccess.Uniform;
-            if ((BufferUsage & BufferUsageKind.Vertex) != 0) access |= Graphite.BufferAccess.Vertex;
-            if ((BufferUsage & BufferUsageKind.Index) != 0) access |= Graphite.BufferAccess.Index;
-            if ((BufferUsage & BufferUsageKind.Indirect) != 0) access |= Graphite.BufferAccess.Indirect;
-            if ((BufferUsage & BufferUsageKind.TransferSrc) != 0) access |= Graphite.BufferAccess.TransferRead;
-            if ((BufferUsage & BufferUsageKind.Storage) != 0) access |= Graphite.BufferAccess.ShaderRead | Graphite.BufferAccess.ShaderWrite;
-            if ((BufferUsage & BufferUsageKind.TransferDst) != 0) access |= Graphite.BufferAccess.TransferWrite;
-            return access;
-        }
+        if (DepthUsage is TextureState depth)
+            return depth;
+        return colorState == TextureState.Storage ? null : colorState;
     }
 }

@@ -47,7 +47,7 @@ file static class BarrierPasses
         TextureHandle handle = default;
         return new LambdaPass(
             "Upload",
-            builder => handle = builder.DeclareOutputTexture(id, desc, usage: TextureUsageKind.TransferDst),
+            builder => handle = builder.DeclareOutputTexture(id, desc, usage: TextureState.TransferDst),
             (context, cmd) =>
             {
                 cmd.CopyTexture(source, context.GetRenderTexture(handle).ColorTextures[0]);
@@ -59,7 +59,7 @@ file static class BarrierPasses
         TextureHandle handle = default;
         return new LambdaPass(
             "Readback",
-            builder => handle = builder.DeclareInputTexture(id, TextureUsageKind.TransferSrc),
+            builder => handle = builder.DeclareInputTexture(id, TextureState.TransferSrc),
             (context, cmd) =>
             {
                 Texture color = context.GetRenderTexture(handle).ColorTextures[0];
@@ -185,7 +185,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle uploadHandle = default;
         LambdaPass upload = new(
             "Upload",
-            builder => uploadHandle = builder.DeclareOutputTexture(id, desc, usage: TextureUsageKind.TransferDst),
+            builder => uploadHandle = builder.DeclareOutputTexture(id, desc, usage: TextureState.TransferDst),
             (context, cmd) =>
             {
                 cmd.CopyTexture(source, context.GetRenderTexture(uploadHandle).ColorTextures[0]);
@@ -301,7 +301,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle storageHandle = default;
         LambdaPass generate = new(
             "Generate",
-            builder => storageHandle = builder.DeclareOutputTexture(storageId, desc, usage: TextureUsageKind.Storage),
+            builder => storageHandle = builder.DeclareOutputTexture(storageId, desc, usage: TextureState.Storage),
             (context, cmd) =>
             {
                 PropertySet props = new();
@@ -383,7 +383,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "DrawVertices",
             builder =>
             {
-                readHandle = builder.DeclareInputBuffer(verticesId, BufferUsageKind.ShaderRead);
+                readHandle = builder.DeclareInputBuffer(verticesId, BufferAccess.ShaderRead);
                 outputHandle = builder.DeclareOutputTexture(outputId, GraphTextureDesc.Sized((int)size, (int)size, false, Format));
             },
             (context, cmd) =>
@@ -429,7 +429,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             builder => fogHandle = builder.DeclareOutputTexture(
                 id, desc,
                 ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded),
-                depthUsage: TextureUsageKind.DepthReadOnly),
+                depthUsage: TextureState.DepthReadOnly),
             (context, cmd) =>
             {
                 RenderTexture scene = context.GetRenderTexture(fogHandle);
@@ -466,7 +466,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle handle = default;
         LambdaPass pass = new(
             "ClearReadOnlyDepth",
-            builder => handle = builder.DeclareOutputTexture(id, desc, depthUsage: TextureUsageKind.DepthReadOnly),
+            builder => handle = builder.DeclareOutputTexture(id, desc, depthUsage: TextureState.DepthReadOnly),
             (context, cmd) =>
             {
                 cmd.SetFramebuffer(context.GetRenderTexture(handle).Framebuffer);

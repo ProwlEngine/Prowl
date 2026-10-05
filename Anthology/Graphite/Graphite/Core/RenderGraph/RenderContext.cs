@@ -95,14 +95,14 @@ public sealed class RenderContext<TView>
                 RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
                 bool fromUndefined = IsTransient(access.Id) && _enteredTransients.Add(access.Id);
                 foreach (Texture color in texture.ColorTextures)
-                    AddTextureTransition(color, ResourceAccess.ToState(access.TextureUsage), fromUndefined);
+                    AddTextureTransition(color, access.TextureUsage, fromUndefined);
                 if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) is TextureState depthTarget)
                     AddTextureTransition(texture.DepthTexture, depthTarget, fromUndefined);
             }
             else
             {
                 DeviceBuffer buffer = GetRenderBuffer(new BufferHandle(access.Id));
-                AddBufferAccess(buffer, access.BufferAccess, ref bufferSrc, ref bufferDst);
+                AddBufferAccess(buffer, access.BufferUsage, ref bufferSrc, ref bufferDst);
             }
         }
 
@@ -114,8 +114,8 @@ public sealed class RenderContext<TView>
         _barriers.Clear();
         foreach ((Texture texture, TextureState state) in _textureStates)
         {
-            if (state != TextureState.Resting && !_discardedTextures.Contains(texture))
-                _barriers.Add(new TextureBarrier(texture, state, TextureState.Resting));
+            if (!_discardedTextures.Contains(texture))
+                _barriers.Add(new TextureBarrier(texture, state, null));
         }
 
         _textureStates.Clear();
@@ -141,28 +141,28 @@ public sealed class RenderContext<TView>
 
     private void AddTextureTransition(Texture texture, TextureState target, bool fromUndefined)
     {
-        TextureState current;
+        TextureState? current = null;
         if (fromUndefined)
-        {
-            current = TextureState.Undefined;
             _discardedTextures.Add(texture);
-        }
-        else
-        {
-            current = _textureStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
-        }
+        else if (_textureStates.TryGetValue(texture, out TextureState state))
+            current = state;
 
         bool writes = target is TextureState.Storage or TextureState.Attachment or TextureState.TransferDst;
         if (current == target && !writes)
             return;
 
-        _barriers.Add(new TextureBarrier(texture, current, target));
+        _barriers.Add(new TextureBarrier(texture, current, target, fromUndefined));
     }
 
     private void CommitBarrierStates()
     {
         foreach (TextureBarrier barrier in _barriers)
-            _textureStates[barrier.Texture] = barrier.After;
+        {
+            if (barrier.After is TextureState after)
+                _textureStates[barrier.Texture] = after;
+            else
+                _textureStates.Remove(barrier.Texture);
+        }
         if (_barriers.Count > 0)
             _stateSnapshot = null;
         _barriers.Clear();

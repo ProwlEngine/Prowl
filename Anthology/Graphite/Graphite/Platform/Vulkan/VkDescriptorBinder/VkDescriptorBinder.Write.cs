@@ -31,7 +31,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             if (current == ImageLayout.General || _cbOwner.IsTemporaryStorage(tex))
                 continue;
 
-            if (isGraphics || _cbOwner.StateOf(tex) != TextureState.Resting)
+            if (isGraphics || _cbOwner.StateOf(tex) != null)
             {
                 throw new RenderException(
                     $"Texture '{tex.Name}' is bound for storage while in layout {current}. " +

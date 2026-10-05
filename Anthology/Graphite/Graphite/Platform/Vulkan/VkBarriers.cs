@@ -71,9 +71,8 @@ internal static unsafe class VkBarriers
             ? ImageLayout.DepthStencilAttachmentOptimal
             : ImageLayout.ColorAttachmentOptimal;
 
-    public static ImageLayout Layout(VkTexture texture, TextureState state) => state switch
+    public static ImageLayout Layout(VkTexture texture, TextureState? state) => state switch
     {
-        TextureState.Undefined => ImageLayout.Undefined,
         TextureState.Sampled => ImageLayout.ShaderReadOnlyOptimal,
         TextureState.Storage => ImageLayout.General,
         TextureState.Attachment => AttachmentLayout(texture),
@@ -82,6 +81,9 @@ internal static unsafe class VkBarriers
         TextureState.DepthReadOnly => ImageLayout.DepthStencilReadOnlyOptimal,
         _ => RestingLayout(texture),
     };
+
+    private static ImageLayout BarrierLayout(VkTexture texture, TextureState? state, bool undefined)
+        => undefined ? ImageLayout.Undefined : Layout(texture, state);
 
     public static ImageLayout CurrentLayout(CommandBufferBase owner, VkTexture texture)
         => Layout(texture, owner.StateOf(texture));
@@ -216,7 +218,7 @@ internal static unsafe class VkBarriers
         foreach (TextureBarrier barrier in textures)
         {
             VkTexture texture = Util.AssertSubtype<Texture, VkTexture>(barrier.Texture);
-            ImageLayout oldLayout = Layout(texture, barrier.Before);
+            ImageLayout oldLayout = BarrierLayout(texture, barrier.Before, barrier.FromUndefined);
             ImageLayout newLayout = Layout(texture, barrier.After);
             if (!NeedsBarrier(oldLayout, newLayout))
                 continue;

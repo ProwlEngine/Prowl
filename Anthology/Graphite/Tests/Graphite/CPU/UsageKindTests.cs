@@ -15,7 +15,7 @@ public class UsageKindTests
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
-            "usage_multi", s_desc, usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled));
+            "usage_multi", s_desc, usage: TextureState.Attachment | TextureState.Sampled));
     }
 
     [Fact]
@@ -23,14 +23,14 @@ public class UsageKindTests
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareInputTexture(
-            "usage_multi_in", TextureUsageKind.Sampled | TextureUsageKind.TransferSrc));
+            "usage_multi_in", TextureState.Sampled | TextureState.TransferSrc));
     }
 
     [Fact]
     public void SingleKindOutput_IsAccepted()
     {
         RenderContextBuilder builder = new();
-        TextureHandle handle = builder.DeclareOutputTexture("usage_ok", s_desc, usage: TextureUsageKind.Storage);
+        TextureHandle handle = builder.DeclareOutputTexture("usage_ok", s_desc, usage: TextureState.Storage);
         Assert.True(handle.IsValid);
     }
 
@@ -39,7 +39,7 @@ public class UsageKindTests
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
-            "usage_nowrite", s_desc, usage: TextureUsageKind.Sampled));
+            "usage_nowrite", s_desc, usage: TextureState.Sampled));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class UsageKindTests
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareInputTexture(
-            "usage_inwrite", TextureUsageKind.Attachment));
+            "usage_inwrite", TextureState.Attachment));
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class UsageKindTests
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareInputTexture(
-            "usage_depthcolor", TextureUsageKind.DepthReadOnly));
+            "usage_depthcolor", TextureState.DepthReadOnly));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class UsageKindTests
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
-            "usage_depthstorage", s_desc, depthUsage: TextureUsageKind.Storage));
+            "usage_depthstorage", s_desc, depthUsage: TextureState.Storage));
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class UsageKindTests
     {
         RenderContextBuilder builder = new();
         TextureHandle handle = builder.DeclareOutputTexture(
-            "usage_depthro", s_desc, depthUsage: TextureUsageKind.DepthReadOnly);
+            "usage_depthro", s_desc, depthUsage: TextureState.DepthReadOnly);
         Assert.True(handle.IsValid);
     }
 }

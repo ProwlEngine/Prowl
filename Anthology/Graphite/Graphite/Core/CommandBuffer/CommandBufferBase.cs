@@ -22,8 +22,8 @@ public abstract class CommandBufferBase : GraphicsResource
 
     internal GraphTextureStates? GraphStates { get; set; }
 
-    internal TextureState StateOf(Texture texture)
-        => GraphStates != null ? GraphStates.StateOf(texture) : TextureState.Resting;
+    internal TextureState? StateOf(Texture texture)
+        => GraphStates?.StateOf(texture);
 
     /// <summary>Updates buffer region with a single value. T must be blittable.</summary>
     /// <typeparam name="T">Upload type.</typeparam>
