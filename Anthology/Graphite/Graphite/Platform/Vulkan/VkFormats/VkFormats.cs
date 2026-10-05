@@ -27,61 +27,29 @@ internal static partial class VkFormats
         }
     }
 
-    internal static void GetFilterParams(
-        SamplerFilter filter,
-        out Filter minFilter,
-        out Filter magFilter,
-        out SamplerMipmapMode mipmapMode)
+    internal static Filter ToVkFilter(FilterMode mode)
     {
-        switch (filter)
+        switch (mode)
         {
-            case SamplerFilter.Anisotropic:
-                minFilter = Filter.Linear;
-                magFilter = Filter.Linear;
-                mipmapMode = SamplerMipmapMode.Linear;
-                break;
-            case SamplerFilter.MinPoint_MagPoint_MipPoint:
-                minFilter = Filter.Nearest;
-                magFilter = Filter.Nearest;
-                mipmapMode = SamplerMipmapMode.Nearest;
-                break;
-            case SamplerFilter.MinPoint_MagPoint_MipLinear:
-                minFilter = Filter.Nearest;
-                magFilter = Filter.Nearest;
-                mipmapMode = SamplerMipmapMode.Linear;
-                break;
-            case SamplerFilter.MinPoint_MagLinear_MipPoint:
-                minFilter = Filter.Nearest;
-                magFilter = Filter.Linear;
-                mipmapMode = SamplerMipmapMode.Nearest;
-                break;
-            case SamplerFilter.MinPoint_MagLinear_MipLinear:
-                minFilter = Filter.Nearest;
-                magFilter = Filter.Linear;
-                mipmapMode = SamplerMipmapMode.Linear;
-                break;
-            case SamplerFilter.MinLinear_MagPoint_MipPoint:
-                minFilter = Filter.Linear;
-                magFilter = Filter.Nearest;
-                mipmapMode = SamplerMipmapMode.Nearest;
-                break;
-            case SamplerFilter.MinLinear_MagPoint_MipLinear:
-                minFilter = Filter.Linear;
-                magFilter = Filter.Nearest;
-                mipmapMode = SamplerMipmapMode.Linear;
-                break;
-            case SamplerFilter.MinLinear_MagLinear_MipPoint:
-                minFilter = Filter.Linear;
-                magFilter = Filter.Linear;
-                mipmapMode = SamplerMipmapMode.Nearest;
-                break;
-            case SamplerFilter.MinLinear_MagLinear_MipLinear:
-                minFilter = Filter.Linear;
-                magFilter = Filter.Linear;
-                mipmapMode = SamplerMipmapMode.Linear;
-                break;
+            case FilterMode.Point:
+                return Filter.Nearest;
+            case FilterMode.Linear:
+                return Filter.Linear;
             default:
-                throw Illegal.Value<SamplerFilter>();
+                throw Illegal.Value<FilterMode>();
+        }
+    }
+
+    internal static SamplerMipmapMode ToVkMipmapMode(FilterMode mode)
+    {
+        switch (mode)
+        {
+            case FilterMode.Point:
+                return SamplerMipmapMode.Nearest;
+            case FilterMode.Linear:
+                return SamplerMipmapMode.Linear;
+            default:
+                throw Illegal.Value<FilterMode>();
         }
     }
 

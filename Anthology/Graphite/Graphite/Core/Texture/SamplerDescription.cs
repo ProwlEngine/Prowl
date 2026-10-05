@@ -20,15 +20,23 @@ public struct SamplerDescription
     /// </summary>
     public SamplerAddressMode AddressModeW;
     /// <summary>
-    /// Sample filter.
+    /// Filter when the texture is minified.
     /// </summary>
-    public SamplerFilter Filter;
+    public FilterMode MinFilter;
+    /// <summary>
+    /// Filter when the texture is magnified.
+    /// </summary>
+    public FilterMode MagFilter;
+    /// <summary>
+    /// Filter between mip levels.
+    /// </summary>
+    public FilterMode MipFilter;
     /// <summary>
     /// Comparison kind. Null = off.
     /// </summary>
     public ComparisonKind? ComparisonKind;
     /// <summary>
-    /// Max anisotropy. Ignored unless anisotropic filtering.
+    /// Max anisotropy. Values above 1 enable anisotropic filtering.
     /// </summary>
     public uint MaximumAnisotropy;
     /// <summary>
@@ -54,7 +62,9 @@ public struct SamplerDescription
     /// <param name="addressModeU">U address mode.</param>
     /// <param name="addressModeV">V address mode.</param>
     /// <param name="addressModeW">W address mode.</param>
-    /// <param name="filter">Sample filter.</param>
+    /// <param name="minFilter">Min filter.</param>
+    /// <param name="magFilter">Mag filter.</param>
+    /// <param name="mipFilter">Mip filter.</param>
     /// <param name="comparisonKind">Comparison kind. Null = off.</param>
     /// <param name="maximumAnisotropy">Max anisotropy.</param>
     /// <param name="minimumLod">Min LOD.</param>
@@ -65,7 +75,9 @@ public struct SamplerDescription
         SamplerAddressMode addressModeU,
         SamplerAddressMode addressModeV,
         SamplerAddressMode addressModeW,
-        SamplerFilter filter,
+        FilterMode minFilter,
+        FilterMode magFilter,
+        FilterMode mipFilter,
         ComparisonKind? comparisonKind,
         uint maximumAnisotropy,
         float minimumLod,
@@ -76,7 +88,9 @@ public struct SamplerDescription
         AddressModeU = addressModeU;
         AddressModeV = addressModeV;
         AddressModeW = addressModeW;
-        Filter = filter;
+        MinFilter = minFilter;
+        MagFilter = magFilter;
+        MipFilter = mipFilter;
         ComparisonKind = comparisonKind;
         MaximumAnisotropy = maximumAnisotropy;
         MinimumLod = minimumLod;
@@ -91,7 +105,7 @@ public struct SamplerDescription
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
     ///     AddressModeW = SamplerAddressMode.Wrap
-    ///     Filter = SamplerFilter.MinPoint_MagPoint_MipPoint
+    ///     MinFilter, MagFilter, MipFilter = FilterMode.Point
     ///     LodBias = 0
     ///     MinimumLod = 0
     ///     MaximumLod = 1000f
@@ -102,7 +116,9 @@ public struct SamplerDescription
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
         AddressModeW = SamplerAddressMode.Wrap,
-        Filter = SamplerFilter.MinPoint_MagPoint_MipPoint,
+        MinFilter = FilterMode.Point,
+        MagFilter = FilterMode.Point,
+        MipFilter = FilterMode.Point,
         LodBias = 0,
         MinimumLod = 0,
         MaximumLod = 1000f,
@@ -115,7 +131,7 @@ public struct SamplerDescription
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
     ///     AddressModeW = SamplerAddressMode.Wrap
-    ///     Filter = SamplerFilter.MinLinear_MagLinear_MipLinear
+    ///     MinFilter, MagFilter, MipFilter = FilterMode.Linear
     ///     LodBias = 0
     ///     MinimumLod = 0
     ///     MaximumLod = 1000f
@@ -126,7 +142,9 @@ public struct SamplerDescription
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
         AddressModeW = SamplerAddressMode.Wrap,
-        Filter = SamplerFilter.MinLinear_MagLinear_MipLinear,
+        MinFilter = FilterMode.Linear,
+        MagFilter = FilterMode.Linear,
+        MipFilter = FilterMode.Linear,
         LodBias = 0,
         MinimumLod = 0,
         MaximumLod = 1000f,
@@ -139,7 +157,7 @@ public struct SamplerDescription
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
     ///     AddressModeW = SamplerAddressMode.Wrap
-    ///     Filter = SamplerFilter.Anisotropic
+    ///     MinFilter, MagFilter, MipFilter = FilterMode.Linear
     ///     LodBias = 0
     ///     MinimumLod = 0
     ///     MaximumLod = 1000f
@@ -150,7 +168,9 @@ public struct SamplerDescription
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
         AddressModeW = SamplerAddressMode.Wrap,
-        Filter = SamplerFilter.Anisotropic,
+        MinFilter = FilterMode.Linear,
+        MagFilter = FilterMode.Linear,
+        MipFilter = FilterMode.Linear,
         LodBias = 0,
         MinimumLod = 0,
         MaximumLod = 1000f,

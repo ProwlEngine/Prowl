@@ -88,10 +88,10 @@ public abstract partial class ResourceFactory
         if (!Device.ValidationEnabled)
             return;
 
-        if (!Features.SamplerAnisotropy && description.Filter == SamplerFilter.Anisotropic)
+        if (!Features.SamplerAnisotropy && description.MaximumAnisotropy > 1)
         {
             throw new RenderException(
-                "SamplerFilter.Anisotropic cannot be used unless GraphicsDeviceFeatures.SamplerAnisotropy is supported.");
+                "A MaximumAnisotropy above 1 cannot be used unless GraphicsDeviceFeatures.SamplerAnisotropy is supported.");
         }
     }
 
