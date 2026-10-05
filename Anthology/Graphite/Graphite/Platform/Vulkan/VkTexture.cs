@@ -21,8 +21,19 @@ internal unsafe partial class VkTexture : Texture
     public SampleCountFlags VkSampleCount { get; }
 
     private readonly bool _isSwapchainTexture;
+    private readonly object _defaultViewLock = new();
+    private VkTextureView? _defaultView;
 
     public bool IsSwapchainTexture => _isSwapchainTexture;
+
+    public VkTextureView DefaultView
+    {
+        get
+        {
+            lock (_defaultViewLock)
+                return _defaultView ??= (VkTextureView)_gd.ResourceFactory.CreateTextureView(this);
+        }
+    }
 
     internal VkTexture(VkGraphicsDevice gd, in TextureDescription description)
         : base(description)
@@ -144,7 +155,13 @@ internal unsafe partial class VkTexture : Texture
 
     private void DestroyNative()
     {
-        _gd.ReleaseDefaultView(this);
+        VkTextureView? defaultView;
+        lock (_defaultViewLock)
+        {
+            defaultView = _defaultView;
+            _defaultView = null;
+        }
+        defaultView?.Dispose();
 
         // Swapchain images belong to the swapchain, not to this wrapper.
         if (_isSwapchainTexture)

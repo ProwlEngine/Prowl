@@ -131,13 +131,13 @@ internal unsafe sealed partial class VkDescriptorBinder
             if (texEntry.Texture != null)
             {
                 missing = false;
-                return _gd.GetOrCreateDefaultView((VkTexture)texEntry.Texture);
+                return ((VkTexture)texEntry.Texture).DefaultView;
             }
         }
 
         missing = true;
         VkTexture fallback = (VkTexture)(elem.Kind == ResourceKind.TextureReadWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D);
-        return _gd.GetOrCreateDefaultView(fallback);
+        return fallback.DefaultView;
     }
 
     private VkSampler ResolveSampler(in ResourceLayoutElementDescription elem, SetBindingMetadata meta, int elemIndex)

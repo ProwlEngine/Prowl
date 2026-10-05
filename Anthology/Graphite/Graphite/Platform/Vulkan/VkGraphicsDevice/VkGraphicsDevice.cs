@@ -21,7 +21,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     private readonly VkSwapchain _mainSwapchain;
     private readonly VkDescriptorSetCacheRegistry _descriptorSetCaches = new();
     private VkShaderCache? _shaderCache;
-    private readonly VkDefaultTextureViewCache _defaultTextureViews;
 
     public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc)
         : this(options, scDesc, new VulkanDeviceOptions()) { }
@@ -57,7 +56,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
 
         ResourceFactory = new VkResourceFactory(this);
-        _defaultTextureViews = new VkDefaultTextureViewCache(ResourceFactory);
 
         InitializeFrameOptions(options);
 
@@ -86,13 +84,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     internal void RegisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Register(cache);
 
     internal void UnregisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Unregister(cache);
-
-    /// <summary>
-    /// Gets or creates full-range view for texture. Device-owned, lives til dispose.
-    /// </summary>
-    internal VkTextureView GetOrCreateDefaultView(VkTexture texture) => _defaultTextureViews.GetOrCreate(texture);
-
-    internal void ReleaseDefaultView(VkTexture texture) => _defaultTextureViews.Remove(texture);
 
     internal override CommandBuffer RentGraphCommandBuffer(ExecutionTask task)
     {
@@ -181,8 +172,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         _mainSwapchain?.Dispose();
         DestroyDebugCallback();
-
-        _defaultTextureViews.Dispose();
 
         DisposeCommandPools();
 
