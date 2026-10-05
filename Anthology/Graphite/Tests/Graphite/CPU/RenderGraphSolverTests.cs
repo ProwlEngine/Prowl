@@ -12,10 +12,10 @@ namespace Prowl.Graphite.RenderGraph.Tests;
 
 public class RenderGraphSolverTests
 {
-    private static RenderGraph<TestView> Build(params IPass<TestView>[] passes)
-        => RenderGraph<TestView>.Build(passes);
+    private static RenderGraph Build(params IPass[] passes)
+        => RenderGraph.Build(passes);
 
-    private static List<string> OrderNames(RenderGraph<TestView> graph)
+    private static List<string> OrderNames(RenderGraph graph)
         => graph.OrderedPasses.Select(n => n.Pass.Name).ToList();
 
     [Fact]
@@ -38,7 +38,7 @@ public class RenderGraphSolverTests
             inputs: new[] { "chain_b" },
             outputs: new[] { ("chain_c", Desc.Color()) });
 
-        RenderGraph<TestView> graph = Build(c, b, a);
+        RenderGraph graph = Build(c, b, a);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("A") < order.IndexOf("B"));
@@ -51,7 +51,7 @@ public class RenderGraphSolverTests
         var a = new TestPass("A", outputs: new[] { ("indep_a", Desc.Color()) });
         var b = new TestPass("B", outputs: new[] { ("indep_b", Desc.Color()) });
 
-        RenderGraph<TestView> graph = Build(a, b);
+        RenderGraph graph = Build(a, b);
 
         Assert.Equal(new[] { "A", "B" }, OrderNames(graph).ToArray());
     }
@@ -89,7 +89,7 @@ public class RenderGraphSolverTests
         var reader = new TestBufferPass("Shade",
             inputs: new[] { "light_grid" });
 
-        RenderGraph<TestView> graph = Build(reader, producer);
+        RenderGraph graph = Build(reader, producer);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Compute") < order.IndexOf("Shade"));
@@ -110,7 +110,7 @@ public class RenderGraphSolverTests
             inputs: new[] { "diamond_y1", "diamond_y2" },
             outputs: new[] { ("diamond_out", Desc.Color()) });
 
-        RenderGraph<TestView> graph = Build(join, right, left, producer);
+        RenderGraph graph = Build(join, right, left, producer);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Producer") < order.IndexOf("Left"));
@@ -128,7 +128,7 @@ public class RenderGraphSolverTests
             inputs: new[] { "fanin_shared" },
             outputs: new[] { ("fanin_out", Desc.Color()) });
 
-        RenderGraph<TestView> graph = Build(reader, writer2, writer1);
+        RenderGraph graph = Build(reader, writer2, writer1);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Writer1") < order.IndexOf("Reader"));
@@ -146,7 +146,7 @@ public class RenderGraphSolverTests
             inputs: new[] { "rmw_res" },
             outputs: new[] { ("rmw_downstream", Desc.Color()) });
 
-        RenderGraph<TestView> graph = Build(downstream, rmw, upstream);
+        RenderGraph graph = Build(downstream, rmw, upstream);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Upstream") < order.IndexOf("RMW"));
@@ -159,7 +159,7 @@ public class RenderGraphSolverTests
         var unreferenced = new TestPass("Unreferenced", outputs: new[] { ("cull_unused", Desc.Color()) });
         var main = new TestPass("Main", outputs: new[] { ("cull_main", Desc.Color()) });
 
-        RenderGraph<TestView> graph = Build(unreferenced, main);
+        RenderGraph graph = Build(unreferenced, main);
 
         Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Unreferenced");
     }
@@ -179,7 +179,7 @@ public class RenderGraphSolverTests
     [Fact]
     public void Build_PassDeclaresBackbuffer_WritesViewTargetIsTrue()
     {
-        RenderGraph<TestView> graph = Build(new TestBackbufferPass());
+        RenderGraph graph = Build(new TestBackbufferPass());
 
         Assert.True(graph.WritesViewTarget);
     }

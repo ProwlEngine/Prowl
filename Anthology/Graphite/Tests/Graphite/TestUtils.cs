@@ -22,15 +22,15 @@ public readonly struct TestRenderView : IRenderView
 
 public static class TestGraphExtensions
 {
-    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView>, CommandBuffer> record)
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext, CommandBuffer> record)
         => gd.RunTestGraphPasses(1, (context, cmd, _) => record(context, cmd));
 
-    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext<TestRenderView>, CommandBuffer, int> record)
+    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext, CommandBuffer, int> record)
     {
         ExecutionTask task = gd.BeginExecution();
-        RenderGraph<TestRenderView> graph = RenderGraph<TestRenderView>.Build(
-            Array.Empty<IPass<TestRenderView>>());
-        var context = new RenderContext<TestRenderView>(gd, task, graph, default);
+        Prowl.Graphite.RenderGraph.RenderGraph graph = Prowl.Graphite.RenderGraph.RenderGraph.Build(
+            Array.Empty<IPass>());
+        var context = new RenderContext(gd, task, graph, default);
 
         try
         {
@@ -49,12 +49,12 @@ public static class TestGraphExtensions
         return task;
     }
 
-    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView>> record)
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext> record)
     {
         ExecutionTask task = gd.BeginExecution();
-        RenderGraph<TestRenderView> graph = RenderGraph<TestRenderView>.Build(
-            Array.Empty<IPass<TestRenderView>>());
-        var context = new RenderContext<TestRenderView>(gd, task, graph, default);
+        Prowl.Graphite.RenderGraph.RenderGraph graph = Prowl.Graphite.RenderGraph.RenderGraph.Build(
+            Array.Empty<IPass>());
+        var context = new RenderContext(gd, task, graph, default);
 
         try
         {

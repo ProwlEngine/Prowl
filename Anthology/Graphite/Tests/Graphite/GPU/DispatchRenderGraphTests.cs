@@ -27,7 +27,7 @@ file readonly struct DispatchView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class RecordingPass : IPass<DispatchView>
+file sealed class RecordingPass : IPass
 {
     public int RenderCount => ViewWidths.Count;
     public List<uint> ViewWidths { get; } = new();
@@ -36,10 +36,10 @@ file sealed class RecordingPass : IPass<DispatchView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd) => ViewWidths.Add(context.View.PixelWidth);
+    public void Render(RenderContext context, CommandBuffer cmd) => ViewWidths.Add(context.View.PixelWidth);
 }
 
-file sealed class BackbufferPass : IPass<DispatchView>
+file sealed class BackbufferPass : IPass
 {
     private TextureHandle _backbuffer;
 
@@ -51,7 +51,7 @@ file sealed class BackbufferPass : IPass<DispatchView>
 
     public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareViewTarget();
 
-    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderCount++;
         Resolved = context.GetRenderTexture(_backbuffer).Framebuffer;
@@ -67,7 +67,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         RecordingPass passA = new();
         RecordingPass passB = new();
-        using RenderPipeline<DispatchView> pipeline = new([passA, passB]);
+        using RenderPipeline pipeline = new([passA, passB]);
         DispatchView[] views = { new(64, 64), new(80, 48), new(32, 32) };
 
         GD.DispatchGraph(pipeline, views);
@@ -82,7 +82,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         BackbufferPass targetPass = new();
         RecordingPass other = new();
-        using RenderPipeline<DispatchView> pipeline = new([other, targetPass]);
+        using RenderPipeline pipeline = new([other, targetPass]);
 
         GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -97,7 +97,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
         Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
         BackbufferPass pass = new();
-        using RenderPipeline<DispatchView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, framebuffer: target) });
         GD.WaitForIdle();
@@ -113,7 +113,7 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
     public void Dispatch_ViewTargetPass_ResolvesSwapchainAndPresents()
     {
         BackbufferPass pass = new();
-        using RenderPipeline<DispatchView> pipeline = new([new RecordingPass(), pass]);
+        using RenderPipeline pipeline = new([new RecordingPass(), pass]);
         DispatchView[] views = { new(64, 64, GD.MainSwapchain) };
 
         GD.DispatchGraph(pipeline, views);

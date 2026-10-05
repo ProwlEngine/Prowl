@@ -21,7 +21,7 @@ internal readonly struct TestView : IRenderView
 }
 
 /// <summary>Test pass for the solver. Declares given input names and output textures.</summary>
-internal sealed class TestPass : IPass<TestView>
+internal sealed class TestPass : IPass
 {
     private readonly string[] _inputs;
     private readonly (string name, GraphTextureDesc desc)[] _outputs;
@@ -46,11 +46,11 @@ internal sealed class TestPass : IPass<TestView>
             builder.DeclareOutputTexture(name, desc);
     }
 
-    public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
 /// <summary>Test pass reading/writing buffers, for testing buffer ordering.</summary>
-internal sealed class TestBufferPass : IPass<TestView>
+internal sealed class TestBufferPass : IPass
 {
     private readonly string[] _inputs;
     private readonly (string name, GraphBufferDesc desc)[] _outputs;
@@ -75,7 +75,7 @@ internal sealed class TestBufferPass : IPass<TestView>
             builder.DeclareOutputBuffer(name, desc);
     }
 
-    public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
 internal static class Desc
@@ -85,7 +85,7 @@ internal static class Desc
 }
 
 /// <summary>Test pass that writes the backbuffer and reads the named textures.</summary>
-internal sealed class TestBackbufferPass : IPass<TestView>
+internal sealed class TestBackbufferPass : IPass
 {
     private readonly string[] _inputs;
 
@@ -101,5 +101,5 @@ internal sealed class TestBackbufferPass : IPass<TestView>
         builder.DeclareViewTarget();
     }
 
-    public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }

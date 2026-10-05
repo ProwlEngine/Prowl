@@ -23,18 +23,18 @@ file readonly struct SwapchainView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
+file sealed class ClearSwapchainPass : RasterPass
 {
     public override string Name => "ClearSwapchain";
 
     public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
 
-    public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
     }
 }
 
-file sealed class DepthSwapchainPass : RasterPass<SwapchainView>
+file sealed class DepthSwapchainPass : RasterPass
 {
     private readonly PixelFormat _depthFormat;
 
@@ -45,19 +45,19 @@ file sealed class DepthSwapchainPass : RasterPass<SwapchainView>
     public override void Setup(RenderContextBuilder builder)
         => SetViewTarget(builder, TargetLoadStoreOps.Clear(Color.Blue), _depthFormat);
 
-    public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
     }
 }
 
-file sealed class OffscreenPass : IPass<SwapchainView>
+file sealed class OffscreenPass : IPass
 {
     public string Name => "Offscreen";
 
     public void Setup(RenderContextBuilder builder)
         => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm));
 
-    public void Render(RenderContext<SwapchainView> context, CommandBuffer cmd) { }
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These
@@ -67,8 +67,8 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
     {
-        using RenderPipeline<SwapchainView> presenting = new([new ClearSwapchainPass()]);
-        using RenderPipeline<SwapchainView> offscreen = new([new OffscreenPass()]);
+        using RenderPipeline presenting = new([new ClearSwapchainPass()]);
+        using RenderPipeline offscreen = new([new OffscreenPass()]);
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
 
         for (int frame = 0; frame < 12; frame++)
@@ -90,7 +90,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void DispatchGraph_ViewTargetDepth_CreatesSwapchainDepth()
     {
-        using RenderPipeline<SwapchainView> pipeline = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
+        using RenderPipeline pipeline = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
 
         GD.DispatchGraph(pipeline, views);
@@ -108,8 +108,8 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void DispatchGraph_ViewTargetDepth_SurvivesResizeAndFormatChange()
     {
-        using RenderPipeline<SwapchainView> shallow = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
-        using RenderPipeline<SwapchainView> deep = new([new DepthSwapchainPass(PixelFormat.R32_Float)]);
+        using RenderPipeline shallow = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
+        using RenderPipeline deep = new([new DepthSwapchainPass(PixelFormat.R32_Float)]);
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
 
         for (int frame = 0; frame < 6; frame++)

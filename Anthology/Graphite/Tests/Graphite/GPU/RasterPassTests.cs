@@ -24,7 +24,7 @@ file readonly struct RasterView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class ClearingRasterPass : RasterPass<RasterView>
+file sealed class ClearingRasterPass : RasterPass
 {
     private readonly RenderResourceID _id;
     private readonly Color _clear;
@@ -40,12 +40,12 @@ file sealed class ClearingRasterPass : RasterPass<RasterView>
     public override void Setup(RenderContextBuilder builder)
         => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
 
-    public override void Render(RenderContext<RasterView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
     }
 }
 
-file sealed class RawClearPass : IPass<RasterView>
+file sealed class RawClearPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly Color _clear;
@@ -61,12 +61,12 @@ file sealed class RawClearPass : IPass<RasterView>
     public void Setup(RenderContextBuilder builder)
         => builder.DeclareOutputTexture(_id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
 
-    public void Render(RenderContext<RasterView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
     }
 }
 
-file sealed class CopyReadbackPass : IPass<RasterView>
+file sealed class CopyReadbackPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly DeviceBuffer _readback;
@@ -82,7 +82,7 @@ file sealed class CopyReadbackPass : IPass<RasterView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext<RasterView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
         cmd.CopyTextureToBuffer(target.ColorTextures[0], _readback, 0, TextureRegion.Whole(target.ColorTextures[0]));
@@ -102,7 +102,7 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         RenderResourceID id = RenderResourceID.Intern("raster_clear_target");
         ClearingRasterPass clearPass = new(id, clear);
         CopyReadbackPass copyPass = new(id, readback);
-        using RenderPipeline<RasterView> pipeline = new([clearPass, copyPass]);
+        using RenderPipeline pipeline = new([clearPass, copyPass]);
 
         GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
         GD.WaitForIdle();
@@ -121,7 +121,7 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         DeviceBuffer readback = CreateTexelReadbackBuffer<Color>(size, size);
 
         RenderResourceID id = RenderResourceID.Intern("raster_raw_clear_target");
-        using RenderPipeline<RasterView> pipeline = new([new RawClearPass(id, clear), new CopyReadbackPass(id, readback)]);
+        using RenderPipeline pipeline = new([new RawClearPass(id, clear), new CopyReadbackPass(id, readback)]);
 
         GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
         GD.WaitForIdle();

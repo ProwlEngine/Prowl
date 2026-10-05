@@ -13,7 +13,7 @@ file readonly struct SubmitBatchingView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class BufferWritePass : IPass<SubmitBatchingView>
+file sealed class BufferWritePass : IPass
 {
     private readonly string _name;
     private readonly DeviceBuffer _source;
@@ -30,7 +30,7 @@ file sealed class BufferWritePass : IPass<SubmitBatchingView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<SubmitBatchingView> context, CommandBuffer cl)
+    public void Render(RenderContext context, CommandBuffer cl)
     {
         cl.CopyBuffer(_source, 0, _destination, 0, _destination.SizeInBytes);
     }
@@ -55,7 +55,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(3);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
-        using RenderPipeline<SubmitBatchingView> pipeline = new([
+        using RenderPipeline pipeline = new([
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
             new BufferWritePass("PassC", sourceC, destination)]);
@@ -76,7 +76,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(33);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
-        using RenderPipeline<SubmitBatchingView> pipeline = new([
+        using RenderPipeline pipeline = new([
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
             new BufferWritePass("PassC", sourceC, destination)]);

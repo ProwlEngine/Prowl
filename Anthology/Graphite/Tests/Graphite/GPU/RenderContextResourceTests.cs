@@ -25,7 +25,7 @@ file readonly struct ResourceView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class ResolvingPass : IPass<ResourceView>
+file sealed class ResolvingPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly GraphTextureDesc _desc;
@@ -49,14 +49,14 @@ file sealed class ResolvingPass : IPass<ResourceView>
     public void Setup(RenderContextBuilder builder)
         => _handle = _isOutput ? builder.DeclareOutputTexture(_id, _desc) : builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
         for (int i = 0; i < _resolvesPerRender; i++)
             Resolved.Add(context.GetRenderTexture(_handle));
     }
 }
 
-file sealed class TwoOutputPass : IPass<ResourceView>
+file sealed class TwoOutputPass : IPass
 {
     private readonly RenderResourceID _a;
     private readonly RenderResourceID _b;
@@ -78,10 +78,10 @@ file sealed class TwoOutputPass : IPass<ResourceView>
         builder.DeclareOutputTexture(_b, _desc);
     }
 
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) { }
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
-file sealed class ZeroOutputPass : IPass<ResourceView>
+file sealed class ZeroOutputPass : IPass
 {
     public ZeroOutputPass(string name) => Name = name;
 
@@ -89,10 +89,10 @@ file sealed class ZeroOutputPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) { }
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
-file sealed class ImportingPass : IPass<ResourceView>
+file sealed class ImportingPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly RenderTexture _external;
@@ -109,7 +109,7 @@ file sealed class ImportingPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareImportedTexture(_id, _external);
 
-    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
+    public void Render(RenderContext context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
 }
 
 file sealed class RecordingProfiler : IProfiler
@@ -161,7 +161,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void GetRenderTexture_SameHandleWithinContext_ReturnsCachedInstance()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_cache"), ColorDesc(), resolvesPerRender: 3);
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
@@ -177,7 +177,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderResourceID id = RenderResourceID.Intern("resourcetest_shared");
         ResolvingPass writer = new("Writer", id, ColorDesc(), isOutput: true);
         ResolvingPass reader = new("Reader", id, ColorDesc(), isOutput: false);
-        using RenderPipeline<ResourceView> pipeline = new([writer, reader]);
+        using RenderPipeline pipeline = new([writer, reader]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
@@ -190,7 +190,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     {
         ResolvingPass a = new("A", RenderResourceID.Intern("resourcetest_distinct_a"), ColorDesc());
         ResolvingPass b = new("B", RenderResourceID.Intern("resourcetest_distinct_b"), ColorDesc());
-        using RenderPipeline<ResourceView> pipeline = new([a, b]);
+        using RenderPipeline pipeline = new([a, b]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
@@ -202,7 +202,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void GetRenderTexture_TwoViewsInOneDispatch_ResolveToIndependentCorrectlySizedTextures()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_perview"), ColorDesc());
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
         ResourceView[] views = { new(64, 48, GD.MainSwapchain), new(128, 96, GD.MainSwapchain) };
 
         GD.DispatchGraph(pipeline, views);
@@ -220,7 +220,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void GetRenderTexture_ViewSizedResource_ScalesToViewPixelSize()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_scale"), ColorDesc(0.5f));
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 100, GD.MainSwapchain) });
         GD.WaitForIdle();
@@ -236,7 +236,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderResourceID b = RenderResourceID.Intern("resourcetest_capture_b");
         TwoOutputPass twoOutputs = new("TwoOutputs", a, b, ColorDesc());
         ZeroOutputPass zeroOutputs = new("ZeroOutputs");
-        using RenderPipeline<ResourceView> pipeline = new([zeroOutputs, twoOutputs]);
+        using RenderPipeline pipeline = new([zeroOutputs, twoOutputs]);
         RecordingProfiler profiler = new() { RequestCapture = true };
 
         using GraphicsDevice profiledDevice = GD.BackendType switch
@@ -258,7 +258,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderTexture external = RF.CreateRenderTexture(new RenderTextureDescription(
             64, 64, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, false, TextureSampleCount.Count1));
         ImportingPass pass = new(RenderResourceID.Intern("resourcetest_imported"), external);
-        using RenderPipeline<ResourceView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
