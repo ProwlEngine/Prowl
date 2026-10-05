@@ -13,11 +13,11 @@ namespace Prowl.Graphite.Samples.PBRRenderer;
 
 internal readonly struct SceneView : IRenderView
 {
-    public Swapchain TargetSwapchain { get; }
+    public Framebuffer Target { get; }
 
     public SceneView(uint width, uint height, Swapchain swapchain)
     {
-        TargetSwapchain = swapchain;
+        Target = swapchain.Framebuffer;
         PixelWidth = width;
         PixelHeight = height;
     }
