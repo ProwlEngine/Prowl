@@ -1,19 +1,7 @@
 // Shadow sampling utilities for deferred lighting
 // Shared by DirectionalLight, SpotLight, and PointLight shaders
 
-// Precomputed Poisson disk offsets for rotated PCF sampling
-const vec2 POISSON_DISK_8[8] = vec2[](
-    vec2(-0.613392,  0.617481),
-    vec2( 0.170019, -0.040254),
-    vec2(-0.299417, -0.792901),
-    vec2( 0.645680, -0.530998),
-    vec2( 0.454148,  0.516511),
-    vec2(-0.507431,  0.281182),
-    vec2(-0.177186, -0.283153),
-    vec2( 0.100558,  0.765839)
-);
-
-// Simple hash function for random rotation in PCF sampling
+// Screen space noise, used to jitter ray marches
 float InterleavedGradientNoise(vec2 position) {
     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
     return fract(magic.z * fract(dot(position, magic.xy)));
@@ -47,35 +35,44 @@ vec3 ProjectToShadowMap(mat4 shadowMatrix, vec3 worldPos)
 
 // Fraction of light blocked at projCoords inside an atlas tile, 0 to 1.
 //   atlasParams: xy = tile position in texels, z = tile size in texels
-//   quality: 0 = hard, 1 = soft
-//   filterRadius: soft kernel radius in texels
-float SampleShadowPCF(sampler2DShadow shadowAtlas, float atlasSize, vec3 projCoords, vec4 atlasParams,
-                      float quality, float filterRadius)
+//   quality: 0 = hard (one hardware 2x2 compare), 1 = soft (5x5 tent filter)
+float SampleShadowPCF(sampler2DShadow shadowAtlas, float atlasSize, vec3 projCoords, vec4 atlasParams, float quality)
 {
     // Every tap stays half a texel inside the tile so the hardware 2x2 compare never reads a neighbour
-    vec2 texelSize = vec2(1.0 / atlasSize);
-    vec2 tileMin = atlasParams.xy / atlasSize + texelSize * 0.5;
-    vec2 tileMax = (atlasParams.xy + atlasParams.z) / atlasSize - texelSize * 0.5;
-    vec2 atlasCoords = clamp((atlasParams.xy + projCoords.xy * atlasParams.z) / atlasSize, tileMin, tileMax);
+    float invSize = 1.0 / atlasSize;
+    vec2 tileMin = (atlasParams.xy + 0.5) * invSize;
+    vec2 tileMax = (atlasParams.xy + atlasParams.z - 0.5) * invSize;
+    vec2 texelCoords = atlasParams.xy + projCoords.xy * atlasParams.z;
 
-    // Hardware depth comparison returns the filtered fraction that is lit
-    float lit;
-    if (quality < 0.5) {
-        lit = texture(shadowAtlas, vec3(atlasCoords, projCoords.z));
-    } else {
-        float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185;
-        float s = sin(randomRotation);
-        float c = cos(randomRotation);
-        mat2 rotationMatrix = mat2(c, -s, s, c);
+    // Hardware depth comparison returns the bilinearly filtered fraction that is lit
+    if (quality < 0.5)
+        return 1.0 - texture(shadowAtlas, vec3(clamp(texelCoords * invSize, tileMin, tileMax), projCoords.z));
 
-        vec2 texelScale = texelSize * filterRadius;
-        lit = 0.0;
-        for (int i = 0; i < 8; i++) {
-            vec2 offset = (rotationMatrix * POISSON_DISK_8[i]) * texelScale;
-            lit += texture(shadowAtlas, vec3(clamp(atlasCoords + offset, tileMin, tileMax), projCoords.z));
+    // Three bilinear taps per axis reproduce a five texel tent exactly, so nine taps cover 5x5 with no noise.
+    // Per axis weights are 4 - 3f, 7 and 1 + 3f (they sum to 12), placed so each tap's bilinear split
+    // lands on the tent's texel weights.
+    vec2 base = floor(texelCoords + 0.5);
+    vec2 f = texelCoords + 0.5 - base;
+    base -= 0.5;
+
+    vec2 w0 = 4.0 - 3.0 * f;
+    vec2 w2 = 1.0 + 3.0 * f;
+    vec2 o0 = (3.0 - 2.0 * f) / w0 - 2.0;
+    vec2 o1 = (3.0 + f) / 7.0;
+    vec2 o2 = f / w2 + 2.0;
+
+    vec3 wx = vec3(w0.x, 7.0, w2.x);
+    vec3 wy = vec3(w0.y, 7.0, w2.y);
+    vec3 ox = vec3(o0.x, o1.x, o2.x);
+    vec3 oy = vec3(o0.y, o1.y, o2.y);
+
+    float lit = 0.0;
+    for (int j = 0; j < 3; j++) {
+        for (int i = 0; i < 3; i++) {
+            vec2 uv = clamp((base + vec2(ox[i], oy[j])) * invSize, tileMin, tileMax);
+            lit += wx[i] * wy[j] * texture(shadowAtlas, vec3(uv, projCoords.z));
         }
-        lit /= 8.0;
     }
 
-    return 1.0 - lit;
+    return 1.0 - lit / 144.0;
 }

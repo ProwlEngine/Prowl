@@ -150,11 +150,7 @@ float DirectionalShadow(vec3 worldPos, vec3 geomNormal, float normalBias, float 
     vec3 projCoords = ProjectToShadowMap(cascadeMatrix, biasedPos);
     if (projCoords.z > 1.0) return 0.0;
 
-    // Holds the penumbra roughly constant in world units, so the softness does not jump at each cascade split
-    const float shadowPenumbraWorld = 0.04;
-    float pcfRadius = clamp(shadowPenumbraWorld / texelWorld, 0.75, 4.0);
-
-    float shadow = SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, cascadeParams, quality, pcfRadius);
+    float shadow = SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, cascadeParams, quality);
 
     // Fades out over the last tenth of the shadow distance
     float fade = smoothstep(_DirectionalLightShadowDistance * 0.9, _DirectionalLightShadowDistance, sqrt(distSq));
@@ -190,7 +186,7 @@ float PointShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBia
     vec3 projCoords = ProjectToShadowMap(_PointShadowMatrices[idx], biasedPos);
     if (projCoords.z > 1.0) return 0.0;
 
-    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, faceParams, quality, 1.5) * L.ShadowStrength;
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, faceParams, quality) * L.ShadowStrength;
 }
 
 float SpotShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
@@ -208,7 +204,7 @@ float SpotShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias
     if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
         return 0.0;
 
-    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, atlasParams, quality, 1.5) * L.ShadowStrength;
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, atlasParams, quality) * L.ShadowStrength;
 }
 
 float LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)

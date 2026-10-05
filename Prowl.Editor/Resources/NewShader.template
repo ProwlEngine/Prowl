@@ -188,10 +188,7 @@ Pass "ShadowCaster"
         {
             #include "Fragment"
 
-            void main()
-            {
-                gl_FragDepth = gl_FragCoord.z;
-            }
+            void main() { }
         }
     ENDGLSL
 }
