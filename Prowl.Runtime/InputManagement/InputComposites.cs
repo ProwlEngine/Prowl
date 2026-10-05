@@ -92,18 +92,7 @@ public class Vector2CompositeBinding : InputCompositeBinding
         return value;
     }
 
-    private bool IsPressed(IInputHandler inputHandler, InputBinding binding)
-    {
-        return binding.BindingType switch
-        {
-            InputBindingType.Key => inputHandler.GetKey(binding.Key!.Value),
-            InputBindingType.MouseButton => inputHandler.GetMouseButton((int)binding.MouseButton!.Value),
-            InputBindingType.GamepadButton => inputHandler.GetGamepadButton(
-                binding.RequiredDeviceIndex ?? 0,
-                binding.GamepadButton!.Value),
-            _ => false
-        };
-    }
+    private static bool IsPressed(IInputHandler inputHandler, InputBinding binding) => binding.IsPressed(inputHandler);
 }
 
 /// <summary>
@@ -145,6 +134,7 @@ public class DualAxisCompositeBinding : InputCompositeBinding
         {
             // For triggers, read the trigger value directly
             InputBindingType.GamepadTrigger => inputHandler.GetGamepadTrigger(binding.RequiredDeviceIndex ?? 0, binding.AxisIndex ?? 0),
+            InputBindingType.XRAxis => binding.ReadXRAxis(),
 
             // For mouse axis, read the specified axis
             InputBindingType.MouseAxis => binding.AxisIndex switch
@@ -196,16 +186,5 @@ public class AxisCompositeBinding : InputCompositeBinding
         return value;
     }
 
-    private bool IsPressed(IInputHandler inputHandler, InputBinding binding)
-    {
-        return binding.BindingType switch
-        {
-            InputBindingType.Key => inputHandler.GetKey(binding.Key!.Value),
-            InputBindingType.MouseButton => inputHandler.GetMouseButton((int)binding.MouseButton!.Value),
-            InputBindingType.GamepadButton => inputHandler.GetGamepadButton(
-                binding.RequiredDeviceIndex ?? 0,
-                binding.GamepadButton!.Value),
-            _ => false
-        };
-    }
+    private static bool IsPressed(IInputHandler inputHandler, InputBinding binding) => binding.IsPressed(inputHandler);
 }

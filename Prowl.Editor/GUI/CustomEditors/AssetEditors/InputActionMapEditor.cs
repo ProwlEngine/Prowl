@@ -406,6 +406,9 @@ public class InputActionMapEditor : AssetImporterEditor
                         case InputBindingType.MouseAxis: binding.AxisIndex = 0; break;
                         case InputBindingType.GamepadAxis: binding.AxisIndex = 0; break;
                         case InputBindingType.GamepadTrigger: binding.AxisIndex = 0; break;
+                        case InputBindingType.XRButton: binding.XRHand = XRHand.Right; binding.XRButton = XRButton.Primary; break;
+                        case InputBindingType.XRAxis: binding.XRHand = XRHand.Right; binding.XRAxis = XRAxis.Trigger; break;
+                        case InputBindingType.XRStick: binding.XRHand = XRHand.Right; break;
                     }
                 }).Show());
 
@@ -566,7 +569,32 @@ public class InputActionMapEditor : AssetImporterEditor
                         new[] { "Left", "Right" }).Show());
                 DrawDeviceField(paper, $"{id}_gtd", binding);
                 break;
+
+            case InputBindingType.XRButton:
+                DrawXRHandField(paper, $"{id}_xbh", binding);
+                EditorGUI.Row(paper, $"{id}_xb", "Button", () =>
+                    Origami.EnumDropdown(paper, $"{id}_xb_v", binding.XRButton ?? XRButton.Primary,
+                        v => { binding.XRButton = v; }).Show());
+                break;
+
+            case InputBindingType.XRAxis:
+                DrawXRHandField(paper, $"{id}_xah", binding);
+                EditorGUI.Row(paper, $"{id}_xa", "Axis", () =>
+                    Origami.EnumDropdown(paper, $"{id}_xa_v", binding.XRAxis ?? XRAxis.Trigger,
+                        v => { binding.XRAxis = v; }).Show());
+                break;
+
+            case InputBindingType.XRStick:
+                DrawXRHandField(paper, $"{id}_xsh", binding);
+                break;
         }
+    }
+
+    private void DrawXRHandField(Paper paper, string id, InputBinding binding)
+    {
+        EditorGUI.Row(paper, id, "Hand", () =>
+            Origami.EnumDropdown(paper, $"{id}_v", binding.XRHand ?? XRHand.Right,
+                v => { binding.XRHand = v; }).Show());
     }
 
     private void DrawDeviceField(Paper paper, string id, InputBinding binding)
@@ -726,6 +754,9 @@ public class InputActionMapEditor : AssetImporterEditor
             InputBindingType.GamepadButton => $"Gamepad {binding.GamepadButton}",
             InputBindingType.GamepadAxis => binding.AxisIndex == 0 ? "Left Stick" : "Right Stick",
             InputBindingType.GamepadTrigger => binding.AxisIndex == 0 ? "Left Trigger" : "Right Trigger",
+            InputBindingType.XRButton => $"XR {binding.XRHand} {binding.XRButton}",
+            InputBindingType.XRAxis => $"XR {binding.XRHand} {binding.XRAxis}",
+            InputBindingType.XRStick => $"XR {binding.XRHand} Stick",
             _ => binding.BindingType.ToString()
         };
     }

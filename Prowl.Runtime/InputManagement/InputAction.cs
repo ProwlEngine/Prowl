@@ -162,6 +162,14 @@ public class InputAction
     }
 
     /// <summary>
+    /// Adds a headset controller button binding.
+    /// </summary>
+    public InputAction AddBinding(XRHand hand, XRButton button, InputInteractionType interaction = InputInteractionType.Default)
+    {
+        return AddBinding(InputBinding.CreateXRButtonBinding(hand, button, interaction));
+    }
+
+    /// <summary>
     /// Takes what another action was configured with, keeping this one's listeners, for a map read again.
     /// </summary>
     internal void TakeConfiguration(InputAction from)
@@ -520,6 +528,10 @@ public class InputAction
                 2 => inputHandler.MouseWheelDelta,
                 _ => 0.0f
             },
+            InputBindingType.XRButton => binding.IsPressed(inputHandler) ? 1.0f : 0.0f,
+            // A button reads a trigger or grip as pressed past halfway, the same point composites use.
+            InputBindingType.XRAxis => ActionType == InputActionType.Button ? (binding.IsPressed(inputHandler) ? 1.0f : 0.0f) : binding.ReadXRAxis(),
+            InputBindingType.XRStick => XRInput.GetThumbstick(binding.XRHand ?? XRHand.Right),
             _ => GetDefaultValue()
         };
     }

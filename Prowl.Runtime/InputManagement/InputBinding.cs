@@ -29,7 +29,13 @@ public enum InputBindingType
     GamepadButton,
     GamepadAxis,
     GamepadTrigger,
-    Composite
+    Composite,
+    /// <summary>A button on a headset controller, read through <see cref="XRInput"/>.</summary>
+    XRButton,
+    /// <summary>A headset controller's trigger or grip, from 0 to 1.</summary>
+    XRAxis,
+    /// <summary>A headset controller's thumbstick, or touchpad on controllers without one.</summary>
+    XRStick,
 }
 
 /// <summary>
@@ -62,6 +68,15 @@ public class InputBinding
     /// The axis index if this is an axis binding.
     /// </summary>
     public int? AxisIndex { get; set; }
+
+    /// <summary>The controller hand for an XR binding.</summary>
+    public XRHand? XRHand { get; set; }
+
+    /// <summary>The controller button for an <see cref="InputBindingType.XRButton"/> binding.</summary>
+    public XRButton? XRButton { get; set; }
+
+    /// <summary>The controller axis for an <see cref="InputBindingType.XRAxis"/> binding.</summary>
+    public XRAxis? XRAxis { get; set; }
 
     /// <summary>
     /// Optional interaction that determines how this binding triggers the action.
@@ -190,6 +205,49 @@ public class InputBinding
             AxisIndex = axisIndex
         };
     }
+
+    public static InputBinding CreateXRButtonBinding(XRHand hand, XRButton button, InputInteractionType interaction = InputInteractionType.Default)
+    {
+        return new InputBinding
+        {
+            BindingType = InputBindingType.XRButton,
+            XRHand = hand,
+            XRButton = button,
+            Interaction = interaction
+        };
+    }
+
+    public static InputBinding CreateXRAxisBinding(XRHand hand, XRAxis axis)
+    {
+        return new InputBinding
+        {
+            BindingType = InputBindingType.XRAxis,
+            XRHand = hand,
+            XRAxis = axis
+        };
+    }
+
+    public static InputBinding CreateXRStickBinding(XRHand hand)
+    {
+        return new InputBinding
+        {
+            BindingType = InputBindingType.XRStick,
+            XRHand = hand
+        };
+    }
+
+    /// <summary>Whether this button style binding is held. XR axes count once past halfway.</summary>
+    internal bool IsPressed(IInputHandler inputHandler) => BindingType switch
+    {
+        InputBindingType.Key => Key.HasValue && inputHandler.GetKey(Key.Value),
+        InputBindingType.MouseButton => MouseButton.HasValue && inputHandler.GetMouseButton((int)MouseButton.Value),
+        InputBindingType.GamepadButton => GamepadButton.HasValue && inputHandler.GetGamepadButton(RequiredDeviceIndex ?? 0, GamepadButton.Value),
+        InputBindingType.XRButton => XRButton.HasValue && XRInput.GetButton(XRHand ?? Runtime.XRHand.Right, XRButton.Value),
+        InputBindingType.XRAxis => ReadXRAxis() > 0.5f,
+        _ => false
+    };
+
+    internal float ReadXRAxis() => XRInput.GetAxis(XRHand ?? Runtime.XRHand.Right, XRAxis ?? Runtime.XRAxis.Trigger);
 
     public override string ToString() => BindingType.ToString();
 }
