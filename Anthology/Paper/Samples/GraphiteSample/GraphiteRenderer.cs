@@ -105,7 +105,9 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             AddressModeU = SamplerAddressMode.Clamp,
             AddressModeV = SamplerAddressMode.Clamp,
             AddressModeW = SamplerAddressMode.Clamp,
-            Filter = SamplerFilter.MinLinear_MagLinear_MipLinear,
+            MinFilter = FilterMode.Linear,
+            MagFilter = FilterMode.Linear,
+            MipFilter = FilterMode.Linear,
         });
 
         UpdateProjection(width, height);
@@ -499,14 +501,13 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         public override void Setup(RenderContextBuilder builder)
         {
             _sceneHandle = builder.DeclareInputTexture("Scene");
-            SetViewTarget(builder);
+            SetViewTarget(builder, depthFormat: PixelFormat.D24_UNorm_S8_UInt);
         }
 
         public override void Render(RenderContext<CanvasView> context, CommandBuffer cmd)
         {
             RenderTexture scene = context.GetRenderTexture(_sceneHandle);
 
-            BindTarget(context, cmd);
 
 
             _properties.SetTexture("src", scene.ColorTextures[0], _owner._sampler);
