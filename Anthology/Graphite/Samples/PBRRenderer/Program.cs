@@ -234,7 +234,6 @@ public static class Program
 
         SwapchainDescription swapchain = new()
         {
-            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
             SyncToVerticalBlank = false
         };
 

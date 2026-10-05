@@ -346,13 +346,17 @@ public sealed class RenderContext<TView>
 
         switch (resource)
         {
-            case GraphViewTargetResource:
+            case GraphViewTargetResource viewTargetResource:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), "The view target has no history.");
                 if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
                     throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
+                if (_view.TargetSwapchain != null && viewTargetResource.DepthFormat is PixelFormat requiredDepth)
+                    _view.TargetSwapchain.RequireDepth(requiredDepth);
                 Framebuffer viewTarget = (_view.TargetSwapchain?.Framebuffer ?? _view.TargetFramebuffer)
                     ?? throw new InvalidOperationException($"A pass resolved the view target, but view '{_view.Name}' has none.");
+                if (viewTargetResource.DepthFormat != null && viewTarget.DepthTarget == null)
+                    throw new InvalidOperationException($"A pass declared a view target depth attachment, but view '{_view.Name}' has a TargetFramebuffer without one.");
                 RenderTexture target = new(viewTarget);
                 _resolved[handle.Id] = target;
                 return target;

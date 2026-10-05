@@ -51,7 +51,7 @@ public static class TestUtils
     // Each device gets its own profiler instance - state must not leak across devices/tests.
     private static GraphicsDeviceOptions HeadlessOptions() => new(true) { Profiler = new TestCountingProfiler() };
     private static GraphicsDeviceOptions SwapchainOptions() => new(true) { Profiler = new TestCountingProfiler() };
-    private static SwapchainDescription SwapchainConfig() => new() { DepthFormat = PixelFormat.R16_UNorm };
+    private static SwapchainDescription SwapchainConfig() => new();
 
     public static GraphicsDevice CreateVulkanDevice()
         => GraphicsDevice.CreateVulkan(HeadlessOptions());

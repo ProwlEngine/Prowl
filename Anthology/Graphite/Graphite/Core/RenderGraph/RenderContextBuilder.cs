@@ -85,16 +85,18 @@ public sealed class RenderContextBuilder
     /// Declares a write to the current view's target: <see cref="IRenderView.TargetFramebuffer"/>, or the main swapchain image
     /// when <see cref="IRenderView.TargetSwapchain"/> is set, which presents after dispatch. The pass is skipped for a view with
     /// neither. Clears by default; pass Loaded ops for a pass that draws over an earlier view target pass.
+    /// A depth format gives the target a depth attachment, created for the swapchain on demand. A TargetFramebuffer must already have one.
     /// </summary>
     public TextureHandle DeclareViewTarget(
         TargetLoadStoreOps? ops = null,
-        TextureUsageKind usage = TextureUsageKind.Attachment)
+        TextureUsageKind usage = TextureUsageKind.Attachment,
+        PixelFormat? depthFormat = null)
     {
         if ((usage & ~(TextureUsageKind.Attachment | TextureUsageKind.TransferDst)) != 0)
             throw new ArgumentException($"The view target only supports Attachment and TransferDst, not {usage}.", nameof(usage));
 
         Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, null, isOutput: true));
-        Outputs.Add(new GraphViewTargetResource(ops));
+        Outputs.Add(new GraphViewTargetResource(ops, depthFormat));
         return new TextureHandle(GraphViewTargetResource.ViewTargetId);
     }
 }

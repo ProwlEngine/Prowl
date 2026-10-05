@@ -78,11 +78,13 @@ internal unsafe partial class VkSwapchain : Swapchain
         }
         _gd.Vk.GetDeviceQueue(_gd.Device, _presentQueueIndex, 0, out _presentQueue);
 
-        _framebuffer = new VkSwapchainFramebuffer(gd, this, _surface, description.Width, description.Height, description.DepthFormat);
+        _framebuffer = new VkSwapchainFramebuffer(gd, this, _surface, description.Width, description.Height);
 
         if (CreateSwapchain(description.Width, description.Height))
             AcquireNextImage();
     }
+
+    internal override void RequireDepth(PixelFormat format) => _framebuffer.RequireDepth(format);
 
     public override void Resize(uint width, uint height)
     {

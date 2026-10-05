@@ -31,10 +31,10 @@ public abstract class RasterPass<TView> : IPass<TView>
         return _target;
     }
 
-    /// <summary>Declares the view's target as this pass's target. The pass is skipped for a view with no target.</summary>
-    protected TextureHandle SetViewTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null)
+    /// <summary>Declares the view's target as this pass's target, with a depth attachment when a format is given. The pass is skipped for a view with no target.</summary>
+    protected TextureHandle SetViewTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null, PixelFormat? depthFormat = null)
     {
-        _target = builder.DeclareViewTarget(ops);
+        _target = builder.DeclareViewTarget(ops, depthFormat: depthFormat);
         _hasTarget = true;
         return _target;
     }

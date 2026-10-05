@@ -29,7 +29,7 @@ internal sealed class CubeGridPass : RasterPass<SceneView>
 
     public override string Name => "Backbuffer";
 
-    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
+    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
@@ -59,7 +59,6 @@ public static class Program
 
         SwapchainDescription swapchain = new()
         {
-            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
             SyncToVerticalBlank = false
         };
 

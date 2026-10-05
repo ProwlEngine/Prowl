@@ -21,10 +21,6 @@ public struct SwapchainDescription
     /// </summary>
     public uint Height;
     /// <summary>
-    /// Depth target format, null = none.
-    /// </summary>
-    public PixelFormat? DepthFormat;
-    /// <summary>
     /// Sync presentation to vblank.
     /// </summary>
     public bool SyncToVerticalBlank;
