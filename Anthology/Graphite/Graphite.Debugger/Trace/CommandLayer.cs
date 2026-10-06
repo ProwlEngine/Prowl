@@ -38,7 +38,6 @@ public readonly record struct TraceAttachment(
 
 public sealed record TracePipelineState(
     TraceProgramId Program,
-    BlobRef VariantKey,
     PrimitiveTopology Topology,
     EquatableArray<PixelFormat> ColorFormats,
     PixelFormat? DepthFormat,
