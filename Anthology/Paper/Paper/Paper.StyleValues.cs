@@ -29,6 +29,7 @@ namespace Prowl.PaperUI
         public Float4 Rounded;
         public BoxShadow BoxShadow;
         public float BackdropBlur;
+        public float Opacity;
         public float AspectRatio;
         public UnitValue Width, Height, MinWidth, MaxWidth, MinHeight, MaxHeight;
         public UnitValue Left, Right, Top, Bottom;
@@ -99,6 +100,7 @@ namespace Prowl.PaperUI
                 case GuiProp.Gap: return ref v.Gap;
                 case GuiProp.LineGap: return ref v.LineGap;
                 case GuiProp.BackdropBlur: return ref v.BackdropBlur;
+                case GuiProp.Opacity: return ref v.Opacity;
                 case GuiProp.AspectRatio: return ref v.AspectRatio;
                 case GuiProp.TranslateX: return ref v.TranslateX;
                 case GuiProp.TranslateY: return ref v.TranslateY;
@@ -353,6 +355,7 @@ namespace Prowl.PaperUI
             GuiProp.Rounded => Rounded,
             GuiProp.BoxShadow => BoxShadow,
             GuiProp.BackdropBlur => BackdropBlur,
+            GuiProp.Opacity => Opacity,
             GuiProp.AspectRatio => AspectRatio,
             GuiProp.Width => Width,
             GuiProp.Height => Height,

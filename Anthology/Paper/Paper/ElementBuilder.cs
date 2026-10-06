@@ -105,6 +105,9 @@ namespace Prowl.PaperUI
         /// </summary>
         public T BackdropBlur(float radius) => SetStyleProperty(GuiProp.BackdropBlur, radius);
 
+        /// <summary>Fades the element and everything inside it. 0 is invisible, 1 is opaque. It still takes the pointer while faded.</summary>
+        public T Opacity(float opacity) => SetStyleProperty(GuiProp.Opacity, opacity);
+
         #endregion
 
         #region Corner Rounding
