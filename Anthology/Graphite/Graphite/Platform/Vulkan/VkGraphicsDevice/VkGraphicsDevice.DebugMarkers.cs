@@ -23,7 +23,7 @@ internal unsafe partial class VkGraphicsDevice
         if (DebugUtils == null)
             return;
 
-        Debug.WriteLine("Enabling Vulkan Debug callbacks.");
+        System.Diagnostics.Debug.WriteLine("Enabling Vulkan Debug callbacks.");
         DebugUtilsMessengerCreateInfoEXT createInfo = new(sType: StructureType.DebugUtilsMessengerCreateInfoExt)
         {
             MessageSeverity = severity,
@@ -129,7 +129,7 @@ internal unsafe partial class VkGraphicsDevice
 
     private void SetDebugUtilsName(ObjectType type, ulong target, string name)
     {
-        Debug.Assert(DebugUtils != null);
+        System.Diagnostics.Debug.Assert(DebugUtils != null);
 
         DebugUtilsObjectNameInfoEXT nameInfo = new(sType: StructureType.DebugUtilsObjectNameInfoExt);
         nameInfo.ObjectType = type;
