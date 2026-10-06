@@ -1,4 +1,5 @@
 using System;
+using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Debugger.Trace;
@@ -14,7 +15,7 @@ public enum PassMarks : byte
 public sealed record TraceResource(
     TraceResourceId Id,
     string Name,
-    ResourceKind Kind,
+    GraphResourceKind Kind,
     bool Imported,
     GraphTextureDesc? Texture,
     GraphBufferDesc? Buffer,
@@ -72,7 +73,7 @@ public sealed record TraceGhost(
 
 public sealed record TraceAccess(
     TraceResourceId Resource,
-    ResourceKind Kind,
+    GraphResourceKind Kind,
     bool IsOutput,
     TextureState TextureUsage,
     TextureState? DepthUsage,

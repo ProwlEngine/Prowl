@@ -1,4 +1,5 @@
 using Prowl.Graphite.Debugger.Trace;
+using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 using Xunit;
@@ -14,7 +15,7 @@ public class TraceModelTests
     private static TraceResource Resource(PixelFormat format, uint id = 1) => new(
         new TraceResourceId(id),
         "Color",
-        ResourceKind.TextureReadWrite,
+        GraphResourceKind.Texture,
         true,
         GraphTextureDesc.ViewSized(format, 0.5f, true),
         null,
@@ -24,7 +25,7 @@ public class TraceModelTests
     private static TracePass Pass(string name, params TraceCommand[] commands) => new(
         name,
         0,
-        EquatableArray.Create(new TraceAccess(new TraceResourceId(1), ResourceKind.TextureReadWrite, true, TextureState.Attachment, null, BufferAccess.None)),
+        EquatableArray.Create(new TraceAccess(new TraceResourceId(1), GraphResourceKind.Texture, true, TextureState.Attachment, null, BufferAccess.None)),
         EquatableArray.Create(new TraceUse(new TraceResourceId(1), 3, TraceRange.Subresources(0, 1, 0, 1), TraceResourceUsage.Sampled)),
         EquatableArray<TraceUse>.Empty,
         EquatableArray<TraceLoadedAttachment>.Empty,
