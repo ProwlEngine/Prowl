@@ -37,9 +37,9 @@ public abstract partial class GraphicsDevice
     private void AttachProfiler(IProfiler? profiler)
     {
         Profiler = profiler;
-        CommandProfiler = profiler as ICommandProfiler;
-        GraphProfiler = profiler as IGraphProfiler;
-        GpuStatsProfiler = profiler as IGpuStatsProfiler;
+        CommandProfiler = profiler is CompositeProfiler { HasCommand: false } ? null : profiler as ICommandProfiler;
+        GraphProfiler = profiler is CompositeProfiler { HasGraph: false } ? null : profiler as IGraphProfiler;
+        GpuStatsProfiler = profiler is CompositeProfiler { HasGpuStats: false } ? null : profiler as IGpuStatsProfiler;
     }
 
     /// <summary>

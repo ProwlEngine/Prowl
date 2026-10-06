@@ -572,6 +572,46 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
+    public void CompositeProfiler_ForwardsEachCategoryToEverySinkThatImplementsIt()
+    {
+        CommandRecorder firstCommands = new();
+        CommandRecorder secondCommands = new();
+        TimingRecorder timing = new();
+        using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(firstCommands, timing, new CompositeProfiler(secondCommands)));
+
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+
+        device.RunTestGraph((context, cl) =>
+        {
+            cl.CopyBuffer(source, 0, destination, 0, 256);
+        });
+        device.WaitForIdle();
+
+        Assert.NotEmpty(firstCommands.Submits);
+        Assert.Equal(firstCommands.Submits.Count, secondCommands.Submits.Count);
+        Assert.Single(timing.ExecutionTimes);
+    }
+
+    [Fact]
+    public void CompositeProfiler_OnlyEnablesCategoriesItsSinksImplement()
+    {
+        CommandRecorder commands = new();
+        using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(commands));
+
+        Assert.NotNull(device.CommandProfiler);
+        Assert.Null(device.GraphProfiler);
+        Assert.Null(device.GpuStatsProfiler);
+    }
+
+    [Fact]
+    public void CompositeProfiler_RejectsNullSinks()
+    {
+        Assert.Throws<ArgumentException>(() => new CompositeProfiler(new CommandRecorder(), null!));
+        Assert.Throws<ArgumentNullException>(() => new CompositeProfiler(null!));
+    }
+
+    [Fact]
     public void SetProfiler_SwapsActiveProfilerAtRuntime()
     {
         using GraphicsDevice device = GD.BackendType switch
