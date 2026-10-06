@@ -16,5 +16,5 @@ public abstract partial class CommandBuffer
 
     internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
 
-    internal void RecordResourceSetBind(uint setCount) => Execution?.Device.Counters.RecordResourceSetBind(setCount);
+    internal void RecordResourceSetBind(uint setCount) => Device.Counters.RecordResourceSetBind(setCount);
 }
