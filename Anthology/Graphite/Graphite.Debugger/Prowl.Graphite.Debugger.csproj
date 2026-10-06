@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OutputType>Library</OutputType>
+        <RootNamespace>Prowl.Graphite.Debugger</RootNamespace>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.Graphite.Debugger</PackageId>
+        <Description>Records Graphite graph executions into a serializable trace and replays them down to a single GPU event.</Description>
+        <PackageTags>Graphics Vulkan Debugger Capture Replay</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+    </ItemGroup>
+
+</Project>
