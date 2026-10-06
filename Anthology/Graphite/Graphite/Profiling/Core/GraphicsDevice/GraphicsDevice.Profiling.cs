@@ -19,6 +19,9 @@ public abstract partial class GraphicsDevice
     /// <summary>Attached profiler's GPU stats capability, null if it does not implement <see cref="IGpuStatsProfiler"/>.</summary>
     internal IGpuStatsProfiler? GpuStatsProfiler { get; private set; }
 
+    /// <summary>Always-on counters of what the backend is doing.</summary>
+    public GraphicsCounters Counters { get; } = new();
+
     private int _graphDispatchDepth;
 
     private void InitializeFrameOptions_InitializeProfiling(in GraphicsDeviceOptions options)
@@ -47,56 +50,5 @@ public abstract partial class GraphicsDevice
             throw new InvalidOperationException("SetProfiler cannot be called while a graph is dispatching.");
 
         AttachProfiler(profiler);
-    }
-
-    // Fans a buffer allocation/free out to every BufferRoleBin matching a usage flag. Bins overlap
-    // by design for multi-flag buffers - the caller's AllocBin.DeviceBuffer call is the
-    // non-double-counted total, this is just the per-role gauges.
-    internal static void ForEachBufferRole(BufferUsage usage, long bytes, IProfiler profiler, bool allocate)
-    {
-        if ((usage & BufferUsage.VertexBuffer) != 0)
-            RecordRole(BufferRoleBin.Vertex);
-        if ((usage & BufferUsage.IndexBuffer) != 0)
-            RecordRole(BufferRoleBin.Index);
-        if ((usage & BufferUsage.UniformBuffer) != 0)
-            RecordRole(BufferRoleBin.Uniform);
-        if ((usage & BufferUsage.StructuredBufferReadOnly) != 0)
-            RecordRole(BufferRoleBin.StructuredReadOnly);
-        if ((usage & BufferUsage.StructuredBufferReadWrite) != 0)
-            RecordRole(BufferRoleBin.StructuredReadWrite);
-        if ((usage & BufferUsage.IndirectBuffer) != 0)
-            RecordRole(BufferRoleBin.Indirect);
-        if ((usage & BufferUsage.Dynamic) != 0)
-            RecordRole(BufferRoleBin.Dynamic);
-        if ((usage & BufferUsage.Staging) != 0)
-            RecordRole(BufferRoleBin.Staging);
-
-        void RecordRole(BufferRoleBin role)
-        {
-            if (allocate)
-                profiler.AllocateMemory(role, bytes);
-            else
-                profiler.FreeMemory(role, bytes);
-        }
-    }
-
-    /// <summary>Records a buffer creation: DeviceBuffer allocation plus role gauges.</summary>
-    internal void RecordBufferAllocation(BufferUsage usage, long bytes)
-    {
-        if (Profiler is not { } profiler)
-            return;
-
-        profiler.Allocate(AllocBin.DeviceBuffer, bytes);
-        ForEachBufferRole(usage, bytes, profiler, allocate: true);
-    }
-
-    /// <summary>Records a buffer destruction: DeviceBuffer free plus role gauges.</summary>
-    internal void RecordBufferFree(BufferUsage usage, long bytes)
-    {
-        if (Profiler is not { } profiler)
-            return;
-
-        profiler.Free(AllocBin.DeviceBuffer, bytes);
-        ForEachBufferRole(usage, bytes, profiler, allocate: false);
     }
 }

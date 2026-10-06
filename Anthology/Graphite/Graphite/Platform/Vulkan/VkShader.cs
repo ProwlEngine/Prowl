@@ -53,7 +53,7 @@ internal sealed unsafe class VkShader
         DescriptorCache = new VkDescriptorSetCache(_gd);
 
         _profiledShaderBytes = bytes;
-        _gd.Profiler?.Allocate(AllocBin.Shader, bytes);
+        _gd.Counters.Allocate(AllocBin.Shader, bytes);
     }
 
     internal ShaderModule GetModule(ShaderStages stage)
@@ -67,7 +67,7 @@ internal sealed unsafe class VkShader
 
     internal void Destroy()
     {
-        _gd.Profiler?.Free(AllocBin.Shader, _profiledShaderBytes);
+        _gd.Counters.Free(AllocBin.Shader, _profiledShaderBytes);
 
         DescriptorCache.Destroy();
 

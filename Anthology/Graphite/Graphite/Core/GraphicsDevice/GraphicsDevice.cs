@@ -96,7 +96,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void SwapBuffers(Swapchain swapchain)
     {
         SwapBuffersCore(swapchain);
-        Profiler?.RecordSwap(SwapBin.Present, 0);
+        Counters.RecordSwap(SwapBin.Present);
     }
 
     private protected abstract void SwapBuffersCore(Swapchain swapchain);
@@ -132,7 +132,7 @@ public abstract partial class GraphicsDevice : IDisposable
         Map_CheckResource(buffer);
         buffer.MarkContentChanged();
         IntPtr data = MapCore(buffer);
-        Profiler?.Record(BufferOpBin.Map, buffer.SizeInBytes);
+        Counters.RecordBufferOp(BufferOpBin.Map, buffer.SizeInBytes);
         return new Span<byte>((void*)data, (int)buffer.SizeInBytes);
     }
 
@@ -148,7 +148,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void Unmap(DeviceBuffer buffer)
     {
         UnmapCore(buffer);
-        Profiler?.Record(BufferOpBin.Unmap, 0);
+        Counters.RecordBufferOp(BufferOpBin.Unmap, 0);
     }
 
     /// <summary>

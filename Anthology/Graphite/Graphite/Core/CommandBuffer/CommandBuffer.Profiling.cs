@@ -18,8 +18,7 @@ public abstract partial class CommandBuffer
 
     internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
 
-    /// <summary>Reports a resource-set bind to the profiler, if any.</summary>
-    internal void RecordResourceSetBind(uint setCount) => Execution?.Device.Profiler?.RecordResourceSetBind(setCount);
+    internal void RecordResourceSetBind(uint setCount) => Execution?.Device.Counters.RecordResourceSetBind(setCount);
 
     private readonly List<BufferBindingInfo> _capturedVertexBuffers = new();
     private BufferBindingInfo? _capturedIndexBuffer;

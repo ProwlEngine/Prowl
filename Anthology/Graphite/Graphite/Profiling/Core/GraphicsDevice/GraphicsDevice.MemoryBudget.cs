@@ -6,8 +6,8 @@ public abstract partial class GraphicsDevice
     /// Polls the device's current VRAM budget/usage, as reported by the driver (accounts for other
     /// processes sharing the GPU, not just this process's own tracked allocations). False
     /// <see cref="MemoryBudgetInfo.IsSupported"/> means the backend or device has no way to report this
-    /// (e.g. VK_EXT_memory_budget unavailable) - callers should fall back to the profiler's own
-    /// Resident/{bin} counters in that case.
+    /// (e.g. VK_EXT_memory_budget unavailable) - callers should fall back to Counters.Snapshot()
+    /// ResidentBytes in that case.
     /// </summary>
     public virtual MemoryBudgetInfo GetMemoryBudget() => default;
 }

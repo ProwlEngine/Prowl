@@ -29,21 +29,9 @@ public interface IGpuStatsProfiler
     void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats);
 }
 
-/// <summary>Aggregate of every capability plus the counter and capture members not yet split out.</summary>
+/// <summary>Aggregate of every capability plus the capture members not yet split out.</summary>
 public interface IProfiler : ICommandProfiler, IGraphProfiler, IGpuStatsProfiler
 {
-    void Allocate(AllocBin type, long bytes);
-    void Free(AllocBin type, long bytes);
-
-    void AllocateMemory(BufferRoleBin role, long bytes);
-    void FreeMemory(BufferRoleBin role, long bytes);
-
-    void Record(BufferOpBin op, long bytes);
-    void RecordSwap(SwapBin evt, long bytes);
-
-    void RecordResourceSetBind(uint setCount);
-    void RecordBarrier(BarrierBin kind, uint count);
-
     void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info);
 
     bool RequestCapture { get; }
