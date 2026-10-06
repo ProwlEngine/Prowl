@@ -9,6 +9,7 @@ namespace Prowl.Graphite;
 public abstract class GraphicsProgram : ShaderProgram
 {
     private readonly ShaderStages[] _stages;
+    private readonly ShaderStageDescription[] _stageDescriptions;
     private readonly BlendStateDescription _blendState;
     private readonly DepthStencilStateDescription _depthStencilState;
     private readonly RasterizerStateDescription _rasterizerState;
@@ -18,6 +19,8 @@ public abstract class GraphicsProgram : ShaderProgram
         : base(description.ResourceLayouts)
     {
         ShaderStageDescription[] stageDescs = description.Stages ?? Array.Empty<ShaderStageDescription>();
+        _stageDescriptions = Util.ShallowClone(stageDescs);
+        Key = ProgramKey.Compute(_stageDescriptions);
         _stages = new ShaderStages[stageDescs.Length];
         for (int i = 0; i < stageDescs.Length; i++)
         {
@@ -33,6 +36,11 @@ public abstract class GraphicsProgram : ShaderProgram
     /// Stages in this program, in description order.
     /// </summary>
     public IReadOnlyList<ShaderStages> Stages => _stages;
+
+    /// <summary>
+    /// Stage descriptions with SPIR-V and entry points, in description order.
+    /// </summary>
+    public IReadOnlyList<ShaderStageDescription> StageDescriptions => _stageDescriptions;
 
     /// <summary>
     /// Blend state.

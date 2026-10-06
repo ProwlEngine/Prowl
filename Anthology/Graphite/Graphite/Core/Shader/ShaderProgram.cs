@@ -18,6 +18,11 @@ public abstract class ShaderProgram : GraphicsResource
         StorageWriteElements = FindStorageWriteElements(_resourceLayouts);
     }
 
+    /// <summary>
+    /// Content key over the stages of this program.
+    /// </summary>
+    public ProgramKey Key { get; private protected set; }
+
     internal (PropertyID Name, ResourceKind Kind)[] StorageWriteElements { get; }
 
     private static (PropertyID Name, ResourceKind Kind)[] FindStorageWriteElements(ResourceLayoutDescription[] layouts)
