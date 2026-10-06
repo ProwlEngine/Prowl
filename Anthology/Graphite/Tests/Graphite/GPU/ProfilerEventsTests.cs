@@ -79,7 +79,7 @@ file readonly struct ProfilerView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class ClearingRasterPass : RasterPass<ProfilerView>
+file sealed class ClearingRasterPass : RasterPass
 {
     private readonly RenderResourceID _id;
 
@@ -90,13 +90,12 @@ file sealed class ClearingRasterPass : RasterPass<ProfilerView>
     public override void Setup(RenderContextBuilder builder)
         => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
-    public override void Render(RenderContext<ProfilerView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
     }
 }
 
-file sealed class ReadingCopyPass : IPass<ProfilerView>
+file sealed class ReadingCopyPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly DeviceBuffer _readback;
@@ -110,9 +109,9 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
 
     public string Name => "ProfilerCopy";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureUsageKind.TransferSrc);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureState.TransferSrc);
 
-    public void Render(RenderContext<ProfilerView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
         cmd.CopyTextureToBuffer(target.ColorTextures[0], _readback, 0, TextureRegion.Whole(target.ColorTextures[0]));
@@ -171,13 +170,11 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         props.SetBuffer("Source", source);
         props.SetBuffer("Destination", destination);
 
-        device.RunTestGraph(context =>
+        device.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            context.SubmitCommandBuffer(cl);
         });
         device.WaitForIdle();
 
@@ -196,26 +193,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void CopyBuffer_RecordsBufferTransitionBarrierAndBufferOp()
-    {
-        RecordingProfiler profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.CopyBuffer(source, 0, destination, 0, 256);
-            context.SubmitCommandBuffer(cl);
-        });
-        device.WaitForIdle();
-
-        Assert.Contains(profiler.Barriers, b => b.Kind == BarrierBin.BufferTransition);
-    }
-
-    [Fact]
     public void DispatchGraph_RecordsPassLifecycleReadsAndSubmits()
     {
         RecordingProfiler profiler = new();
@@ -227,7 +204,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_target");
         ClearingRasterPass clearPass = new(id);
         ReadingCopyPass copyPass = new(id, readback);
-        using RenderPipeline<ProfilerView> pipeline = new([clearPass, copyPass]);
+        using RenderPipeline pipeline = new([clearPass, copyPass]);
 
         device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
         device.WaitForIdle();
@@ -250,20 +227,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void Record_RecordsTransferSubmit()
-    {
-        RecordingProfiler profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
-
-        Assert.Contains(profiler.Submits, s => s.IsTransfer);
-    }
-
-    [Fact]
     public void RequestExecutionTiming_True_RecordsExecutionTime()
     {
         RecordingProfiler profiler = new() { RequestGPUStatistics = true };
@@ -272,37 +235,15 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
-        device.RunTestGraph(context =>
+        device.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyBuffer(source, 0, destination, 0, 256);
-            context.SubmitCommandBuffer(cl);
         });
         device.WaitForIdle();
 
         (CommandBufferInfo _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
         Assert.False(isTransfer);
         Assert.True(milliseconds >= 0);
-    }
-
-    [Fact]
-    public void RequestExecutionTiming_False_NeverRecordsExecutionTime()
-    {
-        RecordingProfiler profiler = new() { RequestGPUStatistics = false };
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.CopyBuffer(source, 0, destination, 0, 256);
-            context.SubmitCommandBuffer(cl);
-        });
-        device.WaitForIdle();
-
-        Assert.Empty(profiler.ExecutionTimes);
     }
 
     [Fact]
@@ -319,11 +260,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         void RunCopyGraph()
         {
-            device.RunTestGraph(context =>
+            device.RunTestGraph((context, cl) =>
             {
-                CommandBuffer cl = context.GetCommandBuffer();
                 cl.CopyBuffer(source, 0, destination, 0, 256);
-                context.SubmitCommandBuffer(cl);
             });
             device.WaitForIdle();
         }

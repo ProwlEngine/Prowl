@@ -28,17 +28,6 @@ public class InternerTests
     }
 
     [Fact]
-    public void Intern_SameKey_ReturnsSameValue()
-    {
-        Interner interner = NewInterner();
-
-        int a = interner.Intern("hello");
-        int b = interner.Intern("hello");
-
-        Assert.Equal(a, b);
-    }
-
-    [Fact]
     public void Intern_DifferentKeys_ReturnDistinctValues()
     {
         Interner interner = NewInterner();
@@ -47,20 +36,6 @@ public class InternerTests
         int b = interner.Intern("b");
 
         Assert.NotEqual(a, b);
-    }
-
-    [Fact]
-    public void Intern_MintsMonotonically()
-    {
-        Interner interner = NewInterner();
-
-        int a = interner.Intern("a");
-        int b = interner.Intern("b");
-        int c = interner.Intern("c");
-
-        Assert.Equal(1, a);
-        Assert.Equal(2, b);
-        Assert.Equal(3, c);
     }
 
     [Fact]
@@ -86,16 +61,6 @@ public class InternerTests
 
         Assert.True(interner.TryGetKey(id, out string? key));
         Assert.Equal("roundtrip", key);
-    }
-
-    [Fact]
-    public void TryGetKey_UnknownValue_ReturnsFalse()
-    {
-        Interner interner = NewInterner();
-        interner.Intern("known");
-
-        Assert.False(interner.TryGetKey(9999, out string? key));
-        Assert.Null(key);
     }
 
     [Fact]

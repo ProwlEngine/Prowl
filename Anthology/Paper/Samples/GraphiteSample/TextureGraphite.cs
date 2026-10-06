@@ -55,7 +55,9 @@ public class TextureGraphite : IDisposable
             AddressModeU = SamplerAddressMode.Wrap,
             AddressModeV = SamplerAddressMode.Wrap,
             AddressModeW = SamplerAddressMode.Wrap,
-            Filter = SamplerFilter.MinLinear_MagLinear_MipLinear
+            MinFilter = FilterMode.Linear,
+            MagFilter = FilterMode.Linear,
+            MipFilter = FilterMode.Linear,
         });
 
         return new TextureGraphite(texture, sampler);

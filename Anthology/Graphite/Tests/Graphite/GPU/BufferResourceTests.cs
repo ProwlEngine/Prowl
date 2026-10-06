@@ -24,7 +24,7 @@ file readonly struct BufferView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class BufferWriterPass : IPass<BufferView>
+file sealed class BufferWriterPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly GraphBufferDesc _desc;
@@ -41,10 +41,10 @@ file sealed class BufferWriterPass : IPass<BufferView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
-    public void Render(RenderContext<BufferView> context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
+    public void Render(RenderContext context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
 }
 
-file sealed class BufferReaderPass : IPass<BufferView>
+file sealed class BufferReaderPass : IPass
 {
     private readonly RenderResourceID _id;
     private BufferHandle _handle;
@@ -56,10 +56,10 @@ file sealed class BufferReaderPass : IPass<BufferView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputBuffer(_id);
 
-    public void Render(RenderContext<BufferView> context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
+    public void Render(RenderContext context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
 }
 
-file sealed class ComputeWriteReadbackPass : IPass<BufferView>
+file sealed class ComputeWriteReadbackPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly GraphBufferDesc _desc;
@@ -85,7 +85,7 @@ file sealed class ComputeWriteReadbackPass : IPass<BufferView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
-    public void Render(RenderContext<BufferView> context, CommandBuffer cl)
+    public void Render(RenderContext context, CommandBuffer cl)
     {
         DeviceBuffer destination = context.GetRenderBuffer(_handle);
 
@@ -102,7 +102,7 @@ file sealed class ComputeWriteReadbackPass : IPass<BufferView>
     }
 }
 
-file sealed class BufferHistoryPass : IPass<BufferView>
+file sealed class BufferHistoryPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly uint _sizeInBytes;
@@ -123,7 +123,7 @@ file sealed class BufferHistoryPass : IPass<BufferView>
     public void Setup(RenderContextBuilder builder)
         => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(_sizeInBytes / 4, 4), history: 1);
 
-    public void Render(RenderContext<BufferView> context, CommandBuffer cl)
+    public void Render(RenderContext context, CommandBuffer cl)
     {
         DeviceBuffer current = context.GetRenderBuffer(_handle, 0);
         DeviceBuffer previous = context.GetRenderBuffer(_handle, 1);
@@ -142,7 +142,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         GraphBufferDesc desc = GraphBufferDesc.Structured(16, sizeof(float));
         BufferWriterPass writer = new(id, desc);
         BufferReaderPass reader = new(id);
-        using RenderPipeline<BufferView> pipeline = new([writer, reader]);
+        using RenderPipeline pipeline = new([writer, reader]);
 
         GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -192,7 +192,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         GraphBufferDesc desc = GraphBufferDesc.Structured(count, sizeof(float));
         ComputeWriteReadbackPass pass = new(
             RenderResourceID.Intern("bufres_compute_out"), desc, compute, source, readback, side);
-        using RenderPipeline<BufferView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -212,7 +212,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(size, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer readback = RF.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
         BufferHistoryPass pass = new(RenderResourceID.Intern("bufres_history"), size, source, readback);
-        using RenderPipeline<BufferView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
 
         float[]? previousValues = null;
         for (int frame = 0; frame < 3; frame++)

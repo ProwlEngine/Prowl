@@ -9,25 +9,20 @@ namespace Prowl.Graphite.RenderGraph;
 /// </summary>
 public sealed class RenderContextBuilder
 {
-    internal readonly List<RenderResourceID> Inputs = new();
-    internal readonly List<GraphResource> Outputs = new();
     internal readonly List<ResourceAccess> Accesses = new();
 
     internal void Reset()
     {
-        Inputs.Clear();
-        Outputs.Clear();
         Accesses.Clear();
     }
 
     /// <summary>Declares a texture this pass reads. Writer owns the description.</summary>
     public TextureHandle DeclareInputTexture(
         RenderResourceID id,
-        TextureUsageKind usage = TextureUsageKind.Sampled,
-        TextureUsageKind? depthUsage = null)
+        TextureState usage = TextureState.Sampled,
+        TextureState? depthUsage = null)
     {
         Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: false));
-        Inputs.Add(id);
         return new TextureHandle(id);
     }
 
@@ -40,11 +35,10 @@ public sealed class RenderContextBuilder
         GraphTextureDesc desc,
         int history = 0,
         TargetLoadStoreOps? ops = null,
-        TextureUsageKind usage = TextureUsageKind.Attachment,
-        TextureUsageKind? depthUsage = null)
+        TextureState usage = TextureState.Attachment,
+        TextureState? depthUsage = null)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true));
-        Outputs.Add(new GraphTextureResource(id, desc, history, ops));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true, new GraphTextureResource(id, desc, history, ops)));
         return new TextureHandle(id);
     }
 
@@ -54,19 +48,17 @@ public sealed class RenderContextBuilder
     public TextureHandle DeclareImportedTexture(
         RenderResourceID id,
         RenderTexture existing,
-        TextureUsageKind usage = TextureUsageKind.Attachment,
-        TextureUsageKind? depthUsage = null)
+        TextureState usage = TextureState.Attachment,
+        TextureState? depthUsage = null)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true));
-        Outputs.Add(new GraphImportedTextureResource(id, existing));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true, new GraphImportedTextureResource(id, existing)));
         return new TextureHandle(id);
     }
 
     /// <summary>Declares a buffer this pass reads. Writer owns the description.</summary>
-    public BufferHandle DeclareInputBuffer(RenderResourceID id, BufferUsageKind usage = BufferUsageKind.AnyRead)
+    public BufferHandle DeclareInputBuffer(RenderResourceID id, BufferAccess usage = BufferAccess.AllReads)
     {
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: false));
-        Inputs.Add(id);
         return new BufferHandle(id);
     }
 
@@ -74,29 +66,26 @@ public sealed class RenderContextBuilder
     /// Declares a buffer this pass writes, creating it if new. Non-zero history makes it a ring buffer of
     /// history+1 copies, rotated each execution so reads can pull prior frames by age.
     /// </summary>
-    public BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferUsageKind usage = BufferUsageKind.Storage)
+    public BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferAccess usage = BufferAccess.ShaderRead | BufferAccess.ShaderWrite)
     {
-        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true));
-        Outputs.Add(new GraphBufferResource(id, desc, history));
+        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true, new GraphBufferResource(id, desc, history)));
         return new BufferHandle(id);
     }
 
     /// <summary>
-    /// Declares a write to the current view's target: <see cref="IRenderView.TargetFramebuffer"/>, or the main swapchain image
-    /// when <see cref="IRenderView.TargetSwapchain"/> is set, which presents after dispatch. The pass is skipped for a view with
-    /// neither. Clears by default; pass Loaded ops for a pass that draws over an earlier view target pass.
-    /// A depth format gives the target a depth attachment, created for the swapchain on demand. A TargetFramebuffer must already have one.
+    /// Declares a write to the current view's target: <see cref="IRenderView.Target"/>, which presents after dispatch
+    /// when it is a swapchain framebuffer. The pass is skipped for a view with no target. Clears by default; pass Loaded ops for a pass that draws over an earlier view target pass.
+    /// A depth format gives the target a depth attachment, created for a swapchain on demand. Any other Target must already have one.
     /// </summary>
     public TextureHandle DeclareViewTarget(
         TargetLoadStoreOps? ops = null,
-        TextureUsageKind usage = TextureUsageKind.Attachment,
+        TextureState usage = TextureState.Attachment,
         PixelFormat? depthFormat = null)
     {
-        if ((usage & ~(TextureUsageKind.Attachment | TextureUsageKind.TransferDst)) != 0)
+        if (usage is not (TextureState.Attachment or TextureState.TransferDst))
             throw new ArgumentException($"The view target only supports Attachment and TransferDst, not {usage}.", nameof(usage));
 
-        Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, null, isOutput: true));
-        Outputs.Add(new GraphViewTargetResource(ops, depthFormat));
+        Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, null, isOutput: true, new GraphViewTargetResource(ops, depthFormat)));
         return new TextureHandle(GraphViewTargetResource.ViewTargetId);
     }
 }

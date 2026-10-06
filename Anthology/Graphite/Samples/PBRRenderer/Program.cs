@@ -13,11 +13,11 @@ namespace Prowl.Graphite.Samples.PBRRenderer;
 
 internal readonly struct SceneView : IRenderView
 {
-    public Swapchain TargetSwapchain { get; }
+    public Framebuffer Target { get; }
 
     public SceneView(uint width, uint height, Swapchain swapchain)
     {
-        TargetSwapchain = swapchain;
+        Target = swapchain.Framebuffer;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -32,7 +32,7 @@ internal readonly struct SceneView : IRenderView
 // upsample) over it into "BloomFull", and finally composites Scene + BloomFull to the swapchain. The
 // graph orders the four passes from their declared texture reads/writes; nothing here manually tracks
 // dependency order.
-internal sealed class ScenePass : RasterPass<SceneView>
+internal sealed class ScenePass : RasterPass
 {
     private readonly ModelAsset _model;
     private readonly GraphicsProgram _shader;
@@ -58,7 +58,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
     public override void Setup(RenderContextBuilder builder)
         => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
         float radius = Math.Max(_distance, 0.001f);
         Float3 eye = _center + new Float3(MathF.Sin(_angle), 0.35f, MathF.Cos(_angle)) * _distance;
@@ -67,7 +67,6 @@ internal sealed class ScenePass : RasterPass<SceneView>
         Float4x4 view = Float4x4.CreateLookAt(eye, _center, Float3.UnitY);
         _properties.SetMatrix("MatrixMVP", projection * view);
 
-        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_model.Mesh);
         cmd.SetProperties(_properties);
@@ -76,7 +75,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
 }
 
 
-internal sealed class BloomDownsamplePass : RasterPass<SceneView>
+internal sealed class BloomDownsamplePass : RasterPass
 {
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
@@ -100,12 +99,11 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
         _bloomHalfHandle = SetTarget(builder, "BloomHalf", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, 0.5f));
     }
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
 
-        BindTarget(context, cmd);
 
         _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomHalf.Desc.Width, 0.5f / bloomHalf.Desc.Height));
@@ -119,7 +117,7 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
 }
 
 
-internal sealed class BloomUpsamplePass : RasterPass<SceneView>
+internal sealed class BloomUpsamplePass : RasterPass
 {
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
@@ -143,12 +141,11 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
         _bloomFullHandle = SetTarget(builder, "BloomFull", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, 1f));
     }
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
-        BindTarget(context, cmd);
 
         _properties.SetTexture("sourceTexture", bloomHalf.ColorTextures[0], _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomFull.Desc.Width, 0.5f / bloomFull.Desc.Height));
@@ -162,7 +159,7 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
 }
 
 
-internal sealed class CompositePass : RasterPass<SceneView>
+internal sealed class CompositePass : RasterPass
 {
     private readonly GraphicsProgram _compositeShader;
     private readonly Sampler _sampler;
@@ -186,12 +183,11 @@ internal sealed class CompositePass : RasterPass<SceneView>
         SetViewTarget(builder);
     }
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
-        BindTarget(context, cmd);
 
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
         _properties.SetTexture("bloomTexture", bloomFull.ColorTextures[0], _sampler);
@@ -220,7 +216,7 @@ public static class Program
     static Sampler compositeSampler;
     static Texture albedo;
 
-    static RenderPipeline<SceneView> pipeline;
+    static RenderPipeline pipeline;
     static ScenePass scenePass;
     static SceneView[] views;
 

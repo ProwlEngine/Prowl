@@ -11,6 +11,6 @@ internal sealed class GraphTextureStates
         _states = new Dictionary<Texture, TextureState>(states);
     }
 
-    internal TextureState StateOf(Texture texture)
-        => _states.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
+    internal TextureState? StateOf(Texture texture)
+        => _states.TryGetValue(texture, out TextureState state) ? state : null;
 }

@@ -18,27 +18,11 @@ public abstract partial class ExecutionTask
     /// <param name="commandList">Buffer to submit.</param>
     internal abstract void SubmitCommandsInternal(CommandBuffer commandList);
 
-    private CommandBuffer? _openTail;
-
-    internal CommandBuffer? OpenTail => _openTail;
-
-    internal void QueueOpen(CommandBuffer commandBuffer)
+    internal void SubmitRecorded(CommandBuffer commandBuffer)
     {
-        CloseTail();
-        commandBuffer.SealRenderPass();
-        _openTail = commandBuffer;
         Device.Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
-    }
-
-    internal void CloseTail()
-    {
-        CommandBuffer? tail = _openTail;
-        if (tail == null)
-            return;
-
-        _openTail = null;
-        tail.End();
-        SubmitCommandsInternal(tail);
+        commandBuffer.End();
+        SubmitCommandsInternal(commandBuffer);
     }
 
     /// <summary>

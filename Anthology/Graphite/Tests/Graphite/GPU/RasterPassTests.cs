@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Coverage for the RasterPass convenience base (Phases E + F): BindTarget binds the declared target and
+// Coverage for the RasterPass convenience base (Phases E + F): the graph binds the declared target and
 // applies its declared load ops, so a transient target is cleared by its lifetime-default Clear op even
 // though the pass records no explicit ClearColorTarget call.
 
@@ -24,7 +24,7 @@ file readonly struct RasterView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class ClearingRasterPass : RasterPass<RasterView>
+file sealed class ClearingRasterPass : RasterPass
 {
     private readonly RenderResourceID _id;
     private readonly Color _clear;
@@ -40,13 +40,33 @@ file sealed class ClearingRasterPass : RasterPass<RasterView>
     public override void Setup(RenderContextBuilder builder)
         => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
 
-    public override void Render(RenderContext<RasterView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
     }
 }
 
-file sealed class CopyReadbackPass : IPass<RasterView>
+file sealed class RawClearPass : IPass
+{
+    private readonly RenderResourceID _id;
+    private readonly Color _clear;
+
+    public RawClearPass(RenderResourceID id, Color clear)
+    {
+        _id = id;
+        _clear = clear;
+    }
+
+    public string Name => "RawClear";
+
+    public void Setup(RenderContextBuilder builder)
+        => builder.DeclareOutputTexture(_id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+    }
+}
+
+file sealed class CopyReadbackPass : IPass
 {
     private readonly RenderResourceID _id;
     private readonly DeviceBuffer _readback;
@@ -62,7 +82,7 @@ file sealed class CopyReadbackPass : IPass<RasterView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext<RasterView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
         cmd.CopyTextureToBuffer(target.ColorTextures[0], _readback, 0, TextureRegion.Whole(target.ColorTextures[0]));
@@ -72,7 +92,7 @@ file sealed class CopyReadbackPass : IPass<RasterView>
 public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void BindTarget_TransientTarget_AppliesDeclaredDefaultClear_WithNoExplicitClearCall()
+    public void DeclaredTarget_TransientTarget_AppliesDeclaredDefaultClear_WithNoExplicitClearCall()
     {
         const uint size = 64;
         Color clear = new(0.2f, 0.4f, 0.6f, 1.0f);
@@ -82,7 +102,7 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         RenderResourceID id = RenderResourceID.Intern("raster_clear_target");
         ClearingRasterPass clearPass = new(id, clear);
         CopyReadbackPass copyPass = new(id, readback);
-        using RenderPipeline<RasterView> pipeline = new([clearPass, copyPass]);
+        using RenderPipeline pipeline = new([clearPass, copyPass]);
 
         GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
         GD.WaitForIdle();
@@ -90,6 +110,24 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         TexelData<Color> map = ReadTexels<Color>(readback, size, size);
         Assert.Equal(clear, map[(int)size / 2, (int)size / 2], ColorFuzzyComparer.Instance);
         Assert.Equal(clear, map[0, 0], ColorFuzzyComparer.Instance);
+    }
+
+    [Fact]
+    public void DeclaredTarget_RawPass_AppliesDeclaredClear()
+    {
+        const uint size = 64;
+        Color clear = new(0.9f, 0.1f, 0.3f, 1.0f);
+
+        DeviceBuffer readback = CreateTexelReadbackBuffer<Color>(size, size);
+
+        RenderResourceID id = RenderResourceID.Intern("raster_raw_clear_target");
+        using RenderPipeline pipeline = new([new RawClearPass(id, clear), new CopyReadbackPass(id, readback)]);
+
+        GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
+        GD.WaitForIdle();
+
+        TexelData<Color> map = ReadTexels<Color>(readback, size, size);
+        Assert.Equal(clear, map[(int)size / 2, (int)size / 2], ColorFuzzyComparer.Instance);
     }
 }
 

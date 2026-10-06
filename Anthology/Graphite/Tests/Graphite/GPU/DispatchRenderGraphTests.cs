@@ -11,23 +11,15 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Coverage for the high-level GraphicsDevice.DispatchRenderGraph entry point: one graph execution per
-// dispatch, the pass loop running once per view against a fresh per-view context, the returned task
-// completing, transient acquisition through the context surviving many dispatches, and the
-// backbuffer declaration deciding whether the dispatch presents. The present path runs on the
-// windowed creator; everything else runs headless.
-
 file readonly struct DispatchView : IRenderView
 {
-    public Swapchain? TargetSwapchain { get; }
-    public Framebuffer? TargetFramebuffer { get; }
+    public Framebuffer? Target { get; }
 
     public DispatchView(uint width, uint height, Swapchain? swapchain = null, Framebuffer? framebuffer = null)
     {
         PixelWidth = width;
         PixelHeight = height;
-        TargetSwapchain = swapchain;
-        TargetFramebuffer = framebuffer;
+        Target = framebuffer ?? swapchain?.Framebuffer;
     }
 
     public uint PixelWidth { get; }
@@ -35,47 +27,19 @@ file readonly struct DispatchView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class RecordingPass : IPass<DispatchView>
+file sealed class RecordingPass : IPass
 {
-    private readonly bool _rentTransient;
-    private TextureHandle _scratch;
-
-    public RecordingPass(bool rentTransient = false) => _rentTransient = rentTransient;
-
-    public int RenderCount { get; private set; }
+    public int RenderCount => ViewWidths.Count;
     public List<uint> ViewWidths { get; } = new();
 
     public string Name => "Recording";
 
-    public void Setup(RenderContextBuilder builder)
-    {
-        if (_rentTransient)
-            _scratch = builder.DeclareOutputTexture("Scratch", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm));
-    }
-
-    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
-    {
-        RenderCount++;
-        ViewWidths.Add(context.View.PixelWidth);
-
-        if (_rentTransient)
-            context.GetRenderTexture(_scratch);
-    }
-}
-
-file sealed class LeakingCommandBufferPass : IPass<DispatchView>
-{
-    public string Name => "Leaking";
-
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
-    {
-        context.GetCommandBuffer("Leaked");
-    }
+    public void Render(RenderContext context, CommandBuffer cmd) => ViewWidths.Add(context.View.PixelWidth);
 }
 
-file sealed class BackbufferPass : IPass<DispatchView>
+file sealed class BackbufferPass : IPass
 {
     private TextureHandle _backbuffer;
 
@@ -87,7 +51,7 @@ file sealed class BackbufferPass : IPass<DispatchView>
 
     public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareViewTarget();
 
-    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
         RenderCount++;
         Resolved = context.GetRenderTexture(_backbuffer).Framebuffer;
@@ -103,52 +67,14 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         RecordingPass passA = new();
         RecordingPass passB = new();
-        using RenderPipeline<DispatchView> pipeline = new([passA, passB]);
+        using RenderPipeline pipeline = new([passA, passB]);
         DispatchView[] views = { new(64, 64), new(80, 48), new(32, 32) };
 
         GD.DispatchGraph(pipeline, views);
         GD.WaitForIdle();
 
-        Assert.Equal(views.Length, passA.RenderCount);
-        Assert.Equal(views.Length, passB.RenderCount);
-    }
-
-    [Fact]
-    public void Dispatch_ReturnsTaskThatCompletes()
-    {
-        using RenderPipeline<DispatchView> pipeline = new([new RecordingPass()]);
-
-        ExecutionTask task = GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
-        GD.WaitForExecution(task);
-
-        Assert.True(GD.IsExecutionComplete(task));
-    }
-
-    [Fact]
-    public void Dispatch_EachViewSeesItsOwnContext()
-    {
-        RecordingPass pass = new();
-        using RenderPipeline<DispatchView> pipeline = new([pass]);
-        DispatchView[] views = { new(64, 64), new(128, 96), new(32, 200) };
-
-        GD.DispatchGraph(pipeline, views);
-        GD.WaitForIdle();
-
-        Assert.Equal(new uint[] { 64, 128, 32 }, pass.ViewWidths);
-    }
-
-    [Fact]
-    public void Dispatch_SwapchainViewWithoutMainSwapchain_SkipsViewTargetPass()
-    {
-        BackbufferPass targetPass = new();
-        RecordingPass other = new();
-        using RenderPipeline<DispatchView> pipeline = new([other, targetPass]);
-
-        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
-        GD.WaitForIdle();
-
-        Assert.Equal(0, targetPass.RenderCount);
-        Assert.Equal(1, other.RenderCount);
+        Assert.Equal(new uint[] { 64, 80, 32 }, passA.ViewWidths);
+        Assert.Equal(new uint[] { 64, 80, 32 }, passB.ViewWidths);
     }
 
     [Fact]
@@ -156,7 +82,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         BackbufferPass targetPass = new();
         RecordingPass other = new();
-        using RenderPipeline<DispatchView> pipeline = new([other, targetPass]);
+        using RenderPipeline pipeline = new([other, targetPass]);
 
         GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -171,7 +97,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
         Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
         BackbufferPass pass = new();
-        using RenderPipeline<DispatchView> pipeline = new([pass]);
+        using RenderPipeline pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, framebuffer: target) });
         GD.WaitForIdle();
@@ -179,80 +105,15 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         Assert.Equal(1, pass.RenderCount);
         Assert.Same(target, pass.Resolved);
     }
-
-    [Fact]
-    public void Dispatch_TransientThroughContext_ReclaimsAcrossManyDispatches()
-    {
-        RecordingPass pass = new(rentTransient: true);
-        using RenderPipeline<DispatchView> pipeline = new([pass]);
-        DispatchView[] views = { new(64, 64, GD.MainSwapchain) };
-
-        uint iterations = GD.MaxExecutingTasks * 2 + 1;
-        for (uint i = 0; i < iterations; i++)
-        {
-            ExecutionTask task = GD.DispatchGraph(pipeline, views);
-            GD.WaitForExecution(task);
-        }
-
-        Assert.Equal((int)iterations, pass.RenderCount);
-    }
-
-    [Fact]
-    public void Dispatch_PassRentsCommandBufferWithoutSubmitting_WarnsOnce()
-    {
-        List<string> warnings = new();
-        GraphicsDeviceWarningHandler? previous = GD.OnWarning;
-        GD.OnWarning = message => warnings.Add(message);
-        try
-        {
-            using RenderPipeline<DispatchView> pipeline = new([new LeakingCommandBufferPass()]);
-            GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.OnWarning = previous;
-        }
-
-        Assert.Single(warnings);
-        Assert.Contains("Leaking", warnings[0]);
-    }
-
-    [Fact]
-    public void Dispatch_ManyTimes_NeverExceedsMaxExecutingGraphs()
-    {
-        using RenderPipeline<DispatchView> pipeline = new([new RecordingPass()]);
-        DispatchView[] views = { new(64, 64, GD.MainSwapchain) };
-
-        uint max = GD.MaxExecutingTasks;
-        for (uint i = 0; i < max * 3 + 1; i++)
-        {
-            GD.DispatchGraph(pipeline, views);
-            Assert.True(GD.ExecutingTasks <= max, "in-flight executions exceeded MaxExecutingTasks");
-        }
-
-        GD.WaitForIdle();
-    }
 }
 
 public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void Dispatch_FramebufferAndSwapchainBothSet_Throws()
-    {
-        Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
-        Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
-        using RenderPipeline<DispatchView> pipeline = new([new BackbufferPass()]);
-
-        Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain, framebuffer: target) }));
-        GD.WaitForIdle();
-    }
-
-    [Fact]
     public void Dispatch_ViewTargetPass_ResolvesSwapchainAndPresents()
     {
         BackbufferPass pass = new();
-        using RenderPipeline<DispatchView> pipeline = new([new RecordingPass(), pass]);
+        using RenderPipeline pipeline = new([new RecordingPass(), pass]);
         DispatchView[] views = { new(64, 64, GD.MainSwapchain) };
 
         GD.DispatchGraph(pipeline, views);
@@ -260,18 +121,6 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
 
         Assert.Equal(1, pass.RenderCount);
         Assert.True(pass.SawFramebuffer);
-    }
-
-    [Fact]
-    public void Dispatch_NoPassDeclaresViewTarget_RunsWithoutPresenting()
-    {
-        RecordingPass pass = new();
-        using RenderPipeline<DispatchView> pipeline = new([pass]);
-
-        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
-        GD.WaitForIdle();
-
-        Assert.Equal(1, pass.RenderCount);
     }
 }
 

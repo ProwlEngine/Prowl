@@ -119,8 +119,18 @@ public abstract partial class ResourceFactory
     /// <returns>New graphics program.</returns>
     public GraphicsProgram CreateGraphicsProgram(in ShaderDescription description)
     {
+        CreateGraphicsProgram_ValidatePipelineStateArrays(description);
         CreateGraphicsProgram_CheckDescription(description);
         return CreateGraphicsProgramCore(description);
+    }
+
+    private static void CreateGraphicsProgram_ValidatePipelineStateArrays(in ShaderDescription description)
+    {
+        if (description.BlendState.AttachmentStates == null)
+        {
+            throw new RenderException(
+                $"{nameof(ShaderDescription)}.{nameof(ShaderDescription.BlendState)}.{nameof(BlendStateDescription.AttachmentStates)} must not be null. Use an empty array if the program has no color attachments.");
+        }
     }
 
     protected abstract GraphicsProgram CreateGraphicsProgramCore(in ShaderDescription description);

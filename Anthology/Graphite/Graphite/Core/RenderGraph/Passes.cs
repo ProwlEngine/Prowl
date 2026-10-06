@@ -20,23 +20,16 @@ public interface IRenderView
     string Name => GetType().Name;
 
     /// <summary>
-    /// Framebuffer that passes declaring the view target draw into, or null. Write-only to passes: they can neither
-    /// sample nor transition it. Should match <see cref="PixelWidth"/> and <see cref="PixelHeight"/>. Setting this and
-    /// <see cref="TargetSwapchain"/> together throws at dispatch.
+    /// Framebuffer that passes declaring the view target draw into, or null. A swapchain's framebuffer is valid and is presented after dispatch.
+    /// Write-only to passes. Should match <see cref="PixelWidth"/> and <see cref="PixelHeight"/>.
     /// </summary>
-    Framebuffer? TargetFramebuffer => null;
-
-    /// <summary>
-    /// Swapchain this view owns, or null. Passes that declare the view target draw into its image and the dispatch presents it.
-    /// </summary>
-    Swapchain? TargetSwapchain => null;
+    Framebuffer? Target => null;
 }
 
 /// <summary>
 /// One pipeline pass. Declares texture in/out via Setup so the graph can order and resolve deps. Pipeline calls Render to execute.
 /// </summary>
-public interface IPass<TView>
-    where TView : IRenderView
+public interface IPass
 {
     /// <summary>Debug name.</summary>
     string Name { get; }
@@ -45,5 +38,5 @@ public interface IPass<TView>
     void Setup(RenderContextBuilder builder);
 
     /// <summary>Record rendering into cmd, already begun. The graph submits it after Render returns. Get textures via context.GetRenderTexture.</summary>
-    void Render(RenderContext<TView> context, CommandBuffer cmd);
+    void Render(RenderContext context, CommandBuffer cmd);
 }

@@ -7,11 +7,11 @@ namespace Prowl.Graphite.Samples.Cube;
 
 internal readonly struct SceneView : IRenderView
 {
-    public Swapchain TargetSwapchain { get; }
+    public Framebuffer Target { get; }
 
     public SceneView(uint width, uint height, Swapchain swapchain)
     {
-        TargetSwapchain = swapchain;
+        Target = swapchain.Framebuffer;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -23,15 +23,14 @@ internal readonly struct SceneView : IRenderView
 
 
 // One draw, no dependencies between passes: the pass clears and draws straight into the backbuffer.
-internal sealed class CubePass : RasterPass<SceneView>
+internal sealed class CubePass : RasterPass
 {
     public override string Name => "Backbuffer";
 
     public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
         Cube.Draw(cmd);
     }
 }
@@ -41,7 +40,7 @@ public static class Program
 {
     static GraphicsDevice device;
     static RenderMSTracker tracker;
-    static RenderPipeline<SceneView> pipeline;
+    static RenderPipeline pipeline;
     static SceneView[] views;
 
 

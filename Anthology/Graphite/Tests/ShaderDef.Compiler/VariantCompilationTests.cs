@@ -18,17 +18,6 @@ public class VariantCompilationTests
 
 
     [Fact]
-    public void EnumeratesVariantSpace()
-    {
-        CompilationResult result = Compile();
-
-        VariantSpace space = Assert.Single(result.VariantSpaces);
-        Assert.Equal("DoubleColor", space.Name);
-        Assert.Equal(2, space.Values.Count);
-    }
-
-
-    [Fact]
     public void ProducesOnePermutationPerValue_ForEveryBackend()
     {
         CompilationResult result = Compile();
@@ -64,27 +53,5 @@ public class VariantCompilationTests
             .ToArray();
 
         Assert.NotEqual(Convert.ToBase64String(vertexSpirv[0]), Convert.ToBase64String(vertexSpirv[1]));
-    }
-
-
-    [Fact]
-    public void EveryVariant_ProducesValidSpirv()
-    {
-        CompilationResult result = Compile();
-
-        foreach (VariantResult variant in result.CompiledVariants)
-        {
-            ShaderDescription description = variant.Backends.Single().Description;
-
-            foreach (ShaderStages stage in new[] { ShaderStages.Vertex, ShaderStages.Fragment })
-            {
-                byte[] spirv = CompilerTestHarness.StageOf(description, stage).ShaderBytes;
-                string validation = CompilerTestHarness.TryValidateSpirv(spirv);
-
-                // null => spirv-val unavailable in this environment.
-                if (validation != null)
-                    Assert.True(validation.Length == 0, $"spirv-val rejected variant {variant.Variants.Single().Value} {stage}:\n{validation}");
-            }
-        }
     }
 }

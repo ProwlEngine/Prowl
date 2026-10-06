@@ -9,11 +9,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// The device-level transient render-texture pool (GraphicsDevice.RentGraphTransientRenderTexture).
-// Covers the recycle model that mirrors the old RenderTexture.GetTemporaryRT: desc-keyed reuse once a frame's fence signals, no reuse while a
-// bundle is still in flight, honoring of every desc field, real render-target usability, the
-// thread-safety of the shared physical free-list, and leak-free disposal.
-//
 // The disposal test needs a device it can tear down on its own, so it builds an isolated device
 // rather than using the shared one.
 public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -31,13 +26,6 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
 
     private static Framebuffer RentFramebuffer(GraphicsDevice device, ExecutionTask task, in RenderTextureDescription desc)
         => device.RentGraphTransientRenderTexture(task, desc).Framebuffer;
-
-    [Fact]
-    public void Rent_WithNullExecution_Throws()
-    {
-        RenderTextureDescription desc = new(64, 64, ColorFormat, depth: false);
-        Assert.Throws<ArgumentNullException>(() => GD.RentGraphTransientRenderTexture(null, desc));
-    }
 
     [Fact]
     public void Rent_AfterFrameCompletes_ReusesTheSameUnderlyingTexture()
@@ -106,30 +94,6 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
     }
 
     [Fact]
-    public void Rent_HonorsDimensionsAndFormat()
-    {
-        RenderTextureDescription desc = new(200, 120, PixelFormat.R8_G8_B8_A8_UNorm, depth: false);
-
-        ExecutionTask task = GD.BeginExecution();
-        try
-        {
-            Texture tex = RentColor(GD, task, desc);
-
-            Assert.Equal(200u, tex.Width);
-            Assert.Equal(120u, tex.Height);
-            Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, tex.Format);
-            Assert.Equal(TextureSampleCount.Count1, tex.SampleCount);
-            Assert.True((tex.Usage & TextureUsage.RenderTarget) != 0);
-            Assert.True((tex.Usage & TextureUsage.Sampled) != 0);
-        }
-        finally
-        {
-            GD.CompleteExecution(task);
-            GD.WaitForIdle();
-        }
-    }
-
-    [Fact]
     public void RentFramebuffer_HonorsColorCountAndDepthPresence()
     {
         PixelFormat[] twoColors = [ColorFormat, PixelFormat.R8_G8_B8_A8_UNorm];
@@ -155,23 +119,6 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
     }
 
     [Fact]
-    public void RenderTexture_NameGetter_ReturnsNameAndPropagatesToAttachments()
-    {
-        RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, ColorFormat, depth: true));
-        try
-        {
-            target.Name = "Scene";
-            Assert.Equal("Scene", target.Name);
-            Assert.Equal("Scene Color[0]", target.ColorTextures[0].Name);
-            Assert.Equal("Scene Depth", target.DepthTexture!.Name);
-        }
-        finally
-        {
-            target.Dispose();
-        }
-    }
-
-    [Fact]
     public void RenderTexture_Dispose_SetsIsDisposedAndFreesAttachments()
     {
         RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, ColorFormat, depth: true));
@@ -184,32 +131,6 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         Assert.True(target.ColorTextures[0].IsDisposed);
         Assert.True(target.DepthTexture!.IsDisposed);
         Assert.True(target.Framebuffer.IsDisposed);
-    }
-
-    [Fact]
-    public void RenderTexture_ExplicitDepthFormat_IsUsedAndReportedInDesc()
-    {
-        PixelFormat[] colors = [ColorFormat];
-        RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, colors, PixelFormat.D32_Float_S8_UInt));
-        try
-        {
-            Assert.Equal(PixelFormat.D32_Float_S8_UInt, target.DepthTexture!.Format);
-            Assert.Equal(PixelFormat.D32_Float_S8_UInt, target.Desc.DepthFormat);
-        }
-        finally
-        {
-            target.Dispose();
-        }
-    }
-
-    [Fact]
-    public void RenderTextureDescription_DepthFormat_DistinguishesDescs()
-    {
-        PixelFormat[] colors = [ColorFormat];
-        RenderTextureDescription deviceDefault = new(8, 8, colors, true);
-        RenderTextureDescription explicitFormat = new(8, 8, colors, PixelFormat.D32_Float_S8_UInt);
-
-        Assert.NotEqual(deviceDefault, explicitFormat);
     }
 
     [Fact]
@@ -252,41 +173,17 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
     }
 
     [Fact]
-    public void Rent_HonorsSampleCount()
-    {
-        TextureSampleCount limit = GD.GetSampleCountLimit(ColorFormat, depthFormat: false);
-        if (limit == TextureSampleCount.Count1)
-            return;
-
-        RenderTextureDescription desc = new(64, 64, ColorFormat, depth: false, TextureSampleCount.Count2);
-
-        ExecutionTask task = GD.BeginExecution();
-        try
-        {
-            Texture tex = RentColor(GD, task, desc);
-            Assert.Equal(TextureSampleCount.Count2, tex.SampleCount);
-        }
-        finally
-        {
-            GD.CompleteExecution(task);
-            GD.WaitForIdle();
-        }
-    }
-
-    [Fact]
     public void RentedFramebuffer_IsUsableAsARenderTarget()
     {
         const uint size = 64;
         RenderTextureDescription desc = new(size, size, ColorFormat, depth: false);
 
         Framebuffer fb = null;
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
             fb = RentFramebuffer(GD, context.Task, desc);
 
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

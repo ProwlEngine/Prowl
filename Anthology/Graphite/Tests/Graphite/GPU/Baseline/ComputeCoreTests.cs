@@ -35,13 +35,11 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
         props.SetBuffer("Source", source);
         props.SetBuffer("Destination", destination);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(width / 16, height / 16, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

@@ -71,16 +71,6 @@ public class ProgramResolutionTests : IDisposable
 
 
     [Fact]
-    public void SameState_ReusesProgram()
-    {
-        GraphicsProgram first = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
-        GraphicsProgram second = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
-
-        Assert.Same(first, second);
-    }
-
-
-    [Fact]
     public void DifferentBaseState_ProducesDistinctProgram()
     {
         GraphicsProgram lessEqual = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);

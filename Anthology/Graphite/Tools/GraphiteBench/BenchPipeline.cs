@@ -16,7 +16,7 @@ public readonly struct BenchView : IRenderView
 }
 
 
-public sealed class BenchPass : IPass<BenchView>
+public sealed class BenchPass : IPass
 {
     private readonly BenchScene _scene;
     private readonly int _index;
@@ -36,7 +36,7 @@ public sealed class BenchPass : IPass<BenchView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<BenchView> context, CommandBuffer cmd)
+    public void Render(RenderContext context, CommandBuffer cmd)
     {
         long start = Stopwatch.GetTimestamp();
 

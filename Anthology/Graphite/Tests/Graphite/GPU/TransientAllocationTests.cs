@@ -5,12 +5,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// The per-frame transient bump allocator (Frame.AllocateTransient). GraphicsDeviceTests covers
-// the trivial path and the single-allocation-over-hard-cap throw; this suite covers what the
-// allocator actually has to get right: offset alignment, genuine non-overlap, the head resetting
-// per frame, and the overflow spill path (growth rule, cumulative caps, the one-shot soft-cap
-// warning) which had no coverage at all.
-//
 // The overflow tests need a device with a small primary transient buffer, so they build their
 // own isolated device rather than using the shared one.
 public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -114,7 +108,7 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
             new BufferDescription(sizeof(uint) * 2, BufferUsage.Staging));
 
         DeviceBufferRange a = default, b = default;
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
             a = context.AllocateTransient(sizeof(uint));
             b = context.AllocateTransient(sizeof(uint));
@@ -122,10 +116,8 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
             WriteUInt(a, 0xAAAAAAAA);
             WriteUInt(b, 0xBBBBBBBB);
 
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyBuffer(a.Buffer, a.Offset, staging, 0, sizeof(uint));
             cl.CopyBuffer(b.Buffer, b.Offset, staging, sizeof(uint), sizeof(uint));
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -228,6 +220,15 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
             context.AllocateTransient(HardCap / 2);
             context.AllocateTransient(HardCap / 2);
         }));
+        device.WaitForIdle();
+    }
+
+    [Fact]
+    public void AllocateTransient_SingleAllocationOverHardCap_Throws()
+    {
+        using GraphicsDevice device = CreateSmallTransientDevice();
+
+        Assert.Throws<RenderException>(() => device.RunTestGraph(context => context.AllocateTransient(HardCap + 1)));
         device.WaitForIdle();
     }
 }

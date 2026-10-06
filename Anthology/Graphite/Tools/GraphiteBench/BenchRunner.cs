@@ -59,8 +59,8 @@ public static class BenchRunner
         Action<CommandBuffer, int> record)
     {
         BenchStats stats = new();
-        using RenderPipeline<BenchView> pipeline = new(
-            Enumerable.Range(0, passes).Select(i => (IPass<BenchView>)new BenchPass(scene, i, record, stats)));
+        using RenderPipeline pipeline = new(
+            Enumerable.Range(0, passes).Select(i => (IPass)new BenchPass(scene, i, record, stats)));
         BenchView[] views = [new BenchView()];
 
         for (int i = 0; i < warmupFrames; i++)

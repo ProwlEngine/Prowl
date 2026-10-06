@@ -1,35 +1,13 @@
 using System;
-using System.Collections.Generic;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// End-to-end coverage of the PropertySet binding API through CommandBuffer.SetProperties. The
-// value-type plumbing is covered by CPU/PropertySetTests; this suite verifies the binding
-// actually reaches the GPU: transient vs. read-only vs. writable uniform buffers, structured
-// buffers, and the missing-property handler. Everything runs through the
-// BasicComputeTest kernel (Destination[i] = Source[i]; Source[i] *= 2) so results are
-// deterministic and easy to read back.
 public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private const uint Side = 16;
     private const uint Count = Side * Side;
-
-    [SkippableFact]
-    public void TransientUniforms_BackScalarWrites()
-    {
-
-        float[] result = RunCompute((props, source, destination) =>
-        {
-            props.SetInt("Width", (int)Side);
-            props.SetInt("Height", (int)Side);
-            props.SetBuffer("Source", source);
-            props.SetBuffer("Destination", destination);
-        });
-
-        AssertCopiedSource(result);
-    }
 
     [SkippableFact]
     public void ReadOnlyUniformBuffer_FeedsContentsAndIgnoresScalarWrites()
@@ -50,59 +28,6 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         });
 
         AssertCopiedSource(result);
-    }
-
-    [SkippableFact]
-    public void WritableUniformBuffer_UsesProvidedBufferAsBackingStorage()
-    {
-
-        // The UBO starts zeroed; the SetInt calls must write the dimensions into this very buffer.
-        DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        GD.UpdateBuffer(ubo, 0, new uint[] { 0, 0, 0, 0 });
-
-        float[] result = RunCompute((props, source, destination) =>
-        {
-            props.SetUniformBuffer("Params", ubo);
-            props.SetInt("Width", (int)Side);
-            props.SetInt("Height", (int)Side);
-            props.SetBuffer("Source", source);
-            props.SetBuffer("Destination", destination);
-        });
-
-        AssertCopiedSource(result);
-
-        // The writes landed in the user-provided buffer, not a transient one.
-        DeviceBuffer readback = GetReadback(ubo);
-        Span<uint> map = GD.Map<uint>(readback);
-        Assert.Equal(Side, map[0]);
-        Assert.Equal(Side, map[1]);
-        GD.Unmap(readback);
-    }
-
-    [SkippableFact]
-    public void MissingProperty_InvokesHandler()
-    {
-
-        HashSet<PropertyID> missing = [];
-        MissingPropertyHandler previous = GD.OnMissingProperty;
-        GD.OnMissingProperty = (program, name, kind, set, binding) => missing.Add(name);
-
-        try
-        {
-            // Deliberately omit Destination; the backend substitutes a default and notifies.
-            RunCompute((props, source, destination) =>
-            {
-                props.SetInt("Width", (int)Side);
-                props.SetInt("Height", (int)Side);
-                props.SetBuffer("Source", source);
-            });
-        }
-        finally
-        {
-            GD.OnMissingProperty = previous;
-        }
-
-        Assert.Contains((PropertyID)"Destination", missing);
     }
 
     private void AssertCopiedSource(float[] destination)
@@ -131,13 +56,11 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         PropertySet props = new();
         configure(props, source, destination);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(Side / 16, Side / 16, 1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

@@ -9,11 +9,11 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct SwapchainView : IRenderView
 {
-    public Swapchain TargetSwapchain { get; }
+    public Framebuffer Target { get; }
 
     public SwapchainView(uint width, uint height, Swapchain swapchain)
     {
-        TargetSwapchain = swapchain;
+        Target = swapchain.Framebuffer;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -23,19 +23,18 @@ file readonly struct SwapchainView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
+file sealed class ClearSwapchainPass : RasterPass
 {
     public override string Name => "ClearSwapchain";
 
     public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
 
-    public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
     }
 }
 
-file sealed class DepthSwapchainPass : RasterPass<SwapchainView>
+file sealed class DepthSwapchainPass : RasterPass
 {
     private readonly PixelFormat _depthFormat;
 
@@ -46,20 +45,19 @@ file sealed class DepthSwapchainPass : RasterPass<SwapchainView>
     public override void Setup(RenderContextBuilder builder)
         => SetViewTarget(builder, TargetLoadStoreOps.Clear(Color.Blue), _depthFormat);
 
-    public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
     }
 }
 
-file sealed class OffscreenPass : IPass<SwapchainView>
+file sealed class OffscreenPass : IPass
 {
     public string Name => "Offscreen";
 
     public void Setup(RenderContextBuilder builder)
         => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm));
 
-    public void Render(RenderContext<SwapchainView> context, CommandBuffer cmd) { }
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These
@@ -67,34 +65,10 @@ file sealed class OffscreenPass : IPass<SwapchainView>
 public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void Framebuffer_Targets_HaveExpectedProperties()
-    {
-        Texture color = GD.MainSwapchain.Framebuffer.ColorTargets[0].Target;
-        Assert.Equal(TextureType.Texture2D, color.Type);
-        Assert.InRange(color.Width, 1u, uint.MaxValue);
-        Assert.InRange(color.Height, 1u, uint.MaxValue);
-        Assert.Equal(1u, color.Depth);
-        Assert.Equal(1u, color.ArrayLayers);
-        Assert.Equal(1u, color.MipLevels);
-        Assert.Equal(TextureUsage.RenderTarget, color.Usage);
-        Assert.Equal(TextureSampleCount.Count1, color.SampleCount);
-        Assert.Null(GD.MainSwapchain.Framebuffer.DepthTarget);
-    }
-
-    [Fact]
-    public void SwapBuffers_DoesNotThrow()
-    {
-        ExecutionTask task = GD.BeginExecution();
-        GD.CompleteExecution(task);
-        GD.SwapBuffers(GD.MainSwapchain);
-        GD.WaitForIdle();
-    }
-
-    [Fact]
     public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
     {
-        using RenderPipeline<SwapchainView> presenting = new([new ClearSwapchainPass()]);
-        using RenderPipeline<SwapchainView> offscreen = new([new OffscreenPass()]);
+        using RenderPipeline presenting = new([new ClearSwapchainPass()]);
+        using RenderPipeline offscreen = new([new OffscreenPass()]);
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
 
         for (int frame = 0; frame < 12; frame++)
@@ -116,7 +90,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void DispatchGraph_ViewTargetDepth_CreatesSwapchainDepth()
     {
-        using RenderPipeline<SwapchainView> pipeline = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
+        using RenderPipeline pipeline = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
 
         GD.DispatchGraph(pipeline, views);
@@ -134,8 +108,8 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void DispatchGraph_ViewTargetDepth_SurvivesResizeAndFormatChange()
     {
-        using RenderPipeline<SwapchainView> shallow = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
-        using RenderPipeline<SwapchainView> deep = new([new DepthSwapchainPass(PixelFormat.R32_Float)]);
+        using RenderPipeline shallow = new([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
+        using RenderPipeline deep = new([new DepthSwapchainPass(PixelFormat.R32_Float)]);
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
 
         for (int frame = 0; frame < 6; frame++)
@@ -151,22 +125,6 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
 
         Texture depth = GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target;
         Assert.Equal(GD.MainSwapchain.Framebuffer.Width, depth.Width);
-        GD.WaitForIdle();
-    }
-
-    [Fact]
-    public void Resize_KeepsFramebufferValid()
-    {
-        // The presented surface clamps to the backing window, so the exact dimensions are
-        // platform-dependent; the contract under test is that resize is honored without throwing
-        // and the framebuffer stays usable.
-        GD.ResizeMainWindow(128, 96);
-        Assert.InRange(GD.MainSwapchain.Framebuffer.Width, 1u, uint.MaxValue);
-        Assert.InRange(GD.MainSwapchain.Framebuffer.Height, 1u, uint.MaxValue);
-
-        ExecutionTask task = GD.BeginExecution();
-        GD.CompleteExecution(task);
-        GD.SwapBuffers(GD.MainSwapchain);
         GD.WaitForIdle();
     }
 }

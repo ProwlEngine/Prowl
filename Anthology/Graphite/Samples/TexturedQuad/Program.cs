@@ -9,11 +9,11 @@ namespace Prowl.Graphite.Samples.TexturedQuad;
 
 internal readonly struct SceneView : IRenderView
 {
-    public Swapchain TargetSwapchain { get; }
+    public Framebuffer Target { get; }
 
     public SceneView(uint width, uint height, Swapchain swapchain)
     {
-        TargetSwapchain = swapchain;
+        Target = swapchain.Framebuffer;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -26,7 +26,7 @@ internal readonly struct SceneView : IRenderView
 
 // Three draws sharing one shader but switching PropertySets, no dependencies between passes: the pass
 // clears and draws straight into the backbuffer.
-internal sealed class TexturedQuadPass : RasterPass<SceneView>
+internal sealed class TexturedQuadPass : RasterPass
 {
     private readonly GraphicsProgram _shader;
     private readonly Mesh _leftQuad;
@@ -54,9 +54,8 @@ internal sealed class TexturedQuadPass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
         cmd.SetShader(_shader);
 
         cmd.SetProperties(_leftProperties);
@@ -92,7 +91,7 @@ public static class Program
     static Sampler rightSampler;
     static Sampler midSampler;
     static RenderMSTracker tracker;
-    static RenderPipeline<SceneView> pipeline;
+    static RenderPipeline pipeline;
     static SceneView[] views;
 
 

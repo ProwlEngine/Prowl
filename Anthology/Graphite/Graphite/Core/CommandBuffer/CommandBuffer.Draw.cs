@@ -33,7 +33,7 @@ public abstract partial class CommandBuffer
     /// <param name="instanceStart">First instance.</param>
     public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        DrawIndexed_CheckIndexBuffer();
+        DrawIndexed_CheckIndexBuffer(indexStart);
         Draw_PreDrawValidation();
 
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
@@ -41,6 +41,49 @@ public abstract partial class CommandBuffer
         Execution?.Device.Profiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
+    }
+
+    private protected static void DrawIndexed_CheckIndexBufferResolved(bool resolved)
+    {
+        if (!resolved)
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
+    }
+
+    private void DrawIndexed_CheckIndexBuffer(uint indexStart)
+    {
+        if (_currentVertexSource == null)
+        {
+            return;
+        }
+        if (!_currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount))
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
+
+        uint indexFormatSize = fmt == IndexFormat.UInt16 ? 2u : 4u;
+        ulong bytesNeeded = ((ulong)indexStart + indexCount) * indexFormatSize;
+        if (ib.SizeInBytes < bytesNeeded)
+        {
+            throw new RenderException(
+                $"The active index buffer does not contain enough data to satisfy the given draw command. {bytesNeeded} bytes are needed, but the buffer only contains {ib.SizeInBytes}.");
+        }
+    }
+
+    private void DrawIndexedIndirect_CheckIndexBuffer()
+    {
+        if (_currentVertexSource != null
+            && !_currentVertexSource.TryGetIndexBuffer(out _, out _, out _))
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
     }
 
     private protected abstract void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
@@ -82,6 +125,7 @@ public abstract partial class CommandBuffer
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawIndexedArguments));
+        DrawIndexedIndirect_CheckIndexBuffer();
         Draw_PreDrawValidation();
 
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);

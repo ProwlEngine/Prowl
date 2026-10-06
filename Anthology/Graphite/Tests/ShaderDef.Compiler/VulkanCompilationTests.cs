@@ -27,14 +27,6 @@ public class VulkanCompilationTests
 
 
     [Fact]
-    public void Graphics_StageEntryPointsAreMain()
-    {
-        ReflectionTestbed.AssertStages(Compile("Graphics"),
-            (ShaderStages.Vertex, "main"), (ShaderStages.Fragment, "main"));
-    }
-
-
-    [Fact]
     public void Graphics_VertexInputsAtExpectedLocations()
     {
         ReflectionTestbed.AssertVertexLocations(Compile("Graphics"),

@@ -54,16 +54,14 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
 
         VertexSource source = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", vertexBuffer);
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0, 0, 0, 1)), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(source);
             cl.SetProperties(props);
             cl.Draw(1);
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

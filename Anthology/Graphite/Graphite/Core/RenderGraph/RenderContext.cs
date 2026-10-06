@@ -6,16 +6,14 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.
 /// </summary>
-public sealed class RenderContext<TView>
-    where TView : IRenderView
+public sealed class RenderContext
 {
     private readonly GraphicsDevice _device;
     private readonly ExecutionTask _task;
-    private readonly RenderGraph<TView> _graph;
-    private readonly TView _view;
+    private readonly RenderGraph _graph;
+    private readonly IRenderView _view;
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
-    private readonly List<CommandBuffer> _pendingCommandBuffers = new();
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
     private GraphTextureStates? _stateSnapshot;
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
@@ -24,21 +22,18 @@ public sealed class RenderContext<TView>
     private readonly HashSet<Texture> _discardedTextures = new();
 
     private PassInfo? _currentPass;
-    private GraphResource[]? _currentPassOutputs;
     private ResourceAccess[]? _currentAccesses;
     private string? _currentScopeName;
-    private TextureBarrier[]? _deferredBarriers;
-    private BufferAccess _deferredBufferSrc;
-    private BufferAccess _deferredBufferDst;
-    private CommandBuffer? _barrierHost;
+    private BufferAccess _pendingBufferSrc;
+    private BufferAccess _pendingBufferDst;
 
     private static long s_nextCommandBufferRentalId;
 
     internal RenderContext(
         GraphicsDevice device,
         ExecutionTask task,
-        RenderGraph<TView> graph,
-        TView view)
+        RenderGraph graph,
+        IRenderView view)
     {
         _device = device;
         _task = task;
@@ -49,36 +44,29 @@ public sealed class RenderContext<TView>
     /// <summary>Execution this context records into.</summary>
     public ExecutionTask Task => _task;
 
-    internal Swapchain? PresentSwapchain => _graph.WritesViewTarget ? _view.TargetSwapchain : null;
+    internal Swapchain? PresentSwapchain => _graph.WritesViewTarget ? _view.Target?.OwningSwapchain : null;
 
-    internal bool HasViewTarget
-    {
-        get
-        {
-            if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
-                throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
-
-            return _view.TargetSwapchain != null || _view.TargetFramebuffer != null;
-        }
-    }
+    internal bool HasViewTarget => _view.Target != null;
 
     /// <summary>View being rendered.</summary>
-    public TView View => _view;
+    public IRenderView View => _view;
+
+    /// <summary>View being rendered as its concrete type.</summary>
+    public T ViewAs<T>() where T : IRenderView => (T)_view;
 
     /// <summary>Device's profiler, null if none.</summary>
     public IProfiler? Profiler => _device.Profiler;
 
-    internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null, null);
+    internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
-    internal void SetCurrentPass(in PassInfo? pass, GraphResource[]? declaredOutputs, ResourceAccess[]? accesses, string? scopeName)
+    internal void SetCurrentPass(in PassInfo? pass, ResourceAccess[]? accesses, string? scopeName)
     {
         _currentPass = pass;
-        _currentPassOutputs = declaredOutputs;
         _currentAccesses = accesses;
         _currentScopeName = scopeName;
     }
 
-    internal void TransitionForAccesses(string scopeName, ResourceAccess[] accesses)
+    internal void TransitionForAccesses(ResourceAccess[] accesses)
     {
         _barriers.Clear();
         BufferAccess bufferSrc = BufferAccess.None;
@@ -95,18 +83,19 @@ public sealed class RenderContext<TView>
                 RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
                 bool fromUndefined = IsTransient(access.Id) && _enteredTransients.Add(access.Id);
                 foreach (Texture color in texture.ColorTextures)
-                    AddTextureTransition(color, ResourceAccess.ToState(access.TextureUsage), fromUndefined);
+                    AddTextureTransition(color, access.TextureUsage, fromUndefined);
                 if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) is TextureState depthTarget)
                     AddTextureTransition(texture.DepthTexture, depthTarget, fromUndefined);
             }
             else
             {
                 DeviceBuffer buffer = GetRenderBuffer(new BufferHandle(access.Id));
-                AddBufferAccess(buffer, access.BufferAccess, ref bufferSrc, ref bufferDst);
+                AddBufferAccess(buffer, access.BufferUsage, ref bufferSrc, ref bufferDst);
             }
         }
 
-        RecordBarriers(scopeName, bufferSrc, bufferDst);
+        _pendingBufferSrc = bufferSrc;
+        _pendingBufferDst = bufferDst;
     }
 
     internal void RestoreRestingStates(string scopeName)
@@ -114,16 +103,23 @@ public sealed class RenderContext<TView>
         _barriers.Clear();
         foreach ((Texture texture, TextureState state) in _textureStates)
         {
-            if (state != TextureState.Resting && !_discardedTextures.Contains(texture))
-                _barriers.Add(new TextureBarrier(texture, state, TextureState.Resting));
+            if (!_discardedTextures.Contains(texture))
+                _barriers.Add(new TextureBarrier(texture, state, null));
         }
 
         _textureStates.Clear();
         _discardedTextures.Clear();
         _enteredTransients.Clear();
         _stateSnapshot = null;
-        RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
-        FlushDeferredBarriers(scopeName);
+        _pendingBufferSrc = BufferAccess.None;
+        _pendingBufferDst = BufferAccess.None;
+        if (_barriers.Count == 0)
+            return;
+
+        CommandBuffer cb = BeginCommandBuffer($"{scopeName} Barriers");
+        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), BufferAccess.None, BufferAccess.None);
+        _barriers.Clear();
+        EndCommandBuffer(cb);
     }
 
     private static bool HasTextureOutput(ResourceAccess[] accesses, RenderResourceID id)
@@ -141,28 +137,28 @@ public sealed class RenderContext<TView>
 
     private void AddTextureTransition(Texture texture, TextureState target, bool fromUndefined)
     {
-        TextureState current;
+        TextureState? current = null;
         if (fromUndefined)
-        {
-            current = TextureState.Undefined;
             _discardedTextures.Add(texture);
-        }
-        else
-        {
-            current = _textureStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
-        }
+        else if (_textureStates.TryGetValue(texture, out TextureState state))
+            current = state;
 
         bool writes = target is TextureState.Storage or TextureState.Attachment or TextureState.TransferDst;
         if (current == target && !writes)
             return;
 
-        _barriers.Add(new TextureBarrier(texture, current, target));
+        _barriers.Add(new TextureBarrier(texture, current, target, fromUndefined));
     }
 
     private void CommitBarrierStates()
     {
         foreach (TextureBarrier barrier in _barriers)
-            _textureStates[barrier.Texture] = barrier.After;
+        {
+            if (barrier.After is TextureState after)
+                _textureStates[barrier.Texture] = after;
+            else
+                _textureStates.Remove(barrier.Texture);
+        }
         if (_barriers.Count > 0)
             _stateSnapshot = null;
         _barriers.Clear();
@@ -197,32 +193,6 @@ public sealed class RenderContext<TView>
         sync.ReadsSinceWrite |= reads;
     }
 
-    private void RecordBarriers(string scopeName, BufferAccess bufferSrc, BufferAccess bufferDst)
-    {
-        if (_barriers.Count == 0 && bufferSrc == BufferAccess.None)
-            return;
-
-        if (_task.OpenTail is { } tail)
-        {
-            tail.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), bufferSrc, bufferDst);
-            CommitBarrierStates();
-            return;
-        }
-
-        _deferredBarriers = _barriers.ToArray();
-        _deferredBufferSrc = bufferSrc;
-        _deferredBufferDst = bufferDst;
-        CommitBarrierStates();
-    }
-
-    private void FlushDeferredBarriers(string scopeName)
-    {
-        if (_deferredBarriers == null || _barrierHost != null)
-            return;
-
-        SubmitCommandBuffer(GetCommandBuffer($"{scopeName} Barriers"));
-    }
-
     private void CheckDeclared(RenderResourceID id)
     {
         if (_currentAccesses == null)
@@ -245,11 +215,7 @@ public sealed class RenderContext<TView>
         public BufferAccess Visible = BufferAccess.None;
     }
 
-    /// <summary>
-    /// Rents an extra command buffer, already begun, for passes that need more than the one Render receives. Submit via SubmitCommandBuffer. Do not begin or end it yourself.
-    /// </summary>
-    /// <param name="name">Optional debug name.</param>
-    public CommandBuffer GetCommandBuffer(string name = "")
+    internal CommandBuffer BeginCommandBuffer(string name)
     {
         CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
 
@@ -261,62 +227,46 @@ public sealed class RenderContext<TView>
 
         cb.Begin();
         cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
-        _pendingCommandBuffers.Add(cb);
-
-        if (_deferredBarriers != null && _barrierHost == null)
-        {
-            cb.RecordBarriers(_deferredBarriers, _deferredBufferSrc, _deferredBufferDst);
-            _barrierHost = cb;
-        }
-
         return cb;
     }
 
-    internal CommandBuffer BeginPassCommandBuffer(string passName) => GetCommandBuffer(passName);
-
-    internal void EndPassCommandBuffer(CommandBuffer cmd)
+    internal CommandBuffer BeginPassCommandBuffer(string passName)
     {
-        if (_pendingCommandBuffers.Contains(cmd))
-            SubmitCommandBuffer(cmd);
+        CommandBuffer cb = BeginCommandBuffer(passName);
+        if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
+            return cb;
+
+        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
+        _pendingBufferSrc = BufferAccess.None;
+        _pendingBufferDst = BufferAccess.None;
+        CommitBarrierStates();
+        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+        return cb;
     }
 
-    /// <summary>Queues a command buffer rented here for this execution's submit. Do not record into it afterwards.</summary>
-    /// <param name="cmd">Command buffer to submit.</param>
-    public void SubmitCommandBuffer(CommandBuffer cmd)
+    internal void BindDeclaredTarget(CommandBuffer cmd, ResourceAccess[] accesses)
     {
-        if (_barrierHost != null)
+        RenderResourceID target = default;
+        bool found = false;
+        foreach (ResourceAccess access in accesses)
         {
-            if (!ReferenceEquals(_barrierHost, cmd))
-            {
-                throw new InvalidOperationException(
-                    $"Pass '{_currentScopeName}' must submit its first rented command buffer first, because it carries the barriers the pass starts with.");
-            }
+            if (!access.IsTexture || !access.IsOutput || access.TextureUsage != TextureState.Attachment)
+                continue;
 
-            _barrierHost = null;
-            _deferredBarriers = null;
+            if (found && access.Id != target)
+                return;
+
+            target = access.Id;
+            found = true;
         }
 
-        _pendingCommandBuffers.Remove(cmd);
-        _task.QueueOpen(cmd);
+        if (!found)
+            return;
+
+        cmd.SetFramebuffer(GetRenderTexture(new TextureHandle(target)).Framebuffer, GetTargetOps(target));
     }
 
-    /// <summary>
-    /// Warns and drops command buffers rented in this scope but never submitted. Ring disposes them on recycle. Called after each pass.
-    /// </summary>
-    /// <param name="scopeName">Pass name for the warning.</param>
-    internal void ReclaimUnsubmittedCommandBuffers(string scopeName)
-    {
-        foreach (CommandBuffer cb in _pendingCommandBuffers)
-        {
-            _device.OnWarning?.Invoke(
-                $"Command buffer '{cb.Name}' rented by pass '{scopeName}' was never submitted. " +
-                "Rent a command buffer only when you intend to submit it through the render context.");
-        }
-
-        _pendingCommandBuffers.Clear();
-        _barrierHost = null;
-        FlushDeferredBarriers(scopeName);
-    }
+    internal void EndCommandBuffer(CommandBuffer cmd) => _task.SubmitRecorded(cmd);
 
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>
@@ -349,14 +299,12 @@ public sealed class RenderContext<TView>
             case GraphViewTargetResource viewTargetResource:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), "The view target has no history.");
-                if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
-                    throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
-                if (_view.TargetSwapchain != null && viewTargetResource.DepthFormat is PixelFormat requiredDepth)
-                    _view.TargetSwapchain.RequireDepth(requiredDepth);
-                Framebuffer viewTarget = (_view.TargetSwapchain?.Framebuffer ?? _view.TargetFramebuffer)
+                Framebuffer viewTarget = _view.Target
                     ?? throw new InvalidOperationException($"A pass resolved the view target, but view '{_view.Name}' has none.");
+                if (viewTargetResource.DepthFormat is PixelFormat requiredDepth)
+                    viewTarget.OwningSwapchain?.RequireDepth(requiredDepth);
                 if (viewTargetResource.DepthFormat != null && viewTarget.DepthTarget == null)
-                    throw new InvalidOperationException($"A pass declared a view target depth attachment, but view '{_view.Name}' has a TargetFramebuffer without one.");
+                    throw new InvalidOperationException($"A pass declared a view target depth attachment, but view '{_view.Name}' has a Target without one.");
                 RenderTexture target = new(viewTarget);
                 _resolved[handle.Id] = target;
                 return target;
@@ -459,11 +407,11 @@ public sealed class RenderContext<TView>
 
     internal TargetLoadStoreOps GetTargetOps(RenderResourceID id)
     {
-        if (_currentPassOutputs != null)
+        if (_currentAccesses != null)
         {
-            foreach (GraphResource declared in _currentPassOutputs)
+            foreach (ResourceAccess access in _currentAccesses)
             {
-                if (declared.Id != id)
+                if (access.Id != id || access.Description is not { } declared)
                     continue;
 
                 switch (declared)

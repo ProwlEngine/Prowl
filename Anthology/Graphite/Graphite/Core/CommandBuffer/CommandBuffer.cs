@@ -74,8 +74,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
 
     internal abstract void RecordBarriers(System.ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst);
 
-    internal abstract void SealRenderPass();
-
     internal abstract void RecordFullBarrier();
 
     internal void RequireGraphExecution(string operation)

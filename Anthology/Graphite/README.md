@@ -27,7 +27,7 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 
 Rendering is built around a render graph: a `RenderPipeline` owns a list of `IPass`es, and a
 `GraphicsDevice` dispatches that pipeline against a list of views. The simplest possible pipeline is one
-pass that writes the view target, which presents the frame when the view sets its `TargetSwapchain`:
+pass that writes the view target, which presents the frame when the view's `Target` is a swapchain framebuffer:
 
 ```cs
 internal readonly struct SceneView : IRenderView
@@ -36,16 +36,16 @@ internal readonly struct SceneView : IRenderView
     {
         PixelWidth = width;
         PixelHeight = height;
-        TargetSwapchain = swapchain;
+        Target = swapchain.Framebuffer;
     }
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
     public int ViewId => 0;
-    public Swapchain TargetSwapchain { get; }
+    public Framebuffer Target { get; }
 }
 
-internal sealed class TrianglePass : RasterPass<SceneView>
+internal sealed class TrianglePass : RasterPass
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
@@ -60,7 +60,7 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
-    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
+    public override void Render(RenderContext context, CommandBuffer cmd)
     {
         BindTarget(context, cmd);
         cmd.SetShader(_shader);
@@ -68,15 +68,6 @@ internal sealed class TrianglePass : RasterPass<SceneView>
         cmd.DrawIndexed();
 
     }
-}
-
-internal sealed class TrianglePipeline : RenderPipeline<SceneView>
-{
-    private readonly TrianglePass _pass;
-
-    public TrianglePipeline(TrianglePass pass) => _pass = pass;
-
-    protected override void InitializePasses() => AddPass(_pass);
 }
 ```
 
@@ -101,7 +92,7 @@ GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescriptio
 
 GraphicsProgram shader = /* load + create a ShaderProgram */;
 Mesh triangle = /* create vertex/index buffers */;
-TrianglePipeline pipeline = new(new TrianglePass(triangle, shader));
+RenderPipeline pipeline = new([new TrianglePass(triangle, shader)]);
 SceneView[] views = { new SceneView(600, 600, device.MainSwapchain) };
 
 // Per-frame render loop: builds an ExecutionTask internally, runs the pipeline for every view, and

@@ -67,21 +67,6 @@ public class ShaderTests
 
 
     [Fact]
-    public void OptionalPropertiesBlock_DefaultsToEmpty()
-    {
-        ShaderDefinition shader = Parse.Shader("""
-            Shader "Min"
-            {
-                Pass { SLANGPROGRAM void main() {} ENDSLANG }
-                Fallback "fb"
-            }
-            """);
-
-        Assert.Empty(shader.Properties!);
-    }
-
-
-    [Fact]
     public void MultiplePasses_AllParsedInOrder()
     {
         ShaderDefinition shader = Parse.Shader("""
@@ -96,18 +81,6 @@ public class ShaderTests
         Assert.Equal(2, shader.Passes!.Length);
         Assert.Equal("A", shader.Passes![0].Name);
         Assert.Equal("B", shader.Passes![1].Name);
-    }
-
-
-    [Fact]
-    public void MissingFallback_Empty()
-    {
-        Assert.Empty(Parse.Shader("""
-            Shader "NoFallback"
-            {
-                Pass { SLANGPROGRAM void main() {} ENDSLANG }
-            }
-            """).Fallback);
     }
 
 

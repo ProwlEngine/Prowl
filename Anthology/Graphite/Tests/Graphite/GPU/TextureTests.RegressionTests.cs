@@ -36,15 +36,13 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             width, height, 1, 1, PixelFormat.R32_G32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(3f, 5f, 999f, 7777f)), AttachmentOps.Loaded));
             // 999f and 7777f are deliberately distinctive sentinels for the B and A channels.
             // The target is R32_G32_Float, so by the contract those two values must be ignored
             // and every pixel must read back as exactly (3, 5). The sentinels ensure that any
             // accidental leakage of B/A into the readback is loud and unambiguous.
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 
@@ -71,9 +69,8 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             width, height, 1, 1, PixelFormat.R16_G16_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
-        GD.RunTestGraph(context =>
+        GD.RunTestGraph((context, cl) =>
         {
-            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(1f, 2f, 999f, 7777f)), AttachmentOps.Loaded));
             // 999f and 7777f are deliberately distinctive sentinels for the B and A channels:
             // the target is R16_G16_Float, so by the contract those two values must be ignored
@@ -81,7 +78,6 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             // representable in IEEE-754 binary16, so the float32 -> float16 narrowing the clear
             // path performs is lossless and would faithfully preserve the sentinels if a bug
             // ever let them leak into the readback.
-            context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
 

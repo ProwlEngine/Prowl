@@ -95,7 +95,7 @@ internal unsafe partial class VkCommandBuffer
 
         bool needBind = _descriptorBinder.Prepare(
             _currentComputeProgram,
-            reportProgram: _currentShaderProgram,
+            reportProgram: _currentComputeProgram,
             isGraphics: false);
 
         if (needBind)
@@ -184,7 +184,7 @@ internal unsafe partial class VkCommandBuffer
     {
         bool has = _currentVertexSource!.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount);
         _currentIndexCount = indexCount;
-        DrawIndexed_AssertIndexBufferResolved(has);
+        DrawIndexed_CheckIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
 
         if (WantsDrawBufferCapture)

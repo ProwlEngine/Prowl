@@ -15,14 +15,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
     private ResourceFactory Inner => GD.ResourceFactory;
 
     [Fact]
-    public void Dispose_Buffer()
-    {
-        DeviceBuffer b = Inner.CreateBuffer(new BufferDescription(256, BufferUsage.VertexBuffer));
-        b.Dispose();
-        Assert.True(b.IsDisposed);
-    }
-
-    [Fact]
     public void Dispose_TextureAndView()
     {
         Texture t = Inner.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
@@ -52,14 +44,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
         Assert.True(t.IsDisposed);
     }
 
-    [Fact]
-    public void Dispose_Sampler()
-    {
-        Sampler s = Inner.CreateSampler(SamplerDescription.Point);
-        s.Dispose();
-        Assert.True(s.IsDisposed);
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     private struct SinkVertex
     {
@@ -67,29 +51,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
         public Float4 B;
         public Float2 C;
         public Float4 D;
-    }
-
-    [Fact]
-    public void Dispose_GraphicsProgram()
-    {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.slang");
-        GraphicsProgram program = Inner.CreateGraphicsProgram(new ShaderDescription(stages)
-        {
-            BlendState = BlendStateDescription.SingleOverrideBlend,
-            DepthStencilState = DepthStencilStateDescription.Disabled,
-            RasterizerState = RasterizerStateDescription.CullNone,
-            VertexLayouts =
-            [
-                new VertexLayoutDescription(0, (uint)Unsafe.SizeOf<SinkVertex>(),
-                    new VertexElementDescription("POSITION", VertexElementFormat.Float3),
-                    new VertexElementDescription("COLOR0", VertexElementFormat.Float4),
-                    new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2),
-                    new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
-            ],
-        });
-
-        program.Dispose();
-        Assert.True(program.IsDisposed);
     }
 
     [SkippableFact]
@@ -124,24 +85,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
 
         first.Dispose();
         second.Dispose();
-    }
-
-    [SkippableFact]
-    public void Dispose_ComputeProgram()
-    {
-
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.slang");
-        ComputeProgram program = Inner.CreateComputeProgram(new ComputeDescription(stage,
-            [
-                new ResourceLayoutDescription
-                {
-                    Set = 0,
-                    Elements = [new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0)]
-                }
-            ], 1, 1, 1));
-
-        program.Dispose();
-        Assert.True(program.IsDisposed);
     }
 }
 

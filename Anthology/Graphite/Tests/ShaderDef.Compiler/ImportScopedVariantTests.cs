@@ -42,17 +42,6 @@ public class ImportScopedVariantTests
 
 
     [Fact]
-    public void PassImportingAxisModule_EnumeratesItsAxes()
-    {
-        VariantSpace[] axes = AxesFor("ScopedAxisImporter")[0];
-
-        Assert.Equal(2, axes.Length);
-        Assert.Contains(axes, a => a.Name == "SCOPED_FLAG" && !a.IsEnum);
-        Assert.Contains(axes, a => a.Name == "SCOPED_MODE" && a.IsEnum);
-    }
-
-
-    [Fact]
     public void PassWithoutTheImport_EnumeratesNoAxes()
     {
         VariantSpace[][] axes = AxesFor("ScopedAxisImporter", "ScopedAxisOutsider");

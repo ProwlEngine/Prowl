@@ -128,13 +128,13 @@ internal unsafe partial class VkCommandBuffer
     private void CountAttachment(Texture texture, bool isDepth, ref int total, ref int graph, ref bool depthReadOnly)
     {
         total++;
-        TextureState state = StateOf(texture);
+        TextureState? state = StateOf(texture);
         if (state == TextureState.Attachment || (isDepth && state == TextureState.DepthReadOnly))
         {
             graph++;
             depthReadOnly |= state == TextureState.DepthReadOnly;
         }
-        else if (state != TextureState.Resting)
+        else if (state != null)
         {
             throw new RenderException(
                 $"Texture '{texture.Name}' is in state {state} for the current pass and cannot be a framebuffer attachment. " +
@@ -148,7 +148,7 @@ internal unsafe partial class VkCommandBuffer
         VkBarriers.Record(_gd, _cb, textures, bufferSrc, bufferDst);
     }
 
-    internal override void SealRenderPass()
+    private void SealRenderPass()
     {
         if (_activeRenderPass.Handle == default && !_currentFramebufferEverActive && _currentFramebuffer != null)
             BeginCurrentRenderPass();

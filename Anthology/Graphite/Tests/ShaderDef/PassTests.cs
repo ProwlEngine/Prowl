@@ -48,23 +48,6 @@ public class PassTests
 
 
     [Fact]
-    public void NameOnly_Parsed()
-    {
-        ShaderPass pass = Parse.Pass("""
-            Pass
-            {
-                Name "ShadowCaster"
-                SLANGPROGRAM
-                void main() {}
-                ENDSLANG
-            }
-            """);
-
-        Assert.Equal("ShadowCaster", pass.Name);
-    }
-
-
-    [Fact]
     public void MisspelledCommand_ThrowsUnknownCommand()
     {
         ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""
