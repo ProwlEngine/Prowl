@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -353,9 +354,9 @@ public abstract class RenderPipeline : EngineObject
 
     /// <summary>
     /// Returns a per-index "culled" mask (true == culled, skip this renderable) aligned to
-    /// <paramref name="renderables"/>. A bool[] keyed by index is cheaper to allocate than a
-    /// HashSet and turns the per-object membership test in every pass into an O(1) array read
-    /// instead of a hash lookup.
+    /// <paramref name="renderables"/>. A bool[] keyed by index turns the per-object membership test
+    /// in every pass into an O(1) array read. The array is pooled and may be longer than
+    /// <paramref name="renderables"/>, hand it back with <see cref="ReturnCullResult"/> once done.
     /// </summary>
     /// <param name="alreadyCulled">Renderables an earlier, wider test culled, which stay culled without testing again.</param>
     public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask, bool[]? alreadyCulled = null)
@@ -363,25 +364,16 @@ public abstract class RenderPipeline : EngineObject
         EnsureWorldBounds(renderables);
 
         ReadOnlySpan<Plane> planes = worldFrustum?.Planes;
-        bool[] culledRenderableIndices = new bool[renderables.Count];
+        bool[] culledRenderableIndices = ArrayPool<bool>.Shared.Rent(renderables.Count);
         int culled = 0;
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
-            if (alreadyCulled != null && alreadyCulled[renderIndex])
-            {
-                culledRenderableIndices[renderIndex] = true;
-                culled++;
-                continue;
-            }
+            bool isCulled = (alreadyCulled != null && alreadyCulled[renderIndex])
+                || (worldFrustum != null && (!_boundsRenderable[renderIndex] || !BoxInsidePlanes(planes, in _worldBounds[renderIndex])))
+                || !cullingMask.HasLayer(renderables[renderIndex].GetLayer());
 
-            bool frustumCull = worldFrustum != null
-                && (!_boundsRenderable[renderIndex] || !BoxInsidePlanes(planes, in _worldBounds[renderIndex]));
-
-            if (frustumCull || cullingMask.HasLayer(renderables[renderIndex].GetLayer()) == false)
-            {
-                culledRenderableIndices[renderIndex] = true;
-                culled++;
-            }
+            culledRenderableIndices[renderIndex] = isCulled;
+            if (isCulled) culled++;
         }
 
         int collected = renderables.Count;
@@ -411,12 +403,13 @@ public abstract class RenderPipeline : EngineObject
     /// <summary>
     /// Culls every renderable whose bounds miss the sphere, as a cheap first pass for views that all sit inside
     /// it, such as the faces of a point light. Not counted in the render stats, the views that use it are.
+    /// Pooled like <see cref="CullRenderables"/>.
     /// </summary>
     public bool[] CullOutsideSphere(IReadOnlyList<IRenderable> renderables, Float3 center, float radius)
     {
         EnsureWorldBounds(renderables);
 
-        bool[] culledRenderableIndices = new bool[renderables.Count];
+        bool[] culledRenderableIndices = ArrayPool<bool>.Shared.Rent(renderables.Count);
         float radiusSq = radius * radius;
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
@@ -426,6 +419,9 @@ public abstract class RenderPipeline : EngineObject
         }
         return culledRenderableIndices;
     }
+
+    /// <summary>Hands a mask from <see cref="CullRenderables"/> or <see cref="CullOutsideSphere"/> back to the pool.</summary>
+    public void ReturnCullResult(bool[] culled) => ArrayPool<bool>.Shared.Return(culled);
 
     public bool CullRenderable(IRenderable renderable, Frustum cameraFrustum)
     {

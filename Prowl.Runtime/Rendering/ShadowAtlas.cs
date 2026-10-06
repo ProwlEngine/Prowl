@@ -13,6 +13,10 @@ public static class ShadowAtlas
     private static int size;
     private static RenderTexture? atlas;
 
+    /// <summary>Width and height of the shadow atlas every shadowed light shares, clamped to between 1024 and the
+    /// largest texture the GPU supports. A change rebuilds the atlas on the next render.</summary>
+    public static int RequestedSize { get; set; } = 8192;
+
     // Simple Guillotine algorithm - maintains a list of free rectangles
     private class FreeRect
     {
@@ -35,12 +39,12 @@ public static class ShadowAtlas
 
     public static void TryInitialize()
     {
-        if (atlas.IsValid()) return;
+        int wanted = Maths.Clamp(RequestedSize, 1024, Graphics.MaxTextureSize);
+        if (atlas.IsValid() && size == wanted) return;
 
-        bool supports8k = Graphics.MaxTextureSize >= 8192;
-        size = supports8k ? 8192 : 4096;
-
-        if (atlas.IsNotValid()) atlas = new RenderTexture(size, size, true, []);
+        if (atlas.IsValid()) atlas.Dispose();
+        size = wanted;
+        atlas = new RenderTexture(size, size, true, []);
 
         // Sample the atlas through hardware depth comparison: a sampler2DShadow in the lighting
         // shaders then gets fixed-function 2x2 PCF (with LINEAR filtering) instead of the manual

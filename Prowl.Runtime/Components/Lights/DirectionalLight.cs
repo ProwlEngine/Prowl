@@ -197,6 +197,7 @@ public class DirectionalLight : Light
                 cmd.SetDepthClamp(false);
                 cmd.SetDepthBias(0f, 0f);
                 Graphics.Submit(cmd);
+                pipeline.ReturnCullResult(culledRenderableIndices);
 
                 // Store cascade data for shader
                 _cascadeShadowMatrices[cascadeIndex] = RenderPipeline.ToGLClipDepth(proj * view);

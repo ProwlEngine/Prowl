@@ -117,6 +117,7 @@ public class SpotLight : Light
             pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
             cmd.SetDepthBias(0f, 0f);
             Graphics.Submit(cmd);
+            pipeline.ReturnCullResult(culledRenderableIndices);
 
             // Store shadow data for shader
             _shadowMatrix = RenderPipeline.ToGLClipDepth(proj * view);

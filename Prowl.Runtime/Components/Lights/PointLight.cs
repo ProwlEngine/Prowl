@@ -27,6 +27,17 @@ public class PointLight : Light
     private Float4[] _shadowFaceParams = new Float4[6]; // xy = atlas pos, z = face size, w = texel size one unit from the light
     private Float4x4[] _shadowMatrices = new Float4x4[6]; // View-projection for each face
 
+    // Forward and up of each cube face, in atlas order
+    private static readonly (Float3 Forward, Float3 Up)[] s_faceOrientations =
+    [
+        (Float3.UnitX,  -Float3.UnitY),
+        (-Float3.UnitX, -Float3.UnitY),
+        (Float3.UnitY,   Float3.UnitZ),
+        (-Float3.UnitY, -Float3.UnitZ),
+        (Float3.UnitZ,  -Float3.UnitY),
+        (-Float3.UnitZ, -Float3.UnitY),
+    ];
+
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         lights.Add(this);
@@ -72,18 +83,6 @@ public class PointLight : Light
         int atlasX = slot.Value.X;
         int atlasY = slot.Value.Y;
 
-        // Define the 6 cube faces with their orientations
-        // Each face needs: target direction and up vector
-        (Float3 forward, Float3 up)[] faceOrientations = new[]
-        {
-            (Float3.UnitX,  -Float3.UnitY), // +X (right)
-            (-Float3.UnitX, -Float3.UnitY), // -X (left)
-            (Float3.UnitY,   Float3.UnitZ), // +Y (up)
-            (-Float3.UnitY, -Float3.UnitZ), // -Y (down)
-            (Float3.UnitZ,  -Float3.UnitY), // +Z (forward)
-            (-Float3.UnitZ, -Float3.UnitY), // -Z (back)
-        };
-
         // Create perspective projection for all faces (90 degree FOV for cubemap)
         Float4x4 projection = Float4x4.CreatePerspectiveFov(Maths.PI / 2.0f, 1.0f, 0.1f, Maths.Max(Range, 0.2f));
 
@@ -99,7 +98,7 @@ public class PointLight : Light
             int viewportX = atlasX + (gridX * res);
             int viewportY = atlasY + (gridY * res);
 
-            (Float3 forward, Float3 up) = faceOrientations[faceIndex];
+            (Float3 forward, Float3 up) = s_faceOrientations[faceIndex];
             Float4x4 view = Float4x4.CreateLookTo(lightPos, forward, up);
 
             Frustum frustum = Frustum.FromMatrix(projection * view);
@@ -121,11 +120,14 @@ public class PointLight : Light
             pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices, false);
             cmd.SetDepthBias(0f, 0f);
             Graphics.Submit(cmd);
+            pipeline.ReturnCullResult(culledRenderableIndices);
 
             // Store face data for shader
             _shadowMatrices[faceIndex] = RenderPipeline.ToGLClipDepth(projection * view);
             _shadowFaceParams[faceIndex] = new Float4(viewportX, viewportY, res, 2f / res);
         }
+
+        pipeline.ReturnCullResult(outsideRange);
     }
 
     public override ForwardLightData GetForwardLightData()

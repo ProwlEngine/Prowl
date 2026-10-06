@@ -219,4 +219,27 @@ public class RenderPipelineTests
             Assert.Equal(ClipToNdc(projection, mid).Y, ClipToNdc(gl, mid).Y, 5);
         }
     }
+
+    [Fact]
+    public void CullRenderables_ReusedMask_DoesNotKeepLastResult()
+    {
+        Mesh quad = Mesh.GetFullscreenQuad();
+        var material = new Material(Shader.LoadDefault(DefaultShader.StandardTransparent));
+        var renderables = new List<IRenderable> { Renderable(quad, material, 1, 5), Renderable(quad, material, 2, 6) };
+        var pipeline = new DefaultRenderPipeline();
+
+        Float4x4 view = Float4x4.CreateLookTo(Float3.Zero, Float3.UnitZ, Float3.UnitY);
+        Frustum ahead = Frustum.FromMatrix(Float4x4.CreatePerspectiveFov(1f, 1f, 0.1f, 100f) * view);
+        Frustum behind = Frustum.FromMatrix(Float4x4.CreatePerspectiveFov(1f, 1f, 0.1f, 100f)
+            * Float4x4.CreateLookTo(Float3.Zero, -Float3.UnitZ, Float3.UnitY));
+
+        // The masks are pooled, so a mask that culled everything comes back for the next view and has to be rewritten
+        bool[] first = pipeline.CullRenderables(renderables, behind, LayerMask.Everything);
+        Assert.True(first[0] && first[1]);
+        pipeline.ReturnCullResult(first);
+
+        bool[] second = pipeline.CullRenderables(renderables, ahead, LayerMask.Everything);
+        Assert.False(second[0] || second[1]);
+        pipeline.ReturnCullResult(second);
+    }
 }

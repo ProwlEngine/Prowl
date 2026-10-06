@@ -584,6 +584,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
             RenderTexture.ReleaseTemporaryRT(prepass);
             RenderTexture.ReleaseTemporaryRT(colorRT);
+            ReturnCullResult(culledRenderableIndices);
         }
     }
 
