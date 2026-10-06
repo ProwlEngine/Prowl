@@ -350,4 +350,6 @@ FodyWeavers.xsd
 .idea/
 
 # Local tools and scratch work, kept out of the repo
+Design/
+.claude/
 Wulferis_Local/
