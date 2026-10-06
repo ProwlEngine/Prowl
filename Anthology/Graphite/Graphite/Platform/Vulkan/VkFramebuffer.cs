@@ -35,7 +35,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 
         AttachmentCount = (uint)ColorTargets.Count + (DepthTarget is not null ? 1u : 0u);
 
-        _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
+        _gd.Counters.Allocate(AllocBin.Framebuffer);
     }
 
     public override RenderPass GetRenderPass(FramebufferMode mode, RenderPassOps ops)
@@ -234,6 +234,6 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
             _gd.Vk.DestroyImageView(_gd.Device, view, null);
         }
 
-        _gd.Profiler?.Free(AllocBin.Framebuffer, 0);
+        _gd.Counters.Free(AllocBin.Framebuffer);
     }
 }

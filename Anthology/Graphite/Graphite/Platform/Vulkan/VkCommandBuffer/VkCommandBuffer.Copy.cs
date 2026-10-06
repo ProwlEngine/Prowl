@@ -37,7 +37,7 @@ internal unsafe partial class VkCommandBuffer
         };
 
         _gd.Vk.CmdCopyBuffer(_cb, srcVkBuffer.DeviceBuffer, dstVkBuffer.DeviceBuffer, 1, in region);
-        _gd.Profiler?.Record(BufferOpBin.Copy, sizeInBytes);
+        _gd.Counters.RecordBufferOp(BufferOpBin.Copy, sizeInBytes);
 
         EmitPostCopyBufferBarrier(destination.Usage.HasFlag(BufferUsage.UniformBuffer));
     }
@@ -93,7 +93,7 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdCopyBufferToImage(_cb, staging.DeviceBuffer, vkTex.OptimalDeviceImage, ImageLayout.TransferDstOptimal, 1, in copy);
 
         VkBarriers.Transition(_gd, _cb, vkTex, ImageLayout.TransferDstOptimal, layout, mipLevel, 1, arrayLayer, 1);
-        _gd.Profiler?.Record(BufferOpBin.Update, sizeInBytes);
+        _gd.Counters.RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }
 
     private void EmitPostCopyBufferBarrier(bool needToProtectUniform)
@@ -118,7 +118,7 @@ internal unsafe partial class VkCommandBuffer
             1, in barrier,
             0, null,
             0, null);
-        _gd.Profiler?.RecordBarrier(BarrierBin.BufferTransition, 1);
+        _gd.Counters.RecordBarrier(BarrierBin.BufferTransition);
     }
 
     private protected override void CopyTextureCore(
@@ -207,7 +207,7 @@ internal unsafe partial class VkCommandBuffer
         VkBarriers.Transition(_gd, _cb, src, layout, ImageLayout.TransferSrcOptimal, region.MipLevel, 1, region.ArrayLayer, 1);
         _gd.Vk.CmdCopyImageToBuffer(_cb, src.OptimalDeviceImage, ImageLayout.TransferSrcOptimal, dst.DeviceBuffer, 1, in copy);
         VkBarriers.Transition(_gd, _cb, src, ImageLayout.TransferSrcOptimal, layout, region.MipLevel, 1, region.ArrayLayer, 1);
-        _gd.Profiler?.Record(BufferOpBin.Copy, FormatHelpers.GetRegionSize(region.Width, region.Height, region.Depth, source.Format));
+        _gd.Counters.RecordBufferOp(BufferOpBin.Copy, FormatHelpers.GetRegionSize(region.Width, region.Height, region.Depth, source.Format));
     }
 
     private static ImageAspectFlags CopyAspectMask(VkTexture texture)

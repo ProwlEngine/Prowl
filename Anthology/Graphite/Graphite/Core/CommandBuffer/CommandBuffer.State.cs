@@ -18,14 +18,15 @@ public abstract partial class CommandBuffer
 
         SetShaderCore(program);
         _shaderProgram = program;
+        _statShaderSwitches++;
 
-        if (Execution?.Device.Profiler is { } profiler)
+        if (Device.CommandProfiler is { } profiler)
         {
             ShaderStages stages = ShaderStages.None;
             foreach (ShaderStages stage in program.Stages)
                 stages |= stage;
 
-            profiler.RecordPipelineSwitch(ProfilerInfo, new PipelineBindInfo(program.Name, isCompute: false, stages, program));
+            profiler.RecordShaderSwitch(ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: false, stages, program));
         }
     }
 
@@ -39,11 +40,12 @@ public abstract partial class CommandBuffer
         ValidationHelpers.RequireNotNullRender(Device, program, nameof(ComputeProgram), nameof(SetComputeShader));
         if (ReferenceEquals(_computeProgram, program)) return;
 
+        _statShaderSwitches++;
+        Device.CommandProfiler?.RecordShaderSwitch(
+            ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
+
         SetComputeShaderCore(program);
         _computeProgram = program;
-
-        Execution?.Device.Profiler?.RecordPipelineSwitch(
-            ProfilerInfo, new PipelineBindInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
     }
 
     private protected abstract void SetComputeShaderCore(ComputeProgram program);

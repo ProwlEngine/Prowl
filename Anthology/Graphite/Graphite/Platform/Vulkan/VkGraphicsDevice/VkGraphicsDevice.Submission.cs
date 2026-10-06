@@ -11,6 +11,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private readonly object _pendingLock = new();
+    private readonly Dictionary<ulong, ExecutionQueryState> _executionQueries = new();
     private readonly Queue<PendingSubmission> _pending = new();
     private VkSemaphore _timelineSemaphore;
     private int _graphicsQueueSubmitCount;
@@ -172,10 +173,15 @@ internal unsafe partial class VkGraphicsDevice
             {
                 foreach (VkCommandBuffer cb in tracked)
                 {
+                    CommandBufferInfo info = cb.ProfilerInfo;
+                    if (info.ExecutionId != 0 && GpuStatsProfiler != null)
+                        QueryStateFor_NoLock(info.ExecutionId).Outstanding++;
+
                     _pending.Enqueue(new PendingSubmission
                     {
                         Serial = serial,
                         CommandBuffer = cb,
+                        Info = info,
                         Queries = cb.TakePendingQueries(),
                         IsTransfer = submission != null,
                         Submission = submission,
@@ -198,7 +204,7 @@ internal unsafe partial class VkGraphicsDevice
     /// Submits an execution's queued command buffers as one vkQueueSubmit and returns its serial. An empty
     /// batch is only submitted when it is the execution's final one, so the execution still gets a serial.
     /// </summary>
-    internal ulong SubmitExecutionBatch(List<VkCommandBuffer> commandBuffers, bool isFinal)
+    internal ulong SubmitExecutionBatch(List<VkCommandBuffer> commandBuffers, ulong executionId, bool isFinal)
     {
         FlushPendingInitCommands();
         int count = commandBuffers.Count;
@@ -211,7 +217,10 @@ internal unsafe partial class VkGraphicsDevice
             for (int i = 0; i < count; i++)
                 handles[i] = commandBuffers[i].CommandBuffer;
 
-            return Submit(new System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer>(handles, 0, count), CollectionsMarshal.AsSpan(commandBuffers));
+            ulong serial = Submit(new System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer>(handles, 0, count), CollectionsMarshal.AsSpan(commandBuffers));
+            if (isFinal)
+                CloseExecutionQueries(executionId);
+            return serial;
         }
         finally
         {
@@ -244,7 +253,7 @@ internal unsafe partial class VkGraphicsDevice
         Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
         ulong serial = Submit(new System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer>(in handle), new System.ReadOnlySpan<VkCommandBuffer>(in cb), submission);
         TagImmediatePool(cb.CommandPool, serial);
-        Profiler?.RecordSubmit(cb.ProfilerInfo, isTransfer: true);
+        CommandProfiler?.RecordSubmit(cb.ProfilerInfo, isTransfer: true);
         return submission;
     }
 
@@ -273,17 +282,71 @@ internal unsafe partial class VkGraphicsDevice
     {
         if (pending.CommandBuffer is { } cb)
         {
-            ResolveQueries(in pending.Queries, cb.ProfilerInfo, pending.IsTransfer);
+            ResolveQueries(in pending.Queries, pending.Info, pending.IsTransfer);
 
             if (pending.Submission != null)
                 ReturnRecordCommandBuffer(cb);
         }
+
+        if (pending.Info.ExecutionId != 0)
+            ReleaseExecutionQuery(pending.Info.ExecutionId);
+    }
+
+    private ExecutionQueryState QueryStateFor_NoLock(ulong executionId)
+    {
+        if (!_executionQueries.TryGetValue(executionId, out ExecutionQueryState? state))
+            _executionQueries[executionId] = state = new ExecutionQueryState();
+        return state;
+    }
+
+    private void CloseExecutionQueries(ulong executionId)
+    {
+        if (GpuStatsProfiler == null)
+            return;
+
+        bool resolved;
+        lock (_pendingLock)
+        {
+            ExecutionQueryState state = QueryStateFor_NoLock(executionId);
+            state.Closed = true;
+            resolved = state.Outstanding == 0;
+            if (resolved)
+                _executionQueries.Remove(executionId);
+        }
+
+        if (resolved)
+            GpuStatsProfiler?.RecordExecutionResolved(executionId);
+    }
+
+    private void ReleaseExecutionQuery(ulong executionId)
+    {
+        bool resolved = false;
+        lock (_pendingLock)
+        {
+            if (_executionQueries.TryGetValue(executionId, out ExecutionQueryState? state))
+            {
+                state.Outstanding--;
+                resolved = state.Closed && state.Outstanding == 0;
+                if (resolved)
+                    _executionQueries.Remove(executionId);
+            }
+        }
+
+        if (resolved)
+            GpuStatsProfiler?.RecordExecutionResolved(executionId);
+    }
+
+    private sealed class ExecutionQueryState
+    {
+        public int Outstanding;
+        public bool Closed;
     }
 
     private struct PendingSubmission
     {
         public ulong Serial;
         public VkCommandBuffer? CommandBuffer;
+        public CommandBufferInfo Info;
         public GpuQueries Queries;
         public bool IsTransfer;
         public VkGpuSubmission? Submission;

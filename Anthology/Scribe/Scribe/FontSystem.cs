@@ -214,17 +214,24 @@ namespace Prowl.Scribe
             var paths = GetSystemFontPaths();
             foreach (var path in paths)
             {
-                FontFile font = null;
+                byte[] data;
+                int count;
                 try
                 {
-                    font = new FontFile(path);
+                    data = File.ReadAllBytes(path);
+                    count = Common.stbtt_GetNumberOfFonts(new FakePtr<byte>(data));
                 }
                 catch
                 {
                     continue; // Silently skip problematic fonts
                 }
-                if (font != null)
+                for (int i = 0; i < count; i++)
+                {
+                    FontFile font;
+                    try { font = new FontFile(data, i); }
+                    catch { continue; } // Skip an unsupported face without hiding the rest.
                     yield return font;
+                }
             }
         }
 
@@ -256,7 +263,8 @@ namespace Prowl.Scribe
                         try { ext = Path.GetExtension(f); }
                         catch { continue; }
 
-                        if (string.Equals(ext, ".ttf", StringComparison.OrdinalIgnoreCase) && yielded.Add(f))
+                        if ((string.Equals(ext, ".ttf", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(ext, ".ttc", StringComparison.OrdinalIgnoreCase)) && yielded.Add(f))
                             yield return f;
                     }
 

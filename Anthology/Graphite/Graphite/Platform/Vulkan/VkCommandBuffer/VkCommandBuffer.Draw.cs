@@ -108,11 +108,6 @@ internal unsafe partial class VkCommandBuffer
 
         if (_hasResolvedPipeline && _resolvedTopology == srcTopology) return;
 
-        if (_currentShaderProgram == null || _currentFramebuffer == null)
-        {
-            throw new RenderException("Cannot draw: no graphics GraphicsProgram or Framebuffer bound.");
-        }
-
         VkPipelineCacheKey key = new(_framebufferOutputs!.Value, srcTopology);
 
         _currentResolvedPipeline = _currentShaderProgram.GetOrAddPipeline(in key);
@@ -120,6 +115,7 @@ internal unsafe partial class VkCommandBuffer
         _hasResolvedPipeline = true;
 
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Graphics, _currentResolvedPipeline.Pipeline);
+        ReportPipelineBind(_currentShaderProgram, _currentResolvedPipeline.Id, isCompute: false, key.Outputs, srcTopology);
     }
 
     private void BindVertexBuffersFromSource()
@@ -127,10 +123,6 @@ internal unsafe partial class VkCommandBuffer
         VkGraphicsProgram program = _currentShaderProgram;
         IReadOnlyList<VertexLayoutDescription> layouts = program.VertexLayouts;
         int count = layouts.Count;
-
-        bool captureForProfiler = WantsDrawBufferCapture;
-        if (captureForProfiler)
-            BeginDrawBufferCapture();
 
         if (count == 0) return;
 
@@ -140,13 +132,6 @@ internal unsafe partial class VkCommandBuffer
         uint sourceVersion = source is VertexSource versioned ? versioned.Version : 0;
         if (_vbCacheSource == source && _vbCacheProgram == program && _vbCacheCount == count && _vbCacheVersion == sourceVersion)
         {
-            for (int slot = 0; slot < count; slot++)
-            {
-                VertexBinding binding = _vbCacheBindings[slot];
-
-                if (captureForProfiler)
-                    CaptureResolvedVertexBinding(in binding);
-            }
             return;
         }
 
@@ -160,9 +145,6 @@ internal unsafe partial class VkCommandBuffer
             VertexLayoutDescription layout = layouts[slot];
             source.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
-
-            if (captureForProfiler)
-                CaptureResolvedVertexBinding(in binding);
 
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(binding.Buffer);
             buffers[slot] = vkBuffer.DeviceBuffer;
@@ -186,9 +168,6 @@ internal unsafe partial class VkCommandBuffer
         _currentIndexCount = indexCount;
         DrawIndexed_CheckIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
-
-        if (WantsDrawBufferCapture)
-            CaptureResolvedIndexBinding(ib, fmt, indexCount);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
 

@@ -15,129 +15,84 @@ using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
-/// <summary>
-/// Radar (spider) chart. The data set defines the spokes, one per item and labelled by <c>Name</c>, and
-/// every series added with <see cref="Series"/> is drawn as one closed polygon whose value i sits on
-/// spoke i. Without any series the items' own values form a single polygon.
-/// </summary>
-public sealed class RadarChart<T> : CircularCore<RadarChart<T>, T>
+/// <summary>Radar chart. Each data item is a spoke named by <see cref="Name"/>; each <see cref="Series"/>
+/// is a closed polygon whose value i sits on spoke i.</summary>
+public sealed class RadarChart<T> : ChartCore<RadarChart<T>, T>
 {
-    internal RadarChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
-        : base(paper, id, theme, data) { }
-
     private sealed class RadarSeries
     {
         public string Label = "";
-        public Color Tint;
+        public Color Color;
         public IReadOnlyList<double> Values = Array.Empty<double>();
         public bool Fill = true;
-        public float? StrokeWidth;
+        public float StrokeWidth = 2f;
+        public bool Hidden;
     }
 
     private readonly List<RadarSeries> _series = new();
-    private RadarSeries? _lastSeries;
+    private RadarSeries? _last;
 
-    private int _yTicks = 4;
+    private Func<T, string>? _nameSelector;
+    private int _ticks = 4;
     private bool _hasRange;
-    private double _rangeMin;
-    private double _rangeMax;
-    private bool _spokeLabels = true;
+    private double _rangeMin, _rangeMax;
+    private bool _labels = true;
+    private bool _tooltip = true;
 
-    private const float DefaultStrokeWidth = 2f;
+    private const string PlotSizeKey = "radar_size";
+    private const float RadiusInset = 18f;
     private const float FillAlpha = 0.25f;
-    private const float GridAlpha = 0.6f;
     private const float VertexRadius = 3f;
     private const float LabelRadiusScale = 1.06f;
     private const float HitRadiusScale = 1.1f;
-    private const float TickBoxWidth = 48f;
-    private const float TickBoxHeight = 14f;
-    private const float SpokeBoxWidth = 90f;
-    private const float SpokeBoxHeight = 14f;
 
-    /// <summary>Add one polygon over the spokes. Value i in <paramref name="values"/> is plotted on the
-    /// spoke made by data item i; missing values sit at the bottom of the range.</summary>
+    internal RadarChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
+        : base(paper, id, theme, data) { }
+
+    public RadarChart<T> Name(Func<T, string> selector) { _nameSelector = selector; return this; }
+
+    /// <summary>Add a polygon; value i sits on the spoke of data item i.</summary>
     public RadarChart<T> Series(string label, Color color, IReadOnlyList<double> values)
     {
-        var s = new RadarSeries { Label = label ?? "", Tint = color, Values = values ?? Array.Empty<double>() };
-        _series.Add(s);
-        _lastSeries = s;
+        _last = new RadarSeries { Label = label ?? "", Color = color, Values = values ?? Array.Empty<double>() };
+        _series.Add(_last);
         return this;
     }
 
-    /// <summary>Add one polygon over the spokes. Value i in <paramref name="values"/> is plotted on the
-    /// spoke made by data item i; missing values sit at the bottom of the range.</summary>
-    public RadarChart<T> Series(string label, Color color, ReadOnlySpan<double> values)
+    public RadarChart<T> Color(Color color) { if (_last != null) _last.Color = color; return this; }
+    public RadarChart<T> Fill(bool fill = true) { if (_last != null) _last.Fill = fill; return this; }
+    public RadarChart<T> StrokeWidth(float width) { if (_last != null) _last.StrokeWidth = MathF.Max(0.1f, width); return this; }
+
+    /// <summary>Number of grid rings and their value labels. Default 4.</summary>
+    public RadarChart<T> YTicks(int count) { _ticks = Math.Max(1, count); return this; }
+
+    /// <summary>Fixed value range. Unset, it spans zero to the largest visible value.</summary>
+    public RadarChart<T> Range(double min, double max) { _hasRange = true; _rangeMin = Math.Min(min, max); _rangeMax = Math.Max(min, max); return this; }
+
+    public RadarChart<T> Labels(bool show = true) { _labels = show; return this; }
+    public RadarChart<T> Tooltip(bool show = true) { _tooltip = show; return this; }
+
+    protected override IReadOnlyList<LegendEntry> BuildLegendEntries()
     {
-        var s = new RadarSeries { Label = label ?? "", Tint = color, Values = values.ToArray() };
-        _series.Add(s);
-        _lastSeries = s;
-        return this;
-    }
-
-    /// <summary>Colour of the most recently added series.</summary>
-    public RadarChart<T> Color(Color color) { if (_lastSeries != null) _lastSeries.Tint = color; return this; }
-
-    /// <summary>Fill the most recently added series' polygon behind its stroke. On by default.</summary>
-    public RadarChart<T> Fill(bool fill = true) { if (_lastSeries != null) _lastSeries.Fill = fill; return this; }
-
-    /// <summary>Stroke width, in pixels, of the most recently added series' polygon. Defaults to 2.</summary>
-    public RadarChart<T> StrokeWidth(float width) { if (_lastSeries != null) _lastSeries.StrokeWidth = MathF.Max(0.1f, width); return this; }
-
-    /// <summary>Number of concentric grid rings, and of the tick labels drawn against them. Defaults to 4.</summary>
-    public RadarChart<T> YTicks(int count) { _yTicks = Math.Max(1, count); return this; }
-
-    /// <summary>Fix the value range every spoke is scaled against. Unset, the range spans zero to the
-    /// largest value of the visible series.</summary>
-    public RadarChart<T> Range(double min, double max)
-    {
-        _hasRange = true;
-        _rangeMin = Math.Min(min, max);
-        _rangeMax = Math.Max(min, max);
-        return this;
-    }
-
-    /// <summary>Show the spoke labels around the outside of the chart. On by default.</summary>
-    public new RadarChart<T> Labels(bool show = true) { _spokeLabels = show; base.Labels(show); return this; }
-
-    protected override float RadiusInset => 18f;
-
-    protected override bool RequiresPositiveTotal => false;
-
-    protected override bool LabelsEnabledForType => false;
-
-    protected override bool LegendListsSlices => _series.Count == 0;
-
-    protected override IReadOnlyList<LegendEntry> BuildLegend(IReadOnlyList<CircularSlice<T>> slices)
-    {
-        if (_series.Count == 0) return base.BuildLegend(slices);
-
         var entries = new List<LegendEntry>(_series.Count);
         for (int i = 0; i < _series.Count; i++)
         {
             RadarSeries s = _series[i];
-            entries.Add(new LegendEntry(
-                s.Label.Length > 0 ? s.Label : "Series " + i, s.Tint, i, null, IsHidden(i)));
+            s.Hidden = IsLegendHidden(i);
+            entries.Add(new LegendEntry(s.Label.Length > 0 ? s.Label : "Series " + i, s.Color, i, null, s.Hidden));
         }
         return entries;
     }
 
-    // --- Geometry ---
+    private int Spokes => _data?.Count ?? 0;
 
-    private static float SpokeAngle(int ordinal, int count)
-        => (-90f + 360f * ordinal / count) * DegToRad;
+    private string SpokeName(int i) => _nameSelector?.Invoke(_data![i]) ?? "";
 
-    private bool SeriesVisible(int index) => !IsHidden(index);
+    private static float SpokeAngle(int i, int spokes) => -MathF.PI * 0.5f + MathF.Tau * i / spokes;
 
-    private double SeriesValue(int seriesIndex, int spoke, double fallback)
-    {
-        IReadOnlyList<double> values = _series[seriesIndex].Values;
-        if (spoke >= values.Count) return fallback;
+    private static float Radius(float w, float h) => MathF.Max(1f, 0.5f * MathF.Min(w, h) - RadiusInset);
 
-        double v = values[spoke];
-        return double.IsNaN(v) || double.IsInfinity(v) ? fallback : v;
-    }
-
-    private void ValueRange(IReadOnlyList<CircularSlice<T>> slices, out double min, out double max)
+    private void ValueRange(out double min, out double max)
     {
         if (_hasRange)
         {
@@ -146,204 +101,163 @@ public sealed class RadarChart<T> : CircularCore<RadarChart<T>, T>
         }
         else
         {
-            double lo = 0d, hi = double.NegativeInfinity;
-            bool any = false;
-
-            if (_series.Count > 0)
+            min = 0d;
+            max = double.MinValue;
+            foreach (RadarSeries s in _series)
             {
-                for (int k = 0; k < _series.Count; k++)
-                {
-                    if (!SeriesVisible(k)) continue;
-
-                    foreach (double v in _series[k].Values)
-                    {
-                        if (double.IsNaN(v) || double.IsInfinity(v)) continue;
-                        lo = Math.Min(lo, v);
-                        hi = Math.Max(hi, v);
-                        any = true;
-                    }
-                }
+                if (s.Hidden) continue;
+                foreach (double v in s.Values)
+                    if (IsFinite(v)) { min = Math.Min(min, v); max = Math.Max(max, v); }
             }
-            else
-            {
-                foreach (CircularSlice<T> slice in slices)
-                {
-                    if (!slice.Visible) continue;
-                    lo = Math.Min(lo, slice.Value);
-                    hi = Math.Max(hi, slice.Value);
-                    any = true;
-                }
-            }
-
-            if (!any) { lo = 0d; hi = 1d; }
-
-            min = Math.Min(0d, lo);
-            max = hi;
+            if (max == double.MinValue) max = 1d;
         }
 
         if (max <= min) max = min + 1d;
     }
 
-    private static float ValueRadius(double value, double min, double max, float radius)
-        => (float)Math.Clamp((value - min) / (max - min), 0d, 1d) * radius;
-
-    private void PolygonPath(Canvas canvas, in CircularContext ctx, int spokes, Func<int, float> radiusOf)
+    protected override void DrawPlot()
     {
-        canvas.BeginPath();
-        for (int i = 0; i < spokes; i++)
+        if (Spokes < 3 || _series.Count == 0)
         {
-            Float2 p = ctx.PointAt(SpokeAngle(i, spokes), radiusOf(i));
-            if (i == 0) canvas.MoveTo(p.X, p.Y); else canvas.LineTo(p.X, p.Y);
-        }
-        canvas.ClosePath();
-    }
-
-    protected override void PaintMarks(Canvas canvas, in CircularContext ctx)
-    {
-        int spokes = ctx.Slices.Count;
-        if (spokes < 3) return;
-
-        ValueRange(ctx.Slices, out double min, out double max);
-
-        Color32 grid = ToC32(_theme.BorderSoft, GridAlpha);
-
-        for (int t = 1; t <= _yTicks; t++)
-        {
-            float r = ctx.Radius * t / _yTicks;
-            PolygonPath(canvas, in ctx, spokes, _ => r);
-            canvas.SetStrokeColor(grid);
-            canvas.SetStrokeWidth(1f);
-            canvas.Stroke();
-        }
-
-        for (int i = 0; i < spokes; i++)
-        {
-            Float2 outer = ctx.PointAt(SpokeAngle(i, spokes), ctx.Radius);
-            bool hovered = ctx.HoverIndex == i;
-
-            canvas.BeginPath();
-            canvas.MoveTo(ctx.CenterX, ctx.CenterY);
-            canvas.LineTo(outer.X, outer.Y);
-            canvas.SetStrokeColor(hovered ? ToC32(_theme.Ink.C500) : grid);
-            canvas.SetStrokeWidth(hovered ? 1.5f : 1f);
-            canvas.Stroke();
-        }
-
-        float radius = ctx.Radius;
-
-        if (_series.Count == 0)
-        {
-            IReadOnlyList<CircularSlice<T>> slices = ctx.Slices;
-            PaintPolygon(canvas, in ctx, spokes, Ramp.C500, true, DefaultStrokeWidth,
-                i => ValueRadius(slices[i].Visible ? slices[i].Value : min, min, max, radius));
+            DrawEmpty();
             return;
         }
 
-        for (int k = 0; k < _series.Count; k++)
-        {
-            if (!SeriesVisible(k)) continue;
+        ValueRange(out double min, out double max);
 
-            RadarSeries s = _series[k];
-            int index = k;
-            PaintPolygon(canvas, in ctx, spokes, s.Tint, s.Fill, s.StrokeWidth ?? DefaultStrokeWidth,
-                i => ValueRadius(SeriesValue(index, i, min), min, max, radius));
+        ElementBuilder plotBox = _paper.Box(_id + "_chart_plot").Clip();
+
+        using (plotBox.Enter())
+        {
+            ElementHandle plotEl = _paper.CurrentParent;
+            int hover = -1;
+
+            if (_tooltip)
+            {
+                TrackPointer(plotBox, plotEl);
+
+                Float2 size = _paper.GetElementStorage(plotEl, PlotSizeKey, new Float2(0f, 0f));
+                if (size.X > 0f && TryGetPointer(plotEl, out Float2 pointer))
+                {
+                    hover = HitTest(size.X * 0.5f, size.Y * 0.5f, Radius(size.X, size.Y), pointer);
+                    if (hover >= 0)
+                    {
+                        var rows = new List<(Color Color, string Text)>();
+                        foreach (RadarSeries s in _series)
+                            if (!s.Hidden && hover < s.Values.Count && IsFinite(s.Values[hover]))
+                                rows.Add((s.Color, $"{s.Label}: {FormatValue(s.Values[hover])}"));
+
+                        Popup(pointer.X, Math.Clamp(pointer.Y + 8f, 0f, size.Y), 0f, size.X, SpokeName(hover), rows);
+                    }
+                }
+            }
+
+            _paper.Draw((canvas, rect) => Paint(canvas, rect, plotEl, hover, min, max));
         }
     }
 
-    private void PaintPolygon(Canvas canvas, in CircularContext ctx, int spokes, Color color, bool fill,
-        float strokeWidth, Func<int, float> radiusOf)
+    private int HitTest(float cx, float cy, float radius, Float2 pointer)
     {
-        if (fill)
-        {
-            PolygonPath(canvas, in ctx, spokes, radiusOf);
-            canvas.SetFillColor(ToC32(color, FillAlpha));
-            canvas.FillComplexAA();
-        }
-
-        PolygonPath(canvas, in ctx, spokes, radiusOf);
-        canvas.SetStrokeColor(ToC32(color));
-        canvas.SetStrokeWidth(strokeWidth);
-        canvas.Stroke();
-
-        for (int i = 0; i < spokes; i++)
-        {
-            Float2 p = ctx.PointAt(SpokeAngle(i, spokes), radiusOf(i));
-            canvas.BeginPath();
-            canvas.Circle(p.X, p.Y, VertexRadius);
-            canvas.SetFillColor(ToC32(color));
-            canvas.Fill();
-        }
-    }
-
-    protected override int HitTest(in CircularContext ctx, Float2 pointer)
-    {
-        int spokes = ctx.Slices.Count;
-        if (spokes < 3) return -1;
-
-        float dx = pointer.X - ctx.CenterX;
-        float dy = pointer.Y - ctx.CenterY;
-        float reach = ctx.Radius * HitRadiusScale;
+        float dx = pointer.X - cx, dy = pointer.Y - cy;
+        float reach = radius * HitRadiusScale;
         if (dx * dx + dy * dy > reach * reach) return -1;
 
-        float angle = MathF.Atan2(dy, dx) / DegToRad + 90f;
-        while (angle < 0f) angle += 360f;
-
-        float step = 360f / spokes;
-        return (int)MathF.Round(angle / step) % spokes;
+        int spokes = Spokes;
+        float turn = (MathF.Atan2(dy, dx) + MathF.PI * 0.5f) / MathF.Tau;
+        turn -= MathF.Floor(turn);
+        return (int)MathF.Round(turn * spokes) % spokes;
     }
 
-    protected override Float2 LabelAnchor(in CircularContext ctx, int ordinal)
-        => ctx.PointAt(SpokeAngle(ordinal, Math.Max(1, ctx.Slices.Count)), ctx.Radius * LabelRadiusScale);
-
-    protected override void DrawOverlay(Paper paper, in CircularContext ctx)
+    private void Paint(Canvas canvas, Rect rect, ElementHandle plotEl, int hover, double min, double max)
     {
-        int spokes = ctx.Slices.Count;
-        if (spokes < 3) return;
+        float w = (float)rect.Size.X, h = (float)rect.Size.Y;
+        if (w < 4f || h < 4f) return;
 
-        ValueRange(ctx.Slices, out double min, out double max);
+        _paper.SetElementStorage(plotEl, PlotSizeKey, new Float2(w, h));
 
-        for (int t = 1; t <= _yTicks; t++)
+        int spokes = Spokes;
+        float cx = (float)rect.Min.X + w * 0.5f, cy = (float)rect.Min.Y + h * 0.5f;
+        float radius = Radius(w, h);
+        var pts = new Float2[spokes];
+
+        canvas.BeginPath();
+        for (int t = 1; t <= _ticks; t++)
         {
-            float r = ctx.Radius * t / _yTicks;
-            string text = FormatValue(min + (max - min) * t / _yTicks);
-
-            using (paper.Box($"{_id}_radar_tick_{t}")
-                .PositionType(PositionType.SelfDirected)
-                .Position(ctx.CenterX + 4f, ctx.CenterY - r - TickBoxHeight * 0.5f)
-                .Size(TickBoxWidth, TickBoxHeight)
-                .Enter())
+            float r = radius * t / _ticks;
+            for (int i = 0; i < spokes; i++)
             {
-                Origami.Label(paper, $"{_id}_radar_tick_txt_{t}", text)
-                    .XS()
-                    .AlignLeft()
-                    .Width(TickBoxWidth)
-                    .Height(TickBoxHeight)
-                    .Show();
+                float a = SpokeAngle(i, spokes);
+                float x = cx + MathF.Cos(a) * r, y = cy + MathF.Sin(a) * r;
+                if (i == 0) canvas.MoveTo(x, y); else canvas.LineTo(x, y);
             }
+            canvas.ClosePath();
+        }
+        for (int i = 0; i < spokes; i++)
+        {
+            if (i == hover) continue;
+            float a = SpokeAngle(i, spokes);
+            canvas.MoveTo(cx, cy);
+            canvas.LineTo(cx + MathF.Cos(a) * radius, cy + MathF.Sin(a) * radius);
+        }
+        canvas.SetStrokeColor(ToC32(_theme.BorderSoft, 0.6f));
+        canvas.SetStrokeWidth(1f);
+        canvas.Stroke();
+
+        if (hover >= 0)
+        {
+            float a = SpokeAngle(hover, spokes);
+            canvas.BeginPath();
+            canvas.MoveTo(cx, cy);
+            canvas.LineTo(cx + MathF.Cos(a) * radius, cy + MathF.Sin(a) * radius);
+            canvas.SetStrokeColor(ToC32(_theme.Ink.C500));
+            canvas.SetStrokeWidth(1.5f);
+            canvas.Stroke();
         }
 
-        if (!_spokeLabels) return;
+        foreach (RadarSeries s in _series)
+        {
+            if (s.Hidden) continue;
+
+            for (int i = 0; i < spokes; i++)
+            {
+                double v = i < s.Values.Count && IsFinite(s.Values[i]) ? s.Values[i] : min;
+                float r = (float)Math.Clamp((v - min) / (max - min), 0d, 1d) * radius;
+                float a = SpokeAngle(i, spokes);
+                pts[i] = new Float2(cx + MathF.Cos(a) * r, cy + MathF.Sin(a) * r);
+            }
+
+            canvas.BeginPath();
+            canvas.MoveTo(pts[0].X, pts[0].Y);
+            for (int i = 1; i < spokes; i++) canvas.LineTo(pts[i].X, pts[i].Y);
+            canvas.ClosePath();
+
+            if (s.Fill)
+            {
+                canvas.SetFillColor(ToC32(s.Color, FillAlpha));
+                canvas.FillComplexAA();
+            }
+
+            canvas.SetStrokeColor(ToC32(s.Color));
+            canvas.SetStrokeWidth(s.StrokeWidth);
+            canvas.Stroke();
+
+            canvas.BeginPath();
+            foreach (Float2 p in pts) canvas.Circle(p.X, p.Y, VertexRadius);
+            canvas.SetFillColor(ToC32(s.Color));
+            canvas.Fill();
+        }
+
+        for (int t = 1; t <= _ticks; t++)
+            DrawText(canvas, FormatValue(min + (max - min) * t / _ticks), cx + 4f, cy - radius * t / _ticks, 0f, 0.5f);
+
+        if (!_labels) return;
 
         for (int i = 0; i < spokes; i++)
         {
-            string label = ctx.Slices[i].Label;
-            if (label.Length == 0) continue;
-
-            Float2 anchor = LabelAnchor(in ctx, i);
-
-            using (paper.Box($"{_id}_spoke_label_{i}")
-                .PositionType(PositionType.SelfDirected)
-                .Position(anchor.X - SpokeBoxWidth * 0.5f, anchor.Y - SpokeBoxHeight * 0.5f)
-                .Size(SpokeBoxWidth, SpokeBoxHeight)
-                .Enter())
-            {
-                Origami.Label(paper, $"{_id}_spoke_label_txt_{i}", label)
-                    .XS()
-                    .AlignCenter()
-                    .Width(SpokeBoxWidth)
-                    .Height(SpokeBoxHeight)
-                    .Show();
-            }
+            float a = SpokeAngle(i, spokes);
+            float r = radius * LabelRadiusScale;
+            DrawText(canvas, SpokeName(i), cx + MathF.Cos(a) * r, cy + MathF.Sin(a) * r,
+                0.5f - 0.5f * MathF.Cos(a), 0.5f - 0.5f * MathF.Sin(a));
         }
     }
 }

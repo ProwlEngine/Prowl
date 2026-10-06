@@ -90,6 +90,7 @@ internal unsafe partial class VkCommandBuffer
 
         _currentComputeProgram = cp;
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, cp.DevicePipeline);
+        ReportPipelineBind(cp, cp.PipelineId, isCompute: true, outputs: null, topology: null);
     }
 
     private protected override void SetPropertiesCore(PropertySet properties) { }

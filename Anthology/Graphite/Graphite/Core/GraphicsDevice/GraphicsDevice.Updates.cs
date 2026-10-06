@@ -66,7 +66,7 @@ public abstract partial class GraphicsDevice
         GpuSubmission submission = Record(cb => cb.UpdateBuffer(buffer, bufferOffsetInBytes, source, sizeInBytes), "UpdateBuffer");
         if ((buffer.Usage & BufferUsage.Staging) != 0)
             submission.Wait();
-        Profiler?.Record(BufferOpBin.Update, sizeInBytes);
+        Counters.RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }
 
     /// <summary>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>Prowl.Graphite.Debugger.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\Graphite.Debugger\Prowl.Graphite.Debugger.csproj" />
+    </ItemGroup>
+
+</Project>

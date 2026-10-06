@@ -4,11 +4,11 @@ internal unsafe partial class VkCommandBuffer
 {
     private void Constructor_RecordAllocation()
     {
-        _gd.Profiler?.Allocate(AllocBin.CommandBuffer, 0);
+        _gd.Counters.Allocate(AllocBin.CommandBuffer);
     }
 
     private void DisposeCore_RecordFree()
     {
-        _gd.Profiler?.Free(AllocBin.CommandBuffer, 0);
+        _gd.Counters.Free(AllocBin.CommandBuffer);
     }
 }

@@ -33,13 +33,17 @@ public sealed class RenderContext
         GraphicsDevice device,
         ExecutionTask task,
         RenderGraph graph,
-        IRenderView view)
+        IRenderView view,
+        int viewIndex = 0)
     {
+        ViewIndex = viewIndex;
         _device = device;
         _task = task;
         _graph = graph;
         _view = view;
     }
+
+    internal int ViewIndex { get; }
 
     /// <summary>Execution this context records into.</summary>
     public ExecutionTask Task => _task;
@@ -54,8 +58,7 @@ public sealed class RenderContext
     /// <summary>View being rendered as its concrete type.</summary>
     public T ViewAs<T>() where T : IRenderView => (T)_view;
 
-    /// <summary>Device's profiler, null if none.</summary>
-    public IProfiler? Profiler => _device.Profiler;
+    internal IGraphProfiler? GraphProfiler => _device.GraphProfiler;
 
     internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
@@ -221,6 +224,7 @@ public sealed class RenderContext
 
         cb.Execution = _task;
         cb.Pass = _currentPass;
+        cb.ResetStats();
         cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
@@ -236,7 +240,8 @@ public sealed class RenderContext
         if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
             return cb;
 
-        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
+        uint emitted = cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
+        cb.AddBarrierStats(emitted);
         _pendingBufferSrc = BufferAccess.None;
         _pendingBufferDst = BufferAccess.None;
         CommitBarrierStates();

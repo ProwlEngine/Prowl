@@ -28,20 +28,22 @@ public sealed class RenderGraph : IDisposable
             }
         }
 
+        internal readonly RenderResourceID[] Inputs;
+
+        internal readonly RenderResourceID[] Outputs;
+
         internal PassNode(IPass pass, ResourceAccess[] accesses)
         {
             Pass = pass;
             Accesses = accesses;
+            Inputs = Ids(accesses, output: false);
+            Outputs = Ids(accesses, output: true);
         }
 
-        internal RenderResourceID[] InputIds() => Ids(output: false);
-
-        internal RenderResourceID[] OutputIds() => Ids(output: true);
-
-        private RenderResourceID[] Ids(bool output)
+        private static RenderResourceID[] Ids(ResourceAccess[] accesses, bool output)
         {
-            var ids = new List<RenderResourceID>(Accesses.Length);
-            foreach (ResourceAccess access in Accesses)
+            var ids = new List<RenderResourceID>(accesses.Length);
+            foreach (ResourceAccess access in accesses)
             {
                 if (access.IsOutput == output)
                     ids.Add(access.Id);

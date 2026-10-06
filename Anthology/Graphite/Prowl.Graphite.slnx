@@ -1,11 +1,15 @@
 <Solution>
     <Folder Name="/Tests/">
         <Project Path="Tests/Graphite/Prowl.Graphite.Tests.csproj" />
+        <Project Path="Tests/Debugger/Prowl.Graphite.Debugger.Tests.csproj" />
         <Project Path="Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
         <Project Path="Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
     </Folder>
     <Folder Name="/Graphite/">
         <Project Path="Graphite/Prowl.Graphite.csproj" />
+    </Folder>
+    <Folder Name="/Debugger/">
+        <Project Path="Graphite.Debugger/Prowl.Graphite.Debugger.csproj" />
     </Folder>
     <Folder Name="/ShaderDef/">
         <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />

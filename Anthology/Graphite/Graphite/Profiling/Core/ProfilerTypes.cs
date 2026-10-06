@@ -9,9 +9,11 @@ public readonly struct ViewInfo
     public int Index { get; }
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public ulong ExecutionId { get; }
 
-    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight)
+    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight, ulong executionId)
     {
+        ExecutionId = executionId;
         Name = name;
         Index = index;
         PixelWidth = pixelWidth;
@@ -23,17 +25,33 @@ public readonly struct PassInfo
 {
     public string Name { get; }
     public int Index { get; }
+    public int ViewIndex { get; }
+    public ulong ExecutionId { get; }
     public ReadOnlyMemory<RenderResourceID> Inputs { get; }
     public ReadOnlyMemory<RenderResourceID> Outputs { get; }
 
-    public PassInfo(string name, int index, ReadOnlyMemory<RenderResourceID> inputs, ReadOnlyMemory<RenderResourceID> outputs)
+    public PassInfo(
+        string name, int index, int viewIndex, ulong executionId,
+        ReadOnlyMemory<RenderResourceID> inputs, ReadOnlyMemory<RenderResourceID> outputs)
     {
         Name = name;
         Index = index;
+        ViewIndex = viewIndex;
+        ExecutionId = executionId;
         Inputs = inputs;
         Outputs = outputs;
     }
 }
+
+/// <summary>Work one pass command buffer recorded. Draws counts direct draw calls, IndirectDraws indirect ones.</summary>
+public readonly record struct PassStats(
+    uint Draws,
+    uint IndirectDraws,
+    uint Dispatches,
+    uint ShaderSwitches,
+    uint PipelineBinds,
+    uint ResourceSetBinds,
+    uint Barriers);
 
 public enum DrawKind { Draw, DrawIndexed, DrawIndirect, DrawIndexedIndirect }
 
@@ -75,59 +93,47 @@ public readonly struct DispatchCallInfo
     }
 }
 
-/// <summary>
-/// One buffer binding at draw time: buffer, byte range (a buffer can serve many sub-allocations), and ContentVersion so callers can tell if two draws saw the same bytes.
-/// </summary>
-public readonly struct BufferBindingInfo
-{
-    public string Name { get; }
-    public DeviceBuffer Buffer { get; }
-    public uint Offset { get; }
-    public uint SizeInBytes { get; }
-    public uint ContentVersion { get; }
-
-    public BufferBindingInfo(string name, DeviceBuffer buffer, uint offset, uint sizeInBytes, uint contentVersion)
-    {
-        Name = name;
-        Buffer = buffer;
-        Offset = offset;
-        SizeInBytes = sizeInBytes;
-        ContentVersion = contentVersion;
-    }
-}
-
-/// <summary>
-/// Buffers bound for the draw that just recorded: vertex/index buffers plus buffer entries in the active PropertySet. Only reported when profiler requests a capture, resolving isn't free.
-/// </summary>
-public readonly struct DrawBufferInfo
-{
-    public IReadOnlyList<BufferBindingInfo> VertexBuffers { get; }
-    public BufferBindingInfo? IndexBuffer { get; }
-    public IReadOnlyList<BufferBindingInfo> BoundBuffers { get; }
-
-    public DrawBufferInfo(IReadOnlyList<BufferBindingInfo> vertexBuffers, BufferBindingInfo? indexBuffer, IReadOnlyList<BufferBindingInfo> boundBuffers)
-    {
-        VertexBuffers = vertexBuffers;
-        IndexBuffer = indexBuffer;
-        BoundBuffers = boundBuffers;
-    }
-}
-
-public readonly struct PipelineBindInfo
+public readonly struct ShaderSwitchInfo
 {
     public string ShaderName { get; }
     public bool IsCompute { get; }
     public ShaderStages Stages { get; }
 
-    /// <summary>Bound GraphicsProgram or ComputeProgram. Typed as object since IProfiler doesn't reference either; cast it yourself.</summary>
-    public object Program { get; }
+    /// <summary>Bound GraphicsProgram or ComputeProgram.</summary>
+    public ShaderProgram Program { get; }
 
-    public PipelineBindInfo(string shaderName, bool isCompute, ShaderStages stages, object program)
+    public ShaderSwitchInfo(string shaderName, bool isCompute, ShaderStages stages, ShaderProgram program)
     {
         ShaderName = shaderName;
         IsCompute = isCompute;
         Stages = stages;
         Program = program;
+    }
+}
+
+public readonly struct PipelineBindInfo
+{
+    /// <summary>Shader program that owns the pipeline.</summary>
+    public ShaderProgram Program { get; }
+
+    /// <summary>Pipeline id, unique within the device.</summary>
+    public ulong PipelineId { get; }
+
+    public bool IsCompute { get; }
+
+    /// <summary>Framebuffer output description of the variant. Null for compute.</summary>
+    public OutputDescription? Outputs { get; }
+
+    /// <summary>Primitive topology of the variant. Null for compute.</summary>
+    public PrimitiveTopology? Topology { get; }
+
+    public PipelineBindInfo(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
+    {
+        Program = program;
+        PipelineId = pipelineId;
+        IsCompute = isCompute;
+        Outputs = outputs;
+        Topology = topology;
     }
 }
 
@@ -139,12 +145,14 @@ public readonly struct CommandBufferInfo
     /// <summary>Fresh id per rental, not per pooled object.</summary>
     public ulong Id { get; }
     public string Name { get; }
+    public ulong ExecutionId { get; }
     public PassInfo? Pass { get; }
 
-    public CommandBufferInfo(ulong id, string name, PassInfo? pass)
+    public CommandBufferInfo(ulong id, string name, ulong executionId, PassInfo? pass)
     {
         Id = id;
         Name = name;
+        ExecutionId = executionId;
         Pass = pass;
     }
 }

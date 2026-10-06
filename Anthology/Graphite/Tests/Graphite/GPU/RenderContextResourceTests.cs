@@ -56,42 +56,6 @@ file sealed class ResolvingPass : IPass
     }
 }
 
-file sealed class TwoOutputPass : IPass
-{
-    private readonly RenderResourceID _a;
-    private readonly RenderResourceID _b;
-    private readonly GraphTextureDesc _desc;
-
-    public TwoOutputPass(string name, RenderResourceID a, RenderResourceID b, GraphTextureDesc desc)
-    {
-        Name = name;
-        _a = a;
-        _b = b;
-        _desc = desc;
-    }
-
-    public string Name { get; }
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        builder.DeclareOutputTexture(_a, _desc);
-        builder.DeclareOutputTexture(_b, _desc);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) { }
-}
-
-file sealed class ZeroOutputPass : IPass
-{
-    public ZeroOutputPass(string name) => Name = name;
-
-    public string Name { get; }
-
-    public void Setup(RenderContextBuilder builder) { }
-
-    public void Render(RenderContext context, CommandBuffer cmd) { }
-}
-
 file sealed class ImportingPass : IPass
 {
     private readonly RenderResourceID _id;
@@ -110,46 +74,6 @@ file sealed class ImportingPass : IPass
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareImportedTexture(_id, _external);
 
     public void Render(RenderContext context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
-}
-
-file sealed class RecordingProfiler : IProfiler
-{
-    public bool RequestCapture { get; set; }
-
-    public List<int> Captures { get; } = new();
-
-    public void Allocate(AllocBin type, long bytes) { }
-    public void Free(AllocBin type, long bytes) { }
-    public void AllocateMemory(BufferRoleBin role, long bytes) { }
-    public void FreeMemory(BufferRoleBin role, long bytes) { }
-    public void Record(BufferOpBin op, long bytes) { }
-    public void RecordSwap(SwapBin evt, long bytes) { }
-
-    public void BeginView(in ViewInfo view) { }
-    public void EndView(in ViewInfo view) { }
-
-    public void BeginPass(in PassInfo pass) { }
-    public void EndPass(in PassInfo pass) { }
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
-    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture)
-    {
-        Captures.Add(passOutputs.Count);
-    }
-
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
-    public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
-    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
-    public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
-
-    public void RecordResourceSetBind(uint setCount) { }
-    public void RecordBarrier(BarrierBin kind, uint count) { }
-    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) { }
-
-    public bool RequestGPUStatistics => false;
-    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) { }
-    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 }
 
 public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -227,29 +151,6 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
 
         Assert.Equal(100u, pass.Resolved[0].Desc.Width);
         Assert.Equal(50u, pass.Resolved[0].Desc.Height);
-    }
-
-    [Fact]
-    public void ExecuteView_ProfilerRequestsCapture_CapturesEachPassByItsOwnDeclaredOutputCount()
-    {
-        RenderResourceID a = RenderResourceID.Intern("resourcetest_capture_a");
-        RenderResourceID b = RenderResourceID.Intern("resourcetest_capture_b");
-        TwoOutputPass twoOutputs = new("TwoOutputs", a, b, ColorDesc());
-        ZeroOutputPass zeroOutputs = new("ZeroOutputs");
-        using RenderPipeline pipeline = new([zeroOutputs, twoOutputs]);
-        RecordingProfiler profiler = new() { RequestCapture = true };
-
-        using GraphicsDevice profiledDevice = GD.BackendType switch
-        {
-            GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true) { Profiler = profiler }),
-            _ => throw new NotSupportedException(),
-        };
-
-        profiledDevice.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
-        profiledDevice.WaitForIdle();
-
-        Assert.Single(profiler.Captures);
-        Assert.Equal(2, profiler.Captures[0]);
     }
 
     [Fact]

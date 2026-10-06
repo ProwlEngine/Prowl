@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
 
@@ -14,294 +15,402 @@ using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
-/// <summary>Non-generic-in-TSelf surface a <see cref="CartesianChart{T}"/> talks to its modules through.
-/// Internal: a module never needs to know this exists, it only ever sees the protected members
-/// <see cref="CartesianModuleBase{TSelf, T}"/> exposes.</summary>
-internal interface ICartesianModule<T>
+internal sealed class CartesianSeries<T>
 {
-    List<CartesianSeries<T>> ResolveOwnSeries();
-    void PaintMarksInternal(Canvas canvas, in PlotContext<T> ctx);
-    void AppendSampleInternal(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows);
-    bool WantsSampleNearest2D { get; }
-    bool WantsPanY { get; }
+    public string Label = "";
+    public Color Color;
+    public bool HasColor;
+    public float? StrokeWidth;
+    public bool Fill;
+    public bool Dashed;
+    public bool Hidden;
+    public readonly List<(double X, double Y, T? Payload)> Points = new();
 }
 
-/// <summary>
-/// One chart type plugged into a <see cref="CartesianChart{T}"/> via <c>.AddLineChart()</c>,
-/// <c>.AddBarChart()</c>, <c>.AddScatterPlot()</c> or <c>.AddBubbleChart()</c>. Owns its own series and
-/// their per-series styling (<see cref="Color"/>, <see cref="Stroke"/>, <see cref="Dashed"/>, ...) plus
-/// whatever knobs are specific to its geometry (a line's <c>.Smooth()</c>, a bar's <c>.BarWidth()</c>, ...).
-/// Everything shared across every module on the chart - the x axis, y range/ticks, grid, legend, sampler
-/// crosshair, zoom/pan - belongs to the owning <see cref="Cartesian"/> chart instead, reachable by chaining
-/// back through <see cref="Cartesian"/>.
-/// </summary>
-public abstract class CartesianModuleBase<TSelf, T> : ICartesianModule<T> where TSelf : CartesianModuleBase<TSelf, T>
+internal readonly struct PlotContext
 {
-    private readonly CartesianChart<T> _chart;
+    public readonly float L, T, R, B;
+    public readonly double XMin, XMax, YMin, YMax;
+
+    public PlotContext(float l, float t, float r, float b, double xMin, double xMax, double yMin, double yMax)
+    {
+        L = l; T = t; R = r; B = b;
+        XMin = xMin; XMax = xMax; YMin = yMin; YMax = yMax;
+    }
+
+    public float XPos(double x) => XMax > XMin ? L + (float)((x - XMin) / (XMax - XMin)) * (R - L) : (L + R) * 0.5f;
+    public float YPos(double y) => YMax > YMin ? B - (float)((y - YMin) / (YMax - YMin)) * (B - T) : (T + B) * 0.5f;
+    public float UnitWidth => XMax > XMin ? (float)((R - L) / (XMax - XMin)) : 0f;
+    public float Baseline => Math.Clamp(YPos(0d), T, B);
+}
+
+/// <summary>Cartesian chart whose marks come from modules added with <c>.AddLineChart()</c>,
+/// <c>.AddBarChart()</c> and <c>.AddScatterPlot()</c>, all sharing one set of axes.</summary>
+public sealed class CartesianChart<T> : ChartCore<CartesianChart<T>, T>
+{
+    private readonly List<CartesianModule<T>> _modules = new();
     private readonly List<CartesianSeries<T>> _series = new();
-    private CartesianSeries<T>? _lastSeries;
-    private Func<T, double>? _ySelector;
-    private string _seriesName = "";
 
-    protected CartesianModuleBase(CartesianChart<T> chart)
+    private Func<T, double>? _xSelector;
+    private bool _hasYRange;
+    private double _yRangeMin, _yRangeMax;
+    private int _yTicks = 4;
+    private int _xTicks = 6;
+    private Func<int, string>? _xTickFormatter;
+    private string _xLabel = "";
+    private string _yLabel = "";
+    private bool _axes = true;
+    private bool _gridX, _gridY;
+    private Color? _gridLineColor;
+    private bool _sampleable;
+    private Color? _sampleLineColor;
+    private bool _zoomable, _pannable;
+
+    private const string PlotRectKey = "cartesian_plot";
+    private const string SamplePosKey = "cartesian_sample_pos";
+    private const string SampleOnKey = "cartesian_sample_on";
+    private const float TickLength = 4f;
+    private const float LabelGap = 2f;
+
+    private struct PlotRect
     {
-        _chart = chart ?? throw new ArgumentNullException(nameof(chart));
-        chart.RegisterModule(this);
+        public float L, T, R, B;
     }
 
-    private TSelf Self => (TSelf)this;
-
-    /// <summary>Back to the owning chart, to add another module or set a chart-level option (the shared
-    /// <c>.X(...)</c>, y range/ticks, grid, sampler, zoom/pan, ...).</summary>
-    public CartesianChart<T> Cartesian => _chart;
-
-    // ── Data ────────────────────────────────────────────────────
-
-    /// <summary>Add a series of pre-sampled values to this module. Index in <paramref name="values"/>
-    /// maps to the x axis, shared with every other module on the chart.</summary>
-    public TSelf Series(string label, Color color, IReadOnlyList<double> values)
-    {
-        var s = new CartesianSeries<T> { Label = label ?? "", Color = color, Owner = this };
-        if (values != null)
-            for (int i = 0; i < values.Count; i++)
-                s.Points.Add((i, values[i], default));
-        _series.Add(s);
-        _lastSeries = s;
-        return Self;
-    }
-
-    /// <summary>Add a series of pre-sampled values. Index in <paramref name="values"/>
-    /// maps to the x axis, shared with every other module on the chart.</summary>
-    public TSelf Series(string label, Color color, ReadOnlySpan<double> values)
-    {
-        var s = new CartesianSeries<T> { Label = label ?? "", Color = color, Owner = this };
-        for (int i = 0; i < values.Length; i++)
-            s.Points.Add((i, values[i], default));
-        _series.Add(s);
-        _lastSeries = s;
-        return Self;
-    }
-
-    /// <summary>Y selector run against the chart's data set (passed to <c>Chart.CreateCartesian(...)</c>)
-    /// and its shared x selector (<c>Cartesian.X(...)</c>) to build this module's implicit series. X is
-    /// deliberately not settable per module - every module reads the same x, which is what lets the
-    /// legend and sampler line up marks from different modules at the same index.</summary>
-    public TSelf Y(Func<T, double> selector) { _ySelector = selector; return Self; }
-
-    /// <summary>Name of the implicit series built from <see cref="Y"/>.</summary>
-    public TSelf Name(string text) { _seriesName = text ?? ""; return Self; }
-
-    /// <summary>Show/hide the most recently added series.</summary>
-    public TSelf Visible(bool visible) { if (_lastSeries != null) _lastSeries.Visible = visible; return Self; }
-
-    /// <summary>Accent colour of the most recently added series (swatch, stroke and fill base).</summary>
-    public TSelf Color(Color color) { if (_lastSeries != null) _lastSeries.Color = color; return Self; }
-
-    /// <summary>Stroke colour of the most recently added series, overriding <see cref="Color"/> for the
-    /// drawn line/border only.</summary>
-    public TSelf Stroke(Color color) { if (_lastSeries != null) _lastSeries.StrokeColor = color; return Self; }
-
-    /// <summary>Stroke width, in pixels, of the most recently added series.</summary>
-    public TSelf StrokeWidth(float width) { if (_lastSeries != null) _lastSeries.StrokeWidth = MathF.Max(0.1f, width); return Self; }
-
-    /// <summary>Fill the area under/behind the most recently added series.</summary>
-    public TSelf Fill(bool fill = true) { if (_lastSeries != null) _lastSeries.Fill = fill; return Self; }
-
-    /// <summary>Draw the most recently added series' stroke as a dashed line.</summary>
-    public TSelf Dashed() { if (_lastSeries != null) _lastSeries.Dash = CartesianDash.Dashed; return Self; }
-
-    /// <summary>Draw the most recently added series' stroke as a dotted line.</summary>
-    public TSelf Dotted() { if (_lastSeries != null) _lastSeries.Dash = CartesianDash.Dotted; return Self; }
-
-    // ── Hooks a concrete module supplies ───────────────────────
-
-    /// <summary>Paint this module's marks (line stroke, bar rects, scatter dots, ...) into the plot area
-    /// described by <paramref name="ctx"/>, whose <see cref="PlotContext{T}.Series"/> is already scoped to
-    /// just this module's own series - axis range and ticks still reflect every module on the chart.</summary>
-    protected abstract void PaintMarks(Canvas canvas, in PlotContext<T> ctx);
-
-    /// <summary>Contribute this module's own sampler dots/rings (via <see cref="SampleDot"/>/
-    /// <see cref="SampleRing"/>) and readout rows for the sampled index in <paramref name="ctx"/>, whose
-    /// series are scoped to this module. The shared crosshair and popup box are drawn once by the owning
-    /// <see cref="CartesianChart{T}"/> after every module has appended its rows.</summary>
-    protected abstract void AppendSample(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows);
-
-    /// <summary>When true the sampler picks this module's point closest to the pointer in both axes
-    /// rather than closest in x alone, if this module owns the chart's longest series. Scatter and Bubble
-    /// set this because their points are scattered freely rather than laid out along a shared x sequence.</summary>
-    protected virtual bool SampleNearest2D => false;
-
-    /// <summary>When true, zoom/pan on the owning chart also affects the y axis by default. Scatter and
-    /// Bubble set this since their points are scattered freely in both axes.</summary>
-    protected virtual bool PanY => false;
-
-    // ── Helpers forwarded from the owning chart ────────────────
-
-    /// <summary>Formats a value the way the owning chart's axis labels and legend do.</summary>
-    protected string FormatValue(double v) => _chart.FormatValueInternal(v);
-
-    /// <summary>Label for the sampled index, from the chart's <c>.XTickFormatter(...)</c> if one is set.</summary>
-    protected string SampleHeader(int index) => _chart.SampleHeaderInternal(index);
-
-    /// <summary>Marker dot centred on a sampled mark. <paramref name="key"/> must be unique among the
-    /// dots every module's sampler pass emits, so prefix it with something identifying this module.</summary>
-    protected void SampleDot(Paper paper, string key, float x, float y, Color color, float diameter = 6f)
-        => _chart.SampleDotInternal(paper, key, x, y, color, diameter);
-
-    /// <summary>Hollow ring around a sampled mark, for marks already filled and big enough that a dot
-    /// would disappear inside them.</summary>
-    protected void SampleRing(Paper paper, string key, float x, float y, float diameter, Color color)
-        => _chart.SampleRingInternal(paper, key, x, y, diameter, color);
-
-    /// <summary>Translucent full-height highlight over a horizontal slice of the plot, for a module
-    /// whose sample covers a whole band rather than a single x (Bar).</summary>
-    protected void SampleBand(Paper paper, in SampleContext<T> ctx, float left, float width)
-        => _chart.SampleBandInternal(paper, in ctx, left, width);
-
-    protected static Color32 ToC32(Color c) => new(c.R, c.G, c.B, c.A);
-    protected static Color32 ToC32(Color c, float alpha) => new(c.R, c.G, c.B, (byte)Math.Clamp(c.A * alpha, 0f, 255f));
-
-    protected static CartesianSeries<T>? LongestVisible(IReadOnlyList<CartesianSeries<T>> series)
-    {
-        CartesianSeries<T>? longest = null;
-        foreach (CartesianSeries<T> s in series)
-            if (s.EffectiveVisible && (longest == null || s.Points.Count > longest.Points.Count))
-                longest = s;
-        return longest;
-    }
-
-
-    private List<CartesianSeries<T>> ResolveOwnSeriesCore()
-    {
-        var list = new List<CartesianSeries<T>>(_series);
-
-        Func<T, double>? xSelector = _chart.SharedXSelector;
-        IReadOnlyList<T>? data = _chart.SharedData;
-        if (_ySelector != null && xSelector != null && data != null)
-        {
-            var s = new CartesianSeries<T> { Label = _seriesName, Owner = this };
-            foreach (T? item in data)
-                s.Points.Add((xSelector(item), _ySelector(item), item));
-            list.Add(s);
-            if (_lastSeries == null) _lastSeries = s;
-        }
-
-        foreach (CartesianSeries<T> s in list) s.Owner = this;
-        return list;
-    }
-
-    List<CartesianSeries<T>> ICartesianModule<T>.ResolveOwnSeries() => ResolveOwnSeriesCore();
-    void ICartesianModule<T>.PaintMarksInternal(Canvas canvas, in PlotContext<T> ctx) => PaintMarks(canvas, in ctx);
-    void ICartesianModule<T>.AppendSampleInternal(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows) => AppendSample(paper, in ctx, rows);
-    bool ICartesianModule<T>.WantsSampleNearest2D => SampleNearest2D;
-    bool ICartesianModule<T>.WantsPanY => PanY;
-}
-
-/// <summary>
-/// A Cartesian chart whose marks come from modules: <c>.AddLineChart()</c>, <c>.AddBarChart()</c>, <c>.AddScatterPlot()</c>, <c>.AddBubbleChart()</c>. 
-/// Built with <see cref="Chart.CreateCartesian{T}"/>.
-///
-/// X axis is shared, every module reads it back to place its own <c>.Y(...)</c>-selected series.
-/// </summary>
-public sealed class CartesianChart<T> : CartesianCore<CartesianChart<T>, T>
-{
     internal CartesianChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
         : base(paper, id, theme, data) { }
 
-    private readonly List<ICartesianModule<T>> _modules = new();
+    public LineModule<T> AddLineChart() => Add(new LineModule<T>(this));
+    public BarModule<T> AddBarChart() => Add(new BarModule<T>(this));
+    public ScatterModule<T> AddScatterPlot() => Add(new ScatterModule<T>(this));
 
-    internal void RegisterModule(ICartesianModule<T> module) => _modules.Add(module);
-
-    // ── Module factories ────────────────────────────────────────
-
-    public LineModule<T> AddLineChart() => new(this);
-    public BarModule<T> AddBarChart() => new(this);
-    public ScatterModule<T> AddScatterPlot() => new(this);
-    public BubbleModule<T> AddBubbleChart() => new(this);
-
-    // ── Internal access for CartesianModuleBase<TSelf, T> ──────
-
-    internal Func<T, double>? SharedXSelector => XSelector;
-    internal IReadOnlyList<T>? SharedData => _data;
-
-    internal string FormatValueInternal(double v) => FormatValue(v);
-    internal string SampleHeaderInternal(int index) => SampleHeader(index);
-    internal void SampleDotInternal(Paper paper, string key, float x, float y, Color color, float diameter) => SampleDot(paper, key, x, y, color, diameter);
-    internal void SampleRingInternal(Paper paper, string key, float x, float y, float diameter, Color color) => SampleRing(paper, key, x, y, diameter, color);
-    internal void SampleBandInternal(Paper paper, in SampleContext<T> ctx, float left, float width) => SampleBand(paper, in ctx, left, width);
-
-    // ── Aggregating every module ────────────────────────────────
-
-    protected override List<CartesianSeries<T>>? ExternalSeries
+    private TModule Add<TModule>(TModule module) where TModule : CartesianModule<T>
     {
-        get
+        _modules.Add(module);
+        return module;
+    }
+
+    /// <summary>X selector over the data set, shared by every module's <c>.Y(...)</c>.</summary>
+    public CartesianChart<T> X(Func<T, double> selector) { _xSelector = selector; return this; }
+
+    public CartesianChart<T> YRange(double min, double max) { _hasYRange = true; _yRangeMin = Math.Min(min, max); _yRangeMax = Math.Max(min, max); return this; }
+    public CartesianChart<T> YTicks(int count) { _yTicks = Math.Max(2, count); return this; }
+    public CartesianChart<T> XTicks(int count) { _xTicks = Math.Max(2, count); return this; }
+
+    /// <summary>Label for the x value rounded to an integer, also used as the sampler header.</summary>
+    public CartesianChart<T> XTickFormatter(Func<int, string> formatter) { _xTickFormatter = formatter; return this; }
+
+    public CartesianChart<T> XLabel(string text) { _xLabel = text ?? ""; return this; }
+    public CartesianChart<T> YLabel(string text) { _yLabel = text ?? ""; return this; }
+    public CartesianChart<T> Axes(bool show = true) { _axes = show; return this; }
+
+    /// <summary>Grid lines at the x and/or y ticks.</summary>
+    public CartesianChart<T> Grid(bool x = true, bool y = true) { _gridX = x; _gridY = y; return this; }
+
+    public CartesianChart<T> GridLineColor(Color color) { _gridLineColor = color; return this; }
+
+    /// <summary>Left-drag over the plot to show a crosshair and readout of the nearest point.</summary>
+    public CartesianChart<T> Sampleable(bool enable = true) { _sampleable = enable; return this; }
+
+    public CartesianChart<T> SampleLineColor(Color color) { _sampleLineColor = color; return this; }
+
+    /// <summary>Scroll-wheel zoom about the pointer, after clicking the plot. Y joins in with a scatter module.</summary>
+    public CartesianChart<T> Zoomable(bool enable = true) { _zoomable = enable; return this; }
+
+    /// <summary>Middle-drag panning of a zoomed view.</summary>
+    public CartesianChart<T> Pannable(bool enable = true) { _pannable = enable; return this; }
+
+    internal Color SampleColor => _sampleLineColor ?? _theme.Ink.C500;
+    internal string Format(double v) => FormatValue(v);
+
+    private string XTickLabel(double x)
+    {
+        int key = (int)Math.Round(x);
+        return _xTickFormatter != null ? _xTickFormatter(key) ?? "" : key.ToString();
+    }
+
+    protected override IReadOnlyList<LegendEntry> BuildLegendEntries()
+    {
+        _series.Clear();
+        foreach (CartesianModule<T> m in _modules)
+            m.Resolve(_data, _xSelector, _series);
+
+        var entries = new List<LegendEntry>(_series.Count);
+        for (int i = 0; i < _series.Count; i++)
         {
-            var all = new List<CartesianSeries<T>>();
-            foreach (ICartesianModule<T> m in _modules)
-                all.AddRange(m.ResolveOwnSeries());
-            return all;
+            CartesianSeries<T> s = _series[i];
+            if (!s.HasColor) s.Color = RampColor(i);
+            s.Hidden = IsLegendHidden(i);
+
+            string? value = LegendShowValueEnabled && s.Points.Count > 0 ? FormatValue(s.Points[^1].Y) : null;
+            entries.Add(new LegendEntry(s.Label, s.Color, i, value, s.Hidden));
+        }
+        return entries;
+    }
+
+    protected override void DrawPlot()
+    {
+        bool any = false;
+        foreach (CartesianSeries<T> s in _series) any |= s.Points.Count > 0;
+        if (!any)
+        {
+            DrawEmpty();
+            return;
+        }
+
+        bool nearest2D = false;
+        foreach (CartesianModule<T> m in _modules) nearest2D |= m.Nearest2D;
+
+        BaseRange(out double xMin, out double xMax, out double yMin, out double yMax);
+
+        ViewRect view = View;
+        double xSpan = xMax - xMin, ySpan = yMax - yMin;
+        xMin += view.X * xSpan;
+        xMax = xMin + view.W * xSpan;
+        yMin += view.Y * ySpan;
+        yMax = yMin + view.H * ySpan;
+
+        double[] xTicks = Ticks(xMin, xMax, _xTicks, 1d);
+        double[] yTicks = Ticks(yMin, yMax, _yTicks, 0d);
+
+        ElementBuilder plotBox = _paper.Box(_id + "_chart_plot").Clip();
+        if (_sampleable) plotBox.Cursor(PaperCursor.Crosshair);
+
+        using (plotBox.Enter())
+        {
+            ElementHandle plotEl = _paper.CurrentParent;
+            WireView(plotBox, plotEl, _zoomable, _pannable, nearest2D);
+
+            CartesianSeries<T>? hit = null;
+            int index = -1;
+
+            if (_sampleable)
+            {
+                plotBox.OnHeld(e =>
+                {
+                    _paper.SetElementStorage(plotEl, SamplePosKey, e.RelativePosition);
+                    _paper.SetElementStorage(plotEl, SampleOnKey, true);
+                });
+                plotBox.OnRelease(_ => _paper.SetElementStorage(plotEl, SampleOnKey, false));
+
+                PlotRect r = _paper.GetElementStorage(plotEl, PlotRectKey, default(PlotRect));
+                if (r.R > r.L && _paper.GetElementStorage(plotEl, SampleOnKey, false))
+                {
+                    var local = new PlotContext(r.L, r.T, r.R, r.B, xMin, xMax, yMin, yMax);
+                    Float2 pointer = _paper.GetElementStorage(plotEl, SamplePosKey, new Float2(0f, 0f));
+                    (hit, index) = FindSample(in local, pointer, nearest2D);
+                    if (hit != null) SamplePopup(in local, hit, index, nearest2D);
+                }
+            }
+
+            _paper.Draw((canvas, rect) => Paint(canvas, rect, plotEl, xMin, xMax, yMin, yMax, xTicks, yTicks, hit, index, nearest2D));
         }
     }
 
-    protected override bool SampleNearest2D
+    private void BaseRange(out double xMin, out double xMax, out double yMin, out double yMax)
     {
-        get
+        xMin = yMin = double.MaxValue;
+        xMax = yMax = double.MinValue;
+
+        foreach (CartesianSeries<T> s in _series)
         {
-            foreach (ICartesianModule<T> m in _modules)
-                if (m.WantsSampleNearest2D) return true;
-            return false;
+            if (s.Hidden) continue;
+            foreach ((double x, double y, T? _) in s.Points)
+            {
+                if (double.IsFinite(x)) { xMin = Math.Min(xMin, x); xMax = Math.Max(xMax, x); }
+                if (double.IsFinite(y)) { yMin = Math.Min(yMin, y); yMax = Math.Max(yMax, y); }
+            }
         }
+
+        float pad = 0f;
+        foreach (CartesianModule<T> m in _modules) pad = MathF.Max(pad, m.XPad);
+
+        if (xMin > xMax) { xMin = 0d; xMax = 1d; }
+        xMin -= pad;
+        xMax += pad;
+        if (xMax <= xMin) xMax = xMin + 1d;
+
+        if (_hasYRange)
+        {
+            yMin = _yRangeMin;
+            yMax = _yRangeMax;
+        }
+        else
+        {
+            if (yMin > yMax) { yMin = 0d; yMax = 1d; }
+            yMin = Math.Min(yMin, 0d);
+            yMax = Math.Max(yMax, 0d);
+
+            double step = NiceStep((yMax - yMin) / (_yTicks - 1));
+            if (step > 0d)
+            {
+                yMin = Math.Floor(yMin / step) * step;
+                yMax = Math.Ceiling(yMax / step) * step;
+            }
+        }
+
+        if (yMax <= yMin) yMax = yMin + 1d;
     }
 
-    protected override bool DefaultPanY
+    private static double NiceStep(double raw)
     {
-        get
-        {
-            foreach (ICartesianModule<T> m in _modules)
-                if (m.WantsPanY) return true;
-            return false;
-        }
+        if (!(raw > 0d) || !double.IsFinite(raw)) return 0d;
+        double exp = Math.Pow(10d, Math.Floor(Math.Log10(raw)));
+        double f = raw / exp;
+        return (f < 1.5d ? 1d : f < 3d ? 2d : f < 7d ? 5d : 10d) * exp;
     }
 
-    protected override void PaintMarks(Canvas canvas, in PlotContext<T> ctx)
+    private static double[] Ticks(double min, double max, int count, double minStep)
     {
-        foreach (ICartesianModule<T> m in _modules)
-        {
-            List<CartesianSeries<T>> own = FilterOwn(ctx.Series, m);
-            if (own.Count == 0) continue;
-            m.PaintMarksInternal(canvas, ctx.WithSeries(own));
-        }
+        double step = Math.Max(minStep, NiceStep((max - min) / (count - 1)));
+        if (!(step > 0d)) return Array.Empty<double>();
+
+        double first = Math.Ceiling(min / step - 1e-9) * step;
+        int n = Math.Clamp((int)Math.Floor((max - first) / step + 1e-9) + 1, 0, 1000);
+
+        var ticks = new double[n];
+        for (int i = 0; i < n; i++) ticks[i] = first + i * step;
+        return ticks;
     }
 
-    /// <summary>One shared crosshair for the whole chart, at the sampled index of whichever module's
-    /// series is longest.</summary>
-    protected override void DrawSampler(Paper paper, in SampleContext<T> ctx)
+    private (CartesianSeries<T>? Series, int Index) FindSample(in PlotContext ctx, Float2 pointer, bool nearest2D)
     {
-        if (ctx.MaxN <= 0) return;
+        float px = Math.Clamp(pointer.X, ctx.L, ctx.R);
+        float py = Math.Clamp(pointer.Y, ctx.T, ctx.B);
 
-        CartesianSeries<T>? longest = LongestVisible(ctx.Series);
-        float lx = longest != null && ctx.Index < longest.Points.Count
-            ? ctx.XPos(longest.Points[ctx.Index].X)
-            : ctx.XPos(ctx.Index);
+        CartesianSeries<T>? best = null;
+        int bestIndex = -1;
+        float bestDist = float.MaxValue;
 
-        SampleLine(paper, in ctx, lx);
+        foreach (CartesianModule<T> m in _modules)
+        {
+            if (m.Nearest2D != nearest2D) continue;
 
+            foreach (CartesianSeries<T> s in m._series)
+            {
+                if (s.Hidden) continue;
+
+                for (int i = 0; i < s.Points.Count; i++)
+                {
+                    (double x, double y, T? _) = s.Points[i];
+                    if (!double.IsFinite(x)) continue;
+
+                    float dx = ctx.XPos(x) - px;
+                    float d = dx * dx;
+                    if (nearest2D)
+                    {
+                        if (!double.IsFinite(y)) continue;
+                        float dy = ctx.YPos(y) - py;
+                        d += dy * dy;
+                    }
+
+                    if (d < bestDist) { bestDist = d; best = s; bestIndex = i; }
+                }
+            }
+        }
+
+        return (best, bestIndex);
+    }
+
+    private void SamplePopup(in PlotContext ctx, CartesianSeries<T> hit, int index, bool nearest2D)
+    {
         var rows = new List<(Color Color, string Text)>();
-        foreach (ICartesianModule<T> m in _modules)
-        {
-            List<CartesianSeries<T>> own = FilterOwn(ctx.Series, m);
-            if (own.Count == 0) continue;
-            m.AppendSampleInternal(paper, ctx.WithSeries(own), rows);
-        }
+        foreach (CartesianModule<T> m in _modules)
+            m.AppendRows(nearest2D ? hit : null, index, rows);
 
-        SamplePopup(paper, in ctx, lx, SampleHeader(ctx.Index), rows);
+        string header = nearest2D ? hit.Label : _xTickFormatter != null ? _xTickFormatter(index) ?? "" : index.ToString();
+        Popup(ctx.XPos(hit.Points[index].X), ctx.T, ctx.L, ctx.R, header, rows);
     }
 
-    private static List<CartesianSeries<T>> FilterOwn(IReadOnlyList<CartesianSeries<T>> all, ICartesianModule<T> owner)
+    private void Paint(Canvas canvas, Rect rect, ElementHandle plotEl, double xMin, double xMax, double yMin, double yMax,
+        double[] xTicks, double[] yTicks, CartesianSeries<T>? hit, int index, bool nearest2D)
     {
-        var list = new List<CartesianSeries<T>>();
-        foreach (CartesianSeries<T> s in all)
-            if (ReferenceEquals(s.Owner, owner)) list.Add(s);
-        return list;
+        float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
+        float w = (float)rect.Size.X, h = (float)rect.Size.Y;
+
+        var xLabels = new string[xTicks.Length];
+        for (int i = 0; i < xTicks.Length; i++) xLabels[i] = XTickLabel(xTicks[i]);
+
+        var yLabels = new string[yTicks.Length];
+        for (int i = 0; i < yTicks.Length; i++) yLabels[i] = FormatValue(yTicks[i]);
+
+        float lineH = MathF.Max(MeasureText(canvas, "0").Y, TextSize);
+        float left = 0f, top = lineH * 0.5f, right = 0f, bottom = 0f;
+
+        if (_axes)
+        {
+            foreach (string label in yLabels) left = MathF.Max(left, MeasureText(canvas, label).X);
+            left += TickLength + LabelGap * 2f;
+            right = lineH;
+            bottom = TickLength + LabelGap + lineH;
+            if (_yLabel.Length > 0) top = lineH + LabelGap * 2f;
+            if (_xLabel.Length > 0) bottom += lineH + LabelGap;
+        }
+
+        if (w - left - right < 4f || h - top - bottom < 4f) return;
+
+        _paper.SetElementStorage(plotEl, PlotRectKey, new PlotRect { L = left, T = top, R = w - right, B = h - bottom });
+        var ctx = new PlotContext(ox + left, oy + top, ox + w - right, oy + h - bottom, xMin, xMax, yMin, yMax);
+
+        Color32 grid = _gridLineColor.HasValue ? ToC32(_gridLineColor.Value) : ToC32(_theme.BorderSoft, 0.6f);
+        Color32 tick = ToC32(_theme.Ink.C500);
+
+        canvas.SetStrokeWidth(1f);
+        canvas.BeginPath();
+        if (_gridX)
+            foreach (double v in xTicks) { float x = ctx.XPos(v); canvas.MoveTo(x, ctx.T); canvas.LineTo(x, ctx.B); }
+        if (_gridY)
+            foreach (double v in yTicks) { float y = ctx.YPos(v); canvas.MoveTo(ctx.L, y); canvas.LineTo(ctx.R, y); }
+        canvas.SetStrokeColor(grid);
+        canvas.Stroke();
+
+        canvas.BeginPath();
+        canvas.MoveTo(ctx.L, ctx.T);
+        canvas.LineTo(ctx.L, ctx.B);
+        canvas.LineTo(ctx.R, ctx.B);
+        canvas.SetStrokeColor(ToC32(_theme.Ink.C300));
+        canvas.Stroke();
+
+        if (_axes)
+        {
+            canvas.BeginPath();
+            foreach (double v in yTicks) { float y = ctx.YPos(v); canvas.MoveTo(ctx.L - TickLength, y); canvas.LineTo(ctx.L, y); }
+            foreach (double v in xTicks) { float x = ctx.XPos(v); canvas.MoveTo(x, ctx.B); canvas.LineTo(x, ctx.B + TickLength); }
+            canvas.SetStrokeColor(tick);
+            canvas.Stroke();
+
+            for (int i = 0; i < yTicks.Length; i++)
+                DrawText(canvas, yLabels[i], ctx.L - TickLength - LabelGap, ctx.YPos(yTicks[i]), 1f, 0.5f);
+            for (int i = 0; i < xTicks.Length; i++)
+                DrawText(canvas, xLabels[i], ctx.XPos(xTicks[i]), ctx.B + TickLength + LabelGap, 0.5f, 0f);
+
+            DrawText(canvas, _yLabel, ox, oy, 0f, 0f);
+            DrawText(canvas, _xLabel, (ctx.L + ctx.R) * 0.5f, oy + h, 0.5f, 1f);
+        }
+
+        canvas.SaveState();
+        canvas.IntersectScissor(ctx.L, ctx.T, ctx.R - ctx.L, ctx.B - ctx.T);
+
+        foreach (CartesianModule<T> m in _modules)
+            m.Paint(canvas, in ctx);
+
+        if (hit != null && index < hit.Points.Count)
+        {
+            if (!nearest2D)
+            {
+                float x = ctx.XPos(hit.Points[index].X);
+                canvas.BeginPath();
+                canvas.MoveTo(x, ctx.T);
+                canvas.LineTo(x, ctx.B);
+                canvas.SetStrokeColor(ToC32(SampleColor));
+                canvas.SetStrokeWidth(1f);
+                canvas.Stroke();
+            }
+
+            foreach (CartesianModule<T> m in _modules)
+                m.PaintSample(canvas, in ctx, nearest2D ? hit : null, index);
+        }
+
+        canvas.RestoreState();
     }
 }

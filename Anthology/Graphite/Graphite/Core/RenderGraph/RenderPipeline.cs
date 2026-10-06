@@ -48,7 +48,7 @@ public class RenderPipeline : IDisposable
     public RenderGraph Graph => _graph ??= RenderGraph.Build(_passes);
 
     /// <summary>
-    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view whose Target is a swapchain framebuffer.
+    /// Runs the solved graph for one view: ordered passes with profiler scopes. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view whose Target is a swapchain framebuffer.
     /// Once per view per dispatch.
     /// </summary>
     public void ExecuteView(RenderContext context)
@@ -57,7 +57,7 @@ public class RenderPipeline : IDisposable
             throw new ArgumentNullException(nameof(context));
 
         RenderGraph graph = Graph;
-        IProfiler? profiler = context.Profiler;
+        IGraphProfiler? profiler = context.GraphProfiler;
 
         _executingView = true;
         try
@@ -69,9 +69,9 @@ public class RenderPipeline : IDisposable
                 if (node.WritesViewTarget && !hasViewTarget)
                     continue;
 
-                RenderResourceID[] inputs = profiler != null ? node.InputIds() : Array.Empty<RenderResourceID>();
-                RenderResourceID[] outputs = profiler != null ? node.OutputIds() : Array.Empty<RenderResourceID>();
-                var passInfo = new PassInfo(node.Pass.Name, index++, inputs, outputs);
+                RenderResourceID[] inputs = node.Inputs;
+                RenderResourceID[] outputs = node.Outputs;
+                var passInfo = new PassInfo(node.Pass.Name, index++, context.ViewIndex, context.Task.Id, inputs, outputs);
 
                 profiler?.BeginPass(passInfo);
                 if (profiler != null)
@@ -88,10 +88,11 @@ public class RenderPipeline : IDisposable
                 CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
                 context.BindDeclaredTarget(passCommands, node.Accesses);
                 node.Pass.Render(context, passCommands);
+                PassStats stats = passCommands.Stats;
                 context.EndCommandBuffer(passCommands);
                 context.SetCurrentPass(null);
 
-                profiler?.EndPass(passInfo);
+                profiler?.EndPass(passInfo, stats);
                 if (profiler != null)
                 {
                     foreach (RenderResourceID output in outputs)
@@ -100,9 +101,6 @@ public class RenderPipeline : IDisposable
                         profiler.RecordPassWrite(passInfo, output, texture, buffer);
                     }
                 }
-
-                if (profiler != null && profiler.RequestCapture)
-                    CapturePassOutputs(context, profiler, passInfo, node);
             }
 
             context.RestoreRestingStates("View");
@@ -110,30 +108,6 @@ public class RenderPipeline : IDisposable
         finally
         {
             _executingView = false;
-        }
-    }
-
-    private static void CapturePassOutputs(RenderContext context, IProfiler profiler, in PassInfo passInfo, RenderGraph.PassNode node)
-    {
-        var framebuffers = new List<Framebuffer>();
-        foreach (RenderResourceID output in node.OutputIds())
-        {
-            if (context.IsTextureResource(output) && output != GraphViewTargetResource.ViewTargetId)
-                framebuffers.Add(context.GetRenderTexture(new TextureHandle(output)).Framebuffer);
-        }
-
-        if (framebuffers.Count == 0)
-            return;
-
-        Framebuffer[] outputs = framebuffers.ToArray();
-        CommandBuffer capture = context.BeginCommandBuffer($"{node.Pass.Name} Capture");
-        try
-        {
-            profiler.Capture(passInfo, outputs, capture);
-        }
-        finally
-        {
-            context.EndCommandBuffer(capture);
         }
     }
 

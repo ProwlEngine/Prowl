@@ -142,10 +142,10 @@ internal unsafe partial class VkCommandBuffer
         }
     }
 
-    internal override void RecordBarriers(ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst)
+    internal override uint RecordBarriers(ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst)
     {
         SealRenderPass();
-        VkBarriers.Record(_gd, _cb, textures, bufferSrc, bufferDst);
+        return VkBarriers.Record(_gd, _cb, textures, bufferSrc, bufferDst);
     }
 
     private void SealRenderPass()

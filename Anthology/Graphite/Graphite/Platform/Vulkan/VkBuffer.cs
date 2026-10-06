@@ -102,7 +102,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             _deviceBuffer);
         _gd.Vk.BindBufferMemory(_gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();
 
-        _gd.RecordBufferAllocation(Usage, SizeInBytes);
+        _gd.Counters.AllocateBuffer(Usage, SizeInBytes);
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
@@ -116,6 +116,6 @@ internal unsafe partial class VkBuffer : DeviceBuffer
     {
         _gd.Vk.DestroyBuffer(_gd.Device, _deviceBuffer, null);
         _gd.MemoryManager.Free(Memory);
-        _gd.RecordBufferFree(Usage, SizeInBytes);
+        _gd.Counters.FreeBuffer(Usage, SizeInBytes);
     }
 }

@@ -997,14 +997,18 @@ namespace Prowl.PaperUI
                             _isDragging[_activeElementId] = true;
                         }
 
-                        // Per-frame delta. On the frame the drag starts it spans the whole distance from
-                        // the initial click; on later frames it is just the movement since last frame.
-                        Float2 frameDelta = wasDragging ? PointerDelta : totalDelta;
+                        // Don't fire the Dragging event until after the DragStart event has been fired.
+                        if (wasDragging || distanceMoved >= DRAG_THRESHOLD)
+                        {
+                            // Per-frame delta. On the frame the drag starts it spans the whole distance from
+                            // the initial click; on later frames it is just the movement since last frame.
+                            Float2 frameDelta = wasDragging ? PointerDelta : totalDelta;
 
-                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, frameDelta, totalDelta, DragPhase.Dragging);
-                        data.OnDragging?.Invoke(draggingEvt);
-                        PropagateDragToHookedChildren(activeElement, startPos, frameDelta, totalDelta, DragPhase.Dragging);
-                        BubbleEventToParents(activeElement, draggingEvt);
+                            var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, frameDelta, totalDelta, DragPhase.Dragging);
+                            data.OnDragging?.Invoke(draggingEvt);
+                            PropagateDragToHookedChildren(activeElement, startPos, frameDelta, totalDelta, DragPhase.Dragging);
+                            BubbleEventToParents(activeElement, draggingEvt);
+                        }
                     }
                 }
             }

@@ -3,186 +3,246 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
+
+using Color = System.Drawing.Color;
 
 using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
-/// <summary>
-/// Circular pie chart. Every visible slice takes the share of the full circle its value is of the
-/// visible total, laid out from <see cref="StartAngle"/> in the direction <see cref="Clockwise"/> picks.
-/// Individual slices can be pulled out of the circle with <see cref="Explode"/>.
-/// </summary>
-public sealed class PieChart<T> : CircularCore<PieChart<T>, T>
+/// <summary>Pie chart, or a donut once <see cref="InnerRadius"/> is above zero.</summary>
+public sealed class PieChart<T> : ChartCore<PieChart<T>, T>
 {
+    private sealed class Slice
+    {
+        public string Label = "";
+        public double Value;
+        public Color Color;
+        public int Index;
+        public bool Hidden;
+        public double Fraction;
+        public float A0, A1;
+    }
+
+    private readonly List<Slice> _slices = new();
+
+    private Func<T, string>? _nameSelector;
+    private Func<T, double>? _valueSelector;
+    private Func<T, int, Color>? _colorFunction;
+    private Func<T, IComparable>? _sortKey;
+    private bool _sortDescending;
+    private bool _tooltip = true;
+    private bool _labels = true;
+    private bool _showPercent;
+    private bool _showValues;
+    private bool _clockwise = true;
+    private float _innerRadius;
+
+    private const string PlotSizeKey = "pie_size";
+    private const float RadiusInset = 8f;
+    private const float HighlightWidth = 1.5f;
+    private const double MinLabelFraction = 0.02d;
+
     internal PieChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
         : base(paper, id, theme, data) { }
 
-    private float _startAngle = -90f;
-    private bool _clockwise = true;
-    private HashSet<int>? _exploded;
+    public PieChart<T> Name(Func<T, string> selector) { _nameSelector = selector; return this; }
 
-    private const float ExplodeFraction = 0.08f;
-    private const float LabelRadiusFraction = 0.68f;
-    private const float HighlightWidth = 1.5f;
+    /// <summary>Slice size. Non-finite values count as zero.</summary>
+    public PieChart<T> Value(Func<T, double> selector) { _valueSelector = selector; return this; }
 
-    /// <summary>Angle, in degrees clockwise from three o'clock, the first slice starts at. Defaults to
-    /// -90, which puts it at twelve o'clock.</summary>
-    public PieChart<T> StartAngle(float degrees) { _startAngle = degrees; return this; }
+    /// <summary>Slice colour from the item and its index in the data set.</summary>
+    public PieChart<T> ColorFunction(Func<T, int, Color> selector) { _colorFunction = selector; return this; }
 
-    /// <summary>Direction the slices are laid out in around the circle. Defaults to clockwise.</summary>
+    public PieChart<T> SortBy(Func<T, IComparable> key, bool descending = false) { _sortKey = key; _sortDescending = descending; return this; }
+    public PieChart<T> Tooltip(bool show = true) { _tooltip = show; return this; }
+    public PieChart<T> Labels(bool show = true) { _labels = show; return this; }
+    public PieChart<T> ShowPercent(bool show = true) { _showPercent = show; return this; }
+    public PieChart<T> ShowValues(bool show = true) { _showValues = show; return this; }
     public PieChart<T> Clockwise(bool clockwise = true) { _clockwise = clockwise; return this; }
 
-    /// <summary>Pulls the slice of the item at <paramref name="index"/> in the source data set out of the
-    /// circle along its middle. Call once per slice to explode several of them.</summary>
-    public PieChart<T> Explode(int index) { (_exploded ??= new HashSet<int>()).Add(index); return this; }
+    /// <summary>Hole radius as a fraction of the outer radius, in [0, 0.95]. Default 0.</summary>
+    public PieChart<T> InnerRadius(float fraction) { _innerRadius = Math.Clamp(fraction, 0f, 0.95f); return this; }
 
-    private bool IsExploded(CircularSlice<T> slice) => _exploded != null && _exploded.Contains(slice.Index);
-
-    private float SweepOf(CircularSlice<T> slice) => (float)(slice.Fraction * 360d) * DegToRad * (_clockwise ? 1f : -1f);
-
-    private float OuterRadius(in CircularContext ctx)
-        => _exploded != null && _exploded.Count > 0 ? ctx.Radius * (1f - ExplodeFraction) : ctx.Radius;
-
-    private Float2 CenterOf(in CircularContext ctx, CircularSlice<T> slice, float midAngle)
+    protected override IReadOnlyList<LegendEntry> BuildLegendEntries()
     {
-        if (!IsExploded(slice)) return new Float2(ctx.CenterX, ctx.CenterY);
+        _slices.Clear();
+        if (_data != null)
+        {
+            IEnumerable<int> order = Enumerable.Range(0, _data.Count);
+            if (_sortKey != null)
+                order = _sortDescending ? order.OrderByDescending(i => _sortKey(_data[i])) : order.OrderBy(i => _sortKey(_data[i]));
 
-        float offset = OuterRadius(in ctx) * ExplodeFraction;
-        return new Float2(ctx.CenterX + MathF.Cos(midAngle) * offset, ctx.CenterY + MathF.Sin(midAngle) * offset);
+            foreach (int i in order)
+            {
+                T item = _data[i];
+                double value = _valueSelector != null ? _valueSelector(item) : 0d;
+                _slices.Add(new Slice
+                {
+                    Label = _nameSelector?.Invoke(item) ?? "",
+                    Value = IsFinite(value) ? value : 0d,
+                    Color = _colorFunction != null ? _colorFunction(item, i) : RampColor(_slices.Count),
+                    Index = i,
+                    Hidden = IsLegendHidden(i),
+                });
+            }
+        }
+
+        double magnitude = 0d;
+        foreach (Slice s in _slices) if (!s.Hidden) magnitude += Math.Abs(s.Value);
+
+        float cursor = -MathF.PI * 0.5f;
+        foreach (Slice s in _slices)
+        {
+            s.Fraction = magnitude > 0d && !s.Hidden ? Math.Abs(s.Value) / magnitude : 0d;
+            float sweep = (float)(s.Fraction * Math.Tau) * (_clockwise ? 1f : -1f);
+            s.A0 = MathF.Min(cursor, cursor + sweep);
+            s.A1 = MathF.Max(cursor, cursor + sweep);
+            cursor += sweep;
+        }
+
+        var entries = new List<LegendEntry>(_slices.Count);
+        foreach (Slice s in _slices)
+            entries.Add(new LegendEntry(SliceName(s), s.Color, s.Index, LegendShowValueEnabled ? FormatValue(s.Value) : null, s.Hidden));
+        return entries;
     }
 
-    private bool SliceArc(in CircularContext ctx, int ordinal, out float a0, out float a1)
+    private static string SliceName(Slice s) => s.Label.Length > 0 ? s.Label : "Slice " + s.Index;
+
+    protected override void DrawPlot()
     {
-        a0 = 0f;
-        a1 = 0f;
-
-        float cursor = _startAngle * DegToRad;
-
-        for (int i = 0; i < ctx.Slices.Count; i++)
+        bool any = false;
+        foreach (Slice s in _slices) any |= s.Fraction > 0d;
+        if (!any)
         {
-            CircularSlice<T> slice = ctx.Slices[i];
-            if (!slice.Visible || slice.Fraction <= 0d) continue;
+            DrawEmpty();
+            return;
+        }
 
-            float sweep = SweepOf(slice);
+        ElementBuilder plotBox = _paper.Box(_id + "_chart_plot").Clip();
 
-            if (i == ordinal)
+        using (plotBox.Enter())
+        {
+            ElementHandle plotEl = _paper.CurrentParent;
+            int hover = -1;
+
+            if (_tooltip)
             {
-                a0 = MathF.Min(cursor, cursor + sweep);
-                a1 = MathF.Max(cursor, cursor + sweep);
-                return true;
+                TrackPointer(plotBox, plotEl);
+
+                Float2 size = _paper.GetElementStorage(plotEl, PlotSizeKey, new Float2(0f, 0f));
+                if (size.X > 0f && TryGetPointer(plotEl, out Float2 pointer))
+                {
+                    hover = HitTest(size.X * 0.5f, size.Y * 0.5f, Radius(size.X, size.Y), pointer);
+                    if (hover >= 0)
+                    {
+                        Slice s = _slices[hover];
+                        var rows = new List<(Color Color, string Text)> { (s.Color, FormatValue(s.Value)) };
+                        if (_showPercent) rows.Add((s.Color, Percent(s)));
+                        Popup(pointer.X, Math.Clamp(pointer.Y + 8f, 0f, size.Y), 0f, size.X, SliceName(s), rows);
+                    }
+                }
             }
 
-            cursor += sweep;
-        }
-
-        return false;
-    }
-
-    protected override void PaintMarks(Canvas canvas, in CircularContext ctx)
-    {
-        float cursor = _startAngle * DegToRad;
-        float outerR = OuterRadius(in ctx);
-        Color32 highlight = ToC32(_theme.Ink.C100);
-
-        for (int i = 0; i < ctx.Slices.Count; i++)
-        {
-            CircularSlice<T> slice = ctx.Slices[i];
-            if (!slice.Visible || slice.Fraction <= 0d) continue;
-
-            float sweep = SweepOf(slice);
-            float a0 = MathF.Min(cursor, cursor + sweep);
-            float a1 = MathF.Max(cursor, cursor + sweep);
-            cursor += sweep;
-
-            Float2 center = CenterOf(in ctx, slice, (a0 + a1) * 0.5f);
-
-            PaintWedge(canvas, center.X, center.Y, 0f, outerR, a0, a1, ToC32(slice.Color));
-
-            if (ctx.HoverIndex == i)
-                StrokeWedge(canvas, center.X, center.Y, 0f, outerR, a0, a1, highlight);
+            _paper.Draw((canvas, rect) => Paint(canvas, rect, plotEl, hover));
         }
     }
 
-    protected override int HitTest(in CircularContext ctx, Float2 pointer)
+    private static float Radius(float w, float h) => MathF.Max(1f, 0.5f * MathF.Min(w, h) - RadiusInset);
+
+    private static string Percent(Slice s) => (s.Fraction * 100d).ToString("0.#") + "%";
+
+    private int HitTest(float cx, float cy, float outer, Float2 pointer)
     {
-        float outerR = OuterRadius(in ctx);
+        float dx = pointer.X - cx, dy = pointer.Y - cy;
+        float r = MathF.Sqrt(dx * dx + dy * dy);
+        if (r > outer || r < outer * _innerRadius) return -1;
 
-        for (int i = 0; i < ctx.Slices.Count; i++)
+        float angle = MathF.Atan2(dy, dx);
+        for (int i = 0; i < _slices.Count; i++)
         {
-            CircularSlice<T> slice = ctx.Slices[i];
-            if (!slice.Visible || slice.Fraction <= 0d) continue;
-            if (!SliceArc(in ctx, i, out float a0, out float a1)) continue;
+            Slice s = _slices[i];
+            if (s.Fraction <= 0d) continue;
 
-            Float2 center = CenterOf(in ctx, slice, (a0 + a1) * 0.5f);
-            float dx = pointer.X - center.X, dy = pointer.Y - center.Y;
-            float radius = MathF.Sqrt(dx * dx + dy * dy);
-
-            if (radius > outerR) continue;
-            if (InSweep(MathF.Atan2(dy, dx), a0, a1 - a0)) return i;
+            float delta = angle - s.A0;
+            delta -= MathF.Floor(delta / MathF.Tau) * MathF.Tau;
+            if (delta <= s.A1 - s.A0) return i;
         }
-
         return -1;
     }
 
-    protected override Float2 LabelAnchor(in CircularContext ctx, int ordinal)
+    private void Paint(Canvas canvas, Rect rect, ElementHandle plotEl, int hover)
     {
-        if (!SliceArc(in ctx, ordinal, out float a0, out float a1))
-            return new Float2(ctx.CenterX, ctx.CenterY);
+        float w = (float)rect.Size.X, h = (float)rect.Size.Y;
+        if (w < 4f || h < 4f) return;
 
-        float mid = (a0 + a1) * 0.5f;
-        Float2 center = CenterOf(in ctx, ctx.Slices[ordinal], mid);
+        _paper.SetElementStorage(plotEl, PlotSizeKey, new Float2(w, h));
 
-        return new Float2(
-            center.X + MathF.Cos(mid) * OuterRadius(in ctx) * LabelRadiusFraction,
-            center.Y + MathF.Sin(mid) * OuterRadius(in ctx) * LabelRadiusFraction);
-    }
+        float cx = (float)rect.Min.X + w * 0.5f, cy = (float)rect.Min.Y + h * 0.5f;
+        float outer = Radius(w, h);
+        float inner = outer * _innerRadius;
 
-    private static bool InSweep(float angle, float a0, float span)
-    {
-        const float TwoPi = MathF.PI * 2f;
-
-        float delta = angle - a0;
-        delta -= MathF.Floor(delta / TwoPi) * TwoPi;
-
-        return delta <= span;
-    }
-
-    private static void StrokeWedge(Canvas canvas, float cx, float cy, float innerR, float outerR,
-        float a0, float a1, Color32 stroke)
-    {
-        if (outerR <= 0f || MathF.Abs(a1 - a0) < 1e-5f) return;
-
-        int segments = Math.Clamp((int)MathF.Ceiling(MathF.Abs(a1 - a0) * MathF.Max(outerR, 1f) / 4f), 3, 240);
-
-        canvas.BeginPath();
-        for (int i = 0; i <= segments; i++)
+        for (int i = 0; i < _slices.Count; i++)
         {
-            float a = a0 + (a1 - a0) * i / segments;
-            float x = cx + MathF.Cos(a) * outerR, y = cy + MathF.Sin(a) * outerR;
-            if (i == 0) canvas.MoveTo(x, y); else canvas.LineTo(x, y);
-        }
+            Slice s = _slices[i];
+            if (s.Fraction <= 0d) continue;
 
-        if (innerR <= 0f)
-        {
-            canvas.LineTo(cx, cy);
-        }
-        else
-        {
-            for (int i = segments; i >= 0; i--)
+            WedgePath(canvas, cx, cy, inner, outer, s.A0, s.A1);
+            canvas.SetFillColor(ToC32(s.Color));
+            canvas.FillComplexAA();
+
+            if (i == hover)
             {
-                float a = a0 + (a1 - a0) * i / segments;
-                canvas.LineTo(cx + MathF.Cos(a) * innerR, cy + MathF.Sin(a) * innerR);
+                canvas.SetStrokeColor(ToC32(_theme.Ink.C100));
+                canvas.SetStrokeWidth(HighlightWidth);
+                canvas.Stroke();
             }
         }
 
+        if (!_labels) return;
+
+        float labelR = inner > 0f ? (inner + outer) * 0.5f : outer * 0.68f;
+        foreach (Slice s in _slices)
+        {
+            if (s.Fraction < MinLabelFraction) continue;
+
+            string text = s.Label;
+            if (_showValues) text += " " + FormatValue(s.Value);
+            if (_showPercent) text += " (" + Percent(s) + ")";
+
+            float mid = (s.A0 + s.A1) * 0.5f;
+            DrawText(canvas, text, cx + MathF.Cos(mid) * labelR, cy + MathF.Sin(mid) * labelR, 0.5f, 0.5f);
+        }
+    }
+
+    private static void WedgePath(Canvas canvas, float cx, float cy, float inner, float outer, float a0, float a1)
+    {
+        int segments = Math.Clamp((int)MathF.Ceiling((a1 - a0) * MathF.Max(outer, 1f) / 4f), 3, 240);
+
+        canvas.BeginPath();
+        if (inner <= 0f) canvas.MoveTo(cx, cy);
+
+        for (int i = 0; i <= segments; i++)
+        {
+            float a = a0 + (a1 - a0) * i / segments;
+            float x = cx + MathF.Cos(a) * outer, y = cy + MathF.Sin(a) * outer;
+            if (i == 0 && inner > 0f) canvas.MoveTo(x, y);
+            else canvas.LineTo(x, y);
+        }
+
+        if (inner > 0f)
+            for (int i = segments; i >= 0; i--)
+            {
+                float a = a0 + (a1 - a0) * i / segments;
+                canvas.LineTo(cx + MathF.Cos(a) * inner, cy + MathF.Sin(a) * inner);
+            }
+
         canvas.ClosePath();
-        canvas.SetStrokeColor(stroke);
-        canvas.SetStrokeWidth(HighlightWidth);
-        canvas.Stroke();
     }
 }
