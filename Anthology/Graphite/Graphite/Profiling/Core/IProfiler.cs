@@ -1,7 +1,12 @@
 namespace Prowl.Graphite;
 
+/// <summary>Root of every profiler capability. Implement one or more capability interfaces to receive events.</summary>
+public interface IProfiler
+{
+}
+
 /// <summary>Command-level events: draws, dispatches, pipeline switches, submits.</summary>
-public interface ICommandProfiler
+public interface ICommandProfiler : IProfiler
 {
     void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer);
     void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info);
@@ -10,7 +15,7 @@ public interface ICommandProfiler
 }
 
 /// <summary>Render graph events: views, passes, and pass resource reads and writes.</summary>
-public interface IGraphProfiler
+public interface IGraphProfiler : IProfiler
 {
     void BeginView(in ViewInfo view);
     void EndView(in ViewInfo view);
@@ -21,13 +26,8 @@ public interface IGraphProfiler
 }
 
 /// <summary>Native GPU stats. Implementing this opts in to timestamp and pipeline statistic queries.</summary>
-public interface IGpuStatsProfiler
+public interface IGpuStatsProfiler : IProfiler
 {
     void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds);
     void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats);
-}
-
-/// <summary>Aggregate of every profiler capability.</summary>
-public interface IProfiler : ICommandProfiler, IGraphProfiler, IGpuStatsProfiler
-{
 }

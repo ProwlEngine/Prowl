@@ -15,7 +15,7 @@ namespace Prowl.Graphite.Tests;
 // and GPU execution timing. Each test builds its own isolated device with a RecordingProfiler
 // attached, since IProfiler is set once at device construction.
 
-file sealed class RecordingProfiler : IProfiler
+file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStatsProfiler
 {
     public readonly List<PipelineBindInfo> PipelineSwitches = new();
     public readonly List<DrawCallInfo> Draws = new();

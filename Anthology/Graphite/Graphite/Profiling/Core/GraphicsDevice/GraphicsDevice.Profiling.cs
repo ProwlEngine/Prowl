@@ -29,9 +29,9 @@ public abstract partial class GraphicsDevice
         AttachProfiler(options.Profiler);
     }
 
-    private void AttachProfiler(object? profiler)
+    private void AttachProfiler(IProfiler? profiler)
     {
-        Profiler = profiler as IProfiler;
+        Profiler = profiler;
         CommandProfiler = profiler as ICommandProfiler;
         GraphProfiler = profiler as IGraphProfiler;
         GpuStatsProfiler = profiler as IGpuStatsProfiler;
@@ -44,7 +44,7 @@ public abstract partial class GraphicsDevice
     /// interface is the opt-in for that category.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown while a <see cref="DispatchGraph{T}"/> is executing.</exception>
-    public void SetProfiler(object? profiler)
+    public void SetProfiler(IProfiler? profiler)
     {
         if (_graphDispatchDepth != 0)
             throw new InvalidOperationException("SetProfiler cannot be called while a graph is dispatching.");
