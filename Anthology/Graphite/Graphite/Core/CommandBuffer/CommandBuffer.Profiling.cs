@@ -1,3 +1,5 @@
+using Prowl.Graphite.Debugging;
+
 namespace Prowl.Graphite;
 
 public abstract partial class CommandBuffer
@@ -43,8 +45,14 @@ public abstract partial class CommandBuffer
     internal void ReportPipelineBind(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
     {
         _statPipelineBinds++;
-        if (Device.CommandProfiler is { } profiler)
-            profiler.RecordPipelineBind(ProfilerInfo, new PipelineBindInfo(program, pipelineId, isCompute, outputs, topology));
+        ICommandProfiler? profiler = Device.CommandProfiler;
+        ICommandStreamSink? sink = PassSink;
+        if (profiler == null && sink == null)
+            return;
+
+        PipelineBindInfo info = new(program, pipelineId, isCompute, outputs, topology);
+        profiler?.RecordPipelineBind(ProfilerInfo, info);
+        sink?.SetPipeline(in info);
     }
 
     internal void RecordResourceSetBind(uint setCount)

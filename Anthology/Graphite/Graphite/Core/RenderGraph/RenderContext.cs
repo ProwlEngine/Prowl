@@ -256,6 +256,12 @@ public sealed class RenderContext
     internal CommandBuffer BeginPassCommandBuffer(string passName)
     {
         CommandBuffer cb = BeginCommandBuffer(passName);
+        if (_device.CommandSink is { } sink && cb.Pass is { } pass)
+        {
+            cb.PassCommandsOpen = true;
+            sink.BeginPassCommands(in pass);
+        }
+
         if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
             return cb;
 
@@ -290,7 +296,16 @@ public sealed class RenderContext
         cmd.SetFramebuffer(GetRenderTexture(new TextureHandle(target)).Framebuffer, GetTargetOps(target));
     }
 
-    internal void EndCommandBuffer(CommandBuffer cmd) => _task.SubmitRecorded(cmd);
+    internal void EndCommandBuffer(CommandBuffer cmd)
+    {
+        if (cmd.PassCommandsOpen && cmd.Pass is { } pass)
+        {
+            cmd.PassCommandsOpen = false;
+            _device.CommandSink?.EndPassCommands(in pass);
+        }
+
+        _task.SubmitRecorded(cmd);
+    }
 
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>

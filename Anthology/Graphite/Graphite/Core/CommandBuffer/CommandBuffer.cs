@@ -64,6 +64,7 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _defaultPropertyKeys.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
+        ResetCaptureState();
     }
 
     /// <summary>Resets and starts recording. Context calls on rent, not passes.</summary>

@@ -8,8 +8,11 @@ public abstract partial class CommandBuffer
     public void ResolveTexture(Texture source, Texture destination)
     {
         ResolveTexture_CheckSampleCounts(source, destination);
+        TrackTexture(source);
+        TrackTexture(destination);
         destination.MarkContentChanged();
         ResolveTextureCore(source, destination);
+        PassSink?.ResolveTexture(source.CurrentVersion, destination.CurrentVersion);
     }
 
     /// <summary>Resolves multisampled texture into non-multisampled one.</summary>
