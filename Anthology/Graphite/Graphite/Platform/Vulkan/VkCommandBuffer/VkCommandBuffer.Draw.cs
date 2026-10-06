@@ -128,10 +128,6 @@ internal unsafe partial class VkCommandBuffer
         IReadOnlyList<VertexLayoutDescription> layouts = program.VertexLayouts;
         int count = layouts.Count;
 
-        bool captureForProfiler = WantsDrawBufferCapture;
-        if (captureForProfiler)
-            BeginDrawBufferCapture();
-
         if (count == 0) return;
 
         IVertexSource source = _currentVertexSource!;
@@ -140,13 +136,6 @@ internal unsafe partial class VkCommandBuffer
         uint sourceVersion = source is VertexSource versioned ? versioned.Version : 0;
         if (_vbCacheSource == source && _vbCacheProgram == program && _vbCacheCount == count && _vbCacheVersion == sourceVersion)
         {
-            for (int slot = 0; slot < count; slot++)
-            {
-                VertexBinding binding = _vbCacheBindings[slot];
-
-                if (captureForProfiler)
-                    CaptureResolvedVertexBinding(in binding);
-            }
             return;
         }
 
@@ -160,9 +149,6 @@ internal unsafe partial class VkCommandBuffer
             VertexLayoutDescription layout = layouts[slot];
             source.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
-
-            if (captureForProfiler)
-                CaptureResolvedVertexBinding(in binding);
 
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(binding.Buffer);
             buffers[slot] = vkBuffer.DeviceBuffer;
@@ -186,9 +172,6 @@ internal unsafe partial class VkCommandBuffer
         _currentIndexCount = indexCount;
         DrawIndexed_CheckIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
-
-        if (WantsDrawBufferCapture)
-            CaptureResolvedIndexBinding(ib, fmt, indexCount);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
 

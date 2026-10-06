@@ -48,7 +48,7 @@ public class RenderPipeline : IDisposable
     public RenderGraph Graph => _graph ??= RenderGraph.Build(_passes);
 
     /// <summary>
-    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view whose Target is a swapchain framebuffer.
+    /// Runs the solved graph for one view: ordered passes with profiler scopes. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view whose Target is a swapchain framebuffer.
     /// Once per view per dispatch.
     /// </summary>
     public void ExecuteView(RenderContext context)
@@ -58,7 +58,6 @@ public class RenderPipeline : IDisposable
 
         RenderGraph graph = Graph;
         IGraphProfiler? profiler = context.GraphProfiler;
-        IProfiler? capturer = context.Profiler;
 
         _executingView = true;
         try
@@ -101,9 +100,6 @@ public class RenderPipeline : IDisposable
                         profiler.RecordPassWrite(passInfo, output, texture, buffer);
                     }
                 }
-
-                if (capturer is { RequestCapture: true })
-                    CapturePassOutputs(context, capturer, passInfo, node);
             }
 
             context.RestoreRestingStates("View");
@@ -111,30 +107,6 @@ public class RenderPipeline : IDisposable
         finally
         {
             _executingView = false;
-        }
-    }
-
-    private static void CapturePassOutputs(RenderContext context, IProfiler profiler, in PassInfo passInfo, RenderGraph.PassNode node)
-    {
-        var framebuffers = new List<Framebuffer>();
-        foreach (RenderResourceID output in node.OutputIds())
-        {
-            if (context.IsTextureResource(output) && output != GraphViewTargetResource.ViewTargetId)
-                framebuffers.Add(context.GetRenderTexture(new TextureHandle(output)).Framebuffer);
-        }
-
-        if (framebuffers.Count == 0)
-            return;
-
-        Framebuffer[] outputs = framebuffers.ToArray();
-        CommandBuffer capture = context.BeginCommandBuffer($"{node.Pass.Name} Capture");
-        try
-        {
-            profiler.Capture(passInfo, outputs, capture);
-        }
-        finally
-        {
-            context.EndCommandBuffer(capture);
         }
     }
 

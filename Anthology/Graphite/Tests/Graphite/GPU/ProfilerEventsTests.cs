@@ -27,8 +27,6 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
     public readonly List<(CommandBufferInfo info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
-    public bool RequestCapture => false;
-
 
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
@@ -40,10 +38,7 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
         => PassWrites.Add((pass, resource, texture, buffer));
 
-    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture) { }
-
     public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) => Draws.Add(info);
-    public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) => Dispatches.Add(info);
     public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) => PipelineSwitches.Add(info);
 

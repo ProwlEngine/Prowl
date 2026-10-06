@@ -18,7 +18,6 @@ public abstract partial class CommandBuffer
 
         Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
-        RecordDrawBuffersIfRequested();
     }
 
     private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
@@ -40,7 +39,6 @@ public abstract partial class CommandBuffer
 
         Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
-        RecordDrawBuffersIfRequested();
     }
 
     private protected static void DrawIndexed_CheckIndexBufferResolved(bool resolved)
@@ -104,7 +102,6 @@ public abstract partial class CommandBuffer
 
         Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
-        RecordDrawBuffersIfRequested();
     }
 
 
@@ -132,7 +129,6 @@ public abstract partial class CommandBuffer
 
         Execution?.Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
-        RecordDrawBuffersIfRequested();
     }
 
 

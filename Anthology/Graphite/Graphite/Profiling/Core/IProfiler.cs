@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Prowl.Graphite;
 
 /// <summary>Command-level events: draws, dispatches, pipeline switches, submits.</summary>
@@ -29,11 +27,7 @@ public interface IGpuStatsProfiler
     void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats);
 }
 
-/// <summary>Aggregate of every capability plus the capture members not yet split out.</summary>
+/// <summary>Aggregate of every profiler capability.</summary>
 public interface IProfiler : ICommandProfiler, IGraphProfiler, IGpuStatsProfiler
 {
-    void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info);
-
-    bool RequestCapture { get; }
-    void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture);
 }

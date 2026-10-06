@@ -75,44 +75,6 @@ public readonly struct DispatchCallInfo
     }
 }
 
-/// <summary>
-/// One buffer binding at draw time: buffer, byte range (a buffer can serve many sub-allocations), and ContentVersion so callers can tell if two draws saw the same bytes.
-/// </summary>
-public readonly struct BufferBindingInfo
-{
-    public string Name { get; }
-    public DeviceBuffer Buffer { get; }
-    public uint Offset { get; }
-    public uint SizeInBytes { get; }
-    public uint ContentVersion { get; }
-
-    public BufferBindingInfo(string name, DeviceBuffer buffer, uint offset, uint sizeInBytes, uint contentVersion)
-    {
-        Name = name;
-        Buffer = buffer;
-        Offset = offset;
-        SizeInBytes = sizeInBytes;
-        ContentVersion = contentVersion;
-    }
-}
-
-/// <summary>
-/// Buffers bound for the draw that just recorded: vertex/index buffers plus buffer entries in the active PropertySet. Only reported when profiler requests a capture, resolving isn't free.
-/// </summary>
-public readonly struct DrawBufferInfo
-{
-    public IReadOnlyList<BufferBindingInfo> VertexBuffers { get; }
-    public BufferBindingInfo? IndexBuffer { get; }
-    public IReadOnlyList<BufferBindingInfo> BoundBuffers { get; }
-
-    public DrawBufferInfo(IReadOnlyList<BufferBindingInfo> vertexBuffers, BufferBindingInfo? indexBuffer, IReadOnlyList<BufferBindingInfo> boundBuffers)
-    {
-        VertexBuffers = vertexBuffers;
-        IndexBuffer = indexBuffer;
-        BoundBuffers = boundBuffers;
-    }
-}
-
 public readonly struct PipelineBindInfo
 {
     public string ShaderName { get; }

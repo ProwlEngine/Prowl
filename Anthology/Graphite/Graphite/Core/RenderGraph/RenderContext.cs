@@ -54,9 +54,6 @@ public sealed class RenderContext
     /// <summary>View being rendered as its concrete type.</summary>
     public T ViewAs<T>() where T : IRenderView => (T)_view;
 
-    /// <summary>Device's profiler, null if none.</summary>
-    public IProfiler? Profiler => _device.Profiler;
-
     internal IGraphProfiler? GraphProfiler => _device.GraphProfiler;
 
     internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
