@@ -107,7 +107,6 @@ public class TraceModelTests
     {
         TracePipelineState Pipeline(PixelFormat format) => new(
             new TraceProgramId(1),
-            Blob(4),
             PrimitiveTopology.TriangleList,
             EquatableArray.Create(format),
             null,
@@ -158,7 +157,7 @@ public class TraceModelTests
                     new BufferDescription(256, BufferUsage.VertexBuffer),
                     new SnapshotRef(new TraceResourceId(5), 1, SnapshotState.Captured, Blob(seed)))),
                 EquatableArray.Create(Pass("Main", new DrawCommand(3, 1, 0, 0))))),
-            EquatableArray.Create(new TraceProgram(new TraceProgramId(1), "Lit", Blob(1), Blob(2), Blob(3))),
+            EquatableArray.Create(new TraceProgram(new TraceProgramId(1), "Lit", Blob(1), Blob(3))),
             EquatableArray.Create(new ResourceWriteEvent(0, Version(5, 1), TraceRange.Bytes(0, 256), null, Blob(seed))));
 
         Assert.Equal(Build(1), Build(1));
