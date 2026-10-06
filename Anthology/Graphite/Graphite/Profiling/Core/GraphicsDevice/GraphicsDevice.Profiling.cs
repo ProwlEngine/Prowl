@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 namespace Prowl.Graphite;
 
@@ -22,7 +23,11 @@ public abstract partial class GraphicsDevice
     /// <summary>Always-on counters of what the backend is doing.</summary>
     public GraphicsCounters Counters { get; } = new();
 
+    private long _pipelineIdCounter;
+
     private int _graphDispatchDepth;
+
+    internal ulong NextPipelineId() => (ulong)Interlocked.Increment(ref _pipelineIdCounter);
 
     private void InitializeFrameOptions_InitializeProfiling(in GraphicsDeviceOptions options)
     {

@@ -83,7 +83,7 @@ public readonly struct DispatchCallInfo
     }
 }
 
-public readonly struct PipelineBindInfo
+public readonly struct ShaderSwitchInfo
 {
     public string ShaderName { get; }
     public bool IsCompute { get; }
@@ -92,12 +92,38 @@ public readonly struct PipelineBindInfo
     /// <summary>Bound GraphicsProgram or ComputeProgram.</summary>
     public ShaderProgram Program { get; }
 
-    public PipelineBindInfo(string shaderName, bool isCompute, ShaderStages stages, ShaderProgram program)
+    public ShaderSwitchInfo(string shaderName, bool isCompute, ShaderStages stages, ShaderProgram program)
     {
         ShaderName = shaderName;
         IsCompute = isCompute;
         Stages = stages;
         Program = program;
+    }
+}
+
+public readonly struct PipelineBindInfo
+{
+    /// <summary>Shader program that owns the pipeline.</summary>
+    public ShaderProgram Program { get; }
+
+    /// <summary>Pipeline id, unique within the device.</summary>
+    public ulong PipelineId { get; }
+
+    public bool IsCompute { get; }
+
+    /// <summary>Framebuffer output description of the variant. Null for compute.</summary>
+    public OutputDescription? Outputs { get; }
+
+    /// <summary>Primitive topology of the variant. Null for compute.</summary>
+    public PrimitiveTopology? Topology { get; }
+
+    public PipelineBindInfo(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
+    {
+        Program = program;
+        PipelineId = pipelineId;
+        IsCompute = isCompute;
+        Outputs = outputs;
+        Topology = topology;
     }
 }
 

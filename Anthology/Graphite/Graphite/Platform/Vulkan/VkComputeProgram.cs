@@ -25,6 +25,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
 
     internal readonly PipelineLayout PipelineLayout;
     internal readonly VkPipelineHandle DevicePipeline;
+    internal readonly ulong PipelineId;
     internal readonly uint ResourceSetCount;
 
     /// <summary>
@@ -64,6 +65,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
 
         _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();
         DevicePipeline = pipeline;
+        PipelineId = gd.NextPipelineId();
 
         DescriptorCache = new VkDescriptorSetCache(_gd);
 

@@ -120,6 +120,7 @@ internal unsafe partial class VkCommandBuffer
         _hasResolvedPipeline = true;
 
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Graphics, _currentResolvedPipeline.Pipeline);
+        ReportPipelineBind(_currentShaderProgram, _currentResolvedPipeline.Id, isCompute: false, key.Outputs, srcTopology);
     }
 
     private void BindVertexBuffersFromSource()

@@ -16,5 +16,11 @@ public abstract partial class CommandBuffer
 
     internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, ExecutionId, Pass);
 
+    internal void ReportPipelineBind(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
+    {
+        if (Device.CommandProfiler is { } profiler)
+            profiler.RecordPipelineBind(ProfilerInfo, new PipelineBindInfo(program, pipelineId, isCompute, outputs, topology));
+    }
+
     internal void RecordResourceSetBind(uint setCount) => Device.Counters.RecordResourceSetBind(setCount);
 }

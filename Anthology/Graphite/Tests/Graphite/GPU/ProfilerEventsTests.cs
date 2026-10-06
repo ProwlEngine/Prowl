@@ -17,7 +17,9 @@ namespace Prowl.Graphite.Tests;
 
 file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStatsProfiler
 {
-    public readonly List<PipelineBindInfo> PipelineSwitches = new();
+    public readonly List<ShaderSwitchInfo> ShaderSwitches = new();
+    public readonly List<PipelineBindInfo> PipelineBinds = new();
+    public readonly List<object> ShaderAndPipelineOrder = new();
     public readonly List<DrawCallInfo> Draws = new();
     public readonly List<DispatchCallInfo> Dispatches = new();
     public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
@@ -40,7 +42,17 @@ file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStat
 
     public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) => Draws.Add(info);
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) => Dispatches.Add(info);
-    public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) => PipelineSwitches.Add(info);
+    public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info)
+    {
+        ShaderSwitches.Add(info);
+        ShaderAndPipelineOrder.Add(info);
+    }
+
+    public void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info)
+    {
+        PipelineBinds.Add(info);
+        ShaderAndPipelineOrder.Add(info);
+    }
 
     public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
 
@@ -151,7 +163,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     };
 
     [Fact]
-    public void Dispatch_RecordsPipelineSwitchResourceSetBindAndDispatch()
+    public void Dispatch_RecordsShaderSwitchPipelineBindResourceSetBindAndDispatch()
     {
         RecordingProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
@@ -202,9 +214,17 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         });
         device.WaitForIdle();
 
-        PipelineBindInfo bind = Assert.Single(profiler.PipelineSwitches);
+        ShaderSwitchInfo shaderSwitch = Assert.Single(profiler.ShaderSwitches);
+        Assert.True(shaderSwitch.IsCompute);
+        Assert.Equal(ShaderStages.Compute, shaderSwitch.Stages);
+        Assert.Same(program, shaderSwitch.Program);
+
+        PipelineBindInfo bind = Assert.Single(profiler.PipelineBinds);
         Assert.True(bind.IsCompute);
-        Assert.Equal(ShaderStages.Compute, bind.Stages);
+        Assert.Same(program, bind.Program);
+        Assert.Null(bind.Outputs);
+        Assert.Null(bind.Topology);
+        Assert.IsType<ShaderSwitchInfo>(profiler.ShaderAndPipelineOrder[0]);
 
         GraphicsCountersSnapshot counters = device.Counters.Snapshot();
         Assert.True(counters.ResourceSetBinds > 0);
@@ -215,6 +235,72 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(1u, dispatch.GroupCountY);
         Assert.Equal(1u, dispatch.GroupCountZ);
         Assert.False(dispatch.IsIndirect);
+    }
+
+    [Fact]
+    public void Draw_OneShaderIntoTwoFramebufferLayouts_RecordsOneShaderSwitchThenTwoPipelineBinds()
+    {
+        RecordingProfiler profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+
+        const uint size = 16;
+        const uint stride = 52;
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(device.BackendType, "VertexLayoutTestShader.slang");
+        ShaderDescription description = new(stages)
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            VertexLayouts =
+            [
+                new VertexLayoutDescription(0, stride,
+                    new VertexElementDescription("POSITION", VertexElementFormat.Float3),
+                    new VertexElementDescription("COLOR0", VertexElementFormat.Float4),
+                    new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2),
+                    new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
+            ],
+        };
+        GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
+
+        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
+        device.UpdateBuffer(vertices, 0, new byte[stride * 3]);
+
+        Texture floatTarget = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
+            size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
+        Texture byteTarget = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
+            size, size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
+        Framebuffer floatFramebuffer = device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, floatTarget));
+        Framebuffer byteFramebuffer = device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, byteTarget));
+
+        device.RunTestGraph((context, cl) =>
+        {
+            cl.SetShader(program);
+            cl.SetVertexSource(new VertexSource().SetBuffer("POSITION", vertices));
+            cl.ClearProperties();
+
+            cl.SetFramebuffer(floatFramebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
+            cl.SetFullViewport();
+            cl.Draw(3);
+
+            cl.SetFramebuffer(byteFramebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
+            cl.SetFullViewport();
+            cl.Draw(3);
+        });
+        device.WaitForIdle();
+
+        Assert.Equal(3, profiler.ShaderAndPipelineOrder.Count);
+        ShaderSwitchInfo shaderSwitch = Assert.IsType<ShaderSwitchInfo>(profiler.ShaderAndPipelineOrder[0]);
+        PipelineBindInfo first = Assert.IsType<PipelineBindInfo>(profiler.ShaderAndPipelineOrder[1]);
+        PipelineBindInfo second = Assert.IsType<PipelineBindInfo>(profiler.ShaderAndPipelineOrder[2]);
+
+        Assert.False(shaderSwitch.IsCompute);
+        Assert.Same(program, shaderSwitch.Program);
+        Assert.Same(program, first.Program);
+        Assert.Same(program, second.Program);
+        Assert.NotEqual(first.PipelineId, second.PipelineId);
+        Assert.Equal(PixelFormat.R32_G32_B32_A32_Float, first.Outputs!.Value.ColorFormats[0]);
+        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, second.Outputs!.Value.ColorFormats[0]);
+        Assert.Equal(PrimitiveTopology.TriangleList, first.Topology);
     }
 
     [Fact]
