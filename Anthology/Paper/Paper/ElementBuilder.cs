@@ -607,6 +607,30 @@ namespace Prowl.PaperUI
         /// <param name="condition">Boolean condition to evaluate</param>
         public StateDrivenStyle If(bool condition) => StateDrivenStyle.Get(this, condition);
 
+        /// <summary>Style properties applied while the named breakpoint matches the viewport.</summary>
+        public StateDrivenStyle Breakpoint(string name) => StateDrivenStyle.Get(this, _paper.IsBreakpoint(name));
+
+        /// <summary>Style properties applied while the breakpoint matches the viewport.</summary>
+        public StateDrivenStyle Breakpoint(in Breakpoint breakpoint) => StateDrivenStyle.Get(this, _paper.ViewportMatches(breakpoint));
+
+        /// <summary>Style properties applied while the viewport is at least this wide.</summary>
+        public StateDrivenStyle MinViewportWidth(float width) => StateDrivenStyle.Get(this, _paper.ViewportWidth >= width);
+
+        /// <summary>Style properties applied while the viewport is at most this wide.</summary>
+        public StateDrivenStyle MaxViewportWidth(float width) => StateDrivenStyle.Get(this, _paper.ViewportWidth <= width);
+
+        /// <summary>Style properties applied while the viewport is at least this tall.</summary>
+        public StateDrivenStyle MinViewportHeight(float height) => StateDrivenStyle.Get(this, _paper.ViewportHeight >= height);
+
+        /// <summary>Style properties applied while the viewport is at most this tall.</summary>
+        public StateDrivenStyle MaxViewportHeight(float height) => StateDrivenStyle.Get(this, _paper.ViewportHeight <= height);
+
+        /// <summary>Style properties applied while the viewport is taller than it is wide.</summary>
+        public StateDrivenStyle Portrait => StateDrivenStyle.Get(this, _paper.IsPortrait);
+
+        /// <summary>Style properties applied while the viewport is at least as wide as it is tall.</summary>
+        public StateDrivenStyle Landscape => StateDrivenStyle.Get(this, _paper.IsLandscape);
+
         /// <summary>
         /// Inherits style properties from the specified element or from the parent if not specified.
         /// </summary>

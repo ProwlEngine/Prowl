@@ -198,6 +198,7 @@ namespace Prowl.PaperUI
             _canvas.BeginFrame(_width, _height, DisplayFramebufferScale.X);
 
             _elementStack.Clear();
+            _viewportStack.Clear();
 
             ClearElements();
             InitializeRootElement(_width, _height);
@@ -379,13 +380,31 @@ namespace Prowl.PaperUI
             {
                 if (!deferred.TryGetValue(data.Layer, out var bucket))
                 {
-                    bucket = _deferredBucketPool.Count > 0 ? _deferredBucketPool.Pop() : new List<(ElementHandle handle, Transform2D transform)>();
+                    bucket = _deferredBucketPool.Count > 0 ? _deferredBucketPool.Pop() : new List<(ElementHandle handle, Transform2D transform, float alpha)>();
                     deferred[data.Layer] = bucket;
                 }
-                bucket.Add((handle, _canvas.GetTransform()));
+                bucket.Add((handle, _canvas.GetTransform(), _canvas.GlobalAlpha));
                 return;
             }
 
+            float opacity = data._elementStyle.GetOpacity();
+            if (opacity >= 1f)
+            {
+                RenderElementBody(handle, currentLayer, deferred);
+                return;
+            }
+            if (opacity <= 0f)
+                return;
+
+            float inheritedAlpha = _canvas.GlobalAlpha;
+            _canvas.SetGlobalAlpha(inheritedAlpha * opacity);
+            RenderElementBody(handle, currentLayer, deferred);
+            _canvas.SetGlobalAlpha(inheritedAlpha);
+        }
+
+        private void RenderElementBody(in ElementHandle handle, int currentLayer, SortedDictionary<int, List<(ElementHandle handle, Transform2D transform, float alpha)>>? deferred)
+        {
+            ref var data = ref handle.Data;
             var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
             _canvas.SaveState();
 
