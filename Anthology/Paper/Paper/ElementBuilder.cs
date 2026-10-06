@@ -105,6 +105,9 @@ namespace Prowl.PaperUI
         /// </summary>
         public T BackdropBlur(float radius) => SetStyleProperty(GuiProp.BackdropBlur, radius);
 
+        /// <summary>Fades the element and everything inside it. 0 is invisible, 1 is opaque. It still takes the pointer while faded.</summary>
+        public T Opacity(float opacity) => SetStyleProperty(GuiProp.Opacity, opacity);
+
         #endregion
 
         #region Corner Rounding
@@ -603,6 +606,30 @@ namespace Prowl.PaperUI
         /// </summary>
         /// <param name="condition">Boolean condition to evaluate</param>
         public StateDrivenStyle If(bool condition) => StateDrivenStyle.Get(this, condition);
+
+        /// <summary>Style properties applied while the named breakpoint matches the viewport.</summary>
+        public StateDrivenStyle Breakpoint(string name) => StateDrivenStyle.Get(this, _paper.IsBreakpoint(name));
+
+        /// <summary>Style properties applied while the breakpoint matches the viewport.</summary>
+        public StateDrivenStyle Breakpoint(in Breakpoint breakpoint) => StateDrivenStyle.Get(this, _paper.ViewportMatches(breakpoint));
+
+        /// <summary>Style properties applied while the viewport is at least this wide.</summary>
+        public StateDrivenStyle MinViewportWidth(float width) => StateDrivenStyle.Get(this, _paper.ViewportWidth >= width);
+
+        /// <summary>Style properties applied while the viewport is at most this wide.</summary>
+        public StateDrivenStyle MaxViewportWidth(float width) => StateDrivenStyle.Get(this, _paper.ViewportWidth <= width);
+
+        /// <summary>Style properties applied while the viewport is at least this tall.</summary>
+        public StateDrivenStyle MinViewportHeight(float height) => StateDrivenStyle.Get(this, _paper.ViewportHeight >= height);
+
+        /// <summary>Style properties applied while the viewport is at most this tall.</summary>
+        public StateDrivenStyle MaxViewportHeight(float height) => StateDrivenStyle.Get(this, _paper.ViewportHeight <= height);
+
+        /// <summary>Style properties applied while the viewport is taller than it is wide.</summary>
+        public StateDrivenStyle Portrait => StateDrivenStyle.Get(this, _paper.IsPortrait);
+
+        /// <summary>Style properties applied while the viewport is at least as wide as it is tall.</summary>
+        public StateDrivenStyle Landscape => StateDrivenStyle.Get(this, _paper.IsLandscape);
 
         /// <summary>
         /// Inherits style properties from the specified element or from the parent if not specified.
@@ -1972,6 +1999,9 @@ namespace Prowl.PaperUI
             return CreateTextInput(value, settings, onChange, true, intID);
         }
 
+        /// <summary>Where a text input lays out its text: the content box inside its padding, relative to the element.</summary>
+        private Rect TextInputArea => _handle.Data.ContentRect;
+
         private ElementBuilder CreateTextInput(
             string value,
             TextInputSettings settings,
@@ -2037,7 +2067,7 @@ namespace Prowl.PaperUI
                         currentState.SelectionEnd = currentState.Value.Length;
                         currentState.CursorPosition = currentState.Value.Length;
                     }
-                    else
+                    else if (!_paper.IsPointerPressed(PaperMouseBtn.Left))
                     {
                         currentState.CursorPosition = currentState.Value.Length;
                         currentState.ClearSelection();
@@ -2052,8 +2082,8 @@ namespace Prowl.PaperUI
             OnPress((ClickEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
-                var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
-                var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var clickPos = e.RelativePosition.X - TextInputArea.Min.X + currentState.ScrollOffsetX;
+                var clickPosY = isMultiLine ? e.RelativePosition.Y - TextInputArea.Min.Y + currentState.ScrollOffsetY : 0;
                 var newPosition = Maths.Clamp(
                     CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
@@ -2084,8 +2114,8 @@ namespace Prowl.PaperUI
             OnDoubleClick((ClickEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
-                var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
-                var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var clickPos = e.RelativePosition.X - TextInputArea.Min.X + currentState.ScrollOffsetX;
+                var clickPosY = isMultiLine ? e.RelativePosition.Y - TextInputArea.Min.Y + currentState.ScrollOffsetY : 0;
                 var clickPosition = Maths.Clamp(
                     CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
@@ -2106,8 +2136,8 @@ namespace Prowl.PaperUI
             OnDragStart((DragEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
-                var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
-                var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var dragPos = e.RelativePosition.X - TextInputArea.Min.X + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.Y - TextInputArea.Min.Y + currentState.ScrollOffsetY : 0;
                 var pos = Maths.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
 
                 currentState.CursorPosition = pos;
@@ -2126,31 +2156,33 @@ namespace Prowl.PaperUI
                 const float edgeScrollSensitivity = 20.0f;
                 const float scrollSpeed = 2.0f;
 
-                if (e.RelativePosition.X < edgeScrollSensitivity)
+                var area = TextInputArea;
+                var local = e.RelativePosition - area.Min;
+                if (local.X < edgeScrollSensitivity)
                     currentState.ScrollOffsetX = Maths.Max(0, currentState.ScrollOffsetX - scrollSpeed);
-                else if (e.RelativePosition.X > e.ElementRect.Size.X - edgeScrollSensitivity)
+                else if (local.X > area.Size.X - edgeScrollSensitivity)
                     currentState.ScrollOffsetX += scrollSpeed;
 
                 if (isMultiLine)
                 {
-                    if (e.RelativePosition.Y < edgeScrollSensitivity)
+                    if (local.Y < edgeScrollSensitivity)
                         currentState.ScrollOffsetY = Maths.Max(0, currentState.ScrollOffsetY - scrollSpeed);
-                    else if (e.RelativePosition.Y > e.ElementRect.Size.Y - edgeScrollSensitivity)
+                    else if (local.Y > area.Size.Y - edgeScrollSensitivity)
                         currentState.ScrollOffsetY += scrollSpeed;
                 }
 
                 // Clamp scroll offsets after auto-scroll (textLayout.Size is pixel-space; convert
                 // to logical via FramebufferScale).
-                var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, e.ElementRect.Size.X);
+                var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, area.Size.X);
                 var displayValue = currentState.Value;
                 var textLayout = _paper.CreateLayout(displayValue, layoutSettings);
-                float visibleWidth = e.ElementRect.Size.X;
-                float visibleHeight = e.ElementRect.Size.Y;
+                float visibleWidth = area.Size.X;
+                float visibleHeight = area.Size.Y;
                 float invFb = 1.0f / _paper.Canvas.FramebufferScale;
                 currentState.ClampScrollOffsets((float)textLayout.Size.X * invFb, (float)textLayout.Size.Y * invFb, visibleWidth, visibleHeight);
 
-                var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
-                var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var dragPos = e.RelativePosition.X - TextInputArea.Min.X + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.Y - TextInputArea.Min.Y + currentState.ScrollOffsetY : 0;
                 var pos = Maths.Clamp(CalculateTextPosition(displayValue, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
 
                 currentState.CursorPosition = pos;
@@ -2208,9 +2240,12 @@ namespace Prowl.PaperUI
                 _paper.Draw(ref elHandle, (canvas, r) =>
                 {
                     var renderState = LoadTextInputState(value, isMultiLine);
+                    var content = elHandle.Data.ContentRect;
+                    r = new Rect(r.Min + content.Min, r.Min + content.Max);
                     var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, r.Size.X);
 
                     canvas.SaveState();
+                    canvas.IntersectScissor(r.Min.X, r.Min.Y, r.Size.X, r.Size.Y);
                     canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
 
                     // TextLayout positions and widths come back in pixel space (Canvas rasterizes
@@ -2355,11 +2390,11 @@ namespace Prowl.PaperUI
 
             if (isMultiLine)
             {
-                var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth));
+                var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, TextInputArea.Size.X));
                 var cursorPos = textLayout.GetCursorPosition(state.CursorPosition) * invFb;
 
-                float visibleWidth = _handle.Data.LayoutWidth;
-                float visibleHeight = _handle.Data.LayoutHeight;
+                float visibleWidth = TextInputArea.Size.X;
+                float visibleHeight = TextInputArea.Size.Y;
 
                 const float margin = 10.0f;
 
@@ -2390,7 +2425,7 @@ namespace Prowl.PaperUI
 
                 var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition, settings.MaskChar) * invFb;
 
-                float visibleWidth = _handle.Data.LayoutWidth;
+                float visibleWidth = TextInputArea.Size.X;
                 if (visibleWidth == 0)
                     visibleWidth = textSize.X;
                 const float margin = 20.0f;
@@ -2400,7 +2435,7 @@ namespace Prowl.PaperUI
                 else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
                     state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
 
-                state.ClampScrollOffsets((float)textSize.X, (float)textSize.Y, visibleWidth, _handle.Data.LayoutHeight);
+                state.ClampScrollOffsets((float)textSize.X, (float)textSize.Y, visibleWidth, TextInputArea.Size.Y);
             }
         }
 
@@ -2410,7 +2445,7 @@ namespace Prowl.PaperUI
         private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, float x, float y = 0)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : float.MaxValue;
+            var maxWidth = isMultiLine ? TextInputArea.Size.X : float.MaxValue;
             var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
             // x,y are in logical units; the layout is in pixel space. Scale to match.
             float s = _paper.Canvas.FramebufferScale;

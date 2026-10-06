@@ -24,6 +24,7 @@ namespace Prowl.PaperUI
         Rounded,
         BoxShadow,
         BackdropBlur,
+        Opacity,
         #endregion
 
         #region Layout Properties
@@ -425,6 +426,7 @@ namespace Prowl.PaperUI
         public float GetBorderWidth() => (_parent != null && !_current.Has(GuiProp.BorderWidth)) ? (float)_parent.GetValue(GuiProp.BorderWidth) : _current.BorderWidth;
         public Float4 GetRounded() => (_parent != null && !_current.Has(GuiProp.Rounded)) ? (Float4)_parent.GetValue(GuiProp.Rounded) : _current.Rounded;
         public BoxShadow GetBoxShadow() => (_parent != null && !_current.Has(GuiProp.BoxShadow)) ? (BoxShadow)_parent.GetValue(GuiProp.BoxShadow) : _current.BoxShadow;
+        public float GetOpacity() => (_parent != null && !_current.Has(GuiProp.Opacity)) ? (float)_parent.GetValue(GuiProp.Opacity) : _current.Opacity;
         public float GetBackdropBlur() => (_parent != null && !_current.Has(GuiProp.BackdropBlur)) ? (float)_parent.GetValue(GuiProp.BackdropBlur) : _current.BackdropBlur;
         public object GetBackgroundImage() => (_parent != null && !_current.Has(GuiProp.BackgroundImage)) ? _parent.GetValue(GuiProp.BackgroundImage) : _current.BackgroundImage;
         public Color GetTextColor() => (_parent != null && !_current.Has(GuiProp.TextColor)) ? (Color)_parent.GetValue(GuiProp.TextColor) : _current.TextColor;
@@ -561,6 +563,7 @@ namespace Prowl.PaperUI
             d.Rounded = new Float4(0, 0, 0, 0);
             d.BoxShadow = BoxShadow.None;
             d.BackdropBlur = 0.0f;
+            d.Opacity = 1.0f;
             d.BackgroundImage = null;
 
             // Layout

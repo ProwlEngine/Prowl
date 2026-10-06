@@ -57,7 +57,7 @@ namespace Prowl.Quill
             // instead of over-covering, so a 0.5px border renders at ~50% alpha rather than fully opaque.
             float covCore = (hp > 0f && half < hp) ? half / hp : 1f;
 
-            int SegCount(float r) => r > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * (r + half) / 2 / _state.roundingMinDistance)) : 0;
+            int SegCount(float r) => r > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * (r + half) / 2 / CurveSpacing)) : 0;
 
             // Affine transform basis about the rect centre (T(p) = c + (p - centre) . [ex, ey]).
             float ccx = x + width / 2, ccy = y + height / 2;
@@ -157,7 +157,7 @@ namespace Prowl.Quill
             if (segments <= 0)
             {
                 float circumference = Maths.PI * 2 * (radius + half);
-                segments = Maths.Max(3, (int)Maths.Ceiling(circumference / _state.roundingMinDistance));
+                segments = Maths.Max(3, (int)Maths.Ceiling(circumference / CurveSpacing));
             }
 
             // Screen-space centre + per-step radial direction, so no full affine transform runs per vertex.
