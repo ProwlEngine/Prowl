@@ -79,6 +79,7 @@ public abstract class CommandBufferBase : GraphicsResource
             return;
         }
 
+        buffer.MarkContentChanged();
         UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
     }
 
@@ -104,6 +105,7 @@ public abstract class CommandBufferBase : GraphicsResource
         }
         BoundsChecks.CopyBuffer(source, sourceOffset, destination, destinationOffset, sizeInBytes);
 
+        destination.MarkContentChanged();
         CopyBufferCore(source, sourceOffset, destination, destinationOffset, sizeInBytes);
     }
 
@@ -121,12 +123,14 @@ public abstract class CommandBufferBase : GraphicsResource
         for (uint level = 0; level < source.MipLevels; level++)
         {
             Util.GetMipDimensions(source, level, out uint mipWidth, out uint mipHeight, out uint mipDepth);
-            CopyTexture(
+            CopyTextureRegion(
                 source, 0, 0, 0, level, 0,
                 destination, 0, 0, 0, level, 0,
                 mipWidth, mipHeight, mipDepth,
                 effectiveSrcArrayLayers);
         }
+
+        destination.MarkContentChanged();
     }
 
     /// <summary>Copies one subresource between textures.</summary>
@@ -165,6 +169,32 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <param name="depth">Region depth, texels.</param>
     /// <param name="layerCount">Layers to copy.</param>
     public void CopyTexture(
+        Texture source,
+        uint srcX, uint srcY, uint srcZ,
+        uint srcMipLevel,
+        uint srcBaseArrayLayer,
+        Texture destination,
+        uint dstX, uint dstY, uint dstZ,
+        uint dstMipLevel,
+        uint dstBaseArrayLayer,
+        uint width, uint height, uint depth,
+        uint layerCount)
+    {
+        CopyTextureRegion(
+            source,
+            srcX, srcY, srcZ,
+            srcMipLevel,
+            srcBaseArrayLayer,
+            destination,
+            dstX, dstY, dstZ,
+            dstMipLevel,
+            dstBaseArrayLayer,
+            width, height, depth,
+            layerCount);
+        destination.MarkContentChanged();
+    }
+
+    private void CopyTextureRegion(
         Texture source,
         uint srcX, uint srcY, uint srcZ,
         uint srcMipLevel,
@@ -220,6 +250,7 @@ public abstract class CommandBufferBase : GraphicsResource
         ValidationHelpers.RequireNotNull(Device, source, nameof(source), nameof(CopyTextureToBuffer));
         ValidationHelpers.RequireNotNull(Device, destination, nameof(destination), nameof(CopyTextureToBuffer));
         BoundsChecks.CopyTextureToBuffer(source, destination, destinationOffset, region);
+        destination.MarkContentChanged();
         CopyTextureToBufferCore(source, destination, destinationOffset, region);
     }
 
@@ -240,6 +271,7 @@ public abstract class CommandBufferBase : GraphicsResource
 
         if (texture.MipLevels > 1)
         {
+            texture.MarkContentChanged();
             GenerateMipmapsCore(texture);
         }
     }
@@ -255,6 +287,7 @@ public abstract class CommandBufferBase : GraphicsResource
     {
         Device.UpdateTexture_CheckParameters(texture, region);
         BoundsChecks.UpdateTexture(texture, sizeInBytes, region);
+        texture.MarkContentChanged();
         UpdateTextureCore(texture, source, sizeInBytes, region);
     }
 

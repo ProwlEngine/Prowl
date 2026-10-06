@@ -1,5 +1,7 @@
 ﻿using System;
 
+using Prowl.Graphite.Debugging;
+
 namespace Prowl.Graphite;
 
 /// <summary>
@@ -25,10 +27,20 @@ public abstract partial class DeviceBuffer : GraphicsResource
     public BufferUsage Usage => _description.Usage;
 
     /// <summary>
-    /// Bumps on every content change (CPU write or GPU copy in). Use to skip re-snapshotting unchanged data.
-    /// Doesn't catch GPU compute writes to read-write bound buffers.
+    /// Stable identifier, unique and never reused.
+    /// </summary>
+    public ResourceId ResourceId { get; } = ResourceId.Next();
+
+    /// <summary>
+    /// Bumps on every content write, stamped at record time. Reads and binds do not bump it.
+    /// Draws and dispatches bump the buffers bound for storage write, conservatively.
     /// </summary>
     public uint ContentVersion { get; private set; }
+
+    /// <summary>
+    /// Identifier and content version together.
+    /// </summary>
+    public ResourceVersion CurrentVersion => new(ResourceId, ContentVersion);
 
     internal void MarkContentChanged()
     {

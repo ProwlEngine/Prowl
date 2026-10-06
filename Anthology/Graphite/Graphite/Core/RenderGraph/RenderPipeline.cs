@@ -90,6 +90,7 @@ public class RenderPipeline : IDisposable
                 node.Pass.Render(context, passCommands);
                 PassStats stats = passCommands.Stats;
                 context.EndCommandBuffer(passCommands);
+                context.MarkAttachmentWrites(node.Accesses);
                 context.SetCurrentPass(null);
 
                 profiler?.EndPass(passInfo, stats);

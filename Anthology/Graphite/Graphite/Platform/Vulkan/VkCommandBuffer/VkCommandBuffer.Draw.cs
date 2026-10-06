@@ -72,8 +72,23 @@ internal unsafe partial class VkCommandBuffer
         return vkBuffer;
     }
 
+    private void MarkStorageWrites(ShaderProgram program)
+    {
+        foreach ((PropertyID name, ResourceKind kind) in program.StorageWriteElements)
+        {
+            if (!_activeProperties.Entries.TryGetValue(name, out PropertyEntry? entry))
+                continue;
+
+            if (kind == ResourceKind.StructuredBufferReadWrite)
+                entry.Buffer?.Buffer.MarkContentChanged();
+            else
+                (entry.TextureView?.Target ?? entry.Texture)?.MarkContentChanged();
+        }
+    }
+
     private void PreDrawCommand()
     {
+        MarkStorageWrites(_currentShaderProgram);
         ResolveAndBindGraphicsPipeline();
 
         // Resolve + transition property textures (must precede the render pass) and prepare descriptor
@@ -92,6 +107,7 @@ internal unsafe partial class VkCommandBuffer
     private void PreDispatchCommand()
     {
         EnsureNoRenderPass();
+        MarkStorageWrites(_currentComputeProgram);
 
         bool needBind = _descriptorBinder.Prepare(
             _currentComputeProgram,

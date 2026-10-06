@@ -8,6 +8,7 @@ public abstract partial class CommandBuffer
     public void ResolveTexture(Texture source, Texture destination)
     {
         ResolveTexture_CheckSampleCounts(source, destination);
+        destination.MarkContentChanged();
         ResolveTextureCore(source, destination);
     }
 

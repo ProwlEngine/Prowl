@@ -101,6 +101,25 @@ public sealed class RenderContext
         _pendingBufferDst = bufferDst;
     }
 
+    internal void MarkAttachmentWrites(ResourceAccess[] accesses)
+    {
+        foreach (ResourceAccess access in accesses)
+        {
+            if (!access.IsTexture || !access.IsOutput)
+                continue;
+
+            RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
+            if (access.TextureUsage == TextureState.Attachment)
+            {
+                foreach (Texture color in texture.ColorTextures)
+                    color.MarkContentChanged();
+            }
+
+            if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) == TextureState.Attachment)
+                texture.DepthTexture.MarkContentChanged();
+        }
+    }
+
     internal void RestoreRestingStates(string scopeName)
     {
         _barriers.Clear();

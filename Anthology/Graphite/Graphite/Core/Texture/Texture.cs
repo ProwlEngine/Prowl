@@ -1,3 +1,5 @@
+using Prowl.Graphite.Debugging;
+
 namespace Prowl.Graphite;
 
 /// <summary>
@@ -48,4 +50,25 @@ public abstract class Texture : GraphicsResource
     /// Sample count (>1 for multisample).
     /// </summary>
     public TextureSampleCount SampleCount => _description.SampleCount;
+
+    /// <summary>
+    /// Stable identifier, unique and never reused.
+    /// </summary>
+    public ResourceId ResourceId { get; } = ResourceId.Next();
+
+    /// <summary>
+    /// Bumps on every content write, stamped at record time. Reads and binds do not bump it.
+    /// Draws and dispatches bump the textures bound for storage write, conservatively.
+    /// </summary>
+    public uint ContentVersion { get; private set; }
+
+    /// <summary>
+    /// Identifier and content version together.
+    /// </summary>
+    public ResourceVersion CurrentVersion => new(ResourceId, ContentVersion);
+
+    internal void MarkContentChanged()
+    {
+        unchecked { ContentVersion++; }
+    }
 }

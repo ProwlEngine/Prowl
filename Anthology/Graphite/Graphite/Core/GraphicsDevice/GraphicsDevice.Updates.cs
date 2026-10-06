@@ -62,7 +62,6 @@ public abstract partial class GraphicsDevice
         {
             return;
         }
-        buffer.MarkContentChanged();
         GpuSubmission submission = Record(cb => cb.UpdateBuffer(buffer, bufferOffsetInBytes, source, sizeInBytes), "UpdateBuffer");
         if ((buffer.Usage & BufferUsage.Staging) != 0)
             submission.Wait();
