@@ -81,10 +81,10 @@ public readonly struct PipelineBindInfo
     public bool IsCompute { get; }
     public ShaderStages Stages { get; }
 
-    /// <summary>Bound GraphicsProgram or ComputeProgram. Typed as object since IProfiler doesn't reference either; cast it yourself.</summary>
-    public object Program { get; }
+    /// <summary>Bound GraphicsProgram or ComputeProgram.</summary>
+    public ShaderProgram Program { get; }
 
-    public PipelineBindInfo(string shaderName, bool isCompute, ShaderStages stages, object program)
+    public PipelineBindInfo(string shaderName, bool isCompute, ShaderStages stages, ShaderProgram program)
     {
         ShaderName = shaderName;
         IsCompute = isCompute;
