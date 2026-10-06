@@ -870,6 +870,17 @@ namespace Prowl.Quill
         /// <param name="distance">The minimum distance in logical units. Default is 3.</param>
         public void SetRoundingMinDistance(float distance = 3) => _state.roundingMinDistance = distance;
 
+        /// <summary>Spacing between generated curve points in local units. The rounding distance is meant on screen, so it shrinks as the current transform scales up.</summary>
+        private float CurveSpacing
+        {
+            get
+            {
+                ref readonly Transform2D t = ref _state.transform;
+                float scale = MathF.Sqrt(MathF.Abs(t.A * t.D - t.B * t.C));
+                return _state.roundingMinDistance / Maths.Clamp(scale, 0.25f, 64f);
+            }
+        }
+
         /// <summary>
         /// Sets a texture on the current brush. The texture will be applied to all shapes drawn with this brush.
         /// Use SetBrushTextureTransform to control how the texture maps to world coordinates.
@@ -1561,7 +1572,7 @@ namespace Prowl.Quill
 
             // Calculate number of segments based on radius size
             float distance = CalculateArcLength(radius, startAngle, endAngle);
-            int segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
+            int segments = Maths.Max(1, (int)Maths.Ceiling(distance / CurveSpacing));
 
             if (counterclockwise && startAngle < endAngle)
             {
@@ -1782,7 +1793,7 @@ namespace Prowl.Quill
 
             // Step 6: Draw the arc using line segments
             float estimatedArcLength = Maths.Abs(deltaTheta) * (rx_abs + ry_abs) / 2.0f;
-            int segments = Maths.Max(1, (int)Maths.Ceiling(estimatedArcLength / _state.roundingMinDistance));
+            int segments = Maths.Max(1, (int)Maths.Ceiling(estimatedArcLength / CurveSpacing));
             if (Maths.Abs(deltaTheta) > 1e-9 && segments == 0) segments = 1; // Ensure at least one segment for tiny arcs
 
             for (int i = 1; i <= segments; i++)
@@ -2269,7 +2280,7 @@ namespace Prowl.Quill
             {
                 // Calculate number of segments based on radius size
                 float distance = Maths.PI * 2 * radius;
-                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / CurveSpacing));
             }
 
             if (radius <= 0 || segments < 3)
@@ -2303,7 +2314,7 @@ namespace Prowl.Quill
             {
                 // Calculate number of segments based on radius size
                 float distance = Maths.PI * 2 * Maths.Max(rx, ry);
-                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / CurveSpacing));
             }
 
             if (rx <= 0 || ry <= 0 || segments < 3)
@@ -2337,7 +2348,7 @@ namespace Prowl.Quill
             if (segments == -1)
             {
                 float distance = CalculateArcLength(radius, startAngle, endAngle);
-                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / CurveSpacing));
             }
 
             if (radius <= 0 || segments < 1)
@@ -2487,10 +2498,10 @@ namespace Prowl.Quill
             // so it stays ~1 physical pixel on screen at any zoom (see FringeHalfLogical).
             float hp = FringeHalfLogical();
 
-            int tlSegments = tlRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * tlRadii / 2 / _state.roundingMinDistance)) : 0;
-            int trSegments = trRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * trRadii / 2 / _state.roundingMinDistance)) : 0;
-            int brSegments = brRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * brRadii / 2 / _state.roundingMinDistance)) : 0;
-            int blSegments = blRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * blRadii / 2 / _state.roundingMinDistance)) : 0;
+            int tlSegments = tlRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * tlRadii / 2 / CurveSpacing)) : 0;
+            int trSegments = trRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * trRadii / 2 / CurveSpacing)) : 0;
+            int brSegments = brRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * brRadii / 2 / CurveSpacing)) : 0;
+            int blSegments = blRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * blRadii / 2 / CurveSpacing)) : 0;
 
             // Transform basis about the rect centre (affine: T(p) = c + (p - centre) . [ex, ey]).
             float ccx = x + width / 2, ccy = y + height / 2;
@@ -2581,7 +2592,7 @@ namespace Prowl.Quill
             float innerMax = Maths.Min(innerWidth, innerHeight) / 2;
 
             // Both outlines take the same number of points per corner so they pair up into quads.
-            int Segments(float r) => r > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * r / 2 / _state.roundingMinDistance)) : 0;
+            int Segments(float r) => r > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * r / 2 / CurveSpacing)) : 0;
             float tlO = Maths.Min(tlRadii, outerMax), tlI = Maths.Min(tlRadii, innerMax);
             float trO = Maths.Min(trRadii, outerMax), trI = Maths.Min(trRadii, innerMax);
             float brO = Maths.Min(brRadii, outerMax), brI = Maths.Min(brRadii, innerMax);
@@ -2678,7 +2689,7 @@ namespace Prowl.Quill
             {
                 // Calculate number of segments based on radius size
                 float distance = Maths.PI * 2 * radius;
-                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / CurveSpacing));
             }
 
             if (radius <= 0 || segments < 3)
@@ -2748,7 +2759,7 @@ namespace Prowl.Quill
             if (segments == -1)
             {
                 float distance = CalculateArcLength(radius, startAngle, endAngle);
-                segments = Maths.Max(1, (int)Maths.Ceiling(distance / _state.roundingMinDistance));
+                segments = Maths.Max(1, (int)Maths.Ceiling(distance / CurveSpacing));
             }
 
             if (radius <= 0 || segments < 1)
