@@ -984,17 +984,8 @@ namespace Prowl.Quill
         /// <param name="color2">The color at the end point.</param>
         public void SetLinearBrush(float x1, float y1, float x2, float y2, Color32 color1, Color32 color2)
         {
-            // Premultiply
-            color1 = Color32.FromArgb(
-                (byte)(color1.A),
-                (byte)(color1.R * (color1.A / 255f)),
-                (byte)(color1.G * (color1.A / 255f)),
-                (byte)(color1.B * (color1.A / 255f)));
-            color2 = Color32.FromArgb(
-                (byte)(color2.A),
-                (byte)(color2.R * (color2.A / 255f)),
-                (byte)(color2.G * (color2.A / 255f)),
-                (byte)(color2.B * (color2.A / 255f)));
+            color1 = PremultiplyColor(color1);
+            color2 = PremultiplyColor(color2);
 
             _state.brush.Type = BrushType.Linear;
             _state.brush.Color1 = color1;
@@ -1017,17 +1008,8 @@ namespace Prowl.Quill
         /// <param name="outerColor">The color at the outer edge.</param>
         public void SetRadialBrush(float centerX, float centerY, float innerRadius, float outerRadius, Color32 innerColor, Color32 outerColor)
         {
-            // Premultiply
-            innerColor = Color32.FromArgb(
-                (byte)(innerColor.A),
-                (byte)(innerColor.R * (innerColor.A / 255f)),
-                (byte)(innerColor.G * (innerColor.A / 255f)),
-                (byte)(innerColor.B * (innerColor.A / 255f)));
-            outerColor = Color32.FromArgb(
-                (byte)(outerColor.A),
-                (byte)(outerColor.R * (outerColor.A / 255f)),
-                (byte)(outerColor.G * (outerColor.A / 255f)),
-                (byte)(outerColor.B * (outerColor.A / 255f)));
+            innerColor = PremultiplyColor(innerColor);
+            outerColor = PremultiplyColor(outerColor);
 
             _state.brush.Type = BrushType.Radial;
             _state.brush.Color1 = innerColor;
@@ -1052,17 +1034,8 @@ namespace Prowl.Quill
         /// <param name="outerColor">The color outside the box.</param>
         public void SetBoxBrush(float centerX, float centerY, float width, float height, float radi, float feather, Color32 innerColor, Color32 outerColor)
         {
-            // Premultiply
-            innerColor = Color32.FromArgb(
-                (byte)(innerColor.A),
-                (byte)(innerColor.R * (innerColor.A / 255f)),
-                (byte)(innerColor.G * (innerColor.A / 255f)),
-                (byte)(innerColor.B * (innerColor.A / 255f)));
-            outerColor = Color32.FromArgb(
-                (byte)(outerColor.A),
-                (byte)(outerColor.R * (outerColor.A / 255f)),
-                (byte)(outerColor.G * (outerColor.A / 255f)),
-                (byte)(outerColor.B * (outerColor.A / 255f)));
+            innerColor = PremultiplyColor(innerColor);
+            outerColor = PremultiplyColor(outerColor);
 
             _state.brush.Type = BrushType.Box;
             _state.brush.Color1 = innerColor;
@@ -1236,6 +1209,9 @@ namespace Prowl.Quill
         /// </summary>
         /// <param name="alpha">The alpha value from 0 (fully transparent) to 1 (fully opaque).</param>
         public void SetGlobalAlpha(float alpha) => _globalAlpha = alpha;
+
+        /// <summary>The alpha currently multiplied into everything drawn.</summary>
+        public float GlobalAlpha => _globalAlpha;
 
         /// <summary>
         /// Enables or disables anti-aliasing for all vector geometry (fills, strokes, rounded rects,
