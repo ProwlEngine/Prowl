@@ -33,9 +33,9 @@ public abstract partial class GraphicsDevice
             foreach (T view in views)
             {
                 var context = new RenderContext(
-                    this, task, graph, view);
+                    this, task, graph, view, index);
 
-                var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
+                var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight, task.Id);
 
                 GraphProfiler?.BeginView(viewInfo);
                 pipeline.ExecuteView(context);

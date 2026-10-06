@@ -48,6 +48,7 @@ file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStat
         => ExecutionTimes.Add((commandBuffer, isTransfer, milliseconds));
 
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
+    public void RecordExecutionResolved(ulong executionId) { }
 }
 
 file sealed class StatsOnlyProfiler : IGpuStatsProfiler
@@ -56,6 +57,37 @@ file sealed class StatsOnlyProfiler : IGpuStatsProfiler
 
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) => Timed.Add(commandBuffer);
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
+    public void RecordExecutionResolved(ulong executionId) { }
+}
+
+file sealed class CorrelationProfiler : IGraphProfiler, IGpuStatsProfiler
+{
+    private readonly object _lock = new();
+
+    public readonly List<ViewInfo> ViewsBegun = new();
+    public readonly List<PassInfo> PassesBegun = new();
+    public readonly List<(int Order, CommandBufferInfo Info)> Timings = new();
+    public readonly List<(int Order, ulong ExecutionId)> Resolved = new();
+    private int _order;
+
+    public void BeginView(in ViewInfo view) { lock (_lock) ViewsBegun.Add(view); }
+    public void EndView(in ViewInfo view) { }
+    public void BeginPass(in PassInfo pass) { lock (_lock) PassesBegun.Add(pass); }
+    public void EndPass(in PassInfo pass) { }
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
+    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
+
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
+    {
+        lock (_lock) Timings.Add((_order++, commandBuffer));
+    }
+
+    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
+
+    public void RecordExecutionResolved(ulong executionId)
+    {
+        lock (_lock) Resolved.Add((_order++, executionId));
+    }
 }
 
 file readonly struct ProfilerView : IRenderView
@@ -238,6 +270,52 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         PassInfo copy = Assert.Single(profiler.Timed, t => t.Name == "ProfilerCopy").Pass!.Value;
         Assert.Contains(id, clear.Outputs.ToArray());
         Assert.Contains(id, copy.Inputs.ToArray());
+    }
+
+    [Fact]
+    public void CorrelationIds_MatchTimingsToExecutionViewAndPass_AcrossTwoExecutions()
+    {
+        CorrelationProfiler profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+
+        const uint size = 64;
+        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+
+        RenderResourceID id = RenderResourceID.Intern("profiler_correlation_target");
+        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
+        ProfilerView[] views = [new(size, size), new(size, size)];
+
+        ExecutionTask first = device.DispatchGraph(pipeline, views);
+        ExecutionTask second = device.DispatchGraph(pipeline, views);
+        device.WaitForIdle();
+
+        ulong[] executions = [first.Id, second.Id];
+        Assert.NotEqual(first.Id, second.Id);
+
+        foreach (ulong execution in executions)
+        {
+            Assert.Equal(new[] { 0, 1 }, profiler.ViewsBegun.FindAll(v => v.ExecutionId == execution).ConvertAll(v => v.Index));
+            Assert.Equal(4, profiler.PassesBegun.FindAll(p => p.ExecutionId == execution).Count);
+
+            var passTimings = profiler.Timings.FindAll(t => t.Info.ExecutionId == execution && t.Info.Pass != null);
+            foreach (int viewIndex in new[] { 0, 1 })
+            {
+                foreach (string name in new[] { "ProfilerClear", "ProfilerCopy" })
+                {
+                    (int _, CommandBufferInfo info) = Assert.Single(
+                        passTimings, t => t.Info.Pass!.Value.ViewIndex == viewIndex && t.Info.Pass!.Value.Name == name);
+                    Assert.Equal(name, info.Name);
+                    Assert.Equal(execution, info.Pass!.Value.ExecutionId);
+                }
+            }
+
+            (int resolvedOrder, ulong _) = Assert.Single(profiler.Resolved, r => r.ExecutionId == execution);
+            foreach ((int order, CommandBufferInfo info) in profiler.Timings.FindAll(t => t.Info.ExecutionId == execution))
+                Assert.True(order < resolvedOrder);
+        }
+
+        Assert.All(profiler.Timings, t => Assert.Contains(t.Info.ExecutionId, executions));
+        Assert.Equal(2, profiler.Resolved.Count);
     }
 
     [Fact]

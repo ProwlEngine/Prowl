@@ -71,7 +71,7 @@ public class RenderPipeline : IDisposable
 
                 RenderResourceID[] inputs = node.Inputs;
                 RenderResourceID[] outputs = node.Outputs;
-                var passInfo = new PassInfo(node.Pass.Name, index++, inputs, outputs);
+                var passInfo = new PassInfo(node.Pass.Name, index++, context.ViewIndex, context.Task.Id, inputs, outputs);
 
                 profiler?.BeginPass(passInfo);
                 if (profiler != null)

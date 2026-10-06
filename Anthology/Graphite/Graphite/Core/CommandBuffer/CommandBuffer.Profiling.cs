@@ -14,7 +14,7 @@ public abstract partial class CommandBuffer
     /// <summary>Fresh id stamped per rental, so profiler can tell reused instances apart.</summary>
     internal ulong RentalId { get; set; }
 
-    internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
+    internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, ExecutionId, Pass);
 
     internal void RecordResourceSetBind(uint setCount) => Device.Counters.RecordResourceSetBind(setCount);
 }

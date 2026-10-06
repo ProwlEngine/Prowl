@@ -30,4 +30,5 @@ public interface IGpuStatsProfiler : IProfiler
 {
     void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds);
     void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats);
+    void RecordExecutionResolved(ulong executionId);
 }

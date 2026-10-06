@@ -33,13 +33,17 @@ public sealed class RenderContext
         GraphicsDevice device,
         ExecutionTask task,
         RenderGraph graph,
-        IRenderView view)
+        IRenderView view,
+        int viewIndex = 0)
     {
+        ViewIndex = viewIndex;
         _device = device;
         _task = task;
         _graph = graph;
         _view = view;
     }
+
+    internal int ViewIndex { get; }
 
     /// <summary>Execution this context records into.</summary>
     public ExecutionTask Task => _task;
