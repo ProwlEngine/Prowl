@@ -72,6 +72,26 @@ var preferredFont = scribe.GetFont(fontFamily, FontStyle.Bold);
 scribe.DrawText("Hello World!", position, FontColor.Blue, pixelSize, preferredFont)
 ```
 
+## Font collections (TTC)
+
+`FontFile` accepts standalone fonts and TrueType Collections (TTC v1/v2). Existing
+constructors load the first face; use the zero-based `fontIndex` overload to select
+another face, or `LoadCollection` to load them all:
+
+```csharp
+var firstFace = new FontFile("path/to/fonts.ttc");
+var secondFace = new FontFile("path/to/fonts.ttc", fontIndex: 1);
+foreach (var face in FontFile.LoadCollection("path/to/fonts.ttc"))
+    scribe.AddFallbackFont(face);
+```
+
+These APIs also accept `FileInfo`, `Stream`, or `byte[]`. Collection loading reads
+the file once and shares its backing data across faces. Streams are read from
+their current position and left open; supplied byte arrays must not be modified
+while the fonts are in use. A standalone font is treated as a one-face collection.
+`EnumerateSystemFonts()` discovers both `.ttf` and `.ttc` files and returns each
+usable collection face, including Windows fonts such as Microsoft YaHei.
+
 ## Customizing Glyphs
 
 A `GlyphCustomizer` runs once per character while text is laid out. Whatever it

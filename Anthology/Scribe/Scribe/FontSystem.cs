@@ -210,25 +210,36 @@ namespace Prowl.Scribe
         }
 
         public IEnumerable<FontFile> EnumerateSystemFonts()
+            => EnumerateFonts(GetSystemFontRoots());
+
+        internal static IEnumerable<FontFile> EnumerateFonts(IEnumerable<string> roots)
         {
-            var paths = GetSystemFontPaths();
+            var paths = GetFontPaths(roots);
             foreach (var path in paths)
             {
-                FontFile font = null;
+                byte[] data;
+                int count;
                 try
                 {
-                    font = new FontFile(path);
+                    data = File.ReadAllBytes(path);
+                    count = FontFile.GetFontCount(data);
                 }
                 catch
                 {
                     continue; // Silently skip problematic fonts
                 }
-                if (font != null)
+
+                for (int i = 0; i < count; i++)
+                {
+                    FontFile font;
+                    try { font = new FontFile(data, i); }
+                    catch { continue; } // One unsupported face must not hide the rest of a TTC.
                     yield return font;
+                }
             }
         }
 
-        private IEnumerable<string> GetSystemFontPaths()
+        private static IEnumerable<string> GetFontPaths(IEnumerable<string> roots)
         {
             // De-dupe final results
             var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -256,7 +267,8 @@ namespace Prowl.Scribe
                         try { ext = Path.GetExtension(f); }
                         catch { continue; }
 
-                        if (string.Equals(ext, ".ttf", StringComparison.OrdinalIgnoreCase) && yielded.Add(f))
+                        if ((string.Equals(ext, ".ttf", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(ext, ".ttc", StringComparison.OrdinalIgnoreCase)) && yielded.Add(f))
                             yield return f;
                     }
 
@@ -269,6 +281,13 @@ namespace Prowl.Scribe
                 }
             }
 
+            foreach (var r in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var f in EnumerateFontsUnder(r))
+                    yield return f;
+        }
+
+        private static IEnumerable<string> GetSystemFontRoots()
+        {
             // Build OS-specific search roots
             var roots = new List<string>();
 
@@ -304,9 +323,7 @@ namespace Prowl.Scribe
                 roots.Add(Path.Combine(home, "Library", "Fonts"));
             }
 
-            foreach (var r in roots.Distinct(StringComparer.OrdinalIgnoreCase))
-                foreach (var f in EnumerateFontsUnder(r))
-                    yield return f;
+            return roots;
         }
 
         public AtlasGlyph GetOrCreateGlyph(int codepoint, FontFile font, FontQuality quality)
