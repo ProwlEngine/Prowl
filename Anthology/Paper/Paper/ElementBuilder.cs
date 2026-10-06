@@ -2271,28 +2271,26 @@ namespace Prowl.PaperUI
                     var renderState = LoadTextInputState(value, isMultiLine);
                     var content = elHandle.Data.ContentRect;
                     r = new Rect(r.Min + content.Min, r.Min + content.Max);
-                    var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, r.Size.X);
 
                     canvas.SaveState();
                     canvas.IntersectScissor(r.Min.X, r.Min.Y, r.Size.X, r.Size.Y);
                     canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
 
-                    // TextLayout positions and widths come back in pixel space (Canvas rasterizes
-                    // at logical × FramebufferScale for HiDPI crispness); divide by FramebufferScale
-                    // to reach logical space, matching the widget's own coordinate system.
+                    // Layout positions and sizes are in pixel space, divide by FramebufferScale for logical units.
                     float invFb = 1.0f / canvas.FramebufferScale;
                     var fontSize = elHandle.Data._elementStyle.GetFontSize();
 
                     // The layout settings carry the mask, so what is drawn is the real string and
                     // cursor, selection and clipboard all stay on it too.
-                    var visibleValue = renderState.Value;
-                    if (string.IsNullOrEmpty(renderState.Value))
+                    bool empty = string.IsNullOrEmpty(renderState.Value);
+                    string shown = empty ? settings.Placeholder : renderState.Value;
+                    var text = LayoutInput(renderState.Value, settings, isMultiLine, r.Size);
+                    if (!string.IsNullOrEmpty(shown))
                     {
-                        canvas.DrawText(settings.Placeholder, (float)(r.Min.X), (float)r.Min.Y, settings.PlaceholderColor, layoutSettings);
-                    }
-                    else
-                    {
-                        canvas.DrawText(visibleValue, (float)(r.Min.X), (float)r.Min.Y, settings.TextColor, layoutSettings);
+                        var drawn = empty ? LayoutInput(shown, settings, isMultiLine, r.Size) : text;
+                        var drawSettings = CreateTextLayoutSettings(settings, isMultiLine, drawn.AlignX > 0 ? drawn.AlignWidth : r.Size.X);
+                        drawSettings.Alignment = drawn.ScribeAlignment;
+                        canvas.DrawText(shown, r.Min.X, r.Min.Y + drawn.OffsetY, empty ? settings.PlaceholderColor : settings.TextColor, drawSettings);
                     }
 
                     // Draw selection and cursor if focused
@@ -2300,83 +2298,24 @@ namespace Prowl.PaperUI
                     {
                         _paper.CaptureKeyboard();
 
-                        // Draw selection background
                         if (renderState.HasSelection)
                         {
                             int start = Maths.Min(renderState.SelectionStart, renderState.SelectionEnd);
                             int end = Maths.Max(renderState.SelectionStart, renderState.SelectionEnd);
 
-                            var textLayout = _paper.CreateLayout(visibleValue, layoutSettings);
-                            var startPos = textLayout.GetCursorPosition(start) * invFb;
-                            var endPos = textLayout.GetCursorPosition(end) * invFb;
-
                             canvas.SetFillColor(Color32.FromArgb(100, 100, 150, 255));
-
-                            if (isMultiLine && Maths.Abs(endPos.Y - startPos.Y) > fontSize / 2)
+                            for (int i = 0; i < text.Layout.Lines.Count; i++)
                             {
-                                // Multi-line selection: Draw rectangles for each line
-                                float lineHeight = fontSize * layoutSettings.LineHeight;
-                                float currentY = startPos.Y;
+                                var line = text.Layout.Lines[i];
+                                int from = Maths.Max(start, line.StartIndex);
+                                int to = Maths.Min(end, line.EndIndex);
+                                if (to <= from) continue;
 
-                                // Get line indices from Y positions
-                                int startLineIndex = (int)(startPos.Y / lineHeight);
-                                int endLineIndex = (int)(endPos.Y / lineHeight);
-
-                                // First line: from start position to end of line (line widths are
-                                // pixel-space on the layout; convert to logical).
-                                float firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width * invFb : 0;
-
+                                float lineStart = text.LineOffset(i);
+                                float x0 = from <= line.StartIndex ? lineStart : text.CursorAt(from).X;
+                                float x1 = to >= line.EndIndex ? lineStart + line.Width * invFb : text.CursorAt(to).X;
                                 canvas.BeginPath();
-                                canvas.RoundedRect(
-                                    r.Min.X + startPos.X,
-                                    r.Min.Y + currentY,
-                                    firstLineWidth - startPos.X,
-                                    lineHeight,
-                                    2, 2, 2, 2);
-                                canvas.Fill();
-
-                                // Middle lines: use actual line widths from textLayout
-                                currentY += lineHeight;
-                                int currentLineIndex = startLineIndex + 1;
-                                while (currentY < endPos.Y && currentLineIndex < textLayout.Lines.Count)
-                                {
-                                    float lineWidth = textLayout.Lines[currentLineIndex].Width * invFb;
-
-                                    canvas.BeginPath();
-                                    canvas.RoundedRect(
-                                        r.Min.X,
-                                        r.Min.Y + currentY,
-                                        lineWidth,
-                                        lineHeight,
-                                        2, 2, 2, 2);
-                                    canvas.Fill();
-                                    currentY += lineHeight;
-                                    currentLineIndex++;
-                                }
-
-                                // Last line: from start of line to end position
-                                if (endPos.X > 0)
-                                {
-                                    canvas.BeginPath();
-                                    canvas.RoundedRect(
-                                        r.Min.X,
-                                        r.Min.Y + endPos.Y,
-                                        endPos.X,
-                                        lineHeight,
-                                        2, 2, 2, 2);
-                                    canvas.Fill();
-                                }
-                            }
-                            else
-                            {
-                                // Single-line selection: Draw one rectangle
-                                canvas.BeginPath();
-                                canvas.RoundedRect(
-                                    r.Min.X + startPos.X,
-                                    r.Min.Y + startPos.Y,
-                                    endPos.X - startPos.X,
-                                    fontSize,
-                                    2, 2, 2, 2);
+                                canvas.RoundedRect(r.Min.X + x0, r.Min.Y + text.OffsetY + line.Position.Y * invFb, x1 - x0, line.Height * invFb, 2, 2, 2, 2);
                                 canvas.Fill();
                             }
                         }
@@ -2384,10 +2323,9 @@ namespace Prowl.PaperUI
                         // Draw blinking cursor
                         if ((int)(_paper.Time * 2) % 2 == 0)
                         {
-                            var textLayout = _paper.CreateLayout(visibleValue, layoutSettings);
-                            var cursorPos = textLayout.GetCursorPosition(renderState.CursorPosition);
-                            float cursorX = r.Min.X + (float)cursorPos.X / canvas.FramebufferScale;
-                            float cursorY = r.Min.Y + (float)cursorPos.Y / canvas.FramebufferScale;
+                            var cursorPos = text.CursorAt(renderState.CursorPosition);
+                            float cursorX = r.Min.X + cursorPos.X;
+                            float cursorY = r.Min.Y + cursorPos.Y;
 
                             canvas.BeginPath();
                             canvas.MoveTo(cursorX, cursorY);
@@ -2408,8 +2346,70 @@ namespace Prowl.PaperUI
         // Helper methods for text field functionality
 
         /// <summary>
-        /// Ensures the cursor is visible by adjusting scroll position if needed.
+        /// An input's text laid out left aligned, which cursor and hit testing work from, plus how far the
+        /// element's text alignment moves each line within the input. All in logical units, relative to the
+        /// input's content box and before scrolling.
         /// </summary>
+        private readonly struct InputText
+        {
+            public readonly TextLayout Layout;
+            public readonly Float2 Size;
+            public readonly float AlignWidth, OffsetY, AlignX;
+            private readonly float _invFb;
+
+            public InputText(TextLayout layout, float invFb, Float2 area, TextAlignment alignment, bool wraps)
+            {
+                Layout = layout;
+                _invFb = invFb;
+                Size = (Float2)layout.Size * invFb;
+                // TextAlignment runs Left, Center, Right, then the Middle and Bottom rows in the same order.
+                AlignX = (int)alignment % 3 * 0.5f;
+                AlignWidth = wraps ? area.X : Maths.Max(area.X, Size.X);
+                OffsetY = Maths.Max(0, area.Y - Size.Y) * ((int)alignment / 3 * 0.5f);
+            }
+
+            public Scribe.TextAlignment ScribeAlignment => AlignX switch
+            {
+                0f => Scribe.TextAlignment.Left,
+                1f => Scribe.TextAlignment.Right,
+                _ => Scribe.TextAlignment.Center,
+            };
+
+            public float LineOffset(int line) => (AlignWidth - Layout.Lines[line].Width * _invFb) * AlignX;
+
+            /// <summary>The line holding a character index, picked the same way the layout places its cursor.</summary>
+            public int LineOf(int index)
+            {
+                for (int i = 0; i < Layout.Lines.Count; i++)
+                    if (index <= Layout.Lines[i].EndIndex) return i;
+                return Layout.Lines.Count - 1;
+            }
+
+            public Float2 CursorAt(int index)
+            {
+                if (Layout.Lines.Count == 0) return new Float2(AlignWidth * AlignX, OffsetY);
+                var p = (Float2)Layout.GetCursorPosition(index) * _invFb;
+                return new Float2(p.X + LineOffset(LineOf(index)), p.Y + OffsetY);
+            }
+
+            public int IndexAt(Float2 point)
+            {
+                if (Layout.Lines.Count == 0) return 0;
+                float scale = 1f / _invFb;
+                float y = (point.Y - OffsetY) * scale;
+                int line = Layout.Lines.Count - 1;
+                for (int i = 0; i < Layout.Lines.Count; i++)
+                    if (y < Layout.Lines[i].Position.Y + Layout.Lines[i].Height) { line = i; break; }
+                return Layout.GetCursorIndex(new Float2((point.X - LineOffset(line)) * scale, y));
+            }
+        }
+
+        private InputText LayoutInput(string text, TextInputSettings settings, bool isMultiLine, Float2 area)
+        {
+            var layout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, isMultiLine ? area.X : float.MaxValue));
+            return new InputText(layout, 1f / _paper.Canvas.FramebufferScale, area, _handle.Data.TextAlignment, isMultiLine && settings.DoWrap);
+        }
+
         /// <summary>Pulls the scroll back within the text, for when the input has grown since it scrolled.</summary>
         private void ClampScrollToContent(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
         {
@@ -2419,85 +2419,40 @@ namespace Prowl.PaperUI
             state.ClampScrollOffsets(content.X, content.Y, area.Size.X, area.Size.Y);
         }
 
+        /// <summary>Scrolls so the cursor is inside the visible area, keeping a margin from the edges.</summary>
         private void EnsureCursorVisible(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
         {
-            // Scroll offsets are applied as a logical-space canvas transform (see line ~1966),
-            // so everything in this method must be in logical units. TextLayout cursor positions
-            // and Size are in pixel space and must be divided by FramebufferScale.
-            float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+            var area = TextInputArea.Size;
 
             // Focus set from code arrives before layout, when there is no area to scroll within yet.
-            state.RevealCursor = TextInputArea.Size.X <= 0 || TextInputArea.Size.Y <= 0;
+            state.RevealCursor = area.X <= 0 || area.Y <= 0;
             if (state.RevealCursor) return;
+
+            var text = LayoutInput(state.Value, settings, isMultiLine, area);
+            var cursorPos = text.CursorAt(state.CursorPosition);
+            float margin = isMultiLine ? 10.0f : 20.0f;
+
+            if (cursorPos.X < state.ScrollOffsetX + margin)
+                state.ScrollOffsetX = Maths.Max(0, cursorPos.X - margin);
+            else if (cursorPos.X > state.ScrollOffsetX + area.X - margin)
+                state.ScrollOffsetX = cursorPos.X - area.X + margin;
 
             if (isMultiLine)
             {
-                var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, TextInputArea.Size.X));
-                var cursorPos = textLayout.GetCursorPosition(state.CursorPosition) * invFb;
-
-                float visibleWidth = TextInputArea.Size.X;
-                float visibleHeight = TextInputArea.Size.Y;
-
-                const float margin = 10.0f;
-
-                // Horizontal scrolling
-                if (cursorPos.X < state.ScrollOffsetX + margin)
-                    state.ScrollOffsetX = Maths.Max(0, (float)cursorPos.X - margin);
-                else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
-                    state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
-
-                // Vertical scrolling
                 if (cursorPos.Y < state.ScrollOffsetY + margin)
-                    state.ScrollOffsetY = Maths.Max(0, (float)cursorPos.Y - margin);
-                else if (cursorPos.Y > state.ScrollOffsetY + visibleHeight - margin)
-                    state.ScrollOffsetY = (float)cursorPos.Y - visibleHeight + margin;
-
-                // Clamp scroll offsets to content bounds (layout Size is pixel-space too).
-                state.ClampScrollOffsets((float)textLayout.Size.X * invFb, (float)textLayout.Size.Y * invFb, visibleWidth, visibleHeight);
+                    state.ScrollOffsetY = Maths.Max(0, cursorPos.Y - margin);
+                else if (cursorPos.Y > state.ScrollOffsetY + area.Y - margin)
+                    state.ScrollOffsetY = cursorPos.Y - area.Y + margin;
             }
-            else
-            {
-                // Single-line horizontal scrolling only. GetCursorPositionFromIndex returns
-                // pixel-space; convert to logical.
-                var displayValue = state.Value;
-                // MeasureText returns logical units already (Canvas divides its pixel result by FramebufferScale).
-                var textSize = _paper.MeasureText(displayValue, CreateTextLayoutSettings(settings, false, float.MaxValue));
 
-                var cursorPos = GetCursorPositionFromIndex(displayValue, settings, state.CursorPosition) * invFb;
-
-                float visibleWidth = TextInputArea.Size.X;
-                const float margin = 20.0f;
-
-                if (cursorPos.X < state.ScrollOffsetX + margin)
-                    state.ScrollOffsetX = Maths.Max(0, (float)cursorPos.X - margin);
-                else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
-                    state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
-
-                state.ClampScrollOffsets((float)textSize.X, (float)textSize.Y, visibleWidth, TextInputArea.Size.Y);
-            }
+            state.ClampScrollOffsets(text.Size.X, text.Size.Y, area.X, area.Y);
         }
 
-        /// <summary>
-        /// Calculates the closest text position based on coordinates using TextLayout.
-        /// </summary>
+        /// <summary>The character index nearest a point in logical units, relative to the input's content box and scroll.</summary>
         private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, float x, float y = 0)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            var maxWidth = isMultiLine ? TextInputArea.Size.X : float.MaxValue;
-            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
-            // x,y are in logical units; the layout is in pixel space. Scale to match.
-            float s = _paper.Canvas.FramebufferScale;
-            return textLayout.GetCursorIndex(new Float2(x * s, y * s));
-        }
-
-        /// <summary>
-        /// Calculates the cursor position for a specific character index using TextLayout.
-        /// </summary>
-        private Float2 GetCursorPositionFromIndex(string text, TextInputSettings inputSettings, int index)
-        {
-            if (string.IsNullOrEmpty(text) || index <= 0) return Float2.Zero;
-            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(inputSettings, false));
-            return (Float2)textLayout.GetCursorPosition(index);
+            return LayoutInput(text, settings, isMultiLine, TextInputArea.Size).IndexAt(new Float2(x, y));
         }
 
         #endregion
