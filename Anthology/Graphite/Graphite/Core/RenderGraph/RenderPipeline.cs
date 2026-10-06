@@ -69,8 +69,8 @@ public class RenderPipeline : IDisposable
                 if (node.WritesViewTarget && !hasViewTarget)
                     continue;
 
-                RenderResourceID[] inputs = profiler != null ? node.InputIds() : Array.Empty<RenderResourceID>();
-                RenderResourceID[] outputs = profiler != null ? node.OutputIds() : Array.Empty<RenderResourceID>();
+                RenderResourceID[] inputs = node.Inputs;
+                RenderResourceID[] outputs = node.Outputs;
                 var passInfo = new PassInfo(node.Pass.Name, index++, inputs, outputs);
 
                 profiler?.BeginPass(passInfo);

@@ -50,6 +50,14 @@ file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStat
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 }
 
+file sealed class StatsOnlyProfiler : IGpuStatsProfiler
+{
+    public readonly List<CommandBufferInfo> Timed = new();
+
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) => Timed.Add(commandBuffer);
+    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
+}
+
 file readonly struct ProfilerView : IRenderView
 {
     public ProfilerView(uint width, uint height)
@@ -209,6 +217,27 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 
         Assert.True(device.Counters.Snapshot().Barriers(BarrierBin.TextureTransition) > 0);
+    }
+
+    [Fact]
+    public void GpuStatsProfilerAlone_ReceivesPassInputsAndOutputs()
+    {
+        StatsOnlyProfiler profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+
+        const uint size = 64;
+        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+
+        RenderResourceID id = RenderResourceID.Intern("profiler_stats_only_target");
+        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
+
+        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
+        device.WaitForIdle();
+
+        PassInfo clear = Assert.Single(profiler.Timed, t => t.Name == "ProfilerClear").Pass!.Value;
+        PassInfo copy = Assert.Single(profiler.Timed, t => t.Name == "ProfilerCopy").Pass!.Value;
+        Assert.Contains(id, clear.Outputs.ToArray());
+        Assert.Contains(id, copy.Inputs.ToArray());
     }
 
     [Fact]
