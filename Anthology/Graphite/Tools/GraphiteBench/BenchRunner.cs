@@ -88,6 +88,7 @@ public static class BenchRunner
 
             stats.Reset();
             profiler.Reset();
+            GraphicsCountersSnapshot countersBefore = gd.Counters.Snapshot();
 
             long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
             long start = Stopwatch.GetTimestamp();
@@ -99,6 +100,7 @@ public static class BenchRunner
             long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
 
             gd.WaitForIdle();
+            GraphicsCountersSnapshot countersAfter = gd.Counters.Snapshot();
 
             double recordNs = stats.RecordTicks * NsPerTick;
             double submitNs = stats.SubmitTicks * NsPerTick;
@@ -110,8 +112,8 @@ public static class BenchRunner
             otherUs.Add(otherNs / frames / 1000.0);
             allocBytes.Add(allocated / (double)frames);
             draws.Add(profiler.Draws / (double)frames);
-            setBinds.Add(profiler.SetBinds / (double)frames);
-            boundSets.Add(profiler.BoundSets / (double)frames);
+            setBinds.Add((countersAfter.ResourceSetBinds - countersBefore.ResourceSetBinds) / (double)frames);
+            boundSets.Add((countersAfter.ResourceSetsBound - countersBefore.ResourceSetsBound) / (double)frames);
             pipelineSwitches.Add(profiler.PipelineSwitches / (double)frames);
             submits.Add(profiler.Submits / (double)frames);
         }

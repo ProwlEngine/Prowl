@@ -118,13 +118,6 @@ file sealed class RecordingProfiler : IProfiler
 
     public List<int> Captures { get; } = new();
 
-    public void Allocate(AllocBin type, long bytes) { }
-    public void Free(AllocBin type, long bytes) { }
-    public void AllocateMemory(BufferRoleBin role, long bytes) { }
-    public void FreeMemory(BufferRoleBin role, long bytes) { }
-    public void Record(BufferOpBin op, long bytes) { }
-    public void RecordSwap(SwapBin evt, long bytes) { }
-
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
 
@@ -143,8 +136,6 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
     public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
 
-    public void RecordResourceSetBind(uint setCount) { }
-    public void RecordBarrier(BarrierBin kind, uint count) { }
     public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) { }
 
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) { }

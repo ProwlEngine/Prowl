@@ -11,7 +11,7 @@ using Xunit;
 namespace Prowl.Graphite.Tests;
 
 // Coverage for the IProfiler event wiring added this session: pipeline switches, draws/dispatches,
-// resource-set binds, barriers, pass begin/end + resource reads, command buffer submission counts,
+// pass begin/end + resource reads, command buffer submission counts,
 // and GPU execution timing. Each test builds its own isolated device with a RecordingProfiler
 // attached, since IProfiler is set once at device construction.
 
@@ -20,8 +20,6 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<PipelineBindInfo> PipelineSwitches = new();
     public readonly List<DrawCallInfo> Draws = new();
     public readonly List<DispatchCallInfo> Dispatches = new();
-    public readonly List<uint> ResourceSetBinds = new();
-    public readonly List<(BarrierBin Kind, uint Count)> Barriers = new();
     public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
@@ -31,12 +29,6 @@ file sealed class RecordingProfiler : IProfiler
 
     public bool RequestCapture => false;
 
-    public void Allocate(AllocBin type, long bytes) { }
-    public void Free(AllocBin type, long bytes) { }
-    public void AllocateMemory(BufferRoleBin role, long bytes) { }
-    public void FreeMemory(BufferRoleBin role, long bytes) { }
-    public void Record(BufferOpBin op, long bytes) { }
-    public void RecordSwap(SwapBin evt, long bytes) { }
 
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
@@ -55,8 +47,6 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) => Dispatches.Add(info);
     public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) => PipelineSwitches.Add(info);
 
-    public void RecordResourceSetBind(uint setCount) => ResourceSetBinds.Add(setCount);
-    public void RecordBarrier(BarrierBin kind, uint count) => Barriers.Add((kind, count));
     public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
 
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
@@ -181,8 +171,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.True(bind.IsCompute);
         Assert.Equal(ShaderStages.Compute, bind.Stages);
 
-        Assert.NotEmpty(profiler.ResourceSetBinds);
-        Assert.All(profiler.ResourceSetBinds, count => Assert.Equal(1u, count));
+        GraphicsCountersSnapshot counters = device.Counters.Snapshot();
+        Assert.True(counters.ResourceSetBinds > 0);
+        Assert.Equal(counters.ResourceSetBinds, counters.ResourceSetsBound);
 
         DispatchCallInfo dispatch = Assert.Single(profiler.Dispatches);
         Assert.Equal(1u, dispatch.GroupCountX);
@@ -222,7 +213,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
             profiler.Submits.ConvertAll(s => s.Info.Name));
         Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 
-        Assert.Contains(profiler.Barriers, b => b.Kind == BarrierBin.TextureTransition);
+        Assert.True(device.Counters.Snapshot().Barriers(BarrierBin.TextureTransition) > 0);
     }
 
     [Fact]

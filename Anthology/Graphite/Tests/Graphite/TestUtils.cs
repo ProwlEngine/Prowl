@@ -76,8 +76,8 @@ public static class TestGraphExtensions
 public static class TestUtils
 {
     // Each device gets its own profiler instance - state must not leak across devices/tests.
-    private static GraphicsDeviceOptions HeadlessOptions() => new(true) { Profiler = new TestCountingProfiler() };
-    private static GraphicsDeviceOptions SwapchainOptions() => new(true) { Profiler = new TestCountingProfiler() };
+    private static GraphicsDeviceOptions HeadlessOptions() => new(true);
+    private static GraphicsDeviceOptions SwapchainOptions() => new(true);
     private static SwapchainDescription SwapchainConfig() => new();
 
     public static GraphicsDevice CreateVulkanDevice()
@@ -231,9 +231,6 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
     public Sampler PointSampler => _pointSampler ??= RF.CreateSampler(SamplerDescription.Point);
     public IWindow Window => _window;
 
-    // Non-null for every device TestUtils builds - see HeadlessOptions/SwapchainOptions.
-    public TestCountingProfiler Profiler => (TestCountingProfiler)_gd.Profiler!;
-
     public GraphicsDeviceTestBase()
     {
         Activator.CreateInstance<T>().CreateGraphicsDevice(out _window, out _gd);
@@ -320,73 +317,4 @@ public class VulkanDeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
     {
         TestUtils.CreateVulkanDeviceWithSwapchain(out window, out gd);
     }
-}
-
-// Minimal IProfiler that reproduces just enough of the old built-in counters (live allocation
-// gauge, buffer-role memory gauge) for tests that assert on resource lifetime, e.g. orphaning in
-// BufferSafetyTests. Everything else Graphite might report is a no-op; Graphite no longer ships
-// any counting profiler of its own, so tests that need one bring their own.
-public sealed class TestCountingProfiler : IProfiler
-{
-    private readonly long[] _live = new long[Enum.GetValues<AllocBin>().Length];
-    private readonly long[] _bufferMem = new long[Enum.GetValues<BufferRoleBin>().Length];
-    private readonly object _lock = new();
-
-    public long Live(AllocBin bin)
-    {
-        lock (_lock) return _live[(int)bin];
-    }
-
-    public long Memory(BufferRoleBin bin)
-    {
-        lock (_lock) return _bufferMem[(int)bin];
-    }
-
-    public void Allocate(AllocBin type, long bytes)
-    {
-        lock (_lock) _live[(int)type]++;
-    }
-
-    public void Free(AllocBin type, long bytes)
-    {
-        lock (_lock) _live[(int)type]--;
-    }
-
-    public void AllocateMemory(BufferRoleBin role, long bytes)
-    {
-        lock (_lock) _bufferMem[(int)role]++;
-    }
-
-    public void FreeMemory(BufferRoleBin role, long bytes)
-    {
-        lock (_lock) _bufferMem[(int)role]--;
-    }
-
-    public void Record(BufferOpBin op, long bytes) { }
-    public void RecordSwap(SwapBin evt, long bytes) { }
-
-    public void BeginView(in ViewInfo view) { }
-    public void EndView(in ViewInfo view) { }
-
-    public void BeginPass(in PassInfo pass) { }
-    public void EndPass(in PassInfo pass) { }
-#nullable enable
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-#nullable restore
-
-    public bool RequestCapture => false;
-    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture) { }
-
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
-    public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
-    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
-    public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
-
-    public void RecordResourceSetBind(uint setCount) { }
-    public void RecordBarrier(BarrierBin kind, uint count) { }
-    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) { }
-
-    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) { }
-    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 }
