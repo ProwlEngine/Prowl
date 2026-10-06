@@ -10,43 +10,17 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Coverage for the IProfiler event wiring added this session: pipeline switches, draws/dispatches,
-// pass begin/end + resource reads, command buffer submission counts,
-// and GPU execution timing. Each test builds its own isolated device with a RecordingProfiler
-// attached, since IProfiler is set once at device construction.
-
-file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStatsProfiler
+file sealed class CommandRecorder : ICommandProfiler
 {
     public readonly List<ShaderSwitchInfo> ShaderSwitches = new();
     public readonly List<PipelineBindInfo> PipelineBinds = new();
     public readonly List<object> ShaderAndPipelineOrder = new();
-    public readonly List<DrawCallInfo> Draws = new();
     public readonly List<DispatchCallInfo> Dispatches = new();
     public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
-    public readonly List<PassInfo> PassesBegun = new();
-    public readonly List<PassInfo> PassesEnded = new();
-    public readonly List<PassStats> PassStatsEnded = new();
-    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
-    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
-    public readonly List<(CommandBufferInfo info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
-
-    public void BeginView(in ViewInfo view) { }
-    public void EndView(in ViewInfo view) { }
-
-    public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
-    public void EndPass(in PassInfo pass, in PassStats stats)
-    {
-        PassesEnded.Add(pass);
-        PassStatsEnded.Add(stats);
-    }
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-        => PassReads.Add((pass, resource, texture, buffer));
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-        => PassWrites.Add((pass, resource, texture, buffer));
-
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) => Draws.Add(info);
+    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) => Dispatches.Add(info);
+
     public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info)
     {
         ShaderSwitches.Add(info);
@@ -60,6 +34,54 @@ file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStat
     }
 
     public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
+}
+
+file sealed class GraphRecorder : IGraphProfiler
+{
+    public readonly List<PassInfo> PassesEnded = new();
+    public readonly List<PassStats> PassStatsEnded = new();
+
+    public void BeginView(in ViewInfo view) { }
+    public void EndView(in ViewInfo view) { }
+    public void BeginPass(in PassInfo pass) { }
+
+    public void EndPass(in PassInfo pass, in PassStats stats)
+    {
+        PassesEnded.Add(pass);
+        PassStatsEnded.Add(stats);
+    }
+
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
+    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
+}
+
+file sealed class LifecycleRecorder : IGraphProfiler, ICommandProfiler
+{
+    public readonly List<PassInfo> PassesBegun = new();
+    public readonly List<PassInfo> PassesEnded = new();
+    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
+    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
+    public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
+
+    public void BeginView(in ViewInfo view) { }
+    public void EndView(in ViewInfo view) { }
+    public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
+    public void EndPass(in PassInfo pass, in PassStats stats) => PassesEnded.Add(pass);
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
+        => PassReads.Add((pass, resource, texture, buffer));
+    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
+        => PassWrites.Add((pass, resource, texture, buffer));
+
+    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
+    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
+    public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info) { }
+    public void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
+    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
+}
+
+file sealed class TimingRecorder : IGpuStatsProfiler
+{
+    public readonly List<(CommandBufferInfo Info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
         => ExecutionTimes.Add((commandBuffer, isTransfer, milliseconds));
@@ -274,7 +296,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void Dispatch_RecordsShaderSwitchPipelineBindResourceSetBindAndDispatch()
     {
-        RecordingProfiler profiler = new();
+        CommandRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         const uint width = 16;
@@ -328,7 +350,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void Draw_OneShaderIntoTwoFramebufferLayouts_RecordsOneShaderSwitchThenTwoPipelineBinds()
     {
-        RecordingProfiler profiler = new();
+        CommandRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         const uint size = 16;
@@ -379,7 +401,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void EndPass_ReportsExactPassStats()
     {
-        RecordingProfiler profiler = new();
+        GraphRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         const uint size = 16;
@@ -431,7 +453,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void DispatchGraph_RecordsPassLifecycleReadsAndSubmits()
     {
-        RecordingProfiler profiler = new();
+        LifecycleRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         const uint size = 64;
@@ -532,7 +554,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void ExecutionTiming_RecordsExecutionTime()
     {
-        RecordingProfiler profiler = new();
+        TimingRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
@@ -572,7 +594,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         Assert.Null(device.Profiler);
 
-        RecordingProfiler profiler = new();
+        CommandRecorder profiler = new();
         device.SetProfiler(profiler);
         Assert.Same(profiler, device.Profiler);
 
@@ -590,7 +612,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void Record_WithTiming_RecordsExecutionTime()
     {
-        RecordingProfiler profiler = new();
+        TimingRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
