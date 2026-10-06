@@ -19,8 +19,8 @@ public static class Chart
     public static PieChart<T> Pie<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
         => new(paper, id, Origami.Current, data);
 
-    public static DonutChart<T> Donut<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-        => new(paper, id, Origami.Current, data);
+    public static PieChart<T> Donut<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
+        => new PieChart<T>(paper, id, Origami.Current, data).InnerRadius(0.6f);
 
     public static RadarChart<T> Radar<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
         => new(paper, id, Origami.Current, data);

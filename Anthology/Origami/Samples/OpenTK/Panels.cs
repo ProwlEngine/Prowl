@@ -1521,7 +1521,6 @@ public sealed class ChartsPanel : DockPanel
             .Value(i => _source[i])
             .Labels(_labels)
             .ShowPercent(true)
-            .Explode(0)
             .ValueFormatter(v => $"{v:0.#}K")
             .Padding(6)
             .Show();
@@ -1552,7 +1551,6 @@ public sealed class ChartsPanel : DockPanel
             .Height(ChartHeight)
             .Legend().LegendInteractive(true)
             .Name(i => Axes[i])
-            .Value(i => _current[i])
             .YTicks(4)
             .Range(0, 100)
             .Labels(_labels)
