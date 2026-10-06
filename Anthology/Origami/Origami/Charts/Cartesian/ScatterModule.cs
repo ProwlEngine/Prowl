@@ -2,111 +2,108 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 
-using Prowl.PaperUI;
 using Prowl.Quill;
 using Prowl.Vector;
 
-using Color = System.Drawing.Color;
-
-using Prowl.OrigamiUI;
-
 namespace Prowl.OrigamiUI.Charts;
 
-/// <summary>
-/// Scatter module for a <see cref="CartesianChart{T}"/>. Plots one marker per point of every visible
-/// series at its mapped (x, y) position, with no connecting stroke between points. Added with
-/// <c>.AddScatterPlot()</c>.
-/// </summary>
-public sealed class ScatterModule<T> : CartesianModuleBase<ScatterModule<T>, T>
+public enum MarkerShape
 {
+    Circle,
+    Square,
+    Triangle,
+    Diamond,
+    Cross,
+}
+
+/// <summary>One marker per point. With <see cref="Size"/> set it draws translucent bubbles.</summary>
+public sealed class ScatterModule<T> : CartesianModule<ScatterModule<T>, T>
+{
+    private float _markerSize = 6f;
+    private MarkerShape _shape = MarkerShape.Circle;
+    private Func<T, float>? _size;
+
     internal ScatterModule(CartesianChart<T> chart) : base(chart) { }
 
-    private float _markerSize = 6f;
-    private MarkerShape _markerShape = MarkerShape.Circle;
+    internal override bool Nearest2D => true;
 
-    /// <summary>Marker diameter in pixels. Defaults to 6.</summary>
+    /// <summary>Marker diameter in pixels. Default 6.</summary>
     public ScatterModule<T> MarkerSize(float size) { _markerSize = MathF.Max(1f, size); return this; }
 
-    /// <summary>Shape drawn at each point. Defaults to <see cref="MarkerShape.Circle"/>.</summary>
-    public ScatterModule<T> Marker(MarkerShape shape) { _markerShape = shape; return this; }
+    public ScatterModule<T> Marker(MarkerShape shape) { _shape = shape; return this; }
 
-    protected override bool SampleNearest2D => true;
+    /// <summary>Per-item marker diameter in pixels, drawn as translucent bubbles.</summary>
+    public ScatterModule<T> Size(Func<T, float> selector) { _size = selector; return this; }
 
-    protected override bool PanY => true;
-
-    /// <summary>Ring around the sampled marker on both axes, and a readout of each visible series'
-    /// point there. A scatter point carries an x of its own, so the readout reports the pair rather than
-    /// a value against a shared x.</summary>
-    protected override void AppendSample(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows)
+    private float DiameterOf(T? payload)
     {
-        for (int i = 0; i < ctx.Series.Count; i++)
-        {
-            CartesianSeries<T> s = ctx.Series[i];
-            if (!s.EffectiveVisible || ctx.Index >= s.Points.Count) continue;
-
-            (double x, double y, T? _) = s.Points[ctx.Index];
-            if (double.IsNaN(x) || double.IsInfinity(x)) continue;
-            if (double.IsNaN(y) || double.IsInfinity(y)) continue;
-
-            Color color = s.Color ?? System.Drawing.Color.Gray;
-
-            SampleRing(paper, $"scatter_{i}", ctx.XPos(x), Math.Clamp(ctx.YPos(y), ctx.PlotT, ctx.PlotB), _markerSize, color);
-            rows.Add((color, $"{s.Label}: ({FormatValue(x)}, {FormatValue(y)})"));
-        }
+        if (_size == null || payload is not T item) return _markerSize;
+        float d = _size(item);
+        return float.IsFinite(d) ? MathF.Max(1f, d) : _markerSize;
     }
 
-    protected override void PaintMarks(Canvas canvas, in PlotContext<T> ctx)
+    internal override void Paint(Canvas canvas, in PlotContext ctx)
     {
-        foreach (var s in ctx.Series)
+        foreach (CartesianSeries<T> s in _series)
         {
-            if (!s.EffectiveVisible || s.Points.Count == 0) continue;
+            if (!Visible(s)) continue;
 
-            Color fillColor = s.Color ?? System.Drawing.Color.Gray;
-            Color32 fillCol = ToC32(fillColor);
-            float strokeWidth = s.StrokeWidth ?? 1f;
+            int n = s.Points.Count;
+            var keys = new float[n];
+            var order = new int[n];
+            for (int i = 0; i < n; i++) { keys[i] = -DiameterOf(s.Points[i].Payload); order[i] = i; }
+            if (_size != null) Array.Sort(keys, order);
 
-            foreach ((double x, double y, T? _) in s.Points)
+            Color32 fill = C32(s.Color, _size != null ? 0.45f : 1f);
+            Color32 outline = C32(s.Color);
+
+            for (int k = 0; k < n; k++)
             {
-                if (double.IsNaN(x) || double.IsInfinity(x)) continue;
-                if (double.IsNaN(y) || double.IsInfinity(y)) continue;
-
-                float cx = ctx.XPos(x);
-                float cy = ctx.YPos(y);
-
-                if (_markerShape == MarkerShape.Cross)
-                {
-                    canvas.BeginPath();
-                    PaintMarker(canvas, MarkerShape.Cross, cx, cy, _markerSize);
-                    canvas.SetStrokeColor(ToC32(s.StrokeColor ?? fillColor));
-                    canvas.SetStrokeWidth(strokeWidth);
-                    canvas.Stroke();
-                    continue;
-                }
+                (double x, double y, T? _) = s.Points[order[k]];
+                if (!double.IsFinite(x) || !double.IsFinite(y)) continue;
 
                 canvas.BeginPath();
-                PaintMarker(canvas, _markerShape, cx, cy, _markerSize);
-                canvas.SetFillColor(fillCol);
-                canvas.Fill();
+                MarkerPath(canvas, ctx.XPos(x), ctx.YPos(y), -keys[k]);
 
-                if (s.StrokeColor.HasValue)
+                if (_shape != MarkerShape.Cross)
                 {
-                    canvas.BeginPath();
-                    PaintMarker(canvas, _markerShape, cx, cy, _markerSize);
-                    canvas.SetStrokeColor(ToC32(s.StrokeColor.Value));
-                    canvas.SetStrokeWidth(strokeWidth);
-                    canvas.Stroke();
+                    canvas.SetFillColor(fill);
+                    canvas.Fill();
+                    if (_size == null) continue;
                 }
+
+                canvas.SetStrokeColor(outline);
+                canvas.SetStrokeWidth(1f);
+                canvas.Stroke();
             }
         }
     }
 
-    private static void PaintMarker(Canvas canvas, MarkerShape shape, float cx, float cy, float size)
+    internal override void PaintSample(Canvas canvas, in PlotContext ctx, CartesianSeries<T>? only, int index)
+    {
+        if (only == null || !_series.Contains(only) || index >= only.Points.Count) return;
+
+        (double x, double y, T? payload) = only.Points[index];
+        canvas.BeginPath();
+        canvas.Circle(ctx.XPos(x), ctx.YPos(y), MathF.Max(3f, DiameterOf(payload) * 0.5f) + 2f);
+        canvas.SetStrokeColor(C32(only.Color));
+        canvas.SetStrokeWidth(1.5f);
+        canvas.Stroke();
+    }
+
+    private protected override string RowText(CartesianSeries<T> s, double x, double y, T? payload)
+    {
+        string text = $"({_chart.Format(x)}, {_chart.Format(y)})";
+        if (_size != null && payload is T item) text += $", size {_chart.Format(_size(item))}";
+        return text;
+    }
+
+    private void MarkerPath(Canvas canvas, float cx, float cy, float size)
     {
         float r = size * 0.5f;
 
-        switch (shape)
+        switch (_shape)
         {
             case MarkerShape.Square:
                 canvas.Rect(cx - r, cy - r, size, size);
