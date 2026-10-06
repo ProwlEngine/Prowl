@@ -51,6 +51,7 @@ public abstract partial class GraphicsDevice
             }
 
             CompleteExecution(task);
+            CaptureHook?.OnExecutionSubmitted(task.Id);
         }
         finally
         {

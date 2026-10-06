@@ -11,13 +11,25 @@ public readonly record struct ResourceUse(
     ResourceRange Range,
     ResourceUsage Usage);
 
-/// <summary>A graph resource as one view execution saw it. Backing is the actual image or buffer for this execution.</summary>
+/// <summary>Which attachment of a graph resource a backing image is.</summary>
+public enum BackingRole : byte
+{
+    Color,
+    Depth,
+    Buffer,
+}
+
+/// <summary>One actual image or buffer behind a graph resource for one execution, with its version when the view began.</summary>
+public readonly record struct GraphBacking(ResourceId Id, ResourceVersion EntryVersion, BackingRole Role, uint Index);
+
+/// <summary>
+/// A graph resource as one view execution saw it. A buffer has one backing, a texture one per color attachment plus depth.
+/// </summary>
 public readonly record struct GraphResourceInfo(
     RenderResourceID Id,
     string Name,
     GraphResourceKind Kind,
-    ResourceId Backing,
-    ResourceVersion EntryVersion,
+    ReadOnlyMemory<GraphBacking> Backings,
     bool Imported,
     GraphTextureDesc? Texture,
     GraphBufferDesc? Buffer);

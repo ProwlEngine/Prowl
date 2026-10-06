@@ -62,6 +62,8 @@ public abstract class Texture : GraphicsResource
     /// </summary>
     public uint ContentVersion { get; private set; }
 
+    internal TextureDescription DescriptionValue => _description;
+
     /// <summary>
     /// Identifier and content version together.
     /// </summary>

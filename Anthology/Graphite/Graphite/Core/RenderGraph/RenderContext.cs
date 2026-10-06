@@ -60,6 +60,8 @@ public sealed class RenderContext
 
     internal IGraphProfiler? GraphProfiler => _device.GraphProfiler;
 
+    internal Prowl.Graphite.Debugging.ICaptureHook? CaptureHook => _device.CaptureHook;
+
     internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
     internal void SetCurrentPass(in PassInfo? pass, ResourceAccess[]? accesses, string? scopeName)

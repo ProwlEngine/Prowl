@@ -5,8 +5,30 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugging;
 
-/// <summary>Graph level capture tap. Members arrive with the graph hook step.</summary>
+/// <summary>
+/// Graph level capture tap, called synchronously on the thread executing the graph, outside any render pass.
+/// Spans are reused buffers and only valid for the duration of the call.
+/// </summary>
 public interface ICaptureHook
+{
+    void OnViewBegin(in ViewCaptureInfo view, ICaptureContext capture);
+
+    void OnPassBegin(in PassInfo pass, ReadOnlySpan<ResourceUse> inputs, ICaptureContext capture);
+
+    void OnPassEnd(
+        in PassInfo pass,
+        ReadOnlySpan<ResourceUse> outputs,
+        ReadOnlySpan<ResourceUse> loadedAttachments,
+        ReadOnlySpan<ExternalResourceInfo> externals,
+        ICaptureContext capture);
+
+    void OnViewEnd(ICaptureContext capture);
+
+    void OnExecutionSubmitted(ulong executionId);
+}
+
+/// <summary>Services a hook can request during a callback. Snapshot members arrive with the copy and readback step.</summary>
+public interface ICaptureContext
 {
 }
 

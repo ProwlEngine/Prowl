@@ -37,6 +37,8 @@ public abstract partial class DeviceBuffer : GraphicsResource
     /// </summary>
     public uint ContentVersion { get; private set; }
 
+    internal BufferDescription DescriptionValue => _description;
+
     /// <summary>
     /// Identifier and content version together.
     /// </summary>

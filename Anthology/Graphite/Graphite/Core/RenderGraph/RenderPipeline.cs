@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Graphite.Debugging;
+
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
@@ -64,6 +66,7 @@ public class RenderPipeline : IDisposable
         {
             int index = 0;
             bool hasViewTarget = context.HasViewTarget;
+            GraphCapture? capture = BeginCapture(context, graph, hasViewTarget);
             foreach (RenderGraph.PassNode node in graph.OrderedPasses)
             {
                 if (node.WritesViewTarget && !hasViewTarget)
@@ -71,7 +74,7 @@ public class RenderPipeline : IDisposable
 
                 RenderResourceID[] inputs = node.Inputs;
                 RenderResourceID[] outputs = node.Outputs;
-                var passInfo = new PassInfo(node.Pass.Name, index++, context.ViewIndex, context.Task.Id, inputs, outputs);
+                var passInfo = new PassInfo(node.Pass.Name, index, context.ViewIndex, context.Task.Id, inputs, outputs);
 
                 profiler?.BeginPass(passInfo);
                 if (profiler != null)
@@ -83,6 +86,7 @@ public class RenderPipeline : IDisposable
                     }
                 }
 
+                capture?.BeginPass(index);
                 context.SetCurrentPass(passInfo, node.Accesses, node.Pass.Name);
                 context.TransitionForAccesses(node.Accesses);
                 CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
@@ -92,6 +96,8 @@ public class RenderPipeline : IDisposable
                 context.EndCommandBuffer(passCommands);
                 context.MarkAttachmentWrites(node.Accesses);
                 context.SetCurrentPass(null);
+                capture?.EndPass(index, passCommands);
+                index++;
 
                 profiler?.EndPass(passInfo, stats);
                 if (profiler != null)
@@ -105,11 +111,34 @@ public class RenderPipeline : IDisposable
             }
 
             context.RestoreRestingStates("View");
+            capture?.EndView();
         }
         finally
         {
             _executingView = false;
         }
+    }
+
+    private static GraphCapture? BeginCapture(RenderContext context, RenderGraph graph, bool hasViewTarget)
+    {
+        ICaptureHook? hook = context.CaptureHook;
+        if (hook == null)
+            return null;
+
+        List<RenderGraph.PassNode> nodes = new();
+        foreach (RenderGraph.PassNode node in graph.OrderedPasses)
+        {
+            if (!node.WritesViewTarget || hasViewTarget)
+                nodes.Add(node);
+        }
+
+        PassInfo[] infos = new PassInfo[nodes.Count];
+        for (int i = 0; i < infos.Length; i++)
+            infos[i] = new PassInfo(nodes[i].Pass.Name, i, context.ViewIndex, context.Task.Id, nodes[i].Inputs, nodes[i].Outputs);
+
+        GraphCapture capture = new(hook, context, graph, nodes.ToArray(), infos);
+        capture.BeginView(context.View.Name, context.Task.Id);
+        return capture;
     }
 
     /// <summary>Disposes passes that are disposable.</summary>
