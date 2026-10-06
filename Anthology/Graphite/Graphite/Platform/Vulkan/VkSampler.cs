@@ -39,7 +39,7 @@ internal unsafe partial class VkSampler : Sampler
 
         _gd.Vk.CreateSampler(_gd.Device, in samplerCI, null, out _sampler);
 
-        _gd.Counters.Allocate(AllocBin.Sampler, 0);
+        _gd.Counters.Allocate(AllocBin.Sampler);
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
@@ -52,6 +52,6 @@ internal unsafe partial class VkSampler : Sampler
     private void DestroyNative()
     {
         _gd.Vk.DestroySampler(_gd.Device, _sampler, null);
-        _gd.Counters.Free(AllocBin.Sampler, 0);
+        _gd.Counters.Free(AllocBin.Sampler);
     }
 }

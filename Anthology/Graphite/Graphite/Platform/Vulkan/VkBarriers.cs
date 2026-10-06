@@ -200,7 +200,7 @@ internal static unsafe class VkBarriers
             ref srcStages, ref dstStages);
 
         Emit(gd, cb, srcStages, dstStages, null, 1, &barrier);
-        gd.Counters.RecordBarrier(BarrierBin.TextureTransition, 1);
+        gd.Counters.RecordBarrier(BarrierBin.TextureTransition);
     }
 
     public static void Record(
@@ -253,7 +253,7 @@ internal static unsafe class VkBarriers
         if (imageCount > 0)
             gd.Counters.RecordBarrier(BarrierBin.TextureTransition, imageCount);
         if (memoryPtr != null)
-            gd.Counters.RecordBarrier(BarrierBin.MemoryBarrier, 1);
+            gd.Counters.RecordBarrier(BarrierBin.MemoryBarrier);
     }
 
     private static void BufferScope(VkGraphicsDevice gd, BufferAccess access, out PipelineStageFlags stages, out AccessFlags flags)

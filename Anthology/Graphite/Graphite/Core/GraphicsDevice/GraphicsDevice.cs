@@ -148,7 +148,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void Unmap(DeviceBuffer buffer)
     {
         UnmapCore(buffer);
-        Counters.RecordBufferOp(BufferOpBin.Unmap, 0);
+        Counters.RecordBufferOp(BufferOpBin.Unmap, buffer.SizeInBytes);
     }
 
     /// <summary>

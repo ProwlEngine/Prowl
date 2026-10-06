@@ -8,12 +8,12 @@ internal unsafe partial class VkComputeProgram
     {
         _profiledShaderBytes = stage.ShaderBytes.Length;
         _gd.Counters.Allocate(AllocBin.Shader, _profiledShaderBytes);
-        _gd.Counters.Allocate(AllocBin.Pipeline, 0);
+        _gd.Counters.Allocate(AllocBin.Pipeline);
     }
 
     private void DisposeCore_RecordFrees()
     {
         _gd.Counters.Free(AllocBin.Shader, _profiledShaderBytes);
-        _gd.Counters.Free(AllocBin.Pipeline, 0);
+        _gd.Counters.Free(AllocBin.Pipeline);
     }
 }

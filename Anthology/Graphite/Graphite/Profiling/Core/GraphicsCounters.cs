@@ -28,6 +28,10 @@ public sealed class GraphicsCounters
         Interlocked.Add(ref _liveBytes[(int)bin], -bytes);
     }
 
+    internal void Allocate(AllocBin bin) => Interlocked.Increment(ref _live[(int)bin]);
+
+    internal void Free(AllocBin bin) => Interlocked.Decrement(ref _live[(int)bin]);
+
     internal void AllocateMemory(BufferRoleBin role, long bytes) => Interlocked.Add(ref _resident[(int)role], bytes);
 
     internal void FreeMemory(BufferRoleBin role, long bytes) => Interlocked.Add(ref _resident[(int)role], -bytes);
@@ -39,6 +43,8 @@ public sealed class GraphicsCounters
     }
 
     internal void RecordSwap(SwapBin evt) => Interlocked.Increment(ref _swaps[(int)evt]);
+
+    internal void RecordBarrier(BarrierBin kind) => Interlocked.Increment(ref _barriers[(int)kind]);
 
     internal void RecordBarrier(BarrierBin kind, uint count) => Interlocked.Add(ref _barriers[(int)kind], count);
 

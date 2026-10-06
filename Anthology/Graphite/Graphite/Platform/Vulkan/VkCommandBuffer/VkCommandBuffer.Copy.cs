@@ -118,7 +118,7 @@ internal unsafe partial class VkCommandBuffer
             1, in barrier,
             0, null,
             0, null);
-        _gd.Counters.RecordBarrier(BarrierBin.BufferTransition, 1);
+        _gd.Counters.RecordBarrier(BarrierBin.BufferTransition);
     }
 
     private protected override void CopyTextureCore(
