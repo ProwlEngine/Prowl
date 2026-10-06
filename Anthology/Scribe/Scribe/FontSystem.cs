@@ -210,11 +210,8 @@ namespace Prowl.Scribe
         }
 
         public IEnumerable<FontFile> EnumerateSystemFonts()
-            => EnumerateFonts(GetSystemFontRoots());
-
-        internal static IEnumerable<FontFile> EnumerateFonts(IEnumerable<string> roots)
         {
-            var paths = GetFontPaths(roots);
+            var paths = GetSystemFontPaths();
             foreach (var path in paths)
             {
                 byte[] data;
@@ -222,24 +219,23 @@ namespace Prowl.Scribe
                 try
                 {
                     data = File.ReadAllBytes(path);
-                    count = FontFile.GetFontCount(data);
+                    count = Common.stbtt_GetNumberOfFonts(new FakePtr<byte>(data));
                 }
                 catch
                 {
                     continue; // Silently skip problematic fonts
                 }
-
                 for (int i = 0; i < count; i++)
                 {
                     FontFile font;
                     try { font = new FontFile(data, i); }
-                    catch { continue; } // One unsupported face must not hide the rest of a TTC.
+                    catch { continue; } // Skip an unsupported face without hiding the rest.
                     yield return font;
                 }
             }
         }
 
-        private static IEnumerable<string> GetFontPaths(IEnumerable<string> roots)
+        private IEnumerable<string> GetSystemFontPaths()
         {
             // De-dupe final results
             var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -281,13 +277,6 @@ namespace Prowl.Scribe
                 }
             }
 
-            foreach (var r in roots.Distinct(StringComparer.OrdinalIgnoreCase))
-                foreach (var f in EnumerateFontsUnder(r))
-                    yield return f;
-        }
-
-        private static IEnumerable<string> GetSystemFontRoots()
-        {
             // Build OS-specific search roots
             var roots = new List<string>();
 
@@ -323,7 +312,9 @@ namespace Prowl.Scribe
                 roots.Add(Path.Combine(home, "Library", "Fonts"));
             }
 
-            return roots;
+            foreach (var r in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var f in EnumerateFontsUnder(r))
+                    yield return f;
         }
 
         public AtlasGlyph GetOrCreateGlyph(int codepoint, FontFile font, FontQuality quality)

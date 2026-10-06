@@ -1,4 +1,4 @@
-﻿using Prowl.Scribe.Internal;
+using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -67,52 +67,32 @@ namespace Prowl.Scribe
         /// <summary>Strikeout thickness in font units, from OS/2.</summary>
         public int StrikeoutThickness { get; private set; }
 
-        // Keep the existing constructor signatures for callers compiled against earlier versions.
-        // A collection defaults to its first face; standalone fonts only accept index zero.
-        public FontFile(FileInfo file) : this(file, 0) { }
-        public FontFile(string path) : this(path, 0) { }
-        public FontFile(Stream stream) : this(stream, 0) { }
-        public FontFile(byte[] data) : this(data, 0) { }
-
-        /// <summary>Loads the zero-based face from a font file or TTC collection.</summary>
-        public FontFile(FileInfo file, int fontIndex) : this(ReadFontFile(file), fontIndex) { }
-
-        /// <summary>Loads the zero-based face from a font file or TTC collection.</summary>
-        public FontFile(string path, int fontIndex) : this(new FileInfo(path), fontIndex) { }
-
-        /// <summary>Loads the zero-based face, reading from the current position without closing the stream.</summary>
-        public FontFile(Stream stream, int fontIndex) : this(ReadFully(stream), fontIndex) { }
-
-        /// <summary>Loads the zero-based face. The font retains the supplied data; do not modify it.</summary>
-        public FontFile(byte[] data, int fontIndex)
+        public FontFile(FileInfo file)
         {
-            if (InitFont(data, GetFontOffset(data, fontIndex)) == 0)
+            if(file.Exists == false)
+                throw new FileNotFoundException("Font file not found", file.FullName);
+
+            if (InitFontAtIndex(File.ReadAllBytes(file.FullName), 0) == 0)
                 throw new InvalidDataException("Failed to initialize font");
         }
 
-        /// <summary>Loads every face, sharing one backing buffer. A standalone font returns one face.</summary>
-        public static FontFile[] LoadCollection(string path) => LoadCollection(new FileInfo(path));
-
-        /// <summary>Loads every face, sharing one backing buffer. A standalone font returns one face.</summary>
-        public static FontFile[] LoadCollection(FileInfo file) => LoadCollection(ReadFontFile(file));
-
-        /// <summary>Loads every face from the current position without closing the stream.</summary>
-        public static FontFile[] LoadCollection(Stream stream) => LoadCollection(ReadFully(stream));
-
-        /// <summary>Loads every face, retaining the same data for all faces; do not modify it.</summary>
-        public static FontFile[] LoadCollection(byte[] data)
+        public FontFile(string path)
         {
-            var fonts = new FontFile[GetFontCount(data)];
-            for (int i = 0; i < fonts.Length; i++)
-                fonts[i] = new FontFile(data, i);
-            return fonts;
+            var file = new FileInfo(path);
+            if (file.Exists == false)
+                throw new FileNotFoundException("Font file not found", file.FullName);
+
+            if (InitFontAtIndex(File.ReadAllBytes(file.FullName), 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
         }
 
-        private static byte[] ReadFontFile(FileInfo file)
+        public FontFile(Stream stream)
         {
-            if (file == null) throw new ArgumentNullException(nameof(file));
-            if (!file.Exists) throw new FileNotFoundException("Font file not found", file.FullName);
-            return File.ReadAllBytes(file.FullName);
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
+
+            if (InitFontAtIndex(ReadFully(stream), 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
         }
 
         // Glyph rasterization needs random access to the whole font, so the stream is read into a
@@ -120,7 +100,6 @@ namespace Prowl.Scribe
         // intermediate copy; only a length-unknown stream needs the grow-and-copy fallback.
         private static byte[] ReadFully(Stream stream)
         {
-            if (stream == null) throw new ArgumentNullException(nameof(stream));
             if (stream.CanSeek)
             {
                 long remaining = stream.Length - stream.Position;
@@ -147,60 +126,25 @@ namespace Prowl.Scribe
             }
         }
 
-        internal static int GetFontCount(byte[] data)
+        public FontFile(byte[] data)
         {
-            if (data == null) throw new ArgumentNullException(nameof(data));
-            if (data.Length < 12) throw new InvalidDataException("Truncated font header");
-            if (ReadUInt32(data, 0) != 0x74746366) return 1; // 'ttcf'
-
-            uint version = ReadUInt32(data, 4);
-            if (version != 0x00010000 && version != 0x00020000)
-                throw new InvalidDataException("Unsupported TTC version");
-
-            // Version 2 includes three DSIG fields after the offset array, even when unsigned.
-            int extraBytes = version == 0x00020000 ? 12 : 0;
-            uint count = ReadUInt32(data, 8);
-            if (count == 0 || 12L + 4L * count + extraBytes > data.Length)
-                throw new InvalidDataException("Invalid TTC face count or truncated header");
-            return (int)count;
+            if (InitFontAtIndex(data, 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
         }
 
-        private static int GetFontOffset(byte[] data, int fontIndex)
+        // System font discovery loads each collection face from the same backing data.
+        internal FontFile(byte[] data, int fontIndex)
         {
-            int count = GetFontCount(data);
-            if (fontIndex < 0 || fontIndex >= count)
-                throw new ArgumentOutOfRangeException(nameof(fontIndex));
-
-            uint offset = ReadUInt32(data, 0) == 0x74746366
-                ? ReadUInt32(data, 12 + 4 * fontIndex) : 0;
-            if (offset > data.Length - 12)
-                throw new InvalidDataException("Font offset is outside the file");
-
-            int start = (int)offset;
-            uint signature = ReadUInt32(data, start);
-            if (signature != 0x00010000 && signature != 0x4F54544F && signature != 0x74727565)
-                throw new InvalidDataException("Unsupported font signature"); // sfnt, OTTO, true
-
-            int tableCount = (data[start + 4] << 8) | data[start + 5];
-            if (start + 12L + 16L * tableCount > data.Length)
-                throw new InvalidDataException("Truncated font table directory");
-
-            // TTC table offsets are relative to the whole file, not to the face's directory.
-            // Keep the original buffer intact so shared tables and glyph data resolve correctly.
-            for (int i = 0; i < tableCount; i++)
-            {
-                int record = start + 12 + 16 * i;
-                uint tableOffset = ReadUInt32(data, record + 8);
-                uint tableLength = ReadUInt32(data, record + 12);
-                if ((long)tableOffset + tableLength > data.Length)
-                    throw new InvalidDataException("Font table is outside the file");
-            }
-            return start;
+            if (InitFontAtIndex(data, fontIndex) == 0)
+                throw new InvalidDataException("Failed to initialize font");
         }
 
-        private static uint ReadUInt32(byte[] data, int offset)
-            => ((uint)data[offset] << 24) | ((uint)data[offset + 1] << 16)
-             | ((uint)data[offset + 2] << 8) | data[offset + 3];
+        private int InitFontAtIndex(byte[] data, int fontIndex)
+        {
+            int offset = stbtt_GetFontOffsetForIndex(data, fontIndex);
+            if (offset < 0 || offset > data.Length - 12) return 0;
+            return InitFont(data, offset);
+        }
 
         internal int InitFont(byte[] data, int fontstart)
 		{
