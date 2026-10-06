@@ -1,3 +1,4 @@
+using PropertyDeltaKind = Prowl.Graphite.Debugger.Trace.PropertyDeltaKind;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
