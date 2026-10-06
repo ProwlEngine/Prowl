@@ -203,7 +203,7 @@ internal static unsafe class VkBarriers
         gd.Counters.RecordBarrier(BarrierBin.TextureTransition);
     }
 
-    public static void Record(
+    public static uint Record(
         VkGraphicsDevice gd,
         Silk.NET.Vulkan.CommandBuffer cb,
         ReadOnlySpan<TextureBarrier> textures,
@@ -247,13 +247,15 @@ internal static unsafe class VkBarriers
         }
 
         if (imageCount == 0 && memoryPtr == null)
-            return;
+            return 0;
 
         Emit(gd, cb, srcStages, dstStages, memoryPtr, imageCount, images);
         if (imageCount > 0)
             gd.Counters.RecordBarrier(BarrierBin.TextureTransition, imageCount);
         if (memoryPtr != null)
             gd.Counters.RecordBarrier(BarrierBin.MemoryBarrier);
+
+        return imageCount + (memoryPtr != null ? 1u : 0u);
     }
 
     private static void BufferScope(VkGraphicsDevice gd, BufferAccess access, out PipelineStageFlags stages, out AccessFlags flags)

@@ -16,11 +16,40 @@ public abstract partial class CommandBuffer
 
     internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, ExecutionId, Pass);
 
+    private uint _statDraws;
+    private uint _statIndirectDraws;
+    private uint _statDispatches;
+    private uint _statShaderSwitches;
+    private uint _statPipelineBinds;
+    private uint _statResourceSetBinds;
+    private uint _statBarriers;
+
+    internal PassStats Stats => new(
+        _statDraws, _statIndirectDraws, _statDispatches, _statShaderSwitches, _statPipelineBinds, _statResourceSetBinds, _statBarriers);
+
+    internal void ResetStats()
+    {
+        _statDraws = 0;
+        _statIndirectDraws = 0;
+        _statDispatches = 0;
+        _statShaderSwitches = 0;
+        _statPipelineBinds = 0;
+        _statResourceSetBinds = 0;
+        _statBarriers = 0;
+    }
+
+    internal void AddBarrierStats(uint count) => _statBarriers += count;
+
     internal void ReportPipelineBind(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
     {
+        _statPipelineBinds++;
         if (Device.CommandProfiler is { } profiler)
             profiler.RecordPipelineBind(ProfilerInfo, new PipelineBindInfo(program, pipelineId, isCompute, outputs, topology));
     }
 
-    internal void RecordResourceSetBind(uint setCount) => Device.Counters.RecordResourceSetBind(setCount);
+    internal void RecordResourceSetBind(uint setCount)
+    {
+        _statResourceSetBinds++;
+        Device.Counters.RecordResourceSetBind(setCount);
+    }
 }

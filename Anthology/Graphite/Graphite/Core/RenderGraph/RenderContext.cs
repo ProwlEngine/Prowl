@@ -224,6 +224,7 @@ public sealed class RenderContext
 
         cb.Execution = _task;
         cb.Pass = _currentPass;
+        cb.ResetStats();
         cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
@@ -239,7 +240,8 @@ public sealed class RenderContext
         if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
             return cb;
 
-        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
+        uint emitted = cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
+        cb.AddBarrierStats(emitted);
         _pendingBufferSrc = BufferAccess.None;
         _pendingBufferDst = BufferAccess.None;
         CommitBarrierStates();

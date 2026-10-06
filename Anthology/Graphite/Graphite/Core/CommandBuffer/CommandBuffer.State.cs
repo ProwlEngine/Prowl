@@ -18,6 +18,7 @@ public abstract partial class CommandBuffer
 
         SetShaderCore(program);
         _shaderProgram = program;
+        _statShaderSwitches++;
 
         if (Device.CommandProfiler is { } profiler)
         {
@@ -39,6 +40,7 @@ public abstract partial class CommandBuffer
         ValidationHelpers.RequireNotNullRender(Device, program, nameof(ComputeProgram), nameof(SetComputeShader));
         if (ReferenceEquals(_computeProgram, program)) return;
 
+        _statShaderSwitches++;
         Device.CommandProfiler?.RecordShaderSwitch(
             ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
 

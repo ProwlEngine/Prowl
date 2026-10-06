@@ -25,6 +25,7 @@ file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStat
     public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
+    public readonly List<PassStats> PassStatsEnded = new();
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
     public readonly List<(CommandBufferInfo info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
@@ -34,7 +35,11 @@ file sealed class RecordingProfiler : ICommandProfiler, IGraphProfiler, IGpuStat
     public void EndView(in ViewInfo view) { }
 
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
-    public void EndPass(in PassInfo pass) => PassesEnded.Add(pass);
+    public void EndPass(in PassInfo pass, in PassStats stats)
+    {
+        PassesEnded.Add(pass);
+        PassStatsEnded.Add(stats);
+    }
     public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
         => PassReads.Add((pass, resource, texture, buffer));
     public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
@@ -85,7 +90,7 @@ file sealed class CorrelationProfiler : IGraphProfiler, IGpuStatsProfiler
     public void BeginView(in ViewInfo view) { lock (_lock) ViewsBegun.Add(view); }
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) { lock (_lock) PassesBegun.Add(pass); }
-    public void EndPass(in PassInfo pass) { }
+    public void EndPass(in PassInfo pass, in PassStats stats) { }
     public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
     public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 
@@ -131,6 +136,63 @@ file sealed class ClearingRasterPass : RasterPass
     }
 }
 
+file sealed class DrawingRasterPass : RasterPass
+{
+    private readonly RenderResourceID _id;
+    private readonly GraphicsProgram _program;
+    private readonly DeviceBuffer _vertices;
+    private readonly DeviceBuffer _indirect;
+
+    public DrawingRasterPass(RenderResourceID id, GraphicsProgram program, DeviceBuffer vertices, DeviceBuffer indirect)
+    {
+        _id = id;
+        _program = program;
+        _vertices = vertices;
+        _indirect = indirect;
+    }
+
+    public override string Name => "ProfilerDraw";
+
+    public override void Setup(RenderContextBuilder builder)
+        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
+
+    public override void Render(RenderContext context, CommandBuffer cmd)
+    {
+        cmd.SetFullViewport();
+        cmd.SetShader(_program);
+        cmd.SetVertexSource(new VertexSource().SetBuffer("POSITION", _vertices));
+        cmd.ClearProperties();
+        cmd.Draw(3);
+        cmd.Draw(3);
+        cmd.Draw(3);
+        cmd.DrawIndirect(_indirect, 0, 1, (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<IndirectDrawArguments>());
+    }
+}
+
+file sealed class DispatchingPass : IPass
+{
+    private readonly ComputeProgram _program;
+    private readonly PropertySet _properties;
+
+    public DispatchingPass(ComputeProgram program, PropertySet properties)
+    {
+        _program = program;
+        _properties = properties;
+    }
+
+    public string Name => "ProfilerDispatch";
+
+    public void Setup(RenderContextBuilder builder) { }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        cmd.SetComputeShader(_program);
+        cmd.SetProperties(_properties);
+        cmd.Dispatch(1, 1, 1);
+        cmd.Dispatch(1, 1, 1);
+    }
+}
+
 file sealed class ReadingCopyPass : IPass
 {
     private readonly RenderResourceID _id;
@@ -162,21 +224,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         _ => throw new NotSupportedException(),
     };
 
-    [Fact]
-    public void Dispatch_RecordsShaderSwitchPipelineBindResourceSetBindAndDispatch()
+    private static ComputeProgram CreateBasicComputeProgram(GraphicsDevice device)
     {
-        RecordingProfiler profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        const uint width = 16;
-        const uint height = 16;
-        const uint count = width * height;
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-
         ShaderStageDescription stage = TestShaderLoader.LoadCompute(device.BackendType, "BasicComputeTest.slang");
         ResourceLayoutDescription[] layouts =
         [
@@ -198,7 +247,46 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
                 ]
             }
         ];
-        ComputeProgram program = device.ResourceFactory.CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
+        return device.ResourceFactory.CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
+    }
+
+    private static GraphicsProgram CreateSinkProgram(GraphicsDevice device)
+    {
+        const uint stride = 52;
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(device.BackendType, "VertexLayoutTestShader.slang");
+        ShaderDescription description = new(stages)
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            VertexLayouts =
+            [
+                new VertexLayoutDescription(0, stride,
+                    new VertexElementDescription("POSITION", VertexElementFormat.Float3),
+                    new VertexElementDescription("COLOR0", VertexElementFormat.Float4),
+                    new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2),
+                    new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
+            ],
+        };
+        return device.ResourceFactory.CreateGraphicsProgram(description);
+    }
+
+    [Fact]
+    public void Dispatch_RecordsShaderSwitchPipelineBindResourceSetBindAndDispatch()
+    {
+        RecordingProfiler profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+
+        const uint width = 16;
+        const uint height = 16;
+        const uint count = width * height;
+
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(
+            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+
+        ComputeProgram program = CreateBasicComputeProgram(device);
 
         PropertySet props = new();
         props.SetInt("Width", (int)width);
@@ -245,22 +333,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         const uint size = 16;
         const uint stride = 52;
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(device.BackendType, "VertexLayoutTestShader.slang");
-        ShaderDescription description = new(stages)
-        {
-            BlendState = BlendStateDescription.SingleOverrideBlend,
-            DepthStencilState = DepthStencilStateDescription.Disabled,
-            RasterizerState = RasterizerStateDescription.CullNone,
-            VertexLayouts =
-            [
-                new VertexLayoutDescription(0, stride,
-                    new VertexElementDescription("POSITION", VertexElementFormat.Float3),
-                    new VertexElementDescription("COLOR0", VertexElementFormat.Float4),
-                    new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2),
-                    new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
-            ],
-        };
-        GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
+        GraphicsProgram program = CreateSinkProgram(device);
 
         DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
         device.UpdateBuffer(vertices, 0, new byte[stride * 3]);
@@ -301,6 +374,58 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(PixelFormat.R32_G32_B32_A32_Float, first.Outputs!.Value.ColorFormats[0]);
         Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, second.Outputs!.Value.ColorFormats[0]);
         Assert.Equal(PrimitiveTopology.TriangleList, first.Topology);
+    }
+
+    [Fact]
+    public void EndPass_ReportsExactPassStats()
+    {
+        RecordingProfiler profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+
+        const uint size = 16;
+        const uint stride = 52;
+        const uint count = size * size;
+
+        GraphicsProgram graphics = CreateSinkProgram(device);
+        ComputeProgram compute = CreateBasicComputeProgram(device);
+
+        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
+        device.UpdateBuffer(vertices, 0, new byte[stride * 3]);
+        DeviceBuffer indirect = device.ResourceFactory.CreateBuffer(new BufferDescription(
+            (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<IndirectDrawArguments>(), BufferUsage.IndirectBuffer));
+        device.UpdateBuffer(indirect, 0, new IndirectDrawArguments { VertexCount = 3, InstanceCount = 1 });
+
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        PropertySet props = new();
+        props.SetInt("Width", (int)size);
+        props.SetInt("Height", (int)size);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
+
+        RenderResourceID id = RenderResourceID.Intern("profiler_pass_stats_target");
+        using RenderPipeline pipeline = new([new DrawingRasterPass(id, graphics, vertices, indirect), new DispatchingPass(compute, props)]);
+
+        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
+        device.WaitForIdle();
+
+        Assert.Equal(new[] { "ProfilerDraw", "ProfilerDispatch" }, profiler.PassesEnded.ConvertAll(p => p.Name));
+
+        PassStats draw = profiler.PassStatsEnded[0];
+        Assert.Equal(3u, draw.Draws);
+        Assert.Equal(1u, draw.IndirectDraws);
+        Assert.Equal(0u, draw.Dispatches);
+        Assert.Equal(1u, draw.ShaderSwitches);
+        Assert.Equal(1u, draw.PipelineBinds);
+        Assert.True(draw.Barriers > 0);
+
+        PassStats dispatch = profiler.PassStatsEnded[1];
+        Assert.Equal(0u, dispatch.Draws);
+        Assert.Equal(0u, dispatch.IndirectDraws);
+        Assert.Equal(2u, dispatch.Dispatches);
+        Assert.Equal(1u, dispatch.ShaderSwitches);
+        Assert.Equal(1u, dispatch.PipelineBinds);
+        Assert.True(dispatch.ResourceSetBinds > 0);
     }
 
     [Fact]

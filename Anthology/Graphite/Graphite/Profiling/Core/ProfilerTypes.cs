@@ -43,6 +43,16 @@ public readonly struct PassInfo
     }
 }
 
+/// <summary>Work one pass command buffer recorded. Draws counts direct draw calls, IndirectDraws indirect ones.</summary>
+public readonly record struct PassStats(
+    uint Draws,
+    uint IndirectDraws,
+    uint Dispatches,
+    uint ShaderSwitches,
+    uint PipelineBinds,
+    uint ResourceSetBinds,
+    uint Barriers);
+
 public enum DrawKind { Draw, DrawIndexed, DrawIndirect, DrawIndexedIndirect }
 
 public readonly struct DrawCallInfo

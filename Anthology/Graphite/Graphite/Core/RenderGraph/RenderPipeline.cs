@@ -88,10 +88,11 @@ public class RenderPipeline : IDisposable
                 CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
                 context.BindDeclaredTarget(passCommands, node.Accesses);
                 node.Pass.Render(context, passCommands);
+                PassStats stats = passCommands.Stats;
                 context.EndCommandBuffer(passCommands);
                 context.SetCurrentPass(null);
 
-                profiler?.EndPass(passInfo);
+                profiler?.EndPass(passInfo, stats);
                 if (profiler != null)
                 {
                     foreach (RenderResourceID output in outputs)

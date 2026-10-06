@@ -21,7 +21,7 @@ public interface IGraphProfiler : IProfiler
     void BeginView(in ViewInfo view);
     void EndView(in ViewInfo view);
     void BeginPass(in PassInfo pass);
-    void EndPass(in PassInfo pass);
+    void EndPass(in PassInfo pass, in PassStats stats);
     void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer);
     void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer);
 }
