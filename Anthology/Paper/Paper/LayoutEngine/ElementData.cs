@@ -125,6 +125,8 @@ public struct ElementData
     internal ElementStyle _elementStyle;
     internal bool _scissorEnabled;
     internal bool _clampToScreen;
+    /// <summary>Raised layers inside this element stay inside it. See ElementBuilder.IsolateLayers.</summary>
+    internal bool _isolateLayers;
 
     // Transforms, computed once per frame after layout by Paper.ComputeTransforms. Rendering and
     // culling want the element's own transform; hit testing wants the accumulated one and its
@@ -226,6 +228,7 @@ public struct ElementData
             _elementStyle = null,
             _scissorEnabled = false,
             _clampToScreen = false,
+            _isolateLayers = false,
             // Default to Layer.Base (0). Fully qualified because the RHS shadows the LHS
             // field name in an object initializer when the type is a static class.
             Layer = PaperUI.Layer.Base,

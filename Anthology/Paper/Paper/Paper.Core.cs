@@ -271,29 +271,7 @@ namespace Prowl.PaperUI
             var deferred = _deferredRender;
             deferred.Clear();
             RenderElement(_rootElementHandle, Layer.Base, deferred);
-
-            while (deferred.Count > 0)
-            {
-                // SortedDictionary keeps keys ascending, so the first is the lowest layer. foreach uses the
-                // struct enumerator (no allocation), unlike LINQ .Keys.First().
-                int nextLayer = 0;
-                foreach (var k in deferred.Keys) { nextLayer = k; break; }
-                var list = deferred[nextLayer];
-                deferred.Remove(nextLayer);
-
-                foreach (var (handle, transform, alpha) in list)
-                {
-                    _canvas.SaveState();
-                    _canvas.CurrentTransform(transform);
-                    _canvas.SetGlobalAlpha(alpha);
-                    RenderElement(handle, nextLayer, deferred);
-                    _canvas.SetGlobalAlpha(1f);
-                    _canvas.RestoreState();
-                }
-
-                list.Clear();
-                _deferredBucketPool.Push(list);
-            }
+            DrainDeferred(deferred);
             __t = _devTools.Phase("Render", __t);
 
             // Update stats
@@ -316,6 +294,39 @@ namespace Prowl.PaperUI
             // Capture snapshot + stats for next frame's DevTools panels.
             _devTools.OnEndFrameEnd();
         }
+
+        /// <summary>
+        /// Renders deferred elements lowest layer first. Each captured the transform and alpha it was
+        /// reached with, so it draws where it would have inline, only later.
+        /// </summary>
+        private void DrainDeferred(SortedDictionary<int, List<(ElementHandle handle, Transform2D transform, float alpha)>> deferred)
+        {
+            float enclosingAlpha = _canvas.GlobalAlpha;
+            while (deferred.Count > 0)
+            {
+                // SortedDictionary keeps keys ascending, so the first is the lowest layer. foreach uses the
+                // struct enumerator (no allocation), unlike LINQ .Keys.First().
+                int nextLayer = 0;
+                foreach (var k in deferred.Keys) { nextLayer = k; break; }
+                var list = deferred[nextLayer];
+                deferred.Remove(nextLayer);
+
+                foreach (var (handle, transform, alpha) in list)
+                {
+                    _canvas.SaveState();
+                    _canvas.CurrentTransform(transform);
+                    _canvas.SetGlobalAlpha(alpha);
+                    RenderElement(handle, nextLayer, deferred);
+                    _canvas.SetGlobalAlpha(enclosingAlpha);
+                    _canvas.RestoreState();
+                }
+
+                list.Clear();
+                _deferredBucketPool.Push(list);
+            }
+        }
+
+        private readonly Stack<SortedDictionary<int, List<(ElementHandle handle, Transform2D transform, float alpha)>>> _isolatedDeferredPool = new();
 
         /// <summary>
         /// Calls post-layout callbacks for an element and its children.
@@ -388,7 +399,7 @@ namespace Prowl.PaperUI
             }
 
             float opacity = data._elementStyle.GetOpacity();
-            if (opacity >= 1f)
+            if (!(opacity < 1f))
             {
                 RenderElementBody(handle, currentLayer, deferred);
                 return;
@@ -595,11 +606,22 @@ namespace Prowl.PaperUI
                 }
             }
 
-            // Draw children
-            foreach (var childIndex in data.ChildIndices)
+            // Draw children. An isolating element drains its own raised layers here, inside its clip.
+            if (data._isolateLayers)
             {
-                var child = new ElementHandle(this, childIndex);
-                RenderElement(child, currentLayer, deferred);
+                var local = _isolatedDeferredPool.Count > 0 ? _isolatedDeferredPool.Pop() : new SortedDictionary<int, List<(ElementHandle handle, Transform2D transform, float alpha)>>();
+                foreach (var childIndex in data.ChildIndices)
+                    RenderElement(new ElementHandle(this, childIndex), Layer.Base, local);
+                DrainDeferred(local);
+                _isolatedDeferredPool.Push(local);
+            }
+            else
+            {
+                foreach (var childIndex in data.ChildIndices)
+                {
+                    var child = new ElementHandle(this, childIndex);
+                    RenderElement(child, currentLayer, deferred);
+                }
             }
 
             // Process foreground render actions (after children)
@@ -717,7 +739,7 @@ namespace Prowl.PaperUI
 
             data._cullMinX = minX; data._cullMinY = minY;
             data._cullMaxX = maxX; data._cullMaxY = maxY;
-            data._cullHasLayerBreakout = breakout;
+            data._cullHasLayerBreakout = breakout && !data._isolateLayers;
 
             return new Rect(minX, minY, maxX, maxY);
         }
