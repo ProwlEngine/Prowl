@@ -108,11 +108,6 @@ internal unsafe partial class VkCommandBuffer
 
         if (_hasResolvedPipeline && _resolvedTopology == srcTopology) return;
 
-        if (_currentShaderProgram == null || _currentFramebuffer == null)
-        {
-            throw new RenderException("Cannot draw: no graphics GraphicsProgram or Framebuffer bound.");
-        }
-
         VkPipelineCacheKey key = new(_framebufferOutputs!.Value, srcTopology);
 
         _currentResolvedPipeline = _currentShaderProgram.GetOrAddPipeline(in key);

@@ -13,7 +13,7 @@ public abstract partial class CommandBuffer
     /// <param name="instanceStart">First instance.</param>
     public void Draw(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
-        Draw_PreDrawValidation();
+        Draw_CheckBoundState();
         DrawCore(vertexCount, instanceCount, vertexStart, instanceStart);
 
         _statDraws++;
@@ -34,13 +34,39 @@ public abstract partial class CommandBuffer
     public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         DrawIndexed_CheckIndexBuffer(indexStart);
-        Draw_PreDrawValidation();
+        Draw_CheckBoundState();
 
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
 
         _statDraws++;
         Device.CommandProfiler?.RecordDraw(
             ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
+    }
+
+    private void Draw_CheckBoundState()
+    {
+        if (_shaderProgram == null)
+        {
+            throw new RenderException($"A graphics GraphicsProgram must be set in order to issue draw commands.");
+        }
+        if (_framebuffer == null)
+        {
+            throw new RenderException($"A {nameof(Framebuffer)} must be set in order to issue draw commands.");
+        }
+        if (_currentVertexSource == null)
+        {
+            throw new RenderException(
+                "An IVertexSource must be set via SetVertexSource before issuing draw commands. " +
+                "Bind an empty IVertexSource implementation if no vertex data is required.");
+        }
+    }
+
+    private void Dispatch_CheckBoundState()
+    {
+        if (_computeProgram == null)
+        {
+            throw new RenderException("A ComputeProgram must be set via SetComputeShader in order to issue dispatch commands.");
+        }
     }
 
     private protected static void DrawIndexed_CheckIndexBufferResolved(bool resolved)
@@ -98,7 +124,7 @@ public abstract partial class CommandBuffer
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawArguments));
-        Draw_PreDrawValidation();
+        Draw_CheckBoundState();
 
         DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
 
@@ -126,7 +152,7 @@ public abstract partial class CommandBuffer
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawIndexedArguments));
         DrawIndexedIndirect_CheckIndexBuffer();
-        Draw_PreDrawValidation();
+        Draw_CheckBoundState();
 
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
 
@@ -149,6 +175,7 @@ public abstract partial class CommandBuffer
     /// <param name="groupCountZ">Thread group count Z.</param>
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
+        Dispatch_CheckBoundState();
         DispatchCore(groupCountX, groupCountY, groupCountZ);
 
         _statDispatches++;
@@ -165,6 +192,7 @@ public abstract partial class CommandBuffer
     {
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
+        Dispatch_CheckBoundState();
         DispatchIndirectCore(indirectBuffer, offset);
 
         _statDispatches++;

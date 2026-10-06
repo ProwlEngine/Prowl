@@ -137,25 +137,4 @@ public abstract partial class CommandBuffer
                 $"The {nameof(destination)} parameter of {nameof(ResolveTexture)} must be a non-multisample texture. Instead, it is a texture with {FormatHelpers.GetSampleCountUInt32(source.SampleCount)} samples.");
         }
     }
-
-    private void Draw_PreDrawValidation()
-    {
-        if (!Device.ValidationEnabled)
-            return;
-
-        if (_shaderProgram == null)
-        {
-            throw new RenderException($"A graphics GraphicsProgram must be set in order to issue draw commands.");
-        }
-        if (_framebuffer == null)
-        {
-            throw new RenderException($"A {nameof(Framebuffer)} must be set in order to issue draw commands.");
-        }
-        if (_currentVertexSource == null)
-        {
-            throw new RenderException(
-                "An IVertexSource must be set via SetVertexSource before issuing draw commands. " +
-                "Bind an empty IVertexSource implementation if no vertex data is required.");
-        }
-    }
 }
