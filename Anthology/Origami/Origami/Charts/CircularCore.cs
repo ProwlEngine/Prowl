@@ -43,7 +43,6 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
     private Func<T, double>? _valueSelector;
 
     private bool _tooltip = true;
-    private Func<double, string>? _valueFormatter;
 
     private Func<T, int, Color>? _colorFunction;
 
@@ -77,8 +76,6 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
     /// <summary>Show a readout beside the pointer for the hovered slice. On by default: a wedge carries
     /// no axis to read its value off.</summary>
     public TSelf Tooltip(bool show = true) { _tooltip = show; return Self; }
-
-    public TSelf ValueFormatter(Func<double, string> formatter) { _valueFormatter = formatter; return Self; }
 
     // --- Presentation ---
 
@@ -121,7 +118,7 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
         for (int ordinal = 0; ordinal < slices.Count; ordinal++)
         {
             CircularSlice<T> slice = slices[ordinal];
-            slice.Color = _colorFunction != null ? _colorFunction(slice.Payload!, slice.Index) : DefaultSliceColor(ordinal);
+            slice.Color = _colorFunction != null ? _colorFunction(slice.Payload!, slice.Index) : RampColor(ordinal);
             if (LegendListsSlices)
                 slice.LegendHidden = IsLegendHidden(slice.Index);
         }
@@ -134,23 +131,6 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
             slice.Fraction = magnitude > 0d && slice.Visible ? Math.Abs(slice.Value) / magnitude : 0d;
 
         return slices;
-    }
-
-    /// <summary>Colour of the slice at <paramref name="ordinal"/> when no <see cref="ColorFunction"/> is
-    /// set: the active variant's ramp walked in a high-contrast order and wrapped every seven slices.</summary>
-    protected Color DefaultSliceColor(int ordinal)
-    {
-        OrigamiRamp ramp = Ramp;
-        return (ordinal % 7) switch
-        {
-            0 => ramp.C500,
-            1 => ramp.C300,
-            2 => ramp.C700,
-            3 => ramp.C400,
-            4 => ramp.C600,
-            5 => ramp.C200,
-            _ => ramp.C100,
-        };
     }
 
     private static double VisibleTotal(IReadOnlyList<CircularSlice<T>> slices)
@@ -182,7 +162,7 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
         var entries = new List<LegendEntry>(slices.Count);
         foreach (CircularSlice<T> slice in slices)
         {
-            string? valueText = LegendShowValueEnabled ? Format(slice.Value) : null;
+            string? valueText = LegendShowValueEnabled ? FormatValue(slice.Value) : null;
             entries.Add(new LegendEntry(
                 slice.Label.Length > 0 ? slice.Label : "Slice " + slice.Index,
                 slice.Color, slice.Index, valueText, slice.LegendHidden));
@@ -194,12 +174,6 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
     /// legend is not interactive. Exposed under this name for chart types (Radar) whose keys refer to
     /// something other than a slice.</summary>
     protected bool IsHidden(int key) => IsLegendHidden(key);
-
-    /// <summary>Formats a value the way this chart's legend, labels and tooltip do, honouring
-    /// <see cref="ValueFormatter"/>.</summary>
-    protected string FormatValue(double v) => Format(v);
-
-    private string Format(double v) => _valueFormatter != null ? _valueFormatter(v) : v.ToString("0.###");
 
     // --- Geometry context ---
 
@@ -305,9 +279,7 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
     {
         if (slices.Count == 0 || (RequiresPositiveTotal && VisibleMagnitude(slices) <= 0d))
         {
-            using (_paper.Row(_id + "_chart_empty_wrap").Enter())
-                Origami.Label(_paper, _id + "_chart_empty", EmptyLabelText).LG().Show();
-
+            DrawEmpty();
             return;
         }
 
@@ -375,7 +347,7 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
             if (!slice.Visible || slice.Fraction < MinLabelFraction) continue;
 
             string text = slice.Label;
-            if (_showValues) text += " " + Format(slice.Value);
+            if (_showValues) text += " " + FormatValue(slice.Value);
             if (_showPercent) text += " (" + (slice.Fraction * 100d).ToString("0.#") + "%)";
             if (text.Length == 0) continue;
 
@@ -401,70 +373,16 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
     {
         CircularSlice<T> slice = ctx.Slices[ordinal];
 
-        var rows = new List<(Color Color, string Text)> { (slice.Color, Format(slice.Value)) };
+        var rows = new List<(Color Color, string Text)> { (slice.Color, FormatValue(slice.Value)) };
         if (_showPercent)
             rows.Add((slice.Color, (slice.Fraction * 100d).ToString("0.#") + "%"));
 
         CircularTooltip(_paper, in ctx, anchor, slice.Label.Length > 0 ? slice.Label : "Slice " + slice.Index, rows);
     }
 
-    /// <summary>Readout panel anchored beside <paramref name="anchor"/>, in the same plot-local pixels the
-    /// overlay pass works in. It flips to the other side of the anchor when it would overhang the plot's
-    /// right edge, using the width it laid out at on the previous frame.</summary>
     protected void CircularTooltip(Paper paper, in CircularContext ctx, Float2 anchor, string header,
         IReadOnlyList<(Color Color, string Text)> rows)
-    {
-        if (header.Length == 0 && rows.Count == 0) return;
-
-        string widthKey = _id + "_tooltip_w";
-        float lastWidth = paper.GetRootStorage<float>(widthKey);
-
-        float x = anchor.X + TooltipGap;
-        if (lastWidth > 0f && x + lastWidth > ctx.PlotR)
-            x = MathF.Max(ctx.PlotL, anchor.X - TooltipGap - lastWidth);
-
-        float y = Math.Clamp(anchor.Y + TooltipGap, ctx.PlotT, ctx.PlotB);
-
-        ElementBuilder popup = paper.Column(_id + "_tooltip")
-            .PositionType(PositionType.SelfDirected)
-            .Position(x, y)
-            .Size(UnitValue.Auto)
-            .BackgroundColor(_theme.Popover)
-            .BorderColor(_theme.BorderStrong).BorderWidth(1f)
-            .Rounded(6f)
-            .Padding(6f)
-            .Gap(6f)
-            .Layer(Layer.Topmost + 1000)
-            .OnPostLayout((_, rect) => paper.SetRootStorage(widthKey, (float)rect.Size.X));
-
-        using (popup.Enter())
-        {
-            if (header.Length > 0)
-                Origami.Label(paper, $"{_id}_tooltip_hdr", header)
-                    .XS()
-                    .AlignCenter()
-                    .AlignLeft()
-                    .Height(SwatchSize)
-                    .Show();
-
-            for (int i = 0; i < rows.Count; i++)
-            {
-                (Color color, string text) = rows[i];
-
-                using (paper.Row($"{_id}_tooltip_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).Gap(2f).Enter())
-                {
-                    paper.Box($"{_id}_tooltip_sw_{i}").Size(SwatchSize).BackgroundColor(color).Rounded(2f);
-
-                    Origami.Label(paper, $"{_id}_tooltip_txt_{i}", text)
-                        .XS()
-                        .AlignCenter()
-                        .AlignLeft()
-                        .Height(SwatchSize)
-                        .Show();
-                }
-            }
-        }
-    }
+        => Popup(anchor.X, Math.Clamp(anchor.Y + 8f, ctx.PlotT, ctx.PlotB), ctx.PlotL, ctx.PlotR, header, rows);
 
     // --- Canvas helpers ---
 

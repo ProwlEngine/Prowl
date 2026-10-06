@@ -228,8 +228,6 @@ public readonly struct BandSlots
 /// </summary>
 public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf : CartesianCore<TSelf, T>
 {
-    private Color? _backgroundColor;
-
     private List<CartesianSeries<T>>? _resolvedCache;
 
     private readonly List<CartesianSeries<T>> _series = new();
@@ -245,7 +243,6 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
     private bool _includeZero = true;
     private AxisScale _scale = AxisScale.Linear;
     private int _yTicks = 4;
-    private Func<double, string>? _valueFormatter;
     private Func<int, string>? _xTickFormatter;
     private int _xTicks = -1;
     private string _xLabel = "";
@@ -270,15 +267,6 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
         : base(paper, id, theme, data) { }
 
     private TSelf Self => (TSelf)this;
-
-    // ── Chrome ──────────────────────────────────────────────────
-
-    public TSelf BackgroundColor(Color color) { _backgroundColor = color; return Self; }
-
-    protected override void DecorateContainer(ElementBuilder container)
-    {
-        if (_backgroundColor.HasValue) container.BackgroundColor(_backgroundColor.Value);
-    }
 
     // ── Data ────────────────────────────────────────────────────
 
@@ -388,7 +376,6 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
     public TSelf Scale(AxisScale scale) { _scale = scale; return Self; }
     public TSelf YTicks(int count) { _yTicks = Math.Max(2, count); return Self; }
 
-    public TSelf ValueFormatter(Func<double, string> formatter) { _valueFormatter = formatter; return Self; }
     public TSelf XTickFormatter(Func<int, string> formatter) { _xTickFormatter = formatter; return Self; }
     public TSelf XTicks(int count) { _xTicks = Math.Max(1, count); return Self; }
     public TSelf XLabel(string text) { _xLabel = text ?? ""; return Self; }
@@ -551,7 +538,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
         foreach (double v in tickVals)
         {
             double pos = (v - yMin) / span;
-            result.Add(new AxisTick(pos, v, Format(v)));
+            result.Add(new AxisTick(pos, v, FormatValue(v)));
         }
         return result;
     }
@@ -641,7 +628,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
         for (int i = 0; i < resolved.Count; i++)
         {
             CartesianSeries<T> s = resolved[i];
-            string? valueText = LegendShowValueEnabled && s.Points.Count > 0 ? Format(s.Points[^1].Y) : null;
+            string? valueText = LegendShowValueEnabled && s.Points.Count > 0 ? FormatValue(s.Points[^1].Y) : null;
             entries.Add(new LegendEntry(s.Label, s.Color ?? System.Drawing.Color.Gray, i, valueText, s.LegendHidden));
         }
         return entries;
@@ -657,9 +644,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
     {
         if (series.Count == 0 || !series.Any(x => x.Points.Count != 0))
         {
-            using (_paper.Row(_id + "_chart_empty_wrap").Enter())
-                Origami.Label(_paper, _id + "_chart_empty", EmptyLabelText).LG().Show();
-
+            DrawEmpty();
             return;
         }
 
@@ -1152,8 +1137,6 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
         return ticks;
     }
 
-    private string Format(double v) => _valueFormatter != null ? _valueFormatter(v) : v.ToString("0.###");
-
     private void PaintChart(Canvas canvas, Rect rect, in PlotContext<T> ctx, int maxN)
     {
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
@@ -1285,10 +1268,6 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
     /// <summary>Colour of the sampler's crosshair and band highlight.</summary>
     protected Color SampleColor => _sampleLineColor ?? _theme.Ink.C500;
 
-    /// <summary>Formats a value the way this chart's axis labels and legend do, honouring
-    /// <see cref="ValueFormatter"/>.</summary>
-    protected string FormatValue(double v) => Format(v);
-
     /// <summary>Label for the sampled index, from <see cref="XTickFormatter"/> if one is set. This is
     /// what a sampler popup uses as its header.</summary>
     protected string SampleHeader(int index) => _xTickFormatter != null ? (_xTickFormatter(index) ?? "") : $"Index {index}";
@@ -1357,61 +1336,6 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
             .BorderColor(color).BorderWidth(1.5f);
     }
 
-    /// <summary>Readout panel listing the sampled values, anchored beside <paramref name="anchorX"/>.
-    /// It flips to the other side of the anchor when it would overhang the plot's right edge, using the
-    /// width it laid out at on the previous frame.</summary>
     protected void SamplePopup(Paper paper, in SampleContext<T> ctx, float anchorX, string header, IReadOnlyList<(Color Color, string Text)> rows)
-    {
-        if (header.Length == 0 && rows.Count == 0) return;
-
-        string widthKey = _id + "_sampler_popup_w";
-        float lastWidth = paper.GetRootStorage<float>(widthKey);
-
-        float x = anchorX + SamplePopupGap;
-        if (lastWidth > 0f && x + lastWidth > ctx.PlotR)
-            x = MathF.Max(ctx.PlotL, anchorX - SamplePopupGap - lastWidth);
-
-        ElementBuilder popup = paper.Column(_id + "_sampler_popup")
-            .PositionType(PositionType.SelfDirected)
-            .Position(x, ctx.PlotT)
-            .Size(UnitValue.Auto)
-            .BackgroundColor(_theme.Popover)
-            .BorderColor(_theme.BorderStrong).BorderWidth(1f)
-            .Rounded(6f)
-            .Padding(6f)
-            .Gap(6f)
-
-            .Layer(Layer.Topmost + 1000)
-            .OnPostLayout((_, rect) => paper.SetRootStorage(widthKey, (float)rect.Size.X));
-
-        using (popup.Enter())
-        {
-            if (header.Length > 0)
-                Origami.Label(paper, $"{_id}_sampler_hdr", header)
-                    .XS()
-                    .AlignCenter()
-                    .AlignLeft()
-                    .Height(SwatchSize)
-                    .Show();
-
-            for (int i = 0; i < rows.Count; i++)
-            {
-                (Color color, string text) = rows[i];
-
-                using (paper.Row($"{_id}_sampler_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).Gap(2f).Enter())
-                {
-                    paper.Box($"{_id}_sampler_sw_{i}").Size(SwatchSize).BackgroundColor(color).Rounded(2f);
-
-                    Origami.Label(paper, $"{_id}_sampler_txt_{i}", text)
-                        .XS()
-                        .AlignCenter()
-                        .AlignLeft()
-                        .Height(SwatchSize)
-                        .Show();
-                }
-            }
-        }
-    }
-
-    private const float SamplePopupGap = 8f;
+        => Popup(anchorX, ctx.PlotT, ctx.PlotL, ctx.PlotR, header, rows);
 }

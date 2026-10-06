@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -14,13 +16,8 @@ using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
-/// <summary>
-/// Shared implementation behind the Cartesian and Circular chart families. Owns the outer box, title
-/// header, and legend column - identical across every chart type regardless of geometry - plus the data
-/// set passed at construction and the generic legend-driven hidden/visible state every subtype's series,
-/// slices or nodes are filtered against. A subtype supplies only its own legend rows (<see cref="BuildLegendEntries"/>)
-/// and its own geometry, painted into the plot area this hands it (<see cref="DrawPlot"/>).
-/// </summary>
+/// <summary>Shared chrome for every chart: outer box, title, legend, value formatting, tooltip popup and
+/// zoom/pan view state. A subtype supplies its legend rows and draws its plot.</summary>
 public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
 {
     protected readonly Paper _paper;
@@ -29,13 +26,13 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
     protected readonly IReadOnlyList<T>? _data;
 
     private string _title = "";
-
     private UnitValue _width = UnitValue.Stretch();
     private UnitValue _height = UnitValue.Pixels(220f);
-    private float _padding = 0f;
-
+    private float _padding;
     private OrigamiVariant _variant = OrigamiVariant.Primary;
     private string _emptyLabel = "No data";
+    private Color? _backgroundColor;
+    private Func<double, string>? _valueFormatter;
 
     private bool _legend = true;
     private bool _legendShowValue = true;
@@ -44,14 +41,17 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
 
     private ElementHandle _containerEl;
 
-    /// <summary>The outer chart container, valid from the top of <see cref="Show"/> onward. A subtype
-    /// keys its own per-instance state (view rect, sample position, ...) off this, kept separate from the
-    /// legend's hidden-key storage above.</summary>
-    protected ElementHandle ContainerEl => _containerEl;
-
-    private const string HiddenKeyPrefix = "chartcore_hidden_";
+    private const string HiddenKeyPrefix = "chart_hidden_";
+    private const string ViewKey = "chart_view";
+    private const string ViewActiveKey = "chart_view_active";
+    private const string ViewSizeKey = "chart_view_size";
+    private const string PointerKey = "chart_pointer";
+    private const string PointerOnKey = "chart_pointer_on";
     private const float LegendWidth = 125f;
     private const float SwatchSize = 12f;
+    private const float PopupGap = 8f;
+    private const float MinViewSpan = 0.005f;
+    private const float ZoomRate = 0.14f;
 
     protected ChartCore(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data = null)
     {
@@ -63,15 +63,11 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
 
     private TSelf Self => (TSelf)this;
 
-    // ── Chrome ──────────────────────────────────────────────────
-
+    /// <summary>Header text. The header row is hidden when empty.</summary>
     public TSelf Title(string text) { _title = text ?? ""; return Self; }
 
-    public TSelf Width(float width) { _width = MathF.Max(32f, width); return Self; }
     public TSelf Width(UnitValue width) { _width = width; return Self; }
-    public TSelf Height(float height) { _height = MathF.Max(32f, height); return Self; }
     public TSelf Height(UnitValue height) { _height = height; return Self; }
-    public TSelf Size(float width, float height) { _width = MathF.Max(32f, width); _height = MathF.Max(32f, height); return Self; }
     public TSelf Size(UnitValue width, UnitValue height) { _width = width; _height = height; return Self; }
     public TSelf Padding(float padding) { _padding = MathF.Max(0f, padding); return Self; }
 
@@ -83,42 +79,23 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
     public TSelf Info() => Variant(OrigamiVariant.Info);
 
     public TSelf EmptyLabel(string text) { _emptyLabel = text ?? "No data"; return Self; }
-
-    /// <summary>The active variant's colour ramp, which is where a subtype's default series/slice colours
-    /// and its own accent colour come from.</summary>
-    protected OrigamiRamp Ramp => _theme.Get(_variant);
-
-    /// <summary>Text shown centred in the chart box in place of geometry when a subtype has nothing to
-    /// draw. Set via <see cref="EmptyLabel"/>.</summary>
-    protected string EmptyLabelText => _emptyLabel;
-
-    /// <summary>Padding passed to <see cref="Padding"/>. A subtype's plot area is already inset by this
-    /// through the container itself; exposed for pieces (e.g. a legend's own top padding) that need to
-    /// line up with it explicitly.</summary>
-    protected float PaddingValue => _padding;
-
-    // ── Legend ──────────────────────────────────────────────────
+    public TSelf BackgroundColor(Color color) { _backgroundColor = color; return Self; }
+    public TSelf ValueFormatter(Func<double, string> formatter) { _valueFormatter = formatter; return Self; }
 
     public TSelf Legend(bool show = true) { _legend = show; return Self; }
     public TSelf LegendShowValue(bool show = true) { _legendShowValue = show; return Self; }
-
-    /// <summary>Font size, in pixels, of the legend's labels. Unset uses the theme's XS size.</summary>
     public TSelf LegendFontSize(float size) { _legendFontSize = MathF.Max(1f, size); return Self; }
 
     /// <summary>Let a click on a legend swatch hide and show what it represents. Also gated globally by
     /// <see cref="Origami.LegendSelectionEnabled"/>.</summary>
     public TSelf LegendInteractive(bool interactive) { _legendInteractive = interactive; return Self; }
 
-    /// <summary>Whether the caller asked for value text next to each legend label. A subtype's
-    /// <see cref="BuildLegendEntries"/> reads this to decide whether to populate <see cref="LegendEntry.ValueText"/>.</summary>
+    protected ElementHandle ContainerEl => _containerEl;
+    protected OrigamiRamp Ramp => _theme.Get(_variant);
+    protected float PaddingValue => _padding;
     protected bool LegendShowValueEnabled => _legendShowValue;
-
-    /// <summary>Whether legend interaction is both requested on this instance and not killed globally.</summary>
     protected bool LegendInteractiveActive => _legendInteractive && Origami.LegendSelectionEnabled;
 
-    /// <summary>Whether the legend entry keyed <paramref name="key"/> is currently hidden. Always false
-    /// while <see cref="LegendInteractiveActive"/> is off, so turning off the global kill switch
-    /// immediately reveals everything even though the stored toggle survives underneath it.</summary>
     protected bool IsLegendHidden(int key)
         => LegendInteractiveActive && _containerEl.IsValid && _paper.GetElementStorage(_containerEl, HiddenKeyPrefix + key, false);
 
@@ -129,24 +106,36 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
         _paper.SetElementStorage(_containerEl, HiddenKeyPrefix + key, hidden);
     }
 
-    // ── Type hooks ──────────────────────────────────────────────
+    protected string FormatValue(double v) => _valueFormatter != null ? _valueFormatter(v) : v.ToString("0.###");
 
-    /// <summary>Called once at the top of <see cref="Show"/>, before any data is resolved.</summary>
+    protected Color RampColor(int ordinal, int depth = 0)
+    {
+        int stop = (ordinal % 7) switch { 0 => 5, 1 => 3, 2 => 7, 3 => 4, 4 => 6, 5 => 2, _ => 1 };
+        stop = ((stop - 1 + Math.Max(0, depth)) % 7) + 1;
+
+        OrigamiRamp ramp = Ramp;
+        return stop switch
+        {
+            1 => ramp.C100,
+            2 => ramp.C200,
+            3 => ramp.C300,
+            4 => ramp.C400,
+            5 => ramp.C500,
+            6 => ramp.C600,
+            _ => ramp.C700,
+        };
+    }
+
+    protected static Color32 ToC32(Color c, float alpha = 1f)
+        => new(c.R, c.G, c.B, (byte)Math.Clamp(c.A * alpha, 0f, 255f));
+
+    protected static bool IsFinite(double v) => double.IsFinite(v);
+
     protected virtual void OnBeforeShow() { }
 
-    /// <summary>This chart's legend rows for the current data, in draw order. Called every frame
-    /// regardless of whether the legend is shown, since a subtype's <see cref="DrawPlot"/> is expected to
-    /// resolve and cache its series/slices/nodes here rather than a second time. Each entry's
-    /// <see cref="LegendEntry.Hidden"/> should come from <see cref="IsLegendHidden"/> on that entry's key.</summary>
     protected abstract IReadOnlyList<LegendEntry> BuildLegendEntries();
 
-    /// <summary>Draw everything past the legend divider: gutters, ticks, grid and marks for a Cartesian
-    /// type, or the plot circle and its chrome for a Circular type. Called as a direct child of the same
-    /// row the legend column sits in, so this is free to enter its own Column/Box occupying the rest of
-    /// that row.</summary>
     protected abstract void DrawPlot();
-
-    // ── Show ────────────────────────────────────────────────────
 
     public void Show()
     {
@@ -158,16 +147,19 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
             .BorderColor(_theme.BorderSoft).BorderWidth(1f)
             .Padding(_padding);
 
-        DecorateContainer(container);
+        if (_backgroundColor.HasValue) container.BackgroundColor(_backgroundColor.Value);
 
         using (container.Enter())
         {
             _containerEl = _paper.CurrentParent;
 
-            using (_paper.Row(_id + "_chart_header").Height(20).Enter())
-                Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
+            if (_title.Length > 0)
+            {
+                using (_paper.Row(_id + "_chart_header").Height(20).Enter())
+                    Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
 
-            _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);
+                _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);
+            }
 
             using (_paper.Row(_id + "_chart_col_split").Enter())
             {
@@ -195,10 +187,168 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
         }
     }
 
-    /// <summary>Hook for a subtype to add chrome to the outer container beyond what every chart shares,
-    /// such as Cartesian's <c>.BackgroundColor(...)</c>. No-op by default.</summary>
-    protected virtual void DecorateContainer(ElementBuilder container) { }
+    protected void DrawEmpty()
+    {
+        using (_paper.Row(_id + "_chart_empty_wrap").Enter())
+            Origami.Label(_paper, _id + "_chart_empty", _emptyLabel).LG().Show();
+    }
 
-    protected static Color32 ToC32(Color c) => new Color32(c.R, c.G, c.B, c.A);
-    protected static Color32 ToC32(Color c, float alpha) => new Color32(c.R, c.G, c.B, (byte)Math.Clamp(c.A * alpha, 0f, 255f));
+    protected float TextSize => _theme.Metrics.FontSize - 2f;
+
+    protected Float2 MeasureText(Canvas canvas, string text)
+        => _theme.Font == null || text.Length == 0 ? new Float2(0f, 0f) : canvas.MeasureText(text, TextSize, _theme.Font);
+
+    protected void DrawText(Canvas canvas, string text, float x, float y, float originX, float originY, Color? color = null)
+    {
+        if (_theme.Font == null || text.Length == 0) return;
+        canvas.DrawText(text, x, y, ToC32(color ?? _theme.Ink.C400), TextSize, _theme.Font, 0f, new Float2(originX, originY));
+    }
+
+    protected string FitText(Canvas canvas, string text, float maxWidth)
+    {
+        if (MeasureText(canvas, text).X <= maxWidth) return text;
+
+        int lo = 0, hi = text.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) / 2;
+            if (MeasureText(canvas, text[..mid] + "...").X <= maxWidth) lo = mid;
+            else hi = mid - 1;
+        }
+        return lo == 0 ? "" : text[..lo] + "...";
+    }
+
+    protected void TrackPointer(ElementBuilder plotBox, ElementHandle plotEl)
+    {
+        plotBox.OnHover(e =>
+        {
+            _paper.SetElementStorage(plotEl, PointerKey, e.RelativePosition);
+            _paper.SetElementStorage(plotEl, PointerOnKey, true);
+        });
+        plotBox.OnLeave(_ => _paper.SetElementStorage(plotEl, PointerOnKey, false));
+    }
+
+    protected bool TryGetPointer(ElementHandle plotEl, out Float2 pointer)
+    {
+        pointer = _paper.GetElementStorage(plotEl, PointerKey, new Float2(0f, 0f));
+        return _paper.GetElementStorage(plotEl, PointerOnKey, false);
+    }
+
+    protected void Popup(float anchorX, float y, float minX, float maxX, string header, IReadOnlyList<(Color Color, string Text)> rows)
+    {
+        if (header.Length == 0 && rows.Count == 0) return;
+
+        string widthKey = _id + "_popup_w";
+        float lastWidth = _paper.GetRootStorage<float>(widthKey);
+
+        float x = anchorX + PopupGap;
+        if (lastWidth > 0f && x + lastWidth > maxX)
+            x = MathF.Max(minX, anchorX - PopupGap - lastWidth);
+
+        ElementBuilder popup = _paper.Column(_id + "_popup")
+            .PositionType(PositionType.SelfDirected)
+            .Position(x, y)
+            .Size(UnitValue.Auto)
+            .BackgroundColor(_theme.Popover)
+            .BorderColor(_theme.BorderStrong).BorderWidth(1f)
+            .Rounded(6f)
+            .Padding(6f)
+            .Gap(6f)
+            .Layer(Layer.Topmost + 1000)
+            .OnPostLayout((_, rect) => _paper.SetRootStorage(widthKey, (float)rect.Size.X));
+
+        using (popup.Enter())
+        {
+            if (header.Length > 0)
+                Origami.Label(_paper, _id + "_popup_hdr", header).XS().AlignCenter().AlignLeft().Height(SwatchSize).Show();
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                (Color color, string text) = rows[i];
+
+                using (_paper.Row($"{_id}_popup_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).Gap(2f).Enter())
+                {
+                    _paper.Box($"{_id}_popup_sw_{i}").Size(SwatchSize).BackgroundColor(color).Rounded(2f);
+                    Origami.Label(_paper, $"{_id}_popup_txt_{i}", text).XS().AlignCenter().AlignLeft().Height(SwatchSize).Show();
+                }
+            }
+        }
+    }
+
+    protected struct ViewRect
+    {
+        public float X, Y, W, H;
+    }
+
+    private static ViewRect ClampView(ViewRect view)
+    {
+        view.W = Math.Clamp(view.W <= 0f ? 1f : view.W, MinViewSpan, 1f);
+        view.H = Math.Clamp(view.H <= 0f ? 1f : view.H, MinViewSpan, 1f);
+        view.X = Math.Clamp(view.X, 0f, 1f - view.W);
+        view.Y = Math.Clamp(view.Y, 0f, 1f - view.H);
+        return view;
+    }
+
+    protected ViewRect View
+        => ClampView(_containerEl.IsValid ? _paper.GetElementStorage(_containerEl, ViewKey, default(ViewRect)) : default);
+
+    private void SetView(ViewRect view)
+    {
+        if (_containerEl.IsValid) _paper.SetElementStorage(_containerEl, ViewKey, ClampView(view));
+    }
+
+    protected void WireView(ElementBuilder plotBox, ElementHandle plotEl, bool zoomable, bool pannable, bool axisY)
+    {
+        if (!zoomable && !pannable) return;
+
+        plotBox.OnPostLayout((_, rect) => _paper.SetElementStorage(plotEl, ViewSizeKey, new Float2((float)rect.Size.X, (float)rect.Size.Y)));
+
+        if (zoomable)
+        {
+            plotBox.OnClick(_ => _paper.SetElementStorage(plotEl, ViewActiveKey, true));
+            plotBox.OnLeave(_ => _paper.SetElementStorage(plotEl, ViewActiveKey, false));
+            plotBox.OnScroll(e =>
+            {
+                if (!_paper.GetElementStorage(plotEl, ViewActiveKey, false)) return;
+                Zoom(e, axisY);
+            });
+        }
+
+        if (pannable && _paper.IsPointerDown(PaperMouseBtn.Middle) && _paper.IsParentHovered)
+        {
+            Float2 size = _paper.GetElementStorage(plotEl, ViewSizeKey, new Float2(0f, 0f));
+            Float2 delta = _paper.PointerDelta;
+            if (size.X <= 0f || size.Y <= 0f || (delta.X == 0f && delta.Y == 0f)) return;
+
+            ViewRect view = View;
+            view.X -= (float)delta.X / size.X * view.W;
+            if (axisY) view.Y += (float)delta.Y / size.Y * view.H;
+            SetView(view);
+        }
+    }
+
+    private void Zoom(ScrollEvent e, bool axisY)
+    {
+        double w = e.ElementRect.Size.X, h = e.ElementRect.Size.Y;
+        if (w <= 0d || h <= 0d) return;
+
+        ViewRect view = View;
+        float factor = MathF.Exp(-e.Delta * ZoomRate);
+
+        float fx = (float)Math.Clamp((e.PointerPosition.X - e.ElementRect.Min.X) / w, 0d, 1d);
+        float nw = Math.Clamp(view.W * factor, MinViewSpan, 1f);
+        view.X += fx * (view.W - nw);
+        view.W = nw;
+
+        if (axisY)
+        {
+            float fy = (float)Math.Clamp((e.ElementRect.Min.Y + h - e.PointerPosition.Y) / h, 0d, 1d);
+            float nh = Math.Clamp(view.H * factor, MinViewSpan, 1f);
+            view.Y += fy * (view.H - nh);
+            view.H = nh;
+        }
+
+        SetView(view);
+        e.StopPropagation();
+    }
 }
