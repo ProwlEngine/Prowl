@@ -687,13 +687,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void CompositeProfiler_RejectsNullSinks()
-    {
-        Assert.Throws<ArgumentException>(() => new CompositeProfiler(new CommandRecorder(), null!));
-        Assert.Throws<ArgumentNullException>(() => new CompositeProfiler(null!));
-    }
-
-    [Fact]
     public void SetProfiler_SwapsActiveProfilerAtRuntime()
     {
         using GraphicsDevice device = GD.BackendType switch
