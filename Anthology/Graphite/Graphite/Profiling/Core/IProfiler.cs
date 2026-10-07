@@ -5,16 +5,6 @@ public interface IProfiler
 {
 }
 
-/// <summary>Command-level events: draws, dispatches, shader switches, pipeline binds, submits.</summary>
-public interface ICommandProfiler : IProfiler
-{
-    void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer);
-    void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info);
-    void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info);
-    void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info);
-    void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info);
-}
-
 /// <summary>Render graph events: views, passes, and pass resource reads and writes.</summary>
 public interface IGraphProfiler : IProfiler
 {

@@ -20,15 +20,6 @@ public abstract partial class CommandBuffer
         SetShaderCore(program);
         _shaderProgram = program;
         _statShaderSwitches++;
-
-        if (Profilers.Command is { } profiler)
-        {
-            ShaderStages stages = ShaderStages.None;
-            foreach (ShaderStages stage in program.Stages)
-                stages |= stage;
-
-            profiler.RecordShaderSwitch(ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: false, stages, program));
-        }
     }
 
     private protected abstract void SetShaderCore(GraphicsProgram program);
@@ -42,9 +33,6 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(_computeProgram, program)) return;
 
         _statShaderSwitches++;
-        Profilers.Command?.RecordShaderSwitch(
-            ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
-
         SetComputeShaderCore(program);
         _computeProgram = program;
     }

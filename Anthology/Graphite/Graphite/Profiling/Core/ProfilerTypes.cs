@@ -53,64 +53,6 @@ public readonly record struct PassStats(
     uint ResourceSetBinds,
     uint Barriers);
 
-public enum DrawKind { Draw, DrawIndexed, DrawIndirect, DrawIndexedIndirect }
-
-public readonly struct DrawCallInfo
-{
-    public DrawKind Kind { get; }
-    public uint VertexOrIndexCount { get; }
-    public uint InstanceCount { get; }
-    public uint DrawCount { get; }
-    public bool IsIndirect { get; }
-
-    /// <summary>Topology at draw time. Needed to turn VertexOrIndexCount into a primitive count.</summary>
-    public PrimitiveTopology Topology { get; }
-
-    public DrawCallInfo(DrawKind kind, uint vertexOrIndexCount, uint instanceCount, uint drawCount, bool isIndirect, PrimitiveTopology topology)
-    {
-        Kind = kind;
-        VertexOrIndexCount = vertexOrIndexCount;
-        InstanceCount = instanceCount;
-        DrawCount = drawCount;
-        IsIndirect = isIndirect;
-        Topology = topology;
-    }
-}
-
-public readonly struct DispatchCallInfo
-{
-    public uint GroupCountX { get; }
-    public uint GroupCountY { get; }
-    public uint GroupCountZ { get; }
-    public bool IsIndirect { get; }
-
-    public DispatchCallInfo(uint groupCountX, uint groupCountY, uint groupCountZ, bool isIndirect)
-    {
-        GroupCountX = groupCountX;
-        GroupCountY = groupCountY;
-        GroupCountZ = groupCountZ;
-        IsIndirect = isIndirect;
-    }
-}
-
-public readonly struct ShaderSwitchInfo
-{
-    public string ShaderName { get; }
-    public bool IsCompute { get; }
-    public ShaderStages Stages { get; }
-
-    /// <summary>Bound GraphicsProgram or ComputeProgram.</summary>
-    public ShaderProgram Program { get; }
-
-    public ShaderSwitchInfo(string shaderName, bool isCompute, ShaderStages stages, ShaderProgram program)
-    {
-        ShaderName = shaderName;
-        IsCompute = isCompute;
-        Stages = stages;
-        Program = program;
-    }
-}
-
 public readonly struct PipelineBindInfo
 {
     /// <summary>Shader program that owns the pipeline.</summary>

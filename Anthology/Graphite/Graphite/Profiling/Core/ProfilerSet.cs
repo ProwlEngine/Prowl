@@ -8,8 +8,6 @@ internal sealed class ProfilerSet
 {
     public static readonly ProfilerSet Empty = new([]);
 
-    public ICommandProfiler? Command { get; }
-
     public IGraphProfiler? Graph { get; }
 
     public IGpuStatsProfiler? GpuStats { get; }
@@ -29,7 +27,6 @@ internal sealed class ProfilerSet
                 leaves.Add(profiler);
         }
 
-        Command = Resolve<ICommandProfiler>(leaves);
         Graph = Resolve<IGraphProfiler>(leaves);
         GpuStats = Resolve<IGpuStatsProfiler>(leaves);
         Capture = First<ICaptureProfiler>(leaves);

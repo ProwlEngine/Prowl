@@ -31,7 +31,6 @@ public abstract partial class ExecutionTask
 
     internal void SubmitRecorded(CommandBuffer commandBuffer)
     {
-        Profilers.Command?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
         commandBuffer.End();
         SubmitCommandsInternal(commandBuffer);
     }

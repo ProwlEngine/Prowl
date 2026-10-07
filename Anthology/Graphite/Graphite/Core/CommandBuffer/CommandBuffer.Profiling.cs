@@ -47,14 +47,12 @@ public abstract partial class CommandBuffer
     internal void ReportPipelineBind(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
     {
         _statPipelineBinds++;
-        ICommandProfiler? profiler = Profilers.Command;
         ICommandStreamProfiler? sink = PassSink;
-        if (profiler == null && sink == null)
+        if (sink == null)
             return;
 
         PipelineBindInfo info = new(program, pipelineId, isCompute, outputs, topology);
-        profiler?.RecordPipelineBind(ProfilerInfo, info);
-        sink?.SetPipeline(in info);
+        sink.SetPipeline(in info);
     }
 
     internal void RecordResourceSetBind(uint setCount)

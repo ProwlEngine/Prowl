@@ -19,8 +19,6 @@ public abstract partial class CommandBuffer
         PassSink?.Draw(vertexCount, instanceCount, vertexStart, instanceStart);
 
         _statDraws++;
-        Profilers.Command?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
     private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
@@ -43,8 +41,6 @@ public abstract partial class CommandBuffer
         PassSink?.DrawIndexed(_currentIndexCount, instanceCount, indexStart, vertexOffset, instanceStart);
 
         _statDraws++;
-        Profilers.Command?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
     private void Draw_CheckBoundState()
@@ -136,8 +132,6 @@ public abstract partial class CommandBuffer
         PassSink?.DrawIndirect(indirectBuffer.CurrentVersion, offset, drawCount, stride);
 
         _statIndirectDraws++;
-        Profilers.Command?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
 
@@ -167,8 +161,6 @@ public abstract partial class CommandBuffer
         PassSink?.DrawIndexedIndirect(indirectBuffer.CurrentVersion, offset, drawCount, stride);
 
         _statIndirectDraws++;
-        Profilers.Command?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
 
@@ -191,8 +183,6 @@ public abstract partial class CommandBuffer
         PassSink?.Dispatch(groupCountX, groupCountY, groupCountZ);
 
         _statDispatches++;
-        Profilers.Command?.RecordDispatch(
-            ProfilerInfo, new DispatchCallInfo(groupCountX, groupCountY, groupCountZ, isIndirect: false));
     }
 
     private protected abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
@@ -211,8 +201,6 @@ public abstract partial class CommandBuffer
         PassSink?.DispatchIndirect(indirectBuffer.CurrentVersion, offset);
 
         _statDispatches++;
-        Profilers.Command?.RecordDispatch(
-            ProfilerInfo, new DispatchCallInfo(0, 0, 0, isIndirect: true));
     }
 
 
