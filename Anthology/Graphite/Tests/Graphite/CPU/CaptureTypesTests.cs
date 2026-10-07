@@ -136,8 +136,7 @@ public class CaptureTypesTests
             color,
             "Color",
             GraphResourceKind.Texture,
-            backing,
-            Version(backing, 1),
+            new[] { new GraphBacking(backing, Version(backing, 1), BackingRole.Color, 0) },
             true,
             GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm),
             null);
@@ -145,10 +144,13 @@ public class CaptureTypesTests
         PassResourceAccess access = new(color, GraphResourceKind.Texture, true, TextureState.Attachment, null, BufferAccess.None);
         PassInfo pass = new("Main", 0, 0, 7, new[] { color }, new[] { color });
         PassCaptureInfo passInfo = new(pass, new[] { access });
-        ViewCaptureInfo view = new(7, "View", new[] { resource }, new[] { passInfo });
+        ViewCaptureInfo view = new(7, "View", 2, 64, 32, new[] { resource }, new[] { passInfo });
 
         Assert.Equal(7ul, view.ExecutionId);
         Assert.Equal("View", view.ViewName);
+        Assert.Equal(2, view.ViewIndex);
+        Assert.Equal(64u, view.PixelWidth);
+        Assert.Equal(32u, view.PixelHeight);
         Assert.Equal(resource, view.Resources.Span[0]);
         Assert.True(view.Resources.Span[0].Imported);
         Assert.Equal("Main", view.Passes.Span[0].Pass.Name);

@@ -38,7 +38,7 @@ internal sealed class GraphCapture
         _passInfos = passInfos;
     }
 
-    public void BeginView(string viewName, ulong executionId)
+    public void BeginView(string viewName, int viewIndex, uint pixelWidth, uint pixelHeight, ulong executionId)
     {
         List<GraphResourceInfo> resources = new();
         HashSet<RenderResourceID> seen = new();
@@ -55,7 +55,7 @@ internal sealed class GraphCapture
         for (int i = 0; i < _nodes.Length; i++)
             passes[i] = new PassCaptureInfo(_passInfos[i], ToPublic(_nodes[i].Accesses));
 
-        ViewCaptureInfo info = new(executionId, viewName, resources.ToArray(), passes);
+        ViewCaptureInfo info = new(executionId, viewName, viewIndex, pixelWidth, pixelHeight, resources.ToArray(), passes);
         _hook.OnViewBegin(in info, CaptureContext.Instance);
     }
 

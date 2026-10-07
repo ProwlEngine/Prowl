@@ -52,6 +52,9 @@ public readonly record struct PassCaptureInfo(
 public readonly record struct ViewCaptureInfo(
     ulong ExecutionId,
     string ViewName,
+    int ViewIndex,
+    uint PixelWidth,
+    uint PixelHeight,
     ReadOnlyMemory<GraphResourceInfo> Resources,
     ReadOnlyMemory<PassCaptureInfo> Passes);
 

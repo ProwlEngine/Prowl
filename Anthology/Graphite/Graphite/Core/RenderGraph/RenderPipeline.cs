@@ -137,7 +137,7 @@ public class RenderPipeline : IDisposable
             infos[i] = new PassInfo(nodes[i].Pass.Name, i, context.ViewIndex, context.Task.Id, nodes[i].Inputs, nodes[i].Outputs);
 
         GraphCapture capture = new(hook, context, graph, nodes.ToArray(), infos);
-        capture.BeginView(context.View.Name, context.Task.Id);
+        capture.BeginView(context.View.Name, context.ViewIndex, context.View.PixelWidth, context.View.PixelHeight, context.Task.Id);
         return capture;
     }
 
