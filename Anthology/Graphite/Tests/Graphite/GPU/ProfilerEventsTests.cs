@@ -59,6 +59,15 @@ file sealed class TimingRecorder : IGpuStatsProfiler
     public void RecordExecutionResolved(ulong executionId) { }
 }
 
+file sealed class ResolveOrderRecorder : IGpuStatsProfiler
+{
+    public readonly List<string> Events = new();
+
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) => Events.Add("time");
+    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) => Events.Add("stats");
+    public void RecordExecutionResolved(ulong executionId) => Events.Add("resolved");
+}
+
 file sealed class StatsOnlyProfiler : IGpuStatsProfiler
 {
     public readonly List<CommandBufferInfo> Timed = new();
@@ -529,6 +538,31 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         Assert.Single(first.ExecutionTimes);
         Assert.Single(second.ExecutionTimes);
+    }
+
+    [Fact]
+    public void ExecutionResolved_FiresOnceAfterTheFenceWithOrWithoutQueries()
+    {
+        ResolveOrderRecorder profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+
+        ExecutionTask empty = device.BeginExecution();
+        device.CompleteExecution(empty);
+        Assert.Empty(profiler.Events);
+
+        device.WaitForExecution(empty);
+        Assert.Equal(new[] { "resolved" }, profiler.Events);
+
+        profiler.Events.Clear();
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        ExecutionTask task = device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
+        Assert.Empty(profiler.Events);
+
+        device.WaitForExecution(task);
+        Assert.Equal("resolved", profiler.Events[^1]);
+        Assert.Contains("time", profiler.Events);
+        Assert.Single(profiler.Events, e => e == "resolved");
     }
 
     [Fact]
