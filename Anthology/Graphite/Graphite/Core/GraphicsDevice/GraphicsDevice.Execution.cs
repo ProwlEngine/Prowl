@@ -105,13 +105,14 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Whether the execution finished on the GPU. Polls once.
+    /// Whether the execution finished on the GPU. Non-blocking. Also polls submissions, so profiler results of finished executions are delivered from here.
     /// </summary>
     /// <param name="task">Execution to check.</param>
     /// <returns>True if complete, false if still in flight.</returns>
     public bool IsExecutionComplete(ExecutionTask task)
     {
         ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(IsExecutionComplete));
+        PollSubmissionsCore();
         return IsExecutionIdComplete(task.Id);
     }
 
@@ -139,6 +140,7 @@ public abstract partial class GraphicsDevice
         bool completed = WaitForExecutionCore(task, nanosecondTimeout);
         if (completed)
         {
+            PollSubmissionsCore();
             lock (_executionLock)
             {
                 ReclaimCompletedExecutions_NoLock();
@@ -214,6 +216,8 @@ public abstract partial class GraphicsDevice
     private protected abstract ExecutionTask BeginExecutionCore(ulong executionId, uint ringSlot);
     private protected abstract void CompleteExecutionCore(ExecutionTask task);
     private protected abstract bool IsExecutionCompleteCore(ExecutionTask task);
+    private protected abstract void PollSubmissionsCore();
+
     private protected abstract bool WaitForExecutionCore(ExecutionTask task, ulong nanosecondTimeout);
     private protected abstract void WaitForIdleCore();
     private protected abstract GpuSubmission RecordCore(System.Action<CommandBuffer> record, string name);

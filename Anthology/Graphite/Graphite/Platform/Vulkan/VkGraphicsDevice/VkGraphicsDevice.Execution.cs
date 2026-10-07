@@ -95,6 +95,8 @@ internal unsafe partial class VkGraphicsDevice
         return serial != 0 && GetCompletedSerial() >= serial;
     }
 
+    private protected override void PollSubmissionsCore() => PollSubmissions();
+
     private protected override bool WaitForExecutionCore(ExecutionTask task, ulong nanosecondTimeout)
     {
         ref SlotState slot = ref _slots[task.RingSlot];
