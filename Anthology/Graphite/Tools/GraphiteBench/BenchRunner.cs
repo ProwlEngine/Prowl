@@ -36,8 +36,7 @@ public sealed record BenchResult(
     double DrawsPerFrame,
     double SetBindsPerFrame,
     double BoundSetsPerFrame,
-    double ShaderSwitchesPerFrame,
-    double SubmitsPerFrame);
+    double ShaderSwitchesPerFrame);
 
 public static class BenchRunner
 {
@@ -78,7 +77,6 @@ public static class BenchRunner
         List<double> setBinds = new(repetitions);
         List<double> boundSets = new(repetitions);
         List<double> shaderSwitches = new(repetitions);
-        List<double> submits = new(repetitions);
 
         for (int rep = 0; rep < repetitions; rep++)
         {
@@ -115,7 +113,6 @@ public static class BenchRunner
             setBinds.Add((countersAfter.ResourceSetBinds - countersBefore.ResourceSetBinds) / (double)frames);
             boundSets.Add((countersAfter.ResourceSetsBound - countersBefore.ResourceSetsBound) / (double)frames);
             shaderSwitches.Add(profiler.ShaderSwitches / (double)frames);
-            submits.Add(profiler.Submits / (double)frames);
         }
 
         return new BenchResult(
@@ -133,8 +130,7 @@ public static class BenchRunner
             DrawsPerFrame: Median(draws),
             SetBindsPerFrame: Median(setBinds),
             BoundSetsPerFrame: Median(boundSets),
-            ShaderSwitchesPerFrame: Median(shaderSwitches),
-            SubmitsPerFrame: Median(submits));
+            ShaderSwitchesPerFrame: Median(shaderSwitches));
     }
 
     private static double Median(List<double> samples)
