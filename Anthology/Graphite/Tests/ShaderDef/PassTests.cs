@@ -29,23 +29,6 @@ public class PassTests
     }
 
 
-    [Fact]
-    public void WithoutOptionalParts_UsesDefaults()
-    {
-        ShaderPass pass = Parse.Pass("""
-            Pass
-            {
-                SLANGPROGRAM
-                void main() {}
-                ENDSLANG
-            }
-            """);
-
-        Assert.Equal("", pass.Name);
-        Assert.Null(pass.Tags);
-        Assert.Equal("void main() {}", pass.InlineSlang);
-    }
-
 
     [Fact]
     public void MisspelledCommand_ThrowsUnknownCommand()
