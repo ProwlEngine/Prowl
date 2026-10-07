@@ -11,7 +11,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private readonly object _pendingLock = new();
-    private readonly Dictionary<ulong, ExecutionQueryState> _executionQueries = new();
+    private readonly Dictionary<ulong, ExecutionRecord> _executionRecords = new();
     private readonly Queue<PendingSubmission> _pending = new();
     private VkSemaphore _timelineSemaphore;
     private int _graphicsQueueSubmitCount;
@@ -177,9 +177,8 @@ internal unsafe partial class VkGraphicsDevice
                     IGpuStatsProfiler? gpuStats = cb.Profilers.GpuStats;
                     if (info.ExecutionId != 0 && gpuStats != null)
                     {
-                        ExecutionQueryState queryState = QueryStateFor_NoLock(info.ExecutionId);
-                        queryState.Stats = gpuStats;
-                        queryState.Outstanding++;
+                        ExecutionRecord record = RecordFor_NoLock(info.ExecutionId, gpuStats);
+                        record.Outstanding++;
                     }
 
                     _pending.Enqueue(new PendingSubmission
@@ -224,8 +223,11 @@ internal unsafe partial class VkGraphicsDevice
                 handles[i] = commandBuffers[i].CommandBuffer;
 
             ulong serial = Submit(new System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer>(handles, 0, count), CollectionsMarshal.AsSpan(commandBuffers));
-            if (isFinal)
-                CloseExecutionQueries(executionId, gpuStats);
+            if (isFinal && gpuStats != null)
+            {
+                lock (_pendingLock)
+                    RecordFor_NoLock(executionId, gpuStats).FinalSerial = serial;
+            }
             return serial;
         }
         finally
@@ -279,76 +281,99 @@ internal unsafe partial class VkGraphicsDevice
                 CompleteSubmission(in submission);
         }
 
+        ResolveCompletedExecutions();
+
         if (completed != 0)
             RetireThrough(completed);
     }
 
     private void CompleteSubmission(in PendingSubmission pending)
     {
+        double? milliseconds = null;
+        GpuVertexStats? vertexStats = null;
+
         if (pending.CommandBuffer is { } cb)
         {
-            ResolveQueries(in pending.Queries, pending.Info, pending.IsTransfer, pending.GpuStats);
+            ResolveQueries(in pending.Queries, out milliseconds, out vertexStats);
 
             if (pending.Submission != null)
                 ReturnRecordCommandBuffer(cb);
         }
 
-        if (pending.Info.ExecutionId != 0)
-            ReleaseExecutionQuery(pending.Info.ExecutionId);
-    }
-
-    private ExecutionQueryState QueryStateFor_NoLock(ulong executionId)
-    {
-        if (!_executionQueries.TryGetValue(executionId, out ExecutionQueryState? state))
-            _executionQueries[executionId] = state = new ExecutionQueryState();
-        return state;
-    }
-
-    private void CloseExecutionQueries(ulong executionId, IGpuStatsProfiler? gpuStats)
-    {
-        if (gpuStats == null)
+        if (pending.Info.ExecutionId == 0 || pending.GpuStats == null)
+        {
+            if (milliseconds is { } ms)
+                pending.GpuStats?.RecordExecutionTime(pending.Info, pending.IsTransfer, ms);
+            if (vertexStats is { } vs)
+                pending.GpuStats?.RecordGpuVertexStats(pending.Info, in vs);
             return;
-
-        bool resolved;
-        lock (_pendingLock)
-        {
-            ExecutionQueryState state = QueryStateFor_NoLock(executionId);
-            state.Stats = gpuStats;
-            state.Closed = true;
-            resolved = state.Outstanding == 0;
-            if (resolved)
-                _executionQueries.Remove(executionId);
         }
 
-        if (resolved)
-            gpuStats.RecordExecutionResolved(executionId);
-    }
-
-    private void ReleaseExecutionQuery(ulong executionId)
-    {
-        bool resolved = false;
-        IGpuStatsProfiler? gpuStats = null;
         lock (_pendingLock)
         {
-            if (_executionQueries.TryGetValue(executionId, out ExecutionQueryState? state))
+            ExecutionRecord record = _executionRecords[pending.Info.ExecutionId];
+            if (milliseconds is { } ms)
+                record.Timings.Add((pending.Info, ms));
+            if (vertexStats is { } vs)
+                record.VertexStats.Add((pending.Info, vs));
+            record.Outstanding--;
+        }
+    }
+
+    private ExecutionRecord RecordFor_NoLock(ulong executionId, IGpuStatsProfiler gpuStats)
+    {
+        if (!_executionRecords.TryGetValue(executionId, out ExecutionRecord? record))
+            _executionRecords[executionId] = record = new ExecutionRecord(gpuStats);
+        return record;
+    }
+
+    private void ResolveCompletedExecutions()
+    {
+        List<KeyValuePair<ulong, ExecutionRecord>>? ready = null;
+        lock (_pendingLock)
+        {
+            if (_executionRecords.Count == 0)
+                return;
+
+            ulong completed = GetCompletedSerial();
+            foreach (KeyValuePair<ulong, ExecutionRecord> entry in _executionRecords)
             {
-                gpuStats = state.Stats;
-                state.Outstanding--;
-                resolved = state.Closed && state.Outstanding == 0;
-                if (resolved)
-                    _executionQueries.Remove(executionId);
+                ExecutionRecord record = entry.Value;
+                if (record.FinalSerial != 0 && record.FinalSerial <= completed && record.Outstanding == 0)
+                    (ready ??= []).Add(entry);
             }
+
+            if (ready == null)
+                return;
+
+            foreach (KeyValuePair<ulong, ExecutionRecord> entry in ready)
+                _executionRecords.Remove(entry.Key);
         }
 
-        if (resolved)
-            gpuStats?.RecordExecutionResolved(executionId);
+        ready.Sort((x, y) => x.Key.CompareTo(y.Key));
+        foreach (KeyValuePair<ulong, ExecutionRecord> entry in ready)
+        {
+            ExecutionRecord record = entry.Value;
+            foreach ((CommandBufferInfo info, double milliseconds) in record.Timings)
+                record.Stats.RecordExecutionTime(info, false, milliseconds);
+            foreach ((CommandBufferInfo info, GpuVertexStats stats) in record.VertexStats)
+                record.Stats.RecordGpuVertexStats(info, in stats);
+            record.Stats.RecordExecutionResolved(entry.Key);
+        }
     }
 
-    private sealed class ExecutionQueryState
+    private sealed class ExecutionRecord
     {
+        public readonly IGpuStatsProfiler Stats;
+        public readonly List<(CommandBufferInfo Info, double Milliseconds)> Timings = new();
+        public readonly List<(CommandBufferInfo Info, GpuVertexStats Stats)> VertexStats = new();
         public int Outstanding;
-        public bool Closed;
-        public IGpuStatsProfiler? Stats;
+        public ulong FinalSerial;
+
+        public ExecutionRecord(IGpuStatsProfiler stats)
+        {
+            Stats = stats;
+        }
     }
 
     private struct PendingSubmission
