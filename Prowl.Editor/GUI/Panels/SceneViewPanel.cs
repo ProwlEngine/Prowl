@@ -225,6 +225,7 @@ public class SceneViewPanel : DockPanel
 
         paper.Box("sv_move_btn")
             .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
@@ -233,6 +234,7 @@ public class SceneViewPanel : DockPanel
 
         paper.Box("sv_rotate_btn")
             .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
@@ -241,6 +243,7 @@ public class SceneViewPanel : DockPanel
 
         paper.Box("sv_scale_btn")
             .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
@@ -249,6 +252,7 @@ public class SceneViewPanel : DockPanel
 
         paper.Box("sv_universal_btn")
             .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
