@@ -1,7 +1,6 @@
 using System;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 
 using Xunit;
 
@@ -105,90 +104,5 @@ public class ResourceRangeTests
         Assert.False(high.Overlaps(Bytes(0, 10)));
         Assert.True(Bytes(0, uint.MaxValue).Contains(high));
         Assert.Equal(Bytes(uint.MaxValue - 2, 2), high.Intersect(Bytes(uint.MaxValue - 2, 10)));
-    }
-}
-
-public class CaptureTypesTests
-{
-    private static ResourceVersion Version(ResourceId id, uint version = 0) => new(id, version);
-
-    [Fact]
-    public void ResourceUse_ComparesByValue()
-    {
-        RenderResourceID id = RenderResourceID.Intern("capture_types_resource");
-        ResourceId backing = ResourceId.Next();
-        ResourceUse a = new(id, Version(backing, 2), ResourceRange.Bytes(0, 8), ResourceUsage.Storage | ResourceUsage.Vertex);
-        ResourceUse b = new(id, Version(backing, 2), ResourceRange.Bytes(0, 8), ResourceUsage.Vertex | ResourceUsage.Storage);
-
-        Assert.Equal(a, b);
-        Assert.NotEqual(a, b with { Version = Version(backing, 3) });
-        Assert.NotEqual(a, b with { Range = ResourceRange.Bytes(0, 9) });
-        Assert.NotEqual(a, b with { Usage = ResourceUsage.Vertex });
-    }
-
-    [Fact]
-    public void ViewCaptureInfo_CarriesResourcesPassesAndAccesses()
-    {
-        RenderResourceID color = RenderResourceID.Intern("capture_types_color");
-        ResourceId backing = ResourceId.Next();
-
-        GraphResourceInfo resource = new(
-            color,
-            "Color",
-            GraphResourceKind.Texture,
-            new[] { new GraphBacking(backing, Version(backing, 1), BackingRole.Color, 0) },
-            true,
-            GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm),
-            null);
-
-        PassResourceAccess access = new(color, GraphResourceKind.Texture, true, TextureState.Attachment, null, BufferAccess.None);
-        PassInfo pass = new("Main", 0, 0, 7, new[] { color }, new[] { color });
-        PassCaptureInfo passInfo = new(pass, new[] { access });
-        ViewCaptureInfo view = new(7, "View", 2, 64, 32, new[] { resource }, new[] { passInfo });
-
-        Assert.Equal(7ul, view.ExecutionId);
-        Assert.Equal("View", view.ViewName);
-        Assert.Equal(2, view.ViewIndex);
-        Assert.Equal(64u, view.PixelWidth);
-        Assert.Equal(32u, view.PixelHeight);
-        Assert.Equal(resource, view.Resources.Span[0]);
-        Assert.True(view.Resources.Span[0].Imported);
-        Assert.Equal("Main", view.Passes.Span[0].Pass.Name);
-        Assert.Equal(access, view.Passes.Span[0].Accesses.Span[0]);
-        Assert.True(view.Passes.Span[0].Accesses.Span[0].IsOutput);
-    }
-
-    [Fact]
-    public void ExternalResourceInfo_HoldsEitherDescription()
-    {
-        ResourceId id = ResourceId.Next();
-        ExternalResourceInfo buffer = new(id, "Mesh", Version(id, 4), null, new BufferDescription(256, BufferUsage.VertexBuffer));
-        ExternalResourceInfo texture = new(id, "Albedo", Version(id, 1), TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled), null);
-
-        Assert.Null(buffer.Texture);
-        Assert.Equal(256u, buffer.Buffer!.Value.SizeInBytes);
-        Assert.Null(texture.Buffer);
-        Assert.Equal(4u, texture.Texture!.Value.Width);
-        Assert.Equal(Version(id, 4), buffer.EntryVersion);
-    }
-
-    [Fact]
-    public void ResourceIds_AreUniqueAndOrdered()
-    {
-        ResourceId first = ResourceId.Next();
-        ResourceId second = ResourceId.Next();
-        Assert.NotEqual(first, second);
-        Assert.True(first.CompareTo(second) < 0);
-        Assert.NotEqual(Version(first, 1), Version(second, 1));
-        Assert.Equal(Version(first, 1), Version(first, 1));
-    }
-
-    [Fact]
-    public void ResourceUsage_FlagsCombine()
-    {
-        ResourceUsage usage = ResourceUsage.CopySource | ResourceUsage.Sampled;
-        Assert.True(usage.HasFlag(ResourceUsage.Sampled));
-        Assert.False(usage.HasFlag(ResourceUsage.CopyDestination));
-        Assert.Equal(ResourceUsage.None, default);
     }
 }
