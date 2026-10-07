@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -60,6 +60,7 @@ public class SceneViewPanel : DockPanel
     /// <summary>Tools ticking in the scene view this frame.</summary>
     public static IReadOnlyList<SceneTool> LiveTools => SceneToolManager.Live;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
+    private int _viewportElementId; // Paper hit target, excluding the floating toolbar and other UI overlays
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
     // Pose restored from disk by RestoreState; applied the first time the camera is created
@@ -314,8 +315,11 @@ public class SceneViewPanel : DockPanel
                 // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
                 Float2 origin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 mouseLocal = paper.PointerPos - origin;
-                // Use Paper's hover state which respects overlays/popups, not just bounds
-                _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, paper.IsParentHovered);
+                
+                // Only the viewport surface accepts scene picks. The enclosing panel is also
+                // hovered over toolbar buttons, which would let their raw mouse press start a pick.
+                bool viewportHovered = _viewportElementId != 0 && paper.HoveredElementId == _viewportElementId;
+                _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, viewportHovered);
 
                 _toolContext.Begin(scene, this);
                 SceneToolManager.SyncAvailability(_toolContext);
@@ -365,6 +369,7 @@ public class SceneViewPanel : DockPanel
                 {
                     // Cache absolute rect for gizmo coordinate space
                     _viewportAbsoluteRect = rect;
+                    _viewportElementId = handle.Data.ID;
 
                     // Draw RT
                     paper.Draw(ref handle, (canvas, r) =>
