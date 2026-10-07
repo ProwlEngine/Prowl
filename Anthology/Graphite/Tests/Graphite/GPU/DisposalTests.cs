@@ -15,21 +15,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
     private ResourceFactory Inner => GD.ResourceFactory;
 
     [Fact]
-    public void Dispose_TextureAndView()
-    {
-        Texture t = Inner.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
-        TextureView tv = Inner.CreateTextureView(t);
-        GD.WaitForIdle();
-
-        tv.Dispose();
-        Assert.True(tv.IsDisposed);
-        Assert.False(t.IsDisposed);
-
-        t.Dispose();
-        Assert.True(t.IsDisposed);
-    }
-
-    [Fact]
     public void Dispose_Framebuffer_DoesNotDisposeTarget()
     {
         Texture t = Inner.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));

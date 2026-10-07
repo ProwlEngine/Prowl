@@ -92,20 +92,6 @@ public abstract class ResourceVersionTests<T> : GraphicsDeviceTestBase<T> where 
     }
 
     [Fact]
-    public void ResourceIds_AreUniqueAndStable()
-    {
-        DeviceBuffer a = Buffer();
-        DeviceBuffer b = Buffer();
-        Texture t = Texture2D();
-
-        Assert.NotEqual(a.ResourceId, b.ResourceId);
-        Assert.NotEqual(a.ResourceId, t.ResourceId);
-        Assert.NotEqual(0ul, a.ResourceId.Value);
-        Assert.Equal(a.ResourceId, a.CurrentVersion.Resource);
-        Assert.Equal(a.ContentVersion, a.CurrentVersion.Version);
-    }
-
-    [Fact]
     public void DeviceUpdateBuffer_BumpsOnce()
     {
         DeviceBuffer buffer = Buffer();

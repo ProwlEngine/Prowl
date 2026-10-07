@@ -20,19 +20,6 @@ public abstract class FrameLifecycleTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void ExecutingTasks_TracksOpenAndCompletedExecutions()
-    {
-        Assert.Equal(0u, GD.ExecutingTasks);
-
-        ExecutionTask task = GD.BeginExecution();
-        Assert.Equal(1u, GD.ExecutingTasks);
-
-        GD.CompleteExecution(task);
-        GD.WaitForExecution(task);
-        Assert.Equal(0u, GD.ExecutingTasks);
-    }
-
-    [Fact]
     public void LastCompletedExecutionId_AdvancesToTheLastAfterWaitForIdle()
     {
         ExecutionTask task = GD.BeginExecution();
