@@ -10,29 +10,11 @@ internal readonly record struct ReferencedResource(DeviceBuffer? Buffer, Texture
 
 public abstract partial class CommandBuffer
 {
-    private readonly struct ReportedProperty
-    {
-        public readonly PropertyEntry Entry;
-        public readonly uint Version;
-        public readonly ResourceVersion Resource;
-
-        public ReportedProperty(PropertyEntry entry, uint version, ResourceVersion resource)
-        {
-            Entry = entry;
-            Version = version;
-            Resource = resource;
-        }
-    }
-
-    private readonly Dictionary<PropertyID, ReportedProperty> _reportedProperties = new();
-    private readonly List<PropertyDelta> _deltaScratch = new();
+    private readonly List<PropertyState> _stateScratch = new();
     private readonly List<ReferencedResource> _referenced = new();
     private readonly HashSet<ResourceId> _referencedIds = new();
     private AttachmentUse[] _attachmentScratch = new AttachmentUse[8];
     private VertexBindingUse[] _vertexScratch = new VertexBindingUse[8];
-    private VertexBindingUse[] _reportedVertex = new VertexBindingUse[8];
-    private int _reportedVertexCount;
-    private IndexBindingUse? _reportedIndex;
 
     internal bool PassCommandsOpen { get; set; }
 
@@ -45,11 +27,8 @@ public abstract partial class CommandBuffer
 
     private void ResetCaptureState()
     {
-        _reportedProperties.Clear();
         _referenced.Clear();
         _referencedIds.Clear();
-        _reportedVertexCount = 0;
-        _reportedIndex = null;
     }
 
     internal override void TrackBuffer(DeviceBuffer buffer)
@@ -96,9 +75,9 @@ public abstract partial class CommandBuffer
         }
     }
 
-    private void ReportPropertyDeltas()
+    private void ReportPropertyStates()
     {
-        _deltaScratch.Clear();
+        _stateScratch.Clear();
         ICommandStreamProfiler? sink = Profilers.CommandStream;
 
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _activeProperties.Entries)
@@ -117,35 +96,27 @@ public abstract partial class CommandBuffer
                     break;
             }
 
-            if (sink == null)
-                continue;
-
-            if (_reportedProperties.TryGetValue(kv.Key, out ReportedProperty last)
-                && ReferenceEquals(last.Entry, entry) && last.Version == entry.Version && last.Resource == resource)
-                continue;
-
-            _reportedProperties[kv.Key] = new ReportedProperty(entry, entry.Version, resource);
-            _deltaScratch.Add(CreateDelta(kv.Key, entry, resource));
+            if (sink != null)
+                _stateScratch.Add(CreateState(kv.Key, entry, resource));
         }
 
-        if (_deltaScratch.Count > 0)
-            sink!.ApplyPropertyDeltas(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_deltaScratch));
+        sink?.SetProperties(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_stateScratch));
     }
 
-    private static PropertyDelta CreateDelta(PropertyID name, PropertyEntry entry, ResourceVersion resource)
+    private static PropertyState CreateState(PropertyID name, PropertyEntry entry, ResourceVersion resource)
     {
         switch (entry.Kind)
         {
             case PropertyEntryKind.Uniform:
                 UniformValue value;
                 value = System.Runtime.CompilerServices.Unsafe.As<PropertyEntry.UniformPayload, UniformValue>(ref entry.Uniform);
-                return new PropertyDelta(name, PropertyDeltaKind.Uniform, entry.UniformType, value, default, default, null, null);
+                return new PropertyState(name, PropertyKind.Uniform, entry.UniformType, value, default, default, null, null);
 
             case PropertyEntryKind.Buffer:
                 DeviceBufferRange range = entry.Buffer ?? default;
-                return new PropertyDelta(
+                return new PropertyState(
                     name,
-                    entry.BackedBlock ? PropertyDeltaKind.UniformBuffer : PropertyDeltaKind.Buffer,
+                    entry.BackedBlock ? PropertyKind.UniformBuffer : PropertyKind.Buffer,
                     default, default, resource, ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
 
             case PropertyEntryKind.Texture:
@@ -157,18 +128,18 @@ public abstract partial class CommandBuffer
                 else if (texture != null)
                     textureRange = ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
 
-                return new PropertyDelta(
-                    name, PropertyDeltaKind.Texture, default, default, resource, textureRange, view?.Format, entry.Sampler?.Description);
+                return new PropertyState(
+                    name, PropertyKind.Texture, default, default, resource, textureRange, view?.Format, entry.Sampler?.Description);
 
             default:
-                return new PropertyDelta(name, PropertyDeltaKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);
+                return new PropertyState(name, PropertyKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);
         }
     }
 
     private void ReportGraphicsState()
     {
         if (CaptureActive)
-            ReportPropertyDeltas();
+            ReportPropertyStates();
     }
 
     /// <summary>Called by the backend with the vertex bindings it resolved for a draw, including cache hits.</summary>
@@ -178,23 +149,13 @@ public abstract partial class CommandBuffer
             return;
 
         Util.EnsureArrayMinimumSize(ref _vertexScratch, (uint)count);
-        bool same = count == _reportedVertexCount;
         for (int slot = 0; slot < count; slot++)
         {
             VertexBinding binding = bindings[slot];
             TrackBuffer(binding.Buffer);
-            VertexBindingUse use = new((uint)slot, binding.Buffer.CurrentVersion, binding.Offset, layouts[slot].Stride);
-            _vertexScratch[slot] = use;
-            if (same && _reportedVertex[slot] != use)
-                same = false;
+            _vertexScratch[slot] = new VertexBindingUse((uint)slot, binding.Buffer.CurrentVersion, binding.Offset, layouts[slot].Stride);
         }
 
-        if (same)
-            return;
-
-        Util.EnsureArrayMinimumSize(ref _reportedVertex, (uint)count);
-        Array.Copy(_vertexScratch, _reportedVertex, count);
-        _reportedVertexCount = count;
         Profilers.CommandStream?.BindVertexBuffers(_vertexScratch.AsSpan(0, count));
     }
 
@@ -206,10 +167,6 @@ public abstract partial class CommandBuffer
 
         TrackBuffer(buffer);
         IndexBindingUse use = new(buffer.CurrentVersion, format, indexCount);
-        if (_reportedIndex == use)
-            return;
-
-        _reportedIndex = use;
         Profilers.CommandStream?.BindIndexBuffer(in use);
     }
 }

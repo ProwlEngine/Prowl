@@ -99,8 +99,6 @@ public abstract partial class CommandBuffer
         _defaultPropertyKeys.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
-        _reportedProperties.Clear();
-        PassSink?.ClearProperties();
         ClearPropertiesCore();
     }
 

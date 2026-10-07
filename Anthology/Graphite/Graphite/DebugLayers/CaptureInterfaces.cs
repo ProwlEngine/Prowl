@@ -54,9 +54,7 @@ public interface ICommandStreamProfiler : IProfiler
 
     void BindIndexBuffer(in IndexBindingUse binding);
 
-    void ApplyPropertyDeltas(ReadOnlySpan<PropertyDelta> deltas);
-
-    void ClearProperties();
+    void SetProperties(ReadOnlySpan<PropertyState> properties);
 
     void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance);
 

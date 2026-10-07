@@ -41,8 +41,8 @@ public readonly record struct VertexBindingUse(uint Slot, ResourceVersion Buffer
 /// <summary>The index buffer resolved for an indexed draw.</summary>
 public readonly record struct IndexBindingUse(ResourceVersion Buffer, IndexFormat Format, uint IndexCount);
 
-/// <summary>What a changed property now holds.</summary>
-public enum PropertyDeltaKind : byte
+/// <summary>What a property holds.</summary>
+public enum PropertyKind : byte
 {
     /// <summary>Loose uniform value.</summary>
     Uniform,
@@ -82,12 +82,12 @@ public struct UniformValue
 }
 
 /// <summary>
-/// One changed property of the resolved property table. Resources are reported by version and range.
+/// One property of the resolved property table. Resources are reported by version and range.
 /// Textures report the view's mip and layer range, and the view format when a view is bound.
 /// </summary>
-public readonly record struct PropertyDelta(
+public readonly record struct PropertyState(
     PropertyID Name,
-    PropertyDeltaKind Kind,
+    PropertyKind Kind,
     UniformScalarType UniformType,
     UniformValue Uniform,
     ResourceVersion Resource,
