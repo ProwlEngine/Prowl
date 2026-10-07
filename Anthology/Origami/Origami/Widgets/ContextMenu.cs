@@ -318,15 +318,29 @@ public sealed class ContextBuilder
         public string Label = "", Icon = "";
         public ContextBuilder? Sub;
 
+        // The delay, in seconds, before the submenu opens or closes.
+        private const float SUBMENU_DELAY_TIME = 0.4f; // seconds
+
+        private struct OpenSubmenuState
+        {
+            public int Index;
+            public float RemainingTime;
+        }
+
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
             var ink = theme.Ink;
+
+            // Check if the submenu should remain open for a short time, even if not hovering.
+            var submenuState = paper.GetElementStorage(paper.CurrentParent, $"{id}_submenu", new OpenSubmenuState {  Index = -1 });
+            bool submenuIsOpen = submenuState.Index == index && submenuState.RemainingTime >= 0;
 
             using (paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
                 .Rounded(theme.Metrics.Rounding)
+                .BackgroundColor(submenuIsOpen ? theme.Hover : Color.Transparent)
                 .Hovered.BackgroundColor(theme.Hover).End()
                 // Remember this row's on-screen rect so next frame the submenu can decide which side to
                 // open on (this frame's layout isn't available yet at build time).
@@ -334,7 +348,7 @@ public sealed class ContextBuilder
                 .Enter())
             {
                 bool hovered = paper.IsParentHovered;
-                Color txt = hovered ? ink.C500 : ink.C400;
+                Color txt = hovered || submenuIsOpen ? ink.C500 : ink.C400;
 
                 if (!string.IsNullOrEmpty(Icon))
                     paper.Box($"{id}_ico_{index}")
@@ -351,7 +365,13 @@ public sealed class ContextBuilder
                 using (paper.Box($"{id}_a_{index}").Width(12).Height(RowHeight).IsNotInteractable().Enter())
                     paper.Draw((canvas, rect) => ContextMenu.DrawChevron(canvas, rect, arrow));
 
-                if (paper.IsParentHovered && Sub != null)
+                // Accumulate a hover time. The submenu can only open after the threshold has been reached.
+                var hoverTime = hovered ? paper.GetElementStorage(paper.CurrentParent, "hover_time", 0f) + paper.DeltaTime : 0f;
+                paper.SetElementStorage(paper.CurrentParent, "hover_time", hoverTime);
+                if (hoverTime >= SUBMENU_DELAY_TIME)
+                    submenuIsOpen = true;
+
+                if (submenuIsOpen && Sub != null)
                 {
                     // The submenu is a self-directed child of this row, so its X is measured from the
                     // row's border box (offset by the row's left padding). It overlaps the row's edge by
@@ -368,7 +388,20 @@ public sealed class ContextBuilder
                                  && row.Min.X - ContextMenu.MenuWidth >= 4f;
                     float subX = flipLeft ? ContextMenu.SubOpenLeftX : ContextMenu.SubOpenRightX;
                     ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, subX, 0, close, layer + 1);
+
+                    // If the mouse is actually hovering over the context menu (or the submenu), continually
+                    // refresh the remaining time so the submenu doesn't close.
+                    if (hovered)
+                        submenuState = new OpenSubmenuState { Index = index, RemainingTime = SUBMENU_DELAY_TIME + paper.DeltaTime };
                 }
+            }
+
+            // If the submenu is open, decrease the remaining time.
+            // When it reaches zero, the submenu will close.
+            if (submenuIsOpen)
+            {
+                submenuState.RemainingTime -= paper.DeltaTime;
+                paper.SetElementStorage(paper.CurrentParent, $"{id}_submenu", submenuState);
             }
         }
     }
