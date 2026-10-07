@@ -34,6 +34,16 @@ public abstract partial class ExecutionTask
         SubmitCommandsInternal(commandBuffer);
     }
 
+    /// <summary>Queues a recorded command buffer immediately ahead of one already queued. Call End() first.</summary>
+    internal virtual void SubmitCommandsAheadInternal(CommandBuffer commandList, CommandBuffer before)
+        => throw new NotSupportedException();
+
+    internal void SubmitRecordedAhead(CommandBuffer commandBuffer, CommandBuffer before)
+    {
+        commandBuffer.End();
+        SubmitCommandsAheadInternal(commandBuffer, before);
+    }
+
     /// <summary>
     /// Submits everything queued so far, so later work on the queue is ordered after it.
     /// </summary>

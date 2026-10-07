@@ -309,6 +309,8 @@ public sealed class RenderContext
         _task.SubmitRecorded(cmd);
     }
 
+    internal void EndCommandBufferAhead(CommandBuffer cmd, CommandBuffer before) => _task.SubmitRecordedAhead(cmd, before);
+
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>
     public DeviceBufferRange AllocateTransient(uint sizeInBytes) => _task.AllocateTransientInternal(sizeInBytes);

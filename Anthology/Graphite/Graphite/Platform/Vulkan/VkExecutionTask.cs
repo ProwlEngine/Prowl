@@ -41,6 +41,17 @@ internal sealed class VkExecutionTask : ExecutionTask
     }
 
 
+    internal override void SubmitCommandsAheadInternal(CommandBuffer commandList, CommandBuffer before)
+    {
+        SubmitCommands_CheckEnded(_gd, commandList);
+        int index = _queuedCommandBuffers.IndexOf(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(before));
+        if (index < 0)
+            throw new InvalidOperationException("The command buffer is no longer queued, so nothing can be queued ahead of it.");
+
+        _queuedCommandBuffers.Insert(index, Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandList));
+    }
+
+
     /// <inheritdoc/>
     internal override void FlushSubmissions()
     {
