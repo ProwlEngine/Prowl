@@ -224,7 +224,7 @@ public class SceneViewPanel : DockPanel
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
         paper.Box("sv_move_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_move"))
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
@@ -233,7 +233,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
 
         paper.Box("sv_rotate_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_rotate"))
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
@@ -242,7 +242,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
 
         paper.Box("sv_scale_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_scale"))
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
@@ -251,7 +251,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
 
         paper.Box("sv_universal_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_universal"))
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
