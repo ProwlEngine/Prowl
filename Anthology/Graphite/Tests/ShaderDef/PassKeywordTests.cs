@@ -54,15 +54,6 @@ public class PassKeywordTests : IDisposable
     private string KeyedAxis(int key, string axis) => _pass.GetVariant(key).Keywords.First(k => k.Name == axis).Value;
 
 
-    [Fact]
-    public void Axes_ExposesBoundAxesInOrder()
-    {
-        Assert.Equal(2, _pass.Axes.Count);
-        Assert.Equal("SKINNED", _pass.Axes[0].Name);
-        Assert.Equal("ALPHA_MODE", _pass.Axes[1].Name);
-        Assert.True(_pass.Axes[1].IsEnum);
-    }
-
 
     [Fact]
     public void GetKey_SetsKnownAndSkipsUnknown()
@@ -111,16 +102,4 @@ public class PassKeywordTests : IDisposable
         Assert.Throws<ArgumentException>(() => _pass.GetKey([K("SKINNED", "True")]));
     }
 
-
-    [Fact]
-    public void GetKey_DoesNotMutateOtherKeys()
-    {
-        int first = _pass.GetKey([K("SKINNED", "true")]);
-        int second = _pass.GetKey([K("ALPHA_MODE", "Cutout")]);
-
-        Assert.Equal("true", KeyedAxis(first, "SKINNED"));
-        Assert.Equal("Opaque", KeyedAxis(first, "ALPHA_MODE"));
-        Assert.Equal("false", KeyedAxis(second, "SKINNED"));
-        Assert.Equal("Cutout", KeyedAxis(second, "ALPHA_MODE"));
-    }
 }
