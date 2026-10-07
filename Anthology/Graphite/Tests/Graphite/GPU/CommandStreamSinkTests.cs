@@ -17,7 +17,7 @@ namespace Prowl.Graphite.Tests;
 internal sealed class SinkRecorder : ICommandStreamProfiler
 {
     public readonly List<string> Log = new();
-    public readonly List<PropertyDelta> Deltas = new();
+    public readonly List<PropertyState[]> Tables = new();
     public readonly List<(ResourceVersion After, uint Offset, byte[] Data)> BufferUpdates = new();
     public readonly List<(ResourceVersion After, TextureRegion Region, byte[] Data)> TextureUpdates = new();
     public readonly List<VertexBindingUse[]> VertexBindings = new();
@@ -57,13 +57,12 @@ internal sealed class SinkRecorder : ICommandStreamProfiler
         Log.Add("BindIndexBuffer");
     }
 
-    public void ApplyPropertyDeltas(ReadOnlySpan<PropertyDelta> deltas)
+    public void SetProperties(ReadOnlySpan<PropertyState> properties)
     {
-        Deltas.AddRange(deltas.ToArray());
-        Log.Add("Deltas:" + deltas.Length);
+        Tables.Add(properties.ToArray());
+        Log.Add("Props:" + properties.Length);
     }
 
-    public void ClearProperties() => Log.Add("ClearProperties");
     public void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance) => Log.Add($"Draw:{vertexCount}:{instanceCount}:{firstVertex}:{firstInstance}");
 
     public void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
@@ -246,9 +245,8 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         [
             "SetFramebuffer:1:False:Clear", "SetViewport", "SetScissor",
             "SetStencilReference", "SetBlendConstants",
-            "Deltas:2", "SetPipeline:Graphics", "BindVertexBuffers", "Draw:4:1:0:0",
-            "ClearProperties",
-            "SetPipeline:Compute", "Deltas:1", "Dispatch:1:1:1",
+            "Props:2", "SetPipeline:Graphics", "BindVertexBuffers", "Draw:4:1:0:0",
+            "SetPipeline:Compute", "Props:1", "Dispatch:1:1:1",
         ];
         Assert.Equal(expected, sink.Log);
         Assert.Same(program, sink.Pipelines[0].Program);
@@ -256,7 +254,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     }
 
     [SkippableFact]
-    public void PropertyDeltas_HoldOnlyChangedUniforms()
+    public void SetProperties_ReportsWholeTableBeforeEveryDraw()
     {
         (Framebuffer fb, _) = CreateTarget();
         GraphicsProgram program = CreatePointProgram();
@@ -278,13 +276,13 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             cl.Draw(1);
         });
 
-        Assert.Equal(3, sink.Deltas.Count);
-        Assert.Equal(1, sink.Log.Count(entry => entry == "Deltas:1"));
-        PropertyDelta last = sink.Deltas[^1];
-        Assert.Equal(PropertyDeltaKind.Uniform, last.Kind);
+        Assert.Equal(3, sink.Tables.Count);
+        Assert.Equal(3, sink.VertexBindings.Count);
+        Assert.Equal(sink.Tables[0].Length, sink.Tables[2].Length);
+        PropertyState last = Assert.Single(sink.Tables[2], p => p.Name == (PropertyID)"ColorNormalizationFactor");
+        Assert.Equal(PropertyKind.Uniform, last.Kind);
         Assert.Equal(UniformScalarType.Int1, last.UniformType);
         Assert.Equal(7, last.Uniform.Read<int>());
-        Assert.Equal((PropertyID)"ColorNormalizationFactor", last.Name);
     }
 
     [SkippableFact]
@@ -307,9 +305,9 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             cl.Draw(1);
         });
 
-        PropertyDelta last = sink.Deltas[^1];
+        Assert.Equal(2, sink.Tables.Count);
+        PropertyState last = Assert.Single(sink.Tables[1], p => p.Name == (PropertyID)"ColorNormalizationFactor");
         Assert.Equal(9, last.Uniform.Read<int>());
-        Assert.Equal(3, sink.Deltas.Count);
     }
 
     [SkippableFact]
@@ -331,18 +329,19 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             cl.Dispatch(1, 1, 1);
         });
 
-        Assert.Equal(3, sink.Deltas.Count);
-        Assert.All(sink.Deltas, delta => Assert.Equal(PropertyDeltaKind.Buffer, delta.Kind));
-        Assert.All(sink.Deltas, delta => Assert.Equal(storage.ResourceId, delta.Resource.Resource));
-        Assert.All(sink.Deltas, delta => Assert.Equal(ResourceRange.Bytes(0, 64), delta.Range));
-        Assert.True(sink.Deltas[1].Resource.Version > sink.Deltas[0].Resource.Version);
-        Assert.True(sink.Deltas[2].Resource.Version > sink.Deltas[1].Resource.Version);
+        Assert.Equal(3, sink.Tables.Count);
+        PropertyState[] states = sink.Tables.Select(table => Assert.Single(table)).ToArray();
+        Assert.All(states, state => Assert.Equal(PropertyKind.Buffer, state.Kind));
+        Assert.All(states, state => Assert.Equal(storage.ResourceId, state.Resource.Resource));
+        Assert.All(states, state => Assert.Equal(ResourceRange.Bytes(0, 64), state.Range));
+        Assert.True(states[1].Resource.Version > states[0].Resource.Version);
+        Assert.True(states[2].Resource.Version > states[1].Resource.Version);
 
         (ResourceVersion after, uint offset, byte[] data) = Assert.Single(sink.BufferUpdates);
         Assert.Equal(8u, offset);
         Assert.Equal(payload, data);
-        Assert.True(after.Version > sink.Deltas[1].Resource.Version);
-        Assert.True(sink.Deltas[2].Resource.Version >= after.Version);
+        Assert.True(after.Version > states[1].Resource.Version);
+        Assert.True(states[2].Resource.Version >= after.Version);
     }
 
     [SkippableFact]
@@ -374,7 +373,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     }
 
     [SkippableFact]
-    public void VertexAndIndexBindings_AreDeduplicatedWithinPass()
+    public void VertexAndIndexBindings_ReportedAtEveryDraw()
     {
         (Framebuffer fb, _) = CreateTarget();
         GraphicsProgram program = CreatePointProgram();
@@ -393,11 +392,13 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             cl.DrawIndexed(2, 1, 0, 0);
         });
 
-        VertexBindingUse[] bindings = Assert.Single(sink.VertexBindings);
-        VertexBindingUse binding = Assert.Single(bindings);
+        Assert.Equal(2, sink.VertexBindings.Count);
+        Assert.Equal(sink.VertexBindings[0], sink.VertexBindings[1]);
+        VertexBindingUse binding = Assert.Single(sink.VertexBindings[0]);
         Assert.Equal(vb.ResourceId, binding.Buffer.Resource);
         Assert.Equal((uint)Unsafe.SizeOf<PointVertex>(), binding.Stride);
-        IndexBindingUse index = Assert.Single(sink.IndexBindings);
+        Assert.Equal(2, sink.IndexBindings.Count);
+        IndexBindingUse index = sink.IndexBindings[0];
         Assert.Equal(ib.ResourceId, index.Buffer.Resource);
         Assert.Equal(IndexFormat.UInt16, index.Format);
         Assert.Equal(4u, index.IndexCount);
@@ -440,7 +441,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         GD.Debug.Attach(sink);
         try
         {
-            using RenderPipeline pipeline = new([new SinkPass(cmd => cmd.ClearProperties())]);
+            using RenderPipeline pipeline = new([new SinkPass(cmd => { })]);
             GD.DispatchGraph(pipeline, new SinkView[] { new() });
             GD.WaitForIdle();
         }
@@ -449,7 +450,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             GD.Debug.Detach(sink);
         }
 
-        Assert.Equal(["BeginPass:SinkPass", "ClearProperties", "EndPass:SinkPass"], sink.Log);
+        Assert.Equal(["BeginPass:SinkPass", "EndPass:SinkPass"], sink.Log);
     }
 
     [SkippableFact]
