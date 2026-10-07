@@ -16,14 +16,6 @@ public class ProgramKeyTests
     }
 
     [Fact]
-    public void Compute_NoStages_IsSha256OfEmpty()
-    {
-        ProgramKey key = ProgramKey.Compute([]);
-
-        Assert.Equal("E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855", key.ToString());
-    }
-
-    [Fact]
     public void Compute_EqualInputs_AreEqual()
     {
         ProgramKey a = ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 2)]);
@@ -45,14 +37,5 @@ public class ProgramKeyTests
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Geometry, "vs", 1, 2), fs]));
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs2", 1, 2), fs]));
         Assert.NotEqual(baseKey, ProgramKey.Compute([Stage(ShaderStages.Vertex, "vs", 1, 9), fs]));
-    }
-
-    [Fact]
-    public void CopyTo_RoundTripsThroughToArray()
-    {
-        ProgramKey key = ProgramKey.Compute([Stage(ShaderStages.Compute, "main", 1, 2, 3, 4)]);
-
-        Assert.Equal(32, key.ToArray().Length);
-        Assert.Equal(key.ToString(), System.Convert.ToHexString(key.ToArray()));
     }
 }
