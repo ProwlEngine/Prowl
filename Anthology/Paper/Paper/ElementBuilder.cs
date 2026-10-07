@@ -1094,7 +1094,19 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Clamps this element's position so it stays fully within the screen bounds.
+        /// Keeps raised layers inside this element. Descendants on a higher <see cref="Layer(int)"/>
+        /// still draw and take the pointer above their siblings, but within this element and its clip
+        /// instead of over everything else. Useful for a UI drawn into a panel, a preview, or a
+        /// scrolling list whose popups should stay put.
+        /// </summary>
+        public ElementBuilder IsolateLayers()
+        {
+            _handle.Data._isolateLayers = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Clamps the element so it stays within the screen bounds.
         /// Applied after layout, before rendering. Works with both SelfDirected and ParentDirected elements.
         /// Children are moved with the parent automatically.
         /// </summary>
@@ -1381,6 +1393,8 @@ namespace Prowl.PaperUI
             public float ScrollOffsetY;
             public bool IsFocused;
             public bool IsMultiLine;
+            /// <summary>The cursor still has to be scrolled into view once the input has been laid out.</summary>
+            public bool RevealCursor;
 
             public readonly bool HasSelection => SelectionStart >= 0 && SelectionEnd >= 0 && SelectionStart != SelectionEnd;
 
@@ -1551,6 +1565,9 @@ namespace Prowl.PaperUI
             settings.Quality = _handle.Data._elementStyle.GetTextQuality();
             settings.Font = inputSettings.Font;
             settings.LetterSpacing = (float)letterSpacing;
+            settings.WordSpacing = _handle.Data._elementStyle.GetWordSpacing();
+            settings.LineHeight = _handle.Data._elementStyle.GetLineHeight();
+            settings.TabSize = _handle.Data._elementStyle.GetTabSize();
             settings.Alignment = Scribe.TextAlignment.Left;
             settings.MaxWidth = (float)maxWidth;
             settings.WrapMode = (isMultiLine && inputSettings.DoWrap) ? Scribe.TextWrapMode.Wrap : TextWrapMode.NoWrap;
@@ -2237,6 +2254,18 @@ namespace Prowl.PaperUI
             // Render cursor and selection
             OnPostLayout((ElementHandle elHandle, Rect rect) =>
             {
+                var layoutState = LoadTextInputState(value, isMultiLine);
+                if (layoutState.RevealCursor)
+                {
+                    EnsureCursorVisible(ref layoutState, settings, isMultiLine);
+                    SaveTextInputState(layoutState);
+                }
+                else if (layoutState.ScrollOffsetX != 0 || layoutState.ScrollOffsetY != 0)
+                {
+                    ClampScrollToContent(ref layoutState, settings, isMultiLine);
+                    SaveTextInputState(layoutState);
+                }
+
                 _paper.Draw(ref elHandle, (canvas, r) =>
                 {
                     var renderState = LoadTextInputState(value, isMultiLine);
@@ -2381,12 +2410,25 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Ensures the cursor is visible by adjusting scroll position if needed.
         /// </summary>
+        /// <summary>Pulls the scroll back within the text, for when the input has grown since it scrolled.</summary>
+        private void ClampScrollToContent(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
+        {
+            var area = TextInputArea;
+            if (area.Size.X <= 0 || area.Size.Y <= 0) return;
+            var content = _paper.MeasureText(state.Value, CreateTextLayoutSettings(settings, isMultiLine, isMultiLine ? area.Size.X : float.MaxValue));
+            state.ClampScrollOffsets(content.X, content.Y, area.Size.X, area.Size.Y);
+        }
+
         private void EnsureCursorVisible(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
         {
             // Scroll offsets are applied as a logical-space canvas transform (see line ~1966),
             // so everything in this method must be in logical units. TextLayout cursor positions
             // and Size are in pixel space and must be divided by FramebufferScale.
             float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+
+            // Focus set from code arrives before layout, when there is no area to scroll within yet.
+            state.RevealCursor = TextInputArea.Size.X <= 0 || TextInputArea.Size.Y <= 0;
+            if (state.RevealCursor) return;
 
             if (isMultiLine)
             {
@@ -2417,17 +2459,13 @@ namespace Prowl.PaperUI
             {
                 // Single-line horizontal scrolling only. GetCursorPositionFromIndex returns
                 // pixel-space; convert to logical.
-                var fontSize = _handle.Data._elementStyle.GetFontSize();
-                var letterSpacing = _handle.Data._elementStyle.GetLetterSpacing();
                 var displayValue = state.Value;
                 // MeasureText returns logical units already (Canvas divides its pixel result by FramebufferScale).
                 var textSize = _paper.MeasureText(displayValue, CreateTextLayoutSettings(settings, false, float.MaxValue));
 
-                var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition, settings.MaskChar) * invFb;
+                var cursorPos = GetCursorPositionFromIndex(displayValue, settings, state.CursorPosition) * invFb;
 
                 float visibleWidth = TextInputArea.Size.X;
-                if (visibleWidth == 0)
-                    visibleWidth = textSize.X;
                 const float margin = 20.0f;
 
                 if (cursorPos.X < state.ScrollOffsetX + margin)
@@ -2455,16 +2493,10 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calculates the cursor position for a specific character index using TextLayout.
         /// </summary>
-        private Float2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index, char? mask = null)
+        private Float2 GetCursorPositionFromIndex(string text, TextInputSettings inputSettings, int index)
         {
             if (string.IsNullOrEmpty(text) || index <= 0) return Float2.Zero;
-            var settings = TextLayoutSettings.Default;
-            settings.Customizer = TextMask.For(mask);
-            settings.Font = font;
-            settings.PixelSize = (float)fontSize;
-            settings.LetterSpacing = (float)letterSpacing;
-            settings.MaxWidth = float.MaxValue;
-            var textLayout = _paper.CreateLayout(text, settings);
+            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(inputSettings, false));
             return (Float2)textLayout.GetCursorPosition(index);
         }
 

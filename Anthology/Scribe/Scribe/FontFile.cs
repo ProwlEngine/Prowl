@@ -1,4 +1,4 @@
-﻿using Prowl.Scribe.Internal;
+using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -72,7 +72,7 @@ namespace Prowl.Scribe
             if(file.Exists == false)
                 throw new FileNotFoundException("Font file not found", file.FullName);
 
-            if (InitFont(File.ReadAllBytes(file.FullName), 0) == 0)
+            if (InitFontAtIndex(File.ReadAllBytes(file.FullName), 0) == 0)
                 throw new InvalidDataException("Failed to initialize font");
         }
 
@@ -82,7 +82,7 @@ namespace Prowl.Scribe
             if (file.Exists == false)
                 throw new FileNotFoundException("Font file not found", file.FullName);
 
-            if (InitFont(File.ReadAllBytes(file.FullName), 0) == 0)
+            if (InitFontAtIndex(File.ReadAllBytes(file.FullName), 0) == 0)
                 throw new InvalidDataException("Failed to initialize font");
         }
 
@@ -91,7 +91,7 @@ namespace Prowl.Scribe
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
 
-            if (InitFont(ReadFully(stream), 0) == 0)
+            if (InitFontAtIndex(ReadFully(stream), 0) == 0)
                 throw new InvalidDataException("Failed to initialize font");
         }
 
@@ -128,8 +128,22 @@ namespace Prowl.Scribe
 
         public FontFile(byte[] data)
         {
-            if (InitFont(data, 0) == 0)
+            if (InitFontAtIndex(data, 0) == 0)
                 throw new InvalidDataException("Failed to initialize font");
+        }
+
+        // System font discovery loads each collection face from the same backing data.
+        internal FontFile(byte[] data, int fontIndex)
+        {
+            if (InitFontAtIndex(data, fontIndex) == 0)
+                throw new InvalidDataException("Failed to initialize font");
+        }
+
+        private int InitFontAtIndex(byte[] data, int fontIndex)
+        {
+            int offset = stbtt_GetFontOffsetForIndex(data, fontIndex);
+            if (offset < 0 || offset > data.Length - 12) return 0;
+            return InitFont(data, offset);
         }
 
         internal int InitFont(byte[] data, int fontstart)

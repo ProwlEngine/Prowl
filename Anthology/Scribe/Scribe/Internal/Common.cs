@@ -113,29 +113,26 @@ namespace Prowl.Scribe.Internal
 
 		public static int stbtt_GetFontOffsetForIndex_internal(FakePtr<byte> font_collection, int index)
 		{
+			if (index < 0 || index >= stbtt_GetNumberOfFonts_internal(font_collection))
+				return -1;
 			if (stbtt__isfont(font_collection) != 0)
-				return index == 0 ? 0 : -1;
-			if (font_collection[0] == "ttcf"[0] && font_collection[1] == "ttcf"[1] && font_collection[2] == "ttcf"[2] &&
-				font_collection[3] == "ttcf"[3])
-				if (ttULONG(font_collection + 4) == 0x00010000 || ttULONG(font_collection + 4) == 0x00020000)
-				{
-					var n = ttLONG(font_collection + 8);
-					if (index >= n)
-						return -1;
-					return (int)ttULONG(font_collection + 12 + index * 4);
-				}
-
-			return -1;
+				return 0;
+			return (int)ttULONG(font_collection + 12 + index * 4);
 		}
 
 		public static int stbtt_GetNumberOfFonts_internal(FakePtr<byte> font_collection)
 		{
+			if (font_collection.Length < 12)
+				return 0;
 			if (stbtt__isfont(font_collection) != 0)
 				return 1;
 			if (font_collection[0] == "ttcf"[0] && font_collection[1] == "ttcf"[1] && font_collection[2] == "ttcf"[2] &&
 				font_collection[3] == "ttcf"[3])
 				if (ttULONG(font_collection + 4) == 0x00010000 || ttULONG(font_collection + 4) == 0x00020000)
-					return ttLONG(font_collection + 8);
+				{
+					int count = ttLONG(font_collection + 8);
+					return count > 0 && count <= (font_collection.Length - 12) / 4 ? count : 0;
+				}
 
 			return 0;
 		}

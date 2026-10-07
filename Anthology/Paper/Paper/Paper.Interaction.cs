@@ -377,6 +377,9 @@ namespace Prowl.PaperUI
                 _layeredElements.Add(handle);
             }
 
+            // Raised layers inside an isolating element are resolved inside it, not globally.
+            if (data._isolateLayers) return;
+
             foreach (var childIndex in data.ChildIndices)
                 CollectLayeredElements(new ElementHandle(this, childIndex));
         }
@@ -452,12 +455,20 @@ namespace Prowl.PaperUI
 
             if (shouldCheckChildren)
             {
-                var childIndices = data.ChildIndices;
-                for (int i = childIndices.Count - 1; i >= 0; i--)
+                if (data._isolateLayers)
                 {
-                    var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
-                    var found = HitTestElementTree(ref childHandle, false);
+                    var found = HitTestIsolatedChildren(handle);
                     if (found.IsValid) return found;
+                }
+                else
+                {
+                    var childIndices = data.ChildIndices;
+                    for (int i = childIndices.Count - 1; i >= 0; i--)
+                    {
+                        var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
+                        var found = HitTestElementTree(ref childHandle, false);
+                        if (found.IsValid) return found;
+                    }
                 }
             }
 
@@ -465,6 +476,64 @@ namespace Prowl.PaperUI
                 return default;
 
             return handle;
+        }
+
+        private readonly Stack<List<ElementHandle>> _isolatedLayerPool = new();
+
+        /// <summary>
+        /// Hit tests the children of an element that isolates its layers: its own raised layers first,
+        /// highest down, then its base tree. The same rules as the whole screen, scoped to one element.
+        /// </summary>
+        private ElementHandle HitTestIsolatedChildren(ElementHandle isolating)
+        {
+            var layered = _isolatedLayerPool.Count > 0 ? _isolatedLayerPool.Pop() : new List<ElementHandle>();
+            layered.Clear();
+            foreach (var childIndex in isolating.Data.ChildIndices)
+                CollectIsolatedLayers(new ElementHandle(this, childIndex), layered);
+
+            ElementHandle result = default;
+            int currentLayer = int.MaxValue;
+            while (!result.IsValid)
+            {
+                int next = int.MinValue;
+                foreach (var le in layered)
+                    if (le.Data.Layer < currentLayer && le.Data.Layer > next) next = le.Data.Layer;
+                if (next == int.MinValue) break;
+                currentLayer = next;
+                for (int i = layered.Count - 1; i >= 0 && !result.IsValid; i--)
+                {
+                    var candidate = layered[i];
+                    if (candidate.Data.Layer == currentLayer)
+                        result = HitTestElementTree(ref candidate);
+                }
+            }
+
+            if (!result.IsValid)
+            {
+                var childIndices = isolating.Data.ChildIndices;
+                for (int i = childIndices.Count - 1; i >= 0 && !result.IsValid; i--)
+                {
+                    var childHandle = new ElementHandle(this, childIndices[i]);
+                    result = HitTestBaseLayer(ref childHandle);
+                }
+            }
+
+            _isolatedLayerPool.Push(layered);
+            return result;
+        }
+
+        private void CollectIsolatedLayers(ElementHandle handle, List<ElementHandle> into)
+        {
+            ref ElementData data = ref handle.Data;
+            if (!data.Visible) return;
+            if (data.Layer > Layer.Base)
+            {
+                into.Add(handle);
+                return;
+            }
+            if (data._isolateLayers) return;
+            foreach (var childIndex in data.ChildIndices)
+                CollectIsolatedLayers(new ElementHandle(this, childIndex), into);
         }
 
         /// <summary>
@@ -491,7 +560,12 @@ namespace Prowl.PaperUI
             bool shouldCheckChildren = data._scissorEnabled == false || isPointerOver;
 
             var childIndices = data.ChildIndices;
-            if (shouldCheckChildren && childIndices.Count > 0)
+            if (shouldCheckChildren && data._isolateLayers)
+            {
+                var found = HitTestIsolatedChildren(handle);
+                if (found.IsValid) return found;
+            }
+            else if (shouldCheckChildren && childIndices.Count > 0)
             {
                 for (int i = childIndices.Count - 1; i >= 0; i--)
                 {
@@ -923,14 +997,18 @@ namespace Prowl.PaperUI
                             _isDragging[_activeElementId] = true;
                         }
 
-                        // Per-frame delta. On the frame the drag starts it spans the whole distance from
-                        // the initial click; on later frames it is just the movement since last frame.
-                        Float2 frameDelta = wasDragging ? PointerDelta : totalDelta;
+                        // Don't fire the Dragging event until after the DragStart event has been fired.
+                        if (wasDragging || distanceMoved >= DRAG_THRESHOLD)
+                        {
+                            // Per-frame delta. On the frame the drag starts it spans the whole distance from
+                            // the initial click; on later frames it is just the movement since last frame.
+                            Float2 frameDelta = wasDragging ? PointerDelta : totalDelta;
 
-                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, frameDelta, totalDelta, DragPhase.Dragging);
-                        data.OnDragging?.Invoke(draggingEvt);
-                        PropagateDragToHookedChildren(activeElement, startPos, frameDelta, totalDelta, DragPhase.Dragging);
-                        BubbleEventToParents(activeElement, draggingEvt);
+                            var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, frameDelta, totalDelta, DragPhase.Dragging);
+                            data.OnDragging?.Invoke(draggingEvt);
+                            PropagateDragToHookedChildren(activeElement, startPos, frameDelta, totalDelta, DragPhase.Dragging);
+                            BubbleEventToParents(activeElement, draggingEvt);
+                        }
                     }
                 }
             }

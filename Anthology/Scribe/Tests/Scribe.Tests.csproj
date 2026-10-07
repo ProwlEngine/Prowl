@@ -24,4 +24,10 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Reuse existing sample fonts to build portable TTC fixtures in memory. -->
+    <EmbeddedResource Include="..\..\Origami\Samples\OpenTK\Fonts\Geist-Regular.ttf" LogicalName="Geist-Regular.ttf" />
+    <EmbeddedResource Include="..\..\Origami\Samples\OpenTK\Fonts\Geist-Bold.ttf" LogicalName="Geist-Bold.ttf" />
+  </ItemGroup>
+
 </Project>
