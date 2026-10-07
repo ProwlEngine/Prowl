@@ -16,37 +16,26 @@ internal sealed class HookRecorder : ICaptureProfiler
 {
     public readonly List<string> Log = new();
     public ViewCaptureInfo View;
-    public readonly Dictionary<string, ResourceUse[]> Inputs = new();
-    public readonly Dictionary<string, ResourceUse[]> Outputs = new();
-    public readonly Dictionary<string, ResourceUse[]> Loaded = new();
-    public readonly Dictionary<string, ExternalResourceInfo[]> Externals = new();
-    public ulong Submitted;
+    public readonly Dictionary<string, PassReference[]> References = new();
+    public ExecutionTask? Submitted;
 
-    public void OnViewBegin(in ViewCaptureInfo view, ICaptureContext capture)
+    public void OnViewBegin(in ViewCaptureInfo view)
     {
         View = view;
         Log.Add($"ViewBegin:{view.Resources.Length}:{view.Passes.Length}");
     }
 
-    public void OnPassBegin(in PassInfo pass, ReadOnlySpan<ResourceUse> inputs, ICaptureContext capture)
+    public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {
-        Inputs[pass.Name] = inputs.ToArray();
-        Log.Add("PassBegin:" + pass.Name);
-    }
-
-    public void OnPassEnd(in PassInfo pass, ReadOnlySpan<ResourceUse> outputs, ReadOnlySpan<ResourceUse> loadedAttachments, ReadOnlySpan<ExternalResourceInfo> externals, ICaptureContext capture)
-    {
-        Outputs[pass.Name] = outputs.ToArray();
-        Loaded[pass.Name] = loadedAttachments.ToArray();
-        Externals[pass.Name] = externals.ToArray();
+        References[pass.Name] = references.ToArray();
         Log.Add("PassEnd:" + pass.Name);
     }
 
-    public void OnViewEnd(ICaptureContext capture) => Log.Add("ViewEnd");
+    public void OnViewEnd() => Log.Add("ViewEnd");
 
-    public void OnExecutionSubmitted(ulong executionId)
+    public void OnExecutionSubmitted(ExecutionTask task)
     {
-        Submitted = executionId;
+        Submitted = task;
         Log.Add("Submitted");
     }
 }
@@ -167,81 +156,57 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Run run = Execute();
 
         Assert.Equal(
-            ["ViewBegin:3:3", "PassBegin:Produce", "PassEnd:Produce", "PassBegin:Consume", "PassEnd:Consume", "PassBegin:Finish", "PassEnd:Finish", "ViewEnd", "Submitted"],
+            ["ViewBegin:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "ViewEnd", "Submitted"],
             run.Hook.Log);
-        Assert.Equal(run.ExecutionId, run.Hook.Submitted);
+        Assert.Equal(run.ExecutionId, run.Hook.Submitted!.Id);
         Assert.Equal("HookView", run.Hook.View.ViewName);
-        Assert.Equal(0, run.Hook.View.ViewIndex);
-        Assert.Equal(32u, run.Hook.View.PixelWidth);
-        Assert.Equal(32u, run.Hook.View.PixelHeight);
         Assert.Equal(run.ExecutionId, run.Hook.View.ExecutionId);
         Assert.Equal(new[] { "Produce", "Consume", "Finish" }, run.Hook.View.Passes.ToArray().Select(p => p.Pass.Name));
     }
 
     [SkippableFact]
-    public void ResourceTable_ListsBackingsAndImportedFlag()
+    public void ResourceTable_ListsBackingsAndOrigin()
     {
         Run run = Execute();
         GraphResourceInfo[] resources = run.Hook.View.Resources.ToArray();
 
         GraphResourceInfo a = Assert.Single(resources, r => r.Id == ColorA);
-        Assert.False(a.Imported);
-        Assert.Equal(GraphResourceKind.Texture, a.Kind);
-        GraphBacking aBacking = Assert.Single(a.Backings.ToArray());
-        Assert.Equal(BackingRole.Color, aBacking.Role);
-        Assert.NotNull(a.Texture);
+        Assert.Equal(GraphResourceOrigin.Transient, a.Origin);
+        Assert.Single(a.Backings.ToArray());
 
         GraphResourceInfo imported = Assert.Single(resources, r => r.Id == Imported);
-        Assert.True(imported.Imported);
+        Assert.Equal(GraphResourceOrigin.Imported, imported.Origin);
         GraphBacking importedBacking = Assert.Single(imported.Backings.ToArray());
         Assert.Equal(run.ImportedTexture.ColorTextures[0].ResourceId, importedBacking.Id);
         Assert.Equal(run.ImportedBefore, importedBacking.EntryVersion);
-        Assert.NotEqual(aBacking.Id, importedBacking.Id);
     }
 
     [SkippableFact]
-    public void Uses_CarryVersionsAcrossPasses()
+    public void PassReferences_CoverDeclaredCommandAndAttachmentVersions()
     {
         Run run = Execute();
         GraphBacking aBacking = Assert.Single(Assert.Single(run.Hook.View.Resources.ToArray(), r => r.Id == ColorA).Backings.ToArray());
+        uint aEntry = aBacking.EntryVersion.Version;
 
-        ResourceUse produced = Assert.Single(run.Hook.Outputs["Produce"]);
-        Assert.Equal(ColorA, produced.Resource);
-        Assert.Equal(aBacking.Id, produced.Version.Resource);
-        Assert.Equal(aBacking.EntryVersion.Version + 1, produced.Version.Version);
-        Assert.Equal(ResourceUsage.Attachment, produced.Usage);
-
-        ResourceUse consumed = Assert.Single(run.Hook.Inputs["Consume"]);
-        Assert.Equal(produced.Version, consumed.Version);
-        Assert.Equal(ResourceUsage.Sampled, consumed.Usage);
-        Assert.Empty(run.Hook.Inputs["Produce"]);
-    }
-
-    [SkippableFact]
-    public void ExternalResources_AreReportedOnceAtFirstReference()
-    {
-        Run run = Execute();
-
-        ExternalResourceInfo external = Assert.Single(run.Hook.Externals["Produce"]);
-        Assert.Equal(run.External.ResourceId, external.Id);
+        PassReference[] produce = run.Hook.References["Produce"];
+        PassReference produced = Assert.Single(produce, r => r.First.Resource == aBacking.Id);
+        Assert.Equal(aEntry, produced.First.Version);
+        Assert.Equal(aEntry + 1, produced.LastVersion);
+        Assert.NotNull(produced.Texture);
+        PassReference external = Assert.Single(produce, r => r.First.Resource == run.External.ResourceId);
+        Assert.Equal(run.ExternalBefore, external.First);
+        Assert.Equal(run.ExternalBefore.Version + 1, external.LastVersion);
         Assert.Equal("ExternalMesh", external.Name);
-        Assert.Equal(run.ExternalBefore, external.EntryVersion);
         Assert.Equal(64u, external.Buffer!.Value.SizeInBytes);
-        Assert.Null(external.Texture);
-        Assert.Empty(run.Hook.Externals["Consume"]);
-        Assert.Empty(run.Hook.Externals["Finish"]);
-    }
 
-    [SkippableFact]
-    public void LoadedAttachments_ReportImportedTargetWithPreVersion()
-    {
-        Run run = Execute();
-
-        ResourceUse loaded = Assert.Single(run.Hook.Loaded["Consume"]);
-        Assert.Equal(Imported, loaded.Resource);
-        Assert.Equal(run.ImportedBefore, loaded.Version);
-        Assert.Empty(run.Hook.Loaded["Produce"]);
-        Assert.Empty(run.Hook.Loaded["Finish"]);
+        PassReference[] consume = run.Hook.References["Consume"];
+        PassReference sampled = Assert.Single(consume, r => r.First.Resource == aBacking.Id);
+        Assert.Equal(aEntry + 1, sampled.First.Version);
+        Assert.Equal(sampled.First.Version, sampled.LastVersion);
+        PassReference attachment = Assert.Single(consume, r => r.First.Resource == run.ImportedTexture.ColorTextures[0].ResourceId);
+        Assert.Equal(run.ImportedBefore, attachment.First);
+        Assert.Equal(run.ImportedBefore.Version + 1, attachment.LastVersion);
+        Assert.DoesNotContain(run.Hook.References["Finish"], r => r.First.Resource == run.External.ResourceId);
     }
 
     [SkippableFact]

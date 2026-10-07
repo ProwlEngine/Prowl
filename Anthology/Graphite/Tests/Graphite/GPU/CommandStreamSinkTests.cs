@@ -407,17 +407,16 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     }
 
     [SkippableFact]
-    public void ReferencedResources_AndLoadedAttachments_AreTracked()
+    public void ReferencedResources_AreTracked()
     {
         (Framebuffer fb, Texture target) = CreateTarget();
-        (Framebuffer clearedFb, Texture clearedTarget) = CreateTarget();
+        (Framebuffer clearedFb, _) = CreateTarget();
         GraphicsProgram program = CreatePointProgram();
         DeviceBuffer vb = CreateVertexBuffer();
         VertexSource source = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", vb);
         PropertySet props = PointProps();
         ResourceVersion vbBefore = vb.CurrentVersion;
         IReadOnlyList<ReferencedResource>? referenced = null;
-        IReadOnlyList<LoadedAttachmentUse>? loaded = null;
 
         Record(cl =>
         {
@@ -428,14 +427,10 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             cl.SetProperties(props);
             cl.Draw(1);
             referenced = cl.ReferencedResources.ToArray();
-            loaded = cl.LoadedAttachments.ToArray();
         });
 
         Assert.Contains(referenced!, r => r.Buffer == vb && r.FirstVersion == vbBefore);
         Assert.Contains(referenced!, r => r.Texture == target);
-        LoadedAttachmentUse load = Assert.Single(loaded!);
-        Assert.Same(target, load.Texture);
-        Assert.DoesNotContain(loaded!, l => l.Texture == clearedTarget);
     }
 
     [SkippableFact]
