@@ -2,6 +2,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 
 using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
@@ -549,6 +551,86 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         Assert.All(profiler.Timings, t => Assert.Contains(t.Info.ExecutionId, executions));
         Assert.Equal(2, profiler.Resolved.Count);
+    }
+
+    [Fact]
+    public void ConcurrentDispatch_DeliversCompleteEventsUnderEachExecutionId()
+    {
+        const int threadCount = 4;
+        const int iterations = 100;
+        const uint size = 32;
+
+        CorrelationProfiler profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+
+        List<ExecutionTask> tasks = new();
+        List<Exception> failures = new();
+        using System.Threading.Barrier start = new(threadCount);
+
+        Thread[] threads = new Thread[threadCount];
+        for (int t = 0; t < threadCount; t++)
+        {
+            int threadIndex = t;
+            threads[t] = new Thread(() =>
+            {
+                try
+                {
+                    DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+                    RenderResourceID id = RenderResourceID.Intern($"profiler_concurrent_target_{threadIndex}");
+                    using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
+                    ProfilerView[] views = [new(size, size), new(size, size)];
+
+                    start.SignalAndWait();
+                    for (int i = 0; i < iterations; i++)
+                    {
+                        ExecutionTask task = device.DispatchGraph(pipeline, views);
+                        lock (tasks)
+                            tasks.Add(task);
+                    }
+                }
+                catch (Exception e)
+                {
+                    lock (failures)
+                        failures.Add(e);
+                }
+            });
+            threads[t].Start();
+        }
+
+        foreach (Thread thread in threads)
+            thread.Join();
+
+        device.WaitForIdle();
+
+        Assert.Empty(failures);
+        Assert.Equal(threadCount * iterations, tasks.Count);
+        Assert.Equal(tasks.Count, tasks.ConvertAll(t => t.Id).Distinct().Count());
+
+        foreach (ExecutionTask task in tasks)
+        {
+            ulong execution = task.Id;
+
+            Assert.Equal(new[] { 0, 1 }, profiler.ViewsBegun.FindAll(v => v.ExecutionId == execution).ConvertAll(v => v.Index).Order().ToArray());
+            Assert.Equal(4, profiler.PassesBegun.FindAll(p => p.ExecutionId == execution).Count);
+
+            var passTimings = profiler.Timings.FindAll(t => t.Info.ExecutionId == execution && t.Info.Pass != null);
+            foreach (int viewIndex in new[] { 0, 1 })
+            {
+                foreach (string name in new[] { "ProfilerClear", "ProfilerCopy" })
+                {
+                    (int _, CommandBufferInfo info) = Assert.Single(
+                        passTimings, t => t.Info.Pass!.Value.ViewIndex == viewIndex && t.Info.Pass!.Value.Name == name);
+                    Assert.Equal(execution, info.Pass!.Value.ExecutionId);
+                }
+            }
+
+            (int resolvedOrder, ulong _) = Assert.Single(profiler.Resolved, r => r.ExecutionId == execution);
+            foreach ((int order, CommandBufferInfo _) in profiler.Timings.FindAll(t => t.Info.ExecutionId == execution))
+                Assert.True(order < resolvedOrder);
+        }
+
+        Assert.Equal(tasks.Count, profiler.Resolved.Count);
+        Assert.Equal(tasks.Count * 4, profiler.Timings.Count);
     }
 
     [Fact]

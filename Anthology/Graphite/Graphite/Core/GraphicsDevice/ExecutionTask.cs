@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+
 namespace Prowl.Graphite;
 
 /// <summary>
@@ -13,6 +16,12 @@ public abstract partial class ExecutionTask
 
     /// <summary>Owning device.</summary>
     public abstract GraphicsDevice Device { get; }
+
+    private int _completed;
+
+    internal bool IsCompleted => Volatile.Read(ref _completed) != 0;
+
+    internal void MarkCompleted() => Volatile.Write(ref _completed, 1);
 
     /// <summary>Queues a recorded command buffer for this execution's submit. Call End() first.</summary>
     /// <param name="commandList">Buffer to submit.</param>

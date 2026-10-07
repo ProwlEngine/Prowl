@@ -63,9 +63,16 @@ public abstract partial class GraphicsDevice
         {
             ReclaimCompletedExecutions_NoLock();
 
-            if (_freeSlots.Count == 0)
+            while (_freeSlots.Count == 0)
             {
-                ExecutionTask oldest = _activeTasks[0];
+                ExecutionTask? oldest = _activeTasks.Find(t => t.IsCompleted);
+                if (oldest == null)
+                {
+                    Monitor.Wait(_executionLock);
+                    ReclaimCompletedExecutions_NoLock();
+                    continue;
+                }
+
                 WaitForExecutionCore(oldest, ulong.MaxValue);
                 ReclaimCompletedExecutions_NoLock();
             }
@@ -88,6 +95,11 @@ public abstract partial class GraphicsDevice
     {
         ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(CompleteExecution));
         CompleteExecutionCore(task);
+        lock (_executionLock)
+        {
+            task.MarkCompleted();
+            Monitor.PulseAll(_executionLock);
+        }
     }
 
     /// <summary>

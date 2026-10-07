@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 
 using Prowl.Graphite.RenderGraph;
 
@@ -24,7 +25,7 @@ public abstract partial class GraphicsDevice
         List<Swapchain>? presents = null;
         ExecutionTask task;
 
-        _graphDispatchDepth++;
+        Interlocked.Increment(ref _graphDispatchDepth);
         try
         {
             task = BeginExecution();
@@ -55,7 +56,7 @@ public abstract partial class GraphicsDevice
         }
         finally
         {
-            _graphDispatchDepth--;
+            Interlocked.Decrement(ref _graphDispatchDepth);
         }
 
         if (presents != null)
