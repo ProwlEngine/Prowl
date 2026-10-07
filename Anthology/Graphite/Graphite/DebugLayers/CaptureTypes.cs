@@ -4,13 +4,6 @@ using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Debugging;
 
-/// <summary>One use of a resource by a pass: which version it had, which part, and how it was used.</summary>
-public readonly record struct ResourceUse(
-    RenderResourceID Resource,
-    ResourceVersion Version,
-    ResourceRange Range,
-    ResourceUsage Usage);
-
 /// <summary>Which attachment of a graph resource a backing image is.</summary>
 public enum BackingRole : byte
 {
@@ -22,6 +15,14 @@ public enum BackingRole : byte
 /// <summary>One actual image or buffer behind a graph resource for one execution, with its version when the view began.</summary>
 public readonly record struct GraphBacking(ResourceId Id, ResourceVersion EntryVersion, BackingRole Role, uint Index);
 
+/// <summary>Where a graph resource comes from.</summary>
+public enum GraphResourceOrigin : byte
+{
+    Transient,
+    Imported,
+    ViewTarget,
+}
+
 /// <summary>
 /// A graph resource as one view execution saw it. A buffer has one backing, a texture one per color attachment plus depth.
 /// </summary>
@@ -30,7 +31,7 @@ public readonly record struct GraphResourceInfo(
     string Name,
     GraphResourceKind Kind,
     ReadOnlyMemory<GraphBacking> Backings,
-    bool Imported,
+    GraphResourceOrigin Origin,
     GraphTextureDesc? Texture,
     GraphBufferDesc? Buffer);
 
@@ -58,10 +59,10 @@ public readonly record struct ViewCaptureInfo(
     ReadOnlyMemory<GraphResourceInfo> Resources,
     ReadOnlyMemory<PassCaptureInfo> Passes);
 
-/// <summary>A buffer or texture a pass references that is not a graph resource.</summary>
-public readonly record struct ExternalResourceInfo(
-    ResourceId Id,
+/// <summary>One resource a pass touched: version at first reference, version after the pass, and its descriptor.</summary>
+public readonly record struct PassReference(
+    ResourceVersion First,
+    uint LastVersion,
     string Name,
-    ResourceVersion EntryVersion,
     TextureDescription? Texture,
     BufferDescription? Buffer);

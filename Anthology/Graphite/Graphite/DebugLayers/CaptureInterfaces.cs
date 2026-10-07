@@ -11,20 +11,13 @@ namespace Prowl.Graphite.Debugging;
 /// </summary>
 public interface ICaptureProfiler : IProfiler
 {
-    void OnViewBegin(in ViewCaptureInfo view, ICaptureContext capture);
+    void OnViewBegin(in ViewCaptureInfo view);
 
-    void OnPassBegin(in PassInfo pass, ReadOnlySpan<ResourceUse> inputs, ICaptureContext capture);
+    void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture);
 
-    void OnPassEnd(
-        in PassInfo pass,
-        ReadOnlySpan<ResourceUse> outputs,
-        ReadOnlySpan<ResourceUse> loadedAttachments,
-        ReadOnlySpan<ExternalResourceInfo> externals,
-        ICaptureContext capture);
+    void OnViewEnd();
 
-    void OnViewEnd(ICaptureContext capture);
-
-    void OnExecutionSubmitted(ulong executionId);
+    void OnExecutionSubmitted(ExecutionTask task);
 }
 
 /// <summary>Services a hook can request during a callback. Snapshot members arrive with the copy and readback step.</summary>

@@ -20,14 +20,10 @@ internal sealed class GraphCapture
     private readonly PassInfo[] _passInfos;
     private readonly RenderGraph.PassNode[] _nodes;
     private readonly Dictionary<RenderResourceID, GraphBacking[]> _backings = new();
-    private readonly HashSet<ResourceId> _graphIds = new();
-    private readonly HashSet<ResourceId> _viewTargetIds = new();
-    private readonly HashSet<ResourceId> _produced = new();
-    private readonly HashSet<ResourceId> _externalsSeen = new();
-    private readonly List<ResourceUse> _inputs = new();
-    private readonly List<ResourceUse> _outputs = new();
-    private readonly List<ResourceUse> _loaded = new();
-    private readonly List<ExternalResourceInfo> _externals = new();
+    private readonly Dictionary<ResourceId, uint> _passEntry = new();
+    private readonly Dictionary<ResourceId, ResourceVersion> _firstReferenced = new();
+    private readonly HashSet<ResourceId> _listed = new();
+    private readonly List<PassReference> _references = new();
 
     public GraphCapture(ICaptureProfiler hook, RenderContext context, RenderGraph graph, RenderGraph.PassNode[] nodes, PassInfo[] passInfos)
     {
@@ -56,66 +52,82 @@ internal sealed class GraphCapture
             passes[i] = new PassCaptureInfo(_passInfos[i], ToPublic(_nodes[i].Accesses));
 
         ViewCaptureInfo info = new(executionId, viewName, viewIndex, pixelWidth, pixelHeight, resources.ToArray(), passes);
-        _hook.OnViewBegin(in info, CaptureContext.Instance);
+        _hook.OnViewBegin(in info);
     }
 
     public void BeginPass(int index)
     {
-        _inputs.Clear();
+        _passEntry.Clear();
         foreach (ResourceAccess access in _nodes[index].Accesses)
         {
-            if (!access.IsOutput)
-                AddUses(_inputs, access);
+            foreach (GraphBacking backing in _backings[access.Id])
+                _passEntry[backing.Id] = ResolveBacking(access, backing).Version;
         }
-
-        _hook.OnPassBegin(in _passInfos[index], CollectionsMarshal.AsSpan(_inputs), CaptureContext.Instance);
     }
 
     public void EndPass(int index, CommandBuffer commands)
     {
-        _outputs.Clear();
+        _references.Clear();
+        _listed.Clear();
+        _firstReferenced.Clear();
+        foreach (ReferencedResource referenced in commands.ReferencedResources)
+            _firstReferenced[referenced.Buffer?.ResourceId ?? referenced.Texture!.ResourceId] = referenced.FirstVersion;
+
         foreach (ResourceAccess access in _nodes[index].Accesses)
         {
-            if (access.IsOutput)
-                AddUses(_outputs, access);
-        }
+            foreach (GraphBacking backing in _backings[access.Id])
+            {
+                if (backing.Role == BackingRole.Depth && access.DepthState(access.TextureUsage) is null)
+                    continue;
 
-        _loaded.Clear();
-        _externals.Clear();
-        foreach (LoadedAttachmentUse load in commands.LoadedAttachments)
-        {
-            ResourceId id = load.Texture.ResourceId;
-            if (_viewTargetIds.Contains(id) || _produced.Contains(id) || !_graphIds.Contains(id))
-                continue;
+                if (!_listed.Add(backing.Id))
+                    continue;
 
-            _loaded.Add(new ResourceUse(
-                OwnerOf(id), load.Version, TextureRange(load.Texture),
-                ResourceUsage.Attachment));
+                ResourceVersion first = _firstReferenced.TryGetValue(backing.Id, out ResourceVersion referenced)
+                    ? referenced
+                    : new ResourceVersion(backing.Id, _passEntry[backing.Id]);
+                AddReference(first, access, backing);
+            }
         }
 
         foreach (ReferencedResource referenced in commands.ReferencedResources)
         {
-            ResourceId id = referenced.Buffer?.ResourceId ?? referenced.Texture!.ResourceId;
-            if (_graphIds.Contains(id) || !_externalsSeen.Add(id))
+            if (!_listed.Add(referenced.Buffer?.ResourceId ?? referenced.Texture!.ResourceId))
                 continue;
 
-            _externals.Add(referenced.Buffer is { } buffer
-                ? new ExternalResourceInfo(id, buffer.Name, referenced.FirstVersion, null, buffer.DescriptionValue)
-                : new ExternalResourceInfo(id, referenced.Texture!.Name, referenced.FirstVersion, referenced.Texture.DescriptionValue, null));
+            if (referenced.Buffer is { } buffer)
+                _references.Add(new PassReference(referenced.FirstVersion, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue));
+            else
+                _references.Add(new PassReference(referenced.FirstVersion, referenced.Texture!.CurrentVersion.Version, referenced.Texture.Name, referenced.Texture.DescriptionValue, null));
         }
 
-        _hook.OnPassEnd(
-            in _passInfos[index],
-            CollectionsMarshal.AsSpan(_outputs),
-            CollectionsMarshal.AsSpan(_loaded),
-            CollectionsMarshal.AsSpan(_externals),
-            CaptureContext.Instance);
-
-        foreach (ResourceUse output in _outputs)
-            _produced.Add(output.Version.Resource);
+        _hook.OnPassEnd(in _passInfos[index], CollectionsMarshal.AsSpan(_references), CaptureContext.Instance);
     }
 
-    public void EndView() => _hook.OnViewEnd(CaptureContext.Instance);
+    public void EndView() => _hook.OnViewEnd();
+
+    private void AddReference(ResourceVersion first, ResourceAccess access, GraphBacking backing)
+    {
+        if (!access.IsTexture)
+        {
+            DeviceBuffer buffer = _context.GetRenderBuffer(new BufferHandle(access.Id));
+            _references.Add(new PassReference(first, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue));
+            return;
+        }
+
+        RenderTexture target = _context.GetRenderTexture(new TextureHandle(access.Id));
+        Texture texture = backing.Role == BackingRole.Depth ? target.DepthTexture! : target.ColorTextures[(int)backing.Index];
+        _references.Add(new PassReference(first, texture.CurrentVersion.Version, texture.Name, texture.DescriptionValue, null));
+    }
+
+    private ResourceVersion ResolveBacking(ResourceAccess access, GraphBacking backing)
+    {
+        if (!access.IsTexture)
+            return _context.GetRenderBuffer(new BufferHandle(access.Id)).CurrentVersion;
+
+        RenderTexture texture = _context.GetRenderTexture(new TextureHandle(access.Id));
+        return (backing.Role == BackingRole.Depth ? texture.DepthTexture! : texture.ColorTextures[(int)backing.Index]).CurrentVersion;
+    }
 
     private GraphResourceInfo DescribeResource(RenderResourceID id, bool isTexture)
     {
@@ -124,7 +136,7 @@ internal sealed class GraphCapture
         List<GraphBacking> backings = new();
         GraphTextureDesc? textureDesc = null;
         GraphBufferDesc? bufferDesc = null;
-        bool imported = false;
+        GraphResourceOrigin origin = GraphResourceOrigin.Transient;
 
         if (isTexture)
         {
@@ -140,12 +152,10 @@ internal sealed class GraphCapture
                     textureDesc = transient.Description;
                     break;
                 case GraphViewTargetResource:
-                    imported = true;
-                    foreach (GraphBacking backing in backings)
-                        _viewTargetIds.Add(backing.Id);
+                    origin = GraphResourceOrigin.ViewTarget;
                     break;
                 case GraphImportedTextureResource:
-                    imported = true;
+                    origin = GraphResourceOrigin.Imported;
                     break;
             }
         }
@@ -159,70 +169,8 @@ internal sealed class GraphCapture
 
         GraphBacking[] array = backings.ToArray();
         _backings[id] = array;
-        foreach (GraphBacking backing in array)
-            _graphIds.Add(backing.Id);
-
         return new GraphResourceInfo(
-            id, name, isTexture ? GraphResourceKind.Texture : GraphResourceKind.Buffer, array, imported, textureDesc, bufferDesc);
-    }
-
-    private void AddUses(List<ResourceUse> uses, ResourceAccess access)
-    {
-        GraphBacking[] backings = _backings[access.Id];
-        if (!access.IsTexture)
-        {
-            DeviceBuffer buffer = _context.GetRenderBuffer(new BufferHandle(access.Id));
-            uses.Add(new ResourceUse(access.Id, buffer.CurrentVersion, ResourceRange.Bytes(0, buffer.SizeInBytes), BufferUsage(access.BufferUsage)));
-            return;
-        }
-
-        RenderTexture texture = _context.GetRenderTexture(new TextureHandle(access.Id));
-        foreach (Texture color in texture.ColorTextures)
-            uses.Add(new ResourceUse(access.Id, color.CurrentVersion, TextureRange(color), TextureUsage(access.TextureUsage)));
-
-        if (texture.DepthTexture is { } depth && access.DepthState(access.TextureUsage) is { } depthState)
-            uses.Add(new ResourceUse(access.Id, depth.CurrentVersion, TextureRange(depth), TextureUsage(depthState)));
-    }
-
-    private RenderResourceID OwnerOf(ResourceId backing)
-    {
-        foreach ((RenderResourceID id, GraphBacking[] backings) in _backings)
-        {
-            foreach (GraphBacking candidate in backings)
-            {
-                if (candidate.Id == backing)
-                    return id;
-            }
-        }
-
-        return default;
-    }
-
-    private static ResourceRange TextureRange(Texture texture)
-        => ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
-
-    private static ResourceUsage TextureUsage(TextureState state) => state switch
-    {
-        TextureState.Sampled => ResourceUsage.Sampled,
-        TextureState.Storage => ResourceUsage.Storage,
-        TextureState.Attachment => ResourceUsage.Attachment,
-        TextureState.TransferSrc => ResourceUsage.CopySource,
-        TextureState.TransferDst => ResourceUsage.CopyDestination,
-        TextureState.DepthReadOnly => ResourceUsage.Attachment | ResourceUsage.Sampled,
-        _ => ResourceUsage.None,
-    };
-
-    private static ResourceUsage BufferUsage(BufferAccess access)
-    {
-        ResourceUsage usage = ResourceUsage.None;
-        if ((access & (BufferAccess.ShaderRead | BufferAccess.ShaderWrite)) != 0) usage |= ResourceUsage.Storage;
-        if ((access & BufferAccess.Uniform) != 0) usage |= ResourceUsage.Uniform;
-        if ((access & BufferAccess.Vertex) != 0) usage |= ResourceUsage.Vertex;
-        if ((access & BufferAccess.Index) != 0) usage |= ResourceUsage.Index;
-        if ((access & BufferAccess.Indirect) != 0) usage |= ResourceUsage.Indirect;
-        if ((access & BufferAccess.TransferRead) != 0) usage |= ResourceUsage.CopySource;
-        if ((access & BufferAccess.TransferWrite) != 0) usage |= ResourceUsage.CopyDestination;
-        return usage;
+            id, name, isTexture ? GraphResourceKind.Texture : GraphResourceKind.Buffer, array, origin, textureDesc, bufferDesc);
     }
 
     private static PassResourceAccess[] ToPublic(ResourceAccess[] accesses)

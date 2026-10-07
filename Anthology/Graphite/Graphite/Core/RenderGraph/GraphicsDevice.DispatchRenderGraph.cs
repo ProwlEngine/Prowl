@@ -50,7 +50,7 @@ public abstract partial class GraphicsDevice
             }
 
             CompleteExecution(task);
-            profilers.Capture?.OnExecutionSubmitted(task.Id);
+            profilers.Capture?.OnExecutionSubmitted(task);
         }
 
         if (presents != null)

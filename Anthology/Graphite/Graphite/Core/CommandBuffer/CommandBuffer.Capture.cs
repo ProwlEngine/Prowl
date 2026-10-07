@@ -8,8 +8,6 @@ namespace Prowl.Graphite;
 
 internal readonly record struct ReferencedResource(DeviceBuffer? Buffer, Texture? Texture, ResourceVersion FirstVersion);
 
-internal readonly record struct LoadedAttachmentUse(Texture Texture, uint MipLevel, uint ArrayLayer, ResourceVersion Version, bool IsDepth);
-
 public abstract partial class CommandBuffer
 {
     private readonly struct ReportedProperty
@@ -30,8 +28,6 @@ public abstract partial class CommandBuffer
     private readonly List<PropertyDelta> _deltaScratch = new();
     private readonly List<ReferencedResource> _referenced = new();
     private readonly HashSet<ResourceId> _referencedIds = new();
-    private readonly List<LoadedAttachmentUse> _loadedAttachments = new();
-    private readonly HashSet<(ResourceId, uint, uint)> _boundAttachments = new();
     private AttachmentUse[] _attachmentScratch = new AttachmentUse[8];
     private VertexBindingUse[] _vertexScratch = new VertexBindingUse[8];
     private VertexBindingUse[] _reportedVertex = new VertexBindingUse[8];
@@ -47,16 +43,11 @@ public abstract partial class CommandBuffer
     /// <summary>Resources this pass's commands referenced, with their version at first reference.</summary>
     internal IReadOnlyList<ReferencedResource> ReferencedResources => _referenced;
 
-    /// <summary>Attachments bound with a load op as their first binding in this pass.</summary>
-    internal IReadOnlyList<LoadedAttachmentUse> LoadedAttachments => _loadedAttachments;
-
     private void ResetCaptureState()
     {
         _reportedProperties.Clear();
         _referenced.Clear();
         _referencedIds.Clear();
-        _loadedAttachments.Clear();
-        _boundAttachments.Clear();
         _reportedVertexCount = 0;
         _reportedIndex = null;
     }
@@ -77,17 +68,6 @@ public abstract partial class CommandBuffer
         _referenced.Add(new ReferencedResource(null, texture, texture.CurrentVersion));
     }
 
-    private ResourceVersion FirstVersionOf(Texture texture)
-    {
-        foreach (ReferencedResource referenced in _referenced)
-        {
-            if (referenced.Texture == texture)
-                return referenced.FirstVersion;
-        }
-
-        return texture.CurrentVersion;
-    }
-
     private void ReportFramebuffer(Framebuffer fb, in TargetLoadStoreOps ops)
     {
         if (!CaptureActive)
@@ -98,14 +78,14 @@ public abstract partial class CommandBuffer
         for (int i = 0; i < colors.Count; i++)
         {
             FramebufferAttachment attachment = colors[i];
-            TrackAttachment(attachment, ops.Color, isDepth: false);
+            TrackTexture(attachment.Target);
             _attachmentScratch[i] = new AttachmentUse(attachment.Target.CurrentVersion, attachment.MipLevel, attachment.ArrayLayer);
         }
 
         AttachmentUse? depth = null;
         if (fb.DepthTarget is { } depthAttachment)
         {
-            TrackAttachment(depthAttachment, ops.Depth, isDepth: true);
+            TrackTexture(depthAttachment.Target);
             depth = new AttachmentUse(depthAttachment.Target.CurrentVersion, depthAttachment.MipLevel, depthAttachment.ArrayLayer);
         }
 
@@ -114,16 +94,6 @@ public abstract partial class CommandBuffer
             FramebufferInfo info = new(_attachmentScratch.AsSpan(0, colors.Count), depth, fb.OutputDescription, fb.Width, fb.Height);
             sink.SetFramebuffer(in info, in ops);
         }
-    }
-
-    private void TrackAttachment(in FramebufferAttachment attachment, in AttachmentOps ops, bool isDepth)
-    {
-        Texture texture = attachment.Target;
-        bool firstBinding = _boundAttachments.Add((texture.ResourceId, attachment.MipLevel, attachment.ArrayLayer));
-        if (firstBinding && ops.Load == LoadAction.Load)
-            _loadedAttachments.Add(new LoadedAttachmentUse(texture, attachment.MipLevel, attachment.ArrayLayer, FirstVersionOf(texture), isDepth));
-
-        TrackTexture(texture);
     }
 
     private void ReportPropertyDeltas()
