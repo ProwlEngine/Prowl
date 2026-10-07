@@ -12,32 +12,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file sealed class CommandRecorder : ICommandProfiler
-{
-    public readonly List<ShaderSwitchInfo> ShaderSwitches = new();
-    public readonly List<PipelineBindInfo> PipelineBinds = new();
-    public readonly List<object> ShaderAndPipelineOrder = new();
-    public readonly List<DispatchCallInfo> Dispatches = new();
-    public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
-
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
-    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) => Dispatches.Add(info);
-
-    public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info)
-    {
-        ShaderSwitches.Add(info);
-        ShaderAndPipelineOrder.Add(info);
-    }
-
-    public void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info)
-    {
-        PipelineBinds.Add(info);
-        ShaderAndPipelineOrder.Add(info);
-    }
-
-    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
-}
-
 file sealed class GraphRecorder : IGraphProfiler
 {
     public readonly List<PassInfo> PassesEnded = new();
@@ -57,13 +31,12 @@ file sealed class GraphRecorder : IGraphProfiler
     public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 }
 
-file sealed class LifecycleRecorder : IGraphProfiler, ICommandProfiler
+file sealed class LifecycleRecorder : IGraphProfiler
 {
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
-    public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
 
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
@@ -73,12 +46,6 @@ file sealed class LifecycleRecorder : IGraphProfiler, ICommandProfiler
         => PassReads.Add((pass, resource, texture, buffer));
     public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
         => PassWrites.Add((pass, resource, texture, buffer));
-
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
-    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
-    public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info) { }
-    public void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
-    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
 }
 
 file sealed class TimingRecorder : IGpuStatsProfiler
@@ -296,111 +263,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void Dispatch_RecordsShaderSwitchPipelineBindResourceSetBindAndDispatch()
-    {
-        CommandRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        const uint width = 16;
-        const uint height = 16;
-        const uint count = width * height;
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-
-        ComputeProgram program = CreateBasicComputeProgram(device);
-
-        PropertySet props = new();
-        props.SetInt("Width", (int)width);
-        props.SetInt("Height", (int)height);
-        props.SetBuffer("Source", source);
-        props.SetBuffer("Destination", destination);
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-        });
-        device.WaitForIdle();
-
-        ShaderSwitchInfo shaderSwitch = Assert.Single(profiler.ShaderSwitches);
-        Assert.True(shaderSwitch.IsCompute);
-        Assert.Equal(ShaderStages.Compute, shaderSwitch.Stages);
-        Assert.Same(program, shaderSwitch.Program);
-
-        PipelineBindInfo bind = Assert.Single(profiler.PipelineBinds);
-        Assert.True(bind.IsCompute);
-        Assert.Same(program, bind.Program);
-        Assert.Null(bind.Outputs);
-        Assert.Null(bind.Topology);
-        Assert.IsType<ShaderSwitchInfo>(profiler.ShaderAndPipelineOrder[0]);
-
-        GraphicsCountersSnapshot counters = device.Counters.Snapshot();
-        Assert.True(counters.ResourceSetBinds > 0);
-        Assert.Equal(counters.ResourceSetBinds, counters.ResourceSetsBound);
-
-        DispatchCallInfo dispatch = Assert.Single(profiler.Dispatches);
-        Assert.Equal(1u, dispatch.GroupCountX);
-        Assert.Equal(1u, dispatch.GroupCountY);
-        Assert.Equal(1u, dispatch.GroupCountZ);
-        Assert.False(dispatch.IsIndirect);
-    }
-
-    [Fact]
-    public void Draw_OneShaderIntoTwoFramebufferLayouts_RecordsOneShaderSwitchThenTwoPipelineBinds()
-    {
-        CommandRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        const uint size = 16;
-        const uint stride = 52;
-        GraphicsProgram program = CreateSinkProgram(device);
-
-        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
-        device.UpdateBuffer(vertices, 0, new byte[stride * 3]);
-
-        Texture floatTarget = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-            size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture byteTarget = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-            size, size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
-        Framebuffer floatFramebuffer = device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, floatTarget));
-        Framebuffer byteFramebuffer = device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, byteTarget));
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.SetShader(program);
-            cl.SetVertexSource(new VertexSource().SetBuffer("POSITION", vertices));
-            cl.ClearProperties();
-
-            cl.SetFramebuffer(floatFramebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.Draw(3);
-
-            cl.SetFramebuffer(byteFramebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.Draw(3);
-        });
-        device.WaitForIdle();
-
-        Assert.Equal(3, profiler.ShaderAndPipelineOrder.Count);
-        ShaderSwitchInfo shaderSwitch = Assert.IsType<ShaderSwitchInfo>(profiler.ShaderAndPipelineOrder[0]);
-        PipelineBindInfo first = Assert.IsType<PipelineBindInfo>(profiler.ShaderAndPipelineOrder[1]);
-        PipelineBindInfo second = Assert.IsType<PipelineBindInfo>(profiler.ShaderAndPipelineOrder[2]);
-
-        Assert.False(shaderSwitch.IsCompute);
-        Assert.Same(program, shaderSwitch.Program);
-        Assert.Same(program, first.Program);
-        Assert.Same(program, second.Program);
-        Assert.NotEqual(first.PipelineId, second.PipelineId);
-        Assert.Equal(PixelFormat.R32_G32_B32_A32_Float, first.Outputs!.Value.ColorFormats[0]);
-        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, second.Outputs!.Value.ColorFormats[0]);
-        Assert.Equal(PrimitiveTopology.TriangleList, first.Topology);
-    }
-
-    [Fact]
     public void EndPass_ReportsExactPassStats()
     {
         GraphRecorder profiler = new();
@@ -453,7 +315,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void DispatchGraph_RecordsPassLifecycleReadsAndSubmits()
+    public void DispatchGraph_RecordsPassLifecycleAndReads()
     {
         LifecycleRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
@@ -477,11 +339,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Contains(profiler.PassWrites, w => w.Pass.Name == "ProfilerClear" && w.Resource.Equals(id));
         Assert.DoesNotContain(profiler.PassReads, r => r.Pass.Name == "ProfilerClear");
         Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerCopy" && r.Resource.Equals(id));
-
-        Assert.Equal(
-            new[] { "ProfilerClear", "ProfilerCopy" },
-            profiler.Submits.ConvertAll(s => s.Info.Name));
-        Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 
         Assert.True(device.Counters.Snapshot().Barriers(BarrierBin.TextureTransition) > 0);
     }
@@ -656,10 +513,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void CompositeProfiler_ForwardsEachCategoryToEverySinkThatImplementsIt()
     {
-        CommandRecorder firstCommands = new();
-        CommandRecorder secondCommands = new();
-        TimingRecorder timing = new();
-        using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(firstCommands, timing, new CompositeProfiler(secondCommands)));
+        TimingRecorder first = new();
+        TimingRecorder second = new();
+        GraphRecorder graph = new();
+        using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(first, graph, new CompositeProfiler(second)));
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
@@ -670,9 +527,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         });
         device.WaitForIdle();
 
-        Assert.NotEmpty(firstCommands.Submits);
-        Assert.Equal(firstCommands.Submits.Count, secondCommands.Submits.Count);
-        Assert.Single(timing.ExecutionTimes);
+        Assert.Single(first.ExecutionTimes);
+        Assert.Single(second.ExecutionTimes);
     }
 
     [Fact]
@@ -686,7 +542,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        CommandRecorder profiler = new();
+        TimingRecorder profiler = new();
 
         void RunCopyGraph(bool attachDuringDispatch)
         {
@@ -700,15 +556,15 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         }
 
         RunCopyGraph(attachDuringDispatch: true);
-        Assert.Empty(profiler.Submits);
+        Assert.Empty(profiler.ExecutionTimes);
 
         RunCopyGraph(attachDuringDispatch: false);
-        Assert.NotEmpty(profiler.Submits);
+        Assert.NotEmpty(profiler.ExecutionTimes);
 
         device.Debug.Detach(profiler);
-        profiler.Submits.Clear();
+        profiler.ExecutionTimes.Clear();
         RunCopyGraph(attachDuringDispatch: false);
-        Assert.Empty(profiler.Submits);
+        Assert.Empty(profiler.ExecutionTimes);
     }
 
     [Fact]
