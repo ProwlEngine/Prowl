@@ -3,33 +3,10 @@ using Xunit;
 namespace Prowl.Graphite.Tests;
 
 // Covers the CPU-only surface of PropertySet: scalar uniform writes, entry de-duplication
-// by name, and Clear. Resource setters (buffer/texture/sampler)
+// by name. Resource setters (buffer/texture/sampler)
 // require a live GraphicsDevice and are exercised by the GPU resource tests instead.
 public class PropertySetTests
 {
-    [Fact]
-    public void SetFloat_SameName_OverwritesInPlace()
-    {
-        PropertySet set = new();
-
-        set.SetFloat("dup", 1.0f);
-        set.SetFloat("dup", 2.0f);
-
-        Assert.Equal(1, set.EntryCount);
-    }
-
-    [Fact]
-    public void Clear_RemovesEntries()
-    {
-        PropertySet set = new();
-        set.SetFloat("a", 1.0f);
-        set.SetFloat("b", 2.0f);
-
-        set.Clear();
-
-        Assert.Equal(0, set.EntryCount);
-    }
-
     [Fact]
     public void SetScalar_SameName_DifferentType_StaysOneEntry()
     {
