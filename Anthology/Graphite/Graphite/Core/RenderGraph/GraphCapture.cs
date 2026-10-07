@@ -14,7 +14,7 @@ internal sealed class CaptureContext : ICaptureContext
 /// <summary>Per view state that turns graph execution into capture hook callbacks.</summary>
 internal sealed class GraphCapture
 {
-    private readonly ICaptureHook _hook;
+    private readonly ICaptureProfiler _hook;
     private readonly RenderContext _context;
     private readonly RenderGraph _graph;
     private readonly PassInfo[] _passInfos;
@@ -29,7 +29,7 @@ internal sealed class GraphCapture
     private readonly List<ResourceUse> _loaded = new();
     private readonly List<ExternalResourceInfo> _externals = new();
 
-    public GraphCapture(ICaptureHook hook, RenderContext context, RenderGraph graph, RenderGraph.PassNode[] nodes, PassInfo[] passInfos)
+    public GraphCapture(ICaptureProfiler hook, RenderContext context, RenderGraph graph, RenderGraph.PassNode[] nodes, PassInfo[] passInfos)
     {
         _hook = hook;
         _context = context;

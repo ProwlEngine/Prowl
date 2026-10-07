@@ -58,9 +58,9 @@ public sealed class RenderContext
     /// <summary>View being rendered as its concrete type.</summary>
     public T ViewAs<T>() where T : IRenderView => (T)_view;
 
-    internal IGraphProfiler? GraphProfiler => _device.GraphProfiler;
+    internal IGraphProfiler? GraphProfiler => _task.Profilers.Graph;
 
-    internal Prowl.Graphite.Debugging.ICaptureHook? CaptureHook => _device.CaptureHook;
+    internal Prowl.Graphite.Debugging.ICaptureProfiler? CaptureHook => _task.Profilers.Capture;
 
     internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
@@ -258,7 +258,7 @@ public sealed class RenderContext
     internal CommandBuffer BeginPassCommandBuffer(string passName)
     {
         CommandBuffer cb = BeginCommandBuffer(passName);
-        if (_device.CommandSink is { } sink && cb.Pass is { } pass)
+        if (_task.Profilers.CommandStream is { } sink && cb.Pass is { } pass)
         {
             cb.PassCommandsOpen = true;
             sink.BeginPassCommands(in pass);
@@ -303,7 +303,7 @@ public sealed class RenderContext
         if (cmd.PassCommandsOpen && cmd.Pass is { } pass)
         {
             cmd.PassCommandsOpen = false;
-            _device.CommandSink?.EndPassCommands(in pass);
+            _task.Profilers.CommandStream?.EndPassCommands(in pass);
         }
 
         _task.SubmitRecorded(cmd);

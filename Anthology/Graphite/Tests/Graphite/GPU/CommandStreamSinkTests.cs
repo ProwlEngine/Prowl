@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-internal sealed class SinkRecorder : ICommandStreamSink
+internal sealed class SinkRecorder : ICommandStreamProfiler
 {
     public readonly List<string> Log = new();
     public readonly List<PropertyDelta> Deltas = new();
@@ -194,7 +194,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     private SinkRecorder Record(Action<CommandBuffer> record)
     {
         SinkRecorder sink = new();
-        GD.Debug.Capture = new CaptureSetup { Commands = sink };
+        GD.Debug.Attach(sink);
         try
         {
             GD.RunTestGraph((context, cl) => record(cl));
@@ -202,7 +202,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         }
         finally
         {
-            GD.Debug.Capture = null;
+            GD.Debug.Detach(sink);
         }
 
         return sink;
@@ -442,7 +442,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     public void PassBeginAndEnd_BracketCommands()
     {
         SinkRecorder sink = new();
-        GD.Debug.Capture = new CaptureSetup { Commands = sink };
+        GD.Debug.Attach(sink);
         try
         {
             using RenderPipeline pipeline = new([new SinkPass(cmd => cmd.ClearProperties())]);
@@ -451,7 +451,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         }
         finally
         {
-            GD.Debug.Capture = null;
+            GD.Debug.Detach(sink);
         }
 
         Assert.Equal(["BeginPass:SinkPass", "ClearProperties", "EndPass:SinkPass"], sink.Log);

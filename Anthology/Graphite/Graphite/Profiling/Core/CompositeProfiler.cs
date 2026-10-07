@@ -9,6 +9,7 @@ public sealed class CompositeProfiler : ICommandProfiler, IGraphProfiler, IGpuSt
     private readonly ICommandProfiler[] _command;
     private readonly IGraphProfiler[] _graph;
     private readonly IGpuStatsProfiler[] _gpuStats;
+    private readonly IProfiler[] _leaves;
 
     /// <summary>Creates a composite over the sinks. Sinks are fixed at construction.</summary>
     /// <param name="sinks">Profilers to forward to.</param>
@@ -19,6 +20,7 @@ public sealed class CompositeProfiler : ICommandProfiler, IGraphProfiler, IGpuSt
         List<ICommandProfiler> command = new();
         List<IGraphProfiler> graph = new();
         List<IGpuStatsProfiler> gpuStats = new();
+        List<IProfiler> leaves = new();
 
         foreach (IProfiler sink in sinks)
         {
@@ -30,9 +32,11 @@ public sealed class CompositeProfiler : ICommandProfiler, IGraphProfiler, IGpuSt
                 command.AddRange(nested._command);
                 graph.AddRange(nested._graph);
                 gpuStats.AddRange(nested._gpuStats);
+                leaves.AddRange(nested._leaves);
                 continue;
             }
 
+            leaves.Add(sink);
             if (sink is ICommandProfiler c)
                 command.Add(c);
             if (sink is IGraphProfiler g)
@@ -44,13 +48,10 @@ public sealed class CompositeProfiler : ICommandProfiler, IGraphProfiler, IGpuSt
         _command = command.ToArray();
         _graph = graph.ToArray();
         _gpuStats = gpuStats.ToArray();
+        _leaves = leaves.ToArray();
     }
 
-    internal bool HasCommand => _command.Length != 0;
-
-    internal bool HasGraph => _graph.Length != 0;
-
-    internal bool HasGpuStats => _gpuStats.Length != 0;
+    internal IProfiler[] Leaves => _leaves;
 
     public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer)
     {

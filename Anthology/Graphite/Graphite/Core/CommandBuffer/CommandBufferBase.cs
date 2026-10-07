@@ -23,7 +23,7 @@ public abstract class CommandBufferBase : GraphicsResource
     }
 
     /// <summary>Command stream sink if this buffer records inside a graph execution and one is registered.</summary>
-    internal virtual ICommandStreamSink? PassSink => null;
+    internal virtual ICommandStreamProfiler? PassSink => null;
 
     internal virtual void TrackBuffer(DeviceBuffer buffer) { }
 

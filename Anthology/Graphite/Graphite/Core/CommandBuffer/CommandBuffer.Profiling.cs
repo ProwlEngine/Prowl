@@ -11,6 +11,8 @@ public abstract partial class CommandBuffer
     internal PassInfo? Pass { get; set; }
 
     /// <summary>Bound execution's id, or 0.</summary>
+    internal ProfilerSet Profilers => Execution?.Profilers ?? Device.Profilers;
+
     internal ulong ExecutionId => Execution?.Id ?? 0;
 
     /// <summary>Fresh id stamped per rental, so profiler can tell reused instances apart.</summary>
@@ -45,8 +47,8 @@ public abstract partial class CommandBuffer
     internal void ReportPipelineBind(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
     {
         _statPipelineBinds++;
-        ICommandProfiler? profiler = Device.CommandProfiler;
-        ICommandStreamSink? sink = PassSink;
+        ICommandProfiler? profiler = Profilers.Command;
+        ICommandStreamProfiler? sink = PassSink;
         if (profiler == null && sink == null)
             return;
 

@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-internal sealed class HookRecorder : ICaptureHook
+internal sealed class HookRecorder : ICaptureProfiler
 {
     public readonly List<string> Log = new();
     public ViewCaptureInfo View;
@@ -142,7 +142,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         ResourceVersion importedBefore = imported.ColorTextures[0].CurrentVersion;
         HookRecorder hook = new();
 
-        GD.Debug.Capture = new CaptureSetup { Hook = hook };
+        GD.Debug.Attach(hook);
         ExecutionTask task;
         try
         {
@@ -155,7 +155,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         }
         finally
         {
-            GD.Debug.Capture = null;
+            GD.Debug.Detach(hook);
         }
 
         return new Run(hook, external, externalBefore, imported, importedBefore, task.Id);

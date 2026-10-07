@@ -676,18 +676,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void CompositeProfiler_OnlyEnablesCategoriesItsSinksImplement()
-    {
-        CommandRecorder commands = new();
-        using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(commands));
-
-        Assert.NotNull(device.CommandProfiler);
-        Assert.Null(device.GraphProfiler);
-        Assert.Null(device.GpuStatsProfiler);
-    }
-
-    [Fact]
-    public void SetProfiler_SwapsActiveProfilerAtRuntime()
+    public void AttachDetach_TakeEffectFromTheNextExecution()
     {
         using GraphicsDevice device = GD.BackendType switch
         {
@@ -697,30 +686,28 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        CommandRecorder profiler = new();
 
-        void RunCopyGraph()
+        void RunCopyGraph(bool attachDuringDispatch)
         {
             device.RunTestGraph((context, cl) =>
             {
+                if (attachDuringDispatch)
+                    device.Debug.Attach(profiler);
                 cl.CopyBuffer(source, 0, destination, 0, 256);
             });
             device.WaitForIdle();
         }
 
-        Assert.Null(device.Profiler);
+        RunCopyGraph(attachDuringDispatch: true);
+        Assert.Empty(profiler.Submits);
 
-        CommandRecorder profiler = new();
-        device.SetProfiler(profiler);
-        Assert.Same(profiler, device.Profiler);
-
-        RunCopyGraph();
+        RunCopyGraph(attachDuringDispatch: false);
         Assert.NotEmpty(profiler.Submits);
 
-        device.SetProfiler(null);
-        Assert.Null(device.Profiler);
-
+        device.Debug.Detach(profiler);
         profiler.Submits.Clear();
-        RunCopyGraph();
+        RunCopyGraph(attachDuringDispatch: false);
         Assert.Empty(profiler.Submits);
     }
 

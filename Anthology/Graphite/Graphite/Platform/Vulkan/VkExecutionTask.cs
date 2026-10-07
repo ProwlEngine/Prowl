@@ -58,7 +58,7 @@ internal sealed class VkExecutionTask : ExecutionTask
         if (_queuedCommandBuffers.Count == 0)
             return;
 
-        _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: false);
+        _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: false, Profilers.GpuStats);
         _queuedCommandBuffers.Clear();
     }
 
@@ -66,7 +66,7 @@ internal sealed class VkExecutionTask : ExecutionTask
     /// <summary>Submits whatever is still queued and returns the serial that marks the execution complete.</summary>
     internal ulong FinalSubmit()
     {
-        ulong serial = _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: true);
+        ulong serial = _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: true, Profilers.GpuStats);
         _queuedCommandBuffers.Clear();
         return serial;
     }

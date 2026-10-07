@@ -1,27 +1,20 @@
-using System;
-
 namespace Prowl.Graphite.Debugging;
 
 /// <summary>Debug settings of a device. Reached through <see cref="GraphicsDevice.Debug"/>.</summary>
 public sealed class DeviceDebug
 {
     private readonly GraphicsDevice _device;
-    private CaptureSetup? _capture;
 
     internal DeviceDebug(GraphicsDevice device)
     {
         _device = device;
     }
 
-    /// <summary>Capture taps, null if none. Assigning throws while a <see cref="GraphicsDevice.DispatchGraph{T}"/> is executing.</summary>
-    public CaptureSetup? Capture
-    {
-        get => _capture;
-        set
-        {
-            _device.RequireNotDispatching("Debug.Capture");
-            _capture = value;
-            _device.ApplyCapture(value);
-        }
-    }
+    /// <summary>Attaches a profiler. Never throws. Applies from the next graph execution.</summary>
+    /// <param name="profiler">Profiler to attach.</param>
+    public void Attach(IProfiler profiler) => _device.AttachProfiler(profiler);
+
+    /// <summary>Detaches a profiler. Never throws. Applies from the next graph execution.</summary>
+    /// <param name="profiler">Profiler to detach.</param>
+    public void Detach(IProfiler profiler) => _device.DetachProfiler(profiler);
 }

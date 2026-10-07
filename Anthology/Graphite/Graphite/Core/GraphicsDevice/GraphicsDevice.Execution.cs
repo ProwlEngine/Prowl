@@ -59,6 +59,7 @@ public abstract partial class GraphicsDevice
     /// <returns>New execution handle.</returns>
     public ExecutionTask BeginExecution()
     {
+        ProfilerSet profilers = Profilers;
         lock (_executionLock)
         {
             ReclaimCompletedExecutions_NoLock();
@@ -81,6 +82,7 @@ public abstract partial class GraphicsDevice
             ulong id = ++_executionIdCounter;
 
             ExecutionTask task = BeginExecutionCore(id, ringSlot);
+            task.Profilers = profilers;
             _activeTasks.Add(task);
             return task;
         }

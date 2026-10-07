@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading;
 
 using Prowl.Graphite.RenderGraph;
 
@@ -25,10 +24,9 @@ public abstract partial class GraphicsDevice
         List<Swapchain>? presents = null;
         ExecutionTask task;
 
-        Interlocked.Increment(ref _graphDispatchDepth);
-        try
         {
             task = BeginExecution();
+            ProfilerSet profilers = task.Profilers;
 
             int index = 0;
             foreach (T view in views)
@@ -38,9 +36,9 @@ public abstract partial class GraphicsDevice
 
                 var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight, task.Id);
 
-                GraphProfiler?.BeginView(viewInfo);
+                profilers.Graph?.BeginView(viewInfo);
                 pipeline.ExecuteView(context);
-                GraphProfiler?.EndView(viewInfo);
+                profilers.Graph?.EndView(viewInfo);
 
                 Swapchain? swapchain = context.PresentSwapchain;
                 if (swapchain != null)
@@ -52,11 +50,7 @@ public abstract partial class GraphicsDevice
             }
 
             CompleteExecution(task);
-            CaptureHook?.OnExecutionSubmitted(task.Id);
-        }
-        finally
-        {
-            Interlocked.Decrement(ref _graphDispatchDepth);
+            profilers.Capture?.OnExecutionSubmitted(task.Id);
         }
 
         if (presents != null)

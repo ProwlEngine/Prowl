@@ -9,7 +9,7 @@ namespace Prowl.Graphite.Debugging;
 /// Graph level capture tap, called synchronously on the thread executing the graph, outside any render pass.
 /// Spans are reused buffers and only valid for the duration of the call.
 /// </summary>
-public interface ICaptureHook
+public interface ICaptureProfiler : IProfiler
 {
     void OnViewBegin(in ViewCaptureInfo view, ICaptureContext capture);
 
@@ -35,7 +35,7 @@ public interface ICaptureContext
 /// <summary>
 /// Observes every command recorded into a pass command buffer, in order. Spans and in-pass update bytes are only valid for the duration of the call.
 /// </summary>
-public interface ICommandStreamSink
+public interface ICommandStreamProfiler : IProfiler
 {
     void BeginPassCommands(in PassInfo pass);
 

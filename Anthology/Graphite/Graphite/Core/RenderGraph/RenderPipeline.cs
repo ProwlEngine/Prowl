@@ -121,7 +121,7 @@ public class RenderPipeline : IDisposable
 
     private static GraphCapture? BeginCapture(RenderContext context, RenderGraph graph, bool hasViewTarget)
     {
-        ICaptureHook? hook = context.CaptureHook;
+        ICaptureProfiler? hook = context.CaptureHook;
         if (hook == null)
             return null;
 

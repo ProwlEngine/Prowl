@@ -17,6 +17,8 @@ public abstract partial class ExecutionTask
     /// <summary>Owning device.</summary>
     public abstract GraphicsDevice Device { get; }
 
+    internal ProfilerSet Profilers { get; set; } = ProfilerSet.Empty;
+
     private int _completed;
 
     internal bool IsCompleted => Volatile.Read(ref _completed) != 0;
@@ -29,7 +31,7 @@ public abstract partial class ExecutionTask
 
     internal void SubmitRecorded(CommandBuffer commandBuffer)
     {
-        Device.CommandProfiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
+        Profilers.Command?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
         commandBuffer.End();
         SubmitCommandsInternal(commandBuffer);
     }

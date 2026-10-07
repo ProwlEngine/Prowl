@@ -40,9 +40,9 @@ public abstract partial class CommandBuffer
 
     internal bool PassCommandsOpen { get; set; }
 
-    internal override ICommandStreamSink? PassSink => Execution != null ? Device.CommandSink : null;
+    internal override ICommandStreamProfiler? PassSink => Execution != null ? Profilers.CommandStream : null;
 
-    internal bool CaptureActive => Execution != null && (Device.CommandSink != null || Device.CaptureHook != null);
+    internal bool CaptureActive => Execution != null && (Profilers.CommandStream != null || Profilers.Capture != null);
 
     /// <summary>Resources this pass's commands referenced, with their version at first reference.</summary>
     internal IReadOnlyList<ReferencedResource> ReferencedResources => _referenced;
@@ -109,7 +109,7 @@ public abstract partial class CommandBuffer
             depth = new AttachmentUse(depthAttachment.Target.CurrentVersion, depthAttachment.MipLevel, depthAttachment.ArrayLayer);
         }
 
-        if (Device.CommandSink is { } sink)
+        if (Profilers.CommandStream is { } sink)
         {
             FramebufferInfo info = new(_attachmentScratch.AsSpan(0, colors.Count), depth, fb.OutputDescription, fb.Width, fb.Height);
             sink.SetFramebuffer(in info, in ops);
@@ -129,7 +129,7 @@ public abstract partial class CommandBuffer
     private void ReportPropertyDeltas()
     {
         _deltaScratch.Clear();
-        ICommandStreamSink? sink = Device.CommandSink;
+        ICommandStreamProfiler? sink = Profilers.CommandStream;
 
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _activeProperties.Entries)
         {
@@ -225,7 +225,7 @@ public abstract partial class CommandBuffer
         Util.EnsureArrayMinimumSize(ref _reportedVertex, (uint)count);
         Array.Copy(_vertexScratch, _reportedVertex, count);
         _reportedVertexCount = count;
-        Device.CommandSink?.BindVertexBuffers(_vertexScratch.AsSpan(0, count));
+        Profilers.CommandStream?.BindVertexBuffers(_vertexScratch.AsSpan(0, count));
     }
 
     /// <summary>Called by the backend with the index buffer it resolved for a draw, including cache hits.</summary>
@@ -240,6 +240,6 @@ public abstract partial class CommandBuffer
             return;
 
         _reportedIndex = use;
-        Device.CommandSink?.BindIndexBuffer(in use);
+        Profilers.CommandStream?.BindIndexBuffer(in use);
     }
 }

@@ -21,7 +21,7 @@ public abstract partial class CommandBuffer
         _shaderProgram = program;
         _statShaderSwitches++;
 
-        if (Device.CommandProfiler is { } profiler)
+        if (Profilers.Command is { } profiler)
         {
             ShaderStages stages = ShaderStages.None;
             foreach (ShaderStages stage in program.Stages)
@@ -42,7 +42,7 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(_computeProgram, program)) return;
 
         _statShaderSwitches++;
-        Device.CommandProfiler?.RecordShaderSwitch(
+        Profilers.Command?.RecordShaderSwitch(
             ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
 
         SetComputeShaderCore(program);
