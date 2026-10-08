@@ -17,6 +17,41 @@ file readonly struct ReplayView : IRenderView
     public int ViewId => 0;
 }
 
+file sealed class EventsPass(RenderTexture target, RenderTexture storage, GraphicsProgram program, ComputeProgram compute, Texture source, Sampler sampler) : IPass
+{
+    private readonly RenderResourceID _target = RenderResourceID.Intern("events_target");
+    private readonly RenderResourceID _storage = RenderResourceID.Intern("events_storage");
+
+    public string Name => "Events";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        builder.DeclareImportedTexture(_target, target);
+        builder.DeclareImportedTexture(_storage, storage, TextureState.Storage);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        PropertySet properties = new();
+        properties.SetTexture("Tex", source);
+        properties.SetSampler("Smp", sampler);
+        cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(new Prowl.Vector.Color(0, 0, 0, 255)));
+        cmd.SetShader(program);
+        cmd.SetVertexSource(VertexSource.None);
+        cmd.SetProperties(properties);
+        cmd.Draw(3);
+        cmd.ClearColorTarget(0, new Prowl.Vector.Color(0, 0, 255, 255));
+        cmd.SetScissor(0, 0, 4, 8);
+        cmd.Draw(3);
+
+        PropertySet computeProperties = new();
+        computeProperties.SetTexture("ComputeOutput", storage.ColorTextures[0]);
+        cmd.SetComputeShader(compute);
+        cmd.SetProperties(computeProperties);
+        cmd.Dispatch(1, 1, 1);
+    }
+}
+
 file sealed class SamplePass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, string name = "Sample") : IPass
 {
     private readonly RenderResourceID _target = RenderResourceID.Intern("sample_target_" + name);
@@ -45,7 +80,7 @@ public class ReplayTests
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         ResourceFactory factory = device.ResourceFactory;
-        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile())
+        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.slang"))
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
             DepthStencilState = DepthStencilStateDescription.Disabled,
@@ -85,7 +120,7 @@ public class ReplayTests
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         ResourceFactory factory = device.ResourceFactory;
-        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile())
+        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.slang"))
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
             DepthStencilState = DepthStencilStateDescription.Disabled,
@@ -126,6 +161,50 @@ public class ReplayTests
         }
     }
 
+    [SkippableFact]
+    public void EventReplay_UpToLastEventEqualsPassOutput()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        ResourceFactory factory = device.ResourceFactory;
+        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.slang"))
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            ResourceLayouts =
+            [
+                new ResourceLayoutDescription(
+                    new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+                    new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)),
+            ],
+        });
+        using ComputeProgram compute = factory.CreateComputeProgram(new ComputeDescription(
+            Compile("ComputeTextureGenerator.slang")[0],
+            [new ResourceLayoutDescription { Set = 0, Elements = [new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)] }],
+            4, 1, 1));
+        using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
+        using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
+        using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using RenderTexture storage = factory.CreateRenderTexture(new RenderTextureDescription(4, 1, new[] { PixelFormat.R32_G32_B32_A32_Float }, depth: false, storage: true));
+        using RenderPipeline pipeline = new(new IPass[] { new EventsPass(target, storage, program, compute, source, sampler) });
+
+        DeepRecording deep = Record(device, new Recorder(device), pipeline, DeepMode.Full);
+        DeepExecution execution = deep.Executions.Single();
+        DeepPass pass = execution.Views[0].Passes[0];
+        Replayer replayer = new(device, deep);
+        ReplayRequest Request(int? last) => new() { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index, EventIndex = last };
+
+        ReplayResult whole = replayer.Replay(Request(null));
+        ReplayResult last = replayer.Replay(Request(3));
+        ReplayResult first = replayer.Replay(Request(0));
+
+        Assert.True(last.Status == ReplayStatus.Reexecuted, last.Reason);
+        Assert.Equal(2, last.Outputs.Length);
+        Assert.Equal(whole.Outputs.Select(o => o.Data), last.Outputs.Select(o => o.Data));
+        Assert.NotEqual(whole.Outputs[0].Data, first.Outputs[0].Data);
+    }
+
     private static DeepRecording Record(GraphicsDevice device, Recorder recorder, RenderPipeline pipeline, DeepMode mode)
     {
         recorder.BeginDeepRecording(mode);
@@ -135,13 +214,13 @@ public class ReplayTests
         return deep;
     }
 
-    private static ShaderStageDescription[] Compile()
+    private static ShaderStageDescription[] Compile(string file)
     {
         string directory = Path.Combine(AppContext.BaseDirectory, "Shaders");
         SlangShaderCompiler compiler = new();
         compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
         compiler.BeginSession([new DirectoryInfo(directory)], path => File.ReadAllBytes(Path.IsPathRooted(path) ? path : Path.Combine(directory, path)));
-        ShaderPass shader = new() { State = new PassState(), InlineSlang = File.ReadAllText(Path.Combine(directory, "FullScreenTriSampleTexture2D.slang")) };
+        ShaderPass shader = new() { State = new PassState(), InlineSlang = File.ReadAllText(Path.Combine(directory, file)) };
         ShaderDescription description = compiler.Compile(shader, [], GraphicsBackend.Vulkan);
         compiler.EndSession();
         return description.Stages;

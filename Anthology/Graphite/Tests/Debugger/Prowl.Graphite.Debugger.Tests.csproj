@@ -15,6 +15,7 @@
 
     <ItemGroup>
         <Content Include="..\Graphite\Shaders\FullScreenTriSampleTexture2D.slang" Link="Shaders\FullScreenTriSampleTexture2D.slang" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="..\Graphite\Shaders\ComputeTextureGenerator.slang" Link="Shaders\ComputeTextureGenerator.slang" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>
