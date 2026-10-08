@@ -52,6 +52,22 @@ file sealed class EventsPass(RenderTexture target, RenderTexture storage, Graphi
     }
 }
 
+file sealed class UndeclaredPass(ComputeProgram compute, Texture storage) : IPass
+{
+    public string Name => "Undeclared";
+
+    public void Setup(RenderContextBuilder builder) { }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        PropertySet properties = new();
+        properties.SetTexture("ComputeOutput", storage);
+        cmd.SetComputeShader(compute);
+        cmd.SetProperties(properties);
+        cmd.Dispatch(1, 1, 1);
+    }
+}
+
 file sealed class SamplePass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, string name = "Sample") : IPass
 {
     private readonly RenderResourceID _target = RenderResourceID.Intern("sample_target_" + name);
@@ -104,6 +120,64 @@ public class ReplayTests
         Assert.Equal(ReplayStatus.Restored, result.Status);
         Assert.Single(result.Outputs);
     }
+
+    [SkippableFact]
+    public void Replay_UnsupportedFormatReportsReason()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        DeepRecording deep = Edit(RecordSample(device), result => result with
+        {
+            Resources = result.Resources
+                .Select(r => r.Texture is { } texture && (texture.Usage & TextureUsage.RenderTarget) != 0
+                    ? r with { Texture = texture with { Format = PixelFormat.BC1_Rgb_UNorm } }
+                    : r)
+                .ToEquatableArray(),
+        });
+
+        ReplayResult result = ReplayFirstEvent(device, deep);
+
+        Assert.Equal(ReplayStatus.NotReplayable, result.Status);
+        Assert.Contains("does not support", result.Reason);
+    }
+
+    [SkippableFact]
+    public void Replay_MissingProgramReportsReason()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        DeepRecording deep = Edit(RecordSample(device), result => result with { Programs = EquatableArray<RecordedProgram>.Empty });
+
+        ReplayResult result = ReplayFirstEvent(device, deep);
+
+        Assert.Equal(ReplayStatus.NotReplayable, result.Status);
+        Assert.Contains("missing from the recording", result.Reason);
+    }
+
+    [SkippableFact]
+    public void Replay_UndeclaredWriteReportsReason()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        using ComputeProgram compute = device.ResourceFactory.CreateComputeProgram(new ComputeDescription(
+            Compile("ComputeTextureGenerator.slang")[0],
+            [new ResourceLayoutDescription { Set = 0, Elements = [new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)] }],
+            4, 1, 1));
+        using Texture storage = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled | TextureUsage.Storage));
+        using RenderPipeline pipeline = new(new IPass[] { new UndeclaredPass(compute, storage) });
+        DeepRecording deep = Record(device, new Recorder(device), pipeline, DeepMode.Full);
+
+        ReplayResult result = ReplayFirstEvent(device, deep);
+
+        Assert.Equal(ReplayStatus.NotReplayable, result.Status);
+        Assert.Contains("Undeclared GPU write", result.Reason);
+    }
+
+    private static ReplayResult ReplayFirstEvent(GraphicsDevice device, DeepRecording deep)
+    {
+        DeepExecution execution = deep.Executions.Single();
+        return new Replayer(device, deep).Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = execution.Views[0].Passes[0].Index, EventIndex = 0 });
+    }
+
+    private static DeepRecording Edit(DeepRecording deep, Func<DeepResult, DeepResult> edit)
+        => new(deep.Mode, deep.Backend, deep.Features, deep.Recording, edit(deep.Result));
 
     private static DeepRecording RecordSample(GraphicsDevice device)
     {
