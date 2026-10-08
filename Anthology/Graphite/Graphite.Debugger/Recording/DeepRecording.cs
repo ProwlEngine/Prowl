@@ -11,6 +11,16 @@ public sealed class DeepRecording : RecordingHandle
     private DeepSink? _sink;
     private DeepResult? _result;
 
+    internal DeepRecording(DeepMode mode, GraphicsBackend backend, RecordedFeatures features, Recording recording, DeepResult result)
+        : base(null, true)
+    {
+        Mode = mode;
+        Backend = backend;
+        Features = features;
+        _recording = recording;
+        _result = result;
+    }
+
     internal DeepRecording(GraphicsDevice device, DeepSink sink, RecordingHandle? previous)
         : base(previous)
     {
@@ -18,7 +28,7 @@ public sealed class DeepRecording : RecordingHandle
         _sink = sink;
         Mode = sink.Mode;
         Backend = device.BackendType;
-        Features = device.Features;
+        Features = RecordedFeatures.From(device.Features);
         _recording = new Recording(device, sink.Light, null);
     }
 
@@ -29,7 +39,7 @@ public sealed class DeepRecording : RecordingHandle
     public GraphicsBackend Backend { get; }
 
     /// <summary>Features of the recording device.</summary>
-    public GraphicsDeviceFeatures Features { get; }
+    public RecordedFeatures Features { get; }
 
     /// <summary>The light data collected alongside. Its timings include the capture copies.</summary>
     public Recording Recording
@@ -56,7 +66,7 @@ public sealed class DeepRecording : RecordingHandle
     /// <summary>The recorded executions in start order.</summary>
     public EquatableArray<DeepExecution> Executions => Result.Executions;
 
-    private DeepResult Result
+    internal DeepResult Result
     {
         get
         {

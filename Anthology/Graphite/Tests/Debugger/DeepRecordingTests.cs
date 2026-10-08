@@ -1,4 +1,7 @@
+using System.IO;
 using System.Linq;
+using Prowl.Echo;
+using Prowl.Graphite.Debugger.Serialization;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
@@ -45,6 +48,20 @@ file sealed class WritePass : IPass
 public class DeepRecordingTests
 {
     private static GraphicsDevice CreateDevice() => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+
+    private static byte[] WriteBinary(EchoObject data)
+    {
+        using MemoryStream stream = new();
+        using (BinaryWriter writer = new(stream, System.Text.Encoding.UTF8, true))
+            data.WriteToBinary(writer);
+        return stream.ToArray();
+    }
+
+    private static EchoObject ReadBinary(byte[] bytes)
+    {
+        using BinaryReader reader = new(new MemoryStream(bytes));
+        return EchoObject.ReadFromBinary(reader);
+    }
 
     private static DeepRecording Record(GraphicsDevice device, DeepMode mode, params IPass[] passes)
     {
@@ -95,5 +112,62 @@ public class DeepRecordingTests
         Assert.Contains(passes[0].Copies, c => c.Placement == CopyPlacement.BeforePass && c.Version.Version == 0);
         Assert.Equal(mode == DeepMode.Full, copies.Any(c => c.Placement == CopyPlacement.AfterPass));
         Assert.All(copies, c => Assert.Contains(deep.Blobs, b => b.Ref == c.Blob));
+    }
+
+    [SkippableFact]
+    public void EchoRoundTrip_ComparesEqual()
+    {
+        using GraphicsDevice device = CreateDevice();
+        DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        DeepRecording deep = Record(device, DeepMode.Full, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
+
+        DebuggerSerialization.Register();
+        byte[] bytes = WriteBinary(Serializer.Serialize(deep));
+        DeepRecording loaded = Serializer.Deserialize<DeepRecording>(ReadBinary(bytes))!;
+
+        Assert.True(loaded.IsDone);
+        Assert.Equal(deep.Mode, loaded.Mode);
+        Assert.Equal(deep.Backend, loaded.Backend);
+        Assert.Equal(deep.Features, loaded.Features);
+        Assert.Equal(deep.Recording.Executions, loaded.Recording.Executions);
+        Assert.Equal(deep.Resources, loaded.Resources);
+        Assert.Equal(deep.Programs, loaded.Programs);
+        Assert.Equal(deep.Samplers, loaded.Samplers);
+        Assert.Equal(deep.Blobs, loaded.Blobs);
+        Assert.Equal(deep.Executions, loaded.Executions);
+    }
+
+    [Fact]
+    public void EchoRoundTrip_KeepsProgramsAndCommands()
+    {
+        DebuggerSerialization.Register();
+        RecordedProgram program = new(
+            ProgramKey.FromBytes(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray()),
+            false,
+            EquatableArray.Create(new RecordedStage(ShaderStages.Vertex, "main", new BlobRef(EquatableArray.Create<byte>(1, 2), 2))),
+            EquatableArray.Create(new ResourceLayoutDescription(new ResourceLayoutElementDescription { Name = "Albedo", BindingIndex = 3 })),
+            null,
+            null,
+            null,
+            EquatableArray.Create(new VertexLayoutDescription(0, 12, new VertexElementDescription("Position", VertexElementFormat.Float3))),
+            1,
+            1,
+            1);
+        EquatableArray<RecordedCommand> commands = EquatableArray.Create<RecordedCommand>(
+            new SetPropertiesCommand(
+                EquatableArray.Create(new RecordedProperty("Tint", PropertyKind.Uniform, UniformScalarType.Float1, EquatableArray.Create<byte>(0, 0, 128, 63), default, default, null, -1)),
+                EquatableArray.Create("Old")),
+            new DrawCommand(3, 1, 0, 0));
+
+        EchoObject programData = ReadBinary(WriteBinary(Serializer.Serialize(program)));
+        RecordedProgram loadedProgram = Serializer.Deserialize<RecordedProgram>(programData)!;
+        EquatableArray<RecordedCommand> loadedCommands = Serializer.Deserialize<EquatableArray<RecordedCommand>>(ReadBinary(WriteBinary(Serializer.Serialize(commands))));
+
+        Assert.Equal(program.Key, loadedProgram.Key);
+        Assert.Equal("Albedo", PropertyID.ToString(loadedProgram.Layouts[0].Elements[0].Name));
+        Assert.Equal("Position", VertexAttributeID.ToString(loadedProgram.VertexLayouts[0].Elements[0].Name));
+        Assert.Equal(program, loadedProgram);
+        Assert.Equal(commands, loadedCommands);
     }
 }

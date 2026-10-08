@@ -10,9 +10,10 @@ public abstract class RecordingHandle
     private RecordingHandle? _previous;
     private volatile bool _done;
 
-    internal RecordingHandle(RecordingHandle? previous)
+    internal RecordingHandle(RecordingHandle? previous, bool done = false)
     {
         _previous = previous;
+        _done = done;
     }
 
     /// <summary>True when every execution it covers has resolved and the handle started before it is done.</summary>

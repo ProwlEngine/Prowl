@@ -9,6 +9,12 @@ public sealed class Recording : RecordingHandle
     private RecordingSink? _sink;
     private EquatableArray<RecordedExecution> _executions = EquatableArray<RecordedExecution>.Empty;
 
+    internal Recording(EquatableArray<RecordedExecution> executions)
+        : base(null, true)
+    {
+        _executions = executions;
+    }
+
     internal Recording(GraphicsDevice device, RecordingSink sink, RecordingHandle? previous)
         : base(previous)
     {
