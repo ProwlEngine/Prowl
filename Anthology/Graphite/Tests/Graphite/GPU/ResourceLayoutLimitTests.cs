@@ -46,7 +46,7 @@ public abstract class ResourceLayoutLimitTests<T> : GraphicsDeviceTestBase<T> wh
 
         ResourceLayoutElementDescription[] elements = new ResourceLayoutElementDescription[elementCount];
         for (int i = 0; i < elementCount; i++)
-            elements[i] = new ResourceLayoutElementDescription($"Element{i}", ResourceKind.UniformBuffer, ShaderStages.Vertex, i);
+            elements[i] = new ResourceLayoutElementDescription($"Element{i}", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, i);
 
         ShaderDescription desc = new(stages)
         {
