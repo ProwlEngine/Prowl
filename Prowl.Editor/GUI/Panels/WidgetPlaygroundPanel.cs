@@ -393,19 +393,53 @@ public class WidgetPlaygroundPanel : DockPanel
             Origami.Separator(paper, "sep12").Show();
 
             // === Tooltip ===
-            Origami.Header(paper, "h_tooltip", "Tooltip (hover the button)").Show();
+            Origami.Header(paper, "h_tooltip", "Tooltip").Show();
 
             var tooltipBtn = paper.Box("tooltip_demo")
-                .Height(EditorTheme.RowHeight)
+                .Height(30)
                 .Width(200)
+                .PaddingLeft(8)
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(Origami.Current.Metrics.Rounding)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                .Cursor(PaperCursor.Pointer)
                 .Tooltip("This is a tooltip! It appears after a short hover delay.");
             if (EditorTheme.DefaultFont != null)
                 tooltipBtn.Text("Hover me for tooltip", EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+                    .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleLeft);
+
+            using (paper.Row("tooltip_placements").Height(30).Gap(6).Enter())
+            {
+                foreach (var placement in new[]
+                {
+                    TooltipPlacement.Top,
+                    TooltipPlacement.Bottom,
+                    TooltipPlacement.Left,
+                    TooltipPlacement.Right
+                })
+                {
+                    var button = paper.Box($"tooltip_{placement}")
+                        .Width(75).Height(30)
+                        .BackgroundColor(EditorTheme.Ink100)
+                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                        .Rounded(Origami.Current.Metrics.Rounding)
+                        .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                        .Cursor(PaperCursor.Pointer)
+                        .Tooltip($"Tooltip beside the button ({placement})", new TooltipOptions
+                        {
+                            Anchor = TooltipAnchor.Element,
+                            Placement = placement,
+                            ShowArrow = true,
+                            Delay = 0.25f
+                        });
+                    if (EditorTheme.DefaultFont != null)
+                        button.Text(placement.ToString(), EditorTheme.DefaultFont)
+                            .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize)
+                            .Alignment(TextAlignment.MiddleCenter);
+                }
+            }
 
             Origami.Separator(paper, "sep13").Show();
 
