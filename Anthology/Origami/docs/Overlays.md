@@ -64,6 +64,25 @@ Origami.Button(paper, "save_btn", "Save", Save)
     .Show();
 
 paper.Box("thumb").Tooltip("Rename", "Press F2 to rename this item");
+
+// Plain tooltip near the cursor (the default).
+paper.Box("move").Tooltip("Move");
+
+// Place beside the hovered element, with an optional arrow and custom delay.
+paper.Box("rotate").Tooltip("Rotate", new TooltipOptions
+{
+    Placement = TooltipPlacement.Right,
+    Anchor = TooltipAnchor.Element,
+    ShowArrow = true,
+    Delay = 0.5f
+});
+
+// Rich tooltips accept the same options.
+paper.Box("scale").Tooltip(new TooltipContent
+{
+    Title = "Scale", Text = "Resize the selection", Shortcut = "R",
+    Options = new TooltipOptions { Anchor = TooltipAnchor.Element }
+});
 ```
 
 - Simplest form: `.Tooltip(text)` or `.Tooltip(title, description)` as an extension on any element builder
@@ -73,6 +92,11 @@ paper.Box("thumb").Tooltip("Rename", "Press F2 to rename this item");
 
 Notes: only one tooltip is shown at a time, and it waits `TooltipSystem.ShowDelay` seconds
 (default 0.5) of continuous hover on the same element before appearing.
+`TooltipOptions.Delay` overrides that delay. Placement supports Top, Bottom, Left, and Right;
+the tooltip flips to the opposite side when space is tight, then clamps to the window.
+Existing calls default to cursor anchoring, Bottom placement, and no arrow. Element anchoring
+requires reporting an `ElementHandle` (as the extension does); ID-only hover reports fall back
+to the cursor. Positioning uses the measured size, including wrapped and custom content.
 
 ## ProgressBar
 
