@@ -17,11 +17,11 @@ file readonly struct ReplayView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class SamplePass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler) : IPass
+file sealed class SamplePass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, string name = "Sample") : IPass
 {
-    private readonly RenderResourceID _target = RenderResourceID.Intern("sample_target");
+    private readonly RenderResourceID _target = RenderResourceID.Intern("sample_target_" + name);
 
-    public string Name => "Sample";
+    public string Name => name;
 
     public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(_target, target);
 
@@ -78,6 +78,61 @@ public class ReplayTests
         RecordedCopy copy = pass.Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
         Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, output.Data);
         Assert.Contains(output.Data.Where((b, i) => i % 4 != 3), b => b != 0);
+    }
+
+    [SkippableFact]
+    public void ReplayOnly_ReexecutedPassesMatchFullCopies()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        ResourceFactory factory = device.ResourceFactory;
+        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile())
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            ResourceLayouts =
+            [
+                new ResourceLayoutDescription(
+                    new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+                    new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)),
+            ],
+        });
+        using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
+        using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
+        using RenderTexture first = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using RenderTexture second = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using RenderPipeline pipeline = new(new IPass[]
+        {
+            new SamplePass(first, program, source, sampler, "First"),
+            new SamplePass(second, program, source, sampler, "Second"),
+        });
+
+        Recorder recorder = new(device);
+        DeepRecording full = Record(device, recorder, pipeline, DeepMode.Full);
+        DeepRecording only = Record(device, recorder, pipeline, DeepMode.ReplayOnly);
+
+        Replayer fullReplayer = new(device, full);
+        Replayer onlyReplayer = new(device, only);
+        DeepView fullView = full.Executions.Single().Views[0];
+        DeepView onlyView = only.Executions.Single().Views[0];
+        Assert.Equal(2, onlyView.Passes.Length);
+        for (int i = 0; i < fullView.Passes.Length; i++)
+        {
+            ReplayResult expected = fullReplayer.Replay(new ReplayRequest { ExecutionId = full.Executions.Single().ExecutionId, ViewIndex = 0, PassIndex = fullView.Passes[i].Index });
+            ReplayResult actual = onlyReplayer.Replay(new ReplayRequest { ExecutionId = only.Executions.Single().ExecutionId, ViewIndex = 0, PassIndex = onlyView.Passes[i].Index });
+            Assert.True(actual.Status == ReplayStatus.Reexecuted, actual.Reason);
+            Assert.Equal(expected.Outputs.Single().Data, actual.Outputs.Single().Data);
+        }
+    }
+
+    private static DeepRecording Record(GraphicsDevice device, Recorder recorder, RenderPipeline pipeline, DeepMode mode)
+    {
+        recorder.BeginDeepRecording(mode);
+        device.DispatchGraph(pipeline, new ReplayView[] { new() });
+        DeepRecording deep = recorder.EndDeepRecording();
+        deep.Wait();
+        return deep;
     }
 
     private static ShaderStageDescription[] Compile()
