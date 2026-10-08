@@ -779,7 +779,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             cl.CopyTexture(
                 src, 0, 0, 0, 3, 0,
                 dst, 0, 0, 0, 3, 0,
-                4, 4, 1, 1);
+                2, 2, 1, 1);
         });
         GD.WaitForIdle();
     }
