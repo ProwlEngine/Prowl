@@ -183,7 +183,7 @@ public class DeepRecordingTests
 
         foreach (DeepPass pass in execution.Views[0].Passes)
         {
-            ReplayResult result = replayer.Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index });
+            ReplayResult result = replayer.Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index, EventIndex = 1 });
 
             Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
             Assert.NotEmpty(result.Outputs);

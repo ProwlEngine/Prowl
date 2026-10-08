@@ -79,6 +79,34 @@ public class ReplayTests
     public void Replay_RebuildsProgramAndPropertiesForADraw()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        DeepRecording deep = RecordSample(device);
+
+        DeepExecution execution = deep.Executions.Single();
+        DeepPass pass = execution.Views[0].Passes[0];
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+
+        Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
+        ReplayOutput output = Assert.Single(result.Outputs);
+        RecordedCopy copy = pass.Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
+        Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, output.Data);
+        Assert.Contains(output.Data.Where((b, i) => i % 4 != 3), b => b != 0);
+    }
+
+    [SkippableFact]
+    public void Replay_FullWithoutEventRestoresFromCopies()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        DeepRecording deep = RecordSample(device);
+
+        DeepExecution execution = deep.Executions.Single();
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = execution.Views[0].Passes[0].Index });
+
+        Assert.Equal(ReplayStatus.Restored, result.Status);
+        Assert.Single(result.Outputs);
+    }
+
+    private static DeepRecording RecordSample(GraphicsDevice device)
+    {
         ResourceFactory factory = device.ResourceFactory;
         using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.slang"))
         {
@@ -96,23 +124,8 @@ public class ReplayTests
         device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
-
-        Recorder recorder = new(device);
         using RenderPipeline pipeline = new(new IPass[] { new SamplePass(target, program, source, sampler) });
-        recorder.BeginDeepRecording(DeepMode.Full);
-        device.DispatchGraph(pipeline, new ReplayView[] { new() });
-        DeepRecording deep = recorder.EndDeepRecording();
-        deep.Wait();
-
-        DeepExecution execution = deep.Executions.Single();
-        DeepPass pass = execution.Views[0].Passes[0];
-        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index });
-
-        Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
-        ReplayOutput output = Assert.Single(result.Outputs);
-        RecordedCopy copy = pass.Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
-        Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, output.Data);
-        Assert.Contains(output.Data.Where((b, i) => i % 4 != 3), b => b != 0);
+        return Record(device, new Recorder(device), pipeline, DeepMode.Full);
     }
 
     [SkippableFact]

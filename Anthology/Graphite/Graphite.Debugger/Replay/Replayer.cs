@@ -45,6 +45,9 @@ public sealed class Replayer
                 return NotReplayable($"Event {eventIndex} is out of range, pass {pass.Name} has {events} events.");
         }
 
+        if (request.EventIndex == null && _recording.Mode == DeepMode.Full)
+            return Restore(pass);
+
         bool reexecute = _recording.Mode != DeepMode.Full;
         List<DeepPass> passes = reexecute ? view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList() : [pass];
         DeepPass? blocked = passes.FirstOrDefault(p => p.NotReplayable != null);
@@ -107,6 +110,24 @@ public sealed class Replayer
         string device = _device.BackendType == _recording.Backend ? "the recording backend" : $"{_device.BackendType}, not the recording backend";
         string executed = passes.Count == 1 ? $"pass {pass.Name}" : $"{passes.Count} passes up to {pass.Name}";
         return new ReplayResult(ReplayStatus.Reexecuted, $"Executed {executed} on {device} with unreproducible inputs restored from copies.", outputs.ToEquatableArray());
+    }
+
+    private ReplayResult Restore(DeepPass pass)
+    {
+        Dictionary<BlobRef, RecordedBlob> blobs = new();
+        foreach (RecordedBlob blob in _recording.Blobs)
+            blobs[blob.Ref] = blob;
+
+        List<ReplayOutput> outputs = new();
+        foreach (RecordedCopy copy in pass.Copies.Where(c => c.Placement == CopyPlacement.AfterPass))
+        {
+            if (!blobs.TryGetValue(copy.Blob, out RecordedBlob? blob))
+                return NotReplayable($"The recorded output of pass {pass.Name} is missing its data.");
+
+            outputs.Add(new ReplayOutput(copy.Version.Resource, copy.Regions, blob.Data));
+        }
+
+        return new ReplayResult(ReplayStatus.Restored, $"Outputs of pass {pass.Name} taken from the copies recorded after it.", outputs.ToEquatableArray());
     }
 
     private static ReplayResult NotReplayable(string reason)
