@@ -48,6 +48,17 @@ public readonly struct ProgramKey : IEquatable<ProgramKey>
     }
 
     /// <summary>
+    /// Rebuilds a key from the 32 digest bytes written by <see cref="CopyTo"/>.
+    /// </summary>
+    public static ProgramKey FromBytes(ReadOnlySpan<byte> digest)
+    {
+        if (digest.Length != DigestSize)
+            throw new ArgumentException($"A program key is {DigestSize} bytes.", nameof(digest));
+
+        return new ProgramKey(digest);
+    }
+
+    /// <summary>
     /// Writes the 32 digest bytes.
     /// </summary>
     public void CopyTo(Span<byte> destination)
