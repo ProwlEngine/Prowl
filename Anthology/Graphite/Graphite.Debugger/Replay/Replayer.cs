@@ -38,14 +38,17 @@ public sealed class Replayer
         if (pass.NotReplayable != null)
             return NotReplayable(pass.NotReplayable);
 
-        if (_recording.Mode != DeepMode.Full)
-            return NotReplayable("ReplayOnly recordings need the view re-executed, which is not supported yet.");
+        bool reexecute = _recording.Mode != DeepMode.Full;
+        List<DeepPass> passes = reexecute ? view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList() : [pass];
+        DeepPass? blocked = passes.FirstOrDefault(p => p.NotReplayable != null);
+        if (blocked != null)
+            return NotReplayable($"Pass {blocked.Name} is needed to reach {pass.Name}: {blocked.NotReplayable}");
 
         try
         {
             using ReplayScope scope = new(_device, _recording);
-            string? error = scope.Prepare(execution, view, pass);
-            return error != null ? NotReplayable(error) : Run(scope, view, pass);
+            string? error = scope.Prepare(execution, view, passes, reexecute);
+            return error != null ? NotReplayable(error) : Run(scope, view, passes, pass);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -53,13 +56,17 @@ public sealed class Replayer
         }
     }
 
-    private ReplayResult Run(ReplayScope scope, DeepView view, DeepPass pass)
+    private ReplayResult Run(ReplayScope scope, DeepView view, List<DeepPass> passes, DeepPass pass)
     {
         scope.RestoreImmediate();
-        string name = $"Replay {pass.Name}";
-        HashSet<TraceResourceId> wanted = pass.Copies.Where(c => c.Placement == CopyPlacement.AfterPass).Select(c => c.Version.Resource).ToHashSet();
+        string name = $"Replay {pass.Index} {pass.Name}";
+        HashSet<TraceResourceId> wanted = _recording.Mode == DeepMode.Full
+            ? pass.Copies.Where(c => c.Placement == CopyPlacement.AfterPass).Select(c => c.Version.Resource).ToHashSet()
+            : scope.Outputs(pass);
         ReplayCapture capture = new(name, wanted, scope.ReplayIds);
-        using RenderPipeline pipeline = new(new IPass[] { new ReplayRestorePass(scope, pass), new ReplayPass(name, scope, _recording, pass) });
+        List<IPass> replay = [new ReplayRestorePass(scope, passes)];
+        replay.AddRange(passes.Select(p => new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p)));
+        using RenderPipeline pipeline = new(replay.ToArray());
         ReplayView[] views = [new ReplayView(view.Name, view.PixelWidth, view.PixelHeight)];
 
         _device.Debug.Attach(capture);
@@ -91,7 +98,8 @@ public sealed class Replayer
             return NotReplayable(capture.Failure);
 
         string device = _device.BackendType == _recording.Backend ? "the recording backend" : $"{_device.BackendType}, not the recording backend";
-        return new ReplayResult(ReplayStatus.Reexecuted, $"Executed pass {pass.Name} on {device} with inputs restored from copies.", outputs.ToEquatableArray());
+        string executed = passes.Count == 1 ? $"pass {pass.Name}" : $"{passes.Count} passes up to {pass.Name}";
+        return new ReplayResult(ReplayStatus.Reexecuted, $"Executed {executed} on {device} with unreproducible inputs restored from copies.", outputs.ToEquatableArray());
     }
 
     private static ReplayResult NotReplayable(string reason)

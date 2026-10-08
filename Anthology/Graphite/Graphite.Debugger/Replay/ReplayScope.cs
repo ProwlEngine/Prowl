@@ -26,6 +26,7 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly Dictionary<TraceResourceId, DeviceBuffer> _buffers = new();
     private readonly Dictionary<ProgramKey, ShaderProgram> _programs = new();
     private readonly Dictionary<int, Sampler> _samplers = new();
+    private readonly HashSet<TraceVersion> _planned = new();
     private readonly List<(Texture Texture, RecordedCopy Copy)> _textureRestores = new();
     private readonly List<(DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
 
@@ -69,7 +70,7 @@ internal sealed unsafe class ReplayScope : IDisposable
 
     public ReadOnlySpan<byte> Blob(BlobRef blob) => _blobs[blob].AsSpan();
 
-    public string? Prepare(DeepExecution execution, DeepView view, DeepPass pass)
+    public string? Prepare(DeepExecution execution, DeepView view, IReadOnlyList<DeepPass> passes, bool reexecute)
     {
         Dictionary<string, RecordedGraphResource> byName = new();
         Dictionary<TraceResourceId, GraphResourceOrigin> origins = new();
@@ -80,6 +81,54 @@ internal sealed unsafe class ReplayScope : IDisposable
                 origins[backing.Id] = resource.Origin;
         }
 
+        Dictionary<TraceVersion, RecordedCopy> copies = new();
+        foreach (DeepView other in execution.Views)
+        {
+            foreach (DeepPass otherPass in other.Passes)
+            {
+                foreach (RecordedCopy copy in otherPass.Copies)
+                {
+                    if (!reexecute || copy.Placement == CopyPlacement.BeforePass)
+                        copies.TryAdd(copy.Version, copy);
+                }
+            }
+        }
+
+        foreach (DeepPass pass in passes)
+        {
+            string? error = PreparePass(pass, byName, origins, copies);
+            if (error != null)
+                return error;
+        }
+
+        for (int i = 0; i < _deep.Samplers.Length; i++)
+            _samplers[i] = Own(_device.ResourceFactory.CreateSampler(_deep.Samplers[i]));
+
+        return null;
+    }
+
+    public HashSet<TraceResourceId> Outputs(DeepPass pass)
+    {
+        HashSet<TraceResourceId> referenced = pass.References.Select(r => r.Resource).ToHashSet();
+        HashSet<TraceResourceId> outputs = new();
+        foreach (RecordedAccess access in pass.Accesses.Where(a => a.IsOutput))
+        {
+            if (GraphTextures.TryGetValue(access.Resource, out GraphTexture? texture))
+                outputs.UnionWith(texture.Backings);
+            else if (GraphBuffers.TryGetValue(access.Resource, out GraphBuffer? buffer))
+                outputs.Add(buffer.Id);
+        }
+
+        outputs.IntersectWith(referenced);
+        return outputs;
+    }
+
+    private string? PreparePass(
+        DeepPass pass,
+        Dictionary<string, RecordedGraphResource> byName,
+        Dictionary<TraceResourceId, GraphResourceOrigin> origins,
+        Dictionary<TraceVersion, RecordedCopy> copies)
+    {
         HashSet<TraceResourceId> inputs = new();
         foreach (RecordedAccess access in pass.Accesses)
         {
@@ -129,22 +178,13 @@ internal sealed unsafe class ReplayScope : IDisposable
             }
         }
 
-        Dictionary<TraceVersion, RecordedCopy> copies = new();
-        foreach (DeepView other in execution.Views)
-        {
-            foreach (DeepPass otherPass in other.Passes)
-            {
-                foreach (RecordedCopy copy in otherPass.Copies)
-                    copies.TryAdd(copy.Version, copy);
-            }
-        }
-
         foreach (RecordedReference reference in pass.References)
         {
             TraceResourceId id = reference.Resource;
             bool reads = loaded.Contains(id) || inputs.Contains(id)
                 || (!attached.Contains(id) && (!origins.TryGetValue(id, out GraphResourceOrigin origin) || origin != GraphResourceOrigin.Transient));
-            if (!reads || !copies.TryGetValue(new TraceVersion(id, reference.First), out RecordedCopy? restore))
+            TraceVersion version = new(id, reference.First);
+            if (!reads || !copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
                 continue;
 
             string? error = PlanRestore(id, restore, byName);
@@ -158,9 +198,6 @@ internal sealed unsafe class ReplayScope : IDisposable
             if (error != null)
                 return error;
         }
-
-        for (int i = 0; i < _deep.Samplers.Length; i++)
-            _samplers[i] = Own(_device.ResourceFactory.CreateSampler(_deep.Samplers[i]));
 
         return null;
     }

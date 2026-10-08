@@ -9,7 +9,7 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
 
-internal sealed class ReplayRestorePass(ReplayScope scope, DeepPass pass) : IPass
+internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes) : IPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
 
@@ -19,7 +19,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, DeepPass pass) : IPas
     {
         _handles.Clear();
         HashSet<string> declared = new();
-        foreach (RecordedAccess access in pass.Accesses.Where(a => !a.IsOutput))
+        foreach (RecordedAccess access in passes.SelectMany(p => p.Accesses).Where(a => !a.IsOutput))
         {
             if (!declared.Add(access.Resource))
                 continue;
