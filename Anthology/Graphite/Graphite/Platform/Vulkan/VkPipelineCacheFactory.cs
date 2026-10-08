@@ -253,18 +253,16 @@ internal static unsafe class VkPipelineCacheFactory
             attachments[attachmentCount++] = depthAttachmentDesc;
         }
 
-        SubpassDependency subpassDependency = new();
-        subpassDependency.SrcSubpass = Silk.NET.Vulkan.Vk.SubpassExternal;
-        subpassDependency.SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
-        subpassDependency.DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
-        subpassDependency.DstAccessMask = AccessFlags.ColorAttachmentReadBit | AccessFlags.ColorAttachmentWriteBit;
+        SubpassDependency* dependencies = stackalloc SubpassDependency[2];
+        dependencies[0] = VkBarriers.ExternalToPass(gd);
+        dependencies[1] = VkBarriers.PassToExternal(gd);
 
         renderPassCI.AttachmentCount = attachmentCount;
         renderPassCI.PAttachments = attachments;
         renderPassCI.SubpassCount = 1;
         renderPassCI.PSubpasses = &subpass;
-        renderPassCI.DependencyCount = 1;
-        renderPassCI.PDependencies = &subpassDependency;
+        renderPassCI.DependencyCount = 2;
+        renderPassCI.PDependencies = dependencies;
 
         gd.Vk.CreateRenderPass(gd.Device, in renderPassCI, null, out RenderPass renderPass).CheckResult();
 
