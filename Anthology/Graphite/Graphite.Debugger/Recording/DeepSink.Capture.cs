@@ -37,16 +37,81 @@ internal sealed partial class DeepSink
         }
 
         state.References = recorded;
+        ExecutionState execution = view.Execution;
+        for (int i = 0; i < references.Length; i++)
+        {
+            PassReference reference = references[i];
+            ResourceId id = reference.First.Resource;
+            if (IsViewTarget(view, id) || execution.Known.Contains((id, reference.First.Version)) || !ReadsContents(view, state, id))
+                continue;
+
+            Copy(execution, state, capture, in reference, CopyPlacement.BeforePass, reference.First.Version);
+            execution.Known.Add((id, reference.First.Version));
+        }
+
         foreach (PassReference reference in references)
         {
             ResourceId id = reference.First.Resource;
             if (state.Outputs.Contains(id) || state.Written.Contains(id))
-                view.Execution.Known.Add((id, reference.LastVersion));
+                execution.Known.Add((id, reference.LastVersion));
+        }
+
+        if (Mode != DeepMode.Full)
+            return;
+
+        for (int i = 0; i < references.Length; i++)
+        {
+            PassReference reference = references[i];
+            ResourceId id = reference.First.Resource;
+            if (!state.Outputs.Contains(id) || IsViewTarget(view, id) || execution.Copied.Contains((id, reference.LastVersion)))
+                continue;
+
+            Copy(execution, state, capture, in reference, CopyPlacement.AfterPass, reference.LastVersion);
+            execution.Known.Add((id, reference.LastVersion));
         }
     }
 
-    public DeepResult Build()
+    private static bool IsViewTarget(ViewState view, ResourceId id)
+        => view.Origins.TryGetValue(id, out GraphResourceOrigin origin) && origin == GraphResourceOrigin.ViewTarget;
+
+    private static bool ReadsContents(ViewState view, PassState state, ResourceId id)
     {
+        if (state.Loaded.Contains(id) || state.Inputs.Contains(id))
+            return true;
+
+        if (state.Attachments.Contains(id))
+            return false;
+
+        return !view.Origins.TryGetValue(id, out GraphResourceOrigin origin) || origin != GraphResourceOrigin.Transient;
+    }
+
+    private void Copy(ExecutionState execution, PassState state, ICaptureContext capture, in PassReference reference, CopyPlacement placement, uint version)
+    {
+        ResourceId id = reference.First.Resource;
+        if (!execution.Copied.Add((id, version)))
+            return;
+
+        try
+        {
+            state.Copies.Add(new PendingCopy(new TraceVersion(Builder(id).Id, version), placement, capture.Copy(in reference, placement)));
+        }
+        catch (NotSupportedException ex)
+        {
+            state.NotReplayable ??= $"{reference.Name} cannot be copied: {ex.Message}";
+        }
+    }
+
+    public DeepResult Build(GraphicsDevice device)
+    {
+        foreach (ExecutionState execution in _executions.Values)
+        {
+            foreach (ViewState view in execution.Views.Values)
+            {
+                foreach (PassState pass in view.Passes.Values)
+                    pass.Recorded = ReadCopies(device, pass);
+            }
+        }
+
         ImmutableArray<RecordedBlob> blobs = _store.Snapshot()
             .Select(pair => new RecordedBlob(pair.Key, ImmutableCollectionsMarshal.AsImmutableArray(pair.Value)))
             .ToImmutableArray();
@@ -81,8 +146,33 @@ internal sealed partial class DeepSink
             pass.Accesses.ToEquatableArray(),
             pass.References.ToEquatableArray(),
             pass.Commands.ToEquatableArray(),
-            EquatableArray<RecordedCopy>.Empty,
+            pass.Recorded,
             pass.NotReplayable);
+
+    private EquatableArray<RecordedCopy> ReadCopies(GraphicsDevice device, PassState pass)
+    {
+        RecordedCopy[] recorded = new RecordedCopy[pass.Copies.Count];
+        for (int i = 0; i < recorded.Length; i++)
+        {
+            PendingCopy pending = pass.Copies[i];
+            DeviceBuffer staging = pending.Copy.Staging;
+            BlobRef blob;
+            try
+            {
+                blob = _store.Put(device.Map(staging));
+                device.Unmap(staging);
+            }
+            finally
+            {
+                staging.Dispose();
+            }
+
+            recorded[i] = new RecordedCopy(pending.Version, pending.Placement, pending.Copy.Regions.ToArray().ToEquatableArray(), blob);
+        }
+
+        pass.Copies.Clear();
+        return recorded.ToEquatableArray();
+    }
 
     private static void Describe(ResourceBuilder builder, in PassReference reference, ResourceOrigin origin)
     {

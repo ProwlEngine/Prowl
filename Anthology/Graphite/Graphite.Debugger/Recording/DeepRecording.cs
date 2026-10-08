@@ -71,7 +71,7 @@ public sealed class DeepRecording : RecordingHandle
 
     internal override void Finish()
     {
-        _result = _sink!.Build();
+        _result = _sink!.Build(_device);
         _sink = null;
     }
 }

@@ -1,5 +1,6 @@
 using System.Linq;
 using Prowl.Graphite.Debugger.Trace;
+using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 using Xunit;
@@ -74,5 +75,25 @@ public class DeepRecordingTests
         Assert.Contains(pass.Commands, c => c is SetFramebufferCommand);
         Assert.Contains(pass.Commands, c => c is ClearColorTargetCommand);
         Assert.Equal(1, deep.Recording.Executions.Count);
+    }
+
+    [SkippableTheory]
+    [InlineData(DeepMode.Full)]
+    [InlineData(DeepMode.ReplayOnly)]
+    public void Copies_AreTakenOncePerVersion(DeepMode mode)
+    {
+        using GraphicsDevice device = CreateDevice();
+        DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+
+        DeepRecording deep = Record(device, mode, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
+
+        DeepPass[] passes = deep.Executions.Single().Views[0].Passes.ToArray();
+        RecordedCopy[] copies = passes.SelectMany(p => p.Copies).ToArray();
+        Assert.Equal(copies.Length, copies.Select(c => c.Version).Distinct().Count());
+        Assert.DoesNotContain(passes[1].Copies, c => c.Placement == CopyPlacement.BeforePass);
+        Assert.Contains(passes[0].Copies, c => c.Placement == CopyPlacement.BeforePass && c.Version.Version == 0);
+        Assert.Equal(mode == DeepMode.Full, copies.Any(c => c.Placement == CopyPlacement.AfterPass));
+        Assert.All(copies, c => Assert.Contains(deep.Blobs, b => b.Ref == c.Blob));
     }
 }

@@ -386,6 +386,8 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
 
     private RecordedStage Stage(ShaderStageDescription stage) => new(stage.Stage, stage.EntryPoint, _store.Put(stage.ShaderBytes));
 
+    private sealed record PendingCopy(TraceVersion Version, CopyPlacement Placement, CaptureCopy Copy);
+
     private sealed class ThreadState
     {
         public ViewState? View;
@@ -396,6 +398,7 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
     {
         public readonly SortedDictionary<int, ViewState> Views = new();
         public readonly HashSet<(ResourceId, uint)> Known = new();
+        public readonly HashSet<(ResourceId, uint)> Copied = new();
     }
 
     private sealed class ViewState(string name, int index, uint pixelWidth, uint pixelHeight, ExecutionState execution)
@@ -434,7 +437,9 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
         public int VertexCount;
         public BindIndexBufferCommand? Index;
         public RecordedReference[] References = [];
+        public readonly List<PendingCopy> Copies = new();
         public string? NotReplayable;
+        public EquatableArray<RecordedCopy> Recorded = EquatableArray<RecordedCopy>.Empty;
     }
 
     private sealed class ResourceBuilder(TraceResourceId id)
