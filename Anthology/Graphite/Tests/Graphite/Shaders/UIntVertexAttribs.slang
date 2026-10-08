@@ -12,6 +12,13 @@ struct VertexInput
 struct VertexOutput
 {
     float4 clipPosition : SV_Position;
+    float pointSize     : SV_PointSize;
+    float4 Color        : COLOR;
+}
+
+struct FragmentInput
+{
+    float4 clipPosition : SV_Position;
     float4 Color        : COLOR;
 }
 
@@ -27,13 +34,14 @@ VertexOutput vertex(VertexInput input)
 {
     VertexOutput output;
     output.clipPosition = mul(Model.Ortho, float4(input.Position, 0, 1));
+    output.pointSize = 1.0;
     output.Color = float4(input.Color_Int.xyz, 1.0) / Model.ColorNormalizationFactor;
     output.Color.w = 1.0;
     return output;
 }
 
 [shader("fragment")]
-float4 fragment(VertexOutput input) : SV_Target
+float4 fragment(FragmentInput input) : SV_Target
 {
     return input.Color;
 }
