@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="Shader.slang" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../Graphite.Debugger/Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="../../ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    </ItemGroup>
+</Project>

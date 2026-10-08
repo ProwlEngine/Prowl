@@ -28,6 +28,9 @@
     <Folder Name="/Samples/TexturedQuad/">
         <Project Path="Samples/TexturedQuad/TexturedQuad.csproj" />
     </Folder>
+    <Folder Name="/Samples/DebuggerReplay/">
+        <Project Path="Samples/DebuggerReplay/DebuggerReplay.csproj" />
+    </Folder>
     <Folder Name="/Samples/Shared/">
         <Project Path="Samples/Shared/Shared.csproj" />
     </Folder>
