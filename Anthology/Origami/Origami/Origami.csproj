@@ -12,6 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Origami.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Echo\Echo\Echo.csproj" />
     <ProjectReference Include="..\..\Paper\Paper\Paper.csproj" />
   </ItemGroup>
