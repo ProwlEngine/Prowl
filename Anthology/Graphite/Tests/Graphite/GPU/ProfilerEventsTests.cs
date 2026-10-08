@@ -247,7 +247,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
                 ]
             }
         ];
-        return device.ResourceFactory.CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
+        return device.Tracked().CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
     }
 
     private static GraphicsProgram CreateSinkProgram(GraphicsDevice device)
@@ -268,7 +268,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
                     new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
             ],
         };
-        return device.ResourceFactory.CreateGraphicsProgram(description);
+        return device.Tracked().CreateGraphicsProgram(description);
     }
 
     [Fact]
@@ -276,6 +276,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     {
         GraphRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 16;
         const uint stride = 52;
@@ -284,14 +285,14 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         GraphicsProgram graphics = CreateSinkProgram(device);
         ComputeProgram compute = CreateBasicComputeProgram(device);
 
-        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
+        DeviceBuffer vertices = device.Tracked().CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
         device.UpdateBuffer(vertices, 0, new byte[stride * 3]);
-        DeviceBuffer indirect = device.ResourceFactory.CreateBuffer(new BufferDescription(
+        DeviceBuffer indirect = device.Tracked().CreateBuffer(new BufferDescription(
             (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<IndirectDrawArguments>(), BufferUsage.IndirectBuffer));
         device.UpdateBuffer(indirect, 0, new IndirectDrawArguments { VertexCount = 3, InstanceCount = 1 });
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         PropertySet props = new();
         props.SetInt("Width", (int)size);
         props.SetInt("Height", (int)size);
@@ -328,9 +329,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     {
         LifecycleRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 64;
-        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+        DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_target");
         ClearingRasterPass clearPass = new(id);
@@ -357,9 +359,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     {
         StatsOnlyProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 64;
-        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+        DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_stats_only_target");
         using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
@@ -378,9 +381,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     {
         CorrelationProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 64;
-        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+        DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_correlation_target");
         using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
@@ -428,6 +432,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         CorrelationProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         List<ExecutionTask> tasks = new();
         List<Exception> failures = new();
@@ -441,7 +446,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
             {
                 try
                 {
-                    DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+                    DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
                     RenderResourceID id = RenderResourceID.Intern($"profiler_concurrent_target_{threadIndex}");
                     using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
                     ProfilerView[] views = [new(size, size), new(size, size)];
@@ -504,9 +509,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     {
         TimingRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.RunTestGraph((context, cl) =>
         {
@@ -526,9 +532,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         TimingRecorder second = new();
         GraphRecorder graph = new();
         using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(first, graph, new CompositeProfiler(second)));
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.RunTestGraph((context, cl) =>
         {
@@ -545,6 +552,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     {
         ResolveOrderRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         ExecutionTask empty = device.BeginExecution();
         device.CompleteExecution(empty);
@@ -554,8 +562,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(new[] { "resolved" }, profiler.Events);
 
         profiler.Events.Clear();
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         ExecutionTask task = device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
         Assert.Empty(profiler.Events);
 
@@ -573,9 +581,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
             GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true)),
             _ => throw new NotSupportedException(),
         };
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         TimingRecorder profiler = new();
 
         void RunCopyGraph(bool attachDuringDispatch)
@@ -606,9 +615,10 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     {
         TimingRecorder profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
 
         device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
 

@@ -65,7 +65,7 @@ public abstract class ResourceVersionTests<T> : GraphicsDeviceTestBase<T> where 
     private Texture Texture2D(uint mips = 3, TextureUsage usage = TextureUsage.Sampled)
         => RF.CreateTexture(TextureDescription.Texture2D(16, 16, mips, 1, PixelFormat.R8_G8_B8_A8_UNorm, usage));
 
-    private static ComputeProgram CreateComputeProgram(GraphicsDevice device)
+    private ComputeProgram CreateComputeProgram(GraphicsDevice device)
     {
         ShaderStageDescription stage = TestShaderLoader.LoadCompute(device.BackendType, "BasicComputeTest.slang");
         ResourceLayoutDescription[] layouts =
@@ -88,7 +88,7 @@ public abstract class ResourceVersionTests<T> : GraphicsDeviceTestBase<T> where 
                 ]
             }
         ];
-        return device.ResourceFactory.CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
+        return RF.CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
     }
 
     [Fact]

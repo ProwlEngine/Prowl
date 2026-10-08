@@ -162,12 +162,16 @@ internal sealed class TrackingResourceFactory : ResourceFactory
 
     private T Track<T>(T resource) where T : IDisposable
     {
-        _created.Add(resource);
+        lock (_created)
+            _created.Add(resource);
         return resource;
     }
 
     public override Framebuffer CreateFramebuffer(in FramebufferDescription description)
         => Track(_inner.CreateFramebuffer(description));
+
+    public override RenderTexture CreateRenderTexture(in RenderTextureDescription description)
+        => Track(_inner.CreateRenderTexture(description));
 
     protected override DeviceBuffer CreateBufferCore(in BufferDescription description)
         => Track(_inner.CreateBuffer(description));
@@ -192,6 +196,21 @@ internal sealed class TrackingResourceFactory : ResourceFactory
 
     public override Swapchain CreateSwapchain(in SwapchainDescription description)
         => Track(_inner.CreateSwapchain(description));
+}
+
+internal static class DeviceTracking
+{
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GraphicsDevice, TrackingResourceFactory> s_factories = new();
+
+    public static TrackingResourceFactory Tracked(this GraphicsDevice device)
+        => s_factories.GetValue(device, d => new TrackingResourceFactory(d.ResourceFactory));
+
+    public static IDisposable TrackedCleanup(this GraphicsDevice device) => new Cleanup(device.Tracked());
+
+    private sealed class Cleanup(TrackingResourceFactory factory) : IDisposable
+    {
+        public void Dispose() => factory.DisposeAll();
+    }
 }
 
 public sealed class TexelData<T> where T : unmanaged
