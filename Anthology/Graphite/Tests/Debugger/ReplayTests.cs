@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using Prowl.Echo;
+using Prowl.Graphite.Debugger.Serialization;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
@@ -168,6 +170,27 @@ public class ReplayTests
 
         Assert.Equal(ReplayStatus.NotReplayable, result.Status);
         Assert.Contains("Undeclared GPU write", result.Reason);
+    }
+
+    [SkippableFact]
+    public void Replay_AfterEchoRoundTripMatchesTheOriginal()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        DeepRecording deep = RecordSample(device);
+
+        DebuggerSerialization.Register();
+        using MemoryStream stream = new();
+        using (BinaryWriter writer = new(stream, System.Text.Encoding.UTF8, true))
+            Serializer.Serialize(deep).WriteToBinary(writer);
+
+        stream.Position = 0;
+        using BinaryReader reader = new(stream);
+        DeepRecording loaded = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))!;
+
+        ReplayResult expected = ReplayFirstEvent(device, deep);
+        ReplayResult actual = ReplayFirstEvent(device, loaded);
+        Assert.True(actual.Status == ReplayStatus.Reexecuted, actual.Reason);
+        Assert.Equal(expected.Outputs, actual.Outputs);
     }
 
     private static ReplayResult ReplayFirstEvent(GraphicsDevice device, DeepRecording deep)
