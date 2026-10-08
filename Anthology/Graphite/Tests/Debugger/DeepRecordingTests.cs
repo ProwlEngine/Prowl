@@ -40,7 +40,7 @@ file sealed class WritePass : IPass
 
     public void Render(RenderContext context, CommandBuffer cmd)
     {
-        cmd.ClearColorTarget(0, new Color(255, 0, 0, 255));
+        cmd.ClearColorTarget(0, new Color((byte)(_value * 50), 0, 0, 255));
         cmd.UpdateBuffer(_external, 0, new byte[] { _value, _value, _value, _value });
     }
 }
@@ -169,5 +169,30 @@ public class DeepRecordingTests
         Assert.Equal("Position", VertexAttributeID.ToString(loadedProgram.VertexLayouts[0].Elements[0].Name));
         Assert.Equal(program, loadedProgram);
         Assert.Equal(commands, loadedCommands);
+    }
+
+    [SkippableFact]
+    public void Replay_ReproducesAfterPassCopies()
+    {
+        using GraphicsDevice device = CreateDevice();
+        using DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        using RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        DeepRecording deep = Record(device, DeepMode.Full, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
+        DeepExecution execution = deep.Executions.Single();
+        Replayer replayer = new(device, deep);
+
+        foreach (DeepPass pass in execution.Views[0].Passes)
+        {
+            ReplayResult result = replayer.Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index });
+
+            Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
+            Assert.NotEmpty(result.Outputs);
+            foreach (ReplayOutput output in result.Outputs)
+            {
+                RecordedCopy copy = pass.Copies.Single(c => c.Placement == CopyPlacement.AfterPass && c.Version.Resource == output.Resource);
+                Assert.Equal(copy.Regions, output.Regions);
+                Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, output.Data);
+            }
+        }
     }
 }
