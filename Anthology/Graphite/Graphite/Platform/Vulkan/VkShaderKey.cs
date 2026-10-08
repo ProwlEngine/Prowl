@@ -2,20 +2,20 @@ using System;
 
 namespace Prowl.Graphite.Vk;
 
-/// <summary>Identity of a shader: SHA-256 over stages, entry points and SPIR-V, plus resource layouts.</summary>
+/// <summary>Identity of a shader: program key plus resource layouts.</summary>
 internal sealed class VkShaderKey : IEquatable<VkShaderKey>
 {
-    private readonly byte[] _digest;
+    private readonly ProgramKey _program;
     private readonly ResourceLayoutDescription[] _layouts;
     private readonly int _hash;
 
-    public VkShaderKey(ShaderStageDescription[] stages, ResourceLayoutDescription[] layouts)
+    public VkShaderKey(ProgramKey program, ResourceLayoutDescription[] layouts)
     {
-        _digest = ProgramKey.Compute(stages).ToArray();
+        _program = program;
         _layouts = layouts;
 
         HashCode hash = new();
-        hash.AddBytes(_digest);
+        hash.Add(_program);
         foreach (ResourceLayoutDescription layout in layouts)
         {
             hash.Add(layout.Set);
@@ -27,7 +27,7 @@ internal sealed class VkShaderKey : IEquatable<VkShaderKey>
 
     public bool Equals(VkShaderKey? other)
     {
-        if (other is null || _hash != other._hash || !_digest.AsSpan().SequenceEqual(other._digest))
+        if (other is null || _hash != other._hash || _program != other._program)
             return false;
 
         if (_layouts.Length != other._layouts.Length)
