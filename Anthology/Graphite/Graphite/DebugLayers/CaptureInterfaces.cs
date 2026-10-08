@@ -82,8 +82,3 @@ public interface ICommandStreamProfiler : IProfiler
 
     void GenerateMips(in ResourceVersion textureAfter);
 }
-
-/// <summary>Tap for content writes outside a pass. Members arrive with the resource write sink step.</summary>
-public interface IResourceWriteSink
-{
-}
