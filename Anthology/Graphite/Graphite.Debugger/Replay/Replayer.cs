@@ -38,6 +38,13 @@ public sealed class Replayer
         if (pass.NotReplayable != null)
             return NotReplayable(pass.NotReplayable);
 
+        if (request.EventIndex is { } eventIndex)
+        {
+            int events = pass.Commands.Count(ReplayEvents.IsEvent);
+            if (eventIndex < 0 || eventIndex >= events)
+                return NotReplayable($"Event {eventIndex} is out of range, pass {pass.Name} has {events} events.");
+        }
+
         bool reexecute = _recording.Mode != DeepMode.Full;
         List<DeepPass> passes = reexecute ? view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList() : [pass];
         DeepPass? blocked = passes.FirstOrDefault(p => p.NotReplayable != null);
@@ -48,7 +55,7 @@ public sealed class Replayer
         {
             using ReplayScope scope = new(_device, _recording);
             string? error = scope.Prepare(execution, view, passes, reexecute);
-            return error != null ? NotReplayable(error) : Run(scope, view, passes, pass);
+            return error != null ? NotReplayable(error) : Run(scope, view, passes, pass, request.EventIndex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -56,7 +63,7 @@ public sealed class Replayer
         }
     }
 
-    private ReplayResult Run(ReplayScope scope, DeepView view, List<DeepPass> passes, DeepPass pass)
+    private ReplayResult Run(ReplayScope scope, DeepView view, List<DeepPass> passes, DeepPass pass, int? eventIndex)
     {
         scope.RestoreImmediate();
         string name = $"Replay {pass.Index} {pass.Name}";
@@ -65,7 +72,7 @@ public sealed class Replayer
             : scope.Outputs(pass);
         ReplayCapture capture = new(name, wanted, scope.ReplayIds);
         List<IPass> replay = [new ReplayRestorePass(scope, passes)];
-        replay.AddRange(passes.Select(p => new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p)));
+        replay.AddRange(passes.Select(p => new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p, p == pass ? eventIndex : null)));
         using RenderPipeline pipeline = new(replay.ToArray());
         ReplayView[] views = [new ReplayView(view.Name, view.PixelWidth, view.PixelHeight)];
 

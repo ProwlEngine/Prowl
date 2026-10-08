@@ -48,7 +48,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
     }
 }
 
-internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepRecording recording, DeepPass pass) : IPass
+internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepRecording recording, DeepPass pass, int? lastEvent = null) : IPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
     private readonly Dictionary<string, RecordedProperty> _properties = new();
@@ -94,8 +94,13 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepReco
         _index = null;
         _pipeline = null;
         _sourceDirty = false;
+        int events = -1;
         foreach (RecordedCommand command in pass.Commands)
+        {
             Execute(cmd, command);
+            if (ReplayEvents.IsEvent(command) && ++events == lastEvent)
+                break;
+        }
     }
 
     private void Execute(CommandBuffer cmd, RecordedCommand command)
@@ -308,4 +313,15 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepReco
                     || property.Range.MipLevels != texture.MipLevels
                     || property.Range.BaseArrayLayer != 0
                     || property.Range.ArrayLayers != texture.ArrayLayers));
+}
+
+internal static class ReplayEvents
+{
+    public static bool IsEvent(RecordedCommand command)
+        => command is DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
+            or DispatchCommand or DispatchIndirectCommand
+            or ClearColorTargetCommand or ClearDepthStencilCommand
+            or UpdateBufferCommand or UpdateTextureCommand
+            or CopyBufferCommand or CopyTextureCommand or CopyTextureToBufferCommand
+            or ResolveTextureCommand or GenerateMipsCommand;
 }

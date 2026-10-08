@@ -21,6 +21,9 @@ public sealed class ReplayRequest
 
     /// <summary>Pass index within the view.</summary>
     public int PassIndex { get; init; }
+
+    /// <summary>Last event of the pass to run, counted from 0. Null runs the whole pass.</summary>
+    public int? EventIndex { get; init; }
 }
 
 /// <summary>A pass output read back after replay, laid out like the recorded copy.</summary>
