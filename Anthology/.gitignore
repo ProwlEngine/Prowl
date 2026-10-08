@@ -401,6 +401,7 @@ FodyWeavers.xsd
 *.msp
 
 # JetBrains Rider
+.idea/
 *.sln.iml
 
 # Wulferis personal/local notes (not part of the repo)
