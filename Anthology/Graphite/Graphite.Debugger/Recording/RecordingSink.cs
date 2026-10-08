@@ -45,6 +45,12 @@ internal sealed class RecordingSink : IGraphProfiler, IGpuStatsProfiler
         }
     }
 
+    public bool Contains(ulong executionId)
+    {
+        lock (_gate)
+            return _executions.ContainsKey(executionId);
+    }
+
     public void Close()
     {
         lock (_gate)

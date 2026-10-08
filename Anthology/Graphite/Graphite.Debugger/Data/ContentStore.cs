@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Security.Cryptography;
 using Prowl.Graphite.Debugger.Trace;
 
@@ -49,6 +50,14 @@ public sealed class ContentStore
         }
 
         return key;
+    }
+
+    public KeyValuePair<BlobRef, byte[]>[] Snapshot()
+    {
+        lock (gate)
+        {
+            return blobs.ToArray();
+        }
     }
 
     public bool Contains(BlobRef blob)
