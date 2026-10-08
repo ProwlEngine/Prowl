@@ -129,6 +129,46 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
+    /// Whether the execution with this id finished on the GPU. Non-blocking, and polls submissions like the task overload.
+    /// </summary>
+    /// <param name="executionId">Id of an execution started on this device.</param>
+    /// <returns>True if complete, false if still in flight or not yet completed by its dispatcher.</returns>
+    public bool IsExecutionComplete(ulong executionId)
+    {
+        ValidateExecutionId(executionId, nameof(IsExecutionComplete));
+        PollSubmissionsCore();
+        return IsExecutionIdComplete(executionId);
+    }
+
+    /// <summary>
+    /// Blocks until the execution with this id finishes on the GPU, or until timeout. Returns false at once if its dispatcher has not completed it yet.
+    /// </summary>
+    /// <param name="executionId">Id of an execution started on this device.</param>
+    /// <param name="nanosecondTimeout">Max wait in ns. ulong.MaxValue = no timeout.</param>
+    /// <returns>True if it finished before timeout, false otherwise.</returns>
+    public bool WaitForExecution(ulong executionId, ulong nanosecondTimeout = ulong.MaxValue)
+    {
+        ValidateExecutionId(executionId, nameof(WaitForExecution));
+        ExecutionTask? task;
+        lock (_executionLock)
+        {
+            task = _activeTasks.Find(t => t.Id == executionId);
+        }
+
+        if (task != null)
+            return WaitForExecution(task, nanosecondTimeout);
+
+        PollSubmissionsCore();
+        return IsExecutionIdComplete(executionId);
+    }
+
+    private void ValidateExecutionId(ulong executionId, string operation)
+    {
+        if (executionId == 0 || executionId > Volatile.Read(ref _executionIdCounter))
+            throw new ArgumentOutOfRangeException(nameof(executionId), $"{operation}: no execution with id {executionId} was started on this device.");
+    }
+
+    /// <summary>
     /// Blocks until the execution finishes on the GPU, or until timeout.
     /// </summary>
     /// <param name="task">Execution to wait for.</param>

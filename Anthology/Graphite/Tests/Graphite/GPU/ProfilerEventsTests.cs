@@ -574,6 +574,23 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
+    public void ExecutionIdOverloads_PollAndWaitWithoutATask()
+    {
+        ResolveOrderRecorder profiler = new();
+        using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using IDisposable trackedCleanup = device.TrackedCleanup();
+
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        ulong id = device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256)).Id;
+
+        Assert.True(device.WaitForExecution(id));
+        Assert.True(device.IsExecutionComplete(id));
+        Assert.Single(profiler.Events, e => e == "resolved");
+        Assert.Throws<ArgumentOutOfRangeException>(() => device.IsExecutionComplete(id + 1000));
+    }
+
+    [Fact]
     public void AttachDetach_TakeEffectFromTheNextExecution()
     {
         using GraphicsDevice device = GD.BackendType switch
