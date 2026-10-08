@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -60,6 +60,7 @@ public class SceneViewPanel : DockPanel
     /// <summary>Tools ticking in the scene view this frame.</summary>
     public static IReadOnlyList<SceneTool> LiveTools => SceneToolManager.Live;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
+    private int _viewportElementId; // Paper hit target, excluding the floating toolbar and other UI overlays
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
     // Pose restored from disk by RestoreState; applied the first time the camera is created
@@ -196,8 +197,8 @@ public class SceneViewPanel : DockPanel
         using (paper.Column("sv_tools")
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
-            .Width(34).Height(UnitValue.Auto)
-            .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(5, 5, 5, 5).Gap(3)
+            .Width(32).Height(UnitValue.Auto)
+            .Rounded(Origami.Current.Metrics.ContainerRounding)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
@@ -223,33 +224,41 @@ public class SceneViewPanel : DockPanel
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
         paper.Box("sv_move_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_move"))
+            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Hovered.BackgroundColor(isTranslate ? EditorTheme.Purple400 : EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
 
         paper.Box("sv_rotate_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_rotate"))
+            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Hovered.BackgroundColor(isRotate ? EditorTheme.Purple400 : EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
 
         paper.Box("sv_scale_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_scale"))
+            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Hovered.BackgroundColor(isScale ? EditorTheme.Purple400 : EditorTheme.Hover).End()
             .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
 
         paper.Box("sv_universal_btn")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
+            .Tooltip(Loc.Get("scene.tool_universal"))
+            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Hovered.BackgroundColor(isUniversal ? EditorTheme.Purple400 : EditorTheme.Hover).End()
             .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Universal));
@@ -314,8 +323,11 @@ public class SceneViewPanel : DockPanel
                 // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
                 Float2 origin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 mouseLocal = paper.PointerPos - origin;
-                // Use Paper's hover state which respects overlays/popups, not just bounds
-                _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, paper.IsParentHovered);
+                
+                // Only the viewport surface accepts scene picks. The enclosing panel is also
+                // hovered over toolbar buttons, which would let their raw mouse press start a pick.
+                bool viewportHovered = _viewportElementId != 0 && paper.HoveredElementId == _viewportElementId;
+                _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, viewportHovered);
 
                 _toolContext.Begin(scene, this);
                 SceneToolManager.SyncAvailability(_toolContext);
@@ -365,6 +377,7 @@ public class SceneViewPanel : DockPanel
                 {
                     // Cache absolute rect for gizmo coordinate space
                     _viewportAbsoluteRect = rect;
+                    _viewportElementId = handle.Data.ID;
 
                     // Draw RT
                     paper.Draw(ref handle, (canvas, r) =>
