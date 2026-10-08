@@ -31,24 +31,33 @@ internal sealed unsafe class VkShader
         Key = key;
 
         long bytes = 0;
-        for (int i = 0; i < stages.Length; i++)
+        try
         {
-            ShaderStageDescription sd = stages[i];
-            ShaderModuleCreateInfo shaderModuleCI = new() { SType = StructureType.ShaderModuleCreateInfo };
-            fixed (byte* codePtr = sd.ShaderBytes)
+            for (int i = 0; i < stages.Length; i++)
             {
-                shaderModuleCI.CodeSize = (UIntPtr)sd.ShaderBytes.Length;
-                shaderModuleCI.PCode = (uint*)codePtr;
-                _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out ShaderModule module).CheckResult();
-                _modules[sd.Stage] = module;
-                _entryPoints[sd.Stage] = sd.EntryPoint;
+                ShaderStageDescription sd = stages[i];
+                ShaderModuleCreateInfo shaderModuleCI = new() { SType = StructureType.ShaderModuleCreateInfo };
+                fixed (byte* codePtr = sd.ShaderBytes)
+                {
+                    shaderModuleCI.CodeSize = (UIntPtr)sd.ShaderBytes.Length;
+                    shaderModuleCI.PCode = (uint*)codePtr;
+                    _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out ShaderModule module).CheckResult();
+                    _modules[sd.Stage] = module;
+                    _entryPoints[sd.Stage] = sd.EntryPoint;
+                }
+
+                bytes += sd.ShaderBytes.Length;
             }
 
-            bytes += sd.ShaderBytes.Length;
+            (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
+                = VkDescriptorLayoutBuilder.Build(_gd, layouts);
         }
-
-        (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
-            = VkDescriptorLayoutBuilder.Build(_gd, layouts);
+        catch
+        {
+            foreach (ShaderModule m in _modules.Values)
+                _gd.Vk.DestroyShaderModule(_gd.Device, m, null);
+            throw;
+        }
 
         DescriptorCache = new VkDescriptorSetCache(_gd);
 
