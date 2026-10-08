@@ -86,6 +86,14 @@ internal unsafe partial class VkGraphicsDevice
         }
     }
 
+    private void DestroyQueryPools()
+    {
+        while (_availableTimingPools.TryDequeue(out QueryPool pool))
+            Vk.DestroyQueryPool(Device, pool, null);
+        while (_availableStatsPools.TryDequeue(out QueryPool pool))
+            Vk.DestroyQueryPool(Device, pool, null);
+    }
+
     private QueryPool GetPool(ConcurrentQueue<QueryPool> free, QueryType type, uint count, QueryPipelineStatisticFlags statistics)
     {
         if (free.TryDequeue(out QueryPool pool))

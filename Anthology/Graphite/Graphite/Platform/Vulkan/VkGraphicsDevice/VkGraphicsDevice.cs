@@ -176,6 +176,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         WaitForGraphicsQueueIdle();
         FlushAllRetired();
+        DestroyQueryPools();
 
         Vk.DestroyPipelineCache(Device, DriverPipelineCache, null);
 
