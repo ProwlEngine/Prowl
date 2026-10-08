@@ -1,3 +1,4 @@
+using System;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
@@ -37,7 +38,27 @@ public sealed record RecordedProgram(
     EquatableArray<VertexLayoutDescription> VertexLayouts,
     uint ThreadGroupX,
     uint ThreadGroupY,
-    uint ThreadGroupZ);
+    uint ThreadGroupZ)
+{
+    /// <summary>Compares layouts element by element.</summary>
+    public bool Equals(RecordedProgram? other)
+        => other is not null
+            && Key.Equals(other.Key)
+            && IsCompute == other.IsCompute
+            && Stages.Equals(other.Stages)
+            && ProgramEquality.Equal(Layouts, other.Layouts)
+            && Blend.Equals(other.Blend)
+            && DepthStencil.Equals(other.DepthStencil)
+            && Rasterizer.Equals(other.Rasterizer)
+            && ProgramEquality.Equal(VertexLayouts, other.VertexLayouts)
+            && ThreadGroupX == other.ThreadGroupX
+            && ThreadGroupY == other.ThreadGroupY
+            && ThreadGroupZ == other.ThreadGroupZ;
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+        => HashCode.Combine(Key, IsCompute, Stages, ProgramEquality.Hash(Layouts), ProgramEquality.Hash(VertexLayouts), ThreadGroupX, ThreadGroupY, ThreadGroupZ);
+}
 
 /// <summary>Content keyed by hash.</summary>
 public sealed record RecordedBlob(BlobRef Ref, EquatableArray<byte> Data);
