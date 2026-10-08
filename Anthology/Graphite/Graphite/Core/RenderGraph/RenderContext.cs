@@ -239,6 +239,10 @@ public sealed class RenderContext
         public BufferAccess Visible = BufferAccess.None;
     }
 
+    internal GraphicsDevice Device => _device;
+
+    internal GraphTextureStates? CurrentTextureStates => _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+
     internal CommandBuffer BeginCommandBuffer(string name)
     {
         CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
@@ -251,7 +255,7 @@ public sealed class RenderContext
             cb.Name = name;
 
         cb.Begin();
-        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+        cb.GraphStates = CurrentTextureStates;
         return cb;
     }
 
@@ -272,7 +276,7 @@ public sealed class RenderContext
         _pendingBufferSrc = BufferAccess.None;
         _pendingBufferDst = BufferAccess.None;
         CommitBarrierStates();
-        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+        cb.GraphStates = CurrentTextureStates;
         return cb;
     }
 

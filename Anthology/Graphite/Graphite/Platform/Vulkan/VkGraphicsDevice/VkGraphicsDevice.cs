@@ -84,6 +84,11 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     internal void UnregisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Unregister(cache);
 
+    private VkCaptureBackend? _captureBackend;
+
+    internal override Prowl.Graphite.RenderGraph.ICaptureBackend CaptureBackend
+        => System.Threading.LazyInitializer.EnsureInitialized(ref _captureBackend, () => new VkCaptureBackend(this))!;
+
     internal override CommandBuffer RentGraphCommandBuffer(ExecutionTask task)
     {
         ref SlotState slot = ref _slots[task.RingSlot];

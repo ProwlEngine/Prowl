@@ -8,7 +8,11 @@ namespace Prowl.Graphite.RenderGraph;
 
 internal sealed class CaptureContext : ICaptureContext
 {
-    public static readonly CaptureContext Instance = new();
+    private readonly GraphCapture _owner;
+
+    public CaptureContext(GraphCapture owner) => _owner = owner;
+
+    public CaptureCopy Copy(in PassReference reference, CopyPlacement placement) => _owner.Copy(in reference, placement);
 }
 
 /// <summary>Per view state that turns graph execution into capture hook callbacks.</summary>
@@ -24,6 +28,11 @@ internal sealed class GraphCapture
     private readonly Dictionary<ResourceId, ResourceVersion> _firstReferenced = new();
     private readonly HashSet<ResourceId> _listed = new();
     private readonly List<PassReference> _references = new();
+    private readonly Dictionary<ResourceId, (Texture? Texture, DeviceBuffer? Buffer)> _live = new();
+    private readonly HashSet<ResourceId> _viewTargets = new();
+    private readonly CaptureContext _captureContext;
+    private GraphTextureStates? _preStates;
+    private CommandBuffer? _passCommands;
 
     public GraphCapture(ICaptureProfiler hook, RenderContext context, RenderGraph graph, RenderGraph.PassNode[] nodes, PassInfo[] passInfos)
     {
@@ -32,6 +41,7 @@ internal sealed class GraphCapture
         _graph = graph;
         _nodes = nodes;
         _passInfos = passInfos;
+        _captureContext = new CaptureContext(this);
     }
 
     public void BeginView(string viewName, int viewIndex, uint pixelWidth, uint pixelHeight, ulong executionId)
@@ -57,6 +67,7 @@ internal sealed class GraphCapture
 
     public void BeginPass(int index)
     {
+        _preStates = _context.CurrentTextureStates;
         _passEntry.Clear();
         foreach (ResourceAccess access in _nodes[index].Accesses)
         {
@@ -70,6 +81,8 @@ internal sealed class GraphCapture
         _references.Clear();
         _listed.Clear();
         _firstReferenced.Clear();
+        _live.Clear();
+        _passCommands = commands;
         foreach (ReferencedResource referenced in commands.ReferencedResources)
             _firstReferenced[referenced.Buffer?.ResourceId ?? referenced.Texture!.ResourceId] = referenced.FirstVersion;
 
@@ -96,12 +109,67 @@ internal sealed class GraphCapture
                 continue;
 
             if (referenced.Buffer is { } buffer)
+            {
+                _live[buffer.ResourceId] = (null, buffer);
                 _references.Add(new PassReference(referenced.FirstVersion, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue));
+            }
             else
-                _references.Add(new PassReference(referenced.FirstVersion, referenced.Texture!.CurrentVersion.Version, referenced.Texture.Name, referenced.Texture.DescriptionValue, null));
+            {
+                _live[referenced.Texture!.ResourceId] = (referenced.Texture, null);
+                _references.Add(new PassReference(referenced.FirstVersion, referenced.Texture.CurrentVersion.Version, referenced.Texture.Name, referenced.Texture.DescriptionValue, null));
+            }
         }
 
-        _hook.OnPassEnd(in _passInfos[index], CollectionsMarshal.AsSpan(_references), CaptureContext.Instance);
+        try
+        {
+            _hook.OnPassEnd(in _passInfos[index], CollectionsMarshal.AsSpan(_references), _captureContext);
+        }
+        finally
+        {
+            _live.Clear();
+            _passCommands = null;
+        }
+    }
+
+    internal CaptureCopy Copy(in PassReference reference, CopyPlacement placement)
+    {
+        ResourceId id = reference.First.Resource;
+        if (_passCommands is not { } passCommands || !_live.TryGetValue(id, out (Texture? Texture, DeviceBuffer? Buffer) live))
+            throw new ArgumentException("The reference does not belong to the pass being captured.", nameof(reference));
+
+        if (_viewTargets.Contains(id))
+            throw new InvalidOperationException("A view target backing cannot be copied.");
+
+        ICaptureBackend backend = _context.Device.CaptureBackend;
+        ResourceFactory factory = _context.Device.ResourceFactory;
+        string name = live.Buffer?.Name ?? live.Texture!.Name;
+        CommandBuffer cb;
+        DeviceBuffer staging;
+        CopyRegion[] regions = Array.Empty<CopyRegion>();
+
+        if (live.Buffer is { } buffer)
+        {
+            staging = factory.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
+            cb = _context.BeginCommandBuffer("Capture " + name);
+            backend.RecordBufferCopy(cb, buffer, staging);
+        }
+        else
+        {
+            Texture texture = live.Texture!;
+            regions = CaptureCopyPlanner.PlanTexture(texture.DescriptionValue, out uint size);
+            staging = factory.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
+            cb = _context.BeginCommandBuffer("Capture " + name);
+            TextureState? before = placement == CopyPlacement.BeforePass ? _preStates?.StateOf(texture) : cb.StateOf(texture);
+            backend.RecordTextureCopy(cb, texture, before, staging, regions);
+        }
+
+        staging.Name = $"Capture staging {name} v{(placement == CopyPlacement.BeforePass ? reference.First.Version : reference.LastVersion)}";
+        if (placement == CopyPlacement.BeforePass)
+            _context.EndCommandBufferAhead(cb, passCommands);
+        else
+            _context.EndCommandBuffer(cb);
+
+        return new CaptureCopy(staging, regions);
     }
 
     public void EndView() => _hook.OnViewEnd();
@@ -111,12 +179,14 @@ internal sealed class GraphCapture
         if (!access.IsTexture)
         {
             DeviceBuffer buffer = _context.GetRenderBuffer(new BufferHandle(access.Id));
+            _live[buffer.ResourceId] = (null, buffer);
             _references.Add(new PassReference(first, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue));
             return;
         }
 
         RenderTexture target = _context.GetRenderTexture(new TextureHandle(access.Id));
         Texture texture = backing.Role == BackingRole.Depth ? target.DepthTexture! : target.ColorTextures[(int)backing.Index];
+        _live[texture.ResourceId] = (texture, null);
         _references.Add(new PassReference(first, texture.CurrentVersion.Version, texture.Name, texture.DescriptionValue, null));
     }
 
@@ -153,6 +223,8 @@ internal sealed class GraphCapture
                     break;
                 case GraphViewTargetResource:
                     origin = GraphResourceOrigin.ViewTarget;
+                    foreach (GraphBacking backing in backings)
+                        _viewTargets.Add(backing.Id);
                     break;
                 case GraphImportedTextureResource:
                     origin = GraphResourceOrigin.Imported;

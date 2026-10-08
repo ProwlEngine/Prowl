@@ -20,9 +20,11 @@ public interface ICaptureProfiler : IProfiler
     void OnExecutionSubmitted(ExecutionTask task);
 }
 
-/// <summary>Services a hook can request during a callback. Snapshot members arrive with the copy and readback step.</summary>
+/// <summary>Services a hook can request during a callback. Only valid for the duration of <see cref="ICaptureProfiler.OnPassEnd"/>.</summary>
 public interface ICaptureContext
 {
+    /// <summary>Records a copy of the whole resource into a new staging buffer owned by the caller. Throws for a view target backing.</summary>
+    CaptureCopy Copy(in PassReference reference, CopyPlacement placement);
 }
 
 /// <summary>

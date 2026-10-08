@@ -53,6 +53,8 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     internal abstract CommandBuffer RentGraphCommandBuffer(ExecutionTask task);
 
+    internal abstract Prowl.Graphite.RenderGraph.ICaptureBackend CaptureBackend { get; }
+
     /// <summary>
     /// Main swapchain for this device, or null if none.
     /// </summary>
