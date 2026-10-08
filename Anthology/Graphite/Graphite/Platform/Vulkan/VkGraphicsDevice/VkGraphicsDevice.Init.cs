@@ -186,7 +186,9 @@ internal unsafe partial class VkGraphicsDevice
             TextureCompressionBC = supported.TextureCompressionBC,
             TextureCompressionEtc2 = supported.TextureCompressionEtc2,
             TextureCompressionAstcLdr = supported.TextureCompressionAstcLdr,
-            ImageCubeArray = supported.ImageCubeArray
+            ImageCubeArray = supported.ImageCubeArray,
+            ShaderStorageImageWriteWithoutFormat = supported.ShaderStorageImageWriteWithoutFormat,
+            ShaderStorageImageReadWithoutFormat = supported.ShaderStorageImageReadWithoutFormat
         };
 
         Vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, out PhysicalDeviceMemProperties);
@@ -275,8 +277,9 @@ internal unsafe partial class VkGraphicsDevice
             throw new RenderException($"The Vulkan device '{_deviceName}' does not support timeline semaphores.");
 
         vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features, timelineSemaphore: true);
+        PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true);
 
-        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan12Features);
+        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan11Features);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
 
