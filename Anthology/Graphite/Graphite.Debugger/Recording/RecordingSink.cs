@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Prowl.Graphite.Debugger.Trace;
 
 namespace Prowl.Graphite.Debugger;
 
@@ -57,10 +58,10 @@ internal sealed class RecordingSink : IGraphProfiler, IGpuStatsProfiler
             _closed = true;
     }
 
-    public IReadOnlyList<RecordedExecution> Build()
+    public EquatableArray<RecordedExecution> Build()
     {
         lock (_gate)
-            return _executions.OrderBy(e => e.Key).Select(e => e.Value.Build(e.Key)).ToArray();
+            return _executions.OrderBy(e => e.Key).Select(e => e.Value.Build(e.Key)).ToEquatableArray();
     }
 
     public void BeginView(in ViewInfo view)
@@ -143,8 +144,8 @@ internal sealed class RecordingSink : IGraphProfiler, IGpuStatsProfiler
         public RecordedExecution Build(ulong id)
             => new(
                 id,
-                Views.Values.Select(v => new RecordedView(v.Name, v.Index, v.PixelWidth, v.PixelHeight, v.Passes.ToArray())).ToArray(),
-                CommandBuffers.OrderBy(c => c.Key).Select(c => c.Value.Build()).ToArray());
+                Views.Values.Select(v => new RecordedView(v.Name, v.Index, v.PixelWidth, v.PixelHeight, v.Passes.ToEquatableArray())).ToEquatableArray(),
+                CommandBuffers.OrderBy(c => c.Key).Select(c => c.Value.Build()).ToEquatableArray());
     }
 
     private sealed class ViewBuilder(string name, int index, uint pixelWidth, uint pixelHeight)

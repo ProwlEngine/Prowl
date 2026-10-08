@@ -60,7 +60,7 @@ public class RecorderTests
 
         Assert.True(recording.IsDone);
         Assert.Equal([first.Id, second.Id], recording.Executions.Select(e => e.ExecutionId));
-        Assert.Equal([1, 2], recording.Executions.Select(e => e.Views.Count));
+        Assert.Equal([1, 2], recording.Executions.Select(e => e.Views.Length));
         Assert.All(recording.Executions.SelectMany(e => e.Views), view => Assert.Equal("Clear", Assert.Single(view.Passes).Name));
         Assert.All(recording.Executions, e => Assert.Contains(e.CommandBuffers, c => c.Milliseconds is not null));
         Assert.Throws<InvalidOperationException>(recorder.EndRecord);

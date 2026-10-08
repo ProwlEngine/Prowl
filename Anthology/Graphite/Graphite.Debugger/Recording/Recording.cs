@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using Prowl.Graphite.Debugger.Trace;
 
 namespace Prowl.Graphite.Debugger;
 
@@ -7,7 +7,7 @@ public sealed class Recording : RecordingHandle
 {
     private readonly GraphicsDevice? _device;
     private RecordingSink? _sink;
-    private IReadOnlyList<RecordedExecution> _executions = [];
+    private EquatableArray<RecordedExecution> _executions = EquatableArray<RecordedExecution>.Empty;
 
     internal Recording(GraphicsDevice device, RecordingSink sink, RecordingHandle? previous)
         : base(previous)
@@ -17,7 +17,7 @@ public sealed class Recording : RecordingHandle
     }
 
     /// <summary>The recorded executions in start order.</summary>
-    public IReadOnlyList<RecordedExecution> Executions
+    public EquatableArray<RecordedExecution> Executions
     {
         get
         {

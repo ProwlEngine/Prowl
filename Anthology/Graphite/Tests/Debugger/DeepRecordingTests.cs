@@ -74,7 +74,7 @@ public class DeepRecordingTests
         Assert.Contains(deep.Blobs, b => b.Ref == update.Data && b.Data.SequenceEqual(new byte[] { 5, 5, 5, 5 }));
         Assert.Contains(pass.Commands, c => c is SetFramebufferCommand);
         Assert.Contains(pass.Commands, c => c is ClearColorTargetCommand);
-        Assert.Equal(1, deep.Recording.Executions.Count);
+        Assert.Single(deep.Recording.Executions);
     }
 
     [SkippableTheory]
