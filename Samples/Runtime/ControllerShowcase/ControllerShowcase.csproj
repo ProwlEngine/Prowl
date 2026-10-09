@@ -4,8 +4,4 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Update="Layout.txt" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>
