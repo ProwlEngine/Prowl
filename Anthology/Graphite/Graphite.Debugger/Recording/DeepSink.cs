@@ -397,7 +397,6 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
     private sealed class ExecutionState
     {
         public readonly SortedDictionary<int, ViewState> Views = new();
-        public readonly HashSet<(ResourceId, uint)> Known = new();
         public readonly HashSet<(ResourceId, uint)> Copied = new();
     }
 
@@ -410,6 +409,7 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
         public readonly ExecutionState Execution = execution;
         public readonly List<RecordedGraphResource> Resources = new();
         public readonly Dictionary<ResourceId, GraphResourceOrigin> Origins = new();
+        public readonly HashSet<(ResourceId, uint)> Known = new();
         public readonly SortedDictionary<int, PassState> Passes = new();
 
         public PassState Pass(int index)

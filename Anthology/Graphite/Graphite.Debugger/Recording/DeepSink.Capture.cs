@@ -42,18 +42,18 @@ internal sealed partial class DeepSink
         {
             PassReference reference = references[i];
             ResourceId id = reference.First.Resource;
-            if (IsViewTarget(view, id) || execution.Known.Contains((id, reference.First.Version)) || !ReadsContents(view, state, id))
+            if (IsViewTarget(view, id) || view.Known.Contains((id, reference.First.Version)) || !ReadsContents(view, state, id))
                 continue;
 
             Copy(execution, state, capture, in reference, CopyPlacement.BeforePass, reference.First.Version);
-            execution.Known.Add((id, reference.First.Version));
+            view.Known.Add((id, reference.First.Version));
         }
 
         foreach (PassReference reference in references)
         {
             ResourceId id = reference.First.Resource;
             if (state.Outputs.Contains(id) || state.Written.Contains(id))
-                execution.Known.Add((id, reference.LastVersion));
+                view.Known.Add((id, reference.LastVersion));
         }
 
         if (Mode != DeepMode.Full)
@@ -67,7 +67,7 @@ internal sealed partial class DeepSink
                 continue;
 
             Copy(execution, state, capture, in reference, CopyPlacement.AfterPass, reference.LastVersion);
-            execution.Known.Add((id, reference.LastVersion));
+            view.Known.Add((id, reference.LastVersion));
         }
     }
 
