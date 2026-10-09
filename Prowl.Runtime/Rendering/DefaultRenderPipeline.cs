@@ -612,7 +612,7 @@ public class DefaultRenderPipeline : RenderPipeline
         fogParams.W = fog.End / fogRange;
 
         PropertyState.SetGlobalColor("_FogColor", fog.Color);
-        PropertyState.SetGlobalVector("_FogSky", new Float2(fog.UseSky ? 1 : 0, fog.SkySunGlow ? 1 : 0));
+        PropertyState.SetGlobalInt("_FogUseSky", fog.UseSky ? 1 : 0);
         PropertyState.SetGlobalVector("_FogParams", fogParams);
         PropertyState.SetGlobalVector("_FogStates", new Float3(
             fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,

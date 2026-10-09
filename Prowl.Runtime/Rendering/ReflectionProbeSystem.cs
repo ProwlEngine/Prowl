@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -30,7 +29,7 @@ internal sealed class ReflectionProbeSystem : IDisposable
 
     private const int TexelsPerProbe = 6;
     private const int SkyLayer = 0;
-    private const double SkyMinInterval = 1.0;
+    private const int SkyFrameInterval = 2;
 
     private sealed class Slot
     {
@@ -56,7 +55,7 @@ internal sealed class ReflectionProbeSystem : IDisposable
 
     private bool _skyCaptured;
     private int _skyHash;
-    private readonly Stopwatch _sinceSky = Stopwatch.StartNew();
+    private long _skyFrame;
 
     // A realtime capture spread over several frames, its faces landing in the shared scratch cube
     private Slot? _slicing;
@@ -143,10 +142,10 @@ internal sealed class ReflectionProbeSystem : IDisposable
         if (_slicing != null) return;
         int hash = SkyHash(scene);
         bool changed = hash != _skyHash;
-        if (_skyCaptured && !(changed && _sinceSky.Elapsed.TotalSeconds >= SkyMinInterval)) return;
+        if (_skyCaptured && !(changed && Time.FrameCount - _skyFrame >= SkyFrameInterval)) return;
 
         _skyHash = hash;
-        _sinceSky.Restart();
+        _skyFrame = Time.FrameCount;
         ReflectionProbeCapture.CaptureSky(scene, Resolution);
         ReflectionProbeCapture.Prefilter(_array!, SkyLayer, MipCount);
         _skyCaptured = true;

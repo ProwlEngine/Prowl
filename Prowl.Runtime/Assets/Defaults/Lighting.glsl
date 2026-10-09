@@ -97,7 +97,7 @@ mat4 ShadowDataMatrix(int texel)
 uniform vec4 _FogColor;
 uniform vec4 _FogParams;
 uniform vec3 _FogStates;
-uniform vec2 _FogSky; // x: color the fog with the sky, y: keep the sun glow
+uniform int _FogUseSky; // 1 colors the fog with the sky
 
 // ============================================================
 //  Ambient lighting uniforms
@@ -915,23 +915,21 @@ vec3 ShadeSH9(vec3 n)
 //  Fog
 // ============================================================
 
-// How blurred the sky is that fog takes its color from, as a sky probe roughness. The sharper one keeps a glow
-// around the sun, the softer one spreads it out.
-#define FOG_SKY_GLOW_ROUGHNESS 0.25
-#define FOG_SKY_ROUGHNESS 0.5
+// How blurred the sky is that fog takes its color from, as a sky probe roughness
+#define FOG_SKY_ROUGHNESS 0.35
 
 // The fog color seen toward worldPos, either the flat fog color or the sky behind it from the sky probe, so it
 // meets whatever sky is drawn seamlessly
 vec3 FogColor(vec3 worldPos)
 {
-    if (_FogSky.x < 0.5 || !ReflectionProbesReady())
+    if (_FogUseSky == 0 || !ReflectionProbesReady())
         return _FogColor.rgb;
 
     // Below the horizon the fog keeps the horizon's color rather than the ground under the sky
     vec3 dir = worldPos - _WorldSpaceCameraPos.xyz;
     dir.y = max(dir.y, 0.0);
     dir = length(dir) > 1e-4 ? normalize(dir) : vec3(0.0, 0.0, 1.0);
-    return SampleProbeLayer(0.0, dir, _FogSky.y > 0.5 ? FOG_SKY_GLOW_ROUGHNESS : FOG_SKY_ROUGHNESS);
+    return SampleProbeLayer(0.0, dir, FOG_SKY_ROUGHNESS);
 }
 
 vec3 ApplyFog(vec3 color, vec3 worldPos)

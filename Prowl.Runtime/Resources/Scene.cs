@@ -415,9 +415,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         /// <summary>Colors the fog with the sky drawn in each view direction, taken from the sky probe, instead of Color.</summary>
         public bool UseSky = false;
 
-        /// <summary>Keeps the glow around the sun in sky colored fog.</summary>
-        public bool SkySunGlow = false;
-
         public bool IsFogLinear => Mode == FogMode.Linear;
 
         public FogParams()
