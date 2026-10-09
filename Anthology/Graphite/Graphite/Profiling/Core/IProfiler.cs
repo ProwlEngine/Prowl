@@ -23,6 +23,6 @@ public interface IGraphProfiler : IProfiler
 /// <summary>Native GPU stats. Implementing this opts in to timestamp and pipeline statistic queries.</summary>
 public interface IGpuStatsProfiler : IProfiler
 {
-    void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds);
+    void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds);
     void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats);
 }
