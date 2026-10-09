@@ -143,7 +143,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             if (error != null)
                 return error;
 
-            if (!access.IsOutput)
+            if (access.ReadsContents)
             {
                 foreach (RecordedBacking backing in graph.Backings)
                     inputs.Add(backing.Id);
