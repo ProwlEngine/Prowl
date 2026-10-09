@@ -1,10 +1,6 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
-using System.Threading;
-using Prowl.Graphite.Debugger.Data;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
@@ -12,139 +8,21 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
 
-internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICaptureProfiler, ICommandStreamProfiler
+public sealed partial class DeepRecording
 {
-    private readonly RecordingSink _light = new();
-    private readonly ContentStore _store = new();
-    private readonly object _gate = new();
-    private readonly ConcurrentDictionary<ResourceId, ResourceBuilder> _resources = new();
+    private readonly Dictionary<ResourceId, ResourceBuilder> _resources = new();
     private readonly Dictionary<ProgramKey, RecordedProgram> _programs = new();
     private readonly List<SamplerDescription> _samplers = new();
-    private readonly SortedDictionary<ulong, ExecutionState> _executions = new();
-    private readonly ThreadLocal<ThreadState> _thread = new(() => new ThreadState());
+    private PassState? _pass;
     private uint _nextTraceId;
 
-    public DeepSink(DeepMode mode)
+    void ICommandStreamProfiler.BeginPassCommands(in PassInfo pass) => _pass = _view?.Pass(pass.Index);
+
+    void ICommandStreamProfiler.EndPassCommands(in PassInfo pass) => _pass = null;
+
+    void ICommandStreamProfiler.SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops)
     {
-        Mode = mode;
-    }
-
-    public DeepMode Mode { get; }
-
-    public RecordingSink Light => _light;
-
-    public void Close() => _light.Close();
-
-    public void BeginView(in ViewInfo view) => _light.BeginView(in view);
-
-    public void EndView(in ViewInfo view) => _light.EndView(in view);
-
-    public void BeginPass(in PassInfo pass) => _light.BeginPass(in pass);
-
-    public void EndPass(in PassInfo pass, in PassStats stats) => _light.EndPass(in pass, in stats);
-
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
-    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
-        => _light.RecordExecutionTime(in commandBuffer, isTransfer, milliseconds);
-
-    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats)
-        => _light.RecordGpuVertexStats(in commandBuffer, in stats);
-
-    public void RecordExecutionResolved(ulong executionId) => _light.RecordExecutionResolved(executionId);
-
-    public void OnViewBegin(in ViewCaptureInfo view)
-    {
-        ThreadState thread = _thread.Value!;
-        thread.View = null;
-        thread.Pass = null;
-        if (!_light.Contains(view.ExecutionId))
-            return;
-
-        ExecutionState execution;
-        lock (_gate)
-        {
-            if (!_executions.TryGetValue(view.ExecutionId, out execution!))
-                _executions[view.ExecutionId] = execution = new ExecutionState();
-        }
-
-        ViewState state = new(view.ViewName, view.ViewIndex, view.PixelWidth, view.PixelHeight, execution);
-        Dictionary<RenderResourceID, GraphResourceInfo> byName = new();
-        foreach (GraphResourceInfo info in view.Resources.Span)
-        {
-            byName[info.Id] = info;
-            GraphBacking[] backings = info.Backings.ToArray();
-            foreach (GraphBacking backing in backings)
-                state.Origins[backing.Id] = info.Origin;
-
-            state.Resources.Add(new RecordedGraphResource(
-                info.Name,
-                info.Kind,
-                info.Origin,
-                backings.Select(b => new RecordedBacking(Trace(b.Id), b.EntryVersion.Version, b.Role, b.Index)).ToEquatableArray(),
-                info.Texture,
-                info.Buffer));
-        }
-
-        foreach (PassCaptureInfo passInfo in view.Passes.Span)
-        {
-            PassState pass = new(passInfo.Pass.Name, passInfo.Pass.Index);
-            foreach (PassResourceAccess access in passInfo.Accesses.Span)
-            {
-                RecordedAccess recorded = new(
-                    RenderResourceID.ToString(access.Id) ?? access.Id.ToString(),
-                    access.Kind,
-                    access.IsOutput,
-                    access.TextureUsage,
-                    access.DepthUsage,
-                    access.BufferUsage);
-                pass.Accesses.Add(recorded);
-
-                if (!byName.TryGetValue(access.Id, out GraphResourceInfo resource))
-                    continue;
-
-                foreach (GraphBacking backing in resource.Backings.Span)
-                {
-                    pass.Declared.Add(backing.Id);
-                    if (access.IsOutput)
-                        pass.Outputs.Add(backing.Id);
-
-                    if (recorded.ReadsContents)
-                        pass.Reads.Add(backing.Id);
-                }
-            }
-
-            state.Passes[passInfo.Pass.Index] = pass;
-        }
-
-        lock (_gate)
-            execution.Views[view.ViewIndex] = state;
-
-        thread.View = state;
-    }
-
-    public void OnViewEnd()
-    {
-        ThreadState thread = _thread.Value!;
-        thread.View = null;
-        thread.Pass = null;
-    }
-
-    public void OnExecutionSubmitted(ExecutionTask task) { }
-
-    public void BeginPassCommands(in PassInfo pass)
-    {
-        ThreadState thread = _thread.Value!;
-        thread.Pass = thread.View?.Pass(pass.Index);
-    }
-
-    public void EndPassCommands(in PassInfo pass) => _thread.Value!.Pass = null;
-
-    public void SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops)
-    {
-        if (_thread.Value!.Pass is not { } pass)
+        if (_pass is not { } pass)
             return;
 
         RecordedAttachment[] colors = new RecordedAttachment[framebuffer.Colors.Length];
@@ -171,24 +49,24 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
         pass.Commands.Add(new SetFramebufferCommand(colors.ToEquatableArray(), depth, framebuffer.Outputs, framebuffer.Width, framebuffer.Height, ops));
     }
 
-    public void ClearColorTarget(uint index, Color color) => Add(new ClearColorTargetCommand(index, color));
+    void ICommandStreamProfiler.ClearColorTarget(uint index, Color color) => Add(new ClearColorTargetCommand(index, color));
 
-    public void ClearDepthStencil(float depth, byte stencil) => Add(new ClearDepthStencilCommand(depth, stencil));
+    void ICommandStreamProfiler.ClearDepthStencil(float depth, byte stencil) => Add(new ClearDepthStencilCommand(depth, stencil));
 
-    public void SetPipeline(in PipelineBindInfo pipeline)
+    void ICommandStreamProfiler.SetPipeline(in PipelineBindInfo pipeline)
         => Add(new SetPipelineCommand(EnsureProgram(pipeline.Program), pipeline.IsCompute, pipeline.Outputs, pipeline.Topology));
 
-    public void SetViewport(in Viewport viewport) => Add(new SetViewportCommand(viewport));
+    void ICommandStreamProfiler.SetViewport(in Viewport viewport) => Add(new SetViewportCommand(viewport));
 
-    public void SetScissor(uint x, uint y, uint width, uint height) => Add(new SetScissorCommand(x, y, width, height));
+    void ICommandStreamProfiler.SetScissor(uint x, uint y, uint width, uint height) => Add(new SetScissorCommand(x, y, width, height));
 
-    public void SetStencilReference(uint reference) => Add(new SetStencilReferenceCommand(reference));
+    void ICommandStreamProfiler.SetStencilReference(uint reference) => Add(new SetStencilReferenceCommand(reference));
 
-    public void SetBlendConstants(Color constants) => Add(new SetBlendConstantsCommand(constants));
+    void ICommandStreamProfiler.SetBlendConstants(Color constants) => Add(new SetBlendConstantsCommand(constants));
 
-    public void BindVertexBuffers(ReadOnlySpan<VertexBindingUse> bindings)
+    void ICommandStreamProfiler.BindVertexBuffers(ReadOnlySpan<VertexBindingUse> bindings)
     {
-        if (_thread.Value!.Pass is not { } pass)
+        if (_pass is not { } pass)
             return;
 
         List<RecordedVertexBinding> changed = new();
@@ -207,9 +85,9 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
         pass.VertexCount = bindings.Length;
     }
 
-    public void BindIndexBuffer(in IndexBindingUse binding)
+    void ICommandStreamProfiler.BindIndexBuffer(in IndexBindingUse binding)
     {
-        if (_thread.Value!.Pass is not { } pass)
+        if (_pass is not { } pass)
             return;
 
         BindIndexBufferCommand command = new(Trace(binding.Buffer), binding.Format, binding.IndexCount);
@@ -219,9 +97,9 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
         pass.Index = command;
     }
 
-    public void SetProperties(ReadOnlySpan<PropertyState> properties)
+    void ICommandStreamProfiler.SetProperties(ReadOnlySpan<PropertyState> properties)
     {
-        if (_thread.Value!.Pass is not { } pass)
+        if (_pass is not { } pass)
             return;
 
         List<RecordedProperty> changed = new();
@@ -244,69 +122,69 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
             pass.Commands.Add(new SetPropertiesCommand(changed.ToEquatableArray(), removed.ToEquatableArray()));
     }
 
-    public void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance)
+    void ICommandStreamProfiler.Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance)
         => Add(new DrawCommand(vertexCount, instanceCount, firstVertex, firstInstance));
 
-    public void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
+    void ICommandStreamProfiler.DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
         => Add(new DrawIndexedCommand(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance));
 
-    public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
+    void ICommandStreamProfiler.DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
         => Add(new DrawIndirectCommand(Trace(buffer), offset, drawCount, stride));
 
-    public void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
+    void ICommandStreamProfiler.DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
         => Add(new DrawIndexedIndirectCommand(Trace(buffer), offset, drawCount, stride));
 
-    public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
+    void ICommandStreamProfiler.Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
         => Add(new DispatchCommand(groupCountX, groupCountY, groupCountZ));
 
-    public void DispatchIndirect(in ResourceVersion buffer, uint offset)
+    void ICommandStreamProfiler.DispatchIndirect(in ResourceVersion buffer, uint offset)
         => Add(new DispatchIndirectCommand(Trace(buffer), offset));
 
-    public void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
+    void ICommandStreamProfiler.UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
     {
         Written(after);
         Add(new UpdateBufferCommand(Trace(after), offset, _store.Put(data)));
     }
 
-    public void UpdateTexture(in ResourceVersion after, in TextureRegion region, ReadOnlySpan<byte> data)
+    void ICommandStreamProfiler.UpdateTexture(in ResourceVersion after, in TextureRegion region, ReadOnlySpan<byte> data)
     {
         Written(after);
         Add(new UpdateTextureCommand(Trace(after), region, _store.Put(data)));
     }
 
-    public void CopyBuffer(in ResourceVersion source, uint sourceOffset, in ResourceVersion destinationAfter, uint destinationOffset, uint sizeInBytes)
+    void ICommandStreamProfiler.CopyBuffer(in ResourceVersion source, uint sourceOffset, in ResourceVersion destinationAfter, uint destinationOffset, uint sizeInBytes)
     {
         Written(destinationAfter);
         Add(new CopyBufferCommand(Trace(source), sourceOffset, Trace(destinationAfter), destinationOffset, sizeInBytes));
     }
 
-    public void CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount)
+    void ICommandStreamProfiler.CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount)
     {
         Written(destinationAfter);
         Add(new CopyTextureCommand(Trace(source), sourceRegion, Trace(destinationAfter), destinationRegion, layerCount));
     }
 
-    public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
+    void ICommandStreamProfiler.CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
     {
         Written(destinationAfter);
         Add(new CopyTextureToBufferCommand(Trace(source), region, Trace(destinationAfter), destinationOffset));
     }
 
-    public void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter)
+    void ICommandStreamProfiler.ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter)
     {
         Written(destinationAfter);
         Add(new ResolveTextureCommand(Trace(source), Trace(destinationAfter)));
     }
 
-    public void GenerateMips(in ResourceVersion textureAfter)
+    void ICommandStreamProfiler.GenerateMips(in ResourceVersion textureAfter)
     {
         Written(textureAfter);
         Add(new GenerateMipsCommand(Trace(textureAfter)));
     }
 
-    private void Add(RecordedCommand command) => _thread.Value!.Pass?.Commands.Add(command);
+    private void Add(RecordedCommand command) => _pass?.Commands.Add(command);
 
-    private void Written(in ResourceVersion version) => _thread.Value!.Pass?.Written.Add(version.Resource);
+    private void Written(in ResourceVersion version) => _pass?.Written.Add(version.Resource);
 
     private TraceResourceId Trace(ResourceId id)
         => id.Value == 0 ? default : Builder(id).Id;
@@ -316,21 +194,22 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
     private RecordedAttachment Attachment(in AttachmentUse use) => new(Trace(use.Texture), use.MipLevel, use.ArrayLayer);
 
     private ResourceBuilder Builder(ResourceId id)
-        => _resources.GetOrAdd(id, _ => new ResourceBuilder(new TraceResourceId(Interlocked.Increment(ref _nextTraceId))));
+    {
+        if (!_resources.TryGetValue(id, out ResourceBuilder? builder))
+            _resources[id] = builder = new ResourceBuilder(new TraceResourceId(++_nextTraceId));
+        return builder;
+    }
 
     private RecordedProperty Property(in PropertyState state)
     {
         int sampler = -1;
         if (state.Sampler is { } description)
         {
-            lock (_gate)
+            sampler = _samplers.IndexOf(description);
+            if (sampler < 0)
             {
-                sampler = _samplers.IndexOf(description);
-                if (sampler < 0)
-                {
-                    sampler = _samplers.Count;
-                    _samplers.Add(description);
-                }
+                sampler = _samplers.Count;
+                _samplers.Add(description);
             }
         }
 
@@ -348,40 +227,37 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
     private ProgramKey EnsureProgram(ShaderProgram program)
     {
         ProgramKey key = program.Key;
-        lock (_gate)
-        {
-            if (_programs.ContainsKey(key))
-                return key;
+        if (_programs.ContainsKey(key))
+            return key;
 
-            _programs[key] = program switch
-            {
-                GraphicsProgram graphics => new RecordedProgram(
-                    key,
-                    false,
-                    graphics.StageDescriptions.Select(Stage).ToEquatableArray(),
-                    program.ResourceLayouts.ToEquatableArray(),
-                    graphics.BlendState,
-                    graphics.DepthStencilState,
-                    graphics.RasterizerState,
-                    graphics.VertexLayouts.ToEquatableArray(),
-                    0,
-                    0,
-                    0),
-                ComputeProgram compute => new RecordedProgram(
-                    key,
-                    true,
-                    EquatableArray.Create(Stage(compute.StageDescription)),
-                    program.ResourceLayouts.ToEquatableArray(),
-                    null,
-                    null,
-                    null,
-                    EquatableArray<VertexLayoutDescription>.Empty,
-                    compute.ThreadGroupSizeX,
-                    compute.ThreadGroupSizeY,
-                    compute.ThreadGroupSizeZ),
-                _ => throw new NotSupportedException($"Unknown program type {program.GetType().Name}."),
-            };
-        }
+        _programs[key] = program switch
+        {
+            GraphicsProgram graphics => new RecordedProgram(
+                key,
+                false,
+                graphics.StageDescriptions.Select(Stage).ToEquatableArray(),
+                program.ResourceLayouts.ToEquatableArray(),
+                graphics.BlendState,
+                graphics.DepthStencilState,
+                graphics.RasterizerState,
+                graphics.VertexLayouts.ToEquatableArray(),
+                0,
+                0,
+                0),
+            ComputeProgram compute => new RecordedProgram(
+                key,
+                true,
+                EquatableArray.Create(Stage(compute.StageDescription)),
+                program.ResourceLayouts.ToEquatableArray(),
+                null,
+                null,
+                null,
+                EquatableArray<VertexLayoutDescription>.Empty,
+                compute.ThreadGroupSizeX,
+                compute.ThreadGroupSizeY,
+                compute.ThreadGroupSizeZ),
+            _ => throw new NotSupportedException($"Unknown program type {program.GetType().Name}."),
+        };
 
         return key;
     }
@@ -390,25 +266,12 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
 
     private sealed record PendingCopy(TraceVersion Version, CopyPlacement Placement, CaptureCopy Copy);
 
-    private sealed class ThreadState
-    {
-        public ViewState? View;
-        public PassState? Pass;
-    }
-
-    private sealed class ExecutionState
-    {
-        public readonly SortedDictionary<int, ViewState> Views = new();
-        public readonly HashSet<(ResourceId, uint)> Copied = new();
-    }
-
-    private sealed class ViewState(string name, int index, uint pixelWidth, uint pixelHeight, ExecutionState execution)
+    private sealed class ViewState(string name, int index, uint pixelWidth, uint pixelHeight)
     {
         public readonly string Name = name;
         public readonly int Index = index;
         public readonly uint PixelWidth = pixelWidth;
         public readonly uint PixelHeight = pixelHeight;
-        public readonly ExecutionState Execution = execution;
         public readonly List<RecordedGraphResource> Resources = new();
         public readonly Dictionary<ResourceId, GraphResourceOrigin> Origins = new();
         public readonly HashSet<(ResourceId, uint)> Known = new();

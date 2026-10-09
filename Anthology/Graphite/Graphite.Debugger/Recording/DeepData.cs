@@ -110,7 +110,7 @@ public sealed record DeepPass(
     EquatableArray<RecordedCopy> Copies,
     string? NotReplayable);
 
-/// <summary>A view of a deep recorded execution.</summary>
+/// <summary>A view of the deep recorded execution.</summary>
 public sealed record DeepView(
     string Name,
     int Index,
@@ -118,9 +118,6 @@ public sealed record DeepView(
     uint PixelHeight,
     EquatableArray<RecordedGraphResource> Resources,
     EquatableArray<DeepPass> Passes);
-
-/// <summary>One graph execution of a deep recording.</summary>
-public sealed record DeepExecution(ulong ExecutionId, EquatableArray<DeepView> Views);
 
 /// <summary>The optional features of the recording device.</summary>
 public sealed record RecordedFeatures(

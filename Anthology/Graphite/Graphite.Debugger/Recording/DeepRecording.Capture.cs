@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
+using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Debugger;
 
@@ -13,13 +14,79 @@ internal sealed record DeepResult(
     EquatableArray<RecordedProgram> Programs,
     EquatableArray<SamplerDescription> Samplers,
     EquatableArray<RecordedBlob> Blobs,
-    EquatableArray<DeepExecution> Executions);
+    EquatableArray<DeepView> Views);
 
-internal sealed partial class DeepSink
+public sealed partial class DeepRecording
 {
-    public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
+    private readonly SortedDictionary<int, ViewState> _views = new();
+    private readonly HashSet<(ResourceId, uint)> _copied = new();
+    private ViewState? _view;
+
+    void ICaptureProfiler.OnViewBegin(in ViewCaptureInfo view)
     {
-        if (_thread.Value!.View is not { } view)
+        _pass = null;
+        ViewState state = new(view.ViewName, view.ViewIndex, view.PixelWidth, view.PixelHeight);
+        Dictionary<RenderResourceID, GraphResourceInfo> byName = new();
+        foreach (GraphResourceInfo info in view.Resources.Span)
+        {
+            byName[info.Id] = info;
+            GraphBacking[] backings = info.Backings.ToArray();
+            foreach (GraphBacking backing in backings)
+                state.Origins[backing.Id] = info.Origin;
+
+            state.Resources.Add(new RecordedGraphResource(
+                info.Name,
+                info.Kind,
+                info.Origin,
+                backings.Select(b => new RecordedBacking(Trace(b.Id), b.EntryVersion.Version, b.Role, b.Index)).ToEquatableArray(),
+                info.Texture,
+                info.Buffer));
+        }
+
+        foreach (PassCaptureInfo passInfo in view.Passes.Span)
+        {
+            PassState pass = new(passInfo.Pass.Name, passInfo.Pass.Index);
+            foreach (PassResourceAccess access in passInfo.Accesses.Span)
+            {
+                RecordedAccess recorded = new(
+                    RenderResourceID.ToString(access.Id) ?? access.Id.ToString(),
+                    access.Kind,
+                    access.IsOutput,
+                    access.TextureUsage,
+                    access.DepthUsage,
+                    access.BufferUsage);
+                pass.Accesses.Add(recorded);
+
+                if (!byName.TryGetValue(access.Id, out GraphResourceInfo resource))
+                    continue;
+
+                foreach (GraphBacking backing in resource.Backings.Span)
+                {
+                    pass.Declared.Add(backing.Id);
+                    if (access.IsOutput)
+                        pass.Outputs.Add(backing.Id);
+
+                    if (recorded.ReadsContents)
+                        pass.Reads.Add(backing.Id);
+                }
+            }
+
+            state.Passes[passInfo.Pass.Index] = pass;
+        }
+
+        _views[view.ViewIndex] = state;
+        _view = state;
+    }
+
+    void ICaptureProfiler.OnViewEnd()
+    {
+        _view = null;
+        _pass = null;
+    }
+
+    void ICaptureProfiler.OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
+    {
+        if (_view is not { } view)
             return;
 
         PassState state = view.Pass(pass.Index);
@@ -37,7 +104,6 @@ internal sealed partial class DeepSink
         }
 
         state.References = recorded;
-        ExecutionState execution = view.Execution;
         for (int i = 0; i < references.Length; i++)
         {
             PassReference reference = references[i];
@@ -45,7 +111,7 @@ internal sealed partial class DeepSink
             if (IsViewTarget(view, id) || view.Known.Contains((id, reference.First.Version)) || !ReadsContents(view, state, id))
                 continue;
 
-            Copy(execution, state, capture, in reference, CopyPlacement.BeforePass, reference.First.Version);
+            Copy(state, capture, in reference, CopyPlacement.BeforePass, reference.First.Version);
             view.Known.Add((id, reference.First.Version));
         }
 
@@ -63,10 +129,10 @@ internal sealed partial class DeepSink
         {
             PassReference reference = references[i];
             ResourceId id = reference.First.Resource;
-            if (!state.Outputs.Contains(id) || IsViewTarget(view, id) || execution.Copied.Contains((id, reference.LastVersion)))
+            if (!state.Outputs.Contains(id) || IsViewTarget(view, id) || _copied.Contains((id, reference.LastVersion)))
                 continue;
 
-            Copy(execution, state, capture, in reference, CopyPlacement.AfterPass, reference.LastVersion);
+            Copy(state, capture, in reference, CopyPlacement.AfterPass, reference.LastVersion);
             view.Known.Add((id, reference.LastVersion));
         }
     }
@@ -85,10 +151,10 @@ internal sealed partial class DeepSink
         return !view.Origins.TryGetValue(id, out GraphResourceOrigin origin) || origin != GraphResourceOrigin.Transient;
     }
 
-    private void Copy(ExecutionState execution, PassState state, ICaptureContext capture, in PassReference reference, CopyPlacement placement, uint version)
+    private void Copy(PassState state, ICaptureContext capture, in PassReference reference, CopyPlacement placement, uint version)
     {
         ResourceId id = reference.First.Resource;
-        if (!execution.Copied.Add((id, version)))
+        if (!_copied.Add((id, version)))
             return;
 
         try
@@ -101,47 +167,38 @@ internal sealed partial class DeepSink
         }
     }
 
-    public void Release()
+    private void Release()
     {
-        foreach (ExecutionState execution in _executions.Values)
+        foreach (PassState pass in _views.Values.SelectMany(v => v.Passes.Values))
         {
-            foreach (PassState pass in execution.Views.Values.SelectMany(v => v.Passes.Values))
-            {
-                foreach (PendingCopy pending in pass.Copies)
-                    pending.Copy.Staging.Dispose();
+            foreach (PendingCopy pending in pass.Copies)
+                pending.Copy.Staging.Dispose();
 
-                pass.Copies.Clear();
-            }
+            pass.Copies.Clear();
         }
     }
 
-    public DeepResult Build(GraphicsDevice device)
+    private DeepResult Build(GraphicsDevice device)
     {
-        foreach (ExecutionState execution in _executions.Values)
+        foreach (ViewState view in _views.Values)
         {
-            foreach (ViewState view in execution.Views.Values)
-            {
-                foreach (PassState pass in view.Passes.Values)
-                    pass.Recorded = ReadCopies(device, pass);
-            }
+            foreach (PassState pass in view.Passes.Values)
+                pass.Recorded = ReadCopies(device, pass);
         }
 
         ImmutableArray<RecordedBlob> blobs = _store.Snapshot()
             .Select(pair => new RecordedBlob(pair.Key, ImmutableCollectionsMarshal.AsImmutableArray(pair.Value)))
             .ToImmutableArray();
 
-        lock (_gate)
-        {
-            return new DeepResult(
-                _resources.Values
-                    .OrderBy(b => b.Id.Value)
-                    .Select(b => new RecordedResource(b.Id, b.Name, b.Kind, b.Origin, b.Texture, b.Buffer))
-                    .ToEquatableArray(),
-                _programs.Values.ToEquatableArray(),
-                _samplers.ToEquatableArray(),
-                blobs,
-                _executions.Select(e => new DeepExecution(e.Key, e.Value.Views.Values.Select(BuildView).ToEquatableArray())).ToEquatableArray());
-        }
+        return new DeepResult(
+            _resources.Values
+                .OrderBy(b => b.Id.Value)
+                .Select(b => new RecordedResource(b.Id, b.Name, b.Kind, b.Origin, b.Texture, b.Buffer))
+                .ToEquatableArray(),
+            _programs.Values.ToEquatableArray(),
+            _samplers.ToEquatableArray(),
+            blobs,
+            _views.Values.Select(BuildView).ToEquatableArray());
     }
 
     private static DeepView BuildView(ViewState view)
@@ -190,18 +247,15 @@ internal sealed partial class DeepSink
 
     private static void Describe(ResourceBuilder builder, in PassReference reference, ResourceOrigin origin)
     {
-        lock (builder)
-        {
-            if (builder.Described)
-                return;
+        if (builder.Described)
+            return;
 
-            builder.Described = true;
-            builder.Name = reference.Name;
-            builder.Origin = origin;
-            builder.Kind = reference.Texture != null ? GraphResourceKind.Texture : GraphResourceKind.Buffer;
-            builder.Texture = reference.Texture;
-            builder.Buffer = reference.Buffer;
-        }
+        builder.Described = true;
+        builder.Name = reference.Name;
+        builder.Origin = origin;
+        builder.Kind = reference.Texture != null ? GraphResourceKind.Texture : GraphResourceKind.Buffer;
+        builder.Texture = reference.Texture;
+        builder.Buffer = reference.Buffer;
     }
 
     private static ResourceOrigin Origin(GraphResourceOrigin origin)
