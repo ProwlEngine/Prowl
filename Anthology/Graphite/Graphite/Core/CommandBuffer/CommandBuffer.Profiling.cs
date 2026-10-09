@@ -10,8 +10,8 @@ public abstract partial class CommandBuffer
     /// <summary>Pass this buffer was rented during, for profiler timing. Null outside a pass.</summary>
     internal PassInfo? Pass { get; set; }
 
-    /// <summary>Bound execution's id, or 0.</summary>
-    internal ProfilerSet Profilers => Execution?.Profilers ?? Device.Profilers;
+    /// <summary>Profilers of the bound execution. Empty outside one, so transfers are never profiled.</summary>
+    internal ProfilerSet Profilers => Execution?.Profilers ?? ProfilerSet.Empty;
 
     internal ulong ExecutionId => Execution?.Id ?? 0;
 

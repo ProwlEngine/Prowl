@@ -56,10 +56,28 @@ public abstract partial class GraphicsDevice
     /// Replaces the old BeginFrame/EndFrame pair. No "current" execution - the graph builds on this directly.
     /// </para>
     /// </summary>
+    /// <param name="profilers">Profilers for this execution only. Empty creates one from each <see cref="GlobalProfilers"/> factory.</param>
     /// <returns>New execution handle.</returns>
-    public ExecutionTask BeginExecution() => BeginExecution(Profilers);
+    public ExecutionTask BeginExecution(params IProfiler[] profilers)
+    {
+        ValidationHelpers.RequireNotNull(this, profilers, nameof(profilers), nameof(BeginExecution));
+        ProfilerSet set = ResolveProfilers(profilers);
+        ExecutionTask task = BeginExecutionSlot(set);
+        try
+        {
+            set.BeginExecution(task.Id);
+        }
+        catch
+        {
+            task.Profilers = ProfilerSet.Empty;
+            CompleteExecution(task);
+            throw;
+        }
 
-    internal ExecutionTask BeginExecution(ProfilerSet profilers)
+        return task;
+    }
+
+    private ExecutionTask BeginExecutionSlot(ProfilerSet profilers)
     {
         lock (_executionLock)
         {
@@ -232,7 +250,6 @@ public abstract partial class GraphicsDevice
         _transientInitialSize = options.TransientBufferInitialSize == 0 ? 4 * 1024 * 1024 : options.TransientBufferInitialSize;
 
         InitializeFrameOptions_SetValidationEnabled(options);
-        InitializeFrameOptions_InitializeProfiling(options);
     }
 
     private void ReclaimCompletedExecutions_NoLock()

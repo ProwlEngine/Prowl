@@ -11,32 +11,11 @@ public abstract partial class GraphicsDevice
     /// </summary>
     /// <param name="pipeline">Pipeline to run.</param>
     /// <param name="views">Views to render.</param>
-    public ExecutionTask DispatchGraph<T>(
-        RenderPipeline pipeline,
-        IReadOnlyList<T> views)
-        where T : IRenderView
-        => DispatchGraph(pipeline, views, Profilers);
-
-    /// <summary>
-    /// Runs a pipeline for the views as one graph execution, reporting only to the given profilers. Attached profilers see nothing.
-    /// </summary>
-    /// <param name="pipeline">Pipeline to run.</param>
-    /// <param name="views">Views to render.</param>
-    /// <param name="profilers">Profilers for this execution only.</param>
+    /// <param name="profilers">Profilers for this execution only. Empty creates one from each <see cref="GlobalProfilers"/> factory.</param>
     public ExecutionTask DispatchGraph<T>(
         RenderPipeline pipeline,
         IReadOnlyList<T> views,
-        IReadOnlyList<IProfiler> profilers)
-        where T : IRenderView
-    {
-        ValidationHelpers.RequireNotNull(this, profilers, nameof(profilers), nameof(DispatchGraph));
-        return DispatchGraph(pipeline, views, new ProfilerSet(profilers));
-    }
-
-    private ExecutionTask DispatchGraph<T>(
-        RenderPipeline pipeline,
-        IReadOnlyList<T> views,
-        ProfilerSet executionProfilers)
+        params IProfiler[] profilers)
         where T : IRenderView
     {
         ValidationHelpers.RequireNotNull(this, pipeline, nameof(pipeline), nameof(DispatchGraph));
@@ -45,36 +24,31 @@ public abstract partial class GraphicsDevice
         RenderGraph.RenderGraph graph = pipeline.Graph;
 
         List<Swapchain>? presents = null;
-        ExecutionTask task;
+        ExecutionTask task = BeginExecution(profilers);
+        IGraphProfiler? profiler = task.Profilers.Graph;
 
+        int index = 0;
+        foreach (T view in views)
         {
-            task = BeginExecution(executionProfilers);
-            ProfilerSet profilers = task.Profilers;
+            var context = new RenderContext(
+                this, task, graph, view, index);
 
-            int index = 0;
-            foreach (T view in views)
+            var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
+
+            profiler?.BeginView(viewInfo);
+            pipeline.ExecuteView(context);
+            profiler?.EndView(viewInfo);
+
+            Swapchain? swapchain = context.PresentSwapchain;
+            if (swapchain != null)
             {
-                var context = new RenderContext(
-                    this, task, graph, view, index);
-
-                var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight, task.Id);
-
-                profilers.Graph?.BeginView(viewInfo);
-                pipeline.ExecuteView(context);
-                profilers.Graph?.EndView(viewInfo);
-
-                Swapchain? swapchain = context.PresentSwapchain;
-                if (swapchain != null)
-                {
-                    presents ??= [];
-                    if (!presents.Contains(swapchain))
-                        presents.Add(swapchain);
-                }
+                presents ??= [];
+                if (!presents.Contains(swapchain))
+                    presents.Add(swapchain);
             }
-
-            CompleteExecution(task);
-            profilers.Capture?.OnExecutionSubmitted(task);
         }
+
+        CompleteExecution(task);
 
         if (presents != null)
         {

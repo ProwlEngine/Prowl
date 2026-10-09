@@ -30,11 +30,6 @@ public struct GraphicsDeviceOptions
     public bool GraphiteValidation = true;
 
     /// <summary>
-    /// Profiler to report events to, or null for none. No default impl shipped - bring your own.
-    /// </summary>
-    public IProfiler? Profiler;
-
-    /// <summary>
     /// Options for a device with no main Swapchain.
     /// </summary>
     /// <param name="vulkanValidationLayers">Enable the Vulkan driver validation layers if installed.</param>

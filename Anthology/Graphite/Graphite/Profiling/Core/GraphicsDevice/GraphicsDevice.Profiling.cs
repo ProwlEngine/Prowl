@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using System.Threading;
 
 namespace Prowl.Graphite;
@@ -8,47 +8,24 @@ public abstract partial class GraphicsDevice
     /// <summary>Always-on counters of what the backend is doing.</summary>
     public GraphicsCounters Counters { get; } = new();
 
-    private readonly object _profilerLock = new();
-    private readonly List<IProfiler> _attachedProfilers = new();
-    private ProfilerSet _pendingProfilers = ProfilerSet.Empty;
+    /// <summary>Factories that each create one profiler for every execution started without profilers of its own.</summary>
+    public GlobalProfilerList GlobalProfilers { get; } = new();
 
     private long _pipelineIdCounter;
 
-    internal ProfilerSet Profilers => Volatile.Read(ref _pendingProfilers);
-
     internal ulong NextPipelineId() => (ulong)Interlocked.Increment(ref _pipelineIdCounter);
 
-    private void InitializeFrameOptions_InitializeProfiling(in GraphicsDeviceOptions options)
+    private ProfilerSet ResolveProfilers(IProfiler[] profilers)
     {
-        AttachProfiler(options.Profiler);
-    }
+        if (profilers.Length == 0)
+            return GlobalProfilers.Create();
 
-    internal void AttachProfiler(IProfiler? profiler)
-    {
-        if (profiler == null)
-            return;
-
-        lock (_profilerLock)
+        foreach (IProfiler profiler in profilers)
         {
-            if (_attachedProfilers.Contains(profiler))
-                return;
-
-            _attachedProfilers.Add(profiler);
-            Volatile.Write(ref _pendingProfilers, new ProfilerSet(_attachedProfilers));
+            if (profiler == null)
+                throw new ArgumentException("Profiler list contains null.", nameof(profilers));
         }
-    }
 
-    internal void DetachProfiler(IProfiler? profiler)
-    {
-        if (profiler == null)
-            return;
-
-        lock (_profilerLock)
-        {
-            if (!_attachedProfilers.Remove(profiler))
-                return;
-
-            Volatile.Write(ref _pendingProfilers, new ProfilerSet(_attachedProfilers));
-        }
+        return new ProfilerSet(profilers);
     }
 }
