@@ -17,7 +17,15 @@ internal sealed class HookRecorder : ICaptureProfiler
     public readonly List<string> Log = new();
     public ViewCaptureInfo View;
     public readonly Dictionary<string, PassReference[]> References = new();
-    public ExecutionTask? Submitted;
+    public ulong ExecutionId;
+
+    public void BeginExecution(ulong executionId)
+    {
+        ExecutionId = executionId;
+        Log.Add("Begin");
+    }
+
+    public void EndExecution() => Log.Add("End");
 
     public void OnViewBegin(in ViewCaptureInfo view)
     {
@@ -32,12 +40,6 @@ internal sealed class HookRecorder : ICaptureProfiler
     }
 
     public void OnViewEnd() => Log.Add("ViewEnd");
-
-    public void OnExecutionSubmitted(ExecutionTask task)
-    {
-        Submitted = task;
-        Log.Add("Submitted");
-    }
 }
 
 file readonly struct HookView : IRenderView
@@ -131,21 +133,12 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         ResourceVersion importedBefore = imported.ColorTextures[0].CurrentVersion;
         HookRecorder hook = new();
 
-        GD.Debug.Attach(hook);
-        ExecutionTask task;
-        try
-        {
-            using RenderPipeline pipeline = new([
-                new ProducePass(ColorA, external),
-                new ConsumePass(ColorA, Imported, imported),
-                new FinishPass(ColorA, ColorB)]);
-            task = GD.DispatchGraph(pipeline, new HookView[] { new() });
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.Debug.Detach(hook);
-        }
+        using RenderPipeline pipeline = new([
+            new ProducePass(ColorA, external),
+            new ConsumePass(ColorA, Imported, imported),
+            new FinishPass(ColorA, ColorB)]);
+        ExecutionTask task = GD.DispatchGraph(pipeline, new HookView[] { new() }, hook);
+        GD.WaitForIdle();
 
         return new Run(hook, external, externalBefore, imported, importedBefore, task.Id);
     }
@@ -156,11 +149,10 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Run run = Execute();
 
         Assert.Equal(
-            ["ViewBegin:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "ViewEnd", "Submitted"],
+            ["Begin", "ViewBegin:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "ViewEnd", "End"],
             run.Hook.Log);
-        Assert.Equal(run.ExecutionId, run.Hook.Submitted!.Id);
+        Assert.Equal(run.ExecutionId, run.Hook.ExecutionId);
         Assert.Equal("HookView", run.Hook.View.ViewName);
-        Assert.Equal(run.ExecutionId, run.Hook.View.ExecutionId);
         Assert.Equal(new[] { "Produce", "Consume", "Finish" }, run.Hook.View.Passes.ToArray().Select(p => p.Pass.Name));
     }
 
