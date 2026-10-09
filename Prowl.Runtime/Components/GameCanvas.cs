@@ -234,9 +234,25 @@ public class GameCanvas : MonoBehaviour
         MarkDirty(UIDirtyFlags.All);   // first build is always dirty
     }
 
-    // CHANGED: OnEnable / OnDisable bodies - both were empty in the original
-    public override void OnEnable()  => MarkDirty(UIDirtyFlags.All);
-    public override void OnDisable() { /* tree retained but no canvas walk picks us up */ }
+    private Scene? _registeredScene;
+
+    public override void OnEnable()
+    {
+        RegisterIn(GameObject.Scene);
+        MarkDirty(UIDirtyFlags.All);
+    }
+
+    internal void RegisterIn(Scene? scene)
+    {
+        _registeredScene = scene;
+        if (scene.IsValid()) scene!.Canvases.Add(this);
+    }
+
+    public override void OnDisable()
+    {
+        if (_registeredScene.IsValid()) _registeredScene!.Canvases.Remove(this);
+        _registeredScene = null;
+    }
 
     // Update() is intentionally not overridden. ScaleFactor must be computed against the
     // active render-target size, which is only known inside RebuildIfDirty (where the

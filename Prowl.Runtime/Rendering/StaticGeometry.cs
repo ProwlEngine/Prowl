@@ -18,8 +18,8 @@ namespace Prowl.Runtime.Rendering;
 /// group go out as a single draw. Materials whose shader, keywords and values are all the same count as one.
 /// <para/>
 /// Built by <see cref="Scene.UpdateStaticGeometry"/> and stored with the scene, so a loaded scene draws from it
-/// without building again. A renderer that moves, changes or stops being static afterwards drops out and draws on
-/// its own until the next build.
+/// without building again. At runtime the merged geometry stays as built until the next build. While editing, a
+/// renderer that moves, changes or stops being static drops out and draws on its own until the next build.
 /// </summary>
 public sealed class StaticGeometry : ISerializable
 {
@@ -176,12 +176,12 @@ public sealed class StaticGeometry : ISerializable
 
     // ---------------------------------------------------------------- per frame
 
-    /// <summary>Drops renderers that changed since the build and adds the clusters still drawing anything.</summary>
+    /// <summary>Adds the clusters still drawing anything, first dropping renderers changed since the build while editing.</summary>
     internal void Collect(Scene scene, List<IRenderable> renderables)
     {
         if (_groups.Count == 0) return;
         if (!_bound) Bind(scene);
-        Validate(scene);
+        if (Application.IsEditor && !Application.IsPlaying) Validate(scene);
         RefreshLighting(scene);
 
         foreach (Group group in _groups)

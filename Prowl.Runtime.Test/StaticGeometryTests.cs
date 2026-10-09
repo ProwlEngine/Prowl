@@ -31,6 +31,13 @@ public class StaticGeometryTests : RuntimeTestBase
         return renderer;
     }
 
+    // Renderers only drop out of the batch while editing, at runtime it stays as built
+    private static void EditMode()
+    {
+        Application.IsEditor = true;
+        Application.IsPlaying = false;
+    }
+
     private static List<IRenderable> Collect(Scene scene)
     {
         var renderables = new List<IRenderable>();
@@ -134,6 +141,7 @@ public class StaticGeometryTests : RuntimeTestBase
     [Fact]
     public void MovingABatchedRenderer_DropsItOutOfTheBatch()
     {
+        EditMode();
         Scene scene = CreateScene(enable: true);
         MeshRenderer moved = AddRenderer(scene, new Float3(-5, 0, 0));
         AddRenderer(scene, new Float3(5, 0, 0));
@@ -150,6 +158,7 @@ public class StaticGeometryTests : RuntimeTestBase
     [Fact]
     public void DisablingOrUnmarkingStatic_DropsItOutOfTheBatch()
     {
+        EditMode();
         Scene scene = CreateScene(enable: true);
         MeshRenderer disabled = AddRenderer(scene, new Float3(0, 0, 0));
         MeshRenderer unmarked = AddRenderer(scene, new Float3(3, 0, 0));
@@ -166,8 +175,29 @@ public class StaticGeometryTests : RuntimeTestBase
     }
 
     [Fact]
+    public void AtRuntime_ChangedRenderersStayInTheBatch_UntilItIsUpdated()
+    {
+        Scene scene = CreateScene(enable: true);
+        MeshRenderer moved = AddRenderer(scene, new Float3(-5, 0, 0));
+        MeshRenderer disabled = AddRenderer(scene, new Float3(5, 0, 0));
+        scene.UpdateStaticGeometry();
+
+        moved.Transform.Position = new Float3(-6, 0, 0);
+        disabled.Enabled = false;
+        List<IRenderable> renderables = Collect(scene);
+
+        Assert.Equal(2, scene.StaticGeometry.LiveSourceCount);
+        Assert.DoesNotContain(renderables, r => r is MeshRenderable);
+        Assert.Equal((uint)_cube.IndexCount * 2, DrawnIndices(renderables));
+
+        scene.UpdateStaticGeometry();
+        Assert.Equal(1, scene.StaticGeometry.LiveSourceCount);
+    }
+
+    [Fact]
     public void ChangingAMaterialProperty_DropsOutRenderersThatNoLongerMatch()
     {
+        EditMode();
         Scene scene = CreateScene(enable: true);
         var twin = new Material(Shader.LoadDefault(DefaultShader.Standard));
         AddRenderer(scene, new Float3(0, 0, 0));
@@ -268,6 +298,7 @@ public class StaticGeometryTests : RuntimeTestBase
     [Fact]
     public void NeedsRebuild_OnceANewStaticRendererAppearsOrOneDropsOut()
     {
+        EditMode();
         Scene scene = CreateScene(enable: true);
         MeshRenderer first = AddRenderer(scene, Float3.Zero);
         scene.UpdateStaticGeometry();

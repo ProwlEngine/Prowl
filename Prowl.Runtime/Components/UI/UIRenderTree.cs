@@ -77,24 +77,19 @@ internal sealed class UIRenderTree
     // ============================================================
 
     /// <summary>
-    /// Walks every active <see cref="GameCanvas"/> in <paramref name="scene"/>, asks each
-    /// to <c>RebuildIfDirty</c>, and appends every item whose surface matches
+    /// Asks every enabled <see cref="GameCanvas"/> in <paramref name="scene"/> to
+    /// <c>RebuildIfDirty</c>, and appends every item whose surface matches
     /// <paramref name="surface"/> to <paramref name="dst"/>.
     /// </summary>
-    /// <remarks>
-    /// We can't cache the canvas list across frames: scenes can hot-add/remove canvases
-    /// at runtime. The walk is O(active GameObjects), bounded by the editor's tree size,
-    /// and only allocates if a canvas needs a rebuild.
-    /// </remarks>
     public static void CollectFor(Scene scene, UISurface surface, List<IRenderable> dst)
     {
         if (scene is null) return;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        List<GameCanvas> canvases = scene.Canvases;
+        for (int c = 0; c < canvases.Count; c++)
         {
-            // GetComponent is O(components-on-go). Cheap.
-            GameCanvas? gc = go.GetComponent<GameCanvas>();
-            if (gc is null || !gc.EnabledInHierarchy) continue;
+            GameCanvas gc = canvases[c];
+            if (!gc.EnabledInHierarchy) continue;
             if (ToSurface(gc.RenderMode) != surface) continue;
 
             gc.RebuildIfDirty();         // no-op if clean
