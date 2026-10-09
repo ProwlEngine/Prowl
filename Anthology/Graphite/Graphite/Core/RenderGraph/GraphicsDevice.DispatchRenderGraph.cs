@@ -15,6 +15,29 @@ public abstract partial class GraphicsDevice
         RenderPipeline pipeline,
         IReadOnlyList<T> views)
         where T : IRenderView
+        => DispatchGraph(pipeline, views, Profilers);
+
+    /// <summary>
+    /// Runs a pipeline for the views as one graph execution, reporting only to the given profilers. Attached profilers see nothing.
+    /// </summary>
+    /// <param name="pipeline">Pipeline to run.</param>
+    /// <param name="views">Views to render.</param>
+    /// <param name="profilers">Profilers for this execution only.</param>
+    public ExecutionTask DispatchGraph<T>(
+        RenderPipeline pipeline,
+        IReadOnlyList<T> views,
+        IReadOnlyList<IProfiler> profilers)
+        where T : IRenderView
+    {
+        ValidationHelpers.RequireNotNull(this, profilers, nameof(profilers), nameof(DispatchGraph));
+        return DispatchGraph(pipeline, views, new ProfilerSet(profilers));
+    }
+
+    private ExecutionTask DispatchGraph<T>(
+        RenderPipeline pipeline,
+        IReadOnlyList<T> views,
+        ProfilerSet executionProfilers)
+        where T : IRenderView
     {
         ValidationHelpers.RequireNotNull(this, pipeline, nameof(pipeline), nameof(DispatchGraph));
         ValidationHelpers.RequireNotNull(this, views, nameof(views), nameof(DispatchGraph));
@@ -25,7 +48,7 @@ public abstract partial class GraphicsDevice
         ExecutionTask task;
 
         {
-            task = BeginExecution();
+            task = BeginExecution(executionProfilers);
             ProfilerSet profilers = task.Profilers;
 
             int index = 0;

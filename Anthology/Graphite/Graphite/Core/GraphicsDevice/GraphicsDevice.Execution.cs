@@ -57,9 +57,10 @@ public abstract partial class GraphicsDevice
     /// </para>
     /// </summary>
     /// <returns>New execution handle.</returns>
-    public ExecutionTask BeginExecution()
+    public ExecutionTask BeginExecution() => BeginExecution(Profilers);
+
+    internal ExecutionTask BeginExecution(ProfilerSet profilers)
     {
-        ProfilerSet profilers = Profilers;
         lock (_executionLock)
         {
             ReclaimCompletedExecutions_NoLock();
