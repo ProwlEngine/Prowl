@@ -66,7 +66,7 @@ Pass "Tonemapper"
 
 			// governs the transition to white for high color intensities
 			float factor = Cmax(color) * 0.15; // multiply by 0.15 to get a similar look to ACES
-			factor = factor / (factor + 1); // remaps the factor to [0-1] range
+			factor = factor / (factor + 1.0); // remaps the factor to [0-1] range
 			factor *= factor; // smooths the transition to white
 
 			// shift the hue for high intensities (for a more pleasing look).

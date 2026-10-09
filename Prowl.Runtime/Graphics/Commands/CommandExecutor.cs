@@ -235,7 +235,9 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetDepthClamp:
                 {
-                    if (ReadU8(stream, ref pos) != 0) Graphics.GL.Enable(EnableCap.DepthClamp);
+                    bool clamp = ReadU8(stream, ref pos) != 0;
+                    if (!Graphics.Capabilities.Require(GraphicsFeature.DepthClamp, "Shadow casters behind the light")) break;
+                    if (clamp) Graphics.GL.Enable(EnableCap.DepthClamp);
                     else Graphics.GL.Disable(EnableCap.DepthClamp);
                     break;
                 }
@@ -984,6 +986,12 @@ internal sealed class CommandExecutor
 
         unsafe
         {
+            if (!Graphics.Capabilities.Has(GraphicsFeature.MultiDraw))
+            {
+                for (int i = 0; i < ranges.Length; i++)
+                    Graphics.GL.DrawElements(mode, _rangeCounts[i], fmt, (void*)_rangeOffsets[i]);
+                return;
+            }
             fixed (uint* counts = _rangeCounts)
             fixed (nint* offsets = _rangeOffsets)
                 Graphics.GL.MultiDrawElements(mode, counts, fmt, (void**)offsets, (uint)ranges.Length);

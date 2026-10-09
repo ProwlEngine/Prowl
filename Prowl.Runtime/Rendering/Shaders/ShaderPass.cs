@@ -159,8 +159,9 @@ public sealed class ShaderPass
             }
         }
 
-        frag = frag.Insert(0, $"#version 410\n");
-        vert = vert.Insert(0, $"#version 410\n");
+        string prelude = Graphics.ShaderPrelude;
+        frag = frag.Insert(0, prelude);
+        vert = vert.Insert(0, prelude);
 
 
         Debug.Log("Compiling shader pass " + Name + " with keywords: " + keywords);
@@ -173,8 +174,10 @@ public sealed class ShaderPass
         {
             Debug.LogError($"Failed to compile shader pass of {Name}. Exception: {e.Message}");
 
-            // Use the Invalid shader as fallback
+            // Use the Invalid shader as fallback, unless this is it
             var fallbackShader = Resources.Shader.LoadDefault(Resources.DefaultShader.Invalid);
+            if (fallbackShader.IsValid() && ReferenceEquals(fallbackShader.GetPass(0), this))
+                throw new Exception($"Failed to compile the fallback shader pass {Name}.");
             if (fallbackShader.IsValid())
             {
                 if (!fallbackShader.GetPass(0).TryGetVariantProgram((Dictionary<string, bool>?)null, out variant))

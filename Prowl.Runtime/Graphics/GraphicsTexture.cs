@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers;
 
 using Silk.NET.OpenGL;
 
@@ -36,6 +37,7 @@ public unsafe class GraphicsTexture : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
         GetTextureFormatEnums(format, out PixelInternalFormat, out PixelType, out PixelFormat);
+        _esUploadType = EsUploadType(format, PixelType);
         Handle = 0;
 
         using var cmd = Graphics.GetCommandBuffer("GraphicsTexture.Create");
@@ -119,6 +121,14 @@ public unsafe class GraphicsTexture : IDisposable
             TextureMag.Linear => GLEnum.Linear,
             _ => throw new ArgumentException("Invalid texture mag filter", nameof(mag)),
         };
+        // 32 bit float textures only filter linearly where the target allows it, otherwise they would sample as black
+        if (PixelInternalFormat is InternalFormat.R32f or InternalFormat.RG32f or InternalFormat.Rgb32f or InternalFormat.Rgba32f
+            && (minFilter != GLEnum.Nearest || magFilter != GLEnum.Nearest)
+            && !Graphics.Capabilities.Require(GraphicsFeature.FloatLinearFiltering, $"Linear filtering of a {PixelInternalFormat} texture"))
+        {
+            minFilter = GLEnum.Nearest;
+            magFilter = GLEnum.Nearest;
+        }
         Graphics.GL.TexParameter(Target, GLEnum.TextureMinFilter, (int)minFilter);
         Graphics.GL.TexParameter(Target, GLEnum.TextureMagFilter, (int)magFilter);
     }
@@ -145,7 +155,10 @@ public unsafe class GraphicsTexture : IDisposable
     public void GetTexImage(int level, void* ptr)
     {
         Bind(false);
-        Graphics.GL.GetTexImage(Target, level, PixelFormat, PixelType, ptr);
+        if (Graphics.Capabilities.Has(GraphicsFeature.TextureReadback))
+            Graphics.GL.GetTexImage(Target, level, PixelFormat, PixelType, ptr);
+        else
+            ReadThroughFramebuffer(Target, level, ptr);
     }
 
     /// <summary>Read back one cubemap face's mip level. <paramref name="face"/> is 0..5 in
@@ -153,8 +166,145 @@ public unsafe class GraphicsTexture : IDisposable
     public void GetTexImageFace(int face, int level, void* ptr)
     {
         Bind(false);
-        Graphics.GL.GetTexImage(TextureTarget.TextureCubeMapPositiveX + face, level, PixelFormat, PixelType, ptr);
+        TextureTarget faceTarget = TextureTarget.TextureCubeMapPositiveX + face;
+        if (Graphics.Capabilities.Has(GraphicsFeature.TextureReadback))
+            Graphics.GL.GetTexImage(faceTarget, level, PixelFormat, PixelType, ptr);
+        else
+            ReadThroughFramebuffer(faceTarget, level, ptr);
     }
+
+    // ---------------------------------------------------------------- ES format rules
+
+    // ES only takes a pixel type the internal format lists, while PixelType stays the layout of the caller's data
+    private readonly PixelType _esUploadType;
+
+    private PixelType UploadType => Graphics.Capabilities.IsES ? _esUploadType : PixelType;
+
+    private static PixelType EsUploadType(TextureImageFormat format, PixelType dataType) => format switch
+    {
+        TextureImageFormat.Depth16f => PixelType.UnsignedShort,
+        TextureImageFormat.Depth24f => PixelType.UnsignedInt,
+        _ when dataType is PixelType.Short or PixelType.UnsignedShort => PixelType.HalfFloat,
+        _ => dataType,
+    };
+
+    private int Components => PixelFormat switch
+    {
+        PixelFormat.Red or PixelFormat.RedInteger or PixelFormat.DepthComponent => 1,
+        PixelFormat.RG or PixelFormat.RGInteger or PixelFormat.DepthStencil => 2,
+        PixelFormat.Rgb or PixelFormat.RgbInteger => 3,
+        _ => 4,
+    };
+
+    // Normalized shorts become the half floats ES wants for a 16 bit float texture. Rented, the caller returns it.
+    private Half[]? HalfsForES(void* data, long texels)
+    {
+        if (data == null || UploadType != PixelType.HalfFloat || PixelType == PixelType.HalfFloat) return null;
+        long count = texels * Components;
+        Half[] halfs = ArrayPool<Half>.Shared.Rent((int)count);
+        if (PixelType == PixelType.UnsignedShort)
+        {
+            ushort* source = (ushort*)data;
+            for (long i = 0; i < count; i++) halfs[i] = (Half)(source[i] / 65535f);
+        }
+        else
+        {
+            short* source = (short*)data;
+            for (long i = 0; i < count; i++) halfs[i] = (Half)Math.Max(source[i] / 32767f, -1f);
+        }
+        return halfs;
+    }
+
+    // ES has no direct texture read, so the level is attached to a framebuffer, read as RGBA and repacked
+    private void ReadThroughFramebuffer(TextureTarget target, int level, void* destination)
+    {
+        GL gl = Graphics.GL;
+        TextureTarget levelTarget = Target == TextureTarget.TextureCubeMap ? TextureTarget.TextureCubeMapPositiveX : target;
+        gl.GetTexLevelParameter(levelTarget, level, GetTextureParameter.TextureWidth, out int width);
+        gl.GetTexLevelParameter(levelTarget, level, GetTextureParameter.TextureHeight, out int height);
+        long texels = (long)width * height;
+        if (texels == 0) return;
+
+        if (PixelFormat is PixelFormat.DepthComponent or PixelFormat.DepthStencil || Target == TextureTarget.Texture3D)
+        {
+            Debug.LogWarningOnce($"GraphicsTexture.ReadES.{PixelInternalFormat}.{Target}",
+                $"OpenGL ES cannot read back a {PixelInternalFormat} {Target}, so it reads as zeros.");
+            new Span<byte>(destination, (int)(texels * Components * TypeSize(PixelType))).Clear();
+            return;
+        }
+
+        uint framebuffer = gl.GenFramebuffer();
+        gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, framebuffer);
+        gl.FramebufferTexture2D(FramebufferTarget.ReadFramebuffer, FramebufferAttachment.ColorAttachment0, target, Handle, level);
+        gl.ReadBuffer(ReadBufferMode.ColorAttachment0);
+
+        bool integer = PixelFormat is PixelFormat.RedInteger or PixelFormat.RGInteger or PixelFormat.RgbInteger or PixelFormat.RgbaInteger;
+        bool floating = !integer && PixelInternalFormat != InternalFormat.Rgba8;
+        int components = Components;
+        int typeSize = TypeSize(PixelType);
+        try
+        {
+            if (integer)
+            {
+                int[] rgba = ArrayPool<int>.Shared.Rent((int)(texels * 4));
+                fixed (int* p = rgba)
+                    gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.RgbaInteger, PixelType == PixelType.UnsignedInt ? PixelType.UnsignedInt : PixelType.Int, p);
+                byte* output = (byte*)destination;
+                for (long t = 0; t < texels; t++)
+                    for (int c = 0; c < components; c++)
+                        WriteInteger(output + (t * components + c) * typeSize, rgba[t * 4 + c]);
+                ArrayPool<int>.Shared.Return(rgba);
+            }
+            else if (floating)
+            {
+                float[] rgba = ArrayPool<float>.Shared.Rent((int)(texels * 4));
+                fixed (float* p = rgba)
+                    gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Rgba, PixelType.Float, p);
+                byte* output = (byte*)destination;
+                for (long t = 0; t < texels; t++)
+                    for (int c = 0; c < components; c++)
+                        WriteFloat(output + (t * components + c) * typeSize, rgba[t * 4 + c]);
+                ArrayPool<float>.Shared.Return(rgba);
+            }
+            else
+            {
+                gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Rgba, PixelType.UnsignedByte, destination);
+            }
+        }
+        finally
+        {
+            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+            gl.DeleteFramebuffer(framebuffer);
+        }
+    }
+
+    private void WriteFloat(byte* at, float value)
+    {
+        switch (PixelType)
+        {
+            case PixelType.Float: *(float*)at = value; break;
+            case PixelType.HalfFloat: *(Half*)at = (Half)value; break;
+            case PixelType.UnsignedShort: *(ushort*)at = (ushort)Math.Clamp(value * 65535f + 0.5f, 0f, 65535f); break;
+            case PixelType.Short: *(short*)at = (short)Math.Clamp(value * 32767f, -32767f, 32767f); break;
+            case PixelType.UnsignedByte: *at = (byte)Math.Clamp(value * 255f + 0.5f, 0f, 255f); break;
+        }
+    }
+
+    private void WriteInteger(byte* at, int value)
+    {
+        switch (PixelType)
+        {
+            case PixelType.Int or PixelType.UnsignedInt: *(int*)at = value; break;
+            case PixelType.UnsignedByte: *at = (byte)value; break;
+        }
+    }
+
+    private static int TypeSize(PixelType type) => type switch
+    {
+        PixelType.UnsignedByte or PixelType.Byte => 1,
+        PixelType.Short or PixelType.UnsignedShort or PixelType.HalfFloat => 2,
+        _ => 4,
+    };
 
     public bool IsDisposed { get; protected set; }
 
@@ -177,25 +327,37 @@ public unsafe class GraphicsTexture : IDisposable
     public void TexImage2D(TextureTarget type, int mip, uint width, uint height, int v2, void* data)
     {
         Bind(false);
-        Graphics.GL.TexImage2D(type, mip, PixelInternalFormat, width, height, v2, PixelFormat, PixelType, data);
+        Half[]? halfs = HalfsForES(data, (long)width * height);
+        fixed (Half* h = halfs)
+            Graphics.GL.TexImage2D(type, mip, PixelInternalFormat, width, height, v2, PixelFormat, UploadType, halfs != null ? h : data);
+        if (halfs != null) ArrayPool<Half>.Shared.Return(halfs);
     }
 
     public void TexImage3D(TextureTarget type, int level, uint width, uint height, uint depth, void* data)
     {
         Bind(false);
-        Graphics.GL.TexImage3D(type, level, PixelInternalFormat, width, height, depth, 0, PixelFormat, PixelType, data);
+        Half[]? halfs = HalfsForES(data, (long)width * height * depth);
+        fixed (Half* h = halfs)
+            Graphics.GL.TexImage3D(type, level, PixelInternalFormat, width, height, depth, 0, PixelFormat, UploadType, halfs != null ? h : data);
+        if (halfs != null) ArrayPool<Half>.Shared.Return(halfs);
     }
 
     internal void TexSubImage2D(TextureTarget type, int mip, int x, int y, uint width, uint height, void* data)
     {
         Bind(false);
-        Graphics.GL.TexSubImage2D(type, mip, x, y, width, height, PixelFormat, PixelType, data);
+        Half[]? halfs = HalfsForES(data, (long)width * height);
+        fixed (Half* h = halfs)
+            Graphics.GL.TexSubImage2D(type, mip, x, y, width, height, PixelFormat, UploadType, halfs != null ? h : data);
+        if (halfs != null) ArrayPool<Half>.Shared.Return(halfs);
     }
 
     internal void TexSubImage3D(TextureTarget type, int level, int x, int y, int z, uint width, uint height, uint depth, void* data)
     {
         Bind(false);
-        Graphics.GL.TexSubImage3D(type, level, x, y, z, width, height, depth, PixelFormat, PixelType, data);
+        Half[]? halfs = HalfsForES(data, (long)width * height * depth);
+        fixed (Half* h = halfs)
+            Graphics.GL.TexSubImage3D(type, level, x, y, z, width, height, depth, PixelFormat, UploadType, halfs != null ? h : data);
+        if (halfs != null) ArrayPool<Half>.Shared.Return(halfs);
     }
 
     /// <summary>
@@ -283,7 +445,7 @@ public unsafe class GraphicsTexture : IDisposable
             TextureImageFormat.Float2 => PixelFormat.RG,
             TextureImageFormat.Float3 => PixelFormat.Rgb,
             TextureImageFormat.Float4 => PixelFormat.Rgba,
-            TextureImageFormat.Int => PixelFormat.RgbaInteger,
+            TextureImageFormat.Int => PixelFormat.RedInteger,
             TextureImageFormat.Int2 => PixelFormat.RGInteger,
             TextureImageFormat.Int3 => PixelFormat.RgbInteger,
             TextureImageFormat.Int4 => PixelFormat.RgbaInteger,

@@ -215,12 +215,65 @@ public static class Window
         s_mode = startState == WindowState.Fullscreen ? WindowMode.Fullscreen : WindowMode.Windowed;
         options.VSync = vsync;
         Application.VSync = vsync;
-        options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
         // Update / Render are driven manually from MainLoop SwapBuffers happens
         // on the render thread.
         options.ShouldSwapAutomatically = false;
-        InternalWindow = Silk.NET.Windowing.Window.Create(options);
+        s_options = options;
+        s_candidates = ContextCandidates();
+        CreateWindow(0);
+    }
 
+    private static WindowOptions s_options;
+    private static GraphicsAPI[] s_candidates = [];
+
+    // Newest first. A driver that cannot make one of these fails the window's creation, and the next is tried.
+    private static GraphicsAPI[] ContextCandidates()
+    {
+        if (Graphics.Target == GraphicsTarget.OpenGLES)
+            return [new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 2))];
+
+        // macOS stops at 4.1 and only hands out a forward compatible core context
+        if (OperatingSystem.IsMacOS())
+            return [new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1))];
+
+        return
+        [
+            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 6)),
+            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 5)),
+            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 3)),
+            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1)),
+        ];
+    }
+
+    private static void CreateWindow(int candidate)
+    {
+        WindowOptions options = s_options;
+        options.API = s_candidates[candidate];
+        InternalWindow = Silk.NET.Windowing.Window.Create(options);
+        HookEvents();
+    }
+
+    private static void InitializeWithFallback()
+    {
+        for (int i = 0; ; i++)
+        {
+            try
+            {
+                InternalWindow.Initialize();
+                return;
+            }
+            catch (Exception ex) when (i < s_candidates.Length - 1)
+            {
+                APIVersion version = s_candidates[i].Version;
+                Debug.LogWarning($"Could not create an OpenGL {version.MajorVersion}.{version.MinorVersion} context, trying an older one: {ex.Message}");
+                InternalWindow.Dispose();
+                CreateWindow(i + 1);
+            }
+        }
+    }
+
+    private static void HookEvents()
+    {
         InternalWindow.Load += OnLoad;
         InternalWindow.Resize += OnResize;
         InternalWindow.FramebufferResize += OnFramebufferResize;
@@ -238,7 +291,7 @@ public static class Window
 
     public static void Start()
     {
-        InternalWindow.Initialize();
+        InitializeWithFallback();
         // Silk.NET's automatic Render path (which would apply options.VSync) doesn't run under our
         // manual loop, so the swap interval is ours to set. The render thread owns the context from
         // here on, so it applies this at the first frame end, which is the warmup frame below.

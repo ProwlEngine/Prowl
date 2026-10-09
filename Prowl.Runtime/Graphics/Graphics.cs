@@ -31,6 +31,17 @@ public static unsafe class Graphics
     public static GL GL;
 
     /// <summary>
+    /// The kind of context to create and write shaders for: OpenGL ES on mobile, desktop OpenGL everywhere else. Can be
+    /// changed before the window opens, such as with --graphics-target OpenGLES to try the ES path on a desktop.
+    /// </summary>
+    public static GraphicsTarget Target { get; set; } = OperatingSystem.IsAndroid() || OperatingSystem.IsIOS()
+        ? GraphicsTarget.OpenGLES
+        : GraphicsTarget.OpenGL;
+
+    /// <summary>What the context the engine is running on allows. Valid once the window has opened.</summary>
+    public static GraphicsCapabilities Capabilities { get; internal set; } = new(GraphicsTarget.OpenGL, 4, 1, new());
+
+    /// <summary>
     /// True when there is no graphics device (no window / render thread) - a dedicated server or a
     /// build launched with --headless. GPU command submission becomes a no-op so gameplay code that
     /// creates or touches GPU resources (materials, terrain, render textures, etc.) runs without
@@ -246,28 +257,81 @@ public static unsafe class Graphics
         GL = GL.GetApi(Window.InternalWindow);
 
         LogAdapter();
+        Capabilities = DetectCapabilities();
+        Debug.Log($"Graphics: {Capabilities}");
 
-        if (debug)
+        if (debug && Capabilities.Has(GraphicsFeature.DebugOutput))
         {
-            if (OperatingSystem.IsWindows())
-            {
-                GL.DebugMessageCallback(DebugCallback, null);
-                GL.Enable(EnableCap.DebugOutput);
-                GL.Enable(EnableCap.DebugOutputSynchronous);
-            }
+            GL.DebugMessageCallback(DebugCallback, null);
+            GL.Enable(EnableCap.DebugOutput);
+            GL.Enable(EnableCap.DebugOutputSynchronous);
         }
 
-        GL.Enable(EnableCap.LineSmooth);
+        // Neither exists on ES, where cubemaps are always seamless
+        if (!Capabilities.IsES)
+        {
+            GL.Enable(EnableCap.LineSmooth);
 
-        // Seamless cubemap filtering removes the visible face seams when sampling a
-        // cubemap with linear/trilinear filtering. Required for clean reflection-probe
-        // and prefiltered-environment sampling.
-        GL.Enable(EnableCap.TextureCubeMapSeamless);
+            // Seamless cubemap filtering removes the visible face seams when sampling a
+            // cubemap with linear/trilinear filtering. Required for clean reflection-probe
+            // and prefiltered-environment sampling.
+            GL.Enable(EnableCap.TextureCubeMapSeamless);
+        }
 
         MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
         MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
         MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
         MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
+    }
+
+    private static string? s_shaderPrelude;
+    private static GraphicsCapabilities? s_preludeFor;
+
+    /// <summary>
+    /// What every shader starts with: the GLSL version of the context, ES precision defaults, and a define per optional
+    /// feature (PROWL_GLES, PROWL_STORAGE_BUFFERS, PROWL_COMPUTE) so a shader can pick its data path.
+    /// </summary>
+    public static string ShaderPrelude
+    {
+        get
+        {
+            if (s_shaderPrelude != null && ReferenceEquals(s_preludeFor, Capabilities)) return s_shaderPrelude;
+            GraphicsCapabilities caps = Capabilities;
+            var sb = new System.Text.StringBuilder();
+            if (caps.IsES)
+            {
+                sb.Append($"#version {caps.ShaderVersion} es\n");
+                sb.Append("#define PROWL_GLES 1\n");
+                foreach (string type in s_esPrecisionTypes)
+                    sb.Append($"precision highp {type};\n");
+            }
+            else
+            {
+                sb.Append($"#version {caps.ShaderVersion} core\n");
+            }
+            if (caps.Has(GraphicsFeature.StorageBuffers)) sb.Append("#define PROWL_STORAGE_BUFFERS 1\n");
+            if (caps.Has(GraphicsFeature.ComputeShaders)) sb.Append("#define PROWL_COMPUTE 1\n");
+            s_preludeFor = caps;
+            return s_shaderPrelude = sb.ToString();
+        }
+    }
+
+    // ES gives float and several sampler types no default precision
+    private static readonly string[] s_esPrecisionTypes =
+    [
+        "float", "int", "sampler2D", "sampler3D", "samplerCube", "sampler2DShadow", "samplerCubeShadow",
+        "sampler2DArray", "sampler2DArrayShadow", "isampler2D", "usampler2D", "isampler3D", "usampler3D",
+    ];
+
+    private static GraphicsCapabilities DetectCapabilities()
+    {
+        int major = GL.GetInteger(GLEnum.MajorVersion);
+        int minor = GL.GetInteger(GLEnum.MinorVersion);
+        var extensions = new System.Collections.Generic.HashSet<string>();
+        int count = GL.GetInteger(GLEnum.NumExtensions);
+        for (uint i = 0; i < count; i++)
+            extensions.Add(GL.GetStringS(Silk.NET.OpenGL.StringName.Extensions, i));
+        return new GraphicsCapabilities(Target, major, minor, extensions);
     }
 
     public static void StartRenderThread()
