@@ -112,12 +112,13 @@ public static class Program
             // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
             ScriptAssemblyManager.RequestRecompile();
 
+            // Project settings load first, since some decide how assets import
+            EditorRegistries.Initialize();
+            EditorRegistries.OnProjectOpened();
+
             // Initialize asset database for the already-opened project
             var db = new EditorAssetBackend(Project.Current!);
             db.Initialize();
-
-            // Load project settings
-            EditorRegistries.OnProjectOpened();
 
             Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath + "/../Builds");
             return;

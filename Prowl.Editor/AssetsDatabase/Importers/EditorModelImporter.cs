@@ -93,8 +93,7 @@ public class EditorModelImporter : AssetImporter
             // while importer.Import() ran above.
 
             // 2b. Generate mesh features (SDF, BVH, Prism, ...) per mesh, registered as sub-assets.
-            for (int i = 0; i < data.Meshes.Count; i++)
-                MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx, meshIdentities[i]);
+            MeshFeatureImporter.GenerateAll(data.Meshes, ctx.Settings, ctx, meshIdentities);
 
             // 3. Serialize GO hierarchy. Sub-assets have their IDs, so they serialize as references.
             //    Tracked (matching SceneImporter/PrefabImporter) so the prefab's own dependency list

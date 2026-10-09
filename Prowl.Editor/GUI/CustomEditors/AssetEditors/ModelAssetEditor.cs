@@ -11,7 +11,6 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.AssetImporting;
-using Prowl.Runtime.MeshFeatures.Generation;
 using Prowl.Runtime.Resources;
 
 using static Prowl.Editor.GUI.EditorGUI;
@@ -63,7 +62,7 @@ public class ModelAssetEditor : ImportSettingsEditor
     }
 
     // Settings live in the compound rather than in fields, so there is one copy of each value and
-    // nothing to keep in sync. Reads never create anything - materialising the SDF block just by
+    // nothing to keep in sync. Reads never create anything, materialising a key just by
     // looking at it would register as an edit and ask to apply a change nobody made.
     private static bool Bool(EchoObject? s, string key, bool fallback)
         => s != null && s.TryGet(key, out EchoObject t) ? t.BoolValue : fallback;
@@ -76,17 +75,6 @@ public class ModelAssetEditor : ImportSettingsEditor
 
     private static string Str(EchoObject? s, string key, string fallback)
         => s != null && s.TryGet(key, out EchoObject t) ? t.StringValue ?? fallback : fallback;
-
-    private static EchoObject? SdfBlock(EchoObject s)
-        => s.TryGet(SDFFeatureSpec.KeyRoot, out EchoObject sdf) ? sdf : null;
-
-    private static EchoObject SdfBlockForWrite(EchoObject s)
-    {
-        if (s.TryGet(SDFFeatureSpec.KeyRoot, out EchoObject sdf)) return sdf;
-        var created = EchoObject.NewCompound();
-        s[SDFFeatureSpec.KeyRoot] = created;
-        return created;
-    }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -233,8 +221,6 @@ public class ModelAssetEditor : ImportSettingsEditor
 
     private static void DrawModelTab(Paper paper, string id, OrigamiMetrics m, EchoObject settings)
     {
-        EchoObject? sdf = SdfBlock(settings);
-
         EditorGUI.SectionHeader(paper, $"{id}_h_geometry", "Geometry", first: true);
 
         EditorGUI.Row(paper, $"{id}_unitScale", "Unit Scale", () =>
@@ -286,29 +272,6 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         EditorGUI.SettingsToggle(paper, $"{id}_strict", "Fail On Validation Errors", Bool(settings, "strictValidation", false),
             v => settings["strictValidation"] = new EchoObject(v), separator: false);
-
-        // Mesh features produces an SDF sub-asset alongside every imported mesh.
-        EditorGUI.SectionHeader(paper, $"{id}_h_features", "Mesh Features");
-
-        bool generateSDF = Bool(sdf, SDFFeatureSpec.Key_Enabled, false);
-        EditorGUI.SettingsToggle(paper, $"{id}_genSDF", "Generate SDF (all meshes)", generateSDF,
-            v => SdfBlockForWrite(settings)[SDFFeatureSpec.Key_Enabled] = new EchoObject(v), separator: false);
-
-        if (generateSDF)
-        {
-            EditorGUI.Row(paper, $"{id}_sdfRes", "SDF Resolution", () =>
-                Origami.NumericField<int>(paper, $"{id}_sdfRes_v", Int(sdf, SDFFeatureSpec.Key_Resolution, 64),
-                    v => SdfBlockForWrite(settings)[SDFFeatureSpec.Key_Resolution] = new EchoObject(System.Math.Clamp(v, 8, 256)))
-                    .Min(8).Max(256).Show());
-
-            EditorGUI.Row(paper, $"{id}_sdfPad", "SDF Padding", () =>
-                Origami.NumericField<float>(paper, $"{id}_sdfPad_v", Float(sdf, SDFFeatureSpec.Key_Padding, 0.1f),
-                    v => SdfBlockForWrite(settings)[SDFFeatureSpec.Key_Padding] = new EchoObject(v)).Show());
-
-            EditorGUI.Row(paper, $"{id}_sdfMax", "SDF Max Distance", () =>
-                Origami.NumericField<float>(paper, $"{id}_sdfMax_v", Float(sdf, SDFFeatureSpec.Key_MaxDistance, 0.25f),
-                    v => SdfBlockForWrite(settings)[SDFFeatureSpec.Key_MaxDistance] = new EchoObject(v)).Show());
-        }
     }
 
     // ---- rig ----------------------------------------------------------------------------------

@@ -8,27 +8,26 @@ using Prowl.Vector;
 namespace Prowl.Runtime.MeshFeatures;
 
 /// <summary>
-/// A Signed Distance Field for a mesh, stored as a single-channel float 3D texture.
+/// A Signed Distance Field for a mesh, stored as a single channel 16 bit 3D texture of cubic voxels.
 /// Distances are measured in mesh-local units. Sign convention: negative inside, positive outside.
 /// </summary>
 /// <remarks>
 /// Created by <see cref="Prowl.Runtime.MeshFeatures.Generation.SDFGenerator"/> during asset
-/// import. Treat as read-only once imported to change it, edit the parent asset's importer
-/// settings and reimport.
+/// import with the project's SDF settings. Treat as read-only, changing those settings reimports every mesh.
 ///
 /// Volume sampling (GPU shader):
 ///   uvw = (localPos - Bounds.Min) / (Bounds.Max - Bounds.Min);
-///   distance = texture(volume, uvw).r;
+///   distance = texture(volume, uvw).r * MaxDistance;
 /// </remarks>
 public sealed class MeshSDF : Asset, IMeshFeature
 {
     private Texture3D? _volume;
     private AABB _bounds;
     private Int3 _resolution;
-    private float _padding;
+    private float _voxelSize;
     private float _maxDistance;
 
-    /// <summary>Float3D texture holding signed distances, layout matches <see cref="Resolution"/>.</summary>
+    /// <summary>Signed distances divided by <see cref="MaxDistance"/>, as signed normalized shorts. Layout matches <see cref="Resolution"/>.</summary>
     public Texture3D? Volume { get { EnsureLoaded(); return _volume; } set { EnsureLoaded(); _volume = value; } }
 
     /// <summary>World-agnostic bounds the volume covers, in mesh-local coordinates.</summary>
@@ -37,13 +36,10 @@ public sealed class MeshSDF : Asset, IMeshFeature
     /// <summary>Voxel grid resolution (X/Y/Z counts).</summary>
     public Int3 Resolution { get { EnsureLoaded(); return _resolution; } set { EnsureLoaded(); _resolution = value; } }
 
-    /// <summary>Extra margin around the source mesh bounds, in mesh-local units.</summary>
-    public float Padding { get { EnsureLoaded(); return _padding; } set { EnsureLoaded(); _padding = value; } }
+    /// <summary>Edge length of every voxel, in mesh-local units.</summary>
+    public float VoxelSize { get { EnsureLoaded(); return _voxelSize; } set { EnsureLoaded(); _voxelSize = value; } }
 
-    /// <summary>
-    /// Distance values are clamped to this during generation. Useful for narrow-band SDFs
-    /// and for normalizing for visualization.
-    /// </summary>
+    /// <summary>The distance a stored value of one stands for, the diagonal of <see cref="Bounds"/>.</summary>
     public float MaxDistance { get { EnsureLoaded(); return _maxDistance; } set { EnsureLoaded(); _maxDistance = value; } }
 
     public MeshSDF() { }
@@ -60,7 +56,7 @@ public sealed class MeshSDF : Asset, IMeshFeature
         compoundTag.Add("Res.X", new(Resolution.X));
         compoundTag.Add("Res.Y", new(Resolution.Y));
         compoundTag.Add("Res.Z", new(Resolution.Z));
-        compoundTag.Add("Padding", new(Padding));
+        compoundTag.Add("VoxelSize", new(VoxelSize));
         compoundTag.Add("MaxDistance", new(MaxDistance));
         if (Volume != null)
             compoundTag.Add("Volume", Serializer.Serialize(typeof(Texture3D), Volume, ctx));
@@ -73,7 +69,7 @@ public sealed class MeshSDF : Asset, IMeshFeature
             new Float3(value["Bounds.Min.X"].FloatValue, value["Bounds.Min.Y"].FloatValue, value["Bounds.Min.Z"].FloatValue),
             new Float3(value["Bounds.Max.X"].FloatValue, value["Bounds.Max.Y"].FloatValue, value["Bounds.Max.Z"].FloatValue));
         Resolution = new Int3(value["Res.X"].IntValue, value["Res.Y"].IntValue, value["Res.Z"].IntValue);
-        Padding = value["Padding"].FloatValue;
+        VoxelSize = value["VoxelSize"].FloatValue;
         MaxDistance = value["MaxDistance"].FloatValue;
         if (value.TryGet("Volume", out var volTag))
             Volume = Serializer.Deserialize<Texture3D>(volTag, ctx);

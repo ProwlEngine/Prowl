@@ -9,50 +9,29 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Runtime.MeshFeatures.Generation;
 
 /// <summary>
-/// Registers the SDF mesh feature: reads settings, invokes <see cref="SDFGenerator"/>.
+/// Registers the SDF mesh feature, generated for every mesh with the project wide settings below.
 /// Auto-discovered by <see cref="MeshFeatureRegistry"/> via reflection.
 /// </summary>
 public sealed class SDFFeatureSpec : MeshFeatureSpec
 {
-    public const string KeyRoot = "sdf";
-    public const string Key_Enabled = "enabled";
-    public const string Key_Resolution = "resolution";
-    public const string Key_Padding = "padding";
-    public const string Key_MaxDistance = "maxDistance";
+    private const int GeneratorVersion = 2;
 
-    public override string Key => KeyRoot;
+    /// <summary>Whether meshes get an SDF. Set from the project's asset settings.</summary>
+    public static bool Enabled = false;
+
+    /// <summary>How every mesh's SDF is built. Set from the project's asset settings.</summary>
+    public static SDFGenerator.Options Options = SDFGenerator.Options.Default;
+
+    public override string Key => "sdf";
     public override string DisplayName => "Signed Distance Field";
     public override Type FeatureType => typeof(MeshSDF);
-    public override int Version => 1;
 
-    public override void PopulateDefaults(EchoObject settings)
-    {
-        var sdf = EchoObject.NewCompound();
-        sdf[Key_Enabled] = new EchoObject(false);
-        sdf[Key_Resolution] = new EchoObject(64);
-        sdf[Key_Padding] = new EchoObject(0.1f);
-        sdf[Key_MaxDistance] = new EchoObject(0.25f);
-        settings[Key] = sdf;
-    }
+    // The settings are part of the version, so changing them reimports every mesh
+    public override int Version => Enabled
+        ? unchecked(GeneratorVersion + BitConverter.SingleToInt32Bits(Options.VoxelSize) * 31 + Options.MaxResolution * 7919)
+        : 1;
 
-    public override Asset? TryGenerate(Mesh mesh, EchoObject? settings)
-    {
-        var options = ReadOptions(settings, out bool enabled);
-        if (!enabled) return null;
-        return SDFGenerator.Generate(mesh, options);
-    }
+    public override void PopulateDefaults(EchoObject settings) { }
 
-    private static SDFGenerator.Options ReadOptions(EchoObject? settings, out bool enabled)
-    {
-        var opts = SDFGenerator.Options.Default;
-        enabled = false;
-        if (settings == null) return opts;
-        if (!settings.TryGet(KeyRoot, out var sdf) || sdf == null) return opts;
-
-        if (sdf.TryGet(Key_Enabled, out var e)) enabled = e.BoolValue;
-        if (sdf.TryGet(Key_Resolution, out var r)) opts.Resolution = r.IntValue;
-        if (sdf.TryGet(Key_Padding, out var p)) opts.PaddingFraction = p.FloatValue;
-        if (sdf.TryGet(Key_MaxDistance, out var m)) opts.MaxDistanceFraction = m.FloatValue;
-        return opts;
-    }
+    public override Asset? TryGenerate(Mesh mesh, EchoObject? settings) => Enabled ? SDFGenerator.Generate(mesh, Options) : null;
 }

@@ -18,7 +18,6 @@ public static class MeshFeatureRegistry
 {
     private static readonly Dictionary<string, MeshFeatureSpec> _specs = new(StringComparer.Ordinal);
     private static bool _initialized;
-    private static int _aggregateVersion;
 
     /// <summary>All registered feature specs, in insertion order.</summary>
     public static IReadOnlyCollection<MeshFeatureSpec> Specs
@@ -26,10 +25,16 @@ public static class MeshFeatureRegistry
         get { Initialize(); return _specs.Values; }
     }
 
-    /// <summary>Sum of every spec's <see cref="MeshFeatureSpec.Version"/>. Feeds importer versions.</summary>
+    /// <summary>Sum of every spec's <see cref="MeshFeatureSpec.Version"/>, read live since a version can follow settings. Feeds importer versions.</summary>
     public static int AggregateVersion
     {
-        get { Initialize(); return _aggregateVersion; }
+        get
+        {
+            Initialize();
+            int sum = 0;
+            foreach (var spec in _specs.Values) sum = unchecked(sum + spec.Version);
+            return sum;
+        }
     }
 
     public static MeshFeatureSpec? Find(string key)
@@ -42,7 +47,6 @@ public static class MeshFeatureRegistry
     {
         _initialized = false;
         _specs.Clear();
-        _aggregateVersion = 0;
         Initialize();
     }
 
@@ -55,7 +59,6 @@ public static class MeshFeatureRegistry
     {
         _initialized = false;
         _specs.Clear();
-        _aggregateVersion = 0;
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
@@ -78,7 +81,6 @@ public static class MeshFeatureRegistry
                     continue;
                 }
                 _specs.Add(spec.Key, spec);
-                _aggregateVersion += spec.Version;
             }
             catch (Exception ex)
             {
@@ -86,7 +88,7 @@ public static class MeshFeatureRegistry
             }
         }
 
-        Debug.Log($"MeshFeatureRegistry: {_specs.Count} feature(s) registered (aggregate version {_aggregateVersion}).");
+        Debug.Log($"MeshFeatureRegistry: {_specs.Count} feature(s) registered.");
     }
 
     /// <summary>

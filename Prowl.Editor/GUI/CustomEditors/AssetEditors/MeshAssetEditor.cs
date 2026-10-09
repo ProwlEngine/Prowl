@@ -122,8 +122,8 @@ public class MeshAssetEditor : AssetImporterEditor
 
         var sdf = FindSDF(parentEntry, subEntry, mesh);
         string sdfText = sdf != null
-            ? $"{sdf.Resolution.X}^3  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}"
-            : "Not generated (toggle on the parent asset)";
+            ? $"{sdf.Resolution.X}x{sdf.Resolution.Y}x{sdf.Resolution.Z}  voxel={sdf.VoxelSize:F3}"
+            : "Not generated (see the Assets project settings)";
         ValueRow(paper, id, "_sdf", "SDF", sdfText, font, m);
     }
 

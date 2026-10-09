@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Runtime;
@@ -15,32 +18,40 @@ namespace Prowl.Editor.Importers;
 public static class MeshFeatureImporter
 {
     /// <summary>
-    /// Generate every enabled feature for the mesh and attach them as sub-assets.
+    /// Generate every enabled feature for each mesh and attach them as sub-assets.
     /// Sub-asset names are <c>{meshName}_{featureKey}</c> for deterministic GUIDs
     /// across reimports.
     /// </summary>
-    /// <param name="ownerIdentity">The sub-asset identity of the mesh these features belong to, so each
-    /// feature keys off its owner plus its own spec key. Registration order would not do here: a feature
-    /// that stops generating shifts every later one onto the wrong GUID.</param>
-    public static void GenerateAll(Mesh mesh, EchoObject? settings, ImportContext ctx, string ownerIdentity)
+    /// <param name="ownerIdentities">The sub-asset identity of each mesh, so each feature keys off its owner
+    /// plus its own spec key. Registration order would not do here: a feature that stops generating shifts
+    /// every later one onto the wrong GUID.</param>
+    public static void GenerateAll(IReadOnlyList<Mesh> meshes, EchoObject? settings, ImportContext ctx, IReadOnlyList<string> ownerIdentities)
     {
-        foreach (var spec in MeshFeatureRegistry.Specs)
+        var specs = MeshFeatureRegistry.Specs.ToArray();
+
+        // Meshes generate side by side, then register in order so the import stays deterministic
+        var features = new Asset?[meshes.Count, specs.Length];
+        Parallel.For(0, meshes.Count, m =>
         {
-            Asset? feature;
-            try
+            for (int s = 0; s < specs.Length; s++)
             {
-                feature = spec.TryGenerate(mesh, settings);
+                try
+                {
+                    features[m, s] = specs[s].TryGenerate(meshes[m], settings);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Mesh feature '{specs[s].Key}' generation failed for {meshes[m].Name}: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Mesh feature '{spec.Key}' generation failed for {mesh.Name}: {ex.Message}");
-                continue;
-            }
+        });
 
-            if (feature == null) continue;
-
-            string meshName = string.IsNullOrEmpty(mesh.Name) ? "Mesh" : mesh.Name;
-            ctx.AddSubAsset($"{meshName}_{spec.Key}", feature, SubAssetIdentity.Key($"{ownerIdentity}/{spec.Key}"));
+        for (int m = 0; m < meshes.Count; m++)
+        {
+            string meshName = string.IsNullOrEmpty(meshes[m].Name) ? "Mesh" : meshes[m].Name;
+            for (int s = 0; s < specs.Length; s++)
+                if (features[m, s] is Asset feature)
+                    ctx.AddSubAsset($"{meshName}_{specs[s].Key}", feature, SubAssetIdentity.Key($"{ownerIdentities[m]}/{specs[s].Key}"));
         }
     }
 }

@@ -41,7 +41,7 @@ public abstract class MeshFeatureSpec
 
     /// <summary>
     /// Read settings, decide whether to generate, and return the feature or null.
-    /// Return null when disabled or when generation is skipped (no error).
+    /// Return null when disabled or when generation is skipped (no error). Called from worker threads.
     /// </summary>
     public abstract Asset? TryGenerate(Mesh mesh, EchoObject? settings);
 }

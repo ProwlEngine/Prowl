@@ -158,12 +158,13 @@ public class EditorApplication : Game
 
         if (projectAlreadyInitialized)
         {
+            // Project settings load first, since some decide how assets import
+            EditorRegistries.Initialize();
+            EditorRegistries.OnProjectOpened();
+
             // Initialize asset database for the already-opened project
             var db = new EditorAssetBackend(Project.Current!);
             db.Initialize();
-
-            // Load project settings
-            EditorRegistries.OnProjectOpened();
 
             // Restore layout
             var savedLayout = LoadDockLayout();
@@ -458,6 +459,10 @@ public class EditorApplication : Game
             if (Project.Current != null)
             {
                 Window.InternalWindow.Title = $"Prowl Editor - {Project.Current.Name}";
+
+                // Project settings load first, since some decide how assets import
+                EditorRegistries.Initialize();
+                EditorRegistries.OnProjectOpened();
 
                 // Initialize the asset database for the opened project
                 var db = new EditorAssetBackend(Project.Current);
