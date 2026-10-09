@@ -122,7 +122,7 @@ public class HingeJoint : PhysicsJoint
             if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(hingeJoint?.Motor))
-                hingeJoint.Motor.MaximumForce = PerSubstep(value);
+                hingeJoint.Motor.MaximumForce = value;
             WakeBodies();
         }
     }
@@ -156,14 +156,10 @@ public class HingeJoint : PhysicsJoint
         if (hasMotor && IsLive(hingeJoint.Motor))
         {
             hingeJoint.Motor.TargetVelocity = motorTargetVelocity;
-            hingeJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
+            hingeJoint.Motor.MaximumForce = motorMaxForce;
         }
     }
 
-    internal override void Refresh()
-    {
-        if (IsLive(hingeJoint?.Motor)) hingeJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
-    }
 
     protected override void DestroyConstraint()
     {

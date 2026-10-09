@@ -108,8 +108,6 @@ public class DriveConstraint : PhysicsConstraint
         data.RotationSpring = rotationSpring;
         data.RotationDamper = rotationDamper;
         data.MaxTorque = maximumTorque;
-        Resources.Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
-        data.Substeps = scene.IsValid() ? Maths.Max(1, scene.Physics.Substep) : 1;
         WakeBodies();
     }
 
@@ -141,7 +139,6 @@ public class DriveConstraint : PhysicsConstraint
             public JVector TargetAngularVelocity;
             public float PositionSpring, PositionDamper, MaxForce;
             public float RotationSpring, RotationDamper, MaxTorque;
-            public int Substeps;
 
             /// <summary>Body1's origin from its centre of mass, in body1's space.</summary>
             public JVector LocalAnchor1;
@@ -163,7 +160,6 @@ public class DriveConstraint : PhysicsConstraint
             base.Create();
             ref DriveData data = ref Data;
             data.TargetRotation = JQuaternion.Identity;
-            data.Substeps = 1;
         }
 
         public override void ResetWarmStart()
@@ -188,9 +184,6 @@ public class DriveConstraint : PhysicsConstraint
             softness = (float)1.0 / (h * stiffness);
             biasRate = spring / stiffness;
         }
-
-        /// <summary>Jitter hands every substep the whole step's time, the drive needs its own substep's.</summary>
-        private static float SubstepTime(in DriveData data, float idt) => (float)1.0 / (idt * Math.Max(1, data.Substeps));
 
         /// <summary>How a point <paramref name="r"/> from a body's centre of mass gives under a push, as an inverse mass.</summary>
         private static JSymmetricMatrix PointResponse(in RigidBodyData body, in JVector r)
@@ -240,12 +233,12 @@ public class DriveConstraint : PhysicsConstraint
             body2.AngularVelocity -= JVector.Transform(impulse, body2.InverseInertiaWorld);
         }
 
-        public static void Prepare(ref ConstraintData constraint, float idt)
+        public static void Prepare(ref ConstraintData constraint, in TimeStep timeStep)
         {
             ref var data = ref Unsafe.As<ConstraintData, DriveData>(ref constraint);
             ref RigidBodyData body1 = ref data.Body1.Data;
             ref RigidBodyData body2 = ref data.Body2.Data;
-            float h = SubstepTime(data, idt);
+            float h = timeStep.SubstepDt;
 
             // Body1's origin is pulled to the target point on body2. Body2 takes the push back where body1 takes it, as
             // an arm reaching out from body2 would hand it on, so the pair never gains a spin from the drive.
@@ -276,12 +269,12 @@ public class DriveConstraint : PhysicsConstraint
             Twist(ref body1, ref body2, data.AngularImpulse);
         }
 
-        public static void Iterate(ref ConstraintData constraint, float idt)
+        public static void Iterate(ref ConstraintData constraint, in TimeStep timeStep)
         {
             ref var data = ref Unsafe.As<ConstraintData, DriveData>(ref constraint);
             ref RigidBodyData body1 = ref data.Body1.Data;
             ref RigidBodyData body2 = ref data.Body2.Data;
-            float h = SubstepTime(data, idt);
+            float h = timeStep.SubstepDt;
 
             Soften(data.PositionSpring, data.PositionDamper, h, out float softness, out _);
             JVector relative = body1.Velocity + JVector.Cross(body1.AngularVelocity, data.R1)

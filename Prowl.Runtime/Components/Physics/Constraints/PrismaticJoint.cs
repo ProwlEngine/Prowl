@@ -139,7 +139,7 @@ public class PrismaticJoint : PhysicsJoint
             if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(prismaticJoint?.Motor))
-                prismaticJoint.Motor.MaximumForce = PerSubstep(value);
+                prismaticJoint.Motor.MaximumForce = value;
             WakeBodies();
         }
     }
@@ -173,14 +173,10 @@ public class PrismaticJoint : PhysicsJoint
         if (hasMotor && IsLive(prismaticJoint.Motor))
         {
             prismaticJoint.Motor.TargetVelocity = motorTargetVelocity;
-            prismaticJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
+            prismaticJoint.Motor.MaximumForce = motorMaxForce;
         }
     }
 
-    internal override void Refresh()
-    {
-        if (IsLive(prismaticJoint?.Motor)) prismaticJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
-    }
 
     protected override void DestroyConstraint()
     {

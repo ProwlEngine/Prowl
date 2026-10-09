@@ -165,14 +165,7 @@ public class PhysicsWorld
     public int Substep
     {
         get => _substep;
-        set
-        {
-            int substep = Maths.Max(1, value);
-            if (substep == _substep) return;
-            _substep = substep;
-            foreach (PhysicsConstraint constraint in _constraints)
-                if (constraint.IsValid()) constraint.Refresh();
-        }
+        set => _substep = Maths.Max(1, value);
     }
 
     public bool AllowSleep = true;
@@ -715,9 +708,9 @@ public class PhysicsWorld
         return staticBody;
     }
 
-    private void OnPreStep(float deltaTime) => InvokeStepEvent(PreStep, deltaTime, nameof(PreStep));
-    private void OnPreSubStep(float deltaTime) => InvokeStepEvent(PreSubStep, deltaTime, nameof(PreSubStep));
-    private void OnPostStep(float deltaTime) => InvokeStepEvent(PostStep, deltaTime, nameof(PostStep));
+    private void OnPreStep(TimeStep timeStep) => InvokeStepEvent(PreStep, timeStep.StepDt, nameof(PreStep));
+    private void OnPreSubStep(TimeStep timeStep) => InvokeStepEvent(PreSubStep, timeStep.SubstepDt, nameof(PreSubStep));
+    private void OnPostStep(TimeStep timeStep) => InvokeStepEvent(PostStep, timeStep.StepDt, nameof(PostStep));
 
     // Step callbacks fire inside Jitter's World.Step. A throwing subscriber (e.g. a wheel raycasting
     // against a disposed body) must not unwind through the solver and crash. Isolate each subscriber
