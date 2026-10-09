@@ -338,29 +338,14 @@ public class DefaultRenderPipeline : RenderPipeline
             catch (Exception ex) { LogEffectSkipped(effect, "OnPreRender", ex); }
 
         // =======================================================
-        // 5. Light system reconcile + shadow atlas + uniform upload
-        // Reconcile does the cheap work first (BVH refits, shadow caster picks). Then the atlas
-        // is rendered for only the directional and the closest-N point/spot, and finally the
-        // BVH textures + directional + shadow uniforms are pushed to the GPU.
+        // 5. Light system reconcile + shadow maps + uniform upload
+        // Reconcile does the cheap work first (BVH refits, which lights cast shadows). The shadow pass then
+        // redraws only the shadow maps that changed, and finally the BVH textures, directional and shadow
+        // data are pushed to the GPU.
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
         if (!secondEye)
         {
             lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
-
-            // ─── Shadow atlas setup (clear) ───
-            // Done in its own CB and submitted before the lights start so the depth/stencil
-            // clear is in place before any face/cascade draws into the atlas. Each face
-            // then submits its own CB (necessary because each face uploads different
-            // view/proj matrices and they can't share a CB see Light.RenderShadows).
-            {
-                ShadowAtlas.TryInitialize();
-                ShadowAtlas.Clear();
-
-                using var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
-                shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-                shadowSetup.ClearRenderTarget(ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
-                Graphics.Submit(shadowSetup);
-            }
 
             // Anything the camera's culling mask hides casts no shadow in its view either.
             IReadOnlyList<IRenderable> shadowCasters = renderables;
@@ -375,6 +360,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
             RenderStats.BeginShadowPass();
             lightSystem.RenderShadows(this, shadowView, shadowCasters);
+            var shadowCamera = new ShadowCamera(camera, css.CameraPosition, css.WorldFrustum, css.Projection, css.PixelHeight, shadowView);
+            lightSystem.RenderShadows(this, shadowCamera, shadowCasters);
             RenderStats.EndShadowPass();
         }
 
@@ -585,6 +572,7 @@ public class DefaultRenderPipeline : RenderPipeline
             RenderTexture.ReleaseTemporaryRT(prepass);
             RenderTexture.ReleaseTemporaryRT(colorRT);
             ReturnCullResult(culledRenderableIndices);
+            ReturnLights(lights);
         }
     }
 

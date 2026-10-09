@@ -532,6 +532,21 @@ public sealed class CommandBuffer : IDisposable
         RenderStats.RecordDraw(topo, indexCount);
     }
 
+    /// <summary>Draws every range of a vertex array already pushed with <see cref="ObjectIndex"/> in one call.</summary>
+    internal void DrawIndexedRanges(int vaoIndex, Topology topo, ReadOnlySpan<IndexRange> ranges, bool index32bit)
+    {
+        WriteHeader(CommandOpcode.DrawIndexedRanges);
+        Write(vaoIndex);
+        Write((byte)topo);
+        Write(index32bit ? (byte)1 : (byte)0);
+        var r = _store.Park(ranges);
+        Write(in r);
+
+        uint indexCount = 0;
+        foreach (IndexRange range in ranges) indexCount += range.Count;
+        RenderStats.RecordDraw(topo, indexCount);
+    }
+
     public void DrawIndexedInstanced(GraphicsVertexArray vao, Topology topo,
                                       uint indexCount, uint instanceCount,
                                       uint startIndex = 0, int baseVertex = 0,
@@ -590,7 +605,7 @@ public sealed class CommandBuffer : IDisposable
         material.SetKeyword("GPU_INSTANCING", false);
 
         var pass = material.Shader.GetPass(passIndex);
-        if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variant) || variant == null)
+        if (!pass.TryGetVariantProgram(material, out GraphicsProgram? variant) || variant == null)
             return;
 
         SetShader(variant);

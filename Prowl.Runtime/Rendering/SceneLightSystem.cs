@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Rendering;
@@ -20,17 +21,12 @@ namespace Prowl.Runtime.Rendering;
 /// </para>
 ///
 /// <para>
-/// A bounded number of point + spot lights win shadow atlas slots each frame, picked by distance
-/// to the camera. Lights that miss the cut still light surfaces; they just sample as unshadowed.
+/// Every point and spot light that casts shadows gets them while it is in view, sized and cached by
+/// <see cref="ShadowRenderer"/>. Its shadow data lives in a texture, so there is no cap on how many.
 /// </para>
 /// </summary>
 public sealed class SceneLightSystem : IDisposable
 {
-    /// <summary>How many local lights (point + spot combined) can have shadow atlas slots in a
-    /// single frame. The atlas budget makes this small in practice; bump alongside the matching
-    /// uniform-array sizes in <c>Lighting.glsl</c> if you raise it.</summary>
-    public const int MaxShadowCasters = 4;
-
     /// <summary>How many directional lights beyond the main one light the scene (unshadowed). Must
     /// match <c>MAX_EXTRA_DIRECTIONAL_LIGHTS</c> in <c>Lighting.glsl</c>.</summary>
     public const int MaxExtraDirectionalLights = 4;
@@ -42,17 +38,17 @@ public sealed class SceneLightSystem : IDisposable
 
     // Tracking which BVH each registered light currently lives in so we can detect static<->dynamic
     // transitions and removals.
-    private readonly Dictionary<IRenderableLight, Membership> _membership = new();
-    private readonly HashSet<IRenderableLight> _seenThisFrame = new();
+    private readonly Dictionary<IRenderableLight, Membership> _membership = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<IRenderableLight> _seenThisFrame = new(ReferenceEqualityComparer.Instance);
 
     // Per-frame results.
     private IRenderableLight _directional;
     private readonly List<IRenderableLight> _extraDirectionals = new();
-    private readonly List<IRenderableLight> _shadowCasters = new();
-    private readonly List<IRenderableLight> _previousCasters = new();
-    private readonly List<(IRenderableLight light, float distSq)> _localCandidates = new();
+    private readonly List<Light> _shadowLights = new();
+    private readonly List<Light> _previousShadowLights = new();
+    private readonly HashSet<Light> _shadowLightSet = new(ReferenceEqualityComparer.Instance);
     private readonly List<IRenderableLight> _toRemove = new();
-    private static readonly Comparison<(IRenderableLight light, float distSq)> s_byDistance = (a, b) => a.distSq.CompareTo(b.distSq);
+    private readonly ShadowRenderer _shadows = new();
 
     public LightBVH StaticBVH => _staticBVH;
     public LightBVH DynamicBVH => _dynamicBVH;
@@ -66,17 +62,18 @@ public sealed class SceneLightSystem : IDisposable
     /// <summary>The other directional lights this frame, lit without shadows.</summary>
     public IReadOnlyList<IRenderableLight> ExtraDirectionals => _extraDirectionals;
 
-    /// <summary>Lights that won shadow atlas slots this frame, in order. The pipeline calls
-    /// <c>RenderShadows</c> on each.</summary>
-    public IReadOnlyList<IRenderableLight> ShadowCasters => _shadowCasters;
+    /// <summary>Point and spot lights that cast shadows this frame, in view or not.</summary>
+    public IReadOnlyList<Light> ShadowLights => _shadowLights;
+
+    /// <summary>Makes and caches every shadow map of this scene.</summary>
+    internal ShadowRenderer Shadows => _shadows;
 
     private enum Membership { Static, Dynamic }
 
     /// <summary>
     /// Walk this frame's lights, register / unregister with the appropriate BVH, refit dynamics,
-    /// pick the directional + closest-N shadow casters, and upload only the dirty rows of each
-    /// texture. Cheap when nothing changed. Shadow casters are picked by distance to
-    /// <paramref name="cameraPosition"/>.
+    /// and pick the directional and the point and spot lights that cast shadows. Cheap when nothing
+    /// changed. <paramref name="cameraPosition"/> is kept for callers, shadows are sized later.
     ///
     /// <para>
     /// Note on <paramref name="cullingMask"/>: per-camera light filtering by layer is not
@@ -89,13 +86,11 @@ public sealed class SceneLightSystem : IDisposable
     public void Reconcile(IReadOnlyList<IRenderableLight> lights, Float3 cameraPosition, LayerMask cullingMask)
     {
         _ = cullingMask; // see remark above
+        _ = cameraPosition;
         _seenThisFrame.Clear();
         _directional = null;
         _extraDirectionals.Clear();
-        _shadowCasters.Clear();
-
-        List<(IRenderableLight light, float distSq)> localCandidates = _localCandidates;
-        localCandidates.Clear();
+        _shadowLights.Clear();
 
         for (int i = 0; i < lights.Count; i++)
         {
@@ -152,12 +147,8 @@ public sealed class SceneLightSystem : IDisposable
                 }
             }
 
-            // Track for shadow-caster selection.
-            if (light.DoCastShadows())
-            {
-                float dSq = (float)Float3.DistanceSquared(cameraPosition, light.GetLightPosition());
-                localCandidates.Add((light, dSq));
-            }
+            if (light.DoCastShadows() && light is Light shadowLight)
+                _shadowLights.Add(shadowLight);
         }
 
         PickDirectionals();
@@ -179,39 +170,10 @@ public sealed class SceneLightSystem : IDisposable
             }
         }
 
-        // Pick closest-N shadow casters. Reset every registered light's slot to -1 first so
-        // anything that lost its slot this frame samples as unshadowed. We only need to touch
-        // slots whose current value disagrees with the new assignment.
-        localCandidates.Sort(s_byDistance);
-
-        int casterCount = Math.Min(MaxShadowCasters, localCandidates.Count);
-        for (int i = 0; i < casterCount; i++)
-        {
-            var l = localCandidates[i].light;
-            _shadowCasters.Add(l);
-            int slot = i;
-            if (_membership.TryGetValue(l, out var m))
-            {
-                var bvh = m == Membership.Static ? _staticBVH : _dynamicBVH;
-                bvh.SetShadowSlot(l, slot);
-            }
-        }
-        // Clear stale slots on lights that were shadow casters last frame but aren't now,
-        // including ones that stopped casting shadows entirely.
-        foreach (var l in _previousCasters)
-        {
-            if (!_shadowCasters.Contains(l) && _membership.TryGetValue(l, out var m))
-                (m == Membership.Static ? _staticBVH : _dynamicBVH).SetShadowSlot(l, -1);
-        }
-        _previousCasters.Clear();
-        _previousCasters.AddRange(_shadowCasters);
-
-        // Build / refit and upload. Either tree rebuilds on add/remove/transition or when a light
-        // escapes its loose bounds.
+        // Either tree rebuilds on add/remove/transition or when a light escapes its loose bounds. The
+        // textures sync at upload, after the shadow pass has set each light's shadow slot.
         _staticBVH.Sync();
         _dynamicBVH.Sync();
-        _staticTex.Sync(_staticBVH);
-        _dynamicTex.Sync(_dynamicBVH);
     }
 
     // _extraDirectionals holds every directional on entry. The brightest becomes the main light, which
@@ -262,34 +224,40 @@ public sealed class SceneLightSystem : IDisposable
     }
 
     /// <summary>
-    /// Render shadow maps for the directional light and the selected closest-N point / spot
-    /// shadow casters into the shared shadow atlas. The pipeline calls this after binding the
-    /// shadow framebuffer.
+    /// Brings the shadow maps of the directional light and every shadowed point and spot light in view up to
+    /// date, drawing only what changed, and points each light at its shadow data.
     /// </summary>
     /// <param name="pipeline">The current render pipeline.</param>
-    /// <param name="view">The view the directional light fits its cascades to.</param>
+    /// <param name="camera">The camera this render is for.</param>
     /// <param name="renderables">Everything that could cast a shadow this frame.</param>
-    public void RenderShadows(RenderPipeline pipeline, in ShadowFitView view, IReadOnlyList<IRenderable> renderables)
+    public void RenderShadows(RenderPipeline pipeline, in ShadowCamera camera, IReadOnlyList<IRenderable> renderables)
     {
-        // Each light manages its own CommandBuffer(s) internally point lights submit
-        // one per face, directional submits one per cascade, spot submits a single CB
-        // so per-face matrix uploads via AssignCameraMatrices are ordered correctly
-        // against that face's draws.
-        if (_directional is Light dl)
-            dl.RenderShadows(pipeline, view, renderables);
+        _shadows.Update(pipeline, camera, _directional as DirectionalLight, _shadowLights, renderables);
 
-        for (int i = 0; i < _shadowCasters.Count; i++)
+        _shadowLightSet.Clear();
+        foreach (Light light in _shadowLights)
         {
-            if (_shadowCasters[i] is Light sc)
-                sc.RenderShadows(pipeline, view, renderables);
+            SetShadowSlot(light, _shadows.GetDataSlot(light));
+            _shadowLightSet.Add(light);
         }
+        foreach (Light light in _previousShadowLights)
+            if (!_shadowLightSet.Contains(light))
+                SetShadowSlot(light, -1);
+        _previousShadowLights.Clear();
+        _previousShadowLights.AddRange(_shadowLights);
+    }
+
+    private void SetShadowSlot(IRenderableLight light, int slot)
+    {
+        if (_membership.TryGetValue(light, out Membership m))
+            (m == Membership.Static ? _staticBVH : _dynamicBVH).SetShadowSlot(light, slot);
     }
 
     /// <summary>
     /// Upload all uniforms touched by <c>Lighting.glsl</c> and <c>LightBVH.glsl</c>: the four
-    /// BVH textures, the directional light slot, the cascade shadow data, and the shadow atlas
-    /// arrays for the selected closest-N point + spot lights. Call after <see cref="Reconcile"/>
-    /// and <see cref="RenderShadows"/>, before any forward draws.
+    /// BVH textures, the directional light slot, the cascade shadow data, and the local shadow data
+    /// texture and atlas. Call after <see cref="Reconcile"/> and <see cref="RenderShadows"/>, before
+    /// any forward draws.
     /// </summary>
     /// <param name="view">The view this frame's cascades were fitted to. The shader fades shadows by depth along it.</param>
     public void UploadGlobalUniforms(in ShadowFitView view)
@@ -297,10 +265,13 @@ public sealed class SceneLightSystem : IDisposable
         // All of these are global-uniform writes. Routing each through its own one-op
         // CommandBuffer (the PropertyState.SetGlobalX helpers) meant ~80-100 rent/submit
         // cycles per camera per frame. Encode them all into a single buffer and submit once.
+        _staticTex.Sync(_staticBVH);
+        _dynamicTex.Sync(_dynamicBVH);
+
         using var cmd = Graphics.GetCommandBuffer("LightUniforms");
         UploadBVHTextures(cmd);
         UploadDirectionalLight(cmd, view);
-        UploadLocalShadowSlots(cmd);
+        UploadLocalShadows(cmd);
         Graphics.Submit(cmd);
     }
 
@@ -371,90 +342,37 @@ public sealed class SceneLightSystem : IDisposable
         cmd.SetGlobalVector("_DirectionalLightDirection", data.Direction);
         cmd.SetGlobalVector("_DirectionalLightColor", data.Color);
         cmd.SetGlobalFloat("_DirectionalLightIntensity", data.Intensity);
-        cmd.SetGlobalInt("_DirectionalLightShadowEnabled", data.ShadowEnabled ? 1 : 0);
+        int cascades = data.ShadowEnabled ? _shadows.CascadeCount : 0;
+        cmd.SetGlobalInt("_DirectionalLightShadowEnabled", cascades > 0 ? 1 : 0);
         cmd.SetGlobalFloat("_DirectionalLightShadowDepthBias", data.ShadowDepthBias);
         cmd.SetGlobalFloat("_DirectionalLightShadowNormalBias", data.ShadowNormalBias);
         cmd.SetGlobalFloat("_DirectionalLightShadowDistance", data.ShadowDistance);
         cmd.SetGlobalFloat("_DirectionalLightShadowStrength", data.ShadowStrength);
         cmd.SetGlobalFloat("_DirectionalLightShadowQuality", data.ShadowQuality);
 
-        cmd.SetGlobalInt("_CascadeCount", data.ShadowEnabled ? data.CascadeCount : 0);
-        if (data.CascadeShadowMatrices != null && data.CascadeAtlasParams != null)
+        cmd.SetGlobalInt("_CascadeCount", cascades);
+        for (int c = 0; c < 4; c++)
         {
-            for (int c = 0; c < 4; c++)
-            {
-                cmd.SetGlobalMatrix($"_CascadeShadowMatrix{c}",
-                    c < data.CascadeCount ? data.CascadeShadowMatrices[c] : Float4x4.Identity);
-                cmd.SetGlobalVector($"_CascadeAtlasParams{c}",
-                    c < data.CascadeCount ? data.CascadeAtlasParams[c] : Float4.Zero);
-                cmd.SetGlobalVector($"_CascadeSphere{c}",
-                    c < data.CascadeCount && data.CascadeSpheres != null ? data.CascadeSpheres[c] : Float4.Zero);
-            }
+            bool used = c < cascades;
+            cmd.SetGlobalMatrix($"_CascadeShadowMatrix{c}", used ? _shadows.CascadeMatrices[c] : Float4x4.Identity);
+            cmd.SetGlobalVector($"_CascadeAtlasParams{c}", used ? _shadows.CascadeAtlasParams[c] : Float4.Zero);
+            cmd.SetGlobalVector($"_CascadeSphere{c}", used ? _shadows.CascadeSpheres[c] : Float4.Zero);
         }
     }
 
-    // What occupied each shadow slot last frame (0 = empty, 1 = point, 2 = spot). Lets us clear
-    // only the slots that actually held data instead of resetting all MaxShadowCasters*7 uniforms
-    // every frame.
-    private readonly int[] _slotKind = new int[MaxShadowCasters];
-
-    private void UploadLocalShadowSlots(CommandBuffer cmd)
+    private void UploadLocalShadows(CommandBuffer cmd)
     {
-        // Clear only the slots that held data last frame so any stale matrices a shader could
-        // index fall through (spot atlas params .z <= 0). Slots reused this frame are overwritten
-        // below; slots that were never written keep their default-zero GPU state.
-        for (int i = 0; i < MaxShadowCasters; i++)
+        if (_shadows.DataTexture.IsValid())
         {
-            if (_slotKind[i] == 1)
-            {
-                for (int f = 0; f < 6; f++)
-                {
-                    int idx = i * 6 + f;
-                    cmd.SetGlobalMatrix($"_PointShadowMatrices[{idx}]", Float4x4.Identity);
-                    cmd.SetGlobalVector($"_PointShadowFaceParams[{idx}]", Float4.Zero);
-                }
-            }
-            else if (_slotKind[i] == 2)
-            {
-                cmd.SetGlobalMatrix($"_SpotShadowMatrices[{i}]", Float4x4.Identity);
-                cmd.SetGlobalVector($"_SpotShadowAtlasParams[{i}]", Float4.Zero);
-            }
-            _slotKind[i] = 0;
+            cmd.SetGlobalTexture("_ShadowData", _shadows.DataTexture);
+            cmd.SetGlobalInt("_ShadowDataShift", _shadows.DataTextureShift);
         }
 
-        for (int i = 0; i < _shadowCasters.Count && i < MaxShadowCasters; i++)
+        Texture2D? atlas = ShadowAtlas.DepthTexture;
+        if (atlas.IsValid())
         {
-            var data = _shadowCasters[i].GetForwardLightData();
-            if (!data.ShadowEnabled) continue;
-
-            int slot = i;
-            if (data.Type == LightType.Point)
-            {
-                if (data.PointShadowMatrices != null && data.PointShadowFaceParams != null)
-                {
-                    for (int f = 0; f < 6; f++)
-                    {
-                        int idx = slot * 6 + f;
-                        cmd.SetGlobalMatrix($"_PointShadowMatrices[{idx}]", data.PointShadowMatrices[f]);
-                        cmd.SetGlobalVector($"_PointShadowFaceParams[{idx}]", data.PointShadowFaceParams[f]);
-                    }
-                    _slotKind[slot] = 1;
-                }
-            }
-            else if (data.Type == LightType.Spot)
-            {
-                cmd.SetGlobalMatrix($"_SpotShadowMatrices[{slot}]", data.SpotShadowMatrix);
-                cmd.SetGlobalVector($"_SpotShadowAtlasParams[{slot}]", data.SpotShadowAtlasParams);
-                _slotKind[slot] = 2;
-            }
-        }
-
-        // Shadow atlas texture itself.
-        var shadowAtlas = ShadowAtlas.GetAtlas();
-        if (shadowAtlas != null)
-        {
-            cmd.SetGlobalTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
-            cmd.SetGlobalVector("_ShadowAtlasSize", new Float2(shadowAtlas.Width, shadowAtlas.Height));
+            cmd.SetGlobalTexture("_ShadowAtlas", atlas);
+            cmd.SetGlobalVector("_ShadowAtlasSize", new Float2(atlas.Width, atlas.Height));
         }
     }
 
@@ -462,10 +380,11 @@ public sealed class SceneLightSystem : IDisposable
     {
         _staticTex.Dispose();
         _dynamicTex.Dispose();
+        _shadows.Dispose();
         _membership.Clear();
         _seenThisFrame.Clear();
-        _shadowCasters.Clear();
-        _previousCasters.Clear();
+        _shadowLights.Clear();
+        _previousShadowLights.Clear();
         _directional = null;
         _extraDirectionals.Clear();
     }

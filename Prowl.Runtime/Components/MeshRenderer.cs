@@ -37,15 +37,32 @@ public class MeshRenderer : MonoBehaviour, IMaterialRenderer
 
     // Per-instance property blocks and renderables, reused across frames so a static scene collects without allocating.
     // The command buffer snapshots these at encode time, so mutating them next frame is safe.
-    [System.NonSerialized] private PropertyState[] _propCache;
-    [System.NonSerialized] private MeshRenderable[] _renderableCache;
-    [System.NonSerialized] private Mesh _propMesh;
+    [System.NonSerialized, NotHeld] private PropertyState[] _propCache;
+    [System.NonSerialized, NotHeld] private MeshRenderable[] _renderableCache;
+    [System.NonSerialized, NotHeld] private Mesh _propMesh;
+
+    private int _visualVersion;
+
+    // The merged static geometry drawing this renderer's covered submeshes, see Scene.UpdateStaticGeometry
+    [System.NonSerialized, NotHeld] internal StaticGeometry.Source? StaticSource;
+
+    internal int VisualVersion => _visualVersion;
+
+    /// <summary>
+    /// Tells the renderer this object looks different in a way the engine cannot see, such as a vertex shader driven
+    /// by your own values, so cached shadows holding it are drawn again. Moving it or changing its mesh or material
+    /// is picked up on its own.
+    /// </summary>
+    public void MarkVisuallyDirty() => _visualVersion++;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         // Something still loading is skipped this frame rather than waited on.
         var mesh = Mesh;
         if (mesh is not { IsLoaded: true } || Materials.Count == 0) return;
+
+        StaticGeometry.Source? batched = StaticSource;
+        if (batched is { AllCovered: true }) return;
 
         int subCount = mesh.SubMeshCount;
         if (_propCache == null || _propCache.Length != subCount)
@@ -62,6 +79,7 @@ public class MeshRenderer : MonoBehaviour, IMaterialRenderer
 
         for (int s = 0; s < subCount; s++)
         {
+            if (batched != null && batched.Covers(s)) continue;
             Material? mat = s < Materials.Count ? Materials[s] : Materials[^1];
             if (mat is not { IsLoaded: true }) continue;
 
@@ -79,6 +97,8 @@ public class MeshRenderer : MonoBehaviour, IMaterialRenderer
 
             MeshRenderable renderable = _renderableCache[s] ??= new MeshRenderable(mesh, mat, world, 0);
             renderable.Set(mesh, mat, world, GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1);
+            renderable.IsStatic = GameObject.IsStatic;
+            renderable.VisualVersion = _visualVersion;
             renderables.Add(renderable);
         }
         _propMesh = mesh;

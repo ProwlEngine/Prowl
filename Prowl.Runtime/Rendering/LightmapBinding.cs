@@ -32,9 +32,12 @@ public static class LightmapBinding
             ? scene!.BakedLighting.PlacementFor(renderer.Identifier)
             : null;
 
-        int lightmapIndex = placement?.Index ?? -1;
-        Float4 scaleOffset = placement?.ScaleOffset ?? new Float4(1, 1, 0, 0);
+        Fill(props, scene, placement?.Index ?? -1, placement?.ScaleOffset ?? new Float4(1, 1, 0, 0), worldPos, meshHasUV2);
+    }
 
+    /// <summary>The same for a draw whose lightmap placement is already known, such as merged static geometry.</summary>
+    internal static void Fill(PropertyState props, Scene? scene, int lightmapIndex, Float4 scaleOffset, Float3 worldPos, bool meshHasUV2)
+    {
         // 1) Baked lightmap (static, lightmapped). A renderer with a valid index IS lightmapped, so it
         // commits to baked GI here and never falls through to probe SH below: probes would light it
         // with a completely different (wrong) result. A page still loading gets plain ambient, since

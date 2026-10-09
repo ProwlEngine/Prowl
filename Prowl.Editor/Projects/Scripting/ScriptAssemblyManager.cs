@@ -468,6 +468,9 @@ public static class ScriptAssemblyManager
             // Per-type caches (RuntimeUtils, registries, ...) are ReloadCaches now and clear themselves
             // through the walk, so nothing to drop explicitly here.
 
+            // A walk spread over frames still holds objects of the old types, which would pin the old context
+            AssetDatabase.AbandonWalk();
+
             // Best-effort unload the old context. No forced GC and no restart if it stays pinned.
             try { oldContext.Unload(); } catch { }
 

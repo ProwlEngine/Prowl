@@ -79,7 +79,7 @@ public sealed class LightBVH
     /// <summary>Encode a leaf hit pointer for slot index <paramref name="slot"/>.</summary>
     public static int EncodeLeafHit(int slot) => -(slot + 1);
 
-    private readonly Dictionary<IRenderableLight, int> _lightToSlot = new();
+    private readonly Dictionary<IRenderableLight, int> _lightToSlot = new(ReferenceEqualityComparer.Instance);
     private readonly Stack<int> _freeSlots = new();
 
     private SlotInfo[] _slots;

@@ -35,13 +35,10 @@ public class DirectionalLight : Light
     private const float CascadeSplitLogBlend = 0.75f;
 
     // Log splits from a tiny near plane would shrink the first cascade to a sliver
-    private const float MinSplitNear = 0.1f;
+    internal const float MinSplitNear = 0.1f;
 
-    // Cascade data (max 4 cascades)
-    private Float4x4[] _cascadeShadowMatrices = new Float4x4[4];
-    private Float4[] _cascadeAtlasParams = new Float4[4]; // xy = atlas pos, z = atlas size, w = cascade radius
-    private Float4[] _cascadeSpheres = new Float4[4]; // xyz = center, w = radius
-    private int _activeCascades = 0;
+    /// <summary>Tile size of each cascade. Scenes saved with a larger size than the enum now offers clamp to the largest.</summary>
+    internal int ShadowMapResolution => Maths.Clamp((int)ShadowResolution, (int)Resolution._512, (int)Resolution._2048);
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
@@ -139,78 +136,6 @@ public class DirectionalLight : Light
         return frustum;
     }
 
-    public override void RenderShadows(RenderPipeline pipeline, in ShadowFitView fitView, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
-    {
-        if (!DoCastShadows())
-        {
-            // No shadows
-            _activeCascades = 0;
-            return;
-        }
-
-        // Determine number of cascades
-        int numCascades = (int)Cascades;
-        _activeCascades = numCascades;
-
-        float distance = Maths.Max(ShadowDistance, 0.01f);
-        float splitNear = Maths.Min(Maths.Max(fitView.Near, MinSplitNear), distance * 0.5f);
-        // Scenes saved with a larger size than the enum now offers still load that value
-        int res = Maths.Min((int)ShadowResolution, (int)Resolution._2048);
-
-
-        // Light direction vectors
-        Float3 forward = Transform.Forward;
-        Float3 right = Transform.Right;
-        Float3 up = Transform.Up;
-
-        // Render each cascade
-        for (int cascadeIndex = 0; cascadeIndex < numCascades; cascadeIndex++)
-        {
-            float sliceNear = cascadeIndex == 0 ? fitView.Near : GetCascadeSplit(cascadeIndex, numCascades, splitNear, distance);
-            float sliceFar = GetCascadeSplit(cascadeIndex + 1, numCascades, splitNear, distance);
-            fitView.GetSliceSphere(sliceNear, sliceFar, out Float3 cascadeCenter, out float cascadeRadius);
-            _cascadeSpheres[cascadeIndex] = new Float4(cascadeCenter, cascadeRadius);
-
-            // Reserve space in shadow atlas for this cascade
-            Int2? slot = ShadowAtlas.ReserveTiles(res, res, GetLightID() + cascadeIndex);
-
-            if (slot != null)
-            {
-                int atlasX = slot.Value.X;
-                int atlasY = slot.Value.Y;
-
-                GetShadowMatrix(cascadeCenter, res, cascadeRadius, out Float4x4 view, out Float4x4 proj);
-
-                bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, GetCasterFrustum(view, proj), LayerMask.Everything);
-
-                // Upload this cascade's matrices BEFORE its CB encodes draws. Each
-                // cascade is its own submitted CB so all four don't get batched and
-                // executed against just the last cascade's matrices.
-                pipeline.AssignCameraMatrices(view, proj);
-
-                using var cmd = Graphics.GetCommandBuffer($"DirectionalLightCascade{cascadeIndex}");
-                cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-                cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
-                cmd.SetDepthBias(CasterSlopeBias, CasterConstantBias);
-                cmd.SetDepthClamp(true);
-                pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
-                cmd.SetDepthClamp(false);
-                cmd.SetDepthBias(0f, 0f);
-                Graphics.Submit(cmd);
-                pipeline.ReturnCullResult(culledRenderableIndices);
-
-                // Store cascade data for shader
-                _cascadeShadowMatrices[cascadeIndex] = RenderPipeline.ToGLClipDepth(proj * view);
-                _cascadeAtlasParams[cascadeIndex] = new Float4(atlasX, atlasY, res, cascadeRadius);
-            }
-            else
-            {
-                // Failed to reserve atlas space for this cascade
-                _cascadeAtlasParams[cascadeIndex] = new Float4(-1, -1, 0, cascadeRadius);
-            }
-        }
-    }
-
     public override ForwardLightData GetForwardLightData()
     {
         return new ForwardLightData
@@ -225,17 +150,13 @@ public class DirectionalLight : Light
             SpotAngle = 0,
             InnerSpotAngle = 0,
 
-            ShadowEnabled = CastShadows && _activeCascades > 0,
+            ShadowEnabled = CastShadows,
             ShadowDepthBias = DepthBias,
             ShadowNormalBias = NormalBias,
             ShadowStrength = ShadowStrength,
             ShadowQuality = (float)ShadowQuality,
 
-            CascadeCount = _activeCascades,
             ShadowDistance = Maths.Max(ShadowDistance, 0.01f),
-            CascadeShadowMatrices = _cascadeShadowMatrices,
-            CascadeAtlasParams = _cascadeAtlasParams,
-            CascadeSpheres = _cascadeSpheres,
         };
     }
 }

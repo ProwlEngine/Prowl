@@ -17,6 +17,12 @@ public class MeshRenderable : IRenderable
     private int _subMeshIndex;
     private Float4x4? _worldToObject;
 
+    /// <summary>Whether the renderer this draws for never moves.</summary>
+    public bool IsStatic { get; set; }
+
+    /// <summary>Bumped by the renderer when it changed in a way the engine cannot see, see <see cref="IRenderable.VisualVersion"/>.</summary>
+    public int VisualVersion { get; set; }
+
     public MeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, PropertyState? propertyBlock = null, int subMeshIndex = -1)
         => Set(mesh, material, matrix, layerIndex, propertyBlock, subMeshIndex);
 

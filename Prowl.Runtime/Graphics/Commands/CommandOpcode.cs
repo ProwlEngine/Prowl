@@ -77,6 +77,7 @@ internal enum CommandOpcode : ushort
     DrawIndexed,
     DrawIndexedInstanced,
     DrawArrays,
+    DrawIndexedRanges,
 
     // (DrawMesh / DrawMeshInstanced / Blit are encoder sugar on CommandBuffer that
     //  expand inline to lower-level opcodes there's no executor case for them.)

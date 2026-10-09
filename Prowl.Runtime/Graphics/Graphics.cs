@@ -51,10 +51,9 @@ public static unsafe class Graphics
     //   resource creation and SubmitAndWait jobs enqueued at ANY time (between frames,
     //   or from background threads) are serviced promptly rather than waiting for the
     //   next BeginFrame.
-    //   main: BeginFrame      -> arm frameDone for this frame
     //   main: encode CBs        (main has no context; render is draining)
-    //   main: EndFrameAndWait -> push frame-end sentinel, block on frameDone
-    //   render: hits sentinel, SwapBuffers, signal frameDone
+    //   main: EndFrameAndWait -> push frame-end sentinel, block until all but MaxFramesInFlight - 1 frames are done
+    //   render: hits sentinel, SwapBuffers, counts the frame as done
 
     private readonly record struct RenderJob(CommandBuffer? Cmd, WaitedJob? Waited = null, bool IsFrameEnd = false, System.Action? Callback = null);
 
@@ -101,7 +100,19 @@ public static unsafe class Graphics
     }
 
     internal static bool IsRenderThread => s_renderThread != null && System.Threading.Thread.CurrentThread == s_renderThread;
-    private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
+
+    // Frames whose end sentinel was pushed, and frames the render thread has swapped. Guarded by s_frameLock.
+    private static long s_framesSubmitted;
+    private static long s_framesCompleted;
+    private static readonly object s_frameLock = new();
+
+    /// <summary>
+    /// How many frames may be in the pipeline at once. With 2 the main thread builds the next frame while the render
+    /// thread finishes the current one, so neither waits on the other, at one frame of extra input latency. 1 waits for
+    /// every frame to finish before starting the next. Running XR always uses 1, since OpenXR orders its frame calls
+    /// strictly and a headset should never show an older frame than it has to.
+    /// </summary>
+    public static int MaxFramesInFlight { get; set; } = 2;
 
     private static int s_wantedSwapInterval = -1;
     private static int s_appliedSwapInterval = -1;
@@ -180,13 +191,7 @@ public static unsafe class Graphics
         waited.Error?.Throw();
     }
 
-    internal static void BeginFrame()
-    {
-        // Arm the frame-done gate so EndFrameAndWait blocks until THIS frame's
-        // sentinel is processed. The render thread is always draining, so there's
-        // nothing to wake.
-        s_renderFrameDone.Reset();
-    }
+    internal static void BeginFrame() { }
 
     /// <summary>Time the main thread spent blocked in <see cref="EndFrameAndWait"/>
     /// last frame. High = render thread is bottleneck. Near-zero = main is.</summary>
@@ -194,11 +199,29 @@ public static unsafe class Graphics
 
     internal static void EndFrameAndWait()
     {
-        Enqueue(new RenderJob(null, IsFrameEnd: true));
+        int inFlight = XR.IsRunning ? 1 : System.Math.Max(1, MaxFramesInFlight);
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
-        s_renderFrameDone.Wait();
+        lock (s_frameLock)
+        {
+            long frame = ++s_framesSubmitted;
+            Enqueue(new RenderJob(null, IsFrameEnd: true));
+
+            // The frame inFlight - 1 frames back has to be on screen before this one may start the next
+            long mustBeDone = frame - inFlight + 1;
+            while (s_framesCompleted < mustBeDone)
+                System.Threading.Monitor.Wait(s_frameLock);
+        }
         long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
         LastFrameWaitMs = (float)(elapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+    }
+
+    private static void CompleteFrame(long frames)
+    {
+        lock (s_frameLock)
+        {
+            s_framesCompleted += frames;
+            System.Threading.Monitor.PulseAll(s_frameLock);
+        }
     }
 
     // On a hybrid machine OpenGL silently picks an adapter for us, and picking the integrated one
@@ -297,7 +320,7 @@ public static unsafe class Graphics
         catch (Exception ex)
         {
             Debug.LogError($"Render thread MakeCurrent failed: {ex}");
-            s_renderFrameDone.Set();
+            CompleteFrame(long.MaxValue / 2);
             return;
         }
 
@@ -317,7 +340,7 @@ public static unsafe class Graphics
                     ApplyPendingSwapInterval();
                     try { Window.InternalWindow.GLContext!.SwapBuffers(); }
                     catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
-                    finally { s_renderFrameDone.Set(); }
+                    finally { CompleteFrame(1); }
                     continue;
                 }
                 if (job.Callback != null)

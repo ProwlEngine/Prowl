@@ -30,6 +30,9 @@ public sealed class ShaderPass
     [SerializeIgnore]
     private Dictionary<string, GraphicsProgram> _variants = [];
 
+    // The same variants keyed by a material's keyword hash, so a draw finds its program without building a key
+    private Dictionary<ulong, GraphicsProgram> _variantsByHash = [];
+
 
     /// <summary>
     /// The name to identify this <see cref="ShaderPass"/>
@@ -92,6 +95,17 @@ public sealed class ShaderPass
         _grabDepthTextureName = grabDepthTextureName;
 
         _variants = [];
+        _variantsByHash = [];
+    }
+
+    /// <summary>The program for the keywords <paramref name="material"/> has enabled, compiled on first use.</summary>
+    public bool TryGetVariantProgram(Resources.Material material, out GraphicsProgram variant)
+    {
+        ulong hash = material.KeywordHash;
+        if (_variantsByHash.TryGetValue(hash, out variant!)) return true;
+        if (!TryGetVariantProgram(material._localKeywords, out variant)) return false;
+        _variantsByHash[hash] = variant;
+        return true;
     }
 
     public bool TryGetVariantProgram(Dictionary<string, bool>? keywordID, out GraphicsProgram variant)
@@ -163,7 +177,7 @@ public sealed class ShaderPass
             var fallbackShader = Resources.Shader.LoadDefault(Resources.DefaultShader.Invalid);
             if (fallbackShader.IsValid())
             {
-                if (!fallbackShader.GetPass(0).TryGetVariantProgram(null, out variant))
+                if (!fallbackShader.GetPass(0).TryGetVariantProgram((Dictionary<string, bool>?)null, out variant))
                     throw new Exception($"Failed to compile shader pass of {Name}. Fallback shader also failed to compile.");
             }
             else
@@ -200,5 +214,6 @@ public sealed class ShaderPass
         foreach (var variant in _variants.Values)
             variant.Dispose();
         _variants.Clear();
+        _variantsByHash.Clear();
     }
 }

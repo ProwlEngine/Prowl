@@ -179,6 +179,14 @@ public class TerrainComponent : MonoBehaviour
     public Float3 WorldToTerrain(Float3 worldPoint) =>
         Float4x4.TransformPoint(worldPoint, Transform.WorldToLocalMatrix);
 
+    private int _visualVersion;
+
+    /// <summary>
+    /// Tells the terrain it looks different in a way the engine cannot see, so cached shadows holding it are drawn
+    /// again. Sculpting and painting through TerrainData are picked up on their own.
+    /// </summary>
+    public void MarkVisuallyDirty() => _visualVersion++;
+
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var terrainData = Data;
@@ -223,6 +231,10 @@ public class TerrainComponent : MonoBehaviour
             _properties.SetTexture($"_Splatmap{si}", splatmapTextures[si]);
         if (holesTex != null) _properties.SetTexture("_HolesMap", holesTex);
         _properties.SetInt("_HasHoles", holesTex != null ? 1 : 0);
+        // Sculpting rewrites the textures in place, the versions let cached shadows see the change
+        _properties.SetInt("_HeightsVersion", terrainData.HeightsVersion);
+        _properties.SetInt("_HolesVersion", terrainData.HolesVersion);
+        _properties.SetInt("_VisualVersion", _visualVersion);
         _properties.SetInt("_LayerCount", terrainData.LayerCount);
 
         // Per-layer textures and settings
@@ -265,7 +277,7 @@ public class TerrainComponent : MonoBehaviour
             renderables, _baseMesh, mat, _transforms,
             (bounds.Min + bounds.Max) * 0.5f,
             layer: GameObject.LayerIndex,
-            properties: _properties, bounds: bounds);
+            properties: _properties, bounds: bounds, isStatic: GameObject.IsStatic);
 
         // Details
         var grassMat = GetDetailMaterialInstance();

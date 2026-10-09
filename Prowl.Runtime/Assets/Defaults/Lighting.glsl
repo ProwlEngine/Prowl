@@ -38,12 +38,8 @@ uniform vec3 _ExtraDirectionalLightDirection[MAX_EXTRA_DIRECTIONAL_LIGHTS];
 uniform vec3 _ExtraDirectionalLightColor[MAX_EXTRA_DIRECTIONAL_LIGHTS]; // color * intensity
 
 // ============================================================
-//  Local-light shadow atlas (closest N point + spot lights share these slots)
+//  Shadow atlas and per light shadow data
 // ============================================================
-
-#ifndef MAX_SHADOW_CASTERS
-#define MAX_SHADOW_CASTERS 4
-#endif
 
 // Shadow atlas (hardware depth-compare sampler; the atlas depth texture has
 // GL_TEXTURE_COMPARE_MODE enabled so texture() does the PCF comparison)
@@ -69,13 +65,24 @@ uniform vec4 _CascadeSphere3;
 uniform vec3 _ShadowViewOrigin;
 uniform vec3 _ShadowViewForward;
 
-// Point shadows (6 faces per light). A point light occupying slot s uses indices [s*6 .. s*6+5].
-uniform mat4 _PointShadowMatrices[MAX_SHADOW_CASTERS * 6];
-uniform vec4 _PointShadowFaceParams[MAX_SHADOW_CASTERS * 6]; // xy: atlasPos, z: faceSize, w: texel size one unit from the light
+// One block of SHADOW_BLOCK_TEXELS texels per shadowed point or spot light, at L.ShadowSlot. The texture is
+// 1 << _ShadowDataShift texels wide.
+//   +0     header: x fade (1 full shadow, 0 none)
+//   +1..   one rect per face (6 for point, 1 for spot): xy tile position, z tile size, w texel size one unit from the light
+//   then   one matrix per face, four columns each
+uniform sampler2D _ShadowData;
+uniform int _ShadowDataShift;
+#define SHADOW_BLOCK_TEXELS 32
 
-// Spot shadows (1 matrix per light, indexed by slot directly).
-uniform mat4 _SpotShadowMatrices[MAX_SHADOW_CASTERS];
-uniform vec4 _SpotShadowAtlasParams[MAX_SHADOW_CASTERS]; // xy: atlasPos, z: atlasSize, w: texel size one unit along the axis
+vec4 ShadowData(int texel)
+{
+    return texelFetch(_ShadowData, ivec2(texel & ((1 << _ShadowDataShift) - 1), texel >> _ShadowDataShift), 0);
+}
+
+mat4 ShadowDataMatrix(int texel)
+{
+    return mat4(ShadowData(texel), ShadowData(texel + 1), ShadowData(texel + 2), ShadowData(texel + 3));
+}
 
 // ============================================================
 //  Fog uniforms
@@ -174,12 +181,17 @@ float DirectionalShadow(vec3 worldPos, vec3 geomNormal, float normalBias, float 
 
 float PointShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
+    int block = L.ShadowSlot * SHADOW_BLOCK_TEXELS;
+    float fade = ShadowData(block).x;
+    if (fade <= 0.0) return 0.0;
+
     vec3 lightToFrag = worldPos - L.Position;
     float dist = length(lightToFrag);
     vec3 absDir = abs(lightToFrag);
     float axisDist = max(absDir.x, max(absDir.y, absDir.z));
 
-    float texelWorld = _PointShadowFaceParams[L.ShadowSlot * 6].w * axisDist;
+    // Every face holds the same tile size, so the first face's texel size serves before a face is picked
+    float texelWorld = ShadowData(block + 1).w * axisDist;
     vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), texelWorld,
                                      L.ShadowDepthBias, normalBias);
 
@@ -194,32 +206,33 @@ float PointShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBia
     else
         faceIndex = dir.z > 0.0 ? 4 : 5;
 
-    int idx = L.ShadowSlot * 6 + faceIndex;
-    vec4 faceParams = _PointShadowFaceParams[idx];
-    if (faceParams.z <= 0.0) return 0.0;
+    vec4 faceRect = ShadowData(block + 1 + faceIndex);
+    if (faceRect.z <= 0.0) return 0.0;
 
-    vec3 projCoords = ProjectToShadowMap(_PointShadowMatrices[idx], biasedPos);
+    vec3 projCoords = ProjectToShadowMap(ShadowDataMatrix(block + 7 + faceIndex * 4), biasedPos);
     if (projCoords.z > 1.0) return 0.0;
 
-    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, faceParams, quality) * L.ShadowStrength;
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, faceRect, quality) * L.ShadowStrength * fade;
 }
 
 float SpotShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
-    vec4 atlasParams = _SpotShadowAtlasParams[L.ShadowSlot];
-    if (atlasParams.z <= 0.0) return 0.0;
+    int block = L.ShadowSlot * SHADOW_BLOCK_TEXELS;
+    float fade = ShadowData(block).x;
+    vec4 rect = ShadowData(block + 1);
+    if (fade <= 0.0 || rect.z <= 0.0) return 0.0;
 
     vec3 lightToFrag = worldPos - L.Position;
     float dist = length(lightToFrag);
     float axisDist = max(dot(lightToFrag, normalize(L.Direction)), 0.0);
 
-    vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), atlasParams.w * axisDist,
+    vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), rect.w * axisDist,
                                      L.ShadowDepthBias, normalBias);
-    vec3 projCoords = ProjectToShadowMap(_SpotShadowMatrices[L.ShadowSlot], biasedPos);
+    vec3 projCoords = ProjectToShadowMap(ShadowDataMatrix(block + 2), biasedPos);
     if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
         return 0.0;
 
-    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, atlasParams, quality) * L.ShadowStrength;
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, rect, quality) * L.ShadowStrength * fade;
 }
 
 float LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)

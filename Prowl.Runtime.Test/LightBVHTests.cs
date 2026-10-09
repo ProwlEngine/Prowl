@@ -375,7 +375,6 @@ public class SceneLightSystemTests : RuntimeTestBase
 
         public override LightType GetLightType() => Data.Type;
         public override Float3 GetLightPosition() => Data.Position;
-        public override void RenderShadows(RenderPipeline pipeline, in ShadowFitView view, System.Collections.Generic.IReadOnlyList<IRenderable> renderables) { }
         public override ForwardLightData GetForwardLightData() => Data;
     }
 
@@ -409,14 +408,25 @@ public class SceneLightSystemTests : RuntimeTestBase
     public void LightThatStopsCasting_LosesItsShadowSlot()
     {
         var system = new SceneLightSystem();
-        var light = CreateLight(isStatic: true);
-        light.Data.ShadowEnabled = true;
+        var go = CreateGameObject("Lamp");
+        go.IsStatic = true;
+        var light = go.AddComponent<PointLight>();
+        light.Range = 5f;
+        go.Transform.Position = new Float3(0, 0, 10);
+
+        var view = Float4x4.CreateLookTo(Float3.Zero, Float3.UnitZ, Float3.UnitY);
+        var projection = Float4x4.CreatePerspectiveFov(1f, 1f, 0.1f, 100f);
+        var camera = new ShadowCamera(this, Float3.Zero, Frustum.FromMatrix(projection * view), projection, 720,
+            ShadowFitView.FromProjection(Float3.Zero, Quaternion.Identity, projection, 0.1f));
+        var pipeline = new DefaultRenderPipeline();
 
         system.Reconcile([light], Float3.Zero, LayerMask.Everything);
-        Assert.Equal(0, system.StaticBVH.Slots[system.StaticBVH.GetSlot(light)].ShadowSlot);
+        system.RenderShadows(pipeline, camera, []);
+        Assert.True(system.StaticBVH.Slots[system.StaticBVH.GetSlot(light)].ShadowSlot >= 0);
 
         light.CastShadows = false;
         system.Reconcile([light], Float3.Zero, LayerMask.Everything);
+        system.RenderShadows(pipeline, camera, []);
         Assert.Equal(-1, system.StaticBVH.Slots[system.StaticBVH.GetSlot(light)].ShadowSlot);
     }
 

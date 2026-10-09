@@ -20,14 +20,13 @@ public class PointLight : Light
         _2048 = 2048,
     }
 
-    public Resolution ShadowResolution = Resolution._256;
+    /// <summary>Largest tile each cube face may take. The face is sized from how big the light is on screen up to this.</summary>
+    public Resolution ShadowResolution = Resolution._512;
     public float Range = 10.0f;
 
-    // Shadow cubemap data - 6 faces stored in a 3x2 grid in the shadow atlas
-    private Float4[] _shadowFaceParams = new Float4[6]; // xy = atlas pos, z = face size, w = texel size one unit from the light
-    private Float4x4[] _shadowMatrices = new Float4x4[6]; // View-projection for each face
+    private const float ShadowNear = 0.1f;
 
-    // Forward and up of each cube face, in atlas order
+    // Forward and up of each cube face
     private static readonly (Float3 Forward, Float3 Up)[] s_faceOrientations =
     [
         (Float3.UnitX,  -Float3.UnitY),
@@ -37,6 +36,8 @@ public class PointLight : Light
         (Float3.UnitZ,  -Float3.UnitY),
         (-Float3.UnitZ, -Float3.UnitY),
     ];
+
+    internal override int MaxShadowResolution => (int)ShadowResolution;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
@@ -56,78 +57,12 @@ public class PointLight : Light
 
     public override LightType GetLightType() => LightType.Point;
 
-    public override void RenderShadows(RenderPipeline pipeline, in ShadowFitView fitView, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
+    /// <summary>View and projection of one cube face, in the order the shaders pick faces: +X, -X, +Y, -Y, +Z, -Z.</summary>
+    internal void GetShadowFace(int face, out Float4x4 view, out Float4x4 projection)
     {
-        if (!DoCastShadows())
-        {
-            System.Array.Clear(_shadowFaceParams);
-            return;
-        }
-
-        int res = (int)ShadowResolution;
-        Float3 lightPos = Transform.Position;
-
-        // Reserve 3x2 grid in shadow atlas for 6 cubemap faces
-        // Layout: [+X][-X][+Y]
-        //         [-Y][+Z][-Z]
-        int requestedWidth = res * 3;
-        int requestedHeight = res * 2;
-        Int2? slot = ShadowAtlas.ReserveTiles(requestedWidth, requestedHeight, GetLightID());
-
-        if (slot == null)
-        {
-            System.Array.Clear(_shadowFaceParams);
-            return;
-        }
-
-        int atlasX = slot.Value.X;
-        int atlasY = slot.Value.Y;
-
-        // Create perspective projection for all faces (90 degree FOV for cubemap)
-        Float4x4 projection = Float4x4.CreatePerspectiveFov(Maths.PI / 2.0f, 1.0f, 0.1f, Maths.Max(Range, 0.2f));
-
-        // Every face sits inside the light's range, so each face only tests what the range kept.
-        bool[] outsideRange = pipeline.CullOutsideSphere(renderables, lightPos, Range);
-
-        // Render each face
-        for (int faceIndex = 0; faceIndex < 6; faceIndex++)
-        {
-            // Calculate viewport position in 3x2 grid
-            int gridX = faceIndex % 3;
-            int gridY = faceIndex / 3;
-            int viewportX = atlasX + (gridX * res);
-            int viewportY = atlasY + (gridY * res);
-
-            (Float3 forward, Float3 up) = s_faceOrientations[faceIndex];
-            Float4x4 view = Float4x4.CreateLookTo(lightPos, forward, up);
-
-            Frustum frustum = Frustum.FromMatrix(projection * view);
-
-            Float3 right = Float3.Normalize(Float3.Cross(up, forward));
-            ViewerData viewerData = new ViewerData(lightPos, forward, right, up);
-
-            bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything, outsideRange);
-
-            // Push this face's view/proj into the global UBO BEFORE the face CB
-            // encodes draws otherwise all six faces would batch into one CB and
-            // execute against whatever matrices the last face uploaded.
-            pipeline.AssignCameraMatrices(view, projection);
-
-            using var cmd = Graphics.GetCommandBuffer($"PointLightFace{faceIndex}");
-            cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-            cmd.SetViewport(viewportX, viewportY, (uint)res, (uint)res);
-            cmd.SetDepthBias(CasterSlopeBias, CasterConstantBias);
-            pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices, false);
-            cmd.SetDepthBias(0f, 0f);
-            Graphics.Submit(cmd);
-            pipeline.ReturnCullResult(culledRenderableIndices);
-
-            // Store face data for shader
-            _shadowMatrices[faceIndex] = RenderPipeline.ToGLClipDepth(projection * view);
-            _shadowFaceParams[faceIndex] = new Float4(viewportX, viewportY, res, 2f / res);
-        }
-
-        pipeline.ReturnCullResult(outsideRange);
+        (Float3 forward, Float3 up) = s_faceOrientations[face];
+        view = Float4x4.CreateLookTo(Transform.Position, forward, up);
+        projection = Float4x4.CreatePerspectiveFov(Maths.PI / 2.0f, 1.0f, ShadowNear, Maths.Max(Range, 0.2f));
     }
 
     public override ForwardLightData GetForwardLightData()
@@ -148,9 +83,6 @@ public class PointLight : Light
             ShadowNormalBias = NormalBias,
             ShadowStrength = ShadowStrength,
             ShadowQuality = (float)ShadowQuality,
-
-            PointShadowMatrices = _shadowMatrices,
-            PointShadowFaceParams = _shadowFaceParams,
         };
     }
 }

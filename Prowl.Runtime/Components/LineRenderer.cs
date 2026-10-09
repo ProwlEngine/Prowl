@@ -205,6 +205,13 @@ public class LineRenderer : MonoBehaviour, IRenderable, IMaterialRenderer
         instanceData = null; // Single instance rendering
     }
 
+    private int _visualVersion;
+
+    /// <summary>Tells the renderer this line looks different in a way the engine cannot see, so cached shadows holding it are drawn again.</summary>
+    public void MarkVisuallyDirty() => _visualVersion++;
+
+    public int VisualVersion => _visualVersion;
+
     public void GetCullingData(out bool isRenderable, out AABB bounds)
     {
         isRenderable = Points != null && Points.Count >= 2 && Material != null;

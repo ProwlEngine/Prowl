@@ -545,6 +545,25 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public LightmapBakeSettings LightmapBake = new();
 
+    [SerializeField, NotHeld]
+    private StaticGeometry? _staticGeometry = new();
+
+    /// <summary>This scene's static renderers merged for drawing, see <see cref="UpdateStaticGeometry"/>.</summary>
+    public StaticGeometry StaticGeometry { get { EnsureNotDisposed(); return _staticGeometry ??= new(); } }
+
+    /// <summary>
+    /// Merges every static MeshRenderer into world space geometry that draws in a few calls, replacing what was
+    /// merged before. The editor does this when a scene is saved, and the result is stored with it. Call it after
+    /// creating or changing static objects at runtime. A static renderer that changes afterwards drops out of the
+    /// merged geometry and draws on its own until this is called again.
+    /// </summary>
+    public void UpdateStaticGeometry()
+    {
+        EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        StaticGeometry.Build(this);
+    }
+
     [NonSerialized] private LightProbeVolume? _probeVolume;
 
     /// <summary>Runtime probe sampler built from <see cref="BakedLighting"/> (lazy). Null when there are no baked probes.</summary>
@@ -964,6 +983,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out Scene? scene) || ReferenceEquals(scene, this));
 
+        _staticGeometry?.Clear();
+
         // Clear the physics world
         _physics.Clear();
 
@@ -1074,6 +1095,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (IsDisposed) return;
         using var session = MainThreadContext.EnterSession();
+        StaticGeometry.Collect(this, renderables);
         _dispatcher.RunRenderCollect(camera, renderables, lights);
     }
 

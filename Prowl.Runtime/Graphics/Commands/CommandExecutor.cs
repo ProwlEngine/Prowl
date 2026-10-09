@@ -106,7 +106,7 @@ internal sealed class CommandExecutor
             CommandOpcode.SetUniformVec3, CommandOpcode.SetUniformVec4, CommandOpcode.SetUniformMatrix,
             CommandOpcode.SetUniformMatrixArray, CommandOpcode.SetUniformTexture, CommandOpcode.SetUniformBuffer,
             CommandOpcode.UpdateBuffer, CommandOpcode.DrawIndexed, CommandOpcode.DrawIndexedInstanced,
-            CommandOpcode.DrawArrays, CommandOpcode.BeginSample, CommandOpcode.EndSample])
+            CommandOpcode.DrawArrays, CommandOpcode.DrawIndexedRanges, CommandOpcode.BeginSample, CommandOpcode.EndSample])
             keeps[(int)op] = true;
         return keeps;
     }
@@ -504,6 +504,15 @@ internal sealed class CommandExecutor
                     int first = ReadI32(stream, ref pos);
                     uint count = ReadU32(stream, ref pos);
                     DoDrawArrays(vao, topo, first, count);
+                    break;
+                }
+                case CommandOpcode.DrawIndexedRanges:
+                {
+                    var vao = (GraphicsVertexArray?)objects[ReadI32(stream, ref pos)];
+                    Topology topo = (Topology)ReadU8(stream, ref pos);
+                    bool i32 = ReadU8(stream, ref pos) != 0;
+                    var ranges = ReadBlob<IndexRange>(stream, ref pos, store);
+                    DoDrawIndexedRanges(vao, topo, ranges, i32);
                     break;
                 }
                 case CommandOpcode.CreateBuffer:
@@ -946,6 +955,38 @@ internal sealed class CommandExecutor
             _ = baseVertex;
             Graphics.GL.DrawElementsInstanced(mode, indexCount, fmt,
                 (void*)(startIndex * indexSize), instanceCount);
+        }
+    }
+
+    private uint[] _rangeCounts = [];
+    private nint[] _rangeOffsets = [];
+
+    private void DoDrawIndexedRanges(GraphicsVertexArray? vao, Topology topo, ReadOnlySpan<IndexRange> ranges, bool i32)
+    {
+        if (vao == null || ranges.Length == 0) return;
+        PrepareDraw();
+        BindVAO(vao);
+
+        PrimitiveType mode = ToGL(topo);
+        DrawElementsType fmt = i32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
+        int indexSize = i32 ? sizeof(uint) : sizeof(ushort);
+
+        if (_rangeCounts.Length < ranges.Length)
+        {
+            _rangeCounts = new uint[ranges.Length * 2];
+            _rangeOffsets = new nint[ranges.Length * 2];
+        }
+        for (int i = 0; i < ranges.Length; i++)
+        {
+            _rangeCounts[i] = ranges[i].Count;
+            _rangeOffsets[i] = (nint)ranges[i].Start * indexSize;
+        }
+
+        unsafe
+        {
+            fixed (uint* counts = _rangeCounts)
+            fixed (nint* offsets = _rangeOffsets)
+                Graphics.GL.MultiDrawElements(mode, counts, fmt, (void**)offsets, (uint)ranges.Length);
         }
     }
 

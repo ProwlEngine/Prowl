@@ -2,17 +2,22 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using Xunit;
 
 namespace Prowl.Runtime.Test;
 
 /// <summary>
-/// Pure math tests (no GPU) for the light shadow setup: directional cascade placement, coverage and
-/// texel snapping, the caster culling volume, spot projections and the shadow flags lights report.
+/// Tests (no GPU) for the light shadow setup: directional cascade placement, coverage and texel snapping, the
+/// caster culling volume, spot projections, the shadow flags lights report, the atlas allocator and the shadow
+/// cache that decides what is redrawn and at what size.
 /// </summary>
 public class ShadowTests : RuntimeTestBase
 {
@@ -278,5 +283,512 @@ public class ShadowTests : RuntimeTestBase
 
         // The first slice is much shorter than an even split, it is the one right in front of the camera
         Assert.True(DirectionalLight.GetCascadeSplit(1, 4, near, distance) < distance / 4f * 0.5f);
+    }
+
+    // ---------------------------------------------------------------- atlas allocator
+
+    // Marks every 16 texel cell a tile covers, failing on the first one already taken
+    private static void Claim(bool[,] cells, ShadowTile tile)
+    {
+        int c = ShadowTileAllocator.SmallestTile;
+        for (int y = tile.Y / c; y < (tile.Y + tile.Size) / c; y++)
+            for (int x = tile.X / c; x < (tile.X + tile.Size) / c; x++)
+            {
+                Assert.False(cells[x, y], $"Tile {tile} overlaps another tile.");
+                cells[x, y] = true;
+            }
+    }
+
+    [Fact]
+    public void ShadowTileAllocator_LargestFirst_FillsTheAtlasExactly()
+    {
+        var allocator = new ShadowTileAllocator(1024);
+        var cells = new bool[64, 64];
+        // 3 x 512 + 3 x 256 + 3 x 128 + 4 x 64 adds up to exactly 1024 x 1024
+        int[] sizes = [512, 512, 512, 256, 256, 256, 128, 128, 128, 64, 64, 64, 64];
+
+        foreach (int size in sizes)
+        {
+            Assert.True(allocator.TryAllocate(size, out ShadowTile tile));
+            Claim(cells, tile);
+        }
+
+        Assert.Equal(allocator.CapacityTexels, allocator.UsedTexels);
+        Assert.False(allocator.TryAllocate(16, out _));
+    }
+
+    [Fact]
+    public void ShadowTileAllocator_FreedTiles_MergeBackIntoTheWholeAtlas()
+    {
+        var allocator = new ShadowTileAllocator(1024);
+        var rng = new Random(4);
+        var tiles = new List<ShadowTile>();
+        while (allocator.TryAllocate(16 << rng.Next(4), out ShadowTile tile))
+            tiles.Add(tile);
+
+        foreach (ShadowTile tile in tiles.OrderBy(_ => rng.Next()))
+            allocator.Free(tile);
+
+        Assert.Equal(0, allocator.UsedTexels);
+        Assert.True(allocator.TryAllocate(1024, out _));
+    }
+
+    [Fact]
+    public void ShadowTileAllocator_Churn_NeverHandsOutOverlappingTiles()
+    {
+        var allocator = new ShadowTileAllocator(512);
+        var rng = new Random(11);
+        var live = new List<ShadowTile>();
+
+        for (int step = 0; step < 3000; step++)
+        {
+            if (live.Count > 0 && rng.Next(3) == 0)
+            {
+                int k = rng.Next(live.Count);
+                allocator.Free(live[k]);
+                live.RemoveAt(k);
+            }
+            else if (allocator.TryAllocate(16 << rng.Next(4), out ShadowTile tile))
+            {
+                live.Add(tile);
+            }
+        }
+
+        var cells = new bool[32, 32];
+        long used = 0;
+        foreach (ShadowTile tile in live)
+        {
+            Claim(cells, tile);
+            used += (long)tile.Size * tile.Size;
+        }
+        Assert.Equal(used, allocator.UsedTexels);
+    }
+
+    // ---------------------------------------------------------------- shadow cache
+
+    private sealed class DeformingRenderable(MeshRenderable inner) : IRenderable
+    {
+        public Material GetMaterial() => inner.GetMaterial();
+        public int GetLayer() => inner.GetLayer();
+        public Float3 GetPosition() => inner.GetPosition();
+        public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData)
+            => inner.GetRenderingData(viewer, out properties, out mesh, out model, out instanceData);
+        public void GetCullingData(out bool isRenderable, out AABB bounds) => inner.GetCullingData(out isRenderable, out bounds);
+        public bool DeformsEveryFrame => true;
+    }
+
+    /// <summary>A camera, some cubes and lights, run through the shadow cache one frame per <see cref="Update"/>.</summary>
+    private sealed class ShadowScene
+    {
+        public readonly DefaultRenderPipeline Pipeline = new();
+        public readonly ShadowRenderer Renderer = new();
+        public readonly List<IRenderable> Renderables = new();
+        public readonly List<Light> Lights = new();
+        public readonly Mesh Cube = Mesh.CreateCube(Float3.One);
+        public readonly Material Material = new(Shader.LoadDefault(DefaultShader.Standard));
+        public DirectionalLight? Sun;
+        public Float3 CameraPosition = Float3.Zero;
+        public Float3 CameraForward = Float3.UnitZ;
+
+        public MeshRenderable AddCube(Float3 position)
+        {
+            var cube = new MeshRenderable(Cube, Material, Float4x4.CreateTranslation(position), 0);
+            Renderables.Add(cube);
+            return cube;
+        }
+
+        public void Move(MeshRenderable cube, Float3 position) => cube.Set(Cube, Material, Float4x4.CreateTranslation(position), 0);
+
+        public void Update()
+        {
+            Time.CurrentTime.FrameCount++;
+            Float4x4 view = Float4x4.CreateLookTo(CameraPosition, CameraForward, Float3.UnitY);
+            Float4x4 projection = Float4x4.CreatePerspectiveFov(60f * Maths.Deg2Rad, 16f / 9f, 0.1f, 500f);
+            Quaternion rotation = Quaternion.LookRotation(CameraForward, Float3.UnitY);
+            var camera = new ShadowCamera(this, CameraPosition, Frustum.FromMatrix(projection * view), projection, 1080,
+                ShadowFitView.FromProjection(CameraPosition, rotation, projection, 0.1f));
+            Renderer.Update(Pipeline, camera, Sun, Lights, Renderables);
+        }
+    }
+
+    private PointLight AddLamp(ShadowScene scene, Float3 position, float range = 6f)
+    {
+        GameObject go = CreateGameObject("Lamp");
+        go.Transform.Position = position;
+        PointLight lamp = go.AddComponent<PointLight>();
+        lamp.Range = range;
+        scene.Lights.Add(lamp);
+        return lamp;
+    }
+
+    [Fact]
+    public void ShadowCache_StaticScene_DrawsOnceThenReuses()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        scene.AddCube(new Float3(1, 0, 10));
+
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+        Assert.Equal(1, scene.Renderer.LightsShadowed);
+
+        scene.Update();
+        Assert.Equal(0, scene.Renderer.FacesDrawn);
+        Assert.Equal(1, scene.Renderer.LightsShadowed);
+    }
+
+    [Fact]
+    public void ShadowCache_CasterMovingInsideTheLight_Redraws()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        MeshRenderable cube = scene.AddCube(new Float3(1, 0, 10));
+        scene.Update();
+        scene.Update();
+
+        scene.Move(cube, new Float3(2, 0, 10));
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_CasterMovingOutsideTheLight_DoesNotRedraw()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        scene.AddCube(new Float3(1, 0, 10));
+        MeshRenderable far = scene.AddCube(new Float3(40, 0, 10));
+        scene.Update();
+        scene.Update();
+
+        scene.Move(far, new Float3(42, 0, 10));
+        scene.Update();
+        Assert.Equal(0, scene.Renderer.FacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_CasterMaterialChange_Redraws()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        scene.AddCube(new Float3(1, 0, 10));
+        scene.Update();
+        scene.Update();
+
+        scene.Material.SetFloat("_AlphaCutoff", 0.3f);
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_LightMoving_Redraws()
+    {
+        var scene = new ShadowScene();
+        PointLight lamp = AddLamp(scene, new Float3(0, 0, 10));
+        scene.AddCube(new Float3(1, 0, 10));
+        scene.Update();
+        scene.Update();
+
+        lamp.Transform.Position = new Float3(0.5f, 0, 10);
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_DeformingCaster_RedrawsEveryFrame()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        scene.Renderables.Add(new DeformingRenderable(new MeshRenderable(scene.Cube, scene.Material, Float4x4.CreateTranslation(new Float3(1, 0, 10)), 0)));
+
+        for (int i = 0; i < 3; i++)
+        {
+            scene.Update();
+            Assert.Equal(6, scene.Renderer.FacesDrawn);
+        }
+    }
+
+    [Fact]
+    public void ShadowCache_LightLeavingTheView_KeepsItsTilesForWhenItReturns()
+    {
+        var scene = new ShadowScene();
+        PointLight lamp = AddLamp(scene, new Float3(0, 0, 10));
+        scene.AddCube(new Float3(1, 0, 10));
+        scene.Update();
+
+        scene.CameraForward = -Float3.UnitZ;
+        scene.Update();
+        Assert.Equal(0, scene.Renderer.LightsShadowed);
+        Assert.True(scene.Renderer.GetTileSize(lamp) > 0);
+
+        scene.CameraForward = Float3.UnitZ;
+        scene.Update();
+        Assert.Equal(1, scene.Renderer.LightsShadowed);
+        Assert.Equal(0, scene.Renderer.FacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_TileSize_FollowsScreenSizeAndIgnoresSmallMoves()
+    {
+        var scene = new ShadowScene();
+        PointLight lamp = AddLamp(scene, new Float3(0, 0, 60), range: 2f);
+        scene.AddCube(new Float3(0.5f, 0, 60));
+
+        scene.Update();
+        int far = scene.Renderer.GetTileSize(lamp);
+
+        scene.CameraPosition = new Float3(0, 0, 50);
+        scene.Update();
+        int near = scene.Renderer.GetTileSize(lamp);
+        Assert.True(near > far, $"Tile should grow as the light fills more of the screen, was {far} then {near}.");
+
+        scene.CameraPosition = new Float3(0, 0, 50.4f);
+        scene.Update();
+        Assert.Equal(near, scene.Renderer.GetTileSize(lamp));
+        Assert.Equal(0, scene.Renderer.FacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_ResolutionChanges_ArePacedPerFrame()
+    {
+        int budget = ShadowAtlas.MaxResolutionChangesPerFrame;
+        try
+        {
+            ShadowAtlas.MaxResolutionChangesPerFrame = 6;
+            var scene = new ShadowScene();
+            foreach (float x in new[] { -5f, 0f, 5f })
+            {
+                AddLamp(scene, new Float3(x, 0, 60), range: 2f);
+                scene.AddCube(new Float3(x + 0.5f, 0, 60));
+            }
+            scene.Update();
+
+            // All three want bigger tiles once the camera comes close, but only one light's worth may change a frame
+            scene.CameraPosition = new Float3(0, 0, 50);
+            for (int frame = 0; frame < 3; frame++)
+            {
+                scene.Update();
+                Assert.Equal(6, scene.Renderer.FacesDrawn);
+            }
+            scene.Update();
+            Assert.Equal(0, scene.Renderer.FacesDrawn);
+        }
+        finally
+        {
+            ShadowAtlas.MaxResolutionChangesPerFrame = budget;
+        }
+    }
+
+    [Fact]
+    public void ShadowCache_CrowdedAtlas_ShrinksEveryLightBeforeDroppingAny()
+    {
+        int size = ShadowAtlas.RequestedSize;
+        try
+        {
+            ShadowAtlas.RequestedSize = 1024;
+            var scene = new ShadowScene();
+            var lamps = new List<PointLight>();
+            for (int i = 0; i < 12; i++)
+            {
+                float x = (i % 4 - 1.5f) * 3f, y = (i / 4 - 1f) * 3f;
+                lamps.Add(AddLamp(scene, new Float3(x, y, 9), range: 3f));
+            }
+
+            scene.Update();
+            Assert.Equal(12, scene.Renderer.LightsShadowed);
+            foreach (PointLight lamp in lamps)
+                Assert.InRange(scene.Renderer.GetTileSize(lamp), ShadowAtlas.MinTileSize, 256);
+        }
+        finally
+        {
+            ShadowAtlas.RequestedSize = size;
+        }
+    }
+
+    [Fact]
+    public void ShadowCache_SpotLight_DrawsOnceThenReuses()
+    {
+        var scene = new ShadowScene();
+        GameObject go = CreateGameObject("Spot");
+        go.Transform.Position = new Float3(0, 5, 10);
+        go.Transform.LocalEulerAngles = new Float3(90f, 0f, 0f);
+        SpotLight spot = go.AddComponent<SpotLight>();
+        spot.Range = 10f;
+        scene.Lights.Add(spot);
+        scene.AddCube(new Float3(0, 0, 10));
+
+        scene.Update();
+        Assert.Equal(1, scene.Renderer.FacesDrawn);
+        scene.Update();
+        Assert.Equal(0, scene.Renderer.FacesDrawn);
+        Assert.Equal(1, scene.Renderer.LightsShadowed);
+    }
+
+    private static DirectionalLight AddSun(ShadowScene scene, GameObject go)
+    {
+        go.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
+        DirectionalLight sun = go.AddComponent<DirectionalLight>();
+        sun.Cascades = DirectionalLight.CascadeCount.Two;
+        scene.Sun = sun;
+        return sun;
+    }
+
+    [Fact]
+    public void ShadowCache_Directional_CascadeRefreshesEveryCPlusOneFrames()
+    {
+        var scene = new ShadowScene();
+        DirectionalLight sun = AddSun(scene, CreateGameObject("Sun"));
+        sun.Cascades = DirectionalLight.CascadeCount.Four;
+        scene.AddCube(new Float3(0, 0, 4));
+
+        scene.Update();
+        Assert.Equal(4, scene.Renderer.CascadesDrawn);
+
+        // Nothing moves, they redraw anyway on their schedule: 12 frames give 12 + 6 + 4 + 3
+        int drawn = 0;
+        for (int i = 0; i < 12; i++)
+        {
+            scene.Update();
+            drawn += scene.Renderer.CascadesDrawn;
+        }
+        Assert.Equal(25, drawn);
+    }
+
+    [Fact]
+    public void ShadowCache_Directional_CameraMoving_RedrawsTheNearCascade()
+    {
+        var scene = new ShadowScene();
+        AddSun(scene, CreateGameObject("Sun"));
+        scene.AddCube(new Float3(0, 0, 4));
+        scene.Update();
+        scene.Update();
+
+        scene.CameraPosition = new Float3(3, 0, 0);
+        scene.Update();
+        Assert.True(scene.Renderer.CascadesDrawn >= 1);
+    }
+
+    [Fact]
+    public void ShadowCache_MovingCasterBesideStaticOnes_KeepsTheStaticLayer()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        MeshRenderable wall = scene.AddCube(new Float3(-1, 0, 10));
+        wall.IsStatic = true;
+        MeshRenderable crate = scene.AddCube(new Float3(1, 0, 10));
+
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.StaticFacesDrawn);
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+
+        scene.Update();
+        Assert.Equal(0, scene.Renderer.StaticFacesDrawn);
+        Assert.Equal(0, scene.Renderer.FacesDrawn);
+
+        // Only the moving caster changed, so the static layer is copied in rather than drawn again
+        scene.Move(crate, new Float3(1.5f, 0, 10));
+        scene.Update();
+        Assert.Equal(0, scene.Renderer.StaticFacesDrawn);
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+
+        wall.Set(scene.Cube, scene.Material, Float4x4.CreateTranslation(new Float3(-1.5f, 0, 10)), 0);
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.StaticFacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_OnlyStaticCasters_KeepsOneLayer()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        scene.AddCube(new Float3(-1, 0, 10)).IsStatic = true;
+        scene.AddCube(new Float3(1, 0, 10)).IsStatic = true;
+
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+        Assert.Equal(0, scene.Renderer.StaticFacesDrawn);
+    }
+
+    [Fact]
+    public void ShadowCache_VisualVersionChange_Redraws()
+    {
+        var scene = new ShadowScene();
+        AddLamp(scene, new Float3(0, 0, 10));
+        MeshRenderable cube = scene.AddCube(new Float3(1, 0, 10));
+        scene.Update();
+        scene.Update();
+
+        // What MeshRenderer.MarkVisuallyDirty hands its renderable
+        cube.VisualVersion++;
+        scene.Update();
+        Assert.Equal(6, scene.Renderer.FacesDrawn);
+    }
+
+    private SpotLight AddDownSpot(ShadowScene scene)
+    {
+        GameObject go = CreateGameObject("Spot");
+        go.Transform.Position = new Float3(0, 6, 10);
+        go.Transform.LocalEulerAngles = new Float3(90f, 0f, 0f);
+        SpotLight spot = go.AddComponent<SpotLight>();
+        spot.Range = 12f;
+        spot.SpotAngle = 60f;
+        scene.Lights.Add(spot);
+        return spot;
+    }
+
+    [Fact]
+    public void ShadowCache_OpaqueCastersOfOneMesh_DrawAsOneBatch()
+    {
+        var scene = new ShadowScene();
+        AddDownSpot(scene);
+        for (int i = 0; i < 10; i++)
+        {
+            // Every cube has its own material, which only matters for color, not for depth
+            var material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+            material.SetColor("_MainColor", new Color(i / 10f, 0.5f, 0.5f, 1f));
+            scene.Renderables.Add(new MeshRenderable(scene.Cube, material, Float4x4.CreateTranslation(new Float3(i - 4.5f, 0, 10)), 0));
+        }
+        scene.Renderables.Add(new MeshRenderable(Mesh.CreateSphere(0.5f, 8, 8), scene.Material, Float4x4.CreateTranslation(new Float3(0, 1, 11)), 0));
+
+        scene.Update();
+        Assert.Equal(2, scene.Renderer.BatchedDraws);
+        Assert.Equal(0, scene.Renderer.UnbatchedDraws);
+    }
+
+    [Fact]
+    public void ShadowCache_CutoutCasters_DrawWithTheirOwnMaterial()
+    {
+        var scene = new ShadowScene();
+        AddDownSpot(scene);
+        var cutout = new Material(Shader.LoadDefault(DefaultShader.StandardCutout));
+        for (int i = 0; i < 3; i++)
+            scene.Renderables.Add(new MeshRenderable(scene.Cube, cutout, Float4x4.CreateTranslation(new Float3(i - 1, 0, 10)), 0));
+
+        scene.Update();
+        Assert.Equal(0, scene.Renderer.BatchedDraws);
+        Assert.Equal(3, scene.Renderer.UnbatchedDraws);
+    }
+
+    [Fact]
+    public void ShadowCache_DepthPrecisionChange_RebuildsEveryShadow()
+    {
+        ShadowDepthPrecision precision = ShadowAtlas.DepthPrecision;
+        try
+        {
+            var scene = new ShadowScene();
+            AddLamp(scene, new Float3(0, 0, 10));
+            scene.AddCube(new Float3(1, 0, 10));
+            scene.Update();
+            scene.Update();
+            Assert.Equal(0, scene.Renderer.FacesDrawn);
+
+            ShadowAtlas.DepthPrecision = precision == ShadowDepthPrecision.Bits16 ? ShadowDepthPrecision.Bits24 : ShadowDepthPrecision.Bits16;
+            scene.Update();
+            Assert.Equal(6, scene.Renderer.FacesDrawn);
+        }
+        finally
+        {
+            ShadowAtlas.DepthPrecision = precision;
+        }
     }
 }
