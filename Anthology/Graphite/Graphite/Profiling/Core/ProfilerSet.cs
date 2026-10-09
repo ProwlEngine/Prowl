@@ -8,6 +8,8 @@ internal sealed class ProfilerSet
 {
     public static readonly ProfilerSet Empty = new([]);
 
+    private readonly IProfiler[] _all;
+
     public IGraphProfiler? Graph { get; }
 
     public IGpuStatsProfiler? GpuStats { get; }
@@ -16,41 +18,50 @@ internal sealed class ProfilerSet
 
     public ICommandStreamProfiler? CommandStream { get; }
 
+    public bool IsEmpty => _all.Length == 0;
+
     public ProfilerSet(IReadOnlyList<IProfiler> profilers)
     {
-        List<IProfiler> leaves = new();
+        List<IProfiler> distinct = new(profilers.Count);
         foreach (IProfiler profiler in profilers)
         {
-            if (profiler is CompositeProfiler composite)
-                leaves.AddRange(composite.Leaves);
-            else
-                leaves.Add(profiler);
+            if (!distinct.Contains(profiler))
+                distinct.Add(profiler);
         }
 
-        Graph = Resolve<IGraphProfiler>(leaves);
-        GpuStats = Resolve<IGpuStatsProfiler>(leaves);
-        Capture = First<ICaptureProfiler>(leaves);
-        CommandStream = First<ICommandStreamProfiler>(leaves);
+        _all = distinct.ToArray();
+        Graph = Resolve<IGraphProfiler>(distinct, sinks => new CompositeGraphProfiler(sinks));
+        GpuStats = Resolve<IGpuStatsProfiler>(distinct, sinks => new CompositeGpuStatsProfiler(sinks));
+        Capture = Resolve<ICaptureProfiler>(distinct, sinks => new CompositeCaptureProfiler(sinks));
+        CommandStream = Resolve<ICommandStreamProfiler>(distinct, sinks => new CompositeCommandStreamProfiler(sinks));
     }
 
-    private static T? Resolve<T>(List<IProfiler> leaves) where T : class, IProfiler
+    public void BeginExecution(ulong executionId)
     {
-        List<IProfiler> matches = leaves.FindAll(p => p is T);
+        foreach (IProfiler profiler in _all)
+            profiler.BeginExecution(executionId);
+    }
+
+    public void EndExecution()
+    {
+        foreach (IProfiler profiler in _all)
+            profiler.EndExecution();
+    }
+
+    private static T? Resolve<T>(List<IProfiler> profilers, System.Func<T[], T> composite) where T : class, IProfiler
+    {
+        List<T> matches = new();
+        foreach (IProfiler profiler in profilers)
+        {
+            if (profiler is T match)
+                matches.Add(match);
+        }
+
         return matches.Count switch
         {
             0 => null,
-            1 => (T)matches[0],
-            _ => (T)(IProfiler)new CompositeProfiler(matches.ToArray()),
+            1 => matches[0],
+            _ => composite(matches.ToArray()),
         };
-    }
-
-    private static T? First<T>(List<IProfiler> leaves) where T : class, IProfiler
-    {
-        foreach (IProfiler profiler in leaves)
-        {
-            if (profiler is T match)
-                return match;
-        }
-        return null;
     }
 }
