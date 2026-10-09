@@ -4,12 +4,13 @@ using Prowl.Graphite.Debugger.Trace;
 namespace Prowl.Graphite.Debugger;
 
 /// <summary>Everything needed to replay the executions of one recording. Reading data before it is done throws.</summary>
-public sealed class DeepRecording : RecordingHandle
+public sealed class DeepRecording : RecordingHandle, IDisposable
 {
     private readonly GraphicsDevice _device;
     private readonly Recording _recording;
     private DeepSink? _sink;
     private DeepResult? _result;
+    private bool _disposed;
 
     internal DeepRecording(DeepMode mode, GraphicsBackend backend, RecordedFeatures features, Recording recording, DeepResult result)
         : base(null, true)
@@ -71,8 +72,24 @@ public sealed class DeepRecording : RecordingHandle
         get
         {
             RequireDone();
-            return _result!;
+            ObjectDisposedException.ThrowIf(_result == null, this);
+            return _result;
         }
+    }
+
+    /// <summary>Frees the capture buffers of a recording that was never read. Waits for its executions first. Its data is gone afterwards.</summary>
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        if (_sink is not { } sink)
+            return;
+
+        _recording.Wait();
+        sink.Release();
+        _sink = null;
     }
 
     internal override bool PollReady() => _recording.IsDone;
@@ -81,7 +98,7 @@ public sealed class DeepRecording : RecordingHandle
 
     internal override void Finish()
     {
-        _result = _sink!.Build(_device);
+        _result = _sink?.Build(_device);
         _sink = null;
     }
 }
