@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Prowl.Echo;
+using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
 
 namespace Prowl.Graphite.Debugger.Serialization;
@@ -12,10 +13,11 @@ internal sealed class RecordFormat : ISerializationFormat
 {
     private static readonly ConcurrentDictionary<Type, Layout> Layouts = new();
 
-    private static readonly HashSet<Type> GraphiteTypes = [typeof(PassStats), typeof(GpuVertexStats), typeof(ResourceRange), typeof(CopyRegion)];
+    private static readonly HashSet<Type> ValueTypes =
+    [typeof(PassStats), typeof(GpuVertexStats), typeof(ResourceRange), typeof(CopyRegion), typeof(TraceResourceId), typeof(TraceVersion), typeof(BlobRef)];
 
     public bool CanHandle(Type type)
-        => GraphiteTypes.Contains(type) || (type.IsClass && !type.IsAbstract && type.Assembly == typeof(RecordFormat).Assembly && type.GetMethod("<Clone>$") != null);
+        => ValueTypes.Contains(type) || (type.IsClass && !type.IsAbstract && type.Assembly == typeof(RecordFormat).Assembly && type.GetMethod("<Clone>$") != null);
 
     public EchoObject Serialize(Type targetType, object value, SerializationContext context)
     {
