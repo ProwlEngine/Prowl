@@ -11,6 +11,7 @@
   <Folder Name="/Samples/" />
   <Folder Name="/Samples/Runtime/">
     <Project Path="Samples/Runtime/HelloProwl/HelloProwl.csproj" />
+    <Project Path="Samples/Runtime/ManyLights/ManyLights.csproj" />
     <Project Path="Samples/Runtime/ControllerShowcase/ControllerShowcase.csproj" />
     <Project Path="Samples/Runtime/ParticleShowcase/ParticleShowcase.csproj" />
     <Project Path="Samples/Runtime/PhysicsShowcase/PhysicsShowcase.csproj" />

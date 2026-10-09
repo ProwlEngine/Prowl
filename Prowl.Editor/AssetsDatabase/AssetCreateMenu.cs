@@ -70,6 +70,9 @@ public static class AssetCreateMenu
     [MenuItem("Assets/Create/Shader", priority: 1000, Icon = EditorIcons.WandMagicSparkles, Separator = true)]
     static void CreateShaderItem() => CreateShader(GetCurrentFolder());
 
+    [MenuItem("Assets/Create/Compute Shader", priority: 1001, Icon = EditorIcons.WandMagicSparkles)]
+    static void CreateComputeShaderItem() => CreateComputeShader(GetCurrentFolder());
+
     [MenuItem("Assets/Create/C# Script", priority: 1010, Icon = EditorIcons.FileCode, Separator = true)]
     static void CreateScriptItem() => NewScriptDialog.Open(GetCurrentFolder());
 
@@ -403,6 +406,37 @@ Pass ""ShadowCaster""
 ");
         EditorAssetBackend.Instance?.InvalidateFolderIndex();
         Debug.Log($"Created shader: {name}");
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+    }
+
+    /// <summary> Creates a new .compute file in the project at the given relative path, with one kernel to start from. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
+    public static string? CreateComputeShader(string relativeFolder)
+    {
+        string absFolder = GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        string name = FindUniqueName(absFolder, "New Compute Shader", ".compute");
+        File.WriteAllText(Path.Combine(absFolder, name), @"// Each kernel is a function, declared with its thread group size: #pragma kernel Name X Y Z
+// Find it with shader.FindKernel(""Main""), set buffers and textures per kernel, then Dispatch.
+// Storage blocks and images need no binding, the engine assigns them and binds by name.
+#pragma kernel Main 64
+
+layout(std430) buffer Values
+{
+    float values[];
+};
+
+uniform float _Scale;
+
+void Main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(values.length())) return;
+    values[i] *= _Scale;
+}
+");
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
+        Debug.Log($"Created compute shader: {name}");
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 

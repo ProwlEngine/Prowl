@@ -56,6 +56,16 @@ public class GraphicsBuffer : IDisposable
         Graphics.GL.BufferSubData(Target, (nint)offsetInBytes, sizeInBytes, data);
     }
 
+    /// <summary>Copies bytes back from the GPU. Render thread only.</summary>
+    internal unsafe void Read(uint offsetInBytes, uint sizeInBytes, void* destination)
+    {
+        Bind();
+        void* mapped = Graphics.GL.MapBufferRange(Target, (nint)offsetInBytes, sizeInBytes, MapBufferAccessMask.ReadBit);
+        if (mapped == null) return;
+        System.Buffer.MemoryCopy(mapped, destination, sizeInBytes, sizeInBytes);
+        Graphics.GL.UnmapBuffer(Target);
+    }
+
     public void Dispose()
     {
         if (IsDisposed)

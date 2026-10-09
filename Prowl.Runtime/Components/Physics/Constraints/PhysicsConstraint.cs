@@ -102,10 +102,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// <summary>Rebuilds the constraint against the bodies as they are now, after one of them was recreated.</summary>
     internal void Rebind() => RecreateConstraint();
 
-    /// <summary>
-    /// Re-applies the settings that depend on the world or the bodies rather than only on this component, such as a
-    /// force limit split across substeps, after the substep count or a body's centre of mass changed.
-    /// </summary>
+    /// <summary>Re-applies the settings that depend on the bodies rather than only on this component, after a body's centre of mass changed.</summary>
     internal virtual void Refresh() { }
 
     public override void OnValidate()
@@ -134,16 +131,6 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// Creates the constraint in the physics world.
     /// </summary>
     protected abstract void CreateConstraint(World world, RigidBody body1, RigidBody body2);
-
-    /// <summary>
-    /// The limit to hand Jitter for a motor that should push with at most <paramref name="force"/>. Jitter clamps each
-    /// substep's impulse using the whole step's time, so a motor could push that hard again on every substep.
-    /// </summary>
-    protected float PerSubstep(float force)
-    {
-        Resources.Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
-        return scene.IsValid() ? force / Maths.Max(1, scene.Physics.Substep) : force;
-    }
 
     /// <summary>Rejects a zero axis, which has no direction to act along.</summary>
     protected static Float3 RequireAxis(Float3 axis)

@@ -759,7 +759,7 @@ public static class EditorRegistries
     private static void RegisterBuiltInFileIcons()
     {
         RegisterFileIcons(EditorIcons.FileCode, ".cs", ".js", ".ts", ".py", ".lua");
-        RegisterFileIcons(EditorIcons.WandMagicSparkles, ".shader", ".glsl", ".hlsl", ".shadergraph");
+        RegisterFileIcons(EditorIcons.WandMagicSparkles, ".shader", ".compute", ".glsl", ".hlsl", ".shadergraph");
         RegisterFileIcons(EditorIcons.FileImage,
             ".png", ".apng",
             ".jpg", ".jpeg", ".jpe", ".jfif",

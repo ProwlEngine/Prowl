@@ -30,6 +30,9 @@ public abstract class EngineObject : IDisposable
     private int _disposed;
     public bool IsDisposed => _disposed != 0;
 
+    // The asset walk that last visited this object, so the walk needs no visited set for engine objects
+    [SerializeIgnore] internal int WalkStamp;
+
     public EngineObject() : this(null) { }
 
     public EngineObject(string? name = "New Object")

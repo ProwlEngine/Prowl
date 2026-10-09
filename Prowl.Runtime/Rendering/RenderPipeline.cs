@@ -88,7 +88,49 @@ public interface IRenderable
     /// </summary>
     public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => model.Invert();
 
+    /// <summary>
+    /// True when the shape changes without the model matrix, mesh, material or instance data changing, such as
+    /// skinning. Shadow maps holding it are redrawn every frame, others are reused while nothing changed.
+    /// </summary>
+    public bool DeformsEveryFrame => false;
+
+    /// <summary>
+    /// True for things that do not move, such as a renderer on a static GameObject. A point or spot light keeps the
+    /// shadow of its static casters in a layer of its own, so a moving caster only redraws itself on top.
+    /// </summary>
+    public bool IsStatic => false;
+
+    /// <summary>
+    /// Counts changes the renderer reports itself, such as a vertex shader that moves things by a value the engine
+    /// cannot see. Shadow maps holding the renderable redraw whenever it changes.
+    /// </summary>
+    public int VisualVersion => 0;
+
     public void GetCullingData(out bool isRenderable, out AABB bounds);
+}
+
+/// <summary>A run of indices in a mesh's index buffer.</summary>
+public readonly record struct IndexRange(uint Start, uint Count)
+{
+    /// <summary>Adds a range, extending the last one when the two touch so a run of neighbours stays one entry.</summary>
+    public static void Append(List<IndexRange> ranges, uint start, uint count)
+    {
+        if (count == 0) return;
+        int last = ranges.Count - 1;
+        if (last >= 0 && ranges[last].Start + ranges[last].Count == start)
+            ranges[last] = new IndexRange(ranges[last].Start, ranges[last].Count + count);
+        else
+            ranges.Add(new IndexRange(start, count));
+    }
+}
+
+/// <summary>
+/// Draws scattered parts of its mesh's index buffer in world space, with an identity model matrix. Neighbours on the
+/// same mesh, material and properties merge into a single draw.
+/// </summary>
+internal interface IIndexRangeRenderable : IRenderable
+{
+    void AppendRanges(List<IndexRange> ranges);
 }
 
 public enum LightType
@@ -122,20 +164,8 @@ public struct ForwardLightData
     public float ShadowStrength;
     public float ShadowQuality;   // 0 = Hard, 1 = Soft
 
-    // Directional cascade data (only for LightType.Directional)
-    public int CascadeCount;
+    // Directional only: how far along the view its shadows reach
     public float ShadowDistance;
-    public Float4x4[] CascadeShadowMatrices; // [4]
-    public Float4[] CascadeAtlasParams;      // [4]
-    public Float4[] CascadeSpheres;          // [4] xyz = center, w = radius
-
-    // Point shadow data (6 faces)
-    public Float4x4[] PointShadowMatrices; // [6]
-    public Float4[] PointShadowFaceParams; // [6]
-
-    // Spot shadow data (1 matrix)
-    public Float4x4 SpotShadowMatrix;
-    public Float4 SpotShadowAtlasParams;
 }
 
 public interface IRenderableLight
@@ -344,10 +374,19 @@ public abstract class RenderPipeline : EngineObject
     {
         // Sized from the last collect, so a big scene does not regrow its list from empty every frame.
         var renderables = new List<IRenderable>(s_lastCollectCount);
-        var lights = new List<IRenderableLight>();
+        List<IRenderableLight> lights = s_lightLists.Count > 0 ? s_lightLists.Pop() : new();
         scene.CollectRenderables(camera, renderables, lights);
         s_lastCollectCount = renderables.Count;
         return (renderables, lights);
+    }
+
+    private static readonly Stack<List<IRenderableLight>> s_lightLists = new();
+
+    /// <summary>Hands a light list from <see cref="CollectRenderables"/> back once the render is done with it.</summary>
+    public static void ReturnLights(List<IRenderableLight> lights)
+    {
+        lights.Clear();
+        s_lightLists.Push(lights);
     }
 
     public virtual void Render(Camera camera, in RenderingData data) => EndMotionTracking();
@@ -471,6 +510,12 @@ public abstract class RenderPipeline : EngineObject
     /// on list identity + count: the first cull of the frame builds it, later culls reuse it. Renderables
     /// don't move between collection and drawing, so caching for the frame is safe.
     /// </summary>
+    /// <summary>World bounds of the list last passed to <see cref="EnsureWorldBounds"/>, by index.</summary>
+    internal ReadOnlySpan<AABB> WorldBounds => _worldBounds;
+
+    /// <summary>Whether each renderable of the last list has bounds at all.</summary>
+    internal ReadOnlySpan<bool> HasWorldBounds => _boundsRenderable;
+
     public void EnsureWorldBounds(IReadOnlyList<IRenderable> renderables)
     {
         int count = renderables.Count;
@@ -619,6 +664,7 @@ public abstract class RenderPipeline : EngineObject
         public Mesh Mesh;              // Shared mesh for all objects in this batch
         public int PassIndex;          // Shader pass index
         public ulong MaterialHash;     // Hash of material uniforms (for sorting/grouping)
+        public int ShaderId;           // Batches of one shader sit together, so its program and state are bound once
         public int SortKey;            // Sort order based on tag value + offset
         public List<int> RenderableIndices;  // Indices of objects in this batch
         public bool IsInstanced;       // True if this batch uses GPU instancing
@@ -629,6 +675,18 @@ public abstract class RenderPipeline : EngineObject
     private static readonly Comparison<RenderBatch> s_batchOrder = (a, b) =>
     {
         int c = a.SortKey.CompareTo(b.SortKey);
+        return c != 0 ? c : a.Order.CompareTo(b.Order);
+    };
+
+    // Also groups by shader then material, so the executor keeps the applied material for every batch after the first.
+    // Equal shader and material leave creation order, which keeps a multi pass material's passes in sequence.
+    private static readonly Comparison<RenderBatch> s_batchOrderByState = (a, b) =>
+    {
+        int c = a.SortKey.CompareTo(b.SortKey);
+        if (c != 0) return c;
+        c = a.ShaderId.CompareTo(b.ShaderId);
+        if (c != 0) return c;
+        c = a.MaterialHash.CompareTo(b.MaterialHash);
         return c != 0 ? c : a.Order.CompareTo(b.Order);
     };
 
@@ -724,6 +782,7 @@ public abstract class RenderPipeline : EngineObject
                         Mesh = mesh,
                         PassIndex = instancedPassIndex,
                         MaterialHash = instancedMaterialHash,
+                        ShaderId = material.Shader.InstanceID,
                         SortKey = sortKey,
                         IsInstanced = true,
                         InstancedRenderableIndex = renderIndex,
@@ -782,6 +841,7 @@ public abstract class RenderPipeline : EngineObject
                         Mesh = mesh,
                         PassIndex = passIndex,
                         MaterialHash = materialHash,
+                        ShaderId = material.Shader.InstanceID,
                         SortKey = sortKey,
                         RenderableIndices = indices,
                         Order = batches.Count
@@ -797,7 +857,11 @@ public abstract class RenderPipeline : EngineObject
         }
 
         // Sort batches by their sort key (respects tag offsets like "Transparent+1000")
-        if (hasSortOffsets)
+        if (!preserveOrder)
+        {
+            batches.Sort(s_batchOrderByState);
+        }
+        else if (hasSortOffsets)
         {
             batches.Sort(s_batchOrder);
         }
@@ -806,7 +870,12 @@ public abstract class RenderPipeline : EngineObject
             RenderStats.AddBatch();
 
         // ========== PHASE 2: Draw Batches ==========
-        // For each batch, bind state once then draw all objects in that batch
+        // For each batch, bind state once then draw all objects in that batch. Consecutive batches with the same
+        // program, pass and material skip binding them again, since a fresh material snapshot would make the
+        // executor apply every material property again
+        GraphicsProgram? boundVariant = null;
+        ShaderPass? boundPass = null;
+        ulong boundMaterialHash = 0;
         foreach (RenderBatch batch in batches)
         {
             // Handle instanced batches separately
@@ -814,6 +883,7 @@ public abstract class RenderPipeline : EngineObject
             {
                 IRenderable instancedRenderable = renderables[batch.InstancedRenderableIndex];
                 DrawInstancedRenderablePass(cmd, instancedRenderable, batch.Material, batch.Mesh, batch.PassIndex, viewer);
+                boundVariant = null;
                 continue;
             }
 
@@ -835,7 +905,7 @@ public abstract class RenderPipeline : EngineObject
             material.SetKeyword("BLENDSHAPES", mesh.HasBlendShapes);
 
             ShaderPass pass = material.Shader.GetPass(passIndex);
-            if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variantNullable) || variantNullable == null)
+            if (!pass.TryGetVariantProgram(material, out GraphicsProgram? variantNullable) || variantNullable == null)
                 continue;
 
             GraphicsProgram variant = variantNullable;
@@ -883,13 +953,19 @@ public abstract class RenderPipeline : EngineObject
             // Bind state for the batch. Globals UBO + material uniforms (with shader
             // defaults filled in) apply once; per-object only sets instance uniforms
             // and transforms.
-            cmd.SetShader(variant);
-            cmd.SetRasterState(pass.State);
+            if (grabRT != null || !ReferenceEquals(variant, boundVariant) || !ReferenceEquals(pass, boundPass) || batch.MaterialHash != boundMaterialHash)
+            {
+                cmd.SetShader(variant);
+                cmd.SetRasterState(pass.State);
 
-            // GlobalUniforms UBO is bound automatically by the executor's PrepareDraw
-            // for every draw no explicit cmd.SetBuffer needed here.
+                // GlobalUniforms UBO is bound automatically by the executor's PrepareDraw
+                // for every draw no explicit cmd.SetBuffer needed here.
 
-            cmd.SetMaterialProperties(material);
+                cmd.SetMaterialProperties(material);
+                boundVariant = grabRT == null ? variant : null;
+                boundPass = pass;
+                boundMaterialHash = batch.MaterialHash;
+            }
 
             // Everything that only depends on the mesh is read and stored once for the whole batch.
             int vao = cmd.ObjectIndex(mesh.VertexArrayObject);
@@ -902,9 +978,15 @@ public abstract class RenderPipeline : EngineObject
             uint meshIndexCount = (uint)mesh.IndexCount;
 
             // ========== PHASE 3: Draw Objects in Batch ==========
-            foreach (int renderIndex in batch.RenderableIndices)
+            List<int> members = batch.RenderableIndices;
+            for (int m = 0; m < members.Count; m++)
             {
-                IRenderable renderable = renderables[renderIndex];
+                IRenderable renderable = renderables[members[m]];
+                if (renderable is IIndexRangeRenderable)
+                {
+                    m = DrawIndexRanges(cmd, renderables, members, m, viewer, vao, meshTopology, i32, objectToWorld, worldToObject, prevObjectToWorld);
+                    continue;
+                }
 
                 renderable.GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
 
@@ -950,6 +1032,36 @@ public abstract class RenderPipeline : EngineObject
                 grabRT = null;
             }
         }
+    }
+
+    private readonly List<IndexRange> _ranges = new();
+
+    // Draws the run of index range renderables from members[first] that share its properties as one draw, and
+    // returns the position of the last one drawn
+    private int DrawIndexRanges(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, List<int> members, int first, ViewerData viewer,
+        int vao, Topology topology, bool i32, int objectToWorld, int worldToObject, int prevObjectToWorld)
+    {
+        renderables[members[first]].GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 _, out InstanceData[]? _);
+
+        _ranges.Clear();
+        int last = first;
+        for (int m = first; m < members.Count; m++)
+        {
+            if (renderables[members[m]] is not IIndexRangeRenderable ranged) break;
+            ranged.GetRenderingData(viewer, out PropertyState next, out Mesh _, out Float4x4 _, out InstanceData[]? _);
+            if (!ReferenceEquals(next, properties)) break;
+            ranged.AppendRanges(_ranges);
+            last = m;
+        }
+        if (_ranges.Count == 0) return last;
+
+        Float4x4 identity = Float4x4.Identity;
+        cmd.SetInstanceProperties(properties);
+        cmd.SetMatrix(objectToWorld, in identity);
+        if (worldToObject >= 0) cmd.SetMatrix(worldToObject, in identity);
+        if (prevObjectToWorld >= 0) cmd.SetMatrix(prevObjectToWorld, in identity);
+        cmd.DrawIndexedRanges(vao, topology, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_ranges), i32);
+        return last;
     }
 
     /// <summary>
@@ -1004,7 +1116,7 @@ public abstract class RenderPipeline : EngineObject
         material.SetKeyword("GPU_INSTANCING", true);
 
         Shaders.ShaderPass pass = material.Shader.GetPass(passIndex);
-        if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variantNullable) || variantNullable == null)
+        if (!pass.TryGetVariantProgram(material, out GraphicsProgram? variantNullable) || variantNullable == null)
         {
             material.SetKeyword("GPU_INSTANCING", false);
             return;

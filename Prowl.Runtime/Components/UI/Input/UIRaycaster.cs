@@ -37,10 +37,11 @@ internal static class UIRaycaster
         Float2 bestDesign = Float2.Zero;
         long bestKey = long.MinValue;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        List<GameCanvas> canvases = scene.Canvases;
+        for (int c = 0; c < canvases.Count; c++)
         {
-            GameCanvas? canvas = go.GetComponent<GameCanvas>();
-            if (canvas is null || !canvas.EnabledInHierarchy) continue;
+            GameCanvas canvas = canvases[c];
+            if (!canvas.EnabledInHierarchy) continue;
 
             // Screen-space canvases only in this pass - World canvases are cast against a camera ray
             // in TryPickWorld below, and only when nothing screen-space is hit (overlay UI composites
@@ -114,10 +115,11 @@ internal static class UIRaycaster
     {
         bestT = float.MaxValue;
 
-        foreach (GameObject go in scene.ActiveObjects)
+        List<GameCanvas> canvases = scene.Canvases;
+        for (int c = 0; c < canvases.Count; c++)
         {
-            GameCanvas? canvas = go.GetComponent<GameCanvas>();
-            if (canvas is null || !canvas.EnabledInHierarchy) continue;
+            GameCanvas canvas = canvases[c];
+            if (!canvas.EnabledInHierarchy) continue;
             if (canvas.RenderMode != RenderMode.WorldSpace) continue;
 
             canvas.RebuildIfDirty();

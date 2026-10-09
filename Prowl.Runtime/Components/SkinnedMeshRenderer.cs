@@ -65,9 +65,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
     // O(bones + depth) world-matrix builds instead of O(bones * depth).
     [System.NonSerialized] private readonly Dictionary<Transform, Float4x4> _worldMemo = new();
 
-    // Bone matrix texture each bone is 4 RGBA32F texels (one per matrix row)
-    [System.NonSerialized] private Texture2D? _boneTexture;
-    [System.NonSerialized] private int _boneTextureSize; // number of bones the texture was allocated for
+    // Skin matrices for the vertex shader, four columns a bone
+    [System.NonSerialized] private ShaderDataTable? _boneTable;
 
     /// <summary>
     /// Per-blend-shape weights (0-100). Length tracks the mesh's blend-shape count.
@@ -76,11 +75,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
     [SerializeField, HideInInspector]
     private float[]? _blendShapeWeights;
 
-    // Active-morph-layer weight texture (rebuilt per frame from current weights): one texel per
-    // active layer = (layerIndex, weight, 0, 0). Reused across frames.
-    [System.NonSerialized] private Texture2D? _morphWeightTexture;
-    [System.NonSerialized] private int _morphWeightCapacity;
-    [System.NonSerialized] private Float4[]? _morphWeightData; // reused upload buffer, sized to capacity
+    // Active morph layers, rebuilt each frame from the current weights: (layerIndex, weight, 0, 0) each
+    [System.NonSerialized] private ShaderDataTable? _morphWeightTable;
     [System.NonSerialized] private readonly List<Float4> _activeMorphLayers = new();
 
     /// <summary>Number of blend shapes on the shared mesh (0 if none).</summary>
@@ -235,7 +231,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
     }
 
     /// <summary>
-    /// Recompute the skinning matrices, world-space bounds and bone texture for the current pose.
+    /// Recompute the skinning matrices, world-space bounds and bone table for the current pose.
     /// Called only when the skeleton has actually moved (see the version check in OnRenderCollect).
     /// Each bone's world matrix is built once via <see cref="WorldMatrixOf"/> (memoized so shared
     /// ancestors aren't re-walked) and reused for both the skin matrix and the bounds corner.
@@ -281,7 +277,9 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
             _cachedBounds = mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
         }
 
-        UploadBoneTexture(_skinMatrices!);
+        _boneTable ??= new ShaderDataTable("ProwlBones", "_BoneTex", GraphicsFeature.VertexStorageBuffers);
+        _boneTable.EnsureCapacity(_skinMatrices!.Length * 4);
+        _boneTable.Write(0, MemoryMarshal.Cast<Float4x4, Float4>(_skinMatrices));
     }
 
     /// <summary>
@@ -302,53 +300,10 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
 
     public override void OnDisable()
     {
-        if (_boneTexture.IsValid()) _boneTexture.Dispose();
-        _boneTexture = null;
-        _boneTextureSize = 0;
-
-        if (_morphWeightTexture.IsValid()) _morphWeightTexture.Dispose();
-        _morphWeightTexture = null;
-        _morphWeightCapacity = 0;
-        _morphWeightData = null;
-    }
-
-    /// <summary>
-    /// Ensures the bone matrix texture exists and is large enough for the given bone count.
-    /// Each bone occupies 4 texels (one per matrix row) in a single-row RGBA32F texture.
-    /// </summary>
-    private void EnsureBoneTexture(int boneCount)
-    {
-        if (_boneTexture != null && _boneTextureSize >= boneCount)
-            return;
-
-        if (_boneTexture.IsValid()) _boneTexture.Dispose();
-
-        // Width = boneCount * 4 (4 texels per mat4), Height = 1
-        uint width = (uint)(boneCount * 4);
-        _boneTexture = new Texture2D(width, 1, false, TextureImageFormat.Float4);
-        _boneTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-        Graphics.SetWrapS(_boneTexture.Handle, TextureWrap.ClampToEdge);
-        Graphics.SetWrapT(_boneTexture.Handle, TextureWrap.ClampToEdge);
-        _boneTextureSize = boneCount;
-    }
-
-    /// <summary>
-    /// Uploads bone matrices to the texture. Each mat4 is stored as 4 consecutive RGBA32F texels.
-    /// Layout: texel[bone*4+0] = row0, texel[bone*4+1] = row1, texel[bone*4+2] = row2, texel[bone*4+3] = row3
-    /// </summary>
-    private unsafe void UploadBoneTexture(Float4x4[] matrices)
-    {
-        int boneCount = matrices.Length;
-        EnsureBoneTexture(boneCount);
-
-        // Float4x4 is column-major (c0,c1,c2,c3). We store columns as texels.
-        // Shader reconstructs: mat4(col0, col1, col2, col3)
-        // Each Float4x4 is 4 Float4 columns laid out contiguously in memory (c0, c1, c2, c3)
-        // So we can upload the whole array directly 4 texels per matrix, boneCount*4 texels total
-        fixed (Float4x4* ptr = matrices)
-        {
-            _boneTexture!.SetDataPtr(ptr, 0, 0, (uint)(boneCount * 4), 1);
-        }
+        _boneTable?.Dispose();
+        _boneTable = null;
+        _morphWeightTable?.Dispose();
+        _morphWeightTable = null;
     }
 
     // Set by PrepareBlendShapes each frame; consumed by ApplyBlendShapeProps per submesh.
@@ -356,8 +311,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
     [System.NonSerialized] private int _morphActiveCount;
 
     /// <summary>
-    /// Once per frame: builds the mesh's static delta textures (first use), resolves the current
-    /// weights into active morph layers, and uploads the per-renderer weight texture. Cheap when idle.
+    /// Once per frame: builds the mesh's static deltas (first use), resolves the current weights into
+    /// active morph layers, and writes them to the per-renderer weight table. Cheap when idle.
     /// </summary>
     private void PrepareBlendShapes(Mesh mesh)
     {
@@ -367,7 +322,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
         int shapeCount = mesh.BlendShapeCount;
         EnsureWeightsArray(shapeCount);
 
-        // Skip all morph work (including building the delta textures) while every weight is zero,
+        // Skip all morph work (including building the deltas) while every weight is zero,
         // so un-morphed meshes cost no VRAM or per-frame upload. The shader loop is a no-op then.
         bool anyActive = false;
         for (int s = 0; s < shapeCount; s++)
@@ -375,9 +330,9 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
         if (!anyActive)
             return;
 
-        mesh.EnsureMorphTextures();
-        if (mesh.MorphPositionTexture == null)
-            return; // Morph textures unavailable (e.g. data too large) shader loop stays a no-op.
+        mesh.EnsureMorphDeltas();
+        if (mesh.MorphDeltas == null)
+            return; // Morph deltas unavailable (e.g. data too large) shader loop stays a no-op.
 
         // Resolve weights -> active (layer, weight) pairs, interpolating between frames by weight.
         _activeMorphLayers.Clear();
@@ -419,59 +374,31 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
         }
 
         _morphActiveCount = _activeMorphLayers.Count;
-        UploadMorphWeightTexture();
+        _morphWeightTable ??= new ShaderDataTable("ProwlMorphWeights", "_MorphWeightTex", GraphicsFeature.VertexStorageBuffers);
+        _morphWeightTable.EnsureCapacity(Math.Max(1, _morphActiveCount));
+        _morphWeightTable.Write(0, CollectionsMarshal.AsSpan(_activeMorphLayers));
         _morphReady = true;
     }
 
     /// <summary>Binds the morph uniforms onto a submesh's <see cref="PropertyState"/>. Cheap dictionary writes.</summary>
     private void ApplyBlendShapeProps(Mesh mesh, PropertyState props)
     {
-        if (!_morphReady)
+        if (!_morphReady || !mesh.MorphDeltas!.Bind(props) || !_morphWeightTable!.Bind(props))
         {
             props.SetInt("morphActiveCount", 0);
             return;
         }
 
-        Texture2D posTex = mesh.MorphPositionTexture!;
-        Texture2D? normalTex = mesh.MorphNormalTexture;
-        Texture2D? tangentTex = mesh.MorphTangentTexture;
-        props.SetTexture("morphPositionTexture", posTex);
-        props.SetTexture("morphNormalTexture", normalTex.IsValid() ? normalTex! : posTex);
-        props.SetTexture("morphTangentTexture", tangentTex.IsValid() ? tangentTex! : posTex);
-        props.SetTexture("morphWeightTexture", _morphWeightTexture!);
         props.SetInt("morphActiveCount", _morphActiveCount);
-        props.SetInt("morphTexWidth", mesh.MorphTexWidth);
         props.SetInt("morphVertexCount", mesh.VertexCount);
-        props.SetInt("morphHasNormals", mesh.MorphHasNormals ? 1 : 0);
-        props.SetInt("morphHasTangents", mesh.MorphHasTangents ? 1 : 0);
+        props.SetInt("morphNormalBase", mesh.MorphNormalBase);
+        props.SetInt("morphTangentBase", mesh.MorphTangentBase);
     }
 
     private void AddMorphLayer(int layer, float weight)
     {
         if (MathF.Abs(weight) < 1e-5f) return;
         _activeMorphLayers.Add(new Float4(layer, weight, 0f, 0f));
-    }
-
-    private void UploadMorphWeightTexture()
-    {
-        int count = Math.Max(1, _activeMorphLayers.Count); // keep a valid 1-wide texture even when idle
-        if (_morphWeightTexture == null || _morphWeightCapacity < count)
-        {
-            if (_morphWeightTexture.IsValid()) _morphWeightTexture.Dispose();
-            _morphWeightTexture = new Texture2D((uint)count, 1, false, TextureImageFormat.Float4);
-            _morphWeightTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-            Graphics.SetWrapS(_morphWeightTexture.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(_morphWeightTexture.Handle, TextureWrap.ClampToEdge);
-            _morphWeightCapacity = count;
-            _morphWeightData = new Float4[count];
-        }
-
-        // Pack into the reusable buffer (sized to the texture). The tail beyond the active count is
-        // never sampled (the shader loops only over morphActiveCount), so stale tail data is fine.
-        var data = _morphWeightData!;
-        for (int i = 0; i < _activeMorphLayers.Count; i++)
-            data[i] = _activeMorphLayers[i];
-        _morphWeightTexture!.SetData<Float4>(data.AsMemory(0, _morphWeightCapacity), 0, 0, (uint)_morphWeightCapacity, 1);
     }
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
@@ -493,14 +420,14 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
             // Dirty check: sum of monotonic Transform.Versions across every bone and the renderer's own
             // ancestor chain (so moving a shared character root, which bumps none of the bones, still
             // refreshes the world-space bounds used for culling). Unchanged sum => static pose, so the
-            // cached skin matrices, bone texture and bounds from last frame are still valid.
+            // cached skin matrices, bone table and bounds from last frame are still valid.
             ulong version = 0;
             for (Transform? t = Transform; t != null; t = t.Parent)
                 version += t.Version;
             for (int i = 0; i < _bones.Length; i++)
                 if (_bones[i] != null) version += _bones[i]!.Version;
 
-            if (version != _lastSkeletonVersion || _boneTexture == null)
+            if (version != _lastSkeletonVersion || _boneTable == null)
             {
                 _lastSkeletonVersion = version;
                 RecomputeSkinning(mesh);
@@ -529,11 +456,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
             props.SetColor("_MainColor", MainColor);
             Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
             LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
-            if (_boneTexture != null)
-            {
-                props.SetTexture("boneMatrixTexture", _boneTexture);
+            if (_boneTable != null && _boneTable.Bind(props))
                 props.SetInt("boneCount", _skinMatrices?.Length ?? 0);
-            }
 
             if (mesh.HasBlendShapes)
                 ApplyBlendShapeProps(mesh, props);

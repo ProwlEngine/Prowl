@@ -87,6 +87,24 @@ public sealed class RenderTexture : Asset, ISerializable
         return (long)_width * _height * bytesPerPixel;
     }
 
+    private bool _enableRandomWrite;
+
+    /// <summary>
+    /// Lets compute kernels write the color textures through an image, as <c>image2D</c> uniforms. Changing it releases
+    /// the textures, which come back with the new setting on next use.
+    /// </summary>
+    public bool EnableRandomWrite
+    {
+        get { EnsureLoaded(); return _enableRandomWrite; }
+        set
+        {
+            EnsureLoaded();
+            if (_enableRandomWrite == value) return;
+            _enableRandomWrite = value;
+            ReleaseResources();
+        }
+    }
+
     /// <summary>Allocates the framebuffer and its attachments if they aren't already.</summary>
     private void EnsureCreated()
     {
@@ -98,7 +116,7 @@ public sealed class RenderTexture : Asset, ISerializable
         _internalTextures = new Texture2D[numTextures];
         for (int i = 0; i < numTextures; i++)
         {
-            _internalTextures[i] = new Texture2D((uint)_width, (uint)_height, false, _textureFormats[i]);
+            _internalTextures[i] = new Texture2D((uint)_width, (uint)_height, false, _textureFormats[i], _enableRandomWrite);
             _internalTextures[i].SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _internalTextures[i].SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
             attachments[i] = new GraphicsFrameBuffer.Attachment { Texture = _internalTextures[i].Handle, IsDepth = false };
@@ -144,6 +162,7 @@ public sealed class RenderTexture : Asset, ISerializable
         foreach (TextureImageFormat format in _textureFormats)
             textureFormatsTag.ListAdd(new((byte)format));
         compoundTag.Add("TextureFormats", textureFormatsTag);
+        compoundTag.Add("EnableRandomWrite", new((byte)(_enableRandomWrite ? 1 : 0)));
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
@@ -164,6 +183,7 @@ public sealed class RenderTexture : Asset, ISerializable
             formats[i] = (TextureImageFormat)formatsTag![i].ByteValue;
 
         Configure(width, height, hasDepth, formats);
+        _enableRandomWrite = (value.Get("EnableRandomWrite")?.ByteValue ?? 0) == 1;
         DeserializeHeader(value);
     }
 

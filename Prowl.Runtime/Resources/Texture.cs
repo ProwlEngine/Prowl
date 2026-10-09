@@ -24,9 +24,13 @@ public abstract class Texture : Asset
     /// <summary>The handle if one exists, without loading or creating anything. For the render thread's bindings.</summary>
     internal GraphicsTexture? HandleIfLoaded => IsLoaded ? _handle : null;
 
+    /// <summary>Whether compute kernels may write this texture through an image. Set before the texture is first used.</summary>
+    private protected bool RandomWrite;
+    private protected int RandomWriteLevels = 1;
+
     private GraphicsTexture CreateHandle()
     {
-        GraphicsTexture handle = Graphics.CreateTexture(_type, _imageFormat);
+        GraphicsTexture handle = Graphics.CreateTexture(_type, _imageFormat, RandomWrite, RandomWriteLevels);
         Graphics.SetWrapS(handle, _wrapMode);
         Graphics.SetWrapT(handle, _wrapMode);
         Graphics.SetTextureFilters(handle, _minFilter, _magFilter);

@@ -81,7 +81,7 @@ public class LinearMotorConstraint : PhysicsConstraint
         {
             if (maximumForce == value) return;
             maximumForce = value;
-            if (IsLive(constraint)) constraint.MaximumForce = PerSubstep(value);
+            if (IsLive(constraint)) constraint.MaximumForce = value;
             WakeBodies();
         }
     }
@@ -105,13 +105,9 @@ public class LinearMotorConstraint : PhysicsConstraint
 
         // Jitter's motor drives the connected side relative to this body, so positive is negated to move this body along +axis.
         constraint.TargetVelocity = -targetVelocity;
-        constraint.MaximumForce = PerSubstep(maximumForce);
+        constraint.MaximumForce = maximumForce;
     }
 
-    internal override void Refresh()
-    {
-        if (IsLive(constraint)) constraint.MaximumForce = PerSubstep(maximumForce);
-    }
 
     protected override void DestroyConstraint()
     {

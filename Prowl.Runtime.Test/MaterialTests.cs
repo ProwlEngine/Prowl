@@ -57,4 +57,30 @@ public class MaterialTests
 
         Assert.NotEqual(before, material.GetStateHash());
     }
+
+    [Fact]
+    public void KeywordHash_TracksKeywordChanges_AndMatchesAFreshMaterial()
+    {
+        var material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        ulong none = material.KeywordHash;
+
+        material.SetKeyword("HAS_NORMALS", true);
+        material.SetKeyword("GPU_INSTANCING", true);
+        ulong both = material.KeywordHash;
+        Assert.NotEqual(none, both);
+
+        // The variant cache keys on this, so it must not depend on the order keywords were turned on
+        var other = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        other.SetKeyword("GPU_INSTANCING", true);
+        other.SetKeyword("HAS_NORMALS", true);
+        Assert.Equal(both, other.KeywordHash);
+
+        material.SetKeyword("GPU_INSTANCING", false);
+        material.SetKeyword("HAS_NORMALS", false);
+        Assert.Equal(none, material.KeywordHash);
+
+        material.SetKeyword("HAS_NORMALS", true);
+        var copy = new Material(material);
+        Assert.Equal(material.KeywordHash, copy.KeywordHash);
+    }
 }

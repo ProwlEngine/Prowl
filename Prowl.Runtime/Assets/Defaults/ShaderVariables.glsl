@@ -54,11 +54,11 @@ uniform int _ObjectID;
 #define PROWL_MATRIX_M prowl_ObjectToWorld
 #define PROWL_MATRIX_M_PREVIOUS prowl_PrevObjectToWorld
 
-// Derived matrices
-mat4 prowl_MatMV = prowl_MatV * prowl_ObjectToWorld;
-mat4 prowl_MatMVP = prowl_MatVP * prowl_ObjectToWorld;
-mat4 prowl_MatTMV = transpose(prowl_MatV * prowl_ObjectToWorld);
-mat4 prowl_MatITMV = transpose(prowl_WorldToObject * prowl_MatIV);
+// Derived matrices. Macros, since GLSL ES only allows constant initializers on globals
+#define prowl_MatMV (prowl_MatV * prowl_ObjectToWorld)
+#define prowl_MatMVP (prowl_MatVP * prowl_ObjectToWorld)
+#define prowl_MatTMV transpose(prowl_MatV * prowl_ObjectToWorld)
+#define prowl_MatITMV transpose(prowl_WorldToObject * prowl_MatIV)
 
 #define PROWL_MATRIX_MV prowl_MatMV
 #define PROWL_MATRIX_MVP prowl_MatMVP

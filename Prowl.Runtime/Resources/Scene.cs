@@ -355,6 +355,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>The scene's dispatch point for per-frame component callbacks and physics events.</summary>
     internal SceneDispatcher Dispatcher => _dispatcher;
 
+    /// <summary>The enabled canvases in this scene, each added by its own OnEnable and removed by its OnDisable.</summary>
+    [SerializeIgnore, NotHeld]
+    internal readonly List<GameCanvas> Canvases = new();
+
+    /// <summary>This scene's reflection probes, and the sky probe surfaces outside them reflect.</summary>
+    [SerializeIgnore, NotHeld]
+    internal readonly ReflectionProbeSystem ReflectionProbes = new();
+
     /// <summary>
     /// Called once after a hot reload has migrated the scene graph in place: each GameObject drops removed
     /// components and rebuilds its lookup, then the dispatcher re-derives membership and ordering from the new
@@ -370,6 +378,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Re-registering from the live scene rather than from what was registered before is what lets a
         // component whose new type gained its first per-frame callback start dispatching at all.
         _dispatcher.Reset();
+        Canvases.Clear();
 
         foreach (GameObject go in _allObj)
         {
@@ -380,6 +389,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 if (comp is null || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
                 comp._countedCollisionListener = false;
                 _dispatcher.Register(comp);
+                if (comp is GameCanvas canvas) canvas.RegisterIn(this);
             }
         }
     }
@@ -402,7 +412,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public float End = 100;
         public float Density = 0.01f;
 
-        /// <summary>Colors the fog with the procedural sky in each view direction instead of Color.</summary>
+        /// <summary>Colors the fog with the sky drawn in each view direction, taken from the sky probe, instead of Color.</summary>
         public bool UseSky = false;
 
         /// <summary>Keeps the glow around the sun in sky colored fog.</summary>
@@ -544,6 +554,25 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     public LightmapBakeSettings LightmapBake = new();
+
+    [SerializeField, NotHeld]
+    private StaticGeometry? _staticGeometry = new();
+
+    /// <summary>This scene's static renderers merged for drawing, see <see cref="UpdateStaticGeometry"/>.</summary>
+    public StaticGeometry StaticGeometry { get { EnsureNotDisposed(); return _staticGeometry ??= new(); } }
+
+    /// <summary>
+    /// Merges every static MeshRenderer into world space geometry that draws in a few calls, replacing what was
+    /// merged before. The editor does this when a scene is saved, and the result is stored with it. Call it after
+    /// creating or changing static objects at runtime. A static renderer that changes afterwards drops out of the
+    /// merged geometry and draws on its own until this is called again.
+    /// </summary>
+    public void UpdateStaticGeometry()
+    {
+        EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        StaticGeometry.Build(this);
+    }
 
     [NonSerialized] private LightProbeVolume? _probeVolume;
 
@@ -964,6 +993,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out Scene? scene) || ReferenceEquals(scene, this));
 
+        _staticGeometry?.Clear();
+        ReflectionProbes.Dispose();
+
         // Clear the physics world
         _physics.Clear();
 
@@ -1074,6 +1106,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (IsDisposed) return;
         using var session = MainThreadContext.EnterSession();
+        StaticGeometry.Collect(this, renderables);
         _dispatcher.RunRenderCollect(camera, renderables, lights);
     }
 

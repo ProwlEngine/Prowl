@@ -374,14 +374,22 @@ void ProwlFragment()
     vec3 diffuseColor = baseColor * (1.0 - metallic);
     vec3 ambientDiffuse = ambientLight * diffuseColor;
 
-    // Specular ambient approximation (critical for metals which have no diffuse).
-    // Without IBL/environment maps we approximate indirect specular using the ambient
-    // light, Fresnel at the view angle, and a roughness-dependent falloff.
+    // Specular ambient from the reflection probes, or before the first capture an approximation from the
+    // ambient light, Fresnel at the view angle, and a roughness-dependent falloff.
     vec3 F0 = mix(vec3(0.04), baseColor, metallic);
     float NdotV = max(dot(worldNormal, viewDir), 0.0);
     vec3 F = EnvBRDF(F0, roughness, NdotV);
-    float specOcclusion = 1.0 - roughness * roughness;
-    vec3 ambientSpecular = ambientLight * F * mix(specOcclusion, 1.0, 0.25);
+    vec3 ambientSpecular;
+    if (ReflectionProbesReady())
+    {
+        ambientSpecular = EvaluateReflectionProbes(vWorldPos, worldNormal, viewDir, roughness) * F
+                          * SpecularOcclusion(NdotV, ao, roughness);
+    }
+    else
+    {
+        float specOcclusion = 1.0 - roughness * roughness;
+        ambientSpecular = ambientLight * F * mix(specOcclusion, 1.0, 0.25);
+    }
 
     vec3 color = ApplyFog(ambientDiffuse + ambientSpecular + lighting + emission, vWorldPos);
 #endif

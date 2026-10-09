@@ -51,19 +51,17 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     /// lightmap/probes); Mixed and Realtime lights light in realtime as usual.</summary>
     public LightBakeMode BakeMode = LightBakeMode.Realtime;
 
-    /// <summary>
-    /// Slot index into the per-light shadow arrays (point: <c>_PointShadowMatrices</c>,
-    /// spot: <c>_SpotShadowMatrices</c>). -1 if no shadow data was uploaded for this light
-    /// this frame. Directional lights store shadow data in the cascade arrays instead;
-    /// for them this remains -1 even when shadows are active.
-    /// Owned and populated by <see cref="Rendering.SceneLightSystem"/> during reconcile.
-    /// </summary>
-    public int ShadowSlot { get; internal set; } = -1;
-
     /// <summary>Hardware depth offset applied while drawing casters, scaled by each polygon's depth slope,
     /// so surfaces at a grazing angle to the light do not shadow themselves.</summary>
-    protected const float CasterSlopeBias = 1f;
-    protected const float CasterConstantBias = 1f;
+    internal const float CasterSlopeBias = 1f;
+
+    /// <summary>Constant part of the caster offset, in steps of the atlas depth format. Two 16 bit steps either way,
+    /// a 24 bit step is 256 times finer, and one of those is too small to stop lit surfaces shading themselves.</summary>
+    internal static float CasterConstantBias => ShadowAtlas.DepthPrecision == ShadowDepthPrecision.Bits16 ? 2f : 512f;
+
+    /// <summary>The largest tile a shadow map of this light may take. Point and spot lights are sized from how big
+    /// they are on screen up to this.</summary>
+    internal virtual int MaxShadowResolution => 0;
 
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
@@ -77,29 +75,6 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public virtual Float3 GetLightPosition() => Transform.Position;
     public virtual Float3 GetLightDirection() => Transform.Forward;
     public virtual bool DoCastShadows() => CastShadows;
-
-    /// <summary>
-    /// Render this light's shadow map(s) into the shared shadow atlas.
-    /// Called by the render pipeline during the shadow pass.
-    ///
-    /// <para>
-    /// Implementations rent and submit their own <see cref="CommandBuffer"/> per face
-    /// (point lights), cascade (directional), or single tile (spot). They CANNOT share
-    /// a CB across multiple faces because each face calls <see cref="RenderPipeline.AssignCameraMatrices"/>
-    /// which uploads view/proj into the single GlobalUniforms UBO sharing a CB would
-    /// queue all the face draws to execute against whatever matrices the LAST face
-    /// uploaded.
-    /// </para>
-    ///
-    /// <para>
-    /// The shadow atlas itself has already been bound + cleared by the caller in a
-    /// separate setup CB before this method runs.
-    /// </para>
-    /// </summary>
-    /// <param name="pipeline">The current render pipeline.</param>
-    /// <param name="view">The view directional cascades are fitted to. Point and spot lights ignore it.</param>
-    /// <param name="renderables">List of all renderables that could cast shadows.</param>
-    public abstract void RenderShadows(RenderPipeline pipeline, in ShadowFitView view, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
 
     public abstract ForwardLightData GetForwardLightData();
 }

@@ -18,40 +18,7 @@ public class ShaderImporter : AssetImporter
         string source = File.ReadAllText(ctx.AbsolutePath);
         string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
 
-        // Resolve #include directives:
-        // 1. Relative to the shader file's directory
-        // 2. Relative to the project's Assets root
-        // 3. Built-in engine includes (ProwlCG.glsl, PBR.glsl, Lighting.glsl, etc.)
-        string? IncludeResolver(string includePath)
-        {
-            // 1. Relative to shader file
-            string fullPath = Path.Combine(dir, includePath);
-            if (File.Exists(fullPath))
-                return File.ReadAllText(fullPath);
-
-            // 2. Relative to Assets root
-            if (Project.Current != null)
-            {
-                string assetsPath = Path.Combine(Project.Current.AssetsPath, includePath);
-                if (File.Exists(assetsPath))
-                    return File.ReadAllText(assetsPath);
-            }
-
-            // 3. Built-in engine includes (embedded resources)
-            // The includePath may be a full absolute path like "C:/.../Assets/Fragment.glsl"
-            // Extract just the filename and try loading from the built-in defaults
-            string fileName = Path.GetFileName(includePath);
-            try
-            {
-                return Runtime.Resources.EmbeddedResources.ReadAllText($"Assets/Defaults/{fileName}");
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        if (!ShaderParser.ParseShader(ctx.AbsolutePath, source, IncludeResolver, out var shader) || shader == null)
+        if (!ShaderParser.ParseShader(ctx.AbsolutePath, source, path => ResolveInclude(dir, path), out var shader) || shader == null)
         {
             Debug.LogError($"Failed to parse shader: {ctx.AbsolutePath}");
             return false;
@@ -60,5 +27,58 @@ public class ShaderImporter : AssetImporter
         shader.Name = ctx.FileName;
         ctx.SetMainAsset(shader);
         return true;
+    }
+
+    /// <summary>
+    /// Finds an included file: beside the shader first, then from the project's Assets root, then among the built-in
+    /// engine includes (ProwlCG.glsl, PBR.glsl, Lighting.glsl and so on).
+    /// </summary>
+    internal static string? ResolveInclude(string dir, string includePath)
+    {
+        string fullPath = Path.Combine(dir, includePath);
+        if (File.Exists(fullPath))
+            return File.ReadAllText(fullPath);
+
+        if (Project.Current != null)
+        {
+            string assetsPath = Path.Combine(Project.Current.AssetsPath, includePath);
+            if (File.Exists(assetsPath))
+                return File.ReadAllText(assetsPath);
+        }
+
+        // The path may be a full absolute path like "C:/.../Assets/Fragment.glsl", so only its file name is tried here
+        string fileName = Path.GetFileName(includePath);
+        try
+        {
+            return Runtime.Resources.EmbeddedResources.ReadAllText($"Assets/Defaults/{fileName}");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+
+/// <summary> Imports .compute files into ComputeShader assets, with their includes resolved like a shader's. </summary>
+[ImporterFor(".compute")]
+public class ComputeShaderImporter : AssetImporter
+{
+    public override int Version => 1;
+
+    public override bool Import(ImportContext ctx)
+    {
+        string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
+        string source = ShaderParser.ExpandIncludes(ctx.AbsolutePath, File.ReadAllText(ctx.AbsolutePath), path => ShaderImporter.ResolveInclude(dir, path));
+
+        try
+        {
+            ctx.SetMainAsset(Runtime.Resources.ComputeShader.FromSource(ctx.FileName, source));
+            return true;
+        }
+        catch (System.ArgumentException ex)
+        {
+            Debug.LogError($"Failed to import compute shader {ctx.AbsolutePath}: {ex.Message}");
+            return false;
+        }
     }
 }

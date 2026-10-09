@@ -159,7 +159,7 @@ public class PaperRenderer : ICanvasRenderer
         }
 
         Rendering.Shaders.ShaderPass pass = shader.GetPass(0);
-        if (!pass.TryGetVariantProgram(null, out _shaderProgram))
+        if (!pass.TryGetVariantProgram((Dictionary<string, bool>?)null, out _shaderProgram))
             Debug.LogError("Failed to compile UI shader.");
     }
 

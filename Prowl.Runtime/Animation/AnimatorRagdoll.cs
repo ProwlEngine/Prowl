@@ -426,7 +426,8 @@ internal sealed class AnimatorRagdoll
     }
 
     // A Jitter soft constraint is a critically damped spring once its softness and bias are set from a
-    // frequency and mass. The solver scales both by the whole step, and an angle's error is half the angle.
+    // frequency and mass. The solver scales the softness by the substep and the bias by the whole step, and an angle's
+    // error is half the angle.
     private const float AngleErrorPerRadian = 0.5f;
     private const float PlaceErrorPerUnit = 1f;
 
@@ -436,7 +437,7 @@ internal sealed class AnimatorRagdoll
         float omega = 2f * MathF.PI * frequency;
         float stiffness = mass * omega * omega;
         float damping = 2f * mass * omega;
-        softness = dt / (substep * (damping + substep * stiffness));
+        softness = 1f / (damping + substep * stiffness);
         bias = dt * stiffness / (errorPerUnit * (damping + substep * stiffness));
         return damping / stiffness;
     }

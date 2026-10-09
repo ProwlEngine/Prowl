@@ -25,6 +25,9 @@ public class InstancedMeshRenderable : IRenderable
     private readonly Float3 _sortPosition;
     private readonly int _subMeshIndex;
 
+    /// <summary>Whether every instance stays where it is.</summary>
+    public bool IsStatic { get; init; }
+
     /// <param name="mesh">Source mesh whose vertex/index buffers are reused for every instance.</param>
     /// <param name="material">Material applied to all instances.</param>
     /// <param name="instanceData">Per-instance transform/colour data uploaded as the instance buffer.</param>
@@ -125,7 +128,8 @@ public class InstancedMeshRenderable : IRenderable
         int layer = 0,
         PropertyState? properties = null,
         AABB? bounds = null,
-        int maxBatchSize = 1023)
+        int maxBatchSize = 1023,
+        bool isStatic = false)
     {
         if (mesh == null || material == null || transforms == null || transforms.Length == 0) return;
 
@@ -145,7 +149,7 @@ public class InstancedMeshRenderable : IRenderable
                 instanceData[i] = new InstanceData(transforms[idx], color, custom);
             }
 
-            output.Add(new InstancedMeshRenderable(mesh, material, instanceData, sortPosition, layer, properties, bounds));
+            output.Add(new InstancedMeshRenderable(mesh, material, instanceData, sortPosition, layer, properties, bounds) { IsStatic = isStatic });
 
             remaining -= batchSize;
             offset += batchSize;

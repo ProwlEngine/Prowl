@@ -5,7 +5,7 @@ using System;
 namespace Prowl.Runtime;
 
 public enum TextureWrap { Repeat, ClampToBorder, ClampToEdge, MirroredRepeat }
-public enum TextureType { Texture2D, Texture3D, TextureCubeMap, }
+public enum TextureType { Texture2D, Texture3D, TextureCubeMap, TextureCubeMapArray, }
 public enum TextureParameter { WrapS, WrapT, WrapR, MinFilter, MagFilter }
 public enum TextureMin { Nearest, Linear, NearestMipmapNearest, LinearMipmapNearest, NearestMipmapLinear, LinearMipmapLinear }
 public enum TextureMag { Nearest, Linear }

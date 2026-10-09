@@ -48,6 +48,15 @@ public abstract class Game
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, vsync: false);
     } 
 
+    // --graphics-target OpenGL or OpenGLES picks the context for this run, overriding what the game set
+    private static void ReadGraphicsTargetArgument()
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        int at = Array.IndexOf(args, "--graphics-target");
+        if (at >= 0 && at + 1 < args.Length && Enum.TryParse(args[at + 1], true, out GraphicsTarget target))
+            Graphics.Target = target;
+    }
+
     public void Run(string title, int width, int height)
     {
         // Invariant culture ensures consistent float parsing (dot decimal separator)
@@ -64,6 +73,7 @@ public abstract class Game
         // Installed on this thread, which is the one the loop runs on, so an await in game code resumes
         // where the scene actually lives. The editor restarts the session when play starts and stops.
         Tasks.MainThreadContext.Install();
+        ReadGraphicsTargetArgument();
         InitializeWindow(title, width, height);
 
         Window.Load += () =>

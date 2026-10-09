@@ -177,6 +177,32 @@ public class UITests : RuntimeTestBase
         finally { GameCanvas.ScreenSizeOverride = prevOverride; }
     }
 
+    [Fact]
+    public void Canvases_AreListedByTheSceneTheyAreEnabledIn()
+    {
+        Scene first = CreateScene(enable: true);
+        Scene second = CreateScene(enable: true);
+        var canvasGo = CreateGameObject("Canvas");
+        first.Add(canvasGo);
+        var canvas = canvasGo.AddComponent<GameCanvas>();
+
+        Assert.Equal([canvas], first.Canvases);
+        Assert.Empty(second.Canvases);
+
+        canvas.Enabled = false;
+        Assert.Empty(first.Canvases);
+
+        canvas.Enabled = true;
+        canvasGo.Enabled = false;
+        Assert.Empty(first.Canvases);
+
+        canvasGo.Enabled = true;
+        Assert.Equal([canvas], first.Canvases);
+
+        first.Remove(canvasGo);
+        Assert.Empty(first.Canvases);
+    }
+
     // A mask rotated 45 degrees clips to a diamond; clicks must follow the diamond, not the unrotated rect.
     [Fact]
     public void Raycast_FollowsRotatedMask()

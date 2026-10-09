@@ -8,6 +8,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
@@ -227,13 +228,12 @@ public class Mesh : Asset, ISerializable
     // ─────────────────────── Blend shapes (morph targets) ───────────────────────
     private BlendShape[] _blendShapes = Array.Empty<BlendShape>();
 
-    // GPU morph delta textures, built lazily from _blendShapes. Each "layer" is one
-    // BlendShapeFrame; deltas are laid out linearly as idx = layer * vertexCount + vertexID
-    // and tiled into a 2D RGBA32F texture (width capped to MaxTextureSize).
-    private Texture2D? _morphPosTex, _morphNrmTex, _morphTanTex;
+    // GPU morph deltas, built lazily from _blendShapes. Each layer is one BlendShapeFrame, its deltas at
+    // layer * vertexCount + vertexID, positions first, then normals and tangents when any frame has them
+    private ShaderDataTable? _morphDeltas;
+    private int _morphNormalBase = -1, _morphTangentBase = -1;
     private int[] _morphLayerOffsets = Array.Empty<int>(); // per-shape starting layer
     private int _morphLayerCount;
-    private int _morphTexWidth;
     private bool _morphDirty = true;
 
     /// <summary>The blend shapes (morph targets) on this mesh.</summary>
@@ -275,14 +275,16 @@ public class Mesh : Asset, ISerializable
         return (frameIndex >= 0 && frameIndex < frames.Length) ? frames[frameIndex].Weight : 0f;
     }
 
-    // GPU morph resources (valid after EnsureMorphTextures).
-    public Texture2D? MorphPositionTexture { get { EnsureLoaded(); return _morphPosTex; } }
-    public Texture2D? MorphNormalTexture { get { EnsureLoaded(); return _morphNrmTex; } }
-    public Texture2D? MorphTangentTexture { get { EnsureLoaded(); return _morphTanTex; } }
-    public bool MorphHasNormals { get { EnsureLoaded(); return _morphNrmTex != null; } }
-    public bool MorphHasTangents { get { EnsureLoaded(); return _morphTanTex != null; } }
+    // GPU morph resources (valid after EnsureMorphDeltas).
+    internal ShaderDataTable? MorphDeltas { get { EnsureLoaded(); return _morphDeltas; } }
+
+    /// <summary>Where the normal deltas start in <see cref="MorphDeltas"/>, -1 when no frame has any.</summary>
+    internal int MorphNormalBase { get { EnsureLoaded(); return _morphNormalBase; } }
+
+    /// <summary>Where the tangent deltas start in <see cref="MorphDeltas"/>, -1 when no frame has any.</summary>
+    internal int MorphTangentBase { get { EnsureLoaded(); return _morphTangentBase; } }
+
     public int MorphLayerCount { get { EnsureLoaded(); return _morphLayerCount; } }
-    public int MorphTexWidth { get { EnsureLoaded(); return _morphTexWidth; } }
 
     /// <summary>Global morph-texture layer (row block) for a given shape's frame.</summary>
     public int GetMorphLayerIndex(int shapeIndex, int frameIndex)
@@ -291,18 +293,18 @@ public class Mesh : Asset, ISerializable
         return _morphLayerOffsets[shapeIndex] + frameIndex;
     }
 
-    /// <summary>Builds the GPU morph delta textures from the blend-shape data if dirty. Cheap no-op otherwise.</summary>
-    public void EnsureMorphTextures()
+    /// <summary>Builds the GPU morph deltas from the blend-shape data if dirty. Cheap no-op otherwise.</summary>
+    internal void EnsureMorphDeltas()
     {
         EnsureLoaded();
         if (!_morphDirty) return;
-        BuildMorphTextures();
+        BuildMorphDeltas();
     }
 
-    private void BuildMorphTextures()
+    private void BuildMorphDeltas()
     {
         _morphDirty = false;
-        DisposeMorphTextures();
+        DisposeMorphDeltas();
         _morphLayerCount = 0;
 
         if (_blendShapes.Length == 0 || vertices == null || vertices.Length == 0)
@@ -327,23 +329,19 @@ public class Mesh : Asset, ISerializable
         }
         if (layers == 0) return;
 
-        int maxTex = Graphics.MaxTextureSize;
-        int width = Math.Min(vtx, maxTex);
         long total = (long)layers * vtx;
-        int height = (int)((total + width - 1) / width);
-        if (height > maxTex)
+        long texels = total * (1 + (anyNormals ? 1 : 0) + (anyTangents ? 1 : 0));
+        if (texels > int.MaxValue / 2)
         {
-            Debug.LogError($"[Mesh] Blend-shape morph data ({layers} layers x {vtx} verts) exceeds the max texture size ({maxTex}); morphs disabled for '{Name}'.");
+            Debug.LogError($"[Mesh] Blend-shape morph data ({layers} layers x {vtx} verts) is too large; morphs disabled for '{Name}'.");
             return;
         }
 
         _morphLayerCount = layers;
-        _morphTexWidth = width;
-
-        int texels = width * height;
-        var pos = new Float4[texels];
-        var nrm = anyNormals ? new Float4[texels] : null;
-        var tan = anyTangents ? new Float4[texels] : null;
+        int perKind = (int)total;
+        var pos = new Float4[perKind];
+        var nrm = anyNormals ? new Float4[perKind] : null;
+        var tan = anyTangents ? new Float4[perKind] : null;
 
         for (int s = 0; s < _blendShapes.Length; s++)
         {
@@ -375,26 +373,28 @@ public class Mesh : Asset, ISerializable
             }
         }
 
-        _morphPosTex = CreateMorphTexture(width, height, pos);
-        if (nrm != null) _morphNrmTex = CreateMorphTexture(width, height, nrm);
-        if (tan != null) _morphTanTex = CreateMorphTexture(width, height, tan);
+        _morphDeltas = new ShaderDataTable("ProwlMorphDeltas", "_MorphDeltaTex", GraphicsFeature.VertexStorageBuffers);
+        _morphDeltas.EnsureCapacity((int)texels);
+        _morphDeltas.Write(0, pos);
+        int next = perKind;
+        if (nrm != null)
+        {
+            _morphNormalBase = next;
+            _morphDeltas.Write(next, nrm);
+            next += perKind;
+        }
+        if (tan != null)
+        {
+            _morphTangentBase = next;
+            _morphDeltas.Write(next, tan);
+        }
     }
 
-    private static Texture2D CreateMorphTexture(int width, int height, Float4[] data)
+    private void DisposeMorphDeltas()
     {
-        var tex = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Float4);
-        tex.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
-        tex.SetData<Float4>(data.AsMemory());
-        return tex;
-    }
-
-    private void DisposeMorphTextures()
-    {
-        if (_morphPosTex.IsValid()) _morphPosTex.Dispose(); _morphPosTex = null;
-        if (_morphNrmTex.IsValid()) _morphNrmTex.Dispose(); _morphNrmTex = null;
-        if (_morphTanTex.IsValid()) _morphTanTex.Dispose(); _morphTanTex = null;
+        _morphDeltas?.Dispose();
+        _morphDeltas = null;
+        _morphNormalBase = _morphTangentBase = -1;
     }
 
     // Submesh support: each submesh defines a range within the shared index buffer
@@ -1464,8 +1464,8 @@ public class Mesh : Asset, ISerializable
         instanceBuffer = null;
         instanceBufferCapacity = 0;
 
-        // Morph delta textures will be rebuilt from CPU blend-shape data on next use.
-        DisposeMorphTextures();
+        // Morph deltas will be rebuilt from CPU blend-shape data on next use.
+        DisposeMorphDeltas();
         _morphDirty = true;
     }
 

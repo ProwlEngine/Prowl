@@ -532,6 +532,54 @@ public sealed class CommandBuffer : IDisposable
         RenderStats.RecordDraw(topo, indexCount);
     }
 
+    /// <summary>Draws every range of a vertex array already pushed with <see cref="ObjectIndex"/> in one call.</summary>
+    internal void DrawIndexedRanges(int vaoIndex, Topology topo, ReadOnlySpan<IndexRange> ranges, bool index32bit)
+    {
+        WriteHeader(CommandOpcode.DrawIndexedRanges);
+        Write(vaoIndex);
+        Write((byte)topo);
+        Write(index32bit ? (byte)1 : (byte)0);
+        var r = _store.Park(ranges);
+        Write(in r);
+
+        uint indexCount = 0;
+        foreach (IndexRange range in ranges) indexCount += range.Count;
+        RenderStats.RecordDraw(topo, indexCount);
+    }
+
+    /// <summary>
+    /// Runs a compute kernel over the given number of thread groups, with the parameters the shader holds right now.
+    /// Later draws and dispatches see everything it wrote.
+    /// </summary>
+    public void DispatchCompute(ComputeShader shader, int kernel, int threadGroupsX, int threadGroupsY, int threadGroupsZ)
+    {
+        if (threadGroupsX <= 0 || threadGroupsY <= 0 || threadGroupsZ <= 0) return;
+        if (!BindKernel(shader, kernel)) return;
+        WriteHeader(CommandOpcode.Dispatch);
+        Write((uint)threadGroupsX);
+        Write((uint)threadGroupsY);
+        Write((uint)threadGroupsZ);
+    }
+
+    /// <summary>Runs a compute kernel with its group counts read from <paramref name="arguments"/>, three uints at <paramref name="argumentsOffset"/> bytes.</summary>
+    public void DispatchCompute(ComputeShader shader, int kernel, ComputeBuffer arguments, uint argumentsOffset = 0)
+    {
+        if (arguments.Buffer == null || !BindKernel(shader, kernel)) return;
+        WriteHeader(CommandOpcode.DispatchIndirect);
+        Write(PushObject(arguments.Buffer));
+        Write(argumentsOffset);
+    }
+
+    private bool BindKernel(ComputeShader shader, int kernel)
+    {
+        GraphicsProgram? program = shader.ProgramFor(kernel);
+        if (program == null) return false;
+        SetShader(program);
+        SetProperties(shader.SharedProperties);
+        SetInstanceProperties(shader.KernelProperties(kernel));
+        return true;
+    }
+
     public void DrawIndexedInstanced(GraphicsVertexArray vao, Topology topo,
                                       uint indexCount, uint instanceCount,
                                       uint startIndex = 0, int baseVertex = 0,
@@ -590,7 +638,7 @@ public sealed class CommandBuffer : IDisposable
         material.SetKeyword("GPU_INSTANCING", false);
 
         var pass = material.Shader.GetPass(passIndex);
-        if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variant) || variant == null)
+        if (!pass.TryGetVariantProgram(material, out GraphicsProgram? variant) || variant == null)
             return;
 
         SetShader(variant);
@@ -812,6 +860,13 @@ public sealed class CommandBuffer : IDisposable
         Write(PushObject(tex));
         Write((byte)min);
         Write((byte)mag);
+    }
+
+    internal void EncodeSetTextureMaxLevel(GraphicsTexture tex, int level)
+    {
+        WriteHeader(CommandOpcode.SetTextureMaxLevel);
+        Write(PushObject(tex));
+        Write(level);
     }
 
     internal void EncodeSetTextureCompareMode(GraphicsTexture tex, bool enabled)

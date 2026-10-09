@@ -56,6 +56,9 @@ public class SkinnedMeshRenderable : IRenderable
     // across every render pass instead of re-inverting per pass.
     public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => _worldToObject ??= _transform.Invert();
 
+    // Bones move the vertices without the model matrix changing
+    public bool DeformsEveryFrame => true;
+
     public void GetCullingData(out bool isRenderable, out AABB bounds)
     {
         isRenderable = true;

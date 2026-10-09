@@ -92,6 +92,33 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     [SerializeIgnore]
     internal Dictionary<string, bool> _localKeywords;
 
+    // Order free hash of the enabled keywords, kept up to date as they change so finding a shader variant is one lookup
+    [SerializeIgnore]
+    private ulong _keywordHash;
+
+    [SerializeIgnore]
+    private bool _keywordHashValid;
+
+    /// <summary>Hash of the enabled keywords, the key a shader pass caches this material's variant under.</summary>
+    internal ulong KeywordHash
+    {
+        get
+        {
+            if (!_keywordHashValid)
+            {
+                ulong sum = 0;
+                foreach (KeyValuePair<string, bool> kv in _localKeywords)
+                    if (kv.Value) sum += KeywordBits(kv.Key);
+                _keywordHash = sum;
+                _keywordHashValid = true;
+            }
+            return _keywordHash;
+        }
+    }
+
+    private static ulong KeywordBits(string keyword) =>
+        PropertyState.Mix((uint)keyword.GetHashCode() * 0x9E3779B97F4A7C15UL + (ulong)keyword.Length + 1);
+
     // Material batching optimization: materials with identical state (uniforms) are batched together
     // to minimize GPU state changes. The hash represents the current uniform values.
     [SerializeIgnore]
@@ -152,6 +179,11 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         EnsureLoaded();
         if (_localKeywords.TryGetValue(keyword, out bool current) && current == value) return;
         _localKeywords[keyword] = value;
+        if (_keywordHashValid)
+        {
+            if (value) _keywordHash += KeywordBits(keyword);
+            else if (current) _keywordHash -= KeywordBits(keyword);
+        }
         if (!s_drawKeywords.Contains(keyword)) MarkDirty();
     }
 
@@ -166,6 +198,9 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     public void SetMatrix(string name, Float4x4 value)    { EnsureLoaded(); _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
     public void SetTexture(string name, Texture2D value)  { EnsureLoaded(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
     public void SetTexture3D(string name, Texture3D value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+
+    /// <summary>Binds a compute buffer to the storage block of that name. Buffers live only at runtime and are not saved.</summary>
+    public void SetBuffer(string name, ComputeBuffer value) { EnsureLoaded(); _properties.SetBuffer(name, value); MarkDirty(); }
     public void SetTextureCube(string name, Cubemap value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
 
     /// <summary>Forget the user override for <paramref name="name"/> next sync

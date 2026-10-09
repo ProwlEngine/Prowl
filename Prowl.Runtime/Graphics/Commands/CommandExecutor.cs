@@ -106,7 +106,7 @@ internal sealed class CommandExecutor
             CommandOpcode.SetUniformVec3, CommandOpcode.SetUniformVec4, CommandOpcode.SetUniformMatrix,
             CommandOpcode.SetUniformMatrixArray, CommandOpcode.SetUniformTexture, CommandOpcode.SetUniformBuffer,
             CommandOpcode.UpdateBuffer, CommandOpcode.DrawIndexed, CommandOpcode.DrawIndexedInstanced,
-            CommandOpcode.DrawArrays, CommandOpcode.BeginSample, CommandOpcode.EndSample])
+            CommandOpcode.DrawArrays, CommandOpcode.DrawIndexedRanges, CommandOpcode.Dispatch, CommandOpcode.DispatchIndirect, CommandOpcode.BeginSample, CommandOpcode.EndSample])
             keeps[(int)op] = true;
         return keeps;
     }
@@ -235,7 +235,9 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetDepthClamp:
                 {
-                    if (ReadU8(stream, ref pos) != 0) Graphics.GL.Enable(EnableCap.DepthClamp);
+                    bool clamp = ReadU8(stream, ref pos) != 0;
+                    if (!Graphics.Capabilities.Require(GraphicsFeature.DepthClamp, "Shadow casters behind the light")) break;
+                    if (clamp) Graphics.GL.Enable(EnableCap.DepthClamp);
                     else Graphics.GL.Disable(EnableCap.DepthClamp);
                     break;
                 }
@@ -506,6 +508,38 @@ internal sealed class CommandExecutor
                     DoDrawArrays(vao, topo, first, count);
                     break;
                 }
+                case CommandOpcode.Dispatch:
+                {
+                    uint x = ReadU32(stream, ref pos);
+                    uint y = ReadU32(stream, ref pos);
+                    uint z = ReadU32(stream, ref pos);
+                    if (_boundProgram == null) break;
+                    PrepareDraw();
+                    Graphics.GL.DispatchCompute(x, y, z);
+                    // Whatever reads the results next, a draw, a copy or the CPU, sees every write
+                    Graphics.GL.MemoryBarrier(MemoryBarrierMask.AllBarrierBits);
+                    break;
+                }
+                case CommandOpcode.DispatchIndirect:
+                {
+                    var arguments = (GraphicsBuffer?)objects[ReadI32(stream, ref pos)];
+                    uint offset = ReadU32(stream, ref pos);
+                    if (_boundProgram == null || arguments == null) break;
+                    PrepareDraw();
+                    Graphics.GL.BindBuffer(BufferTargetARB.DispatchIndirectBuffer, arguments.Handle);
+                    Graphics.GL.DispatchComputeIndirect((nint)offset);
+                    Graphics.GL.MemoryBarrier(MemoryBarrierMask.AllBarrierBits);
+                    break;
+                }
+                case CommandOpcode.DrawIndexedRanges:
+                {
+                    var vao = (GraphicsVertexArray?)objects[ReadI32(stream, ref pos)];
+                    Topology topo = (Topology)ReadU8(stream, ref pos);
+                    bool i32 = ReadU8(stream, ref pos) != 0;
+                    var ranges = ReadBlob<IndexRange>(stream, ref pos, store);
+                    DoDrawIndexedRanges(vao, topo, ranges, i32);
+                    break;
+                }
                 case CommandOpcode.CreateBuffer:
                 {
                     var buf = (GraphicsBuffer)objects[ReadI32(stream, ref pos)]!;
@@ -658,6 +692,12 @@ internal sealed class CommandExecutor
                     var min = (TextureMin)ReadU8(stream, ref pos);
                     var mag = (TextureMag)ReadU8(stream, ref pos);
                     tex.SetTextureFilters(min, mag);
+                    break;
+                }
+                case CommandOpcode.SetTextureMaxLevel:
+                {
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
+                    tex.SetMaxLevel(ReadI32(stream, ref pos));
                     break;
                 }
                 case CommandOpcode.SetTextureCompareMode:
@@ -946,6 +986,44 @@ internal sealed class CommandExecutor
             _ = baseVertex;
             Graphics.GL.DrawElementsInstanced(mode, indexCount, fmt,
                 (void*)(startIndex * indexSize), instanceCount);
+        }
+    }
+
+    private uint[] _rangeCounts = [];
+    private nint[] _rangeOffsets = [];
+
+    private void DoDrawIndexedRanges(GraphicsVertexArray? vao, Topology topo, ReadOnlySpan<IndexRange> ranges, bool i32)
+    {
+        if (vao == null || ranges.Length == 0) return;
+        PrepareDraw();
+        BindVAO(vao);
+
+        PrimitiveType mode = ToGL(topo);
+        DrawElementsType fmt = i32 ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
+        int indexSize = i32 ? sizeof(uint) : sizeof(ushort);
+
+        if (_rangeCounts.Length < ranges.Length)
+        {
+            _rangeCounts = new uint[ranges.Length * 2];
+            _rangeOffsets = new nint[ranges.Length * 2];
+        }
+        for (int i = 0; i < ranges.Length; i++)
+        {
+            _rangeCounts[i] = ranges[i].Count;
+            _rangeOffsets[i] = (nint)ranges[i].Start * indexSize;
+        }
+
+        unsafe
+        {
+            if (!Graphics.Capabilities.Has(GraphicsFeature.MultiDraw))
+            {
+                for (int i = 0; i < ranges.Length; i++)
+                    Graphics.GL.DrawElements(mode, _rangeCounts[i], fmt, (void*)_rangeOffsets[i]);
+                return;
+            }
+            fixed (uint* counts = _rangeCounts)
+            fixed (nint* offsets = _rangeOffsets)
+                Graphics.GL.MultiDrawElements(mode, counts, fmt, (void**)offsets, (uint)ranges.Length);
         }
     }
 

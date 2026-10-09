@@ -62,7 +62,8 @@ public enum DefaultShader
     TAA,
     MotionBlur,
     GizmoIcon,
-    AutoExposure
+    AutoExposure,
+    PrefilterCubemap
 }
 
 /// <summary>
@@ -140,7 +141,7 @@ public enum DefaultShaderInclude
     Shadow,
     VertexAttributes,
     Lighting,
-    LightBVH,
+    LightTree,
     StandardCore,
     FastNoiseLite,
     SimplexNoise4D

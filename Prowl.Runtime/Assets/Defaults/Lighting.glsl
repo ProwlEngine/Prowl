@@ -2,16 +2,16 @@
 // Include this in any lit forward shader (Standard, Terrain, Grass, etc.)
 // Provides: CalculateForwardLighting(), CalculateAmbient(), ApplyFog()
 //
-// Light data lives in two BVHs (static + dynamic). Per fragment we walk both trees and
-// accumulate contributions from every light whose tight AABB contains worldPos. The single
-// directional light is uploaded separately and evaluated unconditionally (no BVH).
+// Point and spot lights live in two four wide trees (static + dynamic), walked together per
+// fragment, adding every light whose sphere holds worldPos. Directional lights are uploaded
+// separately and evaluated unconditionally.
 
 #ifndef PROWL_LIGHTING
 #define PROWL_LIGHTING
 
 #include "PBR"
 #include "Shadow"
-#include "LightBVH"
+#include "LightTree"
 
 // ============================================================
 //  Directional lights: the brightest one is the main light and owns the shadow cascades,
@@ -38,12 +38,8 @@ uniform vec3 _ExtraDirectionalLightDirection[MAX_EXTRA_DIRECTIONAL_LIGHTS];
 uniform vec3 _ExtraDirectionalLightColor[MAX_EXTRA_DIRECTIONAL_LIGHTS]; // color * intensity
 
 // ============================================================
-//  Local-light shadow atlas (closest N point + spot lights share these slots)
+//  Shadow atlas and per light shadow data
 // ============================================================
-
-#ifndef MAX_SHADOW_CASTERS
-#define MAX_SHADOW_CASTERS 4
-#endif
 
 // Shadow atlas (hardware depth-compare sampler; the atlas depth texture has
 // GL_TEXTURE_COMPARE_MODE enabled so texture() does the PCF comparison)
@@ -69,13 +65,30 @@ uniform vec4 _CascadeSphere3;
 uniform vec3 _ShadowViewOrigin;
 uniform vec3 _ShadowViewForward;
 
-// Point shadows (6 faces per light). A point light occupying slot s uses indices [s*6 .. s*6+5].
-uniform mat4 _PointShadowMatrices[MAX_SHADOW_CASTERS * 6];
-uniform vec4 _PointShadowFaceParams[MAX_SHADOW_CASTERS * 6]; // xy: atlasPos, z: faceSize, w: texel size one unit from the light
+// One block of SHADOW_BLOCK_TEXELS vec4 per shadowed point or spot light, at L.ShadowSlot:
+//   +0     header: x fade (1 full shadow, 0 none)
+//   +1..   one rect per face (6 for point, 1 for spot): xy tile position, z tile size, w texel size one unit from the light
+//   then   one matrix per face, four columns each
+#define SHADOW_BLOCK_TEXELS 32
 
-// Spot shadows (1 matrix per light, indexed by slot directly).
-uniform mat4 _SpotShadowMatrices[MAX_SHADOW_CASTERS];
-uniform vec4 _SpotShadowAtlasParams[MAX_SHADOW_CASTERS]; // xy: atlasPos, z: atlasSize, w: texel size one unit along the axis
+#if defined(PROWL_FRAGMENT_STORAGE_BUFFERS) && !defined(PROWL_VERTEX_STAGE)
+layout(std430) readonly buffer ProwlShadowData { vec4 _ShadowData[]; };
+
+vec4 ShadowData(int texel) { return _ShadowData[texel]; }
+#else
+uniform sampler2D _ShadowDataTex;
+uniform int _ShadowDataTexShift;
+
+vec4 ShadowData(int texel)
+{
+    return texelFetch(_ShadowDataTex, ivec2(texel & ((1 << _ShadowDataTexShift) - 1), texel >> _ShadowDataTexShift), 0);
+}
+#endif
+
+mat4 ShadowDataMatrix(int texel)
+{
+    return mat4(ShadowData(texel), ShadowData(texel + 1), ShadowData(texel + 2), ShadowData(texel + 3));
+}
 
 // ============================================================
 //  Fog uniforms
@@ -174,12 +187,17 @@ float DirectionalShadow(vec3 worldPos, vec3 geomNormal, float normalBias, float 
 
 float PointShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
+    int block = L.ShadowSlot * SHADOW_BLOCK_TEXELS;
+    float fade = ShadowData(block).x;
+    if (fade <= 0.0) return 0.0;
+
     vec3 lightToFrag = worldPos - L.Position;
     float dist = length(lightToFrag);
     vec3 absDir = abs(lightToFrag);
     float axisDist = max(absDir.x, max(absDir.y, absDir.z));
 
-    float texelWorld = _PointShadowFaceParams[L.ShadowSlot * 6].w * axisDist;
+    // Every face holds the same tile size, so the first face's texel size serves before a face is picked
+    float texelWorld = ShadowData(block + 1).w * axisDist;
     vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), texelWorld,
                                      L.ShadowDepthBias, normalBias);
 
@@ -194,32 +212,33 @@ float PointShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBia
     else
         faceIndex = dir.z > 0.0 ? 4 : 5;
 
-    int idx = L.ShadowSlot * 6 + faceIndex;
-    vec4 faceParams = _PointShadowFaceParams[idx];
-    if (faceParams.z <= 0.0) return 0.0;
+    vec4 faceRect = ShadowData(block + 1 + faceIndex);
+    if (faceRect.z <= 0.0) return 0.0;
 
-    vec3 projCoords = ProjectToShadowMap(_PointShadowMatrices[idx], biasedPos);
+    vec3 projCoords = ProjectToShadowMap(ShadowDataMatrix(block + 7 + faceIndex * 4), biasedPos);
     if (projCoords.z > 1.0) return 0.0;
 
-    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, faceParams, quality) * L.ShadowStrength;
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, faceRect, quality) * L.ShadowStrength * fade;
 }
 
 float SpotShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
-    vec4 atlasParams = _SpotShadowAtlasParams[L.ShadowSlot];
-    if (atlasParams.z <= 0.0) return 0.0;
+    int block = L.ShadowSlot * SHADOW_BLOCK_TEXELS;
+    float fade = ShadowData(block).x;
+    vec4 rect = ShadowData(block + 1);
+    if (fade <= 0.0 || rect.z <= 0.0) return 0.0;
 
     vec3 lightToFrag = worldPos - L.Position;
     float dist = length(lightToFrag);
     float axisDist = max(dot(lightToFrag, normalize(L.Direction)), 0.0);
 
-    vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), atlasParams.w * axisDist,
+    vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), rect.w * axisDist,
                                      L.ShadowDepthBias, normalBias);
-    vec3 projCoords = ProjectToShadowMap(_SpotShadowMatrices[L.ShadowSlot], biasedPos);
+    vec3 projCoords = ProjectToShadowMap(ShadowDataMatrix(block + 2), biasedPos);
     if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
         return 0.0;
 
-    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, atlasParams, quality) * L.ShadowStrength;
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, rect, quality) * L.ShadowStrength * fade;
 }
 
 float LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
@@ -238,7 +257,7 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geo
                         vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
     // BVH only emits point + spot leaves; directional has its own path. The leaf-level sphere
-    // test in LBVH_Next has already rejected fragments past Range, so we don't repeat it here.
+    // test in LightTree_FetchLight has already rejected fragments past Range, so we don't repeat it here.
     //
     // Two remaining rejections before PBR:
     //   1) Spot cone reject (outer-cone-cosine test before any GGX work).
@@ -501,24 +520,13 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
 
     vec3 totalLight = EvaluateDirectional(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
 
-    // Static tree.
-    if (_StaticLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _StaticLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
-        }
-    }
-
-    // Dynamic tree.
-    if (_DynamicLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _DynamicLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+    LightTreeWalk walk;
+    LightTree_Begin(walk);
+    int first, last;
+    while (LightTree_NextLeaf(walk, worldPos, first, last)) {
+        for (int k = first; k < last; k++) {
+            LightSample L;
+            if (!LightTree_FetchLight(k, worldPos, L)) continue;
             totalLight += EvaluateLocalLight(L, worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
         }
     }
@@ -542,23 +550,13 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNor
     vec3 totalLight = EvaluateDirectionalAniso(worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
                                                 albedo, metallic, mt, mb, roughness, ao, F0);
 
-    if (_StaticLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _StaticLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
-                                                   albedo, metallic, mt, mb, roughness, ao, F0);
-        }
-    }
-
-    if (_DynamicLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _DynamicLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+    LightTreeWalk walk;
+    LightTree_Begin(walk);
+    int first, last;
+    while (LightTree_NextLeaf(walk, worldPos, first, last)) {
+        for (int k = first; k < last; k++) {
+            LightSample L;
+            if (!LightTree_FetchLight(k, worldPos, L)) continue;
             totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
                                                    albedo, metallic, mt, mb, roughness, ao, F0);
         }
@@ -701,26 +699,13 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
                           worldNormal, viewDir, albedo, metallic, roughness, ao, F0,
                           translucency, scatterPower, scatterDist, scatterScale);
 
-    // ---- Static BVH ----
-    if (_StaticLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _StaticLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, geomNormal, viewDir,
-                              albedo, metallic, roughness, ao, F0,
-                              translucency, scatterPower, scatterDist, scatterScale);
-        }
-    }
-
-    // ---- Dynamic BVH ----
-    if (_DynamicLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _DynamicLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+    LightTreeWalk walk;
+    LightTree_Begin(walk);
+    int first, last;
+    while (LightTree_NextLeaf(walk, worldPos, first, last)) {
+        for (int k = first; k < last; k++) {
+            LightSample L;
+            if (!LightTree_FetchLight(k, worldPos, L)) continue;
             totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, geomNormal, viewDir,
                               albedo, metallic, roughness, ao, F0,
                               translucency, scatterPower, scatterDist, scatterScale);
@@ -771,6 +756,129 @@ vec3 CalculateAmbient(vec3 worldNormal)
 }
 
 // ============================================================
+//  Reflection probes
+// ============================================================
+
+// Every probe is a layer of _ReflectionProbes prefiltered by roughness across its mips, layer 0 is the sky.
+// A probe record, REFLECTION_PROBE_TEXELS vec4 at index * REFLECTION_PROBE_TEXELS:
+//   +0..+2  rows of the world to box matrix, the box centred on the capture point
+//   +3      box half size, blend distance
+//   +4      array layer as int bits
+//   +5      intensity, box projection, priority
+uniform int _ReflectionProbesReady;
+uniform samplerCubeArray _ReflectionProbes;
+uniform float _ReflectionProbeMips;
+uniform int _ReflectionProbeRoot;
+
+#define REFLECTION_PROBE_TEXELS 6
+#define MAX_BLENDED_PROBES 4
+
+bool ReflectionProbesReady() { return _ReflectionProbesReady != 0; }
+
+vec3 SampleProbeLayer(float layer, vec3 dir, float roughness)
+{
+    return textureLod(_ReflectionProbes, vec4(dir, layer), roughness * (_ReflectionProbeMips - 1.0)).rgb;
+}
+
+// Projects the reflection onto the probe's box, so it lands where the reflected surface really is
+vec3 SampleReflectionProbe(int index, vec3 worldPos, vec3 dir, float roughness)
+{
+    int b = index * REFLECTION_PROBE_TEXELS;
+    vec4 params = ReflectionProbeTexel(b + 5);
+    float layer = float(floatBitsToInt(ReflectionProbeTexel(b + 4).x));
+
+    if (params.y > 0.5)
+    {
+        vec4 r0 = ReflectionProbeTexel(b);
+        vec4 r1 = ReflectionProbeTexel(b + 1);
+        vec4 r2 = ReflectionProbeTexel(b + 2);
+        vec3 halfSize = ReflectionProbeTexel(b + 3).xyz;
+
+        vec3 p = vec3(dot(r0.xyz, worldPos) + r0.w, dot(r1.xyz, worldPos) + r1.w, dot(r2.xyz, worldPos) + r2.w);
+        vec3 d = vec3(dot(r0.xyz, dir), dot(r1.xyz, dir), dot(r2.xyz, dir));
+        vec3 far = max((halfSize - p) / d, (-halfSize - p) / d);
+        float t = max(min(min(far.x, far.y), far.z), 0.0);
+        vec3 hit = p + d * t;
+
+        // The lobe's footprint shrinks with the distance to what it reflects, so close surfaces reflect sharper
+        roughness *= sqrt(clamp(t / max(length(hit), 1e-4), 0.0, 1.0));
+        dir = r0.xyz * hit.x + r1.xyz * hit.y + r2.xyz * hit.z;
+    }
+
+    return SampleProbeLayer(layer, dir, roughness) * params.x;
+}
+
+// Blends the most important probes around the point by how far inside their boxes it is, the sky filling the rest
+vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
+{
+    // Rough lobes lean toward the normal
+    float a = roughness * roughness;
+    vec3 R = normalize(mix(N, reflect(-V, N), (1.0 - a) * (sqrt(1.0 - a) + a)));
+
+    int index[MAX_BLENDED_PROBES];
+    float weight[MAX_BLENDED_PROBES];
+    float priority[MAX_BLENDED_PROBES];
+    int count = 0;
+
+    if (_ReflectionProbeRoot >= 0)
+    {
+        LightTreeWalk walk;
+        ProbeTree_Begin(walk, _ReflectionProbeRoot);
+        int first, last;
+        while (LightTree_NextLeaf(walk, worldPos, first, last))
+        {
+            for (int k = first; k < last; k++)
+            {
+                int b = k * REFLECTION_PROBE_TEXELS;
+                vec4 r0 = ReflectionProbeTexel(b);
+                vec4 r1 = ReflectionProbeTexel(b + 1);
+                vec4 r2 = ReflectionProbeTexel(b + 2);
+                vec4 box = ReflectionProbeTexel(b + 3);
+                vec3 p = vec3(dot(r0.xyz, worldPos) + r0.w, dot(r1.xyz, worldPos) + r1.w, dot(r2.xyz, worldPos) + r2.w);
+                vec3 inside3 = box.xyz - abs(p);
+                float inside = min(inside3.x, min(inside3.y, inside3.z));
+                if (inside <= 0.0) continue;
+
+                float w = box.w > 0.0 ? clamp(inside / box.w, 0.0, 1.0) : 1.0;
+                float pr = ReflectionProbeTexel(b + 5).z;
+                int at;
+                if (count < MAX_BLENDED_PROBES) at = count++;
+                else if (pr > priority[MAX_BLENDED_PROBES - 1]) at = MAX_BLENDED_PROBES - 1;
+                else continue;
+
+                index[at] = k;
+                weight[at] = w;
+                priority[at] = pr;
+                for (int j = at; j > 0 && priority[j] > priority[j - 1]; j--)
+                {
+                    int ti = index[j]; index[j] = index[j - 1]; index[j - 1] = ti;
+                    float tw = weight[j]; weight[j] = weight[j - 1]; weight[j - 1] = tw;
+                    float tp = priority[j]; priority[j] = priority[j - 1]; priority[j - 1] = tp;
+                }
+            }
+        }
+    }
+
+    vec3 color = vec3(0.0);
+    float total = 0.0;
+    for (int i = 0; i < count && total < 0.999; i++)
+    {
+        float w = weight[i] * (1.0 - total);
+        color += SampleReflectionProbe(index[i], worldPos, R, roughness) * w;
+        total += w;
+    }
+    if (total < 0.999)
+        color += SampleProbeLayer(0.0, R, roughness) * (1.0 - total);
+    return color;
+}
+
+// How much of the environment the ambient occlusion hides from a reflection
+float SpecularOcclusion(float NdotV, float ao, float roughness)
+{
+    return clamp(pow(NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
+// ============================================================
 //  Light-probe spherical harmonics (per-object, set by the pipeline for dynamic objects)
 // ============================================================
 
@@ -807,20 +915,23 @@ vec3 ShadeSH9(vec3 n)
 //  Fog
 // ============================================================
 
-// The fog color seen toward worldPos, either the flat fog color or the sky behind it
+// How blurred the sky is that fog takes its color from, as a sky probe roughness. The sharper one keeps a glow
+// around the sun, the softer one spreads it out.
+#define FOG_SKY_GLOW_ROUGHNESS 0.25
+#define FOG_SKY_ROUGHNESS 0.5
+
+// The fog color seen toward worldPos, either the flat fog color or the sky behind it from the sky probe, so it
+// meets whatever sky is drawn seamlessly
 vec3 FogColor(vec3 worldPos)
 {
-    if (_FogSky.x < 0.5)
+    if (_FogSky.x < 0.5 || !ReflectionProbesReady())
         return _FogColor.rgb;
 
-    vec3 toPoint = worldPos - _WorldSpaceCameraPos.xyz;
-    vec3 sun = _DirectionalLightEnabled != 0 ? normalize(_DirectionalLightDirection) : normalize(vec3(-0.5, 0.7, -0.5));
-    vec3 c = prowlSky(toPoint / max(length(toPoint), 1e-4), sun, _FogSky.y) * 40.0;
-
-    // The same exposure and tonemap the skybox uses, so the fog meets the sky seamlessly
-    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    vec3 tc = c / (c + 1.0);
-    return mix(c / (l + 1.0), tc, tc);
+    // Below the horizon the fog keeps the horizon's color rather than the ground under the sky
+    vec3 dir = worldPos - _WorldSpaceCameraPos.xyz;
+    dir.y = max(dir.y, 0.0);
+    dir = length(dir) > 1e-4 ? normalize(dir) : vec3(0.0, 0.0, 1.0);
+    return SampleProbeLayer(0.0, dir, _FogSky.y > 0.5 ? FOG_SKY_GLOW_ROUGHNESS : FOG_SKY_ROUGHNESS);
 }
 
 vec3 ApplyFog(vec3 color, vec3 worldPos)

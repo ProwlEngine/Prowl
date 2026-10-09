@@ -71,19 +71,24 @@
 
 		const int MAX_BONE_INFLUENCE = 4;
 
-		// Bone matrices stored in a RGBA32F texture - no uniform array size limit.
-		// Layout: each bone = 4 consecutive texels (one per column of mat4).
-		uniform sampler2D boneMatrixTexture;
+		// Skin matrices, four columns a bone, in a storage buffer or a float texture where the vertex stage has none
 		uniform int boneCount;
+
+	#ifdef PROWL_VERTEX_STORAGE_BUFFERS
+		layout(std430) readonly buffer ProwlBones { vec4 _Bones[]; };
+
+		vec4 BoneTexel(int i) { return _Bones[i]; }
+	#else
+		uniform sampler2D _BoneTex;
+		uniform int _BoneTexShift;
+
+		vec4 BoneTexel(int i) { return texelFetch(_BoneTex, ivec2(i & ((1 << _BoneTexShift) - 1), i >> _BoneTexShift), 0); }
+	#endif
 
 		mat4 GetBoneMatrix(int boneIndex)
 		{
-			int texOffset = boneIndex * 4;
-			vec4 col0 = texelFetch(boneMatrixTexture, ivec2(texOffset + 0, 0), 0);
-			vec4 col1 = texelFetch(boneMatrixTexture, ivec2(texOffset + 1, 0), 0);
-			vec4 col2 = texelFetch(boneMatrixTexture, ivec2(texOffset + 2, 0), 0);
-			vec4 col3 = texelFetch(boneMatrixTexture, ivec2(texOffset + 3, 0), 0);
-			return mat4(col0, col1, col2, col3);
+			int t = boneIndex * 4;
+			return mat4(BoneTexel(t), BoneTexel(t + 1), BoneTexel(t + 2), BoneTexel(t + 3));
 		}
 
 		vec4 GetSkinnedPosition(vec3 position)
@@ -130,59 +135,69 @@
 
 // =============================================================
 //  Blend Shapes (Morph Targets)
-//  Per-mesh delta textures (RGBA32F) hold one "layer" per blend-shape frame.
-//  Deltas are laid out linearly as idx = layer * morphVertexCount + gl_VertexID
-//  and tiled into 2D: (idx % morphTexWidth, idx / morphTexWidth).
-//  The renderer uploads only the ACTIVE layers (non-zero weight) into
-//  morphWeightTexture, one texel each: (layerIndex, weight, 0, 0).
+//  One per-mesh delta table holds a "layer" per blend-shape frame, each delta at
+//  layer * morphVertexCount + gl_VertexID: positions from 0, normals from morphNormalBase and
+//  tangents from morphTangentBase (-1 when the mesh has none).
+//  The renderer writes only the ACTIVE layers (non-zero weight) to a weight table,
+//  one vec4 each: (layerIndex, weight, 0, 0).
 //  Morphing is applied to the rest-pose vertex BEFORE skinning.
 // =============================================================
 
 #ifdef BLENDSHAPES
-		uniform sampler2D morphPositionTexture;
-		uniform sampler2D morphNormalTexture;
-		uniform sampler2D morphTangentTexture;
-		uniform sampler2D morphWeightTexture;
 		uniform int morphActiveCount;
-		uniform int morphTexWidth;
 		uniform int morphVertexCount;
-		uniform int morphHasNormals;
-		uniform int morphHasTangents;
+		uniform int morphNormalBase;
+		uniform int morphTangentBase;
 
-		vec3 SampleMorphDelta(sampler2D tex, int layer)
+	#ifdef PROWL_VERTEX_STORAGE_BUFFERS
+		layout(std430) readonly buffer ProwlMorphDeltas { vec4 _MorphDeltas[]; };
+		layout(std430) readonly buffer ProwlMorphWeights { vec4 _MorphWeights[]; };
+
+		vec4 MorphDeltaTexel(int i) { return _MorphDeltas[i]; }
+		vec4 MorphWeightTexel(int i) { return _MorphWeights[i]; }
+	#else
+		uniform sampler2D _MorphDeltaTex;
+		uniform int _MorphDeltaTexShift;
+		uniform sampler2D _MorphWeightTex;
+		uniform int _MorphWeightTexShift;
+
+		vec4 MorphDeltaTexel(int i) { return texelFetch(_MorphDeltaTex, ivec2(i & ((1 << _MorphDeltaTexShift) - 1), i >> _MorphDeltaTexShift), 0); }
+		vec4 MorphWeightTexel(int i) { return texelFetch(_MorphWeightTex, ivec2(i & ((1 << _MorphWeightTexShift) - 1), i >> _MorphWeightTexShift), 0); }
+	#endif
+
+		vec3 MorphDelta(int base, int layer)
 		{
-			int idx = layer * morphVertexCount + gl_VertexID;
-			return texelFetch(tex, ivec2(idx % morphTexWidth, idx / morphTexWidth), 0).xyz;
+			return MorphDeltaTexel(base + layer * morphVertexCount + gl_VertexID).xyz;
 		}
 
 		vec3 GetMorphedPosition(vec3 position)
 		{
 			for (int i = 0; i < morphActiveCount; i++)
 			{
-				vec2 lw = texelFetch(morphWeightTexture, ivec2(i, 0), 0).xy;
-				position += SampleMorphDelta(morphPositionTexture, int(lw.x)) * lw.y;
+				vec2 lw = MorphWeightTexel(i).xy;
+				position += MorphDelta(0, int(lw.x)) * lw.y;
 			}
 			return position;
 		}
 
 		vec3 GetMorphedNormal(vec3 normal)
 		{
-			if (morphHasNormals == 0) return normal;
+			if (morphNormalBase < 0) return normal;
 			for (int i = 0; i < morphActiveCount; i++)
 			{
-				vec2 lw = texelFetch(morphWeightTexture, ivec2(i, 0), 0).xy;
-				normal += SampleMorphDelta(morphNormalTexture, int(lw.x)) * lw.y;
+				vec2 lw = MorphWeightTexel(i).xy;
+				normal += MorphDelta(morphNormalBase, int(lw.x)) * lw.y;
 			}
 			return normal;
 		}
 
 		vec3 GetMorphedTangent(vec3 tangent)
 		{
-			if (morphHasTangents == 0) return tangent;
+			if (morphTangentBase < 0) return tangent;
 			for (int i = 0; i < morphActiveCount; i++)
 			{
-				vec2 lw = texelFetch(morphWeightTexture, ivec2(i, 0), 0).xy;
-				tangent += SampleMorphDelta(morphTangentTexture, int(lw.x)) * lw.y;
+				vec2 lw = MorphWeightTexel(i).xy;
+				tangent += MorphDelta(morphTangentBase, int(lw.x)) * lw.y;
 			}
 			return tangent;
 		}

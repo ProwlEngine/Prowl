@@ -31,6 +31,17 @@ public static unsafe class Graphics
     public static GL GL;
 
     /// <summary>
+    /// The kind of context to create and write shaders for: OpenGL ES on mobile, desktop OpenGL everywhere else. Can be
+    /// changed before the window opens, such as with --graphics-target OpenGLES to try the ES path on a desktop.
+    /// </summary>
+    public static GraphicsTarget Target { get; set; } = OperatingSystem.IsAndroid() || OperatingSystem.IsIOS()
+        ? GraphicsTarget.OpenGLES
+        : GraphicsTarget.OpenGL;
+
+    /// <summary>What the context the engine is running on allows. Valid once the window has opened.</summary>
+    public static GraphicsCapabilities Capabilities { get; internal set; } = new(GraphicsTarget.OpenGL, 4, 1, new());
+
+    /// <summary>
     /// True when there is no graphics device (no window / render thread) - a dedicated server or a
     /// build launched with --headless. GPU command submission becomes a no-op so gameplay code that
     /// creates or touches GPU resources (materials, terrain, render textures, etc.) runs without
@@ -51,10 +62,9 @@ public static unsafe class Graphics
     //   resource creation and SubmitAndWait jobs enqueued at ANY time (between frames,
     //   or from background threads) are serviced promptly rather than waiting for the
     //   next BeginFrame.
-    //   main: BeginFrame      -> arm frameDone for this frame
     //   main: encode CBs        (main has no context; render is draining)
-    //   main: EndFrameAndWait -> push frame-end sentinel, block on frameDone
-    //   render: hits sentinel, SwapBuffers, signal frameDone
+    //   main: EndFrameAndWait -> push frame-end sentinel, block until all but MaxFramesInFlight - 1 frames are done
+    //   render: hits sentinel, SwapBuffers, counts the frame as done
 
     private readonly record struct RenderJob(CommandBuffer? Cmd, WaitedJob? Waited = null, bool IsFrameEnd = false, System.Action? Callback = null);
 
@@ -101,7 +111,19 @@ public static unsafe class Graphics
     }
 
     internal static bool IsRenderThread => s_renderThread != null && System.Threading.Thread.CurrentThread == s_renderThread;
-    private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
+
+    // Frames whose end sentinel was pushed, and frames the render thread has swapped. Guarded by s_frameLock.
+    private static long s_framesSubmitted;
+    private static long s_framesCompleted;
+    private static readonly object s_frameLock = new();
+
+    /// <summary>
+    /// How many frames may be in the pipeline at once. With 2 the main thread builds the next frame while the render
+    /// thread finishes the current one, so neither waits on the other, at one frame of extra input latency. 1 waits for
+    /// every frame to finish before starting the next. Running XR always uses 1, since OpenXR orders its frame calls
+    /// strictly and a headset should never show an older frame than it has to.
+    /// </summary>
+    public static int MaxFramesInFlight { get; set; } = 2;
 
     private static int s_wantedSwapInterval = -1;
     private static int s_appliedSwapInterval = -1;
@@ -180,13 +202,7 @@ public static unsafe class Graphics
         waited.Error?.Throw();
     }
 
-    internal static void BeginFrame()
-    {
-        // Arm the frame-done gate so EndFrameAndWait blocks until THIS frame's
-        // sentinel is processed. The render thread is always draining, so there's
-        // nothing to wake.
-        s_renderFrameDone.Reset();
-    }
+    internal static void BeginFrame() { }
 
     /// <summary>Time the main thread spent blocked in <see cref="EndFrameAndWait"/>
     /// last frame. High = render thread is bottleneck. Near-zero = main is.</summary>
@@ -194,11 +210,29 @@ public static unsafe class Graphics
 
     internal static void EndFrameAndWait()
     {
-        Enqueue(new RenderJob(null, IsFrameEnd: true));
+        int inFlight = XR.IsRunning ? 1 : System.Math.Max(1, MaxFramesInFlight);
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
-        s_renderFrameDone.Wait();
+        lock (s_frameLock)
+        {
+            long frame = ++s_framesSubmitted;
+            Enqueue(new RenderJob(null, IsFrameEnd: true));
+
+            // The frame inFlight - 1 frames back has to be on screen before this one may start the next
+            long mustBeDone = frame - inFlight + 1;
+            while (s_framesCompleted < mustBeDone)
+                System.Threading.Monitor.Wait(s_frameLock);
+        }
         long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
         LastFrameWaitMs = (float)(elapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+    }
+
+    private static void CompleteFrame(long frames)
+    {
+        lock (s_frameLock)
+        {
+            s_framesCompleted += frames;
+            System.Threading.Monitor.PulseAll(s_frameLock);
+        }
     }
 
     // On a hybrid machine OpenGL silently picks an adapter for us, and picking the integrated one
@@ -223,28 +257,90 @@ public static unsafe class Graphics
         GL = GL.GetApi(Window.InternalWindow);
 
         LogAdapter();
+        Capabilities = DetectCapabilities();
+        Debug.Log($"Graphics: {Capabilities}");
 
-        if (debug)
+        if (debug && Capabilities.Has(GraphicsFeature.DebugOutput))
         {
-            if (OperatingSystem.IsWindows())
-            {
-                GL.DebugMessageCallback(DebugCallback, null);
-                GL.Enable(EnableCap.DebugOutput);
-                GL.Enable(EnableCap.DebugOutputSynchronous);
-            }
+            GL.DebugMessageCallback(DebugCallback, null);
+            GL.Enable(EnableCap.DebugOutput);
+            GL.Enable(EnableCap.DebugOutputSynchronous);
         }
 
-        GL.Enable(EnableCap.LineSmooth);
+        // Neither exists on ES, where cubemaps are always seamless
+        if (!Capabilities.IsES)
+        {
+            GL.Enable(EnableCap.LineSmooth);
 
-        // Seamless cubemap filtering removes the visible face seams when sampling a
-        // cubemap with linear/trilinear filtering. Required for clean reflection-probe
-        // and prefiltered-environment sampling.
-        GL.Enable(EnableCap.TextureCubeMapSeamless);
+            // Seamless cubemap filtering removes the visible face seams when sampling a
+            // cubemap with linear/trilinear filtering. Required for clean reflection-probe
+            // and prefiltered-environment sampling.
+            GL.Enable(EnableCap.TextureCubeMapSeamless);
+        }
 
         MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
         MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
         MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
         MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
+    }
+
+    private static string? s_shaderPrelude;
+    private static GraphicsCapabilities? s_preludeFor;
+
+    /// <summary>
+    /// What every shader starts with: the GLSL version of the context, ES precision defaults, and a define per optional
+    /// feature (PROWL_GLES, PROWL_STORAGE_BUFFERS, PROWL_VERTEX_STORAGE_BUFFERS, PROWL_FRAGMENT_STORAGE_BUFFERS,
+    /// PROWL_COMPUTE) so a shader can pick its data path.
+    /// </summary>
+    public static string ShaderPrelude
+    {
+        get
+        {
+            if (s_shaderPrelude != null && ReferenceEquals(s_preludeFor, Capabilities)) return s_shaderPrelude;
+            GraphicsCapabilities caps = Capabilities;
+            var sb = new System.Text.StringBuilder();
+            if (caps.IsES)
+            {
+                sb.Append($"#version {caps.ShaderVersion} es\n");
+                sb.Append("#define PROWL_GLES 1\n");
+                foreach (string type in s_esPrecisionTypes)
+                    sb.Append($"precision highp {type};\n");
+            }
+            else
+            {
+                sb.Append($"#version {caps.ShaderVersion} core\n");
+            }
+            if (caps.Has(GraphicsFeature.StorageBuffers)) sb.Append("#define PROWL_STORAGE_BUFFERS 1\n");
+            if (caps.Has(GraphicsFeature.VertexStorageBuffers)) sb.Append("#define PROWL_VERTEX_STORAGE_BUFFERS 1\n");
+            if (caps.Has(GraphicsFeature.FragmentStorageBuffers)) sb.Append("#define PROWL_FRAGMENT_STORAGE_BUFFERS 1\n");
+            if (caps.Has(GraphicsFeature.ComputeShaders)) sb.Append("#define PROWL_COMPUTE 1\n");
+            s_preludeFor = caps;
+            return s_shaderPrelude = sb.ToString();
+        }
+    }
+
+    // ES gives float and several sampler types no default precision
+    private static readonly string[] s_esPrecisionTypes =
+    [
+        "float", "int", "sampler2D", "sampler3D", "samplerCube", "sampler2DShadow", "samplerCubeShadow",
+        "sampler2DArray", "sampler2DArrayShadow", "isampler2D", "usampler2D", "isampler3D", "usampler3D",
+        "samplerCubeArray",
+    ];
+
+    private static GraphicsCapabilities DetectCapabilities()
+    {
+        int major = GL.GetInteger(GLEnum.MajorVersion);
+        int minor = GL.GetInteger(GLEnum.MinorVersion);
+        var extensions = new System.Collections.Generic.HashSet<string>();
+        int count = GL.GetInteger(GLEnum.NumExtensions);
+        for (uint i = 0; i < count; i++)
+            extensions.Add(GL.GetStringS(Silk.NET.OpenGL.StringName.Extensions, i));
+
+        // Only queried where storage buffers exist, older contexts reject the enums
+        bool storage = Target == GraphicsTarget.OpenGLES ? major > 3 || (major == 3 && minor >= 1) : major > 4 || (major == 4 && minor >= 3);
+        int vertexBlocks = storage ? GL.GetInteger(GLEnum.MaxVertexShaderStorageBlocks) : 0;
+        int fragmentBlocks = storage ? GL.GetInteger(GLEnum.MaxFragmentShaderStorageBlocks) : 0;
+        return new GraphicsCapabilities(Target, major, minor, extensions, vertexBlocks, fragmentBlocks);
     }
 
     public static void StartRenderThread()
@@ -297,7 +393,7 @@ public static unsafe class Graphics
         catch (Exception ex)
         {
             Debug.LogError($"Render thread MakeCurrent failed: {ex}");
-            s_renderFrameDone.Set();
+            CompleteFrame(long.MaxValue / 2);
             return;
         }
 
@@ -317,7 +413,7 @@ public static unsafe class Graphics
                     ApplyPendingSwapInterval();
                     try { Window.InternalWindow.GLContext!.SwapBuffers(); }
                     catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
-                    finally { s_renderFrameDone.Set(); }
+                    finally { CompleteFrame(1); }
                     continue;
                 }
                 if (job.Callback != null)
@@ -399,8 +495,8 @@ public static unsafe class Graphics
     public static GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments, uint width, uint height)
         => new GraphicsFrameBuffer(attachments, width, height);
 
-    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format)
-        => new GraphicsTexture(type, format);
+    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format, bool randomWrite = false, int levels = 1)
+        => new GraphicsTexture(type, format, randomWrite, levels);
 
     public static GraphicsProgram CompileProgram(string fragment, string vertex, string geometry)
         => new GraphicsProgram(fragment, vertex, geometry);
@@ -435,6 +531,7 @@ public static unsafe class Graphics
     public static void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => EncodeOneOp(c => c.EncodeSetTextureWrap(texture, 1, wrap), "Texture.SetWrapT");
     public static void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => EncodeOneOp(c => c.EncodeSetTextureWrap(texture, 2, wrap), "Texture.SetWrapR");
     public static void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => EncodeOneOp(c => c.EncodeSetTextureFilters(texture, min, mag), "Texture.SetFilters");
+    public static void SetTextureMaxLevel(GraphicsTexture texture, int level) => EncodeOneOp(c => c.EncodeSetTextureMaxLevel(texture, level), "Texture.SetMaxLevel");
     public static void SetTextureCompareMode(GraphicsTexture texture, bool enabled) => EncodeOneOp(c => c.EncodeSetTextureCompareMode(texture, enabled), "Texture.SetCompareMode");
     public static void GenerateMipmap(GraphicsTexture texture) => EncodeOneOp(c => c.GenerateMipmap(texture), "Texture.GenerateMipmap");
 

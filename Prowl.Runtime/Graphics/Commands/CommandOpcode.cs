@@ -77,6 +77,9 @@ internal enum CommandOpcode : ushort
     DrawIndexed,
     DrawIndexedInstanced,
     DrawArrays,
+    DrawIndexedRanges,
+    Dispatch,
+    DispatchIndirect,
 
     // (DrawMesh / DrawMeshInstanced / Blit are encoder sugar on CommandBuffer that
     //  expand inline to lower-level opcodes there's no executor case for them.)
@@ -93,6 +96,7 @@ internal enum CommandOpcode : ushort
     UpdateTexture3D,
     SetTextureWrap,
     SetTextureFiltersOp,
+    SetTextureMaxLevel,
     SetTextureCompareMode,
     GetTextureData,
     GetTextureDataPtr,

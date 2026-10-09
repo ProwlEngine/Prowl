@@ -263,6 +263,10 @@ public static class EditorSceneManager
             // those edits the next time they are refreshed.
             PrefabUtility.ReconcileOpenScene();
 
+            // Stored with the scene, so a loaded scene or a build draws its static objects merged without building them
+            if (Scene.Current.StaticGeometry.NeedsRebuild(Scene.Current))
+                Scene.Current.UpdateStaticGeometry();
+
             var echo = Serializer.Serialize(typeof(object), Scene.Current);
             if (echo == null)
             {

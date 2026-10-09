@@ -281,24 +281,13 @@ Pass "FogMarch"
                 }
             }
 
-            // Static BVH.
-            if (_StaticLightRoot >= 0) {
-                LBVH_Iter it;
-                LBVH_Begin(it, _StaticLightRoot);
-                int slot;
-                while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
-                    LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-                    scatter += ScatterFromLocalLight(L, worldPos, viewDir, volColor);
-                }
-            }
-
-            // Dynamic BVH.
-            if (_DynamicLightRoot >= 0) {
-                LBVH_Iter it;
-                LBVH_Begin(it, _DynamicLightRoot);
-                int slot;
-                while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
-                    LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+            LightTreeWalk walk;
+            LightTree_Begin(walk);
+            int first, last;
+            while (LightTree_NextLeaf(walk, worldPos, first, last)) {
+                for (int k = first; k < last; k++) {
+                    LightSample L;
+                    if (!LightTree_FetchLight(k, worldPos, L)) continue;
                     scatter += ScatterFromLocalLight(L, worldPos, viewDir, volColor);
                 }
             }
