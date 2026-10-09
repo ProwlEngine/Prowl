@@ -82,20 +82,10 @@ public sealed record RecordedAccess(
     bool IsOutput,
     TextureState TextureUsage,
     TextureState? DepthUsage,
-    BufferAccess BufferUsage)
-{
-    private const TextureState TextureReads = TextureState.Sampled | TextureState.Storage | TextureState.TransferSrc | TextureState.DepthReadOnly;
-
-    /// <summary>Whether the declared usage reads the contents the resource had before the pass.</summary>
-    public bool ReadsContents
-        => !IsOutput
-            || (Kind == GraphResourceKind.Texture
-                ? ((TextureUsage | (DepthUsage ?? 0)) & TextureReads) != 0
-                : (BufferUsage & BufferAccess.AllReads) != 0);
-}
+    BufferAccess BufferUsage);
 
 /// <summary>A resource a pass touched, with its version at first reference and after the pass.</summary>
-public sealed record RecordedReference(TraceResourceId Resource, uint First, uint Last, bool Reads);
+public sealed record RecordedReference(TraceResourceId Resource, uint First, uint Last, bool NeedsContents);
 
 /// <summary>A copy taken for a pass. The blob holds the staging bytes laid out by the regions.</summary>
 public sealed record RecordedCopy(TraceVersion Version, CopyPlacement Placement, EquatableArray<CopyRegion> Regions, BlobRef Blob);

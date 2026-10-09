@@ -32,9 +32,6 @@ public sealed partial class DeepRecording
             AttachmentUse use = framebuffer.Colors[i];
             colors[i] = Attachment(use);
             pass.Written.Add(use.Texture.Resource);
-            pass.Attachments.Add(use.Texture.Resource);
-            if (ops.Color.Load == LoadAction.Load)
-                pass.Loaded.Add(use.Texture.Resource);
         }
 
         RecordedAttachment? depth = null;
@@ -42,9 +39,6 @@ public sealed partial class DeepRecording
         {
             depth = Attachment(depthUse);
             pass.Written.Add(depthUse.Texture.Resource);
-            pass.Attachments.Add(depthUse.Texture.Resource);
-            if (ops.Depth.Load == LoadAction.Load)
-                pass.Loaded.Add(depthUse.Texture.Resource);
         }
 
         pass.Commands.Add(new SetFramebufferCommand(colors.ToEquatableArray(), depth, framebuffer.Outputs, framebuffer.Width, framebuffer.Height, ops));
@@ -293,9 +287,6 @@ public sealed partial class DeepRecording
         public readonly List<RecordedAccess> Accesses = new();
         public readonly HashSet<ResourceId> Declared = new();
         public readonly HashSet<ResourceId> Outputs = new();
-        public readonly HashSet<ResourceId> Reads = new();
-        public readonly HashSet<ResourceId> Attachments = new();
-        public readonly HashSet<ResourceId> Loaded = new();
         public readonly HashSet<ResourceId> Written = new();
         public readonly List<RecordedCommand> Commands = new();
         public readonly Dictionary<string, RecordedProperty> Properties = new();

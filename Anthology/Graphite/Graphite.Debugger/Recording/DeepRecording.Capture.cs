@@ -65,9 +65,6 @@ public sealed partial class DeepRecording
                     pass.Declared.Add(backing.Id);
                     if (access.IsOutput)
                         pass.Outputs.Add(backing.Id);
-
-                    if (recorded.ReadsContents)
-                        pass.Reads.Add(backing.Id);
                 }
             }
 
@@ -88,7 +85,7 @@ public sealed partial class DeepRecording
             ResourceId id = reference.First.Resource;
             ResourceBuilder builder = Builder(id);
             Describe(builder, in reference, view.Origins.TryGetValue(id, out GraphResourceOrigin origin) ? Origin(origin) : ResourceOrigin.External);
-            recorded[i] = new RecordedReference(builder.Id, reference.First.Version, reference.LastVersion, ReadsContents(view, state, id));
+            recorded[i] = new RecordedReference(builder.Id, reference.First.Version, reference.LastVersion, reference.NeedsContents);
 
             if (reference.LastVersion != reference.First.Version && !state.Outputs.Contains(id) && !state.Written.Contains(id))
                 state.NotReplayable ??= $"Undeclared GPU write to {reference.Name}.";
@@ -99,7 +96,7 @@ public sealed partial class DeepRecording
         {
             PassReference reference = references[i];
             ResourceId id = reference.First.Resource;
-            if (IsViewTarget(view, id) || view.Known.Contains((id, reference.First.Version)) || !recorded[i].Reads)
+            if (IsViewTarget(view, id) || view.Known.Contains((id, reference.First.Version)) || !reference.NeedsContents)
                 continue;
 
             Copy(state, capture, in reference, CopyPlacement.BeforePass, reference.First.Version);
@@ -130,17 +127,6 @@ public sealed partial class DeepRecording
 
     private static bool IsViewTarget(ViewState view, ResourceId id)
         => view.Origins.TryGetValue(id, out GraphResourceOrigin origin) && origin == GraphResourceOrigin.ViewTarget;
-
-    private static bool ReadsContents(ViewState view, PassState state, ResourceId id)
-    {
-        if (state.Loaded.Contains(id) || state.Reads.Contains(id))
-            return true;
-
-        if (state.Attachments.Contains(id))
-            return false;
-
-        return !view.Origins.TryGetValue(id, out GraphResourceOrigin origin) || origin != GraphResourceOrigin.Transient;
-    }
 
     private void Copy(PassState state, ICaptureContext capture, in PassReference reference, CopyPlacement placement, uint version)
     {

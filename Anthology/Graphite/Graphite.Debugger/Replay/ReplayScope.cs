@@ -94,7 +94,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             foreach (RecordedReference reference in passes[i].References)
             {
                 TraceVersion version = new(reference.Resource, reference.First);
-                if (reference.Reads && !produced.Contains(version)
+                if (reference.NeedsContents && !produced.Contains(version)
                     && (!_copies.TryGetValue(version, out RecordedCopy? copy) || Unrestorable(reference.Resource, copy) != null))
                     return false;
             }
@@ -178,7 +178,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         foreach (RecordedReference reference in pass.References)
         {
             TraceVersion version = new(reference.Resource, reference.First);
-            if (!reference.Reads || _produced.Contains(version) || !_copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
+            if (!reference.NeedsContents || _produced.Contains(version) || !_copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
                 continue;
 
             string? error = PlanRestore(pass.Index, reference.Resource, restore);
