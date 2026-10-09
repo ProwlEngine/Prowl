@@ -28,7 +28,7 @@ public partial class GameObject : EngineObject, ISerializable
     // in OnHotReload.
     internal List<MonoBehaviour> _components = [];
     // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
-    [ReloadIgnore] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
+    [ReloadIgnore, NotHeld] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
     private Guid _identifier = Guid.NewGuid();
 
