@@ -83,21 +83,22 @@ public sealed class Replayer
         using RenderPipeline pipeline = new(replay.ToArray());
         ReplayView[] views = [new ReplayView(view.Name, view.PixelWidth, view.PixelHeight)];
 
-        ExecutionTask task = _device.DispatchGraph(pipeline, views, [capture]);
-        _device.WaitForExecution(task);
-
         List<ReplayOutput> outputs = new();
-        foreach ((TraceResourceId resource, CaptureCopy copy) in capture.Copies)
+        try
         {
-            try
+            ExecutionTask task = _device.DispatchGraph(pipeline, views, [capture]);
+            _device.WaitForExecution(task);
+
+            foreach ((TraceResourceId resource, CaptureCopy copy) in capture.Copies)
             {
                 outputs.Add(new ReplayOutput(resource, copy.Regions.ToArray().ToEquatableArray(), EquatableArray.Create<byte>(_device.Map(copy.Staging))));
                 _device.Unmap(copy.Staging);
             }
-            finally
-            {
+        }
+        finally
+        {
+            foreach ((_, CaptureCopy copy) in capture.Copies)
                 copy.Staging.Dispose();
-            }
         }
 
         if (capture.Failure != null)
