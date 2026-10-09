@@ -1,0 +1,5 @@
+newmtl Steel
+Kd 0.55 0.57 0.6
+
+newmtl Paint
+Kd 0.6 0.1 0.1

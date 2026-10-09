@@ -1,0 +1,5 @@
+newmtl Ash
+Kd 0.3 0.2 0.1
+
+newmtl Steel
+Kd 0.55 0.57 0.6

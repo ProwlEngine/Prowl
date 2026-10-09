@@ -117,6 +117,9 @@ public abstract class StationGame : Game
     /// <summary>The live stat line under the description.</summary>
     public virtual string Stats => string.Empty;
 
+    /// <summary>Shows only the stats, the frame rate and the sample's controls, for a sample played in a headset.</summary>
+    public virtual bool CompactHud => false;
+
     public string KeyHelp
     {
         get
@@ -631,14 +634,17 @@ public sealed class SampleHud : MonoBehaviour
             .Padding(16, 16, 12, 14).Gap(6)
             .Enter())
         {
-            paper.Box("title").Height(30)
-                .Text(Game.Stations.Count > 1 ? $"{(index + 1) % 10}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
-                .Alignment(TextAlignment.MiddleLeft);
+            if (!Game.CompactHud)
+            {
+                paper.Box("title").Height(30)
+                    .Text(Game.Stations.Count > 1 ? $"{(index + 1) % 10}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
+                    .Alignment(TextAlignment.MiddleLeft);
 
-            paper.Box("description").Height(UnitValue.Auto)
-                .Text(station.Description, font).FontSize(16).TextColor(Bright)
-                .Wrap(TextWrapMode.Wrap)
-                .Alignment(TextAlignment.Left);
+                paper.Box("description").Height(UnitValue.Auto)
+                    .Text(station.Description, font).FontSize(16).TextColor(Bright)
+                    .Wrap(TextWrapMode.Wrap)
+                    .Alignment(TextAlignment.Left);
+            }
 
             string stats = Game.Stats;
             if (!string.IsNullOrEmpty(stats))
@@ -647,10 +653,11 @@ public sealed class SampleHud : MonoBehaviour
                     .Wrap(TextWrapMode.Wrap)
                     .Alignment(TextAlignment.Left);
 
-            paper.Box("keys").Height(UnitValue.Auto)
-                .Text(Game.KeyHelp + "    F1  hide", font).FontSize(14).TextColor(Dim)
-                .Wrap(TextWrapMode.Wrap)
-                .Alignment(TextAlignment.Left);
+            if (!Game.CompactHud)
+                paper.Box("keys").Height(UnitValue.Auto)
+                    .Text(Game.KeyHelp + "    F1  hide", font).FontSize(14).TextColor(Dim)
+                    .Wrap(TextWrapMode.Wrap)
+                    .Alignment(TextAlignment.Left);
         }
     }
 
@@ -705,6 +712,8 @@ public sealed class SampleHud : MonoBehaviour
                     .Text($"{average:0.00} ms", font).FontSize(14).TextColor(Dim)
                     .Alignment(TextAlignment.MiddleRight);
             }
+
+            if (Game.CompactHud) return;
 
             using (paper.Box("graph").Height(96).Enter())
                 paper.Draw((canvas, rect) => DrawGraph(canvas, rect, font, worst));

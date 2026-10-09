@@ -1,0 +1,8 @@
+newmtl Polymer
+Kd 0.04 0.04 0.045
+
+newmtl Steel
+Kd 0.55 0.57 0.6
+
+newmtl Gunmetal
+Kd 0.08 0.085 0.09

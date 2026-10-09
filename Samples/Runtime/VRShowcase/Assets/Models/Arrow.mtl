@@ -1,0 +1,11 @@
+newmtl Polymer
+Kd 0.04 0.04 0.045
+
+newmtl Ash
+Kd 0.3 0.2 0.1
+
+newmtl Steel
+Kd 0.55 0.57 0.6
+
+newmtl Feather
+Kd 0.8 0.15 0.1

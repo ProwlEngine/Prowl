@@ -1,0 +1,11 @@
+newmtl Gunmetal
+Kd 0.08 0.085 0.09
+
+newmtl Ash
+Kd 0.3 0.2 0.1
+
+newmtl Brass
+Kd 0.5 0.32 0.06
+
+newmtl Steel
+Kd 0.55 0.57 0.6
