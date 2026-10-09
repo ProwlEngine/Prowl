@@ -14,6 +14,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
     private readonly SortedDictionary<int, ViewBuilder> _views = new();
     private readonly Dictionary<ulong, CommandBufferBuilder> _commandBuffers = new();
     private ulong _executionId;
+    private string _graphName = "";
     private bool _resolved;
     private volatile bool _done;
     private EquatableArray<RecordedView> _builtViews = EquatableArray<RecordedView>.Empty;
@@ -27,9 +28,10 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         _device = device;
     }
 
-    internal Recording(ulong executionId, EquatableArray<RecordedView> views, EquatableArray<RecordedCommandBuffer> commandBuffers)
+    internal Recording(ulong executionId, string graphName, EquatableArray<RecordedView> views, EquatableArray<RecordedCommandBuffer> commandBuffers)
     {
         _executionId = executionId;
+        _graphName = graphName;
         _builtViews = views;
         _builtCommandBuffers = commandBuffers;
         _done = true;
@@ -37,6 +39,9 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
 
     /// <summary>Id of the recorded execution, or 0 before it is passed to one. Ids grow with start order.</summary>
     public ulong ExecutionId => Volatile.Read(ref _executionId);
+
+    /// <summary>Debug name of the recorded execution's graph, or empty before it is passed to one.</summary>
+    public string GraphName => Volatile.Read(ref _graphName);
 
     /// <summary>The views of the execution in order.</summary>
     public EquatableArray<RecordedView> Views
@@ -109,13 +114,14 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
             throw new InvalidOperationException("The recording is not done. Check IsDone or call Wait() first.");
     }
 
-    void IProfiler.BeginExecution(ulong executionId)
+    void IProfiler.BeginExecution(ulong executionId, string graphName)
     {
         lock (_gate)
         {
             if (_device == null || _executionId != 0)
                 throw new InvalidOperationException("A recording observes exactly one execution.");
 
+            Volatile.Write(ref _graphName, graphName);
             Volatile.Write(ref _executionId, executionId);
         }
     }

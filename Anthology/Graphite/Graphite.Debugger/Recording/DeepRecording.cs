@@ -146,7 +146,7 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
             throw new InvalidOperationException("The recording is not done. Check IsDone or call Wait() first.");
     }
 
-    void IProfiler.BeginExecution(ulong executionId) => ((IProfiler)_recording).BeginExecution(executionId);
+    void IProfiler.BeginExecution(ulong executionId, string graphName) => ((IProfiler)_recording).BeginExecution(executionId, graphName);
 
     void IProfiler.EndExecution() => ((IProfiler)_recording).EndExecution();
 

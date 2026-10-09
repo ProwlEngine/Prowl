@@ -10,7 +10,7 @@ internal sealed class ReplayCapture(string passName, HashSet<TraceResourceId> wa
     public readonly List<(TraceResourceId Resource, CaptureCopy Copy)> Copies = new();
     public string? Failure;
 
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
 
     public void EndExecution() { }
 
