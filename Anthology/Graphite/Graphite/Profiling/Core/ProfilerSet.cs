@@ -36,10 +36,10 @@ internal sealed class ProfilerSet
         CommandStream = Resolve<ICommandStreamProfiler>(distinct, sinks => new CompositeCommandStreamProfiler(sinks));
     }
 
-    public void BeginExecution(ulong executionId)
+    public void BeginExecution(ulong executionId, string graphName)
     {
         foreach (IProfiler profiler in _all)
-            profiler.BeginExecution(executionId);
+            profiler.BeginExecution(executionId, graphName);
     }
 
     public void EndExecution()

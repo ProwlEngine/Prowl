@@ -8,7 +8,7 @@ namespace Prowl.Graphite;
 
 internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphProfiler
 {
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
 
     public void EndExecution() { }
 
@@ -51,7 +51,7 @@ internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphPro
 
 internal sealed class CompositeGpuStatsProfiler(IGpuStatsProfiler[] sinks) : IGpuStatsProfiler
 {
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
 
     public void EndExecution() { }
 
@@ -70,7 +70,7 @@ internal sealed class CompositeGpuStatsProfiler(IGpuStatsProfiler[] sinks) : IGp
 
 internal sealed class CompositeCaptureProfiler(ICaptureProfiler[] sinks) : ICaptureProfiler
 {
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
 
     public void EndExecution() { }
 
@@ -95,7 +95,7 @@ internal sealed class CompositeCaptureProfiler(ICaptureProfiler[] sinks) : ICapt
 
 internal sealed class CompositeCommandStreamProfiler(ICommandStreamProfiler[] sinks) : ICommandStreamProfiler
 {
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
 
     public void EndExecution() { }
 

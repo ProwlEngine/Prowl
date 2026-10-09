@@ -24,7 +24,7 @@ public abstract partial class GraphicsDevice
         RenderGraph.RenderGraph graph = pipeline.Graph;
 
         List<Swapchain>? presents = null;
-        ExecutionTask task = BeginExecution(profilers);
+        ExecutionTask task = BeginExecution(graph.Name, profilers);
         IGraphProfiler? profiler = task.Profilers.Graph;
 
         int index = 0;

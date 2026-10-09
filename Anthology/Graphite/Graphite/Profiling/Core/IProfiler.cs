@@ -3,7 +3,8 @@ namespace Prowl.Graphite;
 /// <summary>Root of every profiler capability. One instance observes one execution, from BeginExecution to EndExecution.</summary>
 public interface IProfiler
 {
-    void BeginExecution(ulong executionId);
+    /// <summary>Called before any event of the execution. The graph name is empty for executions started without a graph.</summary>
+    void BeginExecution(ulong executionId, string graphName);
 
     /// <summary>Called once every event and GPU result of the execution has been delivered.</summary>
     void EndExecution();

@@ -58,14 +58,23 @@ public abstract partial class GraphicsDevice
     /// </summary>
     /// <param name="profilers">Profilers for this execution only. Empty creates one from each <see cref="GlobalProfilers"/> factory.</param>
     /// <returns>New execution handle.</returns>
-    public ExecutionTask BeginExecution(params IProfiler[] profilers)
+    public ExecutionTask BeginExecution(params IProfiler[] profilers) => BeginExecution("", profilers);
+
+    /// <summary>
+    /// Starts a new execution like <see cref="BeginExecution(IProfiler[])"/>, reporting a debug name to its profilers.
+    /// </summary>
+    /// <param name="name">Debug name reported to profilers as the graph name.</param>
+    /// <param name="profilers">Profilers for this execution only. Empty creates one from each <see cref="GlobalProfilers"/> factory.</param>
+    /// <returns>New execution handle.</returns>
+    public ExecutionTask BeginExecution(string name, params IProfiler[] profilers)
     {
+        ValidationHelpers.RequireNotNull(this, name, nameof(name), nameof(BeginExecution));
         ValidationHelpers.RequireNotNull(this, profilers, nameof(profilers), nameof(BeginExecution));
         ProfilerSet set = ResolveProfilers(profilers);
         ExecutionTask task = BeginExecutionSlot(set);
         try
         {
-            set.BeginExecution(task.Id);
+            set.BeginExecution(task.Id, name);
         }
         catch
         {
