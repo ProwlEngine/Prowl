@@ -69,6 +69,10 @@ internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
     public readonly List<Exception> Errors = new();
     public string? OnlyPass;
 
+    public void BeginExecution(ulong executionId) { }
+
+    public void EndExecution() { }
+
     public void OnViewBegin(in ViewCaptureInfo view) { }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
@@ -94,8 +98,6 @@ internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
 
     public void OnViewEnd() { }
 
-    public void OnExecutionSubmitted(ExecutionTask task) { }
-
     public void Dispose()
     {
         foreach ((string _, string _, CopyPlacement _, CaptureCopy copy) in Copies)
@@ -119,16 +121,8 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
             new WritePass("First", Target, target, external, new Color(255, 0, 0, 255), 1),
             new WritePass("Second", Target, target, external, new Color(0, 0, 255, 255), 2)]);
 
-        GD.Debug.Attach(profiler);
-        try
-        {
-            GD.DispatchGraph(pipeline, new CopyView[] { new() });
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.Debug.Detach(profiler);
-        }
+        GD.DispatchGraph(pipeline, new CopyView[] { new() }, profiler);
+        GD.WaitForIdle();
 
         Assert.Empty(profiler.Errors);
         Assert.Equal(Enumerable.Repeat((byte)1, 4), Read(profiler, "External", CopyPlacement.BeforePass).Take(4));
@@ -177,16 +171,8 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         CopyingProfiler profiler = new();
         using RenderPipeline pipeline = new([new WritePass("Only", Target, target, external, new Color(255, 0, 0, 255), 1, depth)]);
 
-        GD.Debug.Attach(profiler);
-        try
-        {
-            GD.DispatchGraph(pipeline, new CopyView[] { new() });
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.Debug.Detach(profiler);
-        }
+        GD.DispatchGraph(pipeline, new CopyView[] { new() }, profiler);
+        GD.WaitForIdle();
 
         return profiler;
     }
@@ -198,16 +184,8 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         using CopyingProfiler profiler = new();
         using RenderPipeline pipeline = new([new ViewTargetPass()]);
 
-        GD.Debug.Attach(profiler);
-        try
-        {
-            GD.DispatchGraph(pipeline, new CopyView[] { new() { Target = target.Framebuffer } });
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.Debug.Detach(profiler);
-        }
+        GD.DispatchGraph(pipeline, new CopyView[] { new() { Target = target.Framebuffer } }, profiler);
+        GD.WaitForIdle();
 
         Assert.NotEmpty(profiler.Errors);
         Assert.Empty(profiler.Copies);
