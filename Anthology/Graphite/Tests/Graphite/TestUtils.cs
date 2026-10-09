@@ -22,12 +22,12 @@ public readonly struct TestRenderView : IRenderView
 
 public static class TestGraphExtensions
 {
-    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext, CommandBuffer> record)
-        => gd.RunTestGraphPasses(1, (context, cmd, _) => record(context, cmd));
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext, CommandBuffer> record, params IProfiler[] profilers)
+        => gd.RunTestGraphPasses(1, (context, cmd, _) => record(context, cmd), profilers);
 
-    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext, CommandBuffer, int> record)
+    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext, CommandBuffer, int> record, params IProfiler[] profilers)
     {
-        ExecutionTask task = gd.BeginExecution();
+        ExecutionTask task = gd.BeginExecution(profilers);
         Prowl.Graphite.RenderGraph.RenderGraph graph = Prowl.Graphite.RenderGraph.RenderGraph.Build(
             Array.Empty<IPass>());
         var context = new RenderContext(gd, task, graph, default);
@@ -75,7 +75,6 @@ public static class TestGraphExtensions
 // creators build a window.
 public static class TestUtils
 {
-    // Each device gets its own profiler instance - state must not leak across devices/tests.
     private static GraphicsDeviceOptions HeadlessOptions() => new(true);
     private static GraphicsDeviceOptions SwapchainOptions() => new(true);
     private static SwapchainDescription SwapchainConfig() => new();
