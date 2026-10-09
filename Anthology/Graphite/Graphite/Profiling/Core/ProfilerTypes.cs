@@ -70,6 +70,7 @@ public readonly struct PassInfo
 }
 
 /// <summary>Work one pass command buffer recorded. Draws counts direct draw calls, IndirectDraws indirect ones.</summary>
+/// <remarks>CpuMilliseconds is the CPU time from the start of the pass's Render through the end of its command buffer.</remarks>
 public readonly record struct PassStats(
     uint Draws,
     uint IndirectDraws,
@@ -77,7 +78,8 @@ public readonly record struct PassStats(
     uint ShaderSwitches,
     uint PipelineBinds,
     uint ResourceSetBinds,
-    uint Barriers);
+    uint Barriers,
+    double CpuMilliseconds);
 
 public readonly struct PipelineBindInfo
 {

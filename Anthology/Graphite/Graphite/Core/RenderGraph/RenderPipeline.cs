@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 using Prowl.Graphite.Debugging;
 
@@ -98,9 +99,11 @@ public class RenderPipeline : IDisposable
                 context.TransitionForAccesses(node.Accesses);
                 CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
                 context.BindDeclaredTarget(passCommands, node.Accesses);
+                long recordStart = Stopwatch.GetTimestamp();
                 node.Pass.Render(context, passCommands);
                 PassStats stats = passCommands.Stats;
                 context.EndCommandBuffer(passCommands);
+                stats = stats with { CpuMilliseconds = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds };
                 context.MarkAttachmentWrites(node.Accesses);
                 context.SetCurrentPass(null);
                 capture?.EndPass(index, passCommands);

@@ -29,7 +29,7 @@ public abstract partial class CommandBuffer
     private uint _statBarriers;
 
     internal PassStats Stats => new(
-        _statDraws, _statIndirectDraws, _statDispatches, _statShaderSwitches, _statPipelineBinds, _statResourceSetBinds, _statBarriers);
+        _statDraws, _statIndirectDraws, _statDispatches, _statShaderSwitches, _statPipelineBinds, _statResourceSetBinds, _statBarriers, 0);
 
     internal void ResetStats()
     {
