@@ -14,7 +14,7 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
   automatically.
 - A frame-less `ExecutionTask` ring for CPU/GPU synchronization, with per-execution transient
   (bump-allocated) GPU memory.
-- Runtime-toggleable validation and profiling layers, controlled via `GraphicsDeviceOptions`.
+- Runtime-toggleable validation through `GraphicsDeviceOptions`, and per-execution profilers.
 
 ## Requirements
 
@@ -129,23 +129,42 @@ One MSBuild property controls backend trimming. It can be set on the command lin
 |-----------------|---------|--------------------------------------------------------------------------------------------------------------------|
 | `ExcludeVulkan` | `false` | Excludes the Vulkan backend (and its Silk.NET packages) from the build, defining `EXCLUDE_VULKAN_BACKEND`. |
 
-## Validation and Profiling Layers
+## Validation and Profiling
 
-Graphite ships two optional layers that mirror the core source tree, toggled at runtime through
-`GraphicsDeviceOptions` rather than at compile time:
+**Validation** (`GraphicsDeviceOptions.GraphiteValidation`, defaults to true) adds argument and
+state checks that throw descriptive exceptions on misuse. It lives under `Graphite/ValidationLayers`,
+mirroring `Graphite/Core` and `Graphite/Platform`, and is read once at device creation. Leave it on
+during development and disable it for release builds.
 
-- **Validation** (`GraphicsDeviceOptions.GraphiteValidation`, defaults to true): extra
-  argument and state checks that throw descriptive exceptions on misuse. Validation lives under
-  `Graphite/ValidationLayers`, mirroring the structure of `Graphite/Core` and `Graphite/Platform`,
-  and every check is gated behind `GraphicsDevice.ValidationEnabled`.
-- **Profiling** (`GraphicsDeviceOptions.EnableProfiling`, defaults to disabled when `null`):
-  allocation and command counters collected by the `GraphicsDevice` and readable through
-  `GraphicsDevice.GetProfile()`. Profiling lives under `Graphite/Profiling`, mirroring the same
-  structure, and every counter is gated behind `GraphicsDevice.ProfilingEnabled`.
+**Counters** (`GraphicsDevice.Counters`) are always on: live allocations, resident buffer bytes,
+barriers, swaps, buffer operations and set binds. Read them with `Counters.Snapshot()`.
 
-Both settings are read once at device creation and apply for the device's lifetime. Leave
-`GraphiteValidation` on during development; disable it for release builds where the extra checks
-aren't needed. `EnableProfiling` stays off unless you're actively reading `GetProfile()`.
+**Profilers** observe exactly one execution each. Pass them to the execution directly:
+
+```csharp
+Recording recording = new(device);
+device.DispatchGraph(pipeline, views, recording);
+recording.Wait();
+```
+
+An execution started with no profilers creates one from each `GraphicsDevice.GlobalProfilers`
+factory, so a factory can collect a profiler per frame:
+
+```csharp
+device.GlobalProfilers.Add(() => new MyFrameProfiler(results));
+```
+
+A profiler gets `BeginExecution(executionId)`, then the events of each capability it implements
+(`IGraphProfiler`, `IGpuStatsProfiler`, `ICaptureProfiler`, `ICommandStreamProfiler`), then
+`EndExecution()` once every GPU result is delivered. A capability with one profiler calls it
+directly; several profilers sharing a capability are merged for that capability only. Execution ids
+grow with start order, so per-execution results sort by id.
+
+There is no profiling for `device.Record` or other transfers outside an execution.
+
+`Graphite.Debugger` builds on this seam: `Recording` captures views, passes and GPU timings,
+`DeepRecording` also captures commands and resource copies, and `Replayer` replays a recorded pass
+on any device.
 
 ## Samples
 
