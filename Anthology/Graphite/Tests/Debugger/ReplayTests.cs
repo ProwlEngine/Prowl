@@ -99,9 +99,8 @@ public class ReplayTests
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         DeepRecording deep = RecordSample(device);
 
-        DeepExecution execution = deep.Executions.Single();
-        DeepPass pass = execution.Views[0].Passes[0];
-        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        DeepPass pass = deep.Views[0].Passes[0];
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
 
         Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
         ReplayOutput output = Assert.Single(result.Outputs);
@@ -116,8 +115,7 @@ public class ReplayTests
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         DeepRecording deep = RecordSample(device);
 
-        DeepExecution execution = deep.Executions.Single();
-        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = execution.Views[0].Passes[0].Index });
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ViewIndex = 0, PassIndex = deep.Views[0].Passes[0].Index });
 
         Assert.Equal(ReplayStatus.Restored, result.Status);
         Assert.Single(result.Outputs);
@@ -164,7 +162,7 @@ public class ReplayTests
             4, 1, 1));
         using Texture storage = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled | TextureUsage.Storage));
         using RenderPipeline pipeline = new(new IPass[] { new UndeclaredPass(compute, storage) });
-        DeepRecording deep = Record(device, new Recorder(device), pipeline, DeepMode.Full);
+        DeepRecording deep = Record(device, pipeline, DeepMode.Full);
 
         ReplayResult result = ReplayFirstEvent(device, deep);
 
@@ -195,8 +193,7 @@ public class ReplayTests
 
     private static ReplayResult ReplayFirstEvent(GraphicsDevice device, DeepRecording deep)
     {
-        DeepExecution execution = deep.Executions.Single();
-        return new Replayer(device, deep).Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = execution.Views[0].Passes[0].Index, EventIndex = 0 });
+        return new Replayer(device, deep).Replay(new ReplayRequest { ViewIndex = 0, PassIndex = deep.Views[0].Passes[0].Index, EventIndex = 0 });
     }
 
     private static DeepRecording Edit(DeepRecording deep, Func<DeepResult, DeepResult> edit)
@@ -222,7 +219,7 @@ public class ReplayTests
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
         using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using RenderPipeline pipeline = new(new IPass[] { new SamplePass(target, program, source, sampler) });
-        return Record(device, new Recorder(device), pipeline, DeepMode.Full);
+        return Record(device, pipeline, DeepMode.Full);
     }
 
     [SkippableFact]
@@ -253,19 +250,18 @@ public class ReplayTests
             new SamplePass(second, program, source, sampler, "Second"),
         });
 
-        Recorder recorder = new(device);
-        DeepRecording full = Record(device, recorder, pipeline, DeepMode.Full);
-        DeepRecording only = Record(device, recorder, pipeline, DeepMode.ReplayOnly);
+        DeepRecording full = Record(device, pipeline, DeepMode.Full);
+        DeepRecording only = Record(device, pipeline, DeepMode.ReplayOnly);
 
         Replayer fullReplayer = new(device, full);
         Replayer onlyReplayer = new(device, only);
-        DeepView fullView = full.Executions.Single().Views[0];
-        DeepView onlyView = only.Executions.Single().Views[0];
+        DeepView fullView = full.Views[0];
+        DeepView onlyView = only.Views[0];
         Assert.Equal(2, onlyView.Passes.Length);
         for (int i = 0; i < fullView.Passes.Length; i++)
         {
-            ReplayResult expected = fullReplayer.Replay(new ReplayRequest { ExecutionId = full.Executions.Single().ExecutionId, ViewIndex = 0, PassIndex = fullView.Passes[i].Index });
-            ReplayResult actual = onlyReplayer.Replay(new ReplayRequest { ExecutionId = only.Executions.Single().ExecutionId, ViewIndex = 0, PassIndex = onlyView.Passes[i].Index });
+            ReplayResult expected = fullReplayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = fullView.Passes[i].Index });
+            ReplayResult actual = onlyReplayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = onlyView.Passes[i].Index });
             Assert.True(actual.Status == ReplayStatus.Reexecuted, actual.Reason);
             Assert.Equal(expected.Outputs.Single().Data, actual.Outputs.Single().Data);
         }
@@ -299,11 +295,10 @@ public class ReplayTests
         using RenderTexture storage = factory.CreateRenderTexture(new RenderTextureDescription(4, 1, new[] { PixelFormat.R32_G32_B32_A32_Float }, depth: false, storage: true));
         using RenderPipeline pipeline = new(new IPass[] { new EventsPass(target, storage, program, compute, source, sampler) });
 
-        DeepRecording deep = Record(device, new Recorder(device), pipeline, DeepMode.Full);
-        DeepExecution execution = deep.Executions.Single();
-        DeepPass pass = execution.Views[0].Passes[0];
+        DeepRecording deep = Record(device, pipeline, DeepMode.Full);
+        DeepPass pass = deep.Views[0].Passes[0];
         Replayer replayer = new(device, deep);
-        ReplayRequest Request(int? last) => new() { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index, EventIndex = last };
+        ReplayRequest Request(int? last) => new() { ViewIndex = 0, PassIndex = pass.Index, EventIndex = last };
 
         ReplayResult whole = replayer.Replay(Request(null));
         ReplayResult last = replayer.Replay(Request(3));
@@ -315,11 +310,10 @@ public class ReplayTests
         Assert.NotEqual(whole.Outputs[0].Data, first.Outputs[0].Data);
     }
 
-    private static DeepRecording Record(GraphicsDevice device, Recorder recorder, RenderPipeline pipeline, DeepMode mode)
+    private static DeepRecording Record(GraphicsDevice device, RenderPipeline pipeline, DeepMode mode)
     {
-        recorder.BeginDeepRecording(mode);
-        device.DispatchGraph(pipeline, new ReplayView[] { new() });
-        DeepRecording deep = recorder.EndDeepRecording();
+        DeepRecording deep = new(device, mode);
+        device.DispatchGraph(pipeline, new ReplayView[] { new() }, deep);
         deep.Wait();
         return deep;
     }
