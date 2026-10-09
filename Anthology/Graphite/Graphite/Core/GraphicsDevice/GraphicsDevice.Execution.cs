@@ -97,8 +97,9 @@ public abstract partial class GraphicsDevice
                 ReclaimCompletedExecutions_NoLock();
             }
 
+            ulong id = checked(_executionIdCounter + 1);
             uint ringSlot = _freeSlots.Dequeue();
-            ulong id = ++_executionIdCounter;
+            _executionIdCounter = id;
 
             ExecutionTask task = BeginExecutionCore(id, ringSlot);
             task.Profilers = profilers;
