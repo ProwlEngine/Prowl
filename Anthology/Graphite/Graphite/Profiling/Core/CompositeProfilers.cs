@@ -35,18 +35,6 @@ internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphPro
         foreach (IGraphProfiler sink in sinks)
             sink.EndPass(in pass, in stats);
     }
-
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-    {
-        foreach (IGraphProfiler sink in sinks)
-            sink.RecordPassRead(in pass, resource, texture, buffer);
-    }
-
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-    {
-        foreach (IGraphProfiler sink in sinks)
-            sink.RecordPassWrite(in pass, resource, texture, buffer);
-    }
 }
 
 internal sealed class CompositeGpuStatsProfiler(IGpuStatsProfiler[] sinks) : IGpuStatsProfiler

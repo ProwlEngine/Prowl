@@ -485,21 +485,6 @@ public sealed class RenderContext
         };
     }
 
-    /// <summary>Resolves a texture or buffer handle to what the profiler should see for a pass read.</summary>
-    internal void ResolveForProfiler(RenderResourceID resource, out RenderTexture? texture, out DeviceBuffer? buffer)
-    {
-        if (IsTextureResource(resource))
-        {
-            texture = GetRenderTexture(new TextureHandle(resource));
-            buffer = null;
-        }
-        else
-        {
-            texture = null;
-            buffer = GetRenderBuffer(new BufferHandle(resource));
-        }
-    }
-
     private RenderTextureDescription ToTransientDesc(GraphTextureResource resource)
     {
         GraphTextureDesc desc = resource.Description;

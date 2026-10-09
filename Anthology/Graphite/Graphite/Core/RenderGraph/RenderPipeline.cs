@@ -95,15 +95,6 @@ public class RenderPipeline : IDisposable
                 var passInfo = new PassInfo(node.Pass.Name, index, context.ViewIndex, inputs, outputs);
 
                 profiler?.BeginPass(passInfo);
-                if (profiler != null)
-                {
-                    foreach (RenderResourceID input in inputs)
-                    {
-                        context.ResolveForProfiler(input, out RenderTexture? texture, out DeviceBuffer? buffer);
-                        profiler.RecordPassRead(passInfo, input, texture, buffer);
-                    }
-                }
-
                 capture?.BeginPass(index);
                 context.SetCurrentPass(passInfo, node.Accesses, node.Pass.Name);
                 context.TransitionForAccesses(node.Accesses);
@@ -118,14 +109,6 @@ public class RenderPipeline : IDisposable
                 index++;
 
                 profiler?.EndPass(passInfo, stats);
-                if (profiler != null)
-                {
-                    foreach (RenderResourceID output in outputs)
-                    {
-                        context.ResolveForProfiler(output, out RenderTexture? texture, out DeviceBuffer? buffer);
-                        profiler.RecordPassWrite(passInfo, output, texture, buffer);
-                    }
-                }
             }
 
             context.RestoreRestingStates("View");
