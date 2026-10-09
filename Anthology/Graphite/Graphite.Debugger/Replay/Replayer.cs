@@ -71,8 +71,15 @@ public sealed class Replayer
         scope.RestoreImmediate();
         string name = $"Replay {pass.Index} {pass.Name}";
         ReplayCapture capture = new(name, ReplayScope.Outputs(view, pass), scope.ReplayIds);
+        HashSet<int> steps = scope.RestoreSteps().ToHashSet();
         List<IPass> replay = [new ReplayRestorePass(scope, passes)];
-        replay.AddRange(passes.Select(p => new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p, p == pass ? eventIndex : null)));
+        foreach (DeepPass p in passes)
+        {
+            if (steps.Contains(p.Index))
+                replay.Add(new ReplayRestorePass(scope, passes, p.Index));
+
+            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p, p == pass ? eventIndex : null));
+        }
         using RenderPipeline pipeline = new(replay.ToArray());
         ReplayView[] views = [new ReplayView(view.Name, view.PixelWidth, view.PixelHeight)];
 
