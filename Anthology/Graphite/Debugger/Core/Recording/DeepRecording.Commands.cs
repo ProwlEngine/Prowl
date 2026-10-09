@@ -66,6 +66,7 @@ public sealed partial class DeepRecording
         {
             GraphicsProgram graphics => new RecordedProgram(
                 key,
+                program.Name,
                 false,
                 graphics.StageDescriptions.Select(Stage).ToEquatableArray(),
                 program.ResourceLayouts.ToEquatableArray(),
@@ -78,6 +79,7 @@ public sealed partial class DeepRecording
                 0),
             ComputeProgram compute => new RecordedProgram(
                 key,
+                program.Name,
                 true,
                 EquatableArray.Create(Stage(compute.StageDescription)),
                 program.ResourceLayouts.ToEquatableArray(),
@@ -125,7 +127,7 @@ public sealed partial class DeepRecording
         public void ClearDepthStencil(float depth, byte stencil) => pass.Commands.Add(new ClearDepthStencilCommand(depth, stencil));
 
         public void SetPipeline(in PipelineBindInfo pipeline)
-            => pass.Commands.Add(new SetPipelineCommand(owner.EnsureProgram(pipeline.Program), pipeline.IsCompute, pipeline.Outputs, pipeline.Topology));
+            => pass.Commands.Add(new SetPipelineCommand(owner.EnsureProgram(pipeline.Program), pipeline.PipelineId, pipeline.IsCompute, pipeline.Outputs, pipeline.Topology));
 
         public void SetViewport(in Viewport viewport) => pass.Commands.Add(new SetViewportCommand(viewport));
 

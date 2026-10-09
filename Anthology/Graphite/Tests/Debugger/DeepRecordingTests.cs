@@ -145,6 +145,7 @@ public class DeepRecordingTests
         DebuggerSerialization.Register();
         RecordedProgram program = new(
             ProgramKey.FromBytes(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray()),
+            "Lit/Forward",
             false,
             EquatableArray.Create(new RecordedStage(ShaderStages.Vertex, "main", new BlobRef(EquatableArray.Create<byte>(1, 2), 2))),
             EquatableArray.Create(new ResourceLayoutDescription(new ResourceLayoutElementDescription { Name = "Albedo", BindingIndex = 3 })),
@@ -156,6 +157,7 @@ public class DeepRecordingTests
             1,
             1);
         EquatableArray<RecordedCommand> commands = EquatableArray.Create<RecordedCommand>(
+            new SetPipelineCommand(program.Key, 42, false, null, PrimitiveTopology.TriangleList),
             new SetPropertiesCommand(
                 EquatableArray.Create(new RecordedProperty("Tint", PropertyKind.Uniform, UniformScalarType.Float1, EquatableArray.Create<byte>(0, 0, 128, 63), default, default, null, -1)),
                 EquatableArray.Create("Old")),

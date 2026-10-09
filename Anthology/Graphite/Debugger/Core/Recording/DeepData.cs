@@ -26,9 +26,10 @@ public sealed record RecordedResource(
 /// <summary>One stage of a recorded program. The SPIR-V is a blob.</summary>
 public sealed record RecordedStage(ShaderStages Stage, string EntryPoint, BlobRef Code);
 
-/// <summary>A program, one per key. Graphics only fields are null for compute.</summary>
+/// <summary>A program, one per key, with the debug name it had when first bound. Graphics only fields are null for compute.</summary>
 public sealed record RecordedProgram(
     ProgramKey Key,
+    string Name,
     bool IsCompute,
     EquatableArray<RecordedStage> Stages,
     EquatableArray<ResourceLayoutDescription> Layouts,
@@ -44,6 +45,7 @@ public sealed record RecordedProgram(
     public bool Equals(RecordedProgram? other)
         => other is not null
             && Key.Equals(other.Key)
+            && Name == other.Name
             && IsCompute == other.IsCompute
             && Stages.Equals(other.Stages)
             && ProgramEquality.Equal(Layouts, other.Layouts)
@@ -57,7 +59,7 @@ public sealed record RecordedProgram(
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Key, IsCompute, Stages, ProgramEquality.Hash(Layouts), ProgramEquality.Hash(VertexLayouts), ThreadGroupX, ThreadGroupY, ThreadGroupZ);
+        => HashCode.Combine(Key, Name, IsCompute, Stages, ProgramEquality.Hash(Layouts), ProgramEquality.Hash(VertexLayouts), HashCode.Combine(ThreadGroupX, ThreadGroupY, ThreadGroupZ));
 }
 
 /// <summary>Content keyed by hash.</summary>

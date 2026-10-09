@@ -37,7 +37,7 @@ public sealed record ClearColorTargetCommand(uint Index, Color Color) : Recorded
 
 public sealed record ClearDepthStencilCommand(float Depth, byte Stencil) : RecordedCommand;
 
-public sealed record SetPipelineCommand(ProgramKey Program, bool IsCompute, OutputDescription? Outputs, PrimitiveTopology? Topology) : RecordedCommand;
+public sealed record SetPipelineCommand(ProgramKey Program, ulong PipelineId, bool IsCompute, OutputDescription? Outputs, PrimitiveTopology? Topology) : RecordedCommand;
 
 public sealed record SetViewportCommand(Viewport Viewport) : RecordedCommand;
 
