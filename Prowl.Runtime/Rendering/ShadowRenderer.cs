@@ -147,7 +147,7 @@ internal sealed class ShadowRenderer : IDisposable
     private readonly Dictionary<Light, LocalEntry> _local = new(ReferenceEqualityComparer.Instance);
     private readonly List<LocalEntry> _visible = new();
     private readonly Dictionary<object, CascadeSet> _cascades = new();
-    private readonly ShadowDataTexture _data = new();
+    private readonly ShadowDataBlocks _data = new();
     private readonly CasterGrid _grid = new();
     private readonly Dictionary<Shader, byte> _shaderKinds = new();
     private readonly List<int> _staticCasters = new();
@@ -186,10 +186,10 @@ internal sealed class ShadowRenderer : IDisposable
     /// <summary>The scale every local light's wanted resolution is multiplied by, below 1 while the atlas is crowded.</summary>
     public float ResolutionScale => MathF.Pow(ScaleStep, -_scaleLevel);
 
-    public Texture2D? DataTexture => _data.Texture;
-    public int DataTextureShift => _data.Shift;
+    /// <summary>Uploads the shadow blocks that changed and binds them for every shader.</summary>
+    internal void BindData(CommandBuffer cmd) => _data.Table.Bind(cmd);
 
-    /// <summary>Slot of the light's block in <see cref="DataTexture"/> for this render, -1 while it has no shadow.</summary>
+    /// <summary>Slot of the light's shadow block for this render, -1 while it has no shadow.</summary>
     public int GetDataSlot(Light light) => _local.TryGetValue(light, out LocalEntry? e) ? e.ActiveSlot : -1;
 
     /// <summary>Tile size each face of the light holds, 0 for none.</summary>
@@ -1185,7 +1185,7 @@ internal sealed class ShadowRenderer : IDisposable
 
     // ---------------------------------------------------------------- shader data
 
-    // Block per shadowed local light, ShadowDataTexture.BlockTexels texels:
+    // Block per shadowed local light, ShadowDataBlocks.BlockTexels texels:
     //   +0      header: x fade (1 full shadow, 0 none)
     //   +1..    one rect per face: xy tile position, z tile size, w texel size one unit from the light
     //   then    one matrix per face, four columns each, GL clip space
@@ -1197,7 +1197,7 @@ internal sealed class ShadowRenderer : IDisposable
             if (!e.Visible || e.TileSize == 0 || !e.ContentValid) continue;
 
             if (e.DataSlot < 0) e.DataSlot = _data.AllocateSlot();
-            int b = e.DataSlot * ShadowDataTexture.BlockTexels;
+            int b = e.DataSlot * ShadowDataBlocks.BlockTexels;
 
             float texelPerUnit = e.Light is SpotLight spot
                 ? 2f * spot.ShadowTanHalfAngle / e.TileSize
@@ -1219,7 +1219,6 @@ internal sealed class ShadowRenderer : IDisposable
             e.ActiveSlot = e.DataSlot;
             LightsShadowed++;
         }
-        _data.Upload();
     }
 
     // ---------------------------------------------------------------- cleanup
@@ -1371,71 +1370,29 @@ internal sealed class ShadowRenderer : IDisposable
             ((long)(x & 0x1FFFFF) << 42) | ((long)(y & 0x1FFFFF) << 21) | (long)(z & 0x1FFFFF);
     }
 
-    // ---------------------------------------------------------------- data texture
+    // ---------------------------------------------------------------- shader data blocks
 
-    /// <summary>The per light shadow blocks the shaders read, uploaded a row range at a time as values change.</summary>
-    private sealed class ShadowDataTexture : IDisposable
+    /// <summary>The per light shadow blocks the shaders read, each written only when a value changes.</summary>
+    private sealed class ShadowDataBlocks : IDisposable
     {
         public const int BlockTexels = 32;
-        private const int Width = 512;
 
-        private float[] _staging = [];
-        private int _rows;
-        private int _dirtyLo = int.MaxValue, _dirtyHi = -1;
         private readonly Stack<int> _freeSlots = new();
         private int _nextSlot;
 
-        public Texture2D? Texture { get; private set; }
-        public int Shift => 9; // log2(Width)
+        public ShaderDataTable Table { get; } = new("ProwlShadowData", "_ShadowDataTex", GraphicsFeature.FragmentStorageBuffers);
 
         public int AllocateSlot()
         {
             int slot = _freeSlots.Count > 0 ? _freeSlots.Pop() : _nextSlot++;
-            int texelsNeeded = (slot + 1) * BlockTexels;
-            int rows = (texelsNeeded + Width - 1) / Width;
-            if (rows > _rows) Grow(rows);
+            Table.EnsureCapacity((slot + 1) * BlockTexels);
             return slot;
         }
 
         public void FreeSlot(int slot) => _freeSlots.Push(slot);
 
-        private void Grow(int rows)
-        {
-            int newRows = Math.Max(rows, Math.Max(4, _rows * 2));
-            Array.Resize(ref _staging, newRows * Width * 4);
-            _rows = newRows;
-            if (Texture.IsValid()) Texture.Dispose();
-            Texture = new Texture2D(Width, (uint)_rows, false, TextureImageFormat.Float4);
-            _dirtyLo = 0;
-            _dirtyHi = _rows * Width - 1;
-        }
+        public void Write(int texel, Float4 v) => Table[texel] = v;
 
-        public void Write(int texel, Float4 v)
-        {
-            int o = texel * 4;
-            if (_staging[o] == v.X && _staging[o + 1] == v.Y && _staging[o + 2] == v.Z && _staging[o + 3] == v.W) return;
-            _staging[o] = v.X;
-            _staging[o + 1] = v.Y;
-            _staging[o + 2] = v.Z;
-            _staging[o + 3] = v.W;
-            _dirtyLo = Math.Min(_dirtyLo, texel);
-            _dirtyHi = Math.Max(_dirtyHi, texel);
-        }
-
-        public unsafe void Upload()
-        {
-            if (_dirtyHi < 0 || Texture is not { } tex) return;
-            int loRow = _dirtyLo / Width, hiRow = _dirtyHi / Width;
-            fixed (float* p = &_staging[loRow * Width * 4])
-                tex.SetDataPtr(p, 0, loRow, Width, (uint)(hiRow - loRow + 1));
-            _dirtyLo = int.MaxValue;
-            _dirtyHi = -1;
-        }
-
-        public void Dispose()
-        {
-            if (Texture.IsValid()) Texture.Dispose();
-            Texture = null;
-        }
+        public void Dispose() => Table.Dispose();
     }
 }

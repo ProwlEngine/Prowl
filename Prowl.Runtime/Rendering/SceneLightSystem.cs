@@ -250,11 +250,7 @@ public sealed class SceneLightSystem : IDisposable
 
     private void UploadLocalShadows(CommandBuffer cmd)
     {
-        if (_shadows.DataTexture.IsValid())
-        {
-            cmd.SetGlobalTexture("_ShadowData", _shadows.DataTexture);
-            cmd.SetGlobalInt("_ShadowDataShift", _shadows.DataTextureShift);
-        }
+        _shadows.BindData(cmd);
 
         Texture2D? atlas = ShadowAtlas.DepthTexture;
         if (atlas.IsValid())

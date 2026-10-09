@@ -65,19 +65,25 @@ uniform vec4 _CascadeSphere3;
 uniform vec3 _ShadowViewOrigin;
 uniform vec3 _ShadowViewForward;
 
-// One block of SHADOW_BLOCK_TEXELS texels per shadowed point or spot light, at L.ShadowSlot. The texture is
-// 1 << _ShadowDataShift texels wide.
+// One block of SHADOW_BLOCK_TEXELS vec4 per shadowed point or spot light, at L.ShadowSlot:
 //   +0     header: x fade (1 full shadow, 0 none)
 //   +1..   one rect per face (6 for point, 1 for spot): xy tile position, z tile size, w texel size one unit from the light
 //   then   one matrix per face, four columns each
-uniform sampler2D _ShadowData;
-uniform int _ShadowDataShift;
 #define SHADOW_BLOCK_TEXELS 32
+
+#if defined(PROWL_FRAGMENT_STORAGE_BUFFERS) && !defined(PROWL_VERTEX_STAGE)
+layout(std430) readonly buffer ProwlShadowData { vec4 _ShadowData[]; };
+
+vec4 ShadowData(int texel) { return _ShadowData[texel]; }
+#else
+uniform sampler2D _ShadowDataTex;
+uniform int _ShadowDataTexShift;
 
 vec4 ShadowData(int texel)
 {
-    return texelFetch(_ShadowData, ivec2(texel & ((1 << _ShadowDataShift) - 1), texel >> _ShadowDataShift), 0);
+    return texelFetch(_ShadowDataTex, ivec2(texel & ((1 << _ShadowDataTexShift) - 1), texel >> _ShadowDataTexShift), 0);
 }
+#endif
 
 mat4 ShadowDataMatrix(int texel)
 {
