@@ -62,22 +62,16 @@ internal sealed class CompositeCaptureProfiler(ICaptureProfiler[] sinks) : ICapt
 
     public void EndExecution() { }
 
-    public void OnViewBegin(in ViewCaptureInfo view)
+    public void DescribeView(in ViewCaptureInfo view)
     {
         foreach (ICaptureProfiler sink in sinks)
-            sink.OnViewBegin(in view);
+            sink.DescribeView(in view);
     }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {
         foreach (ICaptureProfiler sink in sinks)
             sink.OnPassEnd(in pass, references, capture);
-    }
-
-    public void OnViewEnd()
-    {
-        foreach (ICaptureProfiler sink in sinks)
-            sink.OnViewEnd();
     }
 }
 

@@ -11,11 +11,9 @@ namespace Prowl.Graphite.Debugging;
 /// </summary>
 public interface ICaptureProfiler : IProfiler
 {
-    void OnViewBegin(in ViewCaptureInfo view);
+    void DescribeView(in ViewCaptureInfo view);
 
     void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture);
-
-    void OnViewEnd();
 }
 
 /// <summary>Services a hook can request during a callback. Only valid for the duration of <see cref="ICaptureProfiler.OnPassEnd"/>.</summary>

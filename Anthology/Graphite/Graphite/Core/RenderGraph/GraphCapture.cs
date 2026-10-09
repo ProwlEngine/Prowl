@@ -44,7 +44,7 @@ internal sealed class GraphCapture
         _captureContext = new CaptureContext(this);
     }
 
-    public void BeginView(string viewName, int viewIndex, uint pixelWidth, uint pixelHeight)
+    public void DescribeView(int viewIndex)
     {
         List<GraphResourceInfo> resources = new();
         HashSet<RenderResourceID> seen = new();
@@ -57,12 +57,8 @@ internal sealed class GraphCapture
             }
         }
 
-        PassCaptureInfo[] passes = new PassCaptureInfo[_nodes.Length];
-        for (int i = 0; i < _nodes.Length; i++)
-            passes[i] = new PassCaptureInfo(_passInfos[i], _nodes[i].PublicAccesses);
-
-        ViewCaptureInfo info = new(viewName, viewIndex, pixelWidth, pixelHeight, resources.ToArray(), passes);
-        _hook.OnViewBegin(in info);
+        ViewCaptureInfo info = new(viewIndex, resources.ToArray(), _passInfos);
+        _hook.DescribeView(in info);
     }
 
     public void BeginPass(int index)
@@ -171,8 +167,6 @@ internal sealed class GraphCapture
 
         return new CaptureCopy(staging, regions);
     }
-
-    public void EndView() => _hook.OnViewEnd();
 
     private void AddReference(ResourceVersion first, ResourceAccess access, GraphBacking backing)
     {

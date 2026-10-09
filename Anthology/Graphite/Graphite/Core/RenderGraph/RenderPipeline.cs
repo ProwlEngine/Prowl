@@ -113,7 +113,6 @@ public class RenderPipeline : IDisposable
         }
         finally
         {
-            capture?.EndView();
             _executingView = false;
         }
     }
@@ -136,7 +135,7 @@ public class RenderPipeline : IDisposable
             infos[i] = new PassInfo(nodes[i].Pass.Name, i, context.ViewIndex, nodes[i].PublicAccesses);
 
         GraphCapture capture = new(hook, context, graph, nodes.ToArray(), infos);
-        capture.BeginView(context.View.Name, context.ViewIndex, context.View.PixelWidth, context.View.PixelHeight);
+        capture.DescribeView(context.ViewIndex);
         return capture;
     }
 

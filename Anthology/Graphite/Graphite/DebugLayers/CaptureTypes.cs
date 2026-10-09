@@ -35,19 +35,11 @@ public readonly record struct GraphResourceInfo(
     GraphTextureDesc? Texture,
     GraphBufferDesc? Buffer);
 
-/// <summary>A pass and the accesses it declared.</summary>
-public readonly record struct PassCaptureInfo(
-    PassInfo Pass,
-    ReadOnlyMemory<PassResourceAccess> Accesses);
-
-/// <summary>Everything a capture hook learns about one view of the execution.</summary>
+/// <summary>The resources and passes of one view, matched to its <see cref="ViewInfo"/> by index.</summary>
 public readonly record struct ViewCaptureInfo(
-    string ViewName,
     int ViewIndex,
-    uint PixelWidth,
-    uint PixelHeight,
     ReadOnlyMemory<GraphResourceInfo> Resources,
-    ReadOnlyMemory<PassCaptureInfo> Passes);
+    ReadOnlyMemory<PassInfo> Passes);
 
 /// <summary>One resource a pass touched: version at first reference, version after the pass, and its descriptor.</summary>
 public readonly record struct PassReference(
