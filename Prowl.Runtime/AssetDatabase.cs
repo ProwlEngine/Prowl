@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -687,24 +688,58 @@ public static class AssetDatabase
     /// <summary>Extra objects to walk, such as the editor's windows and selection.</summary>
     public static event Action<AssetWalker>? WalkingRoots;
 
+    /// <summary>
+    /// Time the walk may take each frame. A walk that needs longer carries on over the next frames, and assets are
+    /// only freed once a whole walk has finished without reaching them.
+    /// </summary>
+    public static TimeSpan WalkBudget { get; set; } = TimeSpan.FromMilliseconds(0.5);
+
+    /// <summary>Whether a walk spread over frames is under way.</summary>
+    public static bool IsWalking { get; private set; }
+
     private static int s_epoch;
+    private static int s_completedEpoch;
     private static int s_completedWalks;
     private static long s_lastWalk;
     private static bool s_warnedBudget;
     private static readonly AssetWalker s_walker = new();
 
-    /// <summary>Runs the walk when it is due and frees what nothing reaches. Called at the end of every frame.</summary>
+    /// <summary>
+    /// Advances the walk by this frame's budget, starting one when it is due, and frees what nothing reached once
+    /// it finishes. Called at the end of every frame.
+    /// </summary>
     public static void EndFrame()
     {
-        long now = Stopwatch.GetTimestamp();
-        if (Stopwatch.GetElapsedTime(s_lastWalk, now) < WalkInterval) return;
-        Walk();
+        if (!IsWalking)
+        {
+            if (Stopwatch.GetElapsedTime(s_lastWalk, Stopwatch.GetTimestamp()) < WalkInterval) return;
+            BeginWalk();
+        }
+
+        long budget = (long)(WalkBudget.TotalSeconds * Stopwatch.Frequency);
+        if (!s_walker.Step(budget)) return;
+        CompleteWalk();
         Evict(ignoreGrace: false);
     }
 
-    /// <summary>Walks every root now and marks what it reaches.</summary>
+    /// <summary>Walks every root now, in one go, and marks what it reaches. Replaces a walk under way.</summary>
     public static void Walk()
     {
+        BeginWalk();
+        s_walker.Finish();
+        CompleteWalk();
+    }
+
+    /// <summary>Drops a walk under way, so it holds nothing an assembly unload is waiting on. The next one starts fresh.</summary>
+    internal static void AbandonWalk()
+    {
+        IsWalking = false;
+        s_walker.Reset();
+    }
+
+    private static void BeginWalk()
+    {
+        IsWalking = true;
         s_lastWalk = Stopwatch.GetTimestamp();
         int epoch = ++s_epoch;
         s_walker.Begin(epoch, s_lastWalk);
@@ -730,8 +765,12 @@ public static class AssetDatabase
         catch (Exception ex) { Debug.LogError($"Walking extra asset roots threw: {ex}"); }
 
         s_walker.VisitHeldStatics();
-        s_walker.Finish();
+    }
 
+    private static void CompleteWalk()
+    {
+        IsWalking = false;
+        int epoch = s_epoch;
         long resident = 0;
         foreach (Asset asset in s_assets.Values)
         {
@@ -744,6 +783,7 @@ public static class AssetDatabase
                 asset.Registered = false;
         }
         ResidentBytes = resident;
+        s_completedEpoch = epoch;
         s_completedWalks++;
     }
 
@@ -790,7 +830,7 @@ public static class AssetDatabase
         var candidates = new List<Asset>();
         foreach (Asset asset in s_assets.Values)
         {
-            if (asset.MarkEpoch == s_epoch || asset.UnreachedWalks < 2 && !ignoreGrace) continue;
+            if (asset.MarkEpoch == s_completedEpoch || asset.UnreachedWalks < 2 && !ignoreGrace) continue;
             if (!CanEvict(asset)) continue;
             if (!ignoreGrace && !overBudget && Stopwatch.GetElapsedTime(asset.LastReached, now) < GracePeriod) continue;
             candidates.Add(asset);
@@ -830,7 +870,7 @@ public static class AssetDatabase
     /// <summary>State, size, holders and whether the last walk reached the asset.</summary>
     public static AssetResidency Explain(Asset asset)
     {
-        bool reached = asset.MarkEpoch == s_epoch && s_completedWalks > 0;
+        bool reached = asset.MarkEpoch == s_completedEpoch && s_completedWalks > 0;
         string? reachedBy = reached ? s_walker.PathTo(asset) : null;
         return new AssetResidency(asset.State, asset.IsLoaded ? asset.EstimateBytes() : 0, reached, reachedBy,
             HoldOwnersOf(asset), Stopwatch.GetElapsedTime(asset.LastReached), asset.LoadCount);
@@ -855,7 +895,9 @@ public static class AssetDatabase
             s_roots.Clear();
         }
         s_epoch = 0;
+        s_completedEpoch = 0;
         s_completedWalks = 0;
+        AbandonWalk();
         s_lastWalk = 0;
         ResidentBytes = 0;
     }
@@ -876,7 +918,7 @@ public sealed class AssetWalker
     private sealed class Plan
     {
         public Kind Kind;
-        public FieldInfo[] Fields = [];
+        public Func<object, object?>[] Fields = [];
     }
 
     private static readonly ReloadCache<Type, Plan> s_plans = new(BuildPlan);
@@ -884,10 +926,16 @@ public sealed class AssetWalker
     private static readonly string[] s_skippedAssemblies =
         ["System", "Microsoft", "Silk.NET", "Jitter2", "Prowl.Motion", "Prowl.Vector", "Prowl.Recast", "Prowl.Paper", "Prowl.Scribe", "Prowl.Echo", "Prowl.Quill", "Prowl.Ember"];
 
+    private const int ExpandsPerClockCheck = 256;
+
+    // Never reset, so a stamp an earlier walk left on an engine object can never match a later walk
+    private static int s_stamp;
+
     private readonly HashSet<object> _visited = new(ReferenceEqualityComparer.Instance);
     private readonly Stack<object> _pending = new();
     private readonly Dictionary<object, object> _parents = new(ReferenceEqualityComparer.Instance);
     private int _epoch;
+    private int _walkStamp;
     private long _now;
     private object? _current;
 
@@ -896,7 +944,14 @@ public sealed class AssetWalker
     internal void Begin(int epoch, long now)
     {
         _epoch = epoch;
+        _walkStamp = ++s_stamp;
         _now = now;
+        Reset();
+    }
+
+    /// <summary>Drops everything the walk still has to visit, so it holds on to nothing.</summary>
+    internal void Reset()
+    {
         _visited.Clear();
         _parents.Clear();
         _pending.Clear();
@@ -906,7 +961,13 @@ public sealed class AssetWalker
     /// <summary>Marks what <paramref name="value"/> reaches, and it if it is an asset.</summary>
     public void Visit(object? value)
     {
-        if (value == null || !_visited.Add(value)) return;
+        if (value == null) return;
+        if (value is EngineObject engineObject)
+        {
+            if (engineObject.WalkStamp == _walkStamp) return;
+            engineObject.WalkStamp = _walkStamp;
+        }
+        else if (!_visited.Add(value)) return;
         if (RecordPaths && _current != null) _parents.TryAdd(value, _current);
 
         if (value is Asset asset)
@@ -922,11 +983,25 @@ public sealed class AssetWalker
         _pending.Push(value);
     }
 
-    internal void Finish()
+    internal void Finish() => Step(long.MaxValue);
+
+    /// <summary>Visits what is pending until <paramref name="budgetTicks"/> of stopwatch time is spent. True once nothing is left.</summary>
+    internal bool Step(long budgetTicks)
     {
+        long start = Stopwatch.GetTimestamp();
+        int sinceCheck = 0;
         while (_pending.Count > 0)
         {
+            if (++sinceCheck > ExpandsPerClockCheck)
+            {
+                sinceCheck = 0;
+                if (Stopwatch.GetTimestamp() - start >= budgetTicks) break;
+            }
+
             object value = _pending.Pop();
+            // Pending across frames, so it may have been destroyed since it was found
+            if (value is EngineObject { IsDisposed: true }) continue;
+
             _current = value;
             try { Expand(value); }
             catch (Exception ex)
@@ -936,6 +1011,7 @@ public sealed class AssetWalker
             }
         }
         _current = null;
+        return _pending.Count == 0;
     }
 
     private void Expand(object value)
@@ -950,11 +1026,22 @@ public sealed class AssetWalker
         if (plan.Kind == Kind.Skip) return;
 
         if (plan.Kind == Kind.Enumerable)
-            foreach (object? item in (IEnumerable)value)
-                if (item != null) VisitMember(item);
+        {
+            // Indexed where possible, since enumerating through the interface boxes an enumerator per collection
+            if (value is IList list)
+            {
+                for (int i = 0; i < list.Count; i++)
+                    if (list[i] is { } item) VisitMember(item);
+            }
+            else
+            {
+                foreach (object? item in (IEnumerable)value)
+                    if (item != null) VisitMember(item);
+            }
+        }
 
-        foreach (FieldInfo field in plan.Fields)
-            if (field.GetValue(value) is { } member) VisitMember(member);
+        foreach (Func<object, object?> field in plan.Fields)
+            if (field(value) is { } member) VisitMember(member);
     }
 
     // A struct is walked where it sits, since boxing gives it a new identity each time.
@@ -1041,14 +1128,27 @@ public sealed class AssetWalker
         bool collection = type != typeof(string) && !typeof(EngineObject).IsAssignableFrom(type) && IsCollection(type);
         if (collection && Skipped(type)) return new Plan { Kind = ElementCanHold(type) ? Kind.Enumerable : Kind.Skip };
 
-        var fields = new List<FieldInfo>();
+        var fields = new List<Func<object, object?>>();
         for (Type? current = type; current != null && current != typeof(object); current = current.BaseType)
             foreach (FieldInfo field in current.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                 if (!field.IsDefined(typeof(NotHeldAttribute)) && CanHold(field.FieldType))
-                    fields.Add(field);
+                    fields.Add(Getter(field));
 
         Kind kind = collection && ElementCanHold(type) ? Kind.Enumerable : typeof(Asset).IsAssignableFrom(type) ? Kind.Asset : Kind.Object;
         return new Plan { Kind = kind, Fields = fields.ToArray() };
+    }
+
+    // A compiled read is many times faster than reflection. Types a hot reload can unload keep the reflection read,
+    // so no generated code holds on to them.
+    private static Func<object, object?> Getter(FieldInfo field)
+    {
+        Type owner = field.DeclaringType!;
+        if (owner.Assembly.IsCollectible || field.FieldType.Assembly.IsCollectible)
+            return field.GetValue;
+
+        ParameterExpression target = Expression.Parameter(typeof(object));
+        Expression read = Expression.Field(Expression.Convert(target, owner), field);
+        return Expression.Lambda<Func<object, object?>>(Expression.Convert(read, typeof(object)), target).Compile();
     }
 
     private static bool IsCollection(Type type)

@@ -687,6 +687,43 @@ public class AssetDatabaseTests : RuntimeTestBase
     }
 
     [Fact]
+    public void SlicedWalk_SpreadOverManyFrames_StillReachesEverything()
+    {
+        Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;
+        Scene scene = CreateScene();
+        for (int i = 0; i < 2000; i++)
+            scene.Add(CreateGameObject());
+        GameObject holder = CreateGameObject();
+        scene.Add(holder);
+        holder.AddComponent<CrateHolder>().Crate = crate;
+
+        TimeSpan grace = AssetDatabase.GracePeriod, interval = AssetDatabase.WalkInterval, budget = AssetDatabase.WalkBudget;
+        AssetDatabase.GracePeriod = TimeSpan.Zero;
+        AssetDatabase.WalkInterval = TimeSpan.Zero;
+        AssetDatabase.WalkBudget = TimeSpan.Zero;
+        try
+        {
+            AssetDatabase.EndFrame();
+            Assert.True(AssetDatabase.IsWalking);
+
+            int frames = 1;
+            for (; frames < 10000 && AssetDatabase.IsWalking; frames++)
+                AssetDatabase.EndFrame();
+            Assert.True(frames > 2);
+
+            for (int i = 0; i < 3 * frames; i++)
+                AssetDatabase.EndFrame();
+            Assert.True(crate.IsLoaded);
+        }
+        finally
+        {
+            AssetDatabase.GracePeriod = grace;
+            AssetDatabase.WalkInterval = interval;
+            AssetDatabase.WalkBudget = budget;
+        }
+    }
+
+    [Fact]
     public void Explain_SaysWhatHoldsAnAsset()
     {
         Crate crate = AssetDatabase.Load<Crate>(AddCrate(1))!;

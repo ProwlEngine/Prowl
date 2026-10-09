@@ -359,7 +359,6 @@ public class DefaultRenderPipeline : RenderPipeline
             }
 
             RenderStats.BeginShadowPass();
-            lightSystem.RenderShadows(this, shadowView, shadowCasters);
             var shadowCamera = new ShadowCamera(camera, css.CameraPosition, css.WorldFrustum, css.Projection, css.PixelHeight, shadowView);
             lightSystem.RenderShadows(this, shadowCamera, shadowCasters);
             RenderStats.EndShadowPass();
