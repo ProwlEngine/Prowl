@@ -14,6 +14,7 @@ internal sealed class RecordingFormat : ISerializationFormat
         if (value is Recording recording)
         {
             compound.Add("ExecutionId", Serializer.Serialize(typeof(ulong), recording.ExecutionId, context));
+            compound.Add("GraphName", Serializer.Serialize(typeof(string), recording.GraphName, context));
             compound.Add("Views", Serializer.Serialize(typeof(EquatableArray<RecordedView>), recording.Views, context));
             compound.Add("CommandBuffers", Serializer.Serialize(typeof(EquatableArray<RecordedCommandBuffer>), recording.CommandBuffers, context));
             return compound;
@@ -33,6 +34,7 @@ internal sealed class RecordingFormat : ISerializationFormat
         if (targetType == typeof(Recording))
             return new Recording(
                 Serializer.Deserialize<ulong>(value["ExecutionId"], context),
+                Serializer.Deserialize<string>(value["GraphName"], context) ?? "",
                 Serializer.Deserialize<EquatableArray<RecordedView>>(value["Views"], context),
                 Serializer.Deserialize<EquatableArray<RecordedCommandBuffer>>(value["CommandBuffers"], context));
 
