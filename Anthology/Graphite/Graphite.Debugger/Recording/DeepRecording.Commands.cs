@@ -126,7 +126,7 @@ public sealed partial class DeepRecording
         => Add(new DrawCommand(vertexCount, instanceCount, firstVertex, firstInstance));
 
     void ICommandStreamProfiler.DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
-        => Add(new DrawIndexedCommand(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance));
+        => Add(new DrawIndexedCommand(instanceCount, firstIndex, vertexOffset, firstInstance));
 
     void ICommandStreamProfiler.DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
         => Add(new DrawIndirectCommand(Trace(buffer), offset, drawCount, stride));

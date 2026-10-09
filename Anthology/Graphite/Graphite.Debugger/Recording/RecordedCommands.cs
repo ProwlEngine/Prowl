@@ -57,7 +57,7 @@ public sealed record SetPropertiesCommand(EquatableArray<RecordedProperty> Chang
 
 public sealed record DrawCommand(uint VertexCount, uint InstanceCount, uint FirstVertex, uint FirstInstance) : RecordedCommand;
 
-public sealed record DrawIndexedCommand(uint IndexCount, uint InstanceCount, uint FirstIndex, int VertexOffset, uint FirstInstance) : RecordedCommand;
+public sealed record DrawIndexedCommand(uint InstanceCount, uint FirstIndex, int VertexOffset, uint FirstInstance) : RecordedCommand;
 
 public sealed record DrawIndirectCommand(TraceVersion Buffer, uint Offset, uint DrawCount, uint Stride) : RecordedCommand;
 
