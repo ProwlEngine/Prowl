@@ -47,15 +47,14 @@ public static class Program
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         DeepRecording recording = Record(device);
-        Console.WriteLine($"Recorded {recording.Executions.Length} execution with {recording.Blobs.Length} blobs.");
+        Console.WriteLine($"Recorded execution {recording.ExecutionId} with {recording.Blobs.Length} blobs.");
 
         DeepRecording loaded = RoundTrip(recording, out int size);
         Console.WriteLine($"Round trip through Echo: {size} bytes.");
 
-        DeepExecution execution = loaded.Executions[0];
-        DeepPass pass = execution.Views[0].Passes[0];
+        DeepPass pass = loaded.Views[0].Passes[0];
         Replayer replayer = new(device, loaded);
-        ReplayResult result = replayer.Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        ReplayResult result = replayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
         Console.WriteLine($"Replay of the draw in pass {pass.Name}: {result.Status}. {result.Reason}");
         if (result.Status == ReplayStatus.NotReplayable)
             return 1;
@@ -88,10 +87,8 @@ public static class Program
         using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(64, 64, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         using RenderPipeline pipeline = new(new IPass[] { new TexturedPass(target, program, source, sampler) });
 
-        Recorder recorder = new(device);
-        recorder.BeginDeepRecording(DeepMode.Full);
-        device.DispatchGraph(pipeline, new OffscreenView[] { new() });
-        DeepRecording recording = recorder.EndDeepRecording();
+        DeepRecording recording = new(device, DeepMode.Full);
+        device.DispatchGraph(pipeline, new OffscreenView[] { new() }, recording);
         recording.Wait();
         return recording;
     }
