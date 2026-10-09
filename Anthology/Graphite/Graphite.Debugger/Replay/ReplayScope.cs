@@ -13,7 +13,7 @@ internal sealed record GraphTexture(RenderTexture Texture, TraceResourceId[] Bac
 
 internal sealed record GraphBuffer(TraceResourceId Id, GraphBufferDesc Desc);
 
-internal sealed record BufferRestore(string Name, byte[] Data);
+internal sealed record BufferRestore(int PassIndex, string Name, byte[] Data);
 
 internal sealed unsafe class ReplayScope : IDisposable
 {
@@ -27,8 +27,9 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly Dictionary<ProgramKey, ShaderProgram> _programs = new();
     private readonly Dictionary<int, Sampler> _samplers = new();
     private readonly HashSet<TraceVersion> _planned = new();
-    private readonly List<(Texture Texture, RecordedCopy Copy)> _textureRestores = new();
-    private readonly List<(DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
+    private readonly List<(int PassIndex, TraceResourceId Id, Texture Texture, RecordedCopy Copy)> _textureRestores = new();
+    private readonly List<(int PassIndex, DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
+    private int _firstPass;
 
     public ReplayScope(GraphicsDevice device, DeepRecording deep)
     {
@@ -94,6 +95,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             }
         }
 
+        _firstPass = passes.Count > 0 ? passes[0].Index : 0;
         foreach (DeepPass pass in passes)
         {
             string? error = PreparePass(pass, byName, origins, copies);
@@ -186,7 +188,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             if (!reads || !copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
                 continue;
 
-            string? error = PlanRestore(id, restore, byName);
+            string? error = PlanRestore(pass.Index, id, restore, byName);
             if (error != null)
                 return error;
         }
@@ -201,24 +203,86 @@ internal sealed unsafe class ReplayScope : IDisposable
         return null;
     }
 
+    public IEnumerable<int> RestoreSteps()
+        => _textureRestores.Select(r => r.PassIndex)
+            .Concat(_externalBufferRestores.Select(r => r.PassIndex))
+            .Concat(BufferRestores.Select(r => r.PassIndex))
+            .Where(i => i != _firstPass)
+            .Distinct()
+            .Order();
+
     public void RestoreImmediate()
     {
-        foreach ((Texture texture, RecordedCopy copy) in _textureRestores)
+        foreach ((int passIndex, _, Texture texture, RecordedCopy copy) in _textureRestores)
         {
-            byte[] data = ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!;
-            foreach (CopyRegion region in copy.Regions)
-            {
-                uint size = region.Width * region.Height * region.Depth * region.Format.GetSizeInBytes();
-                fixed (byte* source = &data[region.Offset])
-                    _device.UpdateTexture(texture, (IntPtr)source, size, new TextureRegion(0, 0, 0, region.Width, region.Height, region.Depth, region.MipLevel, region.ArrayLayer));
-            }
+            if (passIndex == _firstPass)
+                UpdateTexture(null, texture, copy);
         }
 
-        foreach ((DeviceBuffer buffer, RecordedCopy copy) in _externalBufferRestores)
+        foreach ((int passIndex, DeviceBuffer buffer, RecordedCopy copy) in _externalBufferRestores)
         {
-            byte[] data = ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!;
-            fixed (byte* source = data)
-                _device.UpdateBuffer(buffer, 0, (IntPtr)source, Math.Min((uint)data.Length, buffer.SizeInBytes));
+            if (passIndex == _firstPass)
+                UpdateBuffer(null, buffer, copy);
+        }
+    }
+
+    public void RestoreStep(CommandBuffer cmd, int passIndex)
+    {
+        foreach ((int index, _, Texture texture, RecordedCopy copy) in _textureRestores)
+        {
+            if (index == passIndex)
+                UpdateTexture(cmd, texture, copy);
+        }
+
+        foreach ((int index, DeviceBuffer buffer, RecordedCopy copy) in _externalBufferRestores)
+        {
+            if (index == passIndex)
+                UpdateBuffer(cmd, buffer, copy);
+        }
+    }
+
+    public IEnumerable<(string Name, GraphTexture Texture)> StepTextures(int passIndex)
+    {
+        foreach ((int index, TraceResourceId id, _, _) in _textureRestores)
+        {
+            if (index != passIndex)
+                continue;
+
+            foreach ((string name, GraphTexture texture) in GraphTextures)
+            {
+                if (texture.Backings.Contains(id))
+                    yield return (name, texture);
+            }
+        }
+    }
+
+    private void UpdateTexture(CommandBuffer? cmd, Texture texture, RecordedCopy copy)
+    {
+        byte[] data = ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!;
+        foreach (CopyRegion region in copy.Regions)
+        {
+            uint size = region.Width * region.Height * region.Depth * region.Format.GetSizeInBytes();
+            TextureRegion target = new(0, 0, 0, region.Width, region.Height, region.Depth, region.MipLevel, region.ArrayLayer);
+            fixed (byte* source = &data[region.Offset])
+            {
+                if (cmd != null)
+                    cmd.UpdateTexture(texture, (IntPtr)source, size, target);
+                else
+                    _device.UpdateTexture(texture, (IntPtr)source, size, target);
+            }
+        }
+    }
+
+    private void UpdateBuffer(CommandBuffer? cmd, DeviceBuffer buffer, RecordedCopy copy)
+    {
+        byte[] data = ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!;
+        uint size = Math.Min((uint)data.Length, buffer.SizeInBytes);
+        fixed (byte* source = data)
+        {
+            if (cmd != null)
+                cmd.UpdateBuffer(buffer, 0, (IntPtr)source, size);
+            else
+                _device.UpdateBuffer(buffer, 0, (IntPtr)source, size);
         }
     }
 
@@ -369,7 +433,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             Owners[id] = owner;
     }
 
-    private string? PlanRestore(TraceResourceId id, RecordedCopy copy, Dictionary<string, RecordedGraphResource> byName)
+    private string? PlanRestore(int passIndex, TraceResourceId id, RecordedCopy copy, Dictionary<string, RecordedGraphResource> byName)
     {
         int length = _blobs[copy.Blob].Length;
         if (_textures.TryGetValue(id, out Texture? texture))
@@ -386,18 +450,18 @@ internal sealed unsafe class ReplayScope : IDisposable
                     return $"{_described[id].Name} has a copy layout that cannot be restored yet.";
             }
 
-            _textureRestores.Add((texture, copy));
+            _textureRestores.Add((passIndex, id, texture, copy));
             return null;
         }
 
         string? name = GraphBuffers.FirstOrDefault(pair => pair.Value.Id == id).Key;
         if (name != null)
         {
-            BufferRestores.Add(new BufferRestore(name, ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!));
+            BufferRestores.Add(new BufferRestore(passIndex, name, ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!));
             return null;
         }
 
-        _externalBufferRestores.Add((_buffers[id], copy));
+        _externalBufferRestores.Add((passIndex, _buffers[id], copy));
         return null;
     }
 
