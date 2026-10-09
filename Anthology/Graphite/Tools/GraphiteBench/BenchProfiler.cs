@@ -13,7 +13,7 @@ public sealed class BenchProfiler : IGraphProfiler
         ShaderSwitches = 0;
     }
 
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
     public void EndExecution() { }
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
