@@ -12,11 +12,12 @@ public static class BenchDevice
     {
         GraphicsDeviceOptions options = new(validation)
         {
-            GraphiteValidation = validation,
-            Profiler = profiler
+            GraphiteValidation = validation
         };
 
-        return GraphicsDevice.CreateVulkan(options);
+        GraphicsDevice gd = GraphicsDevice.CreateVulkan(options);
+        gd.GlobalProfilers.Add(() => profiler);
+        return gd;
     }
 
     public static string Describe(GraphicsDevice gd)
