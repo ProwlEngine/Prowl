@@ -266,11 +266,17 @@ public static class Debug
         }
     }
 
+    /// <summary>Logs an error when <paramref name="condition"/> is false, in every build, and carries on.</summary>
     public static void Assert(bool condition, string? message)
-        => System.Diagnostics.Debug.Assert(condition, message);
+    {
+        if (!condition) Log(message == null ? "Assertion failed" : $"Assertion failed: {message}", LogSeverity.Error);
+    }
 
+    /// <inheritdoc cref="Assert(bool, string?)"/>
     public static void Assert(bool condition)
-        => System.Diagnostics.Debug.Assert(condition);
+    {
+        if (!condition) Log("Assertion failed", LogSeverity.Error);
+    }
 
     #region Gizmos
 
