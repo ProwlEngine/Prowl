@@ -20,12 +20,12 @@ public sealed partial class DeepRecording
 {
     private readonly SortedDictionary<int, ViewState> _views = new();
     private readonly HashSet<(ResourceId, uint)> _copied = new();
-    private ViewState? _view;
 
-    void ICaptureProfiler.OnViewBegin(in ViewCaptureInfo view)
+    void ICaptureProfiler.DescribeView(in ViewCaptureInfo view)
     {
-        _pass = null;
-        ViewState state = new(view.ViewName, view.ViewIndex, view.PixelWidth, view.PixelHeight);
+        if (!_views.TryGetValue(view.ViewIndex, out ViewState? state))
+            return;
+
         Dictionary<RenderResourceID, GraphResourceInfo> byName = new();
         foreach (GraphResourceInfo info in view.Resources.Span)
         {
@@ -43,9 +43,9 @@ public sealed partial class DeepRecording
                 info.Buffer));
         }
 
-        foreach (PassCaptureInfo passInfo in view.Passes.Span)
+        foreach (PassInfo passInfo in view.Passes.Span)
         {
-            PassState pass = new(passInfo.Pass.Name, passInfo.Pass.Index);
+            PassState pass = new(passInfo.Name, passInfo.Index);
             foreach (PassResourceAccess access in passInfo.Accesses.Span)
             {
                 RecordedAccess recorded = new(
@@ -71,22 +71,13 @@ public sealed partial class DeepRecording
                 }
             }
 
-            state.Passes[passInfo.Pass.Index] = pass;
+            state.Passes[passInfo.Index] = pass;
         }
-
-        _views[view.ViewIndex] = state;
-        _view = state;
-    }
-
-    void ICaptureProfiler.OnViewEnd()
-    {
-        _view = null;
-        _pass = null;
     }
 
     void ICaptureProfiler.OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {
-        if (_view is not { } view)
+        if (!_views.TryGetValue(pass.ViewIndex, out ViewState? view))
             return;
 
         PassState state = view.Pass(pass.Index);

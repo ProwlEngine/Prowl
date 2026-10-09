@@ -16,7 +16,8 @@ public sealed partial class DeepRecording
     private PassState? _pass;
     private uint _nextTraceId;
 
-    void ICommandStreamProfiler.BeginPassCommands(in PassInfo pass) => _pass = _view?.Pass(pass.Index);
+    void ICommandStreamProfiler.BeginPassCommands(in PassInfo pass)
+        => _pass = _views.TryGetValue(pass.ViewIndex, out ViewState? view) ? view.Pass(pass.Index) : null;
 
     void ICommandStreamProfiler.EndPassCommands(in PassInfo pass) => _pass = null;
 
