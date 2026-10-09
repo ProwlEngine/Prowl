@@ -69,7 +69,7 @@ internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
     public readonly List<Exception> Errors = new();
     public string? OnlyPass;
 
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
 
     public void EndExecution() { }
 
