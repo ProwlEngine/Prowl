@@ -110,18 +110,3 @@ public sealed record DeepView(
     uint PixelHeight,
     EquatableArray<RecordedGraphResource> Resources,
     EquatableArray<DeepPass> Passes);
-
-/// <summary>The optional features of the recording device.</summary>
-public sealed record RecordedFeatures(
-    bool GeometryShader,
-    bool TessellationShaders,
-    bool DrawIndirectBaseInstance,
-    bool SamplerAnisotropy,
-    bool DepthClipDisable,
-    bool IndependentBlend,
-    bool CommandBufferDebugMarkers,
-    bool ShaderFloat64)
-{
-    internal static RecordedFeatures From(GraphicsDeviceFeatures f)
-        => new(f.GeometryShader, f.TessellationShaders, f.DrawIndirectBaseInstance, f.SamplerAnisotropy, f.DepthClipDisable, f.IndependentBlend, f.CommandBufferDebugMarkers, f.ShaderFloat64);
-}

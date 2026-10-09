@@ -25,15 +25,11 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
         _device = device;
         _recording = new Recording(device);
         Mode = mode;
-        Backend = device.BackendType;
-        Features = RecordedFeatures.From(device.Features);
     }
 
-    internal DeepRecording(DeepMode mode, GraphicsBackend backend, RecordedFeatures features, Recording recording, DeepResult result)
+    internal DeepRecording(DeepMode mode, Recording recording, DeepResult result)
     {
         Mode = mode;
-        Backend = backend;
-        Features = features;
         _recording = recording;
         _result = result;
         _done = true;
@@ -46,10 +42,10 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
     public DeepMode Mode { get; }
 
     /// <summary>Backend of the recording device.</summary>
-    public GraphicsBackend Backend { get; }
+    public GraphicsBackend Backend => _recording.Backend;
 
     /// <summary>Features of the recording device.</summary>
-    public RecordedFeatures Features { get; }
+    public RecordedFeatures Features => _recording.Features;
 
     /// <summary>The light data collected alongside. Its timings include the capture copies.</summary>
     public Recording Recording

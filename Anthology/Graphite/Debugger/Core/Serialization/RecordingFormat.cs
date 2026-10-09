@@ -7,6 +7,9 @@ namespace Prowl.Graphite.Debugger.Serialization;
 internal sealed class RecordingFormat : ISerializationFormat
 {
     private sealed record RecordingData(
+        GraphicsBackend Backend,
+        string DeviceName,
+        RecordedFeatures Features,
         ulong ExecutionId,
         string GraphName,
         EquatableArray<RecordedView> Views,
@@ -14,8 +17,6 @@ internal sealed class RecordingFormat : ISerializationFormat
 
     private sealed record DeepRecordingData(
         DeepMode Mode,
-        GraphicsBackend Backend,
-        RecordedFeatures Features,
         RecordingData Recording,
         DeepResult Result);
 
@@ -32,15 +33,15 @@ internal sealed class RecordingFormat : ISerializationFormat
             return Unpack(Serializer.Deserialize<RecordingData>(value, context)!);
 
         DeepRecordingData data = Serializer.Deserialize<DeepRecordingData>(value, context)!;
-        return new DeepRecording(data.Mode, data.Backend, data.Features, Unpack(data.Recording), data.Result);
+        return new DeepRecording(data.Mode, Unpack(data.Recording), data.Result);
     }
 
     private static RecordingData Pack(Recording recording)
-        => new(recording.ExecutionId, recording.GraphName, recording.Views, recording.CommandBuffers);
+        => new(recording.Backend, recording.DeviceName, recording.Features, recording.ExecutionId, recording.GraphName, recording.Views, recording.CommandBuffers);
 
     private static DeepRecordingData Pack(DeepRecording deep)
-        => new(deep.Mode, deep.Backend, deep.Features, Pack(deep.Recording), deep.Result);
+        => new(deep.Mode, Pack(deep.Recording), deep.Result);
 
     private static Recording Unpack(RecordingData data)
-        => new(data.ExecutionId, data.GraphName ?? "", data.Views, data.CommandBuffers);
+        => new(data.Backend, data.DeviceName ?? "", data.Features, data.ExecutionId, data.GraphName ?? "", data.Views, data.CommandBuffers);
 }

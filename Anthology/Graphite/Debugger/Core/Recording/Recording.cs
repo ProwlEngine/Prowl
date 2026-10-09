@@ -26,16 +26,38 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
     {
         ArgumentNullException.ThrowIfNull(device);
         _device = device;
+        Backend = device.BackendType;
+        DeviceName = device.DeviceName;
+        Features = RecordedFeatures.From(device.Features);
     }
 
-    internal Recording(ulong executionId, string graphName, EquatableArray<RecordedView> views, EquatableArray<RecordedCommandBuffer> commandBuffers)
+    internal Recording(
+        GraphicsBackend backend,
+        string deviceName,
+        RecordedFeatures features,
+        ulong executionId,
+        string graphName,
+        EquatableArray<RecordedView> views,
+        EquatableArray<RecordedCommandBuffer> commandBuffers)
     {
+        Backend = backend;
+        DeviceName = deviceName;
+        Features = features;
         _executionId = executionId;
         _graphName = graphName;
         _builtViews = views;
         _builtCommandBuffers = commandBuffers;
         _done = true;
     }
+
+    /// <summary>Backend of the recording device.</summary>
+    public GraphicsBackend Backend { get; }
+
+    /// <summary>Name of the recording device's adapter.</summary>
+    public string DeviceName { get; }
+
+    /// <summary>Features of the recording device.</summary>
+    public RecordedFeatures Features { get; }
 
     /// <summary>Id of the recorded execution, or 0 before it is passed to one. Ids grow with start order.</summary>
     public ulong ExecutionId => Volatile.Read(ref _executionId);

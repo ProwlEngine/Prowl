@@ -197,7 +197,7 @@ public class ReplayTests
     }
 
     private static DeepRecording Edit(DeepRecording deep, Func<DeepResult, DeepResult> edit)
-        => new(deep.Mode, deep.Backend, deep.Features, deep.Recording, edit(deep.Result));
+        => new(deep.Mode, deep.Recording, edit(deep.Result));
 
     private static DeepRecording RecordSample(GraphicsDevice device)
     {
