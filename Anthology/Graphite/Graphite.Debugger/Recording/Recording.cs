@@ -151,10 +151,6 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         }
     }
 
-    void IGraphProfiler.RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
-    void IGraphProfiler.RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
     void IGpuStatsProfiler.RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds)
     {
         lock (_gate)

@@ -158,10 +158,6 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
 
     void IGraphProfiler.EndPass(in PassInfo pass, in PassStats stats) => ((IGraphProfiler)_recording).EndPass(in pass, in stats);
 
-    void IGraphProfiler.RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
-    void IGraphProfiler.RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
     void IGpuStatsProfiler.RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds)
         => ((IGpuStatsProfiler)_recording).RecordExecutionTime(in commandBuffer, milliseconds);
 
