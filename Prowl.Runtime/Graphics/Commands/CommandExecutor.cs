@@ -694,6 +694,12 @@ internal sealed class CommandExecutor
                     tex.SetTextureFilters(min, mag);
                     break;
                 }
+                case CommandOpcode.SetTextureMaxLevel:
+                {
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
+                    tex.SetMaxLevel(ReadI32(stream, ref pos));
+                    break;
+                }
                 case CommandOpcode.SetTextureCompareMode:
                 {
                     var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;

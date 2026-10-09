@@ -113,6 +113,13 @@ public unsafe class GraphicsTexture : IDisposable
         Graphics.GL.TexParameter(Target, GLEnum.TextureWrapR, (int)wrapMode);
     }
 
+    /// <summary>The last mip level sampling may reach, so a chain that stops before 1x1 is still complete.</summary>
+    public void SetMaxLevel(int level)
+    {
+        Bind(false);
+        Graphics.GL.TexParameter(Target, TextureParameterName.TextureMaxLevel, level);
+    }
+
     public void SetTextureFilters(TextureMin min, TextureMag mag)
     {
         Bind(false);

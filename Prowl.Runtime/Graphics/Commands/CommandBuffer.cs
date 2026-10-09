@@ -862,6 +862,13 @@ public sealed class CommandBuffer : IDisposable
         Write((byte)mag);
     }
 
+    internal void EncodeSetTextureMaxLevel(GraphicsTexture tex, int level)
+    {
+        WriteHeader(CommandOpcode.SetTextureMaxLevel);
+        Write(PushObject(tex));
+        Write(level);
+    }
+
     internal void EncodeSetTextureCompareMode(GraphicsTexture tex, bool enabled)
     {
         WriteHeader(CommandOpcode.SetTextureCompareMode);

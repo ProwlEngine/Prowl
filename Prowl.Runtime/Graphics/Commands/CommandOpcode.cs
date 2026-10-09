@@ -96,6 +96,7 @@ internal enum CommandOpcode : ushort
     UpdateTexture3D,
     SetTextureWrap,
     SetTextureFiltersOp,
+    SetTextureMaxLevel,
     SetTextureCompareMode,
     GetTextureData,
     GetTextureDataPtr,
