@@ -34,7 +34,7 @@ public class RecordingTests
     public void Recording_HoldsExactlyOneExecution()
     {
         using GraphicsDevice device = CreateDevice();
-        using RenderPipeline pipeline = new([new ClearPass("recording_target")]);
+        using RenderPipeline pipeline = new([new ClearPass("recording_target")]) { Name = "Main" };
         Recording recording = new(device);
         Assert.Throws<InvalidOperationException>(recording.Wait);
 
@@ -43,6 +43,7 @@ public class RecordingTests
         recording.Wait();
 
         Assert.Equal(task.Id, recording.ExecutionId);
+        Assert.Equal("Main", recording.GraphName);
         Assert.Equal([0, 1], recording.Views.Select(v => v.Index));
         Assert.All(recording.Views, view => Assert.Equal("Clear", Assert.Single(view.Passes).Name));
         Assert.Contains(recording.CommandBuffers, c => c.Milliseconds is not null);
