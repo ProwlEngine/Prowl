@@ -34,9 +34,13 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="height">The height of the <see cref="Texture2D"/>.</param>
     /// <param name="generateMipmaps">Whether to generate mipmaps for this <see cref="Texture2D"/>.</param>
     /// <param name="imageFormat">The image format for this <see cref="Texture2D"/>.</param>
-    public Texture2D(uint width, uint height, bool generateMipmaps = false, TextureImageFormat imageFormat = TextureImageFormat.Color4b)
+    /// <param name="enableRandomWrite">Lets compute kernels write it through an image. Its size is then fixed.</param>
+    public Texture2D(uint width, uint height, bool generateMipmaps = false, TextureImageFormat imageFormat = TextureImageFormat.Color4b, bool enableRandomWrite = false)
         : base(TextureType.Texture2D, imageFormat)
     {
+        RandomWrite = enableRandomWrite;
+        if (enableRandomWrite && generateMipmaps)
+            RandomWriteLevels = 1 + (int)Math.Floor(Math.Log2(Math.Max(width, height)));
         RecreateImage(width, height); //This also binds the texture
 
         if (generateMipmaps)

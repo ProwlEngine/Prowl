@@ -547,6 +547,39 @@ public sealed class CommandBuffer : IDisposable
         RenderStats.RecordDraw(topo, indexCount);
     }
 
+    /// <summary>
+    /// Runs a compute kernel over the given number of thread groups, with the parameters the shader holds right now.
+    /// Later draws and dispatches see everything it wrote.
+    /// </summary>
+    public void DispatchCompute(ComputeShader shader, int kernel, int threadGroupsX, int threadGroupsY, int threadGroupsZ)
+    {
+        if (threadGroupsX <= 0 || threadGroupsY <= 0 || threadGroupsZ <= 0) return;
+        if (!BindKernel(shader, kernel)) return;
+        WriteHeader(CommandOpcode.Dispatch);
+        Write((uint)threadGroupsX);
+        Write((uint)threadGroupsY);
+        Write((uint)threadGroupsZ);
+    }
+
+    /// <summary>Runs a compute kernel with its group counts read from <paramref name="arguments"/>, three uints at <paramref name="argumentsOffset"/> bytes.</summary>
+    public void DispatchCompute(ComputeShader shader, int kernel, ComputeBuffer arguments, uint argumentsOffset = 0)
+    {
+        if (arguments.Buffer == null || !BindKernel(shader, kernel)) return;
+        WriteHeader(CommandOpcode.DispatchIndirect);
+        Write(PushObject(arguments.Buffer));
+        Write(argumentsOffset);
+    }
+
+    private bool BindKernel(ComputeShader shader, int kernel)
+    {
+        GraphicsProgram? program = shader.ProgramFor(kernel);
+        if (program == null) return false;
+        SetShader(program);
+        SetProperties(shader.SharedProperties);
+        SetInstanceProperties(shader.KernelProperties(kernel));
+        return true;
+    }
+
     public void DrawIndexedInstanced(GraphicsVertexArray vao, Topology topo,
                                       uint indexCount, uint instanceCount,
                                       uint startIndex = 0, int baseVertex = 0,

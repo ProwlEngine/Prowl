@@ -264,6 +264,7 @@ public static class RuntimeImporters
         Register(new ModelRuntimeImporter());
         Register(new MaterialRuntimeImporter());
         Register(new ShaderRuntimeImporter());
+        Register(new ComputeShaderRuntimeImporter());
         Register(new AudioRuntimeImporter());
     }
 
@@ -360,7 +361,8 @@ internal sealed class ShaderRuntimeImporter : RuntimeImporter
     {
         string? Include(string path)
         {
-            try { return context.Source.ReadAllText(AssetFileSource.Combine(context.Path, path)); }
+            // Already relative to the source's root, the parser joins it to the including file's folder
+            try { return context.Source.ReadAllText(AssetFileSource.Combine("", path)); }
             catch (Exception) { }
             try { return EmbeddedResources.ReadAllText(path); }
             catch (Exception) { }
@@ -371,6 +373,29 @@ internal sealed class ShaderRuntimeImporter : RuntimeImporter
         if (!ShaderParser.ParseShader(context.Path, context.ReadAllText(), Include, out Shader? shader) || shader.IsNotValid())
             throw new InvalidDataException($"'{context.Path}' is not a shader that parses.");
         context.SetMain(shader!);
+    }
+}
+
+/// <summary>Compute shaders, whose includes are found the same way as a shader's.</summary>
+internal sealed class ComputeShaderRuntimeImporter : RuntimeImporter
+{
+    public override IReadOnlyList<string> Extensions { get; } = [".compute"];
+
+    public override Type AssetType => typeof(ComputeShader);
+
+    public override void Import(RuntimeImportContext context)
+    {
+        string? Include(string path)
+        {
+            // Already relative to the source's root, the parser joins it to the including file's folder
+            try { return context.Source.ReadAllText(AssetFileSource.Combine("", path)); }
+            catch (Exception) { }
+            try { return EmbeddedResources.ReadAllText($"Assets/Defaults/{System.IO.Path.GetFileName(path)}"); }
+            catch (Exception) { return null; }
+        }
+
+        string source = ShaderParser.ExpandIncludes(context.Path, context.ReadAllText(), Include);
+        context.SetMain(ComputeShader.FromSource(System.IO.Path.GetFileNameWithoutExtension(context.Path), source));
     }
 }
 

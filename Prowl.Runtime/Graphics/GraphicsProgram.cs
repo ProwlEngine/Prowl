@@ -52,6 +52,12 @@ public class GraphicsProgram : IDisposable
     internal int[] samplerUnits = [];
     internal readonly Dictionary<int, int> samplerIndexByLocation = [];
 
+    // Image uniforms by location, with the unit their binding layout gives them
+    internal readonly Dictionary<int, int> imageUnitByLocation = [];
+
+    // Storage blocks by name, with their binding point, or -1 for a name the program does not declare
+    internal readonly Dictionary<string, int> storageBindings = [];
+
     // Units kept free of textures, one per sampler type, since two sampler types on one unit is an error.
     internal const int FirstEmptyUnit = 40;
 
@@ -63,13 +69,15 @@ public class GraphicsProgram : IDisposable
     private string? _fragmentSource;
     private string? _vertexSource;
     private string? _geometrySource;
+    private string? _computeSource;
 
     public GraphicsProgram(string fragmentSource, string vertexSource, string geometrySource) : base()
     {
         ID = System.Threading.Interlocked.Increment(ref _nextId);
-        _fragmentSource = fragmentSource;
-        _vertexSource = vertexSource;
-        _geometrySource = geometrySource;
+        string[] sources = AssignBindings(fragmentSource ?? "", vertexSource ?? "", geometrySource ?? "");
+        _fragmentSource = fragmentSource == null ? null : sources[0];
+        _vertexSource = vertexSource == null ? null : sources[1];
+        _geometrySource = geometrySource == null ? null : sources[2];
         Handle = 0;
 
         // SubmitAndWait so compile / link errors surface synchronously to
@@ -77,6 +85,73 @@ public class GraphicsProgram : IDisposable
         using var cmd = Graphics.GetCommandBuffer("GraphicsProgram.Compile");
         cmd.EncodeCompileShader(this);
         Graphics.SubmitAndWait(cmd);
+    }
+
+    /// <summary>A compute program from one compute stage. Compile errors throw here, like the graphics constructor's.</summary>
+    public GraphicsProgram(string computeSource) : base()
+    {
+        ID = System.Threading.Interlocked.Increment(ref _nextId);
+        _computeSource = AssignBindings(computeSource)[0];
+        Handle = 0;
+
+        using var cmd = Graphics.GetCommandBuffer("GraphicsProgram.CompileCompute");
+        cmd.EncodeCompileShader(this);
+        Graphics.SubmitAndWait(cmd);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex s_bufferBlock = new(
+        @"(?<![\w.])(?:layout\s*\((?<args>[^)]*)\)\s*)?(?<rest>(?:(?:readonly|writeonly|restrict|coherent|volatile)\s+)*buffer\s+(?<name>\w+)\s*\{)");
+
+    private static readonly System.Text.RegularExpressions.Regex s_imageUniform = new(
+        @"(?<![\w.])(?:layout\s*\((?<args>[^)]*)\)\s*)?(?<rest>(?:(?:readonly|writeonly|restrict|coherent|volatile|highp|mediump|lowp)\s+)*uniform\s+(?:(?:readonly|writeonly|restrict|coherent|volatile|highp|mediump|lowp)\s+)*[iu]?image\w+\s+(?<name>\w+))");
+
+    private static readonly System.Text.RegularExpressions.Regex s_binding = new(@"\bbinding\s*=\s*(\d+)");
+
+    /// <summary>
+    /// Gives every storage block and image uniform declared without a binding one of its own, the same number in every
+    /// stage that shares the name, skipping numbers the sources already use. ES can only take these from the source, so
+    /// C# then finds a block or image by name and binds it to whatever number the program reports.
+    /// </summary>
+    internal static string[] AssignBindings(params string[] sources)
+    {
+        sources = (string[])sources.Clone();
+        Assign(sources, s_bufferBlock, "std430, ");
+        Assign(sources, s_imageUniform, "");
+        return sources;
+    }
+
+    private static void Assign(string[] sources, System.Text.RegularExpressions.Regex declaration, string defaultLayout)
+    {
+        var used = new HashSet<int>();
+        var assigned = new Dictionary<string, int>();
+        foreach (string source in sources)
+            foreach (System.Text.RegularExpressions.Match match in declaration.Matches(source))
+            {
+                var binding = s_binding.Match(match.Groups["args"].Value);
+                if (binding.Success) used.Add(int.Parse(binding.Groups[1].Value));
+            }
+
+        int next = 0;
+        for (int i = 0; i < sources.Length; i++)
+        {
+            sources[i] = declaration.Replace(sources[i], match =>
+            {
+                string args = match.Groups["args"].Value;
+                if (s_binding.IsMatch(args)) return match.Value;
+
+                string name = match.Groups["name"].Value;
+                if (!assigned.TryGetValue(name, out int binding))
+                {
+                    while (used.Contains(next)) next++;
+                    binding = next;
+                    used.Add(binding);
+                    assigned[name] = binding;
+                }
+
+                string layout = match.Groups["args"].Success ? $"{args.Trim()}, binding = {binding}" : $"{defaultLayout}binding = {binding}";
+                return $"layout({layout}) {match.Groups["rest"].Value}";
+            });
+        }
     }
 
     /// <summary>Invoked by the CompileShader executor handler on the render thread.
@@ -87,6 +162,29 @@ public class GraphicsProgram : IDisposable
         string info = string.Empty;
 
         Handle = Graphics.GL.CreateProgram();
+
+        if (!string.IsNullOrEmpty(_computeSource))
+        {
+            uint computeShader = Graphics.GL.CreateShader(ShaderType.ComputeShader);
+            Graphics.GL.ShaderSource(computeShader, _computeSource);
+            Graphics.GL.CompileShader(computeShader);
+
+            Graphics.GL.GetShaderInfoLog(computeShader, out info);
+            Graphics.GL.GetShader(computeShader, ShaderParameterName.CompileStatus, out statusCode);
+
+            if (statusCode != 1)
+            {
+                IsDisposed = true;
+                Graphics.GL.DeleteShader(computeShader);
+                Graphics.GL.DeleteProgram(Handle);
+                Handle = 0;
+                throw new InvalidOperationException("Failed to Compile Compute Shader Source.\n" +
+                    info + "\n\nStatus Code: " + statusCode.ToString());
+            }
+
+            Graphics.GL.AttachShader(Handle, computeShader);
+            Graphics.GL.DeleteShader(computeShader);
+        }
 
         if (!string.IsNullOrEmpty(_fragmentSource))
         {
@@ -177,6 +275,7 @@ public class GraphicsProgram : IDisposable
         _fragmentSource = null;
         _vertexSource = null;
         _geometrySource = null;
+        _computeSource = null;
     }
 
     private void FindSamplers()
@@ -186,6 +285,19 @@ public class GraphicsProgram : IDisposable
         for (uint i = 0; i < count; i++)
         {
             string name = Graphics.GL.GetActiveUniform(Handle, i, out int size, out UniformType type);
+
+            // An image's unit comes from its binding layout, so it is read once here rather than set per draw
+            if (IsImageType(type))
+            {
+                int imageLocation = Graphics.GL.GetUniformLocation(Handle, name);
+                if (imageLocation >= 0)
+                {
+                    Graphics.GL.GetUniform(Handle, imageLocation, out int unit);
+                    imageUnitByLocation[imageLocation] = unit;
+                }
+                continue;
+            }
+
             int emptyUnit = type switch
             {
                 UniformType.Sampler2D or UniformType.IntSampler2D or UniformType.UnsignedIntSampler2D => FirstEmptyUnit,
@@ -213,6 +325,9 @@ public class GraphicsProgram : IDisposable
         samplerUnits = new int[samplers.Length];
         Array.Fill(samplerUnits, -1);
     }
+
+    // GL numbers every image type from IMAGE_1D to UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY in one run
+    private static bool IsImageType(UniformType type) => (int)type is >= 0x904C and <= 0x906C;
 
     public static GraphicsProgram? currentProgram = null;
     public void Use()

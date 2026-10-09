@@ -58,4 +58,27 @@ public class ShaderImporter : AssetImporter
         }
     }
 }
+
+/// <summary> Imports .compute files into ComputeShader assets, with their includes resolved like a shader's. </summary>
+[ImporterFor(".compute")]
+public class ComputeShaderImporter : AssetImporter
+{
+    public override int Version => 1;
+
+    public override bool Import(ImportContext ctx)
+    {
+        string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
+        string source = ShaderParser.ExpandIncludes(ctx.AbsolutePath, File.ReadAllText(ctx.AbsolutePath), path => ShaderImporter.ResolveInclude(dir, path));
+
+        try
+        {
+            ctx.SetMainAsset(Runtime.Resources.ComputeShader.FromSource(ctx.FileName, source));
+            return true;
+        }
+        catch (System.ArgumentException ex)
+        {
+            Debug.LogError($"Failed to import compute shader {ctx.AbsolutePath}: {ex.Message}");
+            return false;
+        }
+    }
 }

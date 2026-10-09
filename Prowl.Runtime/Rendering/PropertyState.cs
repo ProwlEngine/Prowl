@@ -126,6 +126,12 @@ public partial class PropertyState : ISerializationCallbackReceiver
         _version++;
     }
 
+    /// <summary>Binds a compute buffer to the storage block of that name in whatever shader draws with this state.</summary>
+    public void SetBuffer(string name, ComputeBuffer value)
+    {
+        if (value.Buffer != null) SetBuffer(name, value.Buffer);
+    }
+
     public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
         _buffers[name] = value;
@@ -431,6 +437,12 @@ public partial class PropertyState
         using var cmd = Graphics.GetCommandBuffer("SetGlobalTextureCube");
         cmd.SetGlobalTextureCube(name, value); Graphics.Submit(cmd);
     }
+    /// <summary>Binds a compute buffer to the storage block of that name in every shader that declares it.</summary>
+    public static void SetGlobalBuffer(string name, ComputeBuffer value)
+    {
+        if (value.Buffer != null) SetGlobalBuffer(name, value.Buffer);
+    }
+
     public static void SetGlobalBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
         using var cmd = Graphics.GetCommandBuffer("SetGlobalBuffer");

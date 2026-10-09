@@ -486,8 +486,8 @@ public static unsafe class Graphics
     public static GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments, uint width, uint height)
         => new GraphicsFrameBuffer(attachments, width, height);
 
-    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format)
-        => new GraphicsTexture(type, format);
+    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format, bool randomWrite = false, int levels = 1)
+        => new GraphicsTexture(type, format, randomWrite, levels);
 
     public static GraphicsProgram CompileProgram(string fragment, string vertex, string geometry)
         => new GraphicsProgram(fragment, vertex, geometry);

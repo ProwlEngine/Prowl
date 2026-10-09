@@ -106,7 +106,7 @@ internal sealed class CommandExecutor
             CommandOpcode.SetUniformVec3, CommandOpcode.SetUniformVec4, CommandOpcode.SetUniformMatrix,
             CommandOpcode.SetUniformMatrixArray, CommandOpcode.SetUniformTexture, CommandOpcode.SetUniformBuffer,
             CommandOpcode.UpdateBuffer, CommandOpcode.DrawIndexed, CommandOpcode.DrawIndexedInstanced,
-            CommandOpcode.DrawArrays, CommandOpcode.DrawIndexedRanges, CommandOpcode.BeginSample, CommandOpcode.EndSample])
+            CommandOpcode.DrawArrays, CommandOpcode.DrawIndexedRanges, CommandOpcode.Dispatch, CommandOpcode.DispatchIndirect, CommandOpcode.BeginSample, CommandOpcode.EndSample])
             keeps[(int)op] = true;
         return keeps;
     }
@@ -506,6 +506,29 @@ internal sealed class CommandExecutor
                     int first = ReadI32(stream, ref pos);
                     uint count = ReadU32(stream, ref pos);
                     DoDrawArrays(vao, topo, first, count);
+                    break;
+                }
+                case CommandOpcode.Dispatch:
+                {
+                    uint x = ReadU32(stream, ref pos);
+                    uint y = ReadU32(stream, ref pos);
+                    uint z = ReadU32(stream, ref pos);
+                    if (_boundProgram == null) break;
+                    PrepareDraw();
+                    Graphics.GL.DispatchCompute(x, y, z);
+                    // Whatever reads the results next, a draw, a copy or the CPU, sees every write
+                    Graphics.GL.MemoryBarrier(MemoryBarrierMask.AllBarrierBits);
+                    break;
+                }
+                case CommandOpcode.DispatchIndirect:
+                {
+                    var arguments = (GraphicsBuffer?)objects[ReadI32(stream, ref pos)];
+                    uint offset = ReadU32(stream, ref pos);
+                    if (_boundProgram == null || arguments == null) break;
+                    PrepareDraw();
+                    Graphics.GL.BindBuffer(BufferTargetARB.DispatchIndirectBuffer, arguments.Handle);
+                    Graphics.GL.DispatchComputeIndirect((nint)offset);
+                    Graphics.GL.MemoryBarrier(MemoryBarrierMask.AllBarrierBits);
                     break;
                 }
                 case CommandOpcode.DrawIndexedRanges:

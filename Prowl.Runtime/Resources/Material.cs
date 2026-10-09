@@ -198,6 +198,9 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     public void SetMatrix(string name, Float4x4 value)    { EnsureLoaded(); _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
     public void SetTexture(string name, Texture2D value)  { EnsureLoaded(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
     public void SetTexture3D(string name, Texture3D value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+
+    /// <summary>Binds a compute buffer to the storage block of that name. Buffers live only at runtime and are not saved.</summary>
+    public void SetBuffer(string name, ComputeBuffer value) { EnsureLoaded(); _properties.SetBuffer(name, value); MarkDirty(); }
     public void SetTextureCube(string name, Cubemap value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
 
     /// <summary>Forget the user override for <paramref name="name"/> next sync

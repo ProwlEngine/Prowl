@@ -106,14 +106,44 @@ internal static class PropertyApply
         Graphics.GL.UniformMatrix4(loc, count, false, in FirstElement(in data[0]));
     }
 
+    /// <summary>Binds a buffer to the program's uniform block or storage block of that name, whichever it declares.</summary>
     public static void BindUniformBuffer(GraphicsProgram p, string name, GraphicsBuffer buf, uint bindingPoint)
     {
         uint blockIdx = BlockIndexOf(p, name);
-        if (blockIdx == 0xFFFFFFFFu) return; // not found
+        if (blockIdx == 0xFFFFFFFFu)
+        {
+            BindStorageBuffer(p, name, buf);
+            return;
+        }
         // Binding points are shared by every program, so any later bind may replace one the prefix made.
         if (s_watched != null) s_watchedTouched = true;
         Graphics.GL.UniformBlockBinding(p.Handle, blockIdx, bindingPoint);
         Graphics.GL.BindBufferBase(BufferTargetARB.UniformBuffer, bindingPoint, buf.Handle);
+    }
+
+    private static unsafe void BindStorageBuffer(GraphicsProgram p, string name, GraphicsBuffer buf)
+    {
+        if (!p.storageBindings.TryGetValue(name, out int binding))
+        {
+            binding = -1;
+            if (Graphics.Capabilities.Has(GraphicsFeature.StorageBuffers))
+            {
+                uint index = Graphics.GL.GetProgramResourceIndex(p.Handle, ProgramInterface.ShaderStorageBlock, name);
+                if (index != 0xFFFFFFFFu)
+                {
+                    ProgramResourceProperty property = ProgramResourceProperty.BufferBinding;
+                    int value;
+                    uint length;
+                    Graphics.GL.GetProgramResource(p.Handle, ProgramInterface.ShaderStorageBlock, index, 1u, &property, 1u, &length, &value);
+                    binding = value;
+                }
+            }
+            p.storageBindings[name] = binding;
+        }
+        if (binding < 0) return;
+
+        if (s_watched != null) s_watchedTouched = true;
+        Graphics.GL.BindBufferBase(BufferTargetARB.ShaderStorageBuffer, (uint)binding, buf.Handle);
     }
 
     // ─────────────────────── PropertyState walking ───────────────────────
@@ -282,7 +312,9 @@ internal static class PropertyApply
         var cache = p.uniformCache;
         foreach (var kv in d)
         {
-            if (cache.buffers.TryGetValue(kv.Key, out var cached) && ReferenceEquals(cached, kv.Value)) continue;
+            // Storage binding points are shared by every program, so only a uniform block may skip a repeat bind
+            bool uniformBlock = BlockIndexOf(p, kv.Key) != 0xFFFFFFFFu;
+            if (uniformBlock && cache.buffers.TryGetValue(kv.Key, out var cached) && ReferenceEquals(cached, kv.Value)) continue;
             uint bp = bindings.TryGetValue(kv.Key, out uint b) ? b : 0u;
             BindUniformBuffer(p, kv.Key, kv.Value, bp);
             cache.buffers[kv.Key] = kv.Value;
@@ -322,6 +354,16 @@ internal static class PropertyApply
         int loc = LocationOf(p, name);
         if (loc < 0) return;
         Touch(name);
+
+        // An image uniform reads and writes the texture through its own unit rather than sampling it
+        if (p.imageUnitByLocation.TryGetValue(loc, out int imageUnit))
+        {
+            if (!tex.RandomWrite && Graphics.Capabilities.IsES)
+                Debug.LogWarningOnce($"ImageNotRandomWrite.{name}",
+                    $"'{name}' is an image, and OpenGL ES only binds a texture made with enableRandomWrite to one.");
+            Graphics.GL.BindImageTexture((uint)imageUnit, tex.Handle, 0, false, 0, BufferAccessARB.ReadWrite, tex.PixelInternalFormat);
+            return;
+        }
 
         int slot = exec.AllocateTextureSlot();
         exec.BindTextureToUnit(slot, tex);

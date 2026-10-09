@@ -26,8 +26,19 @@ public unsafe class GraphicsTexture : IDisposable
     /// <summary>The format of the pixel data.</summary>
     public readonly PixelFormat PixelFormat;
 
-    public GraphicsTexture(TextureType type, TextureImageFormat format)
+    /// <summary>
+    /// Whether compute kernels and shaders may write the texture through an image. Such a texture is allocated once with
+    /// immutable storage, which ES requires of an image, and keeps its size.
+    /// </summary>
+    public bool RandomWrite { get; }
+
+    private readonly int _storageLevels;
+    private uint _storageWidth, _storageHeight;
+
+    public GraphicsTexture(TextureType type, TextureImageFormat format, bool randomWrite = false, int levels = 1)
     {
+        RandomWrite = randomWrite;
+        _storageLevels = Math.Max(1, levels);
         Type = type;
         Target = type switch
         {
@@ -171,6 +182,22 @@ public unsafe class GraphicsTexture : IDisposable
             Graphics.GL.GetTexImage(faceTarget, level, PixelFormat, PixelType, ptr);
         else
             ReadThroughFramebuffer(faceTarget, level, ptr);
+    }
+
+    // Immutable storage needs GL 4.2 or ES 3.0, below that a random write texture is an ordinary one
+    private bool UsesStorage => RandomWrite && Graphics.Capabilities.Has(GraphicsFeature.ImageLoadStore);
+
+    private void AllocateStorage(uint width, uint height, int mip)
+    {
+        if (mip != 0) return;
+        if (_storageWidth == width && _storageHeight == height) return;
+        if (_storageWidth != 0)
+        {
+            Debug.LogError($"A random write texture keeps the size it was made with ({_storageWidth}x{_storageHeight}), so it was not resized to {width}x{height}. Make a new one instead.");
+            return;
+        }
+        Graphics.GL.TexStorage2D(Target, (uint)_storageLevels, (SizedInternalFormat)PixelInternalFormat, width, height);
+        (_storageWidth, _storageHeight) = (width, height);
     }
 
     // ---------------------------------------------------------------- ES format rules
@@ -327,6 +354,12 @@ public unsafe class GraphicsTexture : IDisposable
     public void TexImage2D(TextureTarget type, int mip, uint width, uint height, int v2, void* data)
     {
         Bind(false);
+        if (UsesStorage)
+        {
+            AllocateStorage(width, height, mip);
+            if (data != null) TexSubImage2D(type, mip, 0, 0, width, height, data);
+            return;
+        }
         Half[]? halfs = HalfsForES(data, (long)width * height);
         fixed (Half* h = halfs)
             Graphics.GL.TexImage2D(type, mip, PixelInternalFormat, width, height, v2, PixelFormat, UploadType, halfs != null ? h : data);
