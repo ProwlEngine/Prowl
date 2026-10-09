@@ -64,7 +64,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
     }
 }
 
-internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepRecording recording, DeepPass pass, int? lastEvent = null) : IPass
+internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null) : IPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
     private readonly Dictionary<string, RecordedProperty> _properties = new();

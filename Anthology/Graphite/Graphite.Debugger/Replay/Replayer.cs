@@ -83,7 +83,7 @@ public sealed class Replayer
             if (p == passes[0] || steps.Contains(p.Index))
                 replay.Add(new ReplayRestorePass(scope, passes, p.Index));
 
-            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p, p == pass ? eventIndex : null));
+            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null));
         }
         using RenderPipeline pipeline = new(replay.ToArray());
         ReplayView[] views = [new ReplayView(view.Name, view.PixelWidth, view.PixelHeight)];
