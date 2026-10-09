@@ -14,7 +14,7 @@ internal sealed class RecordFormat : ISerializationFormat
     private static readonly ConcurrentDictionary<Type, Layout> Layouts = new();
 
     private static readonly HashSet<Type> ValueTypes =
-    [typeof(PassStats), typeof(GpuVertexStats), typeof(ResourceRange), typeof(CopyRegion), typeof(TraceResourceId), typeof(TraceVersion), typeof(BlobRef)];
+    [typeof(PassStats), typeof(GpuVertexStats), typeof(MemoryBudgetInfo), typeof(ResourceRange), typeof(CopyRegion), typeof(TraceResourceId), typeof(TraceVersion), typeof(BlobRef)];
 
     public bool CanHandle(Type type)
         => ValueTypes.Contains(type) || (type.IsClass && !type.IsAbstract && type.Assembly == typeof(RecordFormat).Assembly && type.GetMethod("<Clone>$") != null);

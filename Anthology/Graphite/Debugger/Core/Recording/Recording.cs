@@ -19,6 +19,8 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
     private volatile bool _done;
     private EquatableArray<RecordedView> _builtViews = EquatableArray<RecordedView>.Empty;
     private EquatableArray<RecordedCommandBuffer> _builtCommandBuffers = EquatableArray<RecordedCommandBuffer>.Empty;
+    private GraphicsCountersSnapshot _startCounters;
+    private RecordedCounters? _counters;
 
     /// <summary>Creates a recording for one execution on the device.</summary>
     /// <param name="device">Device the execution runs on.</param>
@@ -38,7 +40,8 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         ulong executionId,
         string graphName,
         EquatableArray<RecordedView> views,
-        EquatableArray<RecordedCommandBuffer> commandBuffers)
+        EquatableArray<RecordedCommandBuffer> commandBuffers,
+        RecordedCounters? counters)
     {
         Backend = backend;
         DeviceName = deviceName;
@@ -47,6 +50,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         _graphName = graphName;
         _builtViews = views;
         _builtCommandBuffers = commandBuffers;
+        _counters = counters;
         _done = true;
     }
 
@@ -82,6 +86,17 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         {
             RequireDone();
             return _builtCommandBuffers;
+        }
+    }
+
+    /// <summary>Counter deltas from the execution start to the end of its last view, or null if it had no views.</summary>
+    /// <remarks>Work after the last view, such as submission and present, is not included.</remarks>
+    public RecordedCounters? Counters
+    {
+        get
+        {
+            RequireDone();
+            return _counters;
         }
     }
 
@@ -143,6 +158,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
             if (_device == null || _executionId != 0)
                 throw new InvalidOperationException("A recording observes exactly one execution.");
 
+            _startCounters = _device.Counters.Snapshot();
             Volatile.Write(ref _graphName, graphName);
             Volatile.Write(ref _executionId, executionId);
         }
@@ -160,7 +176,13 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
             _views[view.Index] = new ViewBuilder(view.Name, view.Index, view.PixelWidth, view.PixelHeight);
     }
 
-    void IGraphProfiler.EndView(in ViewInfo view) { }
+    void IGraphProfiler.EndView(in ViewInfo view)
+    {
+        GraphicsCountersSnapshot end = _device!.Counters.Snapshot();
+        MemoryBudgetInfo budget = _device.GetMemoryBudget();
+        lock (_gate)
+            _counters = RecordedCounters.Delta(_startCounters, end, budget);
+    }
 
     void IGraphProfiler.BeginPass(in PassInfo pass) { }
 

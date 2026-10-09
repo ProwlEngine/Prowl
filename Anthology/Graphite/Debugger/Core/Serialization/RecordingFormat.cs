@@ -13,7 +13,8 @@ internal sealed class RecordingFormat : ISerializationFormat
         ulong ExecutionId,
         string GraphName,
         EquatableArray<RecordedView> Views,
-        EquatableArray<RecordedCommandBuffer> CommandBuffers);
+        EquatableArray<RecordedCommandBuffer> CommandBuffers,
+        RecordedCounters? Counters);
 
     private sealed record DeepRecordingData(
         DeepMode Mode,
@@ -37,11 +38,11 @@ internal sealed class RecordingFormat : ISerializationFormat
     }
 
     private static RecordingData Pack(Recording recording)
-        => new(recording.Backend, recording.DeviceName, recording.Features, recording.ExecutionId, recording.GraphName, recording.Views, recording.CommandBuffers);
+        => new(recording.Backend, recording.DeviceName, recording.Features, recording.ExecutionId, recording.GraphName, recording.Views, recording.CommandBuffers, recording.Counters);
 
     private static DeepRecordingData Pack(DeepRecording deep)
         => new(deep.Mode, Pack(deep.Recording), deep.Result);
 
     private static Recording Unpack(RecordingData data)
-        => new(data.Backend, data.DeviceName ?? "", data.Features, data.ExecutionId, data.GraphName ?? "", data.Views, data.CommandBuffers);
+        => new(data.Backend, data.DeviceName ?? "", data.Features, data.ExecutionId, data.GraphName ?? "", data.Views, data.CommandBuffers, data.Counters);
 }
