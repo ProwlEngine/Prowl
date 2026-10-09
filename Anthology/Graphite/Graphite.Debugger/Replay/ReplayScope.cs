@@ -21,7 +21,8 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly DeepRecording _deep;
     private readonly List<IDisposable> _owned = new();
     private readonly Dictionary<TraceResourceId, RecordedResource> _described = new();
-    private readonly Dictionary<BlobRef, EquatableArray<byte>> _blobs = new();
+    private readonly Dictionary<BlobRef, EquatableArray<byte>> _blobs;
+    private readonly Dictionary<ProgramKey, RecordedProgram> _recordedPrograms;
     private readonly Dictionary<TraceResourceId, Texture> _textures = new();
     private readonly Dictionary<TraceResourceId, DeviceBuffer> _buffers = new();
     private readonly Dictionary<ProgramKey, ShaderProgram> _programs = new();
@@ -33,15 +34,14 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly List<(int PassIndex, TraceResourceId Id, Texture Texture, RecordedCopy Copy)> _textureRestores = new();
     private readonly List<(int PassIndex, DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
 
-    public ReplayScope(GraphicsDevice device, DeepRecording deep)
+    public ReplayScope(GraphicsDevice device, DeepRecording deep, Dictionary<BlobRef, EquatableArray<byte>> blobs, Dictionary<ProgramKey, RecordedProgram> programs)
     {
         _device = device;
         _deep = deep;
+        _blobs = blobs;
+        _recordedPrograms = programs;
         foreach (RecordedResource resource in deep.Resources)
             _described[resource.Id] = resource;
-
-        foreach (RecordedBlob blob in deep.Blobs)
-            _blobs[blob.Ref] = blob.Data;
 
         foreach (RecordedCopy copy in deep.Views.SelectMany(v => v.Passes).SelectMany(p => p.Copies))
             _copies.TryAdd(copy.Version, copy);
@@ -468,8 +468,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         if (_programs.ContainsKey(key))
             return null;
 
-        RecordedProgram? program = _deep.Programs.FirstOrDefault(p => p.Key == key);
-        if (program == null)
+        if (!_recordedPrograms.TryGetValue(key, out RecordedProgram? program))
             return "A pipeline references a program that is missing from the recording.";
 
         ShaderStageDescription[] stages = program.Stages
