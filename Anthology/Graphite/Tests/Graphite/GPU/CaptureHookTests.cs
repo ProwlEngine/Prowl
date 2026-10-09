@@ -18,10 +18,12 @@ internal sealed class HookRecorder : ICaptureProfiler
     public ViewCaptureInfo View;
     public readonly Dictionary<string, PassReference[]> References = new();
     public ulong ExecutionId;
+    public string GraphName = "";
 
-    public void BeginExecution(ulong executionId)
+    public void BeginExecution(ulong executionId, string graphName)
     {
         ExecutionId = executionId;
+        GraphName = graphName;
         Log.Add("Begin");
     }
 
@@ -152,6 +154,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
             ["Begin", "ViewBegin:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "ViewEnd", "End"],
             run.Hook.Log);
         Assert.Equal(run.ExecutionId, run.Hook.ExecutionId);
+        Assert.Equal(nameof(RenderPipeline), run.Hook.GraphName);
         Assert.Equal("HookView", run.Hook.View.ViewName);
         Assert.Equal(new[] { "Produce", "Consume", "Finish" }, run.Hook.View.Passes.ToArray().Select(p => p.Pass.Name));
     }
