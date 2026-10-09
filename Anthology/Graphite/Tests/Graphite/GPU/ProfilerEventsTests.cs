@@ -486,7 +486,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void GlobalProfilers_OnlyFeedExecutionsStartedWithoutProfilers()
+    public void GlobalProfilers_OnlyFeedUnprofiledExecutionsTheyChooseToSample()
     {
         using GraphicsDevice device = CreateDevice();
         using IDisposable trackedCleanup = device.TrackedCleanup();
@@ -494,8 +494,12 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
         List<TimingRecorder> created = new();
-        Func<IProfiler> factory = () =>
+        bool sample = true;
+        Func<IProfiler?> factory = () =>
         {
+            if (!sample)
+                return null;
+
             TimingRecorder recorder = new();
             created.Add(recorder);
             return recorder;
@@ -511,6 +515,11 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
         device.WaitForIdle();
         Assert.Single(Assert.Single(created).ExecutionTimes);
+
+        sample = false;
+        device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
+        device.WaitForIdle();
+        Assert.Single(created);
 
         device.GlobalProfilers.Remove(factory);
         device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
