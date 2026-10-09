@@ -97,7 +97,7 @@ public sealed partial class DeepRecording
             ResourceId id = reference.First.Resource;
             ResourceBuilder builder = Builder(id);
             Describe(builder, in reference, view.Origins.TryGetValue(id, out GraphResourceOrigin origin) ? Origin(origin) : ResourceOrigin.External);
-            recorded[i] = new RecordedReference(builder.Id, reference.First.Version, reference.LastVersion);
+            recorded[i] = new RecordedReference(builder.Id, reference.First.Version, reference.LastVersion, ReadsContents(view, state, id));
 
             if (reference.LastVersion != reference.First.Version && !state.Outputs.Contains(id) && !state.Written.Contains(id))
                 state.NotReplayable ??= $"Undeclared GPU write to {reference.Name}.";
@@ -108,7 +108,7 @@ public sealed partial class DeepRecording
         {
             PassReference reference = references[i];
             ResourceId id = reference.First.Resource;
-            if (IsViewTarget(view, id) || view.Known.Contains((id, reference.First.Version)) || !ReadsContents(view, state, id))
+            if (IsViewTarget(view, id) || view.Known.Contains((id, reference.First.Version)) || !recorded[i].Reads)
                 continue;
 
             Copy(state, capture, in reference, CopyPlacement.BeforePass, reference.First.Version);

@@ -95,7 +95,7 @@ public sealed record RecordedAccess(
 }
 
 /// <summary>A resource a pass touched, with its version at first reference and after the pass.</summary>
-public sealed record RecordedReference(TraceResourceId Resource, uint First, uint Last);
+public sealed record RecordedReference(TraceResourceId Resource, uint First, uint Last, bool Reads);
 
 /// <summary>A copy taken for a pass. The blob holds the staging bytes laid out by the regions.</summary>
 public sealed record RecordedCopy(TraceVersion Version, CopyPlacement Placement, EquatableArray<CopyRegion> Regions, BlobRef Blob);

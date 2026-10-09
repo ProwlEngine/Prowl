@@ -74,13 +74,8 @@ internal sealed unsafe class ReplayScope : IDisposable
     public string? Prepare(DeepView view, IReadOnlyList<DeepPass> passes, bool reexecute)
     {
         Dictionary<string, RecordedGraphResource> byName = new();
-        Dictionary<TraceResourceId, GraphResourceOrigin> origins = new();
         foreach (RecordedGraphResource resource in view.Resources)
-        {
             byName.TryAdd(resource.Name, resource);
-            foreach (RecordedBacking backing in resource.Backings)
-                origins[backing.Id] = resource.Origin;
-        }
 
         Dictionary<TraceVersion, RecordedCopy> copies = new();
         foreach (DeepView other in _deep.Views)
@@ -98,7 +93,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         _firstPass = passes.Count > 0 ? passes[0].Index : 0;
         foreach (DeepPass pass in passes)
         {
-            string? error = PreparePass(pass, byName, origins, copies);
+            string? error = PreparePass(pass, byName, copies);
             if (error != null)
                 return error;
         }
@@ -127,10 +122,8 @@ internal sealed unsafe class ReplayScope : IDisposable
     private string? PreparePass(
         DeepPass pass,
         Dictionary<string, RecordedGraphResource> byName,
-        Dictionary<TraceResourceId, GraphResourceOrigin> origins,
         Dictionary<TraceVersion, RecordedCopy> copies)
     {
-        HashSet<TraceResourceId> inputs = new();
         foreach (RecordedAccess access in pass.Accesses)
         {
             if (!byName.TryGetValue(access.Resource, out RecordedGraphResource? graph))
@@ -142,12 +135,6 @@ internal sealed unsafe class ReplayScope : IDisposable
             string? error = graph.Kind == GraphResourceKind.Texture ? BuildTexture(graph) : BuildBuffer(graph);
             if (error != null)
                 return error;
-
-            if (access.ReadsContents)
-            {
-                foreach (RecordedBacking backing in graph.Backings)
-                    inputs.Add(backing.Id);
-            }
         }
 
         foreach (RecordedReference reference in pass.References)
@@ -160,35 +147,13 @@ internal sealed unsafe class ReplayScope : IDisposable
                 return error;
         }
 
-        HashSet<TraceResourceId> loaded = new();
-        HashSet<TraceResourceId> attached = new();
-        foreach (SetFramebufferCommand framebuffer in pass.Commands.OfType<SetFramebufferCommand>())
-        {
-            foreach (RecordedAttachment color in framebuffer.Colors)
-            {
-                attached.Add(color.Texture.Resource);
-                if (framebuffer.Ops.Color.Load == LoadAction.Load)
-                    loaded.Add(color.Texture.Resource);
-            }
-
-            if (framebuffer.Depth is { } depth)
-            {
-                attached.Add(depth.Texture.Resource);
-                if (framebuffer.Ops.Depth.Load == LoadAction.Load)
-                    loaded.Add(depth.Texture.Resource);
-            }
-        }
-
         foreach (RecordedReference reference in pass.References)
         {
-            TraceResourceId id = reference.Resource;
-            bool reads = loaded.Contains(id) || inputs.Contains(id)
-                || (!attached.Contains(id) && (!origins.TryGetValue(id, out GraphResourceOrigin origin) || origin != GraphResourceOrigin.Transient));
-            TraceVersion version = new(id, reference.First);
-            if (!reads || !copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
+            TraceVersion version = new(reference.Resource, reference.First);
+            if (!reference.Reads || !copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
                 continue;
 
-            string? error = PlanRestore(pass.Index, id, restore, byName);
+            string? error = PlanRestore(pass.Index, reference.Resource, restore);
             if (error != null)
                 return error;
         }
@@ -433,7 +398,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             Owners[id] = owner;
     }
 
-    private string? PlanRestore(int passIndex, TraceResourceId id, RecordedCopy copy, Dictionary<string, RecordedGraphResource> byName)
+    private string? PlanRestore(int passIndex, TraceResourceId id, RecordedCopy copy)
     {
         int length = _blobs[copy.Blob].Length;
         if (_textures.TryGetValue(id, out Texture? texture))
