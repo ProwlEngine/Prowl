@@ -13,7 +13,9 @@ internal sealed class RecordingFormat : ISerializationFormat
         EchoObject compound = EchoObject.NewCompound();
         if (value is Recording recording)
         {
-            compound.Add("Executions", Serializer.Serialize(typeof(EquatableArray<RecordedExecution>), recording.Executions, context));
+            compound.Add("ExecutionId", Serializer.Serialize(typeof(ulong), recording.ExecutionId, context));
+            compound.Add("Views", Serializer.Serialize(typeof(EquatableArray<RecordedView>), recording.Views, context));
+            compound.Add("CommandBuffers", Serializer.Serialize(typeof(EquatableArray<RecordedCommandBuffer>), recording.CommandBuffers, context));
             return compound;
         }
 
@@ -29,7 +31,10 @@ internal sealed class RecordingFormat : ISerializationFormat
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
         if (targetType == typeof(Recording))
-            return new Recording(Serializer.Deserialize<EquatableArray<RecordedExecution>>(value["Executions"], context));
+            return new Recording(
+                Serializer.Deserialize<ulong>(value["ExecutionId"], context),
+                Serializer.Deserialize<EquatableArray<RecordedView>>(value["Views"], context),
+                Serializer.Deserialize<EquatableArray<RecordedCommandBuffer>>(value["CommandBuffers"], context));
 
         return new DeepRecording(
             Serializer.Deserialize<DeepMode>(value["Mode"], context),
