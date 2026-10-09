@@ -93,13 +93,14 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
             PassState pass = new(passInfo.Pass.Name, passInfo.Pass.Index);
             foreach (PassResourceAccess access in passInfo.Accesses.Span)
             {
-                pass.Accesses.Add(new RecordedAccess(
+                RecordedAccess recorded = new(
                     RenderResourceID.ToString(access.Id) ?? access.Id.ToString(),
                     access.Kind,
                     access.IsOutput,
                     access.TextureUsage,
                     access.DepthUsage,
-                    access.BufferUsage));
+                    access.BufferUsage);
+                pass.Accesses.Add(recorded);
 
                 if (!byName.TryGetValue(access.Id, out GraphResourceInfo resource))
                     continue;
@@ -109,8 +110,9 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
                     pass.Declared.Add(backing.Id);
                     if (access.IsOutput)
                         pass.Outputs.Add(backing.Id);
-                    else
-                        pass.Inputs.Add(backing.Id);
+
+                    if (recorded.ReadsContents)
+                        pass.Reads.Add(backing.Id);
                 }
             }
 
@@ -427,7 +429,7 @@ internal sealed partial class DeepSink : IGraphProfiler, IGpuStatsProfiler, ICap
         public readonly List<RecordedAccess> Accesses = new();
         public readonly HashSet<ResourceId> Declared = new();
         public readonly HashSet<ResourceId> Outputs = new();
-        public readonly HashSet<ResourceId> Inputs = new();
+        public readonly HashSet<ResourceId> Reads = new();
         public readonly HashSet<ResourceId> Attachments = new();
         public readonly HashSet<ResourceId> Loaded = new();
         public readonly HashSet<ResourceId> Written = new();

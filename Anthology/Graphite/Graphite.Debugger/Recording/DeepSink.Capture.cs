@@ -76,7 +76,7 @@ internal sealed partial class DeepSink
 
     private static bool ReadsContents(ViewState view, PassState state, ResourceId id)
     {
-        if (state.Loaded.Contains(id) || state.Inputs.Contains(id))
+        if (state.Loaded.Contains(id) || state.Reads.Contains(id))
             return true;
 
         if (state.Attachments.Contains(id))
