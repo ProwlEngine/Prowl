@@ -129,6 +129,7 @@ public class DeepRecordingTests
         Assert.Equal(deep.Backend, loaded.Backend);
         Assert.Equal(deep.Features, loaded.Features);
         Assert.Equal(deep.ExecutionId, loaded.ExecutionId);
+        Assert.Equal(nameof(RenderPipeline), loaded.Recording.GraphName);
         Assert.Equal(deep.Recording.Views, loaded.Recording.Views);
         Assert.Equal(deep.Recording.CommandBuffers, loaded.Recording.CommandBuffers);
         Assert.Equal(deep.Resources, loaded.Resources);
