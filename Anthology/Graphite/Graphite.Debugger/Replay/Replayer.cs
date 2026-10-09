@@ -46,7 +46,7 @@ public sealed class Replayer
         }
 
         if (request.EventIndex == null && _recording.Mode == DeepMode.Full)
-            return Restore(pass);
+            return Restore(execution, view, pass);
 
         bool reexecute = _recording.Mode != DeepMode.Full;
         List<DeepPass> passes = reexecute ? view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList() : [pass];
@@ -70,10 +70,7 @@ public sealed class Replayer
     {
         scope.RestoreImmediate();
         string name = $"Replay {pass.Index} {pass.Name}";
-        HashSet<TraceResourceId> wanted = _recording.Mode == DeepMode.Full
-            ? pass.Copies.Where(c => c.Placement == CopyPlacement.AfterPass).Select(c => c.Version.Resource).ToHashSet()
-            : scope.Outputs(pass);
-        ReplayCapture capture = new(name, wanted, scope.ReplayIds);
+        ReplayCapture capture = new(name, ReplayScope.Outputs(view, pass), scope.ReplayIds);
         List<IPass> replay = [new ReplayRestorePass(scope, passes)];
         replay.AddRange(passes.Select(p => new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p, p == pass ? eventIndex : null)));
         using RenderPipeline pipeline = new(replay.ToArray());
@@ -104,22 +101,27 @@ public sealed class Replayer
         return new ReplayResult(ReplayStatus.Reexecuted, $"Executed {executed} on {device} with unreproducible inputs restored from copies.", outputs.ToEquatableArray());
     }
 
-    private ReplayResult Restore(DeepPass pass)
+    private ReplayResult Restore(DeepExecution execution, DeepView view, DeepPass pass)
     {
         Dictionary<BlobRef, RecordedBlob> blobs = new();
         foreach (RecordedBlob blob in _recording.Blobs)
             blobs[blob.Ref] = blob;
 
-        List<ReplayOutput> outputs = new();
-        foreach (RecordedCopy copy in pass.Copies.Where(c => c.Placement == CopyPlacement.AfterPass))
+        Dictionary<TraceVersion, RecordedCopy> copies = new();
+        foreach (RecordedCopy copy in execution.Views.SelectMany(v => v.Passes).SelectMany(p => p.Copies))
+            copies.TryAdd(copy.Version, copy);
+
+        HashSet<TraceResourceId> outputs = ReplayScope.Outputs(view, pass);
+        List<ReplayOutput> results = new();
+        foreach (RecordedReference reference in pass.References.Where(r => outputs.Contains(r.Resource)))
         {
-            if (!blobs.TryGetValue(copy.Blob, out RecordedBlob? blob))
+            if (!copies.TryGetValue(new TraceVersion(reference.Resource, reference.Last), out RecordedCopy? copy) || !blobs.TryGetValue(copy.Blob, out RecordedBlob? blob))
                 return NotReplayable($"The recorded output of pass {pass.Name} is missing its data.");
 
-            outputs.Add(new ReplayOutput(copy.Version.Resource, copy.Regions, blob.Data));
+            results.Add(new ReplayOutput(reference.Resource, copy.Regions, blob.Data));
         }
 
-        return new ReplayResult(ReplayStatus.Restored, $"Outputs of pass {pass.Name} taken from the copies recorded after it.", outputs.ToEquatableArray());
+        return new ReplayResult(ReplayStatus.Restored, $"Outputs of pass {pass.Name} taken from the copies recorded for their versions.", results.ToEquatableArray());
     }
 
     private static ReplayResult NotReplayable(string reason)

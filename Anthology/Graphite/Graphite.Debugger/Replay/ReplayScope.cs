@@ -107,16 +107,15 @@ internal sealed unsafe class ReplayScope : IDisposable
         return null;
     }
 
-    public HashSet<TraceResourceId> Outputs(DeepPass pass)
+    public static HashSet<TraceResourceId> Outputs(DeepView view, DeepPass pass)
     {
         HashSet<TraceResourceId> referenced = pass.References.Select(r => r.Resource).ToHashSet();
+        HashSet<string> names = pass.Accesses.Where(a => a.IsOutput).Select(a => a.Resource).ToHashSet();
         HashSet<TraceResourceId> outputs = new();
-        foreach (RecordedAccess access in pass.Accesses.Where(a => a.IsOutput))
+        foreach (RecordedGraphResource resource in view.Resources)
         {
-            if (GraphTextures.TryGetValue(access.Resource, out GraphTexture? texture))
-                outputs.UnionWith(texture.Backings);
-            else if (GraphBuffers.TryGetValue(access.Resource, out GraphBuffer? buffer))
-                outputs.Add(buffer.Id);
+            if (names.Contains(resource.Name))
+                outputs.UnionWith(resource.Backings.Select(b => b.Id));
         }
 
         outputs.IntersectWith(referenced);
