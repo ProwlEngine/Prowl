@@ -530,6 +530,27 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     [Fact]
+    public void DontDestroyOnLoad_MovesSceneRegistrations_ToTheNewScene()
+    {
+        var first = CreateScene(enable: true);
+        var keeper = CreateGameObject("Keeper");
+        keeper.AddComponent<ReflectionProbe>();
+        var canvas = keeper.AddComponent<GameCanvas>();
+        first.Add(keeper);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(keeper);
+        Assert.Equal(1, first.ReflectionProbes.Count);
+
+        var second = CreateScene();
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+
+        Assert.Equal(1, second.ReflectionProbes.Count);
+        Assert.Equal([canvas], second.Canvases);
+    }
+
+    [Fact]
     public void DontDestroyOnLoad_DoesNotRestartTheObject()
     {
         var first = CreateScene(enable: true);

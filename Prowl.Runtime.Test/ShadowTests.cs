@@ -389,6 +389,7 @@ public class ShadowTests : RuntimeTestBase
         public DirectionalLight? Sun;
         public Float3 CameraPosition = Float3.Zero;
         public Float3 CameraForward = Float3.UnitZ;
+        public bool RefitEveryCascade;
 
         public MeshRenderable AddCube(Float3 position)
         {
@@ -406,7 +407,7 @@ public class ShadowTests : RuntimeTestBase
             Float4x4 projection = Float4x4.CreatePerspectiveFov(60f * Maths.Deg2Rad, 16f / 9f, 0.1f, 500f);
             Quaternion rotation = Quaternion.LookRotation(CameraForward, Float3.UnitY);
             var camera = new ShadowCamera(this, CameraPosition, Frustum.FromMatrix(projection * view), projection, 1080,
-                ShadowFitView.FromProjection(CameraPosition, rotation, projection, 0.1f));
+                ShadowFitView.FromProjection(CameraPosition, rotation, projection, 0.1f), RefitEveryCascade);
             Renderer.Update(Pipeline, camera, Sun, Lights, Renderables);
         }
     }
@@ -652,6 +653,22 @@ public class ShadowTests : RuntimeTestBase
             drawn += scene.Renderer.CascadesDrawn;
         }
         Assert.Equal(25, drawn);
+    }
+
+    [Fact]
+    public void ShadowCache_Directional_ProbeCaptures_RefitEveryCascadeEveryRender()
+    {
+        var scene = new ShadowScene { RefitEveryCascade = true };
+        DirectionalLight sun = AddSun(scene, CreateGameObject("Sun"));
+        sun.Cascades = DirectionalLight.CascadeCount.Four;
+        scene.AddCube(new Float3(0, 0, 4));
+
+        for (int i = 0; i < 6; i++)
+        {
+            scene.CameraForward = i % 2 == 0 ? Float3.UnitZ : Float3.UnitX;
+            scene.Update();
+            Assert.Equal(4, scene.Renderer.CascadesDrawn);
+        }
     }
 
     [Fact]

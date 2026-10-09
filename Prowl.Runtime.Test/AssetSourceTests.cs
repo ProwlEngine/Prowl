@@ -111,6 +111,59 @@ public class AssetSourceTests : RuntimeTestBase
     }
 
     [Fact]
+    public void AComputeShaderLoadsWithItsKernelsAndIncludes()
+    {
+        string folder = Folder("Pack");
+        Write(folder, "Compute/Common.glsl", "float Twice(float x) { return x * 2.0; }");
+        Write(folder, "Compute/Blur.compute", """
+            #pragma kernel Horizontal 64
+            #include "Common"
+            void Horizontal() { }
+            """);
+        MountFolder(folder);
+
+        ComputeShader shader = AssetDatabase.FindResource<ComputeShader>("Compute/Blur")!;
+
+        Assert.NotNull(shader);
+        int kernel = shader.FindKernel("Horizontal");
+        shader.GetKernelThreadGroupSizes(kernel, out uint x, out _, out _);
+        Assert.Equal(64u, x);
+        Assert.Contains("float Twice(float x)", shader.KernelSource(kernel));
+    }
+
+    [Fact]
+    public void AShaderInASubfolder_FindsTheIncludeBesideIt()
+    {
+        string folder = Folder("Pack");
+        Write(folder, "Shaders/Common.glsl", "#define TINT_VALUE 0.5");
+        Write(folder, "Shaders/Tint.shader", """
+            Shader "Test/Tint"
+
+            Pass "Forward"
+            {
+                GLSLPROGRAM
+                    Vertex
+                    {
+                        #include "Common"
+                        void main() { gl_Position = vec4(TINT_VALUE); }
+                    }
+                    Fragment
+                    {
+                        out vec4 color;
+                        void main() { color = vec4(1.0); }
+                    }
+                ENDGLSL
+            }
+            """);
+        MountFolder(folder);
+
+        Shader shader = AssetDatabase.FindResource<Shader>("Shaders/Tint")!;
+
+        Assert.NotNull(shader);
+        Assert.Contains("#define TINT_VALUE 0.5", shader.GetPass(0).VertexSource);
+    }
+
+    [Fact]
     public void AMaterialNamesItsTextureByLoadPath()
     {
         string folder = Folder("Pack");
