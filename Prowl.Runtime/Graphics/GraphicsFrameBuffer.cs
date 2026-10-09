@@ -24,6 +24,9 @@ public unsafe class GraphicsFrameBuffer
 
         /// <summary>Mip level of the texture/face to attach. Defaults to 0 (full 2D RTs).</summary>
         public int MipLevel;
+
+        /// <summary>For a cubemap array, which cube's <see cref="CubeFace"/> to attach.</summary>
+        public int Layer;
     }
 
     public uint Handle { get; internal set; }
@@ -84,7 +87,11 @@ public unsafe class GraphicsFrameBuffer
             for (int i = 0; i < numTextures; i++)
             {
                 ref readonly Attachment a = ref _attachments[i];
-                if (!a.IsDepth)
+                if (!a.IsDepth && a.Texture!.Target == TextureTarget.TextureCubeMapArray)
+                {
+                    Graphics.GL.FramebufferTextureLayer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, a.Texture.Handle, a.MipLevel, a.Layer * 6 + a.CubeFace);
+                }
+                else if (!a.IsDepth)
                 {
                     TextureTarget colorTarget = a.IsCubeFace
                         ? TextureTarget.TextureCubeMapPositiveX + a.CubeFace

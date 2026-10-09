@@ -305,6 +305,7 @@ public class GraphicsProgram : IDisposable
                 UniformType.Sampler3D => FirstEmptyUnit + 2,
                 UniformType.SamplerCube => FirstEmptyUnit + 3,
                 UniformType.Sampler2DArray => FirstEmptyUnit + 4,
+                UniformType.SamplerCubeMapArray => FirstEmptyUnit + 5,
                 _ => -1,
             };
             if (emptyUnit < 0) continue;

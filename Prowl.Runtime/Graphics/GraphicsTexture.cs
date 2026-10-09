@@ -45,6 +45,7 @@ public unsafe class GraphicsTexture : IDisposable
             TextureType.Texture2D => TextureTarget.Texture2D,
             TextureType.Texture3D => TextureTarget.Texture3D,
             TextureType.TextureCubeMap => TextureTarget.TextureCubeMap,
+            TextureType.TextureCubeMapArray => TextureTarget.TextureCubeMapArray,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
         GetTextureFormatEnums(format, out PixelInternalFormat, out PixelType, out PixelFormat);

@@ -324,6 +324,7 @@ public static unsafe class Graphics
     [
         "float", "int", "sampler2D", "sampler3D", "samplerCube", "sampler2DShadow", "samplerCubeShadow",
         "sampler2DArray", "sampler2DArrayShadow", "isampler2D", "usampler2D", "isampler3D", "usampler3D",
+        "samplerCubeArray",
     ];
 
     private static GraphicsCapabilities DetectCapabilities()
