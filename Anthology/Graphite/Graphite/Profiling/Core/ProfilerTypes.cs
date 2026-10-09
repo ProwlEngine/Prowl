@@ -9,11 +9,9 @@ public readonly struct ViewInfo
     public int Index { get; }
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
-    public ulong ExecutionId { get; }
 
-    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight, ulong executionId)
+    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight)
     {
-        ExecutionId = executionId;
         Name = name;
         Index = index;
         PixelWidth = pixelWidth;
@@ -26,18 +24,16 @@ public readonly struct PassInfo
     public string Name { get; }
     public int Index { get; }
     public int ViewIndex { get; }
-    public ulong ExecutionId { get; }
     public ReadOnlyMemory<RenderResourceID> Inputs { get; }
     public ReadOnlyMemory<RenderResourceID> Outputs { get; }
 
     public PassInfo(
-        string name, int index, int viewIndex, ulong executionId,
+        string name, int index, int viewIndex,
         ReadOnlyMemory<RenderResourceID> inputs, ReadOnlyMemory<RenderResourceID> outputs)
     {
         Name = name;
         Index = index;
         ViewIndex = viewIndex;
-        ExecutionId = executionId;
         Inputs = inputs;
         Outputs = outputs;
     }
@@ -87,14 +83,12 @@ public readonly struct CommandBufferInfo
     /// <summary>Fresh id per rental, not per pooled object.</summary>
     public ulong Id { get; }
     public string Name { get; }
-    public ulong ExecutionId { get; }
     public PassInfo? Pass { get; }
 
-    public CommandBufferInfo(ulong id, string name, ulong executionId, PassInfo? pass)
+    public CommandBufferInfo(ulong id, string name, PassInfo? pass)
     {
         Id = id;
         Name = name;
-        ExecutionId = executionId;
         Pass = pass;
     }
 }

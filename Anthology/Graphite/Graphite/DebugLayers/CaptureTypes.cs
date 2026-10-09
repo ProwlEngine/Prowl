@@ -49,9 +49,8 @@ public readonly record struct PassCaptureInfo(
     PassInfo Pass,
     ReadOnlyMemory<PassResourceAccess> Accesses);
 
-/// <summary>Everything a capture hook learns about one view of one graph execution.</summary>
+/// <summary>Everything a capture hook learns about one view of the execution.</summary>
 public readonly record struct ViewCaptureInfo(
-    ulong ExecutionId,
     string ViewName,
     int ViewIndex,
     uint PixelWidth,

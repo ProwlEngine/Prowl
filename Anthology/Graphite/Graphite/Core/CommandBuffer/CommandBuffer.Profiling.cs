@@ -18,7 +18,7 @@ public abstract partial class CommandBuffer
     /// <summary>Fresh id stamped per rental, so profiler can tell reused instances apart.</summary>
     internal ulong RentalId { get; set; }
 
-    internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, ExecutionId, Pass);
+    internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
 
     private uint _statDraws;
     private uint _statIndirectDraws;
