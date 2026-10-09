@@ -8,7 +8,7 @@ public abstract partial class GraphicsDevice
     /// <summary>Always-on counters of what the backend is doing.</summary>
     public GraphicsCounters Counters { get; } = new();
 
-    /// <summary>Factories that each create one profiler for every execution started without profilers of its own.</summary>
+    /// <summary>Factories that each create one profiler, or null to skip, for every execution started without profilers of its own.</summary>
     public GlobalProfilerList GlobalProfilers { get; } = new();
 
     private long _pipelineIdCounter;

@@ -148,7 +148,7 @@ recording.Wait();
 ```
 
 An execution started with no profilers creates one from each `GraphicsDevice.GlobalProfilers`
-factory, so a factory can collect a profiler per frame:
+factory, so a factory can collect a profiler per frame, or return null to skip a frame and sample:
 
 ```csharp
 device.GlobalProfilers.Add(() => new MyFrameProfiler(results));
