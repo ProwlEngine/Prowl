@@ -82,7 +82,17 @@ public sealed record RecordedAccess(
     bool IsOutput,
     TextureState TextureUsage,
     TextureState? DepthUsage,
-    BufferAccess BufferUsage);
+    BufferAccess BufferUsage)
+{
+    private const TextureState TextureReads = TextureState.Sampled | TextureState.Storage | TextureState.TransferSrc | TextureState.DepthReadOnly;
+
+    /// <summary>Whether the declared usage reads the contents the resource had before the pass.</summary>
+    public bool ReadsContents
+        => !IsOutput
+            || (Kind == GraphResourceKind.Texture
+                ? ((TextureUsage | (DepthUsage ?? 0)) & TextureReads) != 0
+                : (BufferUsage & BufferAccess.AllReads) != 0);
+}
 
 /// <summary>A resource a pass touched, with its version at first reference and after the pass.</summary>
 public sealed record RecordedReference(TraceResourceId Resource, uint First, uint Last);
