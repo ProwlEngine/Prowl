@@ -16,8 +16,6 @@ public interface ICaptureProfiler : IProfiler
     void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture);
 
     void OnViewEnd();
-
-    void OnExecutionSubmitted(ExecutionTask task);
 }
 
 /// <summary>Services a hook can request during a callback. Only valid for the duration of <see cref="ICaptureProfiler.OnPassEnd"/>.</summary>

@@ -1,8 +1,12 @@
 namespace Prowl.Graphite;
 
-/// <summary>Root of every profiler capability. Implement one or more capability interfaces to receive events.</summary>
+/// <summary>Root of every profiler capability. One instance observes one execution, from BeginExecution to EndExecution.</summary>
 public interface IProfiler
 {
+    void BeginExecution(ulong executionId);
+
+    /// <summary>Called once every event and GPU result of the execution has been delivered.</summary>
+    void EndExecution();
 }
 
 /// <summary>Render graph events: views, passes, and pass resource reads and writes.</summary>
@@ -21,5 +25,4 @@ public interface IGpuStatsProfiler : IProfiler
 {
     void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds);
     void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats);
-    void RecordExecutionResolved(ulong executionId);
 }
