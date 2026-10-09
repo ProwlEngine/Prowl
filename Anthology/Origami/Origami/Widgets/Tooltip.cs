@@ -12,6 +12,33 @@ using Color = System.Drawing.Color;
 
 namespace Prowl.OrigamiUI;
 
+/// <summary>The side of the anchor on which the tooltip prefers to appear.</summary>
+public enum TooltipPlacement
+{
+    Top,
+    Bottom,
+    Left,
+    Right
+}
+
+/// <summary>Whether the tooltip follows the cursor or sits beside its hovered element.</summary>
+public enum TooltipAnchor
+{
+    Cursor,
+    Element
+}
+
+/// <summary>Tooltip presentation. Tooltips flip to the opposite side when needed and stay on screen.</summary>
+public sealed class TooltipOptions
+{
+    public TooltipPlacement Placement { get; set; } = TooltipPlacement.Bottom;
+    public TooltipAnchor Anchor { get; set; } = TooltipAnchor.Cursor;
+    public bool ShowArrow { get; set; }
+
+    /// <summary>Hover delay in seconds, or null to use TooltipSystem.ShowDelay.</summary>
+    public float? Delay { get; set; }
+}
+
 /// <summary>
 /// Describes a tooltip's content. Supports plain text, title + description,
 /// icon, shortcut hint, and fully custom draw callbacks.
@@ -26,6 +53,7 @@ public sealed class TooltipContent
     public float MaxWidth = 200f;
     /// <summary>The narrowest the bubble gets, for custom content that needs room the title does not give it.</summary>
     public float MinWidth;
+    public TooltipOptions? Options;
 
     public TooltipContent() { }
     public TooltipContent(string text) => Text = text;
@@ -51,16 +79,21 @@ public static class TooltipSystem
     private static TooltipContent? _claim;
     private static int _claimId;
     private static int _claimDepth = -1;
+    private static Paper? _claimOwner;
+    private static Paper? _anchorOwner;
 
     public static void Hover(int elementId, TooltipContent content) => Hover(elementId, content, 0);
 
     /// <summary>Asks to show a tooltip for an element this frame. A deeper element outranks a shallower one.</summary>
     public static void Hover(int elementId, TooltipContent content, int depth)
     {
-        if (depth < _claimDepth) return;
+        if (depth < _claimDepth)
+            return;
+
         _claim = content;
         _claimId = elementId;
         _claimDepth = depth;
+        _claimOwner = null;
     }
 
     public static void Hover(int elementId, string text)
@@ -68,7 +101,14 @@ public static class TooltipSystem
 
     /// <summary>Asks to show a tooltip for an element, ranked by how deep it sits in the tree.</summary>
     public static void Hover(ElementHandle element, TooltipContent content)
-        => Hover(element.Data.ID, content, Depth(element));
+    {
+        int depth = Depth(element);
+        if (depth < _claimDepth)
+            return;
+
+        Hover(element.Data.ID, content, depth);
+        _claimOwner = element.Owner;
+    }
 
     public static void Hover(ElementHandle element, string text)
         => Hover(element, new TooltipContent(text));
@@ -76,7 +116,9 @@ public static class TooltipSystem
     internal static int Depth(ElementHandle handle)
     {
         int depth = 0;
-        for (ElementHandle h = handle.GetParentHandle(); h.IsValid; h = h.GetParentHandle()) depth++;
+        for (ElementHandle h = handle.GetParentHandle(); h.IsValid; h = h.GetParentHandle())
+            depth++;
+
         return depth;
     }
 
@@ -88,12 +130,21 @@ public static class TooltipSystem
     {
         if (_claim != null)
         {
-            if (_activeElementId == _claimId) _hoverTime += _lastDeltaTime;
-            else { _activeElementId = _claimId; _hoverTime = 0; }
+            if (_activeElementId == _claimId)
+            {
+                _hoverTime += _lastDeltaTime;
+            }
+            else
+            {
+                _activeElementId = _claimId;
+                _hoverTime = 0;
+            }
         }
 
         _pending = _claim;
+        _anchorOwner = _claimOwner;
         _claim = null;
+        _claimOwner = null;
         _claimDepth = -1;
     }
 
@@ -109,7 +160,7 @@ public static class TooltipSystem
             return;
         }
 
-        if (_hoverTime < _showDelay)
+        if (_hoverTime < MathF.Max(0f, _pending.Options?.Delay ?? _showDelay))
         {
             _pending = null;
             return;
@@ -117,7 +168,11 @@ public static class TooltipSystem
 
         var theme = Origami.Current;
         var font = theme.Font;
-        if (font == null) { _pending = null; return; }
+        if (font == null)
+        {
+            _pending = null;
+            return;
+        }
 
         var content = _pending;
         _pending = null;
@@ -133,37 +188,39 @@ public static class TooltipSystem
         bool hasText = !string.IsNullOrEmpty(content.Text);
 
         // .w2tip padding: 6px 11px
-        const float padX = 11f, padY = 6f;
+        const float padX = 11f;
+        const float padY = 6f;
 
         // Estimate width - cap at MaxWidth so long text wraps instead of stretching
         float textW = 0;
-        if (hasTitle) textW = MathF.Max(textW, (float)paper.MeasureText(content.Title!, titleFontSize, font).X);
-        if (hasText) textW = MathF.Max(textW, (float)paper.MeasureText(content.Text, fontSize, font).X);
-        if (hasShortcut) textW += (float)paper.MeasureText(content.Shortcut!, fontSize, font).X + m.PaddingLarge;
+        if (hasTitle)
+            textW = MathF.Max(textW, (float)paper.MeasureText(content.Title!, titleFontSize, font).X);
+        if (hasText)
+            textW = MathF.Max(textW, (float)paper.MeasureText(content.Text, fontSize, font).X);
+        if (hasShortcut)
+            textW += (float)paper.MeasureText(content.Shortcut!, fontSize, font).X + m.PaddingLarge;
 
         float naturalW = textW + padX * 2 + (hasIcon ? m.HeaderHeight : 0f);
         float tooltipW = MathF.Min(content.MaxWidth, MathF.Max(content.MinWidth, naturalW));
-        if (tooltipW < 40) tooltipW = 40;
+        if (tooltipW < 40)
+            tooltipW = 40;
+
         bool needsWrap = naturalW > content.MaxWidth;
 
-        // Position below cursor
+        var options = content.Options;
+        bool useElementAnchor = options?.Anchor == TooltipAnchor.Element && _anchorOwner == paper;
+        int anchorId = _activeElementId;
         var pos = paper.PointerPos;
-        float tooltipX = (float)pos.X + 14;
-        float tooltipY = (float)pos.Y + 18;
-
-        // Clamp to screen
-        float screenW = (float)paper.ScreenRect.Size.X;
-        if (tooltipX + tooltipW > screenW - 4) tooltipX = screenW - tooltipW - 4;
-        if (tooltipX < 4) tooltipX = 4;
-
+        Rect cursorAnchor = new Rect(pos.X, pos.Y, pos.X, pos.Y);
+        TooltipPlacement placement = options?.Placement ?? TooltipPlacement.Bottom;
+        // Limit width to the window too, including tooltips whose minimum width is very large.
+        tooltipW = MathF.Min(tooltipW, MathF.Max(1f, paper.ScreenRect.Size.X - 8f));
+        needsWrap |= naturalW > tooltipW;
         Color bgColor = theme.Popover;
-
-        float arrowPx = (float)pos.X;
-        float arrowPy = (float)pos.Y;
 
         using (paper.Column("tt_root")
             .PositionType(PositionType.SelfDirected)
-            .Position(tooltipX, tooltipY)
+            .Position(0, 0)
             .Width(tooltipW).Height(UnitValue.Auto)
             .BackgroundColor(bgColor)
             .Rounded(m.ContainerRounding)
@@ -171,10 +228,23 @@ public static class TooltipSystem
             .Padding(padX, padX, padY, padY)
             .Gap(m.SpacingSmall)
             .Layer(Layer.Topmost + 1000)
-            .ClampToScreen()
             .IsNotInteractable()
-            .OnPostLayout((handle, rect) => paper.Draw(ref handle,
-                (canvas, r) => DrawArrow(canvas, r, arrowPx, arrowPy, bgColor)))
+            .OnPostLayout((handle, rect) =>
+            {
+                // Hover claims come from the previous frame. Resolve the stable ID against this
+                // frame's tree after layout so moving or resized elements keep their tooltip attached.
+                ElementHandle anchorElement = useElementAnchor ? paper.FindElementByID(anchorId) : default;
+                bool elementAnchor = anchorElement.IsValid;
+                Rect anchor = elementAnchor ? anchorElement.Data.LayoutRect : cursorAnchor;
+
+                // Use the measured height so wrapping and custom content position correctly
+                // on the first visible frame, including when the preferred side must flip.
+                Rect placed = PositionTooltip(anchor, rect.Size, paper.ScreenRect, placement,
+                    elementAnchor, options?.ShowArrow == true);
+                MoveTooltip(handle, placed.Min - rect.Min);
+                if (options?.ShowArrow == true)
+                    paper.Draw(ref handle, (canvas, r) => DrawArrow(canvas, r, anchor, bgColor, m.ContainerRounding));
+            })
             .Enter())
         {
             if (hasTitle || hasIcon)
@@ -218,27 +288,89 @@ public static class TooltipSystem
     }
 
     /// <summary>
-    /// Draw the little 8px arrow (an 45deg-rotated square) on the bubble edge that faces the
-    /// anchor. Placed on the top edge when the bubble sits below the pointer, on the bottom edge
-    /// when it was flipped above.
+    /// Places the bubble beside its anchor, flips to the opposite side if it fits better,
+    /// and clamps the result to the screen with a 4px margin.
     /// </summary>
-    private static void DrawArrow(Canvas canvas, Rect rect, float pointerX, float pointerY, Color color)
+    internal static Rect PositionTooltip(Rect anchor, Float2 size, Rect screen, TooltipPlacement placement,
+        bool elementAnchor, bool showArrow = false)
     {
-        const float half = 5.6f;   // half-diagonal of an 8px square rotated 45deg
-        float left = (float)rect.Min.X;
-        float top = (float)rect.Min.Y;
-        float right = (float)(rect.Min.X + rect.Size.X);
-        float bottom = (float)(rect.Min.Y + rect.Size.Y);
+        Float2 center = (anchor.Min + anchor.Max) * 0.5f;
+        bool centered = elementAnchor || showArrow;
+        float gapX = elementAnchor ? 10f : 14f;
+        float gapY = elementAnchor ? 10f : 18f;
 
-        float edgeY = pointerY >= bottom ? bottom : top;   // opposite edge points at the anchor
-        float ax = Math.Clamp(pointerX, left + 7f + half, right - 7f - half);
+        // Cursor tooltips keep the usual 14px/18px offset unless an arrow needs to face the anchor.
+        Float2 Position(TooltipPlacement side) => side switch
+        {
+            TooltipPlacement.Top => new Float2(centered ? center.X - size.X / 2 : center.X + 14, anchor.Min.Y - gapY - size.Y),
+            TooltipPlacement.Left => new Float2(anchor.Min.X - gapX - size.X, centered ? center.Y - size.Y / 2 : center.Y + 18),
+            TooltipPlacement.Right => new Float2(anchor.Max.X + gapX, centered ? center.Y - size.Y / 2 : center.Y + 18),
+            _ => new Float2(centered ? center.X - size.X / 2 : center.X + 14, anchor.Max.Y + gapY)
+        };
+
+        TooltipPlacement opposite = placement switch
+        {
+            TooltipPlacement.Top => TooltipPlacement.Bottom,
+            TooltipPlacement.Left => TooltipPlacement.Right,
+            TooltipPlacement.Right => TooltipPlacement.Left,
+            _ => TooltipPlacement.Top
+        };
+
+        float minX = screen.Min.X + 4;
+        float minY = screen.Min.Y + 4;
+        float maxX = screen.Max.X - 4;
+        float maxY = screen.Max.Y - 4;
+
+        // Compare overflow along the placement axis before clamping to the screen.
+        float Overflow(Float2 p) => placement == TooltipPlacement.Left || placement == TooltipPlacement.Right
+            ? MathF.Max(0, minX - p.X) + MathF.Max(0, p.X + size.X - maxX)
+            : MathF.Max(0, minY - p.Y) + MathF.Max(0, p.Y + size.Y - maxY);
+
+        Float2 position = Position(placement);
+        Float2 flipped = Position(opposite);
+        if (Overflow(flipped) < Overflow(position))
+            position = flipped;
+
+        // Clamp to screen, including viewports too small to contain the entire bubble.
+        position.X = Math.Clamp(position.X, minX, MathF.Max(minX, maxX - size.X));
+        position.Y = Math.Clamp(position.Y, minY, MathF.Max(minY, maxY - size.Y));
+        return new Rect(position.X, position.Y, position.X + size.X, position.Y + size.Y);
+    }
+
+    private static void MoveTooltip(ElementHandle handle, Float2 delta)
+    {
+        // Post-layout positioning must move the bubble's content along with its background.
+        handle.Data.X += delta.X;
+        handle.Data.Y += delta.Y;
+        foreach (int child in handle.Data.ChildIndices)
+            MoveTooltip(new ElementHandle(handle.Owner, child), delta);
+    }
+
+    /// <summary>
+    /// Draws the little 8px arrow (a square rotated 45 degrees) on the bubble edge facing
+    /// the anchor. It follows the bubble when placement flips and stays clear of rounded corners.
+    /// </summary>
+    private static void DrawArrow(Canvas canvas, Rect rect, Rect anchor, Color color, float rounding)
+    {
+        const float half = 5.6f;   // Half-diagonal of an 8px square rotated 45 degrees.
+        Float2 target = (anchor.Min + anchor.Max) * 0.5f;
+        bool vertical = target.Y < rect.Min.Y || target.Y > rect.Max.Y;
+        if (!vertical && target.X >= rect.Min.X && target.X <= rect.Max.X)
+            return;
+
+        float length = vertical ? rect.Size.X : rect.Size.Y;
+        float inset = MathF.Min(MathF.Max(0f, rounding) + half, length / 2f);
+        float ax = vertical ? Math.Clamp(target.X, rect.Min.X + inset, rect.Max.X - inset)
+            : target.X < rect.Min.X ? rect.Min.X : rect.Max.X;
+        float ay = vertical ? target.Y < rect.Min.Y ? rect.Min.Y : rect.Max.Y
+            : Math.Clamp(target.Y, rect.Min.Y + inset, rect.Max.Y - inset);
 
         canvas.SaveState();
         canvas.BeginPath();
-        canvas.MoveTo(ax, edgeY - half);
-        canvas.LineTo(ax + half, edgeY);
-        canvas.LineTo(ax, edgeY + half);
-        canvas.LineTo(ax - half, edgeY);
+        canvas.MoveTo(ax, ay - half);
+        canvas.LineTo(ax + half, ay);
+        canvas.LineTo(ax, ay + half);
+        canvas.LineTo(ax - half, ay);
         canvas.ClosePath();
         canvas.SetFillColor(color);
         canvas.Fill();
@@ -251,11 +383,11 @@ public static class TooltipSystem
 /// </summary>
 public static class TooltipExtensions
 {
-    public static ElementBuilder Tooltip(this ElementBuilder builder, string text)
-        => builder.Tooltip(new TooltipContent(text));
+    public static ElementBuilder Tooltip(this ElementBuilder builder, string text, TooltipOptions? options = null)
+        => builder.Tooltip(new TooltipContent(text) { Options = options });
 
-    public static ElementBuilder Tooltip(this ElementBuilder builder, string title, string description)
-        => builder.Tooltip(new TooltipContent { Title = title, Text = description });
+    public static ElementBuilder Tooltip(this ElementBuilder builder, string title, string description, TooltipOptions? options = null)
+        => builder.Tooltip(new TooltipContent { Title = title, Text = description, Options = options });
 
     public static ElementBuilder Tooltip(this ElementBuilder builder, TooltipContent content)
     {
