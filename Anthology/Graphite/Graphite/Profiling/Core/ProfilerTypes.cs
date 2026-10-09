@@ -3,6 +3,22 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite;
 
+/// <summary>Whether a graph resource is a texture or a buffer.</summary>
+public enum GraphResourceKind : byte
+{
+    Texture,
+    Buffer,
+}
+
+/// <summary>Public copy of a pass's declared access to a graph resource.</summary>
+public readonly record struct PassResourceAccess(
+    RenderResourceID Id,
+    GraphResourceKind Kind,
+    bool IsOutput,
+    TextureState TextureUsage,
+    TextureState? DepthUsage,
+    BufferAccess BufferUsage);
+
 public readonly struct ViewInfo
 {
     public string Name { get; }
