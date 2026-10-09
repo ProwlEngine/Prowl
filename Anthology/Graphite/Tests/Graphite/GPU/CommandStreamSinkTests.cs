@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-internal sealed class SinkRecorder : ICommandStreamProfiler
+internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
 {
     public readonly List<string> Log = new();
     public readonly List<PropertyState[]> Tables = new();
@@ -27,8 +27,14 @@ internal sealed class SinkRecorder : ICommandStreamProfiler
 
     public void BeginExecution(ulong executionId, string graphName) { }
     public void EndExecution() { }
-    public void BeginPassCommands(in PassInfo pass) => Log.Add("BeginPass:" + pass.Name);
-    public void EndPassCommands(in PassInfo pass) => Log.Add("EndPass:" + pass.Name);
+
+    public IPassCommandSink? BeginPassCommands(in PassInfo pass)
+    {
+        Log.Add("BeginPass:" + pass.Name);
+        return this;
+    }
+
+    public void End() => Log.Add("EndPass");
 
     public void SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops)
         => Log.Add($"SetFramebuffer:{framebuffer.Colors.Length}:{framebuffer.Depth.HasValue}:{ops.Color.Load}");
@@ -195,7 +201,8 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     private SinkRecorder Record(Action<CommandBuffer> record)
     {
         SinkRecorder sink = new();
-        GD.RunTestGraph((context, cl) => record(cl), sink);
+        using RenderPipeline pipeline = new([new SinkPass(record)]);
+        GD.DispatchGraph(pipeline, new SinkView[] { new() }, sink);
         GD.WaitForIdle();
 
         return sink;
@@ -237,10 +244,12 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
 
         string[] expected =
         [
+            "BeginPass:SinkPass",
             "SetFramebuffer:1:False:Clear", "SetViewport", "SetScissor",
             "SetStencilReference", "SetBlendConstants",
             "Props:2", "SetPipeline:Graphics", "BindVertexBuffers", "Draw:4:1:0:0",
             "SetPipeline:Compute", "Props:1", "Dispatch:1:1:1",
+            "EndPass",
         ];
         Assert.Equal(expected, sink.Log);
         Assert.Same(program, sink.Pipelines[0].Program);
@@ -436,7 +445,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         GD.DispatchGraph(pipeline, new SinkView[] { new() }, sink);
         GD.WaitForIdle();
 
-        Assert.Equal(["BeginPass:SinkPass", "EndPass:SinkPass"], sink.Log);
+        Assert.Equal(["BeginPass:SinkPass", "EndPass"], sink.Log);
     }
 
     [SkippableFact]
