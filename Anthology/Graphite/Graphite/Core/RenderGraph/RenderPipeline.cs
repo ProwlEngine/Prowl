@@ -61,12 +61,13 @@ public class RenderPipeline : IDisposable
         RenderGraph graph = Graph;
         IGraphProfiler? profiler = context.GraphProfiler;
 
+        GraphCapture? capture = null;
         _executingView = true;
         try
         {
             int index = 0;
             bool hasViewTarget = context.HasViewTarget;
-            GraphCapture? capture = BeginCapture(context, graph, hasViewTarget);
+            capture = BeginCapture(context, graph, hasViewTarget);
             foreach (RenderGraph.PassNode node in graph.OrderedPasses)
             {
                 if (node.WritesViewTarget && !hasViewTarget)
@@ -111,10 +112,10 @@ public class RenderPipeline : IDisposable
             }
 
             context.RestoreRestingStates("View");
-            capture?.EndView();
         }
         finally
         {
+            capture?.EndView();
             _executingView = false;
         }
     }
