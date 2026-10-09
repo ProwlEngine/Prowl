@@ -15,9 +15,15 @@ namespace Prowl.Graphite.Tests;
 file abstract class ExecutionRecorder : IProfiler
 {
     public ulong ExecutionId;
+    public string GraphName = "";
     public int Ended;
 
-    public virtual void BeginExecution(ulong executionId) => ExecutionId = executionId;
+    public virtual void BeginExecution(ulong executionId, string graphName)
+    {
+        ExecutionId = executionId;
+        GraphName = graphName;
+    }
+
     public virtual void EndExecution() => Ended++;
 }
 
@@ -71,7 +77,7 @@ file sealed class ResolveOrderRecorder : IGpuStatsProfiler
 {
     public readonly List<string> Events = new();
 
-    public void BeginExecution(ulong executionId) => Events.Add("begin");
+    public void BeginExecution(ulong executionId, string graphName) => Events.Add("begin");
     public void EndExecution() => Events.Add("end");
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Events.Add("time");
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) => Events.Add("stats");
@@ -107,9 +113,10 @@ file sealed class CorrelationProfiler : ExecutionRecorder, IGraphProfiler, IGpuS
         base.EndExecution();
     }
 
-    public void AssertCompleteTwoViewCopyExecution(ulong executionId)
+    public void AssertCompleteTwoViewCopyExecution(ulong executionId, string graphName)
     {
         Assert.Equal(executionId, ExecutionId);
+        Assert.Equal(graphName, GraphName);
         Assert.Equal(1, Ended);
         Assert.Equal(new[] { 0, 1 }, ViewsBegun.ConvertAll(v => v.Index));
         Assert.Equal(4, PassesBegun.Count);
@@ -406,7 +413,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_correlation_target");
-        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
+        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]) { Name = "Correlation" };
         ProfilerView[] views = [new(size, size), new(size, size)];
 
         ExecutionTask first = device.DispatchGraph(pipeline, views, firstProfiler);
@@ -414,8 +421,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         device.WaitForIdle();
 
         Assert.True(first.Id < second.Id);
-        firstProfiler.AssertCompleteTwoViewCopyExecution(first.Id);
-        secondProfiler.AssertCompleteTwoViewCopyExecution(second.Id);
+        firstProfiler.AssertCompleteTwoViewCopyExecution(first.Id, "Correlation");
+        secondProfiler.AssertCompleteTwoViewCopyExecution(second.Id, "Correlation");
     }
 
     [Fact]
@@ -482,7 +489,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         Dictionary<ulong, CorrelationProfiler> byExecution = profilers.ToDictionary(p => p.ExecutionId);
         foreach (ExecutionTask task in tasks)
-            byExecution[task.Id].AssertCompleteTwoViewCopyExecution(task.Id);
+            byExecution[task.Id].AssertCompleteTwoViewCopyExecution(task.Id, nameof(RenderPipeline));
     }
 
     [Fact]
