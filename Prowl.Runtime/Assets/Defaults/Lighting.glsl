@@ -796,6 +796,7 @@ vec3 SampleReflectionProbe(int index, vec3 worldPos, vec3 dir, float roughness)
 
         vec3 p = vec3(dot(r0.xyz, worldPos) + r0.w, dot(r1.xyz, worldPos) + r1.w, dot(r2.xyz, worldPos) + r2.w);
         vec3 d = vec3(dot(r0.xyz, dir), dot(r1.xyz, dir), dot(r2.xyz, dir));
+        d = mix(vec3(1e-6), d, greaterThanEqual(abs(d), vec3(1e-6)));
         vec3 far = max((halfSize - p) / d, (-halfSize - p) / d);
         float t = max(min(min(far.x, far.y), far.z), 0.0);
         vec3 hit = p + d * t;

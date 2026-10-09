@@ -28,8 +28,13 @@ public readonly struct ShadowCamera
     public readonly float PixelHeight;
     public readonly ShadowFitView FitView;
 
-    public ShadowCamera(object key, Float3 position, Frustum frustum, Float4x4 projection, float pixelHeight, in ShadowFitView fitView)
+    /// <summary>Fits every cascade to this view, for views that jump from one render to the next like probe captures.</summary>
+    public readonly bool RefitEveryCascade;
+
+    public ShadowCamera(object key, Float3 position, Frustum frustum, Float4x4 projection, float pixelHeight, in ShadowFitView fitView,
+                        bool refitEveryCascade = false)
     {
+        RefitEveryCascade = refitEveryCascade;
         Key = key;
         Position = position;
         Frustum = frustum;
@@ -107,8 +112,6 @@ internal sealed class ShadowRenderer : IDisposable
         public int Generation;
         public long LastUsedFrame;
         public int SeenStamp;
-        public int DataSlot = -1;
-        public int ActiveSlot = -1;
 
         // The static casters alone, copied under the moving ones while both are in range
         public readonly ShadowTile[] StaticTiles = new ShadowTile[6];
@@ -148,6 +151,7 @@ internal sealed class ShadowRenderer : IDisposable
     private readonly List<LocalEntry> _visible = new();
     private readonly Dictionary<object, CascadeSet> _cascades = new();
     private readonly ShadowDataBlocks _data = new();
+    private readonly ShadowAtlasTexture _atlas = new();
     private readonly CasterGrid _grid = new();
     private readonly Dictionary<Shader, byte> _shaderKinds = new();
     private readonly List<int> _staticCasters = new();
@@ -186,11 +190,14 @@ internal sealed class ShadowRenderer : IDisposable
     /// <summary>The scale every local light's wanted resolution is multiplied by, below 1 while the atlas is crowded.</summary>
     public float ResolutionScale => MathF.Pow(ScaleStep, -_scaleLevel);
 
+    /// <summary>Size this renderer's atlas is asked to be, 0 for <see cref="ShadowAtlas.RequestedSize"/>.</summary>
+    public int AtlasSize { get; set; }
+
+    /// <summary>The atlas depth texture the lighting shaders sample.</summary>
+    public Texture2D? AtlasTexture => _atlas.DepthTexture;
+
     /// <summary>Uploads the shadow blocks that changed and binds them for every shader.</summary>
     internal void BindData(CommandBuffer cmd) => _data.Table.Bind(cmd);
-
-    /// <summary>Slot of the light's shadow block for this render, -1 while it has no shadow.</summary>
-    public int GetDataSlot(Light light) => _local.TryGetValue(light, out LocalEntry? e) ? e.ActiveSlot : -1;
 
     /// <summary>Tile size each face of the light holds, 0 for none.</summary>
     public int GetTileSize(Light light) => _local.TryGetValue(light, out LocalEntry? e) ? e.TileSize : 0;
@@ -206,10 +213,11 @@ internal sealed class ShadowRenderer : IDisposable
 
     /// <summary>
     /// Brings every shadow map this camera sees up to date, drawing only what changed, and writes the per light
-    /// shadow data. <paramref name="localLights"/> are the point and spot lights that cast shadows.
+    /// shadow data. <paramref name="localLights"/> are the point and spot lights that cast shadows, and
+    /// <paramref name="shadowIdOf"/> gives the block each one's data goes in, the same for every camera.
     /// </summary>
     public void Update(RenderPipeline pipeline, in ShadowCamera camera, DirectionalLight? directional,
-                       IReadOnlyList<Light> localLights, IReadOnlyList<IRenderable> renderables)
+                       IReadOnlyList<Light> localLights, IReadOnlyList<IRenderable> renderables, Func<Light, int>? shadowIdOf = null)
     {
         FacesDrawn = 0;
         StaticFacesDrawn = 0;
@@ -220,13 +228,13 @@ internal sealed class ShadowRenderer : IDisposable
         _stamp++;
         long frame = Time.FrameCount;
 
-        ShadowAtlas.TryInitialize();
-        if (ShadowAtlas.Generation != _generation)
+        _atlas.Ensure(AtlasSize > 0 ? AtlasSize : ShadowAtlas.RequestedSize);
+        if (_atlas.Generation != _generation)
         {
             // The atlas was rebuilt, so every tile is gone with it
             foreach (LocalEntry e in _local.Values) ForgetTiles(e);
             foreach (CascadeSet set in _cascades.Values) ForgetTiles(set);
-            _generation = ShadowAtlas.Generation;
+            _generation = _atlas.Generation;
         }
 
         PrepareCasters(pipeline, renderables);
@@ -241,7 +249,7 @@ internal sealed class ShadowRenderer : IDisposable
             DrawCascades(pipeline, camera, renderables, frame);
         DrawLocal(pipeline, renderables);
 
-        WriteData();
+        WriteData(localLights, shadowIdOf);
         Forget(frame);
     }
 
@@ -426,7 +434,7 @@ internal sealed class ShadowRenderer : IDisposable
 
     private long LocalCapacity()
     {
-        long capacity = ShadowAtlas.Allocator.CapacityTexels;
+        long capacity = _atlas.Allocator.CapacityTexels;
         if (_currentCascades != null && _currentDirectional != null)
         {
             int res = _currentDirectional.ShadowMapResolution;
@@ -622,7 +630,7 @@ internal sealed class ShadowRenderer : IDisposable
             if (AllocateWithEviction(size, out e.Tiles[f], cameraKey, frame, allowEviction)) continue;
             for (int g = 0; g < f; g++)
             {
-                ShadowAtlas.Allocator.Free(e.Tiles[g]);
+                _atlas.Allocator.Free(e.Tiles[g]);
                 e.Tiles[g] = default;
             }
             return false;
@@ -636,7 +644,7 @@ internal sealed class ShadowRenderer : IDisposable
     {
         while (true)
         {
-            if (ShadowAtlas.Allocator.TryAllocate(size, out tile)) return true;
+            if (_atlas.Allocator.TryAllocate(size, out tile)) return true;
             if (!allowEviction || !EvictOldest(cameraKey, frame)) return false;
         }
     }
@@ -690,7 +698,7 @@ internal sealed class ShadowRenderer : IDisposable
     {
         for (int f = 0; f < e.Tiles.Length; f++)
         {
-            if (e.Tiles[f].IsValid) ShadowAtlas.Allocator.Free(e.Tiles[f]);
+            if (e.Tiles[f].IsValid) _atlas.Allocator.Free(e.Tiles[f]);
             e.Tiles[f] = default;
         }
         e.TileSize = 0;
@@ -698,19 +706,19 @@ internal sealed class ShadowRenderer : IDisposable
         FreeStaticTiles(e);
     }
 
-    private static void FreeStaticTiles(LocalEntry e)
+    private void FreeStaticTiles(LocalEntry e)
     {
         for (int f = 0; f < e.StaticTiles.Length; f++)
         {
-            if (e.StaticTiles[f].IsValid) ShadowAtlas.Allocator.Free(e.StaticTiles[f]);
+            if (e.StaticTiles[f].IsValid) _atlas.Allocator.Free(e.StaticTiles[f]);
             e.StaticTiles[f] = default;
         }
         e.StaticValid = false;
     }
 
-    private static void FreeCascade(CascadeSet set, int c)
+    private void FreeCascade(CascadeSet set, int c)
     {
-        if (set.Tiles[c].IsValid) ShadowAtlas.Allocator.Free(set.Tiles[c]);
+        if (set.Tiles[c].IsValid) _atlas.Allocator.Free(set.Tiles[c]);
         set.Tiles[c] = default;
         set.Valid[c] = false;
     }
@@ -725,7 +733,7 @@ internal sealed class ShadowRenderer : IDisposable
         e.ContentValid = false;
     }
 
-    private static void ForgetTiles(CascadeSet set, bool free = false)
+    private void ForgetTiles(CascadeSet set, bool free = false)
     {
         for (int c = 0; c < 4; c++)
         {
@@ -791,7 +799,7 @@ internal sealed class ShadowRenderer : IDisposable
             // Cascade c refreshes every c + 1 frames, staggered so they rarely land on the same frame. Meanwhile it
             // keeps its own matrix and sphere, so what it holds stays consistent and only its edge lags
             int interval = c + 1;
-            if (set.Valid[c] && (frame + c) % interval != 0) continue;
+            if (set.Valid[c] && !camera.RefitEveryCascade && (frame + c) % interval != 0) continue;
 
             float sliceNear = c == 0 ? camera.FitView.Near : DirectionalLight.GetCascadeSplit(c, count, splitNear, distance);
             float sliceFar = DirectionalLight.GetCascadeSplit(c + 1, count, splitNear, distance);
@@ -919,7 +927,7 @@ internal sealed class ShadowRenderer : IDisposable
         pipeline.AssignCameraMatrices(view, proj);
 
         using CommandBuffer cmd = Graphics.GetCommandBuffer(name);
-        GraphicsFrameBuffer atlas = ShadowAtlas.FrameBuffer!;
+        GraphicsFrameBuffer atlas = _atlas.FrameBuffer!;
         cmd.SetRenderTargets(atlas, atlas);
         cmd.SetViewport(tile.X, tile.Y, (uint)tile.Size, (uint)tile.Size);
         cmd.SetScissor(tile.X, tile.Y, (uint)tile.Size, (uint)tile.Size);
@@ -1189,17 +1197,26 @@ internal sealed class ShadowRenderer : IDisposable
     //   +0      header: x fade (1 full shadow, 0 none)
     //   +1..    one rect per face: xy tile position, z tile size, w texel size one unit from the light
     //   then    one matrix per face, four columns each, GL clip space
-    private void WriteData()
+    // A light this camera does not shadow gets a block with no fade, so the shader skips it
+    private void WriteData(IReadOnlyList<Light> lights, Func<Light, int>? shadowIdOf)
     {
-        foreach (LocalEntry e in _local.Values)
+        foreach (Light light in lights)
         {
-            e.ActiveSlot = -1;
-            if (!e.Visible || e.TileSize == 0 || !e.ContentValid) continue;
+            _local.TryGetValue(light, out LocalEntry? e);
+            bool active = e != null && e.Visible && e.TileSize > 0 && e.ContentValid;
+            if (active) LightsShadowed++;
+            if (shadowIdOf == null) continue;
 
-            if (e.DataSlot < 0) e.DataSlot = _data.AllocateSlot();
-            int b = e.DataSlot * ShadowDataBlocks.BlockTexels;
+            int id = shadowIdOf(light);
+            if (id < 0) continue;
+            int b = _data.Block(id);
+            if (!active)
+            {
+                _data.Write(b, Float4.Zero);
+                continue;
+            }
 
-            float texelPerUnit = e.Light is SpotLight spot
+            float texelPerUnit = e!.Light is SpotLight spot
                 ? 2f * spot.ShadowTanHalfAngle / e.TileSize
                 : 2f / e.TileSize;
 
@@ -1215,9 +1232,6 @@ internal sealed class ShadowRenderer : IDisposable
                 _data.Write(m + 2, mat.c2);
                 _data.Write(m + 3, mat.c3);
             }
-
-            e.ActiveSlot = e.DataSlot;
-            LightsShadowed++;
         }
     }
 
@@ -1234,7 +1248,6 @@ internal sealed class ShadowRenderer : IDisposable
         foreach (LocalEntry e in _toForget)
         {
             FreeTiles(e);
-            if (e.DataSlot >= 0) _data.FreeSlot(e.DataSlot);
             _local.Remove(e.Light);
         }
 
@@ -1252,7 +1265,7 @@ internal sealed class ShadowRenderer : IDisposable
     public void Dispose()
     {
         // Tiles from before an atlas rebuild are already gone, freeing them again would corrupt the allocator
-        bool atlasCurrent = _generation == ShadowAtlas.Generation;
+        bool atlasCurrent = _generation == _atlas.Generation;
         foreach (LocalEntry e in _local.Values)
         {
             if (atlasCurrent) FreeTiles(e);
@@ -1262,6 +1275,7 @@ internal sealed class ShadowRenderer : IDisposable
         _local.Clear();
         _cascades.Clear();
         _data.Dispose();
+        _atlas.Dispose();
     }
 
     // ---------------------------------------------------------------- caster grid
@@ -1372,24 +1386,19 @@ internal sealed class ShadowRenderer : IDisposable
 
     // ---------------------------------------------------------------- shader data blocks
 
-    /// <summary>The per light shadow blocks the shaders read, each written only when a value changes.</summary>
+    /// <summary>The per light shadow blocks the shaders read, at each light's shadow id, each written only when a value changes.</summary>
     private sealed class ShadowDataBlocks : IDisposable
     {
         public const int BlockTexels = 32;
 
-        private readonly Stack<int> _freeSlots = new();
-        private int _nextSlot;
-
         public ShaderDataTable Table { get; } = new("ProwlShadowData", "_ShadowDataTex", GraphicsFeature.FragmentStorageBuffers);
 
-        public int AllocateSlot()
+        /// <summary>The first texel of block <paramref name="id"/>, growing the table to hold it.</summary>
+        public int Block(int id)
         {
-            int slot = _freeSlots.Count > 0 ? _freeSlots.Pop() : _nextSlot++;
-            Table.EnsureCapacity((slot + 1) * BlockTexels);
-            return slot;
+            Table.EnsureCapacity((id + 1) * BlockTexels);
+            return id * BlockTexels;
         }
-
-        public void FreeSlot(int slot) => _freeSlots.Push(slot);
 
         public void Write(int texel, Float4 v) => Table[texel] = v;
 

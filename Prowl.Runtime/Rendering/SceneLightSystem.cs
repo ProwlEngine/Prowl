@@ -21,8 +21,8 @@ namespace Prowl.Runtime.Rendering;
 /// </para>
 ///
 /// <para>
-/// Every point and spot light that casts shadows gets them while it is in view, sized and cached by
-/// <see cref="ShadowRenderer"/>. Its shadow data lives in a texture, so there is no cap on how many.
+/// Every point and spot light that casts shadows gets them while it is in view, sized and cached by each
+/// camera's own <see cref="ShadowRenderer"/>. Its shadow data lives in a table, so there is no cap on how many.
 /// </para>
 /// </summary>
 public sealed class SceneLightSystem : IDisposable
@@ -38,9 +38,15 @@ public sealed class SceneLightSystem : IDisposable
     private IRenderableLight _directional;
     private readonly List<IRenderableLight> _extraDirectionals = new();
     private readonly List<Light> _shadowLights = new();
-    private readonly List<Light> _previousShadowLights = new();
     private readonly HashSet<Light> _shadowLightSet = new(ReferenceEqualityComparer.Instance);
-    private readonly ShadowRenderer _shadows = new();
+
+    // Every shadow casting point and spot light holds a block id for as long as it casts, the same for every camera,
+    // so the light's record can point at it while each camera fills the block with its own shadow data
+    private readonly Dictionary<Light, int> _shadowIds = new(ReferenceEqualityComparer.Instance);
+    private readonly Stack<int> _freeShadowIds = new();
+    private readonly List<Light> _releasedShadowIds = new();
+    private readonly Func<Light, int> _shadowIdOf;
+    private int _nextShadowId;
 
     /// <summary>The point and spot lights in the static and dynamic trees.</summary>
     internal ForwardLightTrees Trees => _trees;
@@ -56,7 +62,10 @@ public sealed class SceneLightSystem : IDisposable
     public IReadOnlyList<Light> ShadowLights => _shadowLights;
 
     /// <summary>Makes and caches every shadow map of this scene.</summary>
-    internal ShadowRenderer Shadows => _shadows;
+    public SceneLightSystem()
+    {
+        _shadowIdOf = light => _shadowIds.TryGetValue(light, out int id) ? id : -1;
+    }
 
     /// <summary>
     /// Walk this frame's lights, track them in the static or dynamic tree, and pick the directional
@@ -104,8 +113,7 @@ public sealed class SceneLightSystem : IDisposable
 
         PickDirectionals();
         _trees.RemoveUnseen(_seenThisFrame);
-
-        // The trees build at upload, after the shadow pass has set each light's shadow slot
+        AssignShadowIds();
         _trees.BeginFrame(view);
     }
 
@@ -163,24 +171,36 @@ public sealed class SceneLightSystem : IDisposable
     /// <param name="pipeline">The current render pipeline.</param>
     /// <param name="camera">The camera this render is for.</param>
     /// <param name="renderables">Everything that could cast a shadow this frame.</param>
-    public void RenderShadows(RenderPipeline pipeline, in ShadowCamera camera, IReadOnlyList<IRenderable> renderables)
+    /// <param name="shadows">The camera's own shadow maps and atlas.</param>
+    internal void RenderShadows(RenderPipeline pipeline, ShadowRenderer shadows, in ShadowCamera camera, IReadOnlyList<IRenderable> renderables)
     {
-        _shadows.Update(pipeline, camera, _directional as DirectionalLight, _shadowLights, renderables);
+        shadows.Update(pipeline, camera, _directional as DirectionalLight, _shadowLights, renderables, _shadowIdOf);
+    }
 
+    // Lights that started casting get an id and lights that stopped give theirs back
+    private void AssignShadowIds()
+    {
         _shadowLightSet.Clear();
         foreach (Light light in _shadowLights)
         {
-            SetShadowSlot(light, _shadows.GetDataSlot(light));
             _shadowLightSet.Add(light);
+            if (_shadowIds.ContainsKey(light)) continue;
+            int id = _freeShadowIds.Count > 0 ? _freeShadowIds.Pop() : _nextShadowId++;
+            _shadowIds[light] = id;
+            _trees.SetShadowSlot(light, id);
         }
-        foreach (Light light in _previousShadowLights)
-            if (!_shadowLightSet.Contains(light))
-                SetShadowSlot(light, -1);
-        _previousShadowLights.Clear();
-        _previousShadowLights.AddRange(_shadowLights);
-    }
 
-    private void SetShadowSlot(IRenderableLight light, int slot) => _trees.SetShadowSlot(light, slot);
+        if (_shadowIds.Count == _shadowLightSet.Count) return;
+        _releasedShadowIds.Clear();
+        foreach (Light light in _shadowIds.Keys)
+            if (!_shadowLightSet.Contains(light)) _releasedShadowIds.Add(light);
+        foreach (Light light in _releasedShadowIds)
+        {
+            _freeShadowIds.Push(_shadowIds[light]);
+            _shadowIds.Remove(light);
+            _trees.SetShadowSlot(light, -1);
+        }
+    }
 
     /// <summary>
     /// Upload all uniforms touched by <c>Lighting.glsl</c> and <c>LightTree.glsl</c>: the light
@@ -189,17 +209,18 @@ public sealed class SceneLightSystem : IDisposable
     /// any forward draws.
     /// </summary>
     /// <param name="view">The view this frame's cascades were fitted to. The shader fades shadows by depth along it.</param>
-    public void UploadGlobalUniforms(in ShadowFitView view)
+    /// <param name="shadows">The camera's own shadow maps, which <see cref="RenderShadows"/> brought up to date.</param>
+    internal void UploadGlobalUniforms(in ShadowFitView view, ShadowRenderer shadows)
     {
         // Encoded into one buffer and submitted once, rather than a buffer per global
         using var cmd = Graphics.GetCommandBuffer("LightUniforms");
         _trees.Upload(cmd);
-        UploadDirectionalLight(cmd, view);
-        UploadLocalShadows(cmd);
+        UploadDirectionalLight(cmd, view, shadows);
+        UploadLocalShadows(cmd, shadows);
         Graphics.Submit(cmd);
     }
 
-    private void UploadDirectionalLight(CommandBuffer cmd, in ShadowFitView view)
+    private void UploadDirectionalLight(CommandBuffer cmd, in ShadowFitView view, ShadowRenderer shadows)
     {
         cmd.SetGlobalVector("_ShadowViewOrigin", view.Origin);
         cmd.SetGlobalVector("_ShadowViewForward", view.Forward);
@@ -230,7 +251,7 @@ public sealed class SceneLightSystem : IDisposable
         cmd.SetGlobalVector("_DirectionalLightDirection", data.Direction);
         cmd.SetGlobalVector("_DirectionalLightColor", data.Color);
         cmd.SetGlobalFloat("_DirectionalLightIntensity", data.Intensity);
-        int cascades = data.ShadowEnabled ? _shadows.CascadeCount : 0;
+        int cascades = data.ShadowEnabled ? shadows.CascadeCount : 0;
         cmd.SetGlobalInt("_DirectionalLightShadowEnabled", cascades > 0 ? 1 : 0);
         cmd.SetGlobalFloat("_DirectionalLightShadowDepthBias", data.ShadowDepthBias);
         cmd.SetGlobalFloat("_DirectionalLightShadowNormalBias", data.ShadowNormalBias);
@@ -242,17 +263,17 @@ public sealed class SceneLightSystem : IDisposable
         for (int c = 0; c < 4; c++)
         {
             bool used = c < cascades;
-            cmd.SetGlobalMatrix($"_CascadeShadowMatrix{c}", used ? _shadows.CascadeMatrices[c] : Float4x4.Identity);
-            cmd.SetGlobalVector($"_CascadeAtlasParams{c}", used ? _shadows.CascadeAtlasParams[c] : Float4.Zero);
-            cmd.SetGlobalVector($"_CascadeSphere{c}", used ? _shadows.CascadeSpheres[c] : Float4.Zero);
+            cmd.SetGlobalMatrix($"_CascadeShadowMatrix{c}", used ? shadows.CascadeMatrices[c] : Float4x4.Identity);
+            cmd.SetGlobalVector($"_CascadeAtlasParams{c}", used ? shadows.CascadeAtlasParams[c] : Float4.Zero);
+            cmd.SetGlobalVector($"_CascadeSphere{c}", used ? shadows.CascadeSpheres[c] : Float4.Zero);
         }
     }
 
-    private void UploadLocalShadows(CommandBuffer cmd)
+    private void UploadLocalShadows(CommandBuffer cmd, ShadowRenderer shadows)
     {
-        _shadows.BindData(cmd);
+        shadows.BindData(cmd);
 
-        Texture2D? atlas = ShadowAtlas.DepthTexture;
+        Texture2D? atlas = shadows.AtlasTexture;
         if (atlas.IsValid())
         {
             cmd.SetGlobalTexture("_ShadowAtlas", atlas);
@@ -263,10 +284,10 @@ public sealed class SceneLightSystem : IDisposable
     public void Dispose()
     {
         _trees.Dispose();
-        _shadows.Dispose();
         _seenThisFrame.Clear();
         _shadowLights.Clear();
-        _previousShadowLights.Clear();
+        _shadowIds.Clear();
+        _freeShadowIds.Clear();
         _directional = null;
         _extraDirectionals.Clear();
     }

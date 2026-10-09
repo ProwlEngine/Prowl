@@ -37,6 +37,7 @@ internal sealed class ReflectionProbeSystem : IDisposable
         public int Layer;
         public int UploadedBakedVersion = -1;
         public bool Captured;
+        public ReflectionProbeMode Mode;
         public readonly Float4[] Record = new Float4[TexelsPerProbe];
     }
 
@@ -68,7 +69,7 @@ internal sealed class ReflectionProbeSystem : IDisposable
     public void Register(ReflectionProbe probe)
     {
         if (_bySlot.ContainsKey(probe)) return;
-        var slot = new Slot { Probe = probe, Layer = _freeLayers.Count > 0 ? _freeLayers.Pop() : _nextLayer++ };
+        var slot = new Slot { Probe = probe, Mode = probe.Mode, Layer = _freeLayers.Count > 0 ? _freeLayers.Pop() : _nextLayer++ };
         _slots.Add(slot);
         _bySlot[probe] = slot;
         _tableDirty = true;
@@ -98,6 +99,20 @@ internal sealed class ReflectionProbeSystem : IDisposable
             if (!slot.Probe.BakeRequested) continue;
             slot.Probe.BakeRequested = false;
             slot.Probe.SetBaked(ReflectionProbeCapture.Bake(scene, slot.Probe, Resolution, MipCount));
+
+            // The bake used the scratch cube, so a capture spread over frames starts again
+            if (_slicing != null)
+            {
+                _slicing.Probe.CaptureRequested = true;
+                _slicing = null;
+            }
+        }
+
+        foreach (Slot slot in _slots)
+        {
+            if (slot.Mode == slot.Probe.Mode) continue;
+            slot.Mode = slot.Probe.Mode;
+            MarkUncaptured(slot);
             if (ReferenceEquals(_slicing, slot)) _slicing = null;
         }
 
@@ -107,6 +122,7 @@ internal sealed class ReflectionProbeSystem : IDisposable
             if (slot.UploadedBakedVersion == slot.Probe.BakedVersion && slot.Captured) continue;
             slot.UploadedBakedVersion = slot.Probe.BakedVersion;
             slot.Captured = slot.Probe.Baked is { } baked && ReflectionProbeCapture.Upload(baked, _array!, slot.Layer);
+            _tableDirty = true;
         }
 
         UpdateSky(scene);
@@ -130,11 +146,16 @@ internal sealed class ReflectionProbeSystem : IDisposable
         _skyCaptured = false;
         _slicing = null;
         foreach (Slot slot in _slots)
-        {
-            slot.Captured = false;
-            slot.UploadedBakedVersion = -1;
-            if (slot.Probe.Mode == ReflectionProbeMode.Realtime) slot.Probe.CaptureRequested = true;
-        }
+            MarkUncaptured(slot);
+    }
+
+    // Drops the probe from the table until it is captured or uploaded again
+    private void MarkUncaptured(Slot slot)
+    {
+        slot.Captured = false;
+        slot.UploadedBakedVersion = -1;
+        if (slot.Probe.Mode == ReflectionProbeMode.Realtime) slot.Probe.CaptureRequested = true;
+        _tableDirty = true;
     }
 
     private void UpdateSky(Scene scene)
@@ -330,6 +351,8 @@ internal static class ReflectionProbeCapture
             s_camera = s_cameraObject.AddComponent<Camera>();
             s_camera.FieldOfView = 90f;
             s_camera.HDR = true;
+            s_camera.StereoTargetEye = StereoTargetEyeMask.None;
+            s_camera.ShadowAtlasSize = 4096;
         }
         if (s_target.IsNotValid() || s_target!.Width != resolution)
         {

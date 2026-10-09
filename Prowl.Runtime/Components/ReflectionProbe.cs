@@ -103,15 +103,18 @@ public class ReflectionProbe : MonoBehaviour
 
     private ReflectionProbeSystem? _system;
 
-    public override void OnEnable()
+    public override void OnEnable() => JoinScene(GameObject.Scene);
+
+    public override void OnDisable() => LeaveScene(GameObject.Scene);
+
+    internal override void JoinScene(Scene? scene)
     {
-        Scene? scene = GameObject.Scene;
         _system = scene.IsValid() ? scene!.ReflectionProbes : null;
         _system?.Register(this);
         if (IsRealtime) CaptureRequested = true;
     }
 
-    public override void OnDisable()
+    internal override void LeaveScene(Scene? scene)
     {
         _system?.Unregister(this);
         _system = null;
