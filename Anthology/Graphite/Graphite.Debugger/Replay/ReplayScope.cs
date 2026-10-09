@@ -26,7 +26,9 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly Dictionary<TraceResourceId, DeviceBuffer> _buffers = new();
     private readonly Dictionary<ProgramKey, ShaderProgram> _programs = new();
     private readonly Dictionary<int, Sampler> _samplers = new();
+    private readonly Dictionary<TraceVersion, RecordedCopy> _copies = new();
     private readonly HashSet<TraceVersion> _planned = new();
+    private readonly HashSet<TraceVersion> _produced = new();
     private readonly List<(int PassIndex, TraceResourceId Id, Texture Texture, RecordedCopy Copy)> _textureRestores = new();
     private readonly List<(int PassIndex, DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
 
@@ -39,6 +41,9 @@ internal sealed unsafe class ReplayScope : IDisposable
 
         foreach (RecordedBlob blob in deep.Blobs)
             _blobs[blob.Ref] = blob.Data;
+
+        foreach (RecordedCopy copy in deep.Views.SelectMany(v => v.Passes).SelectMany(p => p.Copies))
+            _copies.TryAdd(copy.Version, copy);
     }
 
     public ResourceFactory Factory => _device.ResourceFactory;
@@ -70,30 +75,58 @@ internal sealed unsafe class ReplayScope : IDisposable
 
     public ReadOnlySpan<byte> Blob(BlobRef blob) => _blobs[blob].AsSpan();
 
-    public string? Prepare(DeepView view, IReadOnlyList<DeepPass> passes, bool reexecute)
+    public int Start(IReadOnlyList<DeepPass> passes)
+    {
+        for (int start = passes.Count - 1; start > 0; start--)
+        {
+            if (CanStartAt(passes, start))
+                return start;
+        }
+
+        return 0;
+    }
+
+    private bool CanStartAt(IReadOnlyList<DeepPass> passes, int start)
+    {
+        HashSet<TraceVersion> produced = new();
+        for (int i = start; i < passes.Count; i++)
+        {
+            foreach (RecordedReference reference in passes[i].References)
+            {
+                TraceVersion version = new(reference.Resource, reference.First);
+                if (reference.Reads && !produced.Contains(version)
+                    && (!_copies.TryGetValue(version, out RecordedCopy? copy) || Unrestorable(reference.Resource, copy) != null))
+                    return false;
+            }
+
+            AddProduced(produced, passes[i]);
+        }
+
+        return true;
+    }
+
+    private static void AddProduced(HashSet<TraceVersion> produced, DeepPass pass)
+    {
+        foreach (RecordedReference reference in pass.References)
+        {
+            if (reference.Last != reference.First)
+                produced.Add(new TraceVersion(reference.Resource, reference.Last));
+        }
+    }
+
+    public string? Prepare(DeepView view, IReadOnlyList<DeepPass> passes)
     {
         Dictionary<string, RecordedGraphResource> byName = new();
         foreach (RecordedGraphResource resource in view.Resources)
             byName.TryAdd(resource.Name, resource);
 
-        Dictionary<TraceVersion, RecordedCopy> copies = new();
-        foreach (DeepView other in _deep.Views)
-        {
-            foreach (DeepPass otherPass in other.Passes)
-            {
-                foreach (RecordedCopy copy in otherPass.Copies)
-                {
-                    if (!reexecute || copy.Placement == CopyPlacement.BeforePass)
-                        copies.TryAdd(copy.Version, copy);
-                }
-            }
-        }
-
         foreach (DeepPass pass in passes)
         {
-            string? error = PreparePass(pass, byName, copies);
+            string? error = PreparePass(pass, byName);
             if (error != null)
                 return error;
+
+            AddProduced(_produced, pass);
         }
 
         for (int i = 0; i < _deep.Samplers.Length; i++)
@@ -117,10 +150,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         return outputs;
     }
 
-    private string? PreparePass(
-        DeepPass pass,
-        Dictionary<string, RecordedGraphResource> byName,
-        Dictionary<TraceVersion, RecordedCopy> copies)
+    private string? PreparePass(DeepPass pass, Dictionary<string, RecordedGraphResource> byName)
     {
         foreach (RecordedAccess access in pass.Accesses)
         {
@@ -148,7 +178,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         foreach (RecordedReference reference in pass.References)
         {
             TraceVersion version = new(reference.Resource, reference.First);
-            if (!reference.Reads || !copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
+            if (!reference.Reads || _produced.Contains(version) || !_copies.TryGetValue(version, out RecordedCopy? restore) || !_planned.Add(version))
                 continue;
 
             string? error = PlanRestore(pass.Index, reference.Resource, restore);
@@ -369,23 +399,38 @@ internal sealed unsafe class ReplayScope : IDisposable
             Owners[id] = owner;
     }
 
+    private string? Unrestorable(TraceResourceId id, RecordedCopy copy)
+    {
+        if (!_described.TryGetValue(id, out RecordedResource? resource))
+            return $"Resource {id.Value} has no recorded description.";
+
+        if (resource.Texture is not { } texture)
+            return null;
+
+        if ((texture.Usage & TextureUsage.DepthStencil) != 0)
+            return $"{resource.Name} is a depth texture, which cannot be restored yet.";
+
+        if (texture.SampleCount != TextureSampleCount.Count1)
+            return $"{resource.Name} is multisampled, which cannot be restored yet.";
+
+        int length = _blobs[copy.Blob].Length;
+        foreach (CopyRegion region in copy.Regions)
+        {
+            if ((ulong)region.Offset + region.Width * region.Height * region.Depth * region.Format.GetSizeInBytes() > (ulong)length)
+                return $"{resource.Name} has a copy layout that cannot be restored yet.";
+        }
+
+        return null;
+    }
+
     private string? PlanRestore(int passIndex, TraceResourceId id, RecordedCopy copy)
     {
-        int length = _blobs[copy.Blob].Length;
+        string? error = Unrestorable(id, copy);
+        if (error != null)
+            return error;
+
         if (_textures.TryGetValue(id, out Texture? texture))
         {
-            if ((texture.Usage & TextureUsage.DepthStencil) != 0)
-                return $"{_described[id].Name} is a depth texture, which cannot be restored yet.";
-
-            if (texture.SampleCount != TextureSampleCount.Count1)
-                return $"{_described[id].Name} is multisampled, which cannot be restored yet.";
-
-            foreach (CopyRegion region in copy.Regions)
-            {
-                if ((ulong)region.Offset + region.Width * region.Height * region.Depth * region.Format.GetSizeInBytes() > (ulong)length)
-                    return $"{_described[id].Name} has a copy layout that cannot be restored yet.";
-            }
-
             _textureRestores.Add((passIndex, id, texture, copy));
             return null;
         }

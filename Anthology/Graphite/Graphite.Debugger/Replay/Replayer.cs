@@ -47,16 +47,16 @@ public sealed class Replayer
         if (request.EventIndex == null && _recording.Mode == DeepMode.Full)
             return Restore(view, pass);
 
-        bool reexecute = _recording.Mode != DeepMode.Full;
-        List<DeepPass> passes = reexecute ? view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList() : [pass];
-        DeepPass? blocked = passes.FirstOrDefault(p => p.NotReplayable != null);
-        if (blocked != null)
-            return NotReplayable($"Pass {blocked.Name} is needed to reach {pass.Name}: {blocked.NotReplayable}");
-
         try
         {
             using ReplayScope scope = new(_device, _recording);
-            string? error = scope.Prepare(view, passes, reexecute);
+            List<DeepPass> ordered = view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList();
+            List<DeepPass> passes = ordered.Skip(scope.Start(ordered)).ToList();
+            DeepPass? blocked = passes.FirstOrDefault(p => p.NotReplayable != null);
+            if (blocked != null)
+                return NotReplayable($"Pass {blocked.Name} is needed to reach {pass.Name}: {blocked.NotReplayable}");
+
+            string? error = scope.Prepare(view, passes);
             return error != null ? NotReplayable(error) : Run(scope, view, passes, pass, request.EventIndex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
