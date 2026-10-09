@@ -154,11 +154,12 @@ factory, so a factory can collect a profiler per frame, or return null to skip a
 device.GlobalProfilers.Add(() => new MyFrameProfiler(results));
 ```
 
-A profiler gets `BeginExecution(executionId)`, then the events of each capability it implements
-(`IGraphProfiler`, `IGpuStatsProfiler`, `ICaptureProfiler`, `ICommandStreamProfiler`), then
-`EndExecution()` once every GPU result is delivered. A capability with one profiler calls it
-directly; several profilers sharing a capability are merged for that capability only. Execution ids
-grow with start order, so per-execution results sort by id.
+A profiler gets `BeginExecution(executionId, graphName)`, then the events of each capability it
+implements (`IGraphProfiler`, `IGpuStatsProfiler`, `ICaptureProfiler`, `ICommandStreamProfiler`), then
+`EndExecution()` once every GPU result is delivered. The graph name is `RenderPipeline.Name`, which
+defaults to the pipeline type name; `BeginExecution(name, ...)` names executions without a graph.
+A capability with one profiler calls it directly; several profilers sharing a capability are merged
+for that capability only. Execution ids grow with start order, so per-execution results sort by id.
 
 There is no profiling for `device.Record` or other transfers outside an execution.
 
