@@ -12,6 +12,7 @@ public class RenderPipeline : IDisposable
 {
     private readonly List<IPass> _passes = new();
     private RenderGraph? _graph;
+    private string? _name;
     private bool _executingView;
 
     /// <summary>Creates an empty pipeline. Call SetPasses before the first dispatch.</summary>
@@ -46,8 +47,24 @@ public class RenderPipeline : IDisposable
         _passes.AddRange(list);
     }
 
+    /// <summary>Debug name of the graph, reported to profilers. Defaults to the pipeline type name. Setting it rebuilds the graph on next use.</summary>
+    public string Name
+    {
+        get => _name ?? GetType().Name;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (_executingView)
+                throw new InvalidOperationException("Name cannot be set while a view is executing.");
+
+            _name = value;
+            _graph?.Dispose();
+            _graph = null;
+        }
+    }
+
     /// <summary>The solved graph, built on first use from the current passes.</summary>
-    public RenderGraph Graph => _graph ??= RenderGraph.Build(_passes);
+    public RenderGraph Graph => _graph ??= RenderGraph.Build(_passes, Name);
 
     /// <summary>
     /// Runs the solved graph for one view: ordered passes with profiler scopes. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view whose Target is a swapchain framebuffer.
