@@ -1041,23 +1041,28 @@ internal sealed class ForwardLightTrees : IDisposable
         return _spheres.AsSpan(0, count);
     }
 
-    // A tree stores its children relative to itself, so they are shifted to where its nodes and lights sit in the tables
-    private void WriteNodes(ReadOnlySpan<LightTreeNode> nodes, int nodeBase, int lightBase)
+    private void WriteNodes(ReadOnlySpan<LightTreeNode> nodes, int nodeBase, int lightBase) => WriteNodes(NodeTable, nodes, 0, nodeBase, lightBase);
+
+    /// <summary>
+    /// Writes a tree's nodes into <paramref name="table"/> from texel <paramref name="texelBase"/>. A tree stores its
+    /// children relative to itself, so they are shifted to where its nodes and lights sit in the tables.
+    /// </summary>
+    internal static void WriteNodes(ShaderDataTable table, ReadOnlySpan<LightTreeNode> nodes, int texelBase, int nodeBase, int lightBase)
     {
-        NodeTable.EnsureCapacity((nodeBase + nodes.Length) * LightTreeNode.Vec4Count);
+        table.EnsureCapacity(texelBase + (nodeBase + nodes.Length) * LightTreeNode.Vec4Count);
         for (int n = 0; n < nodes.Length; n++)
         {
             LightTreeNode node = nodes[n];
-            int t = (nodeBase + n) * LightTreeNode.Vec4Count;
-            NodeTable[t + 0] = ToFloat4(node.MinX);
-            NodeTable[t + 1] = ToFloat4(node.MinY);
-            NodeTable[t + 2] = ToFloat4(node.MinZ);
-            NodeTable[t + 3] = ToFloat4(node.MaxX);
-            NodeTable[t + 4] = ToFloat4(node.MaxY);
-            NodeTable[t + 5] = ToFloat4(node.MaxZ);
-            NodeTable[t + 6] = new Float4(Rebase(node.Child0, nodeBase, lightBase), Rebase(node.Child1, nodeBase, lightBase),
-                                          Rebase(node.Child2, nodeBase, lightBase), Rebase(node.Child3, nodeBase, lightBase));
-            NodeTable[t + 7] = new Float4(Bits(node.Count0), Bits(node.Count1), Bits(node.Count2), Bits(node.Count3));
+            int t = texelBase + (nodeBase + n) * LightTreeNode.Vec4Count;
+            table[t + 0] = ToFloat4(node.MinX);
+            table[t + 1] = ToFloat4(node.MinY);
+            table[t + 2] = ToFloat4(node.MinZ);
+            table[t + 3] = ToFloat4(node.MaxX);
+            table[t + 4] = ToFloat4(node.MaxY);
+            table[t + 5] = ToFloat4(node.MaxZ);
+            table[t + 6] = new Float4(Rebase(node.Child0, nodeBase, lightBase), Rebase(node.Child1, nodeBase, lightBase),
+                                      Rebase(node.Child2, nodeBase, lightBase), Rebase(node.Child3, nodeBase, lightBase));
+            table[t + 7] = new Float4(Bits(node.Count0), Bits(node.Count1), Bits(node.Count2), Bits(node.Count3));
         }
     }
 

@@ -756,6 +756,129 @@ vec3 CalculateAmbient(vec3 worldNormal)
 }
 
 // ============================================================
+//  Reflection probes
+// ============================================================
+
+// Every probe is a layer of _ReflectionProbes prefiltered by roughness across its mips, layer 0 is the sky.
+// A probe record, REFLECTION_PROBE_TEXELS vec4 at index * REFLECTION_PROBE_TEXELS:
+//   +0..+2  rows of the world to box matrix, the box centred on the capture point
+//   +3      box half size, blend distance
+//   +4      array layer as int bits
+//   +5      intensity, box projection, priority
+uniform int _ReflectionProbesReady;
+uniform samplerCubeArray _ReflectionProbes;
+uniform float _ReflectionProbeMips;
+uniform int _ReflectionProbeRoot;
+
+#define REFLECTION_PROBE_TEXELS 6
+#define MAX_BLENDED_PROBES 4
+
+bool ReflectionProbesReady() { return _ReflectionProbesReady != 0; }
+
+vec3 SampleProbeLayer(float layer, vec3 dir, float roughness)
+{
+    return textureLod(_ReflectionProbes, vec4(dir, layer), roughness * (_ReflectionProbeMips - 1.0)).rgb;
+}
+
+// Projects the reflection onto the probe's box, so it lands where the reflected surface really is
+vec3 SampleReflectionProbe(int index, vec3 worldPos, vec3 dir, float roughness)
+{
+    int b = index * REFLECTION_PROBE_TEXELS;
+    vec4 params = ReflectionProbeTexel(b + 5);
+    float layer = float(floatBitsToInt(ReflectionProbeTexel(b + 4).x));
+
+    if (params.y > 0.5)
+    {
+        vec4 r0 = ReflectionProbeTexel(b);
+        vec4 r1 = ReflectionProbeTexel(b + 1);
+        vec4 r2 = ReflectionProbeTexel(b + 2);
+        vec3 halfSize = ReflectionProbeTexel(b + 3).xyz;
+
+        vec3 p = vec3(dot(r0.xyz, worldPos) + r0.w, dot(r1.xyz, worldPos) + r1.w, dot(r2.xyz, worldPos) + r2.w);
+        vec3 d = vec3(dot(r0.xyz, dir), dot(r1.xyz, dir), dot(r2.xyz, dir));
+        vec3 far = max((halfSize - p) / d, (-halfSize - p) / d);
+        float t = max(min(min(far.x, far.y), far.z), 0.0);
+        vec3 hit = p + d * t;
+
+        // The lobe's footprint shrinks with the distance to what it reflects, so close surfaces reflect sharper
+        roughness *= sqrt(clamp(t / max(length(hit), 1e-4), 0.0, 1.0));
+        dir = r0.xyz * hit.x + r1.xyz * hit.y + r2.xyz * hit.z;
+    }
+
+    return SampleProbeLayer(layer, dir, roughness) * params.x;
+}
+
+// Blends the most important probes around the point by how far inside their boxes it is, the sky filling the rest
+vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
+{
+    // Rough lobes lean toward the normal
+    float a = roughness * roughness;
+    vec3 R = normalize(mix(N, reflect(-V, N), (1.0 - a) * (sqrt(1.0 - a) + a)));
+
+    int index[MAX_BLENDED_PROBES];
+    float weight[MAX_BLENDED_PROBES];
+    float priority[MAX_BLENDED_PROBES];
+    int count = 0;
+
+    if (_ReflectionProbeRoot >= 0)
+    {
+        LightTreeWalk walk;
+        ProbeTree_Begin(walk, _ReflectionProbeRoot);
+        int first, last;
+        while (LightTree_NextLeaf(walk, worldPos, first, last))
+        {
+            for (int k = first; k < last; k++)
+            {
+                int b = k * REFLECTION_PROBE_TEXELS;
+                vec4 r0 = ReflectionProbeTexel(b);
+                vec4 r1 = ReflectionProbeTexel(b + 1);
+                vec4 r2 = ReflectionProbeTexel(b + 2);
+                vec4 box = ReflectionProbeTexel(b + 3);
+                vec3 p = vec3(dot(r0.xyz, worldPos) + r0.w, dot(r1.xyz, worldPos) + r1.w, dot(r2.xyz, worldPos) + r2.w);
+                vec3 inside3 = box.xyz - abs(p);
+                float inside = min(inside3.x, min(inside3.y, inside3.z));
+                if (inside <= 0.0) continue;
+
+                float w = box.w > 0.0 ? clamp(inside / box.w, 0.0, 1.0) : 1.0;
+                float pr = ReflectionProbeTexel(b + 5).z;
+                int at;
+                if (count < MAX_BLENDED_PROBES) at = count++;
+                else if (pr > priority[MAX_BLENDED_PROBES - 1]) at = MAX_BLENDED_PROBES - 1;
+                else continue;
+
+                index[at] = k;
+                weight[at] = w;
+                priority[at] = pr;
+                for (int j = at; j > 0 && priority[j] > priority[j - 1]; j--)
+                {
+                    int ti = index[j]; index[j] = index[j - 1]; index[j - 1] = ti;
+                    float tw = weight[j]; weight[j] = weight[j - 1]; weight[j - 1] = tw;
+                    float tp = priority[j]; priority[j] = priority[j - 1]; priority[j - 1] = tp;
+                }
+            }
+        }
+    }
+
+    vec3 color = vec3(0.0);
+    float total = 0.0;
+    for (int i = 0; i < count && total < 0.999; i++)
+    {
+        float w = weight[i] * (1.0 - total);
+        color += SampleReflectionProbe(index[i], worldPos, R, roughness) * w;
+        total += w;
+    }
+    if (total < 0.999)
+        color += SampleProbeLayer(0.0, R, roughness) * (1.0 - total);
+    return color;
+}
+
+// How much of the environment the ambient occlusion hides from a reflection
+float SpecularOcclusion(float NdotV, float ao, float roughness)
+{
+    return clamp(pow(NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
+// ============================================================
 //  Light-probe spherical harmonics (per-object, set by the pipeline for dynamic objects)
 // ============================================================
 
@@ -792,20 +915,23 @@ vec3 ShadeSH9(vec3 n)
 //  Fog
 // ============================================================
 
-// The fog color seen toward worldPos, either the flat fog color or the sky behind it
+// How blurred the sky is that fog takes its color from, as a sky probe roughness. The sharper one keeps a glow
+// around the sun, the softer one spreads it out.
+#define FOG_SKY_GLOW_ROUGHNESS 0.25
+#define FOG_SKY_ROUGHNESS 0.5
+
+// The fog color seen toward worldPos, either the flat fog color or the sky behind it from the sky probe, so it
+// meets whatever sky is drawn seamlessly
 vec3 FogColor(vec3 worldPos)
 {
-    if (_FogSky.x < 0.5)
+    if (_FogSky.x < 0.5 || !ReflectionProbesReady())
         return _FogColor.rgb;
 
-    vec3 toPoint = worldPos - _WorldSpaceCameraPos.xyz;
-    vec3 sun = _DirectionalLightEnabled != 0 ? normalize(_DirectionalLightDirection) : normalize(vec3(-0.5, 0.7, -0.5));
-    vec3 c = prowlSky(toPoint / max(length(toPoint), 1e-4), sun, _FogSky.y) * 40.0;
-
-    // The same exposure and tonemap the skybox uses, so the fog meets the sky seamlessly
-    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    vec3 tc = c / (c + 1.0);
-    return mix(c / (l + 1.0), tc, tc);
+    // Below the horizon the fog keeps the horizon's color rather than the ground under the sky
+    vec3 dir = worldPos - _WorldSpaceCameraPos.xyz;
+    dir.y = max(dir.y, 0.0);
+    dir = length(dir) > 1e-4 ? normalize(dir) : vec3(0.0, 0.0, 1.0);
+    return SampleProbeLayer(0.0, dir, _FogSky.y > 0.5 ? FOG_SKY_GLOW_ROUGHNESS : FOG_SKY_ROUGHNESS);
 }
 
 vec3 ApplyFog(vec3 color, vec3 worldPos)

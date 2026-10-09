@@ -111,6 +111,10 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         ValidateDefaults();
 
+        // Probe captures render the scene themselves, so they run before this camera starts
+        Scene? scene = camera.GameObject.Scene;
+        if (scene.IsValid()) scene!.ReflectionProbes.Update(scene);
+
         if (XR.ShouldRenderStereo(camera, data))
         {
             RenderStereo(camera, data);
@@ -366,6 +370,11 @@ public class DefaultRenderPipeline : RenderPipeline
 
         AssignCameraMatrices(css.View, css.Projection);
         lightSystem.UploadGlobalUniforms(shadowView);
+        using (CommandBuffer probeCmd = Graphics.GetCommandBuffer("ReflectionProbes"))
+        {
+            css.Scene.ReflectionProbes.Bind(probeCmd);
+            Graphics.Submit(probeCmd);
+        }
 
         UploadFogUniforms(css.Scene);
         UploadAmbientUniforms(css.Scene);

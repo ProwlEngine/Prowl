@@ -62,7 +62,8 @@ public enum DefaultShader
     TAA,
     MotionBlur,
     GizmoIcon,
-    AutoExposure
+    AutoExposure,
+    PrefilterCubemap
 }
 
 /// <summary>

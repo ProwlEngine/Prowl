@@ -359,6 +359,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore, NotHeld]
     internal readonly List<GameCanvas> Canvases = new();
 
+    /// <summary>This scene's reflection probes, and the sky probe surfaces outside them reflect.</summary>
+    [SerializeIgnore, NotHeld]
+    internal readonly ReflectionProbeSystem ReflectionProbes = new();
+
     /// <summary>
     /// Called once after a hot reload has migrated the scene graph in place: each GameObject drops removed
     /// components and rebuilds its lookup, then the dispatcher re-derives membership and ordering from the new
@@ -408,7 +412,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public float End = 100;
         public float Density = 0.01f;
 
-        /// <summary>Colors the fog with the procedural sky in each view direction instead of Color.</summary>
+        /// <summary>Colors the fog with the sky drawn in each view direction, taken from the sky probe, instead of Color.</summary>
         public bool UseSky = false;
 
         /// <summary>Keeps the glow around the sun in sky colored fog.</summary>
@@ -990,6 +994,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out Scene? scene) || ReferenceEquals(scene, this));
 
         _staticGeometry?.Clear();
+        ReflectionProbes.Dispose();
 
         // Clear the physics world
         _physics.Clear();

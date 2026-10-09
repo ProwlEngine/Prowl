@@ -9,6 +9,9 @@
 //   +3 : SpotCos, InnerSpotCos, ShadowDepthBias, ShadowNormalBias (read for spots and shadowed lights)
 //   +4 : ShadowStrength, ShadowQuality, ShadowSlot as int bits, padding (read for shadowed lights)
 //
+// Reflection probes walk the same kind of tree, their records and nodes in one table, the nodes from
+// _ReflectionProbeNodeBase.
+//
 // NODE TABLE, 8 vec4 per node, one lane per child:
 //   +0..+5 : MinX, MinY, MinZ, MaxX, MaxY, MaxZ
 //   +6     : child as uint bits. With the leaf bit set the rest is the first light, otherwise a node index
@@ -26,21 +29,36 @@
 uniform int _StaticLightRoot;
 uniform int _DynamicLightRoot;
 
+uniform int _ReflectionProbeNodeBase;
+
 #if defined(PROWL_FRAGMENT_STORAGE_BUFFERS) && !defined(PROWL_VERTEX_STAGE)
 layout(std430) readonly buffer ProwlLightData { vec4 _LightData[]; };
 layout(std430) readonly buffer ProwlLightNodes { vec4 _LightNodes[]; };
+layout(std430) readonly buffer ProwlReflectionProbes { vec4 _ReflectionProbeData[]; };
 
 vec4 LightTexel(int i) { return _LightData[i]; }
 vec4 LightNodeTexel(int i) { return _LightNodes[i]; }
+vec4 ReflectionProbeTexel(int i) { return _ReflectionProbeData[i]; }
 #else
 uniform sampler2D _LightDataTex;
 uniform int _LightDataTexShift;
 uniform sampler2D _LightNodeTex;
 uniform int _LightNodeTexShift;
+uniform sampler2D _ReflectionProbeTex;
+uniform int _ReflectionProbeTexShift;
 
 vec4 LightTexel(int i) { return texelFetch(_LightDataTex, ivec2(i & ((1 << _LightDataTexShift) - 1), i >> _LightDataTexShift), 0); }
 vec4 LightNodeTexel(int i) { return texelFetch(_LightNodeTex, ivec2(i & ((1 << _LightNodeTexShift) - 1), i >> _LightNodeTexShift), 0); }
+vec4 ReflectionProbeTexel(int i) { return texelFetch(_ReflectionProbeTex, ivec2(i & ((1 << _ReflectionProbeTexShift) - 1), i >> _ReflectionProbeTexShift), 0); }
 #endif
+
+#define LIGHT_TREE_LIGHTS 0
+#define LIGHT_TREE_PROBES 1
+
+vec4 TreeNodeTexel(int table, int i)
+{
+    return table == LIGHT_TREE_LIGHTS ? LightNodeTexel(i) : ReflectionProbeTexel(_ReflectionProbeNodeBase + i);
+}
 
 struct LightSample
 {
@@ -121,6 +139,7 @@ uint _LightTreeStack[LIGHT_TREE_STACK];
 
 struct LightTreeWalk
 {
+    int   table;
     int   sp;
     int   child;
     uint  next;
@@ -132,6 +151,7 @@ struct LightTreeWalk
 // Starts at the static root with the dynamic root waiting on the stack, so one walk covers both trees
 void LightTree_Begin(out LightTreeWalk w)
 {
+    w.table = LIGHT_TREE_LIGHTS;
     w.sp = 0;
     w.child = 4;
     w.next = LIGHT_TREE_INVALID;
@@ -140,6 +160,18 @@ void LightTree_Begin(out LightTreeWalk w)
     w.counts = uvec4(0u);
     if (_DynamicLightRoot >= 0) _LightTreeStack[w.sp++] = uint(_DynamicLightRoot);
     if (_StaticLightRoot >= 0) w.next = uint(_StaticLightRoot);
+}
+
+// Walks the reflection probe tree, its leaves listing probe records
+void ProbeTree_Begin(out LightTreeWalk w, int root)
+{
+    w.table = LIGHT_TREE_PROBES;
+    w.sp = 0;
+    w.child = 4;
+    w.next = root >= 0 ? uint(root) : LIGHT_TREE_INVALID;
+    w.overlap = vec4(0.0);
+    w.children = uvec4(LIGHT_TREE_INVALID);
+    w.counts = uvec4(0u);
 }
 
 // Finds the next leaf whose box holds worldPos and returns its lights as [first, last)
@@ -174,11 +206,11 @@ bool LightTree_NextLeaf(inout LightTreeWalk w, vec3 worldPos, out int first, out
         int base = int(w.next) * 8;
         w.next = LIGHT_TREE_INVALID;
         w.child = 0;
-        w.overlap = step(LightNodeTexel(base + 0), vec4(worldPos.x)) * step(vec4(worldPos.x), LightNodeTexel(base + 3))
-                  * step(LightNodeTexel(base + 1), vec4(worldPos.y)) * step(vec4(worldPos.y), LightNodeTexel(base + 4))
-                  * step(LightNodeTexel(base + 2), vec4(worldPos.z)) * step(vec4(worldPos.z), LightNodeTexel(base + 5));
-        w.children = floatBitsToUint(LightNodeTexel(base + 6));
-        w.counts = floatBitsToUint(LightNodeTexel(base + 7));
+        w.overlap = step(TreeNodeTexel(w.table, base + 0), vec4(worldPos.x)) * step(vec4(worldPos.x), TreeNodeTexel(w.table, base + 3))
+                  * step(TreeNodeTexel(w.table, base + 1), vec4(worldPos.y)) * step(vec4(worldPos.y), TreeNodeTexel(w.table, base + 4))
+                  * step(TreeNodeTexel(w.table, base + 2), vec4(worldPos.z)) * step(vec4(worldPos.z), TreeNodeTexel(w.table, base + 5));
+        w.children = floatBitsToUint(TreeNodeTexel(w.table, base + 6));
+        w.counts = floatBitsToUint(TreeNodeTexel(w.table, base + 7));
     }
     return false;
 }
