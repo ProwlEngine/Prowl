@@ -25,6 +25,8 @@ internal sealed class SinkRecorder : ICommandStreamProfiler
     public readonly List<PipelineBindInfo> Pipelines = new();
     public readonly List<(ResourceVersion Source, uint SourceOffset, ResourceVersion After, uint Offset, uint Size)> BufferCopies = new();
 
+    public void BeginExecution(ulong executionId) { }
+    public void EndExecution() { }
     public void BeginPassCommands(in PassInfo pass) => Log.Add("BeginPass:" + pass.Name);
     public void EndPassCommands(in PassInfo pass) => Log.Add("EndPass:" + pass.Name);
 
@@ -193,16 +195,8 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     private SinkRecorder Record(Action<CommandBuffer> record)
     {
         SinkRecorder sink = new();
-        GD.Debug.Attach(sink);
-        try
-        {
-            GD.RunTestGraph((context, cl) => record(cl));
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.Debug.Detach(sink);
-        }
+        GD.RunTestGraph((context, cl) => record(cl), sink);
+        GD.WaitForIdle();
 
         return sink;
     }
@@ -438,17 +432,9 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     public void PassBeginAndEnd_BracketCommands()
     {
         SinkRecorder sink = new();
-        GD.Debug.Attach(sink);
-        try
-        {
-            using RenderPipeline pipeline = new([new SinkPass(cmd => { })]);
-            GD.DispatchGraph(pipeline, new SinkView[] { new() });
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.Debug.Detach(sink);
-        }
+        using RenderPipeline pipeline = new([new SinkPass(cmd => { })]);
+        GD.DispatchGraph(pipeline, new SinkView[] { new() }, sink);
+        GD.WaitForIdle();
 
         Assert.Equal(["BeginPass:SinkPass", "EndPass:SinkPass"], sink.Log);
     }
