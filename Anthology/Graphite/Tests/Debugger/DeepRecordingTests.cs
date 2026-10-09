@@ -65,11 +65,9 @@ public class DeepRecordingTests
 
     private static DeepRecording Record(GraphicsDevice device, DeepMode mode, params IPass[] passes)
     {
-        Recorder recorder = new(device);
         using RenderPipeline pipeline = new(passes);
-        recorder.BeginDeepRecording(mode);
-        device.DispatchGraph(pipeline, new DeepView[] { new() });
-        DeepRecording deep = recorder.EndDeepRecording();
+        DeepRecording deep = new(device, mode);
+        device.DispatchGraph(pipeline, new DeepView[] { new() }, deep);
         deep.Wait();
         return deep;
     }
@@ -83,7 +81,7 @@ public class DeepRecordingTests
 
         DeepRecording deep = Record(device, DeepMode.Full, new WritePass("Only", target, external, 5));
 
-        DeepPass pass = Assert.Single(Assert.Single(Assert.Single(deep.Executions).Views).Passes);
+        DeepPass pass = Assert.Single(Assert.Single(deep.Views).Passes);
         Assert.Null(pass.NotReplayable);
         Assert.Equal(2, pass.References.Length);
         UpdateBufferCommand update = Assert.Single(pass.Commands.OfType<UpdateBufferCommand>());
@@ -91,7 +89,7 @@ public class DeepRecordingTests
         Assert.Contains(deep.Blobs, b => b.Ref == update.Data && b.Data.SequenceEqual(new byte[] { 5, 5, 5, 5 }));
         Assert.Contains(pass.Commands, c => c is SetFramebufferCommand);
         Assert.Contains(pass.Commands, c => c is ClearColorTargetCommand);
-        Assert.Single(deep.Recording.Executions);
+        Assert.Single(deep.Recording.Views);
     }
 
     [SkippableTheory]
@@ -105,7 +103,7 @@ public class DeepRecordingTests
 
         DeepRecording deep = Record(device, mode, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
 
-        DeepPass[] passes = deep.Executions.Single().Views[0].Passes.ToArray();
+        DeepPass[] passes = deep.Views[0].Passes.ToArray();
         RecordedCopy[] copies = passes.SelectMany(p => p.Copies).ToArray();
         Assert.Equal(copies.Length, copies.Select(c => c.Version).Distinct().Count());
         Assert.DoesNotContain(passes[1].Copies, c => c.Placement == CopyPlacement.BeforePass);
@@ -130,12 +128,14 @@ public class DeepRecordingTests
         Assert.Equal(deep.Mode, loaded.Mode);
         Assert.Equal(deep.Backend, loaded.Backend);
         Assert.Equal(deep.Features, loaded.Features);
-        Assert.Equal(deep.Recording.Executions, loaded.Recording.Executions);
+        Assert.Equal(deep.ExecutionId, loaded.ExecutionId);
+        Assert.Equal(deep.Recording.Views, loaded.Recording.Views);
+        Assert.Equal(deep.Recording.CommandBuffers, loaded.Recording.CommandBuffers);
         Assert.Equal(deep.Resources, loaded.Resources);
         Assert.Equal(deep.Programs, loaded.Programs);
         Assert.Equal(deep.Samplers, loaded.Samplers);
         Assert.Equal(deep.Blobs, loaded.Blobs);
-        Assert.Equal(deep.Executions, loaded.Executions);
+        Assert.Equal(deep.Views, loaded.Views);
     }
 
     [Fact]
@@ -178,12 +178,11 @@ public class DeepRecordingTests
         using DeviceBuffer external = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         using RenderTexture target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         DeepRecording deep = Record(device, DeepMode.Full, new WritePass("First", target, external, 1), new WritePass("Second", target, external, 2));
-        DeepExecution execution = deep.Executions.Single();
         Replayer replayer = new(device, deep);
 
-        foreach (DeepPass pass in execution.Views[0].Passes)
+        foreach (DeepPass pass in deep.Views[0].Passes)
         {
-            ReplayResult result = replayer.Replay(new ReplayRequest { ExecutionId = execution.ExecutionId, ViewIndex = 0, PassIndex = pass.Index, EventIndex = 1 });
+            ReplayResult result = replayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 1 });
 
             Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
             Assert.NotEmpty(result.Outputs);
