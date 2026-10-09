@@ -380,6 +380,15 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public virtual void OnDisable() { }
 
     /// <summary>
+    /// The object is moving to another scene without leaving the world, as <see cref="Scene.DontDestroyOnLoad"/> does,
+    /// so nothing is disabled. Anything registered with the old scene moves in <see cref="JoinScene"/>.
+    /// </summary>
+    internal virtual void LeaveScene(Scene? scene) { }
+
+    /// <summary>The other half of <see cref="LeaveScene"/>, called while the component is enabled in the new scene.</summary>
+    internal virtual void JoinScene(Scene? scene) { }
+
+    /// <summary>
     /// Called before the first frame update.
     /// </summary>
     public virtual void Start() { }
