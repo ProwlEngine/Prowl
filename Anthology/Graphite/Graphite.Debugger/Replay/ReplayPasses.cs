@@ -9,45 +9,35 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
 
-internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int? step = null) : IPass
+internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step) : IPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
 
-    public string Name => step is { } index ? $"Replay restore {index}" : "Replay restore";
+    public string Name => $"Replay restore {step}";
 
-    private IEnumerable<BufferRestore> Restores => scope.BufferRestores.Where(r => step is { } index ? r.PassIndex == index : r.PassIndex == passes[0].Index);
+    private IEnumerable<BufferRestore> Restores => scope.BufferRestores.Where(r => r.PassIndex == step);
 
     public void Setup(RenderContextBuilder builder)
     {
         _handles.Clear();
         HashSet<string> declared = new();
-        if (step is { } index)
+        if (step == passes[0].Index)
         {
-            foreach ((string name, GraphTexture texture) in scope.StepTextures(index))
+            HashSet<string> produced = new();
+            foreach (DeepPass pass in passes)
             {
-                if (declared.Add(name))
-                    builder.DeclareImportedTexture(RenderResourceID.Intern(name), texture.Texture, TextureState.TransferDst);
-            }
-        }
-        else
-        {
-            foreach (RecordedAccess access in passes.SelectMany(p => p.Accesses).Where(a => !a.IsOutput))
-            {
-                if (!declared.Add(access.Resource))
-                    continue;
+                foreach (RecordedAccess access in pass.Accesses.Where(a => !a.IsOutput && !produced.Contains(a.Resource)))
+                    Import(builder, access.Resource, declared);
 
-                if (scope.GraphTextures.TryGetValue(access.Resource, out GraphTexture? texture))
-                    builder.DeclareImportedTexture(RenderResourceID.Intern(access.Resource), texture.Texture, TextureState.TransferDst);
-                else if (scope.GraphBuffers.TryGetValue(access.Resource, out GraphBuffer? buffer))
-                    _handles[access.Resource] = builder.DeclareOutputBuffer(RenderResourceID.Intern(access.Resource), buffer.Desc, 0, BufferAccess.TransferWrite);
+                produced.UnionWith(pass.Accesses.Where(a => a.IsOutput).Select(a => a.Resource));
             }
         }
+
+        foreach ((string name, _) in scope.StepTextures(step))
+            Import(builder, name, declared);
 
         foreach (BufferRestore restore in Restores)
-        {
-            if (declared.Add(restore.Name))
-                _handles[restore.Name] = builder.DeclareOutputBuffer(RenderResourceID.Intern(restore.Name), scope.GraphBuffers[restore.Name].Desc, 0, BufferAccess.TransferWrite);
-        }
+            Import(builder, restore.Name, declared);
     }
 
     public unsafe void Render(RenderContext context, CommandBuffer cmd)
@@ -59,8 +49,18 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
                 cmd.UpdateBuffer(buffer, 0, (IntPtr)source, Math.Min((uint)restore.Data.Length, buffer.SizeInBytes));
         }
 
-        if (step is { } index)
-            scope.RestoreStep(cmd, index);
+        scope.RestoreStep(cmd, step);
+    }
+
+    private void Import(RenderContextBuilder builder, string name, HashSet<string> declared)
+    {
+        if (!declared.Add(name))
+            return;
+
+        if (scope.GraphTextures.TryGetValue(name, out GraphTexture? texture))
+            builder.DeclareImportedTexture(RenderResourceID.Intern(name), texture.Texture, TextureState.TransferDst);
+        else if (scope.GraphBuffers.TryGetValue(name, out GraphBuffer? buffer))
+            _handles[name] = builder.DeclareOutputBuffer(RenderResourceID.Intern(name), buffer.Desc, 0, BufferAccess.TransferWrite);
     }
 }
 

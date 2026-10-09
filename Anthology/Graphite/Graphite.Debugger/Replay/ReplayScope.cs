@@ -29,7 +29,6 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly HashSet<TraceVersion> _planned = new();
     private readonly List<(int PassIndex, TraceResourceId Id, Texture Texture, RecordedCopy Copy)> _textureRestores = new();
     private readonly List<(int PassIndex, DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
-    private int _firstPass;
 
     public ReplayScope(GraphicsDevice device, DeepRecording deep)
     {
@@ -90,7 +89,6 @@ internal sealed unsafe class ReplayScope : IDisposable
             }
         }
 
-        _firstPass = passes.Count > 0 ? passes[0].Index : 0;
         foreach (DeepPass pass in passes)
         {
             string? error = PreparePass(pass, byName, copies);
@@ -172,24 +170,8 @@ internal sealed unsafe class ReplayScope : IDisposable
         => _textureRestores.Select(r => r.PassIndex)
             .Concat(_externalBufferRestores.Select(r => r.PassIndex))
             .Concat(BufferRestores.Select(r => r.PassIndex))
-            .Where(i => i != _firstPass)
             .Distinct()
             .Order();
-
-    public void RestoreImmediate()
-    {
-        foreach ((int passIndex, _, Texture texture, RecordedCopy copy) in _textureRestores)
-        {
-            if (passIndex == _firstPass)
-                UpdateTexture(null, texture, copy);
-        }
-
-        foreach ((int passIndex, DeviceBuffer buffer, RecordedCopy copy) in _externalBufferRestores)
-        {
-            if (passIndex == _firstPass)
-                UpdateBuffer(null, buffer, copy);
-        }
-    }
 
     public void RestoreStep(CommandBuffer cmd, int passIndex)
     {
@@ -221,7 +203,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         }
     }
 
-    private void UpdateTexture(CommandBuffer? cmd, Texture texture, RecordedCopy copy)
+    private void UpdateTexture(CommandBuffer cmd, Texture texture, RecordedCopy copy)
     {
         byte[] data = ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!;
         foreach (CopyRegion region in copy.Regions)
@@ -229,26 +211,15 @@ internal sealed unsafe class ReplayScope : IDisposable
             uint size = region.Width * region.Height * region.Depth * region.Format.GetSizeInBytes();
             TextureRegion target = new(0, 0, 0, region.Width, region.Height, region.Depth, region.MipLevel, region.ArrayLayer);
             fixed (byte* source = &data[region.Offset])
-            {
-                if (cmd != null)
-                    cmd.UpdateTexture(texture, (IntPtr)source, size, target);
-                else
-                    _device.UpdateTexture(texture, (IntPtr)source, size, target);
-            }
+                cmd.UpdateTexture(texture, (IntPtr)source, size, target);
         }
     }
 
-    private void UpdateBuffer(CommandBuffer? cmd, DeviceBuffer buffer, RecordedCopy copy)
+    private void UpdateBuffer(CommandBuffer cmd, DeviceBuffer buffer, RecordedCopy copy)
     {
         byte[] data = ImmutableCollectionsMarshal.AsArray(_blobs[copy.Blob].Items)!;
-        uint size = Math.Min((uint)data.Length, buffer.SizeInBytes);
         fixed (byte* source = data)
-        {
-            if (cmd != null)
-                cmd.UpdateBuffer(buffer, 0, (IntPtr)source, size);
-            else
-                _device.UpdateBuffer(buffer, 0, (IntPtr)source, size);
-        }
+            cmd.UpdateBuffer(buffer, 0, (IntPtr)source, Math.Min((uint)data.Length, buffer.SizeInBytes));
     }
 
     public Framebuffer Framebuffer(SetFramebufferCommand command)

@@ -67,14 +67,13 @@ public sealed class Replayer
 
     private ReplayResult Run(ReplayScope scope, DeepView view, List<DeepPass> passes, DeepPass pass, int? eventIndex)
     {
-        scope.RestoreImmediate();
         string name = $"Replay {pass.Index} {pass.Name}";
         ReplayCapture capture = new(name, ReplayScope.Outputs(view, pass), scope.ReplayIds);
         HashSet<int> steps = scope.RestoreSteps().ToHashSet();
-        List<IPass> replay = [new ReplayRestorePass(scope, passes)];
+        List<IPass> replay = new();
         foreach (DeepPass p in passes)
         {
-            if (steps.Contains(p.Index))
+            if (p == passes[0] || steps.Contains(p.Index))
                 replay.Add(new ReplayRestorePass(scope, passes, p.Index));
 
             replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, _recording, p, p == pass ? eventIndex : null));
