@@ -29,10 +29,10 @@ internal sealed class HookRecorder : ICaptureProfiler
 
     public void EndExecution() => Log.Add("End");
 
-    public void OnViewBegin(in ViewCaptureInfo view)
+    public void DescribeView(in ViewCaptureInfo view)
     {
         View = view;
-        Log.Add($"ViewBegin:{view.Resources.Length}:{view.Passes.Length}");
+        Log.Add($"Describe:{view.Resources.Length}:{view.Passes.Length}");
     }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
@@ -40,8 +40,6 @@ internal sealed class HookRecorder : ICaptureProfiler
         References[pass.Name] = references.ToArray();
         Log.Add("PassEnd:" + pass.Name);
     }
-
-    public void OnViewEnd() => Log.Add("ViewEnd");
 }
 
 file readonly struct HookView : IRenderView
@@ -151,12 +149,12 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Run run = Execute();
 
         Assert.Equal(
-            ["Begin", "ViewBegin:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "ViewEnd", "End"],
+            ["Begin", "Describe:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "End"],
             run.Hook.Log);
         Assert.Equal(run.ExecutionId, run.Hook.ExecutionId);
         Assert.Equal(nameof(RenderPipeline), run.Hook.GraphName);
-        Assert.Equal("HookView", run.Hook.View.ViewName);
-        Assert.Equal(new[] { "Produce", "Consume", "Finish" }, run.Hook.View.Passes.ToArray().Select(p => p.Pass.Name));
+        Assert.Equal(0, run.Hook.View.ViewIndex);
+        Assert.Equal(new[] { "Produce", "Consume", "Finish" }, run.Hook.View.Passes.ToArray().Select(p => p.Name));
     }
 
     [SkippableFact]

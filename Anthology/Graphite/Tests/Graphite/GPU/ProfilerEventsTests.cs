@@ -41,26 +41,17 @@ file sealed class GraphRecorder : ExecutionRecorder, IGraphProfiler
         PassesEnded.Add(pass);
         PassStatsEnded.Add(stats);
     }
-
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 }
 
 file sealed class LifecycleRecorder : ExecutionRecorder, IGraphProfiler
 {
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
-    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
-    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
 
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
     public void EndPass(in PassInfo pass, in PassStats stats) => PassesEnded.Add(pass);
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-        => PassReads.Add((pass, resource, texture, buffer));
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-        => PassWrites.Add((pass, resource, texture, buffer));
 }
 
 file sealed class TimingRecorder : ExecutionRecorder, IGpuStatsProfiler
@@ -102,8 +93,6 @@ file sealed class CorrelationProfiler : ExecutionRecorder, IGraphProfiler, IGpuS
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
     public void EndPass(in PassInfo pass, in PassStats stats) { }
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Timings.Add(commandBuffer);
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 
@@ -350,7 +339,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void DispatchGraph_RecordsPassLifecycleAndReads()
+    public void DispatchGraph_RecordsPassLifecycle()
     {
         LifecycleRecorder profiler = new();
         using GraphicsDevice device = CreateDevice();
@@ -370,11 +359,6 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(2, profiler.PassesBegun.Count);
         Assert.Equal(2, profiler.PassesEnded.Count);
         Assert.Equal(new[] { "ProfilerClear", "ProfilerCopy" }, profiler.PassesBegun.ConvertAll(p => p.Name));
-
-        // ClearingRasterPass declares the target as an output; ReadingCopyPass declares it as an input.
-        Assert.Contains(profiler.PassWrites, w => w.Pass.Name == "ProfilerClear" && w.Resource.Equals(id));
-        Assert.DoesNotContain(profiler.PassReads, r => r.Pass.Name == "ProfilerClear");
-        Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerCopy" && r.Resource.Equals(id));
 
         Assert.True(device.Counters.Snapshot().Barriers(BarrierBin.TextureTransition) > 0);
     }
@@ -397,8 +381,9 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         PassInfo clear = Assert.Single(profiler.Timed, t => t.Name == "ProfilerClear").Pass!.Value;
         PassInfo copy = Assert.Single(profiler.Timed, t => t.Name == "ProfilerCopy").Pass!.Value;
-        Assert.Contains(id, clear.Outputs.ToArray());
-        Assert.Contains(id, copy.Inputs.ToArray());
+        Assert.Contains(id, clear.GetOutputs().Select(a => a.Id));
+        Assert.DoesNotContain(id, clear.GetInputs().Select(a => a.Id));
+        Assert.Contains(id, copy.GetInputs().Select(a => a.Id));
     }
 
     [Fact]

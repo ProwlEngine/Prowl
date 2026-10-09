@@ -73,7 +73,7 @@ internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
 
     public void EndExecution() { }
 
-    public void OnViewBegin(in ViewCaptureInfo view) { }
+    public void DescribeView(in ViewCaptureInfo view) { }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {
@@ -95,8 +95,6 @@ internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
             }
         }
     }
-
-    public void OnViewEnd() { }
 
     public void Dispose()
     {
