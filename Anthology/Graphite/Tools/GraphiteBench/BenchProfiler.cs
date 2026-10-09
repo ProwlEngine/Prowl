@@ -24,7 +24,4 @@ public sealed class BenchProfiler : IGraphProfiler
         Draws += stats.Draws + stats.IndirectDraws;
         ShaderSwitches += stats.ShaderSwitches;
     }
-
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 }
