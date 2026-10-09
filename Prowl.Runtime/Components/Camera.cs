@@ -208,6 +208,41 @@ public class Camera : MonoBehaviour
     [SerializeIgnore]
     private readonly HashSet<ImageEffect> _lastActiveEffects = new();
 
+    [NonSerialized, NotHeld] private readonly Dictionary<Type, object> _renderData = new();
+
+    /// <summary>Size of this camera's shadow atlas, 0 for <see cref="Rendering.ShadowAtlas.RequestedSize"/>.</summary>
+    public int ShadowAtlasSize = 0;
+
+    /// <summary>
+    /// Data a render pipeline keeps for this camera from one render to the next, such as its shadow maps or history
+    /// buffers. One value per type, made by <paramref name="create"/> on first use and disposed with the camera.
+    /// </summary>
+    public T GetRenderData<T>(Func<T> create) where T : class
+    {
+        if (_renderData.TryGetValue(typeof(T), out object? data)) return (T)data;
+        T made = create();
+        _renderData[typeof(T)] = made;
+        return made;
+    }
+
+    /// <summary>Disposes and forgets the render data of type <typeparamref name="T"/>, made again on its next use.</summary>
+    public void ReleaseRenderData<T>() where T : class
+    {
+        if (_renderData.Remove(typeof(T), out object? data) && data is IDisposable disposable)
+            disposable.Dispose();
+    }
+
+    protected override void OnDispose()
+    {
+        foreach (object data in _renderData.Values)
+        {
+            try { (data as IDisposable)?.Dispose(); }
+            catch (Exception e) { Debug.LogError($"Disposing render data of camera '{Name}' threw: {e.Message}"); }
+        }
+        _renderData.Clear();
+        base.OnDispose();
+    }
+
     public uint PixelWidth { get; private set; }
     public uint PixelHeight { get; private set; }
 

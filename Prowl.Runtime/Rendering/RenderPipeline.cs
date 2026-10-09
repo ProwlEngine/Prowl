@@ -329,7 +329,6 @@ public abstract class RenderPipeline : EngineObject
         public Dictionary<long, Float4x4> Current = [];
     }
 
-    private readonly ConditionalWeakTable<Camera, MotionHistory[]> _motionHistories = new();
     private MotionHistory? _motion;
 
     /// <summary>
@@ -338,7 +337,7 @@ public abstract class RenderPipeline : EngineObject
     /// </summary>
     protected void BeginMotionTracking(Camera camera)
     {
-        MotionHistory[] perEye = _motionHistories.GetValue(camera, _ => new MotionHistory[3]);
+        MotionHistory[] perEye = camera.GetRenderData(() => new MotionHistory[3]);
         _motion = perEye[(int)camera.ActiveEye] ??= new MotionHistory();
     }
 

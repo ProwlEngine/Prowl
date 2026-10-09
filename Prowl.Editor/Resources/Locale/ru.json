@@ -373,7 +373,6 @@
   "env.end_distance": "Конечная дистанция",
   "env.density": "Плотность",
   "env.fog_use_sky": "Использовать небо",
-  "env.fog_sun_glow": "Свечение солнца",
   "env.ambient_lighting": "Окружающее освещение",
   "env.strength": "Сила",
   "env.sky_color": "Цвет неба",

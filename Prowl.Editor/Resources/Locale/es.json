@@ -373,7 +373,6 @@
   "env.end_distance": "Distancia final",
   "env.density": "Densidad",
   "env.fog_use_sky": "Usar cielo",
-  "env.fog_sun_glow": "Brillo solar",
   "env.ambient_lighting": "Iluminacion ambiental",
   "env.strength": "Intensidad",
   "env.sky_color": "Color del cielo",

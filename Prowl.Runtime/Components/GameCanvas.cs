@@ -248,11 +248,15 @@ public class GameCanvas : MonoBehaviour
         if (scene.IsValid()) scene!.Canvases.Add(this);
     }
 
-    public override void OnDisable()
+    public override void OnDisable() => LeaveScene(_registeredScene);
+
+    internal override void LeaveScene(Scene? scene)
     {
         if (_registeredScene.IsValid()) _registeredScene!.Canvases.Remove(this);
         _registeredScene = null;
     }
+
+    internal override void JoinScene(Scene? scene) => RegisterIn(scene);
 
     // Update() is intentionally not overridden. ScaleFactor must be computed against the
     // active render-target size, which is only known inside RebuildIfDirty (where the

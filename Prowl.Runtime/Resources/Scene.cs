@@ -415,9 +415,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         /// <summary>Colors the fog with the sky drawn in each view direction, taken from the sky probe, instead of Color.</summary>
         public bool UseSky = false;
 
-        /// <summary>Keeps the glow around the sun in sky colored fog.</summary>
-        public bool SkySunGlow = false;
-
         public bool IsFogLinear => Mode == FogMode.Linear;
 
         public FogParams()
@@ -812,8 +809,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _allObj.Remove(obj);
 
         foreach (MonoBehaviour component in obj._components)
-            if (!component.IsDisposed)
-                _dispatcher.Unregister(component);
+        {
+            if (component.IsDisposed) continue;
+            _dispatcher.Unregister(component);
+            component.LeaveScene(this);
+        }
 
         obj.Scene = null;
     }
@@ -828,8 +828,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             if (IsActive && obj.EnabledInHierarchy)
                 foreach (MonoBehaviour component in obj._components)
-                    if (!component.IsDisposed && component.Enabled && component.EnabledInHierarchy)
-                        _dispatcher.Register(component);
+                {
+                    if (component.IsDisposed || !component.Enabled || !component.EnabledInHierarchy) continue;
+                    _dispatcher.Register(component);
+                    component.JoinScene(this);
+                }
         }
 
         foreach (GameObject child in obj.Children.ToArray())

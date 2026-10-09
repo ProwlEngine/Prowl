@@ -347,6 +347,8 @@ public class DefaultRenderPipeline : RenderPipeline
         // redraws only the shadow maps that changed, and finally the BVH textures, directional and shadow
         // data are pushed to the GPU.
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
+        ShadowRenderer shadows = camera.GetRenderData(() => new ShadowRenderer());
+        shadows.AtlasSize = camera.ShadowAtlasSize;
         if (!secondEye)
         {
             lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask, stereoShadowView.HasValue ? null : css.WorldFrustum);
@@ -362,14 +364,20 @@ public class DefaultRenderPipeline : RenderPipeline
                 shadowCasters = s_shadowCasters;
             }
 
-            RenderStats.BeginShadowPass();
-            var shadowCamera = new ShadowCamera(camera, css.CameraPosition, css.WorldFrustum, css.Projection, css.PixelHeight, shadowView);
-            lightSystem.RenderShadows(this, shadowCamera, shadowCasters);
-            RenderStats.EndShadowPass();
+            // A camera that draws nothing, such as a sky capture, has no shadows to cast. Probe captures jump to a new
+            // view every face, so their cascades are fitted every time
+            if (css.CullingMask != LayerMask.Nothing)
+            {
+                RenderStats.BeginShadowPass();
+                var shadowCamera = new ShadowCamera(camera, css.CameraPosition, css.WorldFrustum, css.Projection, css.PixelHeight, shadowView,
+                                                    refitEveryCascade: ReflectionProbeCapture.Capturing);
+                lightSystem.RenderShadows(this, shadows, shadowCamera, shadowCasters);
+                RenderStats.EndShadowPass();
+            }
         }
 
         AssignCameraMatrices(css.View, css.Projection);
-        lightSystem.UploadGlobalUniforms(shadowView);
+        lightSystem.UploadGlobalUniforms(shadowView, shadows);
         using (CommandBuffer probeCmd = Graphics.GetCommandBuffer("ReflectionProbes"))
         {
             css.Scene.ReflectionProbes.Bind(probeCmd);
@@ -433,7 +441,7 @@ public class DefaultRenderPipeline : RenderPipeline
                     var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
                         ? css.Scene.Skybox.SolidColor : camera.ClearColor;
                     mainCmd.ClearRenderTarget(ClearFlags.Color, skyColor);
-                    RenderSkybox(mainCmd, css, lights);
+                    RenderSkybox(mainCmd, css);
                     break;
                 }
                 case CameraClearFlags.SolidColor:
@@ -612,7 +620,7 @@ public class DefaultRenderPipeline : RenderPipeline
         fogParams.W = fog.End / fogRange;
 
         PropertyState.SetGlobalColor("_FogColor", fog.Color);
-        PropertyState.SetGlobalVector("_FogSky", new Float2(fog.UseSky ? 1 : 0, fog.SkySunGlow ? 1 : 0));
+        PropertyState.SetGlobalInt("_FogUseSky", fog.UseSky ? 1 : 0);
         PropertyState.SetGlobalVector("_FogParams", fogParams);
         PropertyState.SetGlobalVector("_FogStates", new Float3(
             fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,
@@ -773,7 +781,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Float4x4 BuildScreenOrtho(CameraSnapshot css)
         => Float4x4.CreateOrthoOffCenter(0, css.PixelWidth, 0, css.PixelHeight, -1000f, 1000f);
 
-    private void RenderSkybox(CommandBuffer cmd, CameraSnapshot css, List<IRenderableLight> lights)
+    private void RenderSkybox(CommandBuffer cmd, CameraSnapshot css)
     {
         var skyParams = css.Scene.Skybox;
 
@@ -810,8 +818,9 @@ public class DefaultRenderPipeline : RenderPipeline
 
         void DrawProcedural()
         {
-            var sun = lights.FirstOrDefault(l => l.GetLightType() == LightType.Directional);
-            // The sky wants the direction toward the sun, lights report the way they shine.
+            // The brightest directional is the sun, the same light that casts the cascades. The sky wants the
+            // direction toward it, lights report the way they shine.
+            IRenderableLight? sun = GetOrCreateLightSystem(css.Scene).Directional;
             s_skybox.SetVector("_SunDir", sun != null ? -sun.GetLightDirection() : Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f)));
             cmd.DrawMesh(s_skyCube, s_skybox);
         }

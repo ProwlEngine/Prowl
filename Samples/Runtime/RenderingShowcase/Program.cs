@@ -180,6 +180,8 @@ public sealed class RenderingShowcaseGame : StationGame
         {
             Slider(paper, font, "Density", SampleScene.Fog.Density, 0f, 0.1f, v => SampleScene.Fog.Density = v, "0.000");
         }
+        if (SampleScene.Fog.Mode != Scene.FogParams.FogMode.Off)
+            Toggle(paper, font, "Use sky", SampleScene.Fog.UseSky, v => SampleScene.Fog.UseSky = v);
 
         Header(paper, font, "Post effects", 2);
         Toggle(paper, font, "Bloom", _bloom.Enabled, v => _bloom.Enabled = v);
@@ -208,6 +210,18 @@ public sealed class RenderingShowcaseGame : StationGame
                 Add(Model($"Sphere m{metallic:0.00} r{roughness:0.00}", sphere, Lit(albedo, metallic, roughness),
                     c + new Float3((col - 3f) * 1.1f, 0.6f + row * 1.0f, 0f)));
             }
+
+        // A probe boxed to the floor and the backdrop, so the spheres reflect both where they really are. It follows
+        // the time of day, one face a frame.
+        var probeObject = new GameObject("Reflection Probe");
+        probeObject.Transform.Position = c + new Float3(0f, 3f, -2f);
+        var probe = probeObject.AddComponent<ReflectionProbe>();
+        probe.Mode = ReflectionProbeMode.Realtime;
+        probe.RefreshMode = ReflectionProbeRefreshMode.EveryFrame;
+        probe.TimeSlicing = ReflectionProbeTimeSlicing.IndividualFaces;
+        probe.BoxSize = new Float3(16f, 6f, 7.5f);
+        probe.BlendDistance = 0.5f;
+        Add(probeObject);
     }
 
     // ----------------------------------------------------------------

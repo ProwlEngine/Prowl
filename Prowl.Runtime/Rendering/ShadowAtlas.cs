@@ -9,19 +9,14 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
-/// The depth texture every shadow map lives in, and the settings that decide how its space is shared.
-/// Tiles are handed out by <see cref="Allocator"/> and stay where they are across frames, so a shadow map
-/// that nothing invalidated is reused instead of redrawn.
+/// Settings every camera's shadow atlas follows. Each camera keeps its own atlas, so split screen views and probe
+/// captures never compete for one another's space.
 /// </summary>
 public static class ShadowAtlas
 {
-    private static int size;
-    private static ShadowDepthPrecision precision;
-    private static Texture2D? depth;
-    private static GraphicsFrameBuffer? frameBuffer;
-
-    /// <summary>Width and height of the shadow atlas every shadowed light shares, clamped to between 1024 and the
-    /// largest texture the GPU supports. A change rebuilds the atlas, and every shadow map, on the next render.</summary>
+    /// <summary>Width and height of a camera's shadow atlas, clamped to between 1024 and the largest texture the GPU
+    /// supports. A camera can ask for its own with <see cref="Camera.ShadowAtlasSize"/>. A change rebuilds the atlases,
+    /// and every shadow map, on the next render.</summary>
     public static int RequestedSize { get; set; } = 8192;
 
     /// <summary>Bits per shadow map depth value. 16 halves the atlas's memory and is precise enough for shadows,
@@ -43,45 +38,80 @@ public static class ShadowAtlas
     /// casters or light changed are always redrawn, this only paces sharpening and softening.</summary>
     public static int MaxResolutionChangesPerFrame { get; set; } = 32;
 
-    /// <summary>How the shared space is split. Reset whenever the atlas is rebuilt.</summary>
-    internal static ShadowTileAllocator Allocator { get; } = new(1024);
+    /// <summary>The size an atlas asking for <paramref name="requested"/> is made at, a power of two the GPU supports.</summary>
+    public static int SizeFor(int requested)
+    {
+        int wanted = Maths.Clamp(requested, 1024, Graphics.MaxTextureSize);
+        int size = 1024;
+        while (size * 2 <= wanted) size *= 2;
+        return size;
+    }
+
+    /// <summary>The size atlases are made at when a camera asks for none of its own.</summary>
+    public static int GetSize() => SizeFor(RequestedSize);
+}
+
+/// <summary>
+/// The depth texture one camera's shadow maps live in. Tiles are handed out by <see cref="Allocator"/> and stay where
+/// they are across frames, so a shadow map that nothing invalidated is reused instead of redrawn.
+/// </summary>
+internal sealed class ShadowAtlasTexture : System.IDisposable
+{
+    private int _size;
+    private ShadowDepthPrecision _precision;
+    private Texture2D? _depth;
+    private GraphicsFrameBuffer? _frameBuffer;
+
+    /// <summary>How the space is split. Reset whenever the atlas is rebuilt.</summary>
+    public ShadowTileAllocator Allocator { get; } = new(1024);
 
     /// <summary>Bumped every time the atlas is rebuilt, so cached tiles from before can tell they are gone.</summary>
-    internal static int Generation { get; private set; }
+    public int Generation { get; private set; }
 
-    public static void TryInitialize()
+    public int Size => _size;
+
+    /// <summary>The depth texture the lighting shaders sample.</summary>
+    public Texture2D? DepthTexture => _depth;
+
+    public GraphicsFrameBuffer? FrameBuffer => _frameBuffer;
+
+    /// <summary>Makes the atlas, or makes it again when its size or precision should change.</summary>
+    public void Ensure(int requested)
     {
-        int wanted = Maths.Clamp(RequestedSize, 1024, Graphics.MaxTextureSize);
-        int pow2 = 1024;
-        while (pow2 * 2 <= wanted) pow2 *= 2;
-        wanted = pow2;
-        if (depth.IsValid() && size == wanted && precision == DepthPrecision) return;
+        int wanted = ShadowAtlas.SizeFor(requested);
+        if (_depth.IsValid() && _size == wanted && _precision == ShadowAtlas.DepthPrecision) return;
 
-        frameBuffer?.Dispose();
-        if (depth.IsValid()) depth.Dispose();
-        size = wanted;
-        precision = DepthPrecision;
+        Release();
+        _size = wanted;
+        _precision = ShadowAtlas.DepthPrecision;
 
-        TextureImageFormat format = precision == ShadowDepthPrecision.Bits16 ? TextureImageFormat.Depth16f : TextureImageFormat.Depth24f;
-        depth = new Texture2D((uint)size, (uint)size, false, format);
+        TextureImageFormat format = _precision == ShadowDepthPrecision.Bits16 ? TextureImageFormat.Depth16f : TextureImageFormat.Depth24f;
+        _depth = new Texture2D((uint)_size, (uint)_size, false, format);
 
         // Sampled through hardware depth comparison: a sampler2DShadow then gets fixed function 2x2 PCF with
         // linear filtering instead of a manual compare per tap
-        depth.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-        depth.SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
-        depth.SetDepthCompareMode(true);
-        frameBuffer = Graphics.CreateFramebuffer([new GraphicsFrameBuffer.Attachment { Texture = depth.Handle, IsDepth = true }], (uint)size, (uint)size);
+        _depth.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+        _depth.SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
+        _depth.SetDepthCompareMode(true);
+        _frameBuffer = Graphics.CreateFramebuffer([new GraphicsFrameBuffer.Attachment { Texture = _depth.Handle, IsDepth = true }], (uint)_size, (uint)_size);
 
-        Allocator.Reset(size);
+        Allocator.Reset(_size);
         Generation++;
     }
 
-    public static int GetSize() => size;
+    private void Release()
+    {
+        _frameBuffer?.Dispose();
+        _frameBuffer = null;
+        if (_depth.IsValid()) _depth!.Dispose();
+        _depth = null;
+    }
 
-    /// <summary>The atlas depth texture the lighting shaders sample.</summary>
-    public static Texture2D? DepthTexture => depth;
-
-    internal static GraphicsFrameBuffer? FrameBuffer => frameBuffer;
+    public void Dispose()
+    {
+        Release();
+        Generation++;
+    }
 }
 
 public enum ShadowDepthPrecision

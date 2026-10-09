@@ -373,7 +373,6 @@
   "env.end_distance": "Bitis mesafesi",
   "env.density": "Yogunluk",
   "env.fog_use_sky": "Gokyuzunu kullan",
-  "env.fog_sun_glow": "Gunes parlamasi",
   "env.ambient_lighting": "Ortam isigi",
   "env.strength": "Guc",
   "env.sky_color": "Gokyuzu rengi",
