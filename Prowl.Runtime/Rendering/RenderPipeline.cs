@@ -88,6 +88,13 @@ public interface IRenderable
     /// </summary>
     public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => model.Invert();
 
+
+    /// <summary>
+    /// True for things that do not move, such as a renderer on a static GameObject. A point or spot light keeps the
+    /// shadow of its static casters in a layer of its own, so a moving caster only redraws itself on top.
+    /// </summary>
+    public bool IsStatic => false;
+
     public void GetCullingData(out bool isRenderable, out AABB bounds);
 }
 
@@ -950,6 +957,36 @@ public abstract class RenderPipeline : EngineObject
                 grabRT = null;
             }
         }
+    }
+
+    private readonly List<IndexRange> _ranges = new();
+
+    // Draws the run of index range renderables from members[first] that share its properties as one draw, and
+    // returns the position of the last one drawn
+    private int DrawIndexRanges(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, List<int> members, int first, ViewerData viewer,
+        int vao, Topology topology, bool i32, int objectToWorld, int worldToObject, int prevObjectToWorld)
+    {
+        renderables[members[first]].GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 _, out InstanceData[]? _);
+
+        _ranges.Clear();
+        int last = first;
+        for (int m = first; m < members.Count; m++)
+        {
+            if (renderables[members[m]] is not IIndexRangeRenderable ranged) break;
+            ranged.GetRenderingData(viewer, out PropertyState next, out Mesh _, out Float4x4 _, out InstanceData[]? _);
+            if (!ReferenceEquals(next, properties)) break;
+            ranged.AppendRanges(_ranges);
+            last = m;
+        }
+        if (_ranges.Count == 0) return last;
+
+        Float4x4 identity = Float4x4.Identity;
+        cmd.SetInstanceProperties(properties);
+        cmd.SetMatrix(objectToWorld, in identity);
+        if (worldToObject >= 0) cmd.SetMatrix(worldToObject, in identity);
+        if (prevObjectToWorld >= 0) cmd.SetMatrix(prevObjectToWorld, in identity);
+        cmd.DrawIndexedRanges(vao, topology, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_ranges), i32);
+        return last;
     }
 
     /// <summary>
