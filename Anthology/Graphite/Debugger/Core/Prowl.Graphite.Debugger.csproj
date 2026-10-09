@@ -18,8 +18,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
-        <ProjectReference Include="..\..\Echo\Echo\Echo.csproj" />
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\..\Echo\Echo\Echo.csproj" />
     </ItemGroup>
 
 </Project>

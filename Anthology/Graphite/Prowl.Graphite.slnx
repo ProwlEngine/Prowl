@@ -9,7 +9,7 @@
         <Project Path="Graphite/Prowl.Graphite.csproj" />
     </Folder>
     <Folder Name="/Debugger/">
-        <Project Path="Graphite.Debugger/Prowl.Graphite.Debugger.csproj" />
+        <Project Path="Debugger/Core/Prowl.Graphite.Debugger.csproj" />
     </Folder>
     <Folder Name="/ShaderDef/">
         <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />

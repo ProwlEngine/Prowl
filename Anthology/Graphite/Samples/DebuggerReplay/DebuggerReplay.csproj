@@ -9,7 +9,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../Graphite.Debugger/Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="../../Debugger/Core/Prowl.Graphite.Debugger.csproj" />
         <ProjectReference Include="../../ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
     </ItemGroup>
 </Project>
