@@ -59,7 +59,7 @@ internal sealed class GraphCapture
 
         PassCaptureInfo[] passes = new PassCaptureInfo[_nodes.Length];
         for (int i = 0; i < _nodes.Length; i++)
-            passes[i] = new PassCaptureInfo(_passInfos[i], ToPublic(_nodes[i].Accesses));
+            passes[i] = new PassCaptureInfo(_passInfos[i], _nodes[i].PublicAccesses);
 
         ViewCaptureInfo info = new(viewName, viewIndex, pixelWidth, pixelHeight, resources.ToArray(), passes);
         _hook.OnViewBegin(in info);
@@ -243,23 +243,5 @@ internal sealed class GraphCapture
         _backings[id] = array;
         return new GraphResourceInfo(
             id, name, isTexture ? GraphResourceKind.Texture : GraphResourceKind.Buffer, array, origin, textureDesc, bufferDesc);
-    }
-
-    private static PassResourceAccess[] ToPublic(ResourceAccess[] accesses)
-    {
-        PassResourceAccess[] result = new PassResourceAccess[accesses.Length];
-        for (int i = 0; i < accesses.Length; i++)
-        {
-            ResourceAccess access = accesses[i];
-            result[i] = new PassResourceAccess(
-                access.Id,
-                access.IsTexture ? GraphResourceKind.Texture : GraphResourceKind.Buffer,
-                access.IsOutput,
-                access.TextureUsage,
-                access.DepthUsage,
-                access.BufferUsage);
-        }
-
-        return result;
     }
 }

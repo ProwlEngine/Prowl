@@ -40,18 +40,32 @@ public readonly struct PassInfo
     public string Name { get; }
     public int Index { get; }
     public int ViewIndex { get; }
-    public ReadOnlyMemory<RenderResourceID> Inputs { get; }
-    public ReadOnlyMemory<RenderResourceID> Outputs { get; }
 
-    public PassInfo(
-        string name, int index, int viewIndex,
-        ReadOnlyMemory<RenderResourceID> inputs, ReadOnlyMemory<RenderResourceID> outputs)
+    /// <summary>Every resource access the pass declared, inputs and outputs.</summary>
+    public ReadOnlyMemory<PassResourceAccess> Accesses { get; }
+
+    public PassInfo(string name, int index, int viewIndex, ReadOnlyMemory<PassResourceAccess> accesses)
     {
         Name = name;
         Index = index;
         ViewIndex = viewIndex;
-        Inputs = inputs;
-        Outputs = outputs;
+        Accesses = accesses;
+    }
+
+    /// <summary>The declared accesses that are not outputs.</summary>
+    public IEnumerable<PassResourceAccess> GetInputs() => Filter(Accesses, output: false);
+
+    /// <summary>The declared accesses that are outputs.</summary>
+    public IEnumerable<PassResourceAccess> GetOutputs() => Filter(Accesses, output: true);
+
+    private static IEnumerable<PassResourceAccess> Filter(ReadOnlyMemory<PassResourceAccess> accesses, bool output)
+    {
+        for (int i = 0; i < accesses.Length; i++)
+        {
+            PassResourceAccess access = accesses.Span[i];
+            if (access.IsOutput == output)
+                yield return access;
+        }
     }
 }
 

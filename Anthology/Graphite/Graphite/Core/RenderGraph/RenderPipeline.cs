@@ -90,9 +90,7 @@ public class RenderPipeline : IDisposable
                 if (node.WritesViewTarget && !hasViewTarget)
                     continue;
 
-                RenderResourceID[] inputs = node.Inputs;
-                RenderResourceID[] outputs = node.Outputs;
-                var passInfo = new PassInfo(node.Pass.Name, index, context.ViewIndex, inputs, outputs);
+                var passInfo = new PassInfo(node.Pass.Name, index, context.ViewIndex, node.PublicAccesses);
 
                 profiler?.BeginPass(passInfo);
                 capture?.BeginPass(index);
@@ -135,7 +133,7 @@ public class RenderPipeline : IDisposable
 
         PassInfo[] infos = new PassInfo[nodes.Count];
         for (int i = 0; i < infos.Length; i++)
-            infos[i] = new PassInfo(nodes[i].Pass.Name, i, context.ViewIndex, nodes[i].Inputs, nodes[i].Outputs);
+            infos[i] = new PassInfo(nodes[i].Pass.Name, i, context.ViewIndex, nodes[i].PublicAccesses);
 
         GraphCapture capture = new(hook, context, graph, nodes.ToArray(), infos);
         capture.BeginView(context.View.Name, context.ViewIndex, context.View.PixelWidth, context.View.PixelHeight);
