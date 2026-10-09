@@ -2,16 +2,16 @@
 // Include this in any lit forward shader (Standard, Terrain, Grass, etc.)
 // Provides: CalculateForwardLighting(), CalculateAmbient(), ApplyFog()
 //
-// Light data lives in two BVHs (static + dynamic). Per fragment we walk both trees and
-// accumulate contributions from every light whose tight AABB contains worldPos. The single
-// directional light is uploaded separately and evaluated unconditionally (no BVH).
+// Point and spot lights live in two four wide trees (static + dynamic), walked together per
+// fragment, adding every light whose sphere holds worldPos. Directional lights are uploaded
+// separately and evaluated unconditionally.
 
 #ifndef PROWL_LIGHTING
 #define PROWL_LIGHTING
 
 #include "PBR"
 #include "Shadow"
-#include "LightBVH"
+#include "LightTree"
 
 // ============================================================
 //  Directional lights: the brightest one is the main light and owns the shadow cascades,
@@ -251,7 +251,7 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geo
                         vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
     // BVH only emits point + spot leaves; directional has its own path. The leaf-level sphere
-    // test in LBVH_Next has already rejected fragments past Range, so we don't repeat it here.
+    // test in LightTree_FetchLight has already rejected fragments past Range, so we don't repeat it here.
     //
     // Two remaining rejections before PBR:
     //   1) Spot cone reject (outer-cone-cosine test before any GGX work).
@@ -514,24 +514,13 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
 
     vec3 totalLight = EvaluateDirectional(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
 
-    // Static tree.
-    if (_StaticLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _StaticLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
-        }
-    }
-
-    // Dynamic tree.
-    if (_DynamicLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _DynamicLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+    LightTreeWalk walk;
+    LightTree_Begin(walk);
+    int first, last;
+    while (LightTree_NextLeaf(walk, worldPos, first, last)) {
+        for (int k = first; k < last; k++) {
+            LightSample L;
+            if (!LightTree_FetchLight(k, worldPos, L)) continue;
             totalLight += EvaluateLocalLight(L, worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
         }
     }
@@ -555,23 +544,13 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNor
     vec3 totalLight = EvaluateDirectionalAniso(worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
                                                 albedo, metallic, mt, mb, roughness, ao, F0);
 
-    if (_StaticLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _StaticLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
-                                                   albedo, metallic, mt, mb, roughness, ao, F0);
-        }
-    }
-
-    if (_DynamicLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _DynamicLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+    LightTreeWalk walk;
+    LightTree_Begin(walk);
+    int first, last;
+    while (LightTree_NextLeaf(walk, worldPos, first, last)) {
+        for (int k = first; k < last; k++) {
+            LightSample L;
+            if (!LightTree_FetchLight(k, worldPos, L)) continue;
             totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
                                                    albedo, metallic, mt, mb, roughness, ao, F0);
         }
@@ -714,26 +693,13 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
                           worldNormal, viewDir, albedo, metallic, roughness, ao, F0,
                           translucency, scatterPower, scatterDist, scatterScale);
 
-    // ---- Static BVH ----
-    if (_StaticLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _StaticLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, geomNormal, viewDir,
-                              albedo, metallic, roughness, ao, F0,
-                              translucency, scatterPower, scatterDist, scatterScale);
-        }
-    }
-
-    // ---- Dynamic BVH ----
-    if (_DynamicLightRoot >= 0) {
-        LBVH_Iter it;
-        LBVH_Begin(it, _DynamicLightRoot);
-        int slot;
-        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
-            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+    LightTreeWalk walk;
+    LightTree_Begin(walk);
+    int first, last;
+    while (LightTree_NextLeaf(walk, worldPos, first, last)) {
+        for (int k = first; k < last; k++) {
+            LightSample L;
+            if (!LightTree_FetchLight(k, worldPos, L)) continue;
             totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, geomNormal, viewDir,
                               albedo, metallic, roughness, ao, F0,
                               translucency, scatterPower, scatterDist, scatterScale);

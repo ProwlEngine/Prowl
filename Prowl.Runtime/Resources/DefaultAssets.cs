@@ -140,7 +140,7 @@ public enum DefaultShaderInclude
     Shadow,
     VertexAttributes,
     Lighting,
-    LightBVH,
+    LightTree,
     StandardCore,
     FastNoiseLite,
     SimplexNoise4D

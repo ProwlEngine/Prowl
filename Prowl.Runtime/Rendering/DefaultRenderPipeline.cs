@@ -345,7 +345,7 @@ public class DefaultRenderPipeline : RenderPipeline
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
         if (!secondEye)
         {
-            lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
+            lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask, stereoShadowView.HasValue ? null : css.WorldFrustum);
 
             // Anything the camera's culling mask hides casts no shadow in its view either.
             IReadOnlyList<IRenderable> shadowCasters = renderables;

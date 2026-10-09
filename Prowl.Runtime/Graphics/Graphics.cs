@@ -289,7 +289,8 @@ public static unsafe class Graphics
 
     /// <summary>
     /// What every shader starts with: the GLSL version of the context, ES precision defaults, and a define per optional
-    /// feature (PROWL_GLES, PROWL_STORAGE_BUFFERS, PROWL_COMPUTE) so a shader can pick its data path.
+    /// feature (PROWL_GLES, PROWL_STORAGE_BUFFERS, PROWL_VERTEX_STORAGE_BUFFERS, PROWL_FRAGMENT_STORAGE_BUFFERS,
+    /// PROWL_COMPUTE) so a shader can pick its data path.
     /// </summary>
     public static string ShaderPrelude
     {
@@ -310,6 +311,8 @@ public static unsafe class Graphics
                 sb.Append($"#version {caps.ShaderVersion} core\n");
             }
             if (caps.Has(GraphicsFeature.StorageBuffers)) sb.Append("#define PROWL_STORAGE_BUFFERS 1\n");
+            if (caps.Has(GraphicsFeature.VertexStorageBuffers)) sb.Append("#define PROWL_VERTEX_STORAGE_BUFFERS 1\n");
+            if (caps.Has(GraphicsFeature.FragmentStorageBuffers)) sb.Append("#define PROWL_FRAGMENT_STORAGE_BUFFERS 1\n");
             if (caps.Has(GraphicsFeature.ComputeShaders)) sb.Append("#define PROWL_COMPUTE 1\n");
             s_preludeFor = caps;
             return s_shaderPrelude = sb.ToString();
@@ -331,7 +334,12 @@ public static unsafe class Graphics
         int count = GL.GetInteger(GLEnum.NumExtensions);
         for (uint i = 0; i < count; i++)
             extensions.Add(GL.GetStringS(Silk.NET.OpenGL.StringName.Extensions, i));
-        return new GraphicsCapabilities(Target, major, minor, extensions);
+
+        // Only queried where storage buffers exist, older contexts reject the enums
+        bool storage = Target == GraphicsTarget.OpenGLES ? major > 3 || (major == 3 && minor >= 1) : major > 4 || (major == 4 && minor >= 3);
+        int vertexBlocks = storage ? GL.GetInteger(GLEnum.MaxVertexShaderStorageBlocks) : 0;
+        int fragmentBlocks = storage ? GL.GetInteger(GLEnum.MaxFragmentShaderStorageBlocks) : 0;
+        return new GraphicsCapabilities(Target, major, minor, extensions, vertexBlocks, fragmentBlocks);
     }
 
     public static void StartRenderThread()

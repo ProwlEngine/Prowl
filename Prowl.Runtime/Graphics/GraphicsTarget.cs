@@ -25,6 +25,12 @@ public enum GraphicsFeature
     /// <summary>Shader storage buffers (SSBOs).</summary>
     StorageBuffers,
 
+    /// <summary>Storage buffers read from vertex shaders, which the spec lets a driver offer none of.</summary>
+    VertexStorageBuffers,
+
+    /// <summary>Storage buffers read from fragment shaders, which the spec lets a driver offer none of.</summary>
+    FragmentStorageBuffers,
+
     /// <summary>Image load and store from shaders.</summary>
     ImageLoadStore,
 
@@ -64,7 +70,11 @@ public sealed class GraphicsCapabilities
     /// <summary>The version number GLSL source is written for, such as 410, 460 or 320.</summary>
     public int ShaderVersion => MajorVersion * 100 + MinorVersion * 10;
 
-    internal GraphicsCapabilities(GraphicsTarget target, int major, int minor, HashSet<string> extensions)
+    /// <summary>Storage blocks a vertex or fragment shader needs for the engine to keep its data in buffers there.</summary>
+    internal const int StageStorageBlocksNeeded = 4;
+
+    internal GraphicsCapabilities(GraphicsTarget target, int major, int minor, HashSet<string> extensions,
+        int vertexStorageBlocks = 16, int fragmentStorageBlocks = 16)
     {
         Target = target;
         MajorVersion = major;
@@ -95,6 +105,10 @@ public sealed class GraphicsCapabilities
             Set(GraphicsFeature.TextureReadback, true);
             Set(GraphicsFeature.DebugOutput, gl43);
         }
+
+        bool storage = Has(GraphicsFeature.StorageBuffers);
+        Set(GraphicsFeature.VertexStorageBuffers, storage && vertexStorageBlocks >= StageStorageBlocksNeeded);
+        Set(GraphicsFeature.FragmentStorageBuffers, storage && fragmentStorageBlocks >= StageStorageBlocksNeeded);
     }
 
     /// <summary>Whether the target allows <paramref name="feature"/> and this device provides it.</summary>
