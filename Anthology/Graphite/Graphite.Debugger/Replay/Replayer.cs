@@ -29,11 +29,10 @@ public sealed class Replayer
     public ReplayResult Replay(ReplayRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        DeepExecution? execution = _recording.Executions.FirstOrDefault(e => e.ExecutionId == request.ExecutionId);
-        DeepView? view = execution?.Views.FirstOrDefault(v => v.Index == request.ViewIndex);
+        DeepView? view = _recording.Views.FirstOrDefault(v => v.Index == request.ViewIndex);
         DeepPass? pass = view?.Passes.FirstOrDefault(p => p.Index == request.PassIndex);
-        if (execution == null || view == null || pass == null)
-            return NotReplayable("The request names an execution, view, or pass that is not in the recording.");
+        if (view == null || pass == null)
+            return NotReplayable("The request names a view or pass that is not in the recording.");
 
         if (pass.NotReplayable != null)
             return NotReplayable(pass.NotReplayable);
@@ -46,7 +45,7 @@ public sealed class Replayer
         }
 
         if (request.EventIndex == null && _recording.Mode == DeepMode.Full)
-            return Restore(execution, view, pass);
+            return Restore(view, pass);
 
         bool reexecute = _recording.Mode != DeepMode.Full;
         List<DeepPass> passes = reexecute ? view.Passes.Where(p => p.Index <= pass.Index).OrderBy(p => p.Index).ToList() : [pass];
@@ -57,7 +56,7 @@ public sealed class Replayer
         try
         {
             using ReplayScope scope = new(_device, _recording);
-            string? error = scope.Prepare(execution, view, passes, reexecute);
+            string? error = scope.Prepare(view, passes, reexecute);
             return error != null ? NotReplayable(error) : Run(scope, view, passes, pass, request.EventIndex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -109,14 +108,14 @@ public sealed class Replayer
         return new ReplayResult(ReplayStatus.Reexecuted, $"Executed {executed} on {device} with unreproducible inputs restored from copies.", outputs.ToEquatableArray());
     }
 
-    private ReplayResult Restore(DeepExecution execution, DeepView view, DeepPass pass)
+    private ReplayResult Restore(DeepView view, DeepPass pass)
     {
         Dictionary<BlobRef, RecordedBlob> blobs = new();
         foreach (RecordedBlob blob in _recording.Blobs)
             blobs[blob.Ref] = blob;
 
         Dictionary<TraceVersion, RecordedCopy> copies = new();
-        foreach (RecordedCopy copy in execution.Views.SelectMany(v => v.Passes).SelectMany(p => p.Copies))
+        foreach (RecordedCopy copy in _recording.Views.SelectMany(v => v.Passes).SelectMany(p => p.Copies))
             copies.TryAdd(copy.Version, copy);
 
         HashSet<TraceResourceId> outputs = ReplayScope.Outputs(view, pass);

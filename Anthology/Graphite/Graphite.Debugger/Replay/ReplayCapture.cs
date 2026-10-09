@@ -10,11 +10,13 @@ internal sealed class ReplayCapture(string passName, HashSet<TraceResourceId> wa
     public readonly List<(TraceResourceId Resource, CaptureCopy Copy)> Copies = new();
     public string? Failure;
 
+    public void BeginExecution(ulong executionId) { }
+
+    public void EndExecution() { }
+
     public void OnViewBegin(in ViewCaptureInfo view) { }
 
     public void OnViewEnd() { }
-
-    public void OnExecutionSubmitted(ExecutionTask task) { }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {

@@ -71,7 +71,7 @@ internal sealed unsafe class ReplayScope : IDisposable
 
     public ReadOnlySpan<byte> Blob(BlobRef blob) => _blobs[blob].AsSpan();
 
-    public string? Prepare(DeepExecution execution, DeepView view, IReadOnlyList<DeepPass> passes, bool reexecute)
+    public string? Prepare(DeepView view, IReadOnlyList<DeepPass> passes, bool reexecute)
     {
         Dictionary<string, RecordedGraphResource> byName = new();
         Dictionary<TraceResourceId, GraphResourceOrigin> origins = new();
@@ -83,7 +83,7 @@ internal sealed unsafe class ReplayScope : IDisposable
         }
 
         Dictionary<TraceVersion, RecordedCopy> copies = new();
-        foreach (DeepView other in execution.Views)
+        foreach (DeepView other in _deep.Views)
         {
             foreach (DeepPass otherPass in other.Passes)
             {

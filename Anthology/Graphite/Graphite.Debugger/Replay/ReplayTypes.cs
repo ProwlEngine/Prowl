@@ -13,10 +13,7 @@ public enum ReplayStatus : byte
 /// <summary>Which pass to replay.</summary>
 public sealed class ReplayRequest
 {
-    /// <summary>Execution id as recorded.</summary>
-    public ulong ExecutionId { get; init; }
-
-    /// <summary>View index within the execution.</summary>
+    /// <summary>View index within the recorded execution.</summary>
     public int ViewIndex { get; init; }
 
     /// <summary>Pass index within the view.</summary>
