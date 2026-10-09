@@ -25,7 +25,7 @@ internal sealed class SinkRecorder : ICommandStreamProfiler
     public readonly List<PipelineBindInfo> Pipelines = new();
     public readonly List<(ResourceVersion Source, uint SourceOffset, ResourceVersion After, uint Offset, uint Size)> BufferCopies = new();
 
-    public void BeginExecution(ulong executionId) { }
+    public void BeginExecution(ulong executionId, string graphName) { }
     public void EndExecution() { }
     public void BeginPassCommands(in PassInfo pass) => Log.Add("BeginPass:" + pass.Name);
     public void EndPassCommands(in PassInfo pass) => Log.Add("EndPass:" + pass.Name);
