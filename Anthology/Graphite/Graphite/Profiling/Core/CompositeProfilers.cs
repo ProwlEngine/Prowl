@@ -251,4 +251,16 @@ internal sealed class CompositePassCommandSink(IPassCommandSink[] sinks) : IPass
         foreach (IPassCommandSink sink in sinks)
             sink.GenerateMips(in textureAfter);
     }
+
+    public void PushMarker(string name)
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.PushMarker(name);
+    }
+
+    public void PopMarker()
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.PopMarker();
+    }
 }

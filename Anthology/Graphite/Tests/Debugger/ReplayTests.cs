@@ -41,7 +41,9 @@ file sealed class EventsPass(RenderTexture target, RenderTexture storage, Graphi
         cmd.SetShader(program);
         cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(properties);
+        cmd.PushDebugGroup("First");
         cmd.Draw(3);
+        cmd.PopDebugGroup();
         cmd.ClearColorTarget(0, new Prowl.Vector.Color(0, 0, 255, 255));
         cmd.SetScissor(0, 0, 4, 8);
         cmd.Draw(3);
@@ -297,6 +299,7 @@ public class ReplayTests
 
         DeepRecording deep = Record(device, pipeline, DeepMode.Full);
         DeepPass pass = deep.Views[0].Passes[0];
+        Assert.Contains(pass.Commands, c => c is PushMarkerCommand { Name: "First" });
         Replayer replayer = new(device, deep);
         ReplayRequest Request(int? last) => new() { ViewIndex = 0, PassIndex = pass.Index, EventIndex = last };
 

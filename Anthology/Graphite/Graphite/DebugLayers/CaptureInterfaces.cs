@@ -84,4 +84,8 @@ public interface IPassCommandSink
     void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter);
 
     void GenerateMips(in ResourceVersion textureAfter);
+
+    void PushMarker(string name);
+
+    void PopMarker();
 }

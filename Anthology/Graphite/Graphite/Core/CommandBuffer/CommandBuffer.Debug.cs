@@ -6,6 +6,7 @@ public abstract partial class CommandBuffer
     /// <param name="name">Group name shown in debug tools.</param>
     public void PushDebugGroup(string name)
     {
+        PassSink?.PushMarker(name);
         PushDebugGroupCore(name);
     }
 
@@ -14,6 +15,7 @@ public abstract partial class CommandBuffer
     /// <summary>Pops current debug group. Only after a matching push.</summary>
     public void PopDebugGroup()
     {
+        PassSink?.PopMarker();
         PopDebugGroupCore();
     }
 

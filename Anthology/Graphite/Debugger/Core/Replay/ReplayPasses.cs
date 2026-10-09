@@ -222,6 +222,8 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             case GenerateMipsCommand mips:
                 cmd.GenerateMipmaps(scope.Texture(mips.TextureAfter.Resource));
                 break;
+            case PushMarkerCommand or PopMarkerCommand:
+                break;
             default:
                 throw new NotSupportedException($"Unknown command {command.GetType().Name}.");
         }

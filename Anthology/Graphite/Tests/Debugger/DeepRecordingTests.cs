@@ -164,7 +164,9 @@ public class DeepRecordingTests
             new SetPropertiesCommand(
                 EquatableArray.Create(new RecordedProperty("Tint", PropertyKind.Uniform, UniformScalarType.Float1, EquatableArray.Create<byte>(0, 0, 128, 63), default, default, null, -1)),
                 EquatableArray.Create("Old")),
-            new DrawCommand(3, 1, 0, 0));
+            new PushMarkerCommand("Group"),
+            new DrawCommand(3, 1, 0, 0),
+            new PopMarkerCommand());
 
         EchoObject programData = ReadBinary(WriteBinary(Serializer.Serialize(program)));
         RecordedProgram loadedProgram = Serializer.Deserialize<RecordedProgram>(programData)!;

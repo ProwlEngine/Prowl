@@ -245,6 +245,10 @@ public sealed partial class DeepRecording
             pass.Written.Add(textureAfter.Resource);
             pass.Commands.Add(new GenerateMipsCommand(owner.Trace(textureAfter)));
         }
+
+        public void PushMarker(string name) => pass.Commands.Add(new PushMarkerCommand(name));
+
+        public void PopMarker() => pass.Commands.Add(new PopMarkerCommand());
     }
 
     private sealed record PendingCopy(TraceVersion Version, CopyPlacement Placement, CaptureCopy Copy);

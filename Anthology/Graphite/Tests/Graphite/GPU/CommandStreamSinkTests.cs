@@ -107,6 +107,8 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
 
     public void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter) => Log.Add("ResolveTexture");
     public void GenerateMips(in ResourceVersion textureAfter) => Log.Add("GenerateMips");
+    public void PushMarker(string name) => Log.Add("PushMarker:" + name);
+    public void PopMarker() => Log.Add("PopMarker");
 }
 
 file readonly struct SinkView : IRenderView
