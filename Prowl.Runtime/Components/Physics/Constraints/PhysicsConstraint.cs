@@ -102,6 +102,12 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// <summary>Rebuilds the constraint against the bodies as they are now, after one of them was recreated.</summary>
     internal void Rebind() => RecreateConstraint();
 
+    /// <summary>
+    /// Re-applies the settings that depend on the world or the bodies rather than only on this component, such as a
+    /// force limit split across substeps, after the substep count or a body's centre of mass changed.
+    /// </summary>
+    internal virtual void Refresh() { }
+
     public override void OnValidate()
     {
         if (GameObject.IsNotValid() || GameObject.Scene.IsNotValid()) return;
@@ -128,6 +134,30 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// Creates the constraint in the physics world.
     /// </summary>
     protected abstract void CreateConstraint(World world, RigidBody body1, RigidBody body2);
+
+    /// <summary>
+    /// The limit to hand Jitter for a motor that should push with at most <paramref name="force"/>. Jitter clamps each
+    /// substep's impulse using the whole step's time, so a motor could push that hard again on every substep.
+    /// </summary>
+    protected float PerSubstep(float force)
+    {
+        Resources.Scene? scene = GameObject.IsValid() ? GameObject.Scene : null;
+        return scene.IsValid() ? force / Maths.Max(1, scene.Physics.Substep) : force;
+    }
+
+    /// <summary>Rejects a zero axis, which has no direction to act along.</summary>
+    protected static Float3 RequireAxis(Float3 axis)
+    {
+        if (Float3.LengthSquared(axis) < 1e-12f) throw new System.ArgumentException("An axis can not be zero.", nameof(axis));
+        return axis;
+    }
+
+    /// <summary>Points an axis the live constraint keeps in a body's own space somewhere else, waking the bodies to follow it.</summary>
+    protected void SetLiveAxis(ref Jitter2.LinearMath.JVector local, Float3 axis)
+    {
+        local = Float3.Normalize(axis).ToJitter();
+        WakeBodies();
+    }
 
     /// <summary>
     /// Destroys the constraint.
@@ -193,6 +223,11 @@ public abstract class PhysicsConstraint : MonoBehaviour
         RigidBody body2 = connectedBody.IsNotValid() || !connectedBody.IsSimulated
             ? world.NullBody
             : connectedBody.Native;
+
+        // Jitter fixes a joint's anchors against where the bodies are in the solver right now, so a Transform moved
+        // since the last step is pushed into its body first, or the joint would hold it to its old place.
+        body1.SyncTransformToBody();
+        if (connectedBody.IsValid()) connectedBody.SyncTransformToBody();
 
         CreateConstraint(world, body1.Native, body2);
 
@@ -299,8 +334,11 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// </summary>
     protected Jitter2.LinearMath.JVector LocalToWorld(Float3 localPos, Transform transform)
     {
-        Float3 worldPos = transform.TransformPoint(localPos);
-        return worldPos.ToJitter();
+        // A moving body's Transform is interpolated and can trail where the solver has it, so a joint made while
+        // it moves would be built off to one side and snap. The pose the solver uses is what the joint must match.
+        if (TryGetJointPose(transform, out Float3 position, out Quaternion rotation))
+            return (position + rotation * (localPos * transform.LossyScale)).ToJitter();
+        return transform.TransformPoint(localPos).ToJitter();
     }
 
     /// <summary>
@@ -308,7 +346,17 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// </summary>
     protected Jitter2.LinearMath.JVector LocalDirToWorld(Float3 localDir, Transform transform)
     {
-        Float3 worldDir = transform.TransformDirection(localDir);
-        return worldDir.ToJitter();
+        if (TryGetJointPose(transform, out _, out Quaternion rotation))
+            return (rotation * localDir).ToJitter();
+        return transform.TransformDirection(localDir).ToJitter();
+    }
+
+    private static bool TryGetJointPose(Transform transform, out Float3 position, out Quaternion rotation)
+    {
+        Rigidbody3D? body = transform.GameObject.GetComponent<Rigidbody3D>();
+        if (body.IsValid()) return body.TryGetJointPose(out position, out rotation);
+        position = default;
+        rotation = default;
+        return false;
     }
 }

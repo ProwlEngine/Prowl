@@ -2091,4 +2091,568 @@ public class PhysicsTests : RuntimeTestBase
 
         Assert.Equal(4.0, body.Transform.Position.Y, 1);
     }
+    // A scene tearing down clears the physics world before its components switch off, and a component
+    // that changes a body's settings in OnDisable must not crash on the body the world already dropped.
+    [Fact]
+    public void Rigidbody3D_Settings_CanChangeAfterTheWorldDroppedTheBody()
+    {
+        Scene scene = CreateScene(enable: true);
+        var go = CreateGameObject("Body");
+        go.AddComponent<BoxCollider>();
+        var body = go.AddComponent<Rigidbody3D>();
+        scene.Add(go);
+        Tick(scene, 1);
+
+        scene.Physics.Clear();
+
+        body.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
+        body.Friction = 0.3f;
+        body.AffectedByGravity = false;
+        body.SetActive(true);
+        Assert.Equal(Jitter2.Dynamics.MotionType.Kinematic, body.MotionType);
+    }
+    // A drive that follows a turning body re-aims its motor every step, so the axis changes on the live constraint.
+    [Fact]
+    public void LinearMotor_AxisChangedWhileLive_DrivesAlongTheNewAxis()
+    {
+        Scene scene = CreateScene(enable: true);
+        scene.Physics.UseMultithreading = false;
+        var go = CreateGameObject("Body");
+        go.AddComponent<SphereCollider>();
+        var body = go.AddComponent<Rigidbody3D>();
+        body.AffectedByGravity = false;
+        var motor = go.AddComponent<LinearMotorConstraint>();
+        motor.Axis1 = Float3.UnitX;
+        motor.Axis2 = Float3.UnitX;
+        motor.TargetVelocity = 2f;
+        motor.MaximumForce = 1000f;
+        scene.Add(go);
+        Tick(scene, 10);
+        Float3 before = body.LinearVelocity;
+
+        motor.Axis1 = Float3.UnitY;
+        motor.Axis2 = Float3.UnitY;
+        Tick(scene, 10);
+
+        Assert.Equal(2f, MathF.Abs(before.X), 1);
+        Assert.Equal(2f, MathF.Abs(body.LinearVelocity.Y), 1);
+        Assert.Equal(before.X, body.LinearVelocity.X, 1);
+    }
+    // A motor's maximum force is a force: a 10 N motor accelerates a 2 kg body at 5 m/s^2 however many substeps a
+    // step is split into. Jitter clamps each substep's impulse by the whole step's time, which would multiply it.
+    [Fact]
+    public void LinearMotor_MaximumForce_IsTheForceItPushesWith()
+    {
+        Scene scene = CreateScene(enable: true);
+        scene.Physics.UseMultithreading = false;
+        scene.Physics.Substep = 3;
+        var go = CreateGameObject("Body");
+        go.AddComponent<SphereCollider>();
+        var body = go.AddComponent<Rigidbody3D>();
+        body.Mass = 2f;
+        body.AffectedByGravity = false;
+        var motor = go.AddComponent<LinearMotorConstraint>();
+        motor.TargetVelocity = 100f;
+        motor.MaximumForce = 10f;
+        scene.Add(go);
+
+        int steps = (int)MathF.Round(1f / Time.FixedDeltaTime);
+        Tick(scene, steps);
+
+        Assert.Equal(5f, MathF.Abs(body.LinearVelocity.X), 0);
+    }
+    // An overridden inertia replaces the one the colliders give: the same twist turns the body by exactly that much.
+    [Fact]
+    public void Rigidbody3D_InertiaTensorOverride_SetsHowHardItIsToTurn()
+    {
+        Scene scene = CreateScene(enable: true);
+        scene.Physics.UseMultithreading = false;
+        var go = CreateGameObject("Body");
+        go.AddComponent<BoxCollider>().Size = new Float3(0.1f, 0.1f, 0.1f);
+        var body = go.AddComponent<Rigidbody3D>();
+        body.Mass = 2f;
+        body.AffectedByGravity = false;
+        scene.Add(go);
+        Tick(scene, 1);
+
+        body.InertiaTensorOverride = new Float3(0.02f);
+        Assert.Equal(0.02f, body.InertiaTensor.X, 4);
+
+        body.ApplyAngularImpulse(new Float3(0f, 0.01f, 0f));
+        Assert.Equal(0.5f, body.AngularVelocity.Y, 3);
+
+        body.InertiaTensorOverride = null;
+        Assert.Equal(2f * (0.1f * 0.1f + 0.1f * 0.1f) / 12f, body.InertiaTensor.Y, 4);
+    }
+
+    private (Scene scene, Rigidbody3D body) WeightlessBox(Float3 position)
+    {
+        Scene scene = CreateScene(enable: true);
+        scene.Physics.UseMultithreading = false;
+        var go = CreateGameObject("Body");
+        go.Transform.Position = position;
+        go.AddComponent<BoxCollider>().Size = new Float3(1f, 0.2f, 0.2f);
+        var body = go.AddComponent<Rigidbody3D>();
+        body.AffectedByGravity = false;
+        scene.Add(go);
+        Tick(scene, 1);
+        return (scene, body);
+    }
+
+    // A moved centre of mass is what the body spins about, while its origin and colliders stay where they are.
+    [Fact]
+    public void Rigidbody3D_CenterOfMassOverride_IsWhatTheBodyTurnsAbout()
+    {
+        var (scene, body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        body.CenterOfMassOverride = new Float3(0.4f, 0f, 0f);
+        Assert.Equal(new Float3(0f, 5f, 0f), body.Position);
+        Assert.True(scene.Physics.Raycast(new Float3(-2f, 5f, 0f), Float3.UnitX, 5f, out RaycastHit hit));
+        Assert.Equal(-0.5f, hit.Point.X, 3);
+
+        body.AngularVelocity = new Float3(0f, 2f, 0f);
+        Tick(scene, 60);
+
+        Float3 center = body.Position + body.Rotation * new Float3(0.4f, 0f, 0f);
+        Assert.Equal(0.4f, center.X, 3);
+        Assert.Equal(0f, center.Z, 3);
+        Assert.True(Float3.Distance(body.Position, new Float3(0f, 5f, 0f)) > 0.3f);
+        Assert.Equal(0.4f, Float3.Distance(body.Position, center), 3);
+    }
+
+    // Hung from its origin, a body with its mass off to one side swings round until the mass hangs below.
+    [Fact]
+    public void Rigidbody3D_CenterOfMassOverride_HangsBelowAPivot()
+    {
+        var (scene, body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        body.AffectedByGravity = true;
+        body.AngularDamping = 0.5f;
+        body.CenterOfMassOverride = new Float3(0.4f, 0f, 0f);
+        body.GameObject.AddComponent<BallSocketConstraint>();
+        Tick(scene, 600);
+
+        Float3 down = body.Rotation * Float3.UnitX;
+        Assert.True(down.Y < -0.99f, $"mass side points {down}");
+        Assert.True(Float3.Distance(body.Position, new Float3(0f, 5f, 0f)) < 0.01f);
+    }
+
+    // Moving the centre of mass on a moving body leaves its pose and the motion of every point on it as they were.
+    [Fact]
+    public void Rigidbody3D_CenterOfMassOverride_ChangedWhileMovingKeepsTheMotion()
+    {
+        var (scene, body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        body.LinearVelocity = new Float3(1f, 0f, 0f);
+        body.AngularVelocity = new Float3(0f, 1f, 0f);
+        Float3 position = body.Position;
+        Quaternion rotation = body.Rotation;
+        Float3 tip = body.Position + body.Rotation * new Float3(0.5f, 0f, 0f);
+        Float3 tipVelocity = body.GetPointVelocity(tip);
+
+        body.CenterOfMassOverride = new Float3(0.3f, 0f, 0f);
+
+        Assert.True(Float3.Distance(position, body.Position) < 1e-4f);
+        Assert.True(Quaternion.Angle(rotation, body.Rotation) < 1e-4f);
+        Assert.True(Float3.Distance(tipVelocity, body.GetPointVelocity(tip)) < 1e-4f);
+    }
+
+    // Teleporting a body with a moved centre of mass places and turns it by its origin.
+    [Fact]
+    public void Rigidbody3D_CenterOfMassOverride_MovePositionAndRotationUseTheOrigin()
+    {
+        var (scene, body) = WeightlessBox(Float3.Zero);
+        body.CenterOfMassOverride = new Float3(0.4f, 0f, 0f);
+
+        body.MovePosition(new Float3(1f, 2f, 3f));
+        body.MoveRotation(Quaternion.AxisAngle(Float3.UnitY, MathF.PI / 2f));
+        Assert.True(Float3.Distance(body.Position, new Float3(1f, 2f, 3f)) < 1e-4f);
+        Tick(scene, 1);
+        Assert.True(Float3.Distance(body.Transform.Position, new Float3(1f, 2f, 3f)) < 1e-4f);
+    }
+
+    // A joint on a body whose centre of mass moves keeps holding the body by the same point.
+    [Fact]
+    public void Rigidbody3D_CenterOfMassOverride_JointsHoldTheSamePoint()
+    {
+        var (scene, body) = WeightlessBox(new Float3(0f, 5f, 0f));
+        body.AffectedByGravity = true;
+        var joint = CreateGameObject("Joint");
+        joint.Enabled = false;
+        joint.SetParent(body.GameObject);
+        joint.AddComponent<BallSocketConstraint>().Anchor = new Float3(-0.5f, 0f, 0f);
+        joint.Enabled = true;
+        Tick(scene, 1);
+
+        body.CenterOfMassOverride = new Float3(0.2f, 0f, 0f);
+        Tick(scene, 300);
+
+        Float3 end = body.Position + body.Rotation * new Float3(-0.5f, 0f, 0f);
+        Assert.True(Float3.Distance(end, new Float3(-0.5f, 5f, 0f)) < 0.01f, $"end at {end}");
+    }
+
+    // A drive aims the body's origin at its target, wherever its centre of mass is.
+    [Fact]
+    public void Drive_WithAMovedCenterOfMass_PutsTheOriginOnTarget()
+    {
+        var (scene, body, drive) = DrivenBody();
+        body.CenterOfMassOverride = new Float3(0.3f, 0f, 0f);
+        drive.PositionSpring = 3000f;
+        drive.PositionDamper = 300f;
+        drive.MaximumForce = 1000f;
+        drive.RotationSpring = 500f;
+        drive.RotationDamper = 50f;
+        drive.MaximumTorque = 1000f;
+        drive.TargetPosition = new Float3(1f, 0f, 0f);
+        drive.TargetRotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI / 2f);
+
+        Tick(scene, (int)MathF.Round(2f / Time.FixedDeltaTime));
+
+        Assert.True(Float3.Distance(body.Position, new Float3(1f, 0f, 0f)) < 0.01f, $"origin at {body.Position}");
+    }
+
+    private static int Seconds(float seconds) => (int)MathF.Round(seconds / Time.FixedDeltaTime);
+
+    private Rigidbody3D FreeBall(Scene scene, Float3 position, float mass = 2f)
+    {
+        var go = CreateGameObject("Ball");
+        go.Transform.Position = position;
+        go.AddComponent<SphereCollider>().Radius = 0.05f;
+        var body = go.AddComponent<Rigidbody3D>();
+        body.Mass = mass;
+        body.AffectedByGravity = false;
+        scene.Add(go);
+        return body;
+    }
+
+    // Without a rotation drive holding it, a body with a moved centre of mass still has its origin put on target.
+    [Fact]
+    public void Drive_WithAMovedCenterOfMassAndNoRotationDrive_PutsTheOriginOnTarget()
+    {
+        var (scene, body, drive) = DrivenBody();
+        body.Transform.Rotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI);
+        body.CenterOfMassOverride = new Float3(0.5f, 0f, 0f);
+        drive.RotationSpring = 0f;
+        drive.RotationDamper = 0f;
+        drive.MaximumForce = 1e5f;
+        drive.TargetPosition = new Float3(1f, 0f, 0f);
+
+        Tick(scene, Seconds(3f));
+
+        Assert.True(Float3.Distance(body.Position, new Float3(1f, 0f, 0f)) < 0.01f, $"origin at {body.Position}");
+    }
+
+    // An axis the body cannot move along takes none of the drive's force, which all goes to the axes that can.
+    [Fact]
+    public void Drive_FrozenAxis_LeavesTheForceToTheFreeAxes()
+    {
+        var (scene, body, drive) = DrivenBody();
+        body.Constraints = RigidbodyConstraints.FreezePositionY;
+        drive.PositionSpring = 1e6f;
+        drive.PositionDamper = 1e4f;
+        drive.MaximumForce = 10f;
+        drive.TargetPosition = new Float3(100f, 100f, 0f);
+
+        Tick(scene, Seconds(1f));
+
+        Assert.Equal(5f, body.LinearVelocity.X, 1);
+    }
+
+    // The same for a rotation the body cannot make: the whole torque goes to the turns it can.
+    [Fact]
+    public void Drive_FrozenRotationAxis_LeavesTheTorqueToTheFreeAxes()
+    {
+        float SpinAboutY(bool freeze)
+        {
+            var (scene, body, drive) = DrivenBody();
+            body.InertiaTensorOverride = new Float3(0.1f);
+            if (freeze) body.Constraints = RigidbodyConstraints.FreezeRotationX;
+            drive.PositionSpring = 0f;
+            drive.PositionDamper = 0f;
+            drive.RotationSpring = 1e5f;
+            drive.RotationDamper = 1e3f;
+            drive.MaximumTorque = 1f;
+            drive.TargetRotation = Quaternion.AxisAngle(Float3.Normalize(new Float3(1f, 1f, 0f)), 3f);
+            Tick(scene, Seconds(0.5f));
+            return body.AngularVelocity.Y;
+        }
+
+        Assert.True(SpinAboutY(freeze: true) > SpinAboutY(freeze: false));
+    }
+
+    // A drive on a body that cannot move pushes nothing.
+    [Fact]
+    public void Drive_OnAStaticBody_PushesNothing()
+    {
+        var (scene, body, drive) = DrivenBody();
+        body.MotionType = Jitter2.Dynamics.MotionType.Static;
+        drive.TargetPosition = new Float3(1f, 0f, 0f);
+
+        Tick(scene, Seconds(1f));
+
+        Assert.Equal(Float3.Zero, drive.Impulse);
+    }
+
+    // The drive only moves the pair against each other, so it never gives two free bodies a spin they did not have.
+    [Fact]
+    public void Drive_BetweenFreeBodies_GivesThePairNoSpin()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D anchor = FreeBall(scene, Float3.Zero);
+        Rigidbody3D driven = FreeBall(scene, new Float3(0f, 0f, 2f));
+        var drive = driven.GameObject.AddComponent<DriveConstraint>();
+        drive.ConnectedBody = anchor;
+        drive.TargetPosition = new Float3(2f, 0f, 0f);
+        drive.MaximumForce = 1e5f;
+        drive.MaximumTorque = 1e5f;
+
+        Float3 spin = Float3.Zero;
+        for (int i = 0; i < Seconds(3f); i++)
+        {
+            Tick(scene, 1);
+            spin = Float3.Zero;
+            foreach (Rigidbody3D body in new[] { anchor, driven })
+                spin += Float3.Cross(body.Native!.Position.ToProwl(), body.LinearVelocity * body.Mass)
+                    + Jitter2.LinearMath.JVector.Transform(body.AngularVelocity.ToJitter(), body.WorldInertia).ToProwl();
+            Assert.True(Float3.Length(spin) < 1e-3f, $"angular momentum {spin} after {i + 1} steps");
+        }
+    }
+
+    // Driven from a spinning body, the damper follows the point it is carried round on rather than dragging behind it.
+    [Fact]
+    public void Drive_FromASpinningBody_KeepsUpWithIt()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D spinner = FreeBall(scene, Float3.Zero);
+        spinner.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
+        Rigidbody3D driven = FreeBall(scene, new Float3(2f, 0f, 0f));
+        var drive = driven.GameObject.AddComponent<DriveConstraint>();
+        drive.ConnectedBody = spinner;
+        drive.TargetPosition = new Float3(2f, 0f, 0f);
+        drive.MaximumForce = 1e5f;
+        drive.MaximumTorque = 1e5f;
+        Tick(scene, 1);
+
+        spinner.AngularVelocity = new Float3(0f, 2f, 0f);
+        Tick(scene, Seconds(5f));
+
+        Float3 goal = spinner.Position + spinner.Rotation * new Float3(2f, 0f, 0f);
+        Assert.True(Float3.Distance(goal, driven.Position) < 0.02f, $"{Float3.Distance(goal, driven.Position)} m behind");
+    }
+
+    // Changing the substep count after a motor or a drive was made keeps the force each pushes with.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    public void Motors_SubstepCountChangedAfterwards_KeepTheirForce(int substeps)
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D moved = FreeBall(scene, Float3.Zero);
+        var motor = moved.GameObject.AddComponent<LinearMotorConstraint>();
+        motor.TargetVelocity = 100f;
+        motor.MaximumForce = 10f;
+        Rigidbody3D driven = FreeBall(scene, new Float3(0f, 5f, 0f));
+        var drive = driven.GameObject.AddComponent<DriveConstraint>();
+        drive.PositionSpring = 1e6f;
+        drive.PositionDamper = 1e4f;
+        drive.MaximumForce = 10f;
+        drive.TargetPosition = new Float3(100f, 5f, 0f);
+        Tick(scene, 1);
+        moved.LinearVelocity = Float3.Zero;
+        driven.LinearVelocity = Float3.Zero;
+
+        scene.Physics.Substep = substeps;
+        Tick(scene, Seconds(1f));
+
+        Assert.Equal(5f, moved.LinearVelocity.X, 1);
+        Assert.Equal(5f, driven.LinearVelocity.X, 1);
+    }
+
+    // Moving the centre of mass of a hinged body keeps the hinge's limits where they were on the body.
+    [Fact]
+    public void Rigidbody3D_CenterOfMassOverride_KeepsJointLimits()
+    {
+        var (scene, body) = WeightlessBox(Float3.Zero);
+        var hinge = body.GameObject.AddComponent<HingeJoint>();
+        hinge.MinAngle = -30f;
+        hinge.MaxAngle = 30f;
+        Tick(scene, 1);
+        body.AngularVelocity = new Float3(0f, 2f, 0f);
+        Tick(scene, Seconds(1f));
+
+        body.AngularVelocity = Float3.Zero;
+        body.CenterOfMassOverride = new Float3(0.1f, 0f, 0f);
+        body.AngularVelocity = new Float3(0f, 2f, 0f);
+        Tick(scene, Seconds(1f));
+
+        float degrees = Quaternion.Angle(Quaternion.Identity, body.Rotation) * 180f / MathF.PI;
+        Assert.True(degrees < 31f, $"turned {degrees} degrees past a 30 degree limit");
+    }
+
+    // An inertia written straight into the saved data, as the inspector does, is kept away from zero.
+    [Fact]
+    public void Rigidbody3D_ZeroInertiaInSavedData_IsClamped()
+    {
+        var (scene, body) = WeightlessBox(Float3.Zero);
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        typeof(Rigidbody3D).GetField("overrideInertia", flags)!.SetValue(body, true);
+        typeof(Rigidbody3D).GetField("inertiaOverride", flags)!.SetValue(body, new Float3(0f, 1f, 1f));
+
+        body.OnValidate();
+
+        Assert.True(body.InertiaTensor.X > 0f);
+    }
+
+    [Fact]
+    public void LinearMotor_ZeroAxis_IsRejected()
+    {
+        Scene scene = CreatePhysicsScene();
+        var motor = FreeBall(scene, Float3.Zero).GameObject.AddComponent<LinearMotorConstraint>();
+        Tick(scene, 1);
+
+        Assert.Throws<ArgumentException>(() => motor.Axis1 = Float3.Zero);
+    }
+
+    // Every constraint axis rejects zero, since it has no direction to act along.
+    [Fact]
+    public void EveryConstraintAxis_RejectsZero()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject go = FreeBall(scene, Float3.Zero).GameObject;
+        var setters = new Action[]
+        {
+            () => go.AddComponent<AngularMotorConstraint>().Axis1 = Float3.Zero,
+            () => go.AddComponent<AngularMotorConstraint>().Axis2 = Float3.Zero,
+            () => go.AddComponent<LinearMotorConstraint>().Axis2 = Float3.Zero,
+            () => go.AddComponent<ConeLimitConstraint>().Axis = Float3.Zero,
+            () => go.AddComponent<ConeLimitConstraint>().ConnectedAxis = Float3.Zero,
+            () => go.AddComponent<HingeAngleConstraint>().HingeAxis = Float3.Zero,
+            () => go.AddComponent<HingeJoint>().Axis = Float3.Zero,
+            () => go.AddComponent<PointOnLineConstraint>().LineAxis = Float3.Zero,
+            () => go.AddComponent<PointOnPlaneConstraint>().PlaneNormal = Float3.Zero,
+            () => go.AddComponent<PrismaticJoint>().Axis = Float3.Zero,
+            () => go.AddComponent<TwistAngleConstraint>().Axis1 = Float3.Zero,
+            () => go.AddComponent<TwistAngleConstraint>().Axis2 = Float3.Zero,
+            () => go.AddComponent<UniversalJoint>().Axis1 = Float3.Zero,
+            () => go.AddComponent<UniversalJoint>().Axis2 = Float3.Zero,
+        };
+
+        foreach (Action set in setters)
+            Assert.Throws<ArgumentException>(set);
+    }
+
+    private (Scene scene, Rigidbody3D body, DriveConstraint drive) DrivenBody(float mass = 2f)
+    {
+        Scene scene = CreateScene(enable: true);
+        scene.Physics.UseMultithreading = false;
+        var go = CreateGameObject("Driven");
+        go.AddComponent<SphereCollider>().Radius = 0.05f;
+        var body = go.AddComponent<Rigidbody3D>();
+        body.Mass = mass;
+        body.AffectedByGravity = false;
+        var drive = go.AddComponent<DriveConstraint>();
+        scene.Add(go);
+        return (scene, body, drive);
+    }
+
+    // A drive's spring and damper settle the body on its target, and an overdamped pair never carries it past.
+    [Fact]
+    public void Drive_SpringAndDamper_SettleOnTheTargetWithoutOvershoot()
+    {
+        var (scene, body, drive) = DrivenBody();
+        drive.PositionSpring = 3000f;
+        drive.PositionDamper = 300f;
+        drive.MaximumForce = 10000f;
+        drive.TargetPosition = new Float3(1f, 0f, 0f);
+
+        float furthest = 0f;
+        int steps = (int)MathF.Round(1f / Time.FixedDeltaTime);
+        for (int i = 0; i < steps; i++) { Tick(scene, 1); furthest = MathF.Max(furthest, body.Position.X); }
+
+        Assert.Equal(1f, body.Position.X, 2);
+        Assert.True(furthest < 1.005f);
+    }
+
+    // However stiff the spring, the drive never pushes harder than its maximum force.
+    [Fact]
+    public void Drive_MaximumForce_LimitsThePush()
+    {
+        var (scene, body, drive) = DrivenBody();
+        drive.PositionSpring = 1e6f;
+        drive.PositionDamper = 1e4f;
+        drive.MaximumForce = 10f;
+        drive.TargetPosition = new Float3(100f, 0f, 0f);
+
+        int steps = (int)MathF.Round(0.5f / Time.FixedDeltaTime);
+        Tick(scene, steps);
+
+        Assert.Equal(2.5f, body.LinearVelocity.X, 1);
+    }
+
+    [Fact]
+    public void Drive_Rotation_TurnsTheBodyToItsTarget()
+    {
+        var (scene, body, drive) = DrivenBody();
+        body.InertiaTensorOverride = new Float3(0.02f);
+        drive.RotationSpring = 500f;
+        drive.RotationDamper = 50f;
+        drive.MaximumTorque = 1000f;
+        drive.TargetRotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI / 2f);
+
+        Tick(scene, (int)MathF.Round(1f / Time.FixedDeltaTime));
+
+        Assert.True(Quaternion.Angle(body.Rotation, drive.TargetRotation) * 180f / MathF.PI < 1f);
+    }
+
+    // What the drive pushes the body with, it pushes the connected body back with.
+    [Fact]
+    public void Drive_PushesTheConnectedBodyBack()
+    {
+        var (scene, body, drive) = DrivenBody();
+        var other = CreateGameObject("Anchor");
+        other.Transform.Position = new Float3(0f, 0f, 2f);
+        other.AddComponent<SphereCollider>().Radius = 0.05f;
+        var anchor = other.AddComponent<Rigidbody3D>();
+        anchor.Mass = 10f;
+        anchor.AffectedByGravity = false;
+        scene.Add(other);
+        drive.ConnectedBody = anchor;
+        drive.TargetPosition = new Float3(1f, 0f, -2f);
+        drive.MaximumForce = 500f;
+
+        Tick(scene, 20);
+
+        Float3 momentum = body.LinearVelocity * body.Mass + anchor.LinearVelocity * anchor.Mass;
+        Assert.True(Float3.Length(body.LinearVelocity) > 0.1f);
+        Assert.True(Float3.Length(momentum) < 1e-3f);
+    }
+
+    // Rebuilding a body's shapes, as changing its centre of mass does, never asks Jitter to remove a shape it no longer has.
+    [Fact]
+    public void RebuildingABodysShapesThrowsNothingInsideJitter()
+    {
+        var scene = CreatePhysicsScene();
+        var go = CreateGameObject("Hammer");
+        go.AddComponent<BoxCollider>();
+        var body = go.AddComponent<Rigidbody3D>();
+        scene.Add(go);
+        Tick(scene, 1);
+
+        int thread = Environment.CurrentManagedThreadId;
+        var thrown = new List<string>();
+        void Record(object? sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
+        {
+            if (Environment.CurrentManagedThreadId == thread && e.Exception.TargetSite?.DeclaringType?.Assembly == typeof(Jitter2.World).Assembly)
+                thrown.Add(e.Exception.Message);
+        }
+
+        AppDomain.CurrentDomain.FirstChanceException += Record;
+        try
+        {
+            body.CenterOfMassOverride = new Float3(0f, 0.2f, 0f);
+        }
+        finally
+        {
+            AppDomain.CurrentDomain.FirstChanceException -= Record;
+        }
+
+        Assert.Empty(thrown);
+    }
 }

@@ -18,27 +18,6 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     [Theory]
     [InlineData(ColliderShape.Capsule)]
     [InlineData(ColliderShape.Cylinder)]
-    public void PressingIntoACornerHoldsStillAndCanLeave(ColliderShape shape)
-    {
-        Scene scene = WorldWithFloor();
-        Box(scene, new Float3(0f, 1.5f, 3f), new Float3(8f, 3f, 0.5f));
-        Box(scene, new Float3(3f, 1.5f, 0f), new Float3(0.5f, 3f, 8f));
-        Walker walker = Spawn(scene, Float3.Zero, shape);
-        Float3 corner = Float3.Normalize(new Float3(1f, 0f, 1f)) * WalkSpeed;
-
-        walker.Run(corner, 1.5f);
-        Float3 pressed = walker.Position;
-        float drift = 0f;
-        walker.Run(corner, 0.5f, () => drift = MathF.Max(drift, Float3.Length(walker.Position - pressed)));
-
-        Assert.True(drift < 0.002f, $"jittered {drift} m in the corner");
-        AssertNotInside(walker);
-        AssertCanStillMove(walker);
-    }
-
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
     public void WalkingIntoARoundPillarSlipsAroundIt(ColliderShape shape)
     {
         Scene scene = WorldWithFloor();

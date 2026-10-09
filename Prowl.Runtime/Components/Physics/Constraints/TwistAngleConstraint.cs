@@ -35,7 +35,7 @@ public class TwistAngleConstraint : PhysicsConstraint
         get => axis1;
         set
         {
-            axis1 = value;
+            axis1 = RequireAxis(value);
             RecreateConstraint();
         }
     }
@@ -49,7 +49,7 @@ public class TwistAngleConstraint : PhysicsConstraint
         get => axis2;
         set
         {
-            axis2 = value;
+            axis2 = RequireAxis(value);
             RecreateConstraint();
         }
     }

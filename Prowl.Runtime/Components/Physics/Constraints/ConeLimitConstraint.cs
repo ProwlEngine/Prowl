@@ -35,7 +35,7 @@ public class ConeLimitConstraint : PhysicsConstraint
         get => axis;
         set
         {
-            axis = value;
+            axis = RequireAxis(value);
             RecreateConstraint();
         }
     }
@@ -49,8 +49,8 @@ public class ConeLimitConstraint : PhysicsConstraint
         get => hasConnectedAxis ? connectedAxis : null;
         set
         {
+            if (value is { } axis) connectedAxis = RequireAxis(axis);
             hasConnectedAxis = value.HasValue;
-            if (value is { } axis) connectedAxis = axis;
             RecreateConstraint();
         }
     }

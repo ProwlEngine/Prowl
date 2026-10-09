@@ -169,26 +169,15 @@ public abstract class Collider : MonoBehaviour
     {
         if (_attachedBody?.IsValid == true && _attachedShapes != null)
         {
-            // Only try to remove shapes if the body is still registered with the physics world
-            // (If the rigidbody was already removed, the shapes are already gone)
             foreach (RigidBodyShape shape in _attachedShapes)
             {
-                try
-                {
-                    // Use Preserve: Update mode calls SetMassInertia() after each removal, which
-                    // iterates remaining shapes this throws NotSupportedException for TriangleShape.
-                    // Mass/inertia is recalculated in full by RegisterShapes after re-attachment.
-                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
-                }
-                catch (ArgumentException)
-                {
-                    // Shape was already removed from this body (e.g., UpdateShapes pre-cleared the
-                    // body with RemoveShapes before calling Detach). Safe to ignore.
-                }
-                catch (InvalidOperationException)
-                {
-                    // Body was removed from the physics world; its shapes are already gone.
-                }
+                // Already gone when the rigidbody cleared its shapes first or left the world.
+                if (!ReferenceEquals(shape.RigidBody, _attachedBody)) continue;
+
+                // Use Preserve: Update mode calls SetMassInertia() after each removal, which
+                // iterates remaining shapes this throws NotSupportedException for TriangleShape.
+                // Mass/inertia is recalculated in full by RegisterShapes after re-attachment.
+                _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
             }
         }
 
@@ -295,7 +284,7 @@ public abstract class Collider : MonoBehaviour
         // into body space. InverseTransformPoint would also divide out the body's scale and pull the
         // shape toward the origin.
         Quaternion inverseBodyRotation = Quaternion.Inverse(rb.Transform.Rotation);
-        Float3 rbLocalCenter = inverseBodyRotation * (worldCenter - rb.Transform.Position);
+        Float3 rbLocalCenter = inverseBodyRotation * (worldCenter - rb.Transform.Position) - rb.AppliedCenterOfMass;
         Quaternion rbLocalRotation = inverseBodyRotation * worldRotation;
 
         return BuildShapes(rbLocalCenter, rbLocalRotation, cumulativeScale);

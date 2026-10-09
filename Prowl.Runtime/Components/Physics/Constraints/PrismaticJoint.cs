@@ -49,7 +49,7 @@ public class PrismaticJoint : PhysicsJoint
         get => axis;
         set
         {
-            axis = value;
+            axis = RequireAxis(value);
             RecreateConstraint();
         }
     }
@@ -139,7 +139,7 @@ public class PrismaticJoint : PhysicsJoint
             if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(prismaticJoint?.Motor))
-                prismaticJoint.Motor.MaximumForce = value;
+                prismaticJoint.Motor.MaximumForce = PerSubstep(value);
             WakeBodies();
         }
     }
@@ -173,8 +173,13 @@ public class PrismaticJoint : PhysicsJoint
         if (hasMotor && IsLive(prismaticJoint.Motor))
         {
             prismaticJoint.Motor.TargetVelocity = motorTargetVelocity;
-            prismaticJoint.Motor.MaximumForce = motorMaxForce;
+            prismaticJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
         }
+    }
+
+    internal override void Refresh()
+    {
+        if (IsLive(prismaticJoint?.Motor)) prismaticJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
     }
 
     protected override void DestroyConstraint()

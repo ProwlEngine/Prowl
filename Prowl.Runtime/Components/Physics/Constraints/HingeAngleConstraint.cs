@@ -35,7 +35,7 @@ public class HingeAngleConstraint : PhysicsConstraint
         get => hingeAxis;
         set
         {
-            hingeAxis = value;
+            hingeAxis = RequireAxis(value);
             RecreateConstraint();
         }
     }

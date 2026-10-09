@@ -165,14 +165,21 @@ public class PhysicsWorld
     public int Substep
     {
         get => _substep;
-        set => _substep = Maths.Max(1, value);
+        set
+        {
+            int substep = Maths.Max(1, value);
+            if (substep == _substep) return;
+            _substep = substep;
+            foreach (PhysicsConstraint constraint in _constraints)
+                if (constraint.IsValid()) constraint.Refresh();
+        }
     }
 
     public bool AllowSleep = true;
     public bool UseMultithreading = true;
     /// <summary>
     /// Whether Transform edits are pushed into the physics system immediately (before physics queries),
-    /// or only batched right before the FixedUpdate step. Matches Unity's Physics.autoSyncTransforms:
+    /// or only batched right before the FixedUpdate step:
     /// when true, a query right after moving a Transform sees the new pose; when false, call
     /// <see cref="SyncTransforms"/> manually (the pre-step sync still happens every FixedUpdate either way).
     /// This only concerns the transform -> body direction; the body -> transform readback after a step
@@ -429,6 +436,12 @@ public class PhysicsWorld
 
     internal void RegisterConstraint(PhysicsConstraint constraint) => _constraints.Add(constraint);
     internal void UnregisterConstraint(PhysicsConstraint constraint) => _constraints.Remove(constraint);
+
+    internal void RefreshConstraints(Rigidbody3D body)
+    {
+        foreach (PhysicsConstraint constraint in _constraints)
+            if (constraint.IsValid() && constraint.Connects(body)) constraint.Refresh();
+    }
 
     internal void RebindConstraints(Rigidbody3D body)
     {

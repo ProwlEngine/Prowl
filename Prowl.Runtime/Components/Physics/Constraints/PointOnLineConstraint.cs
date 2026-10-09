@@ -39,7 +39,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         get => lineAxis;
         set
         {
-            lineAxis = value;
+            lineAxis = RequireAxis(value);
             RecreateConstraint();
         }
     }

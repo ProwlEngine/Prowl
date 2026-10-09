@@ -47,7 +47,7 @@ public class UniversalJoint : PhysicsJoint
         get => axis1;
         set
         {
-            axis1 = value;
+            axis1 = RequireAxis(value);
             RecreateConstraint();
         }
     }
@@ -60,7 +60,7 @@ public class UniversalJoint : PhysicsJoint
         get => axis2;
         set
         {
-            axis2 = value;
+            axis2 = RequireAxis(value);
             RecreateConstraint();
         }
     }
@@ -108,7 +108,7 @@ public class UniversalJoint : PhysicsJoint
             if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(universalJoint?.Motor))
-                universalJoint.Motor.MaximumForce = value;
+                universalJoint.Motor.MaximumForce = PerSubstep(value);
             WakeBodies();
         }
     }
@@ -142,8 +142,13 @@ public class UniversalJoint : PhysicsJoint
         {
             // Jitter's motor drives the connected side relative to this body, so positive is negated to turn this body along +axis.
             universalJoint.Motor.TargetVelocity = -motorTargetVelocity;
-            universalJoint.Motor.MaximumForce = motorMaxForce;
+            universalJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
         }
+    }
+
+    internal override void Refresh()
+    {
+        if (IsLive(universalJoint?.Motor)) universalJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
     }
 
     protected override void DestroyConstraint()

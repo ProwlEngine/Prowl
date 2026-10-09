@@ -9,6 +9,7 @@ using Jitter2;
 using Jitter2.Collision.Shapes;
 using Jitter2.DataStructures;
 using Jitter2.Dynamics;
+using Jitter2.Dynamics.Constraints;
 using Jitter2.LinearMath;
 
 using Prowl.Echo;
@@ -46,6 +47,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeField] private bool useGravity = true;
     [SerializeField] private bool enableGyroscopicForces = false;
     [SerializeField] private float mass = 1;
+    [SerializeField] private bool overrideInertia;
+    [SerializeField] private Float3 inertiaOverride = Float3.One;
+    [SerializeField] private bool overrideCenterOfMass;
+    [SerializeField] private Float3 centerOfMassOverride;
     [SerializeField, Range(0, 1)] private float linearDamping = 0.0f;
     [SerializeField, Range(0, 1)] private float angularDamping = 0.0f;
     [SerializeField] private float friction = 0.2f;
@@ -108,7 +113,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             motionType = value;
-            if (_body != null) _body.MotionType = value;
+            if (IsSimulated) _body.MotionType = value;
         }
     }
 
@@ -122,7 +127,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             isSpeculative = value;
-            if (_body != null) _body.EnableSpeculativeContacts = value;
+            if (IsSimulated) _body.EnableSpeculativeContacts = value;
         }
     }
 
@@ -136,7 +141,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             useGravity = value;
-            if (_body != null) _body.AffectedByGravity = value;
+            if (IsSimulated) _body.AffectedByGravity = value;
         }
     }
 
@@ -158,6 +163,113 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
+    /// Replaces the inertia worked out from the colliders with this diagonal, in the body's own space, in kg m^2, or null
+    /// to work it out from the colliders. Heavier than the shapes give, a body turns more steadily, which a jointed chain
+    /// of a light body and a heavy one needs.
+    /// </summary>
+    public Float3? InertiaTensorOverride
+    {
+        get => overrideInertia ? inertiaOverride : null;
+        set
+        {
+            AssertOwner();
+            overrideInertia = value.HasValue;
+            if (value.HasValue) inertiaOverride = Maths.Max(value.Value, new Float3(1e-6f));
+            ApplyMassInertia();
+        }
+    }
+
+    /// <summary>
+    /// Where the body's mass is centred, in metres along its own axes from its origin, or null for the origin itself.
+    /// The body turns about this point and gravity pulls through it, while its colliders, its Transform and
+    /// <see cref="Position"/> stay where they are. Changing it on a moving body keeps the body's motion, and rebuilds
+    /// the joints on it.
+    /// </summary>
+    public Float3? CenterOfMassOverride
+    {
+        get => overrideCenterOfMass ? centerOfMassOverride : null;
+        set
+        {
+            AssertOwner();
+            overrideCenterOfMass = value.HasValue;
+            if (value.HasValue) centerOfMassOverride = value.Value;
+            ApplyCenterOfMass();
+        }
+    }
+
+    /// <summary>The centre of mass the simulated body and its shapes are currently built around, in the body's space.</summary>
+    internal Float3 AppliedCenterOfMass => _appliedCenterOfMass;
+    private Float3 _appliedCenterOfMass;
+
+    private Float3 LocalCenterOfMass => overrideCenterOfMass ? centerOfMassOverride : Float3.Zero;
+
+    /// <summary>Rebuilds the body around a new centre of mass, keeping its origin, its pose and how every point on it moves.</summary>
+    private void ApplyCenterOfMass()
+    {
+        Float3 next = LocalCenterOfMass;
+        if (!IsSimulated)
+        {
+            _appliedCenterOfMass = next;
+            return;
+        }
+        if (next.Equals(_appliedCenterOfMass)) return;
+
+        Float3 origin = Position;
+        Quaternion rotation = Rotation;
+        Float3 center = origin + rotation * next;
+        Float3 velocity = GetPointVelocity(center);
+
+        Float3 shift = next - _appliedCenterOfMass;
+        _appliedCenterOfMass = next;
+        UpdateShapes(_body);
+        _body.Position = center.ToJitter();
+        if (motionType != MotionType.Static) _body.Velocity = velocity.ToJitter();
+        ShiftJointAnchors(shift);
+    }
+
+    /// <summary>
+    /// Keeps every joint on the body holding the same points on it after its centre of mass moved by
+    /// <paramref name="shift"/> in its own space. Joints keep their anchors from the centre of mass, so each anchor on
+    /// this body moves back by the shift. Nothing is rebuilt, so limits, drift and warm starts carry on as they were.
+    /// </summary>
+    private void ShiftJointAnchors(Float3 shift)
+    {
+        JVector by = shift.ToJitter();
+        foreach (Constraint constraint in _body!.Constraints)
+        {
+            bool first = constraint.Body1 == _body, second = constraint.Body2 == _body;
+            switch (constraint)
+            {
+                case BallSocket c:
+                    if (first) c.Data.LocalAnchor1 -= by;
+                    if (second) c.Data.LocalAnchor2 -= by;
+                    break;
+                case DistanceLimit c:
+                    if (first) c.Data.LocalAnchor1 -= by;
+                    if (second) c.Data.LocalAnchor2 -= by;
+                    break;
+                case PointOnLine c:
+                    if (first) c.Data.LocalAnchor1 -= by;
+                    if (second) c.Data.LocalAnchor2 -= by;
+                    break;
+                case PointOnPlane c:
+                    if (first) c.Data.LocalAnchor1 -= by;
+                    if (second) c.Data.LocalAnchor2 -= by;
+                    break;
+            }
+        }
+
+        if (GameObject.Scene.IsValid()) GameObject.Scene.Physics?.RefreshConstraints(this);
+    }
+
+    /// <summary>Where the simulated body's centre goes for an origin pose.</summary>
+    private JVector BodyPosition(Float3 origin, Quaternion rotation) => (origin + rotation * _appliedCenterOfMass).ToJitter();
+
+    /// <summary>The origin of a simulated body pose.</summary>
+    private Float3 OriginOf(JVector position, JQuaternion orientation)
+        => position.ToProwl() - orientation.ToProwl() * _appliedCenterOfMass;
+
+    /// <summary>
     /// Gets or sets the friction of this Rigidbody3D.
     /// </summary>
     public float Friction
@@ -170,7 +282,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 throw new ArgumentOutOfRangeException(nameof(value), "Friction can not be negative.");
 
             friction = value;
-            if (_body != null) _body.Friction = value;
+            if (IsSimulated) _body.Friction = value;
         }
     }
 
@@ -187,7 +299,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 throw new ArgumentOutOfRangeException(nameof(value), "Restitution must be between 0 and 1.");
 
             restitution = value;
-            if (_body != null) _body.Restitution = value;
+            if (IsSimulated) _body.Restitution = value;
         }
     }
 
@@ -205,7 +317,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 throw new ArgumentOutOfRangeException(nameof(value), "Linear damping must be between 0 and 1.");
 
             linearDamping = value;
-            if (_body != null) _body.Damping = (linearDamping, _body.Damping.angular);
+            if (IsSimulated) _body.Damping = (linearDamping, _body.Damping.angular);
         }
     }
 
@@ -223,7 +335,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 throw new ArgumentOutOfRangeException(nameof(value), "Angular damping must be between 0 and 1.");
 
             angularDamping = value;
-            if (_body != null) _body.Damping = (_body.Damping.linear, angularDamping);
+            if (IsSimulated) _body.Damping = (_body.Damping.linear, angularDamping);
         }
     }
 
@@ -238,7 +350,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             enableGyroscopicForces = value;
-            if (_body != null) _body.EnableGyroscopicForces = value;
+            if (IsSimulated) _body.EnableGyroscopicForces = value;
         }
     }
 
@@ -253,7 +365,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             deactivationTime = value;
-            if (_body != null) _body.DeactivationTime = System.TimeSpan.FromSeconds(value);
+            if (IsSimulated) _body.DeactivationTime = System.TimeSpan.FromSeconds(value);
         }
     }
 
@@ -267,7 +379,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             linearSleepThreshold = value;
-            if (_body != null) _body.DeactivationThreshold = (_body.DeactivationThreshold.angular, value);
+            if (IsSimulated) _body.DeactivationThreshold = (_body.DeactivationThreshold.angular, value);
         }
     }
 
@@ -281,7 +393,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             angularSleepThreshold = value;
-            if (_body != null) _body.DeactivationThreshold = (value, _body.DeactivationThreshold.linear);
+            if (IsSimulated) _body.DeactivationThreshold = (value, _body.DeactivationThreshold.linear);
         }
     }
 
@@ -312,7 +424,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// Where the simulation has the body right now. The Transform is interpolated between steps and
     /// trails this, so anything acting on the body at a point should measure from here.
     /// </summary>
-    public Float3 Position => IsSimulated ? _body.Position.ToProwl() : Transform.Position;
+    public Float3 Position => IsSimulated ? OriginOf(_body.Position, _body.Orientation) : Transform.Position;
 
     /// <summary>The simulated orientation, without the interpolation the Transform shows. See <see cref="Position"/>.</summary>
     public Quaternion Rotation => IsSimulated ? _body.Orientation.ToProwl() : Transform.Rotation;
@@ -357,6 +469,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public RigidBody CreateBody(World world)
     {
         _body = world.CreateRigidBody();
+        _appliedCenterOfMass = LocalCenterOfMass;
         UpdateProperties(_body);
         UpdateShapes(_body);
         UpdateTransform(_body);
@@ -385,9 +498,12 @@ public sealed class Rigidbody3D : MonoBehaviour
             return;
         }
 
+        Float3 shift = LocalCenterOfMass - _appliedCenterOfMass;
+        _appliedCenterOfMass = LocalCenterOfMass;
         UpdateProperties(_body);
         UpdateShapes(_body);
         UpdateTransform(_body);
+        if (!shift.Equals(Float3.Zero)) ShiftJointAnchors(shift);
     }
 
     public override void Update()
@@ -412,13 +528,13 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         if (interpolation == RigidbodyInterpolation.None || !_hasPose)
         {
-            position = _body.Position.ToProwl();
+            position = OriginOf(_body.Position, _body.Orientation);
             rotation = _body.Orientation.ToProwl();
         }
         else if (interpolation == RigidbodyInterpolation.Extrapolate)
         {
             _body.PredictPose(Time.FixedAccumulator, out JVector predicted, out JQuaternion predictedOrientation);
-            position = predicted.ToProwl();
+            position = OriginOf(predicted, predictedOrientation);
             rotation = predictedOrientation.ToProwl();
         }
         else
@@ -448,7 +564,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         _previousPosition = _currentPosition;
         _previousRotation = _currentRotation;
-        _currentPosition = _body.Position.ToProwl();
+        _currentPosition = OriginOf(_body.Position, _body.Orientation);
         _currentRotation = _body.Orientation.ToProwl();
 
         if (!_hasPose)
@@ -466,7 +582,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!IsSimulated) { _hasPose = false; return; }
 
-        _currentPosition = _previousPosition = _body.Position.ToProwl();
+        _currentPosition = _previousPosition = OriginOf(_body.Position, _body.Orientation);
         _currentRotation = _previousRotation = _body.Orientation.ToProwl();
         _hasPose = true;
     }
@@ -553,6 +669,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         deactivationTime = MathF.Max(deactivationTime, 0f);
         linearSleepThreshold = MathF.Max(linearSleepThreshold, 0f);
         angularSleepThreshold = MathF.Max(angularSleepThreshold, 0f);
+        inertiaOverride = Maths.Max(inertiaOverride, new Float3(1e-6f));
     }
 
     private const float MinMass = 0.001f;
@@ -568,6 +685,16 @@ public sealed class Rigidbody3D : MonoBehaviour
         if (!IsSimulated) return;
 
         mass = MathF.Max(mass, MinMass);
+        if (overrideInertia)
+        {
+            JSymmetricMatrix diagonal = JSymmetricMatrix.Identity;
+            diagonal.M11 = inertiaOverride.X;
+            diagonal.M22 = inertiaOverride.Y;
+            diagonal.M33 = inertiaOverride.Z;
+            _body.SetMassInertia(diagonal, mass);
+            return;
+        }
+
         try
         {
             _body.SetMassInertia(mass);
@@ -635,7 +762,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// by the caller (initial creation, the pre-step sync, or an auto-synced query).</summary>
     internal void UpdateTransform(RigidBody rb)
     {
-        rb.Position = Transform.Position.ToJitter();
+        rb.Position = BodyPosition(Transform.Position, Transform.Rotation);
         rb.Orientation = Transform.Rotation.ToJitter();
         ResetPose();
     }
@@ -645,6 +772,25 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// sync (a genuine user edit) - so it never clobbers the simulated pose. Called by the physics
     /// world before each step and, when AutoSyncTransforms is on, before queries.
     /// </summary>
+    /// <summary>
+    /// The pose a joint made now should be built against. That is the simulated pose, since the Transform is
+    /// interpolated between steps and can trail it by a whole step, unless the Transform was moved since the last
+    /// sync, in which case that move is what the body is about to take. False when there is no simulated body.
+    /// </summary>
+    internal bool TryGetJointPose(out Float3 position, out Quaternion rotation)
+    {
+        if (!IsSimulated || Transform.Version != _lastSyncedTransformVersion)
+        {
+            position = default;
+            rotation = default;
+            return false;
+        }
+
+        position = OriginOf(_body.Position, _body.Orientation);
+        rotation = _body.Orientation.ToProwl();
+        return true;
+    }
+
     internal void SyncTransformToBody()
     {
         if (!IsSimulated) return;
@@ -772,7 +918,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public void SetActive(bool active)
     {
         AssertOwner();
-        if (_body != null)
+        if (IsSimulated)
             _body.SetActivationState(active);
     }
 
@@ -793,10 +939,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// <summary>
     /// The centre of mass in world space, derived from the attached shapes and their offsets.
     /// <para/>
-    /// This is not the point the body spins about. Jitter accumulates inertia about the body origin and
-    /// never shifts it, so an off-centre collider rotates about the Transform's position rather than
-    /// about this. Shapes with no volume (a concave MeshCollider's triangles) contribute nothing, and a
-    /// body made only of those reports its origin.
+    /// This is not the point the body spins about, which is its origin, or <see cref="CenterOfMassOverride"/>
+    /// when set. Setting that to this point, moved into the body's space, makes the body turn the way its shapes
+    /// weigh. Shapes with no volume (a concave MeshCollider's triangles) contribute nothing, and a body made only
+    /// of those reports its origin.
     /// </summary>
     public Float3 CenterOfMass
     {
@@ -822,8 +968,8 @@ public sealed class Rigidbody3D : MonoBehaviour
             }
 
             // Body-local, because the shape offsets are; fall back to the origin when nothing weighed in.
-            JVector local = totalMass > 0.0f ? weighted * (1.0f / totalMass) : JVector.Zero;
-            JVector world = _body.Position + JVector.Transform(local, _body.Orientation);
+            if (totalMass <= 0.0f) return Position;
+            JVector world = _body.Position + JVector.Transform(weighted * (1.0f / totalMass), _body.Orientation);
             return world.ToProwl();
         }
     }
@@ -898,7 +1044,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
-        body.Position = position.ToJitter();
+        body.Position = BodyPosition(position, body.Orientation.ToProwl());
         body.SetActivationState(true);
 
         // Static bodies never read their pose back, so the Transform has to be taken along explicitly.
@@ -908,13 +1054,14 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
-    /// Rotates the rigidbody to a new rotation (teleport).
+    /// Rotates the rigidbody to a new rotation about its origin (teleport).
     /// </summary>
     public void MoveRotation(Quaternion rotation)
     {
         AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
+        body.Position = BodyPosition(OriginOf(body.Position, body.Orientation), rotation);
         body.Orientation = rotation.ToJitter();
         body.SetActivationState(true);
 

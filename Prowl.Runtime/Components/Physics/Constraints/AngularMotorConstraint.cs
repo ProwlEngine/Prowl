@@ -33,8 +33,10 @@ public class AngularMotorConstraint : PhysicsConstraint
         get => axis1;
         set
         {
-            axis1 = value;
-            RecreateConstraint();
+            axis1 = RequireAxis(value);
+            // The axis is already in the body's own space, which is where the live motor keeps it, so it can change every step.
+            if (IsLive(constraint)) SetLiveAxis(ref constraint.Data.LocalAxis1, value);
+            else RecreateConstraint();
         }
     }
 
@@ -47,8 +49,10 @@ public class AngularMotorConstraint : PhysicsConstraint
         get => axis2;
         set
         {
-            axis2 = value;
-            RecreateConstraint();
+            axis2 = RequireAxis(value);
+            // Against a connected body not in the world yet, the axis was fixed in the world when the motor was made.
+            if (IsLive(constraint) && (connectedBody.IsNotValid() || connectedBody.IsSimulated)) SetLiveAxis(ref constraint.Data.LocalAxis2, value);
+            else RecreateConstraint();
         }
     }
 
@@ -78,7 +82,7 @@ public class AngularMotorConstraint : PhysicsConstraint
         {
             if (maximumForce == value) return;
             maximumForce = value;
-            if (IsLive(constraint)) constraint.MaximumForce = value;
+            if (IsLive(constraint)) constraint.MaximumForce = PerSubstep(value);
             WakeBodies();
         }
     }
@@ -123,7 +127,12 @@ public class AngularMotorConstraint : PhysicsConstraint
 
         // Jitter's motor drives the connected side relative to this body, so positive is negated to move this body along +axis.
         constraint.TargetVelocity = -targetVelocity;
-        constraint.MaximumForce = maximumForce;
+        constraint.MaximumForce = PerSubstep(maximumForce);
+    }
+
+    internal override void Refresh()
+    {
+        if (IsLive(constraint)) constraint.MaximumForce = PerSubstep(maximumForce);
     }
 
     protected override void DestroyConstraint()

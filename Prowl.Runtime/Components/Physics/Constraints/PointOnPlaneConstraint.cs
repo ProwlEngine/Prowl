@@ -37,7 +37,7 @@ public class PointOnPlaneConstraint : PhysicsConstraint
         get => planeNormal;
         set
         {
-            planeNormal = value;
+            planeNormal = RequireAxis(value);
             RecreateConstraint();
         }
     }

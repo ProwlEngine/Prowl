@@ -48,7 +48,7 @@ public class HingeJoint : PhysicsJoint
         get => axis;
         set
         {
-            axis = value;
+            axis = RequireAxis(value);
             RecreateConstraint();
         }
     }
@@ -122,7 +122,7 @@ public class HingeJoint : PhysicsJoint
             if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(hingeJoint?.Motor))
-                hingeJoint.Motor.MaximumForce = value;
+                hingeJoint.Motor.MaximumForce = PerSubstep(value);
             WakeBodies();
         }
     }
@@ -156,8 +156,13 @@ public class HingeJoint : PhysicsJoint
         if (hasMotor && IsLive(hingeJoint.Motor))
         {
             hingeJoint.Motor.TargetVelocity = motorTargetVelocity;
-            hingeJoint.Motor.MaximumForce = motorMaxForce;
+            hingeJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
         }
+    }
+
+    internal override void Refresh()
+    {
+        if (IsLive(hingeJoint?.Motor)) hingeJoint.Motor.MaximumForce = PerSubstep(motorMaxForce);
     }
 
     protected override void DestroyConstraint()
