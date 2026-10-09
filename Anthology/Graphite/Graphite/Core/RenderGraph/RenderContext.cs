@@ -249,6 +249,7 @@ public sealed class RenderContext
 
         cb.Execution = _task;
         cb.Pass = _currentPass;
+        cb.PassSink = null;
         cb.ResetStats();
         cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
         if (!string.IsNullOrEmpty(name))
@@ -262,11 +263,8 @@ public sealed class RenderContext
     internal CommandBuffer BeginPassCommandBuffer(string passName)
     {
         CommandBuffer cb = BeginCommandBuffer(passName);
-        if (_task.Profilers.CommandStream is { } sink && cb.Pass is { } pass)
-        {
-            cb.PassCommandsOpen = true;
-            sink.BeginPassCommands(in pass);
-        }
+        if (_task.Profilers.CommandStream is { } profiler && cb.Pass is { } pass)
+            cb.PassSink = profiler.BeginPassCommands(in pass);
 
         if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
             return cb;
@@ -304,10 +302,10 @@ public sealed class RenderContext
 
     internal void EndCommandBuffer(CommandBuffer cmd)
     {
-        if (cmd.PassCommandsOpen && cmd.Pass is { } pass)
+        if (cmd.PassSink is { } sink)
         {
-            cmd.PassCommandsOpen = false;
-            _task.Profilers.CommandStream?.EndPassCommands(in pass);
+            cmd.PassSink = null;
+            sink.End();
         }
 
         _task.SubmitRecorded(cmd);

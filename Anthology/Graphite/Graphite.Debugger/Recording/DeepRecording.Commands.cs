@@ -13,173 +13,10 @@ public sealed partial class DeepRecording
     private readonly Dictionary<ResourceId, ResourceBuilder> _resources = new();
     private readonly Dictionary<ProgramKey, RecordedProgram> _programs = new();
     private readonly List<SamplerDescription> _samplers = new();
-    private PassState? _pass;
     private uint _nextTraceId;
 
-    void ICommandStreamProfiler.BeginPassCommands(in PassInfo pass)
-        => _pass = _views.TryGetValue(pass.ViewIndex, out ViewState? view) ? view.Pass(pass.Index) : null;
-
-    void ICommandStreamProfiler.EndPassCommands(in PassInfo pass) => _pass = null;
-
-    void ICommandStreamProfiler.SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops)
-    {
-        if (_pass is not { } pass)
-            return;
-
-        RecordedAttachment[] colors = new RecordedAttachment[framebuffer.Colors.Length];
-        for (int i = 0; i < colors.Length; i++)
-        {
-            AttachmentUse use = framebuffer.Colors[i];
-            colors[i] = Attachment(use);
-            pass.Written.Add(use.Texture.Resource);
-        }
-
-        RecordedAttachment? depth = null;
-        if (framebuffer.Depth is { } depthUse)
-        {
-            depth = Attachment(depthUse);
-            pass.Written.Add(depthUse.Texture.Resource);
-        }
-
-        pass.Commands.Add(new SetFramebufferCommand(colors.ToEquatableArray(), depth, framebuffer.Outputs, framebuffer.Width, framebuffer.Height, ops));
-    }
-
-    void ICommandStreamProfiler.ClearColorTarget(uint index, Color color) => Add(new ClearColorTargetCommand(index, color));
-
-    void ICommandStreamProfiler.ClearDepthStencil(float depth, byte stencil) => Add(new ClearDepthStencilCommand(depth, stencil));
-
-    void ICommandStreamProfiler.SetPipeline(in PipelineBindInfo pipeline)
-        => Add(new SetPipelineCommand(EnsureProgram(pipeline.Program), pipeline.IsCompute, pipeline.Outputs, pipeline.Topology));
-
-    void ICommandStreamProfiler.SetViewport(in Viewport viewport) => Add(new SetViewportCommand(viewport));
-
-    void ICommandStreamProfiler.SetScissor(uint x, uint y, uint width, uint height) => Add(new SetScissorCommand(x, y, width, height));
-
-    void ICommandStreamProfiler.SetStencilReference(uint reference) => Add(new SetStencilReferenceCommand(reference));
-
-    void ICommandStreamProfiler.SetBlendConstants(Color constants) => Add(new SetBlendConstantsCommand(constants));
-
-    void ICommandStreamProfiler.BindVertexBuffers(ReadOnlySpan<VertexBindingUse> bindings)
-    {
-        if (_pass is not { } pass)
-            return;
-
-        List<RecordedVertexBinding> changed = new();
-        foreach (VertexBindingUse use in bindings)
-        {
-            RecordedVertexBinding binding = new(use.Slot, Trace(use.Buffer), use.Offset, use.Stride);
-            if (!pass.Vertex.TryGetValue(use.Slot, out RecordedVertexBinding? previous) || previous != binding)
-                changed.Add(binding);
-
-            pass.Vertex[use.Slot] = binding;
-        }
-
-        if (changed.Count > 0 || pass.VertexCount != bindings.Length)
-            pass.Commands.Add(new BindVertexBuffersCommand(changed.ToEquatableArray(), bindings.Length));
-
-        pass.VertexCount = bindings.Length;
-    }
-
-    void ICommandStreamProfiler.BindIndexBuffer(in IndexBindingUse binding)
-    {
-        if (_pass is not { } pass)
-            return;
-
-        BindIndexBufferCommand command = new(Trace(binding.Buffer), binding.Format, binding.IndexCount);
-        if (pass.Index != command)
-            pass.Commands.Add(command);
-
-        pass.Index = command;
-    }
-
-    void ICommandStreamProfiler.SetProperties(ReadOnlySpan<PropertyState> properties)
-    {
-        if (_pass is not { } pass)
-            return;
-
-        List<RecordedProperty> changed = new();
-        HashSet<string> present = new();
-        foreach (PropertyState state in properties)
-        {
-            RecordedProperty property = Property(state);
-            present.Add(property.Name);
-            if (!pass.Properties.TryGetValue(property.Name, out RecordedProperty? previous) || previous != property)
-                changed.Add(property);
-
-            pass.Properties[property.Name] = property;
-        }
-
-        string[] removed = pass.Properties.Keys.Where(name => !present.Contains(name)).ToArray();
-        foreach (string name in removed)
-            pass.Properties.Remove(name);
-
-        if (changed.Count > 0 || removed.Length > 0)
-            pass.Commands.Add(new SetPropertiesCommand(changed.ToEquatableArray(), removed.ToEquatableArray()));
-    }
-
-    void ICommandStreamProfiler.Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance)
-        => Add(new DrawCommand(vertexCount, instanceCount, firstVertex, firstInstance));
-
-    void ICommandStreamProfiler.DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
-        => Add(new DrawIndexedCommand(instanceCount, firstIndex, vertexOffset, firstInstance));
-
-    void ICommandStreamProfiler.DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
-        => Add(new DrawIndirectCommand(Trace(buffer), offset, drawCount, stride));
-
-    void ICommandStreamProfiler.DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
-        => Add(new DrawIndexedIndirectCommand(Trace(buffer), offset, drawCount, stride));
-
-    void ICommandStreamProfiler.Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
-        => Add(new DispatchCommand(groupCountX, groupCountY, groupCountZ));
-
-    void ICommandStreamProfiler.DispatchIndirect(in ResourceVersion buffer, uint offset)
-        => Add(new DispatchIndirectCommand(Trace(buffer), offset));
-
-    void ICommandStreamProfiler.UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
-    {
-        Written(after);
-        Add(new UpdateBufferCommand(Trace(after), offset, _store.Put(data)));
-    }
-
-    void ICommandStreamProfiler.UpdateTexture(in ResourceVersion after, in TextureRegion region, ReadOnlySpan<byte> data)
-    {
-        Written(after);
-        Add(new UpdateTextureCommand(Trace(after), region, _store.Put(data)));
-    }
-
-    void ICommandStreamProfiler.CopyBuffer(in ResourceVersion source, uint sourceOffset, in ResourceVersion destinationAfter, uint destinationOffset, uint sizeInBytes)
-    {
-        Written(destinationAfter);
-        Add(new CopyBufferCommand(Trace(source), sourceOffset, Trace(destinationAfter), destinationOffset, sizeInBytes));
-    }
-
-    void ICommandStreamProfiler.CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount)
-    {
-        Written(destinationAfter);
-        Add(new CopyTextureCommand(Trace(source), sourceRegion, Trace(destinationAfter), destinationRegion, layerCount));
-    }
-
-    void ICommandStreamProfiler.CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
-    {
-        Written(destinationAfter);
-        Add(new CopyTextureToBufferCommand(Trace(source), region, Trace(destinationAfter), destinationOffset));
-    }
-
-    void ICommandStreamProfiler.ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter)
-    {
-        Written(destinationAfter);
-        Add(new ResolveTextureCommand(Trace(source), Trace(destinationAfter)));
-    }
-
-    void ICommandStreamProfiler.GenerateMips(in ResourceVersion textureAfter)
-    {
-        Written(textureAfter);
-        Add(new GenerateMipsCommand(Trace(textureAfter)));
-    }
-
-    private void Add(RecordedCommand command) => _pass?.Commands.Add(command);
-
-    private void Written(in ResourceVersion version) => _pass?.Written.Add(version.Resource);
+    IPassCommandSink? ICommandStreamProfiler.BeginPassCommands(in PassInfo pass)
+        => _views.TryGetValue(pass.ViewIndex, out ViewState? view) ? new PassRecorder(this, view.Pass(pass.Index)) : null;
 
     private TraceResourceId Trace(ResourceId id)
         => id.Value == 0 ? default : Builder(id).Id;
@@ -258,6 +95,155 @@ public sealed partial class DeepRecording
     }
 
     private RecordedStage Stage(ShaderStageDescription stage) => new(stage.Stage, stage.EntryPoint, _store.Put(stage.ShaderBytes));
+
+    private sealed class PassRecorder(DeepRecording owner, PassState pass) : IPassCommandSink
+    {
+        public void End() { }
+
+        public void SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops)
+        {
+            RecordedAttachment[] colors = new RecordedAttachment[framebuffer.Colors.Length];
+            for (int i = 0; i < colors.Length; i++)
+            {
+                AttachmentUse use = framebuffer.Colors[i];
+                colors[i] = owner.Attachment(use);
+                pass.Written.Add(use.Texture.Resource);
+            }
+
+            RecordedAttachment? depth = null;
+            if (framebuffer.Depth is { } depthUse)
+            {
+                depth = owner.Attachment(depthUse);
+                pass.Written.Add(depthUse.Texture.Resource);
+            }
+
+            pass.Commands.Add(new SetFramebufferCommand(colors.ToEquatableArray(), depth, framebuffer.Outputs, framebuffer.Width, framebuffer.Height, ops));
+        }
+
+        public void ClearColorTarget(uint index, Color color) => pass.Commands.Add(new ClearColorTargetCommand(index, color));
+
+        public void ClearDepthStencil(float depth, byte stencil) => pass.Commands.Add(new ClearDepthStencilCommand(depth, stencil));
+
+        public void SetPipeline(in PipelineBindInfo pipeline)
+            => pass.Commands.Add(new SetPipelineCommand(owner.EnsureProgram(pipeline.Program), pipeline.IsCompute, pipeline.Outputs, pipeline.Topology));
+
+        public void SetViewport(in Viewport viewport) => pass.Commands.Add(new SetViewportCommand(viewport));
+
+        public void SetScissor(uint x, uint y, uint width, uint height) => pass.Commands.Add(new SetScissorCommand(x, y, width, height));
+
+        public void SetStencilReference(uint reference) => pass.Commands.Add(new SetStencilReferenceCommand(reference));
+
+        public void SetBlendConstants(Color constants) => pass.Commands.Add(new SetBlendConstantsCommand(constants));
+
+        public void BindVertexBuffers(ReadOnlySpan<VertexBindingUse> bindings)
+        {
+            List<RecordedVertexBinding> changed = new();
+            foreach (VertexBindingUse use in bindings)
+            {
+                RecordedVertexBinding binding = new(use.Slot, owner.Trace(use.Buffer), use.Offset, use.Stride);
+                if (!pass.Vertex.TryGetValue(use.Slot, out RecordedVertexBinding? previous) || previous != binding)
+                    changed.Add(binding);
+
+                pass.Vertex[use.Slot] = binding;
+            }
+
+            if (changed.Count > 0 || pass.VertexCount != bindings.Length)
+                pass.Commands.Add(new BindVertexBuffersCommand(changed.ToEquatableArray(), bindings.Length));
+
+            pass.VertexCount = bindings.Length;
+        }
+
+        public void BindIndexBuffer(in IndexBindingUse binding)
+        {
+            BindIndexBufferCommand command = new(owner.Trace(binding.Buffer), binding.Format, binding.IndexCount);
+            if (pass.Index != command)
+                pass.Commands.Add(command);
+
+            pass.Index = command;
+        }
+
+        public void SetProperties(ReadOnlySpan<PropertyState> properties)
+        {
+            List<RecordedProperty> changed = new();
+            HashSet<string> present = new();
+            foreach (PropertyState state in properties)
+            {
+                RecordedProperty property = owner.Property(state);
+                present.Add(property.Name);
+                if (!pass.Properties.TryGetValue(property.Name, out RecordedProperty? previous) || previous != property)
+                    changed.Add(property);
+
+                pass.Properties[property.Name] = property;
+            }
+
+            string[] removed = pass.Properties.Keys.Where(name => !present.Contains(name)).ToArray();
+            foreach (string name in removed)
+                pass.Properties.Remove(name);
+
+            if (changed.Count > 0 || removed.Length > 0)
+                pass.Commands.Add(new SetPropertiesCommand(changed.ToEquatableArray(), removed.ToEquatableArray()));
+        }
+
+        public void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance)
+            => pass.Commands.Add(new DrawCommand(vertexCount, instanceCount, firstVertex, firstInstance));
+
+        public void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
+            => pass.Commands.Add(new DrawIndexedCommand(instanceCount, firstIndex, vertexOffset, firstInstance));
+
+        public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
+            => pass.Commands.Add(new DrawIndirectCommand(owner.Trace(buffer), offset, drawCount, stride));
+
+        public void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
+            => pass.Commands.Add(new DrawIndexedIndirectCommand(owner.Trace(buffer), offset, drawCount, stride));
+
+        public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
+            => pass.Commands.Add(new DispatchCommand(groupCountX, groupCountY, groupCountZ));
+
+        public void DispatchIndirect(in ResourceVersion buffer, uint offset)
+            => pass.Commands.Add(new DispatchIndirectCommand(owner.Trace(buffer), offset));
+
+        public void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
+        {
+            pass.Written.Add(after.Resource);
+            pass.Commands.Add(new UpdateBufferCommand(owner.Trace(after), offset, owner._store.Put(data)));
+        }
+
+        public void UpdateTexture(in ResourceVersion after, in TextureRegion region, ReadOnlySpan<byte> data)
+        {
+            pass.Written.Add(after.Resource);
+            pass.Commands.Add(new UpdateTextureCommand(owner.Trace(after), region, owner._store.Put(data)));
+        }
+
+        public void CopyBuffer(in ResourceVersion source, uint sourceOffset, in ResourceVersion destinationAfter, uint destinationOffset, uint sizeInBytes)
+        {
+            pass.Written.Add(destinationAfter.Resource);
+            pass.Commands.Add(new CopyBufferCommand(owner.Trace(source), sourceOffset, owner.Trace(destinationAfter), destinationOffset, sizeInBytes));
+        }
+
+        public void CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount)
+        {
+            pass.Written.Add(destinationAfter.Resource);
+            pass.Commands.Add(new CopyTextureCommand(owner.Trace(source), sourceRegion, owner.Trace(destinationAfter), destinationRegion, layerCount));
+        }
+
+        public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
+        {
+            pass.Written.Add(destinationAfter.Resource);
+            pass.Commands.Add(new CopyTextureToBufferCommand(owner.Trace(source), region, owner.Trace(destinationAfter), destinationOffset));
+        }
+
+        public void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter)
+        {
+            pass.Written.Add(destinationAfter.Resource);
+            pass.Commands.Add(new ResolveTextureCommand(owner.Trace(source), owner.Trace(destinationAfter)));
+        }
+
+        public void GenerateMips(in ResourceVersion textureAfter)
+        {
+            pass.Written.Add(textureAfter.Resource);
+            pass.Commands.Add(new GenerateMipsCommand(owner.Trace(textureAfter)));
+        }
+    }
 
     private sealed record PendingCopy(TraceVersion Version, CopyPlacement Placement, CaptureCopy Copy);
 

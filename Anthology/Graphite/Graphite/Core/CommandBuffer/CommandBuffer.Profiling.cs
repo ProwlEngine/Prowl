@@ -47,7 +47,7 @@ public abstract partial class CommandBuffer
     internal void ReportPipelineBind(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
     {
         _statPipelineBinds++;
-        ICommandStreamProfiler? sink = PassSink;
+        IPassCommandSink? sink = PassSink;
         if (sink == null)
             return;
 

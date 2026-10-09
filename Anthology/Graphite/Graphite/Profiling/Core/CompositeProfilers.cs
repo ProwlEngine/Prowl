@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
@@ -75,165 +76,179 @@ internal sealed class CompositeCaptureProfiler(ICaptureProfiler[] sinks) : ICapt
     }
 }
 
-internal sealed class CompositeCommandStreamProfiler(ICommandStreamProfiler[] sinks) : ICommandStreamProfiler
+internal sealed class CompositeCommandStreamProfiler(ICommandStreamProfiler[] profilers) : ICommandStreamProfiler
 {
     public void BeginExecution(ulong executionId, string graphName) { }
 
     public void EndExecution() { }
 
-    public void BeginPassCommands(in PassInfo pass)
+    public IPassCommandSink? BeginPassCommands(in PassInfo pass)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
-            sink.BeginPassCommands(in pass);
-    }
+        List<IPassCommandSink> sinks = new(profilers.Length);
+        foreach (ICommandStreamProfiler profiler in profilers)
+        {
+            if (profiler.BeginPassCommands(in pass) is { } sink)
+                sinks.Add(sink);
+        }
 
-    public void EndPassCommands(in PassInfo pass)
+        return sinks.Count switch
+        {
+            0 => null,
+            1 => sinks[0],
+            _ => new CompositePassCommandSink(sinks.ToArray()),
+        };
+    }
+}
+
+internal sealed class CompositePassCommandSink(IPassCommandSink[] sinks) : IPassCommandSink
+{
+    public void End()
     {
-        foreach (ICommandStreamProfiler sink in sinks)
-            sink.EndPassCommands(in pass);
+        foreach (IPassCommandSink sink in sinks)
+            sink.End();
     }
 
     public void SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.SetFramebuffer(in framebuffer, in ops);
     }
 
     public void ClearColorTarget(uint index, Color color)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.ClearColorTarget(index, color);
     }
 
     public void ClearDepthStencil(float depth, byte stencil)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.ClearDepthStencil(depth, stencil);
     }
 
     public void SetPipeline(in PipelineBindInfo pipeline)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.SetPipeline(in pipeline);
     }
 
     public void SetViewport(in Viewport viewport)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.SetViewport(in viewport);
     }
 
     public void SetScissor(uint x, uint y, uint width, uint height)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.SetScissor(x, y, width, height);
     }
 
     public void SetStencilReference(uint reference)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.SetStencilReference(reference);
     }
 
     public void SetBlendConstants(Color constants)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.SetBlendConstants(constants);
     }
 
     public void BindVertexBuffers(ReadOnlySpan<VertexBindingUse> bindings)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.BindVertexBuffers(bindings);
     }
 
     public void BindIndexBuffer(in IndexBindingUse binding)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.BindIndexBuffer(in binding);
     }
 
     public void SetProperties(ReadOnlySpan<PropertyState> properties)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.SetProperties(properties);
     }
 
     public void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.Draw(vertexCount, instanceCount, firstVertex, firstInstance);
     }
 
     public void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.DrawIndexed(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
     }
 
     public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.DrawIndirect(in buffer, offset, drawCount, stride);
     }
 
     public void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.DrawIndexedIndirect(in buffer, offset, drawCount, stride);
     }
 
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.Dispatch(groupCountX, groupCountY, groupCountZ);
     }
 
     public void DispatchIndirect(in ResourceVersion buffer, uint offset)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.DispatchIndirect(in buffer, offset);
     }
 
     public void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.UpdateBuffer(in after, offset, data);
     }
 
     public void UpdateTexture(in ResourceVersion after, in TextureRegion region, ReadOnlySpan<byte> data)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.UpdateTexture(in after, in region, data);
     }
 
     public void CopyBuffer(in ResourceVersion source, uint sourceOffset, in ResourceVersion destinationAfter, uint destinationOffset, uint sizeInBytes)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.CopyBuffer(in source, sourceOffset, in destinationAfter, destinationOffset, sizeInBytes);
     }
 
     public void CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.CopyTexture(in source, in sourceRegion, in destinationAfter, in destinationRegion, layerCount);
     }
 
     public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.CopyTextureToBuffer(in source, in region, in destinationAfter, destinationOffset);
     }
 
     public void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.ResolveTexture(in source, in destinationAfter);
     }
 
     public void GenerateMips(in ResourceVersion textureAfter)
     {
-        foreach (ICommandStreamProfiler sink in sinks)
+        foreach (IPassCommandSink sink in sinks)
             sink.GenerateMips(in textureAfter);
     }
 }

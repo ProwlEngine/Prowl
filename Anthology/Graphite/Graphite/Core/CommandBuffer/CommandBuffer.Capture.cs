@@ -16,10 +16,6 @@ public abstract partial class CommandBuffer
     private AttachmentUse[] _attachmentScratch = new AttachmentUse[8];
     private VertexBindingUse[] _vertexScratch = new VertexBindingUse[8];
 
-    internal bool PassCommandsOpen { get; set; }
-
-    internal override ICommandStreamProfiler? PassSink => Execution != null ? Profilers.CommandStream : null;
-
     internal bool CaptureActive => Execution != null && (Profilers.CommandStream != null || Profilers.Capture != null);
 
     /// <summary>Resources this pass's commands referenced, with their version at first reference.</summary>
@@ -73,7 +69,7 @@ public abstract partial class CommandBuffer
             depth = new AttachmentUse(depthAttachment.Target.CurrentVersion, depthAttachment.MipLevel, depthAttachment.ArrayLayer);
         }
 
-        if (Profilers.CommandStream is { } sink)
+        if (PassSink is { } sink)
         {
             FramebufferInfo info = new(_attachmentScratch.AsSpan(0, colors.Count), depth, fb.OutputDescription, fb.Width, fb.Height);
             sink.SetFramebuffer(in info, in ops);
@@ -83,7 +79,7 @@ public abstract partial class CommandBuffer
     private void ReportPropertyStates()
     {
         _stateScratch.Clear();
-        ICommandStreamProfiler? sink = Profilers.CommandStream;
+        IPassCommandSink? sink = PassSink;
 
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _activeProperties.Entries)
         {
@@ -161,7 +157,7 @@ public abstract partial class CommandBuffer
             _vertexScratch[slot] = new VertexBindingUse((uint)slot, binding.Buffer.CurrentVersion, binding.Offset, layouts[slot].Stride);
         }
 
-        Profilers.CommandStream?.BindVertexBuffers(_vertexScratch.AsSpan(0, count));
+        PassSink?.BindVertexBuffers(_vertexScratch.AsSpan(0, count));
     }
 
     /// <summary>Called by the backend with the index buffer it resolved for a draw, including cache hits.</summary>
@@ -172,6 +168,6 @@ public abstract partial class CommandBuffer
 
         TrackBuffer(buffer);
         IndexBindingUse use = new(buffer.CurrentVersion, format, indexCount);
-        Profilers.CommandStream?.BindIndexBuffer(in use);
+        PassSink?.BindIndexBuffer(in use);
     }
 }

@@ -152,7 +152,6 @@ public sealed partial class DeepRecording : IGraphProfiler, IGpuStatsProfiler, I
 
     void IGraphProfiler.BeginView(in ViewInfo view)
     {
-        _pass = null;
         _views[view.Index] = new ViewState(view.Name, view.Index, view.PixelWidth, view.PixelHeight);
         ((IGraphProfiler)_recording).BeginView(in view);
     }

@@ -23,14 +23,19 @@ public interface ICaptureContext
     CaptureCopy Copy(in PassReference reference, CopyPlacement placement);
 }
 
-/// <summary>
-/// Observes every command recorded into a pass command buffer, in order. Spans and in-pass update bytes are only valid for the duration of the call.
-/// </summary>
+/// <summary>Observes the commands recorded into each pass command buffer.</summary>
 public interface ICommandStreamProfiler : IProfiler
 {
-    void BeginPassCommands(in PassInfo pass);
+    /// <summary>Returns the sink for this pass's commands, or null to skip them.</summary>
+    IPassCommandSink? BeginPassCommands(in PassInfo pass);
+}
 
-    void EndPassCommands(in PassInfo pass);
+/// <summary>
+/// Receives every command of one pass in order, then <see cref="End"/>. Spans and in-pass update bytes are only valid for the duration of the call.
+/// </summary>
+public interface IPassCommandSink
+{
+    void End();
 
     void SetFramebuffer(in FramebufferInfo framebuffer, in TargetLoadStoreOps ops);
 
