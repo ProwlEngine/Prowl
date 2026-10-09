@@ -292,20 +292,9 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepReco
                 Texture texture = scope.Texture(property.Resource.Resource);
                 Sampler? sampler = scope.Sampler(property.Sampler);
                 if (NeedsView(texture, property))
-                {
-                    TextureView view = scope.Own(scope.Factory.CreateTextureView(new TextureViewDescription(
-                        texture,
-                        property.Range.BaseMipLevel,
-                        property.Range.IsTexture ? property.Range.MipLevels : texture.MipLevels,
-                        property.Range.BaseArrayLayer,
-                        property.Range.IsTexture ? property.Range.ArrayLayers : texture.ArrayLayers,
-                        property.ViewFormat)));
-                    set.SetTexture(name, view, sampler);
-                }
+                    set.SetTexture(name, scope.View(texture, property.Range, property.ViewFormat), sampler);
                 else
-                {
                     set.SetTexture(name, texture, sampler);
-                }
 
                 break;
             case PropertyKind.Sampler:

@@ -26,6 +26,7 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly Dictionary<TraceResourceId, DeviceBuffer> _buffers = new();
     private readonly Dictionary<ProgramKey, ShaderProgram> _programs = new();
     private readonly Dictionary<int, Sampler> _samplers = new();
+    private readonly Dictionary<(Texture, ResourceRange, PixelFormat?), TextureView> _views = new();
     private readonly Dictionary<TraceVersion, RecordedCopy> _copies = new();
     private readonly HashSet<TraceVersion> _planned = new();
     private readonly HashSet<TraceVersion> _produced = new();
@@ -72,6 +73,22 @@ internal sealed unsafe class ReplayScope : IDisposable
     public ShaderProgram Program(ProgramKey key) => _programs[key];
 
     public Sampler? Sampler(int index) => index < 0 ? null : _samplers[index];
+
+    public TextureView View(Texture texture, ResourceRange range, PixelFormat? format)
+    {
+        if (_views.TryGetValue((texture, range, format), out TextureView? view))
+            return view;
+
+        view = Own(_device.ResourceFactory.CreateTextureView(new TextureViewDescription(
+            texture,
+            range.BaseMipLevel,
+            range.IsTexture ? range.MipLevels : texture.MipLevels,
+            range.BaseArrayLayer,
+            range.IsTexture ? range.ArrayLayers : texture.ArrayLayers,
+            format)));
+        _views[(texture, range, format)] = view;
+        return view;
+    }
 
     public ReadOnlySpan<byte> Blob(BlobRef blob) => _blobs[blob].AsSpan();
 
