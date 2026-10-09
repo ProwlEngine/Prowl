@@ -186,7 +186,9 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Assert.Equal(aEntry, produced.First.Version);
         Assert.Equal(aEntry + 1, produced.LastVersion);
         Assert.NotNull(produced.Texture);
+        Assert.False(produced.NeedsContents);
         PassReference external = Assert.Single(produce, r => r.First.Resource == run.External.ResourceId);
+        Assert.True(external.NeedsContents);
         Assert.Equal(run.ExternalBefore, external.First);
         Assert.Equal(run.ExternalBefore.Version + 1, external.LastVersion);
         Assert.Equal("ExternalMesh", external.Name);
@@ -196,6 +198,7 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         PassReference sampled = Assert.Single(consume, r => r.First.Resource == aBacking.Id);
         Assert.Equal(aEntry + 1, sampled.First.Version);
         Assert.Equal(sampled.First.Version, sampled.LastVersion);
+        Assert.False(sampled.NeedsContents);
         PassReference attachment = Assert.Single(consume, r => r.First.Resource == run.ImportedTexture.ColorTextures[0].ResourceId);
         Assert.Equal(run.ImportedBefore, attachment.First);
         Assert.Equal(run.ImportedBefore.Version + 1, attachment.LastVersion);
