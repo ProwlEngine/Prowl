@@ -25,7 +25,7 @@ internal sealed class GraphCapture
     private readonly RenderGraph.PassNode[] _nodes;
     private readonly Dictionary<RenderResourceID, GraphBacking[]> _backings = new();
     private readonly Dictionary<ResourceId, uint> _passEntry = new();
-    private readonly Dictionary<ResourceId, ResourceVersion> _firstReferenced = new();
+    private readonly Dictionary<ResourceId, ReferencedResource> _firstReferenced = new();
     private readonly HashSet<ResourceId> _listed = new();
     private readonly List<PassReference> _references = new();
     private readonly Dictionary<ResourceId, (Texture? Texture, DeviceBuffer? Buffer)> _live = new();
@@ -80,7 +80,7 @@ internal sealed class GraphCapture
         _live.Clear();
         _passCommands = commands;
         foreach (ReferencedResource referenced in commands.ReferencedResources)
-            _firstReferenced[referenced.Buffer?.ResourceId ?? referenced.Texture!.ResourceId] = referenced.FirstVersion;
+            _firstReferenced[referenced.Buffer?.ResourceId ?? referenced.Texture!.ResourceId] = referenced;
 
         foreach (ResourceAccess access in _nodes[index].Accesses)
         {
@@ -92,10 +92,10 @@ internal sealed class GraphCapture
                 if (!_listed.Add(backing.Id))
                     continue;
 
-                ResourceVersion first = _firstReferenced.TryGetValue(backing.Id, out ResourceVersion referenced)
-                    ? referenced
-                    : new ResourceVersion(backing.Id, _passEntry[backing.Id]);
-                AddReference(first, access, backing);
+                if (_firstReferenced.TryGetValue(backing.Id, out ReferencedResource referenced))
+                    AddReference(referenced.FirstVersion, !referenced.Overwritten, access, backing);
+                else
+                    AddReference(new ResourceVersion(backing.Id, _passEntry[backing.Id]), false, access, backing);
             }
         }
 
@@ -107,12 +107,13 @@ internal sealed class GraphCapture
             if (referenced.Buffer is { } buffer)
             {
                 _live[buffer.ResourceId] = (null, buffer);
-                _references.Add(new PassReference(referenced.FirstVersion, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue));
+                _references.Add(new PassReference(referenced.FirstVersion, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue, !referenced.Overwritten));
             }
             else
             {
                 _live[referenced.Texture!.ResourceId] = (referenced.Texture, null);
-                _references.Add(new PassReference(referenced.FirstVersion, referenced.Texture.CurrentVersion.Version, referenced.Texture.Name, referenced.Texture.DescriptionValue, null));
+                _references.Add(new PassReference(
+                    referenced.FirstVersion, referenced.Texture.CurrentVersion.Version, referenced.Texture.Name, referenced.Texture.DescriptionValue, null, !referenced.Overwritten));
             }
         }
 
@@ -168,20 +169,20 @@ internal sealed class GraphCapture
         return new CaptureCopy(staging, regions);
     }
 
-    private void AddReference(ResourceVersion first, ResourceAccess access, GraphBacking backing)
+    private void AddReference(ResourceVersion first, bool needsContents, ResourceAccess access, GraphBacking backing)
     {
         if (!access.IsTexture)
         {
             DeviceBuffer buffer = _context.GetRenderBuffer(new BufferHandle(access.Id));
             _live[buffer.ResourceId] = (null, buffer);
-            _references.Add(new PassReference(first, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue));
+            _references.Add(new PassReference(first, buffer.CurrentVersion.Version, buffer.Name, null, buffer.DescriptionValue, needsContents));
             return;
         }
 
         RenderTexture target = _context.GetRenderTexture(new TextureHandle(access.Id));
         Texture texture = backing.Role == BackingRole.Depth ? target.DepthTexture! : target.ColorTextures[(int)backing.Index];
         _live[texture.ResourceId] = (texture, null);
-        _references.Add(new PassReference(first, texture.CurrentVersion.Version, texture.Name, texture.DescriptionValue, null));
+        _references.Add(new PassReference(first, texture.CurrentVersion.Version, texture.Name, texture.DescriptionValue, null, needsContents));
     }
 
     private ResourceVersion ResolveBacking(ResourceAccess access, GraphBacking backing)

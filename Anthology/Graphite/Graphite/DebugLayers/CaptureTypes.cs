@@ -42,9 +42,11 @@ public readonly record struct ViewCaptureInfo(
     ReadOnlyMemory<PassInfo> Passes);
 
 /// <summary>One resource a pass touched: version at first reference, version after the pass, and its descriptor.</summary>
+/// <remarks>NeedsContents is false when the pass never touched it or its first touch overwrote all of it.</remarks>
 public readonly record struct PassReference(
     ResourceVersion First,
     uint LastVersion,
     string Name,
     TextureDescription? Texture,
-    BufferDescription? Buffer);
+    BufferDescription? Buffer,
+    bool NeedsContents);

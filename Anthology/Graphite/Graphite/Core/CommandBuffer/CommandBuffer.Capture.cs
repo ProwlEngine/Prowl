@@ -6,7 +6,7 @@ using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite;
 
-internal readonly record struct ReferencedResource(DeviceBuffer? Buffer, Texture? Texture, ResourceVersion FirstVersion);
+internal readonly record struct ReferencedResource(DeviceBuffer? Buffer, Texture? Texture, ResourceVersion FirstVersion, bool Overwritten);
 
 public abstract partial class CommandBuffer
 {
@@ -36,16 +36,21 @@ public abstract partial class CommandBuffer
         if (!CaptureActive || !_referencedIds.Add(buffer.ResourceId))
             return;
 
-        _referenced.Add(new ReferencedResource(buffer, null, buffer.CurrentVersion));
+        _referenced.Add(new ReferencedResource(buffer, null, buffer.CurrentVersion, false));
     }
 
-    internal override void TrackTexture(Texture texture)
+    internal override void TrackTexture(Texture texture) => TrackTexture(texture, false);
+
+    private void TrackTexture(Texture texture, bool overwritten)
     {
         if (!CaptureActive || !_referencedIds.Add(texture.ResourceId))
             return;
 
-        _referenced.Add(new ReferencedResource(null, texture, texture.CurrentVersion));
+        _referenced.Add(new ReferencedResource(null, texture, texture.CurrentVersion, overwritten));
     }
+
+    private void TrackAttachment(Texture texture, LoadAction load)
+        => TrackTexture(texture, load != LoadAction.Load && texture.MipLevels == 1 && ValidationHelpers.GetEffectiveArrayLayers(texture) == 1);
 
     private void ReportFramebuffer(Framebuffer fb, in TargetLoadStoreOps ops)
     {
@@ -57,14 +62,14 @@ public abstract partial class CommandBuffer
         for (int i = 0; i < colors.Count; i++)
         {
             FramebufferAttachment attachment = colors[i];
-            TrackTexture(attachment.Target);
+            TrackAttachment(attachment.Target, ops.Color.Load);
             _attachmentScratch[i] = new AttachmentUse(attachment.Target.CurrentVersion, attachment.MipLevel, attachment.ArrayLayer);
         }
 
         AttachmentUse? depth = null;
         if (fb.DepthTarget is { } depthAttachment)
         {
-            TrackTexture(depthAttachment.Target);
+            TrackAttachment(depthAttachment.Target, ops.Depth.Load);
             depth = new AttachmentUse(depthAttachment.Target.CurrentVersion, depthAttachment.MipLevel, depthAttachment.ArrayLayer);
         }
 
