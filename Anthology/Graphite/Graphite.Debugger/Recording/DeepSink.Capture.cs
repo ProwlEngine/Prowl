@@ -101,6 +101,20 @@ internal sealed partial class DeepSink
         }
     }
 
+    public void Release()
+    {
+        foreach (ExecutionState execution in _executions.Values)
+        {
+            foreach (PassState pass in execution.Views.Values.SelectMany(v => v.Passes.Values))
+            {
+                foreach (PendingCopy pending in pass.Copies)
+                    pending.Copy.Staging.Dispose();
+
+                pass.Copies.Clear();
+            }
+        }
+    }
+
     public DeepResult Build(GraphicsDevice device)
     {
         foreach (ExecutionState execution in _executions.Values)
