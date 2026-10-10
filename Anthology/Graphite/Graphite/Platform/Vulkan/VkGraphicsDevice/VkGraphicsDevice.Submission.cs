@@ -196,7 +196,7 @@ internal unsafe partial class VkGraphicsDevice
     internal ulong SubmitImmediate(Silk.NET.Vulkan.CommandBuffer cb, CommandPool pool)
     {
         ulong serial = Submit(new System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer>(in cb), []);
-        TagImmediatePool(pool, serial);
+        TagImmediatePool(pool, cb, serial);
         return serial;
     }
 
@@ -247,7 +247,7 @@ internal unsafe partial class VkGraphicsDevice
         {
             if (cb.IsRecording)
                 cb.End();
-            TagImmediatePool(cb.CommandPool, 0);
+            TagImmediatePool(cb.CommandPool, cb.CommandBuffer, 0);
             ReturnRecordCommandBuffer(cb);
             throw;
         }
@@ -255,7 +255,7 @@ internal unsafe partial class VkGraphicsDevice
         VkGpuSubmission submission = new(this);
         Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
         ulong serial = Submit(new System.ReadOnlySpan<Silk.NET.Vulkan.CommandBuffer>(in handle), new System.ReadOnlySpan<VkCommandBuffer>(in cb), submission);
-        TagImmediatePool(cb.CommandPool, serial);
+        TagImmediatePool(cb.CommandPool, cb.CommandBuffer, serial);
         return submission;
     }
 

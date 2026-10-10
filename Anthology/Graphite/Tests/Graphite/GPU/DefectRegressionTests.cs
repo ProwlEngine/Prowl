@@ -137,6 +137,30 @@ public abstract class DefectRegressionTests<T> : GraphicsDeviceTestBase<T> where
     }
 
     [Fact]
+    public void NativeCommandBuffers_AreReusedAcrossExecutions()
+    {
+        VkGraphicsDevice vk = (VkGraphicsDevice)GD;
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.VertexBuffer));
+
+        void Cycle()
+        {
+            GD.RunTestGraph((context, cl) => { });
+            RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget)).Dispose();
+            GD.Record(transfer => transfer.UpdateBuffer(buffer, 0, new uint[] { 1, 2, 3, 4 })).Wait();
+            GD.WaitForIdle();
+        }
+
+        for (int i = 0; i < GD.MaxExecutingTasks; i++)
+            Cycle();
+        int warm = vk.AllocatedCommandBufferCount;
+
+        for (int i = 0; i < 32; i++)
+            Cycle();
+
+        Assert.Equal(warm, vk.AllocatedCommandBufferCount);
+    }
+
+    [Fact]
     public void RenderTargetCreation_BatchesInitIntoOneSubmit_AndClearsToZero()
     {
         VkGraphicsDevice vk = (VkGraphicsDevice)GD;

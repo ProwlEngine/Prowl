@@ -45,7 +45,8 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         }
         _usedSwapchains.Clear();
         HasEnded = false;
-        _cb = _gd.AllocatePrimaryCommandBuffer(_pool);
+        if (_cb.Handle == 0)
+            _cb = _gd.AllocatePrimaryCommandBuffer(_pool);
         if (Name.Length > 0)
             _gd.SetResourceName(this, Name);
 
@@ -97,13 +98,16 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         return queries;
     }
 
-    internal void SetPool(CommandPool pool) => _pool = pool;
+    internal void SetPool(CommandPool pool, Silk.NET.Vulkan.CommandBuffer cb)
+    {
+        _pool = pool;
+        _cb = cb;
+    }
 
     internal void ResetForReuse()
     {
         _commandBufferBegun = false;
         HasEnded = false;
-        _cb = default;
         ReleaseStagingBuffers();
     }
 

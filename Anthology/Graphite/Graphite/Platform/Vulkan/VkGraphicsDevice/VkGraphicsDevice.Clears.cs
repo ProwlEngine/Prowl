@@ -81,15 +81,13 @@ internal unsafe partial class VkGraphicsDevice
     {
         if (texture.IsSwapchainTexture)
         {
-            immediatePool = AcquireImmediatePool();
-            return BeginImmediateCommandBuffer(immediatePool);
+            return BeginImmediateCommandBuffer(out immediatePool);
         }
 
         immediatePool = default;
         if (_initPool.Handle == 0)
         {
-            _initPool = AcquireImmediatePool();
-            _initCb = BeginImmediateCommandBuffer(_initPool);
+            _initCb = BeginImmediateCommandBuffer(out _initPool);
         }
 
         return _initCb;
