@@ -37,7 +37,7 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdCopyBuffer(_cb, srcVkBuffer.DeviceBuffer, dstVkBuffer.DeviceBuffer, 1, in region);
         _gd.Counters.RecordBufferOp(BufferOpBin.Copy, sizeInBytes);
 
-        EmitPostCopyBufferBarrier(destination.Usage.HasFlag(BufferUsage.UniformBuffer));
+        EmitPostCopyBufferBarrier(destination);
     }
 
     internal override void RecordFullBarrier()
@@ -94,20 +94,15 @@ internal unsafe partial class VkCommandBuffer
         _gd.Counters.RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }
 
-    private void EmitPostCopyBufferBarrier(bool needToProtectUniform)
+    private void EmitPostCopyBufferBarrier(DeviceBuffer destination)
     {
+        VkBarriers.BufferScope(_gd, VkBarriers.ReadersOf(destination.Usage), out PipelineStageFlags dstStage, out AccessFlags dstAccess);
         MemoryBarrier barrier = new()
         {
             SType = StructureType.MemoryBarrier,
             SrcAccessMask = AccessFlags.TransferWriteBit,
-            DstAccessMask = needToProtectUniform ? AccessFlags.UniformReadBit : AccessFlags.VertexAttributeReadBit
+            DstAccessMask = dstAccess
         };
-
-        PipelineStageFlags dstStage = needToProtectUniform
-            ? PipelineStageFlags.VertexShaderBit | PipelineStageFlags.ComputeShaderBit |
-              PipelineStageFlags.FragmentShaderBit | PipelineStageFlags.GeometryShaderBit |
-              PipelineStageFlags.TessellationControlShaderBit | PipelineStageFlags.TessellationEvaluationShaderBit
-            : PipelineStageFlags.VertexInputBit;
 
         _gd.Vk.CmdPipelineBarrier(
             _cb,

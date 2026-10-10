@@ -258,7 +258,19 @@ internal static unsafe class VkBarriers
         return imageCount + (memoryPtr != null ? 1u : 0u);
     }
 
-    private static void BufferScope(VkGraphicsDevice gd, BufferAccess access, out PipelineStageFlags stages, out AccessFlags flags)
+    internal static BufferAccess ReadersOf(BufferUsage usage)
+    {
+        BufferAccess access = BufferAccess.TransferRead | BufferAccess.TransferWrite;
+        if ((usage & BufferUsage.VertexBuffer) != 0) access |= BufferAccess.Vertex;
+        if ((usage & BufferUsage.IndexBuffer) != 0) access |= BufferAccess.Index;
+        if ((usage & BufferUsage.UniformBuffer) != 0) access |= BufferAccess.Uniform;
+        if ((usage & BufferUsage.IndirectBuffer) != 0) access |= BufferAccess.Indirect;
+        if ((usage & BufferUsage.StructuredBufferReadOnly) != 0) access |= BufferAccess.ShaderRead;
+        if ((usage & BufferUsage.StructuredBufferReadWrite) != 0) access |= BufferAccess.ShaderRead | BufferAccess.ShaderWrite;
+        return access;
+    }
+
+    internal static void BufferScope(VkGraphicsDevice gd, BufferAccess access, out PipelineStageFlags stages, out AccessFlags flags)
     {
         stages = PipelineStageFlags.None;
         flags = AccessFlags.None;
