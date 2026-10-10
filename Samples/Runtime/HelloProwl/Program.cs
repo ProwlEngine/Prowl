@@ -19,6 +19,7 @@ using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Samples;
 using Prowl.Vector;
 
 namespace HelloProwl;
