@@ -8,6 +8,8 @@
     <Title>Prowl.Quill</Title>
     <Description>A Hardware-Accelerated Anti-Aliased Vector Graphics Library made with .NET</Description>
     <PackageTags>vector-graphics;vector;graphics;canvas;2d;2d-graphics;game-development;graphics-library;anti-aliased;hardware-accelerated;prowl;rendering;bezier;path;gpu;fast</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

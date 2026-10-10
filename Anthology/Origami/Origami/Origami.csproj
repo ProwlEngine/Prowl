@@ -9,6 +9,8 @@
     <Description>A production-ready UI widget library built on Prowl.Paper. Provides buttons, sliders, dropdowns, property grids, docking, modals, toasts, tooltips, tree views, color pickers, curve editors, and more with a consistent fluent builder API and full theming support.</Description>
     <RootNamespace>Prowl.OrigamiUI</RootNamespace>
     <PackageTags>UI widgets;component library;fluent API;theme system;docking;property grid;buttons;sliders;dropdowns;modals;toasts;tooltips;tree view;color picker;curve editor;date picker;breadcrumbs;chat bubbles;immediate mode;Prowl;game engine;editor UI</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
