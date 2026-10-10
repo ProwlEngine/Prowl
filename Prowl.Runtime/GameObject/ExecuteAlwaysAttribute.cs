@@ -6,9 +6,9 @@ using System;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// When applied to a MonoBehaviour, its gameplay lifecycle methods (Start, Update, LateUpdate, FixedUpdate)
-/// are called even when the application is not in play mode (e.g., in the editor).
-/// Structural lifecycle methods (OnEnable, OnDisable, OnRenderCollect, etc.) always run regardless.
+/// When applied to a MonoBehaviour, its gameplay methods also run outside play mode, such as in the editor: Start,
+/// Update, LateUpdate, FixedUpdate, OnEnable, OnDisable, and the collision, trigger and character callbacks.
+/// OnAddedToScene, OnRemovedFromScene, OnRenderCollect, DrawGizmos, DrawGizmosSelected and OnGui always run.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = true)]
 public class ExecuteAlwaysAttribute : Attribute { }
