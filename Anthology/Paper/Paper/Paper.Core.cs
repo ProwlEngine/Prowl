@@ -85,30 +85,10 @@ namespace Prowl.PaperUI
         /// </summary>
         public Float2 DisplayFramebufferScale = new Float2(1.0f, 1.0f);
 
-        /// <summary> Accumulated scale applied to the registered default dimensional values by ScaleAllSizes. </summary>
-        public float MainScale { get; private set; } = 1.0f;
-
         /// <summary>
         /// Convenience shorthand for <c>DisplayFramebufferScale.X</c>.
         /// </summary>
         public float DpiScale => DisplayFramebufferScale.X;
-
-        /// Multiplies every registered default dimensional value by <paramref name="scaleFactor"/>. Call this <b>once</b> at init, typically with the monitor's DPI ratio, to adapt default style values (padding, border width, spacing, etc.) to a HiDPI display.
-        public void ScaleAllSizes(float scaleFactor)
-        {
-            if (scaleFactor <= 0) throw new ArgumentOutOfRangeException(nameof(scaleFactor));
-            MainScale *= scaleFactor;
-            foreach (var scale in _scaledDefaults)
-                scale(scaleFactor);
-        }
-
-        /// <summary>
-        /// Registers a default value so <see cref="ScaleAllSizes"/> can scale it. The style
-        /// subsystem calls this during init for each scalable default.
-        /// </summary>
-        internal void RegisterScaledDefault(Action<float> applyScale) => _scaledDefaults.Add(applyScale);
-
-        private readonly List<Action<float>> _scaledDefaults = new List<Action<float>>();
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
@@ -1094,10 +1074,12 @@ namespace Prowl.PaperUI
             // Collect stale ids into a reused scratch list (can't Remove while enumerating _storage.Keys),
             // avoiding the per-frame _storage.Keys.ToArray() allocation.
             _storageCleanupScratch.Clear();
+            int rootID = _rootElementHandle.Data.ID;
             foreach (var storedID in _storage.Keys)
             {
                 // We didnt create this element this frame, so it no longer exists, delete any storage for it.
-                if (!_createdElements.Contains(storedID))
+                // The root is never created through Box, and its storage lives for the whole session.
+                if (storedID != rootID && !_createdElements.Contains(storedID))
                     _storageCleanupScratch.Add(storedID);
             }
 

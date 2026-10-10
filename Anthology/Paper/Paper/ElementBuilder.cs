@@ -1264,7 +1264,7 @@ namespace Prowl.PaperUI
                     float pivotX = x + w * piv.X;
                     float pivotY = y + h * piv.Y;
                     var transform = Transform2D.CreateTranslation(pivotX, pivotY)
-                        * Transform2D.CreateRotation(rot * (Maths.PI / 180f))
+                        * Transform2D.CreateRotation(rot)
                         * Transform2D.CreateTranslation(-pivotX, -pivotY);
                     canvas.TransformBy(transform);
                     canvas.DrawImage(tex, x, y, w, h, color);

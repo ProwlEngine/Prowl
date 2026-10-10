@@ -207,6 +207,53 @@ public class TransformTests
         return b;
     }
 
+    /// <summary>Image rotation is in degrees: a quarter turn swaps a 100 by 50 image's extents about its centre.</summary>
+    [Fact]
+    public void An_image_rotates_by_degrees()
+    {
+        var renderer = new ImageBoundsRenderer();
+        var paper = new Paper(renderer, 800, 600, new FontAtlasSettings());
+        paper.BeginFrame(0.016f);
+        paper.Box("image").PositionType(PositionType.SelfDirected).Width(100).Height(50).Image(renderer.Texture, rotation: 90f);
+        paper.EndFrame();
+
+        // The antialiasing fringe adds half a pixel on every side.
+        Assert.Equal(25f, renderer.Min.X, 1f);
+        Assert.Equal(75f, renderer.Max.X, 1f);
+        Assert.Equal(-25f, renderer.Min.Y, 1f);
+        Assert.Equal(75f, renderer.Max.Y, 1f);
+    }
+
+    /// <summary>Records the bounds of every vertex drawn with <see cref="Texture"/>.</summary>
+    private sealed class ImageBoundsRenderer : ICanvasRenderer
+    {
+        public readonly object Texture = new Int2(4, 4);
+        public Float2 Min = new(float.MaxValue, float.MaxValue), Max = new(float.MinValue, float.MinValue);
+
+        public void Dispose() { }
+        public object CreateTexture(uint width, uint height) => new Int2((int)width, (int)height);
+        public Int2 GetTextureSize(object texture) => (Int2)texture;
+        public void SetTextureData(object texture, IntRect bounds, byte[] data) { }
+
+        public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
+        {
+            int start = 0;
+            foreach (DrawCall call in drawCalls)
+            {
+                if (ReferenceEquals(call.Texture, Texture))
+                {
+                    for (int i = start; i < start + call.ElementCount; i++)
+                    {
+                        Float2 position = canvas.Vertices[(int)canvas.Indices[i]].Position;
+                        Min = new Float2(MathF.Min(Min.X, position.X), MathF.Min(Min.Y, position.Y));
+                        Max = new Float2(MathF.Max(Max.X, position.X), MathF.Max(Max.Y, position.Y));
+                    }
+                }
+                start += call.ElementCount;
+            }
+        }
+    }
+
     private sealed class NullRenderer : ICanvasRenderer
     {
         public void Dispose() { }

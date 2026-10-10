@@ -328,11 +328,11 @@ public partial class Paper
         };
     }
 
-    /// <summary>Anchors are pixel offsets from the parent's content box. Auto means unanchored.</summary>
-    private static float? Anchor(ElementStyle style, GuiProp property)
+    /// <summary>Anchors are offsets from the parent's content box, in pixels, percent of it, or both. Auto means unanchored.</summary>
+    private static LayoutBackend.Length? Anchor(ElementStyle style, GuiProp property)
     {
         UnitValue value = style.GetUnit(property);
-        return value.IsAuto ? null : Bound(value, property.ToString()).Px;
+        return value.IsAuto ? null : Bound(value, property.ToString());
     }
 
     private static LayoutBackend.Align ToAlign(LayoutAlignment alignment) => alignment switch
