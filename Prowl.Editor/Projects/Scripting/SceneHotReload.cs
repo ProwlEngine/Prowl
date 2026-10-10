@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 using Prowl.Ember;
@@ -24,12 +25,13 @@ public static class SceneHotReload
     public static void Migrate(Scene scene, IReadOnlyCollection<(Assembly Previous, Assembly Current)> assemblyPairs)
     {
         if (assemblyPairs.Count == 0) return;
+        var scripts = assemblyPairs.Select(p => p.Current.GetName().Name).ToHashSet();
 
         var engine = ReloadEngine.Create(options =>
         {
             // Cecil reads the swapped IL for closure matching and new-field defaults.
             options.AssemblyBytes = ScriptAssemblyManager.GetAssemblyBytes;
-            options.Diagnostics = new DelegateDiagnosticSink(Log);
+            options.Diagnostics = new DelegateDiagnosticSink(d => Log(d, scripts));
 
             // A handler that cannot be rebuilt throws where it is invoked rather than turning into a null that
             // fails somewhere unrelated. Worth the noise in an editor.
@@ -71,8 +73,11 @@ public static class SceneHotReload
         scene.OnHotReload(); // re-derive per-frame membership and rebuild GameObject lookups from the new types
     }
 
-    private static void Log(ReloadDiagnostic diagnostic)
+    private static void Log(ReloadDiagnostic diagnostic, HashSet<string?> scripts)
     {
+        // Engine assemblies are walked but never replaced, so their missing IL changes nothing.
+        if (diagnostic.Code == ReloadCode.NoAssemblyBytes && !scripts.Contains(diagnostic.Subject)) return;
+
         string message = $"[Ember] {diagnostic}";
 
         switch (diagnostic.Severity)
