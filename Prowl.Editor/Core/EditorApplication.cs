@@ -496,6 +496,7 @@ public class EditorApplication : Game
         _wasFocused = focused;
 
         ExternalAssetDrop.ProcessPending();
+        CliServer.Update();
 
         if (_quitRequested)
         {
@@ -2014,6 +2015,7 @@ public class EditorApplication : Game
     public override void Closing()
     {
         s_closing = true;
+        CliServer.Shutdown();
         base.Closing();
     }
 

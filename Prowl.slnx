@@ -22,6 +22,7 @@
     <Project Path="Samples/Runtime/VRShowcase/VRShowcase.csproj" />
   </Folder>
   <Project Path="Prowl.Analyzers/Prowl.Analyzers.csproj" />
+  <Project Path="Prowl.Cli/Prowl.Cli.csproj" />
   <Project Path="Prowl.Editor.Test/Prowl.Editor.Test.csproj" />
   <Project Path="Prowl.Editor/Prowl.Editor.csproj" />
   <Project Path="Prowl.Runtime.Test/Prowl.Runtime.Test.csproj" />

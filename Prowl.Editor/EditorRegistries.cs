@@ -138,6 +138,7 @@ public static class EditorRegistries
         Build.TargetRegistry.Shared.ResetToBuiltIns();
 
         MenuItemAttribute.Clear();
+        CliCommands.Clear();
         _scriptTemplates.Clear();
 
         _fileIcons.Clear();
@@ -186,6 +187,7 @@ public static class EditorRegistries
                 foreach (var method in type.GetMethods(methodFlags))
                 {
                     MenuItemAttribute.Scan(method);
+                    CliCommands.Scan(method);
                     ScanScriptTemplate(method);
                     ScanFileIconMethod(method);
                     ScanDoubleClickHandler(method);

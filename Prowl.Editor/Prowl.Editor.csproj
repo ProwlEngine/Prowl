@@ -56,6 +56,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Prowl.Cli\CliProtocol.cs" Link="Cli\CliProtocol.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Players\Desktop\Prowl.Player.Desktop.csproj" />
   </ItemGroup>
 
