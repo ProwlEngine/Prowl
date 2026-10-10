@@ -46,6 +46,7 @@ public class EditorApplication : Game
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
     private bool _wasFocused = true;
+    private bool _wasCliActive;
     // A project's scene is queued here and opened by the frame loop once its scripts have been built.
     private bool _sceneLoadPending;
     private bool _quitRequested;
@@ -491,9 +492,11 @@ public class EditorApplication : Game
         bool focused = Window.IsFocused;
         if (focused && !_wasFocused)
             EditorAssetBackend.Instance?.Refresh();
-        if (focused != _wasFocused)
+        bool cliActive = CliServer.IsActive;
+        if (focused != _wasFocused || cliActive != _wasCliActive)
             ApplyFramePacing();
         _wasFocused = focused;
+        _wasCliActive = cliActive;
 
         ExternalAssetDrop.ProcessPending();
         CliServer.Update();
@@ -505,7 +508,7 @@ public class EditorApplication : Game
         }
 
         // Process file changes optionally only when window is focused
-        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || ExternalAssetDrop.ForceProcessActive;
+        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || cliActive || ExternalAssetDrop.ForceProcessActive;
         if (canProcessAssets)
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
@@ -1713,7 +1716,7 @@ public class EditorApplication : Game
 
         int limit = settings.TargetFrameRate;
         int unfocused = settings.UnfocusedFrameRate;
-        if (!Window.IsFocused && unfocused > 0 && (limit == 0 || unfocused < limit))
+        if (!Window.IsFocused && !CliServer.IsActive && unfocused > 0 && (limit == 0 || unfocused < limit))
             limit = unfocused;
         Application.TargetFrameRate = limit;
     }
