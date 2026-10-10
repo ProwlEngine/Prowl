@@ -151,6 +151,23 @@ public class CoreMigrationTests : MigrationTestBase
     }
 
     [Fact]
+    public void Migrate_ReadonlyStaticCollections_KeepTheirContents()
+    {
+        const string source =
+            "using System.Collections.Generic; " +
+            "public static class H { public static readonly float[] Times = new float[3]; public static readonly List<int> Unlocked = new List<int>{ 1 }; " +
+            "public static void Play(){ Times[1] = 42.5f; Unlocked.Add(2); } }";
+        Assembly v1 = Compile(source);
+        v1.GetType("H")!.GetMethod("Play")!.Invoke(null, null);
+        Assembly v2 = Compile(source);
+        Migrate(v1, v2);
+
+        Type hV2 = v2.GetType("H")!;
+        Assert.Equal(new[] { 0f, 42.5f, 0f }, (float[])hV2.GetField("Times")!.GetValue(null)!);
+        Assert.Equal(new[] { 1, 2 }, (List<int>)hV2.GetField("Unlocked")!.GetValue(null)!);
+    }
+
+    [Fact]
     public void Migrate_LazyOfSwappedType_MigratesCreatedValue()
     {
         Assembly v1 = Compile("using System; " + EDef +
