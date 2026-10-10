@@ -13,7 +13,7 @@ public sealed partial class EchoObject
     /// <param name="tagName">The name of the tag to check for</param>
     /// <returns>The tag if found, otherwise null</returns>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace or the value that is being set is null</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or empty or the value that is being set is null</exception>
     public EchoObject this[string tagName]
     {
         get { return Get(tagName); }
@@ -69,7 +69,7 @@ public sealed partial class EchoObject
     /// <param name="tagName">The name of the tag to check for</param>
     /// <returns>The tag if found, otherwise null</returns>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or empty</exception>
     public EchoObject? Get(string tagName)
     {
         if (TagType != EchoType.Compound)
@@ -87,7 +87,7 @@ public sealed partial class EchoObject
     /// <param name="result">The tag if found, otherwise null</param>
     /// <returns>True if the tag was found, otherwise false</returns>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or empty</exception>
     public bool TryGet(string tagName, out EchoObject? result)
     {
         if (TagType != EchoType.Compound)
@@ -104,7 +104,7 @@ public sealed partial class EchoObject
     /// <param name="tagName">The name of the tag to check for</param>
     /// <returns>True if the tag exists, otherwise false</returns>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or empty</exception>
     public bool Contains(string tagName)
     {
         if (TagType != EchoType.Compound)
@@ -120,7 +120,7 @@ public sealed partial class EchoObject
     /// <param name="name">The name of the tag</param>
     /// <param name="newTag">The tag to add</param>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or empty</exception>
     /// <exception cref="ArgumentException">Thrown if the new tag is null or the same as this tag</exception>
     public void Add(string name, EchoObject newTag)
     {
@@ -179,7 +179,7 @@ public sealed partial class EchoObject
     /// <param name="oldName">The old name of the tag</param>
     /// <param name="newName">The new name of the tag</param>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the old or new name is null or whitespace</exception>
+    /// <exception cref="ArgumentNullException">Thrown if the old or new name is null or empty</exception>
     /// <exception cref="ArgumentException">Thrown if the old name doesn't exist or the new name already exists</exception>
     public void Rename(string oldName, string newName)
     {
