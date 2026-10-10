@@ -1164,7 +1164,7 @@ public class HierarchyPanel : DockPanel
                 DeleteOneGameObject(go);
     }
 
-    private static void DeleteOneGameObject(GameObject go)
+    internal static void DeleteOneGameObject(GameObject go)
     {
         var scene = Scene.Current;
         if (scene == null) return;
