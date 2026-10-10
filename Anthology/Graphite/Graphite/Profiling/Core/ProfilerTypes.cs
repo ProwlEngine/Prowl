@@ -3,17 +3,31 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite;
 
+/// <summary>Whether a graph resource is a texture or a buffer.</summary>
+public enum GraphResourceKind : byte
+{
+    Texture,
+    Buffer,
+}
+
+/// <summary>Public copy of a pass's declared access to a graph resource.</summary>
+public readonly record struct PassResourceAccess(
+    RenderResourceID Id,
+    GraphResourceKind Kind,
+    bool IsOutput,
+    TextureState TextureUsage,
+    TextureState? DepthUsage,
+    BufferAccess BufferUsage);
+
 public readonly struct ViewInfo
 {
     public string Name { get; }
     public int Index { get; }
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
-    public ulong ExecutionId { get; }
 
-    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight, ulong executionId)
+    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight)
     {
-        ExecutionId = executionId;
         Name = name;
         Index = index;
         PixelWidth = pixelWidth;
@@ -26,24 +40,44 @@ public readonly struct PassInfo
     public string Name { get; }
     public int Index { get; }
     public int ViewIndex { get; }
-    public ulong ExecutionId { get; }
-    public ReadOnlyMemory<RenderResourceID> Inputs { get; }
-    public ReadOnlyMemory<RenderResourceID> Outputs { get; }
 
-    public PassInfo(
-        string name, int index, int viewIndex, ulong executionId,
-        ReadOnlyMemory<RenderResourceID> inputs, ReadOnlyMemory<RenderResourceID> outputs)
+    /// <summary>Every resource access the pass declared, inputs and outputs.</summary>
+    public ReadOnlyMemory<PassResourceAccess> Accesses { get; }
+
+    public PassInfo(string name, int index, int viewIndex, ReadOnlyMemory<PassResourceAccess> accesses)
     {
         Name = name;
         Index = index;
         ViewIndex = viewIndex;
-        ExecutionId = executionId;
-        Inputs = inputs;
-        Outputs = outputs;
+        Accesses = accesses;
+    }
+
+    /// <summary>The declared accesses that are not outputs.</summary>
+    public IEnumerable<PassResourceAccess> GetInputs() => Filter(Accesses, output: false);
+
+    /// <summary>The declared accesses that are outputs.</summary>
+    public IEnumerable<PassResourceAccess> GetOutputs() => Filter(Accesses, output: true);
+
+    private static IEnumerable<PassResourceAccess> Filter(ReadOnlyMemory<PassResourceAccess> accesses, bool output)
+    {
+        for (int i = 0; i < accesses.Length; i++)
+        {
+            PassResourceAccess access = accesses.Span[i];
+            if (access.IsOutput == output)
+                yield return access;
+        }
     }
 }
 
+/// <summary>Why a pass of the graph did not run for a view.</summary>
+public enum PassSkipReason : byte
+{
+    /// <summary>The pass writes the view target and the view has none.</summary>
+    NoViewTarget,
+}
+
 /// <summary>Work one pass command buffer recorded. Draws counts direct draw calls, IndirectDraws indirect ones.</summary>
+/// <remarks>CpuMilliseconds is the CPU time from the start of the pass's Render through the end of its command buffer.</remarks>
 public readonly record struct PassStats(
     uint Draws,
     uint IndirectDraws,
@@ -51,65 +85,8 @@ public readonly record struct PassStats(
     uint ShaderSwitches,
     uint PipelineBinds,
     uint ResourceSetBinds,
-    uint Barriers);
-
-public enum DrawKind { Draw, DrawIndexed, DrawIndirect, DrawIndexedIndirect }
-
-public readonly struct DrawCallInfo
-{
-    public DrawKind Kind { get; }
-    public uint VertexOrIndexCount { get; }
-    public uint InstanceCount { get; }
-    public uint DrawCount { get; }
-    public bool IsIndirect { get; }
-
-    /// <summary>Topology at draw time. Needed to turn VertexOrIndexCount into a primitive count.</summary>
-    public PrimitiveTopology Topology { get; }
-
-    public DrawCallInfo(DrawKind kind, uint vertexOrIndexCount, uint instanceCount, uint drawCount, bool isIndirect, PrimitiveTopology topology)
-    {
-        Kind = kind;
-        VertexOrIndexCount = vertexOrIndexCount;
-        InstanceCount = instanceCount;
-        DrawCount = drawCount;
-        IsIndirect = isIndirect;
-        Topology = topology;
-    }
-}
-
-public readonly struct DispatchCallInfo
-{
-    public uint GroupCountX { get; }
-    public uint GroupCountY { get; }
-    public uint GroupCountZ { get; }
-    public bool IsIndirect { get; }
-
-    public DispatchCallInfo(uint groupCountX, uint groupCountY, uint groupCountZ, bool isIndirect)
-    {
-        GroupCountX = groupCountX;
-        GroupCountY = groupCountY;
-        GroupCountZ = groupCountZ;
-        IsIndirect = isIndirect;
-    }
-}
-
-public readonly struct ShaderSwitchInfo
-{
-    public string ShaderName { get; }
-    public bool IsCompute { get; }
-    public ShaderStages Stages { get; }
-
-    /// <summary>Bound GraphicsProgram or ComputeProgram.</summary>
-    public ShaderProgram Program { get; }
-
-    public ShaderSwitchInfo(string shaderName, bool isCompute, ShaderStages stages, ShaderProgram program)
-    {
-        ShaderName = shaderName;
-        IsCompute = isCompute;
-        Stages = stages;
-        Program = program;
-    }
-}
+    uint Barriers,
+    double CpuMilliseconds);
 
 public readonly struct PipelineBindInfo
 {
@@ -145,14 +122,12 @@ public readonly struct CommandBufferInfo
     /// <summary>Fresh id per rental, not per pooled object.</summary>
     public ulong Id { get; }
     public string Name { get; }
-    public ulong ExecutionId { get; }
     public PassInfo? Pass { get; }
 
-    public CommandBufferInfo(ulong id, string name, ulong executionId, PassInfo? pass)
+    public CommandBufferInfo(ulong id, string name, PassInfo? pass)
     {
         Id = id;
         Name = name;
-        ExecutionId = executionId;
         Pass = pass;
     }
 }

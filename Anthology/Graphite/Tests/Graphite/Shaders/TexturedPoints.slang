@@ -12,6 +12,12 @@ struct VertexInput
 struct VertexOutput
 {
     float4 clipPosition : SV_Position;
+    float pointSize     : SV_PointSize;
+}
+
+struct FragmentInput
+{
+    float4 clipPosition : SV_Position;
 }
 
 struct Globals
@@ -28,11 +34,12 @@ VertexOutput vertex(VertexInput input)
 {
     VertexOutput output;
     output.clipPosition = mul(Resources.Ortho, float4(input.Position, 0, 1));
+    output.pointSize = 1.0;
     return output;
 }
 
 [shader("fragment")]
-float4 fragment(VertexOutput input) : SV_Target
+float4 fragment(FragmentInput input) : SV_Target
 {
     return Resources.Tex.Sample(Resources.Smp, float2(0.5, 0.5));
 }

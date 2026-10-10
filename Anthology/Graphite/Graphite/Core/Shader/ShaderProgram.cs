@@ -15,6 +15,30 @@ public abstract class ShaderProgram : GraphicsResource
         _resourceLayouts = Util.ShallowClone(resourceLayouts);
         DeepCloneUniformFields(_resourceLayouts);
         _bindingMetadata = SetBindingMetadata.Build(_resourceLayouts);
+        StorageWriteElements = FindStorageWriteElements(_resourceLayouts);
+    }
+
+    /// <summary>
+    /// Content key over the stages of this program.
+    /// </summary>
+    public ProgramKey Key { get; private protected set; }
+
+    internal (PropertyID Name, ResourceKind Kind)[] StorageWriteElements { get; }
+
+    private static (PropertyID Name, ResourceKind Kind)[] FindStorageWriteElements(ResourceLayoutDescription[] layouts)
+    {
+        List<(PropertyID, ResourceKind)> found = new();
+        foreach (ResourceLayoutDescription layout in layouts)
+        {
+            if (layout.Elements == null) continue;
+            foreach (ResourceLayoutElementDescription element in layout.Elements)
+            {
+                if (element.Kind is ResourceKind.StructuredBufferReadWrite or ResourceKind.TextureReadWrite)
+                    found.Add((element.Name, element.Kind));
+            }
+        }
+
+        return found.ToArray();
     }
 
     /// <summary>

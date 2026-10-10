@@ -9,7 +9,7 @@
         <Project Path="Graphite/Prowl.Graphite.csproj" />
     </Folder>
     <Folder Name="/Debugger/">
-        <Project Path="Graphite.Debugger/Prowl.Graphite.Debugger.csproj" />
+        <Project Path="Debugger/Core/Prowl.Graphite.Debugger.csproj" />
     </Folder>
     <Folder Name="/ShaderDef/">
         <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
@@ -27,6 +27,9 @@
     </Folder>
     <Folder Name="/Samples/TexturedQuad/">
         <Project Path="Samples/TexturedQuad/TexturedQuad.csproj" />
+    </Folder>
+    <Folder Name="/Samples/DebuggerReplay/">
+        <Project Path="Samples/DebuggerReplay/DebuggerReplay.csproj" />
     </Folder>
     <Folder Name="/Samples/Shared/">
         <Project Path="Samples/Shared/Shared.csproj" />

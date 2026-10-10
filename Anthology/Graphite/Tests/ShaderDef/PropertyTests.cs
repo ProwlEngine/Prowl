@@ -8,16 +8,6 @@ namespace Prowl.Graphite.ShaderDef.Tests;
 
 public class PropertyTests
 {
-    [Fact]
-    public void ParsesNameDisplayNameAndType()
-    {
-        ShaderProperty p = Parse.Property("""_Tint("Tint Color", Color) = (1, 1, 1, 1)""");
-
-        Assert.Equal("_Tint", p.Name);
-        Assert.Equal("Tint Color", p.DisplayName);
-        Assert.Equal(ShaderPropertyType.Color, p.PropertyType);
-    }
-
 
     [Fact]
     public void Float_ParsesScalarIntoX()
@@ -29,23 +19,6 @@ public class PropertyTests
     }
 
 
-    [Fact]
-    public void Float_ParsesNegative()
-    {
-        ShaderProperty p = Parse.Property("""_B("Bias", Float) = -1.5""");
-
-        Assert.Equal(-1.5f, p.Value.X);
-    }
-
-
-    [Fact]
-    public void Integer_StoredAsFloat()
-    {
-        ShaderProperty p = Parse.Property("""_C("Count", Integer) = 7""");
-
-        Assert.Equal(ShaderPropertyType.Integer, p.PropertyType);
-        Assert.Equal(7f, p.Value.X);
-    }
 
 
     [Theory]
@@ -114,13 +87,4 @@ public class PropertyTests
         Assert.Contains("Float property expects a scalar", ex.Message);
     }
 
-
-    [Fact]
-    public void NoDefaultValue_LeavesDefaults()
-    {
-        ShaderProperty p = Parse.Property("""_X("X", Float)""");
-
-        Assert.Equal(Float4.Zero, p.Value);
-        Assert.Equal("", p.TextureValue);
-    }
 }

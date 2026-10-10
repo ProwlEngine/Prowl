@@ -58,7 +58,9 @@ public sealed class RenderContext
     /// <summary>View being rendered as its concrete type.</summary>
     public T ViewAs<T>() where T : IRenderView => (T)_view;
 
-    internal IGraphProfiler? GraphProfiler => _device.GraphProfiler;
+    internal IGraphProfiler? GraphProfiler => _task.Profilers.Graph;
+
+    internal Prowl.Graphite.Debugging.ICaptureProfiler? CaptureHook => _task.Profilers.Capture;
 
     internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
@@ -99,6 +101,25 @@ public sealed class RenderContext
 
         _pendingBufferSrc = bufferSrc;
         _pendingBufferDst = bufferDst;
+    }
+
+    internal void MarkAttachmentWrites(ResourceAccess[] accesses)
+    {
+        foreach (ResourceAccess access in accesses)
+        {
+            if (!access.IsTexture || !access.IsOutput)
+                continue;
+
+            RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
+            if (access.TextureUsage == TextureState.Attachment)
+            {
+                foreach (Texture color in texture.ColorTextures)
+                    color.MarkContentChanged();
+            }
+
+            if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) == TextureState.Attachment)
+                texture.DepthTexture.MarkContentChanged();
+        }
     }
 
     internal void RestoreRestingStates(string scopeName)
@@ -218,25 +239,33 @@ public sealed class RenderContext
         public BufferAccess Visible = BufferAccess.None;
     }
 
+    internal GraphicsDevice Device => _device;
+
+    internal GraphTextureStates? CurrentTextureStates => _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+
     internal CommandBuffer BeginCommandBuffer(string name)
     {
         CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
 
         cb.Execution = _task;
         cb.Pass = _currentPass;
+        cb.PassSink = null;
         cb.ResetStats();
         cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
 
         cb.Begin();
-        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+        cb.GraphStates = CurrentTextureStates;
         return cb;
     }
 
     internal CommandBuffer BeginPassCommandBuffer(string passName)
     {
         CommandBuffer cb = BeginCommandBuffer(passName);
+        if (_task.Profilers.CommandStream is { } profiler && cb.Pass is { } pass)
+            cb.PassSink = profiler.BeginPassCommands(in pass);
+
         if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
             return cb;
 
@@ -245,7 +274,7 @@ public sealed class RenderContext
         _pendingBufferSrc = BufferAccess.None;
         _pendingBufferDst = BufferAccess.None;
         CommitBarrierStates();
-        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+        cb.GraphStates = CurrentTextureStates;
         return cb;
     }
 
@@ -271,7 +300,18 @@ public sealed class RenderContext
         cmd.SetFramebuffer(GetRenderTexture(new TextureHandle(target)).Framebuffer, GetTargetOps(target));
     }
 
-    internal void EndCommandBuffer(CommandBuffer cmd) => _task.SubmitRecorded(cmd);
+    internal void EndCommandBuffer(CommandBuffer cmd)
+    {
+        if (cmd.PassSink is { } sink)
+        {
+            cmd.PassSink = null;
+            sink.End();
+        }
+
+        _task.SubmitRecorded(cmd);
+    }
+
+    internal void EndCommandBufferAhead(CommandBuffer cmd, CommandBuffer before) => _task.SubmitRecordedAhead(cmd, before);
 
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>
@@ -441,21 +481,6 @@ public sealed class RenderContext
             GraphViewTargetResource viewTarget => viewTarget.Ops,
             _ => throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' is not a render target.")
         };
-    }
-
-    /// <summary>Resolves a texture or buffer handle to what the profiler should see for a pass read.</summary>
-    internal void ResolveForProfiler(RenderResourceID resource, out RenderTexture? texture, out DeviceBuffer? buffer)
-    {
-        if (IsTextureResource(resource))
-        {
-            texture = GetRenderTexture(new TextureHandle(resource));
-            buffer = null;
-        }
-        else
-        {
-            texture = null;
-            buffer = GetRenderBuffer(new BufferHandle(resource));
-        }
     }
 
     private RenderTextureDescription ToTransientDesc(GraphTextureResource resource)

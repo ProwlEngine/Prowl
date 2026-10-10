@@ -105,11 +105,10 @@ dotnet test Tests/Prowl.Graphite.Tests.csproj -p:ExcludeGPU=true
 
 ## Profiler tests
 
-`GPU/Baseline/ProfilingCountingTests` assert the live profiling counters against real device work.
-Profiling is now a runtime toggle (`GraphicsDeviceOptions.EnableProfiling`) rather than a
-compile-time flag, so each test probes the running device directly (creates a throwaway buffer and
-checks whether `GetProfile()` moved) and skips itself if profiling isn't enabled on that device,
-instead of relying on a build-time define.
+`GPU/ProfilerEventsTests` cover the per-execution profiler seam: the execution lifecycle, events
+under one execution, per-capability merging, and `GlobalProfilers` factories. The capture and
+command stream seams are covered by `GPU/CaptureHookTests`, `GPU/CaptureCopyTests` and
+`GPU/CommandStreamSinkTests`, and `Graphite.Debugger` by `Tests/Debugger`.
 
 ## Vulkan debug callback note
 

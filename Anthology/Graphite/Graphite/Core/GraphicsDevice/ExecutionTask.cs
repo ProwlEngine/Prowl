@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+
 namespace Prowl.Graphite;
 
 /// <summary>
@@ -14,15 +17,32 @@ public abstract partial class ExecutionTask
     /// <summary>Owning device.</summary>
     public abstract GraphicsDevice Device { get; }
 
+    internal ProfilerSet Profilers { get; set; } = ProfilerSet.Empty;
+
+    private int _completed;
+
+    internal bool IsCompleted => Volatile.Read(ref _completed) != 0;
+
+    internal void MarkCompleted() => Volatile.Write(ref _completed, 1);
+
     /// <summary>Queues a recorded command buffer for this execution's submit. Call End() first.</summary>
     /// <param name="commandList">Buffer to submit.</param>
     internal abstract void SubmitCommandsInternal(CommandBuffer commandList);
 
     internal void SubmitRecorded(CommandBuffer commandBuffer)
     {
-        Device.CommandProfiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
         commandBuffer.End();
         SubmitCommandsInternal(commandBuffer);
+    }
+
+    /// <summary>Queues a recorded command buffer immediately ahead of one already queued. Call End() first.</summary>
+    internal virtual void SubmitCommandsAheadInternal(CommandBuffer commandList, CommandBuffer before)
+        => throw new NotSupportedException();
+
+    internal void SubmitRecordedAhead(CommandBuffer commandBuffer, CommandBuffer before)
+    {
+        commandBuffer.End();
+        SubmitCommandsAheadInternal(commandBuffer, before);
     }
 
     /// <summary>

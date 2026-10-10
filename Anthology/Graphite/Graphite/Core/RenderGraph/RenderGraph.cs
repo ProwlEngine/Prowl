@@ -28,29 +28,36 @@ public sealed class RenderGraph : IDisposable
             }
         }
 
-        internal readonly RenderResourceID[] Inputs;
-
-        internal readonly RenderResourceID[] Outputs;
+        internal readonly PassResourceAccess[] PublicAccesses;
 
         internal PassNode(IPass pass, ResourceAccess[] accesses)
         {
             Pass = pass;
             Accesses = accesses;
-            Inputs = Ids(accesses, output: false);
-            Outputs = Ids(accesses, output: true);
+            PublicAccesses = ToPublic(accesses);
         }
 
-        private static RenderResourceID[] Ids(ResourceAccess[] accesses, bool output)
+        private static PassResourceAccess[] ToPublic(ResourceAccess[] accesses)
         {
-            var ids = new List<RenderResourceID>(accesses.Length);
-            foreach (ResourceAccess access in accesses)
+            PassResourceAccess[] result = new PassResourceAccess[accesses.Length];
+            for (int i = 0; i < accesses.Length; i++)
             {
-                if (access.IsOutput == output)
-                    ids.Add(access.Id);
+                ResourceAccess access = accesses[i];
+                result[i] = new PassResourceAccess(
+                    access.Id,
+                    access.IsTexture ? GraphResourceKind.Texture : GraphResourceKind.Buffer,
+                    access.IsOutput,
+                    access.TextureUsage,
+                    access.DepthUsage,
+                    access.BufferUsage);
             }
-            return ids.ToArray();
+
+            return result;
         }
     }
+
+    /// <summary>Debug name reported to profilers of every execution of this graph.</summary>
+    public string Name { get; }
 
     /// <summary>Passes in exec order (topo sorted, ties by insertion order).</summary>
     public IReadOnlyList<PassNode> OrderedPasses { get; }
@@ -62,9 +69,11 @@ public sealed class RenderGraph : IDisposable
     public bool WritesViewTarget { get; }
 
     private RenderGraph(
+        string name,
         PassNode[] ordered,
         Dictionary<RenderResourceID, GraphResource> resources)
     {
+        Name = name;
         OrderedPasses = ordered;
         Resources = resources;
         WritesViewTarget = resources.ContainsKey(GraphViewTargetResource.ViewTargetId);
@@ -80,9 +89,14 @@ public sealed class RenderGraph : IDisposable
     /// <summary>
     /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Throws if an input has no producer, or on a dependency cycle.
     /// </summary>
+    /// <param name="passes">Passes to solve.</param>
+    /// <param name="name">Debug name reported to profilers.</param>
     public static RenderGraph Build(
-        IReadOnlyList<IPass> passes)
+        IReadOnlyList<IPass> passes,
+        string name = "")
     {
+        ArgumentNullException.ThrowIfNull(name);
+
         int count = passes.Count;
         var nodes = new PassNode[count];
         var resources = new Dictionary<RenderResourceID, GraphResource>();
@@ -118,7 +132,7 @@ public sealed class RenderGraph : IDisposable
         for (int i = 0; i < ordered.Length; i++)
             orderedNodes[i] = nodes[ordered[i]];
 
-        return new RenderGraph(orderedNodes, resources);
+        return new RenderGraph(name, orderedNodes, resources);
     }
 
     private static bool SameDeclaration(GraphResource existing, GraphResource declared) => (existing, declared) switch

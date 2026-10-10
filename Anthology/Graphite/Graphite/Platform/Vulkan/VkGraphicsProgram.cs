@@ -63,7 +63,7 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
         : base(description)
     {
         _gd = gd;
-        _shader = gd.ShaderCache.Acquire(description.Stages, ResourceLayoutsArray);
+        _shader = gd.ShaderCache.Acquire(Key, description.Stages, ResourceLayoutsArray);
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);

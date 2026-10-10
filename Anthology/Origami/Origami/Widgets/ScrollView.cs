@@ -133,8 +133,8 @@ public sealed class ScrollViewBuilder
     /// <summary>Scroll-wheel step in pixels per click (default 30).</summary>
     public ScrollViewBuilder WheelStep(float step) { _wheelStep = MathF.Max(1f, step); return this; }
 
-    /// <summary>When true (default), a wheel scroll this view actually consumes stops propagating to
-    /// ancestor scroll views (so scrolling a nested list/table doesn't also scroll the page behind it).</summary>
+    /// <summary>When true (default), a wheel scroll that moves this view stops propagating to ancestor scroll views.
+    /// At an edge the wheel passes through so the outer view keeps scrolling.</summary>
     public ScrollViewBuilder TrapScroll(bool trap = true) { _trapScroll = trap; return this; }
 
     /// <summary>
@@ -195,24 +195,21 @@ public sealed class ScrollViewBuilder
 
                 if (_horizontal && (shift || !_vertical))
                 {
-                    float scroll = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
+                    float prev = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
                     float contentW = _paper.GetElementStorage(outerHandle, "contentW", _width);
                     float maxScroll = MathF.Max(0f, contentW - _width);
-                    scroll -= (float)e.Delta * _wheelStep;
-                    scroll = Clamp(scroll, 0f, maxScroll);
+                    float scroll = Clamp(prev - (float)e.Delta * _wheelStep, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollX", scroll);
-                    // Don't let an ancestor scroll view also consume this wheel event.
-                    if (_trapScroll && maxScroll > 0f) e.StopPropagation();
+                    if (_trapScroll && scroll != prev) e.StopPropagation();
                 }
                 else if (_vertical)
                 {
-                    float scroll = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
+                    float prev = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
                     float contentH = _paper.GetElementStorage(outerHandle, "contentH", _height);
                     float maxScroll = MathF.Max(0f, contentH - _height);
-                    scroll -= (float)e.Delta * _wheelStep;
-                    scroll = Clamp(scroll, 0f, maxScroll);
+                    float scroll = Clamp(prev - (float)e.Delta * _wheelStep, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollY", scroll);
-                    if (_trapScroll && maxScroll > 0f) e.StopPropagation();
+                    if (_trapScroll && scroll != prev) e.StopPropagation();
                 }
             });
 

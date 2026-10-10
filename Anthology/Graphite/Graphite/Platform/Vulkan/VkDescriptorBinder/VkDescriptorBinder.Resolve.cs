@@ -95,7 +95,7 @@ internal unsafe sealed partial class VkDescriptorBinder
         }
 
         missing = true;
-        return new DeviceBufferRange(_gd.NullStructuredRW, 0, 0);
+        return new DeviceBufferRange(_gd.NullStructuredRW, 0, _gd.NullStructuredRW.SizeInBytes);
     }
 
     private DeviceBufferRange ResolveUboRange(

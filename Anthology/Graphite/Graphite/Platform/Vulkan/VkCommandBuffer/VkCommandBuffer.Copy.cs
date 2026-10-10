@@ -12,7 +12,7 @@ internal unsafe partial class VkCommandBuffer
     private protected override void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)
     {
         VkBuffer stagingBuffer = GetFilledStagingBuffer(source, sizeInBytes);
-        CopyBuffer(stagingBuffer, 0, buffer, bufferOffsetInBytes, sizeInBytes);
+        CopyBufferCore(stagingBuffer, 0, buffer, bufferOffsetInBytes, sizeInBytes);
     }
 
     private protected override void CopyBufferCore(
@@ -23,8 +23,6 @@ internal unsafe partial class VkCommandBuffer
         uint sizeInBytes)
     {
         EnsureNoRenderPass();
-
-        destination.MarkContentChanged();
 
         VkBuffer srcVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(source);
         VkBuffer dstVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(destination);
@@ -183,7 +181,6 @@ internal unsafe partial class VkCommandBuffer
         in TextureRegion region)
     {
         EnsureNoRenderPass();
-        destination.MarkContentChanged();
         VkTexture src = Util.AssertSubtype<Texture, VkTexture>(source);
         VkBuffer dst = Util.AssertSubtype<DeviceBuffer, VkBuffer>(destination);
         ImageLayout layout = VkBarriers.CurrentLayout(this, src);

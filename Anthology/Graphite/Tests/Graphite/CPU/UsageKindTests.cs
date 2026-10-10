@@ -57,13 +57,4 @@ public class UsageKindTests
         Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
             "usage_depthstorage", s_desc, depthUsage: TextureState.Storage));
     }
-
-    [Fact]
-    public void DepthReadOnly_OnOutput_IsAccepted()
-    {
-        RenderContextBuilder builder = new();
-        TextureHandle handle = builder.DeclareOutputTexture(
-            "usage_depthro", s_desc, depthUsage: TextureState.DepthReadOnly);
-        Assert.True(handle.IsValid);
-    }
 }

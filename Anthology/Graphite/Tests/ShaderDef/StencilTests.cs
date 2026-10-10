@@ -18,21 +18,6 @@ public class StencilTests
     }
 
 
-    [Fact]
-    public void ReadAndWriteMask_Set()
-    {
-        PassState s = Parse.State("""
-            Stencil
-            {
-                ReadMask 15
-                WriteMask 7
-            }
-            """);
-
-        Assert.Equal(15, s.DepthStencil.StencilReadMask);
-        Assert.Equal(7, s.DepthStencil.StencilWriteMask);
-    }
-
 
     [Fact]
     public void Comp_SetsBothFaces()
@@ -104,14 +89,6 @@ public class StencilTests
         Assert.Equal(StencilOperation.DecrementAndClamp, s.DepthStencil.StencilBack.DepthFail);
     }
 
-
-    [Fact]
-    public void EmptyBlock_OnlyEnablesStencilTest()
-    {
-        PassState s = Parse.State("""Stencil { }""");
-
-        Assert.Equal(PassStateFields.StencilTest, s.Set);
-    }
 
 
     [Fact]

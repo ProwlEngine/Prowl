@@ -22,12 +22,12 @@ public readonly struct TestRenderView : IRenderView
 
 public static class TestGraphExtensions
 {
-    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext, CommandBuffer> record)
-        => gd.RunTestGraphPasses(1, (context, cmd, _) => record(context, cmd));
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext, CommandBuffer> record, params IProfiler[] profilers)
+        => gd.RunTestGraphPasses(1, (context, cmd, _) => record(context, cmd), profilers);
 
-    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext, CommandBuffer, int> record)
+    public static ExecutionTask RunTestGraphPasses(this GraphicsDevice gd, int passCount, Action<RenderContext, CommandBuffer, int> record, params IProfiler[] profilers)
     {
-        ExecutionTask task = gd.BeginExecution();
+        ExecutionTask task = gd.BeginExecution(profilers);
         Prowl.Graphite.RenderGraph.RenderGraph graph = Prowl.Graphite.RenderGraph.RenderGraph.Build(
             Array.Empty<IPass>());
         var context = new RenderContext(gd, task, graph, default);
@@ -75,7 +75,6 @@ public static class TestGraphExtensions
 // creators build a window.
 public static class TestUtils
 {
-    // Each device gets its own profiler instance - state must not leak across devices/tests.
     private static GraphicsDeviceOptions HeadlessOptions() => new(true);
     private static GraphicsDeviceOptions SwapchainOptions() => new(true);
     private static SwapchainDescription SwapchainConfig() => new();
@@ -162,12 +161,16 @@ internal sealed class TrackingResourceFactory : ResourceFactory
 
     private T Track<T>(T resource) where T : IDisposable
     {
-        _created.Add(resource);
+        lock (_created)
+            _created.Add(resource);
         return resource;
     }
 
     public override Framebuffer CreateFramebuffer(in FramebufferDescription description)
         => Track(_inner.CreateFramebuffer(description));
+
+    public override RenderTexture CreateRenderTexture(in RenderTextureDescription description)
+        => Track(_inner.CreateRenderTexture(description));
 
     protected override DeviceBuffer CreateBufferCore(in BufferDescription description)
         => Track(_inner.CreateBuffer(description));
@@ -192,6 +195,21 @@ internal sealed class TrackingResourceFactory : ResourceFactory
 
     public override Swapchain CreateSwapchain(in SwapchainDescription description)
         => Track(_inner.CreateSwapchain(description));
+}
+
+internal static class DeviceTracking
+{
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GraphicsDevice, TrackingResourceFactory> s_factories = new();
+
+    public static TrackingResourceFactory Tracked(this GraphicsDevice device)
+        => s_factories.GetValue(device, d => new TrackingResourceFactory(d.ResourceFactory));
+
+    public static IDisposable TrackedCleanup(this GraphicsDevice device) => new Cleanup(device.Tracked());
+
+    private sealed class Cleanup(TrackingResourceFactory factory) : IDisposable
+    {
+        public void Dispose() => factory.DisposeAll();
+    }
 }
 
 public sealed class TexelData<T> where T : unmanaged

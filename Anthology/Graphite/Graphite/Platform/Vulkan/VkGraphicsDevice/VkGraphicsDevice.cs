@@ -84,6 +84,11 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     internal void UnregisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Unregister(cache);
 
+    private VkCaptureBackend? _captureBackend;
+
+    internal override Prowl.Graphite.RenderGraph.ICaptureBackend CaptureBackend
+        => System.Threading.LazyInitializer.EnsureInitialized(ref _captureBackend, () => new VkCaptureBackend(this))!;
+
     internal override CommandBuffer RentGraphCommandBuffer(ExecutionTask task)
     {
         ref SlotState slot = ref _slots[task.RingSlot];
@@ -167,7 +172,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     {
         DisposeSlots();
 
-        Debug.Assert(_pending.Count == 0);
+        System.Diagnostics.Debug.Assert(_pending.Count == 0);
 
         _mainSwapchain?.Dispose();
         DestroyDebugCallback();
@@ -176,6 +181,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         WaitForGraphicsQueueIdle();
         FlushAllRetired();
+        DestroyQueryPools();
 
         Vk.DestroyPipelineCache(Device, DriverPipelineCache, null);
 

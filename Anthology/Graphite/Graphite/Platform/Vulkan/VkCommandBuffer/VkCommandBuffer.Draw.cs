@@ -72,8 +72,23 @@ internal unsafe partial class VkCommandBuffer
         return vkBuffer;
     }
 
+    private void MarkStorageWrites(ShaderProgram program)
+    {
+        foreach ((PropertyID name, ResourceKind kind) in program.StorageWriteElements)
+        {
+            if (!_activeProperties.Entries.TryGetValue(name, out PropertyEntry? entry))
+                continue;
+
+            if (kind == ResourceKind.StructuredBufferReadWrite)
+                entry.Buffer?.Buffer.MarkContentChanged();
+            else
+                (entry.TextureView?.Target ?? entry.Texture)?.MarkContentChanged();
+        }
+    }
+
     private void PreDrawCommand()
     {
+        MarkStorageWrites(_currentShaderProgram);
         ResolveAndBindGraphicsPipeline();
 
         // Resolve + transition property textures (must precede the render pass) and prepare descriptor
@@ -92,6 +107,7 @@ internal unsafe partial class VkCommandBuffer
     private void PreDispatchCommand()
     {
         EnsureNoRenderPass();
+        MarkStorageWrites(_currentComputeProgram);
 
         bool needBind = _descriptorBinder.Prepare(
             _currentComputeProgram,
@@ -132,6 +148,7 @@ internal unsafe partial class VkCommandBuffer
         uint sourceVersion = source is VertexSource versioned ? versioned.Version : 0;
         if (_vbCacheSource == source && _vbCacheProgram == program && _vbCacheCount == count && _vbCacheVersion == sourceVersion)
         {
+            ReportVertexBindings(layouts, _vbCacheBindings, count);
             return;
         }
 
@@ -160,6 +177,7 @@ internal unsafe partial class VkCommandBuffer
         _vbCacheProgram = program;
         _vbCacheCount = count;
         _vbCacheVersion = sourceVersion;
+        ReportVertexBindings(layouts, _vbCacheBindings, count);
     }
 
     private void BindIndexBufferFromSource()
@@ -171,6 +189,7 @@ internal unsafe partial class VkCommandBuffer
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
 
+        ReportIndexBinding(ib, fmt, indexCount);
         VkBufferHandle nativeBuffer = vkBuffer.DeviceBuffer;
         if (_ibCacheValid && _ibCacheBuffer.Handle == nativeBuffer.Handle && _ibCacheFormat == fmt)
             return;

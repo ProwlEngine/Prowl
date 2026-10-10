@@ -41,6 +41,7 @@
     <Project Path="Unwrapper/Tests/Unwrapper.Tests.csproj" />
     <Project Path="Rosetta/Tests/Rosetta.Tests.csproj" />
     <Project Path="Paper/Tests/Paper.Tests.csproj" />
+    <Project Path="Origami/Tests/Origami.Tests.csproj" />
     <Project Path="Scaffold/Tests/Scaffold.Tests.csproj" />
     <Project Path="Quire/Tests/Quire.Tests.csproj" />
     <Project Path="Slang/Tests/Prowl.Slang.Tests.csproj" />

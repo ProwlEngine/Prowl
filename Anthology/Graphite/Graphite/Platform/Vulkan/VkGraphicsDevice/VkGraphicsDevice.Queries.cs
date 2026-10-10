@@ -24,10 +24,10 @@ internal unsafe partial class VkGraphicsDevice
     private readonly ConcurrentQueue<QueryPool> _availableTimingPools = new();
     private readonly ConcurrentQueue<QueryPool> _availableStatsPools = new();
 
-    internal GpuQueries BeginQueries(Silk.NET.Vulkan.CommandBuffer cb)
+    internal GpuQueries BeginQueries(Silk.NET.Vulkan.CommandBuffer cb, bool enabled)
     {
         GpuQueries queries = default;
-        if (GpuStatsProfiler == null)
+        if (!enabled)
             return queries;
 
         QueryPool timing = GetPool(_availableTimingPools, QueryType.Timestamp, 2, 0);
@@ -55,8 +55,11 @@ internal unsafe partial class VkGraphicsDevice
             Vk.CmdWriteTimestamp(cb, PipelineStageFlags.BottomOfPipeBit, timing, 1);
     }
 
-    private void ResolveQueries(in GpuQueries queries, in CommandBufferInfo info, bool isTransfer)
+    private void ResolveQueries(in GpuQueries queries, out double? milliseconds, out GpuVertexStats? vertexStats)
     {
+        milliseconds = null;
+        vertexStats = null;
+
         if (queries.Timing is { } timing)
         {
             ulong* timestamps = stackalloc ulong[2];
@@ -67,8 +70,7 @@ internal unsafe partial class VkGraphicsDevice
             _availableTimingPools.Enqueue(timing);
 
             double ticks = timestamps[1] > timestamps[0] ? timestamps[1] - timestamps[0] : 0;
-            double milliseconds = ticks * _physicalDeviceProperties.Limits.TimestampPeriod / 1_000_000.0;
-            GpuStatsProfiler?.RecordExecutionTime(info, isTransfer, milliseconds);
+            milliseconds = ticks * _physicalDeviceProperties.Limits.TimestampPeriod / 1_000_000.0;
         }
 
         if (queries.Stats is { } stats)
@@ -80,9 +82,16 @@ internal unsafe partial class VkGraphicsDevice
                 QueryResultFlags.ResultWaitBit | QueryResultFlags.Result64Bit).CheckResult();
             _availableStatsPools.Enqueue(stats);
 
-            GpuVertexStats vertexStats = new(results[0], results[1], results[2], results[3], results[4]);
-            GpuStatsProfiler?.RecordGpuVertexStats(info, in vertexStats);
+            vertexStats = new GpuVertexStats(results[0], results[1], results[2], results[3], results[4]);
         }
+    }
+
+    private void DestroyQueryPools()
+    {
+        while (_availableTimingPools.TryDequeue(out QueryPool pool))
+            Vk.DestroyQueryPool(Device, pool, null);
+        while (_availableStatsPools.TryDequeue(out QueryPool pool))
+            Vk.DestroyQueryPool(Device, pool, null);
     }
 
     private QueryPool GetPool(ConcurrentQueue<QueryPool> free, QueryType type, uint count, QueryPipelineStatisticFlags statistics)

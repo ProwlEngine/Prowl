@@ -2,6 +2,8 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.Debugging;
+
 namespace Prowl.Graphite;
 
 /// <summary>
@@ -19,6 +21,13 @@ public abstract class CommandBufferBase : GraphicsResource
     {
         Device = device;
     }
+
+    /// <summary>Command sink of the pass this buffer records, if a command stream profiler took it.</summary>
+    internal IPassCommandSink? PassSink { get; set; }
+
+    internal virtual void TrackBuffer(DeviceBuffer buffer) { }
+
+    internal virtual void TrackTexture(Texture texture) { }
 
     internal GraphTextureStates? GraphStates { get; set; }
 
@@ -79,8 +88,14 @@ public abstract class CommandBufferBase : GraphicsResource
             return;
         }
 
+        TrackBuffer(buffer);
+        buffer.MarkContentChanged();
         UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
+        PassSink?.UpdateBuffer(buffer.CurrentVersion, bufferOffsetInBytes, SourceBytes(source, sizeInBytes));
     }
+
+    private static unsafe ReadOnlySpan<byte> SourceBytes(IntPtr source, uint sizeInBytes)
+        => new((void*)source, (int)sizeInBytes);
 
     private protected abstract void UpdateBufferCore(
         DeviceBuffer buffer,
@@ -104,7 +119,11 @@ public abstract class CommandBufferBase : GraphicsResource
         }
         BoundsChecks.CopyBuffer(source, sourceOffset, destination, destinationOffset, sizeInBytes);
 
+        TrackBuffer(source);
+        TrackBuffer(destination);
+        destination.MarkContentChanged();
         CopyBufferCore(source, sourceOffset, destination, destinationOffset, sizeInBytes);
+        PassSink?.CopyBuffer(source.CurrentVersion, sourceOffset, destination.CurrentVersion, destinationOffset, sizeInBytes);
     }
 
     private protected abstract void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes);
@@ -121,11 +140,24 @@ public abstract class CommandBufferBase : GraphicsResource
         for (uint level = 0; level < source.MipLevels; level++)
         {
             Util.GetMipDimensions(source, level, out uint mipWidth, out uint mipHeight, out uint mipDepth);
-            CopyTexture(
+            CopyTextureRegion(
                 source, 0, 0, 0, level, 0,
                 destination, 0, 0, 0, level, 0,
                 mipWidth, mipHeight, mipDepth,
                 effectiveSrcArrayLayers);
+        }
+
+        destination.MarkContentChanged();
+
+        if (PassSink is { } sink)
+        {
+            for (uint level = 0; level < source.MipLevels; level++)
+            {
+                Util.GetMipDimensions(source, level, out uint mipWidth, out uint mipHeight, out uint mipDepth);
+                TextureRegion sourceRegion = new(0, 0, 0, mipWidth, mipHeight, mipDepth, level, 0);
+                TextureRegion destinationRegion = new(0, 0, 0, mipWidth, mipHeight, mipDepth, level, 0);
+                sink.CopyTexture(source.CurrentVersion, in sourceRegion, destination.CurrentVersion, in destinationRegion, effectiveSrcArrayLayers);
+            }
         }
     }
 
@@ -176,8 +208,43 @@ public abstract class CommandBufferBase : GraphicsResource
         uint width, uint height, uint depth,
         uint layerCount)
     {
+        CopyTextureRegion(
+            source,
+            srcX, srcY, srcZ,
+            srcMipLevel,
+            srcBaseArrayLayer,
+            destination,
+            dstX, dstY, dstZ,
+            dstMipLevel,
+            dstBaseArrayLayer,
+            width, height, depth,
+            layerCount);
+        destination.MarkContentChanged();
+
+        if (PassSink is { } sink)
+        {
+            TextureRegion sourceRegion = new(srcX, srcY, srcZ, width, height, depth, srcMipLevel, srcBaseArrayLayer);
+            TextureRegion destinationRegion = new(dstX, dstY, dstZ, width, height, depth, dstMipLevel, dstBaseArrayLayer);
+            sink.CopyTexture(source.CurrentVersion, in sourceRegion, destination.CurrentVersion, in destinationRegion, layerCount);
+        }
+    }
+
+    private void CopyTextureRegion(
+        Texture source,
+        uint srcX, uint srcY, uint srcZ,
+        uint srcMipLevel,
+        uint srcBaseArrayLayer,
+        Texture destination,
+        uint dstX, uint dstY, uint dstZ,
+        uint dstMipLevel,
+        uint dstBaseArrayLayer,
+        uint width, uint height, uint depth,
+        uint layerCount)
+    {
         ValidationHelpers.CopyTextureCheckNotNull(Device, source, destination);
         ValidationHelpers.CopyTextureCheckRegion(Device, width, height, depth, layerCount);
+        TrackTexture(source);
+        TrackTexture(destination);
         BoundsChecks.CopyTexture(
             source,
             srcX, srcY, srcZ,
@@ -220,7 +287,11 @@ public abstract class CommandBufferBase : GraphicsResource
         ValidationHelpers.RequireNotNull(Device, source, nameof(source), nameof(CopyTextureToBuffer));
         ValidationHelpers.RequireNotNull(Device, destination, nameof(destination), nameof(CopyTextureToBuffer));
         BoundsChecks.CopyTextureToBuffer(source, destination, destinationOffset, region);
+        TrackTexture(source);
+        TrackBuffer(destination);
+        destination.MarkContentChanged();
         CopyTextureToBufferCore(source, destination, destinationOffset, region);
+        PassSink?.CopyTextureToBuffer(source.CurrentVersion, in region, destination.CurrentVersion, destinationOffset);
     }
 
     private protected abstract void CopyTextureToBufferCore(
@@ -240,7 +311,10 @@ public abstract class CommandBufferBase : GraphicsResource
 
         if (texture.MipLevels > 1)
         {
+            TrackTexture(texture);
+            texture.MarkContentChanged();
             GenerateMipmapsCore(texture);
+            PassSink?.GenerateMips(texture.CurrentVersion);
         }
     }
 
@@ -255,7 +329,10 @@ public abstract class CommandBufferBase : GraphicsResource
     {
         Device.UpdateTexture_CheckParameters(texture, region);
         BoundsChecks.UpdateTexture(texture, sizeInBytes, region);
+        TrackTexture(texture);
+        texture.MarkContentChanged();
         UpdateTextureCore(texture, source, sizeInBytes, region);
+        PassSink?.UpdateTexture(texture.CurrentVersion, in region, SourceBytes(source, sizeInBytes));
     }
 
     /// <summary>Updates a texture region from a span.</summary>

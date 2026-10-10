@@ -13,6 +13,7 @@ internal unsafe partial class VkGraphicsDevice
     private const uint VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR = 0x00000001;
 
     private bool _khronosValidationSupported;
+    private bool _surfaceExtensionEnabled;
 
     private void CreateInstance(bool debug, VulkanDeviceOptions options, SwapchainSource? surface)
     {
@@ -51,6 +52,7 @@ internal unsafe partial class VkGraphicsDevice
 
         if (surface != null)
         {
+            _surfaceExtensionEnabled = true;
             byte** surfaceExtensions = surface.VkSurface.GetRequiredExtensions(out uint extensionCount);
             HashSet<string> addedExtensions = [];
 
@@ -186,7 +188,9 @@ internal unsafe partial class VkGraphicsDevice
             TextureCompressionBC = supported.TextureCompressionBC,
             TextureCompressionEtc2 = supported.TextureCompressionEtc2,
             TextureCompressionAstcLdr = supported.TextureCompressionAstcLdr,
-            ImageCubeArray = supported.ImageCubeArray
+            ImageCubeArray = supported.ImageCubeArray,
+            ShaderStorageImageWriteWithoutFormat = supported.ShaderStorageImageWriteWithoutFormat,
+            ShaderStorageImageReadWithoutFormat = supported.ShaderStorageImageReadWithoutFormat
         };
 
         Vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, out PhysicalDeviceMemProperties);
@@ -229,6 +233,9 @@ internal unsafe partial class VkGraphicsDevice
                 string extensionName = Util.GetString(properties[property].ExtensionName);
                 if (extensionName == "VK_KHR_swapchain")
                 {
+                    if (!_surfaceExtensionEnabled)
+                        continue;
+
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
                 }
@@ -275,8 +282,9 @@ internal unsafe partial class VkGraphicsDevice
             throw new RenderException($"The Vulkan device '{_deviceName}' does not support timeline semaphores.");
 
         vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features, timelineSemaphore: true);
+        PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true);
 
-        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan12Features);
+        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan11Features);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
 

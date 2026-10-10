@@ -40,12 +40,11 @@ internal unsafe partial class VkCommandBuffer
                 ClearValue = clearValue
             };
 
-            Texture colorTex = _currentFramebuffer.ColorTargets[(int)index].Target;
             ClearRect clearRect = new()
             {
                 BaseArrayLayer = 0,
                 LayerCount = 1,
-                Rect = new Rect2D(new Offset2D(0, 0), new Extent2D(colorTex.Width, colorTex.Height))
+                Rect = new Rect2D(new Offset2D(0, 0), new Extent2D(_currentFramebuffer.RenderableWidth, _currentFramebuffer.RenderableHeight))
             };
 
             _gd.Vk.CmdClearAttachments(_cb, 1, in clearAttachment, 1, in clearRect);

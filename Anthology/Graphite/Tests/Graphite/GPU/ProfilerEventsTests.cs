@@ -2,6 +2,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 
 using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
@@ -10,33 +12,22 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file sealed class CommandRecorder : ICommandProfiler
+file abstract class ExecutionRecorder : IProfiler
 {
-    public readonly List<ShaderSwitchInfo> ShaderSwitches = new();
-    public readonly List<PipelineBindInfo> PipelineBinds = new();
-    public readonly List<object> ShaderAndPipelineOrder = new();
-    public readonly List<DispatchCallInfo> Dispatches = new();
-    public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
+    public ulong ExecutionId;
+    public string GraphName = "";
+    public int Ended;
 
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
-    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) => Dispatches.Add(info);
-
-    public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info)
+    public virtual void BeginExecution(ulong executionId, string graphName)
     {
-        ShaderSwitches.Add(info);
-        ShaderAndPipelineOrder.Add(info);
+        ExecutionId = executionId;
+        GraphName = graphName;
     }
 
-    public void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info)
-    {
-        PipelineBinds.Add(info);
-        ShaderAndPipelineOrder.Add(info);
-    }
-
-    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
+    public virtual void EndExecution() => Ended++;
 }
 
-file sealed class GraphRecorder : IGraphProfiler
+file sealed class GraphRecorder : ExecutionRecorder, IGraphProfiler
 {
     public readonly List<PassInfo> PassesEnded = new();
     public readonly List<PassStats> PassStatsEnded = new();
@@ -44,88 +35,92 @@ file sealed class GraphRecorder : IGraphProfiler
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) { }
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
 
     public void EndPass(in PassInfo pass, in PassStats stats)
     {
         PassesEnded.Add(pass);
         PassStatsEnded.Add(stats);
     }
-
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 }
 
-file sealed class LifecycleRecorder : IGraphProfiler, ICommandProfiler
+file sealed class LifecycleRecorder : ExecutionRecorder, IGraphProfiler
 {
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
-    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
-    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
-    public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
 
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
     public void EndPass(in PassInfo pass, in PassStats stats) => PassesEnded.Add(pass);
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-        => PassReads.Add((pass, resource, texture, buffer));
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
-        => PassWrites.Add((pass, resource, texture, buffer));
-
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
-    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
-    public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info) { }
-    public void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
-    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
 }
 
-file sealed class TimingRecorder : IGpuStatsProfiler
+file sealed class TimingRecorder : ExecutionRecorder, IGpuStatsProfiler
 {
-    public readonly List<(CommandBufferInfo Info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
+    public readonly List<(CommandBufferInfo Info, double Milliseconds)> ExecutionTimes = new();
 
-    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
-        => ExecutionTimes.Add((commandBuffer, isTransfer, milliseconds));
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds)
+        => ExecutionTimes.Add((commandBuffer, milliseconds));
 
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
-    public void RecordExecutionResolved(ulong executionId) { }
 }
 
-file sealed class StatsOnlyProfiler : IGpuStatsProfiler
+file sealed class ResolveOrderRecorder : IGpuStatsProfiler
+{
+    public readonly List<string> Events = new();
+
+    public void BeginExecution(ulong executionId, string graphName) => Events.Add("begin");
+    public void EndExecution() => Events.Add("end");
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Events.Add("time");
+    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) => Events.Add("stats");
+}
+
+file sealed class StatsOnlyProfiler : ExecutionRecorder, IGpuStatsProfiler
 {
     public readonly List<CommandBufferInfo> Timed = new();
 
-    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) => Timed.Add(commandBuffer);
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Timed.Add(commandBuffer);
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
-    public void RecordExecutionResolved(ulong executionId) { }
 }
 
-file sealed class CorrelationProfiler : IGraphProfiler, IGpuStatsProfiler
+file sealed class CorrelationProfiler : ExecutionRecorder, IGraphProfiler, IGpuStatsProfiler
 {
-    private readonly object _lock = new();
-
     public readonly List<ViewInfo> ViewsBegun = new();
     public readonly List<PassInfo> PassesBegun = new();
-    public readonly List<(int Order, CommandBufferInfo Info)> Timings = new();
-    public readonly List<(int Order, ulong ExecutionId)> Resolved = new();
-    private int _order;
+    public readonly List<CommandBufferInfo> Timings = new();
+    public int TimingsAtEnd = -1;
 
-    public void BeginView(in ViewInfo view) { lock (_lock) ViewsBegun.Add(view); }
+    public void BeginView(in ViewInfo view) => ViewsBegun.Add(view);
     public void EndView(in ViewInfo view) { }
-    public void BeginPass(in PassInfo pass) { lock (_lock) PassesBegun.Add(pass); }
+    public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
     public void EndPass(in PassInfo pass, in PassStats stats) { }
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
-
-    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
-    {
-        lock (_lock) Timings.Add((_order++, commandBuffer));
-    }
-
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Timings.Add(commandBuffer);
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 
-    public void RecordExecutionResolved(ulong executionId)
+    public override void EndExecution()
     {
-        lock (_lock) Resolved.Add((_order++, executionId));
+        TimingsAtEnd = Timings.Count;
+        base.EndExecution();
+    }
+
+    public void AssertCompleteTwoViewCopyExecution(ulong executionId, string graphName)
+    {
+        Assert.Equal(executionId, ExecutionId);
+        Assert.Equal(graphName, GraphName);
+        Assert.Equal(1, Ended);
+        Assert.Equal(new[] { 0, 1 }, ViewsBegun.ConvertAll(v => v.Index));
+        Assert.Equal(4, PassesBegun.Count);
+        Assert.Equal(4, TimingsAtEnd);
+        foreach (int viewIndex in new[] { 0, 1 })
+        {
+            foreach (string name in new[] { "ProfilerClear", "ProfilerCopy" })
+            {
+                CommandBufferInfo info = Assert.Single(Timings, t => t.Pass!.Value.ViewIndex == viewIndex && t.Pass!.Value.Name == name);
+                Assert.Equal(name, info.Name);
+            }
+        }
     }
 }
 
@@ -240,9 +235,9 @@ file sealed class ReadingCopyPass : IPass
 
 public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    private GraphicsDevice CreateProfiledDevice(IProfiler profiler) => GD.BackendType switch
+    private GraphicsDevice CreateDevice() => GD.BackendType switch
     {
-        GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true) { Profiler = profiler }),
+        GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true)),
         _ => throw new NotSupportedException(),
     };
 
@@ -269,7 +264,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
                 ]
             }
         ];
-        return device.ResourceFactory.CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
+        return device.Tracked().CreateComputeProgram(new ComputeDescription(stage, layouts, 16, 16, 1));
     }
 
     private static GraphicsProgram CreateSinkProgram(GraphicsDevice device)
@@ -290,119 +285,15 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
                     new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
             ],
         };
-        return device.ResourceFactory.CreateGraphicsProgram(description);
-    }
-
-    [Fact]
-    public void Dispatch_RecordsShaderSwitchPipelineBindResourceSetBindAndDispatch()
-    {
-        CommandRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        const uint width = 16;
-        const uint height = 16;
-        const uint count = width * height;
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(
-            count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-
-        ComputeProgram program = CreateBasicComputeProgram(device);
-
-        PropertySet props = new();
-        props.SetInt("Width", (int)width);
-        props.SetInt("Height", (int)height);
-        props.SetBuffer("Source", source);
-        props.SetBuffer("Destination", destination);
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-        });
-        device.WaitForIdle();
-
-        ShaderSwitchInfo shaderSwitch = Assert.Single(profiler.ShaderSwitches);
-        Assert.True(shaderSwitch.IsCompute);
-        Assert.Equal(ShaderStages.Compute, shaderSwitch.Stages);
-        Assert.Same(program, shaderSwitch.Program);
-
-        PipelineBindInfo bind = Assert.Single(profiler.PipelineBinds);
-        Assert.True(bind.IsCompute);
-        Assert.Same(program, bind.Program);
-        Assert.Null(bind.Outputs);
-        Assert.Null(bind.Topology);
-        Assert.IsType<ShaderSwitchInfo>(profiler.ShaderAndPipelineOrder[0]);
-
-        GraphicsCountersSnapshot counters = device.Counters.Snapshot();
-        Assert.True(counters.ResourceSetBinds > 0);
-        Assert.Equal(counters.ResourceSetBinds, counters.ResourceSetsBound);
-
-        DispatchCallInfo dispatch = Assert.Single(profiler.Dispatches);
-        Assert.Equal(1u, dispatch.GroupCountX);
-        Assert.Equal(1u, dispatch.GroupCountY);
-        Assert.Equal(1u, dispatch.GroupCountZ);
-        Assert.False(dispatch.IsIndirect);
-    }
-
-    [Fact]
-    public void Draw_OneShaderIntoTwoFramebufferLayouts_RecordsOneShaderSwitchThenTwoPipelineBinds()
-    {
-        CommandRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        const uint size = 16;
-        const uint stride = 52;
-        GraphicsProgram program = CreateSinkProgram(device);
-
-        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
-        device.UpdateBuffer(vertices, 0, new byte[stride * 3]);
-
-        Texture floatTarget = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-            size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture byteTarget = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-            size, size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
-        Framebuffer floatFramebuffer = device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, floatTarget));
-        Framebuffer byteFramebuffer = device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, byteTarget));
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.SetShader(program);
-            cl.SetVertexSource(new VertexSource().SetBuffer("POSITION", vertices));
-            cl.ClearProperties();
-
-            cl.SetFramebuffer(floatFramebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.Draw(3);
-
-            cl.SetFramebuffer(byteFramebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
-            cl.SetFullViewport();
-            cl.Draw(3);
-        });
-        device.WaitForIdle();
-
-        Assert.Equal(3, profiler.ShaderAndPipelineOrder.Count);
-        ShaderSwitchInfo shaderSwitch = Assert.IsType<ShaderSwitchInfo>(profiler.ShaderAndPipelineOrder[0]);
-        PipelineBindInfo first = Assert.IsType<PipelineBindInfo>(profiler.ShaderAndPipelineOrder[1]);
-        PipelineBindInfo second = Assert.IsType<PipelineBindInfo>(profiler.ShaderAndPipelineOrder[2]);
-
-        Assert.False(shaderSwitch.IsCompute);
-        Assert.Same(program, shaderSwitch.Program);
-        Assert.Same(program, first.Program);
-        Assert.Same(program, second.Program);
-        Assert.NotEqual(first.PipelineId, second.PipelineId);
-        Assert.Equal(PixelFormat.R32_G32_B32_A32_Float, first.Outputs!.Value.ColorFormats[0]);
-        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, second.Outputs!.Value.ColorFormats[0]);
-        Assert.Equal(PrimitiveTopology.TriangleList, first.Topology);
+        return device.Tracked().CreateGraphicsProgram(description);
     }
 
     [Fact]
     public void EndPass_ReportsExactPassStats()
     {
         GraphRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 16;
         const uint stride = 52;
@@ -411,14 +302,14 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         GraphicsProgram graphics = CreateSinkProgram(device);
         ComputeProgram compute = CreateBasicComputeProgram(device);
 
-        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
+        DeviceBuffer vertices = device.Tracked().CreateBuffer(new BufferDescription(stride * 3, BufferUsage.VertexBuffer));
         device.UpdateBuffer(vertices, 0, new byte[stride * 3]);
-        DeviceBuffer indirect = device.ResourceFactory.CreateBuffer(new BufferDescription(
+        DeviceBuffer indirect = device.Tracked().CreateBuffer(new BufferDescription(
             (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<IndirectDrawArguments>(), BufferUsage.IndirectBuffer));
         device.UpdateBuffer(indirect, 0, new IndirectDrawArguments { VertexCount = 3, InstanceCount = 1 });
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         PropertySet props = new();
         props.SetInt("Width", (int)size);
         props.SetInt("Height", (int)size);
@@ -428,7 +319,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_stats_target");
         using RenderPipeline pipeline = new([new DrawingRasterPass(id, graphics, vertices, indirect), new DispatchingPass(compute, props)]);
 
-        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
+        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) }, profiler);
         device.WaitForIdle();
 
         Assert.Equal(new[] { "ProfilerDraw", "ProfilerDispatch" }, profiler.PassesEnded.ConvertAll(p => p.Name));
@@ -451,35 +342,26 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void DispatchGraph_RecordsPassLifecycleReadsAndSubmits()
+    public void DispatchGraph_RecordsPassLifecycle()
     {
         LifecycleRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 64;
-        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+        DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_target");
         ClearingRasterPass clearPass = new(id);
         ReadingCopyPass copyPass = new(id, readback);
         using RenderPipeline pipeline = new([clearPass, copyPass]);
 
-        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
+        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) }, profiler);
         device.WaitForIdle();
 
         Assert.Equal(2, profiler.PassesBegun.Count);
         Assert.Equal(2, profiler.PassesEnded.Count);
         Assert.Equal(new[] { "ProfilerClear", "ProfilerCopy" }, profiler.PassesBegun.ConvertAll(p => p.Name));
-
-        // ClearingRasterPass declares the target as an output; ReadingCopyPass declares it as an input.
-        Assert.Contains(profiler.PassWrites, w => w.Pass.Name == "ProfilerClear" && w.Resource.Equals(id));
-        Assert.DoesNotContain(profiler.PassReads, r => r.Pass.Name == "ProfilerClear");
-        Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerCopy" && r.Resource.Equals(id));
-
-        Assert.Equal(
-            new[] { "ProfilerClear", "ProfilerCopy" },
-            profiler.Submits.ConvertAll(s => s.Info.Name));
-        Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 
         Assert.True(device.Counters.Snapshot().Barriers(BarrierBin.TextureTransition) > 0);
     }
@@ -488,181 +370,223 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     public void GpuStatsProfilerAlone_ReceivesPassInputsAndOutputs()
     {
         StatsOnlyProfiler profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 64;
-        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+        DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_stats_only_target");
         using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
 
-        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
+        device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) }, profiler);
         device.WaitForIdle();
 
         PassInfo clear = Assert.Single(profiler.Timed, t => t.Name == "ProfilerClear").Pass!.Value;
         PassInfo copy = Assert.Single(profiler.Timed, t => t.Name == "ProfilerCopy").Pass!.Value;
-        Assert.Contains(id, clear.Outputs.ToArray());
-        Assert.Contains(id, copy.Inputs.ToArray());
+        Assert.Contains(id, clear.GetOutputs().Select(a => a.Id));
+        Assert.DoesNotContain(id, clear.GetInputs().Select(a => a.Id));
+        Assert.Contains(id, copy.GetInputs().Select(a => a.Id));
     }
 
     [Fact]
-    public void CorrelationIds_MatchTimingsToExecutionViewAndPass_AcrossTwoExecutions()
+    public void EachExecution_DeliversOnlyItsOwnEventsToItsProfiler()
     {
-        CorrelationProfiler profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
+        CorrelationProfiler firstProfiler = new();
+        CorrelationProfiler secondProfiler = new();
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
         const uint size = 64;
-        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+        DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_correlation_target");
-        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
+        using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]) { Name = "Correlation" };
         ProfilerView[] views = [new(size, size), new(size, size)];
 
-        ExecutionTask first = device.DispatchGraph(pipeline, views);
-        ExecutionTask second = device.DispatchGraph(pipeline, views);
+        ExecutionTask first = device.DispatchGraph(pipeline, views, firstProfiler);
+        ExecutionTask second = device.DispatchGraph(pipeline, views, secondProfiler);
         device.WaitForIdle();
 
-        ulong[] executions = [first.Id, second.Id];
-        Assert.NotEqual(first.Id, second.Id);
+        Assert.True(first.Id < second.Id);
+        firstProfiler.AssertCompleteTwoViewCopyExecution(first.Id, "Correlation");
+        secondProfiler.AssertCompleteTwoViewCopyExecution(second.Id, "Correlation");
+    }
 
-        foreach (ulong execution in executions)
+    [Fact]
+    public void ConcurrentDispatch_GlobalFactoryGivesEachExecutionItsOwnProfiler()
+    {
+        const int threadCount = 4;
+        const int iterations = 100;
+        const uint size = 32;
+
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
+
+        List<CorrelationProfiler> profilers = new();
+        device.GlobalProfilers.Add(() =>
         {
-            Assert.Equal(new[] { 0, 1 }, profiler.ViewsBegun.FindAll(v => v.ExecutionId == execution).ConvertAll(v => v.Index));
-            Assert.Equal(4, profiler.PassesBegun.FindAll(p => p.ExecutionId == execution).Count);
+            CorrelationProfiler profiler = new();
+            lock (profilers)
+                profilers.Add(profiler);
+            return profiler;
+        });
 
-            var passTimings = profiler.Timings.FindAll(t => t.Info.ExecutionId == execution && t.Info.Pass != null);
-            foreach (int viewIndex in new[] { 0, 1 })
+        List<ExecutionTask> tasks = new();
+        List<Exception> failures = new();
+        using System.Threading.Barrier start = new(threadCount);
+
+        Thread[] threads = new Thread[threadCount];
+        for (int t = 0; t < threadCount; t++)
+        {
+            int threadIndex = t;
+            threads[t] = new Thread(() =>
             {
-                foreach (string name in new[] { "ProfilerClear", "ProfilerCopy" })
+                try
                 {
-                    (int _, CommandBufferInfo info) = Assert.Single(
-                        passTimings, t => t.Info.Pass!.Value.ViewIndex == viewIndex && t.Info.Pass!.Value.Name == name);
-                    Assert.Equal(name, info.Name);
-                    Assert.Equal(execution, info.Pass!.Value.ExecutionId);
+                    DeviceBuffer readback = device.Tracked().CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
+                    RenderResourceID id = RenderResourceID.Intern($"profiler_concurrent_target_{threadIndex}");
+                    using RenderPipeline pipeline = new([new ClearingRasterPass(id), new ReadingCopyPass(id, readback)]);
+                    ProfilerView[] views = [new(size, size), new(size, size)];
+
+                    start.SignalAndWait();
+                    for (int i = 0; i < iterations; i++)
+                    {
+                        ExecutionTask task = device.DispatchGraph(pipeline, views);
+                        lock (tasks)
+                            tasks.Add(task);
+                    }
                 }
-            }
-
-            (int resolvedOrder, ulong _) = Assert.Single(profiler.Resolved, r => r.ExecutionId == execution);
-            foreach ((int order, CommandBufferInfo info) in profiler.Timings.FindAll(t => t.Info.ExecutionId == execution))
-                Assert.True(order < resolvedOrder);
-        }
-
-        Assert.All(profiler.Timings, t => Assert.Contains(t.Info.ExecutionId, executions));
-        Assert.Equal(2, profiler.Resolved.Count);
-    }
-
-    [Fact]
-    public void ExecutionTiming_RecordsExecutionTime()
-    {
-        TimingRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.CopyBuffer(source, 0, destination, 0, 256);
-        });
-        device.WaitForIdle();
-
-        (CommandBufferInfo _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
-        Assert.False(isTransfer);
-        Assert.True(milliseconds >= 0);
-    }
-
-    [Fact]
-    public void CompositeProfiler_ForwardsEachCategoryToEverySinkThatImplementsIt()
-    {
-        CommandRecorder firstCommands = new();
-        CommandRecorder secondCommands = new();
-        TimingRecorder timing = new();
-        using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(firstCommands, timing, new CompositeProfiler(secondCommands)));
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        device.RunTestGraph((context, cl) =>
-        {
-            cl.CopyBuffer(source, 0, destination, 0, 256);
-        });
-        device.WaitForIdle();
-
-        Assert.NotEmpty(firstCommands.Submits);
-        Assert.Equal(firstCommands.Submits.Count, secondCommands.Submits.Count);
-        Assert.Single(timing.ExecutionTimes);
-    }
-
-    [Fact]
-    public void CompositeProfiler_OnlyEnablesCategoriesItsSinksImplement()
-    {
-        CommandRecorder commands = new();
-        using GraphicsDevice device = CreateProfiledDevice(new CompositeProfiler(commands));
-
-        Assert.NotNull(device.CommandProfiler);
-        Assert.Null(device.GraphProfiler);
-        Assert.Null(device.GpuStatsProfiler);
-    }
-
-    [Fact]
-    public void CompositeProfiler_RejectsNullSinks()
-    {
-        Assert.Throws<ArgumentException>(() => new CompositeProfiler(new CommandRecorder(), null!));
-        Assert.Throws<ArgumentNullException>(() => new CompositeProfiler(null!));
-    }
-
-    [Fact]
-    public void SetProfiler_SwapsActiveProfilerAtRuntime()
-    {
-        using GraphicsDevice device = GD.BackendType switch
-        {
-            GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true)),
-            _ => throw new NotSupportedException(),
-        };
-
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-
-        void RunCopyGraph()
-        {
-            device.RunTestGraph((context, cl) =>
-            {
-                cl.CopyBuffer(source, 0, destination, 0, 256);
+                catch (Exception e)
+                {
+                    lock (failures)
+                        failures.Add(e);
+                }
             });
-            device.WaitForIdle();
+            threads[t].Start();
         }
 
-        Assert.Null(device.Profiler);
+        foreach (Thread thread in threads)
+            thread.Join();
 
-        CommandRecorder profiler = new();
-        device.SetProfiler(profiler);
-        Assert.Same(profiler, device.Profiler);
+        device.WaitForIdle();
 
-        RunCopyGraph();
-        Assert.NotEmpty(profiler.Submits);
+        Assert.Empty(failures);
+        Assert.Equal(threadCount * iterations, tasks.Count);
+        Assert.Equal(tasks.Count, profilers.Count);
 
-        device.SetProfiler(null);
-        Assert.Null(device.Profiler);
-
-        profiler.Submits.Clear();
-        RunCopyGraph();
-        Assert.Empty(profiler.Submits);
+        Dictionary<ulong, CorrelationProfiler> byExecution = profilers.ToDictionary(p => p.ExecutionId);
+        foreach (ExecutionTask task in tasks)
+            byExecution[task.Id].AssertCompleteTwoViewCopyExecution(task.Id, nameof(RenderPipeline));
     }
 
     [Fact]
-    public void Record_WithTiming_RecordsExecutionTime()
+    public void GlobalProfilers_OnlyFeedUnprofiledExecutionsTheyChooseToSample()
     {
-        TimingRecorder profiler = new();
-        using GraphicsDevice device = CreateProfiledDevice(profiler);
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
 
-        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        List<TimingRecorder> created = new();
+        bool sample = true;
+        Func<IProfiler?> factory = () =>
+        {
+            if (!sample)
+                return null;
 
-        device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
+            TimingRecorder recorder = new();
+            created.Add(recorder);
+            return recorder;
+        };
+        device.GlobalProfilers.Add(factory);
 
-        (CommandBufferInfo _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
-        Assert.True(isTransfer);
-        Assert.True(milliseconds >= 0);
+        TimingRecorder explicitProfiler = new();
+        device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256), explicitProfiler);
+        device.WaitForIdle();
+        Assert.Empty(created);
+        Assert.Single(explicitProfiler.ExecutionTimes);
+
+        device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
+        device.WaitForIdle();
+        Assert.Single(Assert.Single(created).ExecutionTimes);
+
+        sample = false;
+        device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
+        device.WaitForIdle();
+        Assert.Single(created);
+
+        device.GlobalProfilers.Remove(factory);
+        device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256));
+        device.WaitForIdle();
+        Assert.Single(created);
+    }
+
+    [Fact]
+    public void SharedCapability_IsMergedAndEveryProfilerGetsTheLifecycleOnce()
+    {
+        TimingRecorder first = new();
+        TimingRecorder second = new();
+        GraphRecorder graph = new();
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
+
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+
+        ExecutionTask task = device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256), first, graph, second, first);
+        device.WaitForIdle();
+
+        Assert.Single(first.ExecutionTimes);
+        Assert.Single(second.ExecutionTimes);
+        Assert.All(new ExecutionRecorder[] { first, second, graph }, p =>
+        {
+            Assert.Equal(task.Id, p.ExecutionId);
+            Assert.Equal(1, p.Ended);
+        });
+    }
+
+    [Fact]
+    public void EndExecution_FiresOnceAfterTheFenceWithOrWithoutQueries()
+    {
+        ResolveOrderRecorder profiler = new();
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
+
+        ExecutionTask empty = device.BeginExecution(profiler);
+        device.CompleteExecution(empty);
+        Assert.Equal(new[] { "begin" }, profiler.Events);
+
+        device.WaitForExecution(empty);
+        Assert.Equal(new[] { "begin", "end" }, profiler.Events);
+
+        profiler.Events.Clear();
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        ExecutionTask task = device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256), profiler);
+        Assert.Equal(new[] { "begin" }, profiler.Events);
+
+        device.WaitForExecution(task);
+        Assert.Equal("end", profiler.Events[^1]);
+        Assert.Contains("time", profiler.Events);
+        Assert.Single(profiler.Events, e => e == "end");
+    }
+
+    [Fact]
+    public void ExecutionIdOverloads_PollAndWaitWithoutATask()
+    {
+        ResolveOrderRecorder profiler = new();
+        using GraphicsDevice device = CreateDevice();
+        using IDisposable trackedCleanup = device.TrackedCleanup();
+
+        DeviceBuffer source = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer destination = device.Tracked().CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite));
+        ulong id = device.RunTestGraph((context, cl) => cl.CopyBuffer(source, 0, destination, 0, 256), profiler).Id;
+
+        Assert.True(device.WaitForExecution(id));
+        Assert.True(device.IsExecutionComplete(id));
+        Assert.Single(profiler.Events, e => e == "end");
+        Assert.Throws<ArgumentOutOfRangeException>(() => device.IsExecutionComplete(id + 1000));
     }
 }
 

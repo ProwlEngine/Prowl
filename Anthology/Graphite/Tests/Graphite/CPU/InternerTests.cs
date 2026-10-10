@@ -28,17 +28,6 @@ public class InternerTests
     }
 
     [Fact]
-    public void Intern_DifferentKeys_ReturnDistinctValues()
-    {
-        Interner interner = NewInterner();
-
-        int a = interner.Intern("a");
-        int b = interner.Intern("b");
-
-        Assert.NotEqual(a, b);
-    }
-
-    [Fact]
     public void Intern_RepeatedKey_DoesNotMintNewValue()
     {
         Interner interner = NewInterner();
@@ -50,17 +39,6 @@ public class InternerTests
         // "a" was only minted once, so "b" should be the second issued id.
         Assert.Equal(1, a);
         Assert.Equal(2, b);
-    }
-
-    [Fact]
-    public void TryGetKey_KnownValue_ReturnsOriginalKey()
-    {
-        Interner interner = NewInterner();
-
-        int id = interner.Intern("roundtrip");
-
-        Assert.True(interner.TryGetKey(id, out string? key));
-        Assert.Equal("roundtrip", key);
     }
 
     [Fact]

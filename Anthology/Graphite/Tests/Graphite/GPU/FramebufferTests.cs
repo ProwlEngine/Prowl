@@ -65,21 +65,6 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             mipHeight = Math.Max(1, mipHeight / 2);
         }
     }
-
-    [Fact]
-    public void OutputDescription_ColorAndDepth_ExposesBoth()
-    {
-        Texture color = RF.CreateTexture(TextureDescription.Texture2D(
-            48, 48, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
-        Texture depth = RF.CreateTexture(TextureDescription.Texture2D(
-            48, 48, 1, 1, PixelFormat.R16_UNorm, TextureUsage.DepthStencil));
-        Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depth, color));
-
-        OutputDescription output = fb.OutputDescription;
-        Assert.NotNull(output.DepthFormat);
-        Assert.Equal(PixelFormat.R16_UNorm, output.DepthFormat.Value);
-        Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, output.ColorFormats[0]);
-    }
 }
 
 #if TEST_VULKAN

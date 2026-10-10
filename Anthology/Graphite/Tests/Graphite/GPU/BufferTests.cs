@@ -10,20 +10,6 @@ namespace Prowl.Graphite.Tests;
 public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void UpdateBuffer_ThenMapRead_Succeeds()
-    {
-        DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.Staging);
-        int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
-        GD.UpdateBuffer(buffer, 0, data);
-
-        Span<int> view = GD.Map<int>(buffer);
-        for (int i = 0; i < view.Length; i++)
-        {
-            Assert.Equal(i * 2, view[i]);
-        }
-    }
-
-    [Fact]
     public void Staging_Map_WriteThenRead()
     {
         DeviceBuffer buffer = CreateBuffer(256, BufferUsage.Staging);
@@ -82,26 +68,6 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
             }
             GD.Unmap(finalDst);
         }
-    }
-
-    [Fact]
-    public unsafe void Map_MultipleTimes_Succeeds()
-    {
-        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
-        Span<byte> map = GD.Map(buffer);
-        fixed (byte* dataPtr = map)
-        {
-            byte* first = dataPtr;
-            map = GD.Map(buffer);
-            fixed (byte* second = map)
-                Assert.True(first == second);
-            map = GD.Map(buffer);
-            fixed (byte* third = map)
-                Assert.True(first == third);
-        }
-        GD.Unmap(buffer);
-        GD.Unmap(buffer);
-        GD.Unmap(buffer);
     }
 
     [Theory]

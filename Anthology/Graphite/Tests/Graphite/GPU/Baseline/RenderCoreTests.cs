@@ -93,7 +93,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
                     Elements =
                     [
                         new VertexElementDescription("POSITION", VertexElementFormat.Float2),
-                        new VertexElementDescription("COLOR", VertexElementFormat.Int4),
+                        new VertexElementDescription("COLOR", VertexElementFormat.UInt4),
                     ]
                 }
             ],

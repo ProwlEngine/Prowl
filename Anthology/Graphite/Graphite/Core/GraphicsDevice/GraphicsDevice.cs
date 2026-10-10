@@ -53,6 +53,8 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     internal abstract CommandBuffer RentGraphCommandBuffer(ExecutionTask task);
 
+    internal abstract Prowl.Graphite.RenderGraph.ICaptureBackend CaptureBackend { get; }
+
     /// <summary>
     /// Main swapchain for this device, or null if none.
     /// </summary>
@@ -130,7 +132,6 @@ public abstract partial class GraphicsDevice : IDisposable
     public unsafe Span<byte> Map(DeviceBuffer buffer)
     {
         Map_CheckResource(buffer);
-        buffer.MarkContentChanged();
         IntPtr data = MapCore(buffer);
         Counters.RecordBufferOp(BufferOpBin.Map, buffer.SizeInBytes);
         return new Span<byte>((void*)data, (int)buffer.SizeInBytes);
@@ -148,6 +149,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void Unmap(DeviceBuffer buffer)
     {
         UnmapCore(buffer);
+        buffer.MarkContentChanged();
         Counters.RecordBufferOp(BufferOpBin.Unmap, buffer.SizeInBytes);
     }
 

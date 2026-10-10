@@ -38,7 +38,7 @@ public abstract partial class ResourceFactory
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New render texture.</returns>
-    public RenderTexture CreateRenderTexture(in RenderTextureDescription description) => new(Device, description);
+    public virtual RenderTexture CreateRenderTexture(in RenderTextureDescription description) => new(Device, description);
 
     /// <summary>
     /// Makes a texture.

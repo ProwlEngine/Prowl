@@ -14,9 +14,9 @@ internal sealed class VkShaderCache
         _gd = gd;
     }
 
-    public VkShader Acquire(ShaderStageDescription[] stages, ResourceLayoutDescription[] layouts)
+    public VkShader Acquire(ProgramKey program, ShaderStageDescription[] stages, ResourceLayoutDescription[] layouts)
     {
-        VkShaderKey key = new(stages, layouts);
+        VkShaderKey key = new(program, layouts);
         lock (_lock)
         {
             if (!_shaders.TryGetValue(key, out VkShader? shader))

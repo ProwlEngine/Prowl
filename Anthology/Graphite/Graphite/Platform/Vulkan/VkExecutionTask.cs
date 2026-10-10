@@ -41,13 +41,24 @@ internal sealed class VkExecutionTask : ExecutionTask
     }
 
 
+    internal override void SubmitCommandsAheadInternal(CommandBuffer commandList, CommandBuffer before)
+    {
+        SubmitCommands_CheckEnded(_gd, commandList);
+        int index = _queuedCommandBuffers.IndexOf(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(before));
+        if (index < 0)
+            throw new InvalidOperationException("The command buffer is no longer queued, so nothing can be queued ahead of it.");
+
+        _queuedCommandBuffers.Insert(index, Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandList));
+    }
+
+
     /// <inheritdoc/>
     internal override void FlushSubmissions()
     {
         if (_queuedCommandBuffers.Count == 0)
             return;
 
-        _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: false);
+        _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: false, Profilers);
         _queuedCommandBuffers.Clear();
     }
 
@@ -55,7 +66,7 @@ internal sealed class VkExecutionTask : ExecutionTask
     /// <summary>Submits whatever is still queued and returns the serial that marks the execution complete.</summary>
     internal ulong FinalSubmit()
     {
-        ulong serial = _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: true);
+        ulong serial = _gd.SubmitExecutionBatch(_queuedCommandBuffers, _id, isFinal: true, Profilers);
         _queuedCommandBuffers.Clear();
         return serial;
     }

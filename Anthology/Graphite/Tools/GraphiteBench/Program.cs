@@ -86,13 +86,13 @@ internal static class Program
 
     private static void PrintCounters(List<BenchResult> results)
     {
-        Console.WriteLine("| Scenario | Draws/frame | Set binds/frame | Bound sets/frame | Shader switches/frame | Submits/frame |");
-        Console.WriteLine("|---|---:|---:|---:|---:|---:|");
+        Console.WriteLine("| Scenario | Draws/frame | Set binds/frame | Bound sets/frame | Shader switches/frame |");
+        Console.WriteLine("|---|---:|---:|---:|---:|");
 
         foreach (BenchResult r in results)
         {
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"| {r.Name} | {r.DrawsPerFrame:F0} | {r.SetBindsPerFrame:F0} | {r.BoundSetsPerFrame:F0} | {r.ShaderSwitchesPerFrame:F0} | {r.SubmitsPerFrame:F0} |"));
+                $"| {r.Name} | {r.DrawsPerFrame:F0} | {r.SetBindsPerFrame:F0} | {r.BoundSetsPerFrame:F0} | {r.ShaderSwitchesPerFrame:F0} |"));
         }
     }
 

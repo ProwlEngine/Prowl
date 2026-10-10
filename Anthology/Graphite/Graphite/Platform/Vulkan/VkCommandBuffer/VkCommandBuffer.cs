@@ -56,7 +56,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         };
         _gd.Vk.BeginCommandBuffer(_cb, in beginInfo);
         _commandBufferBegun = true;
-        _pendingQueries = _gd.BeginQueries(_cb);
+        _pendingQueries = _gd.BeginQueries(_cb, Profilers.GpuStats != null);
 
         ClearCachedState();
         ClearGraphicsState();

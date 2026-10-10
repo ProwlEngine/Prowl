@@ -14,11 +14,11 @@ public abstract partial class CommandBuffer
     public void Draw(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
         Draw_CheckBoundState();
+        ReportGraphicsState();
         DrawCore(vertexCount, instanceCount, vertexStart, instanceStart);
+        PassSink?.Draw(vertexCount, instanceCount, vertexStart, instanceStart);
 
         _statDraws++;
-        Device.CommandProfiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
     private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
@@ -36,11 +36,11 @@ public abstract partial class CommandBuffer
         DrawIndexed_CheckIndexBuffer(indexStart);
         Draw_CheckBoundState();
 
+        ReportGraphicsState();
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
+        PassSink?.DrawIndexed(_currentIndexCount, instanceCount, indexStart, vertexOffset, instanceStart);
 
         _statDraws++;
-        Device.CommandProfiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
     private void Draw_CheckBoundState()
@@ -126,11 +126,12 @@ public abstract partial class CommandBuffer
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawArguments));
         Draw_CheckBoundState();
 
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
         DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
+        PassSink?.DrawIndirect(indirectBuffer.CurrentVersion, offset, drawCount, stride);
 
         _statIndirectDraws++;
-        Device.CommandProfiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
 
@@ -154,11 +155,12 @@ public abstract partial class CommandBuffer
         DrawIndexedIndirect_CheckIndexBuffer();
         Draw_CheckBoundState();
 
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
+        PassSink?.DrawIndexedIndirect(indirectBuffer.CurrentVersion, offset, drawCount, stride);
 
         _statIndirectDraws++;
-        Device.CommandProfiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
     }
 
 
@@ -176,11 +178,11 @@ public abstract partial class CommandBuffer
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
         Dispatch_CheckBoundState();
+        ReportGraphicsState();
         DispatchCore(groupCountX, groupCountY, groupCountZ);
+        PassSink?.Dispatch(groupCountX, groupCountY, groupCountZ);
 
         _statDispatches++;
-        Device.CommandProfiler?.RecordDispatch(
-            ProfilerInfo, new DispatchCallInfo(groupCountX, groupCountY, groupCountZ, isIndirect: false));
     }
 
     private protected abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
@@ -193,11 +195,12 @@ public abstract partial class CommandBuffer
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
         Dispatch_CheckBoundState();
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
         DispatchIndirectCore(indirectBuffer, offset);
+        PassSink?.DispatchIndirect(indirectBuffer.CurrentVersion, offset);
 
         _statDispatches++;
-        Device.CommandProfiler?.RecordDispatch(
-            ProfilerInfo, new DispatchCallInfo(0, 0, 0, isIndirect: true));
     }
 
 

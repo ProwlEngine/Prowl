@@ -1,3 +1,5 @@
+using Prowl.Graphite.Debugging;
+
 namespace Prowl.Graphite;
 
 public abstract partial class CommandBuffer
@@ -8,13 +10,15 @@ public abstract partial class CommandBuffer
     /// <summary>Pass this buffer was rented during, for profiler timing. Null outside a pass.</summary>
     internal PassInfo? Pass { get; set; }
 
-    /// <summary>Bound execution's id, or 0.</summary>
+    /// <summary>Profilers of the bound execution. Empty outside one, so transfers are never profiled.</summary>
+    internal ProfilerSet Profilers => Execution?.Profilers ?? ProfilerSet.Empty;
+
     internal ulong ExecutionId => Execution?.Id ?? 0;
 
     /// <summary>Fresh id stamped per rental, so profiler can tell reused instances apart.</summary>
     internal ulong RentalId { get; set; }
 
-    internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, ExecutionId, Pass);
+    internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
 
     private uint _statDraws;
     private uint _statIndirectDraws;
@@ -25,7 +29,7 @@ public abstract partial class CommandBuffer
     private uint _statBarriers;
 
     internal PassStats Stats => new(
-        _statDraws, _statIndirectDraws, _statDispatches, _statShaderSwitches, _statPipelineBinds, _statResourceSetBinds, _statBarriers);
+        _statDraws, _statIndirectDraws, _statDispatches, _statShaderSwitches, _statPipelineBinds, _statResourceSetBinds, _statBarriers, 0);
 
     internal void ResetStats()
     {
@@ -43,8 +47,12 @@ public abstract partial class CommandBuffer
     internal void ReportPipelineBind(ShaderProgram program, ulong pipelineId, bool isCompute, OutputDescription? outputs, PrimitiveTopology? topology)
     {
         _statPipelineBinds++;
-        if (Device.CommandProfiler is { } profiler)
-            profiler.RecordPipelineBind(ProfilerInfo, new PipelineBindInfo(program, pipelineId, isCompute, outputs, topology));
+        IPassCommandSink? sink = PassSink;
+        if (sink == null)
+            return;
+
+        PipelineBindInfo info = new(program, pipelineId, isCompute, outputs, topology);
+        sink.SetPipeline(in info);
     }
 
     internal void RecordResourceSetBind(uint setCount)

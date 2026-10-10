@@ -1,3 +1,4 @@
+using Prowl.Graphite.Debugging;
 using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
@@ -19,15 +20,6 @@ public abstract partial class CommandBuffer
         SetShaderCore(program);
         _shaderProgram = program;
         _statShaderSwitches++;
-
-        if (Device.CommandProfiler is { } profiler)
-        {
-            ShaderStages stages = ShaderStages.None;
-            foreach (ShaderStages stage in program.Stages)
-                stages |= stage;
-
-            profiler.RecordShaderSwitch(ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: false, stages, program));
-        }
     }
 
     private protected abstract void SetShaderCore(GraphicsProgram program);
@@ -41,9 +33,6 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(_computeProgram, program)) return;
 
         _statShaderSwitches++;
-        Device.CommandProfiler?.RecordShaderSwitch(
-            ProfilerInfo, new ShaderSwitchInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
-
         SetComputeShaderCore(program);
         _computeProgram = program;
     }
@@ -127,7 +116,9 @@ public abstract partial class CommandBuffer
             return;
 
         _framebuffer = fb;
-        SetFramebufferCore(fb, ops ?? new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+        TargetLoadStoreOps resolvedOps = ops ?? new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded);
+        ReportFramebuffer(fb, in resolvedOps);
+        SetFramebufferCore(fb, resolvedOps);
         if (!changed)
             return;
 
@@ -158,6 +149,7 @@ public abstract partial class CommandBuffer
         RequireGraphExecution(nameof(ClearColorTarget));
         ClearColorTarget_CheckFramebuffer(index);
         ClearColorTargetCore(index, clearColor);
+        PassSink?.ClearColorTarget(index, clearColor);
     }
 
     private protected abstract void ClearColorTargetCore(uint index, Color clearColor);
@@ -170,6 +162,7 @@ public abstract partial class CommandBuffer
         RequireGraphExecution(nameof(ClearDepthStencil));
         ClearDepthStencil_CheckFramebuffer();
         ClearDepthStencilCore(depth, stencil);
+        PassSink?.ClearDepthStencil(depth, stencil);
     }
 
     private protected abstract void ClearDepthStencilCore(float depth, byte stencil);
@@ -183,20 +176,44 @@ public abstract partial class CommandBuffer
 
     /// <summary>Sets viewport.</summary>
     /// <param name="viewport">New viewport.</param>
-    public abstract void SetViewport(Viewport viewport);
+    public void SetViewport(Viewport viewport)
+    {
+        SetViewportCore(viewport);
+        PassSink?.SetViewport(in viewport);
+    }
+
+    private protected abstract void SetViewportCore(Viewport viewport);
 
     /// <summary>Sets scissor rect.</summary>
     /// <param name="x">Rect X.</param>
     /// <param name="y">Rect Y.</param>
     /// <param name="width">Rect width.</param>
     /// <param name="height">Rect height.</param>
-    public abstract void SetScissor(uint x, uint y, uint width, uint height);
+    public void SetScissor(uint x, uint y, uint width, uint height)
+    {
+        SetScissorCore(x, y, width, height);
+        PassSink?.SetScissor(x, y, width, height);
+    }
+
+    private protected abstract void SetScissorCore(uint x, uint y, uint width, uint height);
 
     /// <summary>Sets stencil reference for subsequent draws. Applied from the program on SetShader.</summary>
     /// <param name="reference">Stencil reference value.</param>
-    public abstract void SetStencilReference(uint reference);
+    public void SetStencilReference(uint reference)
+    {
+        SetStencilReferenceCore(reference);
+        PassSink?.SetStencilReference(reference);
+    }
+
+    private protected abstract void SetStencilReferenceCore(uint reference);
 
     /// <summary>Sets blend constants for subsequent draws. Applied from the program on SetShader.</summary>
     /// <param name="constants">Blend constant color.</param>
-    public abstract void SetBlendConstants(Color constants);
+    public void SetBlendConstants(Color constants)
+    {
+        SetBlendConstantsCore(constants);
+        PassSink?.SetBlendConstants(constants);
+    }
+
+    private protected abstract void SetBlendConstantsCore(Color constants);
 }

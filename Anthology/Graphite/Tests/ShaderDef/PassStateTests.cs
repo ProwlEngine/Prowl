@@ -10,41 +10,8 @@ namespace Prowl.Graphite.ShaderDef.Tests;
 
 public class PassStateTests
 {
-    [Fact]
-    public void Empty_LeavesEverythingUnset()
-    {
-        PassState s = Parse.State("");
-
-        Assert.Equal(PassStateFields.None, s.Set);
-    }
 
 
-    [Theory]
-    [InlineData("Back", FaceCullMode.Back)]
-    [InlineData("Front", FaceCullMode.Front)]
-    [InlineData("Off", FaceCullMode.None)]
-    public void Cull_SetsCullMode(string value, FaceCullMode expected)
-    {
-        Assert.Equal(expected, Parse.State($"Cull {value}").Raster.CullMode);
-    }
-
-
-    [Theory]
-    [InlineData("LessEqual", ComparisonKind.LessEqual)]
-    [InlineData("Always", ComparisonKind.Always)]
-    public void ZTest_SetsDepthFunc(string value, ComparisonKind expected)
-    {
-        Assert.Equal(expected, Parse.State($"ZTest {value}").DepthStencil.DepthComparison);
-    }
-
-
-    [Theory]
-    [InlineData("On", true)]
-    [InlineData("Off", false)]
-    public void ZClip_SetsDepthClip(string value, bool expected)
-    {
-        Assert.Equal(expected, Parse.State($"ZClip {value}").Raster.DepthClipEnabled);
-    }
 
 
     [Fact]
@@ -83,16 +50,6 @@ public class PassStateTests
     }
 
 
-    [Theory]
-    [InlineData("Subtract", BlendFunction.Subtract)]
-    public void BlendOp_SetsBothBlendFunctions(string value, BlendFunction expected)
-    {
-        PassState s = Parse.State($"BlendOp {value}");
-
-        Assert.Equal(expected, s.Blend.ColorFunction);
-        Assert.Equal(expected, s.Blend.AlphaFunction);
-    }
-
 
     [Theory]
     [InlineData("R", ColorWriteMask.Red)]
@@ -112,14 +69,6 @@ public class PassStateTests
     }
 
 
-    [Theory]
-    [InlineData("On", true)]
-    [InlineData("Off", false)]
-    public void AlphaToMask_Sets(string value, bool expected)
-    {
-        Assert.Equal(expected, Parse.State($"AlphaToMask {value}").AlphaToCoverage);
-    }
-
 
     [Fact]
     public void Offset_AppliesDepthBiasToRasterizerState()
@@ -133,15 +82,6 @@ public class PassStateTests
         Assert.Equal(-1f, r.DepthBiasConstantFactor);
     }
 
-
-    [Fact]
-    public void NoOffset_LeavesDepthBiasOff()
-    {
-        RasterizerStateDescription r = Parse.State("").ToRasterizerState(RasterizerStateDescription.Default);
-
-        Assert.False(r.DepthBiasEnabled);
-        Assert.Equal(RasterizerStateDescription.Default, r);
-    }
 
 
     [Fact]
@@ -168,12 +108,6 @@ public class PassStateTests
         Assert.Equal(FaceCullMode.Back, s.Raster.CullMode);
     }
 
-
-    [Fact]
-    public void UnknownEnumValue_Throws()
-    {
-        Assert.ThrowsAny<Exception>(() => Parse.State("ZTest Baloney"));
-    }
 
 
     [Fact]

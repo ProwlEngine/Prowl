@@ -98,7 +98,7 @@ internal unsafe partial class VkCommandBuffer
     // Sets are content-addressed in the cache, so clearing needs no invalidation here.
     private protected override void ClearPropertiesCore() { }
 
-    public override void SetScissor(uint x, uint y, uint width, uint height)
+    private protected override void SetScissorCore(uint x, uint y, uint width, uint height)
     {
         Rect2D scissor = new(new Offset2D((int)x, (int)y), new Extent2D(width, height));
         if (scissor.Equals(_scissor)) return;
@@ -107,7 +107,7 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdSetScissor(_cb, 0, 1, in scissor);
     }
 
-    public override void SetViewport(Viewport viewport)
+    private protected override void SetViewportCore(Viewport viewport)
     {
         if (viewport.Equals(_viewport)) return;
         _viewport = viewport;
@@ -125,7 +125,7 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdSetViewport(_cb, 0, 1, in vkViewport);
     }
 
-    public override void SetStencilReference(uint reference)
+    private protected override void SetStencilReferenceCore(uint reference)
     {
         if (_stencilReferenceValid && reference == _stencilReference) return;
 
@@ -134,7 +134,7 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdSetStencilReference(_cb, StencilFaceFlags.FaceFrontAndBack, reference);
     }
 
-    public override void SetBlendConstants(Color constants)
+    private protected override void SetBlendConstantsCore(Color constants)
     {
         if (_blendConstantsValid && constants.Equals(_blendConstants)) return;
 

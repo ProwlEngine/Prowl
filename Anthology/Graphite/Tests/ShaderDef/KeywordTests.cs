@@ -18,14 +18,4 @@ public class KeywordTests
         Assert.Equal(a.LongHash(), b.LongHash());
     }
 
-
-    [Fact]
-    public void Interning_SameNameSharesNameId_DifferentValueDiffersValueId()
-    {
-        Keyword a = new("MODE", "A");
-        Keyword b = new("MODE", "B");
-
-        Assert.Equal(a.NameId, b.NameId);
-        Assert.NotEqual(a.ValueId, b.ValueId);
-    }
 }

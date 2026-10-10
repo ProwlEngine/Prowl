@@ -71,6 +71,13 @@ public class ProgramResolutionTests : IDisposable
 
 
     [Fact]
+    public void ResolvedProgram_IsNamedAfterShaderAndPass()
+    {
+        Assert.Equal("Test/Resolution/0", _pass.ResolveProgram(0, s_blend, s_depth, s_raster).Name);
+    }
+
+
+    [Fact]
     public void DifferentBaseState_ProducesDistinctProgram()
     {
         GraphicsProgram lessEqual = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);

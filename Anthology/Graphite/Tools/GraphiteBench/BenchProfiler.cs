@@ -2,25 +2,27 @@ using Prowl.Graphite;
 
 namespace Prowl.Graphite.Bench;
 
-public sealed class BenchProfiler : ICommandProfiler
+public sealed class BenchProfiler : IGraphProfiler
 {
     public long Draws;
     public long ShaderSwitches;
-    public long Submits;
 
     public void Reset()
     {
         Draws = 0;
         ShaderSwitches = 0;
-        Submits = 0;
     }
 
-    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) => Draws++;
+    public void BeginExecution(ulong executionId, string graphName) { }
+    public void EndExecution() { }
+    public void BeginView(in ViewInfo view) { }
+    public void EndView(in ViewInfo view) { }
+    public void BeginPass(in PassInfo pass) { }
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
 
-    public void RecordShaderSwitch(in CommandBufferInfo commandBuffer, in ShaderSwitchInfo info) => ShaderSwitches++;
-    public void RecordPipelineBind(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
-
-    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits++;
-
-    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
+    public void EndPass(in PassInfo pass, in PassStats stats)
+    {
+        Draws += stats.Draws + stats.IndirectDraws;
+        ShaderSwitches += stats.ShaderSwitches;
+    }
 }

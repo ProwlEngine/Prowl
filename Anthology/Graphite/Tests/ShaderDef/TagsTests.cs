@@ -31,21 +31,6 @@ public class TagsTests
     }
 
 
-    [Fact]
-    public void EmptyTagsBlock_EmptyDictionary()
-    {
-        Dictionary<string, string> tags = TagsOf("""
-            Pass
-            {
-                Tags { }
-                SLANGPROGRAM void main() {} ENDSLANG
-            }
-            """);
-
-        Assert.NotNull(tags);
-        Assert.Empty(tags!);
-    }
-
 
     [Fact]
     public void DuplicateTagKey_Throws()

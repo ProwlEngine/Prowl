@@ -13,6 +13,7 @@ internal unsafe partial class VkSampler : Sampler
 
 
     public VkSampler(VkGraphicsDevice gd, in SamplerDescription description)
+        : base(description)
     {
         _gd = gd;
 

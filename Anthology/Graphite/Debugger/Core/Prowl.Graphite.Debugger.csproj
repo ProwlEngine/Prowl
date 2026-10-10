@@ -14,7 +14,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+        <InternalsVisibleTo Include="Prowl.Graphite.Debugger.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\..\Echo\Echo\Echo.csproj" />
     </ItemGroup>
 
 </Project>

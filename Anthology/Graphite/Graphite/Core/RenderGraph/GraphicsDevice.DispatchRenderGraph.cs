@@ -11,9 +11,11 @@ public abstract partial class GraphicsDevice
     /// </summary>
     /// <param name="pipeline">Pipeline to run.</param>
     /// <param name="views">Views to render.</param>
+    /// <param name="profilers">Profilers for this execution only. Empty creates one from each <see cref="GlobalProfilers"/> factory.</param>
     public ExecutionTask DispatchGraph<T>(
         RenderPipeline pipeline,
-        IReadOnlyList<T> views)
+        IReadOnlyList<T> views,
+        params IProfiler[] profilers)
         where T : IRenderView
     {
         ValidationHelpers.RequireNotNull(this, pipeline, nameof(pipeline), nameof(DispatchGraph));
@@ -22,40 +24,31 @@ public abstract partial class GraphicsDevice
         RenderGraph.RenderGraph graph = pipeline.Graph;
 
         List<Swapchain>? presents = null;
-        ExecutionTask task;
+        ExecutionTask task = BeginExecution(graph.Name, profilers);
+        IGraphProfiler? profiler = task.Profilers.Graph;
 
-        _graphDispatchDepth++;
-        try
+        int index = 0;
+        foreach (T view in views)
         {
-            task = BeginExecution();
+            var context = new RenderContext(
+                this, task, graph, view, index);
 
-            int index = 0;
-            foreach (T view in views)
+            var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
+
+            profiler?.BeginView(viewInfo);
+            pipeline.ExecuteView(context);
+            profiler?.EndView(viewInfo);
+
+            Swapchain? swapchain = context.PresentSwapchain;
+            if (swapchain != null)
             {
-                var context = new RenderContext(
-                    this, task, graph, view, index);
-
-                var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight, task.Id);
-
-                GraphProfiler?.BeginView(viewInfo);
-                pipeline.ExecuteView(context);
-                GraphProfiler?.EndView(viewInfo);
-
-                Swapchain? swapchain = context.PresentSwapchain;
-                if (swapchain != null)
-                {
-                    presents ??= [];
-                    if (!presents.Contains(swapchain))
-                        presents.Add(swapchain);
-                }
+                presents ??= [];
+                if (!presents.Contains(swapchain))
+                    presents.Add(swapchain);
             }
+        }
 
-            CompleteExecution(task);
-        }
-        finally
-        {
-            _graphDispatchDepth--;
-        }
+        CompleteExecution(task);
 
         if (presents != null)
         {

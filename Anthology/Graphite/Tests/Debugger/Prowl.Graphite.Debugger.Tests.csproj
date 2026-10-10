@@ -8,7 +8,14 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
-        <ProjectReference Include="..\..\Graphite.Debugger\Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="..\..\Debugger\Core\Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="..\Graphite\Shaders\FullScreenTriSampleTexture2D.slang" Link="Shaders\FullScreenTriSampleTexture2D.slang" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="..\Graphite\Shaders\ComputeTextureGenerator.slang" Link="Shaders\ComputeTextureGenerator.slang" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>
