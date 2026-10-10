@@ -21,7 +21,7 @@ public sealed class BloomEffect : ImageEffect
     public float Intensity = 1.5f;
 
     /// <summary>Brightness above which pixels bloom.</summary>
-    public float Threshold = 0.8f;
+    public float Threshold = 1.2f;
 
     /// <summary>How gradually pixels near the threshold fade into the bloom (0 = hard cut, 1 = widest ramp).</summary>
     public float SoftKnee = 0.5f;
