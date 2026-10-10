@@ -531,6 +531,114 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
 
         AssertTexels(staging);
     }
+
+    [Fact]
+    public void AttachmentAndSampled_InOnePass_SamplesTheClearAndKeepsIt()
+    {
+        const uint size = 8;
+        DeviceBuffer sceneStaging = CreateStaging(size, size);
+        DeviceBuffer copyStaging = CreateStaging(size, size);
+        GraphicsProgram program = CreateSampleProgram();
+        RenderResourceID sceneId = RenderResourceID.Intern("barrier_multi_scene");
+        RenderResourceID copyId = RenderResourceID.Intern("barrier_multi_copy");
+        GraphTextureDesc desc = GraphTextureDesc.Sized((int)size, (int)size, false, Format);
+
+        TextureHandle scene = default;
+        TextureHandle copy = default;
+        LambdaPass pass = new(
+            "PingPong",
+            builder =>
+            {
+                scene = builder.DeclareOutputTexture(sceneId, desc, usage: TextureState.Attachment | TextureState.Sampled);
+                copy = builder.DeclareOutputTexture(copyId, desc);
+            },
+            (context, cmd) =>
+            {
+                RenderTexture sceneTexture = context.GetRenderTexture(scene);
+                cmd.SetFramebuffer(sceneTexture.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Red), AttachmentOps.Loaded));
+                DrawSampled(cmd, program, context.GetRenderTexture(copy).Framebuffer, sceneTexture.ColorTextures[0], PointSampler);
+                cmd.SetFramebuffer(sceneTexture.Framebuffer);
+            });
+
+        using RenderPipeline pipeline = new([pass, BarrierPasses.Readback(sceneId, sceneStaging), BarrierPasses.Readback(copyId, copyStaging)]);
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
+        GD.WaitForIdle();
+
+        AssertUniform(copyStaging, size, size, Color.Red);
+        AssertUniform(sceneStaging, size, size, Color.Red);
+    }
+
+    [Fact]
+    public void SamplingMidRenderPass_SplitsThePass_AndLoadsWhatWasDrawn()
+    {
+        const uint size = 8;
+        DeviceBuffer staging = CreateStaging(size, size);
+        RenderResourceID targetId = RenderResourceID.Intern("barrier_split_target");
+        GraphicsProgram program = CreateSampleProgram();
+        IPass pass = SplitPass(targetId, program, StoreAction.Store);
+
+        using RenderPipeline pipeline = new([pass, BarrierPasses.Readback(targetId, staging)]);
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
+        GD.WaitForIdle();
+
+        TexelData<Color> texels = ReadTexels<Color>(staging, size, size);
+        for (uint y = 0; y < size; y++)
+        {
+            for (uint x = 0; x < size; x++)
+                Assert.Equal(x < size / 2 ? Color.Blue : Color.Red, texels[x, y], ColorFuzzyComparer.Instance);
+        }
+    }
+
+    [Fact]
+    public void SamplingMidRenderPass_WithDiscardedStores_Throws()
+    {
+        RenderResourceID targetId = RenderResourceID.Intern("barrier_split_discard");
+        IPass pass = SplitPass(targetId, CreateSampleProgram(), StoreAction.DontCare);
+
+        try
+        {
+            using RenderPipeline pipeline = new([pass]);
+            RenderException ex = Assert.Throws<RenderException>(() => GD.DispatchGraph(pipeline, new BarrierView[] { new(8, 8) }));
+            Assert.Contains("DontCare", ex.Message);
+        }
+        finally
+        {
+            GD.WaitForIdle();
+        }
+    }
+
+    private IPass SplitPass(RenderResourceID targetId, GraphicsProgram program, StoreAction store)
+    {
+        RenderResourceID otherId = RenderResourceID.Intern(RenderResourceID.ToString(targetId) + "_other");
+        GraphTextureDesc desc = GraphTextureDesc.Sized(8, 8, false, Format);
+        TextureHandle target = default;
+        TextureHandle other = default;
+        return new LambdaPass(
+            "Split",
+            builder =>
+            {
+                target = builder.DeclareOutputTexture(targetId, desc);
+                other = builder.DeclareOutputTexture(otherId, desc, usage: TextureState.Attachment | TextureState.Sampled);
+            },
+            (context, cmd) =>
+            {
+                RenderTexture otherTexture = context.GetRenderTexture(other);
+                cmd.SetFramebuffer(otherTexture.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Blue), AttachmentOps.Loaded));
+                AttachmentOps targetOps = AttachmentOps.Clear(Color.Red);
+                targetOps.Store = store;
+                cmd.SetFramebuffer(context.GetRenderTexture(target).Framebuffer, new TargetLoadStoreOps(targetOps, AttachmentOps.Loaded));
+                cmd.ClearColorTarget(0, Color.Red);
+
+                PropertySet props = new();
+                props.SetTexture("Tex", otherTexture.ColorTextures[0], PointSampler);
+                props.SetSampler("Smp", PointSampler);
+                cmd.SetScissor(0, 0, 4, 8);
+                cmd.SetShader(program);
+                cmd.SetVertexSource(VertexSource.None);
+                cmd.SetProperties(props);
+                cmd.Draw(3);
+            });
+    }
 }
 
 #if TEST_VULKAN

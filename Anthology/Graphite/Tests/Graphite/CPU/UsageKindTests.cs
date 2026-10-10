@@ -11,19 +11,11 @@ public class UsageKindTests
     private static readonly GraphTextureDesc s_desc = GraphTextureDesc.Sized(4, 4, true, PixelFormat.R8_G8_B8_A8_UNorm);
 
     [Fact]
-    public void MultiKindOutput_Throws()
+    public void OutputWithTwoWriteKinds_Throws()
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
-            "usage_multi", s_desc, usage: TextureState.Attachment | TextureState.Sampled));
-    }
-
-    [Fact]
-    public void MultiKindInput_Throws()
-    {
-        RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.DeclareInputTexture(
-            "usage_multi_in", TextureState.Sampled | TextureState.TransferSrc));
+            "usage_multi_write", s_desc, usage: TextureState.Attachment | TextureState.Storage));
     }
 
     [Fact]
