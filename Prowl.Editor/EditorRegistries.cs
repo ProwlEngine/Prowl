@@ -125,6 +125,7 @@ public static class EditorRegistries
 
         _importersByExt.Clear();
         _customAssetExtensions.Clear();
+        _assetMenuEntries.Clear();
         _importersByName.Clear();
         EditorAssetBackend.ClearImporterCache();
 
@@ -384,6 +385,11 @@ public static class EditorRegistries
     /// <summary>Extensions claimed by a create-asset menu entry, resolved to an importer after the scan.</summary>
     private static readonly HashSet<string> _customAssetExtensions = [];
 
+    private static readonly List<AssetMenuEntry> _assetMenuEntries = [];
+
+    /// <summary> Every asset type that can be created from the Assets/Create menu. </summary>
+    public static IReadOnlyList<AssetMenuEntry> AssetMenuEntries => _assetMenuEntries;
+
     /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
     private static readonly Dictionary<Type, Func<EngineObject>> _assetFactories = new()
     {
@@ -406,6 +412,7 @@ public static class EditorRegistries
         };
         if (!string.IsNullOrEmpty(attr.Extension))
             _customAssetExtensions.Add(NormalizeExt(attr.Extension));
+        _assetMenuEntries.Add(entry);
         MenuItemAttribute.Register("Assets/Create/" + attr.Name, () =>
         {
             var task = new Core.Tasks.CreateAssetTask();
