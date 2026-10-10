@@ -77,8 +77,18 @@ public sealed class EngineObjectNullAnalyzer : DiagnosticAnalyzer
         ctx.ReportDiagnostic(Diagnostic.Create(rule, operand.Syntax.GetLocation(), operand.Type!.Name));
     }
 
-    private static bool DerivesFromEngineObject(ITypeSymbol? type, INamedTypeSymbol engineObject)
+    private static bool DerivesFromEngineObject(ITypeSymbol? type, INamedTypeSymbol engineObject, int depth = 0)
     {
+        // A generic parameter is an EngineObject when one of its constraints is, which may itself be another parameter.
+        if (type is ITypeParameterSymbol parameter)
+        {
+            if (depth > 8) return false;
+            foreach (ITypeSymbol constraint in parameter.ConstraintTypes)
+                if (DerivesFromEngineObject(constraint, engineObject, depth + 1))
+                    return true;
+            return false;
+        }
+
         for (ITypeSymbol? t = type; t is not null; t = t.BaseType)
             if (SymbolEqualityComparer.Default.Equals(t, engineObject))
                 return true;

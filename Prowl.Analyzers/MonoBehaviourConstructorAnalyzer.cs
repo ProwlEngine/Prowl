@@ -13,7 +13,7 @@ namespace Prowl.Analyzers;
 /// through <c>AddComponent</c> and through deserialization, and a constructor runs before the
 /// component is attached to anything: <c>GameObject</c> and <c>Transform</c> are not set yet, and
 /// serialized field values have not been written. Anything that needs those belongs in
-/// <c>OnEnable</c>, <c>Awake</c> or <c>Start</c>.
+/// <c>OnEnable</c> or <c>Start</c>.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class MonoBehaviourConstructorAnalyzer : DiagnosticAnalyzer
@@ -28,7 +28,7 @@ public sealed class MonoBehaviourConstructorAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor DeclaredConstructor = new(
         DeclaredConstructorId,
         title: "Constructor declared on a MonoBehaviour",
-        messageFormat: "'{0}' declares a constructor. The engine constructs components itself, and a constructor runs before the component is attached, so GameObject, Transform and serialized field values are not available yet. Move the work to OnEnable, Awake or Start.",
+        messageFormat: "'{0}' declares a constructor. The engine constructs components itself, and a constructor runs before the component is attached, so GameObject, Transform and serialized field values are not available yet. Move the work to OnEnable or Start.",
         category: "Usage",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
