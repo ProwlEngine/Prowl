@@ -16,11 +16,15 @@ public static class CliProtocol
     public const string CommandsPath = "/commands";
     public const string RunPath = "/run";
 
+    // Relaxed escaping keeps generics, quotes and symbols readable, which matters to an agent reading the output.
     public static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
+
+    public static readonly JsonSerializerOptions Indented = new(Json) { WriteIndented = true };
 }
 
 /// <summary> Written to the project's Library folder by a running editor so the CLI can find and authenticate with it. </summary>

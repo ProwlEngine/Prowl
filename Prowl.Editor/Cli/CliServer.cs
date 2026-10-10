@@ -62,6 +62,7 @@ public static class CliServer
     static CliServer()
     {
         Debug.OnLog += CaptureLog;
+        Debug.OnLog += LogHistory.Add;
     }
 
     private static readonly TimeSpan s_activeLinger = TimeSpan.FromSeconds(10);
@@ -96,6 +97,7 @@ public static class CliServer
     /// <summary> Keeps the server pointed at the open project, keeps its lock file current, and resumes awaiting commands. Called once per editor frame. </summary>
     internal static void Update()
     {
+        GUI.SimulatedInput.Tick();
         PumpContinuations();
         if (s_shutDown) return;
 
@@ -112,6 +114,7 @@ public static class CliServer
             {
                 Debug.LogError($"[CLI] Could not start the command server, the prowl CLI will not reach this editor: {ex.Message}");
             }
+            AgentFiles.Write(project.RootPath, project.LibraryPath);
             return;
         }
 
@@ -123,7 +126,40 @@ public static class CliServer
     }
 
     /// <summary> Runs command continuations that were waiting on the main thread. Independent of the gameplay session, so a command survives play mode changes and script reloads. </summary>
-    internal static void PumpContinuations() => s_context.Pump();
+    internal static void PumpContinuations()
+    {
+        List<TaskCompletionSource>? frame;
+        lock (s_frameWaiters)
+        {
+            frame = s_frameWaiters.Count > 0 ? [.. s_frameWaiters] : null;
+            s_frameWaiters.Clear();
+        }
+        if (frame != null) foreach (var waiter in frame) waiter.TrySetResult();
+
+        s_context.Pump();
+    }
+
+    private static readonly List<TaskCompletionSource> s_frameWaiters = [];
+
+    /// <summary> Completes on the next editor frame. Survives play mode changes and script reloads, unlike a gameplay frame wait. </summary>
+    public static Task NextFrame()
+    {
+        var waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (s_frameWaiters) s_frameWaiters.Add(waiter);
+        return waiter.Task;
+    }
+
+    /// <summary> Waits editor frames until the condition holds or the time runs out. Returns whether it held. </summary>
+    public static async Task<bool> WaitUntil(Func<bool> condition, TimeSpan timeout)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (clock.Elapsed > timeout) return false;
+            await NextFrame();
+        }
+        return true;
+    }
 
     public static void Start(string projectRoot, string libraryPath)
     {
@@ -390,6 +426,13 @@ public static class CliServer
     {
         if (s_shutDown) throw new CliException("The editor is closing.");
 
+        // With no loop the caller is the main thread, as it is for a test or a command line build.
+        if (MainThreadContext.Current == null)
+        {
+            work();
+            return;
+        }
+
         var gate = new object();
         bool started = false, abandoned = false;
         var dispatch = Task.Run(() => GameTask.Run(() =>
@@ -553,5 +596,82 @@ public static class CliServer
         string head = $"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {payload.Length}\r\nConnection: close\r\n\r\n";
         await stream.WriteAsync(Encoding.ASCII.GetBytes(head), ct).ConfigureAwait(false);
         await stream.WriteAsync(payload, ct).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// Writes what an AI agent needs into a project when it opens. The prowl launcher in Library points at the running
+/// editor and is rewritten every time. The skills, CLAUDE.md and AGENTS.md end with a marker holding a hash of their
+/// content: a file that still matches it is untouched and gets updated when the editor ships a newer version, a file
+/// someone edited no longer matches and is left alone, and deleting the marker line opts a file out for good.
+/// </summary>
+public static class AgentFiles
+{
+    private const string Prefix = "Agent/";
+    private const string MarkerStart = "<!-- prowl:generated ";
+    private const string MarkerEnd = " Remove this line to stop the Prowl editor updating this file. -->";
+
+    public static void Write(string projectRoot, string libraryPath)
+    {
+        try
+        {
+            WriteLauncher(libraryPath);
+
+            var assembly = typeof(AgentFiles).Assembly;
+            foreach (string name in assembly.GetManifestResourceNames())
+            {
+                if (!name.StartsWith(Prefix, StringComparison.Ordinal)) continue;
+
+                // Kept as Skills/ in the editor's source, since the repository ignores .claude folders.
+                string relative = name[Prefix.Length..];
+                if (relative.StartsWith("Skills/", StringComparison.Ordinal)) relative = ".claude/skills/" + relative["Skills/".Length..];
+                string target = Path.Combine(projectRoot, relative.Replace('/', Path.DirectorySeparatorChar));
+
+                using var reader = new StreamReader(assembly.GetManifestResourceStream(name)!);
+                string content = reader.ReadToEnd().ReplaceLineEndings("\n").TrimEnd('\n') + "\n";
+
+                if (File.Exists(target) && !IsUntouchedAndOutdated(File.ReadAllText(target), content)) continue;
+
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.WriteAllText(target, content + "\n" + Marker(content) + "\n");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Debug.LogWarning($"[CLI] Could not write the agent files into the project: {ex.Message}");
+        }
+    }
+
+    // True when the file still holds exactly what the editor last wrote there and the editor now has something different.
+    private static bool IsUntouchedAndOutdated(string existing, string current)
+    {
+        string text = existing.ReplaceLineEndings("\n").TrimEnd('\n');
+        int marker = text.LastIndexOf("\n" + MarkerStart, StringComparison.Ordinal);
+        if (marker < 0 || !text.EndsWith(MarkerEnd, StringComparison.Ordinal)) return false;
+
+        string recorded = text[(marker + 1 + MarkerStart.Length)..^MarkerEnd.Length];
+        string body = text[..marker].TrimEnd('\n') + "\n";
+        return Hash(body) == recorded && recorded != Hash(current);
+    }
+
+    internal static string Hash(string content)
+        => System.Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)))[..16].ToLowerInvariant();
+
+    /// <summary> The last line of a written file, which records the hash of everything above it. </summary>
+    internal static string Marker(string content) => MarkerStart + Hash(content) + MarkerEnd;
+
+    private static void WriteLauncher(string libraryPath)
+    {
+        string exe = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Prowl.Cli.exe" : "Prowl.Cli");
+        if (!File.Exists(exe)) return;
+
+        Directory.CreateDirectory(libraryPath);
+        File.WriteAllText(Path.Combine(libraryPath, "prowl.cmd"), $"@\"{exe}\" %*\r\n");
+
+        string script = Path.Combine(libraryPath, "prowl");
+        // Git Bash and MSYS2 rewrite arguments starting with / into Windows paths, which breaks refs like /Player.
+        File.WriteAllText(script, $"#!/bin/sh\nexport MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL=\"*\"\nexec \"{exe.Replace('\\', '/')}\" \"$@\"\n");
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 }

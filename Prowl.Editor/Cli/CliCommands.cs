@@ -308,7 +308,7 @@ public static class CliCommands
         {
             var obj = new JsonObject();
             foreach (var prop in type.GetProperties())
-                obj[prop.Name] = ToJson(prop.GetValue(value), depth + 1);
+                if (ToJson(prop.GetValue(value), depth + 1) is { } propValue) obj[prop.Name] = propValue;
             return obj;
         }
 
@@ -334,16 +334,6 @@ public static class CliCommands
         }
         return text;
     }
-
-    [CliCommand("status", "Reports the open project, scene and play state")]
-    public static object Status() => new
-    {
-        project = Project.Current?.Name,
-        projectPath = Project.Current?.RootPath,
-        scene = EditorSceneManager.CurrentScenePath,
-        isPlaying = Application.IsPlaying,
-        isPaused = Application.IsPaused,
-    };
 
     [CliCommand("eval", "Compiles and runs C# on the editor main thread and returns the result. Accepts an expression or statements with a return, and await")]
     public static Task<object?> Eval([CliArg("code", "C# expression or statements. Leading using directives are allowed")] string code)

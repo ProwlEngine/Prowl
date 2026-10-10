@@ -56,10 +56,13 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\**" />
+    <!-- Named by their path inside a project, where AgentFiles writes them. -->
+    <EmbeddedResource Update="Resources\Agent\**" LogicalName="$([System.String]::Copy('%(RecursiveDir)').Replace('\', '/'))%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- The prowl CLI ships next to the editor, and its wire types are shared from it. -->
   <ItemGroup>
-    <Compile Include="..\Prowl.Cli\CliProtocol.cs" Link="Cli\CliProtocol.cs" />
+    <ProjectReference Include="..\Prowl.Cli\Prowl.Cli.csproj" />
   </ItemGroup>
 
   <ItemGroup>

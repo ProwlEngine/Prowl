@@ -293,6 +293,20 @@ public class AnimationGraphWindow : DockPanel
         Publish(picked);
     }
 
+    /// <summary>
+    /// Runs an edit made from outside the window, such as by the CLI, through a window showing that graph, so it is
+    /// undoable, drawn, and kept with any unsaved edits there. Saves when asked. False when no window shows the graph.
+    /// </summary>
+    internal static bool TryEditOpen(Guid asset, string description, Action change, bool save)
+    {
+        AnimationGraphWindow? window = s_open.Find(w => w._assetGuid == asset && w._graph.IsValid());
+        if (window == null) return false;
+
+        window.Edit(description, change);
+        if (save) window.Save();
+        return true;
+    }
+
     /// <summary>Runs one edit and makes it undoable by snapshotting the whole graph.</summary>
     private void Edit(string description, Action change, bool rebuild = true, bool compiles = true)
     {

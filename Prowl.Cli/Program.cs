@@ -257,7 +257,7 @@ public static class Program
         if (result.Result != null)
         {
             bool isString = result.Result.GetValueKind() == JsonValueKind.String;
-            Console.WriteLine(isString ? result.Result.GetValue<string>() : result.Result.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine(isString ? result.Result.GetValue<string>() : result.Result.ToJsonString(CliProtocol.Indented));
         }
         return ExitOk;
     }

@@ -1,14 +1,20 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Prowl.Cli;
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
+using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
+using Prowl.Vector;
 
 using Xunit;
 
@@ -34,7 +40,7 @@ public class CliTests : EditorTestHarness
     {
         EditorSettings.Instance = new EditorSettings();
         CliCommands.Clear();
-        foreach (var type in new[] { typeof(CliCommands), typeof(CliTests) })
+        foreach (var type in new[] { typeof(CliCommands), typeof(CliEditorCommands), typeof(CliTests) })
             foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                 CliCommands.Scan(method);
     }
@@ -308,6 +314,611 @@ public class CliTests : EditorTestHarness
             CliServer.Stop();
             MainThreadContext.Uninstall();
             SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+}
+
+public sealed class CliProbe : MonoBehaviour
+{
+    public int Count;
+    public float Speed = 1;
+    public string Label = "";
+    public Float3 Offset;
+    public List<int> Numbers = [1, 2, 3];
+    public GameObject? Target;
+    public CliProbeSettings Settings = new();
+
+    [System.NonSerialized] public int Validated;
+    public override void OnValidate() => Validated++;
+}
+
+public sealed class CliProbeSettings
+{
+    public float Radius = 0.5f;
+}
+
+/// <summary> The built in editor commands, run through the same path the CLI uses, against a live scene. </summary>
+public class CliEditorCommandTests : EditorTestHarness
+{
+    private readonly Scene _scene;
+
+    public CliEditorCommandTests()
+    {
+        EditorSettings.Instance = new EditorSettings();
+        CliCommands.Clear();
+        foreach (var type in new[] { typeof(CliCommands), typeof(CliEditorCommands) })
+            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                CliCommands.Scan(method);
+
+        Undo.Clear();
+        _scene = new Scene();
+        Scene.Load(_scene);
+        Scene.ProcessPendingLoad();
+    }
+
+    public override void Dispose()
+    {
+        Application.IsPlaying = false;
+        CliCommands.Clear();
+        EditorSettings.Instance = null!;
+        base.Dispose();
+    }
+
+    private static JsonNode? Ok(string command, params string[] argv)
+    {
+        var response = CliServer.Execute(new CliRunRequest { Command = command, Argv = [.. argv] });
+        Assert.True(response.Ok, $"{command} failed: {response.Error}");
+        return response.Result == null ? null : JsonNode.Parse(response.Result.ToJsonString());
+    }
+
+    private static string Fails(string command, params string[] argv)
+    {
+        var response = CliServer.Execute(new CliRunRequest { Command = command, Argv = [.. argv] });
+        Assert.False(response.Ok, $"{command} should have failed");
+        return response.Error!;
+    }
+
+    [Fact]
+    public void GoCreatesUnderAParentAtALocalPositionAndUndoRemovesIt()
+    {
+        Ok("go", "create", "--name", "Root");
+        var child = Ok("go", "create", "--name", "Gun", "--parent", "/Root", "--position", "[1, 2, 3]", "--components", "CliProbe")!;
+
+        Assert.Equal("/Root/Gun", child["path"]!.GetValue<string>());
+        var gun = _scene.AllObjects.Single(g => g.Name == "Gun");
+        Assert.Equal(new Float3(1, 2, 3), gun.Transform.LocalPosition);
+        Assert.NotNull(gun.GetComponent<CliProbe>());
+
+        Ok("undo");
+        Assert.DoesNotContain(_scene.AllObjects, g => g.Name == "Gun");
+        Ok("undo", "--redo");
+        Assert.NotNull(_scene.AllObjects.Single(g => g.Name == "Gun").GetComponent<CliProbe>());
+    }
+
+    [Fact]
+    public void RefsResolvePathsIndexedSiblingsComponentsAndIds()
+    {
+        Ok("go", "create", "--name", "A");
+        Ok("go", "create", "--name", "A");
+        var probe = Ok("go", "create", "--name", "P", "--parent", "/A[1]", "--components", "CliProbe")!;
+
+        Assert.Contains("A[0] to A[1]", Fails("get", "/A"));
+        Assert.Equal("/A[1]/P", Ok("get", "/A[1]/P")!["path"]!.GetValue<string>());
+        Assert.Equal("CliProbe", Ok("get", "/A[1]/P:CliProbe")!["type"]!.GetValue<string>());
+        Assert.Equal("/A[1]/P", Ok("get", probe["id"]!.GetValue<string>())!["path"]!.GetValue<string>());
+        Assert.Contains("There is: A", Fails("get", "/Nope"));
+        Assert.Contains("has no Camera", Fails("get", "/A[1]/P:Camera"));
+    }
+
+    [Fact]
+    public void SetWritesFieldsLikeTheInspectorAndUndoRestoresThem()
+    {
+        Ok("go", "create", "--name", "Other");
+        Ok("go", "create", "--name", "P", "--components", "CliProbe");
+        var probe = _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
+        int validatedBefore = probe.Validated;
+
+        Ok("set", "/P:CliProbe", "--values", """{"Count": 5, "Speed": 2, "Label": "hello", "Offset": [1, 2, 3], "Numbers[1]": 9, "Settings.Radius": 2.5, "Target": "/Other"}""");
+
+        Assert.Equal(5, probe.Count);
+        Assert.Equal(2f, probe.Speed);
+        Assert.Equal("hello", probe.Label);
+        Assert.Equal(new Float3(1, 2, 3), probe.Offset);
+        Assert.Equal([1, 9, 3], probe.Numbers);
+        Assert.Equal(2.5f, probe.Settings.Radius);
+        Assert.Equal("Other", probe.Target!.Name);
+        Assert.True(probe.Validated > validatedBefore);
+
+        Assert.Equal("/Other", Ok("get", "/P:CliProbe", "Target")!["ref"]!.GetValue<string>());
+        Assert.Equal(9, Ok("get", "/P:CliProbe", "Numbers[1]")!.GetValue<long>());
+
+        Ok("undo");
+        Assert.Equal(0, probe.Count);
+        Assert.Null(probe.Target);
+    }
+
+    [Fact]
+    public void SetRejectsUnknownFieldsBeforeWritingAnything()
+    {
+        Ok("go", "create", "--name", "P", "--components", "CliProbe");
+        var probe = _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
+
+        Assert.Contains("no field 'Nope'", Fails("set", "/P:CliProbe", "--values", """{"Count": 5, "Nope": 1}"""));
+        Assert.Equal(0, probe.Count);
+    }
+
+    [Fact]
+    public void ComponentAddSetsValuesInOneUndoStepAndRemoveIsUndoable()
+    {
+        Ok("go", "create", "--name", "P");
+        var added = Ok("component", "add", "/P", "--type", "CliProbe", "--values", """{"Count": 7}""")!;
+        Assert.Equal(7, added["fields"]!["Count"]!.GetValue<long>());
+
+        var go = _scene.AllObjects.Single(g => g.Name == "P");
+        Ok("component", "remove", "/P:CliProbe");
+        Assert.Null(go.GetComponent<CliProbe>());
+
+        Ok("undo");
+        Assert.Equal(7, go.GetComponent<CliProbe>()!.Count);
+        Ok("undo");
+        Assert.Null(go.GetComponent<CliProbe>());
+        Ok("undo", "--redo");
+        Assert.Equal(7, go.GetComponent<CliProbe>()!.Count);
+    }
+
+    [Fact]
+    public void GoRenamesReparentsDeactivatesDuplicatesAndDeletes()
+    {
+        Ok("go", "create", "--name", "A");
+        Ok("go", "create", "--name", "B");
+        Ok("go", "rename", "--target", "/B", "--name", "C");
+        Ok("go", "parent", "--target", "/C", "--parent", "/A");
+        Assert.Equal("/A/C", Ok("get", "/A/C")!["path"]!.GetValue<string>());
+
+        Ok("go", "active", "--target", "/A/C", "--active", "false");
+        Assert.False(_scene.AllObjects.Single(g => g.Name == "C").Enabled);
+
+        Ok("go", "duplicate", "--target", "/A");
+        Assert.Equal(2, _scene.RootObjects.Count(g => g.Name.StartsWith('A')));
+
+        Ok("go", "parent", "--target", "/A[0]/C", "--parent", "/");
+        Assert.Contains("is A or inside it", Fails("go", "parent", "--target", "/A[0]", "--parent", "/A[0]"));
+
+        Ok("go", "delete", "--target", "/C");
+        Assert.DoesNotContain(_scene.RootObjects, g => g.Name == "C");
+        Ok("undo");
+        Assert.Contains(_scene.RootObjects, g => g.Name == "C");
+    }
+
+    [Fact]
+    public void TreeNestsAndFilters()
+    {
+        Ok("go", "create", "--name", "Root");
+        Ok("go", "create", "--name", "Gun", "--parent", "/Root", "--components", "CliProbe");
+
+        var tree = Ok("tree")!.AsArray();
+        Assert.True(tree.Count == 1, tree.ToJsonString());
+        Assert.Equal("Gun", tree.Single()!["children"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal(1, Ok("tree", "--depth", "0")!.AsArray().Single()!["childCount"]!.GetValue<long>());
+        Assert.Equal("/Root/Gun", Ok("tree", "--filter", "CliProbe")!["matches"]![0]!["path"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void LogsReturnOnlyWhatIsNewSinceTheLastCall()
+    {
+        long seq = Ok("status")!["logSeq"]!.GetValue<long>();
+        Debug.Log("cli first");
+        Debug.LogError("cli second");
+
+        var result = Ok("logs", "--since", seq.ToString())!;
+        Assert.Equal(["cli first", "cli second"], result["logs"]!.AsArray().Select(l => l!["message"]!.GetValue<string>()));
+        Assert.Single(Ok("logs", "--since", seq.ToString(), "--level", "error")!["logs"]!.AsArray());
+        Assert.Empty(Ok("logs", "--since", result["nextSeq"]!.ToJsonString())!["logs"]!.AsArray());
+    }
+
+    [Fact]
+    public void PlayModeEditsWarnOncePerPlaySession()
+    {
+        Ok("go", "create", "--name", "P", "--components", "CliProbe");
+        Application.IsPlaying = true;
+
+        var first = CliServer.Execute(new CliRunRequest { Command = "set", Argv = ["/P:CliProbe", "Count", "1"] });
+        var second = CliServer.Execute(new CliRunRequest { Command = "set", Argv = ["/P:CliProbe", "Count", "2"] });
+        Assert.Contains(first.Logs, l => l.Message.Contains("lost when play stops"));
+        Assert.DoesNotContain(second.Logs, l => l.Message.Contains("lost when play stops"));
+        Assert.Equal(2, _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!.Count);
+
+        Application.IsPlaying = false;
+        CliServer.Execute(new CliRunRequest { Command = "set", Argv = ["/P:CliProbe", "Count", "3"] });
+        Application.IsPlaying = true;
+        var nextSession = CliServer.Execute(new CliRunRequest { Command = "set", Argv = ["/P:CliProbe", "Count", "4"] });
+        Assert.Contains(nextSession.Logs, l => l.Message.Contains("lost when play stops"));
+    }
+
+    [Fact]
+    public void SceneOpenRefusesToDropUnsavedChanges()
+    {
+        EditorSceneManager.MarkDirty();
+        Assert.Contains("unsaved changes", Fails("scene", "--action", "new"));
+        Assert.True(Ok("scene")!["dirty"]!.GetValue<bool>());
+    }
+}
+
+/// <summary> Asset, prefab, script and import settings commands against a throwaway project. </summary>
+public class CliAssetCommandTests : EditorTestHarness
+{
+    private readonly Scene _scene;
+
+    public CliAssetCommandTests()
+    {
+        EditorSettings.Instance = new EditorSettings();
+        EditorRegistries.Initialize();
+        CliCommands.Clear();
+        foreach (var type in new[] { typeof(CliCommands), typeof(CliEditorCommands) })
+            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                CliCommands.Scan(method);
+
+        Undo.Clear();
+        _scene = new Scene();
+        Scene.Load(_scene);
+        Scene.ProcessPendingLoad();
+    }
+
+    public override void Dispose()
+    {
+        CliCommands.Clear();
+        EditorSettings.Instance = null!;
+        base.Dispose();
+    }
+
+    private static JsonNode? Ok(string command, params string[] argv)
+    {
+        var response = CliServer.Execute(new CliRunRequest { Command = command, Argv = [.. argv] });
+        Assert.True(response.Ok, $"{command} failed: {response.Error}");
+        return response.Result == null ? null : JsonNode.Parse(response.Result.ToJsonString());
+    }
+
+    private static string Fails(string command, params string[] argv)
+    {
+        var response = CliServer.Execute(new CliRunRequest { Command = command, Argv = [.. argv] });
+        Assert.False(response.Ok, $"{command} should have failed");
+        return response.Error!;
+    }
+
+    [Fact]
+    public void AssetsAreCreatedFoundEditedMovedAndDeleted()
+    {
+        Assert.Contains(Ok("asset", "types")!.AsArray(), t => t!["type"]!.GetValue<string>() == "AvatarMask");
+
+        var created = Ok("asset", "create", "--path", "Masks/Upper", "--type", "AvatarMask")!;
+        Assert.Equal("Masks/Upper.mask", created["path"]!.GetValue<string>());
+        Assert.Contains("already exists", Fails("asset", "create", "--path", "Masks/Upper.mask", "--type", "AvatarMask"));
+
+        Assert.Equal("Masks/Upper.mask", Ok("asset", "find", "--type", "AvatarMask")!["results"]![0]!["path"]!.GetValue<string>());
+
+        Ok("set", "Masks/Upper.mask", "--values", """{"DefaultWeight": 0.5, "Bones": [{"Bone": "Spine", "Weight": 1, "IncludeChildren": true}]}""");
+        var mask = AssetDatabase.Load<AvatarMask>(Assets.PathToGuid("Masks/Upper.mask"))!;
+        Assert.Equal(0.5f, mask.DefaultWeight);
+        Assert.Equal("Spine", mask.Bones.Single().Bone);
+        Assert.Contains("Spine", File.ReadAllText(AssetAbsolutePath("Masks/Upper.mask")));
+
+        Ok("asset", "move", "--path", "Masks/Upper.mask", "--to", "Masks/Top.mask");
+        Assert.True(File.Exists(AssetAbsolutePath("Masks/Top.mask")));
+
+        Assert.Contains("--confirm", Fails("asset", "delete", "--path", "Masks/Top.mask"));
+        Ok("asset", "delete", "--path", "Masks/Top.mask", "--confirm");
+        Assert.False(File.Exists(AssetAbsolutePath("Masks/Top.mask")));
+    }
+
+    [Fact]
+    public void ScriptsAreWrittenFromATemplate()
+    {
+        var result = Ok("script", "Scripts/Gun")!;
+        Assert.Equal("Scripts/Gun.cs", result["path"]!.GetValue<string>());
+        Assert.Contains("class Gun", File.ReadAllText(AssetAbsolutePath("Scripts/Gun.cs")));
+        Assert.Contains("already exists", Fails("script", "Scripts/Gun.cs"));
+        Assert.Contains("not a valid class name", Fails("script", "Scripts/1Bad.cs"));
+    }
+
+    [Fact]
+    public void PrefabsAreCreatedAndTheirOverridesListedAndReverted()
+    {
+        Ok("go", "create", "--name", "Probe", "--components", "CliProbe");
+        var made = Ok("prefab", "create", "/Probe", "--path", "Prefabs/Probe")!;
+        Assert.Equal("Prefabs/Probe.prefab", made["prefab"]!["path"]!.GetValue<string>());
+
+        var instance = _scene.AllObjects.Single(g => g.Name == "Probe");
+        Assert.True(instance.IsPrefabInstance);
+
+        Ok("set", "/Probe:CliProbe", "Count", "4");
+        Assert.Contains(Ok("prefab", "overrides", "/Probe")!.AsArray(), o => o!["MemberName"]!.GetValue<string>() == "Count");
+
+        Ok("prefab", "revert", "/Probe");
+        Assert.Equal(0, _scene.AllObjects.Single(g => g.Name == "Probe").GetComponent<CliProbe>()!.Count);
+    }
+
+    [Fact]
+    public void ImportSettingsMergeNestedKeysIntoTheMetaFile()
+    {
+        Ok("asset", "create", "--path", "Masks/M", "--type", "AvatarMask");
+        var result = Ok("importer", "Masks/M.mask", "--values", """{"clips.Fire.loop": true, "scale": 2}""")!;
+
+        Assert.True(result["settings"]!["clips"]!["Fire"]!["loop"]!.GetValue<bool>());
+        string meta = File.ReadAllText(AssetAbsolutePath("Masks/M.mask") + ".meta");
+        Assert.Contains("Fire", meta);
+    }
+}
+
+/// <summary> The graph command building a small state machine, the way an agent would. </summary>
+public class CliGraphCommandTests : EditorTestHarness
+{
+    public CliGraphCommandTests()
+    {
+        EditorSettings.Instance = new EditorSettings();
+        EditorRegistries.Initialize();
+        CliCommands.Clear();
+        foreach (var type in new[] { typeof(CliCommands), typeof(CliEditorCommands) })
+            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                CliCommands.Scan(method);
+        Undo.Clear();
+        var scene = new Scene();
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+    }
+
+    public override void Dispose()
+    {
+        CliCommands.Clear();
+        EditorSettings.Instance = null!;
+        base.Dispose();
+    }
+
+    private static CliRunResponse Run(string command, params string[] argv) => CliServer.Execute(new CliRunRequest { Command = command, Argv = [.. argv] });
+
+    private static JsonNode Ok(string command, params string[] argv)
+    {
+        var response = Run(command, argv);
+        Assert.True(response.Ok, $"{command} failed: {response.Error}");
+        return JsonNode.Parse(response.Result!.ToJsonString())!;
+    }
+
+    private const string Machine = """
+        [
+          {"op": "param", "name": "Speed", "kind": "Number", "value": 0},
+          {"op": "add", "type": "motion.stateMachine", "as": "sm"},
+          {"op": "state", "machine": "$sm", "name": "Idle", "as": "idle"},
+          {"op": "state", "machine": "$sm", "name": "Run", "as": "run"},
+          {"op": "add", "type": "motion.clip", "owner": "$idle", "as": "idleClip"},
+          {"op": "connect", "from": "$idleClip", "to": "$idle.output", "pin": "Pose"},
+          {"op": "add", "type": "motion.constBool", "owner": "$run", "as": "go"},
+          {"op": "connect", "from": "$go", "to": "$run.output", "pin": "Enter"},
+          {"op": "transition", "machine": "$sm", "from": "Idle", "to": "Run", "duration": 0.3},
+          {"op": "gate", "state": "$idle", "exit": true}
+        ]
+        """;
+
+    [Fact]
+    public void AStateMachineIsBuiltFromOpsAndSaved()
+    {
+        Assert.Contains(Ok("graph", "--action", "types", "--filter", "stateMachine").AsArray(), t => t!["id"]!.GetValue<string>() == "motion.stateMachine");
+        Ok("asset", "create", "--path", "Anim/Player", "--type", "AnimationGraph");
+
+        var described = Ok("graph", "Anim/Player.animgraph", "--action", "edit", "--ops", Machine)["graph"]!;
+        var machine = described["nodes"]!.AsArray().Single(n => n!["type"]!.GetValue<string>() == "motion.stateMachine")!;
+        Assert.Equal(machine["id"]!.GetValue<string>(), described["root"]!.GetValue<string>());
+
+        var states = machine["states"]!.AsArray();
+        Assert.Equal(["Idle", "Run"], states.Select(s => s!["name"]!.GetValue<string>()));
+        Assert.True(states[0]!["default"]!.GetValue<bool>());
+        Assert.Equal(0.3f, states[0]!["transitions"]![0]!["duration"]!.GetValue<float>());
+
+        string runOutput = states[1]!["output"]!.GetValue<string>();
+        var output = described["nodes"]!.AsArray().Single(n => n!["id"]!.GetValue<string>() == runOutput)!;
+        Assert.Contains(output["inputs"]!.AsArray(), i => i!["name"]!.GetValue<string>() == "Enter" && i["from"] != null);
+
+        Assert.Contains("Speed", File.ReadAllText(AssetAbsolutePath("Anim/Player.animgraph")));
+    }
+
+    [Fact]
+    public void EveryGraphExampleInTheSkillsApplies()
+    {
+        var examples = AgentSkillExampleTests.SkillBlocks("json").Where(j => j.TrimStart().StartsWith('[') && j.Contains("\"op\"")).ToList();
+        Assert.NotEmpty(examples);
+        for (int i = 0; i < examples.Count; i++)
+        {
+            Ok("asset", "create", "--path", $"Anim/Example{i}", "--type", "AnimationGraph");
+            var described = Ok("graph", $"Anim/Example{i}.animgraph", "--action", "edit", "--ops", examples[i])["graph"]!;
+            Assert.False(string.IsNullOrEmpty(described["root"]?.GetValue<string>()), $"Example {i} has no root.");
+        }
+    }
+
+    [Fact]
+    public void ABadOpChangesNothing()
+    {
+        Ok("asset", "create", "--path", "Anim/G", "--type", "AnimationGraph");
+        var response = Run("graph", "Anim/G.animgraph", "--action", "edit", "--ops", """[{"op": "add", "type": "motion.clip"}, {"op": "connect", "from": "nope", "to": "x"}]""");
+        Assert.False(response.Ok);
+        Assert.Contains("no node 'x'", response.Error);
+        Assert.Empty(Ok("graph", "Anim/G.animgraph")["nodes"]!.AsArray());
+    }
+
+    [Fact]
+    public void GraphEditsUndoBackOnDisk()
+    {
+        Ok("asset", "create", "--path", "Anim/U", "--type", "AnimationGraph");
+        Ok("graph", "Anim/U.animgraph", "--action", "edit", "--ops", """[{"op": "param", "name": "Jump", "kind": "Flag", "trigger": true}]""");
+        Assert.Contains("Jump", File.ReadAllText(AssetAbsolutePath("Anim/U.animgraph")));
+
+        Ok("undo");
+        Assert.DoesNotContain("Jump", File.ReadAllText(AssetAbsolutePath("Anim/U.animgraph")));
+        Assert.Empty(Ok("graph", "Anim/U.animgraph")["parameters"]!.AsArray());
+    }
+}
+
+/// <summary> The api command, finding real signatures and their docs. </summary>
+public class CliApiCommandTests : EditorTestHarness
+{
+    public CliApiCommandTests()
+    {
+        EditorSettings.Instance = new EditorSettings();
+        CliCommands.Clear();
+        foreach (var method in typeof(CliEditorCommands).GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            CliCommands.Scan(method);
+    }
+
+    public override void Dispose()
+    {
+        CliCommands.Clear();
+        EditorSettings.Instance = null!;
+        base.Dispose();
+    }
+
+    private static JsonNode Ok(params string[] argv)
+    {
+        var response = CliServer.Execute(new CliRunRequest { Command = "api", Argv = [.. argv] });
+        Assert.True(response.Ok, response.Error);
+        return JsonNode.Parse(response.Result!.ToJsonString())!;
+    }
+
+    [Fact]
+    public void SearchFindsMembersWithTheirSignatureAndSummary()
+    {
+        var hit = Ok("--search", "LogOnce")["members"]!.AsArray().First(m => m!["member"]!.GetValue<string>().Contains("LogOnce("))!;
+        Assert.Equal("public static void LogOnce(string id, string message)", hit["member"]!.GetValue<string>());
+        Assert.Contains("first time", hit["summary"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ATypeListsItsMembersAndAMemberItsParameterDocs()
+    {
+        var type = Ok("--type", "AssetRef");
+        Assert.Equal("Prowl.Runtime.AssetRef<T>", type["name"]!.GetValue<string>());
+        Assert.Contains("asset", type["summary"]!.GetValue<string>());
+        Assert.Contains(type["members"]!.AsArray(), m => m!["signature"]!.GetValue<string>() == "public T Load()");
+
+        var member = Ok("--type", "Prowl.Runtime.Debug", "--member", "EnsureMainThread")["members"]![0]!;
+        Assert.Contains(member["parameters"]!.AsArray(), p => p!.GetValue<string>().StartsWith("member: Defaults to the calling member"));
+        Assert.Contains("main thread", member["returns"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void UserScriptsAndInheritedMembersAreIncluded()
+    {
+        var probe = Ok("--type", "CliProbe");
+        Assert.Contains(probe["members"]!.AsArray(), m => m!["signature"]!.GetValue<string>() == "public float Speed");
+        Assert.Contains(probe["members"]!.AsArray(), m => m!["signature"]!.GetValue<string>() == "public override void OnValidate()");
+
+        var inherited = Ok("--type", "CliProbe", "--member", "GetComponent", "--inherited");
+        Assert.Equal("MonoBehaviour", inherited["members"]![0]!["declaredOn"]!.GetValue<string>());
+    }
+}
+
+/// <summary> The files an agent reads, written into a project. </summary>
+public class AgentFilesTests : EditorTestHarness
+{
+    private string ClaudeMd => Path.Combine(Project.RootPath, "CLAUDE.md");
+    private string Skill => Path.Combine(Project.RootPath, ".claude", "skills", "prowl-cli", "SKILL.md");
+
+    // A file as an older editor version would have left it: different content, with a marker that matches it.
+    private static string OldVersion(string content) => content + "\n" + AgentFiles.Marker(content) + "\n";
+
+    [Fact]
+    public void FilesAreWrittenIntoTheProjectWithTheLauncher()
+    {
+        AgentFiles.Write(Project.RootPath, Project.LibraryPath);
+
+        Assert.True(File.Exists(ClaudeMd));
+        Assert.True(File.Exists(Path.Combine(Project.RootPath, "AGENTS.md")));
+        Assert.StartsWith("---\nname: prowl-cli", File.ReadAllText(Skill));
+        Assert.Contains("prowl:generated", File.ReadAllText(Skill));
+
+        string launcher = Path.Combine(Project.LibraryPath, "prowl.cmd");
+        File.WriteAllText(launcher, "stale");
+        AgentFiles.Write(Project.RootPath, Project.LibraryPath);
+        Assert.Contains("Prowl.Cli", File.ReadAllText(launcher));
+
+        // Git Bash would otherwise turn a ref like /Player into C:/Program Files/Git/Player.
+        Assert.Contains("MSYS_NO_PATHCONV=1", File.ReadAllText(Path.Combine(Project.LibraryPath, "prowl")));
+    }
+
+    [Fact]
+    public void UntouchedFilesFromAnOlderVersionAreUpdated()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Skill)!);
+        File.WriteAllText(Skill, OldVersion("---\nname: prowl-cli\n---\nold advice\n"));
+
+        AgentFiles.Write(Project.RootPath, Project.LibraryPath);
+        Assert.DoesNotContain("old advice", File.ReadAllText(Skill));
+        Assert.Contains("# Driving the Prowl editor", File.ReadAllText(Skill));
+    }
+
+    [Fact]
+    public void EditedOrOptedOutFilesAreLeftAlone()
+    {
+        AgentFiles.Write(Project.RootPath, Project.LibraryPath);
+
+        string edited = File.ReadAllText(ClaudeMd).Replace("This is a game", "This is MY game");
+        File.WriteAllText(ClaudeMd, edited);
+        string optedOut = OldVersion("old skill text\n").Split("<!--")[0];
+        File.WriteAllText(Skill, optedOut);
+
+        AgentFiles.Write(Project.RootPath, Project.LibraryPath);
+        Assert.Equal(edited, File.ReadAllText(ClaudeMd));
+        Assert.Equal(optedOut, File.ReadAllText(Skill));
+    }
+
+    [Fact]
+    public void ACurrentFileIsNotRewritten()
+    {
+        AgentFiles.Write(Project.RootPath, Project.LibraryPath);
+        var written = File.GetLastWriteTimeUtc(ClaudeMd);
+        File.SetLastWriteTimeUtc(ClaudeMd, written.AddDays(-1));
+
+        AgentFiles.Write(Project.RootPath, Project.LibraryPath);
+        Assert.Equal(written.AddDays(-1), File.GetLastWriteTimeUtc(ClaudeMd));
+    }
+}
+
+/// <summary> Every complete script example in the agent skills compiles against the engine, so the docs can not drift from the code. </summary>
+public class AgentSkillExampleTests : EditorTestHarness
+{
+    /// <summary>The body of every fenced block of this language in the embedded agent guides.</summary>
+    public static IEnumerable<string> SkillBlocks(string language)
+    {
+        var assembly = typeof(AgentFiles).Assembly;
+        foreach (string name in assembly.GetManifestResourceNames().Where(n => n.EndsWith(".md", StringComparison.Ordinal)))
+        {
+            using var reader = new StreamReader(assembly.GetManifestResourceStream(name)!);
+            string text = reader.ReadToEnd().ReplaceLineEndings("\n");
+            foreach (System.Text.RegularExpressions.Match block in System.Text.RegularExpressions.Regex.Matches(text, $"```{language}\n(.*?)```", System.Text.RegularExpressions.RegexOptions.Singleline))
+                yield return block.Groups[1].Value;
+        }
+    }
+
+    [Fact]
+    public void EveryScriptExampleInTheSkillsCompiles()
+    {
+        int examples = 0;
+        foreach (string code in SkillBlocks("csharp").Where(c => c.Contains("class ")))
+            WriteScript($"SkillExample{examples++}.cs", code);
+
+        Assert.True(examples >= 4, $"Expected the skill examples, found {examples}.");
+        var result = Prowl.Editor.Projects.Scripting.ScriptCompiler.CompileAll(Project);
+        Assert.True(result.Success, result.Errors);
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity == "Warning");
+    }
+
+    [Fact]
+    public void EveryEvalRecipeInTheSkillsCompiles()
+    {
+        var assemblies = Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.LiveAssemblies().Where(a => !a.IsDynamic).ToList();
+        var recipes = SkillBlocks("csharp").Where(c => c.StartsWith("// prowl eval", StringComparison.Ordinal)).ToList();
+
+        Assert.True(recipes.Count >= 3, $"Expected the eval recipes, found {recipes.Count}.");
+        foreach (string recipe in recipes)
+        {
+            var error = Record.Exception(() => CliEval.Compile(recipe, assemblies));
+            Assert.True(error == null, $"{recipe}\n{error?.Message}");
         }
     }
 }
