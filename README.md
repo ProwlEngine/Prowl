@@ -200,6 +200,202 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 ## Contributors 🌟
 
 <!-- readme: collaborators,contributors -start -->
+<table>
+	<tbody>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/michaelsakharov">
+                    <img src="https://avatars.githubusercontent.com/u/8621606?v=4" width="100;" alt="michaelsakharov"/>
+                    <br />
+                    <sub><b>Wulferis</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/sinnwrig">
+                    <img src="https://avatars.githubusercontent.com/u/116330012?v=4" width="100;" alt="sinnwrig"/>
+                    <br />
+                    <sub><b>Kai Angulo</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/PaperPrototype">
+                    <img src="https://avatars.githubusercontent.com/u/48071553?v=4" width="100;" alt="PaperPrototype"/>
+                    <br />
+                    <sub><b>Abdiel Lopez</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/xZekro51">
+                    <img src="https://avatars.githubusercontent.com/u/28503323?v=4" width="100;" alt="xZekro51"/>
+                    <br />
+                    <sub><b>Paolo</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Acissathar">
+                    <img src="https://avatars.githubusercontent.com/u/10227954?v=4" width="100;" alt="Acissathar"/>
+                    <br />
+                    <sub><b>Will</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/brmassa">
+                    <img src="https://avatars.githubusercontent.com/u/13696218?v=4" width="100;" alt="brmassa"/>
+                    <br />
+                    <sub><b>Bruno Massa</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/EJTP">
+                    <img src="https://avatars.githubusercontent.com/u/87308197?v=4" width="100;" alt="EJTP"/>
+                    <br />
+                    <sub><b>EJTP</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/dimmerly">
+                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
+                    <br />
+                    <sub><b>Dimmer</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Kuvrot">
+                    <img src="https://avatars.githubusercontent.com/u/23508114?v=4" width="100;" alt="Kuvrot"/>
+                    <br />
+                    <sub><b>Jaime Arturo</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/IsaacMarovitz">
+                    <img src="https://avatars.githubusercontent.com/u/42140194?v=4" width="100;" alt="IsaacMarovitz"/>
+                    <br />
+                    <sub><b>Isaac Marovitz</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/10xJosh">
+                    <img src="https://avatars.githubusercontent.com/u/55113224?v=4" width="100;" alt="10xJosh"/>
+                    <br />
+                    <sub><b>Josh Davis</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/ZeppelinGames">
+                    <img src="https://avatars.githubusercontent.com/u/31507417?v=4" width="100;" alt="ZeppelinGames"/>
+                    <br />
+                    <sub><b>Mark Saba</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/ZedDevStuff">
+                    <img src="https://avatars.githubusercontent.com/u/98429642?v=4" width="100;" alt="ZedDevStuff"/>
+                    <br />
+                    <sub><b>Kouame Benoit Junior Augustin</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/keithwill">
+                    <img src="https://avatars.githubusercontent.com/u/33398353?v=4" width="100;" alt="keithwill"/>
+                    <br />
+                    <sub><b>Keith Williams</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Tryibion">
+                    <img src="https://avatars.githubusercontent.com/u/71274967?v=4" width="100;" alt="Tryibion"/>
+                    <br />
+                    <sub><b>Chandler Cox</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/ArtemkaKun">
+                    <img src="https://avatars.githubusercontent.com/u/36485221?v=4" width="100;" alt="ArtemkaKun"/>
+                    <br />
+                    <sub><b>Artem Yurchenko</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Porphyri0n">
+                    <img src="https://avatars.githubusercontent.com/u/119479540?v=4" width="100;" alt="Porphyri0n"/>
+                    <br />
+                    <sub><b>Erdoğan Başer</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/jihadkhawaja">
+                    <img src="https://avatars.githubusercontent.com/u/47315122?v=4" width="100;" alt="jihadkhawaja"/>
+                    <br />
+                    <sub><b>Jay Khawaja</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/JaggerJo">
+                    <img src="https://avatars.githubusercontent.com/u/13090415?v=4" width="100;" alt="JaggerJo"/>
+                    <br />
+                    <sub><b>Josua Jäger</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/japsuu">
+                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
+                    <br />
+                    <sub><b>Jasper Honkasalo</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/UBTL">
+                    <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
+                    <br />
+                    <sub><b>Uncle Bane</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/draxxris">
+                    <img src="https://avatars.githubusercontent.com/u/24984408?v=4" width="100;" alt="draxxris"/>
+                    <br />
+                    <sub><b>draxxris</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/JothamR">
+                    <img src="https://avatars.githubusercontent.com/u/5410231?v=4" width="100;" alt="JothamR"/>
+                    <br />
+                    <sub><b>Jotham</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/notgiven688">
+                    <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
+                    <br />
+                    <sub><b>notgiven688</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/recore67">
+                    <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>
+                    <br />
+                    <sub><b>salman ameeri</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/treviasxk">
+                    <img src="https://avatars.githubusercontent.com/u/24716901?v=4" width="100;" alt="treviasxk"/>
+                    <br />
+                    <sub><b>Trevias Xk</b></sub>
+                </a>
+            </td>
+		</tr>
+	<tbody>
+</table>
 <!-- readme: collaborators,contributors -end -->
 
 ## Dependencies 📦
