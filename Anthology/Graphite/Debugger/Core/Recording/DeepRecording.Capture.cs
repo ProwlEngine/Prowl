@@ -40,7 +40,10 @@ public sealed partial class DeepRecording
                 info.Origin,
                 backings.Select(b => new RecordedBacking(Trace(b.Id), b.EntryVersion.Version, b.Role, b.Index)).ToEquatableArray(),
                 info.Texture,
-                info.Buffer));
+                info.Buffer,
+                info.HistoryDepth,
+                info.HistorySlot,
+                info.HistoryValid));
         }
 
         foreach (PassInfo passInfo in view.Passes.Span)

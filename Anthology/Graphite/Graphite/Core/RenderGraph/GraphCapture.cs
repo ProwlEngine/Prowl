@@ -202,6 +202,9 @@ internal sealed class GraphCapture
         GraphTextureDesc? textureDesc = null;
         GraphBufferDesc? bufferDesc = null;
         GraphResourceOrigin origin = GraphResourceOrigin.Transient;
+        int historyDepth = 0;
+        int historySlot = -1;
+        bool historyValid = false;
 
         if (isTexture)
         {
@@ -215,6 +218,9 @@ internal sealed class GraphCapture
             {
                 case GraphTextureResource transient:
                     textureDesc = transient.Description;
+                    historyDepth = transient.HistoryDepth;
+                    historySlot = transient.HistorySlot(_context.View.ViewId);
+                    historyValid = _context.IsHistoryValid(new TextureHandle(id));
                     break;
                 case GraphViewTargetResource:
                     origin = GraphResourceOrigin.ViewTarget;
@@ -231,12 +237,17 @@ internal sealed class GraphCapture
             DeviceBuffer buffer = _context.GetRenderBuffer(new BufferHandle(id));
             backings.Add(new GraphBacking(buffer.ResourceId, buffer.CurrentVersion, BackingRole.Buffer, 0));
             if (resource is GraphBufferResource bufferResource)
+            {
                 bufferDesc = bufferResource.Description;
+                historyDepth = bufferResource.HistoryDepth;
+                historySlot = bufferResource.HistorySlot(_context.View.ViewId);
+                historyValid = _context.IsHistoryValid(new BufferHandle(id));
+            }
         }
 
         GraphBacking[] array = backings.ToArray();
         _backings[id] = array;
         return new GraphResourceInfo(
-            id, name, isTexture ? GraphResourceKind.Texture : GraphResourceKind.Buffer, array, origin, textureDesc, bufferDesc);
+            id, name, isTexture ? GraphResourceKind.Texture : GraphResourceKind.Buffer, array, origin, textureDesc, bufferDesc, historyDepth, historySlot, historyValid);
     }
 }

@@ -26,6 +26,7 @@ public enum GraphResourceOrigin : byte
 /// <summary>
 /// A graph resource as one view execution saw it. A buffer has one backing, a texture one per color attachment plus depth.
 /// </summary>
+/// <remarks>HistorySlot is the ring slot this execution resolved, or -1 without history. HistoryValid is false on a fresh ring.</remarks>
 public readonly record struct GraphResourceInfo(
     RenderResourceID Id,
     string Name,
@@ -33,7 +34,10 @@ public readonly record struct GraphResourceInfo(
     ReadOnlyMemory<GraphBacking> Backings,
     GraphResourceOrigin Origin,
     GraphTextureDesc? Texture,
-    GraphBufferDesc? Buffer);
+    GraphBufferDesc? Buffer,
+    int HistoryDepth,
+    int HistorySlot,
+    bool HistoryValid);
 
 /// <summary>The resources and passes of one view, matched to its <see cref="ViewInfo"/> by index.</summary>
 public readonly record struct ViewCaptureInfo(

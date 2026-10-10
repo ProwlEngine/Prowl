@@ -75,6 +75,8 @@ internal abstract class HistoryRings<TResource, TDesc>
         return ring.Slots[index];
     }
 
+    public int CurrentSlot(int viewId) => _rings.TryGetValue(viewId, out Ring? ring) ? ring.CurrentIndex : -1;
+
     public bool IsValid(int viewId, ulong executionId, in TDesc desc)
     {
         Advance(executionId);
@@ -159,6 +161,8 @@ public sealed class GraphTextureResource : GraphResource
     internal bool IsHistoryValid(int viewId, ulong executionId, in RenderTextureDescription desc)
         => HistoryDepth > 0 && _rings.IsValid(viewId, executionId, desc);
 
+    internal int HistorySlot(int viewId) => HistoryDepth > 0 ? _rings.CurrentSlot(viewId) : -1;
+
     internal override void DisposeOwned() => _rings.DisposeAll();
 
     private sealed class TextureRings : HistoryRings<RenderTexture, RenderTextureDescription>
@@ -211,6 +215,8 @@ public sealed class GraphBufferResource : GraphResource
 
     internal bool IsHistoryValid(int viewId, ulong executionId, in BufferDescription desc)
         => HistoryDepth > 0 && _rings.IsValid(viewId, executionId, desc);
+
+    internal int HistorySlot(int viewId) => HistoryDepth > 0 ? _rings.CurrentSlot(viewId) : -1;
 
     internal override void DisposeOwned() => _rings.DisposeAll();
 

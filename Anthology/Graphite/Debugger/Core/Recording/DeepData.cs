@@ -68,14 +68,17 @@ public sealed record RecordedBlob(BlobRef Ref, EquatableArray<byte> Data);
 /// <summary>One backing of a graph resource in a view.</summary>
 public sealed record RecordedBacking(TraceResourceId Id, uint EntryVersion, BackingRole Role, uint Index);
 
-/// <summary>A graph resource as a view saw it.</summary>
+/// <summary>A graph resource as a view saw it. HistorySlot is the ring slot it resolved, or -1 without history.</summary>
 public sealed record RecordedGraphResource(
     string Name,
     GraphResourceKind Kind,
     GraphResourceOrigin Origin,
     EquatableArray<RecordedBacking> Backings,
     GraphTextureDesc? Texture,
-    GraphBufferDesc? Buffer);
+    GraphBufferDesc? Buffer,
+    int HistoryDepth,
+    int HistorySlot,
+    bool HistoryValid);
 
 /// <summary>A pass's declared access to a graph resource, by name.</summary>
 public sealed record RecordedAccess(

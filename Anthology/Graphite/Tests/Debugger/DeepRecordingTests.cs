@@ -45,6 +45,17 @@ file sealed class WritePass : IPass
     }
 }
 
+file sealed class HistoryPass : IPass
+{
+    private readonly RenderResourceID _id = RenderResourceID.Intern("deep_history");
+
+    public string Name => "History";
+
+    public void Setup(RenderContextBuilder builder) => builder.DeclareOutputTexture(_id, GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm), history: 1);
+
+    public void Render(RenderContext context, CommandBuffer cmd) { }
+}
+
 public class DeepRecordingTests
 {
     private static GraphicsDevice CreateDevice() => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -201,5 +212,28 @@ public class DeepRecordingTests
                 Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, output.Data);
             }
         }
+    }
+
+    [SkippableFact]
+    public void HistoryResources_RecordRingSlotAndValidity()
+    {
+        using GraphicsDevice device = CreateDevice();
+        using RenderPipeline pipeline = new([new HistoryPass()]);
+
+        RecordedGraphResource Run()
+        {
+            DeepRecording deep = new(device, DeepMode.ReplayOnly);
+            device.DispatchGraph(pipeline, new DeepView[] { new() }, deep);
+            deep.Wait();
+            return Assert.Single(deep.Views[0].Resources);
+        }
+
+        RecordedGraphResource first = Run();
+        RecordedGraphResource second = Run();
+
+        Assert.Equal(1, first.HistoryDepth);
+        Assert.False(first.HistoryValid);
+        Assert.True(second.HistoryValid);
+        Assert.NotEqual(first.HistorySlot, second.HistorySlot);
     }
 }
