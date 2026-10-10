@@ -760,7 +760,7 @@ namespace Prowl.PaperUI
 
         /// <summary>
         /// Appends a closed rounded-rect contour to the canvas' current path (unlike
-        /// <see cref="Canvas.RoundedRect"/>, it does not call BeginPath), so several contours can be
+        /// <see cref="Canvas.RoundedRect(float, float, float, float, float)"/>, it does not call BeginPath), so several contours can be
         /// combined in one path — e.g. an outer rect plus an inner hole for an even-odd fill.
         /// </summary>
         private static void AddRoundedContour(Canvas canvas, float x, float y, float w, float h, Float4 r)

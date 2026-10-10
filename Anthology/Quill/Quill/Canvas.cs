@@ -2831,7 +2831,7 @@ namespace Prowl.Quill
         }
 
         /// <summary>
-        /// Draws a textured rectangle with rounded corners. Same brush setup as <see cref="DrawImage"/>
+        /// Draws a textured rectangle with rounded corners. Same brush setup as <see cref="DrawImage(object, float, float, float, float, System.Nullable{Prowl.Vector.Color32})"/>
         /// but filled with a rounded rect, so image thumbnails clip to the given corner radius.
         /// </summary>
         public void DrawImageRounded(object texture, float x, float y, float width, float height, float radius, Color32? tint = null)

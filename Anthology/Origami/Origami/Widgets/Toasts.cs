@@ -239,7 +239,7 @@ public sealed class Toasts
 
     /// <summary>
     /// Render a static, non-interactive <c>.w2toast</c> card inline in the current layout flow
-    /// (for showcases / documentation). Unlike <see cref="Show"/> this does not queue or auto-dismiss.
+    /// (for showcases / documentation). Unlike <see cref="Show()"/> this does not queue or auto-dismiss.
     /// </summary>
     public static void Preview(Paper paper, string id, string title, ToastType type, string message = "")
     {
