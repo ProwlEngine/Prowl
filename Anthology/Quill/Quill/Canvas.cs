@@ -1696,11 +1696,11 @@ namespace Prowl.Quill
         /// </summary>
         /// <param name="rx">The x-axis radius of the ellipse.</param>
         /// <param name="ry">The y-axis radius of the ellipse.</param>
-        /// <param name="xAxisRotation">The x-coordinate of the second control point.</param>
+        /// <param name="xAxisRotationDegrees">The rotation of the ellipse around its x axis in degrees.</param>
         /// <param name="largeArcFlag">If largeArcFlag is '1', then one of the two larger arc sweeps will be chosen; otherwise, if largeArcFlag is '0', one of the smaller arc sweeps will be chosen.</param>
         /// <param name="sweepFlag">If sweepFlag is '1', then the arc will be drawn in a "positive-angle" direction. A value of 0 causes the arc to be drawn in a "negative-angle" direction</param>
-        /// <param name="x">The x-coordinate of the endpoint.</param>
-        /// <param name="y">The y-coordinate of the endpoint.</param>
+        /// <param name="x_end">The x-coordinate of the endpoint.</param>
+        /// <param name="y_end">The y-coordinate of the endpoint.</param>
         /// <remarks>
         /// This method creates an elliptical arc with radii (rx,ry) from current point to (x_end,y_end)
         /// </remarks>
@@ -2202,7 +2202,6 @@ namespace Prowl.Quill
         /// <param name="y">The y-coordinate of the top-left corner of the rectangle.</param>
         /// <param name="width">The width of the rectangle.</param>
         /// <param name="height">The height of the rectangle.</param>
-        /// <param name="color">The color of the rectangle.</param>
         public void Rect(float x, float y, float width, float height)
         {
             if (width <= 0 || height <= 0)
