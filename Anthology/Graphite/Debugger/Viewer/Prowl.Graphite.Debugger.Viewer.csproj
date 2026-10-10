@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OutputType>Library</OutputType>
+        <RootNamespace>Prowl.Graphite.Debugger.Viewer</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Core\Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="..\..\..\Origami\Origami\Origami.csproj" />
+        <ProjectReference Include="..\..\..\Paper\Paper\Paper.csproj" />
+        <ProjectReference Include="..\..\..\Quill\Quill\Quill.csproj" />
+    </ItemGroup>
+
+</Project>
