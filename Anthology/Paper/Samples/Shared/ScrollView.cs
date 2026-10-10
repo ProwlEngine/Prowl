@@ -29,12 +29,12 @@ public static class ScrollView
             .Clip()
             .OnScroll(e =>
             {
-                float scroll = paper.GetElementStorage(outerHandle, "scrollY", 0f);
+                float prev = paper.GetElementStorage(outerHandle, "scrollY", 0f);
                 float contentH = paper.GetElementStorage(outerHandle, "contentH", height);
                 float maxScroll = MathF.Max(0, contentH - height);
-                scroll -= (float)e.Delta * ScrollSpeed;
-                scroll = MathF.Max(0, MathF.Min(maxScroll, scroll));
+                float scroll = MathF.Max(0, MathF.Min(maxScroll, prev - (float)e.Delta * ScrollSpeed));
                 paper.SetElementStorage(outerHandle, "scrollY", scroll);
+                if (scroll != prev) e.StopPropagation();
             });
 
         var outerDisposable = outerBuilder.Enter();

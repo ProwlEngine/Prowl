@@ -308,7 +308,10 @@ public sealed partial class PaperDevTools
             .OnScroll(e =>
             {
                 float m = MathF.Max(0f, _scrollContent.GetValueOrDefault(key) - h);
-                _scroll[key] = Math.Clamp(_scroll.GetValueOrDefault(key) - (float)e.Delta * 30f, 0f, m);
+                float prev = _scroll.GetValueOrDefault(key);
+                float next = Math.Clamp(prev - (float)e.Delta * 30f, 0f, m);
+                _scroll[key] = next;
+                if (next != prev) e.StopPropagation();
             });
         var oScope = outer.Enter();
 
