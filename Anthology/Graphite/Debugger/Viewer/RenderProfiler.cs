@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 using Prowl.OrigamiUI;
@@ -23,6 +24,7 @@ internal sealed partial class ProfilerView
     private const float HierarchyWidth = 330f;
     private const double BudgetMs = 16.7;
     private const double ScaleMs = 25;
+    private const double FollowIntervalMs = 250;
 
     private readonly ProfilerSession _session;
     private readonly IRenderProfilerSource _source;
@@ -31,6 +33,8 @@ internal sealed partial class ProfilerView
     private readonly Action _snapshotTaken;
     private Snapshot? _shown;
     private ulong? _pinned;
+    private Recording? _followed;
+    private long _followedAt;
     private string _selId = "f";
     private string _message = "";
     private FrameModel? _liveModel;
@@ -119,7 +123,12 @@ internal sealed partial class ProfilerView
                 if (frame.ExecutionId == n)
                     return frame;
         _pinned = null;
-        return frames[^1];
+        if (_followed == null || _followed.ExecutionId < frames[0].ExecutionId || Stopwatch.GetElapsedTime(_followedAt).TotalMilliseconds >= FollowIntervalMs)
+        {
+            _followed = frames[^1];
+            _followedAt = Stopwatch.GetTimestamp();
+        }
+        return _followed;
     }
 
     private FrameModel LiveModel(Recording live)
