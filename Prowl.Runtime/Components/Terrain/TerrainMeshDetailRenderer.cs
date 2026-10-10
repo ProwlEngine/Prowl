@@ -44,6 +44,11 @@ internal class TerrainMeshDetailRenderer
 
     private readonly Dictionary<int, Build> _builds = [];
 
+    // Painted cells in range of a rebuild, by distance from the camera then cell, reused between rebuilds
+    private static readonly List<(float DistanceSq, int Cell)> s_cells = [];
+    private static readonly Comparison<(float DistanceSq, int Cell)> s_nearestFirst =
+        (a, b) => a.DistanceSq != b.DistanceSq ? a.DistanceSq.CompareTo(b.DistanceSq) : a.Cell.CompareTo(b.Cell);
+
     private sealed class Build
     {
         public InstanceData[] Instances = [];
@@ -160,56 +165,65 @@ internal class TerrainMeshDetailRenderer
 
         float radiusSq = radius * radius;
 
-        for (int cz = startZ; cz <= endZ && instances.Count < MaxInstancesPerPrototype; cz++)
+        s_cells.Clear();
+        for (int cz = startZ; cz <= endZ; cz++)
         {
             for (int cx = startX; cx <= endX; cx++)
             {
-                float rawDensity = densityMap[cz * detailRes + cx] * (1f / 255f);
-                if (rawDensity < 0.01f) continue;
+                if (densityMap[cz * detailRes + cx] * (1f / 255f) < 0.01f) continue;
 
-                float cellCentreX = (cx + 0.5f) * cellSize;
-                float cellCentreZ = (cz + 0.5f) * cellSize;
-                float dx = cellCentreX - centre.X, dz = cellCentreZ - centre.Y;
-                if (dx * dx + dz * dz > radiusSq) continue;
+                float dx = (cx + 0.5f) * cellSize - centre.X, dz = (cz + 0.5f) * cellSize - centre.Y;
+                float distanceSq = dx * dx + dz * dz;
+                if (distanceSq <= radiusSq) s_cells.Add((distanceSq, cz * detailRes + cx));
+            }
+        }
 
-                float dither = s_ditherTable[(cx & 7) + (cz & 7) * 8];
-                // Ordered dither, so a faint cell still averages out to its share of an instance
-                int count = Math.Clamp((int)(rawDensity * MaxInstancesPerCell + dither), 0, MaxInstancesPerCell);
-                count = Math.Min(count, MaxInstancesPerPrototype - instances.Count);
-                if (count <= 0) continue;
+        // Nearest first, so when the budget runs out it is the furthest cells that go without
+        s_cells.Sort(s_nearestFirst);
 
-                // Seeded from the world cell, so a rebuild reproduces the same scatter exactly
-                var rng = new SeededRandom((uint)(cx * 73856093 ^ cz * 19349663 ^ protoIdx * 83492791));
+        foreach ((float _, int cell) in s_cells)
+        {
+            if (instances.Count >= MaxInstancesPerPrototype) break;
+            int cx = cell % detailRes, cz = cell / detailRes;
+            float rawDensity = densityMap[cell] * (1f / 255f);
 
-                for (int k = 0; k < count; k++)
-                {
-                    float u = (cx + rng.NextFloat()) / detailRes;
-                    float v = (cz + rng.NextFloat()) / detailRes;
-                    float rotY = rng.NextFloat() * MathF.PI * 2f;
-                    float windPhase = rng.NextFloat() * MathF.PI * 2f;
-                    if (data.IsHoleAt(u, v)) continue;
+            float dither = s_ditherTable[(cx & 7) + (cz & 7) * 8];
+            // Ordered dither, so a faint cell still averages out to its share of an instance
+            int count = Math.Clamp((int)(rawDensity * MaxInstancesPerCell + dither), 0, MaxInstancesPerCell);
+            count = Math.Min(count, MaxInstancesPerPrototype - instances.Count);
+            if (count <= 0) continue;
 
-                    float wx = u * terrainSize;
-                    float wz = v * terrainSize;
-                    float wy = data.GetInterpolatedHeight(u, v);
-                    minY = MathF.Min(minY, wy);
-                    maxY = MathF.Max(maxY, wy);
+            // Seeded from the world cell, so a rebuild reproduces the same scatter exactly
+            var rng = new SeededRandom((uint)(cx * 73856093 ^ cz * 19349663 ^ protoIdx * 83492791));
 
-                    float noise = NoiseAt(wx * proto.NoiseSpread, wz * proto.NoiseSpread);
-                    float densityScale = MathF.Min(1f, rawDensity * 2f);
-                    float sizeT = noise * densityScale;
-                    float sw = proto.MinWidth + sizeT * (proto.MaxWidth - proto.MinWidth);
-                    float sh = proto.MinHeight + sizeT * (proto.MaxHeight - proto.MinHeight);
+            for (int k = 0; k < count; k++)
+            {
+                float u = (cx + rng.NextFloat()) / detailRes;
+                float v = (cz + rng.NextFloat()) / detailRes;
+                float rotY = rng.NextFloat() * MathF.PI * 2f;
+                float windPhase = rng.NextFloat() * MathF.PI * 2f;
+                if (data.IsHoleAt(u, v)) continue;
 
-                    Float4x4 transform = terrainToWorld * Float4x4.CreateTranslation(new Float3(wx, wy, wz))
-                        * Float4x4.FromAxisAngle(new Float3(0, 1, 0), rotY)
-                        * Float4x4.CreateScale(new Float3(sw, sh, sw));
+                float wx = u * terrainSize;
+                float wz = v * terrainSize;
+                float wy = data.GetInterpolatedHeight(u, v);
+                minY = MathF.Min(minY, wy);
+                maxY = MathF.Max(maxY, wy);
 
-                    Color tint = Color.Lerp(proto.HealthyColor, proto.DryColor, 1f - noise);
-                    instances.Add(new InstanceData(transform,
-                        new Float4(tint.R, tint.G, tint.B, tint.A),
-                        new Float4(windPhase, proto.BendFactor, 0, 0)));
-                }
+                float noise = NoiseAt(wx * proto.NoiseSpread, wz * proto.NoiseSpread);
+                float densityScale = MathF.Min(1f, rawDensity * 2f);
+                float sizeT = noise * densityScale;
+                float sw = proto.MinWidth + sizeT * (proto.MaxWidth - proto.MinWidth);
+                float sh = proto.MinHeight + sizeT * (proto.MaxHeight - proto.MinHeight);
+
+                Float4x4 transform = terrainToWorld * Float4x4.CreateTranslation(new Float3(wx, wy, wz))
+                    * Float4x4.FromAxisAngle(new Float3(0, 1, 0), rotY)
+                    * Float4x4.CreateScale(new Float3(sw, sh, sw));
+
+                Color tint = Color.Lerp(proto.HealthyColor, proto.DryColor, 1f - noise);
+                instances.Add(new InstanceData(transform,
+                    new Float4(tint.R, tint.G, tint.B, tint.A),
+                    new Float4(windPhase, proto.BendFactor, 0, 0)));
             }
         }
 
@@ -217,7 +231,7 @@ internal class TerrainMeshDetailRenderer
         {
             Debug.LogWarningOnce("terrain_mesh_detail_budget",
                 $"Mesh detail prototype {protoIdx} hit its {MaxInstancesPerPrototype} instance budget. " +
-                "Paint it more sparsely or shorten Detail Distance, or the far side will be bare.");
+                "The furthest painted cells are left bare. Paint it more sparsely or shorten Detail Distance.");
         }
 
         build.Instances = instances.ToArray();

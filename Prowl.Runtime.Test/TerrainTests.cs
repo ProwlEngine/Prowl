@@ -989,6 +989,27 @@ public class TerrainSceneTests : RuntimeTestBase
     }
 
     [Fact]
+    public void MeshDetailsOverTheirBudgetKeepTheNearestToTheCamera()
+    {
+        Scene scene = CreateScene(enable: true);
+        TerrainData data = MeshDetailTerrain();
+
+        // Solid everywhere is far more instances than one prototype may place
+        PaintDetail(data, 0, 0, 63, 63, 1f);
+        TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
+
+        var camera = new Float2(60f, 60f);
+        List<Float3> positions = CollectMeshDetails(scene, terrain, new Float3(camera.X, 5f, camera.Y));
+
+        Assert.NotEmpty(positions);
+        float nearest = positions.Min(p => Float2.Distance(new Float2(p.X, p.Z), camera));
+        float furthest = positions.Max(p => Float2.Distance(new Float2(p.X, p.Z), camera));
+        Assert.True(nearest < 2f, $"nearest instance is {nearest} m from the camera");
+        // The budget covers about a quarter disc of 40 metres around the corner, so nothing much further is placed
+        Assert.True(furthest < 45f, $"furthest instance is {furthest} m from the camera");
+    }
+
+    [Fact]
     public void MeshDetailsSkipHoles()
     {
         Scene scene = CreateScene(enable: true);
