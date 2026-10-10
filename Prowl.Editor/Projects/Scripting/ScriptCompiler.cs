@@ -32,7 +32,12 @@ public static class ScriptCompiler
         public string Errors;
         /// <summary> Whether at least one assembly was rebuilt and requires a hot-reload. </summary>
         public bool RequiresReload;   // true when script assemblies were rebuilt and need a hot-reload
+        /// <summary> Every compiler and analyzer error and warning, structured. </summary>
+        public List<CompileDiagnostic> Diagnostics;
     }
+
+    /// <summary> One compiler or analyzer message. Line and column are 1 based, file is absolute or empty. </summary>
+    public readonly record struct CompileDiagnostic(string Severity, string Id, string File, int Line, int Column, string Message, string Assembly);
 
     /// <summary>A single user assembly to be generated and compiled.</summary>
     internal sealed class CompilationUnit
@@ -78,6 +83,7 @@ public static class ScriptCompiler
 
         var output = new StringBuilder();
         var errors = new StringBuilder();
+        var diagnostics = new List<CompileDiagnostic>();
         var peerRefs = new Dictionary<string, Microsoft.CodeAnalysis.MetadataReference>(StringComparer.OrdinalIgnoreCase);
         bool anyRecompiled = false;
 
@@ -94,6 +100,12 @@ public static class ScriptCompiler
             {
                 string line = d.ToString();
                 output.AppendLine(line);
+
+                var span = d.Location.GetMappedLineSpan();
+                diagnostics.Add(new CompileDiagnostic(
+                    d.Severity.ToString(), d.Id, span.IsValid ? span.Path : "",
+                    span.IsValid ? span.StartLinePosition.Line + 1 : 0, span.IsValid ? span.StartLinePosition.Character + 1 : 0,
+                    d.GetMessage(System.Globalization.CultureInfo.InvariantCulture), unit.Name));
                 if (d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
                 {
                     Runtime.Debug.LogError(line);
@@ -108,7 +120,7 @@ public static class ScriptCompiler
             if (outcome.Image == null)
             {
                 Runtime.Debug.LogError($"[ScriptCompiler] {unit.Name} compilation failed.");
-                return new CompileResult { Success = false, Output = output.ToString(), Errors = errors.ToString() };
+                return new CompileResult { Success = false, Output = output.ToString(), Errors = errors.ToString(), Diagnostics = diagnostics };
             }
 
             // Write the DLL where the player build and the assembly loader expect it. Skip the write
@@ -124,7 +136,7 @@ public static class ScriptCompiler
         }
 
         // Nothing actually rebuilt (a spurious or no-op recompile) means there is nothing to reload.
-        return new CompileResult { Success = true, Output = output.ToString(), Errors = errors.ToString(), RequiresReload = anyRecompiled };
+        return new CompileResult { Success = true, Output = output.ToString(), Errors = errors.ToString(), RequiresReload = anyRecompiled, Diagnostics = diagnostics };
     }
 
     /// <summary>

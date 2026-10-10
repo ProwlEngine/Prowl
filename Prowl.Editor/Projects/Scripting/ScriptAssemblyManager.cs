@@ -82,6 +82,26 @@ public static class ScriptAssemblyManager
         }
     }
 
+    /// <summary> How a finished compile went. Reloaded is true when new code is now running. </summary>
+    public sealed record CompileReport(bool Success, bool Reloaded, int DurationMs, IReadOnlyList<ScriptCompiler.CompileDiagnostic> Diagnostics, DateTime FinishedUtc);
+
+    /// <summary> The most recent finished compile, or null if none has finished since the editor started. </summary>
+    public static CompileReport? LastCompile { get; private set; }
+
+    /// <summary> Raised on the main thread when a compile has been fully handled, after any hot reload. </summary>
+    public static event Action<CompileReport>? CompileFinished;
+
+    /// <summary> Whether a compile is running or has been asked for and not started yet. </summary>
+    public static bool IsCompiling => _isCompiling || _recompileRequested;
+
+    private static void Finish(bool success, bool reloaded, int durationMs, List<ScriptCompiler.CompileDiagnostic>? diagnostics)
+    {
+        var report = new CompileReport(success, reloaded, durationMs, diagnostics ?? [], DateTime.UtcNow);
+        LastCompile = report;
+        try { CompileFinished?.Invoke(report); }
+        catch (Exception ex) { Runtime.Debug.LogError($"[ScriptAssemblyManager] A CompileFinished handler threw: {ex}"); }
+    }
+
     /// <summary>Pending-recompile flag, so tests can assert that a change asked for one.</summary>
     internal static bool RecompilePending { get => _recompileRequested; set => _recompileRequested = value; }
 
@@ -116,8 +136,9 @@ public static class ScriptAssemblyManager
 
         // Only compile when the editor window is focused (don't spam while user is editing externally).
         // A startup compile is exempt: the first scene load is waiting on it, so leaving the window
-        // would otherwise leave the editor sitting on an empty scene until focus came back.
-        if (!_startupCompilePending && !Window.IsFocused) return;
+        // would otherwise leave the editor sitting on an empty scene until focus came back. So is a
+        // compile while the CLI is driving the editor, since nobody is at the window to focus it.
+        if (!_startupCompilePending && !Window.IsFocused && !CliServer.IsActive) return;
 
         // Wait for debounce (nothing is mid-edit at startup, so that compile skips it)
         if (!_startupCompilePending && DateTime.UtcNow - _lastScriptChange < DebounceDelay) return;
@@ -134,6 +155,7 @@ public static class ScriptAssemblyManager
         if (!hasScripts && !hasPackages)
         {
             SettleStartupCompile();
+            Finish(true, false, 0, null);
             return;
         }
 
@@ -189,11 +211,13 @@ public static class ScriptAssemblyManager
             // The per line compiler errors are already in the console (the "why"); summarise and toast.
             Runtime.Debug.LogError("[Scripts] Compilation failed. See the errors above.");
             EditorApplication.Instance?.NotifyCompileFailed();
+            Finish(false, false, elapsedMs, result.Diagnostics);
             return true;
         }
         if (!result.RequiresReload)
         {
             Runtime.Debug.LogSuccess($"[Scripts] Packages restored in {elapsedMs}ms.");
+            Finish(true, false, elapsedMs, result.Diagnostics);
             return true;
         }
 
@@ -206,6 +230,7 @@ public static class ScriptAssemblyManager
                 Runtime.Tasks.MainThreadContext.Restart();
                 Runtime.Debug.LogSuccess($"[Scripts] Recompiled and hot reloaded in {elapsedMs}ms.");
                 EditorApplication.Instance?.NotifyScriptsReloaded($"Recompiled and reloaded in {elapsedMs}ms.");
+                Finish(true, true, elapsedMs, result.Diagnostics);
                 return true;
             }
         }
@@ -218,6 +243,7 @@ public static class ScriptAssemblyManager
         // success), so the editor keeps running on the old code; the user fixes it and saves to retry.
         EditorApplication.Instance?.NotifyReloadFailed();
         Runtime.Debug.LogWarning("[ScriptAssemblyManager] Hot reload failed; keeping the old code. Fix and save to retry.");
+        Finish(false, false, elapsedMs, result.Diagnostics);
         return true;
     }
 
