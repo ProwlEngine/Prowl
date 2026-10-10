@@ -42,3 +42,9 @@ root `Directory.Build.props`, so individual project files stay small.
 
 History for each library is preserved under its folder, so `git log -- Scribe/` shows the
 full past of that library.
+
+## Contributors
+
+<!-- readme: collaborators,contributors -start -->
+<!-- readme: collaborators,contributors -end -->
+
