@@ -39,6 +39,9 @@ public abstract class ImportSettingsEditor : AssetImporterEditor
         return settings;
     }
 
+    /// <summary> Drops the cached settings for an asset whose <c>.meta</c> was written elsewhere, so the inspector reads it again. </summary>
+    public static void Forget(Guid guid) => s_settings.Remove(guid);
+
     /// <summary>The asset's <c>.meta</c> path, or null when there is no open project.</summary>
     protected static string? MetaPathOf(AssetEntry entry)
     {
