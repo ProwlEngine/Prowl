@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "Espacamento do dock",
   "pref.maintenance": "Manutencao",
+  "pref.cli": "Linha de comando",
+  "pref.cli_allow_eval": "Permitir eval pela CLI do prowl",
   "pref.clear_cache": "Cache do editor",
   "pref.clear_cache_btn": "Limpar cache e redefinir layout",
   "pref.clear_cache_done": "Miniaturas e layout limpos. O tour sera reproduzido novamente na proxima inicializacao.",

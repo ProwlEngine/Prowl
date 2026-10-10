@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "Dock-Abstand",
   "pref.maintenance": "Wartung",
+  "pref.cli": "Kommandozeile",
+  "pref.cli_allow_eval": "eval ueber die prowl CLI erlauben",
   "pref.clear_cache": "Editor-Cache",
   "pref.clear_cache_btn": "Cache leeren & Layout zuruecksetzen",
   "pref.clear_cache_done": "Miniaturbilder und Layout geleert. Die Tour startet beim naechsten Start erneut.",

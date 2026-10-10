@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "Espaciado del dock",
   "pref.maintenance": "Mantenimiento",
+  "pref.cli": "Linea de comandos",
+  "pref.cli_allow_eval": "Permitir eval desde la CLI de prowl",
   "pref.clear_cache": "Cache del editor",
   "pref.clear_cache_btn": "Borrar cache y restablecer diseno",
   "pref.clear_cache_done": "Miniaturas y diseno borrados. El recorrido se reproduce de nuevo al reiniciar.",

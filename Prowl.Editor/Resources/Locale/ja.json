@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "ドック間隔",
   "pref.maintenance": "メンテナンス",
+  "pref.cli": "コマンドライン",
+  "pref.cli_allow_eval": "prowl CLI からの eval を許可",
   "pref.clear_cache": "エディタキャッシュ",
   "pref.clear_cache_btn": "キャッシュを消去してレイアウトをリセット",
   "pref.clear_cache_done": "サムネイルとレイアウトを消去しました。次回起動時にツアーが再生されます。",

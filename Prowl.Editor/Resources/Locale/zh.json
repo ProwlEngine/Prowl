@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "停靠区间距",
   "pref.maintenance": "维护",
+  "pref.cli": "命令行",
+  "pref.cli_allow_eval": "允许 prowl CLI 执行 eval",
   "pref.clear_cache": "编辑器缓存",
   "pref.clear_cache_btn": "清除缓存并重置布局",
   "pref.clear_cache_done": "已清除缩略图和布局。下次启动时将再次播放导览。",

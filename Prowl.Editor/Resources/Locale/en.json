@@ -521,6 +521,8 @@
   "pref.frame_rate_limit": "Frame Rate Limit",
   "pref.unfocused_frame_rate": "Unfocused Frame Rate Limit",
   "pref.maintenance": "Maintenance",
+  "pref.cli": "Command Line",
+  "pref.cli_allow_eval": "Allow eval from the prowl CLI",
   "pref.clear_cache": "Editor Cache",
   "pref.clear_cache_btn": "Clear Cache & Reset Layout",
   "pref.clear_cache_done": "Cleared thumbnails and layout. The tour plays again next launch.",

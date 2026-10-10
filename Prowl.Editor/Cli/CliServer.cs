@@ -64,6 +64,31 @@ public static class CliServer
         Debug.OnLog += CaptureLog;
     }
 
+    private static readonly TimeSpan s_activeLinger = TimeSpan.FromSeconds(10);
+    private static readonly Stopwatch s_sinceActivity = new();
+    private static int s_running;
+
+    /// <summary>
+    /// Whether the CLI is driving the editor: a command is running or one finished in the last few seconds. While true the
+    /// editor imports, compiles and paces frames as if focused, since nobody is at the window.
+    /// </summary>
+    public static bool IsActive
+    {
+        get
+        {
+            if (Volatile.Read(ref s_running) > 0) return true;
+            lock (s_sinceActivity) return s_sinceActivity.IsRunning && s_sinceActivity.Elapsed < s_activeLinger;
+        }
+    }
+
+    private static void BeginActivity() => Interlocked.Increment(ref s_running);
+
+    private static void EndActivity()
+    {
+        lock (s_sinceActivity) s_sinceActivity.Restart();
+        Interlocked.Decrement(ref s_running);
+    }
+
     public static bool IsRunning => s_server != null;
     public static int Port => s_server?.Port ?? 0;
     public static string Token => s_server?.Token ?? "";
@@ -303,6 +328,7 @@ public static class CliServer
         var timeout = TimeSpan.FromSeconds(Math.Clamp(request.TimeoutSeconds, 1, CliRunRequest.MaxTimeoutSeconds));
         var clock = Stopwatch.StartNew();
 
+        BeginActivity();
         try
         {
             object? result = null;
@@ -329,6 +355,10 @@ public static class CliServer
                 TaskCanceledException => $"Command '{request.Command}' was cancelled. Entering or leaving play mode and script reloads cancel waits tied to the game session, such as GameTask.NextFrame.",
                 _ => ex.ToString(),
             };
+        }
+        finally
+        {
+            EndActivity();
         }
 
         response.Logs = capture.Close();

@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "Odstep doku",
   "pref.maintenance": "Konserwacja",
+  "pref.cli": "Wiersz polecen",
+  "pref.cli_allow_eval": "Zezwalaj na eval z prowl CLI",
   "pref.clear_cache": "Pamiec podreczna edytora",
   "pref.clear_cache_btn": "Wyczysc pamiec i zresetuj uklad",
   "pref.clear_cache_done": "Wyczyszczono miniatury i uklad. Samouczek uruchomi sie ponownie przy nastepnym starcie.",

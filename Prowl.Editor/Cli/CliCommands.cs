@@ -24,6 +24,7 @@ using Prowl.Cli;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Theming;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -346,7 +347,11 @@ public static class CliCommands
 
     [CliCommand("eval", "Compiles and runs C# on the editor main thread and returns the result. Accepts an expression or statements with a return, and await")]
     public static Task<object?> Eval([CliArg("code", "C# expression or statements. Leading using directives are allowed")] string code)
-        => CliEval.Run(code);
+    {
+        if (!EditorSettings.Instance.AllowCliEval)
+            throw new CliException("eval is turned off in Editor Preferences > General > Command Line.");
+        return CliEval.Run(code);
+    }
 }
 
 /// <summary> A command failed in a way the caller should read as a plain message, without a stack trace. </summary>

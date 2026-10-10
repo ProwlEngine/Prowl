@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "Dock araligi",
   "pref.maintenance": "Bakim",
+  "pref.cli": "Komut satiri",
+  "pref.cli_allow_eval": "prowl CLI uzerinden eval izni ver",
   "pref.clear_cache": "Editor onbellegi",
   "pref.clear_cache_btn": "Onbellegi temizle ve duzeni sifirla",
   "pref.clear_cache_done": "Kucuk resimler ve duzen temizlendi. Tur bir sonraki baslatmada tekrar oynatilir.",

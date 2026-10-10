@@ -15,7 +15,11 @@ namespace Prowl.Editor.Theming;
 public class EditorSettings
 {
     private static EditorSettings? _instance;
-    public static EditorSettings Instance => _instance ??= Load();
+    public static EditorSettings Instance
+    {
+        get => _instance ??= Load();
+        internal set => _instance = value;
+    }
 
     private static readonly string _filePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -53,6 +57,9 @@ public class EditorSettings
 
     /// <summary> Gets or sets the frame rate the editor is paced to while its window is not focused. 0 means no separate limit. Play mode ignores this and lets the game decide. </summary>
     public int UnfocusedFrameRate { get; set; } = 5;
+
+    /// <summary> Gets or sets whether the prowl CLI may run arbitrary C# in the editor through eval. </summary>
+    public bool AllowCliEval { get; set; } = true;
 
     // Shortcuts only user-overridden bindings are stored
     /// <summary> Gets or sets the dictionary of user-overridden shortcut bindings, keyed by action name. Only overridden bindings are stored. </summary>

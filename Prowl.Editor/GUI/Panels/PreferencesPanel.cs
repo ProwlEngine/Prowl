@@ -166,6 +166,10 @@ public class PreferencesPanel : DockPanel
                     EditorApplication.ApplyFramePacing();
                 }, UnfocusedFrameRateNames).Show());
 
+        EditorGUI.SectionHeader(paper, "pref_gen_cli", Loc.Get("pref.cli"));
+        EditorGUI.SettingsToggle(paper, "pref_cli_eval", Loc.Get("pref.cli_allow_eval"), s.AllowCliEval,
+            v => { s.AllowCliEval = v; s.Save(); });
+
         EditorGUI.SectionHeader(paper, "pref_gen_maint", Loc.Get("pref.maintenance"));
         EditorGUI.SettingsRow(paper, "pref_clear_cache", Loc.Get("pref.clear_cache"), () =>
             Origami.Button(paper, "pref_clear_cache_b", $"{EditorIcons.ArrowsRotate}  {Loc.Get("pref.clear_cache_btn")}",

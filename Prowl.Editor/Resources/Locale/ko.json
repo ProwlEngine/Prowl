@@ -518,6 +518,8 @@
 
   "pref.dock_spacing": "독 간격",
   "pref.maintenance": "유지 관리",
+  "pref.cli": "명령줄",
+  "pref.cli_allow_eval": "prowl CLI의 eval 허용",
   "pref.clear_cache": "에디터 캐시",
   "pref.clear_cache_btn": "캐시 지우기 및 레이아웃 초기화",
   "pref.clear_cache_done": "썸네일과 레이아웃을 지웠습니다. 다음 실행 시 둘러보기가 다시 재생됩니다.",

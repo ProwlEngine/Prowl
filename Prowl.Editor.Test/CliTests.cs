@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text.Json;
 
 using Prowl.Cli;
+using Prowl.Editor.Theming;
 using Prowl.Runtime.Tasks;
 
 using Xunit;
@@ -31,6 +32,7 @@ public class CliTests : EditorTestHarness
 
     public CliTests()
     {
+        EditorSettings.Instance = new EditorSettings();
         CliCommands.Clear();
         foreach (var type in new[] { typeof(CliCommands), typeof(CliTests) })
             foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
@@ -41,6 +43,7 @@ public class CliTests : EditorTestHarness
     {
         CliServer.Stop();
         CliCommands.Clear();
+        EditorSettings.Instance = null!;
         base.Dispose();
     }
 
@@ -68,6 +71,20 @@ public class CliTests : EditorTestHarness
     public void UndefinedEnumValuesAreRejected()
     {
         Assert.Contains("expects Fast|Slow", Run("test_speed", null, "5").Error);
+    }
+
+    [Fact]
+    public void EvalCanBeTurnedOffInPreferences()
+    {
+        EditorSettings.Instance.AllowCliEval = false;
+        Assert.Contains("turned off", Eval("1").Error);
+    }
+
+    [Fact]
+    public void ACommandMakesTheCliActive()
+    {
+        Eval("1");
+        Assert.True(CliServer.IsActive);
     }
 
     [Fact]
