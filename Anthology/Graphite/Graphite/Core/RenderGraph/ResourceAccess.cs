@@ -38,11 +38,11 @@ internal readonly struct ResourceAccess
         GraphResource? description = null)
     {
         string role = isOutput ? "output" : "input";
-        if (!Enum.IsDefined(usage) || usage == TextureState.DepthReadOnly)
-            throw new ArgumentException($"Texture usage {usage} is not valid for color, name exactly one state; DepthReadOnly belongs in depthUsage.", nameof(usage));
-        if (isOutput && !IsWrite(usage))
-            throw new ArgumentException($"Texture output usage {usage} must be Attachment, Storage or TransferDst.", nameof(usage));
-        if (!isOutput && !IsRead(usage))
+        if (usage == 0 || (usage & ~ColorStates) != 0)
+            throw new ArgumentException($"Texture usage {usage} is not valid for color; DepthReadOnly belongs in depthUsage.", nameof(usage));
+        if (isOutput && !IsSingle(usage & WriteStates))
+            throw new ArgumentException($"Texture output usage {usage} must include exactly one of Attachment, Storage or TransferDst.", nameof(usage));
+        if (!isOutput && (usage & ~ReadStates) != 0)
             throw new ArgumentException($"Texture usage {usage} writes, declare it with DeclareOutputTexture.", nameof(usage));
 
         if (depthUsage is TextureState depth)
@@ -71,11 +71,16 @@ internal readonly struct ResourceAccess
         return new ResourceAccess(id, false, isOutput, default, null, usage, description);
     }
 
-    private static bool IsWrite(TextureState state)
-        => state is TextureState.Storage or TextureState.Attachment or TextureState.TransferDst;
+    private const TextureState WriteStates = TextureState.Storage | TextureState.Attachment | TextureState.TransferDst;
+    private const TextureState ReadStates = TextureState.Sampled | TextureState.Storage | TextureState.TransferSrc;
+    private const TextureState ColorStates = WriteStates | ReadStates;
+
+    private static bool IsSingle(TextureState state) => state != 0 && (state & (state - 1)) == 0;
 
     private static bool IsRead(TextureState state)
         => state is TextureState.Sampled or TextureState.Storage or TextureState.TransferSrc or TextureState.DepthReadOnly;
+
+    public TextureState Entry => IsOutput ? TextureUsage & WriteStates : (TextureState)((int)TextureUsage & -(int)TextureUsage);
 
     public TextureState? DepthState(TextureState colorState)
     {
@@ -83,4 +88,6 @@ internal readonly struct ResourceAccess
             return depth;
         return colorState == TextureState.Storage ? null : colorState;
     }
+
+    public TextureState DepthAllowed => DepthUsage ?? (TextureUsage & ~TextureState.Storage);
 }

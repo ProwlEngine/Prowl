@@ -106,6 +106,7 @@ public class RenderPipeline : IDisposable
                 node.Pass.Render(context, passCommands);
                 PassStats stats = passCommands.Stats;
                 context.EndCommandBuffer(passCommands);
+                context.AdoptPassStates(passCommands);
                 stats = stats with { CpuMilliseconds = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds };
                 context.MarkAttachmentWrites(node.Accesses);
                 context.SetCurrentPass(null);

@@ -120,11 +120,10 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         EnsureBindCacheFor(program, (int)setCount);
         ulong executionId = _cbOwner.ExecutionId;
-        GraphTextureStates? graphStates = _cbOwner.GraphStates;
-
         int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
         {
+            GraphTextureStates? graphStates = _cbOwner.GraphStates;
             ResourceLayoutElementDescription[] elements = resourceLayouts[setIdx].Elements ?? Array.Empty<ResourceLayoutElementDescription>();
             SetBindingMetadata meta = metadata[setIdx];
             SetBindState state = _setBindStates[setIdx];
@@ -138,7 +137,7 @@ internal unsafe sealed partial class VkDescriptorBinder
                 PrepareResolvedTextures(elements, isGraphics);
                 SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
                 GatherDynOffsets(meta, state);
-                state.GraphStates = graphStates;
+                state.GraphStates = _cbOwner.GraphStates;
             }
 
             if (firstChanged < 0 && SetDiffersFromBound(state))

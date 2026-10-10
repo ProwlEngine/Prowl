@@ -2,7 +2,8 @@ using System;
 
 namespace Prowl.Graphite;
 
-/// <summary>How a pass uses a declared texture. A declaration names exactly one state.</summary>
+/// <summary>How a pass uses a declared texture. Combine states to let the pass move between them; it enters the write state, or the lowest read state for an input.</summary>
+[Flags]
 public enum TextureState : byte
 {
     /// <summary>Read through a sampled or read-only texture binding.</summary>

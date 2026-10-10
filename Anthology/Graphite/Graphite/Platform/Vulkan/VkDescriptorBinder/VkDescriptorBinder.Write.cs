@@ -17,18 +17,22 @@ internal unsafe sealed partial class VkDescriptorBinder
 
             if (r.Kind == ResourceKind.TextureReadOnly)
             {
+                if (current != ImageLayout.ShaderReadOnlyOptimal && current != ImageLayout.DepthStencilReadOnlyOptimal
+                    && _cbOwner.TryTransitionInPass(tex, TextureState.Sampled))
+                    current = VkBarriers.CurrentLayout(_cbOwner, tex);
+
                 if (current != ImageLayout.ShaderReadOnlyOptimal && current != ImageLayout.DepthStencilReadOnlyOptimal)
                 {
                     throw new RenderException(
                         $"Texture '{tex.Name}' is bound for sampling while in layout {current}. " +
-                        "Declare it as a Sampled input of the pass, or transition it to Sampled.");
+                        "Declare it as a Sampled input of the pass, or add Sampled to its output usage, e.g. Attachment | Sampled.");
                 }
                 r.Layout = current;
                 continue;
             }
 
             r.Layout = ImageLayout.General;
-            if (current == ImageLayout.General || _cbOwner.IsTemporaryStorage(tex))
+            if (current == ImageLayout.General || _cbOwner.IsTemporaryStorage(tex) || _cbOwner.TryTransitionInPass(tex, TextureState.Storage))
                 continue;
 
             if (isGraphics || _cbOwner.StateOf(tex) != null)

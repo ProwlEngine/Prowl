@@ -86,7 +86,7 @@ internal sealed class GraphCapture
         {
             foreach (GraphBacking backing in _backings[access.Id])
             {
-                if (backing.Role == BackingRole.Depth && access.DepthState(access.TextureUsage) is null)
+                if (backing.Role == BackingRole.Depth && access.DepthAllowed == 0)
                     continue;
 
                 if (!_listed.Add(backing.Id))

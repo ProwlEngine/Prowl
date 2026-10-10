@@ -180,7 +180,7 @@ public sealed class RenderGraph : IDisposable
                 $"Pass '{passName}' declares resource '{RenderResourceID.ToString(access.Id)}' as a " +
                 $"{(access.IsTexture ? "texture" : "buffer")}, but it is a {(access.IsTexture ? "buffer" : "texture")}.");
 
-        if (!access.IsTexture || access.TextureUsage != TextureState.Storage)
+        if (!access.IsTexture || (access.TextureUsage & TextureState.Storage) == 0)
             return;
 
         switch (resource)

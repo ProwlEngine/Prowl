@@ -92,6 +92,11 @@ internal unsafe partial class VkCommandBuffer
     {
         if (_activeRenderPass.Handle != default)
             EndCurrentRenderPass();
+        else if (!_currentFramebufferEverActive && _currentFramebuffer != null && _currentFramebuffer != fb && ClearIsPending())
+        {
+            BeginCurrentRenderPass();
+            EndCurrentRenderPass();
+        }
 
         VkFramebufferBase vkFB = Util.AssertSubtype<Framebuffer, VkFramebufferBase>(fb);
         _currentFramebuffer = vkFB;
@@ -128,6 +133,10 @@ internal unsafe partial class VkCommandBuffer
     {
         total++;
         TextureState? state = StateOf(texture);
+        if (state != null && state != TextureState.Attachment && !(isDepth && state == TextureState.DepthReadOnly)
+            && (TryTransitionInPass(texture, TextureState.Attachment) || (isDepth && TryTransitionInPass(texture, TextureState.DepthReadOnly))))
+            state = StateOf(texture);
+
         if (state == TextureState.Attachment || (isDepth && state == TextureState.DepthReadOnly))
         {
             graph++;
@@ -137,9 +146,59 @@ internal unsafe partial class VkCommandBuffer
         {
             throw new RenderException(
                 $"Texture '{texture.Name}' is in state {state} for the current pass and cannot be a framebuffer attachment. " +
-                "Declare it as an Attachment (or DepthReadOnly depth), or transition it first.");
+                "Declare it as an Attachment (or DepthReadOnly depth), or add Attachment to its usage, e.g. Attachment | Sampled.");
         }
     }
+
+    internal bool TryTransitionInPass(Texture texture, TextureState target)
+    {
+        GraphTextureStates? states = GraphStates;
+        if (states == null || states.StateOf(texture) is not TextureState current || !states.Allows(texture, target))
+            return false;
+        if (current == target)
+            return true;
+
+        if (target is not (TextureState.Attachment or TextureState.DepthReadOnly) && IsBoundAttachment(texture))
+        {
+            throw new RenderException(
+                $"Texture '{texture.Name}' is an attachment of the bound framebuffer and cannot move to {target}. Set another framebuffer first.");
+        }
+
+        if (_activeRenderPass.Handle != default)
+        {
+            if (DiscardsStores())
+            {
+                throw new RenderException(
+                    $"Moving texture '{texture.Name}' to {target} ends the current render pass, whose attachments use StoreAction.DontCare and would lose their contents.");
+            }
+            EndCurrentRenderPass();
+        }
+
+        TextureBarrier barrier = new(texture, current, target);
+        AddBarrierStats(VkBarriers.Record(_gd, _cb, new ReadOnlySpan<TextureBarrier>(in barrier), BufferAccess.None, BufferAccess.None));
+        GraphStates = states.With(texture, target);
+        return true;
+    }
+
+    private bool IsBoundAttachment(Texture texture)
+    {
+        if (_currentFramebuffer == null)
+            return false;
+        foreach (FramebufferAttachment attachment in _currentFramebuffer.ColorTargets)
+        {
+            if (attachment.Target == texture)
+                return true;
+        }
+        return _currentFramebuffer.DepthTarget?.Target == texture;
+    }
+
+    private bool ClearIsPending()
+        => (_currentFramebuffer.ColorTargets.Count > 0 && _pendingOps.Color.Load == LoadAction.Clear)
+            || (_currentFramebuffer.DepthTarget != null && _pendingOps.Depth.Load == LoadAction.Clear);
+
+    private bool DiscardsStores()
+        => (_currentFramebuffer.ColorTargets.Count > 0 && _pendingOps.Color.Store == StoreAction.DontCare)
+            || (_currentFramebuffer.DepthTarget != null && _pendingOps.Depth.Store == StoreAction.DontCare);
 
     internal override uint RecordBarriers(ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst)
     {

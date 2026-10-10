@@ -16,6 +16,7 @@ public sealed class RenderContext
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
     private GraphTextureStates? _stateSnapshot;
+    private GraphTextureStates? _passStates;
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
     private readonly List<TextureBarrier> _barriers = new();
     private readonly HashSet<RenderResourceID> _enteredTransients = new();
@@ -88,8 +89,8 @@ public sealed class RenderContext
                 RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
                 bool fromUndefined = IsTransient(access.Id) && _enteredTransients.Add(access.Id);
                 foreach (Texture color in texture.ColorTextures)
-                    AddTextureTransition(color, access.TextureUsage, fromUndefined);
-                if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) is TextureState depthTarget)
+                    AddTextureTransition(color, access.Entry, fromUndefined);
+                if (texture.DepthTexture != null && access.DepthState(access.Entry) is TextureState depthTarget)
                     AddTextureTransition(texture.DepthTexture, depthTarget, fromUndefined);
             }
             else
@@ -111,13 +112,13 @@ public sealed class RenderContext
                 continue;
 
             RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
-            if (access.TextureUsage == TextureState.Attachment)
+            if ((access.TextureUsage & TextureState.Attachment) != 0)
             {
                 foreach (Texture color in texture.ColorTextures)
                     color.MarkContentChanged();
             }
 
-            if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) == TextureState.Attachment)
+            if (texture.DepthTexture != null && (access.DepthAllowed & TextureState.Attachment) != 0)
                 texture.DepthTexture.MarkContentChanged();
         }
     }
@@ -266,16 +267,84 @@ public sealed class RenderContext
         if (_task.Profilers.CommandStream is { } profiler && cb.Pass is { } pass)
             cb.PassSink = profiler.BeginPassCommands(in pass);
 
-        if (_barriers.Count == 0 && _pendingBufferSrc == BufferAccess.None)
-            return cb;
+        if (_barriers.Count > 0 || _pendingBufferSrc != BufferAccess.None)
+        {
+            uint emitted = cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
+            cb.AddBarrierStats(emitted);
+            _pendingBufferSrc = BufferAccess.None;
+            _pendingBufferDst = BufferAccess.None;
+            CommitBarrierStates();
+        }
 
-        uint emitted = cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
-        cb.AddBarrierStats(emitted);
-        _pendingBufferSrc = BufferAccess.None;
-        _pendingBufferDst = BufferAccess.None;
-        CommitBarrierStates();
-        cb.GraphStates = CurrentTextureStates;
+        cb.GraphStates = PassTextureStates();
+        _passStates = cb.GraphStates;
         return cb;
+    }
+
+    private GraphTextureStates? PassTextureStates()
+    {
+        Dictionary<Texture, TextureState>? allowed = null;
+        if (_currentAccesses != null && HasSeveralStates(_currentAccesses))
+        {
+            foreach (ResourceAccess access in _currentAccesses)
+            {
+                if (!access.IsTexture || access.Id == GraphViewTargetResource.ViewTargetId)
+                    continue;
+
+                RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
+                foreach (Texture color in texture.ColorTextures)
+                    Allow(ref allowed, color, access.TextureUsage);
+                if (texture.DepthTexture != null && access.DepthAllowed != 0)
+                    Allow(ref allowed, texture.DepthTexture, access.DepthAllowed);
+            }
+        }
+
+        if (allowed == null)
+            return CurrentTextureStates;
+
+        foreach ((Texture texture, TextureState states) in allowed)
+        {
+            if ((states & (states - 1)) == 0)
+                allowed.Remove(texture);
+        }
+
+        return allowed.Count == 0 ? CurrentTextureStates : new GraphTextureStates(_textureStates, allowed);
+    }
+
+    private static bool HasSeveralStates(ResourceAccess[] accesses)
+    {
+        for (int i = 0; i < accesses.Length; i++)
+        {
+            ResourceAccess access = accesses[i];
+            if (!access.IsTexture)
+                continue;
+            if (access.TextureUsage != access.Entry || (access.DepthAllowed & (access.DepthAllowed - 1)) != 0)
+                return true;
+            for (int j = 0; j < i; j++)
+            {
+                if (accesses[j].IsTexture && accesses[j].Id == access.Id && accesses[j].TextureUsage != access.TextureUsage)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static void Allow(ref Dictionary<Texture, TextureState>? allowed, Texture texture, TextureState states)
+    {
+        allowed ??= new Dictionary<Texture, TextureState>();
+        allowed[texture] = allowed.TryGetValue(texture, out TextureState existing) ? existing | states : states;
+    }
+
+    internal void AdoptPassStates(CommandBuffer cmd)
+    {
+        GraphTextureStates? final = cmd.GraphStates;
+        GraphTextureStates? begun = _passStates;
+        _passStates = null;
+        if (final == null || ReferenceEquals(final, begun))
+            return;
+
+        final.CopyTo(_textureStates);
+        _stateSnapshot = null;
     }
 
     internal void BindDeclaredTarget(CommandBuffer cmd, ResourceAccess[] accesses)
@@ -284,7 +353,7 @@ public sealed class RenderContext
         bool found = false;
         foreach (ResourceAccess access in accesses)
         {
-            if (!access.IsTexture || !access.IsOutput || access.TextureUsage != TextureState.Attachment)
+            if (!access.IsTexture || !access.IsOutput || access.Entry != TextureState.Attachment)
                 continue;
 
             if (found && access.Id != target)
