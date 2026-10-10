@@ -8,7 +8,7 @@ namespace Prowl.Graphite.ShaderDef;
 /// <summary>
 /// Render state, id metadata, source shaders, plus the variant set once its ShaderDefinition is created for a device.
 /// </summary>
-public sealed class ShaderPass
+public sealed class ShaderPass : IDisposable
 {
     /// <summary>
     /// Pass name, blank if none.
@@ -77,10 +77,7 @@ public sealed class ShaderPass
         _combos = VariantCombos.Generate(axes);
         _variants = new Variant?[_combos.Length];
         _failures = new CompileFailure?[_combos.Length];
-        _programCache = new();
-        _fallbackProgramCache = new();
-        _lastKey = -1;
-        _lastProgram = null;
+        ReleasePrograms();
 
         _axisByName = new();
         _valueIndices = new Dictionary<string, int>[axes.Length];
@@ -252,6 +249,26 @@ public sealed class ShaderPass
 
         for (int i = 0; i < _combos.Length; i++)
             Compile(i);
+    }
+
+
+    /// <summary>
+    /// Disposes every program this pass created. The pass can still resolve programs afterwards.
+    /// </summary>
+    public void Dispose() => ReleasePrograms();
+
+
+    private void ReleasePrograms()
+    {
+        foreach (GraphicsProgram program in _programCache.Values)
+            program.Dispose();
+        foreach (GraphicsProgram program in _fallbackProgramCache.Values)
+            program.Dispose();
+
+        _programCache = new();
+        _fallbackProgramCache = new();
+        _lastKey = -1;
+        _lastProgram = null;
     }
 
 
