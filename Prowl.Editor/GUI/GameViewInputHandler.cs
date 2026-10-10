@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -95,13 +98,13 @@ public class GameViewInputHandler : IInputHandler
         set => _real.Clipboard = value;
     }
 
-    // Keyboard filtered only during gameplay execution outside game view
-    public bool IsAnyKeyDown => ShouldFilter ? false : _real.IsAnyKeyDown;
+    // Keyboard filtered only during gameplay execution outside game view. Simulated input reaches gameplay either way.
+    public bool IsAnyKeyDown => (!ShouldFilter && _real.IsAnyKeyDown) || SimulatedInput.AnyKey;
     public char? GetPressedChar() => ShouldFilter ? null : _real.GetPressedChar();
     public string InputString => ShouldFilter ? string.Empty : _real.InputString;
-    public bool GetKey(KeyCode key) => ShouldFilter ? false : _real.GetKey(key);
-    public bool GetKeyDown(KeyCode key) => ShouldFilter ? false : _real.GetKeyDown(key);
-    public bool GetKeyUp(KeyCode key) => ShouldFilter ? false : _real.GetKeyUp(key);
+    public bool GetKey(KeyCode key) => (!ShouldFilter && _real.GetKey(key)) || SimulatedInput.GetKey(key);
+    public bool GetKeyDown(KeyCode key) => (!ShouldFilter && _real.GetKeyDown(key)) || SimulatedInput.GetKeyDown(key);
+    public bool GetKeyUp(KeyCode key) => (!ShouldFilter && _real.GetKeyUp(key)) || SimulatedInput.GetKeyUp(key);
 
     public Int2 MapWindowPosition(Int2 windowPos) => ToViewport(windowPos);
 
@@ -116,17 +119,18 @@ public class GameViewInputHandler : IInputHandler
     {
         get
         {
-            if (ShouldFilter) return Float2.Zero;
+            Float2 simulated = SimulatedInput.MouseDelta;
+            if (ShouldFilter) return simulated;
             Float2 delta = _real.MouseDelta;
             if (TryGetViewport(out GameViewport vp))
                 delta = new Float2(delta.X * (vp.RenderSize.X / vp.DisplaySize.X), delta.Y * (vp.RenderSize.Y / vp.DisplaySize.Y));
-            return delta;
+            return delta + simulated;
         }
     }
     public float MouseWheelDelta => ShouldFilter ? 0f : _real.MouseWheelDelta;
-    public bool GetMouseButton(int button) => ShouldFilter ? false : _real.GetMouseButton(button);
-    public bool GetMouseButtonDown(int button) => ShouldFilter ? false : _real.GetMouseButtonDown(button);
-    public bool GetMouseButtonUp(int button) => ShouldFilter ? false : _real.GetMouseButtonUp(button);
+    public bool GetMouseButton(int button) => (!ShouldFilter && _real.GetMouseButton(button)) || SimulatedInput.GetMouseButton(button);
+    public bool GetMouseButtonDown(int button) => (!ShouldFilter && _real.GetMouseButtonDown(button)) || SimulatedInput.GetMouseButtonDown(button);
+    public bool GetMouseButtonUp(int button) => (!ShouldFilter && _real.GetMouseButtonUp(button)) || SimulatedInput.GetMouseButtonUp(button);
 
     public void ApplyCursorState(bool visible, CursorLockMode mode)
     {
@@ -160,4 +164,147 @@ public class GameViewInputHandler : IInputHandler
     public Float2 GetGamepadAxis(int gamepadIndex, int axisIndex) => _real.GetGamepadAxis(gamepadIndex, axisIndex);
     public float GetGamepadTrigger(int gamepadIndex, int triggerIndex) => _real.GetGamepadTrigger(gamepadIndex, triggerIndex);
     public void SetGamepadVibration(int gamepadIndex, float leftMotor, float rightMotor) => _real.SetGamepadVibration(gamepadIndex, leftMotor, rightMotor);
+}
+
+/// <summary>
+/// Input pressed on the player's behalf, such as by the CLI, merged into what gameplay reads in play mode. A key or
+/// button is held for a time, reading down on the first frame gameplay sees it and up on the first frame after release.
+/// </summary>
+public static class SimulatedInput
+{
+    private sealed class Hold
+    {
+        public TimeSpan ReleaseAt;
+        public long DownFrame = -1;
+        public long UpFrame = -1;
+        public bool Released;
+    }
+
+    private static readonly Dictionary<KeyCode, Hold> s_keys = new();
+    private static readonly Dictionary<int, Hold> s_buttons = new();
+    private static readonly Stopwatch s_clock = Stopwatch.StartNew();
+    private static readonly object s_lock = new();
+    private static Float2 s_look;
+    private static TimeSpan s_lookUntil;
+
+    public static void Press(KeyCode key, double seconds) { lock (s_lock) s_keys[key] = new Hold { ReleaseAt = s_clock.Elapsed + TimeSpan.FromSeconds(seconds) }; }
+
+    public static void PressButton(int button, double seconds) { lock (s_lock) s_buttons[button] = new Hold { ReleaseAt = s_clock.Elapsed + TimeSpan.FromSeconds(seconds) }; }
+
+    /// <summary> Adds a mouse movement every frame until the time is up, as turning a camera would. </summary>
+    public static void Look(Float2 deltaPerFrame, double seconds)
+    {
+        lock (s_lock)
+        {
+            s_look = deltaPerFrame;
+            s_lookUntil = s_clock.Elapsed + TimeSpan.FromSeconds(seconds);
+        }
+    }
+
+    public static void Clear()
+    {
+        lock (s_lock)
+        {
+            s_keys.Clear();
+            s_buttons.Clear();
+            s_lookUntil = TimeSpan.Zero;
+        }
+    }
+
+    /// <summary> Whether anything is still held or moving. </summary>
+    public static bool Busy
+    {
+        get { lock (s_lock) return s_keys.Count > 0 || s_buttons.Count > 0 || s_clock.Elapsed < s_lookUntil; }
+    }
+
+    /// <summary> Releases holds whose time is up and forgets finished ones. Called once per editor frame. </summary>
+    public static void Tick()
+    {
+        if (!Application.IsPlaying)
+        {
+            Clear();
+            return;
+        }
+
+        lock (s_lock)
+        {
+            Tick(s_keys);
+            Tick(s_buttons);
+        }
+    }
+
+    private static void Tick<T>(Dictionary<T, Hold> holds) where T : notnull
+    {
+        long frame = Time.FrameCount;
+        var done = new List<T>();
+        foreach (var (key, hold) in holds)
+        {
+            if (!hold.Released && s_clock.Elapsed >= hold.ReleaseAt && hold.DownFrame >= 0 && frame > hold.DownFrame) hold.Released = true;
+            bool upSeen = hold.UpFrame >= 0 && frame > hold.UpFrame;
+            bool neverRead = hold.Released && s_clock.Elapsed > hold.ReleaseAt + TimeSpan.FromSeconds(5);
+            if (upSeen || neverRead) done.Add(key);
+        }
+        foreach (var key in done) holds.Remove(key);
+    }
+
+    private static bool Gameplay => Application.IsPlaying && Application.IsGameplayExecuting;
+
+    public static bool AnyKey
+    {
+        get
+        {
+            if (!Gameplay) return false;
+            lock (s_lock) return s_keys.Values.Any(h => !h.Released);
+        }
+    }
+
+    public static bool GetKey(KeyCode key) => Held(s_keys, key);
+    public static bool GetKeyDown(KeyCode key) => Down(s_keys, key);
+    public static bool GetKeyUp(KeyCode key) => Up(s_keys, key);
+    public static bool GetMouseButton(int button) => Held(s_buttons, button);
+    public static bool GetMouseButtonDown(int button) => Down(s_buttons, button);
+    public static bool GetMouseButtonUp(int button) => Up(s_buttons, button);
+
+    public static Float2 MouseDelta
+    {
+        get
+        {
+            if (!Gameplay) return Float2.Zero;
+            lock (s_lock) return s_clock.Elapsed < s_lookUntil ? s_look : Float2.Zero;
+        }
+    }
+
+    private static bool Held<T>(Dictionary<T, Hold> holds, T key) where T : notnull
+    {
+        if (!Gameplay) return false;
+        lock (s_lock)
+        {
+            if (!holds.TryGetValue(key, out Hold? hold)) return false;
+            if (hold.DownFrame < 0) hold.DownFrame = Time.FrameCount;
+            if (hold.Released && hold.UpFrame < 0) hold.UpFrame = Time.FrameCount;
+            return !hold.Released;
+        }
+    }
+
+    private static bool Down<T>(Dictionary<T, Hold> holds, T key) where T : notnull
+    {
+        if (!Gameplay) return false;
+        lock (s_lock)
+        {
+            if (!holds.TryGetValue(key, out Hold? hold)) return false;
+            if (hold.DownFrame < 0) hold.DownFrame = Time.FrameCount;
+            return hold.DownFrame == Time.FrameCount;
+        }
+    }
+
+    private static bool Up<T>(Dictionary<T, Hold> holds, T key) where T : notnull
+    {
+        if (!Gameplay) return false;
+        lock (s_lock)
+        {
+            if (!holds.TryGetValue(key, out Hold? hold) || !hold.Released) return false;
+            if (hold.UpFrame < 0) hold.UpFrame = Time.FrameCount;
+            return hold.UpFrame == Time.FrameCount;
+        }
+    }
 }
