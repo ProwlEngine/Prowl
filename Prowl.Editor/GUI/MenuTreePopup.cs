@@ -131,7 +131,9 @@ public static class MenuTreePopup
         {
             using (paper.Row($"{id}_search_row").Height(searchH).Enter())
             {
-                Origami.SearchField(paper, $"{id}_search", state.Search, v => state.Search = v, searchPlaceholder).Show();
+                Origami.SearchField(paper, $"{id}_search", state.Search, v => state.Search = v, searchPlaceholder)
+                    .AutoFocus()
+                    .Show();
             }
 
             Origami.ScrollView(paper, $"{id}_scroll", width - padX * 2, MaxListHeight)

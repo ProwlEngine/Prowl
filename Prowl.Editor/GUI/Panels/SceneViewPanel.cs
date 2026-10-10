@@ -37,6 +37,10 @@ public class SceneViewPanel : DockPanel
     private EditorCamera? _editorCamera;
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
+    private bool _gizmoHasMoved;
+    private bool _gizmoDuplicated;
+    private GameObject[]? _gizmoTargets;
+    private GameObject[]? _gizmoSelection;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;
 
     // Screen rect of the view manipulator, cached from layout so its control can register during the
@@ -323,7 +327,7 @@ public class SceneViewPanel : DockPanel
                 // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
                 Float2 origin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 mouseLocal = paper.PointerPos - origin;
-                
+
                 // Only the viewport surface accepts scene picks. The enclosing panel is also
                 // hovered over toolbar buttons, which would let their raw mouse press start a pick.
                 bool viewportHovered = _viewportElementId != 0 && paper.HoveredElementId == _viewportElementId;
@@ -877,14 +881,36 @@ public class SceneViewPanel : DockPanel
         _transformGizmo?.SetMode(SceneTools.GizmoMode);
     }
 
+    public override void OnClosed()
+    {
+        if (_wasGizmoActive) EndGizmoDrag();
+    }
+
+    private void EndGizmoDrag()
+    {
+        Undo.EndContinuous();
+        if (_gizmoDuplicated && _gizmoTargets is { } targets)
+            Undo.RegisterActionGroup("Duplicate", targets.Where(go => go.IsValid())
+                .Select(Undo.CaptureCreatedObject).ToArray());
+        _gizmoDuplicated = false;
+        _wasGizmoActive = false;
+        _gizmoTargets = null;
+        _gizmoSelection = null;
+    }
+
     private void UpdateTransformGizmo()
     {
         _gizmoActive = false;
+        if (_wasGizmoActive && !_handles.IsHot(_handles.GetControlID(TransformControl)))
+        {
+            EndGizmoDrag();
+        }
         if (_editorCamera == null) return;
         if (SceneTools.SuppressTransformGizmo) return;
 
         // Only show gizmo when GameObjects are selected
-        var selectedGOs = Selection.GetSelected<GameObject>().GetEnumerator();
+        IEnumerable<GameObject> selectedObjects = _gizmoSelection ?? Selection.GetSelected<GameObject>();
+        var selectedGOs = selectedObjects.GetEnumerator();
         if (!selectedGOs.MoveNext()) return;
 
         _gizmoActive = true;
@@ -906,7 +932,7 @@ public class SceneViewPanel : DockPanel
         {
             center = Float3.Zero;
             int count = 0;
-            foreach (var go in Selection.GetSelected<GameObject>())
+            foreach (var go in selectedObjects)
             {
                 center += go.Transform.Position;
                 count++;
@@ -960,41 +986,83 @@ public class SceneViewPanel : DockPanel
         // angles, which would otherwise split one drag into two undo steps.
         bool dragging = _handles.IsHot(control);
         if (dragging && !_wasGizmoActive)
-            Undo.BeginContinuous(Selection.GetSelected<GameObject>().ToArray(), "Transform");
-        if (!dragging && _wasGizmoActive)
-            Undo.EndContinuous();
+        {
+            _gizmoHasMoved = false;
+            _gizmoSelection = selectedObjects.ToArray();
+            _gizmoTargets = GameObjectClipboard.FilterToRoots(_gizmoSelection).ToArray();
+            Undo.BeginContinuous(_gizmoTargets, "Transform");
+        }
         _wasGizmoActive = dragging;
 
         _handles.TryEndDrag(control);
 
-        if (result.HasValue && dragging)
+        if (result.HasValue && dragging && _gizmoTargets is { } targets)
         {
             var r = result.Value;
 
-            // Apply translation
-            if (r.TranslationDelta.HasValue)
+            // Decide once, on the first actual transform change. Clicking a handle creates no copy.
+            bool changed = (r.TranslationDelta is { } move && !move.Equals(Float3.Zero)) ||
+                (r.RotationDelta is { } angle && r.RotationAxis.HasValue && angle != 0f) ||
+                (r.ScaleDelta is { } scaleDelta && !scaleDelta.Equals(Float3.One));
+            if (!_gizmoHasMoved && changed)
             {
-                foreach (var go in Selection.GetSelected<GameObject>())
-                    go.Transform.Position += r.TranslationDelta.Value;
+                _gizmoHasMoved = true;
+                if (_handles.Shift)
+                {
+                    Undo.EndContinuous();
+                    var copies = GameObjectClipboard.Duplicate(targets);
+                    if (copies.Count > 0)
+                    {
+                        // Keep selected descendants represented in the copied pivot selection.
+                        GameObject FindCopy(GameObject go)
+                        {
+                            int root = Array.IndexOf(targets, go);
+                            if (root >= 0) return copies[root];
+                            if (go.Parent is { } parent)
+                                return FindCopy(parent).Children[parent.Children.IndexOf(go)];
+                            throw new InvalidOperationException("Drag selection is outside its roots.");
+                        }
+                        if (_gizmoSelection is { } selection)
+                        {
+                            _gizmoSelection = selection.Select(FindCopy).ToArray();
+                            Selection.Clear();
+                            foreach (var go in _gizmoSelection) Selection.AddToSelection(go);
+                        }
+                        _gizmoTargets = targets = copies.ToArray();
+                        _gizmoDuplicated = true;
+                    }
+                    // Copies are recorded at release; their final pose belongs to creation.
+                    Undo.BeginContinuous(_gizmoDuplicated ? [] : targets,
+                        _gizmoDuplicated ? "Duplicate" : "Transform");
+                }
+            }
+
+            if (r.TranslationDelta is { } delta)
+            {
+                foreach (var go in targets)
+                    if (go.IsValid()) go.Transform.Position += delta;
             }
 
             // Apply rotation
             if (r.RotationDelta.HasValue && r.RotationAxis.HasValue)
             {
                 var rotDelta = Quaternion.AxisAngle(r.RotationAxis.Value, r.RotationDelta.Value);
-                foreach (var go in Selection.GetSelected<GameObject>())
+                foreach (var go in targets)
                     go.Transform.Rotation = rotDelta * go.Transform.Rotation;
             }
 
             // Apply scale
             if (r.ScaleDelta.HasValue)
             {
-                foreach (var go in Selection.GetSelected<GameObject>())
+                foreach (var go in targets)
                     go.Transform.LocalScale *= r.ScaleDelta.Value;
             }
 
             EditorSceneManager.MarkDirty();
         }
+
+        if (!_handles.IsHot(control) && _wasGizmoActive)
+            EndGizmoDrag();
     }
 
     // ================================================================
