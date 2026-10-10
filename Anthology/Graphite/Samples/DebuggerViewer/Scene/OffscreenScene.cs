@@ -98,6 +98,7 @@ internal sealed class OffscreenScene : IDisposable
     {
         Pipeline.Dispose();
         _lit.Dispose();
+        _tonemap.Dispose();
         _sampler.Dispose();
         _vertices.Dispose();
         _indices.Dispose();

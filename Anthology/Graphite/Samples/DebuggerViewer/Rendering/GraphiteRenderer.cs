@@ -45,6 +45,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     private Float4x4 _projection;
     private TextureGraphite _defaultTexture = null!;
     private Sampler _sampler = null!;
+    private readonly List<TextureGraphite> _created = new();
     private int _fbWidth;
     private int _fbHeight;
     private CanvasView[] _views = [];
@@ -99,7 +100,12 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     /// <summary>Writes the next rendered UI frame to a PNG at the path.</summary>
     public void Screenshot(string path) => _screenshot = path;
 
-    public object CreateTexture(uint width, uint height) => TextureGraphite.Create(_device, width, height);
+    public object CreateTexture(uint width, uint height)
+    {
+        TextureGraphite texture = TextureGraphite.Create(_device, width, height);
+        _created.Add(texture);
+        return texture;
+    }
 
     public Int2 GetTextureSize(object texture)
     {
@@ -153,7 +159,11 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         _pipeline.Dispose();
         _sampler?.Dispose();
         _canvasProgram?.Dispose();
+        _blurPass?.Dispose();
         _defaultTexture?.Dispose();
+        foreach (TextureGraphite texture in _created)
+            texture.Dispose();
+        _created.Clear();
     }
 
     private sealed class ScenePass : IPass
