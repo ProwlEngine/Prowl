@@ -757,7 +757,8 @@ public sealed class TreeBuilder
                 .Text(node.Label, font)
                 .TextColor(labelColor)
                 .FontSize(metrics.FontSize)
-                .Alignment(TextAlignment.MiddleLeft);
+                .Alignment(TextAlignment.MiddleLeft)
+                .TextTruncate();
         }
 
         // Badge
