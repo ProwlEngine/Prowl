@@ -46,7 +46,7 @@ public readonly struct SliderThumbContext
 {
     /// <summary>Thumb center in screen space.</summary>
     public readonly Float2 Center;
-    /// <summary>Suggested thumb radius (driven by the slider's <see cref="SliderBuilder{T}.Size"/>).</summary>
+    /// <summary>Suggested thumb radius (driven by the slider's <see cref="SliderBuilder{T}.ThumbSize(float)"/>).</summary>
     public readonly float Radius;
     /// <summary>0..1 fraction of the track filled by the current value.</summary>
     public readonly float FilledT;

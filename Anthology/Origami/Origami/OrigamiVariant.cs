@@ -4,8 +4,8 @@
 namespace Prowl.OrigamiUI;
 
 /// <summary>
-/// Semantic style variants for Origami widgets. Each variant maps to an
-/// <see cref="OrigamiPalette"/> in the active <see cref="OrigamiContext"/>.
+/// Semantic style variants for Origami widgets. Each variant maps to a color ramp
+/// in the active <see cref="OrigamiTheme"/>.
 /// </summary>
 public enum OrigamiVariant
 {

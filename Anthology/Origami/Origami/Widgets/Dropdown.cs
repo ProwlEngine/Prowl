@@ -80,7 +80,7 @@ public sealed class DropdownBuilder<T>
 
     // ── Sizing ─────────────────────────────────────────────────────────
 
-    /// <summary>Trigger width (default <see cref="UnitValue.Stretch()"/>).</summary>
+    /// <summary>Trigger width (default <c>UnitValue.Stretch()</c>).</summary>
     public DropdownBuilder<T> Width(UnitValue width) { _width = width; return this; }
     /// <summary>Trigger height in pixels (default 24).</summary>
     public DropdownBuilder<T> Height(float height) { _height = MathF.Max(16, height); return this; }
