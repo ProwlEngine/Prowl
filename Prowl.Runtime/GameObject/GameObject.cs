@@ -565,6 +565,8 @@ public partial class GameObject : EngineObject, ISerializable
         MainThreadContext.AssertOwner(this, nameof(AddComponent));
         if (!CanConstruct(type)) return null;
 
+        if (RefusesAnother(type)) return null;
+
         pending ??= [];
         if (!pending.Add(type)) return null;
 
@@ -633,10 +635,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>Adds whatever a type's <see cref="RequireComponentAttribute"/> asks for and is missing.</summary>
     private void AddRequirements(Type type, HashSet<Type> pending)
     {
-        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
-        if (requireComponentAttribute == null) return;
-
-        foreach (Type requiredComponentType in requireComponentAttribute.types)
+        foreach (Type requiredComponentType in type.GetCustomAttributes<RequireComponentAttribute>().SelectMany(a => a.types))
         {
             if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
                 continue;
@@ -656,13 +655,15 @@ public partial class GameObject : EngineObject, ISerializable
     /// Adds an existing MonoBehaviour component to the GameObject.
     /// </summary>
     /// <param name="comp">The MonoBehaviour component to add.</param>
-    public void AddComponent(MonoBehaviour comp)
+    /// <returns>False when a <see cref="DisallowMultipleComponentAttribute"/> refused it.</returns>
+    public bool AddComponent(MonoBehaviour comp)
     {
         ArgumentNullException.ThrowIfNull(comp, nameof(comp));
         MainThreadContext.AssertOwner(this);
         MainThreadContext.AssertOwner(comp.GameObject);
 
-        if (ReferenceEquals(comp.GameObject, this)) return;
+        if (ReferenceEquals(comp.GameObject, this)) return true;
+        if (RefusesAnother(comp.GetType())) return false;
 
         // A component belongs to exactly one GameObject. Leaving it registered on its previous one
         // would have both report it from GetComponent, and would destroy it when that one is disposed.
@@ -679,6 +680,21 @@ public partial class GameObject : EngineObject, ISerializable
         _componentCache.Add(comp.GetType(), comp);
 
         NotifyComponentAddedToScene(comp);
+        return true;
+    }
+
+    /// <summary>Whether the nearest <see cref="DisallowMultipleComponentAttribute"/> type in this type's ancestry already has a component here.</summary>
+    private bool RefusesAnother(Type type)
+    {
+        for (Type? marked = type; marked != null && marked != typeof(MonoBehaviour); marked = marked.BaseType)
+        {
+            if (!marked.IsDefined(typeof(DisallowMultipleComponentAttribute), false)) continue;
+            if (GetComponent(marked).IsNotValid()) return false;
+
+            Debug.LogWarning($"'{Name}' already has a {marked.Name}, which allows only one per GameObject, so the {type.Name} was not added.");
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -1098,11 +1114,7 @@ public partial class GameObject : EngineObject, ISerializable
         // If it is the last type on a GameObject, check if it is required by another component.
         foreach (MonoBehaviour component in _components)
         {
-            RequireComponentAttribute? requireComponentAttribute = component.GetType().GetCustomAttribute<RequireComponentAttribute>();
-            if (requireComponentAttribute == null)
-                continue;
-
-            if (requireComponentAttribute.types.All(type => type != componentType))
+            if (component.GetType().GetCustomAttributes<RequireComponentAttribute>().All(a => a.types.All(type => type != componentType)))
                 continue;
 
             dependentType = component.GetType();

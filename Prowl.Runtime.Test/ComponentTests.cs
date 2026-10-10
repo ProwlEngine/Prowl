@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -29,6 +29,18 @@ public sealed class NeedsChain : MonoBehaviour { }
 
 [RequireComponent(typeof(PlainComponent), typeof(SecondComponent))]
 public sealed class NeedsTwo : MonoBehaviour { }
+
+[RequireComponent(typeof(PlainComponent))]
+[RequireComponent(typeof(SecondComponent))]
+public sealed class NeedsStacked : MonoBehaviour { }
+
+[DisallowMultipleComponent]
+public sealed class OnlyOne : MonoBehaviour { }
+
+[DisallowMultipleComponent]
+public class OnlyOneBase : MonoBehaviour { }
+
+public sealed class OnlyOneDerived : OnlyOneBase { }
 
 [ExecutionOrder(-100)]
 public sealed class EarlyComponent : MonoBehaviour { }
@@ -493,6 +505,70 @@ public class ComponentTests : RuntimeTestBase
         go.RemoveComponent(plain!);
 
         Assert.NotNull(go.GetComponent<PlainComponent>());
+    }
+
+    [Fact]
+    public void RequireComponent_Stacked_AddsEveryDependency()
+    {
+        var go = CreateGameObject();
+
+        go.AddComponent<NeedsStacked>();
+
+        Assert.NotNull(go.GetComponent<PlainComponent>());
+        Assert.NotNull(go.GetComponent<SecondComponent>());
+    }
+
+    [Fact]
+    public void RemoveComponent_RequiredByStackedAttribute_IsBlocked()
+    {
+        var go = CreateGameObject();
+        go.AddComponent<NeedsStacked>();
+
+        go.RemoveComponent(go.GetComponent<SecondComponent>()!);
+
+        Assert.NotNull(go.GetComponent<SecondComponent>());
+    }
+
+    // ---- DisallowMultipleComponent ----
+
+    [Fact]
+    public void DisallowMultiple_SecondAdd_IsRefused()
+    {
+        var go = CreateGameObject();
+        var first = go.AddComponent<OnlyOne>();
+
+        var second = go.AddComponent<OnlyOne>();
+
+        Assert.Null(second);
+        Assert.Same(first, Assert.Single(go.GetComponents<OnlyOne>()));
+    }
+
+    [Fact]
+    public void DisallowMultiple_CoversSubclassesOfTheMarkedType()
+    {
+        var go = CreateGameObject();
+        go.AddComponent<OnlyOneBase>();
+
+        Assert.Null(go.AddComponent<OnlyOneDerived>());
+        Assert.Single(go.GetComponents<OnlyOneBase>());
+    }
+
+    [Fact]
+    public void DisallowMultiple_AttachingAnInstance_IsRefused()
+    {
+        var go = CreateGameObject();
+        go.AddComponent<OnlyOne>();
+        var loose = CreateGameObject().AddComponent<OnlyOne>();
+
+        Assert.False(go.AddComponent(loose));
+        Assert.Single(go.GetComponents<OnlyOne>());
+    }
+
+    [Fact]
+    public void DisallowMultiple_OnAnotherObject_IsAllowed()
+    {
+        Assert.NotNull(CreateGameObject().AddComponent<OnlyOne>());
+        Assert.NotNull(CreateGameObject().AddComponent<OnlyOne>());
     }
 
     // ---- Enumeration safety ----

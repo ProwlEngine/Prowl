@@ -12,7 +12,7 @@ using System;
 /// 
 /// This attribute can only be applied to classes (typically components deriving from MonoBehaviour).
 /// </remarks>
-[AttributeUsage(AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class RequireComponentAttribute : Attribute
 {
     /// <summary>
@@ -35,4 +35,13 @@ public class RequireComponentAttribute : Attribute
     {
         this.types = types;
     }
+}
+
+/// <summary>
+/// Allows only one component of this type, or of any type deriving from it, on a GameObject.
+/// Adding a second one is refused with a warning.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class)]
+public class DisallowMultipleComponentAttribute : Attribute
+{
 }

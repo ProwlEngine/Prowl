@@ -115,7 +115,7 @@ public static class ComponentClipboard
 
             // AddComponent(instance) attaches, registers with the scene and fires OnAddedToScene /
             // OnEnable, so the pasted component is live immediately.
-            go.AddComponent(comp);
+            if (!go.AddComponent(comp)) return null;
             comp.OnValidate();
 
             // Look the GameObject back up by identifier rather than capturing it: undoing a destroy
