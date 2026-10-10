@@ -139,8 +139,8 @@ public sealed class CubeSpawner : MonoBehaviour
             renderer.Material = HelloProwlGame.MakeMaterial(new Color(0.05f, 0.25f, 0.8f, 1f));
             cube.AddComponent<BoxCollider>().Size = new Float3(0.5f, 0.5f, 0.5f);
             cube.AddComponent<Rigidbody3D>();
-            cube.Transform.Position = new Float3(Random.Shared.NextSingle() * 4f - 2f, 6f, Random.Shared.NextSingle() * 4f - 2f);
-            cube.Transform.LocalEulerAngles = new Float3(Random.Shared.NextSingle() * 360f, Random.Shared.NextSingle() * 360f, 0f);
+            cube.Transform.Position = new Float3(Sample.Rng.NextSingle() * 4f - 2f, 6f, Sample.Rng.NextSingle() * 4f - 2f);
+            cube.Transform.LocalEulerAngles = new Float3(Sample.Rng.NextSingle() * 360f, Sample.Rng.NextSingle() * 360f, 0f);
             GameObject.Scene!.Add(cube);
             _spawned.Add(cube);
         }

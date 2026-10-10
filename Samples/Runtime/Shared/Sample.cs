@@ -10,6 +10,8 @@
 // controls to the panel on the right through Sample.Button, Sample.Toggle and Sample.Slider.
 //
 
+using System.Diagnostics;
+using System.Globalization;
 using System.IO.Compression;
 
 using Prowl.PaperUI;
@@ -44,10 +46,18 @@ public abstract class StationGame : Game
     /// <summary>Key help for the sample's own controls, shown after the shared ones.</summary>
     protected virtual string ExtraKeys => string.Empty;
 
+    // Capture mode renders every station with time locked to 60 frames a second, saves an image of each and then
+    // times a run of frames there, for reference images and performance numbers that repeat run to run
+    private const int PerformanceFrames = 300;
     private string? _captureFolder;
     private int _captureFrames = 120;
     private int _captureCounter;
     private bool _captureNow;
+    private readonly Stopwatch _frameClock = new();
+    private readonly List<double> _frameTimes = [];
+    private RenderStats.Frame _captureStats;
+    private double _colorPassMs, _shadowPassMs, _postFxMs;
+    private StreamWriter? _performance;
 
     private static readonly KeyCode[] StationKeys =
     [
@@ -83,8 +93,10 @@ public abstract class StationGame : Game
         Hud = hud.AddComponent<SampleHud>();
         Hud.Game = this;
         SampleScene.Add(hud);
+        if (_captureFolder != null) Hud.Visible = false;
 
         Build();
+        if (_captureFolder != null) FixParticleSeeds();
 
         GoToStation(0);
         Scene.Load(SampleScene);
@@ -161,6 +173,18 @@ public abstract class StationGame : Game
         AdvanceCapture();
     }
 
+    // Every particle system draws from its own seed, so captures repeat exactly
+    private void FixParticleSeeds()
+    {
+        uint seed = 1;
+        foreach (GameObject go in SampleScene.AllObjects)
+            foreach (var particles in go.GetComponents<Prowl.Runtime.ParticleSystem.ParticleSystemComponent>())
+            {
+                particles.AutoRandomSeed = false;
+                particles.RandomSeed = seed++;
+            }
+    }
+
     public override void BeginRender() => RenderStats.BeginFrame();
     public override void EndRender() => RenderStats.EndFrame();
 
@@ -172,11 +196,7 @@ public abstract class StationGame : Game
         Station station = Stations[CurrentStation];
         string file = Path.Combine(_captureFolder!, $"{CurrentStation + 1:00} {station.Name}.png");
         SaveScreenshot(file);
-
-        if (CurrentStation + 1 < Stations.Count)
-            GoToStation(CurrentStation + 1);
-        else
-            Quit();
+        _captureStats = RenderStats.Last;
     }
 
     private void ReadCaptureArguments()
@@ -189,14 +209,66 @@ public abstract class StationGame : Game
         Directory.CreateDirectory(_captureFolder);
         if (at + 2 < args.Length && int.TryParse(args[at + 2], out int frames))
             _captureFrames = frames;
+
+        Time.LockedDeltaTime = 1f / 60f;
+        Application.VSync = false;
+        Application.TargetFrameRate = 0;
+
+        _performance = new StreamWriter(Path.Combine(_captureFolder, "performance.csv"));
+        _performance.WriteLine("station,frames,mean ms,median ms,p95 ms,max ms,fps,draw calls,instanced draw calls,batches,triangles," +
+            "renderables drawn,shadow draw calls,shadow passes,shadow triangles,lights,image effects,color pass cpu ms,shadow pass cpu ms,post cpu ms");
     }
 
+    // Each station settles for the capture frame count, is saved, then has a run of frames timed by the wall clock
     private void AdvanceCapture()
     {
         if (_captureFolder == null || Stations.Count == 0) return;
-        if (++_captureCounter < _captureFrames) return;
+
+        double elapsed = _frameClock.Elapsed.TotalMilliseconds;
+        _frameClock.Restart();
+
+        _captureCounter++;
+        if (_captureCounter == _captureFrames)
+        {
+            _captureNow = true;
+            _frameTimes.Clear();
+            _colorPassMs = _shadowPassMs = _postFxMs = 0;
+            return;
+        }
+        if (_captureCounter <= _captureFrames + 1) return;
+
+        _frameTimes.Add(elapsed);
+        RenderStats.Frame frame = RenderStats.Last;
+        _colorPassMs += frame.ColorPassMs;
+        _shadowPassMs += frame.ShadowPassMs;
+        _postFxMs += frame.PostFxMs;
+        if (_frameTimes.Count < PerformanceFrames) return;
+
+        WritePerformance();
         _captureCounter = 0;
-        _captureNow = true;
+        if (CurrentStation + 1 < Stations.Count)
+            GoToStation(CurrentStation + 1);
+        else
+        {
+            _performance!.Dispose();
+            Quit();
+        }
+    }
+
+    private void WritePerformance()
+    {
+        double[] sorted = [.. _frameTimes];
+        Array.Sort(sorted);
+        double mean = sorted.Average();
+        RenderStats.Frame s = _captureStats;
+        string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+        _performance!.WriteLine(string.Join(",",
+            $"\"{CurrentStation + 1:00} {Stations[CurrentStation].Name}\"", sorted.Length, Number(mean), Number(sorted[sorted.Length / 2]),
+            Number(sorted[(int)(sorted.Length * 0.95)]), Number(sorted[^1]), Number(1000.0 / mean),
+            s.DrawCalls, s.InstancedDrawCalls, s.Batches, s.Triangles, s.RenderablesDrawn,
+            s.ShadowDrawCalls, s.ShadowPasses, s.ShadowTriangles, s.Lights, s.ImageEffects,
+            Number(_colorPassMs / sorted.Length), Number(_shadowPassMs / sorted.Length), Number(_postFxMs / sorted.Length)));
+        _performance.Flush();
     }
 
     /// <summary>Writes the window's current contents to a PNG file.</summary>
@@ -788,6 +860,9 @@ public sealed class SampleHud : MonoBehaviour
 /// <summary>Small helpers every sample uses: materials, meshes, curves, procedural textures and Paper widgets.</summary>
 public static class Sample
 {
+    /// <summary>Randomness for sample content, seeded so every run builds the same scene.</summary>
+    public static readonly Random Rng = new(1);
+
     /// <summary>An asset from the Assets folder by its path without the extension, such as "Textures/Asphalt".</summary>
     public static T Load<T>(string path) where T : Asset
     {

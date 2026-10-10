@@ -232,10 +232,10 @@ public sealed class ScriptingShowcaseGame : StationGame
     private void SpawnLantern()
     {
         GameObject copy = GameObject.Instantiate(_template, SampleScene)!;
-        copy.Transform.Position = _instantiateCenter + new Float3(Random.Shared.NextSingle() * 14f - 7f, 0.6f, Random.Shared.NextSingle() * 8f - 4f);
+        copy.Transform.Position = _instantiateCenter + new Float3(Sample.Rng.NextSingle() * 14f - 7f, 0.6f, Sample.Rng.NextSingle() * 8f - 4f);
 
         // Every copy shares the template's materials, so give each head its own to tint it.
-        Color color = Hsv(Random.Shared.NextSingle(), 0.8f, 1f);
+        Color color = Hsv(Sample.Rng.NextSingle(), 0.8f, 1f);
         copy.GetComponentInChildren<Bob>()!.GetComponent<MeshRenderer>()!.Material = Lit(color).Emissive(color, 2.5f);
         _clones.Add(copy);
     }
@@ -473,7 +473,7 @@ public sealed class Bob : MonoBehaviour
     public override void Start()
     {
         _start = Transform.LocalPosition;
-        _phase = Random.Shared.NextSingle() * MathF.Tau;
+        _phase = Sample.Rng.NextSingle() * MathF.Tau;
     }
 
     public override void Update()

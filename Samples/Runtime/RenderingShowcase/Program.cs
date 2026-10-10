@@ -387,7 +387,7 @@ public sealed class RenderingShowcaseGame : StationGame
         Mesh bulb = Mesh.CreateSphere(0.06f, 6, 8);
         for (int i = 0; i < 256; i++)
         {
-            Color color = Hsv(Random.Shared.NextSingle(), 0.75f, 1f);
+            Color color = Hsv(Sample.Rng.NextSingle(), 0.75f, 1f);
             GameObject go = Model("Wandering Light", bulb, Unlit(new Color(color.R * 4f, color.G * 4f, color.B * 4f, 1f)), c);
             PointLight light = go.AddComponent<PointLight>();
             light.Color = color;
@@ -671,9 +671,9 @@ public sealed class Wanderer : MonoBehaviour
     }
 
     private Float3 Pick() => Center + new Float3(
-        (Random.Shared.NextSingle() * 2f - 1f) * Extent.X,
-        Random.Shared.NextSingle() * Extent.Y,
-        (Random.Shared.NextSingle() * 2f - 1f) * Extent.Z);
+        (Sample.Rng.NextSingle() * 2f - 1f) * Extent.X,
+        Sample.Rng.NextSingle() * Extent.Y,
+        (Sample.Rng.NextSingle() * 2f - 1f) * Extent.Z);
 
     public override void Update()
     {
