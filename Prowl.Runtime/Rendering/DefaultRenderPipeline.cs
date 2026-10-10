@@ -491,6 +491,13 @@ public class DefaultRenderPipeline : RenderPipeline
             }
             RenderStats.EndPostFx();
 
+            // Clouds over the opaques and the sky, under the transparents. A camera that draws nothing, like a sky
+            // capture, sees the sky alone
+            if (!camera.IsOrthographic && css.CullingMask != LayerMask.Nothing && css.Scene.Clouds.Count > 0)
+                CloudRenderer.Render(camera, css, css.Scene.Clouds[0], colorRT, prepass);
+            else if (css.Scene.Clouds.Count == 0)
+                CloudRenderer.Release(camera);
+
             // World-space UI canvases, into the scene color and tested against the opaque depth, so solid things in
             // front hide them and transparents like a pointer's laser still draw over them.
             RenderUIQueue(css, colorRT, UISurface.World, data);

@@ -13,11 +13,12 @@
 //   6  Fog              volumetric fog, fog volumes and lights that scatter in it
 //   7  Instancing       thousands of renderers sharing a mesh and material
 //   8  Render textures  a second camera drawing into a texture shown on a monitor
+//   9  Clouds           volumetric clouds and flat cloud layers over the whole scene
 //
 // Textures and materials load from the sample's Assets folder.
 //
 // Controls:
-//   1 to 8      Jump to a station
+//   1 to 9      Jump to a station
 //   WASD, Q/E   Fly, hold Right Mouse to look, Shift to go faster
 //   F1          Hide the HUD
 //   The panels on the right hold each station's own controls and the scene wide settings:
@@ -47,14 +48,17 @@ internal class Program
 public sealed class RenderingShowcaseGame : StationGame
 {
     private const float StationSpacing = 30f;
-    private const int StationCount = 8;
+    private const int StationCount = 9;
     private const int FogStation = 5;
+    private const int CloudStation = 8;
 
     // The time of day each station is shown at, in hours.
-    private static readonly float[] StationHours = [14f, 15f, 13f, 22f, 22f, 23f, 11f, 14f];
+    private static readonly float[] StationHours = [14f, 15f, 13f, 22f, 22f, 23f, 11f, 14f, 16f];
 
     private DirectionalLight _sun = null!;
     private VolumetricFogEffect _fog = null!;
+    private VolumetricClouds _clouds = null!;
+    private float _cloudFlightSpeed = 300f;
     private BloomEffect _bloom = null!;
     private TonemapperEffect _tonemapper = null!;
     private float _hours = 14f;
@@ -95,6 +99,7 @@ public sealed class RenderingShowcaseGame : StationGame
         BuildFog(StationCenter(5));
         BuildInstancing(StationCenter(6));
         BuildRenderTextures(StationCenter(7));
+        BuildClouds(StationCenter(8));
     }
 
     protected override void OnStationChanged(int index)
@@ -103,6 +108,15 @@ public sealed class RenderingShowcaseGame : StationGame
         _animateSky = false;
         _fog.Enabled = index == FogStation;
         SetTimeOfDay(_hours);
+        SetFlightSpeed(index == CloudStation ? _cloudFlightSpeed : 7f);
+    }
+
+    // Shift flies about three times faster, as the fly camera does by default
+    private void SetFlightSpeed(float speed)
+    {
+        var fly = CameraObject.GetComponent<FlyCamera>();
+        fly.Speed = speed;
+        fly.FastSpeed = speed * 3f;
     }
 
     protected override void Tick()
@@ -142,12 +156,13 @@ public sealed class RenderingShowcaseGame : StationGame
             {
                 4 => $"{_wanderers.Count(w => w.GameObject.Enabled)} point lights    {common}",
                 6 => $"{_cubeCount:N0} cubes    {common}",
+                8 => $"{_clouds.ParticleGrid * _clouds.ParticleGrid * 2:N0} cloud particles    {common}",
                 _ => common,
             };
         }
     }
 
-    public override bool HasStationControls => CurrentStation is 1 or 3 or 4 or 5 or 6;
+    public override bool HasStationControls => CurrentStation is 1 or 3 or 4 or 5 or 6 or 8;
 
     public override void DrawControls(Paper paper, FontFile font)
     {
@@ -158,6 +173,7 @@ public sealed class RenderingShowcaseGame : StationGame
             case 4: ManyLightControls(paper, font); break;
             case 5: FogControls(paper, font); break;
             case 6: InstancingControls(paper, font); break;
+            case 8: CloudControls(paper, font); break;
         }
     }
 
@@ -551,6 +567,46 @@ public sealed class RenderingShowcaseGame : StationGame
             GameObject shape = Add(Model("Shape", i % 2 == 0 ? Mesh.CreateCube(Float3.One) : Mesh.CreateSphere(0.5f, 16, 24), Lit(color, 0f, 0.4f), c + new Float3(-6f + i * 1.6f, 0.5f, -3f)));
             shape.AddComponent<Spin>().Speed = new Float3(0f, 30f + i * 10f, 0f);
         }
+    }
+
+    // ----------------------------------------------------------------
+    //  9  Clouds
+    // ----------------------------------------------------------------
+
+    private void BuildClouds(Float3 c)
+    {
+        AddStation("Clouds", "Clouds cover the whole scene, so they are over every station. They are not ray marched: a grid of camera facing particles around the camera takes its shape from a coverage map and noise, and each marches only a few steps toward the sun.", c, new Float3(0f, 2f, -6f), 8f);
+
+        var clouds = new GameObject("Clouds");
+        _clouds = clouds.AddComponent<VolumetricClouds>();
+        _clouds.Layers =
+        [
+            new CloudLayer { Style = CloudLayerStyle.Cirrus, Altitude = 9000f, Coverage = 0.5f, Opacity = 0.6f },
+            new CloudLayer { Enabled = false, Style = CloudLayerStyle.Stratus, Altitude = 5000f, Coverage = 0.45f, Opacity = 0.6f, WindMultiplier = 1.5f },
+        ];
+        Add(clouds);
+    }
+
+    private void CloudControls(Paper paper, FontFile font)
+    {
+        Header(paper, font, "Clouds");
+        Slider(paper, font, "Flight speed", _cloudFlightSpeed, 7f, 3000f, v => { _cloudFlightSpeed = v; SetFlightSpeed(v); }, "0");
+        Slider(paper, font, "Coverage", _clouds.Coverage, 0f, 1f, v => _clouds.Coverage = v);
+        Slider(paper, font, "Density", _clouds.Density, 0f, 4f, v => _clouds.Density = v);
+        Slider(paper, font, "Erosion", _clouds.Erosion, 0f, 1f, v => _clouds.Erosion = v);
+        Slider(paper, font, "Puff strength", _clouds.PuffStrength, 0f, 1f, v => _clouds.PuffStrength = v);
+        Slider(paper, font, "Puff scale", _clouds.PuffScale, 0.5f, 10f, v => _clouds.PuffScale = v, "0.0");
+        Toggle(paper, font, "Temporal upscale", _clouds.TemporalUpscale, v => _clouds.TemporalUpscale = v);
+        Slider(paper, font, "Particles per side", _clouds.ParticleGrid, 32f, 256f, v => _clouds.ParticleGrid = (int)MathF.Round(v / 32f) * 32, "0");
+        Toggle(paper, font, "March toward the sun", _clouds.MarchToSun, v => _clouds.MarchToSun = v);
+        if (_clouds.MarchToSun)
+            Slider(paper, font, "Light samples", _clouds.LightSamples, 1f, 8f, v => _clouds.LightSamples = (int)MathF.Round(v), "0");
+        Slider(paper, font, "Altitude", _clouds.Altitude, 200f, 4000f, v => _clouds.Altitude = v, "0");
+        Slider(paper, font, "Thickness", _clouds.Thickness, 100f, 3000f, v => _clouds.Thickness = v, "0");
+        Slider(paper, font, "Wind speed", _clouds.WindSpeed, 0f, 200f, v => _clouds.WindSpeed = v, "0");
+        Cycle(paper, font, "Resolution", _clouds.Resolution, v => _clouds.Resolution = v);
+        Toggle(paper, font, "Cirrus layer", _clouds.Layers[0].Enabled, v => _clouds.Layers[0].Enabled = v);
+        Toggle(paper, font, "Stratus layer", _clouds.Layers[1].Enabled, v => _clouds.Layers[1].Enabled = v);
     }
 }
 

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.IO;
 
 using Prowl.Echo;
 
@@ -28,6 +29,32 @@ public sealed class Texture3D : Texture, ISerializable
     }
 
     private uint _width, _height, _depth;
+
+    public static Texture3D LoadDefault(DefaultTexture3D texture) => BuiltInAssets.Load<Texture3D>(BuiltInAssets.GuidFor(texture));
+
+    /// <summary>
+    /// Raw load of a default embedded 3D texture invoked by <see cref="BuiltInAssets"/> on first cache miss. They are
+    /// stored as raw texels, slice after slice, since no image format holds a volume.
+    /// </summary>
+    internal static Texture3D ParseDefault(DefaultTexture3D texture)
+    {
+        (string fileName, uint size, TextureImageFormat format) = texture switch
+        {
+            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, TextureImageFormat.UnsignedShort2),
+            _ => throw new ArgumentException($"Unknown default 3D texture: {texture}")
+        };
+
+        using Stream stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
+        using var bytes = new MemoryStream();
+        stream.CopyTo(bytes);
+
+        var result = new Texture3D(size, size, size, false, format) { Name = texture.ToString() };
+        result.SetData(new Memory<byte>(bytes.ToArray()));
+        result.GenerateMipmaps();
+        result.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
+        result.SetWrapModes(TextureWrap.Repeat, TextureWrap.Repeat, TextureWrap.Repeat);
+        return result;
+    }
 
     /// <summary>The width of this <see cref="Texture3D"/>.</summary>
     public uint Width { get { EnsureLoaded(); return _width; } private set => _width = value; }

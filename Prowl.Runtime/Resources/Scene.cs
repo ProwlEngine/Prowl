@@ -359,6 +359,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore, NotHeld]
     internal readonly List<GameCanvas> Canvases = new();
 
+    /// <summary>The enabled volumetric clouds in this scene. The first one is drawn.</summary>
+    [SerializeIgnore, NotHeld]
+    internal readonly List<VolumetricClouds> Clouds = new();
+
     /// <summary>This scene's reflection probes, and the sky probe surfaces outside them reflect.</summary>
     [SerializeIgnore, NotHeld]
     internal readonly ReflectionProbeSystem ReflectionProbes = new();
@@ -379,6 +383,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // component whose new type gained its first per-frame callback start dispatching at all.
         _dispatcher.Reset();
         Canvases.Clear();
+        Clouds.Clear();
 
         foreach (GameObject go in _allObj)
         {
@@ -390,6 +395,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 comp._countedCollisionListener = false;
                 _dispatcher.Register(comp);
                 if (comp is GameCanvas canvas) canvas.RegisterIn(this);
+                if (comp is VolumetricClouds clouds) clouds.JoinScene(this);
             }
         }
     }

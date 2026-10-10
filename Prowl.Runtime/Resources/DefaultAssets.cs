@@ -63,7 +63,8 @@ public enum DefaultShader
     MotionBlur,
     GizmoIcon,
     AutoExposure,
-    PrefilterCubemap
+    PrefilterCubemap,
+    VolumetricClouds
 }
 
 /// <summary>
@@ -109,6 +110,7 @@ public enum DefaultTexture
     Emission,
     Grid,
     Noise,
+    CloudNoise,
 
     // UI
     UIPanel,
@@ -119,6 +121,14 @@ public enum DefaultTexture
     // Gizmo icons
     IconCamera,
     IconLight,
+}
+
+/// <summary>
+/// Default 3D textures embedded in the runtime
+/// </summary>
+public enum DefaultTexture3D
+{
+    CloudNoise,
 }
 
 /// <summary>
@@ -144,5 +154,6 @@ public enum DefaultShaderInclude
     LightTree,
     StandardCore,
     FastNoiseLite,
-    SimplexNoise4D
+    SimplexNoise4D,
+    Clouds
 }

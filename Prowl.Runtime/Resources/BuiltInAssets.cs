@@ -119,6 +119,13 @@ public static class BuiltInAssets
                 () => Texture2D.ParseDefault(tex));
         }
 
+        foreach (DefaultTexture3D t in Enum.GetValues<DefaultTexture3D>())
+        {
+            var tex = t;
+            Register($"$Default:Texture3D/{tex}", tex.ToString(), typeof(Texture3D),
+                () => Texture3D.ParseDefault(tex));
+        }
+
         // Sprites: built from a default texture, shared instance.
         foreach (DefaultSprite sp in Enum.GetValues<DefaultSprite>())
         {
@@ -209,6 +216,8 @@ public static class BuiltInAssets
     public static Guid GuidFor(DefaultMaterial material) => DeterministicGuid($"$Default:Material/{material}");
 
     public static Guid GuidFor(DefaultTexture tex) => DeterministicGuid($"$Default:Texture/{tex}");
+
+    public static Guid GuidFor(DefaultTexture3D tex) => DeterministicGuid($"$Default:Texture3D/{tex}");
 
     /// <summary>Get the deterministic GUID for a specific default sprite.</summary>
     public static Guid GuidFor(DefaultSprite sprite) => DeterministicGuid($"$Default:Sprite/{sprite}");

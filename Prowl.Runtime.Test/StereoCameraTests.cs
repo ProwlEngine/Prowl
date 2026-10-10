@@ -145,6 +145,26 @@ public class StereoCameraTests : RuntimeTestBase
     }
 
     [Fact]
+    public void MotionHistory_SurvivesJoiningASceneWhileTheObjectIsDisabled()
+    {
+        // The scene view camera joins the scene for each render and leaves after. Joining enabled would count as the
+        // camera being enabled again and forget its history every frame, which breaks every temporal effect
+        Scene scene = CreateScene(enable: true);
+        Camera camera = CreateCamera(Float3.Zero, Quaternion.Identity);
+        camera.GameObject.Enabled = false;
+        RenderTexture target = Target(128, 128);
+
+        for (int frame = 0; frame < 3; frame++)
+        {
+            scene.Add(camera.GameObject);
+            camera.UpdateRenderData(target);
+            if (frame > 0) Assert.True(camera.HasPreviousViewProjectionMatrix);
+            camera.SavePreviousViewProjectionMatrix();
+            scene.Remove(camera.GameObject);
+        }
+    }
+
+    [Fact]
     public void HandSetProjection_SurvivesAStereoRender()
     {
         Camera camera = CreateCamera(Float3.Zero, Quaternion.Identity);
