@@ -16,7 +16,7 @@ namespace Prowl.OrigamiUI;
 /// <summary>
 /// Fluent builder for a two-thumb range slider. The user picks a low/high pair within an
 /// outer min/max range. Construct via <c>Origami.RangeSlider</c> / <c>Origami.IntRangeSlider</c>
-/// (or the generic <c>Origami.RangeSlider&lt;T&gt;</c>).
+/// (or the generic <see cref="Origami.RangeSlider{T}"/>).
 /// </summary>
 /// <remarks>
 /// Mirrors <see cref="SliderBuilder{T}"/> for everything except the value model: two thumbs,

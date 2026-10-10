@@ -73,7 +73,7 @@ public readonly struct SliderThumbContext
 
 /// <summary>
 /// Fluent builder for a single-thumb slider. Construct via the <c>Origami.Slider</c> /
-/// <c>Origami.IntSlider</c> factories (or the generic <c>Origami.Slider&lt;T&gt;</c>) and
+/// <c>Origami.IntSlider</c> factories (or the generic <see cref="Origami.Slider{T}"/>) and
 /// call <see cref="Show"/> to render.
 /// </summary>
 /// <remarks>
