@@ -31,6 +31,9 @@ public class GameViewPanel : DockPanel
     public override string Icon => EditorIcons.Gamepad;
 
     private RenderTexture? _rt;
+
+    /// <summary> What the game view last rendered into, or null before it has drawn. </summary>
+    internal RenderTexture? RenderTarget => _rt;
     private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private bool _showStats;
     private RenderStats.Frame _gameStats; // snapshot from last game render (persists when paused)
