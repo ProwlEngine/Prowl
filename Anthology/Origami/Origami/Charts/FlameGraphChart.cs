@@ -28,6 +28,7 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
         public int Depth;
         public int Index;
         public bool Hidden;
+        public T? Item;
         public readonly List<Node> Children = new();
     }
 
@@ -44,6 +45,9 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
     private bool _tooltip = true;
     private bool _zoomable, _pannable;
     private float _rowHeight = 18f;
+    private Action<T>? _onNodeClick;
+    private T? _selected;
+    private bool _hasSelected;
 
     private const string PlotSizeKey = "flame_size";
     private const int MaxDepth = 32;
@@ -72,6 +76,12 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
 
     /// <summary>Height of one depth row in pixels, gap included. Default 18.</summary>
     public FlameGraphChart<T> RowHeight(float height) { _rowHeight = MathF.Max(MinRowHeight, height); return this; }
+
+    /// <summary>Fires with the clicked node's item.</summary>
+    public FlameGraphChart<T> OnNodeClick(Action<T> handler) { _onNodeClick = handler; return this; }
+
+    /// <summary>Marks one node with the hover ring, independent of the pointer.</summary>
+    public FlameGraphChart<T> Selected(T? item) { _selected = item; _hasSelected = item is not null; return this; }
 
     protected override IReadOnlyList<LegendEntry> BuildLegendEntries()
     {
@@ -112,7 +122,7 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
     {
         if (item is null || depth > MaxDepth) return null;
 
-        var node = new Node { Label = _nameSelector?.Invoke(item) ?? "", Depth = depth };
+        var node = new Node { Label = _nameSelector?.Invoke(item) ?? "", Depth = depth, Item = item };
 
         double childSum = 0d;
         IEnumerable<T>? kids = _childrenSelector?.Invoke(item);
@@ -198,6 +208,18 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
             ElementHandle plotEl = _paper.CurrentParent;
             WireView(plotBox, plotEl, _zoomable, _pannable, false);
 
+            if (_onNodeClick != null)
+            {
+                ViewRect clickView = View;
+                plotBox.Cursor(PaperCursor.Pointer).OnClick(e =>
+                {
+                    Float2 plotSize = _paper.GetElementStorage(plotEl, PlotSizeKey, new Float2(0f, 0f));
+                    if (plotSize.X <= 0f) return;
+                    Node? hit = HitTest(new Float2((float)e.RelativePosition.X, (float)e.RelativePosition.Y), plotSize.X, clickView);
+                    if (hit != null && hit.Item is { } clicked) _onNodeClick(clicked);
+                });
+            }
+
             ViewRect view = View;
             Node? hover = null;
 
@@ -275,7 +297,8 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
             canvas.SetFillColor(ToC32(node.Color));
             canvas.Fill();
 
-            if (node == hover)
+            bool selected = _hasSelected && node.Item is not null && EqualityComparer<T>.Default.Equals(node.Item, _selected!);
+            if (node == hover || selected)
             {
                 canvas.SetStrokeColor(ToC32(_theme.Ink.C700));
                 canvas.SetStrokeWidth(1.5f);
