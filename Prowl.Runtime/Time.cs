@@ -57,7 +57,7 @@ public class TimeData
     {
         _stopwatch ??= Stopwatch.StartNew();
 
-        float dt = (float)_stopwatch.Elapsed.TotalMilliseconds / 1000.0f;
+        float dt = Prowl.Runtime.Time.LockedDeltaTime > 0f ? Prowl.Runtime.Time.LockedDeltaTime : (float)_stopwatch.Elapsed.TotalMilliseconds / 1000.0f;
 
         FrameCount++;
 
@@ -117,6 +117,12 @@ public static class Time
 
     public static float DeltaTime => CurrentTime.DeltaTime;
     public static float FixedDeltaTime = 1.0f / 60.0f;
+
+    /// <summary>
+    /// When above zero, every frame advances time by exactly this many seconds instead of the measured time, so a run
+    /// plays out the same way every time, for reference captures and recordings.
+    /// </summary>
+    public static float LockedDeltaTime = 0f;
     public static int MaxFixedIterations = 3;
 
     /// <summary>
