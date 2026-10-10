@@ -186,6 +186,15 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
 
     void IGraphProfiler.BeginPass(in PassInfo pass) { }
 
+    void IGraphProfiler.SkipPass(string name, int viewIndex, PassSkipReason reason)
+    {
+        lock (_gate)
+        {
+            if (_views.TryGetValue(viewIndex, out ViewBuilder? view))
+                view.Skipped.Add(new RecordedSkippedPass(name, reason));
+        }
+    }
+
     void IGraphProfiler.EndPass(in PassInfo pass, in PassStats stats)
     {
         lock (_gate)
@@ -216,7 +225,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
 
     private void Build()
     {
-        _builtViews = _views.Values.Select(v => new RecordedView(v.Name, v.Index, v.PixelWidth, v.PixelHeight, v.Passes.ToEquatableArray())).ToEquatableArray();
+        _builtViews = _views.Values.Select(v => new RecordedView(v.Name, v.Index, v.PixelWidth, v.PixelHeight, v.Passes.ToEquatableArray(), v.Skipped.ToEquatableArray())).ToEquatableArray();
         _builtCommandBuffers = _commandBuffers.OrderBy(c => c.Key).Select(c => c.Value.Build()).ToEquatableArray();
         _views.Clear();
         _commandBuffers.Clear();
@@ -229,6 +238,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         public readonly uint PixelWidth = pixelWidth;
         public readonly uint PixelHeight = pixelHeight;
         public readonly List<RecordedPass> Passes = new();
+        public readonly List<RecordedSkippedPass> Skipped = new();
     }
 
     private sealed class CommandBufferBuilder(in CommandBufferInfo info)

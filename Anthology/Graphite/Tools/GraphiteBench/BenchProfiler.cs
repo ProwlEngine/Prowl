@@ -18,6 +18,7 @@ public sealed class BenchProfiler : IGraphProfiler
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) { }
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
 
     public void EndPass(in PassInfo pass, in PassStats stats)
     {

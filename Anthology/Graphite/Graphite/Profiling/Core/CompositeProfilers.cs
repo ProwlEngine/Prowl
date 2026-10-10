@@ -36,6 +36,12 @@ internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphPro
         foreach (IGraphProfiler sink in sinks)
             sink.EndPass(in pass, in stats);
     }
+
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason)
+    {
+        foreach (IGraphProfiler sink in sinks)
+            sink.SkipPass(name, viewIndex, reason);
+    }
 }
 
 internal sealed class CompositeGpuStatsProfiler(IGpuStatsProfiler[] sinks) : IGpuStatsProfiler

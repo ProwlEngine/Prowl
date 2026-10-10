@@ -26,6 +26,15 @@ file sealed class ClearPass(string target) : RasterPass
     public override void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
+file sealed class ViewTargetPass : IPass
+{
+    public string Name => "Present";
+
+    public void Setup(RenderContextBuilder builder) => builder.DeclareViewTarget();
+
+    public void Render(RenderContext context, CommandBuffer cmd) { }
+}
+
 public class RecordingTests
 {
     private static GraphicsDevice CreateDevice() => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -47,5 +56,20 @@ public class RecordingTests
         Assert.Equal([0, 1], recording.Views.Select(v => v.Index));
         Assert.All(recording.Views, view => Assert.Equal("Clear", Assert.Single(view.Passes).Name));
         Assert.Contains(recording.CommandBuffers, c => c.Milliseconds is not null);
+    }
+
+    [SkippableFact]
+    public void Recording_KeepsPassesSkippedForMissingViewTarget()
+    {
+        using GraphicsDevice device = CreateDevice();
+        using RenderPipeline pipeline = new([new ClearPass("skipped_target"), new ViewTargetPass()]);
+        Recording recording = new(device);
+
+        device.DispatchGraph(pipeline, new RecordView[] { new() }, recording);
+        recording.Wait();
+
+        RecordedView view = Assert.Single(recording.Views);
+        Assert.Equal("Clear", Assert.Single(view.Passes).Name);
+        Assert.Equal(new RecordedSkippedPass("Present", PassSkipReason.NoViewTarget), Assert.Single(view.Skipped));
     }
 }

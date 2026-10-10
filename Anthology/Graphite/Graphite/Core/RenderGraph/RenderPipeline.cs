@@ -89,7 +89,10 @@ public class RenderPipeline : IDisposable
             foreach (RenderGraph.PassNode node in graph.OrderedPasses)
             {
                 if (node.WritesViewTarget && !hasViewTarget)
+                {
+                    profiler?.SkipPass(node.Pass.Name, context.ViewIndex, PassSkipReason.NoViewTarget);
                     continue;
+                }
 
                 var passInfo = new PassInfo(node.Pass.Name, index, context.ViewIndex, node.PublicAccesses);
 

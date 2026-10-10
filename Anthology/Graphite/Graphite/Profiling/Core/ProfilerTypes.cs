@@ -69,6 +69,13 @@ public readonly struct PassInfo
     }
 }
 
+/// <summary>Why a pass of the graph did not run for a view.</summary>
+public enum PassSkipReason : byte
+{
+    /// <summary>The pass writes the view target and the view has none.</summary>
+    NoViewTarget,
+}
+
 /// <summary>Work one pass command buffer recorded. Draws counts direct draw calls, IndirectDraws indirect ones.</summary>
 /// <remarks>CpuMilliseconds is the CPU time from the start of the pass's Render through the end of its command buffer.</remarks>
 public readonly record struct PassStats(

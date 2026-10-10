@@ -17,6 +17,7 @@ public interface IGraphProfiler : IProfiler
     void EndView(in ViewInfo view);
     void BeginPass(in PassInfo pass);
     void EndPass(in PassInfo pass, in PassStats stats);
+    void SkipPass(string name, int viewIndex, PassSkipReason reason);
 }
 
 /// <summary>Native GPU stats. Implementing this opts in to timestamp and pipeline statistic queries.</summary>

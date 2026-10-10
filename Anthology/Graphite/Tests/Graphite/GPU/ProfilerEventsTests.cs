@@ -35,6 +35,7 @@ file sealed class GraphRecorder : ExecutionRecorder, IGraphProfiler
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) { }
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
 
     public void EndPass(in PassInfo pass, in PassStats stats)
     {
@@ -51,6 +52,7 @@ file sealed class LifecycleRecorder : ExecutionRecorder, IGraphProfiler
     public void BeginView(in ViewInfo view) { }
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
     public void EndPass(in PassInfo pass, in PassStats stats) => PassesEnded.Add(pass);
 }
 
@@ -92,6 +94,7 @@ file sealed class CorrelationProfiler : ExecutionRecorder, IGraphProfiler, IGpuS
     public void BeginView(in ViewInfo view) => ViewsBegun.Add(view);
     public void EndView(in ViewInfo view) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
+    public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
     public void EndPass(in PassInfo pass, in PassStats stats) { }
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Timings.Add(commandBuffer);
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
