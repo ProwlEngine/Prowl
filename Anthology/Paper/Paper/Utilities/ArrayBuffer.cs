@@ -3,7 +3,7 @@
 namespace Prowl.PaperUI.Utilities
 {
     /// <summary>
-    /// A high-performance alternative to List<T> for VertexArray operations.
+    /// A high-performance alternative to <see cref="System.Collections.Generic.List{T}"/> for VertexArray operations.
     /// Provides direct array access
     /// </summary>
     internal class ArrayBuffer<T>
@@ -20,8 +20,8 @@ namespace Prowl.PaperUI.Utilities
 
         /// <summary>
         /// Gets the underlying array regardless of how many elements are in use.
-        /// This is the main reason for using this class instead of List<T>.
-        /// List<T> requires a ToArray() call which copies the data to a new array of the correct size.
+        /// This is the main reason for using this class instead of <see cref="System.Collections.Generic.List{T}"/>.
+        /// <see cref="System.Collections.Generic.List{T}"/> requires a ToArray() call which copies the data to a new array of the correct size.
         /// </summary>
         public T[] Array => _array;
 
