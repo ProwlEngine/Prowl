@@ -95,6 +95,9 @@ public class PaperRenderer : ICanvasRenderer
         UpdateProjection(width, height);
     }
 
+    /// <summary>The framebuffer the UI draws into, null for the window. Backdrop blur captures from it and draws back into it.</summary>
+    public GraphicsFrameBuffer? Target { get; set; }
+
     public void UpdateProjection(int width, int height)
     {
         _fbWidth = width;
@@ -235,7 +238,7 @@ public class PaperRenderer : ICanvasRenderer
             {
                 RenderTexture blurred = RenderBackdropBlur(cmd, blurAmount, out float blurMix);
 
-                cmd.SetRenderTarget(null);
+                cmd.SetRenderTarget(Target);
                 cmd.SetViewport(0, 0, (uint)_fbWidth, (uint)_fbHeight);
                 cmd.SetRasterState(state);
                 cmd.SetShader(_shaderProgram);
@@ -348,7 +351,7 @@ public class PaperRenderer : ICanvasRenderer
         // proper box filter. Blitting straight to quarter size would skip most pixels and shimmer
         // as things move behind the glass.
         RenderTexture capture = _blurCapture!;
-        cmd.SetRenderTargets(capture.frameBuffer, null);
+        cmd.SetRenderTargets(capture.frameBuffer, Target);
         cmd.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, capture.Width, capture.Height, ClearFlags.Color, BlitFilter.Linear);
 
         // The step down to the base level only filters, so it uses the tightest spread and leaves
