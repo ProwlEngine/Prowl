@@ -419,7 +419,7 @@ namespace Prowl.Vector
        }
 
        /// <summary>
-       /// Checks if this AABB is valid (min <= max in all dimensions).
+       /// Checks if this AABB is valid (min &lt;= max in all dimensions).
        /// </summary>
        /// <returns>True if the AABB is valid.</returns>
        [MethodImpl(MethodImplOptions.AggressiveInlining)]

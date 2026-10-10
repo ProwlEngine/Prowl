@@ -319,7 +319,7 @@ namespace Prowl.Vector
         }
 
         /// <summary>
-        /// Checks if this rectangle is valid (min <= max in both dimensions).
+        /// Checks if this rectangle is valid (min &lt;= max in both dimensions).
         /// </summary>
         /// <returns>True if the rectangle is valid.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

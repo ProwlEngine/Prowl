@@ -654,14 +654,14 @@ public static partial class Maths
     public static Double4 Repeat(Double4 t, Double4 length) => new Double4(Repeat(t.X, length.X), Repeat(t.Y, length.Y), Repeat(t.Z, length.Z), Repeat(t.W, length.W));
 
 
-    /// <summary>Performs a smooth Hermite interpolation between 0 and 1 when edge0 < x < edge1.</summary>
+    /// <summary>Performs a smooth Hermite interpolation between 0 and 1 when edge0 &lt; x &lt; edge1.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Smoothstep(float edge0, float edge1, float x)
     {
         float t = Saturate((x - edge0) / (edge1 - edge0));
         return t * t * (3f - 2f * t);
     }
-    /// <summary>Performs a smooth Hermite interpolation between 0 and 1 when edge0 < x < edge1.</summary>
+    /// <summary>Performs a smooth Hermite interpolation between 0 and 1 when edge0 &lt; x &lt; edge1.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static double Smoothstep(double edge0, double edge1, double x)
     {
@@ -714,10 +714,10 @@ public static partial class Maths
     public static Double4 Sqrt(Double4 x) => new Double4(Sqrt(x.X), Sqrt(x.Y), Sqrt(x.Z), Sqrt(x.W));
 
 
-    /// <summary>Returns 0 if x < edge, otherwise returns 1.</summary>
+    /// <summary>Returns 0 if x &lt; edge, otherwise returns 1.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Step(float edge, float x) => x < edge ? 0f : 1f;
-    /// <summary>Returns 0 if x < edge, otherwise returns 1.</summary>
+    /// <summary>Returns 0 if x &lt; edge, otherwise returns 1.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static double Step(double edge, double x) => x < edge ? 0.0 : 1.0;
     /// <summary>Returns 0 or 1 for each component based on the step function.</summary>

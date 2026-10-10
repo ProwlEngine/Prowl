@@ -207,8 +207,7 @@ public static class GeometryOperators
     /// Scale specified faces uniformly from their centers.
     /// </summary>
     /// <param name="mesh">The mesh to scale.</param>
-    /// <param name="face"></param>
-    /// <param name="faces">The faces to scale.</param>
+    /// <param name="face">The face to scale.</param>
     /// <param name="scale">The scale factor.</param>
     public static void ScaleFace(GeometryData mesh, GeometryData.Face face, float scale)
     {
