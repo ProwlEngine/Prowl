@@ -1,10 +1,8 @@
 using System.Runtime.InteropServices;
 using Prowl.Graphite;
 using Silk.NET.Maths;
-using Silk.NET.SDL;
 using Silk.NET.Windowing;
 using Silk.NET.Windowing.Glfw;
-using Silk.NET.Windowing.Sdl;
 
 
 namespace GraphiteExample;

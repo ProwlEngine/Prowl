@@ -256,7 +256,7 @@ namespace SilkExample
         
         private unsafe void SetMatrix4Uniform(int location, Float4x4 matrix)
         {
-            _gl.UniformMatrix4(location, 1, false, in matrix.c0.X);
+            _gl.UniformMatrix4(location, 1, false, (float*)&matrix);
         }
 
         /// <summary>
@@ -266,7 +266,7 @@ namespace SilkExample
         /// </summary>
         private unsafe void SetCanvasMatrixUniform(int location, Float4x4 matrix)
         {
-            _gl.UniformMatrix4(location, 1, true, in matrix.c0.X);
+            _gl.UniformMatrix4(location, 1, true, (float*)&matrix);
         }
 
 

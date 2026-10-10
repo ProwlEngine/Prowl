@@ -10,10 +10,7 @@ using Silk.NET.Windowing;
 
 using Texture = Prowl.Graphite.Texture;
 using Sampler = Prowl.Graphite.Sampler;
-using Silk.NET.Windowing.Sdl;
-using Silk.NET.Input.Sdl;
 using System.Runtime.InteropServices;
-using Silk.NET.SDL;
 
 
 namespace GraphiteExample;
@@ -52,27 +49,22 @@ public class SilkWindow : IDisposable
     private Int2 _lastMousePos;
 
 
+    private delegate void GlfwInitVulkanLoader(IntPtr vkGetInstanceProcAddr);
+
+    // GLFW 3.4 on macOS only looks for libvulkan.1.dylib (the Vulkan SDK loader), so it can't find the
+    // MoltenVK that Silk.NET ships. glfwInitVulkanLoader lets us hand it MoltenVK's vkGetInstanceProcAddr
+    // directly, but Silk.NET doesn't bind it, so it's resolved by hand. Must run before glfwInit.
     private static void MoltenVKMacWorkaround(GraphicsBackend backend)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || backend != GraphicsBackend.Vulkan)
             return;
 
-        SdlWindowing.RegisterPlatform();
-        SdlWindowing.Use();
-        SdlInput.Use();
+        IntPtr moltenVK = NativeLibrary.Load(Path.Join(AppContext.BaseDirectory, "runtimes/osx/native/libMoltenVK.dylib"));
+        IntPtr getInstanceProcAddr = NativeLibrary.GetExport(moltenVK, "vkGetInstanceProcAddr");
 
-        Sdl? sdl = Sdl.GetApi();
-
-        if (sdl.Init(Sdl.InitVideo) != 0)
-            Console.WriteLine($"SDL video initialization failed: {sdl.GetErrorS()}");
-
-        string basePath = Environment.ProcessPath != null ? AppContext.BaseDirectory :
-            Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
-
-        string libraryPath = Path.Join(basePath, "runtimes/osx/native/libMoltenVK.dylib");
-
-        if (sdl.VulkanLoadLibrary(libraryPath) != 0)
-            Console.WriteLine($"SDL VulkanLoadLibrary failed for '{libraryPath}': {sdl.GetErrorS()}");
+        Silk.NET.GLFW.Glfw glfw = Silk.NET.GLFW.Glfw.GetApi();
+        IntPtr initVulkanLoader = glfw.Context.GetProcAddress("glfwInitVulkanLoader");
+        Marshal.GetDelegateForFunctionPointer<GlfwInitVulkanLoader>(initVulkanLoader)(getInstanceProcAddr);
     }
 
 

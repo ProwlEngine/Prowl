@@ -12,7 +12,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Silk.NET.Input.SDL" Version="2.22.0" />
         <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
     </ItemGroup>
 

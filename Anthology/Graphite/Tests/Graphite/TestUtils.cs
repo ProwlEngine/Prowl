@@ -93,6 +93,8 @@ public static class TestUtils
     // entering the blocking run loop the samples use.
     public static IWindow CreateWindow(GraphicsBackend backend)
     {
+        MoltenVKMacWorkaround(backend);
+
         WindowOptions options = WindowOptions.Default;
         options.Title = "Prowl.Graphite.Tests";
         options.Size = new Vector2D<int>(200, 200);
@@ -104,6 +106,25 @@ public static class TestUtils
         IWindow window = Window.Create(options);
         window.Initialize();
         return window;
+    }
+
+    private delegate void GlfwInitVulkanLoader(IntPtr vkGetInstanceProcAddr);
+    private static bool s_glfwLoaderSet;
+
+    // Duplicated from Samples/Shared/DeviceCreateUtilities. GLFW 3.4 on macOS only looks for
+    // libvulkan.1.dylib, so hand it MoltenVK's vkGetInstanceProcAddr before glfwInit runs.
+    private static void MoltenVKMacWorkaround(GraphicsBackend backend)
+    {
+        if (s_glfwLoaderSet || !RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || backend != GraphicsBackend.Vulkan)
+            return;
+
+        IntPtr moltenVK = NativeLibrary.Load(System.IO.Path.Join(AppContext.BaseDirectory, "runtimes/osx/native/libMoltenVK.dylib"));
+        IntPtr getInstanceProcAddr = NativeLibrary.GetExport(moltenVK, "vkGetInstanceProcAddr");
+
+        Silk.NET.GLFW.Glfw glfw = Silk.NET.GLFW.Glfw.GetApi();
+        IntPtr initVulkanLoader = glfw.Context.GetProcAddress("glfwInitVulkanLoader");
+        Marshal.GetDelegateForFunctionPointer<GlfwInitVulkanLoader>(initVulkanLoader)(getInstanceProcAddr);
+        s_glfwLoaderSet = true;
     }
 
     private static GraphicsAPI GetApi(GraphicsBackend backend) => backend switch

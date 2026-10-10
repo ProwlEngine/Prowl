@@ -48,6 +48,8 @@ internal sealed class ViewerWindow : IDisposable
     public ViewerWindow(Options options)
     {
         _options = options;
+        DeviceCreateUtilities.InitializeWindowing();
+
         WindowOptions windowOptions = WindowOptions.Default with
         {
             Title = "Graphite Debugger Viewer",
