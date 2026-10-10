@@ -10,6 +10,7 @@
     </Folder>
     <Folder Name="/Debugger/">
         <Project Path="Debugger/Core/Prowl.Graphite.Debugger.csproj" />
+        <Project Path="Debugger/Viewer/Prowl.Graphite.Debugger.Viewer.csproj" />
     </Folder>
     <Folder Name="/ShaderDef/">
         <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
@@ -30,6 +31,9 @@
     </Folder>
     <Folder Name="/Samples/DebuggerReplay/">
         <Project Path="Samples/DebuggerReplay/DebuggerReplay.csproj" />
+    </Folder>
+    <Folder Name="/Samples/DebuggerViewer/">
+        <Project Path="Samples/DebuggerViewer/DebuggerViewer.csproj" />
     </Folder>
     <Folder Name="/Samples/Shared/">
         <Project Path="Samples/Shared/Shared.csproj" />
