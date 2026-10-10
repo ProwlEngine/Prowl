@@ -23,6 +23,17 @@ public sealed class CounterComponent : MonoBehaviour
     public override void FixedUpdate() { FixedUpdateCount++; Order.Add("FixedUpdate"); }
 }
 
+/// <summary>Records which lifecycle callbacks ran, in order.</summary>
+public sealed class LifecycleRecorder : MonoBehaviour
+{
+    public readonly List<string> Calls = [];
+
+    public override void OnEnable() => Calls.Add("OnEnable");
+    public override void Start() => Calls.Add("Start");
+    public override void Update() => Calls.Add("Update");
+    public override void OnDisable() => Calls.Add("OnDisable");
+}
+
 /// <summary>A counter that runs even outside play mode.</summary>
 [ExecuteAlways]
 public sealed class ExecuteAlwaysCounter : MonoBehaviour
@@ -179,6 +190,39 @@ public class UpdateLoopTests : RuntimeTestBase
         Update(scene);
 
         Assert.Equal(["early", "mid", "late"], TickLog.Entries);
+    }
+
+    // Entering play mode flips IsPlaying while the edit scene is still current until the end of the frame.
+    [Fact]
+    public void ASceneEnabledOutsidePlay_GetsNoGameplayCallbacks_WhenPlayStartsUnderIt()
+    {
+        Application.IsPlaying = false;
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        var comp = go.AddComponent<LifecycleRecorder>();
+        scene.Add(go);
+
+        Application.IsPlaying = true;
+        Update(scene, 2);
+        scene.Disable();
+
+        Assert.Empty(comp.Calls);
+    }
+
+    [Fact]
+    public void OnDisable_PairsWithOnEnable_WhenPlayStopsUnderIt()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        var comp = go.AddComponent<LifecycleRecorder>();
+        scene.Add(go);
+        Update(scene);
+
+        Application.IsPlaying = false;
+        Update(scene);
+        scene.Disable();
+
+        Assert.Equal(["OnEnable", "Start", "Update", "OnDisable"], comp.Calls);
     }
 
     [Fact]

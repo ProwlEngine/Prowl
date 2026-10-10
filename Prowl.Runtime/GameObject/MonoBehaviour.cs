@@ -58,6 +58,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [SerializeIgnore]
     private bool _hasBeenEnabled = false;
 
+    /// <summary>Whether gameplay OnEnable ran and OnDisable has not yet. Start, the updates and physics callbacks need it, and OnDisable pairs with it.</summary>
+    [SerializeIgnore]
+    private bool _gameplayEnabled;
+
     [SerializeIgnore]
     private bool? _executeAlwaysCached;
 
@@ -119,6 +123,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
             return Application.IsPlaying || _executeAlwaysCached.Value;
         }
     }
+
+    /// <summary>
+    /// Whether gameplay callbacks run now. A component enabled while gameplay was gated off, such as the edit
+    /// scene in the frame play mode starts, stays inert until it is enabled again.
+    /// </summary>
+    private bool RunsGameplay => _gameplayEnabled && ShouldExecuteGameplay;
 
     /// <summary>
     /// Gets the identifier for this MonoBehaviour.
@@ -466,7 +476,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     internal void InternalStart()
     {
         if (HasStarted) return;
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         HasStarted = true;
         try { Start(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Start() threw: {ex.Message}\n{ex.StackTrace}"); }
@@ -475,7 +485,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Gated Update only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalUpdate()
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { Update(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Update() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
@@ -483,7 +493,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Gated LateUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalLateUpdate()
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { LateUpdate(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] LateUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
@@ -491,7 +501,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Gated FixedUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalFixedUpdate()
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { FixedUpdate(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] FixedUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
@@ -509,11 +519,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
                 scene.Dispatcher.Register(this);
         }
         if (!ShouldExecuteGameplay) return;
+        _gameplayEnabled = true;
         try { OnEnable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnEnable() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
-    /// <summary>Gated OnDisable only runs in play mode or with [ExecuteAlways].</summary>
+    /// <summary>OnDisable only runs to pair with a gameplay OnEnable.</summary>
     internal void InternalOnDisable()
     {
         if (GameObject.IsValid())
@@ -522,7 +533,8 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
             if (scene.IsValid())
                 scene.Dispatcher.Unregister(this);
         }
-        if (!ShouldExecuteGameplay) return;
+        if (!_gameplayEnabled) return;
+        _gameplayEnabled = false;
         try { OnDisable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnDisable() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
@@ -531,63 +543,63 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
     internal void InternalOnCollisionBegin(in Collision collision)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnCollisionBegin(collision); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionBegin() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnCollisionStay(in Collision collision)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnCollisionStay(collision); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionStay() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnCollisionEnd(in Collision collision)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnCollisionEnd(collision); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionEnd() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnTriggerEnter(Rigidbody3D other)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnTriggerEnter(other); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerEnter() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnTriggerStay(Rigidbody3D other)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnTriggerStay(other); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerStay() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnTriggerExit(Rigidbody3D other)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnTriggerExit(other); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerExit() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnCharacterEnter(CharacterController character)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnCharacterEnter(character); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterEnter() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnCharacterStay(CharacterController character)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnCharacterStay(character); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterStay() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnCharacterExit(CharacterController character)
     {
-        if (!ShouldExecuteGameplay) return;
+        if (!RunsGameplay) return;
         try { OnCharacterExit(character); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterExit() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
