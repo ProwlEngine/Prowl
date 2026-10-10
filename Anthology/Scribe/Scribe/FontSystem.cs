@@ -91,7 +91,7 @@ namespace Prowl.Scribe
         /// Each <see cref="TextLayout"/> stamps <see cref="TextLayout.AtlasVersion"/> when it's
         /// built; consumers compare against this value (or call
         /// <see cref="TextLayout.EnsureUpToDate"/>) to detect staleness and re-layout.
-        /// <see cref="DrawLayout"/> does the check automatically.
+        /// <see cref="DrawLayout(TextLayout, Prowl.Vector.Float2, FontColor)"/> does the check automatically.
         /// </para>
         /// </summary>
         public int AtlasVersion { get; private set; }

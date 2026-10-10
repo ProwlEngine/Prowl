@@ -7,5 +7,7 @@
     <Title>Prowl.Scaffold</Title>
     <Description>Incremental, allocation-free steady-state layout for application UI.</Description>
     <PackageTags>layout;UI;flex;grid;incremental;immediate mode</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 </Project>

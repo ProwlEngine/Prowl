@@ -22,7 +22,7 @@ public enum RadioGroupOrientation
 
 /// <summary>
 /// Fluent builder for a single-select radio group bound to a typed list of items. Construct
-/// via <c>Origami.RadioGroup&lt;T&gt;</c>; chain modifiers; call <see cref="Show"/> to render.
+/// via <see cref="Origami.RadioGroup{T}"/>; chain modifiers; call <see cref="Show"/> to render.
 /// </summary>
 /// <remarks>
 /// Each row is an Origami <see cref="ToggleBuilder"/> in radio style with the item's display

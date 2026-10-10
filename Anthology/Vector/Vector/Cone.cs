@@ -238,7 +238,6 @@ public struct Cone : IEquatable<Cone>, IFormattable, IBoundingShape
     /// <summary>
     /// Generates mesh data for rendering this cone.
     /// </summary>
-    /// <param name="mode">Wireframe for outline, Solid for filled cone.</param>
     /// <param name="resolution">Number of segments around the base circle.</param>
     /// <returns>Mesh data for rendering.</returns>
     public GeometryData GetGeometryData(int resolution = 16)

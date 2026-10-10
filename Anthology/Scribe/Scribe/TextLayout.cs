@@ -66,7 +66,7 @@ namespace Prowl.Scribe
 
         /// <summary>
         /// Position-independent glyph quads (corner offsets relative to the draw origin, plus atlas
-        /// UVs), built lazily by <see cref="FontSystem.DrawLayout"/> and reused across frames. Cleared
+        /// UVs), built lazily by <see cref="FontSystem.DrawLayout(TextLayout, Prowl.Vector.Float2, FontColor)"/> and reused across frames. Cleared
         /// whenever the layout is rebuilt (which includes atlas-version changes via
         /// <see cref="EnsureUpToDate"/>), so it never carries stale UVs. Colour and draw position are
         /// applied at emit time, so they are not baked in here.
@@ -119,7 +119,7 @@ namespace Prowl.Scribe
         /// Re-layouts this instance against the current atlas state if it's stale. Safe to call
         /// every frame - no-op when up-to-date. Call this before reading UV-dependent data from
         /// the layout's glyphs, or before any direct rendering path that doesn't go through
-        /// <see cref="FontSystem.DrawLayout"/>.
+        /// <see cref="FontSystem.DrawLayout(TextLayout, Prowl.Vector.Float2, FontColor)"/>.
         /// </summary>
         public void EnsureUpToDate(FontSystem fontSystem)
         {

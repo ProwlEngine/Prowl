@@ -560,7 +560,7 @@ public static partial class Origami
 
     /// <summary>
     /// Begin building a segmented control. Caller supplies the current selected index and a setter;
-    /// chain <see cref="ButtonGroupBuilder.Item"/> for each segment.
+    /// chain <see cref="ButtonGroupBuilder.Item(string, string, string)"/> for each segment.
     /// </summary>
     public static ButtonGroupBuilder ButtonGroup(Paper paper, string id, int selectedIndex, Action<int> setter)
         => new ButtonGroupBuilder(paper, id, selectedIndex, setter, Current);

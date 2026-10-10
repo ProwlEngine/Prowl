@@ -10,6 +10,8 @@
     <Title>Prowl.Rosetta</Title>
     <Description>A lightweight, backend-agnostic localization library for .NET. Static API, named interpolation, CLDR pluralization, gender variants, and pluggable providers.</Description>
     <PackageTags>localization;i18n;l10n;translation;gamedev;game-engine;prowl;dotnet;csharp;pluralization;cldr</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

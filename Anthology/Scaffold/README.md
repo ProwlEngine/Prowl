@@ -10,7 +10,7 @@ Keep the tree alive between frames and it only recomputes what actually changed.
   - Rows and columns, with wrapping and reverse order
   - Overlay containers, where children share one content box
   - Equal-width grids with content-height rows
-  - Absolute children anchored by left/right/top/bottom
+  - Absolute children anchored by left/right/top/bottom, in pixels and percentages
 
 - **Sizing**
   - Composite `Length`: pixels + percentage + auto-content, with grow and shrink weights

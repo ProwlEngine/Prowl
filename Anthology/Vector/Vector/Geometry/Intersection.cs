@@ -155,7 +155,7 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Calculates intersection of a ray with a sphere.
         /// </summary>
-        /// <returns>True if intersection. out t0 and t1 are distances (t0 <= t1). If only one intersection (tangent) or ray starts inside, t0 may be negative.</returns>
+        /// <returns>True if intersection. out t0 and t1 are distances (t0 &lt;= t1). If only one intersection (tangent) or ray starts inside, t0 may be negative.</returns>
         public static bool RaySphere(
             Float3 rayOrigin,
             Float3 rayDir, // Assumed normalized
@@ -192,7 +192,7 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Calculates intersection of a ray with an infinite cylinder defined by an axis, radius, and a point on the axis.
         /// </summary>
-        /// <returns>True if intersection. out t0 and t1 are distances along the ray (t0 <= t1).</returns>
+        /// <returns>True if intersection. out t0 and t1 are distances along the ray (t0 &lt;= t1).</returns>
         public static bool RayCylinderInfinite(
             Float3 rayOrigin, Float3 rayDir, // rayDir assumed normalized
             Float3 cylinderAxisPoint, Float3 cylinderAxisDir, // cylinderAxisDir assumed normalized

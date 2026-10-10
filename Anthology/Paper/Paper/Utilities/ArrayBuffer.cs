@@ -3,16 +3,16 @@
 namespace Prowl.PaperUI.Utilities
 {
     /// <summary>
-    /// A high-performance alternative to List<T> for VertexArray operations.
+    /// A high-performance alternative to <see cref="System.Collections.Generic.List{T}"/> for VertexArray operations.
     /// Provides direct array access
     /// </summary>
-    /// <remarks> Initializes a new instance of the ArrayBuffer class with the specified capacity. </remarks>
-    /// <param name="capacity">The initial capacity of the buffer.</param>
     internal class ArrayBuffer<T>
     {
         private T[] _array;        // Internal storage array
         private int _count = 0;    // Number of elements currently in use
 
+        /// <summary>Initializes a new instance of the buffer with the specified capacity.</summary>
+        /// <param name="capacity">The initial capacity of the buffer.</param>
         public ArrayBuffer(int capacity)
         {
             _array = new T[capacity];
@@ -20,8 +20,8 @@ namespace Prowl.PaperUI.Utilities
 
         /// <summary>
         /// Gets the underlying array regardless of how many elements are in use.
-        /// This is the main reason for using this class instead of List<T>.
-        /// List<T> requires a ToArray() call which copies the data to a new array of the correct size.
+        /// This is the main reason for using this class instead of <see cref="System.Collections.Generic.List{T}"/>.
+        /// <see cref="System.Collections.Generic.List{T}"/> requires a ToArray() call which copies the data to a new array of the correct size.
         /// </summary>
         public T[] Array => _array;
 

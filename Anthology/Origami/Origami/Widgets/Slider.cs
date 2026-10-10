@@ -46,7 +46,7 @@ public readonly struct SliderThumbContext
 {
     /// <summary>Thumb center in screen space.</summary>
     public readonly Float2 Center;
-    /// <summary>Suggested thumb radius (driven by the slider's <see cref="SliderBuilder{T}.Size"/>).</summary>
+    /// <summary>Suggested thumb radius (driven by the slider's <see cref="SliderBuilder{T}.ThumbSize(float)"/>).</summary>
     public readonly float Radius;
     /// <summary>0..1 fraction of the track filled by the current value.</summary>
     public readonly float FilledT;
@@ -73,7 +73,7 @@ public readonly struct SliderThumbContext
 
 /// <summary>
 /// Fluent builder for a single-thumb slider. Construct via the <c>Origami.Slider</c> /
-/// <c>Origami.IntSlider</c> factories (or the generic <c>Origami.Slider&lt;T&gt;</c>) and
+/// <c>Origami.IntSlider</c> factories (or the generic <see cref="Origami.Slider{T}"/>) and
 /// call <see cref="Show"/> to render.
 /// </summary>
 /// <remarks>

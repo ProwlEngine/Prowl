@@ -128,7 +128,8 @@ Callbacks must return finite nonnegative sizes and must not touch layout while m
 `Bottom` act as margins.
 
 `PositionType.SelfDirected` takes the element out of flow and positions it with the anchor
-properties, measured from the parent's content box. `Auto` means unanchored, and anchoring both
+properties, measured from the parent's content box. Anchors take pixels, percentages of that box,
+or both, as in `AnchorLeft(UnitValue.Percentage(50, -20))`. `Auto` means unanchored, and anchoring both
 edges of an axis stretches the element across it:
 
 ```csharp

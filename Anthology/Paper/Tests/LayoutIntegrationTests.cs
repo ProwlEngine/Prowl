@@ -215,6 +215,29 @@ public class LayoutIntegrationTests
         Rect(overlayChild, 40, 140, 20, 20);
     }
 
+    [Fact]
+    public void PercentageAnchorsResolveAgainstTheParent()
+    {
+        var p = NewPaper();
+        p.BeginFrame(.01f);
+        var centred = Box(p, "centred").PositionType(PositionType.SelfDirected)
+            .AnchorLeft(UnitValue.Percentage(50, -20)).AnchorTop(UnitValue.Percentage(50, -10)).Width(40).Height(20);
+        var inset = Box(p, "inset").PositionType(PositionType.SelfDirected)
+            .AnchorRight(UnitValue.Percentage(10)).AnchorBottom(UnitValue.Percentage(10)).Width(40).Height(20);
+        p.EndFrame();
+        Rect(centred, 180, 140, 40, 20);
+        Rect(inset, 320, 250, 40, 20);
+    }
+
+    [Fact]
+    public void FlexibleAnchorsAreRejectedRatherThanDropped()
+    {
+        var p = NewPaper();
+        p.BeginFrame(.01f);
+        Box(p, "stretched").PositionType(PositionType.SelfDirected).AnchorLeft(UnitValue.Stretch()).Width(40).Height(20);
+        Assert.Throws<NotSupportedException>(() => p.EndFrame());
+    }
+
     /// <summary>Anchoring both edges of an axis stretches the element across it.</summary>
     [Fact]
     public void AnchorsPositionAndStretchSelfDirectedElements()

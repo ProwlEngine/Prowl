@@ -122,6 +122,7 @@ public sealed class CSGScene
     /// <param name="brushId">Brush the surface belongs to, matching <see cref="CSGBrushHandle.Id"/>.</param>
     /// <param name="sourceFaceIndex">Index of the face in that brush's shape.</param>
     /// <param name="facePlane">World-space plane of the surface.</param>
+    /// <param name="space">Receives the texture projection when true is returned.</param>
     public delegate bool SurfaceUVProvider(int brushId, int sourceFaceIndex, in Plane facePlane, out SurfaceTexSpace space);
 
     /// <summary>

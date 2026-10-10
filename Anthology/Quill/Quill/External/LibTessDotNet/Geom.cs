@@ -74,7 +74,7 @@ namespace LibTessDotNet
         }
 
         /// <summary>
-        /// Given three vertices u,v,w such that VertLeq(u,v) && VertLeq(v,w),
+        /// Given three vertices u,v,w such that VertLeq(u,v) &amp;&amp; VertLeq(v,w),
         /// evaluates the t-coord of the edge uw at the s-coord of the vertex v.
         /// Returns v->t - (uw)(v->s), ie. the signed distance from uw to v.
         /// If uw is vertical (and thus passes thru v), the result is zero.
@@ -82,7 +82,7 @@ namespace LibTessDotNet
         /// The calculation is extremely accurate and stable, even when v
         /// is very close to u or w.  In particular if we set v->t = 0 and
         /// let r be the negated result (this evaluates (uw)(v->s)), then
-        /// r is guaranteed to satisfy MIN(u->t,w->t) <= r <= MAX(u->t,w->t).
+        /// r is guaranteed to satisfy MIN(u->t,w->t) &lt;= r &lt;= MAX(u->t,w->t).
         /// </summary>
         public static Real EdgeEval(MeshUtils.Vertex u, MeshUtils.Vertex v, MeshUtils.Vertex w)
         {
@@ -108,7 +108,7 @@ namespace LibTessDotNet
 
         /// <summary>
         /// Returns a number whose sign matches EdgeEval(u,v,w) but which
-        /// is cheaper to evaluate. Returns > 0, == 0 , or < 0
+        /// is cheaper to evaluate. Returns > 0, == 0 , or &lt; 0
         /// as v is above, on, or below the edge uw.
         /// </summary>
         public static Real EdgeSign(MeshUtils.Vertex u, MeshUtils.Vertex v, MeshUtils.Vertex w)

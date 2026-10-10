@@ -63,6 +63,7 @@ public partial class Paper
     /// <param name="easing">Optional easing applied on read; null = linear. The underlying progress is
     /// stored linear, so reversing target produces a smooth reversal regardless of easing shape.</param>
     /// <param name="id">Optional explicit slot id for use inside loops or wrapper helpers.</param>
+    /// <param name="callerLine">Call site line number, filled in by the compiler.</param>
     /// <returns>Eased 0..1 progress.</returns>
     public float AnimateBool(
         bool target,
@@ -126,6 +127,8 @@ public partial class Paper
     /// <param name="frequency">Oscillation frequency in Hz (higher = stiffer / faster response).</param>
     /// <param name="damping">0 = undamped (rings forever), 1 = critically damped (no overshoot),
     /// values in between produce decaying oscillation.</param>
+    /// <param name="id">Optional explicit slot id for use inside loops or wrapper helpers.</param>
+    /// <param name="callerLine">Call site line number, filled in by the compiler.</param>
     public float AnimateSpring(
         float target,
         float frequency = 6f,
@@ -278,6 +281,8 @@ public partial class Paper
     /// <param name="intensity">Peak displacement in pixels.</param>
     /// <param name="decay">Higher = shake fades faster (units of 1/sec; 6 ≈ ~0.5s tail).</param>
     /// <param name="frequency">How fast the shake oscillates (Hz-ish; 30 = quick chatter).</param>
+    /// <param name="id">Optional explicit slot id for use inside loops or wrapper helpers.</param>
+    /// <param name="callerLine">Call site line number, filled in by the compiler.</param>
     public Float2 Shake(
         bool trigger,
         float intensity = 4f,

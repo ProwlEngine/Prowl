@@ -540,7 +540,7 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
     }
 
     /// <summary>Calculates the determinant of a Float4x4 matrix.</summary>
-    /// <param name="m">The matrix to calculate the determinant
+    /// <param name="m">The matrix to calculate the determinant.</param>
     public static float Determinant(Float4x4 m)
     {
         // Components are laid out in column-major order, but the formula is often shown in row-major.

@@ -9,7 +9,7 @@ namespace Prowl.Quill
 {
     /// <summary>
     /// A growable array that hands out its backing store directly, so renderer backends can upload
-    /// canvas geometry without copying it out first. List&lt;T&gt; cannot do this on netstandard2.1,
+    /// canvas geometry without copying it out first. <see cref="System.Collections.Generic.List{T}"/> cannot do this on netstandard2.1,
     /// which has no CollectionsMarshal.
     /// </summary>
     internal sealed class GeometryBuffer<T>

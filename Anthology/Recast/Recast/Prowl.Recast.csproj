@@ -13,6 +13,8 @@
 
     <!-- Upstream treats the ref-readonly diagnostic as an error; kept so ported code stays honest. -->
     <WarningsAsErrors>$(WarningsAsErrors);CS9191</WarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
 </Project>

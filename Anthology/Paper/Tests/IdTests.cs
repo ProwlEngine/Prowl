@@ -34,6 +34,36 @@ public class IdTests
         paper.EndFrame();
     }
 
+    [Fact]
+    public void RootStorage_PersistsAcrossFrames()
+    {
+        var paper = new Paper(new Renderer(), 1, 1, new FontAtlasSettings());
+
+        paper.BeginFrame(0);
+        paper.SetRootStorage("count", 3);
+        paper.EndFrame();
+
+        paper.BeginFrame(0);
+        Assert.Equal(3, paper.GetRootStorage<int>("count"));
+        paper.EndFrame();
+    }
+
+    [Fact]
+    public void AnimationHelpers_ProgressAtTheTopLevel()
+    {
+        var paper = new Paper(new Renderer(), 1, 1, new FontAtlasSettings());
+        float value = 0;
+
+        for (int frame = 0; frame < 7; frame++)
+        {
+            paper.BeginFrame(0.05f);
+            value = paper.AnimateBool(frame >= 2, 0.5f);
+            paper.EndFrame();
+        }
+
+        Assert.InRange(value, 0.3f, 0.7f);
+    }
+
     private class Renderer : ICanvasRenderer
     {
         public void Dispose() { }

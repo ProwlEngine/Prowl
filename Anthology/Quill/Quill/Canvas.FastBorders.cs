@@ -33,7 +33,16 @@ namespace Prowl.Quill
         /// Paints a hardware-accelerated rounded-rectangle border (outline) with per-corner radii, centred
         /// on the rect's edge. This does not modify or use the current path.
         /// </summary>
+        /// <param name="x">The x coordinate of the top left corner.</param>
+        /// <param name="y">The y coordinate of the top left corner.</param>
+        /// <param name="width">The width of the rectangle.</param>
+        /// <param name="height">The height of the rectangle.</param>
+        /// <param name="tlRadii">The corner radius for the top left corner.</param>
+        /// <param name="trRadii">The corner radius for the top right corner.</param>
+        /// <param name="brRadii">The corner radius for the bottom right corner.</param>
+        /// <param name="blRadii">The corner radius for the bottom left corner.</param>
         /// <param name="thickness">Total border width; the stroke straddles the outline by half each side.</param>
+        /// <param name="color">The color of the border.</param>
         /// <remarks>Significantly faster than building a path and calling <see cref="Stroke"/>.</remarks>
         public void RoundedRectBorder(float x, float y, float width, float height,
                                       float tlRadii, float trRadii, float brRadii, float blRadii,

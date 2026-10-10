@@ -10,6 +10,8 @@
     <Title>Prowl.Echo</Title>
     <Description>A high-performance .NET serializer with source generation. Supports complex object graphs, circular references, polymorphism, collections, and 470+ tests. Serializes to an in-memory graph that can be inspected, modified, and converted to binary or text.</Description>
     <PackageTags>serialization;serializer;source-generator;high-performance;gamedev;game-engine;prowl;dotnet;csharp;binary-serialization;text-serialization;object-graph</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <!-- 'dynamic' needs Microsoft.CSharp on netstandard2.1; it is in-box on net8+. -->

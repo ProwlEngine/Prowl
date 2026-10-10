@@ -264,7 +264,7 @@ public class RNG
 
     /// <summary>
     /// Returns a random Double3 with components in the range [0, 1].
-    /// summary>
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Double3 NextDouble3() => new Double3(NextDouble(), NextDouble(), NextDouble());
 

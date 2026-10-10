@@ -33,7 +33,7 @@ public readonly struct ScrollViewport
 
 /// <summary>
 /// Fluent builder for an Origami scroll view. Construct via <see cref="Origami.ScrollView"/>;
-/// chain modifiers; call <see cref="Body"/> to render.
+/// chain modifiers; call <see cref="Body(System.Action)"/> to render.
 /// </summary>
 /// <remarks>
 /// <para>Provides a clipped viewport that scrolls vertically (default) and/or horizontally.

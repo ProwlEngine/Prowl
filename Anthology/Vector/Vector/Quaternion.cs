@@ -163,7 +163,10 @@ public struct Quaternion : IEquatable<Quaternion>, IFormattable
         return new Quaternion(x, y, z, w);
     }
 
+    /// <summary>Creates a rotation from Euler angles in degrees.</summary>
     public static Quaternion FromEuler(Float3 euler) => FromEuler(euler.X, euler.Y, euler.Z);
+
+    /// <summary>Creates a rotation from Euler angles in degrees.</summary>
     public static Quaternion FromEuler(float x, float y, float z)
     {
         float yawOver2 = Maths.Deg2Rad * x * 0.5f;

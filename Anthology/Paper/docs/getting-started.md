@@ -98,12 +98,6 @@ physical-pixels-per-logical-pixel ratio. Set it to the host's DPI ratio before
 it for you when `> 0`). Paper uses this to scale vertex output and rasterize
 fonts at the right density.
 
-Separately, `paper.ScaleAllSizes(scaleFactor)` multiplies every *default* style
-value (default padding, border width, spacing, etc. — the values a fresh element
-gets before you set anything) by `scaleFactor`. Call it once at init with the
-monitor's DPI ratio if you want your default spacing constants to scale with the
-display; it doesn't touch values you explicitly set via the builder.
-
 ## DevTools
 
 Set `paper.DevTools.Enabled = true` and press F12 at runtime to open a built-in

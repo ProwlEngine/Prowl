@@ -241,6 +241,36 @@ internal sealed class GraphRewriter
         var plan = _planner.For(source.GetType());
         if (plan.NeedsFill)
             _fill.Enqueue(new Task(plan, source, existingTarget));
+        else if (!ReferenceEquals(source, existingTarget) && source.GetType() == existingTarget.GetType())
+            CopyInert(source, existingTarget);
+    }
+
+    /// <summary>
+    /// Copies an instance whose plan preserves it into the one already in its place. Nothing it holds needs
+    /// migrating, so a shallow copy carries everything across.
+    /// </summary>
+    private void CopyInert(object source, object target)
+    {
+        try
+        {
+            if (source is Array from)
+            {
+                var to = (Array)target;
+                if (from.Rank == 1) Array.Copy(from, to, Math.Min(from.Length, to.Length));
+                else if (from.Length == to.Length) Array.Copy(from, to, from.Length);
+                return;
+            }
+
+            if (source.GetType().IsValueType) return;
+
+            for (Type? type = source.GetType(); type != null; type = type.BaseType)
+                foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    field.SetValue(target, field.GetValue(source));
+        }
+        catch (Exception e)
+        {
+            _report.Report(ReloadCode.FieldReadFailed, e, source.GetType().FullName ?? source.GetType().Name);
+        }
     }
 
     public void ScheduleRebuild(object source, object target)
