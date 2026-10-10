@@ -29,6 +29,7 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
     private UnitValue _width = UnitValue.Stretch();
     private UnitValue _height = UnitValue.Pixels(220f);
     private float _padding;
+    private bool _bordered = true;
     private OrigamiVariant _variant = OrigamiVariant.Primary;
     private string _emptyLabel = "No data";
     private Color? _backgroundColor;
@@ -70,6 +71,9 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
     public TSelf Height(UnitValue height) { _height = height; return Self; }
     public TSelf Size(UnitValue width, UnitValue height) { _width = width; _height = height; return Self; }
     public TSelf Padding(float padding) { _padding = MathF.Max(0f, padding); return Self; }
+
+    /// <summary>Draw the outer border and rounded corners (default true). Pass false to embed flush inside a panel.</summary>
+    public TSelf Bordered(bool bordered) { _bordered = bordered; return Self; }
 
     public TSelf Variant(OrigamiVariant v) { _variant = v; return Self; }
     public TSelf Primary() => Variant(OrigamiVariant.Primary);
@@ -143,9 +147,10 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
 
         ElementBuilder container = _paper.Column(_id)
             .Size(_width, _height)
-            .Rounded(_theme.Metrics.ContainerRounding)
-            .BorderColor(_theme.BorderSoft).BorderWidth(1f)
             .Padding(_padding);
+
+        if (_bordered)
+            container.Rounded(_theme.Metrics.ContainerRounding).BorderColor(_theme.BorderSoft).BorderWidth(1f);
 
         if (_backgroundColor.HasValue) container.BackgroundColor(_backgroundColor.Value);
 
