@@ -108,11 +108,13 @@ public class GameViewInputHandler : IInputHandler
 
     public Int2 MapWindowPosition(Int2 windowPos) => ToViewport(windowPos);
 
+    private static Int2? SimulatedPointer => Runtime.Application.IsGameplayExecuting ? SimulatedInput.Pointer : null;
+
     // Mouse filtered only during gameplay execution outside game view
-    public Int2 PrevMousePosition => ToViewport(_real.PrevMousePosition);
+    public Int2 PrevMousePosition => SimulatedPointer ?? ToViewport(_real.PrevMousePosition);
     public Int2 MousePosition
     {
-        get => ToViewport(_real.MousePosition);
+        get => SimulatedPointer ?? ToViewport(_real.MousePosition);
         set => _real.MousePosition = FromViewport(value);
     }
     public Float2 MouseDelta
@@ -175,6 +177,7 @@ public static class SimulatedInput
     private sealed class Hold
     {
         public TimeSpan ReleaseAt;
+        public long StartFrame;
         public long DownFrame = -1;
         public long UpFrame = -1;
         public bool Released;
@@ -186,10 +189,39 @@ public static class SimulatedInput
     private static readonly object s_lock = new();
     private static Float2 s_look;
     private static TimeSpan s_lookUntil;
+    private static Int2 s_pointer;
+    private static TimeSpan s_pointerUntil;
 
     public static void Press(KeyCode key, double seconds) { lock (s_lock) s_keys[key] = new Hold { ReleaseAt = s_clock.Elapsed + TimeSpan.FromSeconds(seconds) }; }
 
-    public static void PressButton(int button, double seconds) { lock (s_lock) s_buttons[button] = new Hold { ReleaseAt = s_clock.Elapsed + TimeSpan.FromSeconds(seconds) }; }
+    /// <summary>
+    /// Presses a mouse button. With a position, in game render pixels, the pointer moves there first and the button
+    /// goes down two frames later, so UI sees the hover before the press as it would from a real mouse.
+    /// </summary>
+    public static void PressButton(int button, double seconds, Int2? position = null)
+    {
+        lock (s_lock)
+        {
+            var hold = new Hold { ReleaseAt = s_clock.Elapsed + TimeSpan.FromSeconds(seconds) };
+            if (position is { } at)
+            {
+                s_pointer = at;
+                s_pointerUntil = s_clock.Elapsed + TimeSpan.FromSeconds(seconds + 0.5);
+                hold.StartFrame = Time.FrameCount + 2;
+            }
+            s_buttons[button] = hold;
+        }
+    }
+
+    /// <summary> Where a simulated click is, in game render pixels, while one is in progress. Only the game view reads it. </summary>
+    public static Int2? Pointer
+    {
+        get
+        {
+            if (!Application.IsPlaying) return null;
+            lock (s_lock) return s_clock.Elapsed < s_pointerUntil ? s_pointer : null;
+        }
+    }
 
     /// <summary> Adds a mouse movement every frame until the time is up, as turning a camera would. </summary>
     public static void Look(Float2 deltaPerFrame, double seconds)
@@ -208,6 +240,7 @@ public static class SimulatedInput
             s_keys.Clear();
             s_buttons.Clear();
             s_lookUntil = TimeSpan.Zero;
+            s_pointerUntil = TimeSpan.Zero;
         }
     }
 
@@ -279,7 +312,7 @@ public static class SimulatedInput
         if (!Gameplay) return false;
         lock (s_lock)
         {
-            if (!holds.TryGetValue(key, out Hold? hold)) return false;
+            if (!holds.TryGetValue(key, out Hold? hold) || Time.FrameCount < hold.StartFrame) return false;
             if (hold.DownFrame < 0) hold.DownFrame = Time.FrameCount;
             if (hold.Released && hold.UpFrame < 0) hold.UpFrame = Time.FrameCount;
             return !hold.Released;
@@ -291,7 +324,7 @@ public static class SimulatedInput
         if (!Gameplay) return false;
         lock (s_lock)
         {
-            if (!holds.TryGetValue(key, out Hold? hold)) return false;
+            if (!holds.TryGetValue(key, out Hold? hold) || Time.FrameCount < hold.StartFrame) return false;
             if (hold.DownFrame < 0) hold.DownFrame = Time.FrameCount;
             return hold.DownFrame == Time.FrameCount;
         }

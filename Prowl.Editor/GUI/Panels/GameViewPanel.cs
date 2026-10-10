@@ -201,6 +201,14 @@ public class GameViewPanel : DockPanel
                 pointerInRT = new(local.X * (rtW / size.X), local.Y * (rtH / size.Y));
                 pointerInside = local.X >= 0 && local.Y >= 0 && local.X <= size.X && local.Y <= size.Y;
 
+                // A click the CLI simulates stands in for the real pointer, for scripts, Paper and GameObject UI alike.
+                if (SimulatedInput.Pointer is { } simulated)
+                {
+                    pointerInRT = new Float2(simulated.X, simulated.Y);
+                    pointerInside = true;
+                    hovered = true;
+                }
+
                 _lockContext.PanelOrigin = origin;
                 _lockContext.PanelSize = size;
                 if (!_lockContextPushed)
@@ -233,6 +241,7 @@ public class GameViewPanel : DockPanel
             {
                 EnsureGamePaper(rtW, rtH);
                 _gamePaperRenderer!.UpdateProjection(rtW, rtH);
+                _gamePaperRenderer.Target = _rt.frameBuffer;
 
                 {
                     using var bind = Graphics.GetCommandBuffer("GameViewPanel.GUI Bind");
@@ -241,10 +250,20 @@ public class GameViewPanel : DockPanel
                     Graphics.Submit(bind);
                 }
 
-                PaperInputBridge.Pump(_gamePaper!, pointerInRT, hovered && pointerInside);
-                _gamePaper!.BeginFrame(Time.DeltaTime, -1f);
-                scene.OnGui(_gamePaper);
-                _gamePaper.EndFrame();
+                // The game's UI is gameplay, so it reads input the way the scene update does, simulated input included.
+                bool wasGameplay = Application.IsGameplayExecuting;
+                Application.IsGameplayExecuting = Application.ShouldRunGameplay;
+                try
+                {
+                    PaperInputBridge.Pump(_gamePaper!, pointerInRT, hovered && pointerInside);
+                    _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
+                    scene.OnGui(_gamePaper);
+                    _gamePaper.EndFrame();
+                }
+                finally
+                {
+                    Application.IsGameplayExecuting = wasGameplay;
+                }
 
                 {
                     using var unbind = Graphics.GetCommandBuffer("GameViewPanel.GUI Unbind");
