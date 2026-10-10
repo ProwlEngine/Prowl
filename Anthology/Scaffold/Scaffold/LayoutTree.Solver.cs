@@ -29,9 +29,14 @@ public sealed partial class LayoutTree
         public readonly Style Declared;
         public readonly float MinWidth, MinHeight, MaxWidth, MaxHeight;
         public readonly Edges Padding, Margin, MarginGrow;
+        public readonly float? Left, Top, Right, Bottom;
         public Resolved(in Style style, Size available)
         {
             Declared = style;
+            Left = style.Left?.Resolve(available.Width, 0);
+            Top = style.Top?.Resolve(available.Height, 0);
+            Right = style.Right?.Resolve(available.Width, 0);
+            Bottom = style.Bottom?.Resolve(available.Height, 0);
             MinWidth = Positive(style.MinWidth.Resolve(available.Width, 0));
             MinHeight = Positive(style.MinHeight.Resolve(available.Height, 0));
             MaxWidth = Math.Max(MinWidth, style.MaxWidth.Resolve(available.Width, 0));
@@ -59,10 +64,6 @@ public sealed partial class LayoutTree
         public float LineGap => Declared.LineGap;
         public bool Wrap => Declared.Wrap;
         public bool Hidden => Declared.Hidden;
-        public float? Left => Declared.Left;
-        public float? Top => Declared.Top;
-        public float? Right => Declared.Right;
-        public float? Bottom => Declared.Bottom;
         public float AspectRatio => Declared.AspectRatio;
         public int GridColumns => Declared.GridColumns;
     }

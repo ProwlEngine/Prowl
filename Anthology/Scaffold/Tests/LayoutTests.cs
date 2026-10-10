@@ -281,6 +281,28 @@ public class LayoutTests
     }
 
     [Fact]
+    public void AbsoluteOffsetsResolvePercentagesAgainstTheContentBox()
+    {
+        var t = new LayoutTree();
+        var r = t.Create(Style.Default with { Padding = new LengthEdges(10) });
+        var a = t.Create(Box(20, 10) with { Position = Position.Absolute, Left = Length.Percentage(50, -10), Top = Length.Percentage(25) }, r);
+        var b = t.Create(Box(20, 10) with { Position = Position.Absolute, Right = Length.Percentage(10), Bottom = 0 }, r);
+        var c = t.Create(Box(1, 10) with { Position = Position.Absolute, Left = Length.Percentage(25), Right = Length.Percentage(25) }, r);
+        t.Layout(r, new(220, 120));
+        RectIs(t, a, 100, 35, 20, 10);
+        RectIs(t, b, 170, 100, 20, 10);
+        RectIs(t, c, 60, 10, 100, 10);
+    }
+
+    [Fact]
+    public void AbsoluteOffsetsRejectFlexibleLengths()
+    {
+        var t = new LayoutTree();
+        Assert.Throws<ArgumentException>(() => t.Create(Style.Default with { Position = Position.Absolute, Left = Length.Stretch() }));
+        Assert.Throws<ArgumentException>(() => t.Create(Style.Default with { Position = Position.Absolute, Top = Length.Auto }));
+    }
+
+    [Fact]
     public void IntrinsicInvalidationAndWidthSensitiveContent()
     {
         var t = new LayoutTree();

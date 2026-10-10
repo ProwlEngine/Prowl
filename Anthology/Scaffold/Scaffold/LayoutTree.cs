@@ -526,6 +526,21 @@ public sealed partial class LayoutTree
         }
     }
 
+    private static void ValidateOffset(Length? offset, string property)
+    {
+        if (offset is not { } length)
+        {
+            return;
+        }
+
+        Finite(length.Px, property);
+        Finite(length.Pct, property);
+        if (length.Grow != 0 || length.AutoFactor != 0 || length.Shrink != 0)
+        {
+            throw new ArgumentException($"{property} takes pixels and percentages only.", property);
+        }
+    }
+
     private static void ValidateSpacing(in LengthEdges edges, string property, bool allowGrow, bool allowNegative)
     {
         Edge(edges.Left, "Left");
@@ -579,25 +594,10 @@ public sealed partial class LayoutTree
         Nonnegative(style.Gap, "Gap");
         Nonnegative(style.LineGap, "LineGap");
         Nonnegative(style.AspectRatio, "AspectRatio");
-        if (style.Left.HasValue)
-        {
-            Finite(style.Left.Value, "Left.Value");
-        }
-
-        if (style.Top.HasValue)
-        {
-            Finite(style.Top.Value, "Top.Value");
-        }
-
-        if (style.Right.HasValue)
-        {
-            Finite(style.Right.Value, "Right.Value");
-        }
-
-        if (style.Bottom.HasValue)
-        {
-            Finite(style.Bottom.Value, "Bottom.Value");
-        }
+        ValidateOffset(style.Left, "Left");
+        ValidateOffset(style.Top, "Top");
+        ValidateOffset(style.Right, "Right");
+        ValidateOffset(style.Bottom, "Bottom");
 
         if ((uint)style.Layout > 3 || (uint)style.AlignItems > 3
             || (style.AlignSelf.HasValue && (uint)style.AlignSelf.Value > 3)

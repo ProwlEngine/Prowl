@@ -113,10 +113,12 @@ public readonly record struct Style
     public bool Reverse { get; init; }
     public bool Hidden { get; init; }
     public Position Position { get; init; }
-    public float? Left { get; init; }
-    public float? Top { get; init; }
-    public float? Right { get; init; }
-    public float? Bottom { get; init; }
+    /// <summary>Offsets of an absolute element from its parent's content box, in pixels, percent of
+    /// that box, or both. Null leaves the edge free.</summary>
+    public Length? Left { get; init; }
+    public Length? Top { get; init; }
+    public Length? Right { get; init; }
+    public Length? Bottom { get; init; }
     /// <summary>Width / height. Derives an auto axis from a definite axis. Zero disables.</summary>
     public float AspectRatio { get; init; }
     /// <summary>Number of equal-width grid columns. Rows size to their tallest item.</summary>
