@@ -6,13 +6,13 @@ namespace Prowl.PaperUI.Utilities
     /// A high-performance alternative to List<T> for VertexArray operations.
     /// Provides direct array access
     /// </summary>
-    /// <remarks> Initializes a new instance of the ArrayBuffer class with the specified capacity. </remarks>
-    /// <param name="capacity">The initial capacity of the buffer.</param>
     internal class ArrayBuffer<T>
     {
         private T[] _array;        // Internal storage array
         private int _count = 0;    // Number of elements currently in use
 
+        /// <summary>Initializes a new instance of the buffer with the specified capacity.</summary>
+        /// <param name="capacity">The initial capacity of the buffer.</param>
         public ArrayBuffer(int capacity)
         {
             _array = new T[capacity];
