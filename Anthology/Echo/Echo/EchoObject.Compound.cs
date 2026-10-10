@@ -155,7 +155,7 @@ public sealed partial class EchoObject
     /// <param name="name">The name of the tag to remove</param>
     /// <returns>True if the tag was removed, otherwise false</returns>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
-    /// <exception cref="ArgumentNullException">Thrown if the name is null or whitespace</exception></exception>
+    /// <exception cref="ArgumentNullException">Thrown if the name is null or empty</exception>
     public bool Remove(string name)
     {
         if (TagType != EchoType.Compound)
