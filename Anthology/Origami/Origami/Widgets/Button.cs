@@ -266,6 +266,7 @@ public sealed class ButtonBuilder
         {
             box.Cursor(PaperCursor.Pointer);
             if (_tabIndex.HasValue) box.TabIndex(_tabIndex.Value);
+            else box.IsNotFocusable();
             if (_onClick != null)
             {
                 var click = _onClick;
