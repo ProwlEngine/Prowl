@@ -931,7 +931,7 @@ public static class GameObjectInspector
     }
 
     /// <summary>Take a component off its object, undoably, restoring it where it sat.</summary>
-    private static void RemoveComponentWithUndo(MonoBehaviour comp)
+    internal static void RemoveComponentWithUndo(MonoBehaviour comp)
     {
         GameObject go = comp.GameObject;
         if (go.IsNotValid()) return;
