@@ -59,6 +59,54 @@ internal sealed class BenchMesh : IDisposable
             indices[t + 5] = (ushort)(v + 3);
         }
 
+        return Create(gd, positions, uvs, indices, IndexFormat.UInt16);
+    }
+
+    public static BenchMesh CreateQuad(GraphicsDevice gd)
+    {
+        Float3[] positions = [new(-1, -1, 0), new(1, -1, 0), new(1, 1, 0), new(-1, 1, 0)];
+        Float2[] uvs = [new(0, 0), new(1, 0), new(1, 1), new(0, 1)];
+        ushort[] indices = [0, 1, 2, 0, 2, 3];
+        return Create(gd, positions, uvs, indices, IndexFormat.UInt16);
+    }
+
+    public static BenchMesh CreateGrid(GraphicsDevice gd, int cells)
+    {
+        int side = cells + 1;
+        Float3[] positions = new Float3[side * side];
+        Float2[] uvs = new Float2[side * side];
+        uint[] indices = new uint[cells * cells * 6];
+
+        for (int y = 0; y < side; y++)
+        {
+            for (int x = 0; x < side; x++)
+            {
+                Float2 uv = new(x / (float)cells, y / (float)cells);
+                positions[y * side + x] = new Float3(uv.X * 2 - 1, uv.Y * 2 - 1, 0);
+                uvs[y * side + x] = uv;
+            }
+        }
+
+        int t = 0;
+        for (int y = 0; y < cells; y++)
+        {
+            for (int x = 0; x < cells; x++)
+            {
+                uint v = (uint)(y * side + x);
+                indices[t++] = v;
+                indices[t++] = v + 1;
+                indices[t++] = v + (uint)side + 1;
+                indices[t++] = v;
+                indices[t++] = v + (uint)side + 1;
+                indices[t++] = v + (uint)side;
+            }
+        }
+
+        return Create(gd, positions, uvs, indices, IndexFormat.UInt32);
+    }
+
+    private static BenchMesh Create<TIndex>(GraphicsDevice gd, Float3[] positions, Float2[] uvs, TIndex[] indices, IndexFormat format) where TIndex : unmanaged
+    {
         DeviceBuffer positionBuffer = Upload(gd, positions, BufferUsage.VertexBuffer);
         DeviceBuffer uvBuffer = Upload(gd, uvs, BufferUsage.VertexBuffer);
         DeviceBuffer indexBuffer = Upload(gd, indices, BufferUsage.IndexBuffer);
@@ -66,7 +114,7 @@ internal sealed class BenchMesh : IDisposable
         VertexSource source = new VertexSource()
             .SetBuffer("POSITION0", positionBuffer)
             .SetBuffer("UV0", uvBuffer)
-            .SetIndexBuffer(indexBuffer, IndexFormat.UInt16, (uint)indices.Length);
+            .SetIndexBuffer(indexBuffer, format, (uint)indices.Length);
 
         return new BenchMesh(source, [positionBuffer, uvBuffer, indexBuffer], (uint)indices.Length);
     }

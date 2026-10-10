@@ -13,6 +13,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
         <ProjectReference Include="..\..\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
         <ProjectReference Include="..\..\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />

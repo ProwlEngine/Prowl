@@ -4,22 +4,19 @@ using Prowl.Graphite;
 
 namespace Prowl.Graphite.Bench;
 
-// Headless device for the harness. Mirrors Tests/Graphite/TestUtils.CreateVulkanDevice, but with
-// validation off - the validation layers sit directly in the recording path being measured.
 public static class BenchDevice
 {
-    public static GraphicsDevice Create(BenchProfiler profiler, bool validation)
+    public static bool Validation { get; set; }
+
+    public static GraphicsDevice Create(BenchProfiler profiler)
     {
-        GraphicsDeviceOptions options = new(validation)
+        GraphicsDeviceOptions options = new(Validation)
         {
-            GraphiteValidation = validation
+            GraphiteValidation = Validation
         };
 
         GraphicsDevice gd = GraphicsDevice.CreateVulkan(options);
         gd.GlobalProfilers.Add(() => profiler);
         return gd;
     }
-
-    public static string Describe(GraphicsDevice gd)
-        => $"{gd.VendorName} {gd.DeviceName} (Vulkan {gd.ApiVersion}), {gd.MaxExecutingTasks} frames in flight";
 }
