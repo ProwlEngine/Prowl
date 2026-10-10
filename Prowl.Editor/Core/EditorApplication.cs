@@ -1786,7 +1786,7 @@ public class EditorApplication : Game
         // in a fresh one.
         Runtime.Resources.Scene.EndSessionOnSwap = true;
 
-        // Before the scene loads, so components choosing between a headset and a desktop setup in Awake or OnEnable see it running.
+        // Before the scene loads, so components choosing between a headset and a desktop setup in OnEnable see it running.
         XRSettings xr = EditorRegistries.GetSettings<XRSettings>();
         xr.Apply();
         if (xr.StartInPlayMode) XR.Start(xr.TrackingOrigin);
