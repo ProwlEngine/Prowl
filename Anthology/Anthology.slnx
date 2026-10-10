@@ -17,6 +17,8 @@
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
     <Project Path="Graphite/ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
     <Project Path="Graphite/ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    <Project Path="Graphite/Debugger/Core/Prowl.Graphite.Debugger.csproj" />
+    <Project Path="Graphite/Debugger/Viewer/Prowl.Graphite.Debugger.Viewer.csproj" />
     <Project Path="Ember/Ember/Prowl.Ember.csproj" />
     <Project Path="Ember/Contracts/Prowl.Ember.Contracts.csproj" />
     <Project Path="Recast/Recast/Prowl.Recast.csproj" />
@@ -27,14 +29,57 @@
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
     <Project Path="Slang/COMApi/Prowl.Slang.COMApi.csproj" />
     <Project Path="Ember/Analyzers/Prowl.Ember.Analyzers.csproj" />
+    <Project Path="Echo/Benchmarks/Benchmarks.csproj" />
+    <Project Path="Quill/ShaderGen/Quill.ShaderGen.csproj" />
+    <Project Path="Graphite/Tools/GraphiteBench/GraphiteBench.csproj" />
+    <Project Path="Graphite/Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
   </Folder>
-  <Folder Name="/Samples/">
+  <Folder Name="/Samples/" />
+  <Folder Name="/Samples/Vector/">
+    <Project Path="Vector/OpenTKSample/OpenTKSample.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Scribe/">
+    <Project Path="Scribe/Samples/RaylibTest/RaylibTest.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Quill/">
+    <Project Path="Quill/Samples/Common/Common.csproj" />
+    <Project Path="Quill/Samples/SilkNETExample/SilkNETExample.csproj" />
+    <Project Path="Quill/Samples/OpenTKExample/OpenTKExample.csproj" />
+    <Project Path="Quill/Samples/RaylibExample/RaylibExample.csproj" />
+    <Project Path="Quill/Samples/SFMLExample/SFMLExample.csproj" />
+    <Project Path="Quill/Samples/GraphiteExample/GraphiteExample.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Paper/">
+    <Project Path="Paper/Samples/Shared/Shared.csproj" />
+    <Project Path="Paper/Samples/OpenTK/OpenTKSample.csproj" />
+    <Project Path="Paper/Samples/RaylibSample/RaylibSample.csproj" />
+    <Project Path="Paper/Samples/GraphiteSample/GraphiteSample.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Origami/">
     <Project Path="Origami/Samples/OpenTK/Origami.Sample.OpenTK.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Photonic/">
+    <Project Path="Photonic/Samples/Photonic.Sample.Raylib/Photonic.Sample.Raylib.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Slang/">
+    <Project Path="Slang/Samples/HelloWorld/HelloWorld.csproj" />
+    <Project Path="Slang/Samples/Triangle/Triangle.csproj" />
+    <Project Path="Slang/Samples/ModelViewer/ModelViewer.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Graphite/">
+    <Project Path="Graphite/Samples/Shared/Shared.csproj" />
+    <Project Path="Graphite/Samples/HelloTriangle/HelloTriangle.csproj" />
+    <Project Path="Graphite/Samples/TexturedQuad/TexturedQuad.csproj" />
+    <Project Path="Graphite/Samples/Cube/Cube.csproj" />
+    <Project Path="Graphite/Samples/CubeGrid/CubeGrid.csproj" />
     <Project Path="Graphite/Samples/PBRRenderer/PBRRenderer.csproj" />
+    <Project Path="Graphite/Samples/DebuggerViewer/DebuggerViewer.csproj" />
+    <Project Path="Graphite/Samples/DebuggerReplay/DebuggerReplay.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Vector/Tests/Vector.Tests/Vector.Tests.csproj" />
     <Project Path="Scribe/Tests/Scribe.Tests.csproj" />
+    <Project Path="Quill/Tests/Quill.Tests.csproj" />
     <Project Path="Echo/Tests/Echo.Tests.csproj" />
     <Project Path="Clay/Tests/Clay.Tests.csproj" />
     <Project Path="Crumb/Tests/Prowl.Crumb.Tests.csproj" />
@@ -48,6 +93,7 @@
     <Project Path="Graphite/Tests/Graphite/Prowl.Graphite.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
+    <Project Path="Graphite/Tests/Debugger/Prowl.Graphite.Debugger.Tests.csproj" />
     <Project Path="Ember/Tests/Prowl.Ember.Tests.csproj" />
     <Project Path="Recast/Tests/Prowl.Recast.Tests.csproj" />
     <Project Path="Motion/Tests/Motion.Tests.csproj" />
