@@ -199,22 +199,8 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 
 ## Contributors 🌟
 
-- [Michael (Wulferis)](https://twitter.com/Wulferis)
-- [Abdiel Lopez (PaperPrototype)](https://github.com/PaperPrototype)
-- [Josh Davis](https://github.com/10xJosh)
-- [ReCore67](https://github.com/recore67)
-- [Isaac Marovitz](https://github.com/IsaacMarovitz)
-- [Kuvrot](https://github.com/Kuvrot)
-- [JaggerJo](https://github.com/JaggerJo)
-- [Jihad Khawaja](https://github.com/jihadkhawaja)
-- [Jasper Honkasalo](https://github.com/japsuu)
-- [Kai Angulo (k0t)](https://github.com/sinnwrig)
-- [Bruno Massa](https://github.com/brmassa)
-- [Mark Saba (ZeppelinGames)](https://github.com/ZeppelinGames)
-- [Chandler Cox (Tryibion)](https://github.com/Tryibion)
-- [EJTP (Unified)](https://github.com/EJTP)
-- [Paolo (xZekro51)](https://github.com/xZekro51)
-- [Kouame Benoit Junior Augustin (ZedDevStuff)](https://github.com/ZedDevStuff)
+<!-- readme: collaborators,contributors -start -->
+<!-- readme: collaborators,contributors -end -->
 
 ## Dependencies 📦
 
