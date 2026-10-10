@@ -327,15 +327,30 @@ public sealed class CliProbe : MonoBehaviour
     public List<int> Numbers = [1, 2, 3];
     public GameObject? Target;
     public CliProbeSettings Settings = new();
+    public List<GameObject?> Targets = [];
+    public CliProbeMode Mode;
+    public List<CliProbeSettings> Shapes = [];
 
     [System.NonSerialized] public int Validated;
     public override void OnValidate() => Validated++;
 }
 
-public sealed class CliProbeSettings
+public sealed class CliProbeExtra : MonoBehaviour
+{
+    public int Level;
+}
+
+public class CliProbeSettings
 {
     public float Radius = 0.5f;
 }
+
+public sealed class CliProbeBox : CliProbeSettings
+{
+    public float Depth;
+}
+
+public enum CliProbeMode { Slow, Fast }
 
 /// <summary> The built in editor commands, run through the same path the CLI uses, against a live scene. </summary>
 public class CliEditorCommandTests : EditorTestHarness
@@ -435,6 +450,22 @@ public class CliEditorCommandTests : EditorTestHarness
         Ok("undo");
         Assert.Equal(0, probe.Count);
         Assert.Null(probe.Target);
+    }
+
+    [Fact]
+    public void SetConvertsListsOfRefsEnumNamesAndFieldsOfSubtypes()
+    {
+        Ok("go", "create", "--name", "Other");
+        Ok("go", "create", "--name", "P", "--components", "CliProbe");
+        var probe = _scene.AllObjects.Single(g => g.Name == "P").GetComponent<CliProbe>()!;
+        probe.Shapes.Add(new CliProbeBox());
+
+        Ok("set", "/P:CliProbe", "--values", """{"Targets": ["/Other", "/P"], "Mode": "Fast", "Shapes[0].Depth": 4}""");
+
+        Assert.Equal(["Other", "P"], probe.Targets.Select(t => t!.Name));
+        Assert.Equal(CliProbeMode.Fast, probe.Mode);
+        Assert.Equal(4f, Assert.IsType<CliProbeBox>(probe.Shapes[0]).Depth);
+        Assert.Contains("Slow, Fast", Fails("set", "/P:CliProbe", "Mode", "Medium"));
     }
 
     [Fact]
@@ -542,6 +573,18 @@ public class CliEditorCommandTests : EditorTestHarness
         Assert.Contains("unsaved changes", Fails("scene", "--action", "new"));
         Assert.True(Ok("scene")!["dirty"]!.GetValue<bool>());
     }
+
+    [Fact]
+    public void SceneNewReportsTheNewScene()
+    {
+        Ok("go", "create", "--name", "OnlyInTheOldScene");
+        EditorSceneManager.IsDirty = false;
+
+        var created = Ok("scene", "--action", "new")!;
+
+        Assert.DoesNotContain(created["roots"]!.AsArray(), r => r!.GetValue<string>() == "OnlyInTheOldScene");
+        Assert.DoesNotContain(Scene.Current.AllObjects, g => g.Name == "OnlyInTheOldScene");
+    }
 }
 
 /// <summary> Asset, prefab, script and import settings commands against a throwaway project. </summary>
@@ -618,6 +661,7 @@ public class CliAssetCommandTests : EditorTestHarness
         Assert.Contains("class Gun", File.ReadAllText(AssetAbsolutePath("Scripts/Gun.cs")));
         Assert.Contains("already exists", Fails("script", "Scripts/Gun.cs"));
         Assert.Contains("not a valid class name", Fails("script", "Scripts/1Bad.cs"));
+        Assert.Contains(Ok("script", "--list")!.AsArray(), t => t!["name"]!.GetValue<string>() == "MonoBehaviour");
     }
 
     [Fact]
@@ -631,10 +675,26 @@ public class CliAssetCommandTests : EditorTestHarness
         Assert.True(instance.IsPrefabInstance);
 
         Ok("set", "/Probe:CliProbe", "Count", "4");
-        Assert.Contains(Ok("prefab", "overrides", "/Probe")!.AsArray(), o => o!["MemberName"]!.GetValue<string>() == "Count");
+        Assert.Contains(Ok("prefab", "overrides", "/Probe")!["overrides"]!.AsArray(), o => o!["MemberName"]!.GetValue<string>() == "Count");
 
         Ok("prefab", "revert", "/Probe");
         Assert.Equal(0, _scene.AllObjects.Single(g => g.Name == "Probe").GetComponent<CliProbe>()!.Count);
+    }
+
+    [Fact]
+    public void ApplyingAPrefabWritesAddedComponentsIntoIt()
+    {
+        Ok("go", "create", "--name", "Probe", "--components", "CliProbe");
+        Ok("prefab", "create", "/Probe", "--path", "Prefabs/Probe");
+        Ok("component", "add", "/Probe", "--type", "CliProbeExtra", "--values", """{"Level": 3}""");
+
+        var listed = Ok("prefab", "overrides", "/Probe")!;
+        Assert.Contains(listed["additions"]!.AsArray(), a => a!["component"]!.GetValue<string>() == "CliProbeExtra");
+
+        var applied = Ok("prefab", "apply", "/Probe")!;
+        Assert.Single(applied["appliedAdditions"]!.AsArray());
+        Assert.Contains("CliProbeExtra", File.ReadAllText(AssetAbsolutePath("Prefabs/Probe.prefab")));
+        Assert.Empty(Ok("prefab", "overrides", "/Probe")!["additions"]!.AsArray());
     }
 
     [Fact]
@@ -799,6 +859,14 @@ public class CliApiCommandTests : EditorTestHarness
         var member = Ok("--type", "Prowl.Runtime.Debug", "--member", "EnsureMainThread")["members"]![0]!;
         Assert.Contains(member["parameters"]!.AsArray(), p => p!.GetValue<string>().StartsWith("member: Defaults to the calling member"));
         Assert.Contains("main thread", member["returns"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void AShortNameSharedWithALibraryPrefersTheEngineType()
+    {
+        var camera = Ok("--type", "Camera");
+        Assert.Equal("Prowl.Runtime.Camera", camera["name"]!.GetValue<string>());
+        Assert.NotEmpty(camera["alsoNamed"]!.AsArray());
     }
 
     [Fact]

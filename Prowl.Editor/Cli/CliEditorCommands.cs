@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -238,6 +238,9 @@ public static class CliEditorCommands
                 if (!EditorSceneManager.SaveAs(CliRefs.AssetPath(path))) throw new CliException("Saving failed. See the logs.");
                 break;
         }
+
+        // Opening or creating only queues the swap for the end of the frame. Commands run between frames, so it can happen now.
+        if (Scene.IsLoadPending) Scene.ProcessPendingLoad();
 
         return new
         {
@@ -801,13 +804,13 @@ public static class CliEditorCommands
 
     [CliCommand("script", "Creates a C# script from a template and imports it. Run 'compile' afterwards to build it")]
     public static object Script(
-        [CliArg("path", "Script path relative to Assets, such as Scripts/Gun.cs")] string path,
+        [CliArg("path", "Script path relative to Assets, such as Scripts/Gun.cs")] string path = "",
         [CliArg("template", "Template name, see --list")] string template = "MonoBehaviour",
         [CliArg("list", "List the templates instead")] bool list = false)
     {
         if (list) return EditorRegistries.ScriptTemplates.Select(t => new { name = t.Name, description = t.Description }).ToList();
 
-        string relative = CliRefs.AssetPath(path);
+        string relative = CliRefs.AssetPath(Require(path, "path"));
         if (!relative.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) relative += ".cs";
         string absolute = Path.Combine(Project.Current!.AssetsPath, relative);
         if (File.Exists(absolute)) throw new CliException($"'{relative}' already exists. Edit it directly instead.");
@@ -832,7 +835,7 @@ public static class CliEditorCommands
 
     public enum PrefabAction { Create, Apply, Revert, Unpack, Overrides }
 
-    [CliCommand("prefab", "Saves a GameObject as a prefab, or applies, reverts, unpacks or lists the overrides of a prefab instance")]
+    [CliCommand("prefab", "Saves a GameObject as a prefab, or applies, reverts, unpacks or lists the overrides and additions of a prefab instance. Apply writes both into the prefab")]
     public static object Prefab(
         [CliArg("action")] PrefabAction action,
         [CliArg("target", "GameObject ref")] string target,
@@ -858,8 +861,24 @@ public static class CliEditorCommands
             case PrefabAction.Apply:
             {
                 var root = Root();
-                CliEdit.Run("Apply Prefab", () => PrefabUtility.ApplyOverrides(root));
-                return CliRefs.Summary(root);
+                Guid rootId = root.Identifier;
+                int overrides = PrefabUtility.CountOverrides(root);
+                var additions = PrefabUtility.DescribeAdditions(root);
+                CliEdit.Run("Apply Prefab", () =>
+                {
+                    PrefabUtility.ApplyOverrides(root);
+                    // Each apply refreshes the instance, which can replace its objects, so the root is found again every time.
+                    foreach (var addition in additions)
+                        if (Undo.FindGO(rootId) is { } live && live.IsValid())
+                            PrefabUtility.ApplyAddition(live, addition);
+                });
+                var applied = Undo.FindGO(rootId);
+                return new
+                {
+                    instance = applied.IsValid() ? CliRefs.Summary(applied!) : null,
+                    appliedOverrides = overrides,
+                    appliedAdditions = additions.Select(a => a.Label).ToList(),
+                };
             }
             case PrefabAction.Revert:
             {
@@ -874,9 +893,18 @@ public static class CliEditorCommands
                 return CliRefs.Summary(root);
             }
             case PrefabAction.Overrides:
-                return PrefabUtility.DescribeOverrides(Root())
-                    .Select(o => new { o.Path, o.ObjectName, o.ComponentName, o.MemberName, o.InstanceValue })
-                    .ToList();
+            {
+                var root = Root();
+                return new
+                {
+                    overrides = PrefabUtility.DescribeOverrides(root)
+                        .Select(o => new { o.Path, o.ObjectName, o.ComponentName, o.MemberName, o.InstanceValue })
+                        .ToList(),
+                    additions = PrefabUtility.DescribeAdditions(root)
+                        .Select(a => new { @object = a.ObjectName, component = a.IsWholeObject ? null : a.ComponentName, id = "#" + a.Identifier })
+                        .ToList(),
+                };
+            }
         }
 
         throw new CliException($"Unknown action {action}.");
@@ -1052,6 +1080,7 @@ public static class CliEditorCommands
         [CliArg("keys", "Comma separated key names for key, such as W,ShiftLeft")] string keys = "",
         [CliArg("button", "Mouse button for mouse: 0 left, 1 right, 2 middle")] int button = 0,
         [CliArg("delta", "Mouse movement per frame for look, [x, y]")] string delta = "",
+        [CliArg("position", "Where to click for mouse, [x, y] in game view pixels as in a game screenshot. Clicks UI there")] string position = "",
         [CliArg("seconds", "How long to hold")] float seconds = 0.1f,
         [CliArg("wait", "Wait until released")] bool wait = true)
     {
@@ -1067,7 +1096,13 @@ public static class CliEditorCommands
                 foreach (var code in parsed) SimulatedInput.Press(code, hold);
                 break;
             case InputAction.Mouse:
-                SimulatedInput.PressButton(button, hold);
+                Int2? at = null;
+                if (position.Length > 0)
+                {
+                    var xy = JsonNode.Parse(position) as JsonArray ?? throw new CliException("--position expects [x, y].");
+                    at = new Int2((int)xy[0]!.GetValue<float>(), (int)xy[1]!.GetValue<float>());
+                }
+                SimulatedInput.PressButton(button, hold, at);
                 break;
             case InputAction.Look:
                 var look = JsonNode.Parse(Require(delta, "delta")) as JsonArray ?? throw new CliException("--delta expects [x, y].");
@@ -1712,6 +1747,12 @@ internal static class CliApi
         return new { types = typeHits, members = memberHits };
     }
 
+    private static int Rank(Type type)
+    {
+        if (ScriptAssemblyManager.IsScriptAssembly(type.Assembly)) return 0;
+        return type.Assembly.GetName().Name switch { "Prowl.Runtime" => 1, "Prowl.Vector" => 2, _ => int.MaxValue };
+    }
+
     public static object Describe(string typeName, string member, bool inherited)
     {
         var matches = Types().Where(t => t.FullName == typeName || TypeName(t, full: true) == typeName || TypeName(t, full: false) == typeName
@@ -1721,7 +1762,17 @@ internal static class CliApi
             var close = Types().Where(t => t.Name.Contains(typeName, StringComparison.OrdinalIgnoreCase)).Select(t => TypeName(t, full: true)).Take(10).ToList();
             throw new CliException($"No type '{typeName}'.{(close.Count > 0 ? $" Did you mean: {string.Join(", ", close)}?" : " Try --search.")}");
         }
-        if (matches.Count > 1) throw new CliException($"'{typeName}' is ambiguous: {string.Join(", ", matches.Select(t => t.FullName))}. Use the full name.");
+        // A short name shared with a library means the engine's or the game's own type, which is what scripts use.
+        var others = new List<Type>();
+        if (matches.Count > 1)
+        {
+            int best = matches.Min(Rank);
+            var preferred = matches.Where(t => Rank(t) == best).ToList();
+            if (best == int.MaxValue || preferred.Count > 1)
+                throw new CliException($"'{typeName}' is ambiguous: {string.Join(", ", matches.Select(t => t.FullName))}. Use the full name.");
+            others = matches.Except(preferred).ToList();
+            matches = preferred;
+        }
         Type type = matches[0];
 
         var members = (inherited ? Hierarchy(type).SelectMany(Visible) : Visible(type))
@@ -1739,6 +1790,7 @@ internal static class CliApi
             interfaces = type.GetInterfaces().Where(i => i.IsPublic).Select(i => TypeName(i, full: false)).ToList(),
             summary = Summary(type.Assembly, "T:" + DocName(type)),
             remarks = Doc(type.Assembly, "T:" + DocName(type), "remarks"),
+            alsoNamed = others.Count > 0 ? others.Select(t => TypeName(t, full: true)).ToList() : null,
             values = type.IsEnum ? Enum.GetNames(type) : null,
             members = members.Take(300).Select(m =>
             {

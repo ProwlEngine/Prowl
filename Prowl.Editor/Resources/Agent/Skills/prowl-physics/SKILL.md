@@ -112,6 +112,8 @@ public sealed class FpsMover : MonoBehaviour
 - `LinearVelocity`, `AngularVelocity`, `Mass`, `AffectedByGravity`, `AddForce(force, ForceMode)`, `ApplyImpulse(impulse)`, `MovePosition`, `MoveRotation`.
 - A collider with no `Rigidbody3D` on it or a parent is static.
 - Interpolation is on by default.
+- `LinearDamping` and `AngularDamping` (0 to 1) are the fraction of velocity removed every physics step, so they are strong: at 60 steps a second, 0.1 leaves under 1 percent of the speed after one second. The defaults are 0.002 and 0.005.
+- A ball rolled only by torque climbs onto light bodies such as crates instead of pushing them. Add a horizontal force in the direction of travel as well.
 
 ## Collisions and triggers
 

@@ -7,6 +7,8 @@ description: Materials, shaders, cameras, lights and effects in Prowl. Use when 
 
 ## Materials
 
+**Colour values are linear**, in materials and lights alike. Textures are decoded from sRGB, but a colour you type is used as is, so a colour picked in an image editor comes out too bright and washed out. Convert it first, roughly `value ^ 2.2`: sRGB 0.5 grey is linear 0.21.
+
 The built in `Standard` shader uses these property names. `material <ref>` lists the real ones for any shader.
 
 | Property | Meaning |
@@ -29,7 +31,8 @@ The built in `Standard` shader uses these property names. `material <ref>` lists
 
 ## Cameras
 
-- A newly added Camera component has `HDR` off, `FarClipPlane` 100 and `FieldOfView` 60. The default scene's Main Camera has HDR on.
+- A newly added Camera component has `HDR` off, `FarClipPlane` 100 and `FieldOfView` 60. The default scene's Main Camera has HDR on and no effects.
+- `BloomEffect.Threshold` defaults to 1.2, so mostly emissive and very bright surfaces bloom. Lower it to make lit surfaces glow too. `TonemapperEffect.Type` defaults to `AgX`, a soft filmic curve that desaturates bright colours. `TonemapperType.ACES` keeps colours punchier.
 - `Camera.Main` is the enabled camera with the highest `Depth` that draws to the screen.
 - Post processing is a list of `ImageEffect` objects on the camera, not components. They live in `Prowl.Runtime.Rendering`: `TonemapperEffect`, `BloomEffect`, `FXAAEffect`, `TAAEffect`, `SMAAEffect`, `GTAOEffect`, `ScreenSpaceReflectionEffect`, `MotionBlurEffect`, `BokehDepthOfFieldEffect`, `AutoExposureEffect`, `VolumetricFogEffect`. Turn on `HDR` when using bloom or tonemapping.
 
@@ -38,7 +41,7 @@ The built in `Standard` shader uses these property names. `material <ref>` lists
 using Prowl.Runtime.Rendering;
 var camera = Scene.Current.FindObjectsOfType<Camera>()[0]!;
 camera.HDR = true;
-camera.Effects = [new BloomEffect(), new TonemapperEffect(), new FXAAEffect()];
+camera.Effects = [new BloomEffect(), new TonemapperEffect { Type = TonemapperType.ACES }, new FXAAEffect()];
 return camera.Effects.Count;
 ```
 
@@ -80,7 +83,7 @@ The viewmodel camera is a child of the world camera, and the arms and gun object
 
 ## Particles
 
-- `ParticleSystemComponent` (namespace `Prowl.Runtime.ParticleSystem`) modules are fields: `Initial`, `Emission`, `Shape`, `Renderer` start enabled, the rest (`ColorOverLifetime`, `SizeOverLifetime`, `Trails` and so on) need `Enabled = true`.
+- `ParticleSystemComponent` (namespace `Prowl.Runtime.ParticleSystem`, module types and their enums such as `ParticleBlendMode` in `Prowl.Runtime.ParticleSystem.Modules`) modules are fields: `Initial`, `Emission`, `Shape`, `Renderer` start enabled, the rest (`ColorOverLifetime`, `SizeOverLifetime`, `Trails` and so on) need `Enabled = true`.
 - Curves are `MinMaxCurve`. From the CLI: `set /Muzzle:ParticleSystemComponent Emission.RateOverTime.ConstantValue 0`.
 
 ```csharp

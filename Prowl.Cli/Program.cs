@@ -33,7 +33,7 @@ public static class Program
           prowl eval_file <path>           Run the C# in a file
 
         Command arguments are positional, --name value or --name=value. A bool flag needs no value.
-        Everything after -- is positional.
+        Everything after -- is positional. An argument that is just - is read from stdin.
 
         Options (anywhere before --):
           --project <path>   Project folder. Defaults to the nearest parent folder with a running editor
@@ -112,8 +112,14 @@ public static class Program
                 break;
 
             case "command" when verbArgs.Count > 0:
-                request = new CliRunRequest { Command = verbArgs[0], Argv = verbArgs.Skip(1).ToList() };
+            {
+                // A lone - stands for stdin, so long code or JSON can be piped in.
+                var argv = verbArgs.Skip(1).ToList();
+                int stdin = argv.IndexOf("-");
+                if (stdin >= 0) argv[stdin] = await Console.In.ReadToEndAsync();
+                request = new CliRunRequest { Command = verbArgs[0], Argv = argv };
                 break;
+            }
 
             case "eval":
                 if (verbArgs.Count != 1) throw new CliUsageException("eval takes one argument, the code. Quote it, or pass - to read it from stdin.");

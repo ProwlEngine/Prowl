@@ -336,7 +336,7 @@ public static class CliRefs
             if (KeyFor(Unwrap(root), segments[0].Name) == null)
                 throw new CliException($"{target.GetType().Name} has no field '{segments[0].Name}'. Fields: {string.Join(", ", FieldNames(Unwrap(root)).Where(f => !s_hiddenFields.Contains(f)))}.");
 
-            Type memberType = MemberTypeAt(target.GetType(), segments, path);
+            Type memberType = MemberTypeAt(target, segments, path);
             Replace(root, segments, ValueFromJson(json, memberType), path);
             topFields.Add(segments[0].Name);
         }
@@ -468,14 +468,25 @@ public static class CliRefs
         return null;
     }
 
-    private static Type MemberTypeAt(Type type, List<Segment> segments, string path)
+    /// <summary> The declared type of the member a path ends at. The walk follows the live values, so a list of a base type reaches fields of the subtype each element really is. </summary>
+    private static Type MemberTypeAt(object target, List<Segment> segments, string path)
     {
+        Type type = target.GetType();
+        object? value = target;
         foreach (var segment in segments)
         {
             if (segment.Name.Length > 0)
-                type = FindField(type, segment.Name)?.FieldType ?? throw new CliException($"{type.Name} has no field '{segment.Name}' ({path}).");
-            if (segment.Index != null)
+            {
+                Type owner = value?.GetType() ?? type;
+                var field = FindField(owner, segment.Name) ?? throw new CliException($"{owner.Name} has no field '{segment.Name}' ({path}).");
+                type = field.FieldType;
+                value = value != null ? field.GetValue(value) : null;
+            }
+            if (segment.Index is { } index)
+            {
                 type = ElementType(type) ?? throw new CliException($"{type.Name} in {path} is not a list.");
+                value = value is System.Collections.IList list && index < list.Count ? list[index] : null;
+            }
         }
         return type;
     }
@@ -535,10 +546,42 @@ public static class CliRefs
         }
 
         if (node == null) return new EchoObject(EchoType.Null, null);
-        if (type == typeof(Float2) || type == typeof(Float3) || type == typeof(Float4) || type == typeof(Quaternion) || type == typeof(Color))
+        bool vector = type == typeof(Float2) || type == typeof(Float3) || type == typeof(Float4) || type == typeof(Quaternion) || type == typeof(Color);
+        if (vector)
             node = VectorObject(node, type);
+        else if (node is JsonArray items && type != typeof(string) && ElementType(type) is { } element)
+            return ListFromJson(items, type, element);
+
+        Type enumType = Nullable.GetUnderlyingType(type) ?? type;
+        if (enumType.IsEnum && node is JsonValue named && named.TryGetValue(out string? name))
+        {
+            if (!Enum.TryParse(enumType, name, ignoreCase: true, out object? parsed))
+                throw new CliException($"'{name}' is not a {enumType.Name}. Use one of {string.Join(", ", Enum.GetNames(enumType))}.");
+            return Serializer.Serialize(enumType, parsed);
+        }
 
         return EchoObject.ReadFromJson(node.ToJsonString());
+    }
+
+    // Each element goes through the same conversion as a single value, so refs and asset paths work inside lists too.
+    private static EchoObject ListFromJson(JsonArray items, Type type, Type element)
+    {
+        var values = items.Select(item => ConvertJson(item?.ToJsonString() ?? "null", element)).ToList();
+        object collection;
+        if (type.IsArray)
+        {
+            var array = Array.CreateInstance(element, values.Count);
+            for (int i = 0; i < values.Count; i++) array.SetValue(values[i], i);
+            collection = array;
+        }
+        else
+        {
+            Type concrete = type.IsInterface ? typeof(List<>).MakeGenericType(element) : type;
+            var list = (System.Collections.IList)(Activator.CreateInstance(concrete) ?? throw new CliException($"Could not create a {type.Name}."));
+            foreach (object? value in values) list.Add(value);
+            collection = list;
+        }
+        return Serializer.Serialize(type, collection, new SerializationContext { ExternalReferences = new SceneReferenceResolver() });
     }
 
     private static object? ReferenceFromString(string text, Type type)

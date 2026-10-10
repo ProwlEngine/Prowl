@@ -37,6 +37,25 @@ public class ProjectSettingsTests : EditorTestHarness
         Assert.Equal("Jump", settings.AreaNames[Prowl.Runtime.NavMeshAreas.Jump]);
     }
 
+    // Settings apply again whenever scripts reload, which must not undo a pause the running game set.
+    [Fact]
+    public void TimeSettings_Apply_LeavesTheTimeScaleOfARunningGame()
+    {
+        bool wasPlaying = Application.IsPlaying;
+        try
+        {
+            Application.IsPlaying = true;
+            Time.TimeScale = 0f;
+            EditorRegistries.GetSettings<TimeSettings>().Apply();
+            Assert.Equal(0f, Time.TimeScale);
+        }
+        finally
+        {
+            Application.IsPlaying = wasPlaying;
+            Time.TimeScale = 1f;
+        }
+    }
+
     // A project seeded from the settings page used to put Jump at cost 1 while headless code and
     // tests kept the runtime's 2, so link costs differed between the editor and everything else.
     [Fact]

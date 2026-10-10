@@ -12,7 +12,7 @@ The editor must be open with this project. Run the CLI from the project root (fr
 
 The verbs are `status`, `command`, `eval` and `eval_file`. **Every command in this guide runs as `Library/prowl command <name> ...`**, for example `Library/prowl command tree --depth 2`. `Library/prowl command` on its own lists every command with its arguments and defaults.
 
-Arguments are positional in declared order, or `--name value`, or `--name=value`. A bool flag needs no value. Everything after `--` is positional. Add `--json` for raw JSON and `--timeout <seconds>` for long commands. Exit code 0 is success, 1 is an error with the reason on stderr, 130 is cancelled. Logs written while a command ran come back on stderr too.
+Arguments are positional in declared order, or `--name value`, or `--name=value`. A bool flag needs no value. Everything after `--` is positional. An argument that is just `-` is read from stdin, for example `command set /Player:Stats --values - < stats.json`. Add `--json` for raw JSON and `--timeout <seconds>` for long commands. Exit code 0 is success, 1 is an error with the reason on stderr, 130 is cancelled. Logs written while a command ran come back on stderr too.
 
 ## Refs
 
@@ -41,6 +41,7 @@ Scene, component, field, material, prefab and graph edits are one undo step each
 
 ## Scenes and objects
 
+- `scene --action new` makes a scene with a Main Camera (HDR on, no effects), a Directional Light, and Floor, Cube and Cube (1), none of which have colliders. Delete what you do not need.
 - `go create --name Gun --parent /Player --position '[0,1,0]' --components Rigidbody3D,BoxCollider`. Quote JSON arrays, unquoted brackets are a shell glob.
 - `go create --prefab Models/Gun.fbx --parent /Player/Hand` instantiates a prefab or model
 - `go rename|delete|duplicate|active|transform|parent --target <ref> ...`. Rotation is euler degrees. Positions are local unless `--world`. `go active --target /X --active false` deactivates.
@@ -61,20 +62,20 @@ Scene, component, field, material, prefab and graph edits are one undo step each
 - `asset move --path A.mat --to B.mat`, `asset delete --path A.mat --confirm`, `asset reimport --path ...`
 - `material Materials/Metal.mat` lists shader properties. `--values '{"_MainColor": [1, 0, 0], "_Roughness": 0.3, "_MainTex": "Textures/Metal.png"}'` sets them. `--shader <ref>` swaps the shader.
 - `importer Models/Gun.fbx` shows import settings and sub assets. `--values` merges keys (dots for nested keys) and reimports. Values keep their JSON type, so pass numbers as numbers: `--values '{"rigType": 2}'` (0 none, 1 generic, 2 humanoid). Animation import settings are in the prowl-animation skill.
-- `prefab create /Gun --path Prefabs/Gun`, then `prefab apply|revert|unpack|overrides --target <instance>`
+- `prefab create /Gun --path Prefabs/Gun`, then `prefab apply|revert|unpack|overrides --target <instance>`. `overrides` lists changed values and additions (components and objects the instance has and the prefab does not). `apply` writes both into the prefab.
 
 Animation graphs are built with the `graph` command. See the prowl-animation skill.
 
 ## Play mode and testing
 
 - `play --action start|stop|pause|resume|step|wait|status`. Each returns the errors logged meanwhile.
-- `input --action key --keys W,ShiftLeft --seconds 1` holds keys, `input --action mouse --button 0`, `input --action look --delta '[5,0]' --seconds 0.5`. Key names are listed in the prowl-scenes skill.
+- `input --action key --keys W,ShiftLeft --seconds 1` holds keys, `input --action mouse --button 0`, `input --action mouse --position '[640,360]'` clicks at that point in game view pixels, as measured on a game screenshot, which presses UI buttons there, `input --action look --delta '[5,0]' --seconds 0.5`. Key names are listed in the prowl-scenes skill.
 - `screenshot --view scene` or `--view game` saves a PNG and returns its path. Open the view first if needed with `menu --path Window/General/Game`.
 - `logs --since <nextSeq>` returns only what is new since the last call.
 
 ## Building
 
-`build --out Builds/Windows [--run] --timeout 1800` builds with the selected pipeline and waits. Without a larger `--timeout` the CLI gives up after 120 seconds while the build keeps running. The same goes for a first `compile` that restores NuGet packages and for long `play --action wait` calls. The build scene list must not be empty (see the eval recipes below). `compile` defines `PROWL_EDITOR` for every script, so editor only code that is not guarded with `#if PROWL_EDITOR` only fails in a build.
+`build --out Builds/Windows [--run] --timeout 1800` builds with the selected pipeline and waits. Each build goes into a new folder under `--out` named after the project, numbered when one exists already, such as `Builds/Windows/Game (1)`, so the last build stays runnable. The result's `output` is the folder. Without a larger `--timeout` the CLI gives up after 120 seconds while the build keeps running. The same goes for a first `compile` that restores NuGet packages and for long `play --action wait` calls. The build scene list must not be empty (see the eval recipes below). `compile` defines `PROWL_EDITOR` for every script, so editor only code that is not guarded with `#if PROWL_EDITOR` only fails in a build.
 
 ## eval
 

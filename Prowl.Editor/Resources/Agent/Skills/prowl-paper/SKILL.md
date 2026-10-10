@@ -13,6 +13,7 @@ using Prowl.PaperUI.Events;        // ClickEvent, DragEvent, ScrollEvent, KeyEve
 using Prowl.PaperUI.LayoutEngine;  // UnitValue, ElementHandle
 using Prowl.Scribe;                // FontFile, TextWrapMode
 using Prowl.Vector;                // Color, Rect, Float2, Easing
+using Prowl.Quill;                 // Canvas, in paper.Draw
 using TextAlignment = Prowl.PaperUI.TextAlignment;   // Prowl.Scribe has one too
 ```
 
@@ -85,7 +86,7 @@ Free placement:
 - Gradients replace the background color: `BackgroundLinearGradient(x1, y1, x2, y2, c1, c2)` with coordinates as fractions 0 to 1 of the element, also radial and box gradients.
 - `BackgroundImage(texture)` and `Image(texture, tint, rotation, pivot, ImageScaleMode.Fit)` take a Prowl `Texture2D`. The rotation is in degrees.
 - Text: `.Text(string, FontFile)`, `FontSize` (default 16), `TextColor` (default white), `Alignment(TextAlignment.MiddleCenter)`, `Wrap(TextWrapMode.Wrap)` (default no wrap), `TextTruncate()`, `LineHeight`, `LetterSpacing`. Plain `Left`, `Center` and `Right` alignments are top aligned, use the `Middle` ones to centre vertically. Text is not clipped unless `.Clip()`.
-- Rich text: `.RichText(...)` with tags like `<b>bold</>`, `<i>`, `<#f80>colour</>`, `<size 1.5>`, `<wave>`.
+- Rich text: `.Text(text, font).RichText()` turns on tags like `<b>bold</>`, `<i>`, `<#f80>colour</>`, `<size 1.5>`, `<wave>`. Pass bold, italic and mono fonts to `RichText` for those styles.
 - Transforms are visual only and do not move layout: `Translate(x, y)`, `Scale(s)`, `Rotate(degrees)`, `TransformOrigin(0.5f, 0.5f)`.
 - `Cursor(PaperCursor.Pointer)` sets the mouse cursor while over the element.
 
@@ -106,6 +107,8 @@ State blocks style an element only while a state is on:
 Reusable styles: `static readonly StyleTemplate Card = new StyleTemplate().BackgroundColor(...).Rounded(8);` then `.Style(Card)`. Named styles exist (`paper.DefineStyle`, `.Style("name")`) but allocate on every use.
 
 ## Animation
+
+Paper runs on real time, so transitions and the helpers below keep animating while `Time.TimeScale` is 0, and a pause menu can fade in.
 
 - `.Transition(GuiProp.BackgroundColor, seconds, Easing.CubicOut)` animates a property toward whatever value is declared this frame. **Declare it every frame.** Easings are in `Prowl.Vector.Easing`. Width, margins and other layout values animate too.
 - **Transforms snap back unless the resting value is declared.** Write `.Scale(1f).Active.Scale(0.95f).End()`, not only the Active part.

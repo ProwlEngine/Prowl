@@ -356,7 +356,8 @@ public static class CliEval
         "Prowl.Vector", "Prowl.Runtime", "Prowl.Runtime.Resources", "Prowl.Editor", "Prowl.Editor.Core",
     ];
 
-    private static readonly ConditionalWeakTable<Assembly, MetadataReference> s_references = new();
+    private static readonly ConditionalWeakTable<Assembly, MetadataReference> s_fileReferences = new();
+    private static readonly ConditionalWeakTable<byte[], MetadataReference> s_imageReferences = new();
     private static readonly CSharpParseOptions s_scriptParse = new(LanguageVersion.Latest, kind: SourceCodeKind.Script);
     private static readonly CSharpParseOptions s_parse = new(LanguageVersion.Latest);
     private static int s_counter;
@@ -462,25 +463,18 @@ public static class CliEval
             string name = assembly.GetName().Name ?? "";
             if (!seen.Add(name)) continue;
 
-            if (s_references.TryGetValue(assembly, out var cached))
-            {
-                references.Add(cached);
-                continue;
-            }
-
             MetadataReference? reference = null;
             try
             {
+                // Script assemblies are cached by their image, so a hot reload can never be compiled against an older build.
                 if (!string.IsNullOrEmpty(assembly.Location))
-                    reference = MetadataReference.CreateFromFile(assembly.Location);
+                    reference = s_fileReferences.GetValue(assembly, a => MetadataReference.CreateFromFile(a.Location));
                 else if (ScriptAssemblyManager.GetAssemblyBytes(assembly) is { } bytes)
-                    reference = MetadataReference.CreateFromImage(bytes);
+                    reference = s_imageReferences.GetValue(bytes, b => MetadataReference.CreateFromImage(b));
             }
             catch (Exception ex) when (ex is IOException or BadImageFormatException) { }
 
-            if (reference == null) continue;
-            s_references.AddOrUpdate(assembly, reference);
-            references.Add(reference);
+            if (reference != null) references.Add(reference);
         }
 
         return references;
