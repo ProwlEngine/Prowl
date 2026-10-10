@@ -70,7 +70,7 @@ public static class ObjectCopy
         var identities = new List<(object Target, Guid Identifier)>();
         foreach (object filled in map.Fills.Values)
             if (filled is GameObject go) identities.Add((go, go.Identifier));
-            else if (filled is MonoBehaviour component) identities.Add((component, component.Identifier));
+            else if (filled is Component component) identities.Add((component, component.Identifier));
 
         var links = new SharedLinks(Owned([source], map), map);
         var written = new SerializationContext { ExternalReferences = links };
@@ -86,7 +86,7 @@ public static class ObjectCopy
 
         foreach (var (filled, identifier) in identities)
             if (filled is GameObject go) go.SetIdentifier(identifier);
-            else ((MonoBehaviour)filled).Identifier = identifier;
+            else ((Component)filled).Identifier = identifier;
     }
 
     private static List<object> CloneRoots(List<object> roots, CopyMap map)
@@ -117,10 +117,10 @@ public static class ObjectCopy
         if (!map.Fills.ContainsKey(source.Transform) && taken.Add(target.Transform))
             map.Fill(source.Transform, target.Transform);
 
-        List<MonoBehaviour> sourceComponents = source._components, targetComponents = target._components;
+        List<Component> sourceComponents = source._components, targetComponents = target._components;
         for (int i = 0; i < sourceComponents.Count; i++)
         {
-            MonoBehaviour component = sourceComponents[i];
+            Component component = sourceComponents[i];
             if (component.IsNotValid() || map.Fills.ContainsKey(component) || map.Links.ContainsKey(component)) continue;
             if (i < targetComponents.Count && targetComponents[i].IsValid() && targetComponents[i].GetType() == component.GetType()
                 && taken.Add(targetComponents[i]))
@@ -161,7 +161,7 @@ public static class ObjectCopy
         {
             if (map.Links.ContainsKey(go)) return;
             owned.Add(go);
-            foreach (MonoBehaviour component in go._components)
+            foreach (Component component in go._components)
                 if (component.IsValid() && !map.Links.ContainsKey(component)) owned.Add(component);
             foreach (GameObject child in go.Children)
                 if (child.IsValid()) AddTree(child);

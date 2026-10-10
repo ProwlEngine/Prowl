@@ -25,7 +25,7 @@ namespace Prowl.Runtime.UI;
 /// </remarks>
 [AddComponentMenu("UI/Event System")]
 [ComponentIcon("")] // ArrowPointer
-public sealed class EventSystem : MonoBehaviour
+public sealed class EventSystem : Component
 {
     [SerializeIgnore] private static EventSystem? s_current;
 
@@ -190,7 +190,7 @@ public sealed class EventSystem : MonoBehaviour
         GameObject? node = root;
         while (node != null)
         {
-            foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
+            foreach (Component comp in node.GetComponents<Component>())
             {
                 if (comp is TInterface handler && comp.EnabledInHierarchy)
                 {
@@ -219,7 +219,7 @@ public sealed class EventSystem : MonoBehaviour
         GameObject? first = null;
         while (node != null)
         {
-            foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
+            foreach (Component comp in node.GetComponents<Component>())
             {
                 if (comp is TInterface handler && comp.IsValid() && comp.EnabledInHierarchy)
                 {
@@ -239,7 +239,7 @@ public sealed class EventSystem : MonoBehaviour
     private static void DispatchNode<TInterface>(GameObject node, PointerEventData e, Action<TInterface, PointerEventData> action)
         where TInterface : class
     {
-        foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
+        foreach (Component comp in node.GetComponents<Component>())
         {
             if (comp is not TInterface handler || !comp.EnabledInHierarchy) continue;
             try { action(handler, e); }
@@ -261,14 +261,14 @@ public sealed class EventSystem : MonoBehaviour
     internal static GameObject? FindHandler<TInterface>(GameObject? from) where TInterface : class
     {
         for (GameObject? node = from; node != null; node = node.Parent)
-            foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
+            foreach (Component comp in node.GetComponents<Component>())
                 if (comp is TInterface && comp.EnabledInHierarchy) return node;
         return null;
     }
 
     /// <summary>Walks up from <paramref name="from"/> and returns the GameObject that owns the first
     /// <typeparamref name="T"/> component encountered, or null.</summary>
-    private static GameObject? FindAncestor<T>(GameObject from) where T : MonoBehaviour
+    private static GameObject? FindAncestor<T>(GameObject from) where T : Component
     {
         GameObject? node = from;
         while (node != null)

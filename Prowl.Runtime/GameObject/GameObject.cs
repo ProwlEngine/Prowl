@@ -26,9 +26,9 @@ public partial class GameObject : EngineObject, ISerializable
 
     // The hot reload walk migrates this list in place; a removed-type component becomes null and is cleaned up
     // in OnHotReload.
-    internal List<MonoBehaviour> _components = [];
+    internal List<Component> _components = [];
     // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
-    [ReloadIgnore, NotHeld] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
+    [ReloadIgnore, NotHeld] private MultiValueDictionary<Type, Component> _componentCache = [];
 
     private Guid _identifier = Guid.NewGuid();
 
@@ -178,13 +178,13 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>The identifier of the component in the prefab that <paramref name="component"/> came
     /// from, or Guid.Empty when it is not part of the prefab. The component itself holds this; the
     /// method stays because callers read it while walking an object's components.</summary>
-    public Guid GetComponentSourceIdentifier(MonoBehaviour component) => component.SourceIdentifier;
+    public Guid GetComponentSourceIdentifier(Component component) => component.SourceIdentifier;
 
     /// <summary>Clear all prefab tracking data on this GameObject and its components.</summary>
     internal void ClearPrefabData()
     {
         _prefabLink = null;
-        foreach (MonoBehaviour component in _components)
+        foreach (Component component in _components)
             if (component.IsValid())
                 component.SourceIdentifier = Guid.Empty;
     }
@@ -543,14 +543,14 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <typeparam name="T">The type of component to add.</typeparam>
     /// <returns>The newly added component of type T.</returns>
-    public T AddComponent<T>() where T : MonoBehaviour, new() => AddComponent(typeof(T)) as T;
+    public T AddComponent<T>() where T : Component, new() => AddComponent(typeof(T)) as T;
 
     /// <summary>
     /// Adds a component of the specified type to the GameObject.
     /// </summary>
     /// <param name="type">The type of component to add.</param>
-    /// <returns>The newly added MonoBehaviour component.</returns>
-    public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
+    /// <returns>The newly added component.</returns>
+    public Component AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
         => AddComponent(type, null);
 
     /// <summary>
@@ -558,7 +558,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// requirement cycle stops rather than recursing. A component only reaches the object after its
     /// requirements are met, so nothing the walk can look at would ever break the cycle on its own.
     /// </summary>
-    private MonoBehaviour AddComponent(
+    private Component AddComponent(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
         HashSet<Type>? pending)
     {
@@ -574,7 +574,7 @@ public partial class GameObject : EngineObject, ISerializable
         {
             AddRequirements(type, pending);
 
-            if (!TryConstruct(type, out MonoBehaviour? newComponent) || newComponent.IsNotValid())
+            if (!TryConstruct(type, out Component? newComponent) || newComponent.IsNotValid())
                 return null;
 
             newComponent.AttachToGameObject(this);
@@ -598,12 +598,12 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     internal static bool TryConstruct(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
-        out MonoBehaviour? component)
+        out Component? component)
     {
         component = null;
         try
         {
-            component = Activator.CreateInstance(type) as MonoBehaviour;
+            component = Activator.CreateInstance(type) as Component;
             return component is not null;
         }
         catch (Exception e)
@@ -627,7 +627,7 @@ public partial class GameObject : EngineObject, ISerializable
     private static bool CanConstruct(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
         => type is not null
-        && typeof(MonoBehaviour).IsAssignableFrom(type)
+        && typeof(Component).IsAssignableFrom(type)
         && !type.IsAbstract
         && !type.ContainsGenericParameters
         && type.GetConstructor(Type.EmptyTypes) != null;
@@ -637,7 +637,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         foreach (Type requiredComponentType in type.GetCustomAttributes<RequireComponentAttribute>().SelectMany(a => a.types))
         {
-            if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
+            if (!typeof(Component).IsAssignableFrom(requiredComponentType))
                 continue;
 
             // If there is already a component on the object
@@ -652,11 +652,11 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// Adds an existing MonoBehaviour component to the GameObject.
+    /// Adds an existing component to the GameObject.
     /// </summary>
-    /// <param name="comp">The MonoBehaviour component to add.</param>
+    /// <param name="comp">The component to add.</param>
     /// <returns>False when a <see cref="DisallowMultipleComponentAttribute"/> refused it.</returns>
-    public bool AddComponent(MonoBehaviour comp)
+    public bool AddComponent(Component comp)
     {
         ArgumentNullException.ThrowIfNull(comp, nameof(comp));
         MainThreadContext.AssertOwner(this);
@@ -686,7 +686,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>Whether the nearest <see cref="DisallowMultipleComponentAttribute"/> type in this type's ancestry already has a component here.</summary>
     private bool RefusesAnother(Type type)
     {
-        for (Type? marked = type; marked != null && marked != typeof(MonoBehaviour); marked = marked.BaseType)
+        for (Type? marked = type; marked != null && marked != typeof(Component); marked = marked.BaseType)
         {
             if (!marked.IsDefined(typeof(DisallowMultipleComponentAttribute), false)) continue;
             if (GetComponent(marked).IsNotValid()) return false;
@@ -707,7 +707,7 @@ public partial class GameObject : EngineObject, ISerializable
         _components.RemoveAll(c => c is null);
 
         _componentCache = [];
-        foreach (MonoBehaviour comp in _components)
+        foreach (Component comp in _components)
             _componentCache.Add(comp.GetType(), comp);
     }
 
@@ -716,7 +716,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// scene now: fire OnAddedToScene (mirroring Scene.AddObject), then OnEnable if the scene is
     /// active and the component is enabled.
     /// </summary>
-    private void NotifyComponentAddedToScene(MonoBehaviour comp)
+    private void NotifyComponentAddedToScene(Component comp)
     {
         Scene? scene = Scene;
         if (!scene.IsValid()) return;
@@ -732,19 +732,19 @@ public partial class GameObject : EngineObject, ISerializable
     /// Removes all components of type T from the GameObject.
     /// </summary>
     /// <typeparam name="T">The type of components to remove.</typeparam>
-    public void RemoveAll<T>() where T : MonoBehaviour
+    public void RemoveAll<T>() where T : Component
     {
-        if (_componentCache.TryGetValue(typeof(T), out IReadOnlyCollection<MonoBehaviour>? components))
+        if (_componentCache.TryGetValue(typeof(T), out IReadOnlyCollection<Component>? components))
         {
             // Create a copy to avoid potential collection modification issues
             var componentList = components.ToList();
 
             // OnDisable is only called if OnEnable was previously called
-            foreach (MonoBehaviour c in componentList)
+            foreach (Component c in componentList)
                 if (c.HasBeenEnabled && c.EnabledInHierarchy)
                     c.InternalOnDisable();
 
-            foreach (MonoBehaviour c in componentList)
+            foreach (Component c in componentList)
             {
                 c.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
                 c.DetachFromGameObject();
@@ -759,11 +759,11 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <typeparam name="T">The type of component to remove.</typeparam>
     /// <param name="component">The component instance to remove.</param>
-    /// <inheritdoc cref="RemoveComponent(MonoBehaviour)"/>
-    public bool RemoveComponent<T>(T component) where T : MonoBehaviour
+    /// <inheritdoc cref="RemoveComponent(Component)"/>
+    public bool RemoveComponent<T>(T component) where T : Component
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
-        return RemoveComponent((MonoBehaviour)component);
+        return RemoveComponent((Component)component);
     }
 
     /// <summary>
@@ -780,7 +780,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// Whether it was removed. False means the prefab provides it, which is the one case this refuses,
     /// and a caller that needs it gone has to break the link or change the prefab first.
     /// </returns>
-    public bool RemoveComponent(MonoBehaviour component)
+    public bool RemoveComponent(Component component)
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
 
@@ -799,7 +799,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// Removes a component without asking where it came from. For teardown, and for the prefab
     /// machinery taking one away precisely because the prefab stopped providing it.
     /// </summary>
-    internal void RemoveComponentInternal(MonoBehaviour component)
+    internal void RemoveComponentInternal(Component component)
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
         MainThreadContext.AssertOwner(this, nameof(RemoveComponent));
@@ -822,7 +822,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>
     /// Removes a component from this GameObject without destroying it, for a move to another one.
     /// </summary>
-    internal void DetachComponent(MonoBehaviour component)
+    internal void DetachComponent(Component component)
     {
         if (!_components.Remove(component)) return;
 
@@ -838,10 +838,10 @@ public partial class GameObject : EngineObject, ISerializable
     /// Removes a specific component from the GameObject By its Identifier.
     /// </summary>
     /// <param name="component">The component identifier to remove.</param>
-    /// <inheritdoc cref="RemoveComponent(MonoBehaviour)"/>
+    /// <inheritdoc cref="RemoveComponent(Component)"/>
     public bool RemoveComponent(Guid component)
     {
-        MonoBehaviour? comp = GetComponentByIdentifier(component);
+        Component? comp = GetComponentByIdentifier(component);
         return comp.IsValid() && RemoveComponent(comp!);
     }
 
@@ -850,20 +850,20 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <typeparam name="T">The type of component to get.</typeparam>
     /// <returns>The component of type T, or null if not found.</returns>
-    public T? GetComponent<T>() where T : MonoBehaviour => (T?)GetComponent(typeof(T));
+    public T? GetComponent<T>() where T : Component => (T?)GetComponent(typeof(T));
 
     /// <summary>
     /// Gets the first component of the specified type attached to the GameObject.
     /// </summary>
     /// <param name="type">The type of component to get.</param>
-    /// <returns>The MonoBehaviour component of the specified type, or null if not found.</returns>
-    public MonoBehaviour? GetComponent(Type type)
+    /// <returns>The component of the specified type, or null if not found.</returns>
+    public Component? GetComponent(Type type)
     {
         if (type == null) return null;
-        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
+        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<Component>? components))
             return components.FirstOrDefault();
         else
-            foreach (MonoBehaviour comp in _components)
+            foreach (Component comp in _components)
                 if (comp.GetType().IsAssignableTo(type))
                     return comp;
         return null;
@@ -873,11 +873,11 @@ public partial class GameObject : EngineObject, ISerializable
     /// Gets the component with the specified identifier attached to the GameObject.
     /// </summary>
     /// <param name="identifier">The identifier of the component to get.</param>
-    /// <returns>The MonoBehaviour component with the specified identifier, or null if not found.</returns>
-    public MonoBehaviour? GetComponentByIdentifier(Guid identifier)
+    /// <returns>The component with the specified identifier, or null if not found.</returns>
+    public Component? GetComponentByIdentifier(Guid identifier)
     {
         if (identifier == Guid.Empty) return null;
-        foreach (MonoBehaviour component in _components)
+        foreach (Component component in _components)
             if (component.Identifier == identifier)
                 return component;
         return null;
@@ -886,8 +886,8 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>
     /// Gets all components attached to the GameObject.
     /// </summary>
-    /// <returns>An IEnumerable of all MonoBehaviour components.</returns>
-    public IEnumerable<MonoBehaviour> GetComponents() => _components;
+    /// <returns>An IEnumerable of all components.</returns>
+    public IEnumerable<Component> GetComponents() => _components;
 
     /// <summary>
     /// Tries to get the first component of type T attached to the GameObject.
@@ -895,29 +895,29 @@ public partial class GameObject : EngineObject, ISerializable
     /// <typeparam name="T">The type of component to get.</typeparam>
     /// <param name="component">The output parameter to store the found component.</param>
     /// <returns>True if a component of type T was found, false otherwise.</returns>
-    public bool TryGetComponent<T>(out T? component) where T : MonoBehaviour => (component = GetComponent<T>()).IsValid();
+    public bool TryGetComponent<T>(out T? component) where T : Component => (component = GetComponent<T>()).IsValid();
 
     /// <summary>
     /// Gets all components of type T attached to the GameObject.
     /// </summary>
     /// <typeparam name="T">The type of components to get.</typeparam>
     /// <returns>An IEnumerable of components of type T.</returns>
-    public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GetComponents(typeof(T)).Cast<T>();
+    public IEnumerable<T> GetComponents<T>() where T : Component => GetComponents(typeof(T)).Cast<T>();
 
     /// <summary>
     /// Gets all components of the specified type attached to the GameObject.
     /// </summary>
     /// <param name="type">The type of components to get.</param>
-    /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
-    public IEnumerable<MonoBehaviour> GetComponents(Type type)
+    /// <returns>An IEnumerable of components of the specified type.</returns>
+    public IEnumerable<Component> GetComponents(Type type)
     {
         // Snapshotted rather than yielded off the live storage, so a caller (or a lifecycle callback
         // it triggers) can add or remove components while walking the result. Component counts are
         // small enough that the copy costs less than the crash it prevents.
-        if (type == typeof(MonoBehaviour))
+        if (type == typeof(Component))
             return _components.ToArray();
 
-        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
+        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<Component>? components))
             return components.ToArray();
 
         return _components.Where(comp => comp.GetType().IsAssignableTo(type)).ToArray();
@@ -930,7 +930,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
     /// <returns>The component of type T, or null if not found.</returns>
-    public T? GetComponentInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => (T)GetComponentInParent(typeof(T), includeSelf, includeInactive);
+    public T? GetComponentInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : Component => (T)GetComponentInParent(typeof(T), includeSelf, includeInactive);
 
     /// <summary>
     /// Gets the first component of the specified type in the GameObject or its parents.
@@ -938,12 +938,12 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="componentType">The type of component to get.</param>
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
-    /// <returns>The MonoBehaviour component of the specified type, or null if not found.</returns>
-    public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true, bool includeInactive = false)
+    /// <returns>The component of the specified type, or null if not found.</returns>
+    public Component? GetComponentInParent(Type componentType, bool includeSelf = true, bool includeInactive = false)
     {
         if (componentType == null) return null;
         // First check the current Object
-        MonoBehaviour component;
+        Component component;
         if (includeSelf && (EnabledInHierarchy || includeInactive))
         {
             component = GetComponent(componentType);
@@ -971,7 +971,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
     /// <returns>An IEnumerable of components of type T.</returns>
-    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => GetComponentsInParent(typeof(T), includeSelf, includeInactive).Cast<T>();
+    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : Component => GetComponentsInParent(typeof(T), includeSelf, includeInactive).Cast<T>();
 
     /// <summary>
     /// Gets all components of the specified type in the GameObject and its parents.
@@ -979,19 +979,19 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="type">The type of components to get.</param>
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
-    /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
-    public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true, bool includeInactive = false)
+    /// <returns>An IEnumerable of components of the specified type.</returns>
+    public IEnumerable<Component> GetComponentsInParent(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
         if (includeSelf && (EnabledInHierarchy || includeInactive))
-            foreach (MonoBehaviour component in GetComponents(type))
+            foreach (Component component in GetComponents(type))
                 yield return component;
         // Now check all parents
         GameObject parent = this;
         while ((parent = parent.Parent).IsValid())
         {
             if (parent.EnabledInHierarchy || includeInactive)
-                foreach (MonoBehaviour component in parent.GetComponents(type))
+                foreach (Component component in parent.GetComponents(type))
                     yield return component;
         }
     }
@@ -1003,7 +1003,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
     /// <returns>The component of type T, or null if not found.</returns>
-    public T? GetComponentInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T), includeSelf, includeInactive);
+    public T? GetComponentInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : Component => (T)GetComponentInChildren(typeof(T), includeSelf, includeInactive);
 
     /// <summary>
     /// Gets the first component of the specified type in the GameObject or its children.
@@ -1011,12 +1011,12 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="componentType">The type of component to get.</param>
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
-    /// <returns>The MonoBehaviour component of the specified type, or null if not found.</returns>
-    public MonoBehaviour GetComponentInChildren(Type componentType, bool includeSelf = true, bool includeInactive = false)
+    /// <returns>The component of the specified type, or null if not found.</returns>
+    public Component GetComponentInChildren(Type componentType, bool includeSelf = true, bool includeInactive = false)
     {
         if (componentType == null) return null;
         // First check the current Object
-        MonoBehaviour component;
+        Component component;
         if (includeSelf && (EnabledInHierarchy || includeInactive))
         {
             component = GetComponent(componentType);
@@ -1037,11 +1037,11 @@ public partial class GameObject : EngineObject, ISerializable
         return null;
     }
 
-    public MonoBehaviour GetComponentInChildrenByIdentifier(Guid identifier, bool includeSelf = true, bool includeInactive = false)
+    public Component GetComponentInChildrenByIdentifier(Guid identifier, bool includeSelf = true, bool includeInactive = false)
     {
         if (includeSelf && (EnabledInHierarchy || includeInactive))
         {
-            MonoBehaviour component = GetComponentByIdentifier(identifier);
+            Component component = GetComponentByIdentifier(identifier);
             if (component.IsValid())
                 return component;
         }
@@ -1052,7 +1052,7 @@ public partial class GameObject : EngineObject, ISerializable
             if (!child.EnabledInHierarchy && !includeInactive)
                 continue;
 
-            MonoBehaviour component = child.GetComponentInChildrenByIdentifier(identifier, true, includeInactive);
+            Component component = child.GetComponentInChildrenByIdentifier(identifier, true, includeInactive);
             if (component.IsValid())
                 return component;
         }
@@ -1066,7 +1066,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
     /// <returns>An IEnumerable of components of type T.</returns>
-    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => GetComponentsInChildren(typeof(T), includeSelf, includeInactive).Cast<T>();
+    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : Component => GetComponentsInChildren(typeof(T), includeSelf, includeInactive).Cast<T>();
 
     /// <summary>
     /// Gets all components of the specified type in the GameObject and its children.
@@ -1074,12 +1074,12 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="type">The type of components to get.</param>
     /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
     /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
-    /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
-    public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true, bool includeInactive = false)
+    /// <returns>An IEnumerable of components of the specified type.</returns>
+    public IEnumerable<Component> GetComponentsInChildren(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
         if (includeSelf && (EnabledInHierarchy || includeInactive))
-            foreach (MonoBehaviour component in GetComponents(type))
+            foreach (Component component in GetComponents(type))
                 yield return component;
         // Now check all children
         foreach (GameObject child in Children)
@@ -1088,7 +1088,7 @@ public partial class GameObject : EngineObject, ISerializable
             if (!child.EnabledInHierarchy && !includeInactive)
                 continue;
 
-            foreach (MonoBehaviour component in child.GetComponentsInChildren(type, true, includeInactive))
+            foreach (Component component in child.GetComponentsInChildren(type, true, includeInactive))
                 yield return component;
         }
     }
@@ -1099,7 +1099,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="requiredComponent">The component to check.</param>
     /// <param name="dependentType">The output parameter to store the type of the dependent component.</param>
     /// <returns>True if the component is required, false otherwise.</returns>
-    internal bool IsComponentRequired(MonoBehaviour requiredComponent, out Type dependentType)
+    internal bool IsComponentRequired(Component requiredComponent, out Type dependentType)
     {
         Type componentType = requiredComponent.GetType();
 
@@ -1112,7 +1112,7 @@ public partial class GameObject : EngineObject, ISerializable
         }
 
         // If it is the last type on a GameObject, check if it is required by another component.
-        foreach (MonoBehaviour component in _components)
+        foreach (Component component in _components)
         {
             if (component.GetType().GetCustomAttributes<RequireComponentAttribute>().All(a => a.types.All(type => type != componentType)))
                 continue;
@@ -1136,7 +1136,7 @@ public partial class GameObject : EngineObject, ISerializable
 
         for (int i = _components.Count - 1; i >= 0; i--)
         {
-            MonoBehaviour component = _components[i];
+            Component component = _components[i];
             if (component.IsDisposed) continue;
 
             // Only call OnDisable if OnEnable previously ran, the component is enabled in hierarchy
@@ -1180,7 +1180,7 @@ public partial class GameObject : EngineObject, ISerializable
         if (_enabledInHierarchy != newState)
         {
             _enabledInHierarchy = newState;
-            foreach (MonoBehaviour component in GetComponents<MonoBehaviour>())
+            foreach (Component component in GetComponents<Component>())
                 component.HierarchyStateChanged();
         }
 
@@ -1230,11 +1230,11 @@ public partial class GameObject : EngineObject, ISerializable
         sb.AppendLine($"{detailIndent}Scale: {FormatVector(t.LocalScale)} (Lossy: {FormatVector(t.LossyScale)})");
 
         // Print Components
-        var components = obj.GetComponents<MonoBehaviour>().ToList();
+        var components = obj.GetComponents<Component>().ToList();
         if (components.Count > 0)
         {
             sb.AppendLine($"{detailIndent}Components ({components.Count}):");
-            foreach (MonoBehaviour? comp in components)
+            foreach (Component? comp in components)
             {
                 string compEnabled = comp.Enabled ? "" : " [DISABLED]";
                 sb.AppendLine($"{detailIndent}  - {comp.GetType().Name}{compEnabled}");
@@ -1262,7 +1262,7 @@ public partial class GameObject : EngineObject, ISerializable
     public override void OnValidate()
     {
         base.OnValidate();
-        var targets = GetComponentsInChildren<MonoBehaviour>();
+        var targets = GetComponentsInChildren<Component>();
         foreach (var target in targets)
         {
             target.OnValidate();
@@ -1298,8 +1298,8 @@ public partial class GameObject : EngineObject, ISerializable
         compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
         EchoObject components = EchoObject.NewList();
-        foreach (MonoBehaviour comp in _components)
-            components.ListAdd(Serializer.Serialize(typeof(MonoBehaviour), comp, ctx));
+        foreach (Component comp in _components)
+            components.ListAdd(Serializer.Serialize(typeof(Component), comp, ctx));
         compoundTag.Add("Components", components);
 
         EchoObject children = EchoObject.NewList();
@@ -1365,22 +1365,22 @@ public partial class GameObject : EngineObject, ISerializable
             {
                 Type oType = RuntimeUtils.FindType(typeProperty.StringValue);
 
-                if (oType == typeof(MissingMonobehaviour))
+                if (oType == typeof(MissingComponent))
                 {
                     HandleMissingComponent(compTag, ctx, existing);
                     continue;
                 }
 
-                // Deserialize against the resolved type, not the abstract MonoBehaviour, so a name that
+                // Deserialize against the resolved type, not the abstract Component, so a name that
                 // binds to a non component type can't throw a bad cast out of the array. A user
                 // constructor runs in here and can throw anything, which would otherwise drop every
                 // remaining object in the scene rather than the one component that failed.
-                MonoBehaviour? typedComponent = null;
-                if (oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType))
+                Component? typedComponent = null;
+                if (oType != null && typeof(Component).IsAssignableFrom(oType))
                 {
                     try
                     {
-                        typedComponent = Serializer.Deserialize(compTag, oType, ctx) as MonoBehaviour;
+                        typedComponent = Serializer.Deserialize(compTag, oType, ctx) as Component;
                     }
                     catch (Exception e)
                     {
@@ -1396,22 +1396,22 @@ public partial class GameObject : EngineObject, ISerializable
                     continue;
                 }
 
-                // Keep the data as a MissingMonobehaviour so it survives a re-save, and back-patch any
+                // Keep the data as a MissingComponent so it survives a re-save, and back-patch any
                 // object definitions Echo stored inline in it once the whole graph has loaded.
-                Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
+                Debug.LogWarning("Missing Component Type: " + typeProperty.StringValue + " On " + Name);
                 EchoObject trapped = compTag;
                 ctx.Defer(() => BackPatchTrappedDefinitions(DefinitionOf(trapped, ctx), ctx));
                 // A copy onto an existing object fills the missing component it was paired with.
-                MissingMonobehaviour missing = compTag.TryGet("$id", out EchoObject? missingId)
-                    && ctx.idToObject.TryGetValue(missingId!.IntValue, out object? paired) && paired is MissingMonobehaviour pairedMissing
+                MissingComponent missing = compTag.TryGet("$id", out EchoObject? missingId)
+                    && ctx.idToObject.TryGetValue(missingId!.IntValue, out object? paired) && paired is MissingComponent pairedMissing
                     ? pairedMissing
-                    : new MissingMonobehaviour();
+                    : new MissingComponent();
                 Serializer.DeserializeInto(compTag, missing, ctx);
                 if (existing.Add(missing)) AddLoadedComponent(missing);
                 continue;
             }
 
-            MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
+            Component? component = Serializer.Deserialize<Component>(compTag, ctx);
             if (component.IsValid() && existing.Add(component!)) AddLoadedComponent(component!);
         }
 
@@ -1446,7 +1446,7 @@ public partial class GameObject : EngineObject, ISerializable
         }
     }
 
-    private void AddLoadedComponent(MonoBehaviour component)
+    private void AddLoadedComponent(Component component)
     {
         _components.Add(component);
         _componentCache.Add(component.GetType(), component);
@@ -1457,9 +1457,9 @@ public partial class GameObject : EngineObject, ISerializable
     /// does not pull in required components, since the object being copied already has whatever it needs. Null when
     /// the type's constructor throws, so one bad component is skipped rather than abandoning the whole copy.
     /// </summary>
-    internal MonoBehaviour? AttachBareComponent(Type type)
+    internal Component? AttachBareComponent(Type type)
     {
-        if (!TryConstruct(type, out MonoBehaviour? component) || component is null)
+        if (!TryConstruct(type, out Component? component) || component is null)
             return null;
 
         component.AttachToGameObject(this);
@@ -1534,7 +1534,7 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// Handles a component saved in the older MissingMonobehaviour wrapper by attempting to recover it.
+    /// Handles a component saved in the older MissingComponent wrapper by attempting to recover it.
     /// Missing components are now saved in their original shape and never reach this.
     /// </summary>
     /// <param name="compTag">The SerializedProperty containing the component data.</param>
@@ -1543,11 +1543,11 @@ public partial class GameObject : EngineObject, ISerializable
         Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
     private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx, HashSet<object> existing)
     {
-        MissingMonobehaviour? missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
+        MissingComponent? missing = Serializer.Deserialize<MissingComponent>(compTag, ctx);
         if (missing.IsNotValid()) return;
 
         // Recovered when its type exists again, otherwise it stays missing so the data survives another save.
-        MonoBehaviour? component = missing!.ComponentData != null ? TryRecoverComponent(missing.ComponentData) : null;
+        Component? component = missing!.ComponentData != null ? TryRecoverComponent(missing.ComponentData) : null;
         if (component.IsValid())
             component!.LoadedIdentifier = missing.LoadedIdentifier;
         else
@@ -1558,21 +1558,21 @@ public partial class GameObject : EngineObject, ISerializable
 
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
         Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
-    private MonoBehaviour? TryRecoverComponent(EchoObject data)
+    private Component? TryRecoverComponent(EchoObject data)
     {
         string? typeName = data.Get("$type")?.StringValue;
         if (string.IsNullOrWhiteSpace(typeName)) return null;
 
         Type? oType = RuntimeUtils.FindType(typeName);
-        if (oType == null || !typeof(MonoBehaviour).IsAssignableFrom(oType))
+        if (oType == null || !typeof(Component).IsAssignableFrom(oType))
         {
-            Debug.LogWarning("Missing Monobehaviour Type: " + typeName + " On " + Name);
+            Debug.LogWarning("Missing Component Type: " + typeName + " On " + Name);
             return null;
         }
 
         try
         {
-            return Serializer.Deserialize(data, oType) as MonoBehaviour;
+            return Serializer.Deserialize(data, oType) as Component;
         }
         catch (Exception e)
         {

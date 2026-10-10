@@ -125,7 +125,7 @@ public class ComponentPopoutPanel : DockPanel
         });
     }
 
-    private (GameObject? go, MonoBehaviour? comp) FindComponent()
+    private (GameObject? go, Component? comp) FindComponent()
     {
         var scene = Scene.Current;
         if (scene == null) return (null, null);
@@ -134,7 +134,7 @@ public class ComponentPopoutPanel : DockPanel
         {
             if (go.Identifier != _goIdentifier) continue;
 
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+            foreach (var comp in go.GetComponents<Component>())
             {
                 if (comp.Identifier == _compIdentifier)
                     return (go, comp);
@@ -148,7 +148,7 @@ public class ComponentPopoutPanel : DockPanel
     /// <summary>
     /// Create and open a popout panel for the given component as a floating window.
     /// </summary>
-    public static void PopOut(GameObject go, MonoBehaviour comp)
+    public static void PopOut(GameObject go, Component comp)
     {
         var panel = new ComponentPopoutPanel(go.Identifier, comp.Identifier, comp.GetType().Name);
         EditorApplication.Instance?.OpenPanelInstance(panel, 350, 400);

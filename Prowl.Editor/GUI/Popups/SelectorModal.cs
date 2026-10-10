@@ -192,7 +192,7 @@ public static class SelectorModal
         // Determine what we're listing
         bool isTransform = typeof(Transform).IsAssignableFrom(_targetType);
         bool isGameObject = typeof(GameObject).IsAssignableFrom(_targetType);
-        bool isComponent = typeof(MonoBehaviour).IsAssignableFrom(_targetType);
+        bool isComponent = typeof(Component).IsAssignableFrom(_targetType);
 
         Origami.ScrollView(paper, "sel_scene_scroll", 380, height).Padding(4, 4, 4, 0).Body(() =>
         {
@@ -229,7 +229,7 @@ public static class SelectorModal
                 else if (isComponent)
                 {
                     // List matching components
-                    foreach (var comp in go.GetComponents<MonoBehaviour>())
+                    foreach (var comp in go.GetComponents<Component>())
                     {
                         if (!_targetType.IsAssignableFrom(comp.GetType())) continue;
 

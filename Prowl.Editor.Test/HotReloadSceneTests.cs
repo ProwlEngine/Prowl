@@ -31,15 +31,15 @@ public class HotReloadSceneTests : EditorTestHarness
     public void RealRecompile_MigratesLiveScene_ToNewTypes_PreservingStateAndIdentity()
     {
         Assembly v1 = CompileGameAssembly("Enemy.cs",
-            "using Prowl.Runtime; public class Enemy : MonoBehaviour { public int Hp; public Enemy Target; }");
+            "using Prowl.Runtime; public class Enemy : Component { public int Hp; public Enemy Target; }");
         Type enemyV1 = v1.GetType("Enemy")!;
         Assert.Null(enemyV1.GetField("Shield")); // v1 has no Shield yet
 
         var scene = new Scene();
         var goA = new GameObject("A");
         var goB = new GameObject("B");
-        MonoBehaviour a = goA.AddComponent(enemyV1);
-        MonoBehaviour b = goB.AddComponent(enemyV1);
+        Component a = goA.AddComponent(enemyV1);
+        Component b = goB.AddComponent(enemyV1);
         enemyV1.GetField("Hp")!.SetValue(a, 100);
         enemyV1.GetField("Hp")!.SetValue(b, 50);
         enemyV1.GetField("Target")!.SetValue(a, b); // A targets B
@@ -47,14 +47,14 @@ public class HotReloadSceneTests : EditorTestHarness
         scene.Add(goB);
 
         Assembly v2 = CompileGameAssembly("Enemy.cs",
-            "using Prowl.Runtime; public class Enemy : MonoBehaviour { public int Hp; public Enemy Target; public int Shield; }");
+            "using Prowl.Runtime; public class Enemy : Component { public int Hp; public Enemy Target; public int Shield; }");
         Type enemyV2 = v2.GetType("Enemy")!;
         Assert.NotSame(v1, v2);
 
         SceneHotReload.Migrate(scene, v1, v2);
 
-        MonoBehaviour newA = goA.GetComponents().Single();
-        MonoBehaviour newB = goB.GetComponents().Single();
+        Component newA = goA.GetComponents().Single();
+        Component newB = goB.GetComponents().Single();
 
         Assert.Same(enemyV2, newA.GetType());
         Assert.Same(v2, newA.GetType().Assembly);
@@ -72,25 +72,25 @@ public class HotReloadSceneTests : EditorTestHarness
         using var play = EnterPlayMode();
 
         Assembly v1 = CompileGameAssembly("Ticker.cs",
-            "using Prowl.Runtime; public class Ticker : MonoBehaviour { public int Ticks; public override void Update() { Ticks++; } }");
+            "using Prowl.Runtime; public class Ticker : Component { public int Ticks; public override void Update() { Ticks++; } }");
         Type tickerV1 = v1.GetType("Ticker")!;
 
         var scene = new Scene();
         scene.Enable();
         var go = new GameObject("T");
-        MonoBehaviour comp = go.AddComponent(tickerV1);
+        Component comp = go.AddComponent(tickerV1);
         scene.Add(go);
 
         UpdateScene(scene, 3);
         Assert.Equal(3, tickerV1.GetField("Ticks")!.GetValue(comp)); // old code, +1 per frame
 
         Assembly v2 = CompileGameAssembly("Ticker.cs",
-            "using Prowl.Runtime; public class Ticker : MonoBehaviour { public int Ticks; public int Extra; public override void Update() { Ticks += 10; } }");
+            "using Prowl.Runtime; public class Ticker : Component { public int Ticks; public int Extra; public override void Update() { Ticks += 10; } }");
         Type tickerV2 = v2.GetType("Ticker")!;
 
         SceneHotReload.Migrate(scene, v1, v2);
 
-        MonoBehaviour newComp = go.GetComponents().Single();
+        Component newComp = go.GetComponents().Single();
         Assert.Same(tickerV2, newComp.GetType());
         Assert.Equal(3, tickerV2.GetField("Ticks")!.GetValue(newComp)); // state carried over
         Assert.Equal(0, tickerV2.GetField("Extra")!.GetValue(newComp));
@@ -105,19 +105,19 @@ public class HotReloadSceneTests : EditorTestHarness
     public void EchoRoundTrip_BindsComponentToLoadedTypeByName_AndCarriesFields()
     {
         Assembly asm = CompileGameAssembly("Loot.cs",
-            "using Prowl.Runtime; public class Loot : MonoBehaviour { public int Gold; }");
+            "using Prowl.Runtime; public class Loot : Component { public int Gold; }");
         Type lootType = asm.GetType("Loot")!;
 
         var scene = new Scene();
         var go = new GameObject("Chest");
-        MonoBehaviour loot = go.AddComponent(lootType);
+        Component loot = go.AddComponent(lootType);
         lootType.GetField("Gold")!.SetValue(loot, 777);
         scene.Add(go);
 
         string text = Serializer.Serialize(scene).WriteToString();
         var restored = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(text))!;
 
-        MonoBehaviour restoredLoot = restored.AllObjects
+        Component restoredLoot = restored.AllObjects
             .First(g => g.Name == "Chest")
             .GetComponents()
             .First(c => c.GetType().Name == "Loot");
@@ -196,26 +196,26 @@ public class HotReloadSceneTests : EditorTestHarness
     public void Migrate_Scene_CrossGameObjectReference_IsRepointed()
     {
         Assembly v1 = CompileGameAssembly("Link.cs",
-            "using Prowl.Runtime; public class Node : MonoBehaviour { public Node Other; public int Val; }");
+            "using Prowl.Runtime; public class Node : Component { public Node Other; public int Val; }");
         Type nodeV1 = v1.GetType("Node")!;
 
         var scene = new Scene();
         var go1 = new GameObject("1");
         var go2 = new GameObject("2");
-        MonoBehaviour a = go1.AddComponent(nodeV1);
-        MonoBehaviour b = go2.AddComponent(nodeV1);
+        Component a = go1.AddComponent(nodeV1);
+        Component b = go2.AddComponent(nodeV1);
         nodeV1.GetField("Val")!.SetValue(b, 42);
         nodeV1.GetField("Other")!.SetValue(a, b); // A (on go1) references B (on go2)
         scene.Add(go1);
         scene.Add(go2);
 
         Assembly v2 = CompileGameAssembly("Link.cs",
-            "using Prowl.Runtime; public class Node : MonoBehaviour { public Node Other; public int Val; public int Extra; }");
+            "using Prowl.Runtime; public class Node : Component { public Node Other; public int Val; public int Extra; }");
         SceneHotReload.Migrate(scene, v1, v2);
 
         Type nodeV2 = v2.GetType("Node")!;
-        MonoBehaviour newA = go1.GetComponents().Single();
-        MonoBehaviour newB = go2.GetComponents().Single();
+        Component newA = go1.GetComponents().Single();
+        Component newB = go2.GetComponents().Single();
         object? other = nodeV2.GetField("Other")!.GetValue(newA);
 
         Assert.Same(newB, other); // repointed across GameObjects, not left as the old B
@@ -229,7 +229,7 @@ public class HotReloadSceneTests : EditorTestHarness
         using var play = EnterPlayMode();
 
         Assembly v1 = CompileGameAssembly("Cb.cs",
-            "using Prowl.Runtime; public class C : MonoBehaviour { public int U; public override void Update() { U++; } }");
+            "using Prowl.Runtime; public class C : Component { public int U; public override void Update() { U++; } }");
         Type cV1 = v1.GetType("C")!;
 
         var scene = new Scene();
@@ -240,11 +240,11 @@ public class HotReloadSceneTests : EditorTestHarness
         UpdateScene(scene, 1);
 
         Assembly v2 = CompileGameAssembly("Cb.cs",
-            "using Prowl.Runtime; public class C : MonoBehaviour { public int U; public int F; public override void Update() { U++; } public override void FixedUpdate() { F++; } }");
+            "using Prowl.Runtime; public class C : Component { public int U; public int F; public override void Update() { U++; } public override void FixedUpdate() { F++; } }");
         SceneHotReload.Migrate(scene, v1, v2);
 
         Type cV2 = v2.GetType("C")!;
-        MonoBehaviour newC = go.GetComponents().Single();
+        Component newC = go.GetComponents().Single();
 
         Tick(scene, 3);
         Assert.Equal(4, cV2.GetField("U")!.GetValue(newC)); // 1 before + 3 after
@@ -259,23 +259,23 @@ public class HotReloadSceneTests : EditorTestHarness
         using var play = EnterPlayMode();
 
         Assembly v1 = CompileGameAssembly("First.cs",
-            "using Prowl.Runtime; public class C : MonoBehaviour { public int Data; }");
+            "using Prowl.Runtime; public class C : Component { public int Data; }");
         Type cV1 = v1.GetType("C")!;
 
         var scene = new Scene();
         scene.Enable();
         var go = new GameObject("G");
-        MonoBehaviour comp = go.AddComponent(cV1);
+        Component comp = go.AddComponent(cV1);
         cV1.GetField("Data")!.SetValue(comp, 5);
         scene.Add(go);
         UpdateScene(scene, 1);
 
         Assembly v2 = CompileGameAssembly("First.cs",
-            "using Prowl.Runtime; public class C : MonoBehaviour { public int Data; public int U; public override void Update() { U++; } }");
+            "using Prowl.Runtime; public class C : Component { public int Data; public int U; public override void Update() { U++; } }");
         SceneHotReload.Migrate(scene, v1, v2);
 
         Type cV2 = v2.GetType("C")!;
-        MonoBehaviour newC = go.GetComponents().Single();
+        Component newC = go.GetComponents().Single();
 
         Tick(scene, 3);
 
@@ -290,7 +290,7 @@ public class HotReloadSceneTests : EditorTestHarness
         using var play = EnterPlayMode();
 
         Assembly v1 = CompileGameAssembly("Last.cs",
-            "using Prowl.Runtime; public class C : MonoBehaviour { public int U; public override void Update() { U++; } }");
+            "using Prowl.Runtime; public class C : Component { public int U; public override void Update() { U++; } }");
         Type cV1 = v1.GetType("C")!;
 
         var scene = new Scene();
@@ -301,11 +301,11 @@ public class HotReloadSceneTests : EditorTestHarness
         UpdateScene(scene, 1);
 
         Assembly v2 = CompileGameAssembly("Last.cs",
-            "using Prowl.Runtime; public class C : MonoBehaviour { public int U; }");
+            "using Prowl.Runtime; public class C : Component { public int U; }");
         SceneHotReload.Migrate(scene, v1, v2);
 
         Type cV2 = v2.GetType("C")!;
-        MonoBehaviour newC = go.GetComponents().Single();
+        Component newC = go.GetComponents().Single();
 
         Tick(scene, 3);
 
@@ -318,26 +318,26 @@ public class HotReloadSceneTests : EditorTestHarness
     {
         Assembly v1 = CompileGameAssembly("Hook.cs",
             "using System.Collections.Generic; using Prowl.Runtime; using Prowl.Ember; " +
-            "public class Net : MonoBehaviour, IReloadAware { public int Setups; " +
+            "public class Net : Component, IReloadAware { public int Setups; " +
             "public void OnReloadDetach(ReloadState s) { s.Set(\"n\", Setups); } " +
             "public void OnReloadAttach(ReloadState s) { Setups = s.GetOrDefault<int>(\"n\") + 1; } }");
         Type netV1 = v1.GetType("Net")!;
 
         var scene = new Scene();
         var go = new GameObject("G");
-        MonoBehaviour comp = go.AddComponent(netV1);
+        Component comp = go.AddComponent(netV1);
         netV1.GetField("Setups")!.SetValue(comp, 5);
         scene.Add(go);
 
         Assembly v2 = CompileGameAssembly("Hook.cs",
             "using System.Collections.Generic; using Prowl.Runtime; using Prowl.Ember; " +
-            "public class Net : MonoBehaviour, IReloadAware { public int Setups; public int Extra; " +
+            "public class Net : Component, IReloadAware { public int Setups; public int Extra; " +
             "public void OnReloadDetach(ReloadState s) { s.Set(\"n\", Setups); } " +
             "public void OnReloadAttach(ReloadState s) { Setups = s.GetOrDefault<int>(\"n\") + 1; } }");
         SceneHotReload.Migrate(scene, v1, v2);
 
         Type netV2 = v2.GetType("Net")!;
-        MonoBehaviour newComp = go.GetComponents().Single();
+        Component newComp = go.GetComponents().Single();
         Assert.Equal(6, netV2.GetField("Setups")!.GetValue(newComp)); // Destroyed(old) stashed 5, Created(new) read it and added 1
     }
 
@@ -346,7 +346,7 @@ public class HotReloadSceneTests : EditorTestHarness
     public void Migrate_Scene_RemovedComponentType_IsDroppedFromGameObject()
     {
         Assembly v1 = CompileGameAssembly("Two.cs",
-            "using Prowl.Runtime; public class Keeper : MonoBehaviour { public int X; } public class Doomed : MonoBehaviour { public int Y; }");
+            "using Prowl.Runtime; public class Keeper : Component { public int X; } public class Doomed : Component { public int Y; }");
         Type keeperV1 = v1.GetType("Keeper")!;
         Type doomedV1 = v1.GetType("Doomed")!;
 
@@ -358,7 +358,7 @@ public class HotReloadSceneTests : EditorTestHarness
         Assert.Equal(2, go.GetComponents().Count());
 
         Assembly v2 = CompileGameAssembly("Two.cs",
-            "using Prowl.Runtime; public class Keeper : MonoBehaviour { public int X; public int Extra; }");
+            "using Prowl.Runtime; public class Keeper : Component { public int X; public int Extra; }");
         SceneHotReload.Migrate(scene, v1, v2);
 
         Type keeperV2 = v2.GetType("Keeper")!;
@@ -376,12 +376,12 @@ public class HotReloadSceneTests : EditorTestHarness
         Assert.NotNull(loaded);
 
         Assembly v1 = CompileGameAssembly("Sub.cs",
-            "using Prowl.Runtime; public class Sub : MonoBehaviour { public int Pings; public void OnPing(){ Pings++; } }");
+            "using Prowl.Runtime; public class Sub : Component { public int Pings; public void OnPing(){ Pings++; } }");
         Type subV1 = v1.GetType("Sub")!;
 
         var scene = new Scene();
         var go = new GameObject("A");
-        MonoBehaviour oldSub = go.AddComponent(subV1);
+        Component oldSub = go.AddComponent(subV1);
         scene.Add(go);
 
         var handler = (Action)Delegate.CreateDelegate(typeof(Action), oldSub, subV1.GetMethod("OnPing")!);
@@ -389,10 +389,10 @@ public class HotReloadSceneTests : EditorTestHarness
         try
         {
             Assembly v2 = CompileGameAssembly("Sub.cs",
-                "using Prowl.Runtime; public class Sub : MonoBehaviour { public int Pings; public int Extra; public void OnPing(){ Pings++; } }");
+                "using Prowl.Runtime; public class Sub : Component { public int Pings; public int Extra; public void OnPing(){ Pings++; } }");
 
             SceneHotReload.Migrate(scene, v1, v2);
-            MonoBehaviour newSub = go.GetComponents().Single();
+            Component newSub = go.GetComponents().Single();
 
             var del = (Delegate?)loaded.GetValue(null);
             Assert.NotNull(del);
@@ -409,7 +409,7 @@ public class HotReloadSceneTests : EditorTestHarness
     public void RealRecompile_MigratesThePrefabComparisonBaseline_SoOverridesKeepBeingRecorded()
     {
         Assembly v1 = CompileGameAssembly("Knob.cs",
-            "using Prowl.Runtime; public class Knob : MonoBehaviour { public int Value; }");
+            "using Prowl.Runtime; public class Knob : Component { public int Value; }");
         Type knobV1 = v1.GetType("Knob")!;
 
         var authored = new GameObject("Root");
@@ -426,12 +426,12 @@ public class HotReloadSceneTests : EditorTestHarness
         Prefabs.PrefabUtility.ReconcileInstance(instance);
 
         Assembly v2 = CompileGameAssembly("Knob.cs",
-            "using Prowl.Runtime; public class Knob : MonoBehaviour { public int Value; public int Added; }");
+            "using Prowl.Runtime; public class Knob : Component { public int Value; public int Added; }");
         Type knobV2 = v2.GetType("Knob")!;
 
         SceneHotReload.Migrate(Scene.Current!, v1, v2);
 
-        MonoBehaviour migrated = instance.GetComponents().Single(c => c.GetType().Name == "Knob");
+        Component migrated = instance.GetComponents().Single(c => c.GetType().Name == "Knob");
         Assert.Same(knobV2, migrated.GetType());
 
         // The comparison still works, which it cannot if the baseline is holding a v1 component.

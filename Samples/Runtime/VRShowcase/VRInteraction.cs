@@ -93,7 +93,7 @@ public enum SocketSize
 }
 
 /// <summary>A dynamic body the physics hands can pick up, hold in one or both hands, throw and put in sockets.</summary>
-public sealed class Grabbable : MonoBehaviour
+public sealed class Grabbable : Component
 {
     public static readonly List<Grabbable> All = new();
 
@@ -315,7 +315,7 @@ public sealed class Grabbable : MonoBehaviour
 /// Something a hand works by gripping it, without picking anything up: the hand stays free and follows its
 /// controller while the target reads where the hand is, like pulling a slide or drawing a bowstring.
 /// </summary>
-public abstract class HandTarget : MonoBehaviour
+public abstract class HandTarget : Component
 {
     public static readonly List<HandTarget> All = new();
 
@@ -358,7 +358,7 @@ public abstract class HandTarget : MonoBehaviour
 /// kinematically and carried along with the socket, so a rack keeps its item. Grabbing the item takes it
 /// back out.
 /// </summary>
-public sealed class Socket : MonoBehaviour
+public sealed class Socket : Component
 {
     public static readonly List<Socket> All = new();
 
@@ -596,7 +596,7 @@ public sealed class Socket : MonoBehaviour
 /// Points a laser from whichever empty hand aims at world space UI and drives the scene's <see cref="EventSystem"/>
 /// with it. The laser only shows while it is on a panel, and the trigger presses.
 /// </summary>
-public sealed class UIPointer : MonoBehaviour
+public sealed class UIPointer : Component
 {
     public PhysicsHand LeftHand = null!;
     public PhysicsHand RightHand = null!;
@@ -670,7 +670,7 @@ public sealed class UIPointer : MonoBehaviour
 }
 
 /// <summary>Moves a kinematic body back and forth between two points by velocity, pausing at each end, so whatever stands on it is carried.</summary>
-public sealed class MovingPlatform : MonoBehaviour
+public sealed class MovingPlatform : Component
 {
     public Float3 From;
     public Float3 To;
@@ -707,7 +707,7 @@ public sealed class MovingPlatform : MonoBehaviour
 }
 
 /// <summary>Spins a kinematic body about the vertical, carrying and turning whatever rides it.</summary>
-public sealed class Spinner : MonoBehaviour
+public sealed class Spinner : Component
 {
     public float DegreesPerSecond = 20f;
 

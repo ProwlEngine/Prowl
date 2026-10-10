@@ -29,7 +29,7 @@ Use a plain field for almost everything. Use `AssetRef<T>` only for things neede
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
-public class Spawner : MonoBehaviour
+public class Spawner : Component
 {
     public PrefabAsset Enemy;                // held and loaded with the scene
     public AssetRef<SceneAsset> NextLevel;   // only a reference, loads when asked

@@ -189,7 +189,7 @@ public sealed class ControllerShowcaseGame : StationGame
 }
 
 /// <summary>Drives a kinematic body back and forth between two points through its velocity, pausing at each end.</summary>
-public sealed class PingPongMover : MonoBehaviour
+public sealed class PingPongMover : Component
 {
     public Float3 From, To;
     public float Speed = 3f;
@@ -227,7 +227,7 @@ public sealed class PingPongMover : MonoBehaviour
 }
 
 /// <summary>Spins a kinematic body at a steady rate about its own up axis.</summary>
-public sealed class Spinner : MonoBehaviour
+public sealed class Spinner : Component
 {
     public float DegreesPerSecond = 45f;
 
@@ -239,7 +239,7 @@ public sealed class Spinner : MonoBehaviour
         => _body.AngularVelocity = _body.Rotation * Float3.UnitY * (DegreesPerSecond * MathF.PI / 180f);
 }
 
-public sealed class CharacterInput : MonoBehaviour
+public sealed class CharacterInput : Component
 {
     public float Speed = 6f;
     public float JumpHeight = 1.4f;
@@ -413,7 +413,7 @@ public sealed class CharacterInput : MonoBehaviour
 /// A region with its own gravity: a fixed pull across a box, or a pull toward the middle of a sphere
 /// for a planet. Where zones overlap the higher <see cref="Priority"/> wins.
 /// </summary>
-public sealed class GravityZone : MonoBehaviour
+public sealed class GravityZone : Component
 {
     public static readonly List<GravityZone> All = new();
 
@@ -459,7 +459,7 @@ public sealed class GravityZone : MonoBehaviour
 }
 
 /// <summary>A pad that throws whatever stands on it at <see cref="Launch"/>.</summary>
-public sealed class JumpPad : MonoBehaviour
+public sealed class JumpPad : Component
 {
     public static readonly List<JumpPad> All = new();
 
@@ -478,7 +478,7 @@ public sealed class JumpPad : MonoBehaviour
 }
 
 /// <summary>One end of a teleporter: stepping onto it puts the walker on <see cref="Exit"/>.</summary>
-public sealed class Teleporter : MonoBehaviour
+public sealed class Teleporter : Component
 {
     public static readonly List<Teleporter> All = new();
 

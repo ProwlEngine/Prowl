@@ -33,7 +33,7 @@ public class AmmoSettings
     public float ReloadSeconds = 1.5f;
 }
 
-public class Weapon : MonoBehaviour
+public class Weapon : Component
 {
     public WeaponKind Kind = WeaponKind.Rifle;               // enums are saved
     public AmmoSettings Ammo = new();                        // nested classes are saved field by field

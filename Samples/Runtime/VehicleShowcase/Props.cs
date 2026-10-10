@@ -10,7 +10,7 @@ namespace VehicleShowcase;
 /// Carries a kinematic Rigidbody3D back and forth between where it starts and <see cref="Travel"/> away, waiting at
 /// each end. It moves by velocity rather than by teleporting, so wheels and anything resting on it ride along.
 /// </summary>
-public sealed class MovingPlatform : MonoBehaviour
+public sealed class MovingPlatform : Component
 {
     /// <summary>How far the far end is from the start, in world space.</summary>
     public Float3 Travel = new(0f, 0f, 10f);
@@ -58,7 +58,7 @@ public sealed class MovingPlatform : MonoBehaviour
 }
 
 /// <summary>Turns a kinematic Rigidbody3D steadily about its own up axis, for a turntable.</summary>
-public sealed class Spinner : MonoBehaviour
+public sealed class Spinner : Component
 {
     public float DegreesPerSecond = 20f;
 

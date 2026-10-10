@@ -16,7 +16,7 @@ namespace Prowl.Runtime;
 /// loads normally with its references intact once its type exists again.
 /// </summary>
 [ComponentIcon("\uf059")] // CircleQuestion
-public class MissingMonobehaviour : MonoBehaviour, ISerializable
+public class MissingComponent : Component, ISerializable
 {
     public EchoObject ComponentData;
 
@@ -55,7 +55,7 @@ public class MissingMonobehaviour : MonoBehaviour, ISerializable
 
         // Saved before missing components kept their original shape: the data sits in a ComponentData
         // field and its ids belong to an older file, so they are not resolved against this one.
-        if (RuntimeUtils.FindType(value.Get("$type")?.StringValue ?? "") == typeof(MissingMonobehaviour))
+        if (RuntimeUtils.FindType(value.Get("$type")?.StringValue ?? "") == typeof(MissingComponent))
         {
             Load(value, value.Get("ComponentData"), ctx);
             return;

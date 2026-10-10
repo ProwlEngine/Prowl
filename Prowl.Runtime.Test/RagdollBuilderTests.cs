@@ -40,7 +40,7 @@ public class RagdollBuilderTests
         return (root, bones);
     }
 
-    private static T On<T>(Dictionary<HumanBodyBone, Transform> bones, HumanBodyBone bone) where T : MonoBehaviour
+    private static T On<T>(Dictionary<HumanBodyBone, Transform> bones, HumanBodyBone bone) where T : Component
         => bones[bone].GameObject.GetComponent<T>();
 
     // Hips, chest, neck and head, and two parts per limb: every part this rig has bones for.

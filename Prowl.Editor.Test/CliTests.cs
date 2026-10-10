@@ -318,7 +318,7 @@ public class CliTests : EditorTestHarness
     }
 }
 
-public sealed class CliProbe : MonoBehaviour
+public sealed class CliProbe : Component
 {
     public int Count;
     public float Speed = 1;
@@ -335,7 +335,7 @@ public sealed class CliProbe : MonoBehaviour
     public override void OnValidate() => Validated++;
 }
 
-public sealed class CliProbeExtra : MonoBehaviour
+public sealed class CliProbeExtra : Component
 {
     public int Level;
 }
@@ -661,7 +661,7 @@ public class CliAssetCommandTests : EditorTestHarness
         Assert.Contains("class Gun", File.ReadAllText(AssetAbsolutePath("Scripts/Gun.cs")));
         Assert.Contains("already exists", Fails("script", "Scripts/Gun.cs"));
         Assert.Contains("not a valid class name", Fails("script", "Scripts/1Bad.cs"));
-        Assert.Contains(Ok("script", "--list")!.AsArray(), t => t!["name"]!.GetValue<string>() == "MonoBehaviour");
+        Assert.Contains(Ok("script", "--list")!.AsArray(), t => t!["name"]!.GetValue<string>() == "Component");
     }
 
     [Fact]
@@ -877,7 +877,7 @@ public class CliApiCommandTests : EditorTestHarness
         Assert.Contains(probe["members"]!.AsArray(), m => m!["signature"]!.GetValue<string>() == "public override void OnValidate()");
 
         var inherited = Ok("--type", "CliProbe", "--member", "GetComponent", "--inherited");
-        Assert.Equal("MonoBehaviour", inherited["members"]![0]!["declaredOn"]!.GetValue<string>());
+        Assert.Equal("Component", inherited["members"]![0]!["declaredOn"]!.GetValue<string>());
     }
 }
 

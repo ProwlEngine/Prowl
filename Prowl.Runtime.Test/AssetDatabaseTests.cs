@@ -24,7 +24,7 @@ public sealed class Crate : Asset
 }
 
 /// <summary>A component holding a crate, the way gameplay code holds an asset.</summary>
-public sealed class CrateHolder : MonoBehaviour
+public sealed class CrateHolder : Component
 {
     public Crate? Crate;
     public Crate? SeenOnEnable;
@@ -254,7 +254,7 @@ public class AssetDatabaseTests : RuntimeTestBase
         Assert.True(crate.IsMissing);
     }
 
-    private sealed class IteratorHolder : MonoBehaviour
+    private sealed class IteratorHolder : Component
     {
         public static bool Ran;
         public IEnumerable<Crate>? Crates;

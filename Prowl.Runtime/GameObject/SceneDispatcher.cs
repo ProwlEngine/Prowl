@@ -12,7 +12,7 @@ using Prowl.Runtime.Rendering;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Which optional <see cref="MonoBehaviour"/> callbacks a component actually overrides. Resolved once per
+/// Which optional <see cref="Component"/> callbacks a component actually overrides. Resolved once per
 /// instance and cached on it, so neither the per-frame loops nor the physics events pay a type lookup.
 /// </summary>
 [Flags]
@@ -80,29 +80,29 @@ internal sealed class SceneDispatcher
     {
         SceneCallbacks callbacks = SceneCallbacks.None;
 
-        if (Overrides(type, nameof(MonoBehaviour.Start))) callbacks |= SceneCallbacks.Start;
-        if (Overrides(type, nameof(MonoBehaviour.Update))) callbacks |= SceneCallbacks.Update;
-        if (Overrides(type, nameof(MonoBehaviour.LateUpdate))) callbacks |= SceneCallbacks.LateUpdate;
-        if (Overrides(type, nameof(MonoBehaviour.FixedUpdate))) callbacks |= SceneCallbacks.FixedUpdate;
-        if (Overrides(type, nameof(MonoBehaviour.OnRenderCollect))) callbacks |= SceneCallbacks.RenderCollect;
-        if (Overrides(type, nameof(MonoBehaviour.DrawGizmos))) callbacks |= SceneCallbacks.DrawGizmos;
-        if (Overrides(type, nameof(MonoBehaviour.OnGui))) callbacks |= SceneCallbacks.OnGui;
+        if (Overrides(type, nameof(Component.Start))) callbacks |= SceneCallbacks.Start;
+        if (Overrides(type, nameof(Component.Update))) callbacks |= SceneCallbacks.Update;
+        if (Overrides(type, nameof(Component.LateUpdate))) callbacks |= SceneCallbacks.LateUpdate;
+        if (Overrides(type, nameof(Component.FixedUpdate))) callbacks |= SceneCallbacks.FixedUpdate;
+        if (Overrides(type, nameof(Component.OnRenderCollect))) callbacks |= SceneCallbacks.RenderCollect;
+        if (Overrides(type, nameof(Component.DrawGizmos))) callbacks |= SceneCallbacks.DrawGizmos;
+        if (Overrides(type, nameof(Component.OnGui))) callbacks |= SceneCallbacks.OnGui;
 
-        if (Overrides(type, nameof(MonoBehaviour.OnCollisionBegin))) callbacks |= SceneCallbacks.CollisionBegin;
-        if (Overrides(type, nameof(MonoBehaviour.OnCollisionStay))) callbacks |= SceneCallbacks.CollisionStay;
-        if (Overrides(type, nameof(MonoBehaviour.OnCollisionEnd))) callbacks |= SceneCallbacks.CollisionEnd;
-        if (Overrides(type, nameof(MonoBehaviour.OnTriggerEnter))) callbacks |= SceneCallbacks.TriggerEnter;
-        if (Overrides(type, nameof(MonoBehaviour.OnTriggerStay))) callbacks |= SceneCallbacks.TriggerStay;
-        if (Overrides(type, nameof(MonoBehaviour.OnTriggerExit))) callbacks |= SceneCallbacks.TriggerExit;
-        if (Overrides(type, nameof(MonoBehaviour.OnCharacterEnter))) callbacks |= SceneCallbacks.CharacterEnter;
-        if (Overrides(type, nameof(MonoBehaviour.OnCharacterStay))) callbacks |= SceneCallbacks.CharacterStay;
-        if (Overrides(type, nameof(MonoBehaviour.OnCharacterExit))) callbacks |= SceneCallbacks.CharacterExit;
+        if (Overrides(type, nameof(Component.OnCollisionBegin))) callbacks |= SceneCallbacks.CollisionBegin;
+        if (Overrides(type, nameof(Component.OnCollisionStay))) callbacks |= SceneCallbacks.CollisionStay;
+        if (Overrides(type, nameof(Component.OnCollisionEnd))) callbacks |= SceneCallbacks.CollisionEnd;
+        if (Overrides(type, nameof(Component.OnTriggerEnter))) callbacks |= SceneCallbacks.TriggerEnter;
+        if (Overrides(type, nameof(Component.OnTriggerStay))) callbacks |= SceneCallbacks.TriggerStay;
+        if (Overrides(type, nameof(Component.OnTriggerExit))) callbacks |= SceneCallbacks.TriggerExit;
+        if (Overrides(type, nameof(Component.OnCharacterEnter))) callbacks |= SceneCallbacks.CharacterEnter;
+        if (Overrides(type, nameof(Component.OnCharacterStay))) callbacks |= SceneCallbacks.CharacterStay;
+        if (Overrides(type, nameof(Component.OnCharacterExit))) callbacks |= SceneCallbacks.CharacterExit;
 
         return callbacks;
     }
 
     private static bool Overrides(Type type, string method)
-        => RuntimeUtils.OverridesVirtual(type, method, typeof(MonoBehaviour));
+        => RuntimeUtils.OverridesVirtual(type, method, typeof(Component));
 
     /// <summary>
     /// The component's callback set, resolved from its type the first time it is asked for and cached on the
@@ -110,14 +110,14 @@ internal sealed class SceneDispatcher
     /// picks up whatever its new type overrides.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static SceneCallbacks CallbacksOf(MonoBehaviour c)
+    internal static SceneCallbacks CallbacksOf(Component c)
     {
         SceneCallbacks cached = c._callbacks;
         return (cached & SceneCallbacks.Resolved) != 0 ? cached : Resolve(c);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static SceneCallbacks Resolve(MonoBehaviour c)
+    private static SceneCallbacks Resolve(Component c)
         => c._callbacks = s_byType[c.GetType()] | SceneCallbacks.Resolved;
 
     // ---- registration --------------------------------------------------------------------------------
@@ -125,7 +125,7 @@ internal sealed class SceneDispatcher
     /// <summary>Enabled components that listen for a collision event. Physics tracks no contacts while there are none.</summary>
     public int CollisionListeners { get; private set; }
 
-    private MonoBehaviour[] _registered = new MonoBehaviour[64];
+    private Component[] _registered = new Component[64];
     private int _count;
     private int _sequence;
 
@@ -141,7 +141,7 @@ internal sealed class SceneDispatcher
     /// Starts dispatching a component's per-frame callbacks. Called whenever it becomes enabled in an active
     /// scene; the per-tick gameplay gate decides whether they actually run.
     /// </summary>
-    public void Register(MonoBehaviour c)
+    public void Register(Component c)
     {
         SceneCallbacks callbacks = CallbacksOf(c);
         if ((callbacks & SceneCallbacks.AnyCollision) != 0 && !c._countedCollisionListener)
@@ -168,7 +168,7 @@ internal sealed class SceneDispatcher
     }
 
     /// <summary>Stops dispatching a component's per-frame callbacks. Constant time.</summary>
-    public void Unregister(MonoBehaviour c)
+    public void Unregister(Component c)
     {
         if (c._countedCollisionListener)
         {
@@ -183,7 +183,7 @@ internal sealed class SceneDispatcher
         // so moving an entry cannot change dispatch order.
         int index = slot - 1;
         int last = --_count;
-        MonoBehaviour moved = _registered[last];
+        Component moved = _registered[last];
         _registered[index] = moved;
         moved._dispatchSlot = index + 1;
         _registered[last] = null!;
@@ -200,7 +200,7 @@ internal sealed class SceneDispatcher
     {
         for (int i = 0; i < _count; i++)
         {
-            MonoBehaviour c = _registered[i];
+            Component c = _registered[i];
             if (c is null) continue;
 
             c._dispatchSlot = 0;
@@ -237,7 +237,7 @@ internal sealed class SceneDispatcher
     private sealed class Channel
     {
         private readonly SceneCallbacks _bit;
-        private MonoBehaviour[] _items = Array.Empty<MonoBehaviour>();
+        private Component[] _items = Array.Empty<Component>();
         private int _count;
 
         public Channel(SceneCallbacks bit) => _bit = bit;
@@ -251,7 +251,7 @@ internal sealed class SceneDispatcher
             Dirty = true;
         }
 
-        public int Snapshot(SceneDispatcher owner, out MonoBehaviour[] items)
+        public int Snapshot(SceneDispatcher owner, out Component[] items)
         {
             if (Dirty) Rebuild(owner);
             items = _items;
@@ -260,18 +260,18 @@ internal sealed class SceneDispatcher
 
         private void Rebuild(SceneDispatcher owner)
         {
-            MonoBehaviour[] source = owner._registered;
+            Component[] source = owner._registered;
             int sourceCount = owner._count;
 
             if (_items.Length < sourceCount)
-                _items = new MonoBehaviour[Math.Max(sourceCount, 8)];
+                _items = new Component[Math.Max(sourceCount, 8)];
 
             int n = 0;
             bool skipStarted = _bit == SceneCallbacks.Start;
 
             for (int i = 0; i < sourceCount; i++)
             {
-                MonoBehaviour c = source[i];
+                Component c = source[i];
                 if ((c._callbacks & _bit) == 0) continue;
 
                 // A component only ever starts once, so it leaves this channel for good afterwards.
@@ -293,11 +293,11 @@ internal sealed class SceneDispatcher
     /// reflection path entirely, and the sequence tie-break makes the result independent of array position,
     /// which is what lets registration use swap-back removal.
     /// </summary>
-    private sealed class DispatchOrder : IComparer<MonoBehaviour>
+    private sealed class DispatchOrder : IComparer<Component>
     {
         public static readonly DispatchOrder Instance = new();
 
-        public int Compare(MonoBehaviour? a, MonoBehaviour? b)
+        public int Compare(Component? a, Component? b)
         {
             int order = a!._dispatchOrder.CompareTo(b!._dispatchOrder);
             return order != 0 ? order : a._dispatchSequence.CompareTo(b._dispatchSequence);
@@ -308,16 +308,16 @@ internal sealed class SceneDispatcher
 
     public void RunStart()
     {
-        int count = _start.Snapshot(this, out MonoBehaviour[] items);
+        int count = _start.Snapshot(this, out Component[] items);
         bool anyStarted = false;
 
         for (int i = 0; i < count; i++)
         {
-            MonoBehaviour c = items[i];
+            Component c = items[i];
             if (c.IsDisposed || c.HasStarted || !c.EnabledInHierarchy) continue;
 
             try { c.InternalStart(); }
-            catch (Exception ex) { Report(c, nameof(MonoBehaviour.Start), ex); }
+            catch (Exception ex) { Report(c, nameof(Component.Start), ex); }
 
             anyStarted |= c.HasStarted;
         }
@@ -329,40 +329,40 @@ internal sealed class SceneDispatcher
 
     public void RunUpdate()
     {
-        int count = _update.Snapshot(this, out MonoBehaviour[] items);
+        int count = _update.Snapshot(this, out Component[] items);
         for (int i = 0; i < count; i++)
         {
-            MonoBehaviour c = items[i];
+            Component c = items[i];
             if (c.IsDisposed || !c.EnabledInHierarchy) continue;
 
             try { c.InternalUpdate(); }
-            catch (Exception ex) { Report(c, nameof(MonoBehaviour.Update), ex); }
+            catch (Exception ex) { Report(c, nameof(Component.Update), ex); }
         }
     }
 
     public void RunLateUpdate()
     {
-        int count = _lateUpdate.Snapshot(this, out MonoBehaviour[] items);
+        int count = _lateUpdate.Snapshot(this, out Component[] items);
         for (int i = 0; i < count; i++)
         {
-            MonoBehaviour c = items[i];
+            Component c = items[i];
             if (c.IsDisposed || !c.EnabledInHierarchy) continue;
 
             try { c.InternalLateUpdate(); }
-            catch (Exception ex) { Report(c, nameof(MonoBehaviour.LateUpdate), ex); }
+            catch (Exception ex) { Report(c, nameof(Component.LateUpdate), ex); }
         }
     }
 
     public void RunFixedUpdate()
     {
-        int count = _fixedUpdate.Snapshot(this, out MonoBehaviour[] items);
+        int count = _fixedUpdate.Snapshot(this, out Component[] items);
         for (int i = 0; i < count; i++)
         {
-            MonoBehaviour c = items[i];
+            Component c = items[i];
             if (c.IsDisposed || !c.EnabledInHierarchy) continue;
 
             try { c.InternalFixedUpdate(); }
-            catch (Exception ex) { Report(c, nameof(MonoBehaviour.FixedUpdate), ex); }
+            catch (Exception ex) { Report(c, nameof(Component.FixedUpdate), ex); }
         }
     }
 
@@ -370,44 +370,44 @@ internal sealed class SceneDispatcher
 
     public void RunRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        int count = _renderCollect.Snapshot(this, out MonoBehaviour[] items);
+        int count = _renderCollect.Snapshot(this, out Component[] items);
         for (int i = 0; i < count; i++)
         {
-            MonoBehaviour c = items[i];
+            Component c = items[i];
             if (c.IsDisposed || !c.EnabledInHierarchy) continue;
 
             try { c.OnRenderCollect(camera, renderables, lights); }
-            catch (Exception ex) { Report(c, nameof(MonoBehaviour.OnRenderCollect), ex); }
+            catch (Exception ex) { Report(c, nameof(Component.OnRenderCollect), ex); }
         }
     }
 
     public void RunDrawGizmos()
     {
-        int count = _drawGizmos.Snapshot(this, out MonoBehaviour[] items);
+        int count = _drawGizmos.Snapshot(this, out Component[] items);
         for (int i = 0; i < count; i++)
         {
-            MonoBehaviour c = items[i];
+            Component c = items[i];
             if (c.IsDisposed || !c.EnabledInHierarchy || (c.HideFlags & HideFlags.NoGizmos) != 0) continue;
 
             try { c.DrawGizmos(); }
-            catch (Exception ex) { Report(c, nameof(MonoBehaviour.DrawGizmos), ex); }
+            catch (Exception ex) { Report(c, nameof(Component.DrawGizmos), ex); }
         }
     }
 
     public void RunOnGui(Paper paper)
     {
-        int count = _onGui.Snapshot(this, out MonoBehaviour[] items);
+        int count = _onGui.Snapshot(this, out Component[] items);
         for (int i = 0; i < count; i++)
         {
-            MonoBehaviour c = items[i];
+            Component c = items[i];
             if (c.IsDisposed || !c.EnabledInHierarchy) continue;
 
             try { c.OnGui(paper); }
-            catch (Exception ex) { Report(c, nameof(MonoBehaviour.OnGui), ex); }
+            catch (Exception ex) { Report(c, nameof(Component.OnGui), ex); }
         }
     }
 
-    private static void Report(MonoBehaviour c, string callback, Exception ex)
+    private static void Report(Component c, string callback, Exception ex)
         => Debug.LogError($"[{(c.GameObject.IsValid() ? c.GameObject.Name : null)}/{c.GetType().Name}] {callback} threw: {ex.Message}\n{ex.StackTrace}");
 
     // ---- sparse physics events -----------------------------------------------------------------------
@@ -420,7 +420,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.CollisionBegin, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.CollisionBegin, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnCollisionBegin(collision); return; }
 
@@ -432,7 +432,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.CollisionStay, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.CollisionStay, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnCollisionStay(collision); return; }
 
@@ -445,10 +445,10 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return false;
 
-        List<MonoBehaviour> components = go._components;
+        List<Component> components = go._components;
         for (int i = 0; i < components.Count; i++)
         {
-            MonoBehaviour c = components[i];
+            Component c = components[i];
             if ((CallbacksOf(c) & which) != 0 && !c.IsDisposed && c.EnabledInHierarchy) return true;
         }
 
@@ -459,7 +459,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.CollisionEnd, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.CollisionEnd, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnCollisionEnd(collision); return; }
 
@@ -471,7 +471,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.TriggerEnter, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.TriggerEnter, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnTriggerEnter(other); return; }
 
@@ -483,7 +483,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.TriggerStay, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.TriggerStay, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnTriggerStay(other); return; }
 
@@ -495,7 +495,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.TriggerExit, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.TriggerExit, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnTriggerExit(other); return; }
 
@@ -507,7 +507,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.CharacterEnter, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.CharacterEnter, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnCharacterEnter(character); return; }
 
@@ -519,7 +519,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.CharacterStay, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.CharacterStay, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnCharacterStay(character); return; }
 
@@ -531,7 +531,7 @@ internal sealed class SceneDispatcher
     {
         if (go is null) return;
 
-        int count = Collect(go, SceneCallbacks.CharacterExit, out MonoBehaviour single, out MonoBehaviour[]? many);
+        int count = Collect(go, SceneCallbacks.CharacterExit, out Component single, out Component[]? many);
         if (count == 0) return;
         if (count == 1) { single.InternalOnCharacterExit(character); return; }
 
@@ -542,18 +542,18 @@ internal sealed class SceneDispatcher
     // A handler may add or remove components, or trigger a nested event, so more than one recipient has to be
     // dispatched off a snapshot. Nothing is copied for the overwhelmingly common cases of no handler at all
     // or exactly one, which is where the contact callbacks actually spend their time.
-    private static int Collect(GameObject go, SceneCallbacks which, out MonoBehaviour single, out MonoBehaviour[]? many)
+    private static int Collect(GameObject go, SceneCallbacks which, out Component single, out Component[]? many)
     {
         single = null!;
         many = null;
 
-        List<MonoBehaviour> components = go._components;
+        List<Component> components = go._components;
         int total = components.Count;
         int found = 0;
 
         for (int i = 0; i < total; i++)
         {
-            MonoBehaviour c = components[i];
+            Component c = components[i];
             if ((CallbacksOf(c) & which) == 0) continue;
             if (c.IsDisposed || !c.EnabledInHierarchy) continue;
 
@@ -571,22 +571,22 @@ internal sealed class SceneDispatcher
         return found;
     }
 
-    [ThreadStatic] private static Stack<MonoBehaviour[]>? t_buffers;
+    [ThreadStatic] private static Stack<Component[]>? t_buffers;
 
-    private static MonoBehaviour[] Rent(int minimum)
+    private static Component[] Rent(int minimum)
     {
-        Stack<MonoBehaviour[]> pool = t_buffers ??= new Stack<MonoBehaviour[]>();
+        Stack<Component[]> pool = t_buffers ??= new Stack<Component[]>();
 
-        while (pool.TryPop(out MonoBehaviour[]? buffer))
+        while (pool.TryPop(out Component[]? buffer))
             if (buffer.Length >= minimum)
                 return buffer;
 
-        return new MonoBehaviour[Math.Max(minimum, 8)];
+        return new Component[Math.Max(minimum, 8)];
     }
 
-    private static void Release(MonoBehaviour[] buffer, int used)
+    private static void Release(Component[] buffer, int used)
     {
         Array.Clear(buffer, 0, used);
-        (t_buffers ??= new Stack<MonoBehaviour[]>()).Push(buffer);
+        (t_buffers ??= new Stack<Component[]>()).Push(buffer);
     }
 }

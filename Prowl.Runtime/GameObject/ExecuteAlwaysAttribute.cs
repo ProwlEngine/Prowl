@@ -6,7 +6,7 @@ using System;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// When applied to a MonoBehaviour, its gameplay methods also run outside play mode, such as in the editor: Start,
+/// When applied to a Component, its gameplay methods also run outside play mode, such as in the editor: Start,
 /// Update, LateUpdate, FixedUpdate, OnEnable, OnDisable, and the collision, trigger and character callbacks.
 /// OnAddedToScene, OnRemovedFromScene, OnRenderCollect, DrawGizmos, DrawGizmosSelected and OnGui always run.
 /// </summary>

@@ -20,7 +20,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Physics/Character Controller")]
 [ComponentIcon("")] // PersonRunning
-public class CharacterController : MonoBehaviour
+public class CharacterController : Component
 {
     /// <summary>Which sides of the controller met something during a move.</summary>
     [Flags]

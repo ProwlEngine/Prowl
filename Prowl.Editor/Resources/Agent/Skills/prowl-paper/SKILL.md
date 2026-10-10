@@ -184,7 +184,7 @@ using Prowl.Scribe;
 using Prowl.Vector;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 
-public sealed class MainMenu : MonoBehaviour
+public sealed class MainMenu : Component
 {
     private static readonly Color Idle = new(0.18f, 0.20f, 0.26f, 1f);
     private static readonly Color Hover = new(0.26f, 0.30f, 0.40f, 1f);
@@ -245,7 +245,7 @@ using Prowl.Scribe;
 using Prowl.Vector;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 
-public sealed class InventoryList : MonoBehaviour
+public sealed class InventoryList : Component
 {
     private const float ViewHeight = 300f;
     private readonly List<string> _items = new();
@@ -318,7 +318,7 @@ using Prowl.Scribe;
 using Prowl.Vector;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 
-public sealed class NameEntry : MonoBehaviour
+public sealed class NameEntry : Component
 {
     private string _name = "";
     private string _submitted = "";
@@ -381,7 +381,7 @@ using Prowl.Scribe;
 using Prowl.Vector;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 
-public sealed class LoadingPanel : MonoBehaviour
+public sealed class LoadingPanel : Component
 {
     private bool _open = true;
     private float _progress;

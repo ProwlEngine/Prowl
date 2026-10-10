@@ -711,7 +711,7 @@ public sealed class ParticleShowcaseGame : StationGame
 }
 
 /// <summary>Flies its GameObject around a horizontal circle, for the simulation space station.</summary>
-public sealed class Orbiter : MonoBehaviour
+public sealed class Orbiter : Component
 {
     public Float3 Center;
     public float Radius = 3f;

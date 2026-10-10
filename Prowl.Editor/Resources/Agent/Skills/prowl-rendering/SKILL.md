@@ -52,7 +52,7 @@ A first person viewmodel camera keeps the gun from clipping into walls:
 ```csharp
 using Prowl.Runtime;
 
-public sealed class ViewmodelSetup : MonoBehaviour
+public sealed class ViewmodelSetup : Component
 {
     public Camera World;
     public Camera Viewmodel;
@@ -90,7 +90,7 @@ The viewmodel camera is a child of the world camera, and the arms and gun object
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 
-public sealed class MuzzleFlash : MonoBehaviour
+public sealed class MuzzleFlash : Component
 {
     public ParticleSystemComponent Flash;
 

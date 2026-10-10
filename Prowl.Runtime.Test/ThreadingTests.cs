@@ -14,13 +14,13 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>Stands in for a user script that overrides OnDispose without calling base.</summary>
-public sealed class ForgetsBaseDispose : MonoBehaviour
+public sealed class ForgetsBaseDispose : Component
 {
     protected override void OnDispose() { }
 }
 
 /// <summary>Runs whatever a test hands it from inside Update, the way gameplay code starts work.</summary>
-public sealed class GameplayHook : MonoBehaviour
+public sealed class GameplayHook : Component
 {
     public static Action? OnUpdate;
 
@@ -28,7 +28,7 @@ public sealed class GameplayHook : MonoBehaviour
 }
 
 /// <summary>Records which async session its enable and disable callbacks ran in.</summary>
-public sealed class SessionProbe : MonoBehaviour
+public sealed class SessionProbe : Component
 {
     public CancellationToken EnabledIn, DisabledIn;
     public bool DisabledInEndedSession;

@@ -119,7 +119,7 @@ public class PrefabTests : RuntimeTestBase
 
             // What tells a prefab-provided component from one the instance adds later. Position is
             // not used, so reordering cannot reclassify anything.
-            MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
+            Component provided = instance.GetComponents<Component>().First();
             Assert.NotEqual(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
             Assert.NotEqual(Guid.Empty, instance.Children[0].SourceIdentifier);
         }
@@ -148,7 +148,7 @@ public class PrefabTests : RuntimeTestBase
             Assert.Equal(assetId, instance.PrefabAssetId);
             Assert.Equal(assetId, instance.Children[0].PrefabAssetId);
 
-            MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
+            Component provided = instance.GetComponents<Component>().First();
             Assert.Equal(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
             Assert.Equal(Guid.Empty, instance.Children[0].SourceIdentifier);
         }
@@ -171,8 +171,8 @@ public class PrefabTests : RuntimeTestBase
 
             // Skipping the bookkeeping must not mean two spawns wearing one identity.
             Assert.NotEqual(a.Identifier, b.Identifier);
-            Assert.NotEqual(a.GetComponents<MonoBehaviour>().First().Identifier,
-                            b.GetComponents<MonoBehaviour>().First().Identifier);
+            Assert.NotEqual(a.GetComponents<Component>().First().Identifier,
+                            b.GetComponents<Component>().First().Identifier);
         }
         finally { Application.IsEditor = wasEditor; }
     }
@@ -185,7 +185,7 @@ public class PrefabTests : RuntimeTestBase
         var prefab = MakePrefab(source, Guid.NewGuid());
 
         var instance = GameObject.InstantiateDetached(prefab)!;
-        MonoBehaviour added = instance.AddComponent<SerializableComponent>();
+        Component added = instance.AddComponent<SerializableComponent>();
 
         Assert.Equal(Guid.Empty, instance.GetComponentSourceIdentifier(added));
     }

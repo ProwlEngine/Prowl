@@ -14,7 +14,7 @@ namespace Prowl.Runtime.Test;
 
 public class UITests : RuntimeTestBase
 {
-    private sealed class ClickCounter : MonoBehaviour, IPointerClickHandler, IPointerDownHandler
+    private sealed class ClickCounter : Component, IPointerClickHandler, IPointerDownHandler
     {
         public int Clicks;
         public int Presses;
@@ -53,7 +53,7 @@ public class UITests : RuntimeTestBase
         Assert.Equal(0, counter.Presses);
     }
 
-    private sealed class DragCatcher : MonoBehaviour, IDragHandler
+    private sealed class DragCatcher : Component, IDragHandler
     {
         public void OnDrag(PointerEventData e) { }
     }

@@ -850,7 +850,7 @@ public sealed class PhysicsShowcaseGame : StationGame
 }
 
 /// <summary>Glows briefly when its body lands hard, scaled by the impulse of the contact.</summary>
-public sealed class ImpactFlash : MonoBehaviour
+public sealed class ImpactFlash : Component
 {
     private Material? _material;
     private float _mass = 1f;
@@ -879,7 +879,7 @@ public sealed class ImpactFlash : MonoBehaviour
 }
 
 /// <summary>Counts what is touching a static collider, lit by how much rests on it.</summary>
-public sealed class ContactCounter : MonoBehaviour
+public sealed class ContactCounter : Component
 {
     public int Touching;
     private Material? _material;
@@ -900,7 +900,7 @@ public sealed class ContactCounter : MonoBehaviour
 }
 
 /// <summary>Flips a prismatic motor up and down at its limits.</summary>
-public sealed class PistonDriver : MonoBehaviour
+public sealed class PistonDriver : Component
 {
     public PrismaticJoint Joint = null!;
     public float Speed = 1.5f;
@@ -916,7 +916,7 @@ public sealed class PistonDriver : MonoBehaviour
 }
 
 /// <summary>Runs a linear motor between two heights.</summary>
-public sealed class ElevatorDriver : MonoBehaviour
+public sealed class ElevatorDriver : Component
 {
     public LinearMotorConstraint Motor = null!;
     public float Bottom, Top;
@@ -941,7 +941,7 @@ public sealed class ElevatorDriver : MonoBehaviour
 }
 
 /// <summary>Moves back and forth by writing the Transform, which a kinematic body follows.</summary>
-public sealed class Oscillate : MonoBehaviour
+public sealed class Oscillate : Component
 {
     public Float3 Origin;
     public Float3 Offset;
@@ -952,7 +952,7 @@ public sealed class Oscillate : MonoBehaviour
 }
 
 /// <summary>Runs the three query demos every frame and draws them as gizmos.</summary>
-public sealed class QueryProbes : MonoBehaviour
+public sealed class QueryProbes : Component
 {
     public Float3 Turret;
     public Float3 LaneStart;
@@ -1021,7 +1021,7 @@ public sealed class QueryProbes : MonoBehaviour
 }
 
 /// <summary>Counts trigger entries and glows while anything is inside.</summary>
-public sealed class TriggerGate : MonoBehaviour
+public sealed class TriggerGate : Component
 {
     public Material Glow = null!;
     public int Count;
@@ -1040,7 +1040,7 @@ public sealed class TriggerGate : MonoBehaviour
 }
 
 /// <summary>Sends anything that falls in back to the top of the ramp.</summary>
-public sealed class Recycler : MonoBehaviour
+public sealed class Recycler : Component
 {
     public Func<Float3> Target = () => Float3.Zero;
 

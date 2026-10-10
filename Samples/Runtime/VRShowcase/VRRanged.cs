@@ -19,7 +19,7 @@ using Prowl.Vector;
 
 namespace VRShowcase;
 
-public sealed class Magazine : MonoBehaviour
+public sealed class Magazine : Component
 {
     public int Capacity = 15;
     public int Rounds = 15;
@@ -31,7 +31,7 @@ public sealed class Magazine : MonoBehaviour
 /// slides along it freely, in and out. Pushed all the way in, it latches: it is welded in and can no longer be
 /// grabbed. Only <see cref="Release"/>, the gun's magazine release, unlatches it to slide back out.
 /// </summary>
-public sealed class MagazineWell : MonoBehaviour
+public sealed class MagazineWell : Component
 {
     /// <summary>How far a magazine travels along the rail, from the mouth to seated.</summary>
     public float Depth = 0.09f;
@@ -283,7 +283,7 @@ public sealed class MagazineWell : MonoBehaviour
 /// <summary>
 /// A gun along its own +Z, held by its first grab point. The hand holding that point fires with the trigger.
 /// </summary>
-public sealed class Gun : MonoBehaviour
+public sealed class Gun : Component
 {
     public Float3 Muzzle;
     public Float3 EjectPort;
@@ -768,7 +768,7 @@ public sealed class Bow : HandTarget
 /// An arrow along its own +Y with its notch at <see cref="Notch"/>. In flight it turns to face where it is going, and it
 /// looks ahead each step so it is not too fast to stick in what it hits.
 /// </summary>
-public sealed class Arrow : MonoBehaviour
+public sealed class Arrow : Component
 {
     public Float3 Notch;
     public Float3 Tip;
@@ -900,7 +900,7 @@ public sealed class Arrow : MonoBehaviour
 }
 
 /// <summary>Removes its GameObject after <see cref="Seconds"/>.</summary>
-public sealed class Expire : MonoBehaviour
+public sealed class Expire : Component
 {
     public float Seconds = 5f;
 

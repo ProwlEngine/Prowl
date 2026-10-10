@@ -103,7 +103,7 @@ public sealed class VRBasicsGame : Game
 }
 
 /// <summary>Turns the rig 45 degrees about the head each time the right stick is pushed sideways.</summary>
-public sealed class SnapTurn : MonoBehaviour
+public sealed class SnapTurn : Component
 {
     private bool _armed = true;
 
@@ -126,7 +126,7 @@ public sealed class SnapTurn : MonoBehaviour
 }
 
 /// <summary>A box on a controller that lights up with the trigger and carries a block while the grip is held.</summary>
-public sealed class SimpleHand : MonoBehaviour
+public sealed class SimpleHand : Component
 {
     public static readonly List<Rigidbody3D> Grabbables = new();
 

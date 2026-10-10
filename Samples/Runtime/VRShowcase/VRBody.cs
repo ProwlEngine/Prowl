@@ -16,7 +16,7 @@ namespace VRShowcase;
 /// wanted speed relative to whatever it stands on, no faster than feet could push.
 /// </para>
 /// </summary>
-public sealed class VRBody : MonoBehaviour
+public sealed class VRBody : Component
 {
     public const float BallRadius = 0.18f;
     public const float LegRadius = 0.14f;

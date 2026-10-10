@@ -13,7 +13,7 @@ namespace VehicleShowcase;
 /// speed, the way a rider steers a real bike. At walking pace it steers directly and stays upright on its own.
 /// It depends on nothing else in the sample, so it can be copied as it is.
 /// </summary>
-public sealed class MotorcycleController : MonoBehaviour
+public sealed class MotorcycleController : Component
 {
     public WheelCollider Front = null!;
     public WheelCollider Rear = null!;

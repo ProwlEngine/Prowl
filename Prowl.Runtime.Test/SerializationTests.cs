@@ -13,7 +13,7 @@ namespace Prowl.Runtime.Test;
 
 /// <summary>A component with a single field, used to confirm component data flows through the
 /// GameObject/Scene serializers (not to test Echo's field serialization itself).</summary>
-public sealed class SerializableComponent : MonoBehaviour
+public sealed class SerializableComponent : Component
 {
     public int IntField;
 }
@@ -26,9 +26,9 @@ public sealed class TestAsset : Asset
 }
 
 /// <summary>A component that references another component, to probe reference round-tripping.</summary>
-public sealed class CrossRefComponent : MonoBehaviour
+public sealed class CrossRefComponent : Component
 {
-    public MonoBehaviour? Other;
+    public Component? Other;
 }
 
 #endregion

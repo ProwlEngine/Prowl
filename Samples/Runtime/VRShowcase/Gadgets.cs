@@ -58,7 +58,7 @@ internal static class Holding
 }
 
 /// <summary>A rocket to hold. The trigger throttles a push the way the hand points, strong enough to lift the player.</summary>
-public sealed class Thruster : MonoBehaviour
+public sealed class Thruster : Component
 {
     public float Thrust = 1100f;
     public Transform? Flame;
@@ -92,7 +92,7 @@ public sealed class Thruster : MonoBehaviour
 /// be swept down to push off the air and lifted back up for free. Held, it pushes the player. Tilted, a fall turns
 /// into a glide.
 /// </summary>
-public sealed class AeroSurface : MonoBehaviour
+public sealed class AeroSurface : Component
 {
     /// <summary>The middle of the plate and the way its working face looks, in the body's space.</summary>
     public Float3 Center;
@@ -143,7 +143,7 @@ public sealed class AeroSurface : MonoBehaviour
 }
 
 /// <summary>A cable from a high end to a low one. Anything with a <see cref="ZipHook"/> touching it hooks on and slides down.</summary>
-public sealed class ZipLine : MonoBehaviour
+public sealed class ZipLine : Component
 {
     public static readonly List<ZipLine> All = new();
 
@@ -172,7 +172,7 @@ public sealed class ZipLine : MonoBehaviour
 /// The hook on an item that rides a <see cref="ZipLine"/>. Held against a cable it hooks on, kept on the cable but
 /// free to turn on it, and the hand holding it bears the player's weight. It drops off near the bottom.
 /// </summary>
-public sealed class ZipHook : MonoBehaviour
+public sealed class ZipHook : Component
 {
     public Float3 Hook;
     public float CatchRadius = 0.1f;
@@ -278,7 +278,7 @@ public sealed class ZipHook : MonoBehaviour
 }
 
 /// <summary>A torch whose trigger switches its spot light on and off. The beam follows the way the hand points.</summary>
-public sealed class Flashlight : MonoBehaviour
+public sealed class Flashlight : Component
 {
     public SpotLight Lamp = null!;
 
@@ -305,7 +305,7 @@ public sealed class Flashlight : MonoBehaviour
 /// A bunch of balloons. Held, they pull the player up hard enough that two bunches float. Let go, they drift up and
 /// away, and come back to where they started once out of sight, or sooner with <see cref="Respawn"/>.
 /// </summary>
-public sealed class Balloons : MonoBehaviour
+public sealed class Balloons : Component
 {
     public float Lift = 420f;
 
@@ -364,7 +364,7 @@ public sealed class Balloons : MonoBehaviour
 /// A bomb. Thrown, it goes off when it hits something or a few seconds later, shoving every loose thing and the
 /// player away from it, and comes back where it started a moment after.
 /// </summary>
-public sealed class Bomb : MonoBehaviour
+public sealed class Bomb : Component
 {
     public VRBody Player = null!;
     public float Radius = 5f;
@@ -459,7 +459,7 @@ public sealed class Bomb : MonoBehaviour
 }
 
 /// <summary>A button that sinks into its housing when pushed and springs back out. Pushed most of the way in, it presses.</summary>
-public sealed class PushButton : MonoBehaviour
+public sealed class PushButton : Component
 {
     public PrismaticJoint Slide = null!;
     public float Travel = 0.015f;

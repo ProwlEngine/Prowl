@@ -206,7 +206,7 @@ public sealed class StaticGeometry : ISerializable
 
         foreach (GameObject go in scene.AllObjects)
         {
-            foreach (MonoBehaviour component in go._components)
+            foreach (Component component in go._components)
             {
                 if (component is not MeshRenderer renderer || !IsEligible(renderer, out Mesh? mesh)) continue;
                 StaticGeometry.Source? source = renderer.StaticSource;
@@ -332,7 +332,7 @@ public sealed class StaticGeometry : ISerializable
         _bound = true;
         var renderers = new Dictionary<Guid, MeshRenderer>();
         foreach (GameObject go in scene.AllObjects)
-            foreach (MonoBehaviour component in go._components)
+            foreach (Component component in go._components)
                 if (component is MeshRenderer renderer && renderer.GetType() == typeof(MeshRenderer))
                     renderers[renderer.Identifier] = renderer;
 
@@ -483,7 +483,7 @@ public sealed class StaticGeometry : ISerializable
 
         foreach (GameObject go in scene.AllObjects)
         {
-            foreach (MonoBehaviour component in go._components)
+            foreach (Component component in go._components)
             {
                 if (component is not MeshRenderer renderer || !IsEligible(renderer, out Mesh? mesh)) continue;
 

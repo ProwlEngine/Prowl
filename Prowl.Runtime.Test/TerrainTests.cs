@@ -1047,7 +1047,7 @@ public class TerrainSceneTests : RuntimeTestBase
         Assert.Equal(0.2, hits[0].Penetration, 2);
     }
 
-    private sealed class TerrainContactRecorder : MonoBehaviour
+    private sealed class TerrainContactRecorder : Component
     {
         public readonly List<Collision> Begins = [];
         public override void OnCollisionBegin(Collision collision) => Begins.Add(collision);

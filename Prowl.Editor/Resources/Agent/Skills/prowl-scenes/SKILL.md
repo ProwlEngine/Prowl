@@ -1,11 +1,13 @@
 ---
 name: prowl-scenes
-description: How to write Prowl game scripts. Use when writing or reviewing a MonoBehaviour, working with GameObjects, components, Transform, scenes, prefabs, input, time, physics callbacks, async code with GameTask, or editor only script code. Covers where Prowl differs from Unity.
+description: How to write Prowl game scripts. Use when writing or reviewing a Component, working with GameObjects, components, Transform, scenes, prefabs, input, time, physics callbacks, async code with GameTask, or editor only script code. Covers where Prowl differs from Unity.
 ---
 
 # Prowl scripting: scenes, GameObjects and components
 
 Prowl looks like Unity but differs in many details. Check anything not listed here with `Library/prowl command api --type <Name>` before using it.
+
+**Scripts derive from `Component`.** There is no `MonoBehaviour` class, and code written against one will not compile.
 
 ## A correct component
 
@@ -18,7 +20,7 @@ using Prowl.Vector;
 
 [RequireComponent(typeof(Rigidbody3D), typeof(BoxCollider))]
 [AddComponentMenu("Game/Player Mover")]
-public sealed class PlayerMover : MonoBehaviour
+public sealed class PlayerMover : Component
 {
     public float Speed = 5f;                  // public fields are saved and shown in the inspector
     public PrefabAsset BulletPrefab;          // assigned in the inspector or with the CLI
@@ -73,7 +75,7 @@ Lifecycle methods are **virtual overrides**: write `public override void Update(
 - Drawing helpers: `DrawGizmos()`, `DrawGizmosSelected()`. Runtime UI: `OnGui(Paper paper)`.
 - An exception in a callback is logged and the frame continues.
 
-**No constructors.** Components are created before they are attached and before saved values are applied, so a constructor sees no GameObject and its values are overwritten. Analyzers flag constructors (PROWLMB001, PROWLMB002) and field initializers that call engine code (PROWLMB003, PROWLMB004). Do setup in `OnEnable` or `Start`.
+**No constructors.** Components are created before they are attached and before saved values are applied, so a constructor sees no GameObject and its values are overwritten. Analyzers flag constructors (PROWLCO001, PROWLCO002) and field initializers that call engine code (PROWLCO003, PROWLCO004). Do setup in `OnEnable` or `Start`.
 
 Attributes: `[RequireComponent(typeof(A), typeof(B))]` (adds missing components automatically, and can be repeated), `[DisallowMultipleComponent]` (a second one of that type or a subclass is refused, `AddComponent` returns null), `[AddComponentMenu("Path")]`, `[ExecuteAlways]` (run callbacks outside play mode), `[ExecutionOrder(n)]`. Inspector attributes include `[HideInInspector]`, `[Range]`, `[Header]`, `[Space]`, `[Tooltip]`, `[ReadOnly]`, `[TextArea]`, `[ShowIf]`, `[Button]` on methods.
 

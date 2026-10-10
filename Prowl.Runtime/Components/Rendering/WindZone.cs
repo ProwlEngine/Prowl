@@ -19,7 +19,7 @@ namespace Prowl.Runtime;
 [AddComponentMenu("Effects/Wind Zone")]
 [ComponentIcon("\uf863")] // Fan
 [ExecuteAlways]
-public sealed class WindZone : MonoBehaviour
+public sealed class WindZone : Component
 {
     /// <summary>How many zones one shader can blend at once.</summary>
     public const int kMaxShaderZones = 4;

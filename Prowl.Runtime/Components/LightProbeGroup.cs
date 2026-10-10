@@ -14,7 +14,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Light Probe Group")]
 [ComponentIcon("")] // Lightbulb
-public class LightProbeGroup : MonoBehaviour
+public class LightProbeGroup : Component
 {
     /// <summary>Probe positions in this object's local space.</summary>
     public List<Float3> ProbePositions = new();

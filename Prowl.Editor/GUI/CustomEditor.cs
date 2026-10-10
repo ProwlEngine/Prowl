@@ -6,7 +6,7 @@ namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Attribute to register a custom editor for a specific type.
-/// Works for any type: MonoBehaviours, ImageEffects, custom data classes, etc.
+/// Works for any type: Components, ImageEffects, custom data classes, etc.
 /// The editor replaces the default PropertyGrid when drawing objects of the target type.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]

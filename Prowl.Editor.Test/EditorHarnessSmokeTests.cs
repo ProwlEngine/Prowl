@@ -9,7 +9,7 @@ using Xunit;
 namespace Prowl.Editor.Test;
 
 /// <summary>A simple component used to verify component data survives the prefab asset pipeline.</summary>
-public sealed class EditorTestComponent : MonoBehaviour
+public sealed class EditorTestComponent : Component
 {
     public int Health;
 }

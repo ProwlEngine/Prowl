@@ -12,13 +12,13 @@ using Xunit;
 namespace Prowl.Editor.Test;
 
 /// <summary>A component that names a scene lazily, for soft dependency tests.</summary>
-public sealed class AssetRefComponent : MonoBehaviour
+public sealed class AssetRefComponent : Component
 {
     public AssetRef<SceneAsset> Ref;
 }
 
 /// <summary>A component that holds a material in a plain field, for hard dependency tests.</summary>
-public sealed class MaterialHolder : MonoBehaviour
+public sealed class MaterialHolder : Component
 {
     public Material? Material;
 }

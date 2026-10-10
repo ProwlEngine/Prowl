@@ -630,7 +630,7 @@ public sealed partial class VRShowcaseGame
 }
 
 /// <summary>Draws the rope something hangs by, from <see cref="Anchor"/> on it up to where it hangs from.</summary>
-public sealed class DummyRope : MonoBehaviour
+public sealed class DummyRope : Component
 {
     public Float3 Anchor;
 

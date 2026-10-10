@@ -18,7 +18,7 @@ using Prowl.Vector;
 namespace VRShowcase;
 
 /// <summary>Something a blade can sink into.</summary>
-public sealed class Stabbable : MonoBehaviour
+public sealed class Stabbable : Component
 {
     /// <summary>The slowest a blade can be moving point first and still go in, in metres per second.</summary>
     public float RequiredSpeed = 1.2f;
@@ -34,7 +34,7 @@ public sealed class Stabbable : MonoBehaviour
 /// Something that makes a <see cref="HitFlash"/> flash when it hits it fast enough. It remembers its velocity from
 /// before each step, since by the time a hit is reported the collision has already slowed it.
 /// </summary>
-public sealed class MeleeWeapon : MonoBehaviour
+public sealed class MeleeWeapon : Component
 {
     /// <summary>Hits slower than this, in metres per second, do not count.</summary>
     public float MinSpeed = 2f;
@@ -54,7 +54,7 @@ public sealed class MeleeWeapon : MonoBehaviour
 }
 
 /// <summary>A blade along a weapon's local <see cref="Axis"/>, ending at <see cref="Tip"/>.</summary>
-public sealed class Stabber : MonoBehaviour
+public sealed class Stabber : Component
 {
     public Float3 Tip;
     public Float3 Axis = Float3.UnitY;
@@ -229,7 +229,7 @@ public sealed class Stabber : MonoBehaviour
 }
 
 /// <summary>Flashes its materials when struck by a weapon or a fist, stabbed or shot, brighter for harder hits.</summary>
-public sealed class HitFlash : MonoBehaviour
+public sealed class HitFlash : Component
 {
     public Color BaseColor = new(0.6f, 0.5f, 0.35f, 1f);
     public Color FlashColor = new(1f, 0.15f, 0.05f, 1f);

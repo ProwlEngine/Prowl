@@ -13,13 +13,13 @@ namespace Prowl.Editor.Projects.Scripting;
 /// <summary>
 /// Maps a dragged script asset (a <c>.cs</c> file) to the component <see cref="Type"/> it defines.
 /// Scripts are not runtime assets (the importer only triggers recompilation), so the type is resolved
-/// by matching the file name against a <see cref="MonoBehaviour"/> type of the same name in the loaded
+/// by matching the file name against a <see cref="Component"/> type of the same name in the loaded
 /// assemblies - the same file-name-equals-class-name convention the script pipeline already relies on.
 /// </summary>
 public static class ScriptComponentResolver
 {
     /// <summary>Resolve the component type a dragged asset represents, or null if it isn't a single
-    /// script file that maps to a concrete <see cref="MonoBehaviour"/>.</summary>
+    /// script file that maps to a concrete <see cref="Component"/>.</summary>
     public static Type? ResolveComponentType(AssetDragPayload? payload)
     {
         if (payload == null || payload.IsMulti) return null;
@@ -39,8 +39,8 @@ public static class ScriptComponentResolver
         {
             if (type.Name != typeName) continue;
             if (type.IsAbstract) continue;
-            if (!typeof(MonoBehaviour).IsAssignableFrom(type)) continue;
-            if (type == typeof(MonoBehaviour)) continue;
+            if (!typeof(Component).IsAssignableFrom(type)) continue;
+            if (type == typeof(Component)) continue;
 
             // Offering a type nothing can construct would put a drop target on screen that does
             // nothing when it is used.

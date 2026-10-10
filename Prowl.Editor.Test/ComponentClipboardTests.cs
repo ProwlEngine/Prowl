@@ -49,20 +49,20 @@ public sealed class FakeClipboardInput : IInputHandler
     public void SetGamepadVibration(int gamepadIndex, float leftMotor, float rightMotor) { }
 }
 
-public sealed class ClipComp : MonoBehaviour
+public sealed class ClipComp : Component
 {
     public int Value;
     public string Label = "";
     public Float3 Offset;
 }
 
-public sealed class OtherClipComp : MonoBehaviour
+public sealed class OtherClipComp : Component
 {
     public int Value;
 }
 
 /// <summary>A component holding scene-object references, the case Echo would otherwise deep-clone.</summary>
-public sealed class ClipRefComp : MonoBehaviour
+public sealed class ClipRefComp : Component
 {
     public GameObject? TargetGO;
     public ClipComp? TargetComp;
@@ -71,7 +71,7 @@ public sealed class ClipRefComp : MonoBehaviour
 }
 
 /// <summary>Scene references nested inside a collection and a plain data class.</summary>
-public sealed class ClipNestedRefComp : MonoBehaviour
+public sealed class ClipNestedRefComp : Component
 {
     public sealed class RefBox { public GameObject? GO; }
 
@@ -84,7 +84,7 @@ public sealed class ClipNestedRefComp : MonoBehaviour
 /// GetSerializableFields and travel only through custom ISerializable methods. A field-by-field
 /// copy would miss every one of them; a values paste must go through Deserialize.
 /// </summary>
-public sealed class ClipSerializableComp : MonoBehaviour, ISerializable
+public sealed class ClipSerializableComp : Component, ISerializable
 {
     private int _hidden;
     public int Hidden { get => _hidden; set => _hidden = value; }
@@ -313,7 +313,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         ComponentClipboard.Copy(src);
         ComponentClipboard.PasteValues(dst);
 
-        var comps = b.GetComponents<MonoBehaviour>().ToList();
+        var comps = b.GetComponents<Component>().ToList();
         Assert.Equal(1, comps.IndexOf(dst));
         Assert.Equal(3, dst.Value);
     }
@@ -518,7 +518,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         Assert.False(ComponentClipboard.CanPasteAsNew());
         Assert.Null(ComponentClipboard.PasteAsNew(b));
-        Assert.Empty(b.GetComponents<MonoBehaviour>());
+        Assert.Empty(b.GetComponents<Component>());
     }
 
     [Fact]
@@ -535,7 +535,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Input.Clipboard = $"ProwlComponent:{typeName}";
         Assert.Null(ComponentClipboard.PasteAsNew(b));
 
-        Assert.Empty(b.GetComponents<MonoBehaviour>());
+        Assert.Empty(b.GetComponents<Component>());
 
         // A real payload still works afterwards - no sticky failure state.
         ComponentClipboard.Copy(a.AddComponent<ClipComp>());

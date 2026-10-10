@@ -30,7 +30,7 @@ public enum LightBakeMode
 }
 
 [ComponentIcon("\uf185")] // Sun
-public abstract class Light : MonoBehaviour, IRenderableLight
+public abstract class Light : Component, IRenderableLight
 {
 
     public Color Color = Color.White;

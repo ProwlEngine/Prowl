@@ -29,7 +29,7 @@ Prowl animation graphs are not Unity's Animator Controller. Transitions have no 
 using Prowl.Runtime;
 using Prowl.Vector;
 
-public sealed class ArmsInput : MonoBehaviour
+public sealed class ArmsInput : Component
 {
     public Animator Arms;
 
@@ -51,7 +51,7 @@ public sealed class ArmsInput : MonoBehaviour
 ```csharp
 using Prowl.Runtime;
 
-public sealed class RootMotionMover : MonoBehaviour
+public sealed class RootMotionMover : Component
 {
     private Animator _animator;
     private CharacterController _controller;

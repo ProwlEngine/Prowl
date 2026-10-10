@@ -23,7 +23,7 @@ namespace Prowl.Runtime;
 [AddComponentMenu("UI/Game Canvas")]
 [ExecuteAlways]
 [ComponentIcon("")] // Image
-public class GameCanvas : MonoBehaviour
+public class GameCanvas : Component
 {
     // ============================================================
     // REMOVED:

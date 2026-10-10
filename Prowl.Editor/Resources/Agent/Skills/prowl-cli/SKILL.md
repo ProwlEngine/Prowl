@@ -33,7 +33,7 @@ Results describe objects as `{id, path, name}`, components as `{id, ref, type}`,
 
 1. Orient: `status`, `tree --depth 2`, `logs --level warning`.
 2. Look up the API before writing code: `api --search Rigidbody`, `api --type CharacterController`, `api --type Transform --member Rotate`, `--inherited` to include base classes. Prowl is not Unity, so do not guess signatures.
-3. Write scripts as `.cs` files under `Assets` (or `script Scripts/Gun --template MonoBehaviour`), then `compile`. It waits for the hot reload and returns errors with file, line and column. Fix them and compile again until `ok` is true.
+3. Write scripts as `.cs` files under `Assets` (or `script Scripts/Gun --template Component`), then `compile`. It waits for the hot reload and returns errors with file, line and column. Fix them and compile again until `ok` is true.
 4. Build the scene with the commands below, then `scene --action save` (or `scene --action saveas --path Scenes/Level.scene`).
 5. Check your work: `play --action start`, `input`, `play --action wait --seconds 2`, read state with `get`, `logs --level error`, `screenshot`, then `play --action stop`.
 

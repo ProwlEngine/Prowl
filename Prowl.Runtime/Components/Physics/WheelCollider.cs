@@ -95,7 +95,7 @@ public struct WheelHit
 
 /// <summary>Scales the grip of every WheelCollider rolling on this GameObject's colliders or terrain, for ice, mud or a racing surface.</summary>
 [AddComponentMenu("Physics/Wheel Surface")]
-public sealed class WheelSurface : MonoBehaviour
+public sealed class WheelSurface : Component
 {
     public float Grip = 1.0f;
 }
@@ -105,7 +105,7 @@ public sealed class WheelSurface : MonoBehaviour
 /// other pulled down, by the difference in compression times <see cref="Stiffness"/>.
 /// </summary>
 [AddComponentMenu("Physics/Anti Roll Bar")]
-public sealed class AntiRollBar : MonoBehaviour
+public sealed class AntiRollBar : Component
 {
     public WheelCollider? Left;
     public WheelCollider? Right;
@@ -139,7 +139,7 @@ public sealed class AntiRollBar : MonoBehaviour
 /// </summary>
 [AddComponentMenu("Physics/Wheel Collider")]
 [ComponentIcon("")] // CarSide
-public sealed class WheelCollider : MonoBehaviour
+public sealed class WheelCollider : Component
 {
     // Geometry
     [SerializeField] private float radius = 0.35f;
@@ -412,7 +412,7 @@ public sealed class WheelCollider : MonoBehaviour
         }
         if (_world != null && _groundProxy != null)
         {
-            MonoBehaviour owner = _world.GetProxyOwner(_groundProxy);
+            Component owner = _world.GetProxyOwner(_groundProxy);
             if (owner.IsValid())
             {
                 hit.Collider = owner as Collider;
@@ -581,7 +581,7 @@ public sealed class WheelCollider : MonoBehaviour
         if (ReferenceEquals(proxy, _surfaceProxy)) return _surfaceGrip;
         _surfaceProxy = proxy;
         if (proxy == null || _world == null) return 1.0f;
-        MonoBehaviour owner = _world.GetProxyOwner(proxy);
+        Component owner = _world.GetProxyOwner(proxy);
         if (owner.IsNotValid()) return 1.0f;
         WheelSurface surface = owner.GetComponentInParent<WheelSurface>();
         return surface.IsValid() ? Maths.Max(0.0f, surface.Grip) : 1.0f;

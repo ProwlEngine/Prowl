@@ -491,11 +491,11 @@ public class PhysicsWorld
     /// </summary>
     internal Transform GetTerrainTransform(IDynamicTreeProxy proxy)
     {
-        MonoBehaviour owner = GetTerrainOwner(proxy);
+        Component owner = GetTerrainOwner(proxy);
         return owner.IsValid() && owner.GameObject.IsValid() ? owner.GameObject.Transform : null;
     }
 
-    internal MonoBehaviour GetProxyOwner(IDynamicTreeProxy proxy)
+    internal Component GetProxyOwner(IDynamicTreeProxy proxy)
         => proxy is RigidBodyShape shape ? GetShapeOwner(shape) : GetTerrainOwner(proxy);
 
     /// <summary>
@@ -512,18 +512,18 @@ public class PhysicsWorld
             return _layerFilter.BodiesCollide(body, shape.RigidBody);
         }
 
-        MonoBehaviour terrain = GetTerrainOwner(proxy);
+        Component terrain = GetTerrainOwner(proxy);
         if (!terrain.IsValid() || !terrain.GameObject.IsValid()) return true;
         int terrainLayer = terrain.GameObject.LayerIndex;
         return mask.HasLayer(terrainLayer) && CollisionMatrix.GetLayerCollision(layer, terrainLayer);
     }
 
     /// <summary>The component that registered the given terrain proxy, or null if it is not terrain.</summary>
-    private MonoBehaviour GetTerrainOwner(IDynamicTreeProxy proxy)
+    private Component GetTerrainOwner(IDynamicTreeProxy proxy)
     {
         if (proxy is TerrainHeightmapProxy terrain &&
             _terrainProxies.TryGetValue(terrain, out ITerrainHeightProvider provider) &&
-            provider is MonoBehaviour owner && owner.IsValid())
+            provider is Component owner && owner.IsValid())
             return owner;
 
         return null;
@@ -534,7 +534,7 @@ public class PhysicsWorld
     /// exclusions do not apply: terrain is neither a rigidbody nor a Collider.</summary>
     private bool TerrainAccepted(IDynamicTreeProxy proxy, in QueryFilter filter)
     {
-        MonoBehaviour owner = GetTerrainOwner(proxy);
+        Component owner = GetTerrainOwner(proxy);
         return owner.IsValid() && owner.GameObject.IsValid() && filter.LayerMask.HasLayer(owner.GameObject.LayerIndex);
     }
 
@@ -1130,7 +1130,7 @@ public class PhysicsWorld
         {
             // The height provider is the TerrainCollider component itself, so it can name the GameObject
             // even though terrain has no RigidBodyShape to look up.
-            var terrain = hp as MonoBehaviour;
+            var terrain = hp as Component;
             hits.Add(new ShapeCastHit
             {
                 Hit = true,
@@ -1199,7 +1199,7 @@ public class PhysicsWorld
 
         if (bestPenetration <= 0.0f) return;
 
-        var terrain = hp as MonoBehaviour;
+        var terrain = hp as Component;
         hits.Add(new ShapeCastHit
         {
             Hit = true,
@@ -1985,7 +1985,7 @@ public class PhysicsWorld
                 side.RigidbodyObject = side.Rigidbody.IsValid() ? side.Rigidbody.GameObject : null;
                 break;
 
-            case MonoBehaviour terrain when terrain.IsValid():
+            case Component terrain when terrain.IsValid():
                 side.ColliderObject = terrain.GameObject;
                 break;
 

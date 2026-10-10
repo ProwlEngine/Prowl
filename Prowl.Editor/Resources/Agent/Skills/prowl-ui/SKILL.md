@@ -24,7 +24,7 @@ using Prowl.Runtime.Resources;
 using Prowl.Scribe;
 using Prowl.Vector;
 
-public sealed class Hud : MonoBehaviour
+public sealed class Hud : Component
 {
     public int Ammo = 30;
     public float Health = 0.75f;

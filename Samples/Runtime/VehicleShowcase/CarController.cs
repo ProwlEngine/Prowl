@@ -13,7 +13,7 @@ namespace VehicleShowcase;
 /// they steer and whether they are driven, so one controller runs a kart, a road car, a monster truck with four
 /// wheel steering or a six wheeled truck. It depends on nothing else in the sample, so it can be copied as it is.
 /// </summary>
-public sealed class CarController : MonoBehaviour
+public sealed class CarController : Component
 {
     public sealed class Axle
     {

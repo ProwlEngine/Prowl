@@ -16,7 +16,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Mesh Renderer")]
 [ComponentIcon("\uf1b2")] // Cube
-public class MeshRenderer : MonoBehaviour, IMaterialRenderer
+public class MeshRenderer : Component, IMaterialRenderer
 {
     int IMaterialRenderer.MaterialSlotCount => Materials.Count;
     Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(Materials, slot);

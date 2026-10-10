@@ -10,7 +10,7 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>Records the physics callbacks it receives, so fan-out can be asserted without a real contact.</summary>
-public sealed class PhysicsListener : MonoBehaviour
+public sealed class PhysicsListener : Component
 {
     public string Mark = "";
     public int Begins, Ends, Enters, Stays, Exits;
@@ -28,7 +28,7 @@ public sealed class PhysicsListener : MonoBehaviour
 }
 
 /// <summary>Throws from every per-frame callback, standing in for any user script that misbehaves.</summary>
-public sealed class ThrowingTick : MonoBehaviour
+public sealed class ThrowingTick : Component
 {
     public override void Start() => throw new InvalidOperationException("start");
     public override void Update() => throw new InvalidOperationException("update");
@@ -37,14 +37,14 @@ public sealed class ThrowingTick : MonoBehaviour
 }
 
 /// <summary>Overrides nothing the per-frame loops dispatch, so it is never registered for ticking.</summary>
-public sealed class PhysicsOnlyListener : MonoBehaviour
+public sealed class PhysicsOnlyListener : Component
 {
     public int Begins;
     public override void OnCollisionBegin(Collision collision) => Begins++;
 }
 
 /// <summary>Mutates its GameObject from inside a physics callback, to exercise the snapshot path.</summary>
-public sealed class SelfRemovingListener : MonoBehaviour
+public sealed class SelfRemovingListener : Component
 {
     public int Begins;
 
@@ -285,7 +285,7 @@ public class SceneDispatcherTests : RuntimeTestBase
 }
 
 /// <summary>Counts Start calls, to prove a started component leaves the channel for good.</summary>
-public sealed class StartCounter : MonoBehaviour
+public sealed class StartCounter : Component
 {
     public int Starts;
     public override void Start() => Starts++;

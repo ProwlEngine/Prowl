@@ -87,7 +87,7 @@ public sealed class HelloProwlGame : Game
 }
 
 /// <summary>Spins and bobs its GameObject, and changes color when Space is pressed.</summary>
-public sealed class Spinner : MonoBehaviour
+public sealed class Spinner : Component
 {
     public float DegreesPerSecond = 90f;
     public float BobHeight = 0.25f;
@@ -126,7 +126,7 @@ public sealed class Spinner : MonoBehaviour
 }
 
 /// <summary>Drops physics cubes on C, clears them on X, quits on Escape and draws the key help.</summary>
-public sealed class CubeSpawner : MonoBehaviour
+public sealed class CubeSpawner : Component
 {
     private readonly List<GameObject> _spawned = new();
 

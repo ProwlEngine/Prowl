@@ -512,8 +512,8 @@ public class PhysicsTests : RuntimeTestBase
     // Trigger volumes
     // ---------------------------------------------------------------------
 
-    // Records the trigger callbacks now delivered as MonoBehaviour overrides. Lives on the trigger's GameObject.
-    private sealed class TriggerRecorder : MonoBehaviour
+    // Records the trigger callbacks now delivered as Component overrides. Lives on the trigger's GameObject.
+    private sealed class TriggerRecorder : Component
     {
         public readonly List<Rigidbody3D> Entered = new();
         public readonly List<Rigidbody3D> Exited = new();
@@ -637,7 +637,7 @@ public class PhysicsTests : RuntimeTestBase
 
     private static TriggerRecorder Recorder(TriggerVolume trigger) => trigger.GetComponent<TriggerRecorder>()!;
 
-    private sealed class DisableOnEnter : MonoBehaviour
+    private sealed class DisableOnEnter : Component
     {
         public override void OnTriggerEnter(Rigidbody3D other) => other.Enabled = false;
     }
@@ -837,7 +837,7 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     /// <summary>Records the collisions it is told about, so the payload can be asserted.</summary>
-    private sealed class CollisionRecorder : MonoBehaviour
+    private sealed class CollisionRecorder : Component
     {
         public readonly List<Collision> Begins = [];
         public readonly List<Collision> Stays = [];
@@ -1009,7 +1009,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Single(recorder.Begins);
     }
 
-    private sealed class DisableOnBegin : MonoBehaviour
+    private sealed class DisableOnBegin : Component
     {
         public override void OnCollisionBegin(Collision collision) => GetComponent<Rigidbody3D>().Enabled = false;
     }
@@ -1276,7 +1276,7 @@ public class PhysicsTests : RuntimeTestBase
     // Rigidbody wiring
     // ---------------------------------------------------------------------
 
-    private sealed class MoveOnce : MonoBehaviour
+    private sealed class MoveOnce : Component
     {
         public Float3 Target;
         private bool _moved;

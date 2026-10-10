@@ -600,7 +600,7 @@ public static class EditorRegistries
     private static string NormalizeExt(string ext)
         => ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
 
-    public static string GetComponentIcon(MonoBehaviour component) => GetComponentIcon(component.GetType());
+    public static string GetComponentIcon(Component component) => GetComponentIcon(component.GetType());
 
     public static string GetComponentIcon(Type componentType)
     {

@@ -347,7 +347,7 @@ public static class CliEditorCommands
                     if (parent.Length > 0 && parent != "/") go.SetParent(CliRefs.ResolveGameObject(parent), worldPositionStays: false);
                     if (index >= 0) go.SetSiblingIndex(index);
                     foreach (string typeName in CliRefs.SplitList(components))
-                        go.AddComponent(CliRefs.FindType(typeName, typeof(MonoBehaviour)));
+                        go.AddComponent(CliRefs.FindType(typeName, typeof(Component)));
                     ApplyTransform(go, position, rotation, scale, world);
 
                     Selection.Select(go);
@@ -499,7 +499,7 @@ public static class CliEditorCommands
             case ComponentAction.Add:
             {
                 var go = CliRefs.ResolveGameObject(target);
-                Type componentType = CliRefs.FindType(Require(type, "type"), typeof(MonoBehaviour));
+                Type componentType = CliRefs.FindType(Require(type, "type"), typeof(Component));
                 var fieldValues = ParseValues(values);
                 return CliEdit.Run("Add Component", () =>
                 {
@@ -523,7 +523,7 @@ public static class CliEditorCommands
 
             case ComponentAction.Remove:
             {
-                if (CliRefs.Resolve(target) is not MonoBehaviour component) throw new CliException("Give a component ref, for example /Player:Rigidbody3D.");
+                if (CliRefs.Resolve(target) is not Component component) throw new CliException("Give a component ref, for example /Player:Rigidbody3D.");
                 if (!component.CanDestroy()) throw new CliException($"{component.GetType().Name} can not be removed. Something else needs it.");
                 if (PrefabUtility.NeedsBreaking(component)) throw new CliException("This component comes from a prefab. Run 'prefab --action unpack' on the instance first.");
                 var summary = CliRefs.Summary(component);
@@ -535,7 +535,7 @@ public static class CliEditorCommands
         throw new CliException($"Unknown action {action}.");
     }
 
-    private static void RecordAdd(GameObject go, MonoBehaviour added)
+    private static void RecordAdd(GameObject go, Component added)
     {
         Guid goId = go.Identifier, compId = added.Identifier;
         Type compType = added.GetType();
@@ -545,7 +545,7 @@ public static class CliEditorCommands
             redo: () =>
             {
                 if (Undo.FindGO(goId) is not { } g) return;
-                if (Echo.Serializer.Deserialize(serialized, compType) is MonoBehaviour c) { c.Identifier = compId; g.AddComponent(c); }
+                if (Echo.Serializer.Deserialize(serialized, compType) is Component c) { c.Identifier = compId; g.AddComponent(c); }
             });
     }
 
@@ -805,7 +805,7 @@ public static class CliEditorCommands
     [CliCommand("script", "Creates a C# script from a template and imports it. Run 'compile' afterwards to build it")]
     public static object Script(
         [CliArg("path", "Script path relative to Assets, such as Scripts/Gun.cs")] string path = "",
-        [CliArg("template", "Template name, see --list")] string template = "MonoBehaviour",
+        [CliArg("template", "Template name, see --list")] string template = "Component",
         [CliArg("list", "List the templates instead")] bool list = false)
     {
         if (list) return EditorRegistries.ScriptTemplates.Select(t => new { name = t.Name, description = t.Description }).ToList();

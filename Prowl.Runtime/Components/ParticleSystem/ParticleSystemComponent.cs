@@ -92,7 +92,7 @@ public struct EmitParams
 [AddComponentMenu("Effects/Particle System")]
 [ExecuteAlways]
 [ComponentIcon("")] // WandMagicSparkles
-public class ParticleSystemComponent : MonoBehaviour
+public class ParticleSystemComponent : Component
 {
     #region Main
 
@@ -1296,10 +1296,10 @@ public class ParticleSystemComponent : MonoBehaviour
             GameObject? other = hit.Other;
             if (other.IsNotValid()) continue;
 
-            List<MonoBehaviour> components = other._components;
+            List<Component> components = other._components;
             for (int c = 0; c < components.Count; c++)
             {
-                MonoBehaviour component = components[c];
+                Component component = components[c];
                 if (component is not IParticleCollisionHandler handler || !component.EnabledInHierarchy) continue;
                 try { handler.OnParticleCollision(this, in hit); }
                 catch (Exception ex) { Debug.LogError($"[{component.GetType().Name}] OnParticleCollision threw: {ex.Message}\n{ex.StackTrace}"); }

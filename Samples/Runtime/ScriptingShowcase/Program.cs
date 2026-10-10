@@ -434,7 +434,7 @@ public sealed class ScriptingShowcaseGame : StationGame
 }
 
 /// <summary>Records lifecycle calls into a shared log so the HUD can show them.</summary>
-public sealed class LifecycleProbe : MonoBehaviour
+public sealed class LifecycleProbe : Component
 {
     public static readonly List<string> Log = new();
 
@@ -455,7 +455,7 @@ public sealed class LifecycleProbe : MonoBehaviour
 }
 
 /// <summary>Turns its GameObject at a fixed rate in local space.</summary>
-public sealed class Spin : MonoBehaviour
+public sealed class Spin : Component
 {
     public Float3 DegreesPerSecond = new(0f, 90f, 0f);
     public bool Unscaled;
@@ -465,7 +465,7 @@ public sealed class Spin : MonoBehaviour
 }
 
 /// <summary>Floats its GameObject up and down around where it started, out of step with its neighbours.</summary>
-public sealed class Bob : MonoBehaviour
+public sealed class Bob : Component
 {
     private Float3 _start;
     private float _phase;
@@ -481,7 +481,7 @@ public sealed class Bob : MonoBehaviour
 }
 
 /// <summary>Jumps once when asked, then settles back down.</summary>
-public sealed class Hop : MonoBehaviour
+public sealed class Hop : Component
 {
     private float _baseY;
     private float _velocity;
@@ -511,7 +511,7 @@ public sealed class Hop : MonoBehaviour
 }
 
 /// <summary>Draws a fading line behind a target with a LineRenderer.</summary>
-public sealed class Trail : MonoBehaviour
+public sealed class Trail : Component
 {
     public Transform Target = null!;
     public Color Color = Color.White;
@@ -542,7 +542,7 @@ public sealed class Trail : MonoBehaviour
 }
 
 /// <summary>Visits each stop in turn with one async method, changing color at every stop.</summary>
-public sealed class Courier : MonoBehaviour
+public sealed class Courier : Component
 {
     public Float3[] Stops = [];
     public Color[] Colors = [];
@@ -588,7 +588,7 @@ public sealed class Courier : MonoBehaviour
 }
 
 /// <summary>Moves a puck with input actions and shows what each action is doing.</summary>
-public sealed class InputDemo : MonoBehaviour
+public sealed class InputDemo : Component
 {
     public Float3 Center;
     public string Status = string.Empty;
@@ -730,7 +730,7 @@ public sealed class InputDemo : MonoBehaviour
 }
 
 /// <summary>Counts Update and FixedUpdate calls over each real second.</summary>
-public sealed class TimeCounter : MonoBehaviour
+public sealed class TimeCounter : Component
 {
     public string Status = string.Empty;
 

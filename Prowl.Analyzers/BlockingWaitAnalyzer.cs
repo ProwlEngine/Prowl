@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Prowl.Analyzers;
 
 /// <summary>
-/// Flags blocking waits on a task inside a <c>MonoBehaviour</c>: <c>.Result</c>, <c>.Wait()</c> and
+/// Flags blocking waits on a task inside a <c>Component</c>: <c>.Result</c>, <c>.Wait()</c> and
 /// <c>GetAwaiter().GetResult()</c>. Component code runs on the main thread, and the engine finishes
 /// asset loads and frame waits from that same thread, so blocking there on one of them never returns.
 /// Code inside a lambda, a static method or a static local function is left alone, since it usually runs on some
@@ -19,11 +19,11 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
 {
     public const string BlockingWaitId = "PROWLTH001";
 
-    private const string MonoBehaviourMetadataName = "Prowl.Runtime.MonoBehaviour";
+    private const string ComponentMetadataName = "Prowl.Runtime.Component";
 
     public static readonly DiagnosticDescriptor BlockingWait = new(
         BlockingWaitId,
-        title: "Blocking wait on a task in a MonoBehaviour",
+        title: "Blocking wait on a task in a Component",
         messageFormat: "'{0}' blocks the main thread until the task finishes. Asset loads and GameTask waits finish on the main thread, so this never returns for them. Use await, or the blocking Load() for assets.",
         category: "Reliability",
         DiagnosticSeverity.Warning,
@@ -38,8 +38,8 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(start =>
         {
-            var monoBehaviour = start.Compilation.GetTypeByMetadataName(MonoBehaviourMetadataName);
-            if (monoBehaviour is null) return;
+            var component = start.Compilation.GetTypeByMetadataName(ComponentMetadataName);
+            if (component is null) return;
 
             var tasks = ImmutableArray.Create(
                 start.Compilation.GetTypeByMetadataName("System.Threading.Tasks.Task"),
@@ -47,20 +47,20 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
                 start.Compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask"),
                 start.Compilation.GetTypeByMetadataName("System.Threading.Tasks.ValueTask`1"));
 
-            start.RegisterOperationAction(ctx => AnalyzeResult(ctx, monoBehaviour, tasks), OperationKind.PropertyReference);
-            start.RegisterOperationAction(ctx => AnalyzeCall(ctx, monoBehaviour, tasks), OperationKind.Invocation);
+            start.RegisterOperationAction(ctx => AnalyzeResult(ctx, component, tasks), OperationKind.PropertyReference);
+            start.RegisterOperationAction(ctx => AnalyzeCall(ctx, component, tasks), OperationKind.Invocation);
         });
     }
 
-    private static void AnalyzeResult(OperationAnalysisContext ctx, INamedTypeSymbol monoBehaviour, ImmutableArray<INamedTypeSymbol?> tasks)
+    private static void AnalyzeResult(OperationAnalysisContext ctx, INamedTypeSymbol component, ImmutableArray<INamedTypeSymbol?> tasks)
     {
         var reference = (IPropertyReferenceOperation)ctx.Operation;
         if (reference.Property.Name != "Result" || !IsTask(reference.Property.ContainingType, tasks)) return;
         if (IsGuardedByCompletion(reference, reference.Instance)) return;
-        Report(ctx, monoBehaviour, ".Result");
+        Report(ctx, component, ".Result");
     }
 
-    private static void AnalyzeCall(OperationAnalysisContext ctx, INamedTypeSymbol monoBehaviour, ImmutableArray<INamedTypeSymbol?> tasks)
+    private static void AnalyzeCall(OperationAnalysisContext ctx, INamedTypeSymbol component, ImmutableArray<INamedTypeSymbol?> tasks)
     {
         var invocation = (IInvocationOperation)ctx.Operation;
         IMethodSymbol method = invocation.TargetMethod;
@@ -68,19 +68,19 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
         if (method.Name is "Wait" or "WaitAll" or "WaitAny" && IsTask(method.ContainingType, tasks))
         {
             if (IsZeroTimeout(invocation) || IsGuardedByCompletion(invocation, invocation.Instance)) return;
-            Report(ctx, monoBehaviour, "." + method.Name + "()");
+            Report(ctx, component, "." + method.Name + "()");
         }
         else if (method.Name == "GetResult" && IsAwaiter(method.ContainingType))
         {
             if (IsGuardedByCompletion(invocation, TaskBehindAwaiter(invocation.Instance))) return;
-            Report(ctx, monoBehaviour, ".GetAwaiter().GetResult()");
+            Report(ctx, component, ".GetAwaiter().GetResult()");
         }
     }
 
-    private static void Report(OperationAnalysisContext ctx, INamedTypeSymbol monoBehaviour, string what)
+    private static void Report(OperationAnalysisContext ctx, INamedTypeSymbol component, string what)
     {
         ISymbol? member = ctx.ContainingSymbol;
-        if (member is null || member.IsStatic || !DerivesFrom(member.ContainingType, monoBehaviour)) return;
+        if (member is null || member.IsStatic || !DerivesFrom(member.ContainingType, component)) return;
 
         for (IOperation? op = ctx.Operation.Parent; op is not null; op = op.Parent)
             if (op is IAnonymousFunctionOperation or ILocalFunctionOperation { Symbol.IsStatic: true }) return;
@@ -209,10 +209,10 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
            && type.Name.EndsWith("Awaiter", System.StringComparison.Ordinal)
            && type.ContainingNamespace?.ToDisplayString() == "System.Runtime.CompilerServices";
 
-    private static bool DerivesFrom(ITypeSymbol? type, INamedTypeSymbol monoBehaviour)
+    private static bool DerivesFrom(ITypeSymbol? type, INamedTypeSymbol component)
     {
         for (ITypeSymbol? t = type; t is not null; t = t.BaseType)
-            if (SymbolEqualityComparer.Default.Equals(t, monoBehaviour))
+            if (SymbolEqualityComparer.Default.Equals(t, component))
                 return true;
         return false;
     }

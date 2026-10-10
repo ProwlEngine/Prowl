@@ -3,7 +3,7 @@ using System;
 using Prowl.Runtime;
 using Prowl.Vector;
 
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public float MoveSpeed = 5f;
     public float SprintMultiplier = 3f;

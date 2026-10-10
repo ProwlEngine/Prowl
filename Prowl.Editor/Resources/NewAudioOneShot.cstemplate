@@ -1,7 +1,7 @@
 using Prowl.Runtime;
 
 [RequireComponent(typeof(AudioSource))]
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public bool PlayOnStart = true;
 

@@ -27,13 +27,13 @@ public readonly struct Collision
     /// <summary>The GameObject that was hit: the rigidbody's when there is one, otherwise the collider's or terrain's.</summary>
     public readonly GameObject GameObject;
 
-    /// <summary>Average contact point in world space, weighted by impulse. Zero on <see cref="MonoBehaviour.OnCollisionEnd"/>.</summary>
+    /// <summary>Average contact point in world space, weighted by impulse. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
     public readonly Float3 Point;
 
-    /// <summary>Contact normal in world space, pointing from the other side toward this one. Zero on <see cref="MonoBehaviour.OnCollisionEnd"/>.</summary>
+    /// <summary>Contact normal in world space, pointing from the other side toward this one. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
     public readonly Float3 Normal;
 
-    /// <summary>Total normal impulse the solver applied across the contact in the last step. Zero on <see cref="MonoBehaviour.OnCollisionEnd"/>.</summary>
+    /// <summary>Total normal impulse the solver applied across the contact in the last step. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
     public readonly float ImpulseMagnitude;
 
     /// <summary>The Transform of whatever was hit, or null when nothing identifiable was involved.</summary>

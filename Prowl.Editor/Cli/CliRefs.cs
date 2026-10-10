@@ -81,7 +81,7 @@ public static class CliRefs
     public static GameObject ResolveGameObject(string text) => Resolve(text) switch
     {
         GameObject go => go,
-        MonoBehaviour mb => mb.GameObject,
+        Component mb => mb.GameObject,
         var other => throw new CliException($"'{text}' is a {other.GetType().Name}, not a GameObject."),
     };
 
@@ -139,9 +139,9 @@ public static class CliRefs
         return current!;
     }
 
-    private static MonoBehaviour Component(GameObject go, string typeName, int index)
+    private static Component Component(GameObject go, string typeName, int index)
     {
-        Type type = FindType(typeName, typeof(MonoBehaviour));
+        Type type = FindType(typeName, typeof(Component));
         var matches = go.GetComponents().Where(c => type.IsInstanceOfType(c)).ToList();
         if (index < matches.Count) return matches[index];
         string have = string.Join(", ", go.GetComponents().Select(c => c.GetType().Name));
@@ -249,7 +249,7 @@ public static class CliRefs
     public static JsonObject Summary(object value) => value switch
     {
         GameObject go => new JsonObject { ["id"] = "#" + go.Identifier, ["path"] = PathOf(go), ["name"] = go.Name },
-        MonoBehaviour mb => new JsonObject
+        Component mb => new JsonObject
         {
             ["id"] = "#" + mb.Identifier,
             ["ref"] = ComponentRef(mb),
@@ -260,7 +260,7 @@ public static class CliRefs
         _ => new JsonObject { ["value"] = value.ToString() },
     };
 
-    public static string ComponentRef(MonoBehaviour mb)
+    public static string ComponentRef(Component mb)
     {
         var sameType = mb.GameObject.GetComponents().Where(c => c.GetType() == mb.GetType()).ToList();
         int index = sameType.IndexOf(mb);
@@ -588,12 +588,12 @@ public static class CliRefs
     {
         if (text.Length == 0) return null;
 
-        if (typeof(GameObject).IsAssignableFrom(type) || typeof(MonoBehaviour).IsAssignableFrom(type) || type == typeof(Transform))
+        if (typeof(GameObject).IsAssignableFrom(type) || typeof(Component).IsAssignableFrom(type) || type == typeof(Transform))
         {
             object resolved = Resolve(text);
             if (type == typeof(Transform)) return ResolveGameObject(text).Transform;
             if (type.IsInstanceOfType(resolved)) return resolved;
-            if (resolved is GameObject go && typeof(MonoBehaviour).IsAssignableFrom(type))
+            if (resolved is GameObject go && typeof(Component).IsAssignableFrom(type))
                 return go.GetComponents().FirstOrDefault(type.IsInstanceOfType) is { } component && component.IsValid()
                     ? component : throw new CliException($"{PathOf(go)} has no {type.Name}.");
             throw new CliException($"'{text}' is a {resolved.GetType().Name}, the field wants a {type.Name}.");
@@ -660,7 +660,7 @@ public static class CliRefs
         return FindInScene(id) switch
         {
             GameObject go => new JsonObject { ["ref"] = PathOf(go), ["id"] = "#" + id },
-            MonoBehaviour mb => new JsonObject { ["ref"] = ComponentRef(mb), ["id"] = "#" + id },
+            Component mb => new JsonObject { ["ref"] = ComponentRef(mb), ["id"] = "#" + id },
             _ => new JsonObject { ["ref"] = "#" + id, ["missing"] = true },
         };
     }

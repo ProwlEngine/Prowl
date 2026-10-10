@@ -169,7 +169,7 @@ public static class AssetTypeStyles
             if (Has("Animation") || Has("Anim"))      return new() { Icon = EditorIcons.Film_I, Color = Cyan };
             if (Has("Audio") || Has("Sound") || Has("Clip")) return new() { Icon = EditorIcons.Music_I, Color = Cyan };
             if (Has("Font"))                          return new() { Icon = EditorIcons.Font_I, Color = Amber };
-            if (Has("Script") || Has("MonoBehaviour")) return new() { Badge = "C#", Color = Green };
+            if (Has("Script") || t.Equals("Component", System.StringComparison.OrdinalIgnoreCase)) return new() { Badge = "C#", Color = Green };
         }
         return _default;
     }

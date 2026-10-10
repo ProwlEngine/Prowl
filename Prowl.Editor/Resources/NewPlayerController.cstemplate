@@ -2,7 +2,7 @@ using Prowl.Runtime;
 using Prowl.Vector;
 
 [RequireComponent(typeof(CharacterController))]
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public float MoveSpeed = 6f;
     public float JumpSpeed = 8f;

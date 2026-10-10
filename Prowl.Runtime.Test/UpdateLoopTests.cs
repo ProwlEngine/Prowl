@@ -8,7 +8,7 @@ namespace Prowl.Runtime.Test;
 /// <summary>
 /// A component that records how many times each per-frame callback ran, and the order they ran in.
 /// </summary>
-public sealed class CounterComponent : MonoBehaviour
+public sealed class CounterComponent : Component
 {
     public int StartCount;
     public int UpdateCount;
@@ -24,7 +24,7 @@ public sealed class CounterComponent : MonoBehaviour
 }
 
 /// <summary>Records which lifecycle callbacks ran, in order.</summary>
-public sealed class LifecycleRecorder : MonoBehaviour
+public sealed class LifecycleRecorder : Component
 {
     public readonly List<string> Calls = [];
 
@@ -36,7 +36,7 @@ public sealed class LifecycleRecorder : MonoBehaviour
 
 /// <summary>A counter that runs even outside play mode.</summary>
 [ExecuteAlways]
-public sealed class ExecuteAlwaysCounter : MonoBehaviour
+public sealed class ExecuteAlwaysCounter : Component
 {
     public int UpdateCount;
     public override void Update() => UpdateCount++;
@@ -49,12 +49,12 @@ public static class TickLog
 }
 
 [ExecutionOrder(-50)]
-public sealed class EarlyTick : MonoBehaviour { public override void Update() => TickLog.Entries.Add("early"); }
+public sealed class EarlyTick : Component { public override void Update() => TickLog.Entries.Add("early"); }
 
-public sealed class MidTick : MonoBehaviour { public override void Update() => TickLog.Entries.Add("mid"); }
+public sealed class MidTick : Component { public override void Update() => TickLog.Entries.Add("mid"); }
 
 [ExecutionOrder(50)]
-public sealed class LateTick : MonoBehaviour { public override void Update() => TickLog.Entries.Add("late"); }
+public sealed class LateTick : Component { public override void Update() => TickLog.Entries.Add("late"); }
 
 /// <summary>
 /// Tests for the per-frame update loop driven through <see cref="Resources.Scene.Update"/> and

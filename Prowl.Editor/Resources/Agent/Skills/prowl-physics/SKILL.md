@@ -30,7 +30,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-public sealed class HitscanGun : MonoBehaviour
+public sealed class HitscanGun : Component
 {
     public float Range = 100f;
     public float Damage = 10f;
@@ -49,7 +49,7 @@ public sealed class HitscanGun : MonoBehaviour
     }
 }
 
-public sealed class Health : MonoBehaviour
+public sealed class Health : Component
 {
     public float Value = 100f;
 
@@ -77,7 +77,7 @@ using Prowl.Runtime;
 using Prowl.Vector;
 
 [RequireComponent(typeof(CharacterController))]
-public sealed class FpsMover : MonoBehaviour
+public sealed class FpsMover : Component
 {
     public float Speed = 5f;
     public float JumpHeight = 1.2f;

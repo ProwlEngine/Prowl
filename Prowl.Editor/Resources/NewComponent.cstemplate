@@ -1,6 +1,6 @@
 using Prowl.Runtime;
 
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public override void Start()
     {

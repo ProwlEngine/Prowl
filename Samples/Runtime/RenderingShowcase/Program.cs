@@ -611,7 +611,7 @@ public sealed class RenderingShowcaseGame : StationGame
 }
 
 /// <summary>Turns its GameObject at a fixed rate in local space.</summary>
-public sealed class Spin : MonoBehaviour
+public sealed class Spin : Component
 {
     public Float3 Speed = new(0f, 90f, 0f);
 
@@ -619,7 +619,7 @@ public sealed class Spin : MonoBehaviour
 }
 
 /// <summary>Flies around a horizontal circle.</summary>
-public sealed class Orbit : MonoBehaviour
+public sealed class Orbit : Component
 {
     public Float3 Center;
     public float Radius = 3f;
@@ -635,7 +635,7 @@ public sealed class Orbit : MonoBehaviour
 }
 
 /// <summary>Points its light at a target that slides from side to side.</summary>
-public sealed class Sweep : MonoBehaviour
+public sealed class Sweep : Component
 {
     public Float3 Target;
     public float Width = 3f;
@@ -646,7 +646,7 @@ public sealed class Sweep : MonoBehaviour
 }
 
 /// <summary>Turns a camera from side to side around a center heading.</summary>
-public sealed class Pan : MonoBehaviour
+public sealed class Pan : Component
 {
     public float Center;
     public float Pitch;
@@ -657,7 +657,7 @@ public sealed class Pan : MonoBehaviour
 }
 
 /// <summary>Drifts smoothly around inside a box, picking a new destination whenever it arrives.</summary>
-public sealed class Wanderer : MonoBehaviour
+public sealed class Wanderer : Component
 {
     public Float3 Center;
     public Float3 Extent = new(5f, 1f, 5f);
@@ -692,7 +692,7 @@ public sealed class Wanderer : MonoBehaviour
 /// Draws a whole field of cubes as GPU instances. Each frame it fills one array of per instance
 /// matrices and colors and hands it to the renderer, so no GameObject exists per cube.
 /// </summary>
-public sealed class InstancedWave : MonoBehaviour
+public sealed class InstancedWave : Component
 {
     public Mesh Mesh = null!;
     public Material Material = null!;
@@ -725,7 +725,7 @@ public sealed class InstancedWave : MonoBehaviour
 }
 
 /// <summary>Moves a field of cubes up and down in rings spreading from the center.</summary>
-public sealed class Wave : MonoBehaviour
+public sealed class Wave : Component
 {
     public List<Transform> Cubes = new();
     public Float3 Center;

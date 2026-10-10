@@ -17,7 +17,7 @@ namespace VehicleShowcase;
 /// the most recent segments, laid at the bottom of each wheel across the way it travels. Hand it the wheels of
 /// every vehicle with <see cref="Track"/>; it needs a MeshRenderer beside it with a transparent material.
 /// </summary>
-public sealed class Skidmarks : MonoBehaviour
+public sealed class Skidmarks : Component
 {
     public int MaxSegments = 3000;
 
@@ -180,7 +180,7 @@ public sealed class Skidmarks : MonoBehaviour
 public enum TyreSprayKind { Smoke, Dust, Chips, None }
 
 /// <summary>Marks a surface for <see cref="TyreSpray"/>. Surfaces without one smoke.</summary>
-public sealed class TyreSurface : MonoBehaviour
+public sealed class TyreSurface : Component
 {
     public TyreSprayKind Spray = TyreSprayKind.Dust;
 }
@@ -191,7 +191,7 @@ public sealed class TyreSurface : MonoBehaviour
 /// The ground picks which with a <see cref="TyreSurface"/>. Hand it the wheels of every vehicle with
 /// <see cref="Track"/>; it sets up its own world space particle systems.
 /// </summary>
-public sealed class TyreSpray : MonoBehaviour
+public sealed class TyreSpray : Component
 {
     public Texture2D? SmokeTexture;
     public Texture2D? ChipTexture;

@@ -600,7 +600,7 @@ public static class RuntimeUtils
     /// The component's [ExecutionOrder], or zero when it has none. The absence of the attribute is cached too:
     /// most types do not carry one, and leaving that uncached meant a reflection lookup every single call.
     /// </summary>
-    internal static int GetExecutionOrder(MonoBehaviour a)
+    internal static int GetExecutionOrder(Component a)
     {
         Type type = a.GetType();
         if (s_executionOrderCache.TryGetValue(type, out int order))
@@ -613,7 +613,7 @@ public static class RuntimeUtils
 
     /// <summary>
     /// Whether <paramref name="type"/> overrides the public virtual <paramref name="method"/> declared on
-    /// <paramref name="baseType"/>. Used to detect which optional MonoBehaviour callbacks a component implements.
+    /// <paramref name="baseType"/>. Used to detect which optional Component callbacks a component implements.
     /// </summary>
     internal static bool OverridesVirtual(Type type, string method, Type baseType)
     {

@@ -345,7 +345,7 @@ public abstract class StationGame : Game
 }
 
 /// <summary>WASD and Q E to fly, hold Right Mouse to look, Shift to go faster. Gamepad sticks work too.</summary>
-public sealed class FlyCamera : MonoBehaviour
+public sealed class FlyCamera : Component
 {
     public float Speed = 7f;
     public float FastSpeed = 20f;
@@ -443,7 +443,7 @@ public sealed class FlyCamera : MonoBehaviour
 /// Follows a target. Holding Right Mouse orbits it, the wheel zooms, and when following a vehicle the
 /// camera swings back behind it on its own.
 /// </summary>
-public sealed class ChaseCamera : MonoBehaviour
+public sealed class ChaseCamera : Component
 {
     public Transform? Target;
     public bool FollowHeading;
@@ -542,7 +542,7 @@ public sealed class MeshBuilder
 /// mouse, so the body still collides and spins about where it is held. The mouse wheel pulls it closer
 /// or pushes it away.
 /// </summary>
-public sealed class PhysicsGrabber : MonoBehaviour
+public sealed class PhysicsGrabber : Component
 {
     public Game Game = null!;
 
@@ -634,7 +634,7 @@ public sealed class PhysicsGrabber : MonoBehaviour
 }
 
 /// <summary>Draws the station title, description, stats, key help, the station bar and the sample's controls.</summary>
-public sealed class SampleHud : MonoBehaviour
+public sealed class SampleHud : Component
 {
     public StationGame Game = null!;
     public bool Visible = true;

@@ -881,7 +881,7 @@ public class NavMeshComponentTests : RuntimeTestBase
         field!.SetValue(target, value);
     }
 
-    private static T FromOldScene<T>(params (string Key, object Value)[] fields) where T : MonoBehaviour
+    private static T FromOldScene<T>(params (string Key, object Value)[] fields) where T : Component
     {
         EchoObject compound = EchoObject.NewCompound();
         foreach ((string key, object value) in fields)

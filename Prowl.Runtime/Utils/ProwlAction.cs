@@ -116,7 +116,7 @@ public sealed class ProwlCall
 
 
     internal string? DiagnoseTarget()
-        => _target is MonoBehaviour component && component.GameObject.IsNotValid()
+        => _target is Component component && component.GameObject.IsNotValid()
             ? $"Its target '{_target.Name}' is a detached {_target.GetType().Name}: no GameObject behind it, " +
               "which is what a reference to an object outside the saved scene loads back as. Re-wire the " +
               "call at runtime instead of saving a cross-scene reference."

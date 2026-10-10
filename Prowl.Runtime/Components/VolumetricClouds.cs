@@ -75,7 +75,7 @@ public sealed class CloudLayer
 [ExecuteAlways]
 [AddComponentMenu("Rendering/Volumetric Clouds")]
 [ComponentIcon("")] // Cloud
-public sealed class VolumetricClouds : MonoBehaviour
+public sealed class VolumetricClouds : Component
 {
     /// <summary>Height of the cloud base above zero, in meters.</summary>
     [Header("Shape")]

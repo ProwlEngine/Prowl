@@ -50,7 +50,7 @@ public enum ReflectionProbeTimeSlicing
 [ExecuteAlways]
 [AddComponentMenu("Rendering/Reflection Probe")]
 [ComponentIcon("")] // Dot circle
-public class ReflectionProbe : MonoBehaviour
+public class ReflectionProbe : Component
 {
     public ReflectionProbeMode Mode = ReflectionProbeMode.Baked;
 

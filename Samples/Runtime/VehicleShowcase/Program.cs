@@ -495,7 +495,7 @@ public sealed partial class VehicleShowcaseGame : StationGame
 }
 
 /// <summary>Times laps as the vehicle being driven crosses the start line.</summary>
-public sealed class LapTimer : MonoBehaviour
+public sealed class LapTimer : Component
 {
     public string Track = "";
     public Rigidbody3D? Car;
@@ -542,7 +542,7 @@ public sealed class LapTimer : MonoBehaviour
 }
 
 /// <summary>Draws the showcase's speedometer over the scene.</summary>
-public sealed class SpeedometerHud : MonoBehaviour
+public sealed class SpeedometerHud : Component
 {
     public VehicleShowcaseGame Game = null!;
 

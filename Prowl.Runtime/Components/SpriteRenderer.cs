@@ -17,7 +17,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Sprite Renderer")]
 [ComponentIcon("")] // Image
-public class SpriteRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
+public class SpriteRenderer : Component, IMaterialRenderer, IColorTint
 {
     int IMaterialRenderer.MaterialSlotCount => 1;
     Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }

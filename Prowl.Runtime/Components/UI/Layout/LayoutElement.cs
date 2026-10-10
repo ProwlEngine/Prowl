@@ -104,7 +104,7 @@ public static class LayoutUtility
         if (s_cache.TryGetValue(go, out Sizes cached)) return cached;
 
         float pw = -1f, ph = -1f, mw = -1f, mh = -1f, fw = 0f, fh = 0f;
-        foreach (MonoBehaviour c in go.GetComponents<MonoBehaviour>())
+        foreach (Component c in go.GetComponents<Component>())
         {
             if (c is not ILayoutElement le || !c.EnabledInHierarchy) continue;
             pw = Maths.Max(pw, le.PreferredWidth);

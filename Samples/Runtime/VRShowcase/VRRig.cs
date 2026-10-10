@@ -33,7 +33,7 @@ public enum MoveDirection { Head, LeftHand }
 /// riding a platform, being shoved, the view simply rides along with.
 /// </para>
 /// </summary>
-public sealed class VRRig : MonoBehaviour
+public sealed class VRRig : Component
 {
     public Transform Origin = null!;
     public Transform Head = null!;

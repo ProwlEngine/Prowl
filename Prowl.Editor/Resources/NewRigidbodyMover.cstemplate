@@ -2,7 +2,7 @@ using Prowl.Runtime;
 using Prowl.Vector;
 
 [RequireComponent(typeof(Rigidbody3D))]
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public float MoveSpeed = 5f;
     public float JumpImpulse = 6f;

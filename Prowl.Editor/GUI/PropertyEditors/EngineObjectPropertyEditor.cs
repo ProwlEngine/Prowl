@@ -58,7 +58,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
             {
                 if (typeof(GameObject).IsAssignableFrom(fieldType))
                     onChange(go);
-                else if (typeof(MonoBehaviour).IsAssignableFrom(fieldType) && go.GetComponent(fieldType) is { } comp)
+                else if (typeof(Component).IsAssignableFrom(fieldType) && go.GetComponent(fieldType) is { } comp)
                     onChange(comp);
             }
             DragDrop.EndDrag();
@@ -81,9 +81,9 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
     internal static void OpenAssetSelector(Type type, Action<object?> onChange)
     {
-        // Scene types (GameObject, MonoBehaviour subclasses) -> Scene tab
+        // Scene types (GameObject, Component subclasses) -> Scene tab
         // Asset types (Mesh, Material, etc.) -> Assets tab
-        bool isSceneType = typeof(GameObject).IsAssignableFrom(type) || typeof(MonoBehaviour).IsAssignableFrom(type);
+        bool isSceneType = typeof(GameObject).IsAssignableFrom(type) || typeof(Component).IsAssignableFrom(type);
         var tabs = isSceneType ? SelectorTabs.Scene : SelectorTabs.Assets;
         SelectorModal.Open($"Select {type.Name}", type, tabs, onChange);
     }

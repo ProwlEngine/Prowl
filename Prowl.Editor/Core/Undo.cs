@@ -29,7 +29,7 @@ public static class Undo
     }
 
     /// <summary>
-    /// Records a property change on a serializable object (typically MonoBehaviour).
+    /// Records a property change on a serializable object (typically Component).
     /// Stores before/after EchoObject snapshots. Restores by copying fields onto the live object.
     /// Tracks targets by Identifier (Guid) so records survive destroy/recreate cycles.
     /// </summary>
@@ -39,9 +39,9 @@ public static class Undo
         public MemoryCopy BeforeState;
         public MemoryCopy AfterState;
 
-        // Identifier-based tracking for MonoBehaviour targets
+        // Identifier-based tracking for Component targets
         public Guid ComponentIdentifier;
-        // Fallback for non-MonoBehaviour targets (plain objects)
+        // Fallback for non-Component targets (plain objects)
         public WeakReference<object>? FallbackRef;
 
         public PropertyRecord(object target, MemoryCopy before, MemoryCopy after)
@@ -50,7 +50,7 @@ public static class Undo
             BeforeState = before;
             AfterState = after;
 
-            if (target is MonoBehaviour mb)
+            if (target is Component mb)
                 ComponentIdentifier = mb.Identifier;
             else
             {
@@ -196,7 +196,7 @@ public static class Undo
         : "Redo";
 
     // ================================================================
-    //  Property Recording (for MonoBehaviour / plain objects via PropertyGrid)
+    //  Property Recording (for Component / plain objects via PropertyGrid)
     // ================================================================
 
     /// <summary>
@@ -815,7 +815,7 @@ public static class Undo
             if (prev.Records[i] is not PropertyRecord prevPR) return false;
             var newPR = newRecords[i];
 
-            // Same target? Compare by identifier for MonoBehaviour, by fallback ref for others
+            // Same target? Compare by identifier for Component, by fallback ref for others
             if (prevPR.ComponentIdentifier != Guid.Empty || newPR.ComponentIdentifier != Guid.Empty)
             {
                 if (prevPR.ComponentIdentifier != newPR.ComponentIdentifier) return false;
@@ -881,7 +881,7 @@ public static class Undo
     // Fields that must never be overwritten by undo they are identity/internal state
     private static readonly HashSet<string> _undoSkipFields = new()
     {
-        "_identifier",        // MonoBehaviour identity must be preserved
+        "_identifier",        // Component identity must be preserved
         "_instanceID",        // EngineObject instance ID
         "_enabledInHierarchy",// Derived state, not user-settable
         "_go",                // GameObject back-reference (not serialized, but just in case)
@@ -961,9 +961,9 @@ public static class Undo
     }
 
     /// <summary>
-    /// Find a MonoBehaviour component by identifier across all GOs in the current scene.
+    /// Find a component by identifier across all GOs in the current scene.
     /// </summary>
-    public static MonoBehaviour? FindComponent(Guid identifier)
+    public static Component? FindComponent(Guid identifier)
     {
         var scene = Scene.Current;
         if (scene == null) return null;
@@ -976,7 +976,7 @@ public static class Undo
     }
 
     // Private alias used by PropertyRecord
-    private static MonoBehaviour? FindComponentByIdentifier(Guid identifier) => FindComponent(identifier);
+    private static Component? FindComponentByIdentifier(Guid identifier) => FindComponent(identifier);
 
     private static GameObject? FindGameObjectByIdentifier(Scene scene, Guid identifier)
     {

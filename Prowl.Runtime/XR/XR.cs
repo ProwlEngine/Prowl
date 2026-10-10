@@ -322,7 +322,7 @@ public static class XR
 
 /// <summary>Moves the transform to follow a tracked device, relative to its parent, which stands for the play area.</summary>
 [AddComponentMenu("XR/Tracked Pose Driver")]
-public class TrackedPoseDriver : MonoBehaviour
+public class TrackedPoseDriver : Component
 {
     public XRNode Node = XRNode.Head;
     public bool TrackPosition = true;

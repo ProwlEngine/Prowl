@@ -1,7 +1,7 @@
 using Prowl.Runtime;
 using Prowl.Vector;
 
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public GameObject? Target;
     public bool LockYAxis = false;

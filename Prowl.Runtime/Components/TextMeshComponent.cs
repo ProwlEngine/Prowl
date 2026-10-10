@@ -27,7 +27,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Text Mesh")]
 [ComponentIcon("T")] // Text
-public class TextMeshComponent : MonoBehaviour, IMaterialRenderer, IColorTint
+public class TextMeshComponent : Component, IMaterialRenderer, IColorTint
 {
     int IMaterialRenderer.MaterialSlotCount => 1;
     Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }

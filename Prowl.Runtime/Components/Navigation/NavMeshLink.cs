@@ -23,7 +23,7 @@ namespace Prowl.Runtime;
 [ExecuteAlways]
 [AddComponentMenu("Navigation/NavMesh Link")]
 [ComponentIcon("\uf0c1")] // link icon
-public class NavMeshLink : MonoBehaviour
+public class NavMeshLink : Component
 {
     [Tooltip("Link start position, local to this GameObject.")]
     [SerializeField] private Float3 startPoint = new(0, 0, -2.5f);
@@ -100,7 +100,7 @@ public class NavMeshLink : MonoBehaviour
 
     /// <summary>Persistent id stamped on the baked connections, resolving a traversing agent back
     /// to this component (<see cref="NavMeshAgent.CurrentOffMeshLinkData"/>). Derived from the
-    /// component's <see cref="MonoBehaviour.Identifier"/>, which the scene persists, so it survives
+    /// component's <see cref="Component.Identifier"/>, which the scene persists, so it survives
     /// a reload and a duplicated object gets its own. Resolution is best-effort — baked data can
     /// outlive the component that produced it — so don't hang gameplay-critical logic on
     /// <c>CurrentOffMeshLinkData.Link</c>.</summary>

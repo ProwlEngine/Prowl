@@ -17,7 +17,7 @@ public class EngineObjectNullAnalyzerTests : EditorTestHarness
 {
     private ScriptCompiler.CompileResult Compile(string members)
     {
-        WriteScript("Comp.cs", $"using Prowl.Runtime;\npublic class Comp : MonoBehaviour {{ {members} }}");
+        WriteScript("Comp.cs", $"using Prowl.Runtime;\npublic class Comp : Component {{ {members} }}");
         return ScriptCompiler.CompileAll(Project);
     }
 
@@ -26,7 +26,7 @@ public class EngineObjectNullAnalyzerTests : EditorTestHarness
     [InlineData("GameObject N(GameObject? a, GameObject b) => a ?? b;", EngineObjectNullAnalyzer.NullCoalescingId)]
     [InlineData("GameObject? _go; void N(GameObject b) { _go ??= b; }", EngineObjectNullAnalyzer.NullCoalescingId)]
     [InlineData("void N<T>(T? asset) where T : Asset { asset?.Load(); }", EngineObjectNullAnalyzer.NullConditionalId)]
-    [InlineData("T N<T>(T? a, T b) where T : MonoBehaviour => a ?? b;", EngineObjectNullAnalyzer.NullCoalescingId)]
+    [InlineData("T N<T>(T? a, T b) where T : Component => a ?? b;", EngineObjectNullAnalyzer.NullCoalescingId)]
     [InlineData("void N<T, U>(T? a) where T : U where U : Asset { a?.Load(); }", EngineObjectNullAnalyzer.NullConditionalId)]
     public void FlagsNullOperatorsOnEngineObjectsIncludingGenerics(string members, string expectedId)
     {

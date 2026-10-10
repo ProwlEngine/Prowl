@@ -22,7 +22,7 @@ namespace VRShowcase;
 /// around its own Y axis through <see cref="GripPoint"/>.
 /// </para>
 /// </summary>
-public sealed class PhysicsHand : MonoBehaviour
+public sealed class PhysicsHand : Component
 {
     public XRHand Hand;
     public Transform Origin = null!;
@@ -1085,7 +1085,7 @@ public sealed class PhysicsHand : MonoBehaviour
 /// a faint line to it. Squeezing the grip picks it out, and a flick of the hand back toward the body throws it up on
 /// an arc that lands in the hand, which catches it while the grip is still held.
 /// </summary>
-public sealed class GravityGlove : MonoBehaviour
+public sealed class GravityGlove : Component
 {
     public PhysicsHand Hand = null!;
     public float MaxDistance = 8f;
