@@ -462,21 +462,17 @@ public static class PropertyGridRenderer
 
                 if (isNumeric && !Origami.IsReadOnly)
                 {
-                    // Draggable label for numeric fields - horizontal drag adjusts value
-                    // Default (1 pixel movement = 0.01)
-                    // Shift (Speed/Bigger Step) = x10
-                    // Ctrl (Precision) = x0.1
-                    lbl.OnDragging(e =>
+                    // Draggable label for numeric fields: horizontal drag adjusts the value from where the drag began.
+                    // Shift moves ten times faster, Ctrl ten times finer
+                    lbl.OnDragStart(e => paper.SetElementStorage(e.Source, DragStartKey, value))
+                        .OnDragging(e =>
                         {
-                            float multiplier = 0.01f;
-                            int decimalPlaces = 2;
-                            if (paper.IsKeyDown(PaperUI.PaperKey.LeftShift) || paper.IsKeyDown(PaperUI.PaperKey.RightShift)) { multiplier *=  10f; decimalPlaces--; }
-                            else if (paper.IsKeyDown(PaperUI.PaperKey.LeftControl) || paper.IsKeyDown(PaperUI.PaperKey.RightControl)) { multiplier *= 0.1f; decimalPlaces++; }
+                            float multiplier = 1f;
+                            if (paper.IsKeyDown(PaperUI.PaperKey.LeftShift) || paper.IsKeyDown(PaperUI.PaperKey.RightShift)) multiplier = 10f;
+                            else if (paper.IsKeyDown(PaperUI.PaperKey.LeftControl) || paper.IsKeyDown(PaperUI.PaperKey.RightControl)) multiplier = 0.1f;
 
-
-                            double newVal = ConvertToDouble(value) + (double)e.ScreenDelta.X * multiplier;
-                            newVal = Math.Round(newVal, decimalPlaces); //set resolution to match shift amount
-                            object? converted = ConvertFromDouble(newVal, fieldType);
+                            object? start = paper.GetElementStorage<object?>(e.Source, DragStartKey, value);
+                            object? converted = DragValue(start, e.ScreenTotalDelta.X, multiplier, fieldType);
                             if (converted != null) onChange(converted);
                         })
                         .Cursor(PaperCursor.ResizeHorizontal);
@@ -1125,6 +1121,26 @@ public static class PropertyGridRenderer
     };
 
     private static bool IsNumericType(Type type) => s_numericTypes.Contains(type);
+
+    private const string DragStartKey = "DragStartValue";
+
+    /// <summary>
+    /// The value a numeric field takes after its label is dragged <paramref name="pixels"/> from where the drag began.
+    /// A pixel moves it a thousandth of its starting size, and never less than 0.01, so large values move as readily
+    /// as small ones. Whole number fields move at least one step every five pixels.
+    /// </summary>
+    internal static object? DragValue(object? start, float pixels, float multiplier, Type fieldType)
+    {
+        double from = ConvertToDouble(start);
+        double step = Math.Max(0.01, Math.Abs(from) * 0.001) * multiplier;
+        if (fieldType != typeof(float) && fieldType != typeof(double) && fieldType != typeof(decimal))
+            step = Math.Max(step, 0.2 * multiplier);
+
+        // Rounded to the step's own resolution, so a drag lands on tidy values
+        double resolution = Math.Pow(10, Math.Floor(Math.Log10(step)));
+        double value = Math.Round((from + pixels * step) / resolution) * resolution;
+        return ConvertFromDouble(value, fieldType);
+    }
 
     private static double ConvertToDouble(object? value)
     {
