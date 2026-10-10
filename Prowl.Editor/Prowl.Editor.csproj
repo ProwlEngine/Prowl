@@ -9,6 +9,9 @@
     <Version>1.0-preview-4</Version>
     <NoWarn>8600;8601;8618;8602;8603;8604;8625</NoWarn>
     <ApplicationIcon>prowl.ico</ApplicationIcon>
+
+    <!-- Copy each package's XML docs next to its dll, so the CLI api command can show docs for every library. -->
+    <CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
