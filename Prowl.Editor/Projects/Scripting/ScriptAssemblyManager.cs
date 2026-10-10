@@ -56,6 +56,9 @@ public static class ScriptAssemblyManager
         Prowl.Echo.TypeNameRegistry.TypeResolver = RuntimeUtils.FindType;
     }
 
+    /// <summary> Whether this is one of the project's live script assemblies. </summary>
+    public static bool IsScriptAssembly(Assembly assembly) => s_scriptAssemblies.Contains(assembly);
+
     /// <summary>
     /// Every loaded assembly worth reflecting over, the live script build first and superseded builds left out.
     /// A hot reload leaves the outgoing assembly loaded under the same simple name, so without this a lookup by
