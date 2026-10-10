@@ -67,10 +67,11 @@ public sealed class ShaderDefinition
         if (Passes == null)
             throw new InvalidOperationException("Shader has no passes.");
 
-        foreach (ShaderPass pass in Passes)
+        for (int i = 0; i < Passes.Length; i++)
         {
+            ShaderPass pass = Passes[i];
             VariantSpace[] axes = compiler != null ? [.. compiler.GetAxes(pass)] : [];
-            pass.Bind(device, axes, [], compiler, mode, fallback);
+            pass.Bind(device, Name ?? "", i, axes, [], compiler, mode, fallback);
         }
 
         _created = true;
@@ -110,7 +111,7 @@ public sealed class ShaderDefinition
         for (int i = 0; i < Passes.Length; i++)
         {
             PassSnapshot pass = snapshot.Passes[i];
-            Passes[i].Bind(device, pass.Axes ?? [], pass.Variants ?? [], compiler, CompileMode.OnDemand, fallback);
+            Passes[i].Bind(device, Name ?? "", i, pass.Axes ?? [], pass.Variants ?? [], compiler, CompileMode.OnDemand, fallback);
         }
 
         _created = true;

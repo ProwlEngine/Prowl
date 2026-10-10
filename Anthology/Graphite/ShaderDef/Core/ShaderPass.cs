@@ -38,6 +38,8 @@ public sealed class ShaderPass
 
 
     private GraphicsDevice? _device;
+    private string _shaderName = "";
+    private int _passIndex;
     private GraphicsBackend _backend;
     private IShaderCompiler? _compiler;
 
@@ -63,9 +65,11 @@ public sealed class ShaderPass
     /// <summary>
     /// Binds this pass to a device. fallback is used for unresolved requests, required if compiler is set.
     /// </summary>
-    internal void Bind(GraphicsDevice device, VariantSpace[] axes, Variant[] known, IShaderCompiler? compiler, CompileMode mode, Variant? fallback = null)
+    internal void Bind(GraphicsDevice device, string shaderName, int passIndex, VariantSpace[] axes, Variant[] known, IShaderCompiler? compiler, CompileMode mode, Variant? fallback = null)
     {
         _device = device;
+        _shaderName = shaderName;
+        _passIndex = passIndex;
         _backend = device.BackendType;
         _compiler = compiler;
         _fallback = fallback;
@@ -337,8 +341,23 @@ public sealed class ShaderPass
         description.RasterizerState = raster;
 
         GraphicsProgram program = _device!.ResourceFactory.CreateGraphicsProgram(description);
+        program.Name = ProgramName(variant.Keywords);
         (isFallback ? _fallbackProgramCache : _programCache)[programKey] = program;
         return program;
+    }
+
+
+    private string ProgramName(Keyword[] keywords)
+    {
+        string name = $"{_shaderName}/{(string.IsNullOrEmpty(Name) ? _passIndex.ToString() : Name)}";
+        if (keywords.Length == 0)
+            return name;
+
+        string[] axes = new string[keywords.Length];
+        for (int i = 0; i < keywords.Length; i++)
+            axes[i] = $"{keywords[i].Name}={keywords[i].Value}";
+
+        return $"{name} [{string.Join(", ", axes)}]";
     }
 
 
