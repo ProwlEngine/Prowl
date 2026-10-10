@@ -24,7 +24,8 @@ internal static class CloudRenderer
     private const int CoverageResolution = 1024;
 
     private static Material? s_material;
-    private static readonly Dictionary<int, Mesh> s_grids = [];
+    private static readonly Dictionary<int, (Mesh Mesh, long UsedAt)> s_grids = [];
+    private static readonly List<int> s_staleGrids = [];
 
     /// <summary>
     /// The coverage and sun maps of one <see cref="VolumetricClouds"/>, drawn once a frame around the main camera and
@@ -183,6 +184,8 @@ internal static class CloudRenderer
         RenderTexture target = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Short4, TextureImageFormat.Short]);
         try
         {
+            Float4x4 viewProjection = css.Projection * css.View;
+            SetViewCorners(mat, viewProjection);
             mat.SetTexture("_CameraDepthTexture", prepass.InternalDepth!);
             mat.SetVector("_CloudFullResolution", new Float2(css.PixelWidth, css.PixelHeight));
             mat.SetVector("_CloudLowResolution", new Float2(width, height));
@@ -218,10 +221,8 @@ internal static class CloudRenderer
                 mat.SetVector("_CloudWindStep", new Float2((float)(clouds.WindX - eye.PreviousWindX), (float)(clouds.WindZ - eye.PreviousWindZ)));
                 mat.SetMatrix("_CloudPreviousViewProjection", eye.PreviousViewProjection);
                 mat.SetMatrix("_CloudPreviousStillViewProjection", eye.PreviousStillViewProjection);
-                Float4x4 viewProjection = css.Projection * css.View;
                 Float4x4 stillViewProjection = css.NonJitteredProjection * css.View;
                 mat.SetMatrix("_CloudStillViewProjection", stillViewProjection);
-                SetViewCorners(mat, viewProjection);
                 cmd.Blit(eye.Write!, mat, PassTemporal);
                 result = eye.Write!;
                 mat.SetVector("_CloudLowResolution", new Float2(outWidth, outHeight));
@@ -526,12 +527,25 @@ internal static class CloudRenderer
         cmd.Blit(mat, PassLayer);
     }
 
-    // One grid per size, so components with different sizes never rebuild each other's
+    // One grid per size in use, so components with different sizes never rebuild each other's. A size nothing has
+    // drawn with for a second is let go, so dragging the size through many values does not keep a mesh for each.
+    // Wall time rather than frames, since the editor and play mode count frames on clocks of their own
     private static Mesh GridFor(int size)
     {
-        if (!s_grids.TryGetValue(size, out Mesh? grid) || grid.IsNotValid())
-            s_grids[size] = grid = BuildGrid(size);
-        return grid;
+        long now = Environment.TickCount64;
+        if (!s_grids.TryGetValue(size, out var entry) || entry.Mesh.IsNotValid())
+            entry.Mesh = BuildGrid(size);
+        s_grids[size] = (entry.Mesh, now);
+
+        s_staleGrids.Clear();
+        foreach (var (key, grid) in s_grids)
+            if (now - grid.UsedAt > 1000) s_staleGrids.Add(key);
+        foreach (int key in s_staleGrids)
+        {
+            if (s_grids[key].Mesh.IsValid()) s_grids[key].Mesh.Dispose();
+            s_grids.Remove(key);
+        }
+        return entry.Mesh;
     }
 
     /// <summary>

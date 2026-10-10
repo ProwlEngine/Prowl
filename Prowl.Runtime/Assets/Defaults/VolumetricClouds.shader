@@ -90,8 +90,8 @@ Pass "Depth"
             float depth = texelFetch(_CameraDepthTexture, pixel, 0).r;
             if (depth >= 0.99999) return 1e8;
             vec2 uv = (vec2(pixel) + 0.5) / _CloudFullResolution;
-            vec4 world = PROWL_MATRIX_I_VP * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
-            return distance(world.xyz / world.w, _WorldSpaceCameraPos.xyz);
+            vec4 view = PROWL_MATRIX_I_P * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+            return length(view.xyz / view.w);
         }
 
         void main()
@@ -225,8 +225,7 @@ Pass "Layer"
         {
             vec2 uv = (gl_FragCoord.xy + _CloudJitter) / _CloudLowResolution;
             vec3 cam = _WorldSpaceCameraPos.xyz;
-            vec4 farPoint = PROWL_MATRIX_I_VP * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
-            vec3 dir = normalize(farPoint.xyz / farPoint.w - cam);
+            vec3 dir = CloudViewRay(uv);
 
             float t = ShellDistance(dir, cam.y, _LayerShape.x);
             float sceneDist = texelFetch(_CloudSceneDepth, ivec2(gl_FragCoord.xy), 0).r;
@@ -573,8 +572,8 @@ Pass "Composite"
             float own = 1e8;
             if (depth < 0.99999)
             {
-                vec4 world = PROWL_MATRIX_I_VP * vec4(TexCoords * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
-                own = distance(world.xyz / world.w, _WorldSpaceCameraPos.xyz);
+                vec4 view = PROWL_MATRIX_I_P * vec4(TexCoords * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+                own = length(view.xyz / view.w);
             }
 
             vec2 position = TexCoords * _CloudLowResolution - 0.5;
@@ -692,6 +691,7 @@ Pass "Temporal"
     Fragment
     {
         #include "ProwlCG"
+        #include "Clouds"
 
         layout(location = 0) out vec4 OutputColor;
         layout(location = 1) out vec4 OutputDistance;
@@ -712,9 +712,6 @@ Pass "Temporal"
         uniform mat4 _CloudPreviousViewProjection;
         // The view projections without the anti aliasing jitter, so a still camera never reads as moving
         uniform mat4 _CloudStillViewProjection, _CloudPreviousStillViewProjection;
-        // The world points under the screen's corners on two planes across the view, worked out in double precision
-        uniform vec3 _CloudNearOrigin, _CloudNearRight, _CloudNearUp;
-        uniform vec3 _CloudFarOrigin, _CloudFarRight, _CloudFarUp;
 
         // This frame's samples interpolated to any pixel. Each sample sits at the centre of its block's jittered cell, and
         // counts by how well the scene behind it matches the pixel's, so samples on geometry do not leak into sky beside

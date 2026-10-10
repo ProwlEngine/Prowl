@@ -19,6 +19,19 @@ uniform float _CloudErosionSize; // texels along each side of the 3D noise
 // The clouds draw in two passes that only add up, so draw order cannot matter. The first adds up moments of how much
 // each sample hides at its distance, the second lights the samples and adds each one dimmed by what the moments say
 // lies in front of it
+// The world points under the screen's corners on a near and a far plane across the view, worked out in double
+// precision. A float inverse of the view projection loses whole pixels far from the origin with a small near plane
+uniform vec3 _CloudNearOrigin, _CloudNearRight, _CloudNearUp;
+uniform vec3 _CloudFarOrigin, _CloudFarRight, _CloudFarUp;
+
+// The view ray through a point of the screen, 0 to 1 across it
+vec3 CloudViewRay(vec2 uv)
+{
+    vec3 start = _CloudNearOrigin + _CloudNearRight * uv.x + _CloudNearUp * uv.y;
+    vec3 end = _CloudFarOrigin + _CloudFarRight * uv.x + _CloudFarUp * uv.y;
+    return normalize(end - start);
+}
+
 uniform int _CloudMomentPass;      // 1 while adding up the moments
 uniform sampler2D _CloudMoments0;  // optical depth, times depth, times depth squared
 uniform sampler2D _CloudMoments1;  // times depth cubed, times depth to the fourth
