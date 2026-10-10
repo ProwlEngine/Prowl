@@ -21,8 +21,11 @@ public class TimeSettings : ProjectSettingsBase
     public override void Apply()
     {
         Runtime.Time.FixedDeltaTime = FixedTimestep;
-        Runtime.Time.TimeScale = DefaultTimeScale;
         Runtime.Time.MaxFixedIterations = MaxFixedIterations;
+
+        // A running game owns its time scale. Entering play mode starts it from the default.
+        if (!Runtime.Application.IsPlaying)
+            Runtime.Time.TimeScale = DefaultTimeScale;
     }
 
     public override void ResetToDefaults()
