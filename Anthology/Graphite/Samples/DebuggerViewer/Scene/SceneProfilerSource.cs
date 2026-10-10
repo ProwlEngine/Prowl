@@ -21,8 +21,8 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
     private readonly List<Recording> _frames = new();
     private readonly List<Pending> _pending = new();
     private readonly Dictionary<Recording, FrameTiming> _timings = new();
-    private readonly Dictionary<DeepRecording, Replayer> _replayers = new();
-    private readonly Dictionary<DeepRecording, float> _captureTimes = new();
+    private Replayer? _replayer;
+    private float _captureTime;
 
     public SceneProfilerSource(GraphicsDevice device, OffscreenScene scene)
     {
@@ -38,6 +38,10 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
     public double TotalMilliseconds { get; private set; }
 
     public long TotalFrames { get; private set; }
+
+    public DeepRecording? Snapshot { get; private set; }
+
+    public FrameTiming? SnapshotTiming { get; private set; }
 
     /// <summary>Collects finished recordings, then renders and records the next scene frame while recording.</summary>
     public void Update(float deltaSeconds)
@@ -72,8 +76,7 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
         }
     }
 
-    public FrameTiming Timing(Recording frame)
-        => _timings.TryGetValue(frame, out FrameTiming? timing) ? timing : Measure(frame, frame.Views.Sum(v => v.Passes.Sum(p => p.Stats.CpuMilliseconds)), 0);
+    public FrameTiming Timing(int frame) => _timings[_frames[frame]];
 
     private FrameTiming Measure(Recording recording, double dispatchMilliseconds, double frameMilliseconds)
     {
@@ -96,34 +99,41 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
             visibility);
     }
 
-    public DeepRecording Capture(Recording frame, DeepMode mode)
+    public void Capture(int frame, DeepMode mode)
     {
         DeepRecording recording = new(_device, mode);
         long start = Stopwatch.GetTimestamp();
         _scene.Dispatch(recording);
         double dispatch = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         recording.Wait();
-        _timings[recording.Recording] = Measure(recording.Recording, dispatch, Timing(frame).FrameMilliseconds);
-        _captureTimes[recording] = _scene.Time;
-        return recording;
+        Open(recording, Measure(recording.Recording, dispatch, Timing(frame).FrameMilliseconds), _scene.Time);
     }
 
-    public ReplayResult Replay(DeepRecording recording, ReplayRequest request)
+    private void Open(DeepRecording recording, FrameTiming timing, float time)
     {
-        if (!_replayers.TryGetValue(recording, out Replayer? replayer))
-            _replayers[recording] = replayer = new Replayer(_device, recording);
-        return replayer.Replay(request);
+        Snapshot?.Dispose();
+        Snapshot = recording;
+        SnapshotTiming = timing;
+        _replayer = null;
+        _captureTime = time;
     }
 
-    public RendererInfo? Renderer(DeepRecording recording, string marker)
+    public ReplayResult Replay(ReplayRequest request)
+    {
+        if (Snapshot == null)
+            throw new InvalidOperationException("There is no snapshot to replay.");
+        _replayer ??= new Replayer(_device, Snapshot);
+        return _replayer.Replay(request);
+    }
+
+    public RendererInfo? Renderer(string marker)
     {
         SceneCube? cube = _scene.Cubes.FirstOrDefault(c => c.Name == marker);
-        if (cube == null)
+        if (Snapshot == null || cube == null)
             return null;
 
-        float time = _captureTimes.TryGetValue(recording, out float captured) ? captured : _scene.Time;
-        Quaternion rotation = Quaternion.AngleAxis(cube.Phase + time * cube.Speed, cube.Axis);
-        Float3 eye = OffscreenScene.Eye(time);
+        Quaternion rotation = Quaternion.AngleAxis(cube.Phase + _captureTime * cube.Speed, cube.Axis);
+        Float3 eye = OffscreenScene.Eye(_captureTime);
         float distance = (float)Float3.Length(cube.Position - eye);
         float radius = (float)Float3.Length(cube.Scale) * 0.5f;
         float projected = radius / (distance * MathF.Tan(OffscreenScene.FieldOfView * 0.5f)) * OffscreenScene.Height * 0.5f;
@@ -149,16 +159,20 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
 
     private static string Format(Float4 v) => $"({v.X:0.##}, {v.Y:0.##}, {v.Z:0.##}, {v.W:0.##})";
 
-    public void Save(DeepRecording recording, string path)
+    public void SaveSnapshot(string path)
     {
+        if (Snapshot == null)
+            throw new InvalidOperationException("There is no snapshot to save.");
         using BinaryWriter writer = new(File.Create(path));
-        Serializer.Serialize(recording).WriteToBinary(writer);
+        Serializer.Serialize(Snapshot).WriteToBinary(writer);
     }
 
-    public DeepRecording Load(string path)
+    public void LoadSnapshot(string path)
     {
-        using BinaryReader reader = new(File.OpenRead(path));
-        return Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))
-            ?? throw new InvalidDataException($"{path} is not a Graphite debugger recording.");
+        DeepRecording recording;
+        using (BinaryReader reader = new(File.OpenRead(path)))
+            recording = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))
+                ?? throw new InvalidDataException($"{path} is not a Graphite debugger recording.");
+        Open(recording, Measure(recording.Recording, recording.Recording.Views.Sum(v => v.Passes.Sum(p => p.Stats.CpuMilliseconds)), 0), _scene.Time);
     }
 }

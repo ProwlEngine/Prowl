@@ -23,7 +23,7 @@ internal sealed partial class ProfilerView
 {
     private static readonly string[] MeshModes = { "Flat", "Flat + wire", "Wireframe", "Normals", "UV layout" };
 
-    private readonly Dictionary<(DeepRecording, int, int, int?), ReplayResult> _replays = new();
+    private readonly Dictionary<(int, int, int?), ReplayResult> _replays = new();
     private readonly Dictionary<string, (object Texture, int Width, int Height, string Version)> _textures = new();
     private readonly ConditionalWeakTable<byte[], Dictionary<CopyRegion, byte[]>> _previews = new();
     private readonly bool[] _channels = { true, true, true, true };
@@ -35,10 +35,10 @@ internal sealed partial class ProfilerView
 
     private ReplayResult Replay(FrameModel model, int view, int pass, int? eventIndex)
     {
-        var key = (model.Deep!, view, pass, eventIndex);
+        var key = (view, pass, eventIndex);
         if (!_replays.TryGetValue(key, out ReplayResult? result))
         {
-            result = _source.Replay(model.Deep!, new ReplayRequest { ViewIndex = view, PassIndex = pass, EventIndex = eventIndex });
+            result = _source.Replay(new ReplayRequest { ViewIndex = view, PassIndex = pass, EventIndex = eventIndex });
             _replays[key] = result;
         }
         return result;

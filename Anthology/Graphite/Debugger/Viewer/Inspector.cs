@@ -56,7 +56,7 @@ internal sealed partial class ProfilerView
                 Mono("ms", stat, Style.InkSoft);
                 Spacer("sp");
                 Title("title", Heavy ? "Snapshot Inspector" : "Inspector");
-                Origami.Label(_paper, "badge", Heavy ? $"SNAPSHOT #{OpenSnapshot!.Id}" : "LIVE").XS().Pill().Padding(Metrics.PaddingLarge, 0).Height(Metrics.RowHeight).Show();
+                Origami.Label(_paper, "badge", Heavy ? "SNAPSHOT" : "LIVE").XS().Pill().Padding(Metrics.PaddingLarge, 0).Height(Metrics.RowHeight).Show();
             }
 
             List<string> chain = new();

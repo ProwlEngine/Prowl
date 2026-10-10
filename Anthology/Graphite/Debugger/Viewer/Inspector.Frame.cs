@@ -42,7 +42,7 @@ internal sealed partial class ProfilerView
                     new("Frame", $"#{rec.ExecutionId}"),
                     new("Execution id", rec.ExecutionId.ToString()),
                     new("Graph", rec.GraphName),
-                    Heavy ? new("Capture", $"Snapshot {OpenSnapshot!.Id} (deep, DeepMode.{OpenSnapshot.Recording.Mode})") : new("Capture", "Live (light)"),
+                    Heavy ? new("Capture", $"Snapshot (deep, DeepMode.{OpenSnapshot!.Mode})") : new("Capture", "Live (light)"),
                     new("Views", rec.Views.Length.ToString()),
                     first != null ? new("Resolution", $"{first.PixelWidth} x {first.PixelHeight}") : null,
                 });
@@ -158,7 +158,7 @@ internal sealed partial class ProfilerView
 
         var budget = c.MemoryBudget;
         double used = budget.UsageBytes, total = Math.Max(1, budget.BudgetBytes);
-        DeepRecording? deep = OpenSnapshot?.Recording;
+        DeepRecording? deep = OpenSnapshot;
         Section("VRAM", 0, $"Driver budget {Style.Bytes(used)} of {Style.Bytes(total)} / {Style.F(used / total * 100, "0.0")}%", _ =>
         {
             StackedBar("driver", "Driver usage", new[]
@@ -247,7 +247,7 @@ internal sealed partial class ProfilerView
     private void FrameHistory(IReadOnlyList<Recording> frames, int current)
     {
         FrameMetrics[] m = frames.Select(FrameMetrics.From).ToArray();
-        FrameTiming[] t = frames.Select(_source.Timing).ToArray();
+        FrameTiming[] t = frames.Select((_, i) => _source.Timing(i)).ToArray();
         Func<double, string> ms = Style.Ms2, count = Style.Int;
         ChartsSection("Frame history", $"{frames.Count} frames / yellow dot = this frame / dashed = window average", current, new[]
         {
@@ -296,7 +296,6 @@ internal sealed partial class ProfilerView
         long blobBytes = deep.Blobs.Sum(b => (long)b.Ref.Length);
         KvSection("Capture", 0, new Kv?[]
         {
-            new("Snapshot", $"#{OpenSnapshot!.Id}"),
             new("Mode", $"DeepMode.{deep.Mode}"),
             new("Backend", deep.Backend.ToString()),
             new("Programs", deep.Programs.Length.ToString()),
@@ -396,7 +395,7 @@ internal sealed partial class ProfilerView
                     new Sparkline("GPU time", frames.Select(Gpu).ToArray(), Style.Read, Style.Ms2),
                     new Sparkline("CPU record", frames.Select(f => Find(f)?.Passes.Sum(p => p.Stats.CpuMilliseconds) ?? 0).ToArray(), Style.KindDot(NodeKind.Pass), Style.Ms2),
                     new Sparkline("Draw calls", frames.Select(f => (double)(Find(f)?.Passes.Sum(p => (long)p.Stats.Draws) ?? 0)).ToArray(), Style.KindDot(NodeKind.Draw), Style.Int),
-                    new Sparkline("Visible renderers", frames.Select(f => (double)(_source.Timing(f).Visibility.FirstOrDefault(v => v.View == view.Name)?.Visible ?? 0)).ToArray(), Style.Good, Style.Int),
+                    new Sparkline("Visible renderers", frames.Select((_, i) => (double)(_source.Timing(i).Visibility.FirstOrDefault(v => v.View == view.Name)?.Visible ?? 0)).ToArray(), Style.Good, Style.Int),
                 });
                 break;
             }

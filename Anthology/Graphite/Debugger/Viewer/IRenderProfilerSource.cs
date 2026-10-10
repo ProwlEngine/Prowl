@@ -16,17 +16,21 @@ public interface IRenderProfilerSource
 
     long TotalFrames { get; }
 
-    FrameTiming Timing(Recording frame);
+    DeepRecording? Snapshot { get; }
 
-    DeepRecording Capture(Recording frame, DeepMode mode);
+    FrameTiming? SnapshotTiming { get; }
 
-    ReplayResult Replay(DeepRecording recording, ReplayRequest request);
+    FrameTiming Timing(int frame);
 
-    RendererInfo? Renderer(DeepRecording recording, string marker);
+    void Capture(int frame, DeepMode mode);
 
-    void Save(DeepRecording recording, string path);
+    ReplayResult Replay(ReplayRequest request);
 
-    DeepRecording Load(string path);
+    RendererInfo? Renderer(string marker);
+
+    void SaveSnapshot(string path);
+
+    void LoadSnapshot(string path);
 }
 
 /// <summary>Engine side timing and visibility for one execution.</summary>

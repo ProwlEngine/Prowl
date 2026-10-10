@@ -26,33 +26,32 @@ internal sealed partial class ProfilerView
     private const double ScaleMs = 25;
     private const double FollowIntervalMs = 250;
 
-    private readonly ProfilerSession _session;
     private readonly IRenderProfilerSource _source;
     private readonly bool _snapshotMode;
     private readonly string _id;
     private readonly Action _snapshotTaken;
-    private Snapshot? _shown;
+    private DeepRecording? _shown;
     private ulong? _pinned;
     private Recording? _followed;
     private long _followedAt;
     private string _selId = "f";
     private string _message = "";
     private FrameModel? _liveModel;
+    private FrameModel? _snapshotModel;
     private float _barsHoverX = -1f;
     private float _topHeight = 400f;
 
     private Paper _paper = null!;
 
-    public ProfilerView(ProfilerSession session, bool snapshotMode, string id, Action snapshotTaken)
+    public ProfilerView(IRenderProfilerSource source, bool snapshotMode, string id, Action snapshotTaken)
     {
-        _session = session;
-        _source = session.Source;
+        _source = source;
         _snapshotMode = snapshotMode;
         _id = id;
         _snapshotTaken = snapshotTaken;
     }
 
-    private Snapshot? OpenSnapshot => _snapshotMode ? _session.Selected : null;
+    private DeepRecording? OpenSnapshot => _snapshotMode ? _source.Snapshot : null;
 
     private bool Heavy => OpenSnapshot != null;
 
@@ -70,7 +69,8 @@ internal sealed partial class ProfilerView
             ResetSelection();
         }
 
-        Recording live = CurrentLive(frames);
+        int liveIndex = CurrentLive(frames);
+        Recording live = frames[liveIndex];
         paper.PushID(_id);
         using (paper.Column("rp_root").Width(width).Height(height).Padding(Gap).Gap(Gap).Enter())
         {
@@ -89,7 +89,7 @@ internal sealed partial class ProfilerView
                 }
                 else
                 {
-                    model = Heavy ? OpenSnapshot!.Model : LiveModel(live);
+                    model = Heavy ? SnapshotModel(OpenSnapshot!) : LiveModel(frames, liveIndex);
                     if (!model.ById.ContainsKey(_selId))
                         _selId = "f";
 
@@ -116,26 +116,42 @@ internal sealed partial class ProfilerView
         paper.PopID();
     }
 
-    private Recording CurrentLive(IReadOnlyList<Recording> frames)
+    private int CurrentLive(IReadOnlyList<Recording> frames)
     {
-        if (_pinned is { } n)
-            foreach (Recording frame in frames)
-                if (frame.ExecutionId == n)
-                    return frame;
+        if (_pinned is { } n && IndexOf(frames, n) is var pinned and >= 0)
+            return pinned;
         _pinned = null;
-        if (_followed == null || _followed.ExecutionId < frames[0].ExecutionId || Stopwatch.GetElapsedTime(_followedAt).TotalMilliseconds >= FollowIntervalMs)
+
+        int followed = _followed != null ? IndexOf(frames, _followed.ExecutionId) : -1;
+        if (followed < 0 || Stopwatch.GetElapsedTime(_followedAt).TotalMilliseconds >= FollowIntervalMs)
         {
-            _followed = frames[^1];
+            followed = frames.Count - 1;
+            _followed = frames[followed];
             _followedAt = Stopwatch.GetTimestamp();
         }
-        return _followed;
+        return followed;
     }
 
-    private FrameModel LiveModel(Recording live)
+    private static int IndexOf(IReadOnlyList<Recording> frames, ulong executionId)
     {
-        if (_liveModel == null || _liveModel.Recording != live)
-            _liveModel = FrameModel.Build(live, _source.Timing(live), null);
+        for (int i = 0; i < frames.Count; i++)
+            if (frames[i].ExecutionId == executionId)
+                return i;
+        return -1;
+    }
+
+    private FrameModel LiveModel(IReadOnlyList<Recording> frames, int index)
+    {
+        if (_liveModel == null || _liveModel.Recording != frames[index])
+            _liveModel = FrameModel.Build(frames[index], _source.Timing(index), null);
         return _liveModel;
+    }
+
+    private FrameModel SnapshotModel(DeepRecording snapshot)
+    {
+        if (_snapshotModel == null || _snapshotModel.Deep != snapshot)
+            _snapshotModel = FrameModel.Build(snapshot.Recording, _source.SnapshotTiming!, snapshot);
+        return _snapshotModel;
     }
 
     private void ResetSelection()
@@ -143,23 +159,25 @@ internal sealed partial class ProfilerView
         _selId = "f";
         _pixel = null;
         _graphSelection = null;
+        _replays.Clear();
     }
 
     private void TakeSnapshot()
     {
-        Recording live = CurrentLive(_source.Frames);
-        Snapshot snapshot = _session.Add(_source.Capture(live, DeepMode.Full), "captured");
-        _message = $"Snapshot {snapshot.Id} / frame #{snapshot.Recording.ExecutionId}";
+        IReadOnlyList<Recording> frames = _source.Frames;
+        int index = CurrentLive(frames);
+        _source.Capture(index, DeepMode.Full);
+        _message = $"Snapshot / frame #{frames[index].ExecutionId}";
         _snapshotTaken();
     }
 
-    private void SaveSnapshot(Snapshot snapshot)
+    private void SaveSnapshot()
     {
         Origami.OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (string.IsNullOrEmpty(path))
                 return;
-            _source.Save(snapshot.Recording, path);
+            _source.SaveSnapshot(path);
             _message = $"Saved {System.IO.Path.GetFileName(path)}";
         });
     }
@@ -170,8 +188,8 @@ internal sealed partial class ProfilerView
         {
             if (string.IsNullOrEmpty(path))
                 return;
-            Snapshot snapshot = _session.Add(_source.Load(path), System.IO.Path.GetFileName(path));
-            _message = $"Loaded {snapshot.Source}";
+            _source.LoadSnapshot(path);
+            _message = $"Loaded {System.IO.Path.GetFileName(path)}";
             _snapshotTaken();
         });
     }
@@ -251,19 +269,12 @@ internal sealed partial class ProfilerView
     {
         using (Toolbar())
         {
-            Snapshot? open = OpenSnapshot;
-            if (_session.Snapshots.Count > 0)
-            {
-                ButtonGroupBuilder group = Origami.ButtonGroup(_paper, "open", open != null ? _session.Snapshots.IndexOf(open) : -1, i => _session.Selected = _session.Snapshots[i]).Small();
-                foreach (Snapshot s in _session.Snapshots)
-                    group.Item($"S{s.Id} #{s.Recording.ExecutionId}", tooltip: $"Snapshot {s.Id} / frame #{s.Recording.ExecutionId} / DeepMode.{s.Recording.Mode} / {s.Source}");
-                group.Show();
-            }
-
+            DeepRecording? open = OpenSnapshot;
             if (open != null)
             {
-                FrameModel model = open.Model;
-                HeaderStat("hs_mode", "Mode", $"DeepMode.{open.Recording.Mode}", Style.Ink);
+                FrameModel model = SnapshotModel(open);
+                HeaderStat("hs_frame", "Frame", $"#{open.ExecutionId}", Style.Ink);
+                HeaderStat("hs_mode", "Mode", $"DeepMode.{open.Mode}", Style.Ink);
                 HeaderStat("hs_views", "Views", model.Recording.Views.Length.ToString(), Style.Ink);
                 HeaderStat("hs_cpu", "CPU", Style.Ms2(model.Timing.CpuMilliseconds), Style.Ink);
                 HeaderStat("hs_gpu", "GPU", Style.Ms2(model.Timing.GpuMilliseconds), Style.Ink);
@@ -272,7 +283,7 @@ internal sealed partial class ProfilerView
 
             if (_message.Length > 0)
                 Mono("message", _message, Style.InkDim);
-            ButtonBuilder save = Origami.IconButton(_paper, "save", OrigamiIconSet.Download, () => { if (OpenSnapshot is { } s) SaveSnapshot(s); }).Small().NotFocusable().Subtle().Tooltip("Save snapshot");
+            ButtonBuilder save = Origami.IconButton(_paper, "save", OrigamiIconSet.Download, SaveSnapshot).Small().NotFocusable().Subtle().Tooltip("Save snapshot");
             save.Disabled(open == null).Show();
             Origami.IconButton(_paper, "load", OrigamiIconSet.FolderOpen, LoadSnapshot).Small().NotFocusable().Subtle().Tooltip("Load snapshot").Show();
         }
@@ -319,9 +330,9 @@ internal sealed partial class ProfilerView
                 using (Card("card").Height(cardHeight).Enter())
                 {
                     double avgCpu = 0, avgGpu = 0;
-                    foreach (Recording f in frames)
+                    for (int i = 0; i < frames.Count; i++)
                     {
-                        FrameTiming t = _source.Timing(f);
+                        FrameTiming t = _source.Timing(i);
                         avgCpu += t.CpuMilliseconds;
                         avgGpu += t.GpuMilliseconds;
                     }
@@ -357,7 +368,7 @@ internal sealed partial class ProfilerView
     {
         const float axis = 44f;
         double cumulative = _source.TotalFrames > 0 ? _source.TotalMilliseconds / _source.TotalFrames : 0;
-        double[] ms = frames.Select(f => _source.Timing(f).FrameMilliseconds).ToArray();
+        double[] ms = frames.Select((_, i) => _source.Timing(i).FrameMilliseconds).ToArray();
 
         int Hit(float x, float width)
         {
@@ -450,7 +461,7 @@ internal sealed partial class ProfilerView
     {
         using (Heading("rp_flame_hdr"))
         {
-            string title = Heavy ? $"Snapshot {OpenSnapshot!.Id} / frame #{model.Number}" : $"Frame #{model.Number}";
+            string title = Heavy ? $"Snapshot / frame #{model.Number}" : $"Frame #{model.Number}";
             Title("t", title);
             string levels = Heavy ? "Frame > View > Render Pass > Program > Renderer (marker) > Draw" : "Frame > View > Render Pass";
             Dim("p", levels + " / timing ends at pass");

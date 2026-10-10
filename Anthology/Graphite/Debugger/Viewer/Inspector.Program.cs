@@ -180,7 +180,7 @@ internal sealed partial class ProfilerView
 
     private void MarkerTab(FrameModel model, ProfileNode node, string tab)
     {
-        RendererInfo? info = _source.Renderer(model.Deep!, node.Name);
+        RendererInfo? info = _source.Renderer(node.Name);
         DeepPass pass = model.PassOf(node)!;
         List<ProfileNode> draws = new();
         node.CollectDraws(draws);

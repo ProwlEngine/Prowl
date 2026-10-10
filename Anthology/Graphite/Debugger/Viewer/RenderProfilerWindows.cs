@@ -17,9 +17,8 @@ public sealed class RenderProfilerWindows
     public RenderProfilerWindows(IRenderProfilerSource source, DockSpace dock)
     {
         _dock = dock;
-        ProfilerSession session = new(source);
-        Live = new LiveProfilerPanel(new ProfilerView(session, false, "rp_live", ShowSnapshots));
-        _snapshotView = new ProfilerView(session, true, "rp_snapshots", ShowSnapshots);
+        Live = new LiveProfilerPanel(new ProfilerView(source, false, "rp_live", ShowSnapshots));
+        _snapshotView = new ProfilerView(source, true, "rp_snapshots", ShowSnapshots);
         Snapshots = new SnapshotViewerPanel(_snapshotView);
     }
 
@@ -109,7 +108,7 @@ public sealed class SnapshotViewerPanel : DockPanel
         _view = view;
     }
 
-    public override string Title => "Snapshots";
+    public override string Title => "Snapshot";
 
     public override string Icon => Glyph.Camera;
 
