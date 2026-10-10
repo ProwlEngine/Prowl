@@ -182,7 +182,9 @@ public static class BuiltInAssets
 
     /// <summary>The built-in asset with this GUID, loaded.</summary>
     public static T Load<T>(Guid guid) where T : Asset
-        => AssetDatabase.Load<T>(guid) ?? throw new InvalidOperationException($"No built-in {typeof(T).Name} has the GUID {guid}.");
+        => AssetDatabase.Load<T>(guid) is { } asset && asset.IsValid()
+            ? asset
+            : throw new InvalidOperationException($"No built-in {typeof(T).Name} has the GUID {guid}.");
 
     /// <summary>
     /// Find all built-in assets assignable to the given type.

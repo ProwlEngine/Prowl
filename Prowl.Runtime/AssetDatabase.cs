@@ -120,7 +120,7 @@ public static class AssetDatabase
     public static T? Load<T>(Guid assetId) where T : Asset
     {
         T? asset = Get<T>(assetId);
-        asset?.Load();
+        if (asset.IsValid()) asset.Load();
         return asset;
     }
 
@@ -439,7 +439,7 @@ public static class AssetDatabase
     public static T? FindResource<T>(string loadPath) where T : Asset
     {
         T? asset = FindUnloaded<T>(loadPath);
-        if (!AssetLoader.IsLoaderThread) asset?.Load();
+        if (!AssetLoader.IsLoaderThread && asset.IsValid()) asset.Load();
         return asset;
     }
 
