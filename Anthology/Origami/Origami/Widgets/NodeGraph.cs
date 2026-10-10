@@ -400,6 +400,7 @@ public sealed class NodeGraphBuilder
     private bool _allowSelfConnections;
     private bool _arrows;
     private bool _showMinimap;
+    private bool _fitZoomOut;
     private float _minimapW = 190f, _minimapH = 120f;
 
     private Action<GraphSelection>? _onSelectionChanged;
@@ -459,6 +460,8 @@ public sealed class NodeGraphBuilder
     public NodeGraphBuilder SnapToGrid(float step) { _snapStep = MathF.Max(0f, step); return this; }
     /// <summary>Let a wire run from a node back into itself, leaving the decision to the validator.</summary>
     public NodeGraphBuilder AllowSelfConnections(bool allow = true) { _allowSelfConnections = allow; return this; }
+    /// <summary>Stop zooming out once the whole graph fits in the view. Further wheel input bubbles to outer scroll views.</summary>
+    public NodeGraphBuilder FitZoomOut(bool fit = true) { _fitZoomOut = fit; return this; }
 
     /// <summary>
     /// Joins whole nodes with straight arrows instead of wiring ports, for a graph whose nodes have
@@ -532,6 +535,7 @@ public sealed class NodeGraphBuilder
     private sealed class GraphState
     {
         public float PanX, PanY, Zoom = 1f;
+        public float FitZoom;
         public bool ViewInit;                          // first-frame InitialView applied
         public float ScreenX, ScreenY;                 // container top-left, from OnPostLayout
         public readonly HashSet<string> SelNodes = new();
@@ -653,12 +657,14 @@ public sealed class NodeGraphBuilder
         // Cursor-anchored zoom (on the container so wheel bubbling up from a node still zooms).
         container.OnScroll(st, (s, e) =>
         {
-            float nz = Math.Clamp(s.Zoom * MathF.Exp(e.Delta * 0.14f), _minZoom, _maxZoom);
+            float nz = Math.Clamp(s.Zoom * MathF.Exp(e.Delta * 0.14f), MinZoom(s), _maxZoom);
+            if (nz == s.Zoom) return;
             float lx = (float)e.PointerPosition.X - s.ScreenX;
             float ly = (float)e.PointerPosition.Y - s.ScreenY;
             s.PanX = lx - (lx - s.PanX) / s.Zoom * nz;
             s.PanY = ly - (ly - s.PanY) / s.Zoom * nz;
             s.Zoom = nz;
+            e.StopPropagation();
         });
 
         // Middle-mouse pan (Paper drag is left-only), and keyboard, scoped to when the graph is hovered.
@@ -682,6 +688,7 @@ public sealed class NodeGraphBuilder
 
         // Apply host commands (frame/focus/select/view) now that layouts (content bounds) are known.
         if (_controller != null) ApplyController(st, layouts, byId);
+        if (_fitZoomOut) ClampToFit(st, layouts);
 
         if (_arrows) UpdateArrowGesture(st, layouts);
 
@@ -891,6 +898,19 @@ public sealed class NodeGraphBuilder
     // ═══════════════════════════════════════════════════════════════════
     //  Programmatic control (NodeGraphController)
     // ═══════════════════════════════════════════════════════════════════
+
+    private float MinZoom(GraphState st) => Math.Min(Math.Max(_minZoom, st.FitZoom), _maxZoom);
+
+    private void ClampToFit(GraphState st, Dictionary<string, NodeLayout> layouts)
+    {
+        st.FitZoom = TryContentBounds(layouts, out _, out Float2 size) ? Math.Min(_width / size.X, _height / size.Y) : 0f;
+        float min = MinZoom(st);
+        if (st.Zoom >= min) return;
+        float cx = _width * 0.5f, cy = _height * 0.5f;
+        st.PanX = cx - (cx - st.PanX) / st.Zoom * min;
+        st.PanY = cy - (cy - st.PanY) / st.Zoom * min;
+        st.Zoom = min;
+    }
 
     private void ApplyController(GraphState st, Dictionary<string, NodeLayout> layouts, Dictionary<string, GraphNode> byId)
     {
