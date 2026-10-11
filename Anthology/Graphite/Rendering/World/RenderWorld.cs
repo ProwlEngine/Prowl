@@ -171,8 +171,11 @@ public sealed class RenderWorld : IDisposable
 
     private readonly RenderSide _render;
 
-    internal RenderWorld(GraphicsDevice device)
+    private readonly Renderer? _owner;
+
+    internal RenderWorld(GraphicsDevice device, Renderer? owner = null)
     {
+        _owner = owner;
         _render = new RenderSide(device);
         Grow(64);
     }
@@ -181,6 +184,9 @@ public sealed class RenderWorld : IDisposable
     public int Count { get; private set; }
 
     internal RenderSide Render => _render;
+
+    /// <summary>Values and keywords this world's views read, falling back to the renderer's.</summary>
+    public GlobalProperties Globals { get; internal set; } = null!;
 
     /// <summary>Renderables changed since the last extraction.</summary>
     internal int PendingChanges => _dirty.Count;
@@ -339,7 +345,16 @@ public sealed class RenderWorld : IDisposable
         _render.EndExtract();
     }
 
-    public void Dispose() => _render.Dispose();
+    /// <summary>Removes the world from its renderer at the next frame. Host thread.</summary>
+    public void Dispose()
+    {
+        if (_owner != null)
+            _owner.RemoveWorld(this);
+        else
+            _render.Dispose();
+    }
+
+    internal void DisposeRender() => _render.Dispose();
 
     private int Check(RenderableHandle handle)
     {
