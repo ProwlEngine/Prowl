@@ -52,6 +52,7 @@ public static class FormatSizeHelpers
             case PixelFormat.R10_G10_B10_A2_UInt:
             case PixelFormat.R11_G11_B10_Float:
             case PixelFormat.D24_UNorm_S8_UInt:
+            case PixelFormat.D32_Float:
                 return 4;
 
             case PixelFormat.D32_Float_S8_UInt:

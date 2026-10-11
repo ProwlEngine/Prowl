@@ -249,4 +249,8 @@ public enum PixelFormat : byte
     /// BC7 compressed, sRGB.
     /// </summary>
     BC7_UNorm_SRgb,
+    /// <summary>
+    /// 32-bit float depth, no stencil.
+    /// </summary>
+    D32_Float,
 }

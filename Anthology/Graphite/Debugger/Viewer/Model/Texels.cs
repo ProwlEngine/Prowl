@@ -8,7 +8,7 @@ namespace Prowl.Graphite.Debugger.Viewer;
 
 internal static class Texels
 {
-    public static bool IsDepth(PixelFormat format) => format is PixelFormat.D24_UNorm_S8_UInt or PixelFormat.D32_Float_S8_UInt;
+    public static bool IsDepth(PixelFormat format) => format is PixelFormat.D24_UNorm_S8_UInt or PixelFormat.D32_Float_S8_UInt or PixelFormat.D32_Float;
 
     public static bool CanDecode(PixelFormat format) => !format.ToString().StartsWith("BC", StringComparison.Ordinal) && !format.ToString().StartsWith("ETC", StringComparison.Ordinal);
 
@@ -77,7 +77,8 @@ internal static class Texels
                     return new Float4(Small(v & 0x7FF, 6), Small((v >> 11) & 0x7FF, 6), Small((v >> 22) & 0x3FF, 5), 1);
                 }
             case PixelFormat.D24_UNorm_S8_UInt: return new Float4((U32(t, 0) & 0xFFFFFF) / 16777215f, 0, 0, 1);
-            case PixelFormat.D32_Float_S8_UInt: return new Float4(F(t, 0), 0, 0, 1);
+            case PixelFormat.D32_Float_S8_UInt:
+            case PixelFormat.D32_Float: return new Float4(F(t, 0), 0, 0, 1);
             default: return default;
         }
     }

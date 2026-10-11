@@ -231,7 +231,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
 {
     public static readonly RenderResourceID SceneId = RenderResourceID.Intern("Graphite.Scene");
 
-    private static readonly GraphTextureDesc s_scene = GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, depth: true) with { DepthFormat = PixelFormat.D32_Float_S8_UInt };
+    private static readonly GraphTextureDesc s_scene = GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, depth: true) with { DepthFormat = PixelFormat.D32_Float };
 
     private readonly PropertySet _properties = new();
     private TextureHandle _target;
