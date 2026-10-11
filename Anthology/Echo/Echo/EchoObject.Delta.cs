@@ -233,15 +233,10 @@ public sealed partial class EchoObject
                 target.Value = new Dictionary<string, EchoObject>(
                     value.Tags.Select(kvp => new KeyValuePair<string, EchoObject>(kvp.Key, kvp.Value.Clone())));
             }
-            else if (value.TagType == EchoType.Null || value.Value == null)
-            {
-                // For null values, we need to use reflection to set the private _value field directly
-                var valueField = typeof(EchoObject).GetField("_value", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                valueField?.SetValue(target, null);
-            }
             else
             {
-                target.Value = value.Value;
+                target._ref = value._ref;
+                target._bits = value._bits;
             }
 
             // Restore parent relationships

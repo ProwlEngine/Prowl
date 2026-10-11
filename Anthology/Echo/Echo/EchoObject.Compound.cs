@@ -5,7 +5,7 @@ namespace Prowl.Echo;
 
 public sealed partial class EchoObject
 {
-    public Dictionary<string, EchoObject> Tags => (Value as Dictionary<string, EchoObject>)!;
+    public Dictionary<string, EchoObject> Tags => (_ref as Dictionary<string, EchoObject>)!;
 
     /// <summary>
     /// Get or set a tag by name in this CompoundTag.

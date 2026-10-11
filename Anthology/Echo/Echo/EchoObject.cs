@@ -28,37 +28,66 @@ public enum EchoType
 
 public sealed partial class EchoObject : IEquatable<EchoObject>
 {
-    private object? _value;
-    public object? Value { get { return _value; } set { SetValue(value); } }
+    // String, byte[], decimal, List and Compound values. Other primitives live unboxed in _bits, with _ref caching their box.
+    private object? _ref;
+    private long _bits;
+    private int _listIndex = -1;
+
+    public object? Value
+    {
+        get => IsBits ? _ref ??= BoxBits() : _ref;
+        set => SetValue(value!);
+    }
+
+    private bool IsBits => TagType is not (EchoType.Null or EchoType.Decimal or EchoType.String or EchoType.ByteArray or EchoType.List or EchoType.Compound);
+
+    private object BoxBits() => TagType switch
+    {
+        EchoType.Byte => (byte)_bits,
+        EchoType.sByte => (sbyte)_bits,
+        EchoType.Short => (short)_bits,
+        EchoType.Int => (int)_bits,
+        EchoType.Long => _bits,
+        EchoType.UShort => (ushort)_bits,
+        EchoType.UInt => (uint)_bits,
+        EchoType.ULong => unchecked((ulong)_bits),
+        EchoType.Float => BitConverter.Int32BitsToSingle((int)_bits),
+        EchoType.Double => BitConverter.Int64BitsToDouble(_bits),
+        _ => (object)(_bits != 0)
+    };
 
     public EchoType TagType { get; private set; }
 
     public EchoObject? Parent { get; private set; }
     public string? CompoundKey { get; private set; }
-    public int? ListIndex { get; private set; }
+    public int? ListIndex
+    {
+        get => _listIndex < 0 ? null : _listIndex;
+        private set => _listIndex = value ?? -1;
+    }
 
     public EchoObject() { }
-    public EchoObject(byte i) { _value = i; TagType = EchoType.Byte; }
-    public EchoObject(sbyte i) { _value = i; TagType = EchoType.sByte; }
-    public EchoObject(short i) { _value = i; TagType = EchoType.Short; }
-    public EchoObject(int i) { _value = i; TagType = EchoType.Int; }
-    public EchoObject(long i) { _value = i; TagType = EchoType.Long; }
-    public EchoObject(ushort i) { _value = i; TagType = EchoType.UShort; }
-    public EchoObject(uint i) { _value = i; TagType = EchoType.UInt; }
-    public EchoObject(ulong i) { _value = i; TagType = EchoType.ULong; }
-    public EchoObject(float i) { _value = i; TagType = EchoType.Float; }
-    public EchoObject(double i) { _value = i; TagType = EchoType.Double; }
-    public EchoObject(decimal i) { _value = i; TagType = EchoType.Decimal; }
-    public EchoObject(string i) { _value = i ?? ""; TagType = EchoType.String; }
-    public EchoObject(byte[] i) { _value = i; TagType = EchoType.ByteArray; }
-    public EchoObject(bool i) { _value = i; TagType = EchoType.Bool; }
+    public EchoObject(byte i) { _bits = i; TagType = EchoType.Byte; }
+    public EchoObject(sbyte i) { _bits = i; TagType = EchoType.sByte; }
+    public EchoObject(short i) { _bits = i; TagType = EchoType.Short; }
+    public EchoObject(int i) { _bits = i; TagType = EchoType.Int; }
+    public EchoObject(long i) { _bits = i; TagType = EchoType.Long; }
+    public EchoObject(ushort i) { _bits = i; TagType = EchoType.UShort; }
+    public EchoObject(uint i) { _bits = i; TagType = EchoType.UInt; }
+    public EchoObject(ulong i) { _bits = unchecked((long)i); TagType = EchoType.ULong; }
+    public EchoObject(float i) { _bits = BitConverter.SingleToInt32Bits(i); TagType = EchoType.Float; }
+    public EchoObject(double i) { _bits = BitConverter.DoubleToInt64Bits(i); TagType = EchoType.Double; }
+    public EchoObject(decimal i) { _ref = i; TagType = EchoType.Decimal; }
+    public EchoObject(string i) { _ref = i ?? ""; TagType = EchoType.String; }
+    public EchoObject(byte[] i) { _ref = i; TagType = EchoType.ByteArray; }
+    public EchoObject(bool i) { _bits = i ? 1 : 0; TagType = EchoType.Bool; }
     public EchoObject(EchoType type, object? value)
     {
         TagType = type;
         if (type == EchoType.List)
         {
-            _value = value ?? new List<EchoObject>();
-            var list = (List<EchoObject>)_value;
+            _ref = value ?? new List<EchoObject>();
+            var list = (List<EchoObject>)_ref;
             for (int i = 0; i < list.Count; i++)
             {
                 list[i].Parent = this;
@@ -67,20 +96,22 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         }
         else if (type == EchoType.Compound)
         {
-            _value = value ?? new Dictionary<string, EchoObject>();
-            foreach (var (key, tag) in (Dictionary<string, EchoObject>)_value)
+            _ref = value ?? new Dictionary<string, EchoObject>();
+            foreach (var (key, tag) in (Dictionary<string, EchoObject>)_ref)
             {
                 tag.Parent = this;
                 tag.CompoundKey = key;
             }
         }
+        else if (value is null || type is EchoType.String or EchoType.ByteArray or EchoType.Decimal)
+            _ref = value;
         else
-            _value = value;
+            StorePrimitive(value);
     }
     public EchoObject(List<EchoObject> tags)
     {
         TagType = EchoType.List;
-        _value = tags;
+        _ref = tags;
 
         // Set parent for all children
         for (int i = 0; i < tags.Count; i++)
@@ -116,7 +147,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             return new(EchoType.Compound, newDict);
         }
 
-        return new(TagType, Value);
+        return new EchoObject { TagType = TagType, _ref = _ref, _bits = _bits };
     }
 
     /// <summary>
@@ -243,33 +274,23 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             case EchoType.Null:
                 return true; // Both are null type
 
-            default:
-                // Handle primitive types
-                if (Value == null) return other.Value == null;
-                if (other.Value == null) return false;
-
-                if (Value is byte[] thisBytes && other.Value is byte[] otherBytes)
-                {
+            case EchoType.String:
+            case EchoType.ByteArray:
+            case EchoType.Decimal:
+                if (_ref == null) return other._ref == null;
+                if (other._ref == null) return false;
+                if (_ref is byte[] thisBytes && other._ref is byte[] otherBytes)
                     return thisBytes.SequenceEqual(otherBytes);
-                }
+                return _ref.Equals(other._ref);
 
-                return TagType switch
-                {
-                    EchoType.Int => IntValue == other.IntValue,
-                    EchoType.Float => FloatValue == other.FloatValue,
-                    EchoType.Double => DoubleValue == other.DoubleValue,
-                    EchoType.Long => LongValue == other.LongValue,
-                    EchoType.Short => ShortValue == other.ShortValue,
-                    EchoType.Byte => ByteValue == other.ByteValue,
-                    EchoType.sByte => sByteValue == other.sByteValue,
-                    EchoType.UShort => UShortValue == other.UShortValue,
-                    EchoType.UInt => UIntValue == other.UIntValue,
-                    EchoType.ULong => ULongValue == other.ULongValue,
-                    EchoType.Decimal => DecimalValue == other.DecimalValue,
-                    EchoType.Bool => BoolValue == other.BoolValue,
-                    EchoType.String => StringValue == other.StringValue,
-                    _ => Value.Equals(other.Value)
-                };
+            case EchoType.Float:
+                return FloatValue == other.FloatValue;
+
+            case EchoType.Double:
+                return DoubleValue == other.DoubleValue;
+
+            default:
+                return _bits == other._bits;
         }
     }
 
@@ -307,8 +328,8 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     {
         get
         {
-            if (TagType == EchoType.Compound) return ((Dictionary<string, EchoObject>)Value!).Count;
-            else if (TagType == EchoType.List) return ((List<EchoObject>)Value!).Count;
+            if (TagType == EchoType.Compound) return ((Dictionary<string, EchoObject>)_ref!).Count;
+            else if (TagType == EchoType.List) return ((List<EchoObject>)_ref!).Count;
             else return 0;
         }
     }
@@ -336,8 +357,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// </summary>
     public void SetValue(object value)
     {
-        if (_value == value) return;
-        var oldValue = _value;
+        if (value != null && ReferenceEquals(_ref, value)) return;
 
         try
         {
@@ -346,7 +366,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             {
                 if (TagType == EchoType.String)
                 {
-                    _value = string.Empty;
+                    _ref = string.Empty;
                     return;
                 }
                 throw new ArgumentNullException(nameof(value), $"Cannot set null value for type {TagType}");
@@ -361,7 +381,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                         $"Cannot convert type {value.GetType().Name} to Dictionary<string, EchoObject>");
                 }
 
-                _value = dict;
+                _ref = dict;
                 // Set parent for all children
                 foreach (var (key, tag) in dict)
                 {
@@ -380,7 +400,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                         $"Cannot convert type {value.GetType().Name} to List<EchoObject>");
                 }
 
-                _value = list;
+                _ref = list;
                 // Set parent for all children
                 for (int i = 0; i < list.Count; i++)
                 {
@@ -390,44 +410,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                 return;
             }
 
-            // Try converting using Convert.ChangeType for numeric types
-            if (IsNumericType(TagType))
-            {
-                try
-                {
-                    _value = TagType switch
-                    {
-                        EchoType.Byte => Convert.ToByte(value),
-                        EchoType.sByte => Convert.ToSByte(value),
-                        EchoType.Short => Convert.ToInt16(value),
-                        EchoType.Int => Convert.ToInt32(value),
-                        EchoType.Long => Convert.ToInt64(value),
-                        EchoType.UShort => Convert.ToUInt16(value),
-                        EchoType.UInt => Convert.ToUInt32(value),
-                        EchoType.ULong => Convert.ToUInt64(value),
-                        EchoType.Float => Convert.ToSingle(value),
-                        EchoType.Double => Convert.ToDouble(value),
-                        EchoType.Decimal => Convert.ToDecimal(value),
-                        _ => throw new InvalidOperationException($"Unexpected numeric type: {TagType}")
-                    };
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException(
-                        $"Failed to convert value '{value}' of type {value.GetType().Name} to {TagType}", ex);
-                }
-            }
-
-            // Handle special types
-            _value = TagType switch
-            {
-                EchoType.String => value is string str ? str : value.ToString(),
-                EchoType.Bool => Convert.ToBoolean(value),
-                EchoType.ByteArray => value is byte[] arr ? arr : throw new InvalidOperationException(
-                    $"Cannot convert type {value.GetType().Name} to byte array"),
-                _ => throw new InvalidOperationException($"Unsupported tag type: {TagType}")
-            };
+            StorePrimitive(value);
         }
         catch (Exception ex)
         {
@@ -436,58 +419,116 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         }
     }
 
-    private static bool IsNumericType(EchoType type) => type switch
+    private void StorePrimitive(object value)
     {
-        EchoType.Byte or EchoType.sByte or
-        EchoType.Short or EchoType.Int or EchoType.Long or
-        EchoType.UShort or EchoType.UInt or EchoType.ULong or
-        EchoType.Float or EchoType.Double or EchoType.Decimal => true,
-        _ => false
-    };
+        if (IsBits) _ref = null;
+        switch (TagType)
+        {
+            case EchoType.Byte: _bits = Convert.ToByte(value); break;
+            case EchoType.sByte: _bits = Convert.ToSByte(value); break;
+            case EchoType.Short: _bits = Convert.ToInt16(value); break;
+            case EchoType.Int: _bits = Convert.ToInt32(value); break;
+            case EchoType.Long: _bits = Convert.ToInt64(value); break;
+            case EchoType.UShort: _bits = Convert.ToUInt16(value); break;
+            case EchoType.UInt: _bits = Convert.ToUInt32(value); break;
+            case EchoType.ULong: _bits = value is long l ? l : unchecked((long)Convert.ToUInt64(value)); break;
+            case EchoType.Float: _bits = BitConverter.SingleToInt32Bits(Convert.ToSingle(value)); break;
+            case EchoType.Double: _bits = BitConverter.DoubleToInt64Bits(Convert.ToDouble(value)); break;
+            case EchoType.Decimal: _ref = Convert.ToDecimal(value); break;
+            case EchoType.Bool: _bits = Convert.ToBoolean(value) ? 1 : 0; break;
+            case EchoType.String: _ref = value as string ?? value.ToString(); break;
+            case EchoType.ByteArray: _ref = value as byte[] ?? throw new InvalidOperationException($"Cannot convert type {value.GetType().Name} to byte array"); break;
+            default: throw new InvalidOperationException($"Unsupported tag type: {TagType}");
+        }
+    }
 
     /// <summary> Returns the value of this tag, cast as a bool. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than BoolTag. </exception>
-    public bool BoolValue { get => (bool)Value; set => SetValue(value); }
+    public bool BoolValue
+    {
+        get => TagType == EchoType.Bool ? _bits != 0 : (bool)Value!;
+        set { if (TagType == EchoType.Bool) { _bits = value ? 1 : 0; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a byte. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ByteTag. </exception>
-    public byte ByteValue { get => Convert.ToByte(Value); set => SetValue(value); }
+    public byte ByteValue
+    {
+        get => TagType == EchoType.Byte ? (byte)_bits : Convert.ToByte(Value);
+        set { if (TagType == EchoType.Byte) { _bits = value; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a sbyte. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than sByteTag. </exception>
-    public sbyte sByteValue { get => Convert.ToSByte(Value); set => SetValue(value); }
+    public sbyte sByteValue
+    {
+        get => TagType == EchoType.sByte ? (sbyte)_bits : Convert.ToSByte(Value);
+        set { if (TagType == EchoType.sByte) { _bits = value; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a short. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ShortTag. </exception>
-    public short ShortValue { get => Convert.ToInt16(Value); set => SetValue(value); }
+    public short ShortValue
+    {
+        get => TagType == EchoType.Short ? (short)_bits : Convert.ToInt16(Value);
+        set { if (TagType == EchoType.Short) { _bits = value; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a int. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than IntTag. </exception>
-    public int IntValue { get => Convert.ToInt32(Value); set => SetValue(value); }
+    public int IntValue
+    {
+        get => TagType == EchoType.Int ? (int)_bits : Convert.ToInt32(Value);
+        set { if (TagType == EchoType.Int) { _bits = value; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a long. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than LongTag. </exception>
-    public long LongValue { get => Convert.ToInt64(Value); set => SetValue(value); }
+    public long LongValue
+    {
+        get => TagType == EchoType.Long ? _bits : Convert.ToInt64(Value);
+        set { if (TagType == EchoType.Long) { _bits = value; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a ushort. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than UShortTag. </exception>
-    public ushort UShortValue { get => Convert.ToUInt16(Value); set => SetValue(value); }
+    public ushort UShortValue
+    {
+        get => TagType == EchoType.UShort ? (ushort)_bits : Convert.ToUInt16(Value);
+        set { if (TagType == EchoType.UShort) { _bits = value; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as an uint. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than UIntTag. </exception>
-    public uint UIntValue { get => Convert.ToUInt32(Value); set => SetValue(value); }
+    public uint UIntValue
+    {
+        get => TagType == EchoType.UInt ? (uint)_bits : Convert.ToUInt32(Value);
+        set { if (TagType == EchoType.UInt) { _bits = value; _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a ulong. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ULongTag. </exception>
-    public ulong ULongValue { get => Value is long l ? unchecked((ulong)l) : Convert.ToUInt64(Value); set => SetValue(value); }
+    public ulong ULongValue
+    {
+        get => TagType is EchoType.ULong or EchoType.Long ? unchecked((ulong)_bits) : Convert.ToUInt64(Value);
+        set { if (TagType == EchoType.ULong) { _bits = unchecked((long)value); _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a float. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than FloatTag. </exception>
-    public float FloatValue { get => Convert.ToSingle(Value); set => SetValue(value); }
+    public float FloatValue
+    {
+        get => TagType == EchoType.Float ? BitConverter.Int32BitsToSingle((int)_bits) : Convert.ToSingle(Value);
+        set { if (TagType == EchoType.Float) { _bits = BitConverter.SingleToInt32Bits(value); _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a double. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than DoubleTag. </exception>
-    public double DoubleValue { get => Convert.ToDouble(Value); set => SetValue(value); }
+    public double DoubleValue
+    {
+        get => TagType == EchoType.Double ? BitConverter.Int64BitsToDouble(_bits) : Convert.ToDouble(Value);
+        set { if (TagType == EchoType.Double) { _bits = BitConverter.DoubleToInt64Bits(value); _ref = null; } else SetValue(value); }
+    }
 
     /// <summary> Returns the value of this tag, cast as a decimal.
     /// Only supported by DecimalTag. </summary>
@@ -509,7 +550,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         get => TagType switch
         {
             EchoType.Null => "NULL",
-            EchoType.String => Value as string ?? "",
+            EchoType.String => _ref as string ?? "",
             EchoType.Byte => ByteValue.ToString(CultureInfo.InvariantCulture),
             EchoType.sByte => sByteValue.ToString(CultureInfo.InvariantCulture),
             EchoType.Double => DoubleValue.ToString(CultureInfo.InvariantCulture),

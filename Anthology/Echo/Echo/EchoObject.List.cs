@@ -5,7 +5,7 @@ namespace Prowl.Echo;
 
 public sealed partial class EchoObject
 {
-    public List<EchoObject> List => (Value as List<EchoObject>)!;
+    public List<EchoObject> List => (_ref as List<EchoObject>)!;
 
     public EchoObject this[int tagIdx]
     {
