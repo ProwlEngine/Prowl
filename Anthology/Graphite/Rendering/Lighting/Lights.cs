@@ -12,8 +12,21 @@ namespace Prowl.Graphite.Rendering;
 public enum LightType : byte
 {
     Directional,
+
+    /// <summary>A point, or a sphere of <see cref="LightDesc.SourceRadius"/>.</summary>
     Point,
+
+    /// <summary>A cone along the direction, from a point or a sphere of <see cref="LightDesc.SourceRadius"/>.</summary>
     Spot,
+
+    /// <summary>A one sided rectangle facing the direction, <see cref="LightDesc.Size"/> wide along right and high along up.</summary>
+    Rect,
+
+    /// <summary>A one sided disk facing the direction, of radius <see cref="LightDesc.Size"/> X.</summary>
+    Disk,
+
+    /// <summary>A capsule along the direction, <see cref="LightDesc.Size"/> X long, of radius <see cref="LightDesc.SourceRadius"/>.</summary>
+    Tube,
 }
 
 /// <summary>How a light casts shadows. Carried on the light now, drawn by the shadow system later.</summary>
@@ -36,15 +49,45 @@ public struct LightDesc
     /// <summary>World position, double so lights far from the origin keep their place.</summary>
     public Double3 Position;
 
-    /// <summary>The direction the light shines, world space.</summary>
+    /// <summary>The direction the light shines or faces, world space, the axis of a tube.</summary>
     public Float3 Direction;
+
+    /// <summary>Up for the light's shape, cookie and IES profile, made square to the direction.</summary>
+    public Float3 Up;
 
     /// <summary>Linear colour.</summary>
     public Float3 Color;
     public float Intensity;
 
-    /// <summary>Distance at which point and spot lights reach zero.</summary>
+    /// <summary>Distance from its centre at which a local light reaches zero.</summary>
     public float Range;
+
+    /// <summary>The radius of a sphere light, a point or spot of a size, and of a tube.</summary>
+    public float SourceRadius;
+
+    /// <summary>A rect's width and height, a disk's radius in X, a tube's length in X.</summary>
+    public Float2 Size;
+
+    /// <summary>The angular radius of a directional light's disk in degrees, the sun's about 0.27.</summary>
+    public float AngularRadius;
+
+    /// <summary>Scales the light's diffuse and specular separately, 1 for physical.</summary>
+    public float DiffuseScale, SpecularScale;
+
+    /// <summary>A texture the light shines through: a 2D one for a spot, across its cone, a cube for a point, in its own space.</summary>
+    public Texture? Cookie;
+
+    /// <summary>
+    /// A photometric profile as a 2D texture: the angle from the direction across U from 0 to 180 degrees, the angle
+    /// around it from up across V, relative intensity in R. For points and spots.
+    /// </summary>
+    public Texture? IesProfile;
+
+    /// <summary>How the cookie and profile are sampled.</summary>
+    public SamplerDescription? CookieSampler;
+
+    /// <summary>Data for custom lighting, read by shaders as LightSample.HostData.</summary>
+    public Float4 HostData;
 
     /// <summary>Spot cone half angles from the axis, in degrees: full intensity inside the inner, none past the outer.</summary>
     public float InnerAngle, OuterAngle;
@@ -60,6 +103,9 @@ public struct LightDesc
     {
         Type = LightType.Point;
         Direction = new Float3(0, 0, 1);
+        Up = new Float3(0, 1, 0);
+        DiffuseScale = 1;
+        SpecularScale = 1;
         Color = new Float3(1, 1, 1);
         Intensity = 1;
         Range = 10;
@@ -102,6 +148,12 @@ public struct DecalDesc
 
     /// <summary>Higher draws over lower where decals overlap.</summary>
     public int Priority;
+
+    /// <summary>Two more textures for a custom surface shader's decals, read as Graphite_DecalRecord.extra.</summary>
+    public Texture? Extra0, Extra1;
+
+    /// <summary>Data for a custom surface shader's decals, read as Graphite_DecalRecord.hostData.</summary>
+    public Float4 HostData;
 
     /// <summary>Which renderables it lands on, against their layer mask.</summary>
     public uint LayerMask;
@@ -205,19 +257,24 @@ public sealed class EnvironmentDesc
         && SkyProbeResolution == other.SkyProbeResolution && SkyCaptureInterval == other.SkyCaptureInterval;
 }
 
-/// <summary>A light record as the shaders read it, 80 bytes, matching Graphite_LightRecord. Positions are in its tree's space.</summary>
+/// <summary>A light record as the shaders read it, 144 bytes, matching Graphite_LightRecord. Positions are in its tree's space.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct LightRecord
 {
     public Float4 PositionRange;
     public Float4 ColorIntensity;
-    public Float4 DirectionFlags;
+    public Float4 DirectionType;
+    public Float4 UpSize;
+    public Float4 Shape;
     public Float4 SpotShadow;
     public Float4 Shadow;
+    public uint Cookie, Ies, Sampler;
+    private uint _pad;
+    public Float4 HostData;
 }
 
 /// <summary>
-/// A decal record as the shaders read it, 128 bytes, matching Graphite_DecalRecord. Its rows are the inverse of the linear
+/// A decal record as the shaders read it, 160 bytes, matching Graphite_DecalRecord. Its rows are the inverse of the linear
 /// part with its centre in its tree's space in w, then the order it was added in.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
@@ -230,27 +287,25 @@ internal struct DecalRecord
     public uint Albedo, Normal, Mask, Sampler;
     public Float4 Params;
     public Float4 Axis;
+    public uint Extra0, Extra1;
+    private uint _pad3, _pad4;
+    public Float4 HostData;
 }
 
+/// <summary>A directional light as the shaders read it, 64 bytes, matching Graphite_DirectionalRecord.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct DirectionalRecord
 {
     public Float4 DirectionShadow;
     public Float4 Color;
+    public Float4 Params;
+    public Float4 HostData;
 }
 
-[InlineArray(WorldLightingRecord.MaxDirectional)]
-internal struct DirectionalRecords
-{
-    private DirectionalRecord _first;
-}
-
-/// <summary>A world's directional lights, ambient light and fog, matching Graphite_WorldLighting. The sun is the first directional light.</summary>
+/// <summary>A world's ambient light, fog and light counts, matching Graphite_WorldLighting. Directional lights have their own buffer, the sun first.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct WorldLightingRecord
 {
-    public const int MaxDirectional = 8;
-
     public uint DirectionalCount;
     private uint _pad0;
     public uint HasProbes;
@@ -266,7 +321,6 @@ internal struct WorldLightingRecord
     public Float4 FogColor;
     public Float4 FogParams;
     public Float4 FogStates;
-    public DirectionalRecords Directional;
 }
 
 public sealed partial class RenderWorld
@@ -427,6 +481,7 @@ internal sealed class WorldLighting : IDisposable
     private readonly StaticRegions<DecalRecord> _staticDecals;
 
     private LightDesc[] _lights = new LightDesc[16];
+    private LightSlots[] _lightSlots = new LightSlots[16];
     private int[] _lightGeneration = new int[16];
     private bool[] _lightAlive = new bool[16];
     private readonly List<int> _dynamicLights = new();
@@ -450,6 +505,11 @@ internal sealed class WorldLighting : IDisposable
     private LightRecord[] _lightScratch = new LightRecord[64];
     private DecalRecord[] _decalScratch = new DecalRecord[64];
 
+    private struct LightSlots
+    {
+        public uint Cookie, Ies, Sampler, Flags;
+    }
+
     /// <summary>What a decal looks like, independent of where it is: texture slots, tint and parameters.</summary>
     private struct DecalLook
     {
@@ -457,9 +517,10 @@ internal sealed class WorldLighting : IDisposable
         public Double3 Center;
         public float Radius;
         public Float4 Color;
-        public uint Albedo, Normal, Mask, Sampler;
+        public uint Albedo, Normal, Mask, Sampler, Extra0, Extra1;
         public Float4 Params;
         public Float4 Axis;
+        public Float4 HostData;
         public uint Sequence;
     }
 
@@ -467,10 +528,12 @@ internal sealed class WorldLighting : IDisposable
     {
         _resources = resources;
         _report = report;
-        _staticLights = new StaticRegions<LightRecord>(device, "Static lights", (index, origin) => Pack(_lights[index], origin), report);
+        _staticLights = new StaticRegions<LightRecord>(device, "Static lights", Pack, report);
         _staticDecals = new StaticRegions<DecalRecord>(device, "Static decals", (index, origin) => Pack(_decalLooks[index], origin), report);
         World = GpuTable.Of<WorldLightingRecord>(device, "World lighting", 1);
-        Tables = [_staticLights.Records, _staticLights.Nodes, _staticDecals.Records, _staticDecals.Nodes, World];
+        Directionals = GpuTable.Of<DirectionalRecord>(device, "Directional lights", 8);
+        Directionals.Set(0, default(DirectionalRecord));
+        Tables = [_staticLights.Records, _staticLights.Nodes, _staticDecals.Records, _staticDecals.Nodes, World, Directionals];
     }
 
     public GpuTable StaticLights => _staticLights.Records;
@@ -478,6 +541,9 @@ internal sealed class WorldLighting : IDisposable
     public GpuTable StaticDecals => _staticDecals.Records;
     public GpuTable StaticDecalNodes => _staticDecals.Nodes;
     public GpuTable World { get; }
+
+    /// <summary>Every directional light, the sun first, as many as there are.</summary>
+    public GpuTable Directionals { get; }
     public GpuTable[] Tables { get; }
 
     public IMaterialResources Resources => _resources;
@@ -488,6 +554,7 @@ internal sealed class WorldLighting : IDisposable
         {
             int size = Math.Max(index + 1, _lights.Length * 2);
             Array.Resize(ref _lights, size);
+            Array.Resize(ref _lightSlots, size);
             Array.Resize(ref _lightGeneration, size);
             Array.Resize(ref _lightAlive, size);
         }
@@ -498,6 +565,8 @@ internal sealed class WorldLighting : IDisposable
         _lights[index] = desc;
         _lightGeneration[index] = generation;
         _lightAlive[index] = alive;
+        if (alive)
+            _lightSlots[index] = Slots(desc);
 
         if (wasAlive != alive || old.Type != desc.Type || old.Static != desc.Static)
             _lightMembership = true;
@@ -507,6 +576,49 @@ internal sealed class WorldLighting : IDisposable
             _staticLights.Remove(index);
         if ((wasAlive && old.Type == LightType.Directional) || (alive && desc.Type == LightType.Directional))
             _worldRecordDirty = true;
+    }
+
+    // The cookie and profile's bindless slots, with the record's flags for what the light has
+    private LightSlots Slots(in LightDesc light)
+    {
+        LightSlots slots = default;
+        bool point = light.Type == LightType.Point, spot = light.Type == LightType.Spot;
+        if (light.Cookie is { IsDisposed: false } cookie && (point || spot))
+        {
+            bool cube = cookie.Type == TextureType.TextureCube;
+            if (cube == point)
+            {
+                slots.Cookie = _resources.TextureSlot(cookie, cube ? MaterialPropertyType.TextureCube : MaterialPropertyType.Texture2D, "white");
+                slots.Flags |= 32;
+            }
+            else
+            {
+                _report(new RendererError("lighting.cookie.type", $"A {(point ? "point" : "spot")} light's cookie must be a {(point ? "cube" : "2D")} texture, it is left off.", RendererErrorSeverity.Warning, cookie));
+            }
+        }
+        if (light.IesProfile is { IsDisposed: false } ies && (point || spot))
+        {
+            slots.Ies = _resources.TextureSlot(ies, MaterialPropertyType.Texture2D, "white");
+            slots.Flags |= 64;
+        }
+        slots.Sampler = _resources.SamplerSlot(light.CookieSampler);
+        return slots;
+    }
+
+    /// <summary>Resolves the slots of lights whose cookie or profile was freed, every one when freed is null. Host thread, at extraction.</summary>
+    public void RepackLights(HashSet<Texture>? freed)
+    {
+        bool Freed(Texture? texture) => texture != null && (freed == null || freed.Contains(texture));
+
+        for (int i = 0; i < _lights.Length; i++)
+        {
+            LightDesc light = _lights[i];
+            if (!_lightAlive[i] || !(Freed(light.Cookie) || Freed(light.IesProfile)))
+                continue;
+            _lightSlots[i] = Slots(light);
+            if (light.Static && light.Type != LightType.Directional)
+                _staticLights.Repack(i);
+        }
     }
 
     internal void ReceiveDecal(int index, int generation, uint sequence, bool alive, in DecalDesc desc)
@@ -575,7 +687,7 @@ internal sealed class WorldLighting : IDisposable
         for (int i = 0; i < _decals.Length; i++)
         {
             DecalDesc decal = _decals[i];
-            if (!_decalAlive[i] || !(Freed(decal.Albedo) || Freed(decal.Normal) || Freed(decal.Mask)))
+            if (!_decalAlive[i] || !(Freed(decal.Albedo) || Freed(decal.Normal) || Freed(decal.Mask) || Freed(decal.Extra0) || Freed(decal.Extra1)))
                 continue;
             _decalLooks[i] = Look(_decals[i], _decalSequence[i]);
             if (_decals[i].Static)
@@ -634,7 +746,7 @@ internal sealed class WorldLighting : IDisposable
             _lightScratch = new LightRecord[_culled.Count * 2];
         ReadOnlySpan<int> order = builder.Order;
         for (int i = 0; i < _culled.Count; i++)
-            _lightScratch[i] = Pack(_lights[_culled[order[i]]], frustum.Camera);
+            _lightScratch[i] = Pack(_culled[order[i]], frustum.Camera);
         records.Write<LightRecord>(uploader, _lightScratch.AsSpan(0, _culled.Count));
         nodes.Write(uploader, builder.Nodes);
         return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
@@ -730,36 +842,68 @@ internal sealed class WorldLighting : IDisposable
         return _spheres.AsSpan(0, count);
     }
 
-    //   +0 position in tree space, range
-    //   +1 colour, intensity
-    //   +2 direction it shines, type in the low 2 bits and shadow enabled in bit 2 as int bits
-    //   +3 cos of the outer and inner spot angles, shadow depth and normal bias
-    //   +4 shadow strength, shadow quality, shadow slot as int bits, layer mask as uint bits
-    // Directions unit length, a zero one pointing down +Z, and the inner cone never past the outer
+    // Directions unit length, a zero one pointing down +Z, up square to it, sizes and the inner cone in range
     private static LightDesc Normalized(in LightDesc light)
     {
         LightDesc result = light;
         Float3 d = light.Direction;
         float length = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
-        result.Direction = length > 1e-12f ? d / length : new Float3(0, 0, 1);
+        Float3 forward = length > 1e-12f ? d / length : new Float3(0, 0, 1);
+        result.Direction = forward;
+        Float3 up = light.Up - forward * (light.Up.X * forward.X + light.Up.Y * forward.Y + light.Up.Z * forward.Z);
+        float upLength = MathF.Sqrt(up.X * up.X + up.Y * up.Y + up.Z * up.Z);
+        if (upLength < 1e-6f)
+        {
+            Float3 other = MathF.Abs(forward.Y) < 0.99f ? new Float3(0, 1, 0) : new Float3(1, 0, 0);
+            up = other - forward * (other.X * forward.X + other.Y * forward.Y + other.Z * forward.Z);
+            upLength = MathF.Sqrt(up.X * up.X + up.Y * up.Y + up.Z * up.Z);
+        }
+        result.Up = up / upLength;
         result.InnerAngle = MathF.Min(light.InnerAngle, light.OuterAngle);
+        result.SourceRadius = MathF.Max(light.SourceRadius, 0);
+        result.Size = new Float2(MathF.Max(light.Size.X, 0), MathF.Max(light.Size.Y, 0));
+        result.AngularRadius = Math.Clamp(light.AngularRadius, 0, 45);
         return result;
     }
 
-    private static LightRecord Pack(in LightDesc light, Double3 origin)
+    //   +0 position in tree space, range
+    //   +1 colour, intensity
+    //   +2 direction it shines or faces, type in bits 0 to 3, shadow 4, cookie 5, profile 6 as uint bits
+    //   +3 up, rect width, disk radius or tube length
+    //   +4 rect height, source radius, diffuse scale, specular scale
+    //   +5 cos of the outer and inner spot angles, shadow depth and normal bias
+    //   +6 shadow strength, shadow quality, shadow slot as int bits, layer mask as uint bits
+    //   +7 cookie, profile and sampler slots
+    //   +8 host data
+    private LightRecord Pack(int index, Double3 origin)
     {
+        LightDesc light = _lights[index];
+        LightSlots slots = _lightSlots[index];
         Double3 p = light.Position - origin;
-        int type = light.Type == LightType.Spot ? 2 : 1;
-        int flags = type | ((light.Shadow.Enabled ? 1 : 0) << 2);
+        uint type = light.Type switch
+        {
+            LightType.Spot => 2u,
+            LightType.Rect => 3u,
+            LightType.Disk => 4u,
+            LightType.Tube => 5u,
+            _ => 1u,
+        };
+        uint flags = type | (light.Shadow.Enabled ? 16u : 0) | slots.Flags;
         bool spot = light.Type == LightType.Spot;
         float outer = MathF.Cos(light.OuterAngle * MathF.PI / 180f);
         return new LightRecord
         {
             PositionRange = new Float4((float)p.X, (float)p.Y, (float)p.Z, light.Range),
             ColorIntensity = new Float4(light.Color.X, light.Color.Y, light.Color.Z, light.Intensity),
-            DirectionFlags = new Float4(light.Direction.X, light.Direction.Y, light.Direction.Z, BitConverter.Int32BitsToSingle(flags)),
+            DirectionType = new Float4(light.Direction.X, light.Direction.Y, light.Direction.Z, BitConverter.UInt32BitsToSingle(flags)),
+            UpSize = new Float4(light.Up.X, light.Up.Y, light.Up.Z, light.Size.X),
+            Shape = new Float4(light.Size.Y, light.SourceRadius, light.DiffuseScale, light.SpecularScale),
             SpotShadow = new Float4(spot ? outer : -1f, spot ? MathF.Max(MathF.Cos(light.InnerAngle * MathF.PI / 180f), outer + 1e-4f) : 1f, light.Shadow.Bias, light.Shadow.NormalBias),
             Shadow = new Float4(light.Shadow.Strength, light.Shadow.Quality, BitConverter.Int32BitsToSingle(-1), BitConverter.UInt32BitsToSingle(light.LayerMask)),
+            Cookie = slots.Cookie,
+            Ies = slots.Ies,
+            Sampler = slots.Sampler,
+            HostData = light.HostData,
         };
     }
 
@@ -781,8 +925,11 @@ internal sealed class WorldLighting : IDisposable
             Normal = _resources.TextureSlot(decal.Normal, MaterialPropertyType.Texture2D, "normal"),
             Mask = _resources.TextureSlot(decal.Mask, MaterialPropertyType.Texture2D, "white"),
             Sampler = _resources.SamplerSlot(decal.Sampler),
+            Extra0 = _resources.TextureSlot(decal.Extra0, MaterialPropertyType.Texture2D, "white"),
+            Extra1 = _resources.TextureSlot(decal.Extra1, MaterialPropertyType.Texture2D, "white"),
             Params = new Float4(decal.NormalStrength, decal.Priority, decal.AngleFade, BitConverter.UInt32BitsToSingle(decal.LayerMask)),
             Axis = new Float4(axis.X, axis.Y, axis.Z, BitConverter.UInt32BitsToSingle(flags)),
+            HostData = decal.HostData,
         };
     }
 
@@ -805,6 +952,9 @@ internal sealed class WorldLighting : IDisposable
             Sampler = look.Sampler,
             Params = look.Params,
             Axis = look.Axis,
+            Extra0 = look.Extra0,
+            Extra1 = look.Extra1,
+            HostData = look.HostData,
         };
     }
 
@@ -830,21 +980,15 @@ internal sealed class WorldLighting : IDisposable
 
         SkyInputs = HashCode.Combine(sun >= 0 ? _lights[sun].Direction : default, env.SkyColor);
 
-        int count = 0;
+        uint count = 0;
         if (sun >= 0)
-            record.Directional[count++] = Directional(_lights[sun]);
+            Directionals.Set(count++, Directional(_lights[sun]));
         foreach (int index in _directionalOrder)
         {
-            if (index == sun)
-                continue;
-            if (count == WorldLightingRecord.MaxDirectional)
-            {
-                _report(new RendererError("lighting.directional.full", $"A world has more than {WorldLightingRecord.MaxDirectional} directional lights, the rest are not drawn."));
-                break;
-            }
-            record.Directional[count++] = Directional(_lights[index]);
+            if (index != sun)
+                Directionals.Set(count++, Directional(_lights[index]));
         }
-        record.DirectionalCount = (uint)count;
+        record.DirectionalCount = count;
         record.HasProbes = _hasProbes ? 1u : 0;
         record.ProbeSlot = _probeSlot;
         record.ProbeSampler = _probeSampler;
@@ -867,11 +1011,17 @@ internal sealed class WorldLighting : IDisposable
     }
 
     // The direction stored points from the surface to the light, the opposite of where it shines. The layer mask rides in w.
-    private static DirectionalRecord Directional(in LightDesc light) => new()
+    private static DirectionalRecord Directional(in LightDesc light)
     {
-        DirectionShadow = new Float4(-light.Direction.X, -light.Direction.Y, -light.Direction.Z, light.Shadow.Enabled ? 1 : 0),
-        Color = new Float4(light.Color.X * light.Intensity, light.Color.Y * light.Intensity, light.Color.Z * light.Intensity, BitConverter.UInt32BitsToSingle(light.LayerMask)),
-    };
+        float radius = light.AngularRadius * MathF.PI / 180f;
+        return new DirectionalRecord
+        {
+            DirectionShadow = new Float4(-light.Direction.X, -light.Direction.Y, -light.Direction.Z, light.Shadow.Enabled ? 1 : 0),
+            Color = new Float4(light.Color.X * light.Intensity, light.Color.Y * light.Intensity, light.Color.Z * light.Intensity, BitConverter.UInt32BitsToSingle(light.LayerMask)),
+            Params = new Float4(MathF.Sin(radius), MathF.Cos(radius), light.DiffuseScale, light.SpecularScale),
+            HostData = light.HostData,
+        };
+    }
 }
 
 /// <summary>

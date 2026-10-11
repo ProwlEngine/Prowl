@@ -92,8 +92,14 @@ public abstract partial class GraphicsDevice
             var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
 
             profiler?.BeginView(viewInfo);
-            pipeline.ExecuteView(context);
-            profiler?.EndView(viewInfo);
+            try
+            {
+                pipeline.ExecuteView(context);
+            }
+            finally
+            {
+                profiler?.EndView(viewInfo);
+            }
 
             Swapchain? swapchain = context.PresentSwapchain;
             if (swapchain != null)

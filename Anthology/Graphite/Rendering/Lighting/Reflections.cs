@@ -631,7 +631,7 @@ internal sealed class WorldReflections : IDisposable
     }
 
     // Bakes first, then the probes already being captured, then the ones that need it most, until the texel budget is spent.
-    // The first new capture of a frame runs whatever it costs, so no probe waits forever.
+    // The first new capture of a frame runs whatever it costs while any budget is left, so no probe waits forever.
     private void PlanCaptures(int frame)
     {
         long budget = Math.Max(_settings.TexelsPerFrame, 1);

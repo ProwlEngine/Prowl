@@ -6,7 +6,7 @@
 // The direction toward the sun: the world's sun light, else a default low in the sky
 vec3 Graphite_SunDirection()
 {
-    return graphite_World.counts.x > 0u ? normalize(graphite_World.directionals[0].directionShadow.xyz) : normalize(vec3(-0.5, 0.7, -0.5));
+    return Graphite_DirectionalCount() > 0u ? Graphite_GetDirectional(0u).direction : normalize(vec3(-0.5, 0.7, -0.5));
 }
 
 // Procedural sky radiance along a unit world direction, sun is the unit direction toward the sun.

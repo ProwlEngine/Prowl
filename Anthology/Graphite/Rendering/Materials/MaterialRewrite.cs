@@ -51,6 +51,7 @@ internal static class GraphiteBindings
     public const int StaticReflectionProbes = 24;
     public const int StaticReflectionProbeNodes = 25;
     public const int SkyAmbient = 26;
+    public const int Directionals = 27;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -115,7 +116,8 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes),
         new ResourceLayoutElementDescription("Graphite_ReflectionProbes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbes),
         new ResourceLayoutElementDescription("Graphite_ReflectionProbeNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbeNodes),
-        new ResourceLayoutElementDescription("Graphite_SkyAmbientSH", ResourceKind.StructuredBufferReadOnly, Graphics, SkyAmbient))
+        new ResourceLayoutElementDescription("Graphite_SkyAmbientSH", ResourceKind.StructuredBufferReadOnly, Graphics, SkyAmbient),
+        new ResourceLayoutElementDescription("Graphite_Directionals", ResourceKind.StructuredBufferReadOnly, Graphics, Directionals))
     {
         Table = true,
     };

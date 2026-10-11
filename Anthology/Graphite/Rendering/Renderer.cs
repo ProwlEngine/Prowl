@@ -198,8 +198,17 @@ public struct FrameDesc
     public ReadOnlyMemory<GraphDispatch> Pipelines;
 }
 
-/// <summary>A texture region read back to the host: tightly packed rows of its format.</summary>
-public readonly record struct TextureReadback(byte[] Data, uint Width, uint Height, PixelFormat Format);
+/// <summary>A texture region read back to the host: tightly packed rows of its format, or why it could not be read.</summary>
+public readonly record struct TextureReadback(byte[] Data, uint Width, uint Height, PixelFormat Format, string? Error = null)
+{
+    public bool Failed => Error != null;
+}
+
+/// <summary>A buffer range read back to the host, or why it could not be read.</summary>
+public readonly record struct BufferReadback(byte[] Data, string? Error = null)
+{
+    public bool Failed => Error != null;
+}
 
 /// <summary>
 /// Graphite's high level renderer. The host mutates worlds, materials and globals on its thread and calls
@@ -375,6 +384,7 @@ public sealed class Renderer : IDisposable
                 foreach (WorldFrame world in _worlds.Values)
                 {
                     world.World.Lighting.RepackDecals(freed);
+                    world.World.Lighting.RepackLights(freed);
                     world.World.RepackLightmaps(freed);
                     world.World.Reflections.RepackBaked(freed);
                 }
@@ -426,34 +436,36 @@ public sealed class Renderer : IDisposable
 
     /// <summary>
     /// Copies a texture region to the host after this frame's views, calling <paramref name="done"/> on the host thread
-    /// at a later SubmitFrame. The whole mip when no region is given. Host thread.
+    /// at a later SubmitFrame, with an error when it could not be read. The whole mip when no region is given. Compressed
+    /// and depth stencil formats cannot be read back. Host thread.
     /// </summary>
     public void Readback(Texture texture, Action<TextureReadback> done, uint mip = 0, uint layer = 0, TextureRegion? region = null)
     {
         ArgumentNullException.ThrowIfNull(texture);
         ArgumentNullException.ThrowIfNull(done);
-        try
-        {
-            texture.Format.GetSizeInBytes();
-        }
-        catch (Exception e)
-        {
-            throw new ArgumentException($"A {texture.Format} texture cannot be read back, its texels have no fixed size.", nameof(texture), e);
-        }
-        if (mip >= texture.MipLevels || layer >= texture.ArrayLayers * (texture.Type == TextureType.TextureCube ? 6u : 1u))
-            throw new ArgumentOutOfRangeException(nameof(mip), $"The texture has {texture.MipLevels} mips and {texture.ArrayLayers} layers.");
-        TextureRegion whole = new(0, 0, 0, Math.Max(texture.Width >> (int)mip, 1), Math.Max(texture.Height >> (int)mip, 1), 1, mip, layer);
-        _readbacks.Enqueue(new ReadbackRequest { Texture = texture, Region = region ?? whole, TextureDone = done });
+        string format = texture.Format.ToString();
+        if (format.StartsWith("BC", StringComparison.Ordinal) || format.StartsWith("ETC", StringComparison.Ordinal) || texture.Format is PixelFormat.D24_UNorm_S8_UInt or PixelFormat.D32_Float_S8_UInt)
+            throw new ArgumentException($"A {texture.Format} texture cannot be read back.", nameof(texture));
+        uint layers = texture.ArrayLayers * (texture.Type == TextureType.TextureCube ? 6u : 1u);
+        TextureRegion r = region ?? new TextureRegion(0, 0, 0, Math.Max(texture.Width >> (int)mip, 1), Math.Max(texture.Height >> (int)mip, 1), Math.Max(texture.Depth >> (int)mip, 1), mip, layer);
+        if (r.MipLevel >= texture.MipLevels || r.ArrayLayer >= layers)
+            throw new ArgumentOutOfRangeException(nameof(region), $"The texture has {texture.MipLevels} mips and {layers} layers.");
+        uint w = Math.Max(texture.Width >> (int)r.MipLevel, 1), h = Math.Max(texture.Height >> (int)r.MipLevel, 1), d = Math.Max(texture.Depth >> (int)r.MipLevel, 1);
+        if (r.Width == 0 || r.Height == 0 || r.Depth == 0 || (long)r.X + r.Width > w || (long)r.Y + r.Height > h || (long)r.Z + r.Depth > d)
+            throw new ArgumentOutOfRangeException(nameof(region), $"The region does not lie within the {w} by {h} by {d} mip.");
+        if ((long)r.Width * r.Height * r.Depth * texture.Format.GetSizeInBytes() > uint.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(region), "The region is too large to read back at once.");
+        _readbacks.Enqueue(new ReadbackRequest { Texture = texture, Region = r, TextureDone = done });
     }
 
     /// <summary>Copies a buffer range to the host after this frame's views, the rest of the buffer when size is 0. Host thread.</summary>
-    public void Readback(DeviceBuffer buffer, Action<byte[]> done, uint offset = 0, uint size = 0)
+    public void Readback(DeviceBuffer buffer, Action<BufferReadback> done, uint offset = 0, uint size = 0)
     {
         ArgumentNullException.ThrowIfNull(buffer);
         ArgumentNullException.ThrowIfNull(done);
         if (size == 0)
             size = buffer.SizeInBytes - Math.Min(offset, buffer.SizeInBytes);
-        if (size == 0 || offset + size > buffer.SizeInBytes)
+        if (size == 0 || (long)offset + size > buffer.SizeInBytes)
             throw new ArgumentOutOfRangeException(nameof(size), $"The buffer holds {buffer.SizeInBytes} bytes.");
         _readbacks.Enqueue(new ReadbackRequest { Buffer = buffer, Offset = offset, Size = size, BufferDone = done });
     }
@@ -464,23 +476,34 @@ public sealed class Renderer : IDisposable
     /// </summary>
     public ViewDraws Draws(int viewId) => _frame.Draws(viewId);
 
-    // Hands finished readbacks to their callbacks. Host thread, render thread idle.
+    // Hands finished and failed readbacks to their callbacks. Host thread, render thread idle.
     private void RaiseReadbacks()
     {
         ulong completed = Device.LastCompletedExecutionId;
         for (int i = 0; i < _pendingReadbacks.Count; i++)
         {
             ReadbackRequest request = _pendingReadbacks[i];
-            if (request.Execution == 0 || request.Execution > completed)
+            if (request.Error == null && (request.Execution == 0 || request.Execution > completed))
                 continue;
             _pendingReadbacks.RemoveAt(i--);
-            byte[] data = Device.Map<byte>(request.Staging!).ToArray();
-            Device.Unmap(request.Staging!);
-            request.Staging!.Dispose();
-            if (request.Texture is { } texture)
-                request.TextureDone!(new TextureReadback(data, request.Region.Width, request.Region.Height, texture.Format));
-            else
-                request.BufferDone!(data);
+            byte[] data = [];
+            if (request.Staging is { } staging)
+            {
+                data = Device.Map<byte>(staging).ToArray();
+                Device.Unmap(staging);
+                staging.Dispose();
+            }
+            try
+            {
+                if (request.Texture is { } texture)
+                    request.TextureDone!(new TextureReadback(data, request.Region.Width, request.Region.Height, texture.Format, request.Error));
+                else
+                    request.BufferDone!(new BufferReadback(data, request.Error));
+            }
+            catch (Exception e)
+            {
+                Report(new RendererError("readback.callback", $"A readback's callback threw: {e}", RendererErrorSeverity.Error, e));
+            }
         }
     }
     private readonly HashSet<Texture> _freedTextures = new();
@@ -639,8 +662,15 @@ public sealed class Renderer : IDisposable
             {
                 request.Staging?.Dispose();
                 request.Staging = null;
-                _readbacks.Enqueue(request);
+                if (++request.Attempts < 2)
+                {
+                    _readbacks.Enqueue(request);
+                    continue;
+                }
+                request.Error = "The frames that would have copied it failed.";
+                _pendingReadbacks.Add(request);
             }
+            _frameReadbacks.Clear();
             Report(new RendererError("frame.failed", $"The frame failed: {e}", RendererErrorSeverity.Error, e) { Key = $"frame.{e.GetType().Name}.{e.Message}" });
         }
     }
@@ -694,8 +724,6 @@ public sealed class Renderer : IDisposable
         _lastDispatched = task.Id;
         foreach (ReadbackRequest request in _frameReadbacks)
         {
-            if (request.Staging == null)
-                continue;
             request.Execution = task.Id;
             _pendingReadbacks.Add(request);
         }

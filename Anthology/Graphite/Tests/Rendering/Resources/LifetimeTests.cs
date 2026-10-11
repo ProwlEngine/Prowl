@@ -33,10 +33,11 @@ public sealed class LifetimeTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Core.glsl"
                     uniform sampler2D _MainTex;
                     layout(location = 0) out vec4 outColor;
-                    void main() { outColor = texture(_MainTex, vec2(0.5)); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = texture(_MainTex, vec2(0.5)); }
                 }
                 ENDGLSL
             }

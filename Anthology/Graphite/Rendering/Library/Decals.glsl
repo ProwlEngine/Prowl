@@ -1,6 +1,8 @@
 // Box projected decals, applied in the forward pass before lighting so their albedo, normals, roughness and metallic
 // reach both the lighting and the thin G-buffer. Decals live in H-Forward trees like lights: a point query finds the
-// ones whose box holds the surface, and up to eight are applied, lowest priority first.
+// ones whose box holds the surface, and up to eight are applied, lowest priority first. A custom surface shader adds its
+// own channels by defining GRAPHITE_DECAL_EXTRA and a Graphite_ApplyDecalExtra function, called after each decal with its
+// extra textures and host data.
 #pragma once
 
 #include "Graphite/Trees.glsl"
@@ -18,6 +20,8 @@ struct Graphite_DecalRecord
     uvec4 textures;          // albedo, normal and mask slots in the 2D table, sampler slot
     vec4 params;             // normal strength, priority, angle fade cosine, layer mask as uint bits
     vec4 axis;               // decal +Z in world space, texture flags as uint bits (albedo 1, normal 2, mask 4)
+    uvec4 extra;             // two more texture slots for custom surface shaders
+    vec4 hostData;
 };
 
 layout(set = 1, binding = 20, std430) readonly buffer Graphite_StaticDecals { Graphite_DecalRecord graphite_StaticDecals[]; };
@@ -81,6 +85,11 @@ void Graphite_ApplyDecal(Graphite_DecalRecord d, vec3 local, float coverage,
         metallic = mix(metallic, mask.b, alpha);
     }
 }
+
+#ifdef GRAPHITE_DECAL_EXTRA
+// Applies a decal's own channels, its uv the decal's 0 to 1 square: sample GRAPHITE_DECAL_TEXTURE(d, d.extra.x, uv)
+void Graphite_ApplyDecalExtra(Graphite_DecalRecord d, vec2 uv, float coverage);
+#endif
 
 // Whether a decal applies before another: lower priority first, then the one added first
 bool Graphite_DecalBefore(float priority, uint sequence, float otherPriority, uint otherSequence)
@@ -158,5 +167,11 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
     }
 
     for (int h = 0; h < hits; h++)
-        Graphite_ApplyDecal(Graphite_DecalAt(hitTree[h], hitIndex[h]), hitLocal[h], hitCoverage[h], albedo, normal, roughness, metallic, occlusion);
+    {
+        Graphite_DecalRecord d = Graphite_DecalAt(hitTree[h], hitIndex[h]);
+        Graphite_ApplyDecal(d, hitLocal[h], hitCoverage[h], albedo, normal, roughness, metallic, occlusion);
+#ifdef GRAPHITE_DECAL_EXTRA
+        Graphite_ApplyDecalExtra(d, hitLocal[h].xy + 0.5, hitCoverage[h]);
+#endif
+    }
 }

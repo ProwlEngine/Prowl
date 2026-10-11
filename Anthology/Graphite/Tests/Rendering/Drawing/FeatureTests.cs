@@ -35,10 +35,11 @@ public sealed class FeatureTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Core.glsl"
                     uniform vec4 _Color;
                     layout(location = 0) out vec4 outColor;
-                    void main() { outColor = vec4(_Color.rgb, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(_Color.rgb, 1.0); }
                 }
                 ENDGLSL
             }
@@ -61,9 +62,10 @@ public sealed class FeatureTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Core.glsl"
                     layout(location = 0) out vec4 outColor;
-                    void main() { outColor = vec4(1.0, 0.0, 0.0, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(1.0, 0.0, 0.0, 1.0); }
                 }
                 ENDGLSL
             }
@@ -697,7 +699,7 @@ public sealed class FeatureTests : IDisposable
         TextureReadback? texture = null;
         byte[]? bytes = null;
         _renderer.Readback(_target, data => texture = data);
-        _renderer.Readback(buffer, data => bytes = data, offset: 4, size: 8);
+        _renderer.Readback(buffer, data => bytes = data.Data, offset: 4, size: 8);
         Frame(View());
         Assert.Null(texture);
 
@@ -710,16 +712,27 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
-    public void AReadbackWhoseTextureIsDisposedFirst_IsReported()
+    public void AReadbackWhoseTextureIsDisposedFirst_FailsWithAReason()
     {
         Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
-        bool done = false;
-        _renderer.Readback(texture, _ => done = true);
+        TextureReadback? result = null;
+        _renderer.Readback(texture, data => result = data);
         texture.Dispose();
         _renderer.SubmitFrame(new FrameDesc());
         _renderer.SubmitFrame(new FrameDesc());
-        Assert.False(done);
+        Assert.True(result!.Value.Failed);
         Assert.Equal("readback.disposed", Assert.Single(_errors).Code);
+    }
+
+    [Fact]
+    public void ReadbacksOutsideTheTexture_AreRefusedWhenAsked()
+    {
+        using Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(texture, _ => { }, region: new TextureRegion(0, 0, 0, 5, 4, 1, 0, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(texture, _ => { }, region: new TextureRegion(0, 0, 0, 0, 4, 1, 0, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(texture, _ => { }, region: new TextureRegion(0, 0, 0, 2, 2, 1, 1, 0)));
+        using DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(buffer, _ => { }, offset: 8, size: uint.MaxValue - 4));
     }
 
     // A host's own pass drawing an external view's opaque renderables into a target

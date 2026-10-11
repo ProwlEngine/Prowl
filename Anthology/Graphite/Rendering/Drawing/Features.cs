@@ -716,7 +716,8 @@ internal sealed class FeaturePass : IPass
         }
         catch (Exception e)
         {
-            Frame.Report(new RendererError("feature.render", $"{Name} threw while recording: {e}", RendererErrorSeverity.Error, Feature) { Key = $"feature.render.{Id}" });
+            Frame.Report(new RendererError("feature.render", $"{Name} threw while recording, so view {Camera.View.ViewId} runs without it: {e}", RendererErrorSeverity.Error, Feature) { Key = $"feature.render.{Id}" });
+            Camera.Fail(Feature);
         }
     }
 }

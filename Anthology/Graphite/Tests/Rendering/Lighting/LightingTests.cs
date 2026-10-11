@@ -9,6 +9,7 @@ using Prowl.Vector;
 
 using Xunit;
 
+using Vector2 = System.Numerics.Vector2;
 using Vector3 = System.Numerics.Vector3;
 
 namespace Prowl.Graphite.Rendering.Tests;
@@ -93,12 +94,13 @@ public sealed class LightingTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Lighting.glsl"
                     layout(location = 0) in vec3 vNormal;
                     layout(location = 1) in vec2 vLightmapUV;
                     layout(location = 0) out vec4 outColor;
                     void main()
-                    {
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
                         outColor = vec4(Graphite_IndirectDiffuse(normalize(vNormal), vLightmapUV), 1.0);
                     }
                 }
@@ -163,11 +165,12 @@ public sealed class LightingTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Lighting.glsl"
                     layout(location = 0) in vec3 vWorld;
                     layout(location = 0) out vec4 outColor;
                     void main()
-                    {
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
                         outColor = vec4(SampleSkyProbe(normalize(vWorld), 0.0), 1.0);
                     }
                 }
@@ -195,10 +198,11 @@ public sealed class LightingTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Core.glsl"
                     uniform vec4 _Color;
                     layout(location = 0) out vec4 outColor;
-                    void main() { outColor = vec4(_Color.rgb, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(_Color.rgb, 1.0); }
                 }
                 ENDGLSL
             }
@@ -233,13 +237,14 @@ public sealed class LightingTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Lighting.glsl"
                     uniform float _Roughness;
                     layout(location = 0) in vec3 vWorld;
                     layout(location = 1) in vec3 vNormal;
                     layout(location = 0) out vec4 outColor;
                     void main()
-                    {
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
                         outColor = vec4(EvaluateReflectionProbes(vWorld, normalize(vNormal), GetWorldViewDir(vWorld), _Roughness), 1.0);
                     }
                 }
@@ -264,10 +269,11 @@ public sealed class LightingTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #include "Graphite/Core.glsl"
                     layout(std430) readonly buffer WindField { vec4 wind[]; };
                     layout(location = 0) out vec4 outColor;
-                    void main() { outColor = vec4(wind[1].rgb, 1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(wind[1].rgb, 1.0); }
                 }
                 ENDGLSL
             }
@@ -610,6 +616,294 @@ public sealed class LightingTests : IDisposable
         AssertMatches(p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.4f) + Reference.Directional(fill, p, s_normal, albedo, 0, 0.4f), Frame());
     }
 
+    // Brute force cosine weighted solid angle of a shape, sampled over its area: sum of cos at the point times cos at the light over d^2
+    private static float Integrate(Func<float, float, Vector3> point, Vector3 lightNormal, float area, Vector3 n, int steps, bool twoSided = false)
+    {
+        double sum = 0;
+        for (int i = 0; i < steps; i++)
+        {
+            for (int j = 0; j < steps; j++)
+            {
+                Vector3 q = point((i + 0.5f) / steps, (j + 0.5f) / steps);
+                float d2 = q.LengthSquared();
+                Vector3 l = q / MathF.Sqrt(d2);
+                float atLight = twoSided ? 1 : MathF.Max(Vector3.Dot(-l, lightNormal), 0);
+                sum += MathF.Max(Vector3.Dot(n, l), 0) * atLight / d2;
+            }
+        }
+        return (float)(sum * area / (steps * steps));
+    }
+
+    [Fact]
+    public void AreaIrradiance_MatchesIntegratingTheShape_AcrossTheHorizon()
+    {
+        Random random = new(5);
+        for (int k = 0; k < 40; k++)
+        {
+            Vector3 n = Vector3.Normalize(new Vector3(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f, random.NextSingle() - 0.5f));
+            Vector3 center = new(random.NextSingle() * 4 - 2, random.NextSingle() * 4 - 2, random.NextSingle() * 2 + 0.6f);
+            float w = 0.5f + random.NextSingle() * 1.5f, h = 0.5f + random.NextSingle() * 1.5f;
+            Vector3 face = new(0, 0, -1), right = new(1, 0, 0), up = new(0, 1, 0);
+
+            Vector3[] quad = [center - right * w / 2 - up * h / 2, center + right * w / 2 - up * h / 2, center + right * w / 2 + up * h / 2, center - right * w / 2 + up * h / 2];
+            float want = Integrate((u, v) => center + right * (u - 0.5f) * w + up * (v - 0.5f) * h, face, w * h, n, 400);
+            Assert.True(MathF.Abs(Reference.QuadIrradiance(quad, n) - want) <= 1e-3f + 0.01f * want, $"rect {k}: {Reference.QuadIrradiance(quad, n)} against {want}");
+
+            // A disk facing the point is a sphere cap as seen from it
+            float radius = 0.3f + random.NextSingle();
+            Vector3 toward = Vector3.Normalize(-center);
+            Vector3 dRight = Vector3.Normalize(Vector3.Cross(toward, new Vector3(0.3f, 1, 0.1f))), dUp = Vector3.Cross(dRight, toward);
+            float disk = Integrate((u, v) =>
+            {
+                float rr = radius * MathF.Sqrt(u), a = 2 * MathF.PI * v;
+                return center + dRight * (rr * MathF.Cos(a)) + dUp * (rr * MathF.Sin(a));
+            }, toward, MathF.PI * radius * radius, n, 400);
+            float d2 = center.LengthSquared();
+            float formula = Reference.SphereIrradiance(Vector3.Dot(n, Vector3.Normalize(center)), radius * radius / (radius * radius + d2));
+            Assert.True(MathF.Abs(formula - disk) <= 1e-3f + 0.01f * disk, $"disk {k}: {formula} against {disk}");
+
+            // A line of unit intensity spread along it, against summing points along it
+            Vector3 a = center - right * w, b = center + up * h;
+            double line = 0;
+            for (int i = 0; i < 20000; i++)
+            {
+                Vector3 q = Vector3.Lerp(a, b, (i + 0.5f) / 20000);
+                float q2 = q.LengthSquared();
+                line += MathF.Max(Vector3.Dot(n, q), 0) / (q2 * MathF.Sqrt(q2));
+            }
+            line /= 20000;
+            Assert.True(MathF.Abs(Reference.LineIrradiance(a, b, n) - (float)line) <= 1e-3f + 0.01f * (float)line, $"line {k}: {Reference.LineIrradiance(a, b, n)} against {line}");
+        }
+    }
+
+    private LightDesc Shaped(LightType type, Float3 color, float intensity) => new()
+    {
+        Type = type,
+        Position = _origin + new Double3(0.6, -0.4, 8.5),
+        Direction = new Float3(0.2f, 0.1f, 1),
+        Up = new Float3(0, 1, 0),
+        Range = 9,
+        Intensity = intensity,
+        Color = color,
+        InnerAngle = 25,
+        OuterAngle = 40,
+        Static = true,
+    };
+
+    [Theory]
+    [InlineData(LightType.Point, 0.6f, 0f, 0f)]
+    [InlineData(LightType.Spot, 0.4f, 0f, 0f)]
+    [InlineData(LightType.Tube, 0.15f, 2.5f, 0f)]
+    [InlineData(LightType.Rect, 0f, 2f, 1f)]
+    [InlineData(LightType.Disk, 0f, 0.8f, 0f)]
+    public void AreaLights_LightByTheirShape(LightType type, float sourceRadius, float sizeX, float sizeY)
+    {
+        Vector3 albedo = new(0.7f, 0.6f, 0.5f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.35f, 0.2f));
+        LightDesc light = Shaped(type, new Float3(1, 0.85f, 0.7f), 0.08f);
+        light.SourceRadius = sourceRadius;
+        light.Size = new Float2(sizeX, sizeY);
+        _world.AddLight(light);
+
+        Float4[] pixels = Frame();
+        Assert.Contains(pixels, p => p.X > 0.01f);
+        AssertMatches(p => Reference.Area(Relative(light), p, s_normal, albedo, 0.2f, 0.35f), pixels);
+    }
+
+    [Fact]
+    public void AreaSpecular_StaysCloseToIntegratingTheShape()
+    {
+        Vector3 n = new(0, 0, -1);
+        List<string> report = new();
+        float worst = 0;
+        foreach (float roughness in new[] { 0.15f, 0.3f, 0.6f })
+        {
+            foreach ((float tilt, float distance) in new[] { (0f, 3f), (0.4f, 3f), (0.8f, 3f), (0f, 1.5f), (0.6f, 1.5f) })
+            {
+                // The light sits along the mirror direction of a view tilted off the normal, so the highlight is on it
+                Vector3 v = Vector3.Normalize(new Vector3(tilt, 0.1f, -1));
+                Vector3 r = Vector3.Reflect(-v, n);
+                Vector3 center = r * distance;
+                Vector3 axis = Vector3.Normalize(-center);
+                Vector3 up = Vector3.Normalize(Vector3.Cross(axis, Vector3.UnitX));
+                foreach ((LightType type, float radius, Vector2 size) in new[] { (LightType.Point, 0.5f, Vector2.Zero), (LightType.Rect, 0f, new Vector2(1.2f, 0.6f)), (LightType.Disk, 0f, new Vector2(0.5f, 0)) })
+                {
+                    (float truth, float estimate) = Reference.Specular(type, center, axis, up, radius, size, v, n, roughness);
+                    float error = MathF.Abs(estimate / truth - 1);
+                    worst = MathF.Max(worst, error);
+                    report.Add($"{type} roughness {roughness} tilt {tilt} distance {distance}: {estimate / truth:F3}");
+                }
+            }
+        }
+        Assert.True(worst < 0.15f, string.Join(Environment.NewLine, report));
+    }
+
+    [Fact]
+    public void SmallAreaLights_LightLikePoints_AndFarOnesLikeThem()
+    {
+        Vector3 albedo = new(0.7f, 0.7f, 0.7f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
+        LightDesc point = Point(new Double3(0, 0, 4), 30, 0.2f, new Float3(1, 1, 1));
+        LightHandle handle = _world.AddLight(point);
+        Float4[] want = Frame();
+
+        // Facing the surface a rect and a disk emit like a point there, a sphere and a tube of no length are one
+        foreach ((LightType type, float radius, Float2 size, float tolerance) in new[]
+        {
+            (LightType.Point, 0.01f, new Float2(0, 0), 0.01f),
+            (LightType.Tube, 0.01f, new Float2(0.001f, 0), 0.01f),
+            (LightType.Rect, 0f, new Float2(0.05f, 0.05f), 0.02f),
+            (LightType.Disk, 0f, new Float2(0.03f, 0), 0.02f),
+        })
+        {
+            LightDesc shaped = point;
+            shaped.Type = type;
+            shaped.SourceRadius = radius;
+            shaped.Size = size;
+            shaped.Direction = new Float3(0, 0, 1);
+            _world.SetLight(handle, shaped);
+            Float4[] got = Frame();
+            for (int i = 0; i < want.Length; i++)
+            {
+                // A disk or rect's emission falls with the cosine away from its axis, a point's does not
+                float cos = type is LightType.Rect or LightType.Disk ? 6 / Vector3.Distance(PixelPosition(i % Size, i / Size), new Vector3(0, 0, 4)) : 1;
+                Assert.True(MathF.Abs(got[i].X - want[i].X * cos) <= 2e-4f + tolerance * want[i].X, $"{type} pixel {i}: {got[i].X} against {want[i].X * cos}");
+            }
+        }
+    }
+
+    [Fact]
+    public void TheSunsDisk_WidensItsHighlight_KeepingItsDiffuse()
+    {
+        Vector3 albedo = new(0.6f, 0.6f, 0.6f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.1f));
+        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.1f, -0.05f, 1), Color = new Float3(1, 0.95f, 0.9f), Intensity = 0.05f, AngularRadius = 3 };
+        _world.AddLight(sun);
+        AssertMatches(p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.1f), Frame());
+    }
+
+    [Fact]
+    public void ManyDirectionalLights_AllLight()
+    {
+        Vector3 albedo = new(0.5f, 0.5f, 0.5f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.6f));
+        List<LightDesc> lights = new();
+        for (int i = 0; i < 12; i++)
+        {
+            float a = i * 0.5f;
+            LightDesc light = new() { Type = LightType.Directional, Direction = new Float3(0.3f * MathF.Cos(a), 0.3f * MathF.Sin(a), 1), Intensity = 0.004f + 0.001f * i };
+            lights.Add(light);
+            _world.AddLight(light);
+        }
+        AssertMatches(p => lights.Aggregate(Vector3.Zero, (sum, l) => sum + Reference.Directional(l, p, s_normal, albedo, 0, 0.6f)), Frame());
+    }
+
+    [Fact]
+    public void SpotCookies_AndProfiles_ShapeTheirLight()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
+        LightDesc spot = new()
+        {
+            Type = LightType.Spot,
+            Position = new Double3(0, 0, 6),
+            Direction = new Float3(0, 0, 1),
+            Up = new Float3(0, 1, 0),
+            Range = 10,
+            Intensity = 0.1f,
+            InnerAngle = 40,
+            OuterAngle = 50,
+            Static = true,
+        };
+        LightHandle handle = _world.AddLight(spot);
+        Float4[] plain = Frame();
+
+        // A cookie lit only on its right half, and a profile at half strength everywhere
+        Texture cookie = Lightmap(2, PixelFormat.R8_G8_B8_A8_UNorm, new byte[] { 0, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 255, 255, 255, 255, 255 });
+        Texture profile = Lightmap(2, PixelFormat.R8_G8_B8_A8_UNorm, Enumerable.Repeat((byte)128, 16).ToArray());
+        spot.Cookie = cookie;
+        spot.CookieSampler = SamplerDescription.Point;
+        _world.SetLight(handle, spot);
+        Float4[] cookied = Frame();
+        for (int i = 0; i < plain.Length; i++)
+        {
+            Vector3 p = PixelPosition(i % Size, i / Size);
+            if (MathF.Abs(p.X) < 0.4f)
+                continue;
+            Assert.True(MathF.Abs(cookied[i].X - (p.X > 0 ? plain[i].X : 0)) <= 1e-4f + 0.01f * plain[i].X, $"cookie pixel {i}: {cookied[i].X} against {plain[i].X} at x {p.X}");
+        }
+
+        spot.Cookie = null;
+        spot.IesProfile = profile;
+        _world.SetLight(handle, spot);
+        Float4[] profiled = Frame();
+        for (int i = 0; i < plain.Length; i++)
+            Assert.True(MathF.Abs(profiled[i].X - plain[i].X * 128 / 255f) <= 1e-4f + 0.01f * plain[i].X, $"profile pixel {i}: {profiled[i].X} against {plain[i].X}");
+    }
+
+    // Shades every light with its own BRDF: its radiance times what reaches the surface diffusely, plus the light's host data
+    private const string CustomBrdfSource = """
+        Shader "Test/CustomBRDF"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    layout(location = 0) out vec3 vWorld;
+                    void main()
+                    {
+                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        gl_Position = Graphite_RelativeToClip(vWorld);
+                    }
+                }
+                Fragment
+                {
+                    #define GRAPHITE_CUSTOM_BRDF
+                    #include "Graphite/Lighting.glsl"
+                    #include "Graphite/Passes.glsl"
+                    layout(location = 0) in vec3 vWorld;
+                    layout(location = 0) out vec4 outColor;
+
+                    vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c)
+                    {
+                        return vec3(c.diffuse, 0.0, 0.0) + vec3(0.0, 0.25, 0.0);
+                    }
+
+                    void main()
+                    {
+                        Graphite_Surface s = Graphite_MakeSurface(vWorld, vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, -1.0), GetWorldViewDir(vWorld), vec3(1.0), 0.0, 0.5, 1.0);
+                        outColor = vec4(Graphite_ShadeLights(s), 1.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    [Fact]
+    public void ACustomBRDF_ShadesEveryLight()
+    {
+        AddQuad(_renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(CustomBrdfSource))));
+        LightDesc point = Point(new Double3(0.5, 0, 7), 10, 0.1f, new Float3(1, 1, 1));
+        _world.AddLight(point);
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 0.1f });
+
+        // The directional light's N.L is 1 everywhere, the point's N.L over distance squared within its window
+        AssertMatches(p =>
+        {
+            Vector3 toLight = new Vector3(0.5f, 0, 7) - p;
+            float d2 = toLight.LengthSquared();
+            float factor = d2 / 100;
+            float window = Math.Clamp(1 - factor * factor, 0, 1);
+            return new Vector3(1 + MathF.Max(-toLight.Z / MathF.Sqrt(d2), 0) * window * window / MathF.Max(d2, 0.01f), 0.5f, 0);
+        }, Frame());
+    }
+
     [Fact]
     public void DirectionalLights_OnlyLightTheirLayers()
     {
@@ -714,6 +1008,66 @@ public sealed class LightingTests : IDisposable
         _world.AddDecal(decal);
 
         AssertMatches(_ => Vector3.One, Frame());
+    }
+
+    // Colours the surface with its decals' host data times their first extra texture, through the decal hook
+    private const string DecalExtraSource = """
+        Shader "Test/DecalExtra"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    layout(location = 0) out vec3 vWorld;
+                    void main()
+                    {
+                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        gl_Position = Graphite_RelativeToClip(vWorld);
+                    }
+                }
+                Fragment
+                {
+                    #define GRAPHITE_DECAL_EXTRA
+                    #include "Graphite/Decals.glsl"
+                    #include "Graphite/Passes.glsl"
+                    layout(location = 0) in vec3 vWorld;
+                    layout(location = 0) out vec4 outColor;
+                    vec3 extraColor = vec3(0.0);
+
+                    void Graphite_ApplyDecalExtra(Graphite_DecalRecord d, vec2 uv, float coverage)
+                    {
+                        extraColor = mix(extraColor, d.hostData.rgb * GRAPHITE_DECAL_TEXTURE(d, d.extra.x, uv).r, coverage);
+                    }
+
+                    void main()
+                    {
+                        vec3 n = vec3(0.0, 0.0, -1.0), albedo = vec3(1.0);
+                        float roughness = 0.5, metallic = 0.0, ao = 1.0;
+                        Graphite_ApplyDecals(vWorld, n, albedo, n, roughness, metallic, ao);
+                        outColor = vec4(extraColor, 1.0);
+                        Graphite_WriteGBuffer(n, roughness, metallic);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    [Fact]
+    public void DecalsCarryHostDataAndExtraTextures_ToCustomSurfaceShaders()
+    {
+        AddQuad(_renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(DecalExtraSource))));
+        Texture half = Lightmap(2, PixelFormat.R8_G8_B8_A8_UNorm, Enumerable.Repeat((byte)128, 16).ToArray());
+        DecalDesc decal = Decal(new Double3(-2, 0, QuadDepth), new Double3(4, 8, 2), new Float4(1, 1, 1, 1));
+        decal.HostData = new Float4(1, 0.5f, 0.25f, 0);
+        decal.Extra0 = half;
+        _world.AddDecal(decal);
+
+        AssertMatches(p => p.X < 0 ? new Vector3(1, 0.5f, 0.25f) * (128 / 255f) : Vector3.Zero, Frame());
     }
 
     [Fact]
@@ -1413,7 +1767,7 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void OnlyOpaquePassesWritingTheGBuffer_WriteIt()
+    public void OpaqueForwardPasses_WriteTheGBuffer_AndMustStoreIt()
     {
         ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
         ShaderDescription lit = _compiler.Compile(pass, [], _device.BackendType);
@@ -1422,10 +1776,22 @@ public sealed class LightingTests : IDisposable
         PassState blended = ShaderParser.ParsePassState("Blend SourceAlpha InverseSourceAlpha");
 
         static ColorWriteMask[] Masks(BlendStateDescription blend) => blend.AttachmentStates.Select(a => a.ColorWriteMask).ToArray();
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All], Masks(ProgramCache.SceneBlend(lit, opaque, prepass: false)));
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(unlit, opaque, prepass: false)));
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(lit, blended, prepass: false)));
-        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(lit, opaque, prepass: true)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: true, prepass: false)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: false)));
+        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true)));
+        Assert.True(ProgramCache.StoresGBuffer(lit));
+        Assert.False(ProgramCache.StoresGBuffer(unlit));
+
+        // An opaque forward pass that never writes it does not load, and says why
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(n, roughness, metallic);", ""))));
+        AddQuad(material);
+        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+        Assert.Equal("shader.gbuffer.missing", Assert.Single(_errors).Code);
+        _errors.Clear();
     }
 
     // A quad whose normal leans with position, (0.2x, 0.2y, -1) before normalizing, with UVs running 0 to 1 across it
@@ -1819,12 +2185,292 @@ public sealed class LightingTests : IDisposable
             return neighbours;
         }
 
+        // The specular a light of unit intensity reflects toward v, its shape integrated by brute force, against the most
+        // representative point's estimate. Fresnel is left at one. Returns (true, estimate).
+        public static (float Truth, float Estimate) Specular(LightType type, Vector3 center, Vector3 axis, Vector3 up, float radius, Vector2 size, Vector3 v, Vector3 n, float roughness)
+        {
+            static float Lobe(Vector3 l, Vector3 v, Vector3 n, float roughness)
+            {
+                float nl = Vector3.Dot(n, l);
+                if (nl <= 0)
+                    return 0;
+                Vector3 h = Vector3.Normalize(l + v);
+                return Ggx(n, h, roughness) * Smith(n, v, l, roughness) / (4 * MathF.Abs(Vector3.Dot(n, v)) * nl + 0.0001f) * nl;
+            }
+
+            Vector3 surface = -v * 5;
+            Vector3 at = surface + center;
+            LightDesc light = new() { Type = type, Position = new Double3(at.X, at.Y, at.Z), Direction = new Float3(axis.X, axis.Y, axis.Z), Up = new Float3(up.X, up.Y, up.Z),
+                SourceRadius = radius, Size = new Float2(size.X, size.Y), Range = 1e6f, Intensity = 1 / 8f, Color = new Float3(1, 1, 1), DiffuseScale = 0 };
+            float estimate = Area(light, surface, n, Vector3.One, 1, roughness).X;
+
+            const int steps = 300;
+            double truth = 0;
+            Vector3 right = Vector3.Cross(up, axis);
+            for (int i = 0; i < steps; i++)
+            {
+                for (int j = 0; j < steps; j++)
+                {
+                    float u = (i + 0.5f) / steps, w = (j + 0.5f) / steps;
+                    if (type == LightType.Point)
+                    {
+                        // Uniform over the cone the sphere fills, radiance 1 over its projected area
+                        float d = center.Length();
+                        float cosMax = MathF.Sqrt(MathF.Max(1 - radius * radius / (d * d), 0));
+                        float cos = 1 - u * (1 - cosMax), sin = MathF.Sqrt(1 - cos * cos), a = 2 * MathF.PI * w;
+                        Vector3 c = center / d;
+                        Vector3 t = Vector3.Normalize(Vector3.Cross(c, MathF.Abs(c.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX)), b = Vector3.Cross(c, t);
+                        Vector3 l = c * cos + t * (sin * MathF.Cos(a)) + b * (sin * MathF.Sin(a));
+                        truth += Lobe(l, v, n, roughness) * 2 * MathF.PI * (1 - cosMax) / (steps * steps) / (MathF.PI * radius * radius);
+                    }
+                    else
+                    {
+                        // Over the surface, radiance 1 over its area, seen with its cosine
+                        Vector3 q;
+                        float area;
+                        if (type == LightType.Rect)
+                        {
+                            q = center + right * ((u - 0.5f) * size.X) + up * ((w - 0.5f) * size.Y);
+                            area = size.X * size.Y;
+                        }
+                        else
+                        {
+                            float rr = size.X * MathF.Sqrt(u), a = 2 * MathF.PI * w;
+                            q = center + right * (rr * MathF.Cos(a)) + up * (rr * MathF.Sin(a));
+                            area = MathF.PI * size.X * size.X;
+                        }
+                        float d2 = q.LengthSquared();
+                        Vector3 l = q / MathF.Sqrt(d2);
+                        truth += Lobe(l, v, n, roughness) * MathF.Max(Vector3.Dot(-l, axis), 0) / d2 * area / (steps * steps) / area;
+                    }
+                }
+            }
+            return ((float)truth, estimate);
+        }
+
         public static Vector3 Directional(in LightDesc light, Vector3 p, Vector3 n, Vector3 albedo, float metallic, float roughness)
         {
             Vector3 l = Vector3.Normalize(-new Vector3(light.Direction.X, light.Direction.Y, light.Direction.Z));
             float nl = MathF.Max(Vector3.Dot(n, l), 0);
             Vector3 radiance = new Vector3(light.Color.X, light.Color.Y, light.Color.Z) * light.Intensity * 8;
-            return Brdf(l, Vector3.Normalize(-p), n, albedo, metallic, roughness, nl) * radiance * nl;
+            if (light.AngularRadius <= 0)
+                return Brdf(l, Vector3.Normalize(-p), n, albedo, metallic, roughness, nl) * radiance * nl;
+
+            // The sun's disk: specular from the nearest direction inside it, its lobe widened by the disk
+            float radius = light.AngularRadius * MathF.PI / 180;
+            float sin = MathF.Sin(radius), cos = MathF.Cos(radius);
+            Vector3 v = Vector3.Normalize(-p);
+            Vector3 r = Vector3.Reflect(-v, n);
+            float rl = Vector3.Dot(r, l);
+            Vector3 across = r - l * rl;
+            Vector3 ls = rl >= cos ? r : across.LengthSquared() > 1e-8f ? Vector3.Normalize(l * cos + Vector3.Normalize(across) * sin) : l;
+            float specular = MathF.Max(Vector3.Dot(n, ls), 0) * AreaEnergy(roughness, 0.5f * sin, 0.5f * sin);
+            return Shade(l, nl, ls, specular, v, n, albedo, metallic, roughness) * radiance;
+        }
+
+        // Prowl's BRDF with the diffuse and specular lobes each from their own direction
+        private static Vector3 Shade(Vector3 ld, float diffuse, Vector3 ls, float specular, Vector3 v, Vector3 n, Vector3 albedo, float metallic, float roughness)
+        {
+            Vector3 f0 = Vector3.Lerp(new Vector3(0.04f), albedo, metallic);
+            float nv = MathF.Abs(Vector3.Dot(n, v));
+            Vector3 hs = Vector3.Normalize(ls + v);
+            float nls = MathF.Max(Vector3.Dot(n, ls), 0);
+            Vector3 f = Fresnel(MathF.Max(Vector3.Dot(ls, hs), 0), f0);
+            Vector3 spec = Ggx(n, hs, roughness) * Smith(n, v, ls, roughness) * f / (4 * nv * nls + 0.0001f);
+            Vector3 hd = Vector3.Normalize(ld + v);
+            Vector3 kd = (Vector3.One - f) * (1 - metallic);
+            Vector3 diff = kd * albedo * Disney(nv, MathF.Max(Vector3.Dot(n, ld), 0), MathF.Max(Vector3.Dot(ld, hd), 0), roughness);
+            return diff * diffuse + spec * specular;
+        }
+
+        private static float Window(float dist2, float range)
+        {
+            float factor = dist2 / MathF.Max(range * range, 1e-6f);
+            float window = Math.Clamp(1 - factor * factor, 0, 1);
+            return window * window;
+        }
+
+        public static float AreaEnergy(float roughness, float ex, float ey)
+        {
+            float a = MathF.Max(roughness, MinRoughness);
+            return a * a / (MathF.Min(MathF.Sqrt(a * a + ex * ex), 1) * MathF.Min(MathF.Sqrt(a * a + ey * ey), 1));
+        }
+
+        // The cosine weighted solid angle of a sphere, or of a disk facing the point, clipped by the horizon
+        public static float SphereIrradiance(float cosTheta, float sinSigma2)
+        {
+            if (cosTheta * cosTheta > sinSigma2)
+                return MathF.PI * sinSigma2 * MathF.Max(cosTheta, 0);
+            float sinTheta = MathF.Sqrt(MathF.Max(1 - cosTheta * cosTheta, 0));
+            float x = MathF.Sqrt(MathF.Max(1 / sinSigma2 - 1, 0));
+            float y = Math.Clamp(-x * cosTheta / MathF.Max(sinTheta, 1e-6f), -1, 1);
+            float sinThetaSqrtY = sinTheta * MathF.Sqrt(MathF.Max(1 - y * y, 0));
+            return MathF.Max((cosTheta * MathF.Acos(y) - x * sinThetaSqrtY) * sinSigma2 + MathF.Atan2(sinThetaSqrtY, x), 0);
+        }
+
+        // The cosine weighted solid angle of a quad of corners relative to the point, clipped by the horizon
+        public static float QuadIrradiance(Vector3[] q, Vector3 n)
+        {
+            List<Vector3> v = new();
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 a = q[i], b = q[(i + 1) & 3];
+                float da = Vector3.Dot(a, n), db = Vector3.Dot(b, n);
+                if (da >= 0)
+                    v.Add(a);
+                if ((da >= 0) != (db >= 0))
+                    v.Add(a + (b - a) * (da / (da - db)));
+            }
+            if (v.Count < 3)
+                return 0;
+            float sum = 0;
+            for (int i = 0; i < v.Count; i++)
+            {
+                Vector3 a = Vector3.Normalize(v[i]), b = Vector3.Normalize(v[(i + 1) % v.Count]);
+                Vector3 axb = Vector3.Cross(a, b);
+                float s = axb.Length();
+                if (s > 1e-12f)
+                    sum += MathF.Atan2(s, Vector3.Dot(a, b)) * Vector3.Dot(axb, n) / s;
+            }
+            return 0.5f * MathF.Abs(sum);
+        }
+
+        // The irradiance per unit intensity of a line from a to b relative to the point, its intensity spread along it
+        public static float LineIrradiance(Vector3 a, Vector3 b, Vector3 n)
+        {
+            Vector3 d = b - a;
+            float len = d.Length();
+            if (len < 1e-3f)
+            {
+                Vector3 m = 0.5f * (a + b);
+                float m2 = MathF.Max(m.LengthSquared(), 1e-4f);
+                return MathF.Max(Vector3.Dot(n, m), 0) / (m2 * MathF.Sqrt(m2));
+            }
+            Vector3 u = d / len;
+            float na = Vector3.Dot(n, a), nu = Vector3.Dot(n, u);
+            float s0 = 0, s1 = len;
+            if (MathF.Abs(nu) > 1e-6f)
+            {
+                float horizon = -na / nu;
+                if (nu > 0)
+                    s0 = MathF.Max(s0, horizon);
+                else
+                    s1 = MathF.Min(s1, horizon);
+            }
+            else if (na < 0)
+            {
+                return 0;
+            }
+            if (s1 <= s0)
+                return 0;
+            float bu = Vector3.Dot(a, u), c = a.LengthSquared();
+            float dd = MathF.Max(c - bu * bu, 1e-8f);
+            float q0 = MathF.Sqrt(s0 * s0 + 2 * bu * s0 + c), q1 = MathF.Sqrt(s1 * s1 + 2 * bu * s1 + c);
+            float f0 = (na * (s0 + bu) - nu * (bu * s0 + c)) / (dd * q0);
+            float f1 = (na * (s1 + bu) - nu * (bu * s1 + c)) / (dd * q1);
+            return MathF.Max(f1 - f0, 0) / len;
+        }
+
+        private static Vector3 SpherePoint(Vector3 center, float radius, Vector3 r)
+        {
+            Vector3 toRay = Vector3.Dot(center, r) * r - center;
+            return center + toRay * Math.Clamp(radius / MathF.Max(toRay.Length(), 1e-6f), 0, 1);
+        }
+
+        private static Vector3 PlanePoint(Vector3 center, Vector3 n, Vector3 right, Vector3 up, Vector2 half, bool disk, Vector3 r)
+        {
+            float facing = Vector3.Dot(r, n);
+            Vector3 hit = facing < -1e-4f ? r * (Vector3.Dot(center, n) / facing) : center + (r - n * facing) * 1e4f;
+            Vector3 local = hit - center;
+            Vector2 p = new(Vector3.Dot(local, right), Vector3.Dot(local, up));
+            if (disk)
+                p *= MathF.Min(1, half.X / MathF.Max(p.Length(), 1e-6f));
+            else
+                p = Vector2.Clamp(p, -half, half);
+            return center + right * p.X + up * p.Y;
+        }
+
+        private static Vector3 V(Float3 f) => new(f.X, f.Y, f.Z);
+
+        // Spheres, tubes, rects and disks: diffuse from their irradiance, specular from the most representative point
+        public static Vector3 Area(in LightDesc light, Vector3 p, Vector3 n, Vector3 albedo, float metallic, float roughness)
+        {
+            Vector3 toLight = new Vector3((float)light.Position.X, (float)light.Position.Y, (float)light.Position.Z) - p;
+            float dist2 = toLight.LengthSquared();
+            if (dist2 > light.Range * light.Range)
+                return Vector3.Zero;
+            float dist = MathF.Sqrt(dist2);
+            Vector3 lc = toLight / MathF.Max(dist, 1e-6f);
+            float window = Window(dist2, light.Range);
+            Vector3 v = Vector3.Normalize(-p);
+            Vector3 r = Vector3.Reflect(-v, n);
+            Vector3 dir = Vector3.Normalize(V(light.Direction));
+            Vector3 up = Vector3.Normalize(V(light.Up) - dir * Vector3.Dot(V(light.Up), dir));
+            Vector3 ld = lc, ls = lc;
+            float diffuse, specular;
+
+            if (light.Type is LightType.Point or LightType.Spot)
+            {
+                float cone = 1;
+                if (light.Type == LightType.Spot)
+                {
+                    float outer = MathF.Cos(light.OuterAngle * MathF.PI / 180), inner = MathF.Max(MathF.Cos(light.InnerAngle * MathF.PI / 180), outer + 1e-4f);
+                    float axisCos = Vector3.Dot(dir, -lc);
+                    if (axisCos <= outer)
+                        return Vector3.Zero;
+                    float t = Math.Clamp((axisCos - outer) / (inner - outer), 0, 1);
+                    cone = t * t * (3 - 2 * t);
+                }
+                float rad = light.SourceRadius;
+                float attenuation = window / MathF.Max(dist2, 0.01f) * cone;
+                diffuse = SphereIrradiance(Vector3.Dot(n, lc), MathF.Min(rad * rad / dist2, 1)) / (MathF.PI * rad * rad) * window * cone;
+                ls = Vector3.Normalize(SpherePoint(toLight, rad, r));
+                specular = MathF.Max(Vector3.Dot(n, ls), 0) * attenuation * AreaEnergy(roughness, rad / (2 * dist), rad / (2 * dist));
+            }
+            else if (light.Type == LightType.Tube)
+            {
+                Vector3 axis = dir * (0.5f * light.Size.X);
+                Vector3 a = toLight - axis, b = toLight + axis, ab = b - a;
+                float t = Math.Clamp(-Vector3.Dot(a, ab) / MathF.Max(ab.LengthSquared(), 1e-8f), 0, 1);
+                ld = Vector3.Normalize(a + ab * t);
+                diffuse = LineIrradiance(a, b, n) * window;
+                float rab = Vector3.Dot(r, ab);
+                float tr = Math.Clamp((Vector3.Dot(r, a) * rab - Vector3.Dot(a, ab)) / MathF.Max(ab.LengthSquared() - rab * rab, 1e-8f), 0, 1);
+                Vector3 onLine = a + ab * tr;
+                ls = Vector3.Normalize(SpherePoint(onLine, light.SourceRadius, r));
+                float lineDist = MathF.Max(onLine.Length(), 1e-4f);
+                specular = MathF.Max(Vector3.Dot(n, ls), 0) * window / MathF.Max(onLine.LengthSquared(), 0.01f)
+                    * AreaEnergy(roughness, light.SourceRadius / (2 * lineDist), light.Size.X / (MathF.PI * lineDist));
+            }
+            else
+            {
+                float front = Vector3.Dot(-lc, dir);
+                if (front <= 0)
+                    return Vector3.Zero;
+                Vector3 right = Vector3.Cross(up, dir);
+                bool disk = light.Type == LightType.Disk;
+                Vector2 half = disk ? new Vector2(light.Size.X) : 0.5f * new Vector2(light.Size.X, light.Size.Y);
+                float area = disk ? MathF.PI * half.X * half.X : light.Size.X * light.Size.Y;
+                if (disk)
+                {
+                    float r2 = half.X * half.X;
+                    diffuse = SphereIrradiance(Vector3.Dot(n, lc), r2 / (r2 + dist2)) * front / area * window;
+                }
+                else
+                {
+                    Vector3 hx = right * half.X, hy = up * half.Y;
+                    diffuse = QuadIrradiance([toLight - hx - hy, toLight + hx - hy, toLight + hx + hy, toLight - hx + hy], n) / area * window;
+                }
+                Vector3 q = PlanePoint(toLight, dir, right, up, half, disk, r);
+                float qDist2 = MathF.Max(q.LengthSquared(), 1e-8f), qDist = MathF.Sqrt(qDist2);
+                ls = q / qDist;
+                float qFront = MathF.Max(Vector3.Dot(-ls, dir), 0);
+                Vector2 extent = disk ? new Vector2(half.X / (2 * qDist)) : new Vector2(light.Size.X, light.Size.Y) / (2 * MathF.Sqrt(MathF.PI) * qDist);
+                specular = MathF.Max(Vector3.Dot(n, ls), 0) * qFront * window / MathF.Max(qDist2, 0.01f) * AreaEnergy(roughness, extent.X, extent.Y);
+            }
+
+            Vector3 radiance = V(light.Color) * (light.Intensity * 8);
+            return Shade(ld, diffuse * light.DiffuseScale, ls, specular * light.SpecularScale, v, n, albedo, metallic, roughness) * radiance;
         }
     }
 }

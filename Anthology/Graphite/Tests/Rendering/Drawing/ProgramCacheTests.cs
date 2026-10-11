@@ -67,8 +67,9 @@ public sealed class ProgramCacheTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     layout(location = 0) out vec4 outColor;
-                    void main() { outColor = vec4(1.0); }
+                    void main() { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0); outColor = vec4(1.0); }
                 }
                 ENDGLSL
             }

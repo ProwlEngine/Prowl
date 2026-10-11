@@ -114,7 +114,12 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     }
 
     /// <summary>Whether the wanted variant itself is built, rather than a nearby one standing in. Render thread.</summary>
-    public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
+    public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords)?.Built != null;
+
+    /// <summary>Whether the wanted variant failed to compile, so it never becomes ready. Render thread.</summary>
+    public bool Failed(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords)?.Failed == true;
+
+    private Entry? Wanted(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
     {
         Get(id, mirrored, keywords);
         DrawProgram program = programs[id];
@@ -125,7 +130,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
             key += (ulong)ValueIndex(axes[i], keywords.GetValueOrDefault(axes[i].Name)) * stride;
             stride *= (ulong)axes[i].Values.Count;
         }
-        return _entries.TryGetValue((id, mirrored, key), out Entry? entry) && entry.Built != null;
+        return _entries.TryGetValue((id, mirrored, key), out Entry? entry) ? entry : null;
     }
 
     public void Dispose()
@@ -203,7 +208,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         catch (Exception e)
         {
             entry.Failed = true;
-            report(new RendererError("shader.compile", $"{program.Shader.Name}: {e.Message}", RendererErrorSeverity.Error, program.Shader) { Key = $"program.{program.Shader.Name}.{program.PassIndex}.{string.Join(",", entry.Values)}" });
+            report(new RendererError(e is GBufferMissingException ? "shader.gbuffer.missing" : "shader.compile", $"{program.Shader.Name}: {e.Message}", RendererErrorSeverity.Error, program.Shader) { Key = $"program.{program.Shader.Name}.{program.PassIndex}.{string.Join(",", entry.Values)}" });
         }
     }
 
@@ -255,13 +260,12 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         return MaterialRewrite.Rewrite(program.Shader.Name, description, program.Shader.Schema, compiler.GetGlobals(pass), globals, FrameLayout, ViewLayout);
     }
 
-    // Colour takes the pass's blend. The G-buffer targets are written only by an opaque pass whose fragment stage writes
-    // them, so transparent and other passes leave what the opaque surfaces wrote. The prepass writes no colour at all.
-    internal static BlendStateDescription SceneBlend(in ShaderDescription description, PassState state, bool prepass)
+    // Colour takes the pass's blend. Every opaque forward pass writes the G-buffer, so it always matches the surface that
+    // won the depth test; transparent, blended and other passes leave it. The prepass writes no colour at all.
+    internal static BlendStateDescription SceneBlend(PassState state, bool forward, bool prepass)
     {
         BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
-        bool blended = color.BlendEnabled && !(color.SourceColorFactor == BlendFactor.One && color.DestinationColorFactor == BlendFactor.Zero);
-        bool gbuffer = !prepass && !blended && WritesGBuffer(description);
+        bool gbuffer = WritesGBufferTargets(state, forward, prepass);
         BlendAttachmentDescription target = BlendAttachmentDescription.OverrideBlend;
         BlendAttachmentDescription masked = target with { ColorWriteMask = ColorWriteMask.None };
         if (prepass)
@@ -272,7 +276,15 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         return blend;
     }
 
-    private static bool WritesGBuffer(in ShaderDescription description)
+    /// <summary>Whether a pass draws opaque surfaces, so it must write the G-buffer.</summary>
+    internal static bool WritesGBufferTargets(PassState state, bool forward, bool prepass)
+    {
+        BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
+        bool blended = color.BlendEnabled && !(color.SourceColorFactor == BlendFactor.One && color.DestinationColorFactor == BlendFactor.Zero);
+        return forward && !prepass && !blended;
+    }
+
+    internal static bool StoresGBuffer(in ShaderDescription description)
     {
         foreach (ShaderStageDescription stage in description.Stages)
         {
@@ -290,7 +302,11 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     {
         ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
-        description.BlendState = SceneBlend(description, state, ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name));
+        bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name);
+        bool prepass = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name);
+        if (WritesGBufferTargets(state, forward, prepass) && !StoresGBuffer(description))
+            throw new GBufferMissingException("An opaque Forward pass must write the G-buffer: include Graphite/Passes.glsl and call Graphite_WriteGBuffer.");
+        description.BlendState = SceneBlend(state, forward, prepass);
         description.DepthStencilState = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
         RasterizerStateDescription raster = state.ToRasterizerState(RasterizerStateDescription.Default);
         if (mirrored)
@@ -322,6 +338,9 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
 /// A device local buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
 /// commands. It grows by doubling, and a grown buffer changes the frame's buffer set.
 /// </summary>
+/// <summary>An opaque forward pass whose fragment stage never writes the G-buffer.</summary>
+internal sealed class GBufferMissingException(string message) : Exception(message);
+
 internal sealed class GpuArray(GraphicsDevice device, BufferUsage usage, string name) : IDisposable
 {
     public DeviceBuffer Buffer { get; private set; } = Create(device, usage, name, 256);
@@ -443,7 +462,16 @@ internal sealed class CameraFrame : IDisposable
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private readonly List<IPass> _passList = new();
 
-    // Features that failed to build on this view with their version, left out until they or the view's features change
+    /// <summary>Leaves a feature out of this view from the next frame, until it or the view's features change.</summary>
+    public void Fail(RenderFeature feature)
+    {
+        if (Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0)
+            return;
+        _failed[feature] = feature.Version;
+        Rebuild = true;
+    }
+
+    // Features that failed on this view with their version, left out until they or the view's features change
     private readonly Dictionary<RenderFeature, int> _failed = new();
     private readonly List<RenderFeature> _unfiltered = new();
     private readonly List<RenderFeature> _lastUnfiltered = new();
@@ -513,7 +541,10 @@ internal sealed class CameraFrame : IDisposable
         // Built now, so a feature that breaks the graph is left out of this view instead of failing the frame
         while (TryBuild(Selected) is { } error)
         {
-            RenderFeature culprit = (error as FeatureSetupException)?.Feature ?? FindCulprit() ?? throw error;
+            RenderFeature? blamed = (error as FeatureSetupException)?.Feature;
+            if (blamed != null && Array.IndexOf(FeatureSelection.BuiltIn, blamed) >= 0)
+                throw error;
+            RenderFeature culprit = blamed ?? FindCulprit() ?? throw error;
             _failed[culprit] = culprit.Version;
             _report(new RendererError("feature.setup", $"{culprit.GetType().Name} broke the graph of view {View.ViewId}, which runs without it: {error.InnerException ?? error}", RendererErrorSeverity.Error, culprit) { Key = $"feature.setup.{View.ViewId}.{culprit.GetType().FullName}" });
             FeatureSelection.Select(Selected, _worldFeatures, _viewFeatures, Info, _report, _failed);
@@ -549,7 +580,7 @@ internal sealed class CameraFrame : IDisposable
         }
     }
 
-    // The first host feature whose joining the built in ones breaks the graph
+    // The first host feature whose joining the built in ones and the host features before it breaks the graph
     private RenderFeature? FindCulprit()
     {
         List<RenderFeature> kept = new(), trial = new();
@@ -558,6 +589,8 @@ internal sealed class CameraFrame : IDisposable
             if (Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0)
                 kept.Add(feature);
         }
+        if (TryBuild(kept) != null)
+            return null;
         foreach (RenderFeature feature in Selected)
         {
             if (kept.Contains(feature))
@@ -839,6 +872,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         table.Set("Graphite_ReflectionProbes", 0, world.Reflections.Regions.Records.Buffer);
         table.Set("Graphite_ReflectionProbeNodes", 0, world.Reflections.Regions.Nodes.Buffer);
         table.Set("Graphite_SkyAmbientSH", 0, world.Reflections.SkyAmbient);
+        table.Set("Graphite_Directionals", 0, lighting.Directionals.Buffer);
     }
 
     // A fullscreen triangle at the far plane with the sky material's slot in the push constants
@@ -1196,6 +1230,11 @@ internal sealed class FramePipeline : IDisposable
         }
         if (view.External)
         {
+            if (camera.Chain.Scene.Texture != null)
+            {
+                camera.Chain.Release();
+                camera.Rebuild = true;
+            }
             camera.ResetPassLists();
             foreach (PassType pass in view.Passes ?? [])
                 camera.ListFor(pass);
@@ -1379,7 +1418,7 @@ internal sealed class FramePipeline : IDisposable
         WorldReflections.Target target = reflections.ProbeTarget(work.Index);
         WorldReflections.Scratch scratch = work.Scratch;
         Float4x4 projection = WorldReflections.FaceProjectionBetween(probe.NearClip, probe.FarClip);
-        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot))
+        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot) && !Programs.Failed(sky, false, world.World.Globals.KeywordSnapshot))
             reflections.Request(work.Index);
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)
@@ -1698,8 +1737,8 @@ public sealed class ViewDraws
     /// <summary>Records the visible renderables of a pass type onto the bound target: the prepass, opaque forward, or one in ViewDesc.Passes.</summary>
     public void Record(RenderContext context, CommandBuffer cmd, PassType pass)
     {
+        DrawList list = _camera.FindList(pass) ?? throw new InvalidOperationException($"View {_camera.Desc.ViewId} did not prepare the {pass.Name} pass, list it in ViewDesc.Passes.");
         Prepare(context);
-        DrawList list = _camera.ListFor(pass);
         _camera.Drawer.DrawList(cmd, list);
     }
 
@@ -1734,9 +1773,11 @@ internal sealed class ReadbackRequest
     public DeviceBuffer? Buffer;
     public uint Offset, Size;
     public Action<TextureReadback>? TextureDone;
-    public Action<byte[]>? BufferDone;
+    public Action<BufferReadback>? BufferDone;
     public DeviceBuffer? Staging;
     public ulong Execution;
+    public int Attempts;
+    public string? Error;
 }
 
 /// <summary>Copies the frame's readbacks into staging buffers, last in the execution.</summary>
@@ -1747,7 +1788,7 @@ internal sealed class ReadbackPass(GraphicsDevice device, Action<RendererError> 
 
     public string Name => "Graphite.Readback";
 
-    // Staging buffers are made now, and requests whose source was disposed are reported and dropped
+    // Staging buffers are made now, and requests whose source was disposed fail
     public void Prepare(List<ReadbackRequest> requests)
     {
         _requests.Clear();
@@ -1756,8 +1797,8 @@ internal sealed class ReadbackPass(GraphicsDevice device, Action<RendererError> 
             ReadbackRequest request = requests[i];
             if (request.Texture?.IsDisposed == true || request.Buffer?.IsDisposed == true)
             {
-                report(new RendererError("readback.disposed", "A readback's texture or buffer was disposed before it was copied, so it never completes.", RendererErrorSeverity.Error, (object?)request.Texture ?? request.Buffer));
-                requests.RemoveAt(i);
+                request.Error = "The texture or buffer was disposed before it was copied.";
+                report(new RendererError("readback.disposed", "A readback's texture or buffer was disposed before it was copied.", RendererErrorSeverity.Warning, (object?)request.Texture ?? request.Buffer));
                 continue;
             }
             uint bytes = request.Texture is { } texture ? request.Region.Width * request.Region.Height * request.Region.Depth * texture.Format.GetSizeInBytes() : request.Size;

@@ -68,6 +68,7 @@ public sealed class MaterialRewriteTests : IDisposable
                 }
                 Fragment
                 {
+                    #include "Graphite/Passes.glsl"
                     #pragma global _Wind
                     uniform float _Scale;
                     uniform vec4 _Color;
@@ -81,7 +82,7 @@ public sealed class MaterialRewriteTests : IDisposable
                     }
 
                     void main()
-                    {
+                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
                         outColor = Fetch(_MainTex, vec2(0.5)) * _Color * _Scale + vec4(_Wind);
                     }
                 }
