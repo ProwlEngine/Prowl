@@ -150,9 +150,9 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
 
     public List<GeometryPage> Pages { get; } = new();
 
-    public GpuTable<ChunkRecord> Chunks { get; } = new(device, "Chunk table", 1024);
+    public GpuTable Chunks { get; } = GpuTable.Of<ChunkRecord>(device, "Chunk table", 1024);
 
-    public GpuTable<MeshRecord> Meshes { get; } = new(device, "Mesh table", 256);
+    public GpuTable Meshes { get; } = GpuTable.Of<MeshRecord>(device, "Mesh table", 256);
 
     /// <summary>Creates a mesh and queues its upload. Thread safe.</summary>
     public GpuMesh Create(MeshData data)
@@ -191,7 +191,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
                 if (layout == null)
                 {
                     Release(mesh, lastDispatched);
-                    Meshes.Set((uint)mesh.Id, default);
+                    Meshes.Set((uint)mesh.Id, default(MeshRecord));
                     _retiringIds.Add((lastDispatched, mesh.Id));
                     changed.Add(mesh);
                     continue;

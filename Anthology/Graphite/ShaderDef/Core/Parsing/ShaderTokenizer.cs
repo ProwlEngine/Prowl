@@ -27,6 +27,8 @@ internal static class ShaderTokenizer
             .Symbol("}", ShaderToken.CloseBrace)
             .Symbol("(", ShaderToken.OpenParen)
             .Symbol(")", ShaderToken.CloseParen)
+            .Symbol("[", ShaderToken.OpenBracket)
+            .Symbol("]", ShaderToken.CloseBracket)
             .Symbol("=", ShaderToken.Equals)
             .Symbol(",", ShaderToken.Comma)
 

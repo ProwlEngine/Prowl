@@ -20,6 +20,8 @@ internal enum ShaderToken
     CloseBrace,
     OpenParen,
     CloseParen,
+    OpenBracket,
+    CloseBracket,
     Comma,
     Equals,
     Minus,

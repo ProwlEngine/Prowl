@@ -267,13 +267,13 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void Tables_GrowIntoANewBuffer_KeepingEveryRecord_AndHandTheOldOneBack()
     {
-        using GpuTable<uint> table = new(_device, "Test table", 4);
+        using GpuTable table = new(_device, "Test table", 1, 4);
         for (uint i = 0; i < 4; i++)
             table.Set(i, i + 10);
         Assert.Null(table.Flush(_uploader));
         DeviceBuffer first = table.Buffer;
 
-        table.Set(9, 99);
+        table.Set(9, 99u);
         DeviceBuffer? replaced = table.Flush(_uploader);
         Assert.Same(first, replaced);
         Flush(table.Buffer);
@@ -286,16 +286,16 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void Tables_OnlyUploadDirtyRecords()
     {
-        using GpuTable<uint> table = new(_device, "Test table", 16);
+        using GpuTable table = new(_device, "Test table", 1, 16);
         for (uint i = 0; i < 16; i++)
             table.Set(i, i);
         table.Flush(_uploader);
         Flush(table.Buffer);
 
-        table.Set(3, 30);
-        table.Set(2, 20);
-        table.Set(9, 90);
-        table.Set(3, 31);
+        table.Set(3, 30u);
+        table.Set(2, 20u);
+        table.Set(9, 90u);
+        table.Set(3, 31u);
         table.Flush(_uploader);
         Assert.Equal(3u, _uploader.QueuedWords);
         Flush(table.Buffer);
@@ -310,11 +310,11 @@ public sealed class UploadTests : IDisposable
         GpuMesh first = pool.Create(Positions(3));
         pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
         uint chunk = first.Placement!.FirstChunk;
-        Assert.Equal(1u, pool.Meshes[(uint)first.Id].ChunkCount);
+        Assert.Equal(1u, pool.Meshes.Get<MeshRecord>((uint)first.Id).ChunkCount);
 
         first.Dispose();
         pool.Apply(_uploader, 1, long.MaxValue, new List<GpuMesh>());
-        Assert.Equal(0u, pool.Meshes[(uint)first.Id].ChunkCount);
+        Assert.Equal(0u, pool.Meshes.Get<MeshRecord>((uint)first.Id).ChunkCount);
 
         pool.Reclaim(1);
         GpuMesh second = pool.Create(Positions(3));

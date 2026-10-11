@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 using Prowl.Crumb;
 using Prowl.Vector;
@@ -523,6 +524,12 @@ public static class ShaderParser
             ShaderPropertyType.Vector =>
                 (value.Kind == ShaderToken.OpenParen, "a 4-component vector like (x, y, z, w)"),
 
+            ShaderPropertyType.Vector2 =>
+                (value.Kind == ShaderToken.OpenParen, "a 2-component vector like (x, y)"),
+
+            ShaderPropertyType.Vector3 =>
+                (value.Kind == ShaderToken.OpenParen, "a 3-component vector like (x, y, z)"),
+
             ShaderPropertyType.Matrix =>
                 (value.Kind == ShaderToken.OpenParen, "a 4x4 matrix like ((..)(..)(..)(..))"),
 
@@ -544,6 +551,8 @@ public static class ShaderParser
             ShaderPropertyType.Integer => (float)ParserUtility.Integer(ref t),
             ShaderPropertyType.Color or
             ShaderPropertyType.Vector => ParserUtility.Vector(ref t),
+            ShaderPropertyType.Vector2 => ParserUtility.Vector(ref t, 2),
+            ShaderPropertyType.Vector3 => ParserUtility.Vector(ref t, 3),
             ShaderPropertyType.Matrix => ParserUtility.Matrix(ref t),
             ShaderPropertyType.Texture2D or
             ShaderPropertyType.Texture2DArray or
@@ -556,8 +565,44 @@ public static class ShaderParser
     }
 
 
+    // Parses [Attribute] [Attribute(args)] after a property, keeping each as source text without the brackets.
+    static string[] Attributes(ref Tokenizer<ShaderToken> t)
+    {
+        List<string> attributes = new();
+        while (t.TryConsume(ShaderToken.OpenBracket))
+        {
+            Token<ShaderToken> nameToken = ParserUtility.Expect(ref t, ShaderToken.Identifier, "attribute name");
+            StringBuilder text = new(t.Slice(nameToken).ToString());
+            if (t.TryConsume(ShaderToken.OpenParen))
+            {
+                text.Append('(');
+                bool first = true;
+                while (!t.TryConsume(ShaderToken.CloseParen))
+                {
+                    if (!first)
+                        ParserUtility.Expect(ref t, ShaderToken.Comma);
+                    text.Append(first ? "" : ", ");
+                    if (t.TryConsume(ShaderToken.Minus))
+                        text.Append('-');
+                    Token<ShaderToken> argument = t.Peek();
+                    if (argument.Kind is not (ShaderToken.Number or ShaderToken.Identifier or ShaderToken.String))
+                        throw new ParseException($"Expected an attribute argument, found {ParserUtility.Found(ref t, argument)}", argument.Line, argument.Column);
+                    t.Next();
+                    text.Append(t.Slice(argument));
+                    first = false;
+                }
+                text.Append(')');
+            }
+            ParserUtility.Expect(ref t, ShaderToken.CloseBracket);
+            attributes.Add(text.ToString());
+        }
+
+        return attributes.ToArray();
+    }
+
+
     /// <summary>
-    /// Parses one property: Name("Display Name", Type) = Value
+    /// Parses one property: Name("Display Name", Type) = Value [Attribute]
     /// </summary>
     public static ShaderProperty ParseProperty(string source)
     {
@@ -598,7 +643,9 @@ public static class ShaderParser
 
             TextureValue = value as string ?? "",
 
-            HasDefault = value != null
+            HasDefault = value != null,
+
+            Attributes = Attributes(ref t),
         };
     }
 }

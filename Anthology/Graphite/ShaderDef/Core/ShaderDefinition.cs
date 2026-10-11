@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Vector;
+
 
 namespace Prowl.Graphite.ShaderDef;
 
@@ -179,6 +181,12 @@ public sealed class ShaderDefinition
                 case ShaderPropertyType.Color:
                 case ShaderPropertyType.Vector:
                     set.SetFloat4(id, property.Value);
+                    break;
+                case ShaderPropertyType.Vector2:
+                    set.SetFloat2(id, new Float2(property.Value.X, property.Value.Y));
+                    break;
+                case ShaderPropertyType.Vector3:
+                    set.SetFloat3(id, new Float3(property.Value.X, property.Value.Y, property.Value.Z));
                     break;
                 case ShaderPropertyType.Matrix:
                     set.SetMatrix(id, property.MatrixValue);

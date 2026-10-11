@@ -87,4 +87,23 @@ public class PropertyTests
         Assert.Contains("Float property expects a scalar", ex.Message);
     }
 
+    [Fact]
+    public void Vector2AndVector3_ParseTheirComponents()
+    {
+        Assert.Equal(new Float4(1, 2, 0, 0), Parse.Property("""_V("V", Vector2) = (1, 2)""").Value);
+        Assert.Equal(new Float4(1, 2, 3, 0), Parse.Property("""_V("V", Vector3) = (1, 2, 3)""").Value);
+        Assert.Throws<ParseException>(() => Parse.Property("""_V("V", Vector2) = (1, 2, 3)"""));
+    }
+
+
+    [Fact]
+    public void Attributes_FollowTheValue_AsSourceText()
+    {
+        ShaderProperty p = Parse.Property("""_R("Rough", Float) = 0.5 [Range(0, -1.5)] [HideInInspector] [ShowIf(_SURFACE_CUTOUT)]""");
+
+        Assert.Equal(["Range(0, -1.5)", "HideInInspector", "ShowIf(_SURFACE_CUTOUT)"], p.Attributes);
+        Assert.Empty(Parse.Property("""_R("Rough", Float) = 0.5""").Attributes);
+        Assert.Equal(["Gamma"], Parse.Property("""_C("C", Color) [Gamma]""").Attributes);
+    }
+
 }

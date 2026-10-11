@@ -45,6 +45,11 @@ public struct ShaderProperty
     /// True when the source gave a default value with an equals sign.
     /// </summary>
     public bool HasDefault;
+
+    /// <summary>
+    /// Attributes written in brackets after the value, as their source text without the brackets, like Range(0, 1).
+    /// </summary>
+    public string[] Attributes;
 }
 
 
@@ -73,6 +78,16 @@ public enum ShaderPropertyType
     /// <code>(0,1,2,3)</code>
     /// </summary>
     Vector,
+
+    /// <summary>
+    /// Two component float vector. Parsed as <code>(0,1)</code>
+    /// </summary>
+    Vector2,
+
+    /// <summary>
+    /// Three component float vector. Parsed as <code>(0,1,2)</code>
+    /// </summary>
+    Vector3,
 
     /// <summary>
     /// 4x4 matrix, type unknown, defaults to float. Parsed as 4 vectors:

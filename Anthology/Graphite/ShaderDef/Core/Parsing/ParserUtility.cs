@@ -137,6 +137,22 @@ internal static class ParserUtility
 
 
     // Parses a 4-dimensional vector: ( x, y, z, w )
+    public static Float4 Vector(ref Tokenizer<ShaderToken> t, int components)
+    {
+        Expect(ref t, ShaderToken.OpenParen);
+        Float4 value = Float4.Zero;
+        for (int i = 0; i < components; i++)
+        {
+            if (i > 0)
+                Expect(ref t, ShaderToken.Comma);
+            value[i] = Float(ref t);
+        }
+        Expect(ref t, ShaderToken.CloseParen);
+
+        return value;
+    }
+
+
     public static Float4 Vector(ref Tokenizer<ShaderToken> t)
     {
         Expect(ref t, ShaderToken.OpenParen);

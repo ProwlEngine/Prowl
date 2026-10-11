@@ -180,56 +180,74 @@ internal sealed class Uploader : IDisposable
 }
 
 /// <summary>
-/// A GPU array of records with a CPU mirror. Records change on the CPU and only the dirty ones reach the GPU on
-/// <see cref="Flush"/>, merged into runs. Growing moves the table to a new buffer and hands the old one back to retire.
+/// A GPU array of fixed size records with a CPU mirror. Records change on the CPU and only the dirty ones reach the GPU
+/// on <see cref="Flush"/>, merged into runs. Growing moves the table to a new buffer and hands the old one back to retire.
 /// </summary>
-internal sealed class GpuTable<T> : IDisposable where T : unmanaged
+internal sealed class GpuTable : IDisposable
 {
     private readonly GraphicsDevice _device;
     private readonly string _name;
-    private T[] _records;
+    private uint[] _words;
     private bool[] _dirtyFlags;
     private readonly List<uint> _dirty = new();
     private uint _count;
 
-    public GpuTable(GraphicsDevice device, string name, uint initialCapacity = 256)
+    public GpuTable(GraphicsDevice device, string name, uint strideWords, uint initialCapacity = 256)
     {
-        if (Unsafe.SizeOf<T>() % 4 != 0)
-            throw new ArgumentException($"{typeof(T).Name} is not a whole number of words.");
+        if (strideWords == 0)
+            throw new ArgumentOutOfRangeException(nameof(strideWords), "A record needs at least one word.");
 
         _device = device;
         _name = name;
-        _records = new T[Math.Max(initialCapacity, 1)];
-        _dirtyFlags = new bool[_records.Length];
-        Buffer = CreateBuffer((uint)_records.Length);
+        StrideWords = strideWords;
+        uint capacity = Math.Max(initialCapacity, 1);
+        _words = new uint[capacity * strideWords];
+        _dirtyFlags = new bool[capacity];
+        Buffer = CreateBuffer(capacity);
+    }
+
+    /// <summary>Makes a table whose records are <typeparamref name="T"/>.</summary>
+    public static GpuTable Of<T>(GraphicsDevice device, string name, uint initialCapacity = 256) where T : unmanaged
+    {
+        if (Unsafe.SizeOf<T>() % 4 != 0)
+            throw new ArgumentException($"{typeof(T).Name} is not a whole number of words.");
+        return new GpuTable(device, name, (uint)Unsafe.SizeOf<T>() / 4, initialCapacity);
     }
 
     public DeviceBuffer Buffer { get; private set; }
 
-    /// <summary>One past the highest index ever set.</summary>
+    public uint StrideWords { get; }
+
+    /// <summary>One past the highest index ever written.</summary>
     public uint Count => _count;
 
-    public ref readonly T this[uint index] => ref _records[index];
+    public ReadOnlySpan<uint> Read(uint index) => _words.AsSpan((int)(index * StrideWords), (int)StrideWords);
 
-    public void Set(uint index, in T value)
+    public ref readonly T Get<T>(uint index) where T : unmanaged => ref MemoryMarshal.Cast<uint, T>(Read(index))[0];
+
+    /// <summary>Marks a record dirty and returns its words to write.</summary>
+    public Span<uint> Edit(uint index)
     {
-        if (index >= _records.Length)
+        uint capacity = (uint)_dirtyFlags.Length;
+        if (index >= capacity)
         {
-            uint size = (uint)_records.Length;
-            while (size <= index)
-                size *= 2;
-            Array.Resize(ref _records, (int)size);
-            Array.Resize(ref _dirtyFlags, (int)size);
+            while (capacity <= index)
+                capacity *= 2;
+            Array.Resize(ref _words, (int)(capacity * StrideWords));
+            Array.Resize(ref _dirtyFlags, (int)capacity);
         }
 
-        _records[index] = value;
         _count = Math.Max(_count, index + 1);
         if (!_dirtyFlags[index])
         {
             _dirtyFlags[index] = true;
             _dirty.Add(index);
         }
+        return _words.AsSpan((int)(index * StrideWords), (int)StrideWords);
     }
+
+    public void Set<T>(uint index, in T value) where T : unmanaged
+        => MemoryMarshal.Cast<byte, uint>(MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value))).CopyTo(Edit(index));
 
     /// <summary>
     /// Queues the dirty records. Returns the replaced buffer when the table outgrew its buffer, which the caller retires
@@ -237,13 +255,12 @@ internal sealed class GpuTable<T> : IDisposable where T : unmanaged
     /// </summary>
     public DeviceBuffer? Flush(Uploader uploader)
     {
-        uint words = (uint)Unsafe.SizeOf<T>() / 4;
         DeviceBuffer? replaced = null;
-        if (_count * words * 4 > Buffer.SizeInBytes)
+        if (_count * StrideWords * 4 > Buffer.SizeInBytes)
         {
             replaced = Buffer;
-            Buffer = CreateBuffer((uint)_records.Length);
-            uploader.Write(Buffer, 0, Words(0, _count));
+            Buffer = CreateBuffer((uint)_dirtyFlags.Length);
+            uploader.Write(Buffer, 0, _words.AsSpan(0, (int)(_count * StrideWords)));
         }
         else if (_dirty.Count > 0)
         {
@@ -254,7 +271,9 @@ internal sealed class GpuTable<T> : IDisposable where T : unmanaged
                 if (i < _dirty.Count && _dirty[i] == _dirty[i - 1] + 1)
                     continue;
 
-                uploader.Write(Buffer, _dirty[start] * words, Words(_dirty[start], _dirty[i - 1] - _dirty[start] + 1));
+                uint first = _dirty[start];
+                uint count = _dirty[i - 1] - first + 1;
+                uploader.Write(Buffer, first * StrideWords, _words.AsSpan((int)(first * StrideWords), (int)(count * StrideWords)));
                 start = i;
             }
         }
@@ -267,11 +286,9 @@ internal sealed class GpuTable<T> : IDisposable where T : unmanaged
 
     public void Dispose() => Buffer.Dispose();
 
-    private ReadOnlySpan<uint> Words(uint first, uint count) => MemoryMarshal.Cast<T, uint>(_records.AsSpan((int)first, (int)count));
-
     private DeviceBuffer CreateBuffer(uint capacity)
     {
-        DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(capacity * (uint)Unsafe.SizeOf<T>(), BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(capacity * StrideWords * 4, BufferUsage.StructuredBufferReadWrite));
         buffer.Name = _name;
         return buffer;
     }
