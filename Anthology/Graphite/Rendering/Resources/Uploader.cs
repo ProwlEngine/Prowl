@@ -41,6 +41,7 @@ internal sealed class Uploader : IDisposable
     private readonly ComputeProgram _scatter;
     private readonly Dictionary<DeviceBuffer, Destination> _destinations = new();
     private readonly List<Destination> _order = new();
+    private readonly Stack<Destination> _spare = new();
     private readonly List<SlotBuffers> _slots = new();
     private readonly PropertySet _properties = new();
     private uint[] _words = new uint[1 << 16];
@@ -64,7 +65,8 @@ internal sealed class Uploader : IDisposable
 
         if (!_destinations.TryGetValue(destination, out Destination? target))
         {
-            target = new Destination { Buffer = destination };
+            target = _spare.Count > 0 ? _spare.Pop() : new Destination { Buffer = destination };
+            target.Buffer = destination;
             _destinations[destination] = target;
             _order.Add(target);
         }
@@ -132,6 +134,19 @@ internal sealed class Uploader : IDisposable
             destination.Items.Clear();
         }
 
+        Clear();
+    }
+
+    /// <summary>Drops everything queued, for a frame that records nothing. Destinations are forgotten until written again.</summary>
+    public void Clear()
+    {
+        foreach (Destination destination in _order)
+        {
+            destination.Items.Clear();
+            _spare.Push(destination);
+        }
+        _order.Clear();
+        _destinations.Clear();
         _wordCount = 0;
         _itemCount = 0;
     }

@@ -186,7 +186,7 @@ internal sealed class BucketSet
     /// <summary>Pass types drawn from buckets, opaque only. Transparent items are sorted per object.</summary>
     public static readonly PassType[] Passes = [PassType.Prepass, PassType.Forward, PassType.ShadowCaster];
 
-    internal readonly record struct BucketId(int Pass, ushort Program, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk);
+    internal readonly record struct BucketId(int Pass, ushort Program, int Queue, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk);
 
     private readonly record struct Membership(Bucket Bucket, int Position);
 
@@ -455,7 +455,7 @@ internal sealed class BucketSet
                     continue;
 
                 Track(material, index);
-                BucketId id = new(pass, program, placement.Page, placement.SubMeshes[chunk.SubMesh].Topology, mirrored, placement.FirstChunk + (uint)c);
+                BucketId id = new(pass, program, draw.RenderQueue, placement.Page, placement.SubMeshes[chunk.SubMesh].Topology, mirrored, placement.FirstChunk + (uint)c);
                 if (!_buckets.TryGetValue(id, out Bucket? bucket))
                 {
                     bucket = new Bucket
@@ -645,13 +645,12 @@ internal sealed class BucketSet
 
     private void RankQueues()
     {
+        // Keys hold 64 ranks. Queues past the 64th share the last rank, so they keep drawing after the others.
         List<int> queues = [.. _queueUse.Keys];
         queues.Sort();
-        if (queues.Count > 64)
-            throw new InvalidOperationException("More than 64 distinct render queues are in use.");
         _queueRanks.Clear();
         for (int i = 0; i < queues.Count; i++)
-            _queueRanks[queues[i]] = i;
+            _queueRanks[queues[i]] = Math.Min(i, 63);
     }
 
     // [queueRank 6][program 16][topology 2, winding 1, page 5][mesh 24][spare 10]

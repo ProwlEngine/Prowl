@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
@@ -11,69 +12,200 @@ namespace Prowl.Graphite.Rendering;
 /// <summary>
 /// The Level 0 programs of draw programs: the variant compiled with the view's global keywords, put through the
 /// material rewrite, with its pass state, the material's state override and the winding of mirrored objects.
-/// Programs that fail to compile are reported once and draw nothing.
+/// A variant compiles on a worker the first time it is asked for, and until it is ready draws use the nearest
+/// compiled variant of the same pass: the one differing in the fewest axes, ties going to axis defaults. Only the
+/// compile and rewrite run on the worker, programs are created on the render thread. In deterministic mode compiles
+/// block instead. Programs that fail to compile are reported once and draw nothing.
 /// </summary>
-internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compiler, GlobalRegistry globals, DrawPrograms programs, Action<string, string> report) : IDisposable
+internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compiler, GlobalRegistry globals, DrawPrograms programs, bool deterministic, Action<string, string> report) : IDisposable
 {
-    private readonly Dictionary<(ushort Program, bool Mirrored, ulong Globals), GraphicsProgram?> _programs = new();
+    private sealed class Entry
+    {
+        public required DrawProgram Program;
+        public required bool Mirrored;
+        public required int[] Values;
+        public Task<ShaderDescription>? Pending;
+        public GraphicsProgram? Built;
+        public bool Failed;
+    }
+
+    private readonly record struct Family(Shader Shader, int PassIndex, PassState? StateOverride, bool Mirrored);
+
+    private readonly Dictionary<(ushort Program, bool Mirrored, ulong Globals), Entry> _entries = new();
+    private readonly Dictionary<Family, List<Entry>> _families = new();
 
     public static readonly ResourceLayoutDescription FrameLayout = GraphiteBindings.FrameTable(RendererTextures.Textures2D, RendererTextures.OtherTextures);
     public static readonly ResourceLayoutDescription ViewLayout = GraphiteBindings.ViewTable(RendererTextures.Samplers);
 
-    public GraphicsProgram? Get(ushort id, bool mirrored, GlobalProperties keywords)
+    /// <summary>Variants still compiling on a worker.</summary>
+    public int Pending
+    {
+        get
+        {
+            int pending = 0;
+            foreach (Entry entry in _entries.Values)
+            {
+                if (entry.Pending != null)
+                    pending++;
+            }
+            return pending;
+        }
+    }
+
+    /// <summary>The program to draw with now: the wanted variant when it is ready, else the nearest ready one, else null. Render thread.</summary>
+    public GraphicsProgram? Get(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
     {
         DrawProgram program = programs[id];
         IReadOnlyList<VariantSpace> axes = program.Shader.GlobalAxes;
         ulong key = 0, stride = 1;
-        Span<int> values = stackalloc int[axes.Count];
+        Span<int> globalValues = stackalloc int[axes.Count];
         for (int i = 0; i < axes.Count; i++)
         {
-            string? value = keywords.GetKeyword(axes[i].Name);
-            int index = 0;
-            for (int v = 0; v < axes[i].Values.Count; v++)
-            {
-                if (axes[i].Values[v] == value)
-                    index = v;
-            }
-            values[i] = index;
-            key += (ulong)index * stride;
+            globalValues[i] = ValueIndex(axes[i], keywords.GetValueOrDefault(axes[i].Name));
+            key += (ulong)globalValues[i] * stride;
             stride *= (ulong)axes[i].Values.Count;
         }
 
-        if (_programs.TryGetValue((id, mirrored, key), out GraphicsProgram? cached))
-            return cached;
-
-        Keyword[] combo = new Keyword[program.Keywords.Length + axes.Count];
-        program.Keywords.CopyTo(combo, 0);
-        for (int i = 0; i < axes.Count; i++)
-            combo[program.Keywords.Length + i] = new Keyword(axes[i].Name, axes[i].Values[values[i]]);
-
-        GraphicsProgram? built = null;
-        try
+        if (!_entries.TryGetValue((id, mirrored, key), out Entry? entry))
         {
-            built = Build(program, combo, mirrored);
+            entry = Create(program, mirrored, globalValues);
+            _entries[(id, mirrored, key)] = entry;
         }
-        catch (Exception e)
-        {
-            report($"program.{program.Shader.Name}.{program.PassIndex}.{key}", $"{program.Shader.Name}: {e.Message}");
-        }
-        _programs[(id, mirrored, key)] = built;
-        return built;
+
+        Complete(entry);
+        return entry.Built ?? (entry.Failed ? null : Nearest(entry));
     }
 
     public void Dispose()
     {
-        foreach (GraphicsProgram? program in _programs.Values)
-            program?.Dispose();
-        _programs.Clear();
+        foreach (Entry entry in _entries.Values)
+        {
+            try
+            {
+                entry.Pending?.Wait();
+            }
+            catch (AggregateException)
+            {
+            }
+            entry.Built?.Dispose();
+        }
+        _entries.Clear();
+        _families.Clear();
     }
 
-    private GraphicsProgram Build(DrawProgram program, Keyword[] combo, bool mirrored)
+    private Entry Create(DrawProgram program, bool mirrored, ReadOnlySpan<int> globalValues)
+    {
+        IReadOnlyList<VariantSpace> materialAxes = program.Shader.MaterialAxes;
+        IReadOnlyList<VariantSpace> globalAxes = program.Shader.GlobalAxes;
+        int[] values = new int[materialAxes.Count + globalAxes.Count];
+        Keyword[] combo = new Keyword[values.Length];
+        for (int i = 0; i < materialAxes.Count; i++)
+        {
+            values[i] = ValueIndex(materialAxes[i], program.Keywords[i].Value);
+            combo[i] = program.Keywords[i];
+        }
+        for (int i = 0; i < globalAxes.Count; i++)
+        {
+            values[materialAxes.Count + i] = globalValues[i];
+            combo[materialAxes.Count + i] = new Keyword(globalAxes[i].Name, globalAxes[i].Values[globalValues[i]]);
+        }
+
+        Entry entry = new() { Program = program, Mirrored = mirrored, Values = values };
+        Family family = new(program.Shader, program.PassIndex, program.StateOverride, mirrored);
+        if (!_families.TryGetValue(family, out List<Entry>? members))
+        {
+            members = new List<Entry>();
+            _families[family] = members;
+        }
+        members.Add(entry);
+
+        entry.Pending = deterministic ? DescribeNow(program, combo) : Task.Run(() => Describe(program, combo));
+        return entry;
+    }
+
+    private Task<ShaderDescription> DescribeNow(DrawProgram program, Keyword[] combo)
+    {
+        try
+        {
+            return Task.FromResult(Describe(program, combo));
+        }
+        catch (Exception e)
+        {
+            return Task.FromException<ShaderDescription>(e);
+        }
+    }
+
+    // A variant that declared new globals waits until the next extraction has grown the regions to hold them.
+    private void Complete(Entry entry)
+    {
+        if (entry.Pending is not { IsCompleted: true } pending || globals.NeedsGrowth)
+            return;
+
+        entry.Pending = null;
+        DrawProgram program = entry.Program;
+        try
+        {
+            ShaderDescription description = pending.GetAwaiter().GetResult();
+            entry.Built = Build(program, description, entry.Mirrored);
+        }
+        catch (Exception e)
+        {
+            entry.Failed = true;
+            report($"program.{program.Shader.Name}.{program.PassIndex}.{string.Join(",", entry.Values)}", $"{program.Shader.Name}: {e.Message}");
+        }
+    }
+
+    // The ready variant of the same pass differing in the fewest axes, ties going to the one whose differences are defaults.
+    private GraphicsProgram? Nearest(Entry wanted)
+    {
+        GraphicsProgram? best = null;
+        (int Differences, int NonDefault) bestScore = (int.MaxValue, int.MaxValue);
+        foreach (Entry candidate in _families[new Family(wanted.Program.Shader, wanted.Program.PassIndex, wanted.Program.StateOverride, wanted.Mirrored)])
+        {
+            Complete(candidate);
+            if (candidate.Built == null)
+                continue;
+
+            int differences = 0, nonDefault = 0;
+            for (int i = 0; i < wanted.Values.Length; i++)
+            {
+                if (candidate.Values[i] == wanted.Values[i])
+                    continue;
+                differences++;
+                if (candidate.Values[i] != 0)
+                    nonDefault++;
+            }
+
+            if ((differences, nonDefault).CompareTo(bestScore) < 0)
+            {
+                bestScore = (differences, nonDefault);
+                best = candidate.Built;
+            }
+        }
+        return best;
+    }
+
+    private static int ValueIndex(VariantSpace axis, string? value)
+    {
+        for (int v = 0; v < axis.Values.Count; v++)
+        {
+            if (axis.Values[v] == value)
+                return v;
+        }
+        return 0;
+    }
+
+    // Worker thread: the compile and the material rewrite, nothing that touches the device.
+    private ShaderDescription Describe(DrawProgram program, Keyword[] combo)
     {
         ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
         ShaderDescription description = compiler.Compile(pass, combo, device.BackendType);
-        description = MaterialRewrite.Rewrite(program.Shader.Name, description, program.Shader.Schema, compiler.GetGlobals(pass), globals, FrameLayout, ViewLayout);
+        return MaterialRewrite.Rewrite(program.Shader.Name, description, program.Shader.Schema, compiler.GetGlobals(pass), globals, FrameLayout, ViewLayout);
+    }
 
+    private GraphicsProgram Build(DrawProgram program, ShaderDescription description, bool mirrored)
+    {
+        ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
         BlendStateDescription blend = BlendStateDescription.SingleOverrideBlend;
         if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name))
@@ -309,7 +441,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
         foreach (DrawCall call in list.Calls)
         {
-            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored, camera.World.World.Globals);
+            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored, camera.World.World.Globals.KeywordSnapshot);
             if (program == null)
                 continue;
 
@@ -397,19 +529,21 @@ internal sealed class FramePipeline : IDisposable
     private int _frame;
 
     private readonly RendererTextures _textures;
+    private readonly bool _deterministic;
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, IShaderCompiler compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, Action<string, string> report)
+    public FramePipeline(GraphicsDevice device, IShaderCompiler compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<string, string> report)
     {
         _device = device;
         _textures = textures;
         _uploader = uploader;
+        _deterministic = deterministic;
         Geometry = geometry;
         Materials = materials;
         Globals = globals;
         DrawPrograms = programs;
-        Programs = new ProgramCache(device, compiler, globals, programs, report);
+        Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report);
         _upload = new UploadPass(uploader);
         _frameStart.Name = "Graphite.FrameStart";
         _frameStart.SetPasses([_upload]);
@@ -456,7 +590,7 @@ internal sealed class FramePipeline : IDisposable
     }
 
     /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched)
     {
         _frame++;
         _dispatches.Clear();
@@ -487,10 +621,33 @@ internal sealed class FramePipeline : IDisposable
             _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
         }
 
+        ResolvePrograms();
+        if (_deterministic && Globals.NeedsGrowth)
+        {
+            Globals.Extract();
+            Globals.Flush(_uploader, lastDispatched);
+            ResolvePrograms();
+        }
+
         CollectBuffers(allWorlds);
         ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches));
         ReleaseStaleCameras();
         return task;
+    }
+
+    // Asks for every call's program before recording, so compiles start early and deterministic ones finish here.
+    private void ResolvePrograms()
+    {
+        foreach (CameraFrame camera in _cameras.Values)
+        {
+            if (camera.LastFrame != _frame)
+                continue;
+            foreach (DrawList list in camera.Lists)
+            {
+                foreach (DrawCall call in list.Calls)
+                    Programs.Get(call.Program, call.Mirrored, camera.World.World.Globals.KeywordSnapshot);
+            }
+        }
     }
 
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world)

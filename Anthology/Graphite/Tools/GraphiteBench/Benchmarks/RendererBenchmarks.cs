@@ -95,7 +95,7 @@ public class RendererBenchmarks
         _profiler = new BenchProfiler();
         _device = BenchDevice.Create(_profiler);
         _compiler = new GlslShaderCompiler();
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline });
+        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true });
         _world = _renderer.CreateWorld();
         _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget | TextureUsage.Sampled));
         _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));

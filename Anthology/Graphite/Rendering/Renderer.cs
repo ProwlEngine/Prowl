@@ -30,6 +30,12 @@ public sealed class RendererOptions
 
     /// <summary>Indices per geometry page.</summary>
     public uint PageIndices = GeometryPool.DefaultPageIndices;
+
+    /// <summary>
+    /// Forces Inline threading and blocking variant compiles, so no fallback variant is ever drawn. For golden images
+    /// and tests.
+    /// </summary>
+    public bool Deterministic;
 }
 
 /// <summary>A problem the renderer reports once, raised on the host thread at SubmitFrame.</summary>
@@ -142,9 +148,9 @@ public sealed class Renderer : IDisposable
         _geometry = new GeometryPool(device, _options.PageVertexWords, _options.PageIndices);
         _materials = new MaterialSystem(device, Textures) { Reporter = message => Report(message, message) };
         _globals = new GlobalRegistry(device, Textures) { Reporter = message => Report(message, message) };
-        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, Report);
+        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report);
 
-        if (_options.Threading == RenderThreading.RenderThread)
+        if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)
         {
             _thread = new Thread(RenderLoop) { Name = "Graphite Render", IsBackground = true };
             _thread.Start();
@@ -337,6 +343,7 @@ public sealed class Renderer : IDisposable
         }
         catch (Exception e)
         {
+            _uploader.Clear();
             Report($"frame.{e.GetType().Name}.{e.Message}", $"The frame failed: {e}");
         }
     }
@@ -372,7 +379,7 @@ public sealed class Renderer : IDisposable
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _worlds, _worlds.Values);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _worlds, _worlds.Values, _lastDispatched);
         _lastDispatched = task.Id;
     }
 }

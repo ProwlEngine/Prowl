@@ -33,6 +33,24 @@ public sealed class GlobalProperties
     /// <summary>Bumps when a keyword changes, so cached variant choices know to look again.</summary>
     public uint KeywordVersion { get; private set; }
 
+    /// <summary>The resolved keywords as of the last extraction: this set's over the fallback's. The render thread reads only this.</summary>
+    internal IReadOnlyDictionary<string, string> KeywordSnapshot { get; private set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    private (uint Own, uint Fallback) _snapshotVersions = (uint.MaxValue, uint.MaxValue);
+
+    internal void SnapshotKeywords()
+    {
+        (uint, uint) versions = (KeywordVersion, Fallback?.KeywordVersion ?? 0);
+        if (versions == _snapshotVersions)
+            return;
+
+        Dictionary<string, string> snapshot = Fallback != null ? new(Fallback._keywords, StringComparer.Ordinal) : new(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, string> pair in _keywords)
+            snapshot[pair.Key] = pair.Value;
+        KeywordSnapshot = snapshot;
+        _snapshotVersions = versions;
+    }
+
     public void SetFloat(PropertyID name, float value) => Set(name, MaterialValue.FromFloat(value));
 
     public void SetFloat2(PropertyID name, Float2 value) => Set(name, MaterialValue.FromFloat2(value));
@@ -230,18 +248,6 @@ internal sealed class GlobalRegistry : IDisposable
             _properties[name] = property;
             _ordered.Add(property);
             _allDirty = true;
-
-            if (_usedWords > _table.StrideWords)
-            {
-                uint words = _table.StrideWords;
-                while (words < _usedWords)
-                    words *= 2;
-                if (_replaced == null)
-                    _replaced = _table;
-                else
-                    _table.Dispose();
-                _table = new GpuTable(_device, "Globals", words, (uint)_regions.Count);
-            }
             return true;
         }
     }
@@ -304,11 +310,41 @@ internal sealed class GlobalRegistry : IDisposable
         Reporter?.Invoke(message);
     }
 
-    /// <summary>Writes every region whose values changed. A renderer change or a new global rewrites them all. Host thread.</summary>
+    /// <summary>True when globals were declared past the current region size, until the next extraction grows the regions.</summary>
+    public bool NeedsGrowth
+    {
+        get
+        {
+            lock (_lock)
+                return _usedWords > _table.StrideWords;
+        }
+    }
+
+    /// <summary>
+    /// Grows the regions when new globals no longer fit, writes every region whose values changed, and snapshots the
+    /// keywords the render thread reads. A renderer change or a new global rewrites them all. Host thread, while the
+    /// render thread is idle, so the buffer and region size stay fixed for the frame.
+    /// </summary>
     public void Extract()
     {
         lock (_lock)
         {
+            if (_usedWords > _table.StrideWords)
+            {
+                uint words = _table.StrideWords;
+                while (words < _usedWords)
+                    words *= 2;
+                if (_replaced == null)
+                    _replaced = _table;
+                else
+                    _table.Dispose();
+                _table = new GpuTable(_device, "Globals", words, (uint)_regions.Count);
+            }
+
+            Renderer.SnapshotKeywords();
+            foreach (GlobalProperties? world in _regions)
+                world?.SnapshotKeywords();
+
             if (_allDirty || _replaced != null)
             {
                 for (int region = 0; region < _regions.Count; region++)

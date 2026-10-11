@@ -118,7 +118,7 @@ public sealed class RendererTests : IDisposable
 
     private void Start(RenderThreading threading)
     {
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = threading, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
+        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = threading, Deterministic = threading == RenderThreading.Inline, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
         _renderer.Error += _errors.Add;
         _world = _renderer.CreateWorld();
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
@@ -265,6 +265,8 @@ public sealed class RendererTests : IDisposable
         Add(Colored(0, 1, 0), new Double3(2, 0, 10));
 
         Color32[] pixels = Frame();
+        for (int frame = 0; frame < 500 && At(pixels, 12, 8) != new Color32(0, 255, 0, 255); frame++)
+            pixels = Frame();
         Assert.Equal(new Color32(255, 0, 0, 255), At(pixels, 4, 8));
         Assert.Equal(new Color32(0, 255, 0, 255), At(pixels, 12, 8));
         Assert.Empty(_errors);
