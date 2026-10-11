@@ -108,6 +108,7 @@ public abstract partial class CommandBuffer
             return;
 
         _activeProperties.MergeFrom(properties, _changedPropertyKeys, _defaultPropertyKeys);
+        _uniformShadows.Apply(properties);
         _lastAppliedSource = properties;
         _lastAppliedSourceVersion = properties.Version;
         SetPropertiesCore(properties);
@@ -125,7 +126,9 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(defaults, _lastAppliedDefaults) && defaults.Version == _lastAppliedDefaultsVersion)
             return;
 
+        int changedBefore = _changedPropertyKeys.Count;
         _activeProperties.MergeDefaults(defaults, _changedPropertyKeys, _defaultPropertyKeys);
+        _uniformShadows.Apply(_changedPropertyKeys, changedBefore, _activeProperties);
         _lastAppliedDefaults = defaults;
         _lastAppliedDefaultsVersion = defaults.Version;
     }
@@ -140,6 +143,7 @@ public abstract partial class CommandBuffer
     public void ClearProperties()
     {
         _activeProperties.Clear();
+        _uniformShadows.Reset();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
         _lastAppliedDefaults = null;
