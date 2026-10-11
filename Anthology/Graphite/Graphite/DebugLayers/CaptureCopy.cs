@@ -10,7 +10,11 @@ public enum CopyPlacement : byte
 }
 
 /// <summary>A copy recorded into a caller-owned staging buffer. Map and dispose the buffer after the execution resolves.</summary>
-public readonly record struct CaptureCopy(DeviceBuffer Staging, ReadOnlyMemory<CopyRegion> Regions);
+public readonly record struct CaptureCopy(DeviceBuffer Staging, ReadOnlyMemory<CopyRegion> Regions)
+{
+    /// <summary>Name prefix of the command buffers that record capture copies.</summary>
+    public const string BufferPrefix = "Capture ";
+}
 
 /// <summary>One tightly packed mip, layer, and aspect of a texture copy inside the staging buffer.</summary>
 public readonly record struct CopyRegion(

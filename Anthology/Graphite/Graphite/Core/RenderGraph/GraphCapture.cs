@@ -147,7 +147,7 @@ internal sealed class GraphCapture
         if (live.Buffer is { } buffer)
         {
             staging = factory.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-            cb = _context.BeginCommandBuffer("Capture " + name);
+            cb = _context.BeginCommandBuffer(CaptureCopy.BufferPrefix + name);
             backend.RecordBufferCopy(cb, buffer, staging);
         }
         else
@@ -155,7 +155,7 @@ internal sealed class GraphCapture
             Texture texture = live.Texture!;
             regions = CaptureCopyPlanner.PlanTexture(texture.DescriptionValue, out uint size);
             staging = factory.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
-            cb = _context.BeginCommandBuffer("Capture " + name);
+            cb = _context.BeginCommandBuffer(CaptureCopy.BufferPrefix + name);
             TextureState? before = placement == CopyPlacement.BeforePass ? _preStates?.StateOf(texture) : cb.StateOf(texture);
             backend.RecordTextureCopy(cb, texture, before, staging, regions);
         }

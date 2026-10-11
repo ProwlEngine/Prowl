@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Graphite.Debugging;
+
 namespace Prowl.Graphite.Debugger.Viewer;
 
 internal sealed class FrameModel
@@ -53,7 +55,7 @@ internal sealed class FrameModel
         }
 
         int outside = 0;
-        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.ViewIndex < 0))
+        foreach (RecordedCommandBuffer buffer in recording.CommandBuffers.Where(b => b.ViewIndex < 0 && !b.Name.StartsWith(CaptureCopy.BufferPrefix, System.StringComparison.Ordinal)))
         {
             ProfileNode node = root.Add(new ProfileNode
             {
