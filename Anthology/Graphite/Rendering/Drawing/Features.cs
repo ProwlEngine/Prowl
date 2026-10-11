@@ -436,12 +436,12 @@ public sealed class FeatureBuilder
     public void DrawToScene()
     {
         FeatureChain chain = _pass.Chain;
-        if (_pass.SceneRead != null)
+        if (_pass.SceneRead != null || (chain.Current == chain.Scene && _pass.Input != null))
             throw new InvalidOperationException($"{_pass.Name} draws onto the scene it reads.");
         if (chain.Current != chain.Scene)
         {
             chain.Current.ReadSinceWrite = true;
-            _pass.CopyBack = _graph.DeclareInputTexture(chain.Current.Id);
+            _pass.CopyBack = _pass.Input?.Id == chain.Current.Id ? _pass.Input : _graph.DeclareInputTexture(chain.Current.Id);
             chain.Current = chain.Scene;
         }
         Write(chain.Scene);
@@ -461,25 +461,38 @@ public sealed class FeatureBuilder
 
     /// <summary>A texture for this feature alone this frame.</summary>
     public TextureHandle Temporary(string name, GraphTextureDesc desc)
-        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.{name}"), desc);
+        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.Temporary.{name}"), desc);
 
     /// <summary>
     /// A texture for this feature that keeps its last frames, read through <see cref="FeatureContext.History"/>. A graph
     /// rebuild starts it over.
     /// </summary>
     public TextureHandle History(string name, GraphTextureDesc desc, int frames = 1)
-        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.{name}"), desc, history: frames);
+        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.History.{name}"), desc, history: frames);
 
     /// <summary>
     /// Asks for the visible renderables whose materials have a pass of this type, the shader pass tagged
-    /// "LightMode" = type, for <see cref="FeatureContext.DrawPass"/> to draw. Any pass type works; the first time one is
-    /// asked for, every renderable of the world is bucketed for it.
+    /// "LightMode" = type, for <see cref="FeatureContext.DrawPass"/> to draw: opaque ones in bucket order, then transparent
+    /// ones back to front. Any pass type works; the first time one is asked for, every renderable of the world is bucketed
+    /// for it. Prepass and Forward are the built in opaque lists.
     /// </summary>
     public void DrawsPass(PassType type)
     {
+        DrawsRenderables();
         DrawList list = _pass.Camera.ListFor(type);
         if (!_pass.Lists.Contains(list))
             _pass.Lists.Add(list);
+    }
+
+    /// <summary>Declares the feature records the view's renderables or sky through the context's Draw methods.</summary>
+    public void DrawsRenderables()
+    {
+        if (_pass.Draws)
+            return;
+        _pass.Draws = true;
+        DeviceBuffer[] host = _pass.Camera.HostBuffers;
+        for (int i = 0; i < host.Length; i++)
+            _graph.DeclareImportedBuffer(FramePipeline.BufferId(i), host[i], BufferAccess.AllReads);
     }
 
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
@@ -550,25 +563,27 @@ public sealed class FeatureContext
     public T GetViewState<T>() where T : class, new() => _pass.Camera.State<T>(_pass.Feature);
 
     /// <summary>Draws the visible opaque renderables' depth prepass onto the current output.</summary>
-    public void DrawPrepass() => _pass.Camera.Drawer.DrawList(Command, _pass.Camera.Prepass);
+    public void DrawPrepass() => Drawer.DrawList(Command, _pass.Camera.Prepass);
 
     /// <summary>Draws the visible opaque renderables' forward pass onto the current output.</summary>
-    public void DrawOpaque() => _pass.Camera.Drawer.DrawList(Command, _pass.Camera.Forward);
+    public void DrawOpaque() => Drawer.DrawList(Command, _pass.Camera.Forward);
 
     /// <summary>Draws the visible transparent renderables back to front onto the current output.</summary>
-    public void DrawTransparent() => _pass.Camera.Drawer.DrawList(Command, _pass.Camera.Transparent);
+    public void DrawTransparent() => Drawer.DrawList(Command, _pass.Camera.Transparent);
 
     /// <summary>Draws the world's sky material onto the current output.</summary>
-    public void DrawSky() => _pass.Camera.Drawer.DrawSky(Command);
+    public void DrawSky() => Drawer.DrawSky(Command);
 
     /// <summary>Draws the visible renderables with a pass of a type asked for in Setup through <see cref="FeatureBuilder.DrawsPass"/>.</summary>
     public void DrawPass(PassType type)
     {
-        DrawList list = _pass.Camera.ListFor(type);
-        if (!_pass.Lists.Contains(list))
+        if (_pass.Camera.FindList(type) is not { } list || !_pass.Lists.Contains(list))
             throw new InvalidOperationException($"{_pass.Name} draws the {type.Name} pass without asking for it in Setup through DrawsPass.");
-        _pass.Camera.Drawer.DrawList(Command, list);
+        Drawer.DrawList(Command, list);
     }
+
+    private SceneDrawer Drawer => _pass.Draws ? _pass.Camera.Drawer
+        : throw new InvalidOperationException($"{_pass.Name} draws renderables without declaring DrawsRenderables or DrawsPass in Setup.");
 
     /// <summary>
     /// Binds the colour the feature draws onto or writes, cleared when this is the first feature drawing it, the scene
@@ -614,8 +629,8 @@ public sealed class FeatureContext
     /// </summary>
     public void Fullscreen(FullscreenProgram program, PropertySet? properties = null)
     {
-        if (Color is not { } source)
-            throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program without reading a colour, declare WriteColor.");
+        if (Color is not { } source || _pass.Output == _pass.Chain.Scene)
+            throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program without writing a new colour, declare WriteColor.");
         BeginOutput();
         Command.SetShader(program.For(View.LayerCount));
         Command.SetVertexSource(VertexSource.None);
@@ -661,6 +676,7 @@ internal sealed class FeaturePass : IPass
     public int BuiltVersion = -1;
 
     public readonly List<DrawList> Lists = new();
+    public bool Draws;
     public TextureHandle? Input;
     public TextureHandle? SceneRead;
     public TextureHandle? CopyBack;
@@ -676,6 +692,7 @@ internal sealed class FeaturePass : IPass
         Output = null;
         OutputId = null;
         Clears = false;
+        Draws = false;
         Lists.Clear();
         BuiltVersion = Feature.Version;
         try
@@ -704,7 +721,7 @@ internal sealed class FeaturePass : IPass
     }
 }
 
-/// <summary>A view's first pass: its tables for the frame, and every persistent buffer imported so draws see their writes.</summary>
+/// <summary>A view's first pass: its tables for the frame. The frame's buffers are made ready for it by a fence before the views.</summary>
 internal sealed class SetupPass(FramePipeline frame, CameraFrame camera) : IPass
 {
     public string Name => "Graphite.Setup";
@@ -713,12 +730,6 @@ internal sealed class SetupPass(FramePipeline frame, CameraFrame camera) : IPass
     {
         camera.Chain.Reset();
         camera.ResetPassLists();
-        DeviceBuffer[] buffers = frame.Buffers;
-        for (int i = 0; i < buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), buffers[i], BufferAccess.AllReads);
-        DeviceBuffer[] host = camera.HostBuffers;
-        for (int i = 0; i < host.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(buffers.Length + i), host[i], BufferAccess.AllReads);
     }
 
     public void Render(RenderContext context, CommandBuffer cmd) => camera.Drawer.Prepare(context.Task.RingSlot);
@@ -778,7 +789,12 @@ public sealed class PrepassFeature : RenderFeature
 
     public override RenderSlot Slot => RenderSlot.Prepass;
     public override ViewKinds RunsOn => ViewKinds.All;
-    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToScene();
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.DrawsRenderables();
+        builder.DrawToScene();
+    }
 
     public override void Render(FeatureContext context)
     {
@@ -794,7 +810,12 @@ public sealed class OpaqueFeature : RenderFeature
 
     public override RenderSlot Slot => RenderSlot.Opaque;
     public override ViewKinds RunsOn => ViewKinds.All;
-    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToScene();
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.DrawsRenderables();
+        builder.DrawToScene();
+    }
 
     public override void Render(FeatureContext context)
     {
@@ -811,7 +832,12 @@ public sealed class SkyFeature : RenderFeature
     public override RenderSlot Slot => RenderSlot.Sky;
     public override ViewKinds RunsOn => ViewKinds.All;
     public override string? ExclusiveGroup => "Sky";
-    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToScene();
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.DrawsRenderables();
+        builder.DrawToScene();
+    }
 
     public override void Render(FeatureContext context)
     {
@@ -827,7 +853,12 @@ public sealed class TransparentFeature : RenderFeature
 
     public override RenderSlot Slot => RenderSlot.Transparent;
     public override ViewKinds RunsOn => ViewKinds.All;
-    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToScene();
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        builder.DrawsRenderables();
+        builder.DrawToScene();
+    }
 
     public override void Render(FeatureContext context)
     {
@@ -850,12 +881,12 @@ internal static class FeatureSelection
     [ThreadStatic]
     private static List<string?>? t_groups;
 
-    public static void Select(List<RenderFeature> result, RenderFeature[] world, RenderFeature[] view, in FeatureView info, Action<RendererError> report)
+    public static void Select(List<RenderFeature> result, RenderFeature[] world, RenderFeature[] view, in FeatureView info, Action<RendererError> report, IReadOnlyDictionary<RenderFeature, int>? failed = null)
     {
         result.Clear();
-        Add(result, BuiltIn, info, report);
-        Add(result, world, info, report);
-        Add(result, view, info, report);
+        Add(result, BuiltIn, info, report, failed);
+        Add(result, world, info, report, failed);
+        Add(result, view, info, report, failed);
 
         // A replacement takes the group of what it replaces
         List<string?> groups = t_groups ??= new();
@@ -916,12 +947,12 @@ internal static class FeatureSelection
         return slot != 0 ? slot : a.OrderSnapshot.CompareTo(b.OrderSnapshot);
     }
 
-    private static void Add(List<RenderFeature> result, RenderFeature[] features, in FeatureView info, Action<RendererError> report)
+    private static void Add(List<RenderFeature> result, RenderFeature[] features, in FeatureView info, Action<RendererError> report, IReadOnlyDictionary<RenderFeature, int>? failed)
     {
         ViewKinds kind = (ViewKinds)(1 << (int)info.Kind);
         foreach (RenderFeature feature in features)
         {
-            if (!feature.EnabledSnapshot || (feature.RunsOnSnapshot & kind) == 0 || result.Contains(feature))
+            if (!feature.EnabledSnapshot || (feature.RunsOnSnapshot & kind) == 0 || result.Contains(feature) || failed?.ContainsKey(feature) == true)
                 continue;
             bool active;
             try

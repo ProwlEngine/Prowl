@@ -414,11 +414,11 @@ internal sealed class WorldReflections : IDisposable
     internal void RequestBake(int index, int generation, Action<BakedReflectionProbe> done) => _bakes.Add((index, generation, done));
 
     /// <summary>Resolves the slots of baked cubes that were disposed and freed. Host thread, at extraction.</summary>
-    internal void RepackBaked(HashSet<Texture> freed)
+    internal void RepackBaked(HashSet<Texture>? freed)
     {
         for (int i = 0; i < _probes.Length; i++)
         {
-            if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Baked && _probes[i].Cubemap is { } cube && freed.Contains(cube))
+            if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Baked && _probes[i].Cubemap is { } cube && (freed == null || freed.Contains(cube)))
             {
                 _baked[i] = null;
                 _bakedDirty.Add(i);
@@ -668,7 +668,7 @@ internal sealed class WorldReflections : IDisposable
         {
             int faces = FacesAtOnce(index);
             uint resolution = Pow2(_probes[index].Resolution, "reflection probe");
-            if (Cost(resolution, faces, faces == 6) > budget && started)
+            if (Cost(resolution, faces, faces == 6) > budget && (started || budget <= 0))
                 continue;
             started = true;
             _requested[index] = false;

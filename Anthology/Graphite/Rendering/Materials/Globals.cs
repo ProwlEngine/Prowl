@@ -67,7 +67,8 @@ public sealed class GlobalProperties
 
     /// <summary>
     /// A storage buffer every shader declaring a buffer of this name reads, a world's over the renderer's. Null removes it.
-    /// Draws reading it wait for earlier GPU writes to it. Disposing it removes it at the next SubmitFrame. Host thread.
+    /// Draws reading it wait for earlier GPU writes to it. To dispose it, set null and dispose it after the next
+    /// SubmitFrame; one disposed while set drops out at the next SubmitFrame. Host thread.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBuffer? buffer)
     {

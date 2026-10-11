@@ -397,6 +397,9 @@ internal sealed class CameraFrame : IDisposable
 
     /// <summary>The host's buffers the view's graph declares, from the world's globals.</summary>
     public DeviceBuffer[] HostBuffers = [];
+
+    /// <summary>What host pipelines draw an external view through.</summary>
+    public ViewDraws? Draws;
     public FeatureView Info;
     public readonly TableRing ViewTable;
     public readonly GpuArray Instances;
@@ -440,8 +443,12 @@ internal sealed class CameraFrame : IDisposable
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private readonly List<IPass> _passList = new();
 
-    // Features whose Setup threw on this view, left out of it
-    private readonly HashSet<RenderFeature> _failed = new();
+    // Features that failed to build on this view with their version, left out until they or the view's features change
+    private readonly Dictionary<RenderFeature, int> _failed = new();
+    private readonly List<RenderFeature> _unfiltered = new();
+    private readonly List<RenderFeature> _lastUnfiltered = new();
+    private RenderFeature[] _worldFeatures = [], _viewFeatures = [];
+    private Action<RendererError> _report = _ => { };
 
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
@@ -472,54 +479,125 @@ internal sealed class CameraFrame : IDisposable
     }
 
     /// <summary>Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed.</summary>
+    /// <summary>Picks this frame's features, leaving out ones that failed until they or the view's other features change.</summary>
+    public void SelectFeatures(RenderFeature[] world, RenderFeature[] view, Action<RendererError> report)
+    {
+        (_worldFeatures, _viewFeatures, _report) = (world, view, report);
+        FeatureSelection.Select(_unfiltered, world, view, Info, report);
+        bool changed = !Same(_unfiltered, _lastUnfiltered);
+        foreach ((RenderFeature feature, int version) in _failed)
+            changed |= feature.Version != version;
+        if (changed)
+        {
+            _failed.Clear();
+            _lastUnfiltered.Clear();
+            _lastUnfiltered.AddRange(_unfiltered);
+        }
+        if (_failed.Count == 0)
+        {
+            Selected.Clear();
+            Selected.AddRange(_unfiltered);
+        }
+        else
+        {
+            FeatureSelection.Select(Selected, world, view, Info, report, _failed);
+        }
+    }
+
+    /// <summary>Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed.</summary>
     public void ApplyFeatures()
     {
-        for (int i = Selected.Count - 1; i >= 0; i--)
-        {
-            if (_failed.Contains(Selected[i]))
-                Selected.RemoveAt(i);
-        }
         if (!Rebuild && Same(Features, Selected) && !Invalidated())
             return;
 
-        // Built now, so a feature whose Setup throws is left out of this view instead of failing the frame
-        while (true)
+        // Built now, so a feature that breaks the graph is left out of this view instead of failing the frame
+        while (TryBuild(Selected) is { } error)
         {
-            Features.Clear();
-            Features.AddRange(Selected);
-            _passList.Clear();
-            _passList.Add(Setup);
-            foreach (RenderFeature feature in Features)
-            {
-                if (!_passes.TryGetValue(feature, out FeaturePass? pass))
-                    _passes[feature] = pass = new FeaturePass(feature, this, _frame);
-                _passList.Add(pass);
-            }
-            _passList.Add(Present);
-            Pipeline.SetPasses(_passList);
-            try
-            {
-                _ = Pipeline.Graph;
-                break;
-            }
-            catch (FeatureSetupException e)
-            {
-                _failed.Add(e.Feature);
-                Selected.Remove(e.Feature);
-                _frame.Report(new RendererError("feature.setup", $"{e.Feature.GetType().Name} threw declaring its work, so view {View.ViewId} runs without it: {e.InnerException}", RendererErrorSeverity.Error, e.Feature) { Key = $"feature.setup.{View.ViewId}.{e.Feature.GetType().FullName}" });
-            }
+            RenderFeature culprit = (error as FeatureSetupException)?.Feature ?? FindCulprit() ?? throw error;
+            _failed[culprit] = culprit.Version;
+            _report(new RendererError("feature.setup", $"{culprit.GetType().Name} broke the graph of view {View.ViewId}, which runs without it: {error.InnerException ?? error}", RendererErrorSeverity.Error, culprit) { Key = $"feature.setup.{View.ViewId}.{culprit.GetType().FullName}" });
+            FeatureSelection.Select(Selected, _worldFeatures, _viewFeatures, Info, _report, _failed);
         }
 
-        if (_passes.Count > Features.Count)
-        {
-            foreach (RenderFeature feature in new List<RenderFeature>(_passes.Keys))
-            {
-                if (!Features.Contains(feature))
-                    _passes.Remove(feature);
-            }
-        }
+        Features.Clear();
+        Features.AddRange(Selected);
+        PruneFeatures();
         Chain.ReleaseUnwritten();
         Rebuild = false;
+    }
+
+    private Exception? TryBuild(List<RenderFeature> features)
+    {
+        _passList.Clear();
+        _passList.Add(Setup);
+        foreach (RenderFeature feature in features)
+        {
+            if (!_passes.TryGetValue(feature, out FeaturePass? pass))
+                _passes[feature] = pass = new FeaturePass(feature, this, _frame);
+            _passList.Add(pass);
+        }
+        _passList.Add(Present);
+        Pipeline.SetPasses(_passList);
+        try
+        {
+            _ = Pipeline.Graph;
+            return null;
+        }
+        catch (Exception e)
+        {
+            return e;
+        }
+    }
+
+    // The first host feature whose joining the built in ones breaks the graph
+    private RenderFeature? FindCulprit()
+    {
+        List<RenderFeature> kept = new(), trial = new();
+        foreach (RenderFeature feature in Selected)
+        {
+            if (Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0)
+                kept.Add(feature);
+        }
+        foreach (RenderFeature feature in Selected)
+        {
+            if (kept.Contains(feature))
+                continue;
+            trial.Clear();
+            foreach (RenderFeature other in Selected)
+            {
+                if (other == feature || kept.Contains(other))
+                    trial.Add(other);
+            }
+            if (TryBuild(trial) != null)
+                return feature;
+            kept.Add(feature);
+        }
+        return null;
+    }
+
+    // Passes and states are kept while their feature is in the world's or view's set, so ids and history survive toggles
+    private void PruneFeatures()
+    {
+        bool Known(RenderFeature feature) => Array.IndexOf(_worldFeatures, feature) >= 0 || Array.IndexOf(_viewFeatures, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
+        List<RenderFeature>? gone = null;
+        foreach (RenderFeature feature in _passes.Keys)
+        {
+            if (!Known(feature))
+                (gone ??= new()).Add(feature);
+        }
+        foreach (RenderFeature feature in gone ?? [])
+            _passes.Remove(feature);
+        List<(RenderFeature, Type)>? stale = null;
+        foreach ((RenderFeature feature, Type type) in States.Keys)
+        {
+            if (!Known(feature))
+                (stale ??= new()).Add((feature, type));
+        }
+        foreach ((RenderFeature, Type) key in stale ?? [])
+        {
+            (States[key] as IDisposable)?.Dispose();
+            States.Remove(key);
+        }
     }
 
     public T State<T>(RenderFeature feature) where T : class, new()
@@ -531,9 +609,9 @@ internal sealed class CameraFrame : IDisposable
 
     private bool Invalidated()
     {
-        foreach (FeaturePass pass in _passes.Values)
+        foreach (RenderFeature feature in Features)
         {
-            if (pass.BuiltVersion != pass.Feature.Version)
+            if (_passes.TryGetValue(feature, out FeaturePass? pass) && pass.BuiltVersion != feature.Version)
                 return true;
         }
         return false;
@@ -599,6 +677,21 @@ internal sealed class CameraFrame : IDisposable
         PassLists.Add((type, created));
         Lists.Add(created);
         return created;
+    }
+
+    /// <summary>The list of a pass type the view's features asked for, or null.</summary>
+    public DrawList? FindList(PassType type)
+    {
+        if (type == PassType.Prepass)
+            return Prepass;
+        if (type == PassType.Forward)
+            return Forward;
+        foreach ((PassType known, DrawList list) in PassLists)
+        {
+            if (known == type)
+                return list;
+        }
+        return null;
     }
 
     /// <summary>Forgets which pass lists the view draws before a graph build asks for them again, keeping what they hold.</summary>
@@ -872,6 +965,11 @@ internal sealed class FramePipeline : IDisposable
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
     private readonly List<IDisposable> _retired = new();
+    private readonly RenderPipeline _readbackPipeline = new() { Name = "Graphite.Readback" };
+    private readonly RenderPipeline _fencePipeline = new() { Name = "Graphite.Fence" };
+    private readonly FencePass _fence = new();
+    private readonly List<int> _fenceAt = new();
+    private readonly ReadbackPass _readback;
     private readonly List<int> _sortedViews = new();
     private bool[] _placed = [];
     private readonly HashSet<RenderFeature> _prepared = new();
@@ -902,6 +1000,8 @@ internal sealed class FramePipeline : IDisposable
         _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
         _frameStart.Name = "Graphite.FrameStart";
         _frameStart.SetPasses([_upload, _probes]);
+        _readback = new ReadbackPass(device, report);
+        _readbackPipeline.SetPasses([_readback]);
 
         PresentProgram = FullscreenProgram.Create(device, compiler, "void main() { outColor = Graphite_SampleSource(vUV); }", "Graphite/Present");
         ClearProgram = FullscreenProgram.Create(device, compiler, "uniform vec4 Graphite_ClearColor; void main() { outColor = Graphite_ClearColor; }", "Graphite/Clear", source: false);
@@ -984,11 +1084,13 @@ internal sealed class FramePipeline : IDisposable
     }
 
     /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, GraphDispatch[] pipelines, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
     {
         _frame++;
         _dispatches.Clear();
         _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
+        _fenceAt.Clear();
+        _fenceAt.Add(_dispatches.Count);
         _frameWorlds.Clear();
         _prepared.Clear();
         foreach (WorldFrame world in allWorlds)
@@ -1040,6 +1142,21 @@ internal sealed class FramePipeline : IDisposable
         }
 
         CollectBuffers(allWorlds);
+        _fence.Update(Buffers, Active(), _frame, _fencePipeline);
+        GraphDispatch fence = new(_fencePipeline, _frameStartViews);
+        for (int i = _fenceAt.Count - 1; i >= 0; i--)
+            _dispatches.Insert(_fenceAt[i], fence);
+        if (pipelines.Length > 0)
+        {
+            _dispatches.Add(fence);
+            _dispatches.AddRange(pipelines);
+        }
+        if (readbacks.Count > 0)
+        {
+            _readback.Prepare(readbacks);
+            _readbackPipeline.SetPasses([_readback]);
+            _dispatches.Add(new GraphDispatch(_readbackPipeline, _frameStartViews));
+        }
         ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches));
         foreach (Texture texture in _disposeAfterDispatch)
             texture.Dispose();
@@ -1069,16 +1186,34 @@ internal sealed class FramePipeline : IDisposable
         }
         uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
         uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
-        if (camera.Chain.Ensure(width, height, view.LayerCount))
+        if (!view.External && camera.Chain.Ensure(width, height, view.LayerCount))
             camera.Rebuild = true;
         camera.Info = new FeatureView(view, width, height);
-        FeatureSelection.Select(camera.Selected, world.World.FeatureSnapshot, features, camera.Info, Report);
-        camera.ApplyFeatures();
+        if (!view.External)
+        {
+            camera.SelectFeatures(world.World.FeatureSnapshot, features, Report);
+            camera.ApplyFeatures();
+        }
+        if (view.External)
+        {
+            camera.ResetPassLists();
+            foreach (PassType pass in view.Passes ?? [])
+                camera.ListFor(pass);
+        }
         Prepare(camera, view, world, time, width, height);
         camera.View.Target = view.Target;
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
-        _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
+        if (!view.External)
+            _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
+    }
+
+    /// <summary>The draws of an external view this frame. Render thread.</summary>
+    public ViewDraws Draws(int viewId)
+    {
+        if (!_cameras.TryGetValue(viewId, out CameraFrame? camera) || camera.LastFrame != _frame || !camera.Desc.External)
+            throw new InvalidOperationException($"No external view {viewId} was submitted this frame.");
+        return camera.Draws ??= new ViewDraws(this, camera);
     }
 
     private void PrepareFeatures(RenderFeature[] features)
@@ -1215,6 +1350,7 @@ internal sealed class FramePipeline : IDisposable
         world.SkyAmbientPass!.Source = scratch.Cube;
         world.SkyAmbientPass.Output = reflections.SkyAmbient;
         _dispatches.Add(new GraphDispatch(world.SkyAmbient, _frameStartViews));
+        _fenceAt.Add(_dispatches.Count);
     }
 
     // Filters a captured cube into every mip of a prefiltered one
@@ -1243,6 +1379,8 @@ internal sealed class FramePipeline : IDisposable
         WorldReflections.Target target = reflections.ProbeTarget(work.Index);
         WorldReflections.Scratch scratch = work.Scratch;
         Float4x4 projection = WorldReflections.FaceProjectionBetween(probe.NearClip, probe.FarClip);
+        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot))
+            reflections.Request(work.Index);
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)
         {
@@ -1295,16 +1433,23 @@ internal sealed class FramePipeline : IDisposable
     // The next capture camera of a pool this frame, one last drawing at this resolution if any so its textures stay
     private CameraFrame Pooled(List<CameraFrame> pool, ref int used, uint resolution)
     {
-        for (int i = used; i < pool.Count; i++)
+        int pick = -1;
+        for (int i = used; i < pool.Count && pick < 0; i++)
         {
             if (pool[i].Chain.Scene.Texture?.Desc.Width == resolution)
-            {
-                (pool[used], pool[i]) = (pool[i], pool[used]);
-                return pool[used++];
-            }
+                pick = i;
         }
-        if (used == pool.Count)
+        for (int i = used; i < pool.Count && pick < 0; i++)
+        {
+            if (pool[i].Chain.Scene.Texture == null)
+                pick = i;
+        }
+        if (pick < 0)
+        {
             pool.Add(Capturing());
+            pick = pool.Count - 1;
+        }
+        (pool[used], pool[pick]) = (pool[pick], pool[used]);
         return pool[used++];
     }
 
@@ -1476,18 +1621,6 @@ internal sealed class FramePipeline : IDisposable
         _upload.Buffers = Buffers;
         _probes.Buffers = Buffers;
         _frameStart.SetPasses([_upload, _probes]);
-        foreach (CameraFrame camera in _cameras.Values)
-        {
-            camera.Rebuild = true;
-            if (camera.LastFrame == _frame)
-                camera.ApplyFeatures();
-        }
-        foreach (CameraFrame camera in _captures)
-        {
-            camera.Rebuild = true;
-            if (camera.LastFrame == _frame)
-                camera.ApplyFeatures();
-        }
     }
 
     private static bool Same(DeviceBuffer[] a, List<DeviceBuffer> b)
@@ -1527,6 +1660,8 @@ internal sealed class FramePipeline : IDisposable
             camera.Dispose();
         _cameras.Clear();
         _frameStart.Dispose();
+        _readbackPipeline.Dispose();
+        _fencePipeline.Dispose();
         _probes.Dispose();
         Programs.Dispose();
         PresentProgram.Dispose();
@@ -1539,4 +1674,166 @@ internal sealed class FramePipeline : IDisposable
         TrilinearClamp.Dispose();
         LinearSampler.Dispose();
     }
+}
+
+/// <summary>
+/// The draws the renderer prepared this frame for an external view: its culled lists, its tables and the frame's
+/// buffers, which a pass before the host pipelines makes ready for them. Host passes bind a target and record. Render thread.
+/// </summary>
+public sealed class ViewDraws
+{
+    private readonly FramePipeline _frame;
+    private readonly CameraFrame _camera;
+    private ulong _preparedExecution;
+
+    internal ViewDraws(FramePipeline frame, CameraFrame camera)
+    {
+        _frame = frame;
+        _camera = camera;
+    }
+
+    /// <summary>The view as submitted.</summary>
+    public ViewDesc Desc => _camera.Desc;
+
+    /// <summary>Records the visible renderables of a pass type onto the bound target: the prepass, opaque forward, or one in ViewDesc.Passes.</summary>
+    public void Record(RenderContext context, CommandBuffer cmd, PassType pass)
+    {
+        Prepare(context);
+        DrawList list = _camera.ListFor(pass);
+        _camera.Drawer.DrawList(cmd, list);
+    }
+
+    /// <summary>Records the visible transparent renderables back to front onto the bound target.</summary>
+    public void RecordTransparent(RenderContext context, CommandBuffer cmd)
+    {
+        Prepare(context);
+        _camera.Drawer.DrawList(cmd, _camera.Transparent);
+    }
+
+    /// <summary>Records the world's sky onto the bound target.</summary>
+    public void RecordSky(RenderContext context, CommandBuffer cmd)
+    {
+        Prepare(context);
+        _camera.Drawer.DrawSky(cmd);
+    }
+
+    private void Prepare(RenderContext context)
+    {
+        if (_preparedExecution == context.Task.Id)
+            return;
+        _camera.Drawer.Prepare(context.Task.RingSlot);
+        _preparedExecution = context.Task.Id;
+    }
+}
+
+/// <summary>A copy to the host the renderer records after a frame's views.</summary>
+internal sealed class ReadbackRequest
+{
+    public Texture? Texture;
+    public TextureRegion Region;
+    public DeviceBuffer? Buffer;
+    public uint Offset, Size;
+    public Action<TextureReadback>? TextureDone;
+    public Action<byte[]>? BufferDone;
+    public DeviceBuffer? Staging;
+    public ulong Execution;
+}
+
+/// <summary>Copies the frame's readbacks into staging buffers, last in the execution.</summary>
+internal sealed class ReadbackPass(GraphicsDevice device, Action<RendererError> report) : IPass
+{
+    private static readonly List<RenderResourceID> s_ids = new();
+    private readonly List<ReadbackRequest> _requests = new();
+
+    public string Name => "Graphite.Readback";
+
+    // Staging buffers are made now, and requests whose source was disposed are reported and dropped
+    public void Prepare(List<ReadbackRequest> requests)
+    {
+        _requests.Clear();
+        for (int i = requests.Count - 1; i >= 0; i--)
+        {
+            ReadbackRequest request = requests[i];
+            if (request.Texture?.IsDisposed == true || request.Buffer?.IsDisposed == true)
+            {
+                report(new RendererError("readback.disposed", "A readback's texture or buffer was disposed before it was copied, so it never completes.", RendererErrorSeverity.Error, (object?)request.Texture ?? request.Buffer));
+                requests.RemoveAt(i);
+                continue;
+            }
+            uint bytes = request.Texture is { } texture ? request.Region.Width * request.Region.Height * request.Region.Depth * texture.Format.GetSizeInBytes() : request.Size;
+            request.Staging ??= device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
+            _requests.Add(request);
+        }
+    }
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        int id = 0;
+        foreach (ReadbackRequest request in _requests)
+        {
+            if (request.Buffer is { } buffer)
+                builder.DeclareImportedBuffer(Id(id++), buffer, BufferAccess.TransferRead);
+        }
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        foreach (ReadbackRequest request in _requests)
+        {
+            if (request.Texture is { } texture)
+                cmd.CopyTextureToBuffer(texture, request.Staging!, 0, request.Region);
+            else
+                cmd.CopyBuffer(request.Buffer!, request.Offset, request.Staging!, 0, request.Size);
+        }
+    }
+
+    private static RenderResourceID Id(int index)
+    {
+        lock (s_ids)
+        {
+            while (s_ids.Count <= index)
+                s_ids.Add(RenderResourceID.Intern("Graphite.Readback" + s_ids.Count));
+            return s_ids[index];
+        }
+    }
+}
+
+/// <summary>
+/// Reads every buffer draws may read, after the passes that write them and before the views and host pipelines, so their
+/// first use in this graph waits for every earlier write. Views then import nothing and never rebuild when a buffer grows.
+/// </summary>
+internal sealed class FencePass : IPass
+{
+    private DeviceBuffer[] _buffers = [];
+    private readonly List<DeviceBuffer> _wanted = new();
+
+    public string Name => "Graphite.Fence";
+
+    public void Update(DeviceBuffer[] frameBuffers, IEnumerable<CameraFrame> cameras, int frame, RenderPipeline pipeline)
+    {
+        _wanted.Clear();
+        _wanted.AddRange(frameBuffers);
+        foreach (CameraFrame camera in cameras)
+        {
+            if (camera.LastFrame != frame)
+                continue;
+            foreach (DeviceBuffer buffer in camera.HostBuffers)
+            {
+                if (!_wanted.Contains(buffer))
+                    _wanted.Add(buffer);
+            }
+        }
+        if (CollectionsMarshal.AsSpan(_wanted).SequenceEqual(_buffers))
+            return;
+        _buffers = [.. _wanted];
+        pipeline.SetPasses([this]);
+    }
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        for (int i = 0; i < _buffers.Length; i++)
+            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), _buffers[i], BufferAccess.AllReads);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd) { }
 }

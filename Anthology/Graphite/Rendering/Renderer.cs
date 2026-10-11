@@ -90,6 +90,10 @@ public readonly record struct RendererError(string Code, string Message, Rendere
 {
     /// <summary>What the error is reported once per, the code when null.</summary>
     internal string? Key { get; init; }
+
+    public bool Equals(RendererError other) => Code == other.Code && Message == other.Message && Severity == other.Severity && Equals(Source, other.Source);
+
+    public override int GetHashCode() => HashCode.Combine(Code, Message, Severity, Source);
 }
 
 /// <summary>One layer of a view: a camera relative view matrix (rotation only), a reversed Z projection and the camera's world position.</summary>
@@ -152,6 +156,15 @@ public struct ViewDesc
     /// <summary>ViewIds of views that draw before this one, such as ones whose targets it samples.</summary>
     public int[]? DependsOn;
 
+    /// <summary>
+    /// The renderer culls the view and prepares its draws but runs no features and presents nothing. Host pipelines in
+    /// <see cref="FrameDesc.Pipelines"/> record them through <see cref="Renderer.Draws"/>.
+    /// </summary>
+    public bool External;
+
+    /// <summary>Pass types an external view prepares draws for, beyond the prepass, opaque and transparent lists.</summary>
+    public PassType[]? Passes;
+
     public ViewDesc()
     {
         World = null!;
@@ -177,7 +190,16 @@ public struct FrameDesc
 {
     public ReadOnlyMemory<ViewDesc> Views;
     public FrameTime Time;
+
+    /// <summary>
+    /// Host pipelines run in the frame's execution after its views, on the render thread. Their passes draw external
+    /// views through <see cref="Renderer.Draws"/>.
+    /// </summary>
+    public ReadOnlyMemory<GraphDispatch> Pipelines;
 }
+
+/// <summary>A texture region read back to the host: tightly packed rows of its format.</summary>
+public readonly record struct TextureReadback(byte[] Data, uint Width, uint Height, PixelFormat Format);
 
 /// <summary>
 /// Graphite's high level renderer. The host mutates worlds, materials and globals on its thread and calls
@@ -341,17 +363,20 @@ public sealed class Renderer : IDisposable
         try
         {
             RaiseBakes();
+            RaiseReadbacks();
             RemoveWorlds();
 
             if (Textures.Sweep(_lastDispatched, Device.LastCompletedExecutionId, _freedTextures))
             {
+                HashSet<Texture>? freed = Textures.Overflowed ? null : _freedTextures;
+                Textures.Overflowed = false;
                 _materials.MarkAllRecords();
                 _globals.MarkAllDirty();
                 foreach (WorldFrame world in _worlds.Values)
                 {
-                    world.World.Lighting.RepackDecals(_freedTextures);
-                    world.World.RepackLightmaps(_freedTextures);
-                    world.World.Reflections.RepackBaked(_freedTextures);
+                    world.World.Lighting.RepackDecals(freed);
+                    world.World.RepackLightmaps(freed);
+                    world.World.Reflections.RepackBaked(freed);
                 }
             }
 
@@ -369,6 +394,10 @@ public sealed class Renderer : IDisposable
             views.CopyTo(_views);
             _viewCount = views.Length;
             ExtractFeatures(views);
+            _pipelines = frame.Pipelines.ToArray();
+            _frameReadbacks.Clear();
+            while (_readbacks.TryDequeue(out ReadbackRequest? request))
+                _frameReadbacks.Add(request);
             _time = frame.Time;
 
             if (_thread == null)
@@ -390,6 +419,70 @@ public sealed class Renderer : IDisposable
     }
 
     private RenderFeature[][] _viewFeatures = [];
+    private GraphDispatch[] _pipelines = [];
+    private readonly ConcurrentQueue<ReadbackRequest> _readbacks = new();
+    private readonly List<ReadbackRequest> _frameReadbacks = new();
+    private readonly List<ReadbackRequest> _pendingReadbacks = new();
+
+    /// <summary>
+    /// Copies a texture region to the host after this frame's views, calling <paramref name="done"/> on the host thread
+    /// at a later SubmitFrame. The whole mip when no region is given. Host thread.
+    /// </summary>
+    public void Readback(Texture texture, Action<TextureReadback> done, uint mip = 0, uint layer = 0, TextureRegion? region = null)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+        ArgumentNullException.ThrowIfNull(done);
+        try
+        {
+            texture.Format.GetSizeInBytes();
+        }
+        catch (Exception e)
+        {
+            throw new ArgumentException($"A {texture.Format} texture cannot be read back, its texels have no fixed size.", nameof(texture), e);
+        }
+        if (mip >= texture.MipLevels || layer >= texture.ArrayLayers * (texture.Type == TextureType.TextureCube ? 6u : 1u))
+            throw new ArgumentOutOfRangeException(nameof(mip), $"The texture has {texture.MipLevels} mips and {texture.ArrayLayers} layers.");
+        TextureRegion whole = new(0, 0, 0, Math.Max(texture.Width >> (int)mip, 1), Math.Max(texture.Height >> (int)mip, 1), 1, mip, layer);
+        _readbacks.Enqueue(new ReadbackRequest { Texture = texture, Region = region ?? whole, TextureDone = done });
+    }
+
+    /// <summary>Copies a buffer range to the host after this frame's views, the rest of the buffer when size is 0. Host thread.</summary>
+    public void Readback(DeviceBuffer buffer, Action<byte[]> done, uint offset = 0, uint size = 0)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentNullException.ThrowIfNull(done);
+        if (size == 0)
+            size = buffer.SizeInBytes - Math.Min(offset, buffer.SizeInBytes);
+        if (size == 0 || offset + size > buffer.SizeInBytes)
+            throw new ArgumentOutOfRangeException(nameof(size), $"The buffer holds {buffer.SizeInBytes} bytes.");
+        _readbacks.Enqueue(new ReadbackRequest { Buffer = buffer, Offset = offset, Size = size, BufferDone = done });
+    }
+
+    /// <summary>
+    /// The draws prepared this frame for an external view, for host pipelines to record. Render thread, inside a pass of
+    /// <see cref="FrameDesc.Pipelines"/>.
+    /// </summary>
+    public ViewDraws Draws(int viewId) => _frame.Draws(viewId);
+
+    // Hands finished readbacks to their callbacks. Host thread, render thread idle.
+    private void RaiseReadbacks()
+    {
+        ulong completed = Device.LastCompletedExecutionId;
+        for (int i = 0; i < _pendingReadbacks.Count; i++)
+        {
+            ReadbackRequest request = _pendingReadbacks[i];
+            if (request.Execution == 0 || request.Execution > completed)
+                continue;
+            _pendingReadbacks.RemoveAt(i--);
+            byte[] data = Device.Map<byte>(request.Staging!).ToArray();
+            Device.Unmap(request.Staging!);
+            request.Staging!.Dispose();
+            if (request.Texture is { } texture)
+                request.TextureDone!(new TextureReadback(data, request.Region.Width, request.Region.Height, texture.Format));
+            else
+                request.BufferDone!(data);
+        }
+    }
     private readonly HashSet<Texture> _freedTextures = new();
     private readonly HashSet<RenderFeature> _extracted = new();
 
@@ -542,6 +635,12 @@ public sealed class Renderer : IDisposable
             _uploader.Clear();
             foreach (WorldFrame world in _worlds.Values)
                 world.World.Reflections.FrameFailed();
+            foreach (ReadbackRequest request in _frameReadbacks)
+            {
+                request.Staging?.Dispose();
+                request.Staging = null;
+                _readbacks.Enqueue(request);
+            }
             Report(new RendererError("frame.failed", $"The frame failed: {e}", RendererErrorSeverity.Error, e) { Key = $"frame.{e.GetType().Name}.{e.Message}" });
         }
     }
@@ -591,8 +690,16 @@ public sealed class Renderer : IDisposable
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _worlds, _worlds.Values, _lastDispatched, _time);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _pipelines, _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time);
         _lastDispatched = task.Id;
+        foreach (ReadbackRequest request in _frameReadbacks)
+        {
+            if (request.Staging == null)
+                continue;
+            request.Execution = task.Id;
+            _pendingReadbacks.Add(request);
+        }
+        _frameReadbacks.Clear();
         foreach (WorldFrame world in _worlds.Values)
             world.World.Reflections.Dispatched(task.Id);
     }

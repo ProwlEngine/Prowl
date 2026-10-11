@@ -91,6 +91,61 @@ public sealed class FeatureTests : IDisposable
         }
         """;
 
+    // Transparent, drawing nothing in its forward pass and its tint half blended in a Glow pass
+    private const string GlowSource = """
+        Shader "Test/Glow"
+        {
+            Properties
+            {
+                _Color("Color", Color) = (1, 1, 1, 0.5)
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Forward" "RenderQueue" = "3000" }
+                Cull Off
+                ZWrite Off
+                Blend SourceAlpha InverseSourceAlpha
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = vec4(0.0); }
+                }
+                ENDGLSL
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Glow" }
+                Cull Off
+                ZTest Always
+                ZWrite Off
+                Blend SourceAlpha InverseSourceAlpha
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    uniform vec4 _Color;
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = _Color; }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
     private const int Size = 16;
 
     // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
@@ -630,6 +685,194 @@ public sealed class FeatureTests : IDisposable
         Frame(View(1));
         Assert.Equal(3, counts.Seen[1]);
         Assert.Equal(1, counts.Seen[2]);
+    }
+
+    [Fact]
+    public void Readbacks_OfTexturesAndBuffers_CompleteOnALaterSubmit()
+    {
+        AddQuad(new Float3(0.25f, 0.5f, 1));
+        using DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
+        _device.UpdateBuffer<uint>(buffer, 0, [1, 2, 3, 4]);
+
+        TextureReadback? texture = null;
+        byte[]? bytes = null;
+        _renderer.Readback(_target, data => texture = data);
+        _renderer.Readback(buffer, data => bytes = data, offset: 4, size: 8);
+        Frame(View());
+        Assert.Null(texture);
+
+        _renderer.SubmitFrame(new FrameDesc());
+        Assert.NotNull(texture);
+        Assert.Equal((16u, 16u, PixelFormat.R32_G32_B32_A32_Float), (texture!.Value.Width, texture.Value.Height, texture.Value.Format));
+        Float4 pixel = MemoryMarshal.Cast<byte, Float4>(texture.Value.Data)[5 * Size + 7];
+        Assert.Equal(new Float4(0.25f, 0.5f, 1, 1), pixel);
+        Assert.Equal([2u, 3u], MemoryMarshal.Cast<byte, uint>(bytes).ToArray());
+    }
+
+    [Fact]
+    public void AReadbackWhoseTextureIsDisposedFirst_IsReported()
+    {
+        Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        bool done = false;
+        _renderer.Readback(texture, _ => done = true);
+        texture.Dispose();
+        _renderer.SubmitFrame(new FrameDesc());
+        _renderer.SubmitFrame(new FrameDesc());
+        Assert.False(done);
+        Assert.Equal("readback.disposed", Assert.Single(_errors).Code);
+    }
+
+    // A host's own pass drawing an external view's opaque renderables into a target
+    private sealed class HostDraw(Renderer renderer, Framebuffer target, int viewId) : IPass
+    {
+
+        public string Name => "Host draw";
+
+        public void Setup(RenderContextBuilder builder) => builder.DeclareViewTarget();
+
+        public void Render(RenderContext context, CommandBuffer cmd)
+        {
+            cmd.SetFramebuffer(target, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0, 0, 0, 1)), AttachmentOps.Clear(0f)));
+            cmd.SetFullViewport();
+            renderer.Draws(viewId).Record(context, cmd, PassType.Forward);
+        }
+    }
+
+    [Fact]
+    public void ExternalViews_DrawThroughTheHostsOwnPipeline()
+    {
+        AddQuad(new Float3(1, 0, 0), scale: 0.5);
+        using Texture depth = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.D32_Float, TextureUsage.DepthStencil));
+        using Framebuffer target = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(depth, _target));
+        using RenderPipeline host = new([new HostDraw(_renderer, target, 9)]);
+        ViewDesc external = View(9);
+        external.External = true;
+        external.Target = target;
+
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { external }, Pipelines = new[] { new GraphDispatch(host, [new HostView(target)]) } });
+        _device.WaitForIdle();
+        Assert.Empty(_errors);
+        Float4[] pixels = ReadTarget();
+        AssertAll(new Float3(1, 0, 0), pixels, Centre);
+        AssertAll(new Float3(0, 0, 0), pixels, i => !Centre(i));
+    }
+
+    private sealed class HostView(Framebuffer target) : IRenderView
+    {
+        public Framebuffer? Target => target;
+        public uint PixelWidth => target.Width;
+        public uint PixelHeight => target.Height;
+        public int ViewId => 100;
+    }
+
+    private Float4[] ReadTarget()
+    {
+        _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
+        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
+        _device.Unmap(_readback);
+        return pixels;
+    }
+
+    private sealed class Glows : RenderFeature
+    {
+        public static readonly PassType Glow = new("Glow");
+
+        public override RenderSlot Slot => RenderSlot.AfterTransparents;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.DrawsPass(Glow);
+            builder.DrawToScene();
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            context.BeginOutput();
+            context.DrawPass(Glow);
+        }
+    }
+
+    [Fact]
+    public void TransparentRenderablesInAFeaturesPass_BlendBackToFront()
+    {
+        Shader glow = _renderer.LoadShader(ShaderParser.Parse(GlowSource));
+        Material Tint(Float3 c)
+        {
+            Material material = _renderer.CreateMaterial(glow);
+            material.SetColor("_Color", new Float4(c.X, c.Y, c.Z, 0.5f));
+            return material;
+        }
+
+        // The near one added first, so only sorting puts the far one under it
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [Tint(new Float3(0, 1, 0))]);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 20)) }, [Tint(new Float3(1, 0, 0))]);
+        _world.Features.Add(new Glows());
+        AssertAll(new Float3(0.25f, 0.5f, 0), Frame(View()));
+    }
+
+    // Declares a read of a texture nothing writes, which the graph refuses after its Setup returns
+    private sealed class BreaksTheGraph : RenderFeature
+    {
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.Graph.DeclareInputTexture(RenderResourceID.Intern("Nothing writes this"));
+        public override void Render(FeatureContext context) { }
+    }
+
+    [Fact]
+    public void AFeatureBreakingTheGraphAfterItsSetup_IsLeftOut_AndTheViewDrawsOn()
+    {
+        AddQuad(new Float3(0.25f, 0.5f, 1));
+        _world.Features.Add(new BreaksTheGraph());
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        RendererError error = Assert.Single(_errors);
+        Assert.Equal("feature.setup", error.Code);
+        Assert.IsType<BreaksTheGraph>(error.Source);
+        _errors.Clear();
+        AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
+    }
+
+    // Publishes the colour when on
+    private sealed class Publisher : RenderFeature
+    {
+        public bool On = true;
+
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+        public override bool IsActive(in FeatureView view) => On;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+            => builder.Publish("Inverted", builder.Temporary("Copy", GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float)));
+
+        public override void Render(FeatureContext context) { }
+    }
+
+    // Reads what the publisher published, and inverts the colour
+    private sealed class Reader(FullscreenProgram program) : RenderFeature
+    {
+        public override RenderSlot Slot => RenderSlot.Tonemap;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.Read("Inverted");
+            builder.WriteColor();
+        }
+
+        public override void Render(FeatureContext context) => context.Fullscreen(program);
+    }
+
+    [Fact]
+    public void AFeatureThatFailed_IsTriedAgain_WhenTheViewsFeaturesChange()
+    {
+        AddQuad(new Float3(0.25f, 0.5f, 1));
+        Publisher publisher = new() { On = false };
+        _world.Features.Add(publisher);
+        _world.Features.Add(new Reader(Program("void main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }")));
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        Assert.Equal("feature.setup", Assert.Single(_errors).Code);
+        _errors.Clear();
+        AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
+
+        publisher.On = true;
+        AssertAll(new Float3(0.75f, 0.5f, 0), Frame(View()));
     }
 
     [Fact]

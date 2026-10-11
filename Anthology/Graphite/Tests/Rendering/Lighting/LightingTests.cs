@@ -1286,6 +1286,26 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void ProbesSlicedAcrossFrames_StartNoNewCapture_OnceTheBudgetIsSpent()
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            ReflectionProbeDesc desc = RoomProbe(new Double3(100 * i, 0, 0), new Float3(10, 10, 10));
+            desc.Resolution = 512;
+            desc.Refresh = ReflectionProbeRefresh.EveryFrame;
+            desc.TimeSlicing = ReflectionProbeTimeSlicing.IndividualFaces;
+            _world.AddReflectionProbe(desc);
+        }
+
+        // A 512 face is the whole budget, so each frame draws one face of one probe
+        for (int frame = 0; frame < 4; frame++)
+        {
+            Frame();
+            Assert.Single(_world.Reflections.Captures);
+        }
+    }
+
+    [Fact]
     public void SkyCapturedEveryFrame_ReusesItsScratchCube()
     {
         _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(0.1f, 0.2f, 0.4f), 0), SkyCapture = SkyCaptureMode.EveryFrame };

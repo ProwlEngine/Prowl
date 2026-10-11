@@ -568,9 +568,9 @@ internal sealed class WorldLighting : IDisposable
     }
 
     /// <summary>Repacks the decals using textures that were disposed and freed. Host thread, at extraction.</summary>
-    public void RepackDecals(HashSet<Texture> freed)
+    public void RepackDecals(HashSet<Texture>? freed)
     {
-        bool Freed(Texture? texture) => texture != null && freed.Contains(texture);
+        bool Freed(Texture? texture) => texture != null && (freed == null || freed.Contains(texture));
 
         for (int i = 0; i < _decals.Length; i++)
         {

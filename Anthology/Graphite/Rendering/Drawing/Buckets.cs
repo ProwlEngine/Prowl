@@ -290,6 +290,7 @@ internal sealed class BucketSet
     /// <summary>One transparent submesh of one object, with the chunks it draws.</summary>
     private sealed class TransparentItem
     {
+        public required int Pass;
         public required int Object;
         public required ushort Program;
         public required int Page;
@@ -368,9 +369,13 @@ internal sealed class BucketSet
         _orderDirty.Add(true);
         for (int index = 0; index < _world.Capacity; index++)
         {
-            if (_world.Alive[index] && _world.Mesh[index]?.Placement is { } placement)
-                AddToPass(index, pass, placement);
+            if (!_world.Alive[index] || _world.Mesh[index]?.Placement is not { } placement)
+                continue;
+            AddToPass(index, pass, placement);
+            if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
+                AddTransparent(index, placement, _world.Mirrored[index], pass);
         }
+        RefreshRanks();
         return pass;
     }
 
@@ -399,15 +404,19 @@ internal sealed class BucketSet
                 AddObject(index);
         }
 
-        if (_ranksDirty)
-        {
-            RankQueues();
-            foreach (Bucket bucket in _buckets.Values)
-                bucket.Key = Key(bucket);
-            for (int i = 0; i < _orderDirty.Count; i++)
-                _orderDirty[i] = true;
-            _ranksDirty = false;
-        }
+        RefreshRanks();
+    }
+
+    private void RefreshRanks()
+    {
+        if (!_ranksDirty)
+            return;
+        RankQueues();
+        foreach (Bucket bucket in _buckets.Values)
+            bucket.Key = Key(bucket);
+        for (int i = 0; i < _orderDirty.Count; i++)
+            _orderDirty[i] = true;
+        _ranksDirty = false;
     }
 
     /// <summary>
@@ -450,6 +459,8 @@ internal sealed class BucketSet
             Emit(list, bucket, first, count);
         }
 
+        if (pass >= BuiltInPasses)
+            AppendTransparent(frustum, list, pass);
         if (!prepass)
             return;
 
@@ -465,15 +476,21 @@ internal sealed class BucketSet
     public void BuildTransparent(in CullFrustum frustum, DrawList list)
     {
         list.Clear();
+        AppendTransparent(frustum, list, 1);
+    }
+
+    // The visible transparent items of a pass, back to front, after what the list holds
+    private void AppendTransparent(in CullFrustum frustum, DrawList list, int pass)
+    {
         _sorted.Clear();
         foreach (TransparentItem item in _transparent)
         {
-            if (_visible[item.Object])
+            if (item.Pass == pass && _visible[item.Object])
                 _sorted.Add((TransparentKey(item, frustum), item));
         }
         _sorted.Sort((a, b) => a.Key.CompareTo(b.Key));
 
-        DrawCommandRef previous = default;
+        DrawCommandRef previous = new(0, -1, default, false, 0, -1);
         foreach ((_, TransparentItem item) in _sorted)
         {
             bool multiChunk = item.Chunks.Length > 1;
@@ -578,7 +595,11 @@ internal sealed class BucketSet
         for (int pass = 0; pass < _passes.Count; pass++)
             AddToPass(index, pass, placement);
         if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
-            AddTransparent(index, placement, _world.Mirrored[index]);
+        {
+            AddTransparent(index, placement, _world.Mirrored[index], 1);
+            for (int pass = BuiltInPasses; pass < _passes.Count; pass++)
+                AddTransparent(index, placement, _world.Mirrored[index], pass);
+        }
     }
 
     // Built in passes draw opaque materials, the shadow pass only casters; a feature's pass draws every material having it
@@ -586,7 +607,6 @@ internal sealed class BucketSet
     {
         RenderableFlags flags = _world.Flags[index];
         bool shadows = _passes[pass] == PassType.ShadowCaster;
-        bool custom = pass >= BuiltInPasses;
         if (shadows ? (flags & RenderableFlags.CastShadows) == 0 : (flags & RenderableFlags.ShadowsOnly) != 0)
             return;
 
@@ -598,7 +618,7 @@ internal sealed class BucketSet
             Material? material = _world.SliceMaterials[_world.SliceBase[index] + (uint)chunk.SubMesh];
             if (material == null || material.IsDisposed || material.Draw is not { } draw)
                 continue;
-            if ((draw.Transparent && !custom) || (shadows && !draw.CastShadows))
+            if (draw.Transparent || (shadows && !draw.CastShadows))
                 continue;
             if (!_programs.TryGet(draw, _passes[pass], out ushort program))
                 continue;
@@ -628,14 +648,14 @@ internal sealed class BucketSet
         }
     }
 
-    private void AddTransparent(int index, MeshPlacement placement, bool mirrored)
+    private void AddTransparent(int index, MeshPlacement placement, bool mirrored, int pass)
     {
         for (int s = 0; s < placement.SubMeshes.Length; s++)
         {
             Material? material = _world.SliceMaterials[_world.SliceBase[index] + (uint)s];
             if (material == null || material.IsDisposed || material.Draw is not { } draw || !draw.Transparent)
                 continue;
-            if (!_programs.TryGet(draw, PassType.Forward, out ushort program))
+            if (!_programs.TryGet(draw, _passes[pass], out ushort program))
                 continue;
 
             List<ChunkRef> chunks = new();
@@ -651,6 +671,7 @@ internal sealed class BucketSet
             Track(material, index);
             TransparentItem item = new()
             {
+                Pass = pass,
                 Object = index,
                 Program = program,
                 Page = placement.Page,

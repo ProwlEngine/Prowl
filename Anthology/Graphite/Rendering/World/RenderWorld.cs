@@ -206,11 +206,13 @@ public sealed partial class RenderWorld : IDisposable
     private readonly RenderSide _render;
 
     private readonly Renderer? _owner;
+    private static int s_nextId;
 
     internal RenderWorld(GraphicsDevice device, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
     {
         _owner = owner;
-        Action<RendererError> report = owner != null ? error => owner.Report(error.Source == null ? error with { Source = this } : error) : _ => { };
+        int id = System.Threading.Interlocked.Increment(ref s_nextId);
+        Action<RendererError> report = owner != null ? error => owner.Report(error with { Source = error.Source ?? this, Key = $"{error.Key ?? error.Code}.world{id}" }) : _ => { };
         Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, report);
         Probes = new WorldProbes(device);
         Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance, report, reflections ?? ReflectionSettings.Default);
@@ -367,12 +369,12 @@ public sealed partial class RenderWorld : IDisposable
         return (resources.TextureSlot(texture, MaterialPropertyType.Texture2D, "black"), sampler | ((uint)lightmap.Encoding << 16));
     }
 
-    /// <summary>Resolves the slots of lightmaps whose textures were disposed and freed. Host thread, at extraction.</summary>
-    internal void RepackLightmaps(HashSet<Texture> freed)
+    /// <summary>Resolves the slots of lightmaps whose textures were freed, every one when freed is null. Host thread, at extraction.</summary>
+    internal void RepackLightmaps(HashSet<Texture>? freed)
     {
         for (int index = 0; index < _count; index++)
         {
-            if (_alive[index] && _lightmap[index].Texture is { } texture && freed.Contains(texture))
+            if (_alive[index] && _lightmap[index].Texture is { } texture && (freed == null || freed.Contains(texture)))
                 MarkDirty(index, Dirt.Attributes);
         }
     }

@@ -141,6 +141,9 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     /// <summary>Raised once when a table is full, so textures fall back to slot 0.</summary>
     internal Action<RendererError>? Reporter { get; set; }
 
+    /// <summary>Whether a table was full since the last sweep, so textures that fell back to slot 0 need resolving again.</summary>
+    internal bool Overflowed { get; set; }
+
     /// <summary>Slots in the 2D texture table.</summary>
     public uint Texture2DCapacity => Textures2D;
 
@@ -269,7 +272,8 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             slot = _nextSlot[table]++;
         else
         {
-            Reporter?.Invoke(new RendererError($"textures.{s_tableNames[table]}.full", $"Every one of the {capacity} slots of {s_tableNames[table]} is in use, new textures there show slot 0."));
+            Overflowed = true;
+            Reporter?.Invoke(new RendererError($"textures.{s_tableNames[table]}.full", $"Every one of the {capacity} slots of {s_tableNames[table]} is in use, new textures there show slot 0.", RendererErrorSeverity.Warning));
             return 0;
         }
         _slots[table][texture] = slot;
