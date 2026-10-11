@@ -123,6 +123,7 @@ internal unsafe partial class VkSwapchain : Swapchain
             {
                 _freeAcquireSemaphores.Push(semaphore);
                 _imageAcquired = false;
+                _gd.ConsumePendingAcquires(this);
                 if (!CreateSwapchain(_framebuffer.Width, _framebuffer.Height))
                     return;
                 continue;
@@ -191,13 +192,11 @@ internal unsafe partial class VkSwapchain : Swapchain
         int imageCount = _framebuffer.ImageCount;
         _imageAcquireSemaphores = new VkSemaphore[imageCount];
 
-        if (_presentSemaphores.Length < imageCount)
-        {
-            int old = _presentSemaphores.Length;
-            Array.Resize(ref _presentSemaphores, imageCount);
-            for (int i = old; i < imageCount; i++)
-                _presentSemaphores[i] = CreateSemaphore();
-        }
+        foreach (VkSemaphore semaphore in _presentSemaphores)
+            _gd.Vk.DestroySemaphore(_gd.Device, semaphore, null);
+        _presentSemaphores = new VkSemaphore[imageCount];
+        for (int i = 0; i < imageCount; i++)
+            _presentSemaphores[i] = CreateSemaphore();
     }
 
     private bool CreateSwapchain(uint width, uint height)
@@ -218,6 +217,11 @@ internal unsafe partial class VkSwapchain : Swapchain
         if (_deviceSwapchain.Handle != default)
         {
             _gd.WaitForIdle();
+            if (_presentQueueIndex != _gd.GraphicsQueueIndex)
+            {
+                lock (this)
+                    _gd.Vk.QueueWaitIdle(_presentQueue);
+            }
         }
 
         _currentImageIndex = 0;
