@@ -25,6 +25,12 @@ public sealed class RendererOptions
     /// <summary>Bytes of queued resource uploads applied per frame.</summary>
     public long UploadBudgetPerFrame = 64 << 20;
 
+    /// <summary>The hardware slope offset every shadow caster draws with.</summary>
+    public float ShadowSlopeBias = 1.5f;
+
+    /// <summary>The hardware constant offset every shadow caster draws with, in depth steps.</summary>
+    public float ShadowConstantBias = 0;
+
     /// <summary>Words of vertex data per geometry page.</summary>
     public uint PageVertexWords = GeometryPool.DefaultPageVertexWords;
 
@@ -267,6 +273,7 @@ public sealed class Renderer : IDisposable
         _globals = new GlobalRegistry(device, Textures) { Reporter = Report };
         _programs.Reporter = Report;
         _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report) { StaleViewFrames = _options.StaleViewFrames };
+        _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
         Skies = new BuiltInSkies(this);
 
         if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)

@@ -1222,6 +1222,206 @@ public sealed class LightingTests : IDisposable
         }
     }
 
+    // Depth alone
+    private const string CasterPass = """
+            Pass
+            {
+                Tags { "LightMode" = "ShadowCaster" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    void main() { }
+                }
+                ENDGLSL
+            }
+        """;
+
+    // For shadow casters the views never see
+    private const string CasterSource = "Shader \"Test/Caster\"\n{\n" + CasterPass + "\n}";
+
+    // The lit surface casting too, so it can only shadow itself through acne
+    private static readonly string LitCasterSource = WithPass(Source.Replace("Test/Lit", "Test/LitCaster"), CasterPass);
+
+    private static string WithPass(string shader, string pass) => shader.Insert(shader.LastIndexOf('}'), pass + "\n");
+
+    // A square of half size half only shadows see, centred at x, y on the plane at depth z
+    private void AddCaster(double x, double y, double z, double half = 1)
+    {
+        Material caster = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(CasterSource)));
+        _world.Add(new RenderableDesc
+        {
+            Mesh = _quad,
+            Transform = Double4x4.CreateTranslation(_origin + new Double3(x, y, z)) * Double4x4.CreateScale(half / 4),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        }, [caster]);
+    }
+
+    // Lit as the reference says, dark where blocked, skipping pixels within margin of the shadow's edge
+    private static void AssertShadowed(Func<Vector3, Vector3> lit, Func<Vector3, float> edgeDistance, Float4[] pixels, float margin)
+    {
+        int checkedLit = 0, checkedDark = 0;
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                Vector3 p = PixelPosition(x, y);
+                float edge = edgeDistance(p);
+                if (MathF.Abs(edge) < margin)
+                    continue;
+                Vector3 want = edge < 0 ? Vector3.Zero : lit(p);
+                Float4 got = pixels[y * Size + x];
+                Assert.True(Vector3.Distance(want, new Vector3(got.X, got.Y, got.Z)) <= 2e-4f + 0.01f * want.Length(), $"pixel {x},{y}: expected {want}, got {got}");
+                if (edge < 0)
+                    checkedDark++;
+                else if (want.Length() > 1e-3f)
+                    checkedLit++;
+            }
+        }
+        Assert.True(checkedDark > 4 && checkedLit > 4, $"{checkedDark} shadowed and {checkedLit} lit pixels checked");
+    }
+
+    // Signed distance from a square's edge, negative inside
+    private static float SquareEdge(Vector3 p, float cx, float cy, float half) => MathF.Max(MathF.Abs(p.X - cx), MathF.Abs(p.Y - cy)) - half;
+
+    [Fact]
+    public void SpotLightShadows_FallWhereTheCasterBlocksTheLight()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        LightDesc light = new()
+        {
+            Type = LightType.Spot,
+            Position = new Double3(0, 0, 2),
+            Direction = new Float3(0, 0, 1),
+            Range = 20,
+            Intensity = 0.2f,
+            InnerAngle = 35,
+            OuterAngle = 40,
+            Static = true,
+            Shadow = new ShadowDesc { Enabled = true },
+        };
+        _world.AddLight(light);
+
+        // Off centre in both axes, so a flipped map shows: from 2 through 6 to 10 the square doubles
+        AddCaster(1, 0.5, 6);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
+    }
+
+    [Fact]
+    public void DirectionalShadows_FallAlongTheLight_FarFromTheOriginAsNearIt()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        Material surface = Surface(new Float3(albedo.X, albedo.Y, albedo.Z));
+        RenderableHandle quad = AddQuad(surface);
+        LightDesc sun = new()
+        {
+            Type = LightType.Directional,
+            Direction = new Float3(0.5f, 0.25f, 1),
+            Intensity = 0.1f,
+            Shadow = new ShadowDesc { Enabled = true },
+        };
+        _world.AddLight(sun);
+
+        // From depth 8 to 10 the light moves a unit in x and half in y
+        AddCaster(-1, -1, 8, half: 2);
+        Float4[] near = Frame();
+        LightDesc normalized = sun with { Direction = Normalize(sun.Direction) };
+        AssertShadowed(p => Reference.Directional(normalized, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 0, -0.5f, 2), near, 0.6f);
+
+        _origin = new Double3(10_000_000.25, 0, -3_000_000);
+        _world.SetTransform(quad, Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)));
+        AddCaster(-1, -1, 8, half: 2);
+
+        // The cascades refit on their stagger, every one within four frames of the jump
+        for (int frame = 0; frame < 3; frame++)
+            Frame();
+        Float4[] far = Frame();
+        for (int i = 0; i < near.Length; i++)
+            Assert.True(MathF.Abs(near[i].X - far[i].X) < 2e-3f + 0.01f * near[i].X, $"pixel {i}: {near[i].X} near, {far[i].X} far");
+    }
+
+    private static Float3 Normalize(Float3 v) => v / MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+
+    [Fact]
+    public void SurfacesCastingOnThemselves_AtAGrazingAngle_ShowNoAcne()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(LitCasterSource)));
+        material.SetColor("_Color", new Float4(albedo.X, albedo.Y, albedo.Z, 1));
+        AddQuad(material);
+        LightDesc sun = new() { Type = LightType.Directional, Direction = Normalize(new Float3(1, 0.2f, 0.3f)), Intensity = 0.1f, Shadow = new ShadowDesc { Enabled = true } };
+        LightHandle handle = _world.AddLight(sun);
+        AssertMatches(p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f), Frame());
+
+        _world.SetLight(handle, sun with { Intensity = 0 });
+        LightDesc spot = new()
+        {
+            Type = LightType.Spot,
+            Position = new Double3(-6, 0, 8),
+            Direction = Normalize(new Float3(1, 0, 0.45f)),
+            Range = 30,
+            Intensity = 0.3f,
+            InnerAngle = 50,
+            OuterAngle = 60,
+            Static = true,
+            Shadow = new ShadowDesc { Enabled = true },
+        };
+        _world.AddLight(spot);
+        AssertMatches(p => Reference.Local(spot, p, s_normal, albedo, 0, 0.5f), Frame());
+    }
+
+    [Fact]
+    public void ShadowTiles_PackLargestFirst_AndMergeBackWhenFreed()
+    {
+        ShadowTileAllocator tiles = new(1024);
+        Assert.True(tiles.TryAllocate(512, out ShadowTile a));
+        Assert.True(tiles.TryAllocate(300, out ShadowTile b));
+        Assert.Equal(512, b.Size);
+        Assert.True(tiles.TryAllocate(256, out ShadowTile c));
+        Assert.True(tiles.TryAllocate(256, out ShadowTile d));
+        Assert.True(tiles.TryAllocate(512, out ShadowTile e));
+        Assert.False(tiles.TryAllocate(512, out _));
+        Assert.True(tiles.TryAllocate(256, out ShadowTile f));
+        Assert.True(tiles.TryAllocate(256, out ShadowTile g));
+        Assert.False(tiles.TryAllocate(16, out _));
+
+        HashSet<(int, int)> corners = [(a.X, a.Y), (b.X, b.Y), (c.X, c.Y), (d.X, d.Y), (e.X, e.Y), (f.X, f.Y), (g.X, g.Y)];
+        Assert.Equal(7, corners.Count);
+        foreach (ShadowTile tile in new[] { a, b, c, d, e, f, g })
+            tiles.Free(tile);
+        Assert.Equal(0, tiles.UsedTexels);
+        Assert.True(tiles.TryAllocate(1024, out ShadowTile whole));
+        Assert.Equal((0, 0, 1024), (whole.X, whole.Y, whole.Size));
+    }
+
+    [Fact]
+    public void CascadeSpheres_HoldTheirSliceAndStayStillAsTheViewTurns()
+    {
+        float depth = ShadowMath.SliceSphere(2, 10, 0.5f, 0.3f, false, out float radius);
+        float k = 0.5f * 0.5f + 0.3f * 0.3f;
+
+        // Every corner of the slice is inside, the far ones on the sphere when the centre sits inside the slice
+        foreach (float z in new[] { 2f, 10f })
+        {
+            float corner = MathF.Sqrt((z - depth) * (z - depth) + z * z * k);
+            Assert.True(corner <= radius + 1e-4f, $"corner at {z} is {corner} from the centre, radius {radius}");
+        }
+        Assert.Equal(1.0, Math.Abs(ShadowMath.Split(0, 4, 0.1f, 50) / 0.1f), 5);
+        Assert.Equal(50f, ShadowMath.Split(4, 4, 0.1f, 50));
+
+        // Snapped centres a texel apart move by exactly one texel
+        Double3 c0 = ShadowMath.Snap(new Double3(1000.3, 5, 7), new Float3(1, 0, 0), new Float3(0, 1, 0), new Float3(0, 0, 1), 0.5);
+        Double3 c1 = ShadowMath.Snap(new Double3(1000.8, 5, 7), new Float3(1, 0, 0), new Float3(0, 1, 0), new Float3(0, 0, 1), 0.5);
+        Assert.Equal(0.5, c1.X - c0.X, 9);
+        Assert.Equal(7, c0.Z, 9);
+    }
+
     [Fact]
     public void SpatialSetRecords_MustBeWholeWords()
     {

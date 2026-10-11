@@ -136,7 +136,15 @@ internal readonly struct CullFrustum
     {
         Camera = camera;
         _layers = 1;
-        _counts[0] = AddLayer(ref _planes, 0, viewProjection, Float3.Zero);
+        _counts[0] = AddLayer(ref _planes, 0, viewProjection, Float3.Zero, true);
+    }
+
+    /// <summary>One view, without its near plane when nearPlane is false, so a directional shadow keeps casters toward the light.</summary>
+    public CullFrustum(in Float4x4 viewProjection, Double3 camera, bool nearPlane)
+    {
+        Camera = camera;
+        _layers = 1;
+        _counts[0] = AddLayer(ref _planes, 0, viewProjection, Float3.Zero, nearPlane);
     }
 
     public CullFrustum(in ViewLayers layers, int count)
@@ -148,12 +156,12 @@ internal readonly struct CullFrustum
         for (int l = 0; l < count; l++)
         {
             ViewLayer layer = layers[l];
-            _counts[l] = AddLayer(ref _planes, l * 6, layer.Projection * layer.View, Relative(layer.Position));
+            _counts[l] = AddLayer(ref _planes, l * 6, layer.Projection * layer.View, Relative(layer.Position), true);
         }
     }
 
     // A layer's planes moved from its own camera to the first layer's, offset being its camera from the first
-    private static int AddLayer(ref Planes planes, int first, in Float4x4 viewProjection, Float3 offset)
+    private static int AddLayer(ref Planes planes, int first, in Float4x4 viewProjection, Float3 offset, bool nearPlane)
     {
         Float4 row0 = new(viewProjection.c0.X, viewProjection.c1.X, viewProjection.c2.X, viewProjection.c3.X);
         Float4 row1 = new(viewProjection.c0.Y, viewProjection.c1.Y, viewProjection.c2.Y, viewProjection.c3.Y);
@@ -162,6 +170,8 @@ internal readonly struct CullFrustum
 
         int count = 0;
         Span<Float4> candidates = [row3 + row0, row3 - row0, row3 + row1, row3 - row1, row2, row3 - row2];
+        if (!nearPlane)
+            candidates = candidates[..5];
         foreach (Float4 plane in candidates)
         {
             float length = MathF.Sqrt(plane.X * plane.X + plane.Y * plane.Y + plane.Z * plane.Z);
@@ -345,6 +355,8 @@ internal sealed class BucketSet
     private List<Material>?[] _objectMaterials = [];
     private readonly Dictionary<int, int> _queueRanks = new();
     private readonly Dictionary<int, int> _queueUse = new();
+    private readonly HashSet<int> _unionQueues = new();
+    private readonly Dictionary<int, int> _unionRanks = new();
     private bool _ranksDirty;
     private readonly HashSet<int> _rebuild = new();
     private readonly List<(ulong Key, int Bucket, int FirstInstance, int Count)> _prepass = new();
@@ -436,7 +448,7 @@ internal sealed class BucketSet
     /// has several chunks. Empty commands are left out. Prepass commands are sorted near to far by their nearest visible
     /// instance.
     /// </summary>
-    public void Build(int pass, in CullFrustum frustum, DrawList list)
+    public void Build(int pass, in CullFrustum frustum, DrawList list, ProvidedItems? provided = null)
     {
         list.Clear();
         Order(pass);
@@ -471,14 +483,19 @@ internal sealed class BucketSet
             Emit(list, bucket, first, count);
         }
 
+        if (prepass)
+        {
+            _prepass.Sort((a, c) => a.Key.CompareTo(c.Key));
+            foreach ((_, int b, int first, int count) in _prepass)
+                Emit(list, ordered[b], first, count);
+        }
+        foreach (TransparentItem item in provided?.Opaque ?? [])
+        {
+            item.FirstCommand = list.CommandCount;
+            EmitProvided(list, item);
+        }
         if (pass >= BuiltInPasses)
-            AppendTransparent(frustum, list, pass);
-        if (!prepass)
-            return;
-
-        _prepass.Sort((a, c) => a.Key.CompareTo(c.Key));
-        foreach ((_, int b, int first, int count) in _prepass)
-            Emit(list, ordered[b], first, count);
+            AppendTransparent(frustum, list, pass, provided?.Sorted);
     }
 
     /// <summary>
@@ -495,15 +512,16 @@ internal sealed class BucketSet
     private void AppendTransparent(in CullFrustum frustum, DrawList list, int pass, IReadOnlyList<TransparentItem>? provided = null)
     {
         _sorted.Clear();
+        Dictionary<int, int> ranks = RanksWith(provided);
         foreach (TransparentItem item in _transparent)
         {
             if (item.Pass == pass && _visible[item.Object])
-                _sorted.Add((TransparentKey(item, frustum), item));
+                _sorted.Add((TransparentKey(item, frustum, ranks), item));
         }
         if (provided != null)
         {
             foreach (TransparentItem item in provided)
-                _sorted.Add((ProvidedKey(item), item));
+                _sorted.Add((ProvidedKey(item, ranks), item));
         }
         _sorted.Sort((a, b) => a.Key.CompareTo(b.Key));
 
@@ -542,10 +560,26 @@ internal sealed class BucketSet
 
     private readonly record struct DrawCommandRef(ushort Program, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk, int Command);
 
-    // [queueRank 6][sortBias 8, the middle][depth 32 back to front][program 12][spare 6]
-    private ulong ProvidedKey(TransparentItem item)
+    // The world's queue ranks, or ranks over its queues and providers' when a provider draws in a queue the world does not use
+    private Dictionary<int, int> RanksWith(IReadOnlyList<TransparentItem>? provided)
     {
-        ulong rank = (ulong)_queueRanks.GetValueOrDefault(item.Queue);
+        bool missing = false;
+        foreach (TransparentItem item in provided ?? [])
+            missing |= !_queueRanks.ContainsKey(item.Queue);
+        if (!missing)
+            return _queueRanks;
+        _unionQueues.Clear();
+        _unionQueues.UnionWith(_queueRanks.Keys);
+        foreach (TransparentItem item in provided!)
+            _unionQueues.Add(item.Queue);
+        Rank(_unionQueues, _unionRanks);
+        return _unionRanks;
+    }
+
+    // [queueRank 6][sortBias 8, the middle][depth 32 back to front][program 12][spare 6]
+    private static ulong ProvidedKey(TransparentItem item, Dictionary<int, int> ranks)
+    {
+        ulong rank = (ulong)ranks.GetValueOrDefault(item.Queue);
         ulong depth = ~BitConverter.SingleToUInt32Bits(MathF.Max(item.Depth, 0)) & 0xFFFFFFFFu;
         return (rank << 58) | (128ul << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
     }
@@ -572,9 +606,9 @@ internal sealed class BucketSet
     }
 
     // [queueRank 6][sortBias 8][depth 32 back to front][program 12][spare 6]
-    private ulong TransparentKey(TransparentItem item, in CullFrustum frustum)
+    private ulong TransparentKey(TransparentItem item, in CullFrustum frustum, Dictionary<int, int> ranks)
     {
-        ulong rank = (ulong)_queueRanks.GetValueOrDefault(item.Queue);
+        ulong rank = (ulong)ranks.GetValueOrDefault(item.Queue);
         ulong bias = (ulong)(_world.SortBias[item.Object] + 128);
         ulong depth = ~BitConverter.SingleToUInt32Bits(Distance(frustum, item.Object)) & 0xFFFFFFFFu;
         return (rank << 58) | (bias << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
@@ -865,14 +899,16 @@ internal sealed class BucketSet
         }
     }
 
-    private void RankQueues()
+    private void RankQueues() => Rank(_queueUse.Keys, _queueRanks);
+
+    // Keys hold 64 ranks. Queues past the 64th share the last rank, so they keep drawing after the others.
+    private static void Rank(IEnumerable<int> queues, Dictionary<int, int> ranks)
     {
-        // Keys hold 64 ranks. Queues past the 64th share the last rank, so they keep drawing after the others.
-        List<int> queues = [.. _queueUse.Keys];
-        queues.Sort();
-        _queueRanks.Clear();
-        for (int i = 0; i < queues.Count; i++)
-            _queueRanks[queues[i]] = Math.Min(i, 63);
+        List<int> sorted = [.. queues];
+        sorted.Sort();
+        ranks.Clear();
+        for (int i = 0; i < sorted.Count; i++)
+            ranks[sorted[i]] = Math.Min(i, 63);
     }
 
     // [queueRank 6][program 16][topology 2, winding 1, page 5][mesh 24][spare 10]

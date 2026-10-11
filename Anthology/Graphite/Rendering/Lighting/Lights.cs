@@ -29,17 +29,42 @@ public enum LightType : byte
     Tube,
 }
 
-/// <summary>How a light casts shadows. Carried on the light now, drawn by the shadow system later.</summary>
+/// <summary>How a light casts shadows. Spot and directional lights cast them, other kinds not yet.</summary>
 public struct ShadowDesc
 {
     public bool Enabled;
+
+    /// <summary>A spot light's largest tile, or each of a directional light's cascades, in texels.</summary>
     public uint Resolution;
-    public float Bias;
+
+    /// <summary>How far receivers move toward the light before the test, in texels.</summary>
+    public float DepthBias;
+
+    /// <summary>How far receivers move along their geometric normal before the test, in texels.</summary>
     public float NormalBias;
+
+    /// <summary>A directional light's cascades, 1 to 4.</summary>
     public byte Cascades;
+
+    /// <summary>How far along the view a directional light casts, fading over the last tenth.</summary>
     public float Distance;
+
+    /// <summary>The fraction of each cascade blended into the next, 0 for a hard switch.</summary>
+    public float CascadeBlend;
     public float Strength;
-    public float Quality;
+    public ShadowFilter Filter;
+
+    public ShadowDesc()
+    {
+        Resolution = 1024;
+        DepthBias = 1;
+        NormalBias = 1;
+        Cascades = 4;
+        Distance = 50;
+        CascadeBlend = 0.1f;
+        Strength = 1;
+        Filter = ShadowFilter.Tent;
+    }
 }
 
 public struct LightDesc
@@ -115,6 +140,7 @@ public struct LightDesc
         InnerAngle = 30;
         OuterAngle = 45;
         LayerMask = ~0u;
+        Shadow = new ShadowDesc();
     }
 }
 
@@ -295,7 +321,7 @@ internal struct DecalRecord
     public Float4 HostData;
 }
 
-/// <summary>A directional light as the shaders read it, 64 bytes, matching Graphite_DirectionalRecord.</summary>
+/// <summary>A directional light as the shaders read it, 80 bytes, matching Graphite_DirectionalRecord.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct DirectionalRecord
 {
@@ -303,6 +329,9 @@ internal struct DirectionalRecord
     public Float4 Color;
     public Float4 Params;
     public Float4 HostData;
+
+    /// <summary>Shadow depth and normal bias, strength, filter.</summary>
+    public Float4 Shadow;
 }
 
 /// <summary>A world's ambient light, fog and light counts, matching Graphite_WorldLighting. Directional lights have their own buffer, the sun first.</summary>
@@ -541,6 +570,18 @@ internal sealed class WorldLighting : IDisposable
 
     public IMaterialResources Resources => _resources;
 
+    /// <summary>One past the highest light index received.</summary>
+    public int LightCapacity => _lights.Length;
+
+    public bool IsAlive(int index) => _lightAlive[index];
+
+    /// <summary>A light as of the last extraction, normalized. Render thread.</summary>
+    public ref readonly LightDesc Light(int index) => ref _lights[index];
+
+    /// <summary>The directional lights' indices in the order shaders read them, the sun first.</summary>
+    public IReadOnlyList<int> DirectionalOrder => _shaderOrder;
+    private readonly List<int> _shaderOrder = new();
+
     internal void ReceiveLight(int index, int generation, uint sequence, bool alive, in LightDesc given)
     {
         if (index >= _lights.Length)
@@ -754,7 +795,7 @@ internal sealed class WorldLighting : IDisposable
     //   +3 up, rect width, disk radius or tube length
     //   +4 rect height, source radius, diffuse scale, specular scale
     //   +5 cos of the outer and inner spot angles, shadow depth and normal bias
-    //   +6 shadow strength, shadow quality, shadow slot as int bits, layer mask as uint bits
+    //   +6 shadow strength, shadow filter, shadow slot as int bits, layer mask as uint bits
     //   +7 cookie, profile and sampler slots
     //   +8 host data
     private LightRecord Pack(int index, Double3 origin)
@@ -770,8 +811,9 @@ internal sealed class WorldLighting : IDisposable
             LightType.Tube => 5u,
             _ => 1u,
         };
-        uint flags = type | (light.Shadow.Enabled ? 16u : 0) | slots.Flags;
         bool spot = light.Type == LightType.Spot;
+        bool shadowed = light.Shadow.Enabled && spot;
+        uint flags = type | (shadowed ? 16u : 0) | slots.Flags;
         float outer = MathF.Cos(light.OuterAngle * MathF.PI / 180f);
         return new LightRecord
         {
@@ -780,8 +822,8 @@ internal sealed class WorldLighting : IDisposable
             DirectionType = new Float4(light.Direction.X, light.Direction.Y, light.Direction.Z, BitConverter.UInt32BitsToSingle(flags)),
             UpSize = new Float4(light.Up.X, light.Up.Y, light.Up.Z, light.Size.X),
             Shape = new Float4(light.Size.Y, light.SourceRadius, light.DiffuseScale, light.SpecularScale),
-            SpotShadow = new Float4(spot ? outer : -1f, spot ? MathF.Max(MathF.Cos(light.InnerAngle * MathF.PI / 180f), outer + 1e-4f) : 1f, light.Shadow.Bias, light.Shadow.NormalBias),
-            Shadow = new Float4(light.Shadow.Strength, light.Shadow.Quality, BitConverter.Int32BitsToSingle(-1), BitConverter.UInt32BitsToSingle(light.LayerMask)),
+            SpotShadow = new Float4(spot ? outer : -1f, spot ? MathF.Max(MathF.Cos(light.InnerAngle * MathF.PI / 180f), outer + 1e-4f) : 1f, light.Shadow.DepthBias, light.Shadow.NormalBias),
+            Shadow = new Float4(light.Shadow.Strength, (float)light.Shadow.Filter, BitConverter.Int32BitsToSingle(shadowed ? index : -1), BitConverter.UInt32BitsToSingle(light.LayerMask)),
             Cookie = slots.Cookie,
             Ies = slots.Ies,
             Sampler = slots.Sampler,
@@ -863,12 +905,18 @@ internal sealed class WorldLighting : IDisposable
         SkyInputs = HashCode.Combine(sun >= 0 ? _lights[sun].Direction : default, env.SkyColor);
 
         uint count = 0;
+        _shaderOrder.Clear();
         if (sun >= 0)
+        {
             Directionals.Set(count++, Directional(_lights[sun]));
+            _shaderOrder.Add(sun);
+        }
         foreach (int index in _directionalOrder)
         {
-            if (index != sun)
-                Directionals.Set(count++, Directional(_lights[index]));
+            if (index == sun)
+                continue;
+            Directionals.Set(count++, Directional(_lights[index]));
+            _shaderOrder.Add(index);
         }
         record.DirectionalCount = count;
         record.HasProbes = _hasProbes ? 1u : 0;
@@ -902,6 +950,7 @@ internal sealed class WorldLighting : IDisposable
             Color = new Float4(light.Color.X * light.Intensity, light.Color.Y * light.Intensity, light.Color.Z * light.Intensity, BitConverter.UInt32BitsToSingle(light.LayerMask)),
             Params = new Float4(MathF.Sin(radius), MathF.Cos(radius), light.DiffuseScale, light.SpecularScale),
             HostData = light.HostData,
+            Shadow = new Float4(light.Shadow.DepthBias, light.Shadow.NormalBias, light.Shadow.Strength, (float)light.Shadow.Filter),
         };
     }
 }
@@ -1424,7 +1473,7 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
 /// <summary>The slots host spatial sets get by name, shared by every world of a renderer. Host thread.</summary>
 internal sealed class SpatialSlots
 {
-    private readonly Dictionary<string, (int Slot, Type Type)> _slots = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (int Slot, Type Type, int Worlds)> _slots = new(StringComparer.Ordinal);
 
     /// <summary>The slot for a name, from the renderer's registry when the world has one, else the world's own.</summary>
     public int Slot(SpatialSlots? renderer, string name, Type type)
@@ -1432,18 +1481,48 @@ internal sealed class SpatialSlots
         SpatialSlots registry = renderer ?? this;
         lock (registry._slots)
         {
-            if (registry._slots.TryGetValue(name, out (int Slot, Type Type) known))
+            if (registry._slots.TryGetValue(name, out (int Slot, Type Type, int Worlds) known))
             {
                 if (known.Type != type)
                     throw new InvalidOperationException($"The spatial set {name} holds {known.Type.Name} records, not {type.Name}.");
+                registry._slots[name] = known with { Worlds = known.Worlds + 1 };
                 return known.Slot;
             }
-            int slot = SpatialIndex.FirstHostSet + registry._slots.Count;
-            if (slot >= SpatialIndex.MaxSets)
-                throw new InvalidOperationException($"A renderer has room for {SpatialIndex.MaxSets - SpatialIndex.FirstHostSet} spatial set names.");
-            registry._slots[name] = (slot, type);
-            return slot;
+            for (int slot = SpatialIndex.FirstHostSet; slot < SpatialIndex.MaxSets; slot++)
+            {
+                if (!registry.Used(slot))
+                {
+                    registry._slots[name] = (slot, type, 1);
+                    return slot;
+                }
+            }
+            throw new InvalidOperationException($"A renderer has room for {SpatialIndex.MaxSets - SpatialIndex.FirstHostSet} spatial set names at once.");
         }
+    }
+
+    /// <summary>A world's set of the name is gone, freeing its slot when no other world has one.</summary>
+    public void Release(SpatialSlots? renderer, string name)
+    {
+        SpatialSlots registry = renderer ?? this;
+        lock (registry._slots)
+        {
+            if (!registry._slots.TryGetValue(name, out (int Slot, Type Type, int Worlds) known))
+                return;
+            if (known.Worlds > 1)
+                registry._slots[name] = known with { Worlds = known.Worlds - 1 };
+            else
+                registry._slots.Remove(name);
+        }
+    }
+
+    private bool Used(int slot)
+    {
+        foreach ((int Slot, Type, int) entry in _slots.Values)
+        {
+            if (entry.Slot == slot)
+                return true;
+        }
+        return false;
     }
 }
 

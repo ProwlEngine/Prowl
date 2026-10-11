@@ -40,6 +40,9 @@ internal static class GraphiteBindings
     public const int ObjectProbes = 23;
     public const int SkyAmbient = 26;
     public const int Directionals = 27;
+    public const int ShadowSampler = 28;
+    public const int ShadowFaces = 29;
+    public const int Cascades = 30;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -93,7 +96,10 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting),
         new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes),
         new ResourceLayoutElementDescription("Graphite_SkyAmbientSH", ResourceKind.StructuredBufferReadOnly, Graphics, SkyAmbient),
-        new ResourceLayoutElementDescription("Graphite_Directionals", ResourceKind.StructuredBufferReadOnly, Graphics, Directionals))
+        new ResourceLayoutElementDescription("Graphite_Directionals", ResourceKind.StructuredBufferReadOnly, Graphics, Directionals),
+        new ResourceLayoutElementDescription("Graphite_ShadowSampler", ResourceKind.Sampler, Graphics, ShadowSampler),
+        new ResourceLayoutElementDescription("Graphite_ShadowFaces", ResourceKind.StructuredBufferReadOnly, Graphics, ShadowFaces),
+        new ResourceLayoutElementDescription("Graphite_Cascades", ResourceKind.StructuredBufferReadOnly, Graphics, Cascades))
     {
         Table = true,
     };

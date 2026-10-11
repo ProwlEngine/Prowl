@@ -5,10 +5,11 @@
 // supply itself by defining GRAPHITE_CUSTOM_BRDF before including this.
 //
 // worldPos is camera relative, as every world position in Graphite shaders is, so the camera sits at the origin.
-// Shadows come with the shadow system; until then lights are unshadowed.
+// Spot and directional lights cast shadows through Graphite/Shadows.glsl.
 #pragma once
 
 #include "Graphite/Trees.glsl"
+#include "Graphite/Shadows.glsl"
 #include "Graphite/PBR.glsl"
 #include "Graphite/Textures.glsl"
 
@@ -26,7 +27,7 @@ struct Graphite_LightRecord
     vec4 upSize;             // up, rect width, disk radius or tube length
     vec4 shape;              // rect height, source radius, diffuse scale, specular scale
     vec4 spotShadow;         // cos of the outer and inner spot angles, shadow depth and normal bias
-    vec4 shadow;             // shadow strength, shadow quality, shadow slot as int bits, layer mask as uint bits
+    vec4 shadow;             // shadow strength, shadow filter, shadow slot as int bits, layer mask as uint bits
     uvec4 textures;          // cookie, profile and sampler slots
     vec4 hostData;
 };
@@ -37,6 +38,7 @@ struct Graphite_DirectionalRecord
     vec4 color;              // colour times intensity, layer mask as uint bits
     vec4 params;             // sin and cos of the angular radius, diffuse scale, specular scale
     vec4 hostData;
+    vec4 shadow;             // shadow depth and normal bias, strength, filter
 };
 
 layout(set = 1, binding = 27, std430) readonly buffer Graphite_Directionals { Graphite_DirectionalRecord graphite_Directionals[]; };
@@ -71,8 +73,8 @@ struct LightSample
     float ShadowDepthBias;
     float ShadowNormalBias;
     float ShadowStrength;
-    float ShadowQuality;
-    int   ShadowSlot;        // -1 if no atlas slot this frame
+    float ShadowFilter;      // 0 hard, 1 tent
+    int   ShadowSlot;        // its shadow faces, -1 for none
     int   ShadowEnabled;     // 0 / 1
     uint  Flags;             // cookie 32, profile 64
     uvec3 Textures;          // cookie, profile and sampler slots
@@ -99,7 +101,7 @@ LightSample Graphite_NewLightSample(vec3 position, float range, vec3 color, floa
     L.ShadowDepthBias = 0.0;
     L.ShadowNormalBias = 0.0;
     L.ShadowStrength = 0.0;
-    L.ShadowQuality = 0.0;
+    L.ShadowFilter = 0.0;
     L.ShadowSlot = -1;
     L.ShadowEnabled = 0;
     L.Flags = 0u;
@@ -108,9 +110,13 @@ LightSample Graphite_NewLightSample(vec3 position, float range, vec3 color, floa
     return L;
 }
 
-float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal) { return 0.0; }
-
-float Graphite_SunShadow(vec3 worldPos, vec3 geomNormal) { return 0.0; }
+// How much of a local light reaches a surface past its shadow, 1 lit
+float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
+{
+    if (L.ShadowEnabled == 0 || L.ShadowSlot < 0 || L.Type != GRAPHITE_LIGHT_SPOT || !Graphite_ReceivesShadows())
+        return 1.0;
+    return Graphite_SpotShadow(L.ShadowSlot, L.Position, L.Direction, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, worldPos, geomNormal);
+}
 
 Graphite_LightRecord Graphite_LightAt(uint array, uint index)
 {
@@ -160,7 +166,7 @@ bool Graphite_FetchLight(uint array, uint index, vec3 worldPos, vec3 offset, vec
     L.ShadowDepthBias = r.spotShadow.z;
     L.ShadowNormalBias = r.spotShadow.w;
     L.ShadowStrength = r.shadow.x;
-    L.ShadowQuality = r.shadow.y;
+    L.ShadowFilter = r.shadow.y;
     L.ShadowSlot = floatBitsToInt(r.shadow.z);
     L.Flags = flags;
     L.Textures = r.textures.xyz;
@@ -217,6 +223,10 @@ struct Graphite_DirectionalLight
     float diffuseScale;
     float specularScale;
     vec4  hostData;
+    float shadowDepthBias;
+    float shadowNormalBias;
+    float shadowStrength;
+    float shadowFilter;
 };
 
 uint Graphite_DirectionalCount() { return graphite_World.counts.x; }
@@ -235,6 +245,10 @@ Graphite_DirectionalLight Graphite_GetDirectional(uint index)
     d.diffuseScale = r.params.z;
     d.specularScale = r.params.w;
     d.hostData = r.hostData;
+    d.shadowDepthBias = r.shadow.x;
+    d.shadowNormalBias = r.shadow.y;
+    d.shadowStrength = r.shadow.z;
+    d.shadowFilter = r.shadow.w;
     return d;
 }
 
@@ -571,18 +585,29 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
         return false;
 
 #ifndef SG_NO_SHADOWS
-    c.radiance *= 1.0 - Graphite_LocalLightShadow(L, s.position, s.geomNormal);
+    c.radiance *= Graphite_LocalLightShadow(L, s.position, s.geomNormal);
 #endif
     return true;
 }
 
-float MainDirectionalShadowFactor(vec3 worldPos, vec3 geomNormal)
+// How much of a directional light reaches a surface past its shadow, 1 lit. index is its place in the world's buffer.
+float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, vec3 worldPos, vec3 geomNormal)
 {
 #ifdef SG_NO_SHADOWS
     return 1.0;
 #else
-    return 1.0 - Graphite_SunShadow(worldPos, geomNormal);
+    if (!d.shadow || !Graphite_ReceivesShadows())
+        return 1.0;
+    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, worldPos, geomNormal);
 #endif
+}
+
+// The sun's shadow, 1 lit
+float MainDirectionalShadowFactor(vec3 worldPos, vec3 geomNormal)
+{
+    if (Graphite_DirectionalCount() == 0u)
+        return 1.0;
+    return Graphite_DirectionalLightShadow(Graphite_GetDirectional(0u), 0u, worldPos, geomNormal);
 }
 
 // What a directional light gives a surface, its specular from the nearest direction inside its disk. index 0 is the sun.
@@ -590,7 +615,7 @@ bool Graphite_ContributeDirectional(Graphite_DirectionalLight d, uint index, Gra
 {
     if ((d.layers & Graphite_SurfaceLayers()) == 0u)
         return false;
-    float shadow = index == 0u ? MainDirectionalShadowFactor(s.position, s.geomNormal) : 1.0;
+    float shadow = Graphite_DirectionalLightShadow(d, index, s.position, s.geomNormal);
     float NdotL = max(dot(s.normal, d.direction), 0.0);
     c.radiance = d.color * 8.0 * shadow;
     c.diffuseL = d.direction;

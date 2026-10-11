@@ -261,6 +261,7 @@ public sealed class FeatureTests : IDisposable
     private readonly Texture _target;
     private readonly Framebuffer _framebuffer;
     private readonly DeviceBuffer _readback;
+    private readonly RendererOptions _options = new() { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 };
     private readonly Renderer _renderer;
     private readonly RenderWorld _world;
     private readonly Shader _unlit;
@@ -273,7 +274,7 @@ public sealed class FeatureTests : IDisposable
         _target = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
         _framebuffer = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _target));
         _readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(Size * Size * 16, BufferUsage.Staging));
-        _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
+        _renderer = new Renderer(_device, _compiler, _options);
         _renderer.Error += _errors.Add;
         _world = _renderer.CreateWorld();
         _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
@@ -1129,6 +1130,172 @@ public sealed class FeatureTests : IDisposable
 
         items.Draws[0] = (Double4x4.CreateTranslation(new Double3(0, 0, 30)), new Float4(0, 1, 0, 1), 1);
         AssertAll(new Float3(0.5f, 0.25f, 0), Frame(View()));
+    }
+
+    // Writes its count on the GPU each frame through a compute pass of its own
+    private sealed class ComputedItems(GraphicsDevice device, GpuMesh mesh, Material material, ComputeProgram program) : RenderProvider
+    {
+        public readonly DeviceBuffer Count = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        public uint Instances;
+        private readonly PropertySet _properties = new();
+
+        public override void Cull(in ProviderView view, DrawItemSink sink)
+            => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(-2, -2, 10)) * Double4x4.CreateScale(0.25), Custom0 = new Float4(1, 0, 0, 1) }, Count, 4);
+
+        public override void ComputeBuffers(List<DeviceBuffer> buffers) => buffers.Add(Count);
+
+        public override void Compute(CommandBuffer command)
+        {
+            _properties.SetBuffer("Counts", Count);
+            command.SetComputeShader(program);
+            command.SetProperties(_properties);
+            command.SetPushConstants(Instances);
+            command.Dispatch(1, 1, 1);
+        }
+    }
+
+    [Fact]
+    public void GpuCounts_AProviderComputes_DrawInTheSameFrame()
+    {
+        const string source = """
+            Compute
+            {
+                layout(local_size_x = 1) in;
+                layout(set = 0, binding = 0, std430) buffer Counts { uint words[]; };
+                layout(push_constant) uniform Push { uint count; } push;
+                void main() { words[1] = push.count; }
+            }
+            """;
+        ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(_compiler.CompileCompute(new ShaderPass { State = new PassState(), Source = source }, [], _device.BackendType));
+        _owned.Add(program);
+
+        // A world object draws first, so the provider's commands are not the view's first
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(2, 2, 10)) * Double4x4.CreateScale(0.25), Custom0 = new Float4(0, 0, 1, 1) }, [ObjectColor()]);
+        ComputedItems items = new(_device, _quad, ObjectColor(shift: 16), program) { Instances = 1 };
+        _owned.Add(items.Count);
+        _world.Providers.Add(items);
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 0, 0), pixels, Inside(2, -2));
+        AssertAll(new Float3(0, 0, 1), pixels, Inside(2, 2));
+
+        items.Instances = 2;
+        pixels = Frame(View());
+        AssertAll(new Float3(1, 0, 0), pixels, Inside(2, -2));
+        items.Instances = 0;
+        pixels = Frame(View());
+        AssertAll(new Float3(0, 0, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 0, 1), pixels, Inside(2, 2));
+    }
+
+    [Fact]
+    public void ProvidedTransparentItems_InAQueueTheWorldDoesNotUse_DrawInQueueOrder()
+    {
+        Shader glass = _renderer.LoadShader(ShaderParser.Parse(ObjectGlassSource));
+        Shader later = _renderer.LoadShader(ShaderParser.Parse(ObjectGlassSource.Replace("3000", "3100")));
+
+        // The provider's green glass is farther but in a later queue, so it draws over the world's near red one
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), Custom0 = new Float4(1, 0, 0, 1) }, [_renderer.CreateMaterial(glass)]);
+        Items items = new(_quad, _renderer.CreateMaterial(later));
+        items.Draws.Add((Double4x4.CreateTranslation(new Double3(0, 0, 20)), new Float4(0, 1, 0, 1), 1));
+        _world.Providers.Add(items);
+        AssertAll(new Float3(0.25f, 0.5f, 0), Frame(View()));
+    }
+
+    // Draws a mesh of its own glass, tinted by the material
+    private sealed class Pane(GpuMesh mesh, Material material, double depth) : RenderProvider
+    {
+        public override void Cull(in ProviderView view, DrawItemSink sink)
+            => sink.Add(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(0, 0, depth)) });
+    }
+
+    [Fact]
+    public void ProvidedTransparentItemsInAFeaturesPass_BlendBackToFront()
+    {
+        Shader glow = _renderer.LoadShader(ShaderParser.Parse(GlowSource));
+        Material Tint(Float3 c)
+        {
+            Material material = _renderer.CreateMaterial(glow);
+            material.SetColor("_Color", new Float4(c.X, c.Y, c.Z, 0.5f));
+            return material;
+        }
+
+        // The near one added first, so only sorting puts the far one under it
+        _world.Providers.Add(new Pane(_quad, Tint(new Float3(0, 1, 0)), 10));
+        _world.Providers.Add(new Pane(_quad, Tint(new Float3(1, 0, 0)), 20));
+        _world.Features.Add(new Glows());
+        AssertAll(new Float3(0.25f, 0.5f, 0), Frame(View()));
+    }
+
+    private sealed class ThrowingProvider : RenderProvider
+    {
+        public override void Extract() => throw new InvalidOperationException("broken");
+        public override void Cull(in ProviderView view, DrawItemSink sink) => throw new InvalidOperationException("never culled");
+    }
+
+    [Fact]
+    public void AProviderWhoseExtractThrows_IsReported_AndTheWorldStillDraws()
+    {
+        AddQuad(new Float3(0, 1, 0));
+        _world.Providers.Add(new ThrowingProvider());
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        Assert.Contains(_errors, e => e.Code == "provider.extract");
+        Assert.DoesNotContain(_errors, e => e.Code == "provider.cull");
+        _errors.Clear();
+        AddQuad(new Float3(0, 0, 1), scale: 0.5);
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        _errors.Clear();
+        AssertAll(new Float3(0, 0, 1), ReadTarget(), Centre);
+    }
+
+    [Fact]
+    public void TransientDraws_WaitingForTheirUpload_DrawOnceUploaded()
+    {
+        Material color = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(VertexColorSource)));
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+
+        // One mesh per frame: the one queued first takes this frame, the transient's geometry the next
+        _options.UploadBudgetPerFrame = 1;
+        _owned.Add(_renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 3,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = new byte[36] }],
+            Indices = new uint[] { 0, 1, 2 },
+        }));
+        uint red = 0xFF0000FFu;
+        Float3[] square = [new(-3, -3, 10), new(-1, -3, 10), new(-1, -1, 10), new(-3, -1, 10)];
+        _world.DrawTransient(new TransientDraw { Positions = square, Colors = new uint[] { red, red, red, red }, Indices = new uint[] { 0, 1, 2, 0, 2, 3 }, Material = color });
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+        AssertAll(new Float3(1, 0, 0), Frame(View()), Inside(-2, -2));
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    [Fact]
+    public void InstanceBatches_ScaledToNothingAndBack_KeepTheirInstances()
+    {
+        InstanceBatchDesc desc = new() { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) };
+        InstanceBatchHandle batch = _world.AddInstanceBatch(desc, [ObjectColor()], [new InstanceData { Transform = Small(-2, -2), Color = new Float4(1, 0, 0, 1) }]);
+        desc.Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0);
+        _world.SetInstanceBatch(batch, desc);
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+        desc.Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10));
+        _world.SetInstanceBatch(batch, desc);
+        AssertAll(new Float3(1, 0, 0), Frame(View()), Inside(-2, -2));
+    }
+
+    [Fact]
+    public void SpatialSetNames_ComeBackWhenTheirWorldsGo()
+    {
+        for (int i = 0; i < 20; i++)
+        {
+            RenderWorld world = _renderer.CreateWorld();
+            world.CreateSpatialSet<Float4>("Set " + i);
+            world.Dispose();
+            Frame(View());
+        }
     }
 
     [Fact]

@@ -301,8 +301,7 @@ internal unsafe partial class VkGraphicsDevice
             && supported12.DescriptorBindingStorageImageUpdateAfterBind
             && supported12.DescriptorBindingStorageBufferUpdateAfterBind
             && supported12.DescriptorBindingUpdateUnusedWhilePending
-            && supported12.ShaderSampledImageArrayNonUniformIndexing
-            && supported12.ShaderStorageBufferArrayNonUniformIndexing;
+            && supported12.ShaderSampledImageArrayNonUniformIndexing;
 
         PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features)
         {
@@ -319,7 +318,7 @@ internal unsafe partial class VkGraphicsDevice
             DescriptorBindingStorageBufferUpdateAfterBind = descriptorIndexing,
             DescriptorBindingUpdateUnusedWhilePending = descriptorIndexing,
             ShaderSampledImageArrayNonUniformIndexing = descriptorIndexing,
-            ShaderStorageBufferArrayNonUniformIndexing = descriptorIndexing,
+            ShaderStorageBufferArrayNonUniformIndexing = descriptorIndexing && supported12.ShaderStorageBufferArrayNonUniformIndexing,
         };
         PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true)
         {

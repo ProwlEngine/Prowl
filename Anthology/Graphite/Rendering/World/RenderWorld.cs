@@ -85,6 +85,7 @@ public struct InstanceBatchDesc
         Mesh = null!;
         Transform = Double4x4.Identity;
         LayerMask = ~0u;
+        Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
     }
 }
 
@@ -118,6 +119,7 @@ public struct TransientDraw
         Material = null!;
         Transform = Double4x4.Identity;
         LayerMask = ~0u;
+        Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         Topology = PrimitiveTopology.TriangleList;
     }
 }
@@ -266,6 +268,12 @@ public sealed partial class RenderWorld : IDisposable
     private readonly List<SpatialIndex> _newHostSets = new();
     private readonly SpatialSlots SpatialSlots = new();
 
+    /// <summary>How the world's local light shadows are stored and sized. Host thread, read at SubmitFrame.</summary>
+    public ShadowSettings Shadows { get; } = new();
+
+    /// <summary>The shadow settings as of the last SubmitFrame. The render thread reads only this.</summary>
+    internal ShadowSettings ShadowSnapshot = new();
+
     /// <summary>Features every view of the world runs. Host thread.</summary>
     public FeatureSet Features { get; } = new();
 
@@ -280,6 +288,7 @@ public sealed partial class RenderWorld : IDisposable
         public InstanceBatchDesc Desc;
         public Material[] Materials = [];
         public readonly List<RenderableHandle> Instances = new();
+        public readonly List<Float4x4> Relative = new();
         public int Generation;
         public bool Alive;
     }
@@ -328,9 +337,7 @@ public sealed partial class RenderWorld : IDisposable
         for (int i = 0; i < batch.Instances.Count; i++)
         {
             RenderableHandle instance = batch.Instances[i];
-            int at = instance.Index;
-            Double4x4 relative = old.Transform.Invert() * _transform[at];
-            SetTransform(instance, desc.Transform * relative);
+            SetTransform(instance, desc.Transform * (Double4x4)batch.Relative[i]);
             if (desc.Mesh != old.Mesh)
                 SetMesh(instance, desc.Mesh);
             if (desc.LayerMask != old.LayerMask)
@@ -350,6 +357,7 @@ public sealed partial class RenderWorld : IDisposable
         foreach (RenderableHandle instance in batch.Instances)
             Remove(instance);
         batch.Instances.Clear();
+        batch.Relative.Clear();
         batch.Alive = false;
         batch.Generation++;
         _freeBatches.Push(handle.Index);
@@ -374,6 +382,7 @@ public sealed partial class RenderWorld : IDisposable
         {
             Remove(batch.Instances[^1]);
             batch.Instances.RemoveAt(batch.Instances.Count - 1);
+            batch.Relative.RemoveAt(batch.Relative.Count - 1);
         }
         for (int i = 0; i < instances.Length; i++)
         {
@@ -381,11 +390,13 @@ public sealed partial class RenderWorld : IDisposable
             Double4x4 transform = desc.Transform * (Double4x4)data.Transform;
             if (i < batch.Instances.Count)
             {
+                batch.Relative[i] = data.Transform;
                 RenderableHandle instance = batch.Instances[i];
                 SetTransform(instance, transform);
                 SetCustomData(instance, data.Color, data.Custom);
                 continue;
             }
+            batch.Relative.Add(data.Transform);
             batch.Instances.Add(Add(new RenderableDesc
             {
                 Mesh = desc.Mesh,
@@ -400,14 +411,13 @@ public sealed partial class RenderWorld : IDisposable
         }
     }
 
-    private readonly List<(RenderableHandle Handle, GpuMesh? Owned)> _transients = new();
-    private readonly List<(RenderableHandle Handle, GpuMesh? Owned)> _drawnTransients = new();
+    private readonly List<(RenderableHandle Handle, GpuMesh Mesh, bool Owned)> _transients = new();
+    private readonly List<(RenderableHandle Handle, GpuMesh Mesh, bool Owned)> _drawnTransients = new();
 
     /// <summary>Draws geometry in the next frame only, through every pass its material has. Host thread.</summary>
     public void DrawTransient(in TransientDraw draw)
     {
         ArgumentNullException.ThrowIfNull(draw.Material);
-        GpuMesh? owned = null;
         GpuMesh mesh;
         if (draw.Mesh != null)
         {
@@ -424,7 +434,7 @@ public sealed partial class RenderWorld : IDisposable
             List<VertexStream> streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(draw.Positions.Span).ToArray() }];
             if (!draw.Colors.IsEmpty)
                 streams.Add(new VertexStream { Semantic = VertexSemantic.Color, Format = VertexElementFormat.Byte4_Norm, Data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(draw.Colors.Span).ToArray() });
-            mesh = owned = _owner.CreateMesh(new MeshData
+            mesh = _owner.CreateMesh(new MeshData
             {
                 VertexCount = count,
                 Streams = [.. streams],
@@ -433,16 +443,22 @@ public sealed partial class RenderWorld : IDisposable
             });
         }
         RenderableHandle handle = Add(new RenderableDesc { Mesh = mesh, Transform = draw.Transform, LayerMask = draw.LayerMask, Flags = draw.Flags }, [draw.Material]);
-        _transients.Add((handle, owned));
+        _transients.Add((handle, mesh, draw.Mesh == null));
     }
 
-    // The frame drawn, last frame's transients go: their renderables and the meshes made for them
+    // Last frame's transients go with the meshes made for them, except those whose mesh was not placed in time to draw
     private void RetireTransients()
     {
-        foreach ((RenderableHandle handle, GpuMesh? owned) in _drawnTransients)
+        foreach ((RenderableHandle handle, GpuMesh mesh, bool owned) in _drawnTransients)
         {
+            if (mesh.Placement == null && !mesh.IsDisposed)
+            {
+                _transients.Add((handle, mesh, owned));
+                continue;
+            }
             Remove(handle);
-            owned?.Dispose();
+            if (owned)
+                mesh.Dispose();
         }
         _drawnTransients.Clear();
         _drawnTransients.AddRange(_transients);
@@ -693,13 +709,23 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>Copies everything that changed since the last call into the render copy. Host thread, at SubmitFrame.</summary>
     internal void Extract()
     {
+        ShadowSnapshot = Shadows.Copy();
         ProviderSnapshot = Providers.Snapshot();
         foreach (RenderProvider provider in ProviderSnapshot)
         {
             provider.EnabledSnapshot = provider.Enabled;
             provider.RunsOnSnapshot = provider.RunsOn;
-            if (provider.Enabled)
+            if (!provider.Enabled)
+                continue;
+            try
+            {
                 provider.Extract();
+            }
+            catch (Exception e)
+            {
+                provider.EnabledSnapshot = false;
+                _report(new RendererError("provider.extract", $"{provider.GetType().Name}.Extract threw, so it draws nothing this frame: {e}", RendererErrorSeverity.Error, provider) { Key = $"provider.extract.{provider.GetType().FullName}" });
+            }
         }
         RetireTransients();
         _render.BeginExtract();
@@ -734,6 +760,18 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>Removes the world from its renderer at the next frame. Host thread.</summary>
     public void Dispose()
     {
+        foreach ((_, GpuMesh mesh, bool owned) in _transients)
+        {
+            if (owned)
+                mesh.Dispose();
+        }
+        foreach ((_, GpuMesh mesh, bool owned) in _drawnTransients)
+        {
+            if (owned)
+                mesh.Dispose();
+        }
+        _transients.Clear();
+        _drawnTransients.Clear();
         if (_owner != null)
             _owner.RemoveWorld(this);
         else
@@ -750,6 +788,9 @@ public sealed partial class RenderWorld : IDisposable
             set.Dispose();
         foreach (SpatialIndex set in _newHostSets)
             set.Dispose();
+        foreach (string name in _hostSetNames)
+            SpatialSlots.Release(_owner?.SpatialSlots, name);
+        _hostSetNames.Clear();
     }
 
     private int Check(RenderableHandle handle)

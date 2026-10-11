@@ -493,7 +493,6 @@ public sealed class FeatureBuilder
         DeviceBuffer[] host = _pass.Camera.HostBuffers;
         for (int i = 0; i < host.Length; i++)
             _graph.DeclareImportedBuffer(FramePipeline.BufferId(i), host[i], BufferAccess.AllReads);
-        _graph.DeclareImportedBuffer(FramePipeline.BufferId(host.Length), _pass.Camera.Commands.Buffer, BufferAccess.Indirect);
     }
 
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
@@ -1032,6 +1031,15 @@ public abstract class RenderProvider
     /// <summary>Adds this view's items to the sink. Render thread.</summary>
     public abstract void Cull(in ProviderView view, DrawItemSink sink);
 
+    /// <summary>The buffers <see cref="Compute"/> reads and writes, so the frame orders it before what reads them. Compute runs only for providers naming some. Render thread.</summary>
+    public virtual void ComputeBuffers(List<DeviceBuffer> buffers) { }
+
+    /// <summary>
+    /// GPU work recorded once a frame, after the frame's uploads and before any view draws: the instance counts
+    /// <see cref="DrawItemSink.AddIndirect"/> reads, instance data. Render thread.
+    /// </summary>
+    public virtual void Compute(CommandBuffer command) { }
+
     internal bool EnabledSnapshot;
     internal ViewKinds RunsOnSnapshot;
 }
@@ -1072,23 +1080,31 @@ public struct DrawItem
     {
         Transform = Double4x4.Identity;
         LayerMask = ~0u;
+        Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         SortDepth = float.NaN;
     }
+}
+
+/// <summary>A view list's provider items, opaque ones drawn after the list's buckets, sorted ones among its transparents.</summary>
+internal sealed class ProvidedItems
+{
+    public readonly List<BucketSet.TransparentItem> Opaque = new();
+    public readonly List<BucketSet.TransparentItem> Sorted = new();
 }
 
 /// <summary>Where a provider adds its items for a view. Valid during Cull only. Render thread.</summary>
 public sealed class DrawItemSink
 {
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MeshPlacement, BucketSet.ChunkRef[]?[]> s_chunks = new();
     private readonly List<BucketSet.TransparentItem> _pool = new();
+    private readonly Dictionary<DrawList, ProvidedItems> _lists = new();
     private int _used;
     private CameraFrame _camera = null!;
     private WorldFrame _world = null!;
     private CullFrustum _frustum;
     private uint _cullingMask;
 
-    internal readonly List<BucketSet.TransparentItem> Transparent = new();
-
-    /// <summary>Indirect items whose instance count the view copies from the provider's buffer before drawing.</summary>
+    /// <summary>Indirect items whose instance count is copied from the provider's buffer into the view's commands.</summary>
     internal readonly List<(BucketSet.TransparentItem Item, DrawList List, DeviceBuffer Source, uint Offset)> Counts = new();
 
     internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask)
@@ -1098,9 +1114,17 @@ public sealed class DrawItemSink
         _frustum = frustum;
         _cullingMask = cullingMask;
         _used = 0;
-        Transparent.Clear();
+        foreach (ProvidedItems items in _lists.Values)
+        {
+            items.Opaque.Clear();
+            items.Sorted.Clear();
+        }
         Counts.Clear();
     }
+
+    /// <summary>The items providers added to a list this view, or null.</summary>
+    internal ProvidedItems? For(DrawList list)
+        => _lists.TryGetValue(list, out ProvidedItems? items) && (items.Opaque.Count > 0 || items.Sorted.Count > 0) ? items : null;
 
     /// <summary>One submesh of a mesh with a material, for one object.</summary>
     public void Add(GpuMesh mesh, int subMesh, Material material, in DrawItem item) => Emit(mesh, subMesh, material, item, 1, false, null, 0);
@@ -1128,7 +1152,9 @@ public sealed class DrawItemSink
     {
         ArgumentNullException.ThrowIfNull(mesh);
         ArgumentNullException.ThrowIfNull(material);
-        if ((item.LayerMask & _cullingMask) == 0 || mesh.Placement is not { } placement || material.IsDisposed || material.Draw is not { } draw || material.Table == null)
+        if ((item.LayerMask & _cullingMask) == 0 || (item.Flags & RenderableFlags.Hidden) != 0)
+            return;
+        if (mesh.Placement is not { } placement || material.IsDisposed || material.Draw is not { } draw || material.Table == null)
             return;
         if ((uint)subMesh >= (uint)placement.SubMeshes.Length)
             throw new ArgumentOutOfRangeException(nameof(subMesh), $"The mesh has {placement.SubMeshes.Length} submeshes.");
@@ -1152,18 +1178,12 @@ public sealed class DrawItemSink
         Double4x4 m = item.Transform;
         float depth = float.IsNaN(item.SortDepth) ? Length(_frustum.Relative(new Double3(m.c3.X, m.c3.Y, m.c3.Z))) : item.SortDepth;
 
-        List<BucketSet.ChunkRef> chunks = new();
-        for (int c = 0; c < placement.Chunks.Length; c++)
-        {
-            MeshChunk chunk = placement.Chunks[c];
-            if (chunk.SubMesh == subMesh)
-                chunks.Add(new BucketSet.ChunkRef(placement.FirstChunk + (uint)c, c, placement.IndexBase + chunk.IndexStart, chunk.IndexCount));
-        }
-        BucketSet.ChunkRef[] refs = [.. chunks];
+        BucketSet.ChunkRef[] refs = Chunks(placement, subMesh);
         PrimitiveTopology topology = placement.SubMeshes[subMesh].Topology;
-        bool shadowsOnly = (item.Flags & RenderableFlags.ShadowsOnly) != 0;
+        RenderableFlags flags = item.Flags;
+        bool shadowsOnly = (flags & RenderableFlags.ShadowsOnly) != 0;
 
-        void Into(DrawList? list, PassType pass, bool sorted)
+        void Into(DrawList list, PassType pass, bool sorted)
         {
             if (!_world.Programs.TryGet(material, draw, pass, out ushort program))
                 return;
@@ -1181,33 +1201,50 @@ public sealed class DrawItemSink
             entry.MaterialSlot = material.Slot;
             entry.Shared = shared;
             entry.InstanceCount = count;
-            if (sorted)
-            {
-                Transparent.Add(entry);
-            }
-            else
-            {
-                entry.FirstCommand = list!.CommandCount;
-                BucketSet.EmitProvided(list, entry);
-            }
+            if (!_lists.TryGetValue(list, out ProvidedItems? items))
+                _lists[list] = items = new ProvidedItems();
+            (sorted ? items.Sorted : items.Opaque).Add(entry);
             if (source != null)
-                Counts.Add((entry, sorted ? _camera.Transparent : list!, source, offset));
+                Counts.Add((entry, list, source, offset));
         }
 
+        // The rules renderables' buckets follow: built in passes and feature passes skip shadow only items, the shadow pass draws only opaque casters
         if (!shadowsOnly)
         {
             if (draw.Transparent)
             {
-                Into(null, PassType.Forward, sorted: true);
+                Into(_camera.Transparent, PassType.Forward, sorted: true);
             }
             else
             {
                 Into(_camera.Prepass, PassType.Prepass, sorted: false);
                 Into(_camera.Forward, PassType.Forward, sorted: false);
             }
-            foreach ((PassType type, DrawList list) in _camera.PassLists)
-                Into(list, type, sorted: false);
         }
+        foreach ((PassType type, DrawList list) in _camera.PassLists)
+        {
+            bool skip = type == PassType.ShadowCaster
+                ? (flags & RenderableFlags.CastShadows) == 0 || !draw.CastShadows || draw.Transparent
+                : shadowsOnly;
+            if (!skip)
+                Into(list, type, sorted: draw.Transparent);
+        }
+    }
+
+    // A submesh's chunks, made once per placement
+    private static BucketSet.ChunkRef[] Chunks(MeshPlacement placement, int subMesh)
+    {
+        BucketSet.ChunkRef[]?[] bySubMesh = s_chunks.GetValue(placement, p => new BucketSet.ChunkRef[]?[p.SubMeshes.Length]);
+        if (bySubMesh[subMesh] is { } known)
+            return known;
+        List<BucketSet.ChunkRef> chunks = new();
+        for (int c = 0; c < placement.Chunks.Length; c++)
+        {
+            MeshChunk chunk = placement.Chunks[c];
+            if (chunk.SubMesh == subMesh)
+                chunks.Add(new BucketSet.ChunkRef(placement.FirstChunk + (uint)c, c, placement.IndexBase + chunk.IndexStart, chunk.IndexCount));
+        }
+        return bySubMesh[subMesh] = [.. chunks];
     }
 
     private static float Length(Float3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
