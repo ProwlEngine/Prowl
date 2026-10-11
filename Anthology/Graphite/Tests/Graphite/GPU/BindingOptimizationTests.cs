@@ -203,7 +203,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     [Fact]
-    public void InPlacePropertyChange_OneRenderPass_PickedUpWithoutReapply()
+    public void InPlacePropertyChange_OneRenderPass_PickedUpOnReapply()
     {
         const uint size = 50;
         const uint norm = 1000;
@@ -231,6 +231,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             cl.SetVertexSource(sourceA);
             cl.Draw(1);
             props.SetInt("ColorNormalizationFactor", (int)norm * 2);
+            cl.SetProperties(props);
             cl.SetVertexSource(sourceB);
             cl.Draw(1);
         });

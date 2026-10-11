@@ -13,7 +13,7 @@ internal sealed class SetBindingMetadata
     /// <summary>Packed byte size of each element's loose uniform block, 0 if it declares none.</summary>
     public readonly uint[] UniformBlockSizes;
 
-    /// <summary>Every property name the set reads: element names plus loose uniform field names.</summary>
+    /// <summary>Every resource name the set reads.</summary>
     public readonly System.Collections.Generic.HashSet<PropertyID> Names;
 
     /// <summary>True if any element is a read-write texture, which can need a per-dispatch layout move.</summary>
@@ -99,11 +99,6 @@ internal sealed class SetBindingMetadata
                 names.Add(element.Name);
                 if (element.Kind == ResourceKind.TextureReadWrite)
                     hasStorageTexture = true;
-                if (element.UniformFields != null)
-                {
-                    foreach (UniformBlockField field in element.UniformFields)
-                        names.Add(field.Name);
-                }
             }
 
             result[s] = new SetBindingMetadata(sortedUbo, hasSameNamedTexture, blockSizes, names, hasStorageTexture);

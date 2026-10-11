@@ -8,6 +8,7 @@ internal sealed class UniformBindingPlan
 {
     public readonly uint[] BlockSizes;
     public readonly int[][] ElementBlock;
+    public readonly int[][] SetBlocks;
     public readonly int[][] DynamicOffsetOrder;
 
     private readonly int[] _keys;
@@ -17,11 +18,12 @@ internal sealed class UniformBindingPlan
     private readonly UniformFieldTarget[] _targets;
 
     private UniformBindingPlan(
-        uint[] blockSizes, int[][] elementBlock, int[][] dynamicOffsetOrder,
+        uint[] blockSizes, int[][] elementBlock, int[][] setBlocks, int[][] dynamicOffsetOrder,
         int[] keys, int[] first, int[] count, UniformFieldTarget[] targets)
     {
         BlockSizes = blockSizes;
         ElementBlock = elementBlock;
+        SetBlocks = setBlocks;
         DynamicOffsetOrder = dynamicOffsetOrder;
         _keys = keys;
         _first = first;
@@ -58,6 +60,7 @@ internal sealed class UniformBindingPlan
     {
         int[][] elementBlock = new int[layouts.Length][];
         int[][] order = new int[layouts.Length][];
+        int[][] setBlocks = new int[layouts.Length][];
         System.Collections.Generic.List<uint> sizes = new();
         System.Collections.Generic.List<(PropertyID Name, UniformFieldTarget Target)> fields = new();
 
@@ -90,6 +93,7 @@ internal sealed class UniformBindingPlan
                 }
             }
 
+            setBlocks[s] = Array.FindAll(elementBlock[s], b => b >= 0);
             order[s] = new int[uboCount];
             int w = 0;
             for (int i = 0; i < elements.Length; i++)
@@ -130,7 +134,7 @@ internal sealed class UniformBindingPlan
             count[slot]++;
         }
 
-        return new UniformBindingPlan(sizes.ToArray(), elementBlock, order, keys, first, count, targets);
+        return new UniformBindingPlan(sizes.ToArray(), elementBlock, setBlocks, order, keys, first, count, targets);
     }
 
     private static int Hash(int value) => (int)((uint)value * 2654435761u >> 8);

@@ -79,6 +79,8 @@ internal unsafe sealed partial class VkDescriptorBinder
     private SetBindState[] _setBindStates = Array.Empty<SetBindState>();
     private ShaderProgram _bindCacheProgram;
     private SetBindState? _trackState;
+    private UniformBindingPlan _plan;
+    private UniformShadows _shadows;
 
     // Set count and first-changed-set index from the most recent Prepare() call that returned true;
     // EmitBind() reads them back so callers don't have to re-derive them from the program.
@@ -121,6 +123,9 @@ internal unsafe sealed partial class VkDescriptorBinder
         DescriptorResourceCounts[] perSetCounts = descProgram.PerSetCounts;
 
         EnsureBindCacheFor(program, (int)setCount);
+        _plan = program.BindingPlan;
+        _shadows = _cbOwner.UniformShadows;
+        _shadows.UsePlan(_plan, _cbOwner.ActiveProperties);
         ulong executionId = _cbOwner.ExecutionId;
         int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
@@ -134,7 +139,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             {
                 UseTable(state, setIdx, resourceLayouts[setIdx]);
             }
-            else if (!CanReuseSet(state, meta, graphStates))
+            else if (!CanReuseSet(state, meta, graphStates, setIdx))
             {
                 state.EntryCount = 0;
                 _trackState = state;
@@ -181,13 +186,25 @@ internal unsafe sealed partial class VkDescriptorBinder
         state.EntryCount = 0;
     }
 
-    private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, GraphTextureStates? graphStates)
+    private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, GraphTextureStates? graphStates, int setIdx)
         => state.IdentityLen >= 0
+            && !AnyBlockDirty(setIdx)
             && !_cbOwner.AllPropertiesChanged
             && !meta.HasStorageTexture
             && ReferenceEquals(state.GraphStates, graphStates)
             && !meta.ReadsAny(_cbOwner.ChangedPropertyKeys)
             && state.EntriesUnchanged();
+
+    private bool AnyBlockDirty(int setIdx)
+    {
+        int[] blocks = _plan.SetBlocks[setIdx];
+        for (int i = 0; i < blocks.Length; i++)
+        {
+            if (_shadows[blocks[i]].Dirty)
+                return true;
+        }
+        return false;
+    }
 
     private static bool SetDiffersFromBound(SetBindState state)
     {
