@@ -103,7 +103,31 @@ public abstract partial class CommandBuffer
                 _stateScratch.Add(CreateState(kv.Key, entry, resource));
         }
 
+        if (sink != null)
+            AddUniformStates();
+
         sink?.SetProperties(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_stateScratch));
+    }
+
+    private void AddUniformStates()
+    {
+        UniformBindingPlan? plan = _uniformShadows.Plan;
+        if (plan == null)
+            return;
+
+        for (int b = 0; b < plan.BlockCount; b++)
+        {
+            ShadowBlock block = _uniformShadows[b];
+            ReadOnlySpan<byte> bytes = block.Cache != null ? block.Cache.Bytes : block.Data;
+            foreach (UniformBlockField field in plan.Layouts[b].Fields)
+            {
+                UniformValue value = default;
+                Span<byte> payload = System.Runtime.InteropServices.MemoryMarshal.CreateSpan(
+                    ref System.Runtime.CompilerServices.Unsafe.As<UniformValue, byte>(ref value), UniformValue.Size);
+                bytes.Slice((int)field.Offset, (int)Math.Min(field.Size, UniformValue.Size)).CopyTo(payload);
+                _stateScratch.Add(new PropertyState(field.Name, PropertyKind.Uniform, field.Type, value, default, default, null, null));
+            }
+        }
     }
 
     private static PropertyState CreateState(PropertyID name, PropertyEntry entry, ResourceVersion resource)

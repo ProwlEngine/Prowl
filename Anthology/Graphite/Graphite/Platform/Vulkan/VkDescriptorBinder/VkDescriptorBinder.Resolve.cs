@@ -106,9 +106,11 @@ internal unsafe sealed partial class VkDescriptorBinder
             if (block >= 0)
             {
                 ShadowBlock skipped = _shadows[block];
+                if (skipped.Dirty)
+                    ReportSkippedUniform(elem.Name, skipped.LastWritten);
+
                 skipped.Dirty = false;
                 skipped.Foreign = true;
-                ReportSkippedUniforms(elem.Name, elem.UniformFields);
             }
             return uboEntry.Buffer!.Value;
         }

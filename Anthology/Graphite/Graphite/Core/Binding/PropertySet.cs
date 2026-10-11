@@ -167,6 +167,9 @@ public sealed partial class PropertySet
     {
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
         {
+            if (kv.Value.Kind == PropertyEntryKind.Uniform)
+                continue;
+
             _entries[kv.Key] = kv.Value;
             changedKeys.Add(kv.Key);
             defaultKeys.Remove(kv.Key);
@@ -180,6 +183,9 @@ public sealed partial class PropertySet
     {
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in defaults.Entries)
         {
+            if (kv.Value.Kind == PropertyEntryKind.Uniform)
+                continue;
+
             if (_entries.ContainsKey(kv.Key) && !defaultKeys.Contains(kv.Key))
                 continue;
 

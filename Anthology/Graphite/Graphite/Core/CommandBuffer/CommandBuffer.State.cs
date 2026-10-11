@@ -21,6 +21,7 @@ public abstract partial class CommandBuffer
         if (!changed) return;
 
         SetShaderCore(program);
+        _uniformShadows.UsePlan(program.BindingPlan);
         _shaderProgram = program;
         _statShaderSwitches++;
     }
@@ -37,6 +38,7 @@ public abstract partial class CommandBuffer
 
         _statShaderSwitches++;
         SetComputeShaderCore(program);
+        _uniformShadows.UsePlan(program.BindingPlan);
         _computeProgram = program;
     }
 
@@ -126,9 +128,8 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(defaults, _lastAppliedDefaults) && defaults.Version == _lastAppliedDefaultsVersion)
             return;
 
-        int changedBefore = _changedPropertyKeys.Count;
         _activeProperties.MergeDefaults(defaults, _changedPropertyKeys, _defaultPropertyKeys);
-        _uniformShadows.Apply(_changedPropertyKeys, changedBefore, _activeProperties);
+        _uniformShadows.ApplyDefaults(defaults);
         _lastAppliedDefaults = defaults;
         _lastAppliedDefaultsVersion = defaults.Version;
     }
@@ -143,7 +144,7 @@ public abstract partial class CommandBuffer
     public void ClearProperties()
     {
         _activeProperties.Clear();
-        _uniformShadows.Reset();
+        _uniformShadows.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
         _lastAppliedDefaults = null;

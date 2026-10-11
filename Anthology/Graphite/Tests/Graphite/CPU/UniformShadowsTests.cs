@@ -15,8 +15,7 @@ public class UniformShadowsTests
     public void BlitWritesAtFieldOffsetAndClearsTheRestOfAShorterValue()
     {
         UniformShadows shadows = new();
-        PropertySet merged = new();
-        shadows.UsePlan(Plan(new UniformBlockField("V", 16, 16, UniformScalarType.Float4)), merged);
+        shadows.UsePlan(Plan(new UniformBlockField("V", 16, 16, UniformScalarType.Float4)));
 
         PropertySet wide = new();
         wide.SetFloat4("V", new Float4(1, 2, 3, 4));
@@ -31,26 +30,24 @@ public class UniformShadowsTests
     }
 
     [Fact]
-    public void ChangingPlanRebuildsFromTheMergedTable()
+    public void ChangingPlanZeroesTheBlocks()
     {
         UniformShadows shadows = new();
-        PropertySet merged = new();
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1)));
         PropertySet source = new();
         source.SetFloat("A", 5);
-        merged.MergeFrom(source, new List<PropertyID>(), new HashSet<PropertyID>());
+        shadows.Apply(source);
 
-        shadows.UsePlan(Plan(new UniformBlockField("Other", 0, 4, UniformScalarType.Float1)), merged);
-        shadows.UsePlan(Plan(new UniformBlockField("A", 4, 4, UniformScalarType.Float1)), merged);
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1)));
 
-        float[] floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(shadows[0].Data).ToArray();
-        Assert.Equal(5f, floats[1]);
+        Assert.Equal(0f, System.BitConverter.ToSingle(shadows[0].Data));
     }
 
     [Fact]
     public void FullCoverageSetBecomesTheBlockSourceAndIsReusedUntilItChanges()
     {
         UniformShadows shadows = new();
-        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1)), new PropertySet());
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1)));
         PropertySet full = new();
         full.SetFloat("A", 1);
         full.SetFloat("B", 2);
@@ -74,7 +71,7 @@ public class UniformShadowsTests
     public void PartialWriteOnACachedBlockStartsFromTheCachedBytes()
     {
         UniformShadows shadows = new();
-        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1)), new PropertySet());
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1)));
         PropertySet full = new();
         full.SetFloat("A", 1);
         full.SetFloat("B", 2);
@@ -88,5 +85,22 @@ public class UniformShadowsTests
         Assert.Null(shadows[0].Cache);
         float[] floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(shadows[0].Data).ToArray();
         Assert.Equal(new float[] { 1, 7 }, floats);
+    }
+
+    [Fact]
+    public void DefaultsAreOverwrittenByLaterUserValuesInCallOrder()
+    {
+        UniformShadows shadows = new();
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1)));
+        PropertySet defaults = new();
+        defaults.SetFloat("A", 1);
+        PropertySet user = new();
+        user.SetFloat("A", 2);
+
+        shadows.ApplyDefaults(defaults);
+        Assert.Equal(1f, System.BitConverter.ToSingle(shadows[0].Data));
+
+        shadows.Apply(user);
+        Assert.Equal(2f, System.BitConverter.ToSingle(shadows[0].Data));
     }
 }

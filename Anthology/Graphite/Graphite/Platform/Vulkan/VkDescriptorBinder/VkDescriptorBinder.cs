@@ -125,7 +125,7 @@ internal unsafe sealed partial class VkDescriptorBinder
         EnsureBindCacheFor(program, (int)setCount);
         _plan = program.BindingPlan;
         _shadows = _cbOwner.UniformShadows;
-        _shadows.UsePlan(_plan, _cbOwner.ActiveProperties);
+        _shadows.UsePlan(_plan);
         ulong executionId = _cbOwner.ExecutionId;
         int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)

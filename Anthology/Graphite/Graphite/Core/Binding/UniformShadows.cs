@@ -11,6 +11,7 @@ internal sealed class ShadowBlock
     public uint Size;
     public bool Dirty;
     public bool Foreign;
+    public PropertyID LastWritten;
     public PackedBlock? Cache;
     public DeviceBufferRange Range;
     public ulong Stamp;
@@ -26,16 +27,30 @@ internal sealed class UniformShadows
     private PackedBlock?[] _pack = Array.Empty<PackedBlock?>();
     private int[] _hits = Array.Empty<int>();
 
+    public UniformBindingPlan? Plan => _plan;
+
     public ShadowBlock this[int block] => _blocks[block];
 
     public void Reset() => _plan = null;
 
-    public void UsePlan(UniformBindingPlan plan, PropertySet merged)
+    public void UsePlan(UniformBindingPlan plan)
     {
         if (ReferenceEquals(plan, _plan))
             return;
 
         _plan = plan;
+        Rebuild();
+    }
+
+    public void Clear()
+    {
+        if (_plan != null)
+            Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        UniformBindingPlan plan = _plan!;
         int count = plan.BlockCount;
         if (_blocks.Length < count)
         {
@@ -64,9 +79,6 @@ internal sealed class UniformShadows
             block.Range = default;
             block.Stamp = 0;
         }
-
-        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in merged.Entries)
-            Write(kv.Key, kv.Value);
     }
 
     public void Apply(PropertySet source)
@@ -124,6 +136,7 @@ internal sealed class UniformShadows
                     ShadowBlock block = _blocks[target.Block];
                     Copy(src, block.Data, target);
                     block.Dirty = true;
+                    block.LastWritten = kv.Key;
                 }
 
                 if (_pack[target.Block] is { } packed)
@@ -151,16 +164,13 @@ internal sealed class UniformShadows
         }
     }
 
-    public void Apply(List<PropertyID> keys, int from, PropertySet merged)
+    public void ApplyDefaults(PropertySet defaults)
     {
         if (_plan == null)
             return;
 
-        for (int i = from; i < keys.Count; i++)
-        {
-            if (merged.Entries.TryGetValue(keys[i], out PropertyEntry? entry))
-                Write(keys[i], entry);
-        }
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in defaults.Entries)
+            Write(kv.Key, kv.Value);
     }
 
     private void Write(PropertyID id, PropertyEntry entry)
@@ -176,6 +186,7 @@ internal sealed class UniformShadows
             Materialize(block);
             Copy(src, block.Data, target);
             block.Dirty = true;
+            block.LastWritten = id;
         }
     }
 
