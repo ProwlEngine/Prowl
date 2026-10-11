@@ -37,6 +37,34 @@ public class GraphicsDeviceFeatures
     /// 64-bit floats usable in shaders.
     /// </summary>
     public bool ShaderFloat64 { get; }
+    /// <summary>
+    /// Indirect draws can issue more than one draw per call.
+    /// </summary>
+    public bool MultiDrawIndirect { get; }
+    /// <summary>
+    /// Indirect draws can read their draw count from a buffer.
+    /// </summary>
+    public bool DrawIndirectCount { get; }
+    /// <summary>
+    /// Partially bound, update after bind, non uniformly indexed arrays of sampled images, for bindless texture tables.
+    /// </summary>
+    public bool DescriptorIndexing { get; }
+    /// <summary>
+    /// One draw renders to several layers through gl_ViewIndex.
+    /// </summary>
+    public bool Multiview { get; }
+    /// <summary>
+    /// Vertex shaders can write gl_Layer.
+    /// </summary>
+    public bool ShaderOutputLayer { get; }
+    /// <summary>
+    /// Vertex shaders can write gl_ViewportIndex.
+    /// </summary>
+    public bool ShaderOutputViewportIndex { get; }
+    /// <summary>
+    /// Samplers can reduce with min or max instead of averaging.
+    /// </summary>
+    public bool SamplerFilterMinmax { get; }
 
     internal GraphicsDeviceFeatures(
         bool geometryShader,
@@ -46,7 +74,14 @@ public class GraphicsDeviceFeatures
         bool depthClipDisable,
         bool independentBlend,
         bool commandBufferDebugMarkers,
-        bool shaderFloat64)
+        bool shaderFloat64,
+        bool multiDrawIndirect,
+        bool drawIndirectCount,
+        bool descriptorIndexing,
+        bool multiview,
+        bool shaderOutputLayer,
+        bool shaderOutputViewportIndex,
+        bool samplerFilterMinmax)
     {
         GeometryShader = geometryShader;
         TessellationShaders = tessellationShaders;
@@ -56,5 +91,12 @@ public class GraphicsDeviceFeatures
         IndependentBlend = independentBlend;
         CommandBufferDebugMarkers = commandBufferDebugMarkers;
         ShaderFloat64 = shaderFloat64;
+        MultiDrawIndirect = multiDrawIndirect;
+        DrawIndirectCount = drawIndirectCount;
+        DescriptorIndexing = descriptorIndexing;
+        Multiview = multiview;
+        ShaderOutputLayer = shaderOutputLayer;
+        ShaderOutputViewportIndex = shaderOutputViewportIndex;
+        SamplerFilterMinmax = samplerFilterMinmax;
     }
 }

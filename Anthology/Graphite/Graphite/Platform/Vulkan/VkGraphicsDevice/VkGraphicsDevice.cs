@@ -52,7 +52,14 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             depthClipDisable: _physicalDeviceFeatures.DepthClamp,
             independentBlend: _physicalDeviceFeatures.IndependentBlend,
             commandBufferDebugMarkers: _debugUtilsEnabled,
-            shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
+            shaderFloat64: _physicalDeviceFeatures.ShaderFloat64,
+            multiDrawIndirect: _physicalDeviceFeatures.MultiDrawIndirect,
+            drawIndirectCount: _enabledVulkan12Features.DrawIndirectCount,
+            descriptorIndexing: _enabledVulkan12Features.RuntimeDescriptorArray,
+            multiview: _enabledVulkan11Features.Multiview,
+            shaderOutputLayer: _enabledVulkan12Features.ShaderOutputLayer,
+            shaderOutputViewportIndex: _enabledVulkan12Features.ShaderOutputViewportIndex,
+            samplerFilterMinmax: _enabledVulkan12Features.SamplerFilterMinmax);
 
         ResourceFactory = new VkResourceFactory(this);
 

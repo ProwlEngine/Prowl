@@ -27,6 +27,8 @@ internal unsafe partial class VkGraphicsDevice
     private readonly object _graphicsQueueLock = new();
     private PhysicalDeviceProperties _physicalDeviceProperties;
     private PhysicalDeviceFeatures _physicalDeviceFeatures;
+    private PhysicalDeviceVulkan11Features _enabledVulkan11Features;
+    private PhysicalDeviceVulkan12Features _enabledVulkan12Features;
     private string _deviceName;
     private string _vendorName;
     private GraphicsApiVersion _apiVersion;

@@ -179,6 +179,7 @@ internal unsafe partial class VkGraphicsDevice
             GeometryShader = supported.GeometryShader,
             TessellationShader = supported.TessellationShader,
             DrawIndirectFirstInstance = supported.DrawIndirectFirstInstance,
+            MultiDrawIndirect = supported.MultiDrawIndirect,
             SamplerAnisotropy = supported.SamplerAnisotropy,
             DepthClamp = supported.DepthClamp,
             DepthBiasClamp = supported.DepthBiasClamp,
@@ -275,20 +276,48 @@ internal unsafe partial class VkGraphicsDevice
                 $"The following Vulkan device extensions were not available: {missingList}");
         }
 
-        PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features);
-        PhysicalDeviceFeatures2 supportedFeatures = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: &vulkan12Features);
+        PhysicalDeviceVulkan11Features supported11 = new(sType: StructureType.PhysicalDeviceVulkan11Features);
+        PhysicalDeviceVulkan12Features supported12 = new(sType: StructureType.PhysicalDeviceVulkan12Features, pNext: &supported11);
+        PhysicalDeviceFeatures2 supportedFeatures = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: &supported12);
         Vk.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures);
-        if (!vulkan12Features.TimelineSemaphore)
+        if (!supported12.TimelineSemaphore)
             throw new RenderException($"The Vulkan device '{_deviceName}' does not support timeline semaphores.");
 
-        vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features, timelineSemaphore: true);
-        PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true);
+        // Bindless texture tables need every one of these, so descriptor indexing is all or nothing.
+        bool descriptorIndexing = supported12.RuntimeDescriptorArray
+            && supported12.DescriptorBindingPartiallyBound
+            && supported12.DescriptorBindingVariableDescriptorCount
+            && supported12.DescriptorBindingSampledImageUpdateAfterBind
+            && supported12.DescriptorBindingUpdateUnusedWhilePending
+            && supported12.ShaderSampledImageArrayNonUniformIndexing;
+
+        PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features)
+        {
+            TimelineSemaphore = true,
+            DrawIndirectCount = supported12.DrawIndirectCount,
+            SamplerFilterMinmax = supported12.SamplerFilterMinmax,
+            ShaderOutputViewportIndex = supported12.ShaderOutputViewportIndex,
+            ShaderOutputLayer = supported12.ShaderOutputLayer,
+            RuntimeDescriptorArray = descriptorIndexing,
+            DescriptorBindingPartiallyBound = descriptorIndexing,
+            DescriptorBindingVariableDescriptorCount = descriptorIndexing,
+            DescriptorBindingSampledImageUpdateAfterBind = descriptorIndexing,
+            DescriptorBindingUpdateUnusedWhilePending = descriptorIndexing,
+            ShaderSampledImageArrayNonUniformIndexing = descriptorIndexing,
+        };
+        PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true)
+        {
+            Multiview = supported11.Multiview,
+        };
 
         DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan11Features);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
 
         deviceCreateInfo.PEnabledFeatures = &deviceFeatures;
+
+        _enabledVulkan11Features = vulkan11Features with { PNext = null };
+        _enabledVulkan12Features = vulkan12Features with { PNext = null };
 
         IntPtr* layerNames = stackalloc IntPtr[1];
         uint layerNameCount = 0;
