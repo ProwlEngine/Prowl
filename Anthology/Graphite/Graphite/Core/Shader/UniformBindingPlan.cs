@@ -6,15 +6,17 @@ internal readonly record struct UniformFieldTarget(int Block, uint Offset, uint 
 
 internal sealed class UniformBlockLayout
 {
-    public const uint MaxCachedBytes = 4096;
+    public const uint MaxCachedBytes = 8192;
 
     public readonly uint Size;
     public readonly int FieldCount;
+    public readonly UniformBlockField[] Fields;
 
-    public UniformBlockLayout(uint size, int fieldCount)
+    public UniformBlockLayout(uint size, int fieldCount, UniformBlockField[] fields)
     {
         Size = size;
         FieldCount = fieldCount;
+        Fields = fields;
     }
 
     public bool Cacheable => Size <= MaxCachedBytes;
@@ -108,7 +110,7 @@ internal sealed class UniformBindingPlan
                     fieldCount++;
                     fields.Add((field.Name, new UniformFieldTarget(block, field.Offset, field.Size)));
                 }
-                layoutList.Add(new UniformBlockLayout(BlockSize(blockFields), fieldCount));
+                layoutList.Add(new UniformBlockLayout(BlockSize(blockFields), fieldCount, blockFields));
             }
 
             setBlocks[s] = Array.FindAll(elementBlock[s], b => b >= 0);
