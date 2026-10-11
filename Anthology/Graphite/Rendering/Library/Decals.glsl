@@ -20,7 +20,7 @@ struct Graphite_DecalRecord
     vec4 axis;               // decal +Z in world space, texture flags as uint bits (albedo 1, normal 2, mask 4)
 };
 
-layout(set = 0, binding = 13, std430) readonly buffer Graphite_StaticDecals { Graphite_DecalRecord graphite_StaticDecals[]; };
+layout(set = 1, binding = 20, std430) readonly buffer Graphite_StaticDecals { Graphite_DecalRecord graphite_StaticDecals[]; };
 layout(set = 1, binding = 5, std430) readonly buffer Graphite_ViewDecals { Graphite_DecalRecord graphite_ViewDecals[]; };
 
 #define GRAPHITE_DECAL_TEXTURE(d, slot, uv) GRAPHITE_SAMPLE_2D(slot, d.textures.w, uv)

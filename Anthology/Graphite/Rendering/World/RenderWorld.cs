@@ -28,10 +28,33 @@ public enum RenderableFlags : ushort
     ShadowsOnly = 1 << 5,
 }
 
-/// <summary>Which lightmap page a renderable samples and where its UVs land on it. A negative page means none.</summary>
-public readonly record struct LightmapBinding(int Page, Float4 ScaleOffset)
+/// <summary>
+/// The lightmap a renderable samples and where its UVs land on it. A lightmapped renderable whose texture is null, one
+/// still loading, lights with ambient light until it is set. <see cref="None"/> is lit by the light probes instead.
+/// </summary>
+public readonly record struct LightmapBinding
 {
-    public static readonly LightmapBinding None = new(-1, new Float4(1, 1, 0, 0));
+    public static readonly LightmapBinding None = default;
+
+    public LightmapBinding(Texture? texture, Float4 scaleOffset, LightmapEncoding encoding = LightmapEncoding.RGBM, SamplerDescription? sampler = null)
+    {
+        Texture = texture;
+        ScaleOffset = scaleOffset;
+        Encoding = encoding;
+        Sampler = sampler;
+        Lightmapped = true;
+    }
+
+    public Texture? Texture { get; }
+
+    /// <summary>The lightmap UVs times xy plus zw.</summary>
+    public Float4 ScaleOffset { get; }
+    public LightmapEncoding Encoding { get; }
+
+    /// <summary>Linear and clamped when null.</summary>
+    public SamplerDescription? Sampler { get; }
+
+    public bool Lightmapped { get; }
 }
 
 public struct RenderableDesc
@@ -106,7 +129,7 @@ internal struct ObjectBounds
     public Float4 Extents;
 }
 
-/// <summary>Per object data shaders read as needed, 80 bytes.</summary>
+/// <summary>Per object data shaders read as needed, 96 bytes, matching Graphite_ObjectData.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ObjectAttributes
 {
@@ -116,10 +139,15 @@ internal struct ObjectAttributes
     public uint Flags;
     public uint ObjectId;
     public uint PreviousTransform;
-    public int LightmapPage;
+    public const uint NoLightmap = uint.MaxValue;
+    public const uint LightmapLoading = uint.MaxValue - 1;
+
+    public uint LightmapTexture;
     public uint ProbeIndex;
     public float LodFade;
     public uint LayerMask;
+    public uint LightmapSampler;
+    private uint _pad0, _pad1, _pad2;
     public Float4 LightmapScaleOffset;
     public Float4 Custom0;
     public Float4 Custom1;
@@ -173,12 +201,12 @@ public sealed partial class RenderWorld : IDisposable
 
     private readonly Renderer? _owner;
 
-    internal RenderWorld(GraphicsDevice device, Renderer? owner = null, IMaterialResources? resources = null)
+    internal RenderWorld(GraphicsDevice device, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
     {
         _owner = owner;
-        Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Report : (_, _) => { });
+        Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Warn : (_, _) => { });
         Probes = new WorldProbes(device);
-        Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Report : (_, _) => { });
+        Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Warn : (_, _) => { }, reflections ?? ReflectionSettings.Default);
         _render = new RenderSide(device, Probes);
         Grow(64);
     }
@@ -311,6 +339,35 @@ public sealed partial class RenderWorld : IDisposable
         int index = Check(handle);
         _lightmap[index] = lightmap;
         MarkDirty(index, Dirt.Attributes);
+    }
+
+    private static readonly SamplerDescription s_lightmapSampler = SamplerDescription.Linear with
+    {
+        AddressModeU = SamplerAddressMode.Clamp,
+        AddressModeV = SamplerAddressMode.Clamp,
+        AddressModeW = SamplerAddressMode.Clamp,
+    };
+
+    // The lightmap's texture slot, or none, or loading, and its sampler slot with the encoding in the high 16 bits
+    private (uint Texture, uint Sampler) LightmapSlots(in LightmapBinding lightmap)
+    {
+        if (!lightmap.Lightmapped)
+            return (ObjectAttributes.NoLightmap, 0);
+        if (lightmap.Texture is not { IsDisposed: false } texture)
+            return (ObjectAttributes.LightmapLoading, 0);
+        IMaterialResources resources = Lighting.Resources;
+        uint sampler = resources.SamplerSlot(lightmap.Sampler ?? s_lightmapSampler);
+        return (resources.TextureSlot(texture, MaterialPropertyType.Texture2D, "black"), sampler | ((uint)lightmap.Encoding << 16));
+    }
+
+    /// <summary>Resolves every lightmap's slots again after a bindless slot was freed. Host thread, at extraction.</summary>
+    internal void RepackLightmaps()
+    {
+        for (int index = 0; index < _count; index++)
+        {
+            if (_alive[index] && _lightmap[index].Lightmapped)
+                MarkDirty(index, Dirt.Attributes);
+        }
     }
 
     public void SetSortBias(RenderableHandle handle, sbyte sortBias)
@@ -517,13 +574,14 @@ public sealed partial class RenderWorld : IDisposable
             ref ObjectAttributes attributes = ref _attributes[index];
             attributes.Flags = (uint)host._flags[index];
             attributes.ObjectId = host._objectId[index];
-            attributes.LightmapPage = host._lightmap[index].Page;
-            attributes.LightmapScaleOffset = host._lightmap[index].ScaleOffset;
+            LightmapBinding lightmap = host._lightmap[index];
+            (attributes.LightmapTexture, attributes.LightmapSampler) = host.LightmapSlots(lightmap);
+            attributes.LightmapScaleOffset = lightmap.Lightmapped ? lightmap.ScaleOffset : new Float4(1, 1, 0, 0);
             attributes.Custom0 = host._custom0[index];
             attributes.Custom1 = host._custom1[index];
             attributes.LodFade = 1;
             attributes.LayerMask = host._layerMask[index];
-            attributes.ProbeIndex = UpdateProbeSlot(index, _probes.Wants(attributes.LightmapPage));
+            attributes.ProbeIndex = UpdateProbeSlot(index, _probes.Active && !lightmap.Lightmapped);
             if (added)
                 attributes.PreviousTransform = ObjectAttributes.NoPrevious;
 
@@ -649,7 +707,7 @@ public sealed partial class RenderWorld : IDisposable
             {
                 if (!Alive[index])
                     continue;
-                uint slot = UpdateProbeSlot(index, _probes.Wants(_attributes[index].LightmapPage));
+                uint slot = UpdateProbeSlot(index, _probes.Active && _attributes[index].LightmapTexture == ObjectAttributes.NoLightmap);
                 if (_attributes[index].ProbeIndex == slot)
                     continue;
                 _attributes[index].ProbeIndex = slot;
@@ -785,7 +843,7 @@ public sealed partial class RenderWorld : IDisposable
             ReleaseProbeSlot(index);
             Mirrored[index] = false;
             Alive[index] = false;
-            _attributes[index] = new ObjectAttributes { Flags = (uint)RenderableFlags.Hidden, PreviousTransform = ObjectAttributes.NoPrevious, LightmapPage = -1, ProbeIndex = WorldProbes.NoSlot };
+            _attributes[index] = new ObjectAttributes { Flags = (uint)RenderableFlags.Hidden, PreviousTransform = ObjectAttributes.NoPrevious, LightmapTexture = ObjectAttributes.NoLightmap, ProbeIndex = WorldProbes.NoSlot };
             Attributes.Set((uint)index, _attributes[index]);
             ChangedDraw(index);
         }

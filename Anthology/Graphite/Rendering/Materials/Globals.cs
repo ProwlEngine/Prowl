@@ -65,6 +65,40 @@ public sealed class GlobalProperties
 
     public void SetMatrix(PropertyID name, Float4x4 value) => Set(name, MaterialValue.FromMatrix(value));
 
+    /// <summary>
+    /// A storage buffer every shader declaring a buffer of this name reads, a world's over the renderer's. Null removes it.
+    /// The host keeps it alive while it is set. Host thread.
+    /// </summary>
+    public void SetBuffer(PropertyID name, DeviceBuffer? buffer)
+    {
+        if (buffer == null)
+            _buffers.Remove(name);
+        else
+            _buffers[name] = buffer;
+        BufferVersion++;
+    }
+
+    public uint BufferVersion { get; private set; }
+
+    /// <summary>The resolved buffers as of the last extraction: this set's over the fallback's. The render thread reads only this.</summary>
+    internal IReadOnlyDictionary<PropertyID, DeviceBuffer> BufferSnapshot { get; private set; } = new Dictionary<PropertyID, DeviceBuffer>();
+
+    private readonly Dictionary<PropertyID, DeviceBuffer> _buffers = new();
+    private (uint Own, uint Fallback) _bufferVersions = (uint.MaxValue, uint.MaxValue);
+
+    internal void SnapshotBuffers()
+    {
+        (uint, uint) versions = (BufferVersion, Fallback?.BufferVersion ?? 0);
+        if (versions == _bufferVersions)
+            return;
+
+        Dictionary<PropertyID, DeviceBuffer> snapshot = Fallback != null ? new(Fallback._buffers) : new();
+        foreach (KeyValuePair<PropertyID, DeviceBuffer> pair in _buffers)
+            snapshot[pair.Key] = pair.Value;
+        BufferSnapshot = snapshot;
+        _bufferVersions = versions;
+    }
+
     public void SetTexture(PropertyID name, Texture? texture, SamplerDescription? sampler = null)
     {
         MaterialPropertyType type = _registry.TryGet(name, out GlobalProperty property) && property.Type >= MaterialPropertyType.Texture2D
@@ -349,8 +383,12 @@ internal sealed class GlobalRegistry : IDisposable
             }
 
             Renderer.SnapshotKeywords();
+            Renderer.SnapshotBuffers();
             foreach (GlobalProperties? world in _regions)
+            {
                 world?.SnapshotKeywords();
+                world?.SnapshotBuffers();
+            }
 
             if (_allDirty || _replaced != null)
             {

@@ -104,6 +104,15 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         return entry.Built ?? (entry.Failed ? null : Nearest(entry));
     }
 
+    private readonly Dictionary<GraphicsProgram, PropertyID[]> _userBuffers = new();
+
+    /// <summary>The buffers a program reads that the host sets through Globals.SetBuffer.</summary>
+    public PropertyID[] UserBuffers(GraphicsProgram program)
+    {
+        lock (_userBuffers)
+            return _userBuffers.TryGetValue(program, out PropertyID[]? buffers) ? buffers : [];
+    }
+
     /// <summary>Whether the wanted variant itself is built, rather than a nearby one standing in. Render thread.</summary>
     public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
     {
@@ -295,6 +304,16 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
 
         GraphicsProgram built = device.ResourceFactory.CreateGraphicsProgram(description);
         built.Name = $"{program.Shader.Name} {pass.Name}";
+        List<PropertyID> buffers = new();
+        foreach (ResourceLayoutDescription layout in description.ResourceLayouts ?? [])
+        {
+            if (layout.Set != GraphiteBindings.UserSet)
+                continue;
+            foreach (ResourceLayoutElementDescription element in layout.Elements)
+                buffers.Add(element.Name);
+        }
+        lock (_userBuffers)
+            _userBuffers[built] = [.. buffers];
         return built;
     }
 }
@@ -565,8 +584,9 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         camera.ViewTable.Set("Graphite_DecalRegionNodes", 0, camera.DecalRegionNodes.Buffer);
         camera.ViewTable.Set("Graphite_ProbeRegions", 0, camera.ProbeRegions.Buffer);
         camera.ViewTable.Set("Graphite_ProbeRegionNodes", 0, camera.ProbeRegionNodes.Buffer);
+        SetWorldBuffers(camera.ViewTable, camera.World.World);
         DescriptorTable viewTable = camera.ViewTable.Get(ring);
-        DescriptorTable frameTable = camera.World.FrameTable.Get(ring);
+        DescriptorTable frameTable = frame.TextureTable;
 
         Float4 clear = camera.Desc.ClearColor;
         cmd.SetFramebuffer(context.GetRenderTexture(_target).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f)));
@@ -584,6 +604,43 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         }
     }
 
+    // The host's buffers a program reads, from the world's globals over the renderer's. A missing one skips the draw.
+    private bool BindUserBuffers(GraphicsProgram program, Shader shader)
+    {
+        IReadOnlyDictionary<PropertyID, DeviceBuffer> buffers = camera.World.World.Globals.BufferSnapshot;
+        foreach (PropertyID name in frame.Programs.UserBuffers(program))
+        {
+            if (!buffers.TryGetValue(name, out DeviceBuffer? buffer) || buffer.IsDisposed)
+            {
+                frame.Report($"global.buffer.{name.Text()}", $"{shader.Name} reads the buffer {name.Text()}, which no Globals.SetBuffer provides, so it does not draw.");
+                return false;
+            }
+            _properties.SetBuffer(name, buffer);
+        }
+        return true;
+    }
+
+    // The world's buffers sit in every view's table, which a frame in flight's table never sees change
+    private void SetWorldBuffers(TableRing table, RenderWorld world)
+    {
+        RenderWorld.RenderSide render = world.Render;
+        WorldLighting lighting = world.Lighting;
+        table.Set("Graphite_Chunks", 0, frame.Geometry.Chunks.Buffer);
+        table.Set("Graphite_Transforms", 0, render.Transforms.Buffer);
+        table.Set("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);
+        table.Set("Graphite_Objects", 0, render.Attributes.Buffer);
+        table.Set("Graphite_MaterialSlots", 0, render.MaterialSlots.Buffer);
+        table.Set("Graphite_StaticLights", 0, lighting.StaticLights.Buffer);
+        table.Set("Graphite_StaticLightNodes", 0, lighting.StaticLightNodes.Buffer);
+        table.Set("Graphite_StaticDecals", 0, lighting.StaticDecals.Buffer);
+        table.Set("Graphite_StaticDecalNodes", 0, lighting.StaticDecalNodes.Buffer);
+        table.Set("Graphite_WorldLighting", 0, lighting.World.Buffer);
+        table.Set("Graphite_ObjectProbes", 0, world.Probes.ObjectSh);
+        table.Set("Graphite_ReflectionProbes", 0, world.Reflections.Regions.Records.Buffer);
+        table.Set("Graphite_ReflectionProbeNodes", 0, world.Reflections.Regions.Nodes.Buffer);
+        table.Set("Graphite_SkyAmbientSH", 0, world.Reflections.SkyAmbient);
+    }
+
     // A fullscreen triangle at the far plane with the sky material's slot in the push constants
     private void DrawSky(CommandBuffer cmd, DescriptorTable frameTable, DescriptorTable viewTable)
     {
@@ -591,7 +648,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         if (!camera.Desc.Sky || world.SkyProgram is not ushort id || world.World.Lighting.Environment.Sky is not { IsDisposed: false, Table: { } table } sky)
             return;
         GraphicsProgram? program = frame.Programs.Get(id, false, world.World.Globals.KeywordSnapshot);
-        if (program == null)
+        if (program == null || !BindUserBuffers(program, sky.Shader))
             return;
 
         cmd.SetShader(program);
@@ -614,7 +671,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
                 continue;
 
             Shader shader = frame.DrawPrograms[call.Program].Shader;
-            if (!frame.Materials.Tables.TryGetValue(shader, out MaterialTable? table))
+            if (!frame.Materials.Tables.TryGetValue(shader, out MaterialTable? table) || !BindUserBuffers(program, shader))
                 continue;
 
             GeometryPage page = frame.Geometry.Pages[call.Page];
@@ -659,36 +716,42 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
 }
 
 /// <summary>A world as the frame pipeline draws it: its buckets, its globals region and its frame table.</summary>
-internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, TableRing frameTable, int globalRegion) : IDisposable
+internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globalRegion) : IDisposable
 {
     private static int s_nextCapture;
 
     public RenderWorld World { get; } = world;
     public BucketSet Buckets { get; } = buckets;
-    public TableRing FrameTable { get; } = frameTable;
     public int GlobalRegion { get; } = globalRegion;
 
     /// <summary>The draw program of the sky material's Sky pass, held while the world draws it.</summary>
     public ushort? SkyProgram;
 
-    /// <summary>The views capturing the sky and the reflection probes, all six faces or one.</summary>
-    public CameraFrame? SkyCamera, ProbeCamera, ProbeFaceCamera;
+    /// <summary>The views capturing the sky and the reflection probes: six faces at once or one, reused across frames.</summary>
+    public CameraFrame? SkyCamera;
+    public readonly List<CameraFrame> ProbeCameras = new();
+    public readonly List<CameraFrame> ProbeFaceCameras = new();
+    public int ProbeCamerasUsed, ProbeFaceCamerasUsed;
+
+    /// <summary>The pipeline projecting the sky onto harmonics for the sky ambient mode.</summary>
+    public RenderPipeline? SkyAmbient;
+    public SkyAmbientPass? SkyAmbientPass;
 
     /// <summary>Filter pipelines, one per filling of a probe layer this frame, reused across frames.</summary>
     public readonly List<(RenderPipeline Pipeline, PrefilterPass Pass)> Filters = new();
     public int FiltersUsed;
 
-    /// <summary>The capture views' ids, below any a host may use.</summary>
-    public int CaptureViewId { get; } = int.MinValue + 3 * Interlocked.Increment(ref s_nextCapture);
+    /// <summary>A new capture view id, below any a host may use.</summary>
+    public static int NextCaptureViewId() => int.MinValue + Interlocked.Increment(ref s_nextCapture);
 
     public IEnumerable<CameraFrame> Captures()
     {
         if (SkyCamera != null)
             yield return SkyCamera;
-        if (ProbeCamera != null)
-            yield return ProbeCamera;
-        if (ProbeFaceCamera != null)
-            yield return ProbeFaceCamera;
+        foreach (CameraFrame camera in ProbeCameras)
+            yield return camera;
+        foreach (CameraFrame camera in ProbeFaceCameras)
+            yield return camera;
     }
 
     public void Dispose()
@@ -697,7 +760,7 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, TableRing
             camera.Dispose();
         foreach ((RenderPipeline pipeline, _) in Filters)
             pipeline.Dispose();
-        FrameTable.Dispose();
+        SkyAmbient?.Dispose();
     }
 }
 
@@ -739,6 +802,7 @@ internal sealed class FramePipeline : IDisposable
 
     public FramePipeline(GraphicsDevice device, IShaderCompiler compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<string, string> report)
     {
+        Report = report;
         _device = device;
         _textures = textures;
         _uploader = uploader;
@@ -757,6 +821,7 @@ internal sealed class FramePipeline : IDisposable
         PresentProgram = Fullscreen(device, compiler, "Internal/Present.glsl");
         PresentLayersProgram = Fullscreen(device, compiler, "Internal/PresentLayers.glsl");
         PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
+        SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
         TrilinearClamp = device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
         {
             AddressModeU = SamplerAddressMode.Clamp,
@@ -777,6 +842,16 @@ internal sealed class FramePipeline : IDisposable
     public GraphicsProgram PresentLayersProgram { get; }
 
     public GraphicsProgram PrefilterProgram { get; }
+
+    /// <summary>Reports a problem once per key.</summary>
+    public Action<string, string> Report { get; }
+    public ComputeProgram SkyAmbientProgram { get; }
+
+    /// <summary>Frames a view keeps its per view state after it was last drawn.</summary>
+    public int StaleViewFrames { get; init; } = 8;
+
+    /// <summary>The renderer's bindless texture table, set 0 of every material program.</summary>
+    public DescriptorTable TextureTable => _textures.Table;
     public Sampler TrilinearClamp { get; }
 
     private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler compiler, string file)
@@ -825,11 +900,13 @@ internal sealed class FramePipeline : IDisposable
         {
             _frameWorlds.Add(world);
             world.FiltersUsed = 0;
+            world.ProbeCamerasUsed = 0;
+            world.ProbeFaceCamerasUsed = 0;
             UpdateSkyProgram(world);
             WorldReflections reflections = world.World.Reflections;
             if (reflections.CaptureDue)
                 CaptureSky(world, time);
-            if (reflections.Capture is { } capture)
+            foreach (ProbeCapture capture in reflections.Captures)
                 CaptureProbe(world, capture, time);
         }
 
@@ -906,15 +983,15 @@ internal sealed class FramePipeline : IDisposable
     private void CaptureSky(WorldFrame world, in FrameTime time)
     {
         WorldReflections reflections = world.World.Reflections;
-        world.SkyCamera ??= Capturing(world.CaptureViewId);
-        WorldReflections.Scratch scratch = reflections.ScratchFor(WorldReflections.SkyResolution);
+        world.SkyCamera ??= Capturing();
+        WorldReflections.Scratch scratch = reflections.SkyScratch!;
         if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot))
             reflections.SkyIncomplete();
 
         ViewDesc capture = new()
         {
             World = world.World,
-            ViewId = world.CaptureViewId,
+            ViewId = world.SkyCamera.View.ViewId,
             LayerCount = 6,
             Target = scratch.All,
             CullingMask = 0,
@@ -925,6 +1002,16 @@ internal sealed class FramePipeline : IDisposable
             capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = WorldReflections.FaceProjection };
         Draw(world.SkyCamera, capture, world, time);
         Fill(world, reflections.Sky!, scratch.Cube, null);
+
+        if (world.SkyAmbient == null)
+        {
+            world.SkyAmbientPass = new SkyAmbientPass(SkyAmbientProgram, TrilinearClamp);
+            world.SkyAmbient = new RenderPipeline { Name = "Graphite.SkyAmbient" };
+            world.SkyAmbient.SetPasses([world.SkyAmbientPass]);
+        }
+        world.SkyAmbientPass!.Source = scratch.Cube;
+        world.SkyAmbientPass.Output = reflections.SkyAmbient;
+        _dispatches.Add(new GraphDispatch(world.SkyAmbient, _frameStartViews));
     }
 
     // Filters a captured cube into every mip of a prefiltered one
@@ -932,7 +1019,7 @@ internal sealed class FramePipeline : IDisposable
     {
         if (world.FiltersUsed == world.Filters.Count)
         {
-            PrefilterPass created = new(PrefilterProgram, TrilinearClamp);
+            PrefilterPass created = new(PrefilterProgram, TrilinearClamp, world.World.Reflections.PrefilterSamples);
             RenderPipeline pipeline = new() { Name = "Graphite.Prefilter" };
             pipeline.SetPasses([created]);
             world.Filters.Add((pipeline, created));
@@ -951,16 +1038,16 @@ internal sealed class FramePipeline : IDisposable
         WorldReflections reflections = world.World.Reflections;
         ReflectionProbeDesc probe = reflections.Probe(work.Index);
         WorldReflections.Target target = reflections.ProbeTarget(work.Index);
-        WorldReflections.Scratch scratch = reflections.ScratchFor(target.Cube.Width);
+        WorldReflections.Scratch scratch = work.Scratch;
         Float4x4 projection = WorldReflections.FaceProjectionBetween(probe.NearClip, probe.FarClip);
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)
         {
-            world.ProbeCamera ??= Capturing(world.CaptureViewId + 1);
+            CameraFrame camera = Pooled(world.ProbeCameras, ref world.ProbeCamerasUsed);
             ViewDesc capture = new()
             {
                 World = world.World,
-                ViewId = world.CaptureViewId + 1,
+                ViewId = camera.View.ViewId,
                 LayerCount = 6,
                 Target = scratch.All,
                 CullingMask = probe.CullingMask,
@@ -970,15 +1057,15 @@ internal sealed class FramePipeline : IDisposable
             };
             for (int face = 0; face < 6; face++)
                 capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = projection, Position = probe.Position };
-            Draw(world.ProbeCamera, capture, world, time);
+            Draw(camera, capture, world, time);
         }
         else if (faces == 1)
         {
-            world.ProbeFaceCamera ??= Capturing(world.CaptureViewId + 2);
+            CameraFrame camera = Pooled(world.ProbeFaceCameras, ref world.ProbeFaceCamerasUsed);
             ViewDesc capture = new()
             {
                 World = world.World,
-                ViewId = world.CaptureViewId + 2,
+                ViewId = camera.View.ViewId,
                 Target = scratch.Faces[work.FirstFace],
                 CullingMask = probe.CullingMask,
                 ClearColor = world.World.Lighting.Environment.SkyColor,
@@ -986,18 +1073,26 @@ internal sealed class FramePipeline : IDisposable
                 FarDistance = probe.FarClip,
             };
             capture.Layers[0] = new ViewLayer { View = WorldReflections.FaceView(work.FirstFace), Projection = projection, Position = probe.Position };
-            Draw(world.ProbeFaceCamera, capture, world, time);
+            Draw(camera, capture, world, time);
         }
 
         if (work.Prefilter)
             Fill(world, target, scratch.Cube, work.Bake);
     }
 
-    private CameraFrame Capturing(int viewId)
+    private CameraFrame Capturing()
     {
-        CameraFrame camera = new(_device, this, viewId);
+        CameraFrame camera = new(_device, this, WorldFrame.NextCaptureViewId());
         _textures.TrackView(camera.ViewTable);
         return camera;
+    }
+
+    // The next capture camera of a pool this frame, a new one when every one is in use
+    private CameraFrame Pooled(List<CameraFrame> pool, ref int used)
+    {
+        if (used == pool.Count)
+            pool.Add(Capturing());
+        return pool[used++];
     }
 
     /// <summary>Releases what the frame pipeline keeps for a removed world. Render thread idle.</summary>
@@ -1125,33 +1220,21 @@ internal sealed class FramePipeline : IDisposable
             RenderWorld.RenderSide render = world.World.Render;
             WorldProbes probes = world.World.Probes;
             _probes.Worlds.Add(probes);
-            _buffers.Add(probes.LightmapPages.Buffer);
             _buffers.Add(probes.ProbeRecords.Buffer);
             _buffers.Add(probes.TetRecords.Buffer);
             _buffers.Add(probes.Requests.Buffer);
             _buffers.Add(probes.ObjectSh);
-            world.FrameTable.Set("Graphite_LightmapPages", 0, probes.LightmapPages.Buffer);
             StaticRegions<ReflectionProbeRecord> reflections = world.World.Reflections.Regions;
             _buffers.Add(reflections.Records.Buffer);
             _buffers.Add(reflections.Nodes.Buffer);
-            world.FrameTable.Set("Graphite_ReflectionProbes", 0, reflections.Records.Buffer);
-            world.FrameTable.Set("Graphite_ReflectionProbeNodes", 0, reflections.Nodes.Buffer);
-            world.FrameTable.Set("Graphite_ObjectProbes", 0, probes.ObjectSh);
+            _buffers.Add(world.World.Reflections.SkyAmbient);
+
             foreach (GpuTable table in render.Tables)
                 _buffers.Add(table.Buffer);
             WorldLighting lighting = world.World.Lighting;
             foreach (GpuTable table in lighting.Tables)
                 _buffers.Add(table.Buffer);
-            world.FrameTable.Set("Graphite_StaticLights", 0, lighting.StaticLights.Buffer);
-            world.FrameTable.Set("Graphite_StaticLightNodes", 0, lighting.StaticLightNodes.Buffer);
-            world.FrameTable.Set("Graphite_StaticDecals", 0, lighting.StaticDecals.Buffer);
-            world.FrameTable.Set("Graphite_StaticDecalNodes", 0, lighting.StaticDecalNodes.Buffer);
-            world.FrameTable.Set("Graphite_WorldLighting", 0, lighting.World.Buffer);
-            world.FrameTable.Set("Graphite_Chunks", 0, Geometry.Chunks.Buffer);
-            world.FrameTable.Set("Graphite_Transforms", 0, render.Transforms.Buffer);
-            world.FrameTable.Set("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);
-            world.FrameTable.Set("Graphite_Objects", 0, render.Attributes.Buffer);
-            world.FrameTable.Set("Graphite_MaterialSlots", 0, render.MaterialSlots.Buffer);
+
         }
         foreach (CameraFrame camera in Active())
             camera.AddBuffers(_buffers);
@@ -1187,7 +1270,7 @@ internal sealed class FramePipeline : IDisposable
         List<int>? stale = null;
         foreach ((int id, CameraFrame camera) in _cameras)
         {
-            if (_frame - camera.LastFrame > 8)
+            if (_frame - camera.LastFrame > StaleViewFrames)
                 (stale ??= new()).Add(id);
         }
         if (stale == null)
@@ -1211,6 +1294,7 @@ internal sealed class FramePipeline : IDisposable
         PresentProgram.Dispose();
         PresentLayersProgram.Dispose();
         PrefilterProgram.Dispose();
+        SkyAmbientProgram.Dispose();
         TrilinearClamp.Dispose();
         LinearSampler.Dispose();
     }

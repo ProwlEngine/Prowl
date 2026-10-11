@@ -100,41 +100,10 @@ internal struct ProbeTetRecord
     public Float4 Row1, Row2, Row3;
 }
 
-/// <summary>A lightmap page: its texture and sampler slots.</summary>
-[StructLayout(LayoutKind.Sequential)]
-internal struct LightmapPageRecord
-{
-    public const uint NotReady = uint.MaxValue;
-
-    public uint Texture;
-    public uint Sampler;
-}
-
 public sealed partial class RenderWorld
 {
-    private static readonly SamplerDescription s_lightmapSampler = SamplerDescription.Linear with
-    {
-        AddressModeU = SamplerAddressMode.Clamp,
-        AddressModeV = SamplerAddressMode.Clamp,
-        AddressModeW = SamplerAddressMode.Clamp,
-    };
-
-    private Texture?[] _lightmaps = [];
-    private LightmapEncoding _lightmapEncoding;
-    private bool _lightmapsDirty;
     private LightProbeData? _probeData;
     private bool _probesDirty;
-
-    /// <summary>
-    /// The lightmap pages renderables index with <see cref="LightmapBinding.Page"/>. A null page, one still loading, lights
-    /// its renderables with ambient light until it is set. Renderables whose page is past the end use the light probes. Host thread.
-    /// </summary>
-    public void SetLightmaps(ReadOnlySpan<Texture?> pages, LightmapEncoding encoding)
-    {
-        _lightmaps = pages.ToArray();
-        _lightmapEncoding = encoding;
-        _lightmapsDirty = true;
-    }
 
     /// <summary>
     /// The baked light probes that light renderables without a lightmap, sampled at their bounds center, or null for
@@ -172,26 +141,8 @@ public sealed partial class RenderWorld
         }
     }
 
-    /// <summary>Resolves the lightmap pages' slots again after a bindless slot was freed. Host thread, at extraction.</summary>
-    internal void RepackLightmaps() => _lightmapsDirty = true;
-
     private void ExtractBakedLighting()
     {
-        if (_lightmapsDirty)
-        {
-            _lightmapsDirty = false;
-            IMaterialResources resources = Lighting.Resources;
-            LightmapPageRecord[] pages = new LightmapPageRecord[_lightmaps.Length];
-            uint sampler = resources.SamplerSlot(s_lightmapSampler);
-            for (int i = 0; i < pages.Length; i++)
-            {
-                Texture? page = _lightmaps[i];
-                uint slot = page is { IsDisposed: false } ? resources.TextureSlot(page, MaterialPropertyType.Texture2D, "black") : LightmapPageRecord.NotReady;
-                pages[i] = new LightmapPageRecord { Texture = slot, Sampler = sampler };
-            }
-            Probes.ReceiveLightmaps(pages);
-            Lighting.SetLightmaps(pages.Length, _lightmapEncoding);
-        }
         if (_probesDirty)
         {
             _probesDirty = false;
@@ -206,8 +157,7 @@ public sealed partial class RenderWorld
 }
 
 /// <summary>
-/// The render side of a world's baked lighting: the lightmap page table, and light probe harmonics per renderable
-/// without a lightmap. Those are sampled on the GPU in FrameStart for renderables that moved, or all of them when the
+/// The render side of a world's light probes: harmonics per renderable without a lightmap. Those are sampled on the GPU in FrameStart for renderables that moved, or all of them when the
 /// probes change: each finds the tetrahedron holding its bounds center, starting from the one it was in last, and
 /// blends its corners, or blends the nearest probes outside the probe hull.
 /// </summary>
@@ -229,14 +179,12 @@ internal sealed class WorldProbes : IDisposable
     public WorldProbes(GraphicsDevice device)
     {
         _device = device;
-        LightmapPages = GpuTable.Of<LightmapPageRecord>(device, "Lightmap pages", 16);
         ProbeRecords = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, "Light probes");
         TetRecords = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, "Light probe tetrahedra");
         Requests = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, "Light probe requests");
         ObjectSh = CreateSh(64);
     }
 
-    public GpuTable LightmapPages { get; }
     public GpuArray ProbeRecords { get; }
     public GpuArray TetRecords { get; }
 
@@ -253,8 +201,6 @@ internal sealed class WorldProbes : IDisposable
     /// <summary>Whether the world has probes. Renderables hold harmonics slots only while it does.</summary>
     public bool Active { get; private set; }
 
-    public int PageCount { get; private set; }
-
     public bool TakeSlotsChanged()
     {
         bool changed = SlotsChanged;
@@ -262,19 +208,8 @@ internal sealed class WorldProbes : IDisposable
         return changed;
     }
 
-    /// <summary>Whether a renderable on this lightmap page is lit by the probes: it has no page, or one past the end.</summary>
-    public bool Wants(int page) => Active && (page < 0 || page >= PageCount);
-
     /// <summary>Whether a renderable could be lit by the probes differently than before the last change.</summary>
     public bool SlotsChanged { get; private set; }
-
-    public void ReceiveLightmaps(ReadOnlySpan<LightmapPageRecord> pages)
-    {
-        SlotsChanged |= PageCount != pages.Length;
-        PageCount = pages.Length;
-        for (int i = 0; i < pages.Length; i++)
-            LightmapPages.Set((uint)i, pages[i]);
-    }
 
     public void ReceiveProbes(LightProbeData? data)
     {
@@ -370,17 +305,8 @@ internal sealed class WorldProbes : IDisposable
         _requests.Clear();
     }
 
-    public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
-    {
-        if (LightmapPages.Flush(uploader) is not { } old)
-            return false;
-        replaced.Add(old);
-        return true;
-    }
-
     public void Dispose()
     {
-        LightmapPages.Dispose();
         ProbeRecords.Dispose();
         TetRecords.Dispose();
         Requests.Dispose();

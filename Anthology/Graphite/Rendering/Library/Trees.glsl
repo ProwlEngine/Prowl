@@ -40,13 +40,13 @@ struct Graphite_TreeNode
     uvec4 count;
 };
 
-layout(set = 0, binding = 12, std430) readonly buffer Graphite_StaticLightNodes { Graphite_TreeNode graphite_StaticLightNodes[]; };
-layout(set = 0, binding = 14, std430) readonly buffer Graphite_StaticDecalNodes { Graphite_TreeNode graphite_StaticDecalNodes[]; };
+layout(set = 1, binding = 19, std430) readonly buffer Graphite_StaticLightNodes { Graphite_TreeNode graphite_StaticLightNodes[]; };
+layout(set = 1, binding = 21, std430) readonly buffer Graphite_StaticDecalNodes { Graphite_TreeNode graphite_StaticDecalNodes[]; };
 layout(set = 1, binding = 4, std430) readonly buffer Graphite_ViewLightNodes { Graphite_TreeNode graphite_ViewLightNodes[]; };
 layout(set = 1, binding = 6, std430) readonly buffer Graphite_ViewDecalNodes { Graphite_TreeNode graphite_ViewDecalNodes[]; };
 layout(set = 1, binding = 8, std430) readonly buffer Graphite_LightRegionNodes { Graphite_TreeNode graphite_LightRegionNodes[]; };
 layout(set = 1, binding = 10, std430) readonly buffer Graphite_DecalRegionNodes { Graphite_TreeNode graphite_DecalRegionNodes[]; };
-layout(set = 0, binding = 19, std430) readonly buffer Graphite_ReflectionProbeNodes { Graphite_TreeNode graphite_ReflectionProbeNodes[]; };
+layout(set = 1, binding = 25, std430) readonly buffer Graphite_ReflectionProbeNodes { Graphite_TreeNode graphite_ReflectionProbeNodes[]; };
 layout(set = 1, binding = 12, std430) readonly buffer Graphite_ProbeRegionNodes { Graphite_TreeNode graphite_ProbeRegionNodes[]; };
 
 // A region the view sees: the camera minus its origin split high and low, and its tree's root

@@ -194,12 +194,12 @@ public sealed class LibraryTests : IDisposable
         geometry.Apply(uploader, 0, long.MaxValue, new List<GpuMesh>());
 
         DescriptorTable frame = Own(_device.ResourceFactory.CreateDescriptorTable(frameLayout));
-        frame.SetBuffer("Graphite_Chunks", 0, geometry.Chunks.Buffer);
-        frame.SetBuffer("Graphite_Transforms", 0, render.Transforms.Buffer);
-        frame.SetBuffer("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);
-        frame.SetBuffer("Graphite_Objects", 0, render.Attributes.Buffer);
-        frame.SetBuffer("Graphite_MaterialSlots", 0, render.MaterialSlots.Buffer);
         DescriptorTable view = Own(_device.ResourceFactory.CreateDescriptorTable(viewLayout));
+        view.SetBuffer("Graphite_Chunks", 0, geometry.Chunks.Buffer);
+        view.SetBuffer("Graphite_Transforms", 0, render.Transforms.Buffer);
+        view.SetBuffer("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);
+        view.SetBuffer("Graphite_Objects", 0, render.Attributes.Buffer);
+        view.SetBuffer("Graphite_MaterialSlots", 0, render.MaterialSlots.Buffer);
         view.SetBuffer("Graphite_Globals", 0, globalsBuffer);
         view.SetBuffer("Graphite_Views", 0, views);
 

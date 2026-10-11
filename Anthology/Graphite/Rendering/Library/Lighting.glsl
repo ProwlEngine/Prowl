@@ -24,16 +24,16 @@ struct Graphite_Directional
     vec4 color;              // colour times intensity, layer mask as uint bits
 };
 
-layout(set = 0, binding = 11, std430) readonly buffer Graphite_StaticLights { Graphite_LightRecord graphite_StaticLights[]; };
+layout(set = 1, binding = 18, std430) readonly buffer Graphite_StaticLights { Graphite_LightRecord graphite_StaticLights[]; };
 layout(set = 1, binding = 3, std430) readonly buffer Graphite_ViewLights { Graphite_LightRecord graphite_ViewLights[]; };
-layout(set = 0, binding = 15, std430) readonly buffer Graphite_WorldLighting
+layout(set = 1, binding = 22, std430) readonly buffer Graphite_WorldLighting
 {
-    uvec4 counts;            // directional lights, lightmap pages, probes present, lightmap encoding (0 linear, 1 RGBM)
+    uvec4 counts;            // directional lights, unused, probes present, unused
     uvec4 reflections;       // the sky probe's cube slot, the probes' sampler slot, the sky probe's mips, whether it is captured
     vec4 ambientColor;
     vec4 ambientSky;
     vec4 ambientGround;
-    vec4 ambientMode;        // uniform, hemisphere, strength
+    vec4 ambientMode;        // uniform, hemisphere, strength, sky
     vec4 fogColor;
     vec4 fogParams;
     vec4 fogStates;          // linear, exponential, exponential squared, use sky
@@ -618,9 +618,11 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
 //  Ambient lighting
 // ============================================================
 
+vec3 Graphite_SkyAmbient(vec3 worldNormal);
+
 vec3 CalculateAmbient(vec3 worldNormal)
 {
-    vec3 ambient = vec3(0.0);
+    vec3 ambient = Graphite_SkyAmbient(worldNormal) * graphite_World.ambientMode.w;
     ambient += graphite_World.ambientColor.rgb * graphite_World.ambientMode.x;
 
     float upDot = dot(worldNormal, vec3(0.0, 1.0, 0.0));
@@ -635,12 +637,15 @@ vec3 CalculateAmbient(vec3 worldNormal)
 
 struct Graphite_ProbeSH { vec4 shAr; vec4 shAg; vec4 shAb; vec4 shBr; vec4 shBg; vec4 shBb; vec4 shC; };
 
-layout(set = 0, binding = 16, std430) readonly buffer Graphite_LightmapPages { uvec2 graphite_LightmapPages[]; };
-layout(set = 0, binding = 17, std430) readonly buffer Graphite_ObjectProbes { Graphite_ProbeSH graphite_ObjectProbes[]; };
+layout(set = 1, binding = 23, std430) readonly buffer Graphite_ObjectProbes { Graphite_ProbeSH graphite_ObjectProbes[]; };
 
-vec3 DecodeLightmap(vec4 texel)
+#define GRAPHITE_NO_LIGHTMAP 0xFFFFFFFFu
+#define GRAPHITE_LIGHTMAP_LOADING 0xFFFFFFFEu
+
+// A lightmap texel as light: as is, or colour times alpha times 8 for RGBM
+vec3 DecodeLightmap(vec4 texel, uint encoding)
 {
-    return graphite_World.counts.w == 1u ? texel.rgb * (texel.a * 8.0) : texel.rgb;
+    return encoding == 1u ? texel.rgb * (texel.a * 8.0) : texel.rgb;
 }
 
 // Diffuse irradiance over pi for a normal from packed order 2 harmonics
@@ -664,20 +669,25 @@ vec3 ShadeSH9(Graphite_ProbeSH sh, vec3 n)
     return max(x + x1 + x2, vec3(0.0));
 }
 
+layout(set = 1, binding = 26, std430) readonly buffer Graphite_SkyAmbientSH { Graphite_ProbeSH graphite_SkyAmbient; };
+
+// The sky's light along a normal, from its harmonics
+vec3 Graphite_SkyAmbient(vec3 worldNormal)
+{
+    return ShadeSH9(graphite_SkyAmbient, worldNormal);
+}
+
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
-// The diffuse light that is not realtime: the object's lightmap, ambient while its page loads, else its light probes,
-// else the ambient light.
+// The diffuse light that is not realtime: the object's lightmap, ambient while it loads, else its light probes, else the
+// ambient light.
 // lightmapUV comes from Graphite_LightmapUV in the vertex stage.
 vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
 {
     Graphite_ObjectData object = Graphite_Object();
-    if (object.lightmapPage >= 0 && uint(object.lightmapPage) < graphite_World.counts.y)
-    {
-        uvec2 page = graphite_LightmapPages[object.lightmapPage];
-        if (page.x == 0xFFFFFFFFu)
-            return CalculateAmbient(worldNormal) * graphite_World.ambientMode.z;
-        return DecodeLightmap(GRAPHITE_SAMPLE_2D(page.x, page.y, lightmapUV));
-    }
+    if (object.lightmapTexture == GRAPHITE_LIGHTMAP_LOADING)
+        return CalculateAmbient(worldNormal) * graphite_World.ambientMode.z;
+    if (object.lightmapTexture != GRAPHITE_NO_LIGHTMAP)
+        return DecodeLightmap(GRAPHITE_SAMPLE_2D(object.lightmapTexture, object.lightmapSampler & 0xFFFFu, lightmapUV), object.lightmapSampler >> 16);
     if (object.probeIndex != 0xFFFFFFFFu && graphite_World.counts.z != 0u)
         return ShadeSH9(graphite_ObjectProbes[object.probeIndex], worldNormal);
     return CalculateAmbient(worldNormal) * graphite_World.ambientMode.z;
@@ -705,7 +715,7 @@ struct Graphite_ReflectionProbe
     vec4 params;             // intensity, box projection, priority, the cube's slot and mips (slot | mips << 16) as uint bits
 };
 
-layout(set = 0, binding = 18, std430) readonly buffer Graphite_ReflectionProbes { Graphite_ReflectionProbe graphite_ReflectionProbes[]; };
+layout(set = 1, binding = 24, std430) readonly buffer Graphite_ReflectionProbes { Graphite_ReflectionProbe graphite_ReflectionProbes[]; };
 
 #define MAX_BLENDED_PROBES 4
 

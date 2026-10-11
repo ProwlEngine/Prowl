@@ -20,7 +20,7 @@ public enum SkyCaptureMode : byte
 
 public enum ReflectionProbeMode : byte
 {
-    /// <summary>Shows <see cref="ReflectionProbeDesc.Baked"/>, a capture the host keeps, from <see cref="RenderWorld.BakeReflectionProbe"/>.</summary>
+    /// <summary>Shows <see cref="ReflectionProbeDesc.Cubemap"/>, a prefiltered cube the host keeps, for example made from <see cref="RenderWorld.BakeReflectionProbe"/>.</summary>
     Baked,
 
     /// <summary>Captured while the world draws, as often as <see cref="ReflectionProbeDesc.Refresh"/> says.</summary>
@@ -81,8 +81,11 @@ public struct ReflectionProbeDesc
     /// <summary>Edge length of a realtime probe's cube, a power of two. Baked probes keep their baked size.</summary>
     public uint Resolution;
 
-    /// <summary>A capture to show in <see cref="ReflectionProbeMode.Baked"/> mode, null for none yet.</summary>
-    public BakedReflectionProbe? Baked;
+    /// <summary>
+    /// A prefiltered cube to show in <see cref="ReflectionProbeMode.Baked"/> mode, its mips from sharp to rough (mip m at
+    /// roughness m / (mips - 1)), in any format, or null for none yet. The host keeps it alive while it is shown.
+    /// </summary>
+    public Texture? Cubemap;
 
     public ReflectionProbeDesc()
     {
@@ -99,7 +102,10 @@ public struct ReflectionProbeDesc
     }
 }
 
-/// <summary>A prefiltered capture as half float RGBA faces, every mip of every face: Faces[face * Mips + mip].</summary>
+/// <summary>
+/// A prefiltered capture as half float RGBA faces, every mip of every face: Faces[face * Mips + mip]. Hosts keep it and
+/// turn it into a cube with <see cref="Renderer.CreateReflectionCubemap"/>.
+/// </summary>
 public sealed class BakedReflectionProbe
 {
     public int Size;
@@ -122,7 +128,7 @@ internal struct ReflectionProbeRecord
 }
 
 /// <summary>What a frame captures of a probe: faces [FirstFace, EndFace), then the filtering, then a read back for a bake.</summary>
-internal readonly record struct ProbeCapture(int Index, int FirstFace, int EndFace, bool Prefilter, Action<BakedReflectionProbe>? Bake);
+internal readonly record struct ProbeCapture(int Index, int FirstFace, int EndFace, bool Prefilter, Action<BakedReflectionProbe>? Bake, WorldReflections.Scratch Scratch);
 
 public sealed partial class RenderWorld
 {
@@ -150,7 +156,7 @@ public sealed partial class RenderWorld
     }
 
     /// <summary>
-    /// Captures a probe, prefilters it and reads it back for the host to keep, as <see cref="ReflectionProbeDesc.Baked"/>.
+    /// Captures a probe, prefilters it and reads it back for the host to keep, then show through <see cref="ReflectionProbeDesc.Cubemap"/>.
     /// <paramref name="done"/> runs on the host thread in a later <see cref="Renderer.SubmitFrame"/>. Host thread.
     /// </summary>
     public void BakeReflectionProbe(ReflectionProbeHandle handle, Action<BakedReflectionProbe> done)
@@ -172,24 +178,22 @@ public sealed partial class RenderWorld
     }
 }
 
+/// <summary>How a renderer captures and filters reflections, from <see cref="RendererOptions"/>.</summary>
+internal sealed record ReflectionSettings(PixelFormat Format, int PrefilterSamples, uint SmallestMip, int FacesPerFrame)
+{
+    public static readonly ReflectionSettings Default = new(PixelFormat.R16_G16_B16_A16_Float, 64, 4, 6);
+}
+
 /// <summary>
 /// The render side of a world's reflections. The sky and every probe each have their own cube, prefiltered by roughness
 /// across its mips and found through its bindless slot, so probes keep their own resolution and nothing is ever resized.
 /// Captures draw six layer views, or one face a frame when sliced, then filter with GGX into every mip, reading the
-/// source mip whose texels match each sample's solid angle. Captured probes live in regions like static lights, so each
-/// pixel finds the probes around it with a tree walk.
+/// source mip whose texels match each sample's solid angle. A frame captures up to a budget of faces, the probes nearest
+/// the views that need it most first. Captured probes live in regions like static lights, so each pixel finds the probes
+/// around it with a tree walk.
 /// </summary>
 internal sealed class WorldReflections : IDisposable
 {
-    /// <summary>Edge length of the sky probe's cube.</summary>
-    public const uint SkyResolution = 128;
-
-    /// <summary>The smallest prefiltered mip is 4 texels across, below that the roughest reflections turn blocky.</summary>
-    public const uint SmallestMip = 4;
-
-    public const int PrefilterSamples = 64;
-    private const int SkyFrameInterval = 2;
-
     /// <summary>A reversed Z perspective with an infinite far plane and a 90 degree field of view, looking down +Z.</summary>
     public static readonly Float4x4 FaceProjection = new(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 0, 1), new Float4(0, 0, 0.05f, 0));
 
@@ -243,9 +247,19 @@ internal sealed class WorldReflections : IDisposable
         }
     }
 
+    // A probe capture in progress: the faces it drew so far into its own scratch cube
+    private sealed class Job
+    {
+        public required int Index;
+        public required Scratch Scratch;
+        public Action<BakedReflectionProbe>? Bake;
+        public int Faces;
+    }
+
     private readonly GraphicsDevice _device;
     private readonly IMaterialResources _resources;
     private readonly Action<string, string> _report;
+    private readonly ReflectionSettings _settings;
     private bool _skyCaptured;
     private int _capturedFrame;
     private Material? _capturedSky;
@@ -257,14 +271,22 @@ internal sealed class WorldReflections : IDisposable
     private Target?[] _targets = new Target?[8];
     private bool[] _captured = new bool[8];
     private bool[] _requested = new bool[8];
-    private BakedReflectionProbe?[] _uploaded = new BakedReflectionProbe?[8];
-    private int _slicing = -1;
-    private int _joining = -1;
-    private int _slicedFaces;
-    private int _nextRealtime;
+    private bool[] _working = new bool[8];
+    private int[] _capturedAt = new int[8];
+    private Texture?[] _baked = new Texture?[8];
+    private uint[] _bakedSlot = new uint[8];
+    private readonly List<int> _bakedDirty = new();
+    private readonly List<Job> _jobs = new();
+    private readonly List<int> _joining = new();
+    private readonly List<int> _candidates = new();
     private readonly List<(int Index, Action<BakedReflectionProbe> Done)> _bakes = new();
-    private readonly Dictionary<uint, Scratch> _scratch = new();
+    private readonly Dictionary<uint, Stack<Scratch>> _scratch = new();
+    private readonly List<Scratch> _scratchUsed = new();
+    private readonly List<Scratch> _scratchAll = new();
     private readonly List<PendingBake> _pendingBakes = new();
+    private Double3[] _views = [];
+    private int _viewCount;
+    private int _frame;
 
     private sealed class PendingBake
     {
@@ -275,12 +297,15 @@ internal sealed class WorldReflections : IDisposable
         public ulong Execution;
     }
 
-    public WorldReflections(GraphicsDevice device, IMaterialResources resources, Action<string, string> report)
+    public WorldReflections(GraphicsDevice device, IMaterialResources resources, Action<string, string> report, ReflectionSettings settings)
     {
         _device = device;
         _resources = resources;
         _report = report;
+        _settings = settings;
         Regions = new StaticRegions<ReflectionProbeRecord>(device, "Reflection probes", Pack, report);
+        SkyAmbient = device.ResourceFactory.CreateBuffer(new BufferDescription(112, BufferUsage.StructuredBufferReadWrite));
+        SkyAmbient.Name = "Sky ambient";
     }
 
     /// <summary>The captured probes, in regions with a tree each.</summary>
@@ -289,18 +314,26 @@ internal sealed class WorldReflections : IDisposable
     /// <summary>The prefiltered sky. Null until the first capture.</summary>
     public Target? Sky { get; private set; }
 
+    /// <summary>The sky's light as packed order 2 harmonics, written on the GPU after each sky capture.</summary>
+    public DeviceBuffer SkyAmbient { get; }
+
     public uint SamplerSlot { get; private set; }
+
+    public int PrefilterSamples => _settings.PrefilterSamples;
 
     /// <summary>Whether the sky is captured this frame. Decided before the frame's records are written.</summary>
     public bool CaptureDue { get; private set; }
 
-    /// <summary>What this frame captures of a probe, if anything.</summary>
-    public ProbeCapture? Capture { get; private set; }
+    /// <summary>The sky's capture cube this frame.</summary>
+    public Scratch? SkyScratch { get; private set; }
+
+    /// <summary>What this frame captures of probes.</summary>
+    public List<ProbeCapture> Captures { get; } = new();
 
     public static Float4x4 FaceView(int face) => s_faceViews[face];
 
-    /// <summary>Prefiltered mips of a cube this size, down to 4 texels across.</summary>
-    public static uint MipsFor(uint resolution) => (uint)(Math.Log2(resolution) - Math.Log2(SmallestMip)) + 1;
+    /// <summary>Prefiltered mips of a cube this size, down to the smallest mip's size.</summary>
+    public uint MipsFor(uint resolution) => (uint)Math.Max(Math.Log2(resolution) - Math.Log2(_settings.SmallestMip), 0) + 1;
 
     /// <summary>A reversed Z perspective with a 90 degree field of view between two clip planes.</summary>
     public static Float4x4 FaceProjectionBetween(float near, float far)
@@ -314,25 +347,6 @@ internal sealed class WorldReflections : IDisposable
 
     public Target ProbeTarget(int index) => _targets[index]!;
 
-    /// <summary>The capture cube for a resolution, made the first time one is needed.</summary>
-    public Scratch ScratchFor(uint resolution)
-    {
-        if (_scratch.TryGetValue(resolution, out Scratch? scratch))
-            return scratch;
-
-        ResourceFactory factory = _device.ResourceFactory;
-        uint fullChain = (uint)Math.Log2(resolution) + 1;
-        Texture cube = factory.CreateTexture(TextureDescription.CreateCube(resolution, fullChain, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled | TextureUsage.RenderTarget));
-        cube.Name = $"Reflection capture {resolution}";
-        Framebuffer all = factory.CreateFramebuffer(new FramebufferDescription(null, cube) { ViewCount = 6 });
-        Framebuffer[] faces = new Framebuffer[6];
-        for (uint face = 0; face < 6; face++)
-            faces[face] = factory.CreateFramebuffer(new FramebufferDescription(null, [new FramebufferAttachment(cube, face)]));
-        scratch = new Scratch(cube, all, faces);
-        _scratch[resolution] = scratch;
-        return scratch;
-    }
-
     internal void ReceiveProbe(int index, int generation, uint sequence, bool alive, in ReflectionProbeDesc desc)
     {
         if (index >= _probes.Length)
@@ -343,7 +357,10 @@ internal sealed class WorldReflections : IDisposable
             Array.Resize(ref _targets, size);
             Array.Resize(ref _captured, size);
             Array.Resize(ref _requested, size);
-            Array.Resize(ref _uploaded, size);
+            Array.Resize(ref _working, size);
+            Array.Resize(ref _capturedAt, size);
+            Array.Resize(ref _baked, size);
+            Array.Resize(ref _bakedSlot, size);
         }
 
         ReflectionProbeDesc old = _probes[index];
@@ -352,10 +369,7 @@ internal sealed class WorldReflections : IDisposable
         {
             if (wasAlive)
             {
-                if (_joining == index)
-                    _joining = -1;
-                if (_slicing == index)
-                    _slicing = -1;
+                StopJob(index);
                 Uncapture(index);
                 ReleaseTarget(index);
             }
@@ -366,10 +380,11 @@ internal sealed class WorldReflections : IDisposable
 
         _probes[index] = desc;
         _alive[index] = true;
+        if (desc.Mode == ReflectionProbeMode.Baked)
+            _bakedDirty.Add(index);
         if (!wasAlive || old.Mode != desc.Mode || (desc.Mode == ReflectionProbeMode.Realtime && old.Resolution != desc.Resolution))
         {
-            if (_slicing == index)
-                _slicing = -1;
+            StopJob(index);
             Uncapture(index);
             ReleaseTarget(index);
             return;
@@ -389,6 +404,19 @@ internal sealed class WorldReflections : IDisposable
 
     internal void RequestBake(int index, Action<BakedReflectionProbe> done) => _bakes.Add((index, done));
 
+    /// <summary>Resolves the baked cubes' slots again after a bindless slot was freed. Host thread, at extraction.</summary>
+    internal void RepackBaked()
+    {
+        for (int i = 0; i < _probes.Length; i++)
+        {
+            if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Baked)
+            {
+                _baked[i] = null;
+                _bakedDirty.Add(i);
+            }
+        }
+    }
+
     /// <summary>The sky capture this frame could not draw the sky material yet, its shader still compiling, so it runs again.</summary>
     public void SkyIncomplete() => _skyCaptured = false;
 
@@ -396,8 +424,10 @@ internal sealed class WorldReflections : IDisposable
     public void FrameFailed()
     {
         _skyCaptured = false;
-        _slicing = -1;
-        _joining = -1;
+        foreach (Job job in _jobs)
+            _working[job.Index] = false;
+        _jobs.Clear();
+        _joining.Clear();
         for (int i = 0; i < _probes.Length; i++)
         {
             if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Realtime)
@@ -406,25 +436,41 @@ internal sealed class WorldReflections : IDisposable
     }
 
     /// <summary>
-    /// Decides this frame's sky capture, baked uploads and probe capture, and marks what they make ready. Render thread,
-    /// before the lighting records flush.
+    /// Decides this frame's sky capture, baked probes and probe captures, and marks what they make ready. cameras are the
+    /// positions this world is seen from this frame. Render thread, before the lighting records flush.
     /// </summary>
-    public void Plan(int frame, WorldLighting lighting)
+    public void Plan(int frame, WorldLighting lighting, ReadOnlySpan<Double3> cameras)
     {
-        Capture = null;
-        if (_joining >= 0 && _alive[_joining])
-            MarkCaptured(_joining);
-        _joining = -1;
+        if (_views.Length < cameras.Length)
+            _views = new Double3[cameras.Length];
+        cameras.CopyTo(_views);
+        _viewCount = cameras.Length;
+        _frame = frame;
 
-        if (Sky == null)
+        Captures.Clear();
+        foreach (Scratch scratch in _scratchUsed)
+            _scratch[scratch.Cube.Width].Push(scratch);
+        _scratchUsed.Clear();
+        foreach (int index in _joining)
         {
+            if (_alive[index])
+                MarkCaptured(index, frame);
+        }
+        _joining.Clear();
+
+        EnvironmentDesc environment = lighting.Environment;
+        uint skyResolution = Pow2(environment.SkyProbeResolution, "sky probe");
+        if (Sky == null || Sky.Cube.Width != skyResolution)
+        {
+            Sky?.Dispose();
             SamplerSlot = _resources.SamplerSlot(s_sampler);
-            Sky = CreateTarget(SkyResolution, MipsFor(SkyResolution), "Sky probe");
+            Sky = CreateTarget(skyResolution, MipsFor(skyResolution), "Sky probe");
             lighting.SetReflections(Sky.Slot, SamplerSlot, Sky.Mips);
+            _skyCaptured = false;
         }
         PlanSky(frame, lighting);
         PlanBaked();
-        PlanRealtime();
+        PlanCaptures(frame);
         Regions.Update();
     }
 
@@ -499,10 +545,11 @@ internal sealed class WorldReflections : IDisposable
         Sky?.Dispose();
         foreach (Target? target in _targets)
             target?.Dispose();
-        foreach (Scratch scratch in _scratch.Values)
+        foreach (Scratch scratch in _scratchAll)
             scratch.Dispose();
         foreach (PendingBake bake in _pendingBakes)
             bake.Buffer.Dispose();
+        SkyAmbient.Dispose();
         Regions.Records.Dispose();
         Regions.Nodes.Dispose();
     }
@@ -516,11 +563,25 @@ internal sealed class WorldReflections : IDisposable
         {
             SkyCaptureMode.EveryFrame => true,
             SkyCaptureMode.Never => !_skyCaptured,
-            _ => changed && (!_skyCaptured || frame - _capturedFrame >= SkyFrameInterval),
+            _ => changed && (!_skyCaptured || frame - _capturedFrame >= Math.Max(environment.SkyCaptureInterval, 1)),
         };
         if (!CaptureDue)
+        {
+            SkyScratch = null;
             return;
+        }
 
+        // Probes captured once hold the old sky in them
+        if (_skyCaptured && changed)
+        {
+            for (int i = 0; i < _probes.Length; i++)
+            {
+                if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Realtime && _probes[i].Refresh == ReflectionProbeRefresh.Once)
+                    _requested[i] = true;
+            }
+        }
+
+        SkyScratch = RentScratch(Sky!.Cube.Width);
         _skyCaptured = true;
         _capturedFrame = frame;
         _capturedSky = sky;
@@ -528,119 +589,185 @@ internal sealed class WorldReflections : IDisposable
         _capturedInputs = lighting.SkyInputs;
     }
 
-    // A baked capture becomes the probe's cube as it is, at its own size and mips
+    // A baked probe shows the host's prefiltered cube as it is, through its own slot
     private void PlanBaked()
     {
-        for (int i = 0; i < _probes.Length; i++)
+        foreach (int i in _bakedDirty)
         {
             if (!_alive[i] || _probes[i].Mode != ReflectionProbeMode.Baked)
                 continue;
-            BakedReflectionProbe? baked = _probes[i].Baked;
-            if (baked == _uploaded[i] && (_captured[i] || baked == null))
+            Texture? cube = _probes[i].Cubemap;
+            if (cube == _baked[i] && (_captured[i] || cube == null))
                 continue;
-            _uploaded[i] = baked;
-            if (baked == null || !Valid(baked))
+            _baked[i] = cube;
+            if (cube is not { IsDisposed: false } || cube.Type != TextureType.TextureCube)
             {
-                if (baked != null)
-                    _report("reflection.baked", "A baked reflection probe's faces do not match its size and mips, it is not shown.");
+                if (cube is { IsDisposed: false })
+                    _report("reflection.baked", "A baked reflection probe's cubemap is not a cube texture, it is not shown.");
                 Uncapture(i);
                 continue;
             }
-
-            ReleaseTarget(i);
-            Target target = CreateTarget((uint)baked.Size, (uint)baked.Mips, "Baked reflection probe");
-            for (int face = 0; face < 6; face++)
-            {
-                for (int mip = 0; mip < baked.Mips; mip++)
-                {
-                    uint size = (uint)Math.Max(baked.Size >> mip, 1);
-                    _device.UpdateTexture<byte>(target.Cube, baked.Faces[face * baked.Mips + mip], new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
-                }
-            }
-            _targets[i] = target;
-            MarkCaptured(i);
+            _bakedSlot[i] = _resources.TextureSlot(cube, MaterialPropertyType.TextureCube, "black");
+            MarkCaptured(i, 0);
         }
+        _bakedDirty.Clear();
     }
 
-    // One probe at a time: a bake first, else the next realtime probe that wants a capture, round robin
-    private void PlanRealtime()
+    // Bakes first, then the probes already being captured, then the ones that need it most, until the face budget is spent
+    private void PlanCaptures(int frame)
     {
-        if (_bakes.Count > 0)
+        int budget = Math.Max(_settings.FacesPerFrame, 1);
+        while (_bakes.Count > 0)
         {
             (int index, Action<BakedReflectionProbe> done) = _bakes[0];
             _bakes.RemoveAt(0);
-            if (index < _alive.Length && _alive[index])
-            {
-                if (_slicing >= 0)
-                {
-                    _requested[_slicing] = true;
-                    _slicing = -1;
-                }
-                EnsureRealtimeTarget(index);
-                Capture = new ProbeCapture(index, 0, 6, true, done);
-                Joins(index);
-                return;
-            }
+            if (index >= _alive.Length || !_alive[index])
+                continue;
+            StopJob(index);
+            Job job = StartJob(index);
+            job.Bake = done;
+            budget -= Advance(job, 6);
         }
 
-        if (_slicing < 0)
+        for (int j = 0; j < _jobs.Count && budget > 0;)
         {
-            for (int i = 0; i < _probes.Length; i++)
-            {
-                int index = (_nextRealtime + i) % _probes.Length;
-                if (!WantsCapture(index))
-                    continue;
-                _nextRealtime = (index + 1) % _probes.Length;
-                _requested[index] = false;
-                _slicing = index;
-                _slicedFaces = 0;
+            Job job = _jobs[j];
+            int before = _jobs.Count;
+            budget -= Advance(job, FacesAtOnce(job.Index));
+            if (_jobs.Count == before)
+                j++;
+        }
+
+        _candidates.Clear();
+        for (int i = 0; i < _probes.Length; i++)
+        {
+            if (WantsCapture(i))
+                _candidates.Add(i);
+        }
+        _candidates.Sort((a, b) => Priority(b, frame).CompareTo(Priority(a, frame)));
+        foreach (int index in _candidates)
+        {
+            int faces = FacesAtOnce(index);
+            if (faces > budget && Captures.Count > 0)
                 break;
-            }
+            _requested[index] = false;
+            budget -= Advance(StartJob(index), faces);
+            if (budget <= 0)
+                break;
         }
-        if (_slicing < 0)
-            return;
+    }
 
-        int probe = _slicing;
-        EnsureRealtimeTarget(probe);
-        int faces = _probes[probe].TimeSlicing == ReflectionProbeTimeSlicing.IndividualFaces ? 1 : 6;
-        if (_slicedFaces < 6)
+    // Draws up to faces more faces of a job and returns how many. A job drawing all six at once filters in the same frame,
+    // one spread over frames filters on the frame after its last face.
+    private int Advance(Job job, int faces)
+    {
+        int first = job.Faces;
+        if (first == 6)
         {
-            int first = _slicedFaces;
-            _slicedFaces = Math.Min(6, first + faces);
-            if (faces == 1 || _slicedFaces < 6)
-            {
-                Capture = new ProbeCapture(probe, first, _slicedFaces, false, null);
-                return;
-            }
-            Capture = new ProbeCapture(probe, first, _slicedFaces, true, null);
-            Joins(probe);
+            Captures.Add(new ProbeCapture(job.Index, 6, 6, true, job.Bake, job.Scratch));
+            Finish(job, joinNow: true);
+            return 0;
         }
-        else
-        {
-            Capture = new ProbeCapture(probe, 0, 0, true, null);
-            MarkCaptured(probe);
-        }
-        _slicing = -1;
+
+        int end = Math.Min(6, first + faces);
+        job.Faces = end;
+        bool filter = first == 0 && end == 6;
+        Captures.Add(new ProbeCapture(job.Index, first, end, filter, job.Bake, job.Scratch));
+        if (filter)
+            Finish(job, joinNow: false);
+        return end - first;
     }
 
     // A probe captured and filtered in one frame joins the tree the next, so its capture never sees its own unfilled cube
-    private void Joins(int index)
+    private void Finish(Job job, bool joinNow)
     {
-        if (_captured[index])
+        _jobs.Remove(job);
+        _working[job.Index] = false;
+        _scratchUsed.Add(job.Scratch);
+        if (_captured[job.Index])
+            _capturedAt[job.Index] = _frame;
+        else if (joinNow)
+            MarkCaptured(job.Index, _frame);
+        else
+            _joining.Add(job.Index);
+    }
+
+    private int FacesAtOnce(int index) => _probes[index].TimeSlicing == ReflectionProbeTimeSlicing.IndividualFaces ? 1 : 6;
+
+    private Job StartJob(int index)
+    {
+        EnsureRealtimeTarget(index);
+        Job job = new() { Index = index, Scratch = RentScratch(_targets[index]!.Cube.Width) };
+        _jobs.Add(job);
+        _working[index] = true;
+        return job;
+    }
+
+    private void StopJob(int index)
+    {
+        if (!_working[index])
             return;
-        _joining = index;
+        _working[index] = false;
+        for (int j = 0; j < _jobs.Count; j++)
+        {
+            if (_jobs[j].Index != index)
+                continue;
+            _scratchUsed.Add(_jobs[j].Scratch);
+            _jobs.RemoveAt(j);
+            break;
+        }
     }
 
     private bool WantsCapture(int index)
     {
-        if (!_alive[index] || _probes[index].Mode != ReflectionProbeMode.Realtime)
+        if (!_alive[index] || _working[index] || _probes[index].Mode != ReflectionProbeMode.Realtime || _joining.Contains(index))
             return false;
         return _requested[index] || !_captured[index] || _probes[index].Refresh == ReflectionProbeRefresh.EveryFrame;
     }
 
+    // Probes asked for or never captured first, nearest first, then the ones refreshing every frame by how long ago and how close
+    private double Priority(int index, int frame)
+    {
+        ReflectionProbeDesc probe = _probes[index];
+        float radius = Math.Max(Radius(probe), 0.01f);
+        double nearest = double.MaxValue;
+        for (int v = 0; v < _viewCount; v++)
+        {
+            Double3 d = _views[v] - probe.Position;
+            nearest = Math.Min(nearest, Math.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z));
+        }
+        double closeness = radius / (Math.Min(nearest, 1e30) + radius);
+        if (_requested[index] || !_captured[index])
+            return 1e9 + closeness;
+        return (frame - _capturedAt[index] + 1) * closeness;
+    }
+
+    private Scratch RentScratch(uint resolution)
+    {
+        if (!_scratch.TryGetValue(resolution, out Stack<Scratch>? free))
+        {
+            free = new Stack<Scratch>();
+            _scratch[resolution] = free;
+        }
+        if (free.Count > 0)
+            return free.Pop();
+
+        ResourceFactory factory = _device.ResourceFactory;
+        uint fullChain = (uint)Math.Log2(resolution) + 1;
+        Texture cube = factory.CreateTexture(TextureDescription.CreateCube(resolution, fullChain, 1, _settings.Format, TextureUsage.Sampled | TextureUsage.RenderTarget));
+        cube.Name = $"Reflection capture {resolution}";
+        Framebuffer all = factory.CreateFramebuffer(new FramebufferDescription(null, cube) { ViewCount = 6 });
+        Framebuffer[] faces = new Framebuffer[6];
+        for (uint face = 0; face < 6; face++)
+            faces[face] = factory.CreateFramebuffer(new FramebufferDescription(null, [new FramebufferAttachment(cube, face)]));
+        Scratch scratch = new(cube, all, faces);
+        _scratchAll.Add(scratch);
+        return scratch;
+    }
+
     private void EnsureRealtimeTarget(int index)
     {
-        uint resolution = Resolution(_probes[index]);
+        uint resolution = Pow2(_probes[index].Resolution, "reflection probe");
         if (_targets[index] is { } target && target.Cube.Width == resolution)
             return;
         ReleaseTarget(index);
@@ -649,7 +776,7 @@ internal sealed class WorldReflections : IDisposable
 
     private Target CreateTarget(uint resolution, uint mips, string name)
     {
-        Texture cube = _device.ResourceFactory.CreateTexture(TextureDescription.CreateCube(resolution, mips, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled | TextureUsage.RenderTarget));
+        Texture cube = _device.ResourceFactory.CreateTexture(TextureDescription.CreateCube(resolution, mips, 1, _settings.Format, TextureUsage.Sampled | TextureUsage.RenderTarget));
         cube.Name = name;
         PrefilterView[] views = new PrefilterView[mips];
         for (uint mip = 0; mip < mips; mip++)
@@ -666,45 +793,31 @@ internal sealed class WorldReflections : IDisposable
         _targets[index] = null;
     }
 
-    private void MarkCaptured(int index)
+    private void MarkCaptured(int index, int frame)
     {
         _captured[index] = true;
+        _capturedAt[index] = frame;
         Regions.Set(index, _probes[index].Position, Radius(_probes[index]));
     }
 
-    // Drops the probe from the tree until it is captured or uploaded again
+    // Drops the probe from the tree until it is captured or its cube shown again
     private void Uncapture(int index)
     {
         _captured[index] = false;
-        _uploaded[index] = null;
+        _baked[index] = null;
         _requested[index] = _alive[index] && _probes[index].Mode == ReflectionProbeMode.Realtime;
         Regions.Remove(index);
     }
 
-    private uint Resolution(in ReflectionProbeDesc desc)
+    private uint Pow2(uint value, string what)
     {
-        uint resolution = Math.Clamp(desc.Resolution, SmallestMip, 2048);
+        uint resolution = Math.Clamp(value, _settings.SmallestMip, 2048);
         if (!uint.IsPow2(resolution))
         {
-            _report("reflection.resolution", $"A reflection probe's resolution {desc.Resolution} is not a power of two, it is rounded up.");
+            _report($"reflection.resolution.{what}", $"A {what} resolution {value} is not a power of two, it is rounded up.");
             resolution = System.Numerics.BitOperations.RoundUpToPowerOf2(resolution);
         }
         return resolution;
-    }
-
-    private static bool Valid(BakedReflectionProbe baked)
-    {
-        if (baked.Size <= 0 || baked.Mips <= 0 || baked.Mips > (int)Math.Log2(baked.Size) + 1 || baked.Faces.Length < 6 * baked.Mips)
-            return false;
-        for (int face = 0; face < 6; face++)
-        {
-            for (int mip = 0; mip < baked.Mips; mip++)
-            {
-                if (baked.Faces[face * baked.Mips + mip]?.Length != FaceBytes((uint)baked.Size, mip))
-                    return false;
-            }
-        }
-        return true;
     }
 
     private static float Radius(in ReflectionProbeDesc desc)
@@ -722,7 +835,7 @@ internal sealed class WorldReflections : IDisposable
     private ReflectionProbeRecord Pack(int index, Double3 origin)
     {
         ReflectionProbeDesc desc = _probes[index];
-        Target target = _targets[index]!;
+        (uint slot, uint mips) = desc.Mode == ReflectionProbeMode.Baked ? (_bakedSlot[index], desc.Cubemap!.MipLevels) : (_targets[index]!.Slot, _targets[index]!.Mips);
         Float3 half = Half(desc);
         Quaternion rotation = desc.Rotation;
         Float3 x = rotation * new Float3(1, 0, 0), y = rotation * new Float3(0, 1, 0), z = rotation * new Float3(0, 0, 1);
@@ -734,12 +847,45 @@ internal sealed class WorldReflections : IDisposable
             Row1 = new Float4(y.X, y.Y, y.Z, (float)c.Y),
             Row2 = new Float4(z.X, z.Y, z.Z, (float)c.Z),
             Box = new Float4(half.X, half.Y, half.Z, MathF.Max(desc.BlendDistance, 0)),
-            Params = new Float4(MathF.Max(desc.Intensity, 0), desc.BoxProjection ? 1 : 0, desc.Importance + 1f / (1f + volume), BitConverter.UInt32BitsToSingle(target.Slot | (target.Mips << 16))),
+            Params = new Float4(MathF.Max(desc.Intensity, 0), desc.BoxProjection ? 1 : 0, desc.Importance + 1f / (1f + volume), BitConverter.UInt32BitsToSingle(slot | (mips << 16))),
         };
     }
 
     private static Float4x4 Rows(Float3 x, Float3 y, Float3 z)
         => new(new Float4(x.X, y.X, z.X, 0), new Float4(x.Y, y.Y, z.Y, 0), new Float4(x.Z, y.Z, z.Z, 0), new Float4(0, 0, 0, 1));
+}
+
+/// <summary>Projects a sky capture onto packed order 2 harmonics for the sky ambient mode, after its filter built its mips.</summary>
+internal sealed class SkyAmbientPass(ComputeProgram program, Sampler sampler) : IPass
+{
+    private static readonly RenderResourceID s_output = RenderResourceID.Intern("Graphite.SkyAmbient");
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Push
+    {
+        public float Lod;
+        public uint Size;
+    }
+
+    private readonly PropertySet _properties = new();
+
+    public Texture Source = null!;
+    public DeviceBuffer Output = null!;
+
+    public string Name => "Graphite.SkyAmbient";
+
+    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedBuffer(s_output, Output, BufferAccess.ShaderWrite);
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        const uint size = 16;
+        cmd.SetComputeShader(program);
+        _properties.SetTexture("Graphite_Source", Source, sampler);
+        _properties.SetBuffer("Graphite_SkyAmbient", Output);
+        cmd.SetProperties(_properties);
+        cmd.SetPushConstants(new Push { Lod = MathF.Max(MathF.Log2(Source.Width / (float)size), 0), Size = size });
+        cmd.Dispatch(1, 1, 1);
+    }
 }
 
 /// <summary>One prefiltered mip of a cube as a render view: its six faces drawn at once.</summary>
@@ -758,7 +904,7 @@ internal sealed class PrefilterView(Framebuffer target, int mip, int mips, uint 
 /// Filters a captured cube with GGX into every roughness mip of a prefiltered cube, run once per mip view. The first view
 /// builds the source's mips, which the filter reads by each sample's solid angle. A bake then reads the cube back.
 /// </summary>
-internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler) : IPass
+internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler, int samples) : IPass
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
@@ -799,7 +945,7 @@ internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler) : 
         {
             Roughness = mips > 1 ? view.Mip / (float)(mips - 1) : 0,
             SourceSize = Source.Width,
-            SampleCount = view.Mip == 0 ? 1u : WorldReflections.PrefilterSamples,
+            SampleCount = view.Mip == 0 ? 1u : (uint)samples,
         });
         cmd.Draw(3);
 

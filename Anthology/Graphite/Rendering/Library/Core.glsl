@@ -35,10 +35,14 @@ struct Graphite_ObjectData
     uint flags;
     uint objectId;
     uint previousTransform;
-    int lightmapPage;
+    uint lightmapTexture;           // the lightmap's 2D slot, all ones for none, all ones but one while it loads
     uint probeIndex;
     float lodFade;
     uint layerMask;
+    uint lightmapSampler;           // the lightmap's sampler slot, its encoding in the high 16 bits (0 linear, 1 RGBM)
+    uint pad0;
+    uint pad1;
+    uint pad2;
     vec4 lightmapScaleOffset;
     vec4 custom0;
     vec4 custom1;
@@ -57,11 +61,11 @@ struct Graphite_Chunk
     uint subMesh;
 };
 
-layout(set = 0, binding = 6, std430) readonly buffer Graphite_Chunks { Graphite_Chunk graphite_Chunks[]; };
-layout(set = 0, binding = 7, std430) readonly buffer Graphite_Transforms { Graphite_Transform graphite_Transforms[]; };
-layout(set = 0, binding = 8, std430) readonly buffer Graphite_PreviousTransforms { Graphite_Transform graphite_PreviousTransforms[]; };
-layout(set = 0, binding = 9, std430) readonly buffer Graphite_Objects { Graphite_ObjectData graphite_Objects[]; };
-layout(set = 0, binding = 10, std430) readonly buffer Graphite_MaterialSlots { uint graphite_MaterialSlots[]; };
+layout(set = 1, binding = 13, std430) readonly buffer Graphite_Chunks { Graphite_Chunk graphite_Chunks[]; };
+layout(set = 1, binding = 14, std430) readonly buffer Graphite_Transforms { Graphite_Transform graphite_Transforms[]; };
+layout(set = 1, binding = 15, std430) readonly buffer Graphite_PreviousTransforms { Graphite_Transform graphite_PreviousTransforms[]; };
+layout(set = 1, binding = 16, std430) readonly buffer Graphite_Objects { Graphite_ObjectData graphite_Objects[]; };
+layout(set = 1, binding = 17, std430) readonly buffer Graphite_MaterialSlots { uint graphite_MaterialSlots[]; };
 
 layout(set = 1, binding = 2, std430) readonly buffer Graphite_Views { Graphite_ViewData graphite_Views[]; };
 

@@ -127,6 +127,9 @@ public enum AmbientMode : byte
 {
     Uniform,
     Hemisphere,
+
+    /// <summary>The sky's light, from the sky probe projected onto spherical harmonics after each capture.</summary>
+    Sky,
 }
 
 public enum FogMode : byte
@@ -187,12 +190,19 @@ public sealed class EnvironmentDesc
     public Float4 SkyColor = new(0.2f, 0.3f, 0.5f, 1);
     public SkyCaptureMode SkyCapture;
 
+    /// <summary>Edge length of the sky probe's cube, a power of two.</summary>
+    public uint SkyProbeResolution = 128;
+
+    /// <summary>Frames at least between two sky captures in <see cref="SkyCaptureMode.OnChange"/>.</summary>
+    public int SkyCaptureInterval = 2;
+
     internal EnvironmentDesc Copy() => (EnvironmentDesc)MemberwiseClone();
 
     internal bool Same(EnvironmentDesc other)
         => Ambient == other.Ambient && AmbientColor == other.AmbientColor && AmbientSky == other.AmbientSky && AmbientGround == other.AmbientGround
         && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && Sun == other.Sun
-        && Sky == other.Sky && SkyColor == other.SkyColor && SkyCapture == other.SkyCapture;
+        && Sky == other.Sky && SkyColor == other.SkyColor && SkyCapture == other.SkyCapture
+        && SkyProbeResolution == other.SkyProbeResolution && SkyCaptureInterval == other.SkyCaptureInterval;
 }
 
 /// <summary>A light record as the shaders read it, 80 bytes, matching Graphite_LightRecord. Positions are in its tree's space.</summary>
@@ -242,9 +252,9 @@ internal struct WorldLightingRecord
     public const int MaxDirectional = 8;
 
     public uint DirectionalCount;
-    public uint LightmapPages;
+    private uint _pad0;
     public uint HasProbes;
-    public uint LightmapEncoding;
+    private uint _pad1;
     public uint ProbeSlot;
     public uint ProbeSampler;
     public uint ProbeMips;
@@ -432,8 +442,6 @@ internal sealed class WorldLighting : IDisposable
 
     private EnvironmentDesc _environment = new();
     private bool _worldRecordDirty = true;
-    private int _lightmapPages;
-    private LightmapEncoding _lightmapEncoding;
     private bool _hasProbes;
     private uint _probeSlot, _probeSampler, _probeMips;
     private Vector4[] _spheres = new Vector4[64];
@@ -550,13 +558,6 @@ internal sealed class WorldLighting : IDisposable
         _probeSlot = slot;
         _probeSampler = sampler;
         _probeMips = mips;
-        _worldRecordDirty = true;
-    }
-
-    internal void SetLightmaps(int pages, LightmapEncoding encoding)
-    {
-        _lightmapPages = pages;
-        _lightmapEncoding = encoding;
         _worldRecordDirty = true;
     }
 
@@ -841,9 +842,7 @@ internal sealed class WorldLighting : IDisposable
             record.Directional[count++] = Directional(_lights[index]);
         }
         record.DirectionalCount = (uint)count;
-        record.LightmapPages = (uint)_lightmapPages;
         record.HasProbes = _hasProbes ? 1u : 0;
-        record.LightmapEncoding = (uint)_lightmapEncoding;
         record.ProbeSlot = _probeSlot;
         record.ProbeSampler = _probeSampler;
         record.ProbeMips = _probeMips;
@@ -852,7 +851,7 @@ internal sealed class WorldLighting : IDisposable
         record.AmbientColor = env.AmbientColor;
         record.AmbientSky = env.AmbientSky;
         record.AmbientGround = env.AmbientGround;
-        record.AmbientMode = new Float4(env.Ambient == AmbientMode.Uniform ? 1 : 0, env.Ambient == AmbientMode.Hemisphere ? 1 : 0, env.AmbientIntensity, 0);
+        record.AmbientMode = new Float4(env.Ambient == AmbientMode.Uniform ? 1 : 0, env.Ambient == AmbientMode.Hemisphere ? 1 : 0, env.AmbientIntensity, env.Ambient == AmbientMode.Sky ? 1 : 0);
 
         FogDesc fog = env.Fog;
         float range = fog.End - fog.Start;

@@ -23,20 +23,6 @@ internal static class GraphiteBindings
     public const int TextureCubeTable = 3;
     public const int TextureCubeArrayTable = 4;
 
-    public const int Chunks = 6;
-    public const int Transforms = 7;
-    public const int PreviousTransforms = 8;
-    public const int Objects = 9;
-    public const int MaterialSlots = 10;
-    public const int StaticLights = 11;
-    public const int StaticLightNodes = 12;
-    public const int StaticDecals = 13;
-    public const int StaticDecalNodes = 14;
-    public const int WorldLighting = 15;
-    public const int LightmapPages = 16;
-    public const int ObjectProbes = 17;
-    public const int StaticReflectionProbes = 18;
-    public const int StaticReflectionProbeNodes = 19;
 
     public const int SamplerTable = 0;
     public const int Globals = 1;
@@ -51,6 +37,20 @@ internal static class GraphiteBindings
     public const int DecalRegionNodes = 10;
     public const int ProbeRegions = 11;
     public const int ProbeRegionNodes = 12;
+    public const int Chunks = 13;
+    public const int Transforms = 14;
+    public const int PreviousTransforms = 15;
+    public const int Objects = 16;
+    public const int MaterialSlots = 17;
+    public const int StaticLights = 18;
+    public const int StaticLightNodes = 19;
+    public const int StaticDecals = 20;
+    public const int StaticDecalNodes = 21;
+    public const int WorldLighting = 22;
+    public const int ObjectProbes = 23;
+    public const int StaticReflectionProbes = 24;
+    public const int StaticReflectionProbeNodes = 25;
+    public const int SkyAmbient = 26;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -70,32 +70,24 @@ internal static class GraphiteBindings
 
     private const ShaderStages Graphics = ShaderStages.Vertex | ShaderStages.Fragment;
 
-    /// <summary>The frame table every material program declares as set 0: bindless textures, chunks and the world's object data.</summary>
+    /// <summary>
+    /// The texture table every material program declares as set 0: the renderer's bindless textures, one table shared by
+    /// every world and view, written only at slots no frame in flight reads.
+    /// </summary>
     public static ResourceLayoutDescription FrameTable(uint textures2D, uint otherTextures) => new(FrameSet,
         new ResourceLayoutElementDescription("Graphite_Textures2D", ResourceKind.TextureReadOnly, Graphics, Texture2DTable) { ArrayCount = textures2D },
         new ResourceLayoutElementDescription("Graphite_Textures2DArray", ResourceKind.TextureReadOnly, Graphics, Texture2DArrayTable) { ArrayCount = otherTextures },
         new ResourceLayoutElementDescription("Graphite_Textures3D", ResourceKind.TextureReadOnly, Graphics, Texture3DTable) { ArrayCount = otherTextures },
         new ResourceLayoutElementDescription("Graphite_TexturesCube", ResourceKind.TextureReadOnly, Graphics, TextureCubeTable) { ArrayCount = otherTextures },
-        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, Graphics, TextureCubeArrayTable) { ArrayCount = otherTextures },
-        new ResourceLayoutElementDescription("Graphite_Chunks", ResourceKind.StructuredBufferReadOnly, Graphics, Chunks),
-        new ResourceLayoutElementDescription("Graphite_Transforms", ResourceKind.StructuredBufferReadOnly, Graphics, Transforms),
-        new ResourceLayoutElementDescription("Graphite_PreviousTransforms", ResourceKind.StructuredBufferReadOnly, Graphics, PreviousTransforms),
-        new ResourceLayoutElementDescription("Graphite_Objects", ResourceKind.StructuredBufferReadOnly, Graphics, Objects),
-        new ResourceLayoutElementDescription("Graphite_MaterialSlots", ResourceKind.StructuredBufferReadOnly, Graphics, MaterialSlots),
-        new ResourceLayoutElementDescription("Graphite_StaticLights", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLights),
-        new ResourceLayoutElementDescription("Graphite_StaticLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLightNodes),
-        new ResourceLayoutElementDescription("Graphite_StaticDecals", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecals),
-        new ResourceLayoutElementDescription("Graphite_StaticDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecalNodes),
-        new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting),
-        new ResourceLayoutElementDescription("Graphite_LightmapPages", ResourceKind.StructuredBufferReadOnly, Graphics, LightmapPages),
-        new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes),
-        new ResourceLayoutElementDescription("Graphite_ReflectionProbes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbes),
-        new ResourceLayoutElementDescription("Graphite_ReflectionProbeNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbeNodes))
+        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, Graphics, TextureCubeArrayTable) { ArrayCount = otherTextures })
     {
         Table = true,
     };
 
-    /// <summary>The view table every material program declares as set 1: the sampler table, the world's globals and the view blocks.</summary>
+    /// <summary>
+    /// The view table every material program declares as set 1: the sampler table with the view's bias, the world's
+    /// globals, the view blocks and per view trees, then the world's buffers.
+    /// </summary>
     public static ResourceLayoutDescription ViewTable(uint samplers) => new(ViewSet,
         new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, Graphics, SamplerTable) { ArrayCount = samplers },
         new ResourceLayoutElementDescription("Graphite_Globals", ResourceKind.StructuredBufferReadOnly, Graphics, Globals),
@@ -109,7 +101,21 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_DecalRegions", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegions),
         new ResourceLayoutElementDescription("Graphite_DecalRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegionNodes),
         new ResourceLayoutElementDescription("Graphite_ProbeRegions", ResourceKind.StructuredBufferReadOnly, Graphics, ProbeRegions),
-        new ResourceLayoutElementDescription("Graphite_ProbeRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ProbeRegionNodes))
+        new ResourceLayoutElementDescription("Graphite_ProbeRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ProbeRegionNodes),
+        new ResourceLayoutElementDescription("Graphite_Chunks", ResourceKind.StructuredBufferReadOnly, Graphics, Chunks),
+        new ResourceLayoutElementDescription("Graphite_Transforms", ResourceKind.StructuredBufferReadOnly, Graphics, Transforms),
+        new ResourceLayoutElementDescription("Graphite_PreviousTransforms", ResourceKind.StructuredBufferReadOnly, Graphics, PreviousTransforms),
+        new ResourceLayoutElementDescription("Graphite_Objects", ResourceKind.StructuredBufferReadOnly, Graphics, Objects),
+        new ResourceLayoutElementDescription("Graphite_MaterialSlots", ResourceKind.StructuredBufferReadOnly, Graphics, MaterialSlots),
+        new ResourceLayoutElementDescription("Graphite_StaticLights", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLights),
+        new ResourceLayoutElementDescription("Graphite_StaticLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLightNodes),
+        new ResourceLayoutElementDescription("Graphite_StaticDecals", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecals),
+        new ResourceLayoutElementDescription("Graphite_StaticDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecalNodes),
+        new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting),
+        new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes),
+        new ResourceLayoutElementDescription("Graphite_ReflectionProbes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbes),
+        new ResourceLayoutElementDescription("Graphite_ReflectionProbeNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbeNodes),
+        new ResourceLayoutElementDescription("Graphite_SkyAmbientSH", ResourceKind.StructuredBufferReadOnly, Graphics, SkyAmbient))
     {
         Table = true,
     };
@@ -203,6 +209,8 @@ internal static class MaterialRewrite
                 }
 
                 List<ResourceLayoutElementDescription> target = layout.Set == GraphiteBindings.PassSet ? pass : user;
+                if (target == user && element.Kind is not (ResourceKind.StructuredBufferReadOnly or ResourceKind.StructuredBufferReadWrite))
+                    throw new ShaderLoadException($"{plan.ShaderName}: {element.Name.Text()} is a {element.Kind}, which a material pass only reads as a material or global property. Buffers come from Globals.SetBuffer.");
                 if (target.Exists(e => e.BindingIndex == element.BindingIndex))
                     throw new ShaderLoadException($"{plan.ShaderName}: {element.Name.Text()} collides with another resource at binding {element.BindingIndex}.");
                 target.Add(element);

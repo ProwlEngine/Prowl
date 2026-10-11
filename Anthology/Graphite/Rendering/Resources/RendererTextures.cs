@@ -108,14 +108,9 @@ internal sealed class TableRing : IDisposable
 /// </summary>
 public sealed class RendererTextures : IMaterialResources, IDisposable
 {
-    /// <summary>Slots in the 2D texture table.</summary>
-    public const uint Textures2D = 16384;
-
-    /// <summary>Slots in each of the other texture tables.</summary>
-    public const uint OtherTextures = 2048;
-
-    /// <summary>Slots in the sampler table.</summary>
-    public const uint Samplers = 64;
+    internal const uint Textures2D = 16384;
+    internal const uint OtherTextures = 2048;
+    internal const uint Samplers = 64;
 
     private static readonly string[] s_tableNames = ["Graphite_Textures2D", "Graphite_Textures2DArray", "Graphite_Textures3D", "Graphite_TexturesCube", "Graphite_TexturesCubeArray"];
 
@@ -127,7 +122,6 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     private readonly Dictionary<string, Texture> _registeredDefaults = new(StringComparer.Ordinal);
     private readonly List<Texture> _owned = new();
     private readonly List<(SamplerDescription? Description, Sampler Sampler)> _samplers = new();
-    private readonly List<TableRing> _frameTables = new();
     private readonly List<TableRing> _viewTables = new();
     private readonly Stack<uint>[] _freeSlots = [new(), new(), new(), new(), new()];
     private readonly List<(ulong Execution, int Table, uint Slot)> _retiringSlots = new();
@@ -137,7 +131,24 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     {
         _device = device;
         _samplers.Add((null, device.ResourceFactory.CreateSampler(SamplerDescription.Linear)));
+        Table = device.ResourceFactory.CreateDescriptorTable(ProgramCache.FrameLayout);
+        Table.Name = "Bindless textures";
     }
+
+    /// <summary>The bindless textures every program reads as set 0, one table for every world and view.</summary>
+    internal DescriptorTable Table { get; }
+
+    /// <summary>Raised once when a table is full, so textures fall back to slot 0.</summary>
+    internal Action<string, string>? Reporter { get; set; }
+
+    /// <summary>Slots in the 2D texture table.</summary>
+    public uint Texture2DCapacity => Textures2D;
+
+    /// <summary>Slots in each of the 2D array, 3D, cube and cube array tables.</summary>
+    public uint OtherTextureCapacity => OtherTextures;
+
+    /// <summary>Slots in the sampler table.</summary>
+    public uint SamplerCapacity => Samplers;
 
     /// <summary>Makes a named default available to texture properties, like <c>"surface"</c>.</summary>
     public void RegisterDefault(string name, Texture texture)
@@ -163,7 +174,10 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             }
 
             if (_samplers.Count == Samplers)
+            {
+                Reporter?.Invoke("textures.samplers.full", $"Every one of the {Samplers} sampler slots is in use, new samplers draw with the default sampler.");
                 return 0;
+            }
             _samplers.Add((sampler, _device.ResourceFactory.CreateSampler(sampler!.Value)));
             uint slot = (uint)_samplers.Count - 1;
             foreach (TableRing ring in _viewTables)
@@ -185,7 +199,9 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             {
                 if (_retiringSlots[i].Execution > completed)
                     continue;
-                _freeSlots[_retiringSlots[i].Table].Push(_retiringSlots[i].Slot);
+                (_, int retired, uint slot) = _retiringSlots[i];
+                Table.SetTexture(s_tableNames[retired], slot, Default("black", s_tableTypes[retired]));
+                _freeSlots[retired].Push(slot);
                 _retiringSlots.RemoveAt(i);
             }
 
@@ -201,31 +217,15 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
                 if (disposed == null)
                     continue;
 
-                Texture fallback = Default("black", s_tableTypes[table]);
                 foreach (Texture texture in disposed)
                 {
                     uint slot = _slots[table][texture];
                     _slots[table].Remove(texture);
-                    foreach (TableRing ring in _frameTables)
-                        ring.Set(s_tableNames[table], slot, fallback);
                     _retiringSlots.Add((lastDispatched, table, slot));
                 }
                 freed = true;
             }
             return freed;
-        }
-    }
-
-    internal void Track(TableRing frameTable)
-    {
-        lock (_lock)
-        {
-            _frameTables.Add(frameTable);
-            for (int table = 0; table < _slots.Length; table++)
-            {
-                foreach ((Texture texture, uint slot) in _slots[table])
-                    frameTable.Set(s_tableNames[table], slot, texture);
-            }
         }
     }
 
@@ -243,13 +243,13 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     {
         lock (_lock)
         {
-            _frameTables.Remove(table);
             _viewTables.Remove(table);
         }
     }
 
     public void Dispose()
     {
+        Table.Dispose();
         foreach (Texture texture in _owned)
             texture.Dispose();
         foreach ((_, Sampler sampler) in _samplers)
@@ -268,10 +268,12 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         else if (_nextSlot[table] < capacity)
             slot = _nextSlot[table]++;
         else
+        {
+            Reporter?.Invoke($"textures.{s_tableNames[table]}.full", $"Every one of the {capacity} slots of {s_tableNames[table]} is in use, new textures there show slot 0.");
             return 0;
+        }
         _slots[table][texture] = slot;
-        foreach (TableRing ring in _frameTables)
-            ring.Set(s_tableNames[table], slot, texture);
+        Table.SetTexture(s_tableNames[table], slot, texture);
         return slot;
     }
 

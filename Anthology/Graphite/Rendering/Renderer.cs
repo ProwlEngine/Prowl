@@ -36,6 +36,21 @@ public sealed class RendererOptions
     /// and tests.
     /// </summary>
     public bool Deterministic;
+
+    /// <summary>Format of reflection probe and sky probe cubes. B10G11R11 halves their memory, alpha is never used.</summary>
+    public PixelFormat ReflectionFormat = PixelFormat.R16_G16_B16_A16_Float;
+
+    /// <summary>GGX samples per prefiltered texel of every mip but the sharpest.</summary>
+    public int PrefilterSamples = 64;
+
+    /// <summary>Edge length of the smallest prefiltered mip, rougher reflections turn blocky below it.</summary>
+    public uint SmallestProbeMip = 4;
+
+    /// <summary>Faces of reflection probes captured per world per frame, six being one whole probe.</summary>
+    public int ProbeFacesPerFrame = 6;
+
+    /// <summary>Frames a view keeps its per view state after it was last drawn.</summary>
+    public int StaleViewFrames = 8;
 }
 
 /// <summary>
@@ -55,7 +70,20 @@ public sealed class BuiltInSkies(Renderer renderer)
 }
 
 /// <summary>A problem the renderer reports once, raised on the host thread at SubmitFrame.</summary>
-public readonly record struct RendererError(string Message);
+public enum RendererErrorSeverity : byte
+{
+    /// <summary>Something draws differently than asked: a capacity reached, a value adjusted.</summary>
+    Warning,
+
+    /// <summary>Something does not draw: a shader that failed, a frame that failed, a missing resource.</summary>
+    Error,
+}
+
+/// <summary>
+/// A problem the renderer reports once per <see cref="Code"/>, raised on the host thread at SubmitFrame. The code is
+/// stable for filtering, the message is for people.
+/// </summary>
+public readonly record struct RendererError(string Code, string Message, RendererErrorSeverity Severity = RendererErrorSeverity.Error, object? Source = null);
 
 /// <summary>One layer of a view: a camera relative view matrix (rotation only), a reversed Z projection and the camera's world position.</summary>
 public struct ViewLayer
@@ -167,13 +195,13 @@ public sealed class Renderer : IDisposable
             throw new NotSupportedException("The renderer needs multi draw indirect, a first instance in indirect draws, and descriptor indexing.");
         InternalShaders.Register();
 
-        Textures = new RendererTextures(device);
+        Textures = new RendererTextures(device) { Reporter = Warn };
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
         _geometry = new GeometryPool(device, _options.PageVertexWords, _options.PageIndices);
         _materials = new MaterialSystem(device, Textures) { Reporter = message => Report(message, message) };
         _globals = new GlobalRegistry(device, Textures) { Reporter = message => Report(message, message) };
         _programs.Reporter = message => Report(message, message);
-        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report);
+        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report) { StaleViewFrames = _options.StaleViewFrames };
         Skies = new BuiltInSkies(this);
 
         if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)
@@ -199,12 +227,10 @@ public sealed class Renderer : IDisposable
         _frameDone.Wait();
         try
         {
-            RenderWorld world = new(Device, this, Textures);
+            RenderWorld world = new(Device, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeFacesPerFrame));
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
-            TableRing frameTable = new(Device, ProgramCache.FrameLayout, "Frame table");
-            Textures.Track(frameTable);
-            _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), frameTable, region);
+            _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), region);
             return world;
         }
         finally
@@ -223,6 +249,29 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The built in skies, each a shader for a material to set as <see cref="EnvironmentDesc.Sky"/>.</summary>
     public BuiltInSkies Skies { get; }
+
+    /// <summary>A prefiltered cube from a bake, to show through <see cref="ReflectionProbeDesc.Cubemap"/>. The caller owns it. Any thread.</summary>
+    public Texture CreateReflectionCubemap(BakedReflectionProbe baked)
+    {
+        ArgumentNullException.ThrowIfNull(baked);
+        if (baked.Size <= 0 || baked.Mips <= 0 || baked.Faces.Length < 6 * baked.Mips)
+            throw new ArgumentException("A baked reflection probe needs a size, mips and every face of every mip.", nameof(baked));
+
+        Texture cube = Device.ResourceFactory.CreateTexture(TextureDescription.CreateCube((uint)baked.Size, (uint)baked.Mips, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        cube.Name = "Baked reflection probe";
+        for (int face = 0; face < 6; face++)
+        {
+            for (int mip = 0; mip < baked.Mips; mip++)
+            {
+                uint size = (uint)Math.Max(baked.Size >> mip, 1);
+                byte[] data = baked.Faces[face * baked.Mips + mip];
+                if (data.Length != size * size * 8)
+                    throw new ArgumentException($"Face {face} mip {mip} holds {data.Length} bytes, {size * size * 8} expected.", nameof(baked));
+                Device.UpdateTexture<byte>(cube, data, new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
+            }
+        }
+        return cube;
+    }
 
     /// <summary>Loads a shader through the renderer's compiler. Any thread.</summary>
     public Shader LoadShader(ShaderDefinition definition) => new(definition, _compiler);
@@ -259,6 +308,7 @@ public sealed class Renderer : IDisposable
                 {
                     world.World.Lighting.RepackDecals();
                     world.World.RepackLightmaps();
+                    world.World.Reflections.RepackBaked();
                 }
             }
 
@@ -293,6 +343,7 @@ public sealed class Renderer : IDisposable
     }
 
     private int _frameCount;
+    private readonly List<Double3> _cameras = new();
     private readonly List<(Action<BakedReflectionProbe> Done, BakedReflectionProbe Baked)> _bakes = new();
 
     // Hands finished reflection probe bakes to the host, before this frame's changes are extracted
@@ -313,7 +364,6 @@ public sealed class Renderer : IDisposable
             if (_worlds.Remove(world, out WorldFrame? removed))
             {
                 _globals.RemoveWorld(removed.GlobalRegion);
-                Textures.Untrack(removed.FrameTable);
                 _frame.ForgetWorld(removed);
                 removed.World.DisposeRender();
                 removed.Dispose();
@@ -363,10 +413,14 @@ public sealed class Renderer : IDisposable
         _frameDone.Dispose();
     }
 
-    internal void Report(string key, string message)
+    internal void Report(string key, string message) => Report(key, message, RendererErrorSeverity.Error, null);
+
+    internal void Warn(string key, string message) => Report(key, message, RendererErrorSeverity.Warning, null);
+
+    internal void Report(string key, string message, RendererErrorSeverity severity, object? source)
     {
         if (_reported.TryAdd(key, true))
-            _errors.Enqueue(new RendererError(message));
+            _errors.Enqueue(new RendererError(key, message, severity, source));
     }
 
     private void RaiseErrors()
@@ -440,12 +494,17 @@ public sealed class Renderer : IDisposable
         foreach (WorldFrame world in _worlds.Values)
         {
             world.World.Render.Flush(_uploader, _replaced);
-            world.World.Reflections.Plan(_frameCount, world.World.Lighting);
+            _cameras.Clear();
+            for (int v = 0; v < _viewCount; v++)
+            {
+                if (_views[v].World == world.World)
+                    _cameras.Add(_views[v].Layers[0].Position);
+            }
+            world.World.Reflections.Plan(_frameCount, world.World.Lighting, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cameras));
             world.World.Reflections.Flush(_uploader, _replaced);
             world.World.Lighting.Update();
             world.World.Lighting.Flush(_uploader, _replaced);
             world.World.Probes.Update(world.World.Render, _uploader, _replaced);
-            world.World.Probes.Flush(_uploader, _replaced);
         }
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));

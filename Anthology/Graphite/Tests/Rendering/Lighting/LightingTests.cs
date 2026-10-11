@@ -248,6 +248,32 @@ public sealed class LightingTests : IDisposable
         }
         """;
 
+    // Colours a quad from a buffer the host provides through Globals.SetBuffer
+    private const string BufferSource = """
+        Shader "Test/Buffer"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    layout(std430) readonly buffer WindField { vec4 wind[]; };
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = vec4(wind[1].rgb, 1.0); }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
     private const int Size = 16;
     private const float QuadDepth = 10;
 
@@ -1074,7 +1100,8 @@ public sealed class LightingTests : IDisposable
         foreach (RenderableHandle wall in Enumerable.Range(0, 6).Select(i => new RenderableHandle(i, 1)))
             _world.Remove(wall);
         desc.Mode = ReflectionProbeMode.Baked;
-        desc.Baked = baked;
+        desc.Cubemap = _renderer.CreateReflectionCubemap(baked);
+        _textures.Add(desc.Cubemap);
         _world.SetReflectionProbe(probe, desc);
         Frame();
         Float4[] shown = Frame();
@@ -1191,6 +1218,84 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void SkyAmbient_LightsWithTheSkysColour()
+    {
+        AddQuad(Surface(new Float3(0.5f, 0.8f, 1)));
+        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Sky, AmbientIntensity = 1, Fog = default, Sky = SkyMaterial(new Float3(0.4f, 0.3f, 0.2f), 0) };
+        Frame();
+        AssertMatches(_ => new Vector3(0.2f, 0.24f, 0.2f), Frame());
+    }
+
+    [Fact]
+    public void ProbeCaptures_GoToTheNearestProbesFirst()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        _world.AddReflectionProbe(RoomProbe(new Double3(10, 0, 18), new Float3(20, 40, 24)));
+        _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
+
+        Frame();
+        AssertMatches(p => p.X < 0 ? new Vector3(0.8f, 0.5f, 0.2f) : s_skyColor, Frame());
+        AssertMatches(_ => new Vector3(0.8f, 0.5f, 0.2f), Frame());
+    }
+
+    [Fact]
+    public void ProbesCapturedOnce_FollowTheSky()
+    {
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        Material sky = SkyMaterial(new Float3(0.1f, 0.2f, 0.4f), 0);
+        _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = sky };
+        ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
+        desc.Intensity = 0.5f;
+        _world.AddReflectionProbe(desc);
+        Frame();
+        AssertMatches(_ => new Vector3(0.05f, 0.1f, 0.2f), Frame());
+
+        sky.SetColor("_Tint", new Float4(1, 0.5f, 0, 1));
+        for (int frame = 0; frame < 4; frame++)
+            Frame();
+        AssertMatches(_ => new Vector3(0.5f, 0.25f, 0), Frame());
+    }
+
+    [Fact]
+    public void HostBuffers_ReachShadersByName_WorldOverRenderer_AndMissingOnesAreReported()
+    {
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(BufferSource)));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) }, [material]);
+        DeviceBuffer Buffer(Float4 second)
+        {
+            DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(32, BufferUsage.StructuredBufferReadOnly));
+            _device.UpdateBuffer<Float4>(buffer, 0, [new Float4(9, 9, 9, 1), second]);
+            return buffer;
+        }
+
+        Float4[] Draw()
+        {
+            ViewDesc view = new() { World = _world, ViewId = 16, Target = _framebuffer };
+            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+            _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+            _device.WaitForIdle();
+            _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+            return ReadLayer(_target, 0);
+        }
+
+        Float4[] missing = Draw();
+        RendererError error = Assert.Single(_errors);
+        Assert.Equal("global.buffer.WindField", error.Code);
+        Assert.Equal(RendererErrorSeverity.Error, error.Severity);
+        Assert.All(missing, p => Assert.Equal(0f, p.X));
+        _errors.Clear();
+
+        using DeviceBuffer renderer = Buffer(new Float4(0.25f, 0.5f, 0.75f, 1));
+        using DeviceBuffer world = Buffer(new Float4(1, 0, 0.5f, 1));
+        _renderer.Globals.SetBuffer("WindField", renderer);
+        AssertMatches(_ => new Vector3(0.25f, 0.5f, 0.75f), Frame());
+
+        _world.Globals.SetBuffer("WindField", world);
+        AssertMatches(_ => new Vector3(1, 0, 0.5f), Frame());
+    }
+
+    [Fact]
     public void OnlyOpaquePassesWritingTheGBuffer_WriteIt()
     {
         ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
@@ -1245,12 +1350,10 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void Lightmaps_LightThroughTheSecondUVSet_PlacedOnTheirPage()
+    public void Lightmaps_LightThroughTheSecondUVSet_PlacedByTheirScaleAndOffset()
     {
-        Texture other = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(5, 5, 5, 1)]);
         Texture gradient = Lightmap<Float4>(2, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1), new Float4(1, 0.5f, 0.25f, 1)]);
-        _world.SetLightmaps([other, gradient], LightmapEncoding.Linear);
-        AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(1, new Float4(0.5f, 1, 0.5f, 0)));
+        AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(gradient, new Float4(0.5f, 1, 0.5f, 0), LightmapEncoding.Linear));
 
         // Bilinear between the two texel centres, clamped at the edge
         AssertMatches(p =>
@@ -1264,8 +1367,7 @@ public sealed class LightingTests : IDisposable
     public void Lightmaps_FallBackToTheFirstUVSet_AndDecodeRGBM()
     {
         byte[] texel = [128, 64, 255, 128];
-        _world.SetLightmaps([Lightmap<byte>(1, PixelFormat.R8_G8_B8_A8_UNorm, texel)], LightmapEncoding.RGBM);
-        AddIndirect(IndirectQuad(secondUVs: false), lightmap: new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+        AddIndirect(IndirectQuad(secondUVs: false), lightmap: new LightmapBinding(Lightmap<byte>(1, PixelFormat.R8_G8_B8_A8_UNorm, texel), new Float4(1, 1, 0, 0), LightmapEncoding.RGBM));
 
         float scale = texel[3] / 255f * 8;
         AssertMatches(_ => new Vector3(texel[0], texel[1], texel[2]) / 255f * scale, Frame());
@@ -1366,24 +1468,24 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void LightmapPages_NotReadyLightWithAmbient_AndPastTheEndUseTheProbes()
+    public void Lightmaps_StillLoadingLightWithAmbient_EachCarryTheirEncoding_AndNoneUsesTheProbes()
     {
         _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), Fog = default };
         LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 13);
         _world.SetLightProbes(probes);
-        _world.SetLightmaps([null], LightmapEncoding.Linear);
-        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(null, new Float4(1, 1, 0, 0)));
         AssertMatches(_ => new Vector3(0.2f, 0.4f, 0.6f), Frame());
 
-        _world.SetLightmap(quad, new LightmapBinding(3, new Float4(1, 1, 0, 0)));
-        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, QuadDepth));
-        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
-
-        _world.SetLightmaps([Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.1f, 0.2f, 0.3f, 1)])], LightmapEncoding.Linear);
-        _world.SetLightmap(quad, new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+        _world.SetLightmap(quad, new LightmapBinding(Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.1f, 0.2f, 0.3f, 1)]), new Float4(1, 1, 0, 0), LightmapEncoding.Linear));
         AssertMatches(_ => new Vector3(0.1f, 0.2f, 0.3f), Frame());
 
+        byte[] texel = [64, 128, 32, 64];
+        _world.SetLightmap(quad, new LightmapBinding(Lightmap<byte>(1, PixelFormat.R8_G8_B8_A8_UNorm, texel), new Float4(1, 1, 0, 0), LightmapEncoding.RGBM, SamplerDescription.Point));
+        float scale = texel[3] / 255f * 8;
+        AssertMatches(_ => new Vector3(texel[0], texel[1], texel[2]) / 255f * scale, Frame());
+
         _world.SetLightmap(quad, LightmapBinding.None);
+        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, QuadDepth));
         AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
     }
 
@@ -1403,11 +1505,11 @@ public sealed class LightingTests : IDisposable
     public void LightmappedRenderables_IgnoreTheProbes()
     {
         _world.SetLightProbes(BoxProbes(s_boxMin, s_boxMax, 9));
-        _world.SetLightmaps([Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.3f, 0.6f, 0.9f, 1)])], LightmapEncoding.Linear);
+        Texture lightmap = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.3f, 0.6f, 0.9f, 1)]);
         RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true));
         Frame();
 
-        _world.SetLightmap(quad, new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+        _world.SetLightmap(quad, new LightmapBinding(lightmap, new Float4(1, 1, 0, 0), LightmapEncoding.Linear));
         AssertMatches(_ => new Vector3(0.3f, 0.6f, 0.9f), Frame());
     }
 
