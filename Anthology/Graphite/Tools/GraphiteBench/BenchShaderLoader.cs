@@ -13,52 +13,36 @@ internal static class BenchShaderLoader
 {
     private static string ShaderDirectory => Path.Combine(AppContext.BaseDirectory, "Shaders");
 
-    private static Memory<byte>? LoadFile(string path)
+    private static readonly GlslShaderCompiler s_compiler = new(new GlslCompilerOptions
     {
-        string full = Path.IsPathRooted(path) ? path : Path.Combine(ShaderDirectory, path);
-        return File.Exists(full) ? File.ReadAllBytes(full) : null;
-    }
+        ResolveInclude = (name, _) =>
+        {
+            string path = Path.Combine(ShaderDirectory, name);
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        },
+    });
 
-    public static string ReadSource(string moduleFile) => File.ReadAllText(Path.Combine(ShaderDirectory, moduleFile));
+    public static string ReadSource(string file) => File.ReadAllText(Path.Combine(ShaderDirectory, file));
 
-    public static GraphicsProgram Create(GraphicsDevice gd, string moduleFile) => CreateFromSource(gd, ReadSource(moduleFile));
+    public static GraphicsProgram Create(GraphicsDevice gd, string file) => CreateFromSource(gd, ReadSource(file));
 
     public static GraphicsProgram CreateFromSource(GraphicsDevice gd, string source)
-        => Compile<GraphicsProgram>(gd, source, (compiler, pass) => [CreateGraphics(gd, compiler.Compile(pass, [], gd.BackendType))])[0];
+        => CreateGraphics(gd, s_compiler.Compile(Pass(source), [], gd.BackendType));
 
-    public static GraphicsProgram[] CreateVariants(GraphicsDevice gd, string moduleFile, int count)
-        => Compile<GraphicsProgram>(gd, ReadSource(moduleFile), (compiler, pass) =>
-        {
-            IEnumerable<Keyword[]> combos = [[]];
-            foreach (VariantSpace axis in compiler.GetAxes(pass))
-                combos = combos.SelectMany(combo => axis.Values.Select(value => (Keyword[])[.. combo, new Keyword(axis.Name, value)]));
-
-            return combos.Take(count).Select(combo => CreateGraphics(gd, compiler.Compile(pass, combo, gd.BackendType))).ToArray();
-        });
-
-    public static ComputeProgram CreateCompute(GraphicsDevice gd, string moduleFile, uint groupSizeX)
-        => Compile<ComputeProgram>(gd, ReadSource(moduleFile), (compiler, pass) =>
-        {
-            ShaderDescription description = compiler.Compile(pass, [], gd.BackendType);
-            return [gd.ResourceFactory.CreateComputeProgram(new ComputeDescription(description.Stages[0], description.ResourceLayouts, groupSizeX, 1, 1))];
-        })[0];
-
-    private static T[] Compile<T>(GraphicsDevice gd, string source, Func<SlangShaderCompiler, ShaderPass, T[]> build)
+    public static GraphicsProgram[] CreateVariants(GraphicsDevice gd, string file, int count)
     {
-        SlangShaderCompiler compiler = new();
-        compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
-        compiler.BeginSession([new DirectoryInfo(ShaderDirectory)], LoadFile);
+        ShaderPass pass = Pass(ReadSource(file));
+        IEnumerable<Keyword[]> combos = [[]];
+        foreach (VariantSpace axis in s_compiler.GetAxes(pass))
+            combos = combos.SelectMany(combo => axis.Values.Select(value => (Keyword[])[.. combo, new Keyword(axis.Name, value)]));
 
-        try
-        {
-            ShaderPass pass = new() { State = new PassState(), InlineSlang = source };
-            return build(compiler, pass);
-        }
-        finally
-        {
-            compiler.EndSession();
-        }
+        return combos.Take(count).Select(combo => CreateGraphics(gd, s_compiler.Compile(pass, combo, gd.BackendType))).ToArray();
     }
+
+    public static ComputeProgram CreateCompute(GraphicsDevice gd, string file)
+        => gd.ResourceFactory.CreateComputeProgram(s_compiler.CompileProgram(Pass(ReadSource(file)), []).ToCompute());
+
+    private static ShaderPass Pass(string source) => new() { State = new PassState(), Source = source };
 
     private static GraphicsProgram CreateGraphics(GraphicsDevice gd, ShaderDescription description)
     {

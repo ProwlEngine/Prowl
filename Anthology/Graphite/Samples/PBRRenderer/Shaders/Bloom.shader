@@ -7,65 +7,63 @@ Shader "PBRRenderer/Bloom"
         Cull Off
         ZTest Disabled
 
-        SLANGPROGRAM
-        import VariantAttributes;
-        import UVOrigin;
-
-
-        [VariantAxis]
-        extern static const bool Upsample;
-
-
-        struct BloomData
+        GLSLPROGRAM
+        Shared
         {
-            Sampler2D<float4> sourceTexture;
-            float2 halfPixel;
-            float offset;
-        };
-        ParameterBlock<BloomData> BloomParams;
+            #pragma variant Upsample
 
 
-        [shader("vertex")]
-        float4 Vertex(uint vertexIndex : SV_VertexID, out float2 UV : UV0) : SV_Position
-        {
-            float2 baseUV = float2(float((vertexIndex << 1) & 2), float(vertexIndex & 2));
-
-            static if (IsUVOriginTopLeft)
-                UV = float2(baseUV.x, 1.0 - baseUV.y);
-            else
-                UV = float2(baseUV.x, baseUV.y);
-
-            return float4(baseUV * 2.0 - 1.0, 0.0, 1.0);
-        }
-
-
-        [shader("fragment")]
-        float4 Fragment(float2 UV : UV0) : SV_Target
-        {
-            Sampler2D<float4> sourceTexture = BloomParams.sourceTexture;
-            float2 halfPixel = BloomParams.halfPixel;
-            float offset = BloomParams.offset;
-
-            static if (Upsample)
+            uniform BloomParams
             {
-                float4 sum = sourceTexture.Sample(UV + float2(-halfPixel.x * 2.0, 0.0) * offset);
-                sum += sourceTexture.Sample(UV + float2(-halfPixel.x, halfPixel.y) * offset) * 2.0;
-                sum += sourceTexture.Sample(UV + float2(0.0, halfPixel.y * 2.0) * offset);
-                sum += sourceTexture.Sample(UV + float2(halfPixel.x, halfPixel.y) * offset) * 2.0;
-                sum += sourceTexture.Sample(UV + float2(halfPixel.x * 2.0, 0.0) * offset);
-                sum += sourceTexture.Sample(UV + float2(halfPixel.x, -halfPixel.y) * offset) * 2.0;
-                sum += sourceTexture.Sample(UV + float2(0.0, -halfPixel.y * 2.0) * offset);
-                sum += sourceTexture.Sample(UV + float2(-halfPixel.x, -halfPixel.y) * offset) * 2.0;
-                return sum / 12.0;
-            }
+                vec2 halfPixel;
+                float offset;
+            };
 
-            float4 sum = sourceTexture.Sample(UV) * 4.0;
-            sum += sourceTexture.Sample(UV - halfPixel * offset);
-            sum += sourceTexture.Sample(UV + halfPixel * offset);
-            sum += sourceTexture.Sample(UV + float2(halfPixel.x, -halfPixel.y) * offset);
-            sum += sourceTexture.Sample(UV - float2(halfPixel.x, -halfPixel.y) * offset);
-            return sum / 8.0;
+            uniform sampler2D sourceTexture;
         }
-        ENDSLANG
+
+
+        Vertex
+        {
+            out vec2 UV;
+
+            void main()
+            {
+                vec2 baseUV = vec2(float((gl_VertexIndex << 1) & 2), float(gl_VertexIndex & 2));
+                UV = vec2(baseUV.x, 1.0 - baseUV.y);
+                gl_Position = vec4(baseUV * 2.0 - 1.0, 0.0, 1.0);
+            }
+        }
+
+
+        Fragment
+        {
+            in vec2 UV;
+
+            out vec4 target;
+
+            void main()
+            {
+            #ifdef Upsample
+                vec4 sum = texture(sourceTexture, UV + vec2(-halfPixel.x * 2.0, 0.0) * offset);
+                sum += texture(sourceTexture, UV + vec2(-halfPixel.x, halfPixel.y) * offset) * 2.0;
+                sum += texture(sourceTexture, UV + vec2(0.0, halfPixel.y * 2.0) * offset);
+                sum += texture(sourceTexture, UV + vec2(halfPixel.x, halfPixel.y) * offset) * 2.0;
+                sum += texture(sourceTexture, UV + vec2(halfPixel.x * 2.0, 0.0) * offset);
+                sum += texture(sourceTexture, UV + vec2(halfPixel.x, -halfPixel.y) * offset) * 2.0;
+                sum += texture(sourceTexture, UV + vec2(0.0, -halfPixel.y * 2.0) * offset);
+                sum += texture(sourceTexture, UV + vec2(-halfPixel.x, -halfPixel.y) * offset) * 2.0;
+                target = sum / 12.0;
+            #else
+                vec4 sum = texture(sourceTexture, UV) * 4.0;
+                sum += texture(sourceTexture, UV - halfPixel * offset);
+                sum += texture(sourceTexture, UV + halfPixel * offset);
+                sum += texture(sourceTexture, UV + vec2(halfPixel.x, -halfPixel.y) * offset);
+                sum += texture(sourceTexture, UV - vec2(halfPixel.x, -halfPixel.y) * offset);
+                target = sum / 8.0;
+            #endif
+            }
+        }
+        ENDGLSL
     }
 }

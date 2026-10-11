@@ -35,7 +35,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         DeviceBuffer vertices = RF.CreateBuffer(new BufferDescription(
             stride * 4, BufferUsage.StructuredBufferReadWrite));
 
-        ComputeProgram compute = CreateCompute("ComputeColoredQuadGenerator.slang",
+        ComputeProgram compute = CreateCompute("ComputeColoredQuadGenerator.glsl",
             new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0));
 
         GraphicsProgram graphics = CreateColoredQuadRenderer();
@@ -73,7 +73,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         Texture computeOutput = RF.CreateTexture(TextureDescription.Texture2D(
             width, height, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled | TextureUsage.Storage));
 
-        ComputeProgram compute = CreateCompute("ComputeTextureGenerator.slang",
+        ComputeProgram compute = CreateCompute("ComputeTextureGenerator.glsl",
             new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0));
 
         PropertySet computeProps = new();
@@ -105,7 +105,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         Texture texture = RF.CreateTexture(TextureDescription.Texture3D(
             size, size, size, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled | TextureUsage.Storage));
 
-        ComputeProgram compute = CreateCompute("ComputeFill3DTexture.slang",
+        ComputeProgram compute = CreateCompute("ComputeFill3DTexture.glsl",
             new ResourceLayoutElementDescription("FillValueBuffer", ResourceKind.UniformBuffer, ShaderStages.Compute, 0)
             {
                 UniformFields = [new UniformBlockField("FillValue", 0, sizeof(float), UniformScalarType.Float1)]
@@ -149,7 +149,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
             (uint)Unsafe.SizeOf<IndirectDispatchArguments>(), BufferUsage.IndirectBuffer));
         GD.UpdateBuffer(indirect, 0, new IndirectDispatchArguments { GroupCountX = 1, GroupCountY = 1, GroupCountZ = 1 });
 
-        ComputeProgram compute = CreateCompute("BasicComputeTest.slang",
+        ComputeProgram compute = CreateCompute("BasicComputeTest.glsl",
             new ResourceLayoutElementDescription("Params", ResourceKind.UniformBuffer, ShaderStages.Compute, 0)
             {
                 UniformFields =
@@ -189,7 +189,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
     private GraphicsProgram CreateColoredQuadRenderer()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.glsl");
         return RF.CreateGraphicsProgram(new ShaderDescription(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,

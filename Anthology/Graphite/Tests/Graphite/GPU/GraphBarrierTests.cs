@@ -112,7 +112,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
 
     private GraphicsProgram CreateSampleProgram()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenTriSampleTexture2D.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenTriSampleTexture2D.glsl");
         return RF.CreateGraphicsProgram(new ShaderDescription(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -288,7 +288,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
 
         DeviceBuffer staging = CreateStaging(4, 1);
         GraphicsProgram program = CreateSampleProgram();
-        ComputeProgram compute = CreateCompute("ComputeTextureGenerator.slang",
+        ComputeProgram compute = CreateCompute("ComputeTextureGenerator.glsl",
             new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0));
         RenderResourceID storageId = RenderResourceID.Intern("barrier_storage");
         RenderResourceID outputId = RenderResourceID.Intern("barrier_storage_output");
@@ -339,9 +339,9 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         const uint size = 16;
         const uint stride = 32;
         DeviceBuffer staging = CreateStaging(size, size);
-        ComputeProgram compute = CreateCompute("ComputeColoredQuadGenerator.slang",
+        ComputeProgram compute = CreateCompute("ComputeColoredQuadGenerator.glsl",
             new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0));
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.glsl");
         GraphicsProgram graphics = RF.CreateGraphicsProgram(new ShaderDescription(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,

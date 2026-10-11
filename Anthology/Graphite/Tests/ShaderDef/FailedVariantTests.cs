@@ -36,7 +36,7 @@ public class FailedVariantTests : IDisposable
 
     public FailedVariantTests()
     {
-        _pass = new ShaderPass { State = new PassState(), InlineSlang = "a" };
+        _pass = new ShaderPass { State = new PassState(), Source = "a" };
         _pass.CompileFailed += (_, _, _) => _reports++;
         _pass.Bind(_device, "Test", 0, [], [], _compiler, CompileMode.OnDemand, _fallback);
     }
@@ -63,7 +63,7 @@ public class FailedVariantTests : IDisposable
     public void SourceChange_Retries()
     {
         _pass.GetVariant(0);
-        _pass.InlineSlang = "b";
+        _pass.Source = "b";
         _pass.GetVariant(0);
         _pass.GetVariant(0);
 
@@ -90,7 +90,7 @@ public class FailedVariantTests : IDisposable
     [Fact]
     public void NoFallback_ThrowsWithInnerException()
     {
-        ShaderPass pass = new() { State = new PassState(), InlineSlang = "a" };
+        ShaderPass pass = new() { State = new PassState(), Source = "a" };
         pass.Bind(_device, "Test", 0, [], [], _compiler, CompileMode.OnDemand);
 
         InvalidOperationException first = Assert.Throws<InvalidOperationException>(() => pass.GetVariant(0));

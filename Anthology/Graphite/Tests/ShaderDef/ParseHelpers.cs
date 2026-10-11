@@ -15,10 +15,10 @@ internal static class Parse
     public static PassState State(string source) => ShaderParser.ParsePassState(source);
 
 
-    public static string Slang(string source)
+    public static string Program(string source)
     {
         Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
-        return ParserUtility.SlangProgram(ref t);
+        return ParserUtility.Program(ref t);
     }
 
 

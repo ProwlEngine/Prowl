@@ -107,7 +107,7 @@ public abstract class GraphiteBenchmark
         return resource;
     }
 
-    protected GraphicsProgram LoadProgram(string moduleFile) => Own(BenchShaderLoader.Create(Device, moduleFile));
+    protected GraphicsProgram LoadProgram(string file) => Own(BenchShaderLoader.Create(Device, file));
 
     protected Texture CreateTexture(uint size, int seed)
     {

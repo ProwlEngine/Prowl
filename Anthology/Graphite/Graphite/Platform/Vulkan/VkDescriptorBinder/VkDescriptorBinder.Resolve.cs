@@ -215,10 +215,13 @@ internal unsafe sealed partial class VkDescriptorBinder
 
     private static uint UniformSize(UniformScalarType type) => type switch
     {
-        UniformScalarType.Float1 or UniformScalarType.Int1 => 4,
-        UniformScalarType.Float2 or UniformScalarType.Int2 => 8,
-        UniformScalarType.Float3 or UniformScalarType.Int3 => 12,
-        UniformScalarType.Float4 or UniformScalarType.Int4 => 16,
+        UniformScalarType.Float1 or UniformScalarType.Int1 or UniformScalarType.UInt1 => 4,
+        UniformScalarType.Float2 or UniformScalarType.Int2 or UniformScalarType.UInt2 or UniformScalarType.Double1 => 8,
+        UniformScalarType.Float3 or UniformScalarType.Int3 or UniformScalarType.UInt3 => 12,
+        UniformScalarType.Float4 or UniformScalarType.Int4 or UniformScalarType.UInt4 or UniformScalarType.Double2 or UniformScalarType.Float2x2 => 16,
+        UniformScalarType.Double3 => 24,
+        UniformScalarType.Double4 => 32,
+        UniformScalarType.Float3x3 => 36,
         _ => 64,
     };
 }

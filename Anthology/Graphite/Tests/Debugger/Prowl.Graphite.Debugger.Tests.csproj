@@ -14,8 +14,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Content Include="..\Graphite\Shaders\FullScreenTriSampleTexture2D.slang" Link="Shaders\FullScreenTriSampleTexture2D.slang" CopyToOutputDirectory="PreserveNewest" />
-        <Content Include="..\Graphite\Shaders\ComputeTextureGenerator.slang" Link="Shaders\ComputeTextureGenerator.slang" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="..\Graphite\Shaders\FullScreenTriSampleTexture2D.glsl" Link="Shaders\FullScreenTriSampleTexture2D.glsl" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="..\Graphite\Shaders\ComputeTextureGenerator.glsl" Link="Shaders\ComputeTextureGenerator.glsl" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>

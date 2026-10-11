@@ -155,7 +155,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             new VertexElementDescription("POSITION", VertexElementFormat.Float2),
             new VertexElementDescription("COLOR", VertexElementFormat.Float4));
 
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FloatColorVertexAttribs.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FloatColorVertexAttribs.glsl");
         return RF.CreateGraphicsProgram(new ShaderDescription(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -185,7 +185,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
 
     private ComputeProgram CreateFillProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

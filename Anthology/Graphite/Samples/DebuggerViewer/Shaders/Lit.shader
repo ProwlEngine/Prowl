@@ -8,49 +8,52 @@ Shader "Sample/Lit"
         ZTest LessEqual
         ZWrite On
 
-        SLANGPROGRAM
-        uniform float4x4 MatrixMVP;
-        uniform float4x4 MatrixModel;
-        uniform float4 Color;
-        uniform float4 LightDirection;
-        uniform float4 LightColor;
-        uniform float4 Ambient;
-
-        struct VertexInput
+        GLSLPROGRAM
+        Shared
         {
-            float3 position : POSITION0;
-            float3 normal : NORMAL0;
-            float2 uv : TEXCOORD0;
-        };
-
-        struct VertexOutput
-        {
-            float4 position : SV_Position;
-            float3 normal : NORMAL0;
-            float2 uv : TEXCOORD0;
-        };
-
-        [shader("vertex")]
-        VertexOutput Vertex(VertexInput input)
-        {
-            VertexOutput output;
-            output.position = mul(MatrixMVP, float4(input.position, 1.0));
-            output.normal = mul(MatrixModel, float4(input.normal, 0.0)).xyz;
-            output.uv = input.uv;
-            return output;
+            uniform mat4 MatrixMVP;
+            uniform mat4 MatrixModel;
+            uniform vec4 Color;
+            uniform vec4 LightDirection;
+            uniform vec4 LightColor;
+            uniform vec4 Ambient;
         }
 
-        [shader("fragment")]
-        float4 Fragment(VertexOutput input) : SV_Target
+        Vertex
         {
-            float3 n = normalize(input.normal);
-            float diffuse = saturate(dot(n, -LightDirection.xyz));
-            float2 edge = abs(input.uv - 0.5) * 2.0;
-            float rim = smoothstep(0.85, 1.0, max(edge.x, edge.y));
-            float3 albedo = Color.rgb * (1.0 - rim * 0.35);
-            float3 lit = albedo * (Ambient.rgb + LightColor.rgb * diffuse);
-            return float4(lit, 1.0);
+            in vec3 POSITION0;
+            in vec3 NORMAL0;
+            in vec2 TEXCOORD0;
+
+            out vec3 normal;
+            out vec2 uv;
+
+            void main()
+            {
+                gl_Position = MatrixMVP * vec4(POSITION0, 1.0);
+                normal = (MatrixModel * vec4(NORMAL0, 0.0)).xyz;
+                uv = TEXCOORD0;
+            }
         }
-        ENDSLANG
+
+        Fragment
+        {
+            in vec3 normal;
+            in vec2 uv;
+
+            out vec4 target;
+
+            void main()
+            {
+                vec3 n = normalize(normal);
+                float diffuse = clamp(dot(n, -LightDirection.xyz), 0.0, 1.0);
+                vec2 edge = abs(uv - 0.5) * 2.0;
+                float rim = smoothstep(0.85, 1.0, max(edge.x, edge.y));
+                vec3 albedo = Color.rgb * (1.0 - rim * 0.35);
+                vec3 lit = albedo * (Ambient.rgb + LightColor.rgb * diffuse);
+                target = vec4(lit, 1.0);
+            }
+        }
+        ENDGLSL
     }
 }

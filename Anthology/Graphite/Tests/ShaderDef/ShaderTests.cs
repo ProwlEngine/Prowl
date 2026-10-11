@@ -32,10 +32,10 @@ public class ShaderTests
 
                 Stencil { Ref 2 Comp Equal Pass Keep }
 
-                SLANGPROGRAM
+                GLSLPROGRAM
                 float4 vsMain() : SV_Position { return 0; }
                 float4 fsMain() : SV_Target { return 1; }
-                ENDSLANG
+                ENDGLSL
             }
 
             Fallback "Hidden/Fallback"
@@ -72,8 +72,8 @@ public class ShaderTests
         ShaderDefinition shader = Parse.Shader("""
             Shader "Multi"
             {
-                Pass { Name "A" SLANGPROGRAM void a() {} ENDSLANG }
-                Pass { Name "B" SLANGPROGRAM void b() {} ENDSLANG }
+                Pass { Name "A" GLSLPROGRAM void a() {} ENDGLSL }
+                Pass { Name "B" GLSLPROGRAM void b() {} ENDGLSL }
                 Fallback "fb"
             }
             """);
@@ -104,7 +104,7 @@ public class ShaderTests
         ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
             Shader "X"
             {
-                Pass { SLANGPROGRAM void main() {} ENDSLANG }
+                Pass { GLSLPROGRAM void main() {} ENDGLSL }
                 Fallback "fb"
             }
             Shader "Leftover" { }
@@ -125,7 +125,7 @@ public class ShaderTests
                     _Color("A", Color) = (1, 1, 1, 1)
                     _Color("B", Color) = (0, 0, 0, 0)
                 }
-                Pass { SLANGPROGRAM void main() {} ENDSLANG }
+                Pass { GLSLPROGRAM void main() {} ENDGLSL }
                 Fallback "fb"
             }
             """));
@@ -140,8 +140,8 @@ public class ShaderTests
         ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
             Shader "X"
             {
-                Pass { Name "Forward" SLANGPROGRAM void a() {} ENDSLANG }
-                Pass { Name "Forward" SLANGPROGRAM void b() {} ENDSLANG }
+                Pass { Name "Forward" GLSLPROGRAM void a() {} ENDGLSL }
+                Pass { Name "Forward" GLSLPROGRAM void b() {} ENDGLSL }
                 Fallback "fb"
             }
             """));
@@ -156,8 +156,8 @@ public class ShaderTests
         ShaderDefinition shader = Parse.Shader("""
             Shader "X"
             {
-                Pass { SLANGPROGRAM void a() {} ENDSLANG }
-                Pass { SLANGPROGRAM void b() {} ENDSLANG }
+                Pass { GLSLPROGRAM void a() {} ENDGLSL }
+                Pass { GLSLPROGRAM void b() {} ENDGLSL }
                 Fallback "fb"
             }
             """);

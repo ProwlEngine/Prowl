@@ -41,7 +41,7 @@ public class MultiViewBenchmarks : GraphiteBenchmark
 
     protected override IEnumerable<IPass> CreatePasses()
     {
-        GraphicsProgram program = LoadProgram("Fullscreen.slang");
+        GraphicsProgram program = LoadProgram("Fullscreen.glsl");
         RenderResourceID[] ids = Enumerable.Range(0, PassesPerView).Select(i => RenderResourceID.Intern("ViewPass" + i)).ToArray();
         int history = History ? 1 : 0;
 

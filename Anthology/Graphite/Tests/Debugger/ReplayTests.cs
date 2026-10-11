@@ -159,7 +159,7 @@ public class ReplayTests
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         using ComputeProgram compute = device.ResourceFactory.CreateComputeProgram(new ComputeDescription(
-            Compile("ComputeTextureGenerator.slang")[0],
+            Compile("ComputeTextureGenerator.glsl")[0],
             [new ResourceLayoutDescription { Set = 0, Elements = [new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)] }],
             4, 1, 1));
         using Texture storage = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(4, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled | TextureUsage.Storage));
@@ -204,7 +204,7 @@ public class ReplayTests
     private static DeepRecording RecordSample(GraphicsDevice device)
     {
         ResourceFactory factory = device.ResourceFactory;
-        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.slang"))
+        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.glsl"))
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
             DepthStencilState = DepthStencilStateDescription.Disabled,
@@ -229,7 +229,7 @@ public class ReplayTests
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         ResourceFactory factory = device.ResourceFactory;
-        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.slang"))
+        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.glsl"))
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
             DepthStencilState = DepthStencilStateDescription.Disabled,
@@ -274,7 +274,7 @@ public class ReplayTests
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
         ResourceFactory factory = device.ResourceFactory;
-        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.slang"))
+        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.glsl"))
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
             DepthStencilState = DepthStencilStateDescription.Disabled,
@@ -287,7 +287,7 @@ public class ReplayTests
             ],
         });
         using ComputeProgram compute = factory.CreateComputeProgram(new ComputeDescription(
-            Compile("ComputeTextureGenerator.slang")[0],
+            Compile("ComputeTextureGenerator.glsl")[0],
             [new ResourceLayoutDescription { Set = 0, Elements = [new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)] }],
             4, 1, 1));
         using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
@@ -323,13 +323,8 @@ public class ReplayTests
 
     private static ShaderStageDescription[] Compile(string file)
     {
-        string directory = Path.Combine(AppContext.BaseDirectory, "Shaders");
-        SlangShaderCompiler compiler = new();
-        compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
-        compiler.BeginSession([new DirectoryInfo(directory)], path => File.ReadAllBytes(Path.IsPathRooted(path) ? path : Path.Combine(directory, path)));
-        ShaderPass shader = new() { State = new PassState(), InlineSlang = File.ReadAllText(Path.Combine(directory, file)) };
-        ShaderDescription description = compiler.Compile(shader, [], GraphicsBackend.Vulkan);
-        compiler.EndSession();
-        return description.Stages;
+        using GlslShaderCompiler compiler = new();
+        ShaderPass shader = new() { State = new PassState(), Source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shaders", file)), SourceName = file };
+        return compiler.Compile(shader, [], GraphicsBackend.Vulkan).Stages;
     }
 }

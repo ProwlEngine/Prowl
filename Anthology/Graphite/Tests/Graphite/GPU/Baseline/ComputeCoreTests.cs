@@ -59,7 +59,7 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
 
     private ComputeProgram CreateBasicComputeProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.glsl");
 
         ResourceLayoutDescription[] layouts =
         [

@@ -20,7 +20,7 @@ public class TagsTests
             Pass
             {
                 Tags { "LightMode" = "ForwardBase" "Queue" = "Transparent" "RenderType" = "Opaque" }
-                SLANGPROGRAM void main() {} ENDSLANG
+                GLSLPROGRAM void main() {} ENDGLSL
             }
             """);
 
@@ -39,7 +39,7 @@ public class TagsTests
             Pass
             {
                 Tags { "LightMode" = "ForwardBase" "LightMode" = "Deferred" }
-                SLANGPROGRAM void main() {} ENDSLANG
+                GLSLPROGRAM void main() {} ENDGLSL
             }
             """));
 

@@ -4,7 +4,6 @@ using System.Text;
 using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Samples;
 using Prowl.Graphite.ShaderDef;
-using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
 
 
@@ -281,21 +280,10 @@ public static class Program
 
     private static ShaderPass LoadBloomShaderPass(GraphicsDevice device)
     {
-        SlangShaderCompiler compiler = new();
-        compiler.RegisterModule(device.BackendType switch
-        {
-            GraphicsBackend.Vulkan => new VulkanCompiler("spirv_1_4"),
-            _ => throw new NotSupportedException($"Unsupported graphics backend: {device.BackendType}")
-        });
-
-        compiler.BeginSession(FileLoader.SearchDirectories, FileLoader.Load);
-
         Memory<byte>? loaded = FileLoader.Load("Shaders/Bloom.shader");
         string source = Encoding.UTF8.GetString(loaded!.Value.Span);
         bloomDef = ShaderParser.Parse(source);
-        bloomDef.Create(device, compiler, new Variant(), CompileMode.All);
-
-        compiler.EndSession();
+        bloomDef.Create(device, ShaderLoader.Compiler, new Variant(), CompileMode.All);
 
         return bloomDef.Passes![0];
     }

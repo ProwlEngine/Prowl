@@ -115,14 +115,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
     private void CreateShaderProgram()
     {
-        SlangShaderCompiler compiler = new();
-        compiler.RegisterModule(_gl.BackendType switch
-        {
-            GraphicsBackend.Vulkan => new VulkanCompiler("spirv_1_4"),
-            _ => throw new NotSupportedException($"Unsupported graphics backend: {_gl.BackendType}")
-        });
-
-        compiler.BeginSession([new DirectoryInfo("/Shaders")], s_fileLoader);
+        using GlslShaderCompiler compiler = new();
 
         ShaderDefinition canvasDef = ShaderParser.Parse(ReadShaderSource("Shader.shader"));
         canvasDef.Create(_gl, compiler, new Variant(), CompileMode.All);
@@ -132,16 +125,12 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         ShaderDefinition blurDef = ShaderParser.Parse(ReadShaderSource("Blur.shader"));
         blurDef.Create(_gl, compiler, new Variant(), CompileMode.All);
         _blurPass = blurDef.Passes![0];
-
-        compiler.EndSession();
     }
 
 
-    // The canvas vertex buffer is a single interleaved struct with a byte-packed color
-    // (Vertex.SizeInBytes, COLOR0 as Byte4_Norm). Slang reflection can only describe one
-    // buffer slot per vertex-input field and has no way to express a packed UNORM color from
-    // a `float4` field, so the reflected VertexLayouts are replaced by hand here instead of
-    // going through ShaderPass.ResolveProgram/SetShader(ShaderPass).
+    // The canvas vertex buffer is one interleaved struct with a byte packed color (COLOR0 as
+    // Byte4_Norm). Reflection gives one buffer slot per input and reads a vec4 input as floats,
+    // so the reflected VertexLayouts are replaced by hand here.
     private GraphicsProgram CreateCanvasProgram(ShaderPass pass)
     {
         if (!pass.GetVariant(0).TryGetDescription(_gl.BackendType, out ShaderDescription description))

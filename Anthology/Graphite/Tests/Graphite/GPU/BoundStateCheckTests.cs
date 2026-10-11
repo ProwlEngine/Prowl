@@ -58,7 +58,7 @@ public abstract class BoundStateCheckTests<T> : GraphicsDeviceTestBase<T> where 
 {
     private GraphicsProgram CreateProgram()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.glsl");
         ShaderDescription description = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,

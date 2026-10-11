@@ -67,7 +67,7 @@ public abstract class ResourceVersionTests<T> : GraphicsDeviceTestBase<T> where 
 
     private ComputeProgram CreateComputeProgram(GraphicsDevice device)
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(device.BackendType, "BasicComputeTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(device.BackendType, "BasicComputeTest.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

@@ -47,7 +47,7 @@ public class DrawCallBenchmarks : GraphiteBenchmark
 
     protected override IEnumerable<IPass> CreatePasses()
     {
-        GraphicsProgram program = LoadProgram("BenchShader.slang");
+        GraphicsProgram program = LoadProgram("BenchShader.glsl");
         PropertySet[] models = Mode is DrawMode.Identical or DrawMode.MeshRebind or DrawMode.ShaderRebind
             ? [CreateModelProperties(Float4.One), CreateModelProperties(Float4.One)]
             : CreateModels(Draws);

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Graphite.ShaderDef;
@@ -7,49 +6,31 @@ using Prowl.Graphite.ShaderDef.Compiler;
 
 namespace Prowl.Graphite.Tests;
 
-// Compiles the test .slang shaders to per-backend stage descriptions at runtime through the
-// Compiler project, mirroring Samples/Shared/ShaderLoader. Each test owns its
-// ShaderDescription/ComputeDescription (vertex + resource layouts); this loader only produces
-// the compiled stage bytes via the Compiler's reflection.
+// Compiles the test .glsl shaders to stage descriptions. Each test owns its ShaderDescription or
+// ComputeDescription layouts, this loader only produces the compiled stages.
 internal static class TestShaderLoader
 {
     private static string ShaderDirectory => Path.Combine(AppContext.BaseDirectory, "Shaders");
 
-    // One compiler module per backend. The profile strings mirror what the tests targeted before
-    // the move to the Compiler project. Modules are built lazily so their constructors (which call
-    // GlobalSession.FindProfile) only run for the backend actually in use.
-    private static readonly Dictionary<GraphicsBackend, Func<CompilerModule>> s_modules = new()
+    private static readonly GlslShaderCompiler s_compiler = new(new GlslCompilerOptions
     {
-        [GraphicsBackend.Vulkan] = () => new VulkanCompiler("spirv_1_4"),
-    };
+        ResolveInclude = (name, _) =>
+        {
+            string path = Path.Combine(ShaderDirectory, name);
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        },
+    });
 
-    private static Memory<byte>? LoadFile(string path)
+    private static ShaderDescription Compile(GraphicsBackend backend, string file)
     {
-        string full = Path.IsPathRooted(path) ? path : Path.Combine(ShaderDirectory, path);
-        return File.Exists(full) ? File.ReadAllBytes(full) : null;
+        string source = File.ReadAllText(Path.Combine(ShaderDirectory, file));
+        ShaderPass pass = new() { State = new PassState(), Source = source, SourceName = file };
+        return s_compiler.Compile(pass, [], backend);
     }
 
-    private static ShaderDescription Compile(GraphicsBackend backend, string moduleFile)
-    {
-        SlangShaderCompiler compiler = new();
-        compiler.RegisterModule(s_modules[backend]());
+    public static ShaderStageDescription[] LoadGraphics(GraphicsBackend backend, string file)
+        => Compile(backend, file).Stages;
 
-        compiler.BeginSession([new DirectoryInfo(ShaderDirectory)], LoadFile);
-
-        string source = File.ReadAllText(Path.Combine(ShaderDirectory, moduleFile));
-        ShaderPass pass = new() { State = new PassState(), InlineSlang = source };
-        ShaderDescription description = compiler.Compile(pass, [], backend);
-
-        compiler.EndSession();
-
-        return description;
-    }
-
-    // Compiles the vertex + fragment entry points of a module into stage descriptions.
-    public static ShaderStageDescription[] LoadGraphics(GraphicsBackend backend, string moduleFile)
-        => Compile(backend, moduleFile).Stages;
-
-    // Compiles a single compute entry point into a stage description.
-    public static ShaderStageDescription LoadCompute(GraphicsBackend backend, string moduleFile)
-        => Compile(backend, moduleFile).Stages[0];
+    public static ShaderStageDescription LoadCompute(GraphicsBackend backend, string file)
+        => Compile(backend, file).Stages[0];
 }

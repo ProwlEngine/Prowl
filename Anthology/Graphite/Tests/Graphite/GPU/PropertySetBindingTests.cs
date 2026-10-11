@@ -74,7 +74,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
     private ComputeProgram CreateBasicComputeProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

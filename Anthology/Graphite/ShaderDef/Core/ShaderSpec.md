@@ -2,7 +2,7 @@
 
 Graphite uses a ShaderLab-inspired declarative render state markup language known as ShaderDef
 If that was a mouthful, it is a text description of how your CPU should set up your GPU to draw a shader.
-It uses Slang shaders in conjunction with a custom ShaderLab-adjacent syntax to describe GPU render state, shader variants, and the programs to use.
+It uses GLSL shaders in conjunction with a custom ShaderLab-adjacent syntax to describe GPU render state, shader variants, and the programs to use.
 
 ---
 
@@ -15,7 +15,7 @@ It uses Slang shaders in conjunction with a custom ShaderLab-adjacent syntax to 
   - [Tags](#tags)
   - [Render State Commands](#render-state-commands)
   - [Stencil Block](#stencil-block)
-  - [SLANGPROGRAM Block](#slangprogram-block)
+  - [GLSLPROGRAM Block](#glslprogram-block)
 - [Fallback](#fallback)
 - [Diagnostics](#diagnostics)
 - [Full Example](#full-example)
@@ -111,9 +111,9 @@ Pass [index]
 
     Stencil { ... }         // optional
 
-    SLANGPROGRAM
-    ...                     // embedded Slang source
-    ENDSLANG
+    GLSLPROGRAM
+    ...                     // embedded GLSL sections
+    ENDGLSL
 }
 ```
 
@@ -407,31 +407,70 @@ Used by `Pass`/`PassFront`/`PassBack`, `Fail`/`FailFront`/`FailBack`, and
 
 ---
 
-## SLANGPROGRAM Block
+## GLSLPROGRAM Block
 
-Each pass must contain exactly one `SLANGPROGRAM ... ENDSLANG` block, which embeds the Slang
-source for the pass inline. Everything between the `SLANGPROGRAM` and `ENDSLANG` markers is captured
-verbatim and handed to the Slang compiler untouched; the ShaderDef parser does not interpret its
-contents.
+Each pass must contain exactly one `GLSLPROGRAM ... ENDGLSL` block. Everything between the markers is
+captured verbatim, the ShaderDef parser does not interpret it. The compiler reads it as a list of
+sections:
 
+```glsl
+GLSLPROGRAM
+Shared
+{
+    // prepended to every stage
+}
+Vertex
+{
+    in vec3 vertexPosition;
+    out vec2 uv;
+    void main() { ... }
+}
+Fragment
+{
+    in vec2 uv;
+    out vec4 color;
+    void main() { ... }
+}
+ENDGLSL
 ```
-SLANGPROGRAM
-[shader("vertex")]
-float4 vertexMain(uint id : SV_VertexID) : SV_Position { ... }
 
-[shader("fragment")]
-float4 fragmentMain() : SV_Target { ... }
-ENDSLANG
+| Section    | Notes                                                                 |
+|------------|-----------------------------------------------------------------------|
+| `Shared`   | Optional. Prepended to every stage of the pass.                      |
+| `Vertex`   | Required for a graphics pass.                                         |
+| `Fragment` | Optional, a pass without one writes depth only.                       |
+| `Compute`  | A compute pass, the only section besides `Shared`.                    |
+
+| Element       | Required | Notes                                                    |
+|---------------|----------|----------------------------------------------------------|
+| `GLSLPROGRAM` | Yes      | Opening marker. Case-sensitive, must be uppercase.       |
+| `ENDGLSL`     | Yes      | Closing marker. Case-sensitive, must be uppercase.       |
+
+The code is plain GLSL in the OpenGL style. The compiler adds `#version 460` (a `#version` in the
+source is an error) and turns it into Vulkan GLSL:
+
+* Loose uniforms of every stage (`uniform vec4 _Color;`) are gathered into one std140 uniform block,
+  reflected as `$Global`, with the same layout in every stage.
+* Textures, samplers, images, uniform blocks and buffer blocks get descriptor bindings by name, the same
+  in every stage. Explicit `layout(set = S, binding = B)` qualifiers are kept.
+* Varyings get locations by name, matched between the vertex and fragment stage. Vertex inputs and
+  fragment outputs get locations in declaration order. Explicit locations are kept.
+* `gl_VertexID` and `gl_InstanceID` are mapped to their Vulkan forms.
+* `GRAPHITE_VERTEX`, `GRAPHITE_FRAGMENT` or `GRAPHITE_COMPUTE` is defined for the stage being compiled.
+
+`#include "Name"` resolves `Graphite/...` from the compiler's built in library and anything else through
+the host. `#pragma once` is supported.
+
+Variant axes are declared with pragmas anywhere in the program or its includes:
+
+```glsl
+#pragma variant _NORMALMAP                 // toggle, defines _NORMALMAP when on
+#pragma variant _SURFACE OPAQUE CUTOUT     // enum, defines _SURFACE_OPAQUE or _SURFACE_CUTOUT
+#pragma variant global FOG OFF LINEAR EXP  // set by the renderer or a view, never by a material
 ```
 
-Stages and entrypoints are not declared in ShaderDef. Slang determines them from the embedded
-source (for example via `[shader("...")]` attributes), so there is no need to specify a vertex or
-fragment entrypoint by hand.
-
-| Element        | Required | Notes                                                          |
-|----------------|----------|----------------------------------------------------------------|
-| `SLANGPROGRAM` | Yes      | Opening marker. Case-sensitive, must be uppercase.             |
-| `ENDSLANG`     | Yes      | Closing marker. Case-sensitive, must be uppercase.             |
+Compile errors report `file:line`, where the file is the shader name (and pass name) and the line is the
+line of the `.shader` document, or the include's own name and line.
 
 ---
 
@@ -458,8 +497,8 @@ rather than silently accepted:
 
 | Condition                                  | Message                                       |
 |--------------------------------------------|-----------------------------------------------|
-| A `Pass` has no `SLANGPROGRAM` block       | `Each Pass must contain a SLANGPROGRAM block` |
-| A `SLANGPROGRAM` block has no `ENDSLANG`    | `Unterminated SLANGPROGRAM block: missing closing 'ENDSLANG'` |
+| A `Pass` has no `GLSLPROGRAM` block        | `Each Pass must contain a GLSLPROGRAM block` |
+| A `GLSLPROGRAM` block has no `ENDGLSL`      | `Unterminated GLSLPROGRAM block: missing closing 'ENDGLSL'` |
 | A `Shader` declares no passes              | `Shader must contain at least one Pass`       |
 | Content follows the shader's closing brace | `Unexpected content '...' after shader`       |
 
@@ -494,7 +533,7 @@ reports `Unknown command '...'` rather than failing later with a confusing messa
 
 ## Full Example
 
-```hlsl
+```glsl
 Shader "Example/PBR"
 {
     Properties
@@ -516,13 +555,17 @@ Shader "Example/PBR"
         ZWrite On
         Blend SourceAlpha InverseSourceAlpha
 
-        SLANGPROGRAM
-        [shader("vertex")]
-        float4 PBRVertex(uint id : SV_VertexID) : SV_Position { ... }
-
-        [shader("fragment")]
-        float4 PBRFragment() : SV_Target { ... }
-        ENDSLANG
+        GLSLPROGRAM
+        Vertex
+        {
+            void main() { ... }
+        }
+        Fragment
+        {
+            out vec4 color;
+            void main() { ... }
+        }
+        ENDGLSL
     }
 
     Pass 1
@@ -535,13 +578,12 @@ Shader "Example/PBR"
         ZWrite On
         ColorMask R
 
-        SLANGPROGRAM
-        [shader("vertex")]
-        float4 PBRShadowVertex(uint id : SV_VertexID) : SV_Position { ... }
-
-        [shader("fragment")]
-        float4 PBRShadowFragment() : SV_Target { ... }
-        ENDSLANG
+        GLSLPROGRAM
+        Vertex
+        {
+            void main() { ... }
+        }
+        ENDGLSL
     }
 
     Fallback "Hidden/InternalError"

@@ -39,7 +39,6 @@
         <Project Path="Samples/Shared/Shared.csproj" />
     </Folder>
     <Folder Name="/Tools/">
-        <Project Path="Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
         <Project Path="Tools/GraphiteBench/GraphiteBench.csproj" />
     </Folder>
 </Solution>

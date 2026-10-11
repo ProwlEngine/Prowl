@@ -13,17 +13,17 @@ public class PassKeywordTests : IDisposable
         {
             Pass
             {
-                SLANGPROGRAM
+                GLSLPROGRAM
                 void main() {}
-                ENDSLANG
+                ENDGLSL
             }
         }
         """;
 
     private static readonly VariantSpace[] s_axes =
     [
-        new("SKINNED", "bool", ["false", "true"]),
-        new("ALPHA_MODE", "AlphaMode", ["Opaque", "Cutout", "Transparent"], true),
+        VariantSpace.Toggle("SKINNED"),
+        new("ALPHA_MODE", ["Opaque", "Cutout", "Transparent"]),
     ];
 
     private readonly GraphicsDevice _device;

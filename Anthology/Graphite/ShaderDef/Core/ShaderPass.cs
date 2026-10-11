@@ -26,9 +26,19 @@ public sealed class ShaderPass : IDisposable
     public required PassState State;
 
     /// <summary>
-    /// Raw Slang source between SLANGPROGRAM and ENDSLANG. Slang finds its own entrypoints, no stages declared here.
+    /// Raw program source between GLSLPROGRAM and ENDGLSL, interpreted only by the compiler.
     /// </summary>
-    public required string InlineSlang;
+    public required string Source;
+
+    /// <summary>
+    /// Name compile errors report the source under, the shader name when parsed.
+    /// </summary>
+    public string SourceName = "";
+
+    /// <summary>
+    /// Line of the document the first line of <see cref="Source"/> is on.
+    /// </summary>
+    public int SourceLine = 1;
 
 
     /// <summary>
@@ -407,7 +417,7 @@ public sealed class ShaderPass : IDisposable
         if (_compiler != null)
         {
             CompileFailure? failure = _failures[index];
-            if (failure == null || failure.SessionVersion != _compiler.SessionVersion || !string.Equals(failure.Source, InlineSlang, StringComparison.Ordinal))
+            if (failure == null || failure.SessionVersion != _compiler.SessionVersion || !string.Equals(failure.Source, Source, StringComparison.Ordinal))
             {
                 try
                 {
@@ -417,7 +427,7 @@ public sealed class ShaderPass : IDisposable
                 }
                 catch (Exception exception)
                 {
-                    _failures[index] = failure = new CompileFailure(InlineSlang, _compiler.SessionVersion, exception);
+                    _failures[index] = failure = new CompileFailure(Source, _compiler.SessionVersion, exception);
                     CompileFailed?.Invoke(this, _combos[index], exception);
                 }
             }

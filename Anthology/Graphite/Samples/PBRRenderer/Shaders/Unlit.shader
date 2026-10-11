@@ -13,50 +13,50 @@ Shader "PBRRenderer/Unlit"
         ZTest LessEqual
         ZWrite On
 
-        SLANGPROGRAM
-        import UVOrigin;
-
-        struct MaterialData
+        GLSLPROGRAM
+        Shared
         {
-            float4x4 MatrixMVP;
-            float4 BaseColor;
-            Sampler2D<float4> AlbedoTexture;
-        }
-        ParameterBlock<MaterialData> Mat;
+            uniform Mat
+            {
+                mat4 MatrixMVP;
+                vec4 BaseColor;
+            };
 
-        struct VertexInput
-        {
-            float3 position : POSITION0;
-            float3 normal : NORMAL0;
-            float4 uv : UV0;
+            uniform sampler2D AlbedoTexture;
         }
 
-        struct Varyings
+        Vertex
         {
-            float4 position : SV_Position;
-            float2 uv : TEXCOORD0;
-            float3 normal : TEXCOORD1;
+            in vec3 POSITION0;
+            in vec3 NORMAL0;
+            in vec4 UV0;
+
+            out vec2 uv;
+            out vec3 normal;
+
+            void main()
+            {
+                gl_Position = MatrixMVP * vec4(POSITION0, 1.0);
+                vec2 texcoord = UV0.xy;
+                texcoord.y = 1.0 - texcoord.y;
+                uv = texcoord;
+                normal = NORMAL0;
+            }
         }
 
-        [shader("vertex")]
-        Varyings Vertex(VertexInput input)
+        Fragment
         {
-            Varyings output;
-            output.position = mul(Mat.MatrixMVP, float4(input.position, 1.0));
-            float2 uv = input.uv.xy;
-            if (IsUVOriginTopLeft)
-                uv.y = 1.0 - uv.y;
-            output.uv = uv;
-            output.normal = input.normal;
-            return output;
-        }
+            in vec2 uv;
+            in vec3 normal;
 
-        [shader("fragment")]
-        float4 Fragment(Varyings input) : SV_Target
-        {
-            float4 albedo = Mat.AlbedoTexture.Sample(input.uv);
-            return albedo * Mat.BaseColor;
+            out vec4 target;
+
+            void main()
+            {
+                vec4 albedo = texture(AlbedoTexture, uv);
+                target = albedo * BaseColor;
+            }
         }
-        ENDSLANG
+        ENDGLSL
     }
 }

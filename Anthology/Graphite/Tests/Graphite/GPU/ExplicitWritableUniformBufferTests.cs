@@ -203,7 +203,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
 
     private ComputeProgram CreateProgram(UniformBlockField[] fields)
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

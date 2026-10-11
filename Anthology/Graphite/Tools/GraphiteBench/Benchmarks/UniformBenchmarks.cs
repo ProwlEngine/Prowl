@@ -92,29 +92,29 @@ public class UniformBenchmarks : GraphiteBenchmark
     private static string GenerateShader(int fields)
     {
         StringBuilder sb = new();
-        sb.AppendLine($"module Uniforms{fields};");
-        sb.AppendLine("struct VertexInput { float3 position : POSITION; float2 uv : UV0; }");
-        sb.AppendLine("struct VertexOutput { float4 clipPosition : SV_Position; float4 color : COLOR; }");
-        sb.AppendLine("struct ViewData { float4x4 MatrixViewProjection; float4 ViewTint; };");
-        sb.AppendLine("ParameterBlock<ViewData> View;");
-        sb.AppendLine("struct ModelData {");
-        sb.AppendLine("    float4x4 MatrixModel;");
+        sb.AppendLine("Vertex {");
+        sb.AppendLine("layout(set = 0) uniform View { mat4 MatrixViewProjection; vec4 ViewTint; };");
+        sb.AppendLine("layout(set = 1) uniform Model {");
+        sb.AppendLine("    mat4 MatrixModel;");
         for (int i = 0; i < fields; i++)
-            sb.AppendLine($"    float4 F{i};");
+            sb.AppendLine($"    vec4 F{i};");
         sb.AppendLine("};");
-        sb.AppendLine("ParameterBlock<ModelData> Model;");
-        sb.AppendLine("[shader(\"vertex\")]");
-        sb.AppendLine("VertexOutput vertex(VertexInput input) {");
-        sb.AppendLine("    float4 sum = 0.0;");
+        sb.AppendLine("in vec3 POSITION0;");
+        sb.AppendLine("in vec2 UV0;");
+        sb.AppendLine("out vec4 color;");
+        sb.AppendLine("void main() {");
+        sb.AppendLine("    vec4 sum = vec4(0.0);");
         for (int i = 0; i < fields; i++)
-            sb.AppendLine($"    sum += Model.F{i};");
-        sb.AppendLine("    VertexOutput output;");
-        sb.AppendLine("    output.clipPosition = mul(View.MatrixViewProjection, mul(Model.MatrixModel, float4(input.position, 1.0)));");
-        sb.AppendLine("    output.color = sum * View.ViewTint;");
-        sb.AppendLine("    return output;");
+            sb.AppendLine($"    sum += F{i};");
+        sb.AppendLine("    gl_Position = MatrixViewProjection * (MatrixModel * vec4(POSITION0, 1.0));");
+        sb.AppendLine("    color = sum * ViewTint;");
         sb.AppendLine("}");
-        sb.AppendLine("[shader(\"fragment\")]");
-        sb.AppendLine("float4 fragment(VertexOutput input) : SV_Target { return input.color; }");
+        sb.AppendLine("}");
+        sb.AppendLine("Fragment {");
+        sb.AppendLine("in vec4 color;");
+        sb.AppendLine("out vec4 target;");
+        sb.AppendLine("void main() { target = color; }");
+        sb.AppendLine("}");
         return sb.ToString();
     }
 }

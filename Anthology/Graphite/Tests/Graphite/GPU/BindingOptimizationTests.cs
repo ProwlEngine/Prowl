@@ -424,7 +424,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
     private GraphicsProgram CreateColoredQuadProgram()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.glsl");
         ShaderDescription desc = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -469,7 +469,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             new VertexElementDescription("POSITION", VertexElementFormat.Float2),
             new VertexElementDescription("COLOR", VertexElementFormat.UInt4));
 
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "UIntVertexAttribs.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "UIntVertexAttribs.glsl");
         ShaderDescription desc = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -509,7 +509,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
     private ComputeProgram CreateTwoBlockProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "MultiParameterBlockBindingTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "MultiParameterBlockBindingTest.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription
@@ -543,7 +543,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
     private ComputeProgram CreateLastSetVariesProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "TwoBlockLastSetVaries.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "TwoBlockLastSetVaries.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription
