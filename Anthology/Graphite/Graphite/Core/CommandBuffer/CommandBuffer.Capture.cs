@@ -118,9 +118,7 @@ public abstract partial class CommandBuffer
             case PropertyEntryKind.Buffer:
                 DeviceBufferRange range = entry.Buffer ?? default;
                 return new PropertyState(
-                    name,
-                    entry.BackedBlock ? PropertyKind.UniformBuffer : PropertyKind.Buffer,
-                    default, default, resource, ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
+                    name, PropertyKind.Buffer, default, default, resource, ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
 
             case PropertyEntryKind.Texture:
                 TextureView? view = entry.TextureView;

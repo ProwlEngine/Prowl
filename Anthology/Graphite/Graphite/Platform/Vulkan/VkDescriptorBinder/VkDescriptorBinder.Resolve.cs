@@ -104,13 +104,11 @@ internal unsafe sealed partial class VkDescriptorBinder
         missing = false;
         PropertyEntry? uboEntry = FindProperty(elem.Name, PropertyEntryKind.Buffer);
 
-        if (uboEntry is { BackedBlock: true } && elem.UniformFields is { Length: > 0 })
-        {
-            return BuildBackedUbo(elem.Name, elem.UniformFields, meta.UniformBlockSizes[elemIndex], uboEntry.Buffer!.Value);
-        }
-
         if (uboEntry != null)
+        {
+            ReportSkippedUniforms(elem.Name, elem.UniformFields);
             return uboEntry.Buffer!.Value;
+        }
 
         if (elem.UniformFields is { Length: > 0 })
             return BuildTransientUbo(elem.UniformFields, meta.UniformBlockSizes[elemIndex]);
@@ -168,21 +166,6 @@ internal unsafe sealed partial class VkDescriptorBinder
     {
         CurrentExecution().AllocateTransientMapped(sizeInBytes, out DeviceBufferRange range);
         return range;
-    }
-
-    private DeviceBufferRange BuildBackedUbo(PropertyID name, UniformBlockField[] fields, uint blockSize, DeviceBufferRange target)
-    {
-        ValidateBackedUbo(name, blockSize, target);
-
-        if (_uboScratch.Length < blockSize)
-            _uboScratch = new byte[blockSize];
-
-        PackUniformFields(fields, _uboScratch.AsSpan(0, (int)blockSize));
-
-        fixed (byte* scratchPtr = _uboScratch)
-            _gd.UpdateBuffer(target.Buffer, target.Offset, (IntPtr)scratchPtr, blockSize);
-
-        return target;
     }
 
     private DeviceBufferRange BuildTransientUbo(UniformBlockField[] fields, uint blockSize)

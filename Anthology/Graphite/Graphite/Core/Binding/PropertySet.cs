@@ -73,7 +73,7 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds buffer to slot as is. On a uniform block it never receives loose uniforms; use SetUniformBuffer for that.
+    /// Binds buffer to slot as is. On a uniform block it never receives loose uniforms.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBufferRange range)
     {
@@ -91,12 +91,12 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Backs a uniform block with a caller-owned buffer range. Loose uniforms are written over the whole block at draw time; unset fields are zeroed.
+    /// Binds a caller-owned buffer range to a uniform block as is. Loose uniforms never write into it.
     /// </summary>
     public void SetUniformBuffer(PropertyID name, DeviceBufferRange range)
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetUniformBuffer));
-        GetOrCreate(name).SetBuffer(range, backedBlock: true);
+        GetOrCreate(name).SetBuffer(range);
         unchecked { _version++; }
     }
 
