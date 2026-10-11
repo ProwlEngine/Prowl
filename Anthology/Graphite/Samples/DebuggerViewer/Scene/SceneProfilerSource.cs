@@ -35,6 +35,8 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
 
     public IReadOnlyList<Recording> Frames => _frames;
 
+    public Recording? Latest { get; private set; }
+
     public double TotalMilliseconds { get; private set; }
 
     public long TotalFrames { get; private set; }
@@ -54,6 +56,7 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
         Recording recording = new(_device);
         long start = Stopwatch.GetTimestamp();
         _scene.Dispatch(recording);
+        Latest = recording;
         _pending.Add(new Pending(recording, Stopwatch.GetElapsedTime(start).TotalMilliseconds, deltaSeconds * 1000.0));
     }
 

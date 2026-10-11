@@ -24,7 +24,6 @@ internal sealed partial class ProfilerView
     private const float HierarchyWidth = 330f;
     private const double BudgetMs = 16.7;
     private const double ScaleMs = 25;
-    private const double FollowIntervalMs = 250;
 
     private readonly IRenderProfilerSource _source;
     private readonly bool _snapshotMode;
@@ -32,8 +31,7 @@ internal sealed partial class ProfilerView
     private readonly Action _snapshotTaken;
     private DeepRecording? _shown;
     private ulong? _pinned;
-    private Recording? _followed;
-    private long _followedAt;
+    private Recording? _awaiting;
     private string _selId = "f";
     private string _message = "";
     private FrameModel? _liveModel;
@@ -69,8 +67,18 @@ internal sealed partial class ProfilerView
             ResetSelection();
         }
 
-        int liveIndex = CurrentLive(frames);
-        Recording live = frames[liveIndex];
+        if (_awaiting != null && !_snapshotMode)
+        {
+            int landed = frames.ToList().IndexOf(_awaiting);
+            if (landed >= 0)
+            {
+                _pinned = _awaiting.ExecutionId;
+                _awaiting = null;
+            }
+        }
+
+        int liveIndex = _snapshotMode ? -1 : CurrentLive(frames);
+        Recording? live = liveIndex >= 0 ? frames[liveIndex] : null;
         paper.PushID(_id);
         using (paper.Column("rp_root").Width(width).Height(height).Padding(Gap).Gap(Gap).Enter())
         {
@@ -86,6 +94,12 @@ internal sealed partial class ProfilerView
                 if (_snapshotMode && OpenSnapshot == null)
                 {
                     Dim("empty", "No snapshot open. Press Snapshot in the Render Profiler window, or load a saved one.");
+                }
+                else if (!_snapshotMode && live == null)
+                {
+                    DrawFramesRow(frames, null, null);
+                    Divider("sep_top");
+                    Dim("idle", "Pause Recording or Select a Frame");
                 }
                 else
                 {
@@ -109,7 +123,7 @@ internal sealed partial class ProfilerView
                 using (paper.Row("rp_bottom").Width(bottomWidth).Height(bottomHeight).Gap(Gap).Enter())
                 {
                     DrawHierarchy(model, bottomHeight);
-                    DrawInspector(model, frames, live, bottomWidth - Gap - HierarchyWidth, bottomHeight);
+                    DrawInspector(model, frames, live!, bottomWidth - Gap - HierarchyWidth, bottomHeight);
                 }
             }
         }
@@ -121,15 +135,7 @@ internal sealed partial class ProfilerView
         if (_pinned is { } n && IndexOf(frames, n) is var pinned and >= 0)
             return pinned;
         _pinned = null;
-
-        int followed = _followed != null ? IndexOf(frames, _followed.ExecutionId) : -1;
-        if (followed < 0 || Stopwatch.GetElapsedTime(_followedAt).TotalMilliseconds >= FollowIntervalMs)
-        {
-            followed = frames.Count - 1;
-            _followed = frames[followed];
-            _followedAt = Stopwatch.GetTimestamp();
-        }
-        return followed;
+        return -1;
     }
 
     private static int IndexOf(IReadOnlyList<Recording> frames, ulong executionId)
@@ -166,6 +172,8 @@ internal sealed partial class ProfilerView
     {
         IReadOnlyList<Recording> frames = _source.Frames;
         int index = CurrentLive(frames);
+        if (index < 0)
+            return;
         _source.Capture(index, DeepMode.Full);
         _message = $"Snapshot / frame #{frames[index].ExecutionId}";
         _snapshotTaken();
@@ -251,7 +259,7 @@ internal sealed partial class ProfilerView
         using (Toolbar())
         {
             bool recording = _source.IsRecording;
-            ButtonBuilder record = Origami.Button(_paper, "record", recording ? "Stop recording" : "Record", () => _source.IsRecording = !_source.IsRecording)
+            ButtonBuilder record = Origami.Button(_paper, "record", recording ? "Stop recording" : "Record", ToggleRecording)
                 .Small().NotFocusable().Soft().LeadingIcon(RecordDot);
             (recording ? record.Danger() : record).Show();
 
@@ -261,7 +269,25 @@ internal sealed partial class ProfilerView
 
             if (_message.Length > 0)
                 Mono("message", _message, Style.InkDim);
-            Origami.Button(_paper, "snapshot", "Snapshot", TakeSnapshot).Small().NotFocusable().Soft().LeadingIcon(OrigamiIconSet.Camera).Show();
+            Origami.Button(_paper, "snapshot", "Snapshot", TakeSnapshot).Small().NotFocusable().Soft().LeadingIcon(OrigamiIconSet.Camera).Disabled(_pinned == null).Show();
+        }
+    }
+
+    private void ToggleRecording()
+    {
+        if (_source.IsRecording)
+        {
+            _source.IsRecording = false;
+            IReadOnlyList<Recording> frames = _source.Frames;
+            if (frames.Count > 0)
+                _pinned = frames[^1].ExecutionId;
+            _awaiting = _source.Latest;
+        }
+        else
+        {
+            _pinned = null;
+            _awaiting = null;
+            _source.IsRecording = true;
         }
     }
 
@@ -298,7 +324,7 @@ internal sealed partial class ProfilerView
         }
     }
 
-    private void DrawFramesRow(IReadOnlyList<Recording> frames, Recording live, FrameModel model)
+    private void DrawFramesRow(IReadOnlyList<Recording> frames, Recording? live, FrameModel? model)
     {
         float cardHeight = FramesHeight - PanelHeaderHeight;
         using (_paper.Row("rp_frames_row").Height(FramesHeight).Gap(Gap).Enter())
@@ -313,15 +339,14 @@ internal sealed partial class ProfilerView
                     LegendItem("lg_avg", Style.Ink, "Cumulative avg");
                     LegendItem("lg_over", Style.OverBudget, $"Over {BudgetMs} ms");
                     bool pinned = _pinned != null;
-                    Mono("follow", pinned ? $"Pinned #{live.ExecutionId}" : "Following latest", pinned ? Style.Selection : Style.InkDim);
-                    if (pinned)
-                        Origami.Button(_paper, "latest", "Jump to latest", () => _pinned = null).Small().NotFocusable().Subtle().Show();
+                    Mono("follow", pinned ? $"Selected #{live!.ExecutionId}" : "No frame selected", pinned ? Style.Selection : Style.InkDim);
                 }
 
                 using (Card("card").Height(cardHeight).Enter())
                     DrawFrameBars(frames, live);
             }
 
+            if (live != null && model != null)
             using (_paper.Column("stats").Width(260).Height(FramesHeight).Enter())
             {
                 using (Heading("hdr"))
@@ -364,7 +389,7 @@ internal sealed partial class ProfilerView
         }
     }
 
-    private void DrawFrameBars(IReadOnlyList<Recording> frames, Recording live)
+    private void DrawFrameBars(IReadOnlyList<Recording> frames, Recording? live)
     {
         const float axis = 44f;
         double cumulative = _source.TotalFrames > 0 ? _source.TotalMilliseconds / _source.TotalFrames : 0;
@@ -392,7 +417,10 @@ internal sealed partial class ProfilerView
             if (i < 0)
                 return;
             ulong n = frames[i].ExecutionId;
+            _awaiting = null;
             _pinned = _pinned == n ? null : n;
+            if (_pinned != null)
+                _source.IsRecording = false;
         });
 
         using (box.Enter())
