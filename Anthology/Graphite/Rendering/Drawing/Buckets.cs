@@ -115,16 +115,25 @@ internal sealed class DrawPrograms
         return true;
     }
 
-    // The depth only pass with the culling of the material's Forward pass, or null when it has none or opts out
+    // Whether a pass's own code discards fragments, a cutout whose shape depth alone would not keep
+    private static bool Discards(ShaderPass pass)
+        => pass.Source != null && System.Text.RegularExpressions.Regex.IsMatch(pass.Source, @"\bdiscard\b");
+
+    // The depth only pass with the culling of the material's Forward pass, or null when it has none, opts out, blends,
+    // writes no depth or discards
     private int? DepthCasterPass(MaterialDraw draw)
     {
         int forward = draw.Shader.PassIndex(PassType.Forward);
         if (DepthCaster == null || forward < 0)
             return null;
         ShaderPass pass = draw.Shader.Definition.Passes![forward];
-        if (ShaderDefinition.PassHasTag(pass, "Shadows", "Off"))
+        if (ShaderDefinition.PassHasTag(pass, "Shadows", "Off") || Discards(pass))
             return null;
         PassState state = draw.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
+        BlendAttachmentDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
+        bool blended = blend.BlendEnabled && !(blend.SourceColorFactor == BlendFactor.One && blend.DestinationColorFactor == BlendFactor.Zero);
+        if (blended || !state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual).DepthWriteEnabled)
+            return null;
         return state.ToRasterizerState(RasterizerStateDescription.Default).CullMode switch
         {
             FaceCullMode.Front => 1,
@@ -687,9 +696,10 @@ internal sealed class BucketSet
     {
         Cull(frustum, cullingMask);
         int statics = 0, moving = 0;
+        int pass = _passes.IndexOf(PassType.ShadowCaster);
         for (int index = 0; index < _world.Capacity; index++)
         {
-            if (!_visible[index] || (_world.Flags[index] & RenderableFlags.CastShadows) == 0)
+            if (!_visible[index] || !InPass(index, pass))
                 continue;
             if ((_world.Flags[index] & RenderableFlags.Static) != 0)
                 statics++;
@@ -697,6 +707,18 @@ internal sealed class BucketSet
                 moving++;
         }
         return (statics, moving);
+    }
+
+    private bool InPass(int index, int pass)
+    {
+        if (index >= _members.Length || _members[index] is not { } members)
+            return false;
+        foreach (Membership membership in members)
+        {
+            if (membership.Bucket.Pass == pass)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>The renderables drawing with a material.</summary>

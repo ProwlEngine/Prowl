@@ -1571,7 +1571,8 @@ public sealed class LightingTests : IDisposable
         Material Culled(string cull)
             => _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Cull" + cull).Replace("Cull Off", "Cull " + cull))));
 
-        // One side or the other faces the light, so exactly one of back and front culling casts, and no culling always does
+        // The test quad winds counter clockwise toward the light, its back face to a clockwise front, so front culling casts and
+        // back does not, and mirrored it culls the same faces
         bool Casts(Material material)
         {
             RenderableHandle caster = AddSurfaceCaster(material, 0, 0, 6);
@@ -1581,7 +1582,17 @@ public sealed class LightingTests : IDisposable
             return centre.X < 1e-4f;
         }
         Assert.True(Casts(Culled("Off")));
-        Assert.NotEqual(Casts(Culled("Back")), Casts(Culled("Front")));
+        Assert.False(Casts(Culled("Back")));
+        Assert.True(Casts(Culled("Front")));
+        Material back = Culled("Back");
+        RenderableHandle mirrored = _world.Add(new RenderableDesc
+        {
+            Mesh = _quad,
+            Transform = Double4x4.CreateTranslation(new Double3(0, 0, 6)) * Double4x4.CreateScale(new Double3(-0.25, 0.25, 0.25)),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        }, [back]);
+        Float4 centre = Frame()[Size / 2 * Size + Size / 2];
+        Assert.True(centre.X > 1e-3f, $"mirrored back culled caster casts {centre}");
     }
 
     // A square only shadows see, from a provider
@@ -1705,6 +1716,222 @@ public sealed class LightingTests : IDisposable
         Assert.True(grid.Near(new Double3(1e6 + 1500, 0, 0), 1).IsSupersetOf([1, 2]));
         Assert.True(grid.Near(Double3.Zero, float.PositiveInfinity).IsSupersetOf([0, 1, 2]));
         Assert.True(grid.Near(Double3.Zero, float.MaxValue).IsSupersetOf([0, 1, 2]));
+    }
+
+    [Fact]
+    public void ShadowTileSizes_RoundToTheNearestPowerOfTwo_AndHoldWithinThreeQuartersOfAnOctave()
+    {
+        Assert.Equal(256, ShadowPlanner.RoundPow2(300, 64, 1024));
+        Assert.Equal(512, ShadowPlanner.RoundPow2(400, 64, 1024));
+        Assert.Equal(64, ShadowPlanner.RoundPow2(10, 64, 1024));
+        Assert.Equal(1024, ShadowPlanner.RoundPow2(5000, 64, 1024));
+
+        Assert.Equal(256, ShadowPlanner.Keep(400, 256, 64, 1024));
+        Assert.Equal(512, ShadowPlanner.Keep(450, 256, 64, 1024));
+        Assert.Equal(256, ShadowPlanner.Keep(160, 256, 64, 1024));
+        Assert.Equal(128, ShadowPlanner.Keep(150, 256, 64, 1024));
+        Assert.Equal(512, ShadowPlanner.Keep(450, 0, 64, 1024));
+    }
+
+    private static ShadowPlan Plan(int light, float wanted, int held = 0, bool split = false, int faces = 1)
+        => new() { Light = light, Faces = faces, Priority = 1000 - light, Wanted = wanted, MaxTile = 1024, Held = held, Split = split };
+
+    [Fact]
+    public void ShadowPlans_GiveWayInOrder_HeldSizesThenStaticCopiesThenHalvingThenDropping()
+    {
+        // Light 0 holds 512 but wants 340 now, which rounds to 256, light 1 has a static copy, light 2 is least important
+        ShadowPlanner planner = new();
+        List<ShadowPlan> plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
+        planner.Plan(plans, 512 * 512 + 2 * 256 * 256 + 256 * 256, 64);
+        Assert.Equal((512, true), (plans[0].Target, plans[1].Split));
+
+        plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
+        planner = new();
+        planner.Plan(plans, 256 * 256 * 4, 64);
+        Assert.Equal((256, true, 256, 256), (plans[0].Target, plans[1].Split, plans[1].Target, plans[2].Target));
+
+        plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
+        planner = new();
+        planner.Plan(plans, 256 * 256 * 3, 64);
+        Assert.Equal((256, false, 256, 256), (plans[0].Target, plans[1].Split, plans[1].Target, plans[2].Target));
+
+        plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
+        planner = new();
+        planner.Plan(plans, 256 * 256 * 2, 64);
+        Assert.Equal((256, 128, 128), (plans[0].Target, plans[1].Target, plans[2].Target));
+
+        plans = [Plan(0, 256), Plan(1, 256), Plan(2, 256)];
+        planner = new();
+        planner.Plan(plans, 64 * 64 * 2, 64);
+        Assert.Equal((64, 64, 0), (plans[0].Target, plans[1].Target, plans[2].Target));
+    }
+
+    [Fact]
+    public void TheShadowScale_DropsAtOnce_AndRisesAStepAfterThirtyFramesOfRoom()
+    {
+        ShadowPlanner planner = new();
+        List<ShadowPlan> Wanting() => [Plan(0, 320), Plan(1, 320), Plan(2, 320)];
+
+        // Three lights wanting 256 fit four fifths of a 256 page only at 128, two steps down
+        planner.Plan(Wanting(), (long)(256 * 256 * 0.8), 64);
+        Assert.Equal(0.5f, planner.Scale, 4);
+
+        long room = 256 * 256 * 4;
+        for (int frame = 0; frame < ShadowPlanner.FramesBeforeScaleRises - 1; frame++)
+            planner.Plan(Wanting(), room, 64);
+        Assert.Equal(0.5f, planner.Scale, 4);
+        planner.Plan(Wanting(), room, 64);
+        Assert.Equal(1 / ShadowPlanner.ScaleStep, planner.Scale, 4);
+    }
+
+    [Fact]
+    public void ATightBudget_ScalesEveryLightDown_AndKeepsThemShadowed()
+    {
+        _world.Shadows.PageSize = 256;
+        _world.Shadows.Budget = 256 * 256 * 2;
+        _world.Shadows.TexelsPerPixel = 8;
+        AddReceiver(new Vector3(0.8f));
+        for (int i = 0; i < 3; i++)
+            _world.AddLight(ShadowSpot() with { Position = new Double3(i - 1, 0, 2) });
+        Frame();
+        Frame();
+        WorldShadows shadows = _renderer.ShadowsOf(_world)!;
+        Assert.Equal(0.5f, shadows.Planner.Scale, 4);
+        Assert.All(shadows.Lights.Values, light => Assert.Equal(128, light.Size));
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void SizeChanges_ThatOnlySharpen_ArePacedByTheResizeBudget()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        _world.AddLight(ShadowSpot() with { Position = new Double3(0.5, 0, 2) });
+        Frame();
+        Frame();
+        _world.Shadows.MaxResizesPerFrame = 1;
+        _world.Shadows.TexelsPerPixel = 8;
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void ALightOutOfView_GivesItsTilesToLightsInViewWhenPagesRunOut()
+    {
+        _world.Shadows.PageSize = 512;
+        _world.Shadows.Budget = 512 * 512 * 2;
+        _world.Shadows.TexelsPerPixel = 100;
+        AddReceiver(new Vector3(0.8f));
+        LightDesc Spot(double x, uint resolution) => ShadowSpot() with { Position = _origin + new Double3(x, 0, 2), Shadow = new ShadowDesc { Enabled = true, Resolution = resolution } };
+        LightHandle away = _world.AddLight(Spot(0, 256));
+        Frame();
+
+        // Moved off, three lights take three quarters of the page and a fourth needs the quarter the first still holds
+        _origin = new Double3(1000, 0, 0);
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(Spot(-1, 256));
+        _world.AddLight(Spot(0, 256));
+        _world.AddLight(Spot(1, 256));
+        LightHandle small = _world.AddLight(Spot(0.5, 64));
+        Frame();
+        WorldShadows shadows = _renderer.ShadowsOf(_world)!;
+        Assert.False(shadows.Lights[away.Index].HasTiles);
+        Assert.True(shadows.Lights[small.Index].HasTiles);
+    }
+
+    [Fact]
+    public void UnderBudgetPressure_StaticCopiesGiveTheirPagesToNewLights()
+    {
+        _world.Shadows.PageSize = 256;
+        _world.Shadows.Budget = 256 * 256 * 2 * 2;
+        _world.Shadows.TexelsPerPixel = 100;
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot() with { Shadow = new ShadowDesc { Enabled = true, Resolution = 128 } });
+        AddCaster(1, 0.5, 6, isStatic: true);
+        AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+
+        // The live page holds the first light's tile and the static page its copy, so the new light needs the static page
+        LightHandle added = _world.AddLight(ShadowSpot() with { Position = new Double3(0.5, 0, 2), Shadow = new ShadowDesc { Enabled = true, Resolution = 256 } });
+        Frame();
+        Frame();
+        Frame();
+        WorldShadows shadows = _renderer.ShadowsOf(_world)!;
+        Assert.True(shadows.Lights[added.Index].HasTiles);
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void CastersCloserToALightThanItsNearPlane_StillCast()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddReceiver(albedo);
+        LightDesc light = Point(new Double3(0, 0, 2), 100, 0.2f, new Float3(1, 1, 1)) with { Shadow = new ShadowDesc { Enabled = true } };
+        _world.AddLight(light);
+
+        // A metre from the light, inside its two metre near plane, the square grows eightfold by the plane
+        AddCaster(0, 0, 3, half: 0.3);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 0, 0, 2.4f), Frame(), 0.6f);
+    }
+
+    [Fact]
+    public void ForwardPassesThatDiscardOrBlend_CastNothingWithoutACasterPass()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddReceiver(albedo);
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+        Material cutout = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Cutout").Replace("vec3 n = normalize(vNormal);", "if (vWorld.x > 100.0) discard;\n                        vec3 n = normalize(vNormal);"))));
+        Material faded = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Faded").Replace("Cull Off", "Cull Off\n                ZWrite Off"))));
+        AddSurfaceCaster(cutout, 1, 0.5, 6);
+        AddSurfaceCaster(faded, -1.5, -1.5, 6);
+        AssertMatches(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), Frame());
+    }
+
+    [Fact]
+    public void RenderablesTheShadowPassDoesNotDraw_DoNotSplitALight()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        Material uncast = Surface(new Float3(1, 1, 1));
+        uncast.CastShadows = false;
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly | RenderableFlags.Static }, [uncast]);
+        AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowCopiesMade);
+    }
+
+    [Fact]
+    public void KeywordsNoCasterReads_LeaveCachedShadowsAlone()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        AddCaster(1, 0.5, 6);
+        Frame();
+        Frame();
+        _world.Globals.SetKeyword("UNUSED_BY_CASTERS", "On");
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void ALightPastTheShadowDistance_LosesItsShadowAtOnce()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot() with { Position = new Double3(0, 0, 8), Range = 3 });
+        AddCaster(0, 0, 9, half: 0.5);
+        Float4 centre = Frame()[Size / 2 * Size + Size / 2];
+        Assert.True(centre.X < 1e-4f, $"shadowed centre {centre}");
+
+        _world.Shadows.LocalDistance = 1;
+        centre = Frame()[Size / 2 * Size + Size / 2];
+        Assert.True(centre.X > 1e-3f, $"lit centre {centre}");
     }
 
     [Fact]

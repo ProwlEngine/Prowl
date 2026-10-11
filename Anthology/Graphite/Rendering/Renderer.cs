@@ -240,6 +240,9 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The frame pipeline, for tests.</summary>
     internal FramePipeline Frame => _frame;
+
+    /// <summary>A world's local light shadows, for tests.</summary>
+    internal WorldShadows? ShadowsOf(RenderWorld world) => _worlds[world].Shadows;
     private readonly Dictionary<RenderWorld, WorldFrame> _worlds = new();
     private readonly List<RenderWorld> _removedWorlds = new();
 
