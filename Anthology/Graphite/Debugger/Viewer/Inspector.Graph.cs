@@ -304,7 +304,6 @@ internal sealed partial class ProfilerView
                     .Controller(controller!)
                     .ReadOnly()
                     .Grid()
-                    .FitZoomOut()
                     .OnSelectionChanged(sel => _graphSelection = sel.Nodes.Count > 0 ? sel.Nodes[0].Id : null)
                     .Show();
 
