@@ -22,4 +22,7 @@ public interface IShaderCompiler
     /// render state, that's applied by the pass at bind time.
     /// </summary>
     ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend);
+
+    /// <summary>Compiles one variant of a compute pass for one backend.</summary>
+    ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend);
 }

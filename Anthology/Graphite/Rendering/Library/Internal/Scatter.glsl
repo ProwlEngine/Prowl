@@ -1,0 +1,17 @@
+// Copies runs of words from the frame's upload buffer into a persistent buffer, one workgroup per run.
+Compute
+{
+    layout(local_size_x = 64) in;
+
+    layout(set = 0, binding = 0, std430) readonly buffer Items { uvec4 items[]; };
+    layout(set = 0, binding = 1, std430) readonly buffer Source { uint source[]; };
+    layout(set = 0, binding = 2, std430) buffer Destination { uint destination[]; };
+    layout(push_constant) uniform Push { uint firstItem; } push;
+
+    void main()
+    {
+        uvec4 item = items[push.firstItem + gl_WorkGroupID.x];
+        for (uint word = gl_LocalInvocationID.x; word < item.z; word += 64u)
+            destination[item.x + word] = source[item.y + word];
+    }
+}

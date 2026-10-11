@@ -1,0 +1,301 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+
+using Prowl.Vector;
+
+namespace Prowl.Graphite.Rendering;
+
+/// <summary>
+/// A mesh uploaded to a geometry page. Its id is dense and stable for its life, and it draws nothing until its data is
+/// resident on the GPU.
+/// </summary>
+public sealed class GpuMesh : IDisposable
+{
+    private readonly GeometryPool _pool;
+    private uint _version;
+
+    internal GpuMesh(GeometryPool pool, int id)
+    {
+        _pool = pool;
+        Id = id;
+    }
+
+    /// <summary>Dense id, unique among live meshes of the renderer.</summary>
+    public int Id { get; }
+
+    /// <summary>Bounds of the data last uploaded.</summary>
+    public AABB Bounds { get; internal set; }
+
+    public int SubMeshCount { get; internal set; }
+
+    public int ChunkCount { get; internal set; }
+
+    /// <summary>Bumps on every <see cref="SetData"/>.</summary>
+    public uint Version => Volatile.Read(ref _version);
+
+    public bool IsDisposed { get; private set; }
+
+    /// <summary>Where the data lives, null until it is resident. Render thread only.</summary>
+    internal MeshPlacement? Placement { get; set; }
+
+    /// <summary>Replaces the mesh's data, keeping its id. Thread safe, the upload happens on a later frame.</summary>
+    public void SetData(MeshData data)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        MeshLayout layout = new(data);
+        Interlocked.Increment(ref _version);
+        _pool.Queue(this, layout);
+    }
+
+    /// <summary>Frees the mesh's geometry once the GPU no longer uses it.</summary>
+    public void Dispose()
+    {
+        if (IsDisposed)
+            return;
+
+        IsDisposed = true;
+        _pool.Queue(this, null);
+    }
+}
+
+/// <summary>Where a mesh's data lives: its page, its ranges, and each present stream's first word.</summary>
+internal sealed class MeshPlacement
+{
+    public required int Page;
+    public required RangeAllocation Vertices;
+    public required RangeAllocation Indices;
+    public required uint[] StreamOffsets;
+    public required uint StreamsPresent;
+    public required uint VertexCount;
+    public required MeshChunk[] Chunks;
+    public required SubMesh[] SubMeshes;
+
+    /// <summary>First index of the mesh in its page's index buffer. Chunk index starts are relative to it.</summary>
+    public uint IndexBase => Indices.Offset;
+}
+
+/// <summary>One fixed size page of geometry: a word buffer for vertex streams and a 32 bit index buffer.</summary>
+internal sealed class GeometryPage(RangeAllocator vertexWords, RangeAllocator indices, DeviceBuffer vertices, DeviceBuffer indexBuffer)
+{
+    public RangeAllocator VertexWords { get; } = vertexWords;
+    public RangeAllocator IndexSpace { get; } = indices;
+    public DeviceBuffer Vertices { get; } = vertices;
+    public DeviceBuffer Indices { get; } = indexBuffer;
+}
+
+/// <summary>
+/// All geometry, in fixed size pages that are never grown or copied, so draws of different meshes in one page merge into
+/// one indirect call. Creation, data changes and disposal are queued from any thread and applied on the render thread,
+/// and freed ranges and ids wait until the GPU retires the frame that freed them.
+/// </summary>
+internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords = GeometryPool.DefaultPageVertexWords, uint pageIndices = GeometryPool.DefaultPageIndices) : IDisposable
+{
+    /// <summary>Words of vertex data per page, 96 MB.</summary>
+    public const uint DefaultPageVertexWords = 24u << 20;
+
+    /// <summary>Indices per page, 32 MB.</summary>
+    public const uint DefaultPageIndices = 8u << 20;
+
+    private const uint StreamAlignment = 4;
+
+    private readonly object _lock = new();
+    private readonly List<(GpuMesh Mesh, MeshLayout? Layout)> _pending = new();
+    private readonly Stack<int> _freeIds = new();
+    private int _nextId;
+
+    private readonly List<(ulong Execution, MeshPlacement Placement)> _retiringRanges = new();
+    private readonly List<(ulong Execution, int Id)> _retiringIds = new();
+
+    public List<GeometryPage> Pages { get; } = new();
+
+    /// <summary>Creates a mesh and queues its upload. Thread safe.</summary>
+    public GpuMesh Create(MeshData data)
+    {
+        MeshLayout layout = new(data);
+        lock (_lock)
+        {
+            GpuMesh mesh = new(this, _freeIds.Count > 0 ? _freeIds.Pop() : _nextId++);
+            _pending.Add((mesh, layout));
+            return mesh;
+        }
+    }
+
+    internal void Queue(GpuMesh mesh, MeshLayout? layout)
+    {
+        lock (_lock)
+            _pending.Add((mesh, layout));
+    }
+
+    /// <summary>
+    /// Places queued meshes and writes their data through the uploader, stopping at the byte budget once something was
+    /// applied. Meshes whose placement changed are added to <paramref name="changed"/>. Freed ranges wait for
+    /// <paramref name="lastDispatched"/>, the newest execution that may still read them. Returns true when a page was added.
+    /// </summary>
+    public bool Apply(Uploader uploader, ulong lastDispatched, long budgetBytes, List<GpuMesh> changed)
+    {
+        int pagesBefore = Pages.Count;
+        long spent = 0;
+        lock (_lock)
+        {
+            int applied = 0;
+            for (; applied < _pending.Count; applied++)
+            {
+                (GpuMesh mesh, MeshLayout? layout) = _pending[applied];
+                if (layout == null)
+                {
+                    Release(mesh, lastDispatched);
+                    _retiringIds.Add((lastDispatched, mesh.Id));
+                    changed.Add(mesh);
+                    continue;
+                }
+
+                if (mesh.IsDisposed)
+                    continue;
+
+                long bytes = ((long)layout.VertexWords + layout.Indices.Length) * 4;
+                if (spent > 0 && spent + bytes > budgetBytes)
+                    break;
+
+                Release(mesh, lastDispatched);
+                MeshPlacement placement = Place(layout);
+                Write(uploader, placement, layout);
+                mesh.Placement = placement;
+                mesh.Bounds = layout.Bounds;
+                mesh.SubMeshCount = layout.SubMeshes.Length;
+                mesh.ChunkCount = layout.Chunks.Length;
+                changed.Add(mesh);
+                spent += bytes;
+            }
+
+            _pending.RemoveRange(0, applied);
+        }
+
+        return Pages.Count != pagesBefore;
+    }
+
+    /// <summary>Returns ranges and ids freed by frames the GPU has finished. Render thread.</summary>
+    public void Reclaim(ulong completedExecution)
+    {
+        for (int i = _retiringRanges.Count - 1; i >= 0; i--)
+        {
+            (ulong execution, MeshPlacement placement) = _retiringRanges[i];
+            if (execution > completedExecution)
+                continue;
+
+            GeometryPage page = Pages[placement.Page];
+            page.VertexWords.Free(placement.Vertices);
+            page.IndexSpace.Free(placement.Indices);
+            _retiringRanges.RemoveAt(i);
+        }
+
+        for (int i = _retiringIds.Count - 1; i >= 0; i--)
+        {
+            if (_retiringIds[i].Execution > completedExecution)
+                continue;
+
+            lock (_lock)
+                _freeIds.Push(_retiringIds[i].Id);
+            _retiringIds.RemoveAt(i);
+        }
+    }
+
+    public void Dispose()
+    {
+        foreach (GeometryPage page in Pages)
+        {
+            page.Vertices.Dispose();
+            page.Indices.Dispose();
+        }
+        Pages.Clear();
+    }
+
+    private void Release(GpuMesh mesh, ulong execution)
+    {
+        if (mesh.Placement is { } old)
+            _retiringRanges.Add((execution, old));
+        mesh.Placement = null;
+    }
+
+    private MeshPlacement Place(MeshLayout layout)
+    {
+        uint vertexWords = 0;
+        for (int s = 0; s < MeshLayout.StreamCount; s++)
+        {
+            if (layout.Streams[s] is { } stream)
+                vertexWords = Align(vertexWords) + (uint)stream.Length;
+        }
+
+        uint indexCount = (uint)Math.Max(1, layout.Indices.Length);
+        int pageIndex = -1;
+        RangeAllocation vertices = default, indices = default;
+        for (int p = 0; p < Pages.Count && pageIndex < 0; p++)
+        {
+            if (!Pages[p].VertexWords.TryAllocate(vertexWords, StreamAlignment, out vertices))
+                continue;
+            if (!Pages[p].IndexSpace.TryAllocate(indexCount, 1, out indices))
+            {
+                Pages[p].VertexWords.Free(vertices);
+                continue;
+            }
+            pageIndex = p;
+        }
+
+        if (pageIndex < 0)
+        {
+            GeometryPage page = NewPage(Math.Max(pageVertexWords, Align(vertexWords)), Math.Max(pageIndices, indexCount));
+            Pages.Add(page);
+            pageIndex = Pages.Count - 1;
+            page.VertexWords.TryAllocate(vertexWords, StreamAlignment, out vertices);
+            page.IndexSpace.TryAllocate(indexCount, 1, out indices);
+        }
+
+        uint[] offsets = new uint[MeshLayout.StreamCount];
+        uint cursor = vertices.Offset;
+        for (int s = 0; s < MeshLayout.StreamCount; s++)
+        {
+            if (layout.Streams[s] is not { } stream)
+                continue;
+
+            cursor = Align(cursor);
+            offsets[s] = cursor;
+            cursor += (uint)stream.Length;
+        }
+
+        return new MeshPlacement
+        {
+            Page = pageIndex,
+            Vertices = vertices,
+            Indices = indices,
+            StreamOffsets = offsets,
+            StreamsPresent = layout.StreamsPresent,
+            VertexCount = layout.VertexCount,
+            Chunks = layout.Chunks,
+            SubMeshes = layout.SubMeshes,
+        };
+    }
+
+    private GeometryPage NewPage(uint vertexWords, uint indexCount)
+    {
+        DeviceBuffer vertices = device.ResourceFactory.CreateBuffer(new BufferDescription(vertexWords * 4, BufferUsage.StructuredBufferReadWrite));
+        DeviceBuffer indices = device.ResourceFactory.CreateBuffer(new BufferDescription(indexCount * 4, BufferUsage.IndexBuffer | BufferUsage.StructuredBufferReadWrite));
+        vertices.Name = $"Geometry page {Pages.Count} vertices";
+        indices.Name = $"Geometry page {Pages.Count} indices";
+        return new GeometryPage(new RangeAllocator(vertexWords), new RangeAllocator(indexCount), vertices, indices);
+    }
+
+    private void Write(Uploader uploader, MeshPlacement placement, MeshLayout layout)
+    {
+        GeometryPage page = Pages[placement.Page];
+        for (int s = 0; s < MeshLayout.StreamCount; s++)
+        {
+            if (layout.Streams[s] is { } stream)
+                uploader.Write(page.Vertices, placement.StreamOffsets[s], stream);
+        }
+
+        if (layout.Indices.Length > 0)
+            uploader.Write(page.Indices, placement.IndexBase, layout.Indices);
+    }
+
+    private static uint Align(uint words) => (words + StreamAlignment - 1) & ~(StreamAlignment - 1);
+}

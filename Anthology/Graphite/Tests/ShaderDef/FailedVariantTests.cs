@@ -24,6 +24,8 @@ public class FailedVariantTests : IDisposable
 
             return new ShaderDescription();
         }
+
+        public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend) => throw new NotSupportedException();
     }
 
 

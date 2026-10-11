@@ -81,12 +81,9 @@ public sealed class GlslProgram
 /// </summary>
 public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
 {
-    private const string LibraryPrefix = "Graphite/";
-
     private static readonly Shaderc s_api = Shaderc.GetApi();
     private static readonly PfnIncludeResolveFn s_resolve = new(ResolveCallback);
     private static readonly PfnIncludeResultReleaseFn s_release = new(ReleaseCallback);
-    private static readonly Lazy<Dictionary<string, string>> s_library = new(LoadLibrary);
 
     private readonly GlslCompilerOptions _options;
     private readonly ThreadLocal<nint> _compilers = new(() => (nint)s_api.CompilerInitialize(), trackAllValues: true);
@@ -101,6 +98,7 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
     public GlslShaderCompiler(GlslCompilerOptions? options = null)
     {
         _options = options ?? new GlslCompilerOptions();
+        ShaderLibrary.Register(typeof(GlslShaderCompiler).Assembly);
     }
 
 
@@ -129,6 +127,16 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
             throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
 
         return CompileProgram(pass, combo).Description;
+    }
+
+
+    /// <inheritdoc/>
+    public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
+    {
+        if (backend != GraphicsBackend.Vulkan)
+            throw new NotSupportedException($"The GLSL compiler targets Vulkan only, not {backend}.");
+
+        return CompileProgram(pass, combo).ToCompute();
     }
 
 
@@ -269,28 +277,10 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private string? Resolve(string name, string from)
     {
-        if (name.StartsWith(LibraryPrefix, StringComparison.Ordinal))
-            return s_library.Value.TryGetValue(name, out string? source) ? source : null;
+        if (name.StartsWith(ShaderLibrary.Prefix, StringComparison.Ordinal))
+            return ShaderLibrary.Get(name);
 
         return _options.ResolveInclude?.Invoke(name, from);
-    }
-
-
-    private static Dictionary<string, string> LoadLibrary()
-    {
-        Dictionary<string, string> library = new(StringComparer.Ordinal);
-        Assembly assembly = typeof(GlslShaderCompiler).Assembly;
-        foreach (string resource in assembly.GetManifestResourceNames())
-        {
-            if (!resource.StartsWith(LibraryPrefix, StringComparison.Ordinal))
-                continue;
-
-            using Stream stream = assembly.GetManifestResourceStream(resource)!;
-            using StreamReader reader = new(stream);
-            library[resource] = reader.ReadToEnd();
-        }
-
-        return library;
     }
 
 
