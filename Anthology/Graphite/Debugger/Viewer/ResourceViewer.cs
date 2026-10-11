@@ -300,10 +300,10 @@ internal sealed partial class ProfilerView
 
         using (_paper.Row("pager").Height(Metrics.HeaderHeight).Gap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
         {
-            Origami.IconButton(_paper, "first", OrigamiIconSet.ArrowLeft, () => _pages[pageKey] = 0).Small().NotFocusable().Subtle().Tooltip("First").Show();
-            Origami.IconButton(_paper, "prev", OrigamiIconSet.ChevronLeft, () => _pages[pageKey] = Math.Max(0, page - 1)).Small().NotFocusable().Subtle().Tooltip("Previous").Show();
-            Origami.IconButton(_paper, "next", OrigamiIconSet.ChevronRight, () => _pages[pageKey] = Math.Min(pages - 1, page + 1)).Small().NotFocusable().Subtle().Tooltip("Next").Show();
-            Origami.IconButton(_paper, "last", OrigamiIconSet.ArrowRight, () => _pages[pageKey] = pages - 1).Small().NotFocusable().Subtle().Tooltip("Last").Show();
+            Origami.IconButton(_paper, "first", OrigamiGlyphs.ArrowLeft_I, () => _pages[pageKey] = 0).Small().NotFocusable().Subtle().Tooltip("First").Show();
+            Origami.IconButton(_paper, "prev", OrigamiGlyphs.ChevronLeft_I, () => _pages[pageKey] = Math.Max(0, page - 1)).Small().NotFocusable().Subtle().Tooltip("Previous").Show();
+            Origami.IconButton(_paper, "next", OrigamiGlyphs.ChevronRight_I, () => _pages[pageKey] = Math.Min(pages - 1, page + 1)).Small().NotFocusable().Subtle().Tooltip("Next").Show();
+            Origami.IconButton(_paper, "last", OrigamiGlyphs.ArrowRight_I, () => _pages[pageKey] = pages - 1).Small().NotFocusable().Subtle().Tooltip("Last").Show();
             Mono("label", $"{rangeLabel} / page {page + 1}/{pages}", Style.InkDim);
         }
     }

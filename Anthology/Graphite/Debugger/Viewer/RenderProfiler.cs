@@ -269,7 +269,7 @@ internal sealed partial class ProfilerView
 
             if (_message.Length > 0)
                 Mono("message", _message, Style.InkDim);
-            Origami.Button(_paper, "snapshot", "Snapshot", TakeSnapshot).Small().NotFocusable().Soft().LeadingIcon(OrigamiIconSet.Camera).Disabled(_pinned == null).Show();
+            Origami.Button(_paper, "snapshot", "Snapshot", TakeSnapshot).Small().NotFocusable().Soft().LeadingIcon(OrigamiGlyphs.Camera_I).Disabled(_pinned == null).Show();
         }
     }
 
@@ -309,9 +309,9 @@ internal sealed partial class ProfilerView
 
             if (_message.Length > 0)
                 Mono("message", _message, Style.InkDim);
-            ButtonBuilder save = Origami.IconButton(_paper, "save", OrigamiIconSet.Download, SaveSnapshot).Small().NotFocusable().Subtle().Tooltip("Save snapshot");
+            ButtonBuilder save = Origami.IconButton(_paper, "save", OrigamiGlyphs.Download_I, SaveSnapshot).Small().NotFocusable().Subtle().Tooltip("Save snapshot");
             save.Disabled(open == null).Show();
-            Origami.IconButton(_paper, "load", OrigamiIconSet.FolderOpen, LoadSnapshot).Small().NotFocusable().Subtle().Tooltip("Load snapshot").Show();
+            Origami.IconButton(_paper, "load", OrigamiGlyphs.FolderOpen_I, LoadSnapshot).Small().NotFocusable().Subtle().Tooltip("Load snapshot").Show();
         }
     }
 

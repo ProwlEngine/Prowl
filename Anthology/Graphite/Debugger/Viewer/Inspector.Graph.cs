@@ -311,7 +311,7 @@ internal sealed partial class ProfilerView
                 {
                     KvGrid(infoWidth, detail, 400f);
                     if (openId != null)
-                        Origami.Button(_paper, "open", "Open pass in inspector", () => _selId = openId).Small().NotFocusable().LeadingIcon(OrigamiIconSet.ArrowRight).Show();
+                        Origami.Button(_paper, "open", "Open pass in inspector", () => _selId = openId).Small().NotFocusable().LeadingIcon(OrigamiGlyphs.ArrowRight_I).Show();
                 }
             }
         });
