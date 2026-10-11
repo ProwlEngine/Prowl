@@ -144,7 +144,7 @@ internal static class SpirvReflector
         foreach ((uint set, List<ResourceLayoutElementDescription> list) in bySet)
         {
             list.Sort((a, b) => a.BindingIndex.CompareTo(b.BindingIndex));
-            layouts.Add(new ResourceLayoutDescription(set, [.. list]));
+            layouts.Add(new ResourceLayoutDescription(set, [.. list]) { Table = list.Exists(e => e.Count > 1) });
         }
 
         ShaderDescription description = new()
@@ -249,6 +249,13 @@ internal static class SpirvReflector
         if (!layout.ByBinding.TryGetValue((set, binding), out GlslResource? resource))
             throw new ShaderCompileException($"error: SPIR-V uses set {set} binding {binding} which no declaration has");
 
+        uint arrayCount = 0;
+        if (m.Types[pointee].Op == OpTypeArray && m.Types[m.Types[pointee].Operands[0]].Op is OpTypeImage or OpTypeSampledImage or OpTypeSampler)
+        {
+            arrayCount = m.Constants[m.Types[pointee].Operands[1]];
+            pointee = m.Types[pointee].Operands[0];
+        }
+
         (int op, uint[] operands) = m.Types[pointee];
         ResourceKind kind;
         ResourceLayoutElementOptions options = ResourceLayoutElementOptions.None;
@@ -289,8 +296,11 @@ internal static class SpirvReflector
                 kind = ResourceKind.Sampler;
                 break;
 
-            case OpTypeArray or OpTypeRuntimeArray:
-                throw new ShaderCompileException($"error: '{resource.SourceName}' is an array of resources, which is not supported yet");
+            case OpTypeRuntimeArray:
+                throw new ShaderCompileException($"error: '{resource.SourceName}' is an unsized array of resources, give it a size");
+
+            case OpTypeArray:
+                throw new ShaderCompileException($"error: '{resource.SourceName}' is an array of buffers, which is not supported");
 
             default:
                 throw new ShaderCompileException($"error: '{resource.SourceName}' is a resource type that is not supported");
@@ -306,7 +316,7 @@ internal static class SpirvReflector
             return;
         }
 
-        elements[(set, binding)] = new ResourceLayoutElementDescription(resource.Name, kind, stage, binding, options, fields);
+        elements[(set, binding)] = new ResourceLayoutElementDescription(resource.Name, kind, stage, binding, options, fields) { ArrayCount = arrayCount };
     }
 
 

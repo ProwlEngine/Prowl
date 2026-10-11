@@ -22,6 +22,7 @@ internal sealed class VkShaderKey : IEquatable<VkShaderKey>
         foreach (ResourceLayoutDescription layout in layouts)
         {
             hash.Add(layout.Set);
+            hash.Add(layout.Table);
             hash.Add(layout.Elements?.ArrayHash() ?? 0);
         }
 
@@ -39,6 +40,7 @@ internal sealed class VkShaderKey : IEquatable<VkShaderKey>
         for (int i = 0; i < _layouts.Length; i++)
         {
             if (_layouts[i].Set != other._layouts[i].Set
+                || _layouts[i].Table != other._layouts[i].Table
                 || !Util.ArrayEqualsEquatable(_layouts[i].Elements, other._layouts[i].Elements))
                 return false;
         }

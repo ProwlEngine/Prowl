@@ -15,6 +15,8 @@ public abstract partial class CommandBuffer
     private readonly HashSet<ResourceId> _referencedIds = new();
     private AttachmentUse[] _attachmentScratch = new AttachmentUse[8];
     private VertexBindingUse[] _vertexScratch = new VertexBindingUse[8];
+    private readonly List<DescriptorTableEntryState> _tableScratch = new();
+    private (DescriptorTable? Table, uint Version)[] _reportedTables = [];
 
     internal bool CaptureActive => Execution != null && (Profilers.CommandStream != null || Profilers.Capture != null);
 
@@ -139,8 +141,68 @@ public abstract partial class CommandBuffer
 
     private void ReportGraphicsState()
     {
-        if (CaptureActive)
-            ReportPropertyStates();
+        if (!CaptureActive)
+            return;
+
+        ReportPropertyStates();
+        ReportDescriptorTables();
+    }
+
+    // Reports a table only when the one bound at a set index, or its contents, changed since the last report.
+    private void ReportDescriptorTables()
+    {
+        int count = Math.Max(_descriptorTables.Length, _reportedTables.Length);
+        if (_reportedTables.Length < count)
+            Array.Resize(ref _reportedTables, count);
+
+        for (int set = 0; set < count; set++)
+        {
+            DescriptorTable? table = DescriptorTableAt(set);
+            (DescriptorTable? Table, uint Version) reported = _reportedTables[set];
+            if (ReferenceEquals(reported.Table, table) && (table == null || reported.Version == table.Version))
+                continue;
+
+            _reportedTables[set] = (table, table?.Version ?? 0);
+            _tableScratch.Clear();
+            if (table != null)
+            {
+                for (int element = 0; element < table.ElementCount; element++)
+                {
+                    ResourceLayoutElementDescription description = table.Layout.Elements[element];
+                    ReadOnlySpan<DescriptorTableEntry> entries = table.EntriesOf(element);
+                    for (int index = 0; index < entries.Length; index++)
+                    {
+                        if (!entries[index].IsEmpty)
+                            _tableScratch.Add(new DescriptorTableEntryState((uint)index, TableEntryState(description, entries[index])));
+                    }
+                }
+            }
+
+            PassSink?.SetDescriptorTable((uint)set, table?.Layout.Elements ?? [], System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_tableScratch));
+        }
+    }
+
+    private PropertyState TableEntryState(in ResourceLayoutElementDescription description, in DescriptorTableEntry entry)
+    {
+        if (entry.Buffer is { } range)
+        {
+            TrackBuffer(range.Buffer);
+            return new PropertyState(description.Name, PropertyKind.Buffer, default, default, range.Buffer.CurrentVersion,
+                ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
+        }
+
+        if ((entry.View?.Target ?? entry.Texture) is { } texture)
+        {
+            TrackTexture(texture);
+            TextureView? view = entry.View;
+            ResourceRange textureRange = view != null
+                ? ResourceRange.Subresources(view.BaseMipLevel, view.MipLevels, view.BaseArrayLayer, view.ArrayLayers)
+                : ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
+            return new PropertyState(description.Name, PropertyKind.Texture, default, default, texture.CurrentVersion,
+                textureRange, view?.Format, entry.Sampler?.Description);
+        }
+
+        return new PropertyState(description.Name, PropertyKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);
     }
 
     /// <summary>Called by the backend with the vertex bindings it resolved for a draw, including cache hits.</summary>

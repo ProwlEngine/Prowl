@@ -27,6 +27,8 @@ public abstract partial class CommandBuffer : CommandBufferBase
     private protected readonly byte[] _pushConstants = new byte[PushConstantCapacity];
     private protected uint _pushConstantVersion;
 
+    private protected DescriptorTable?[] _descriptorTables = [];
+
 
     /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
@@ -65,6 +67,8 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _currentVertexSource = null;
         System.Array.Clear(_pushConstants);
         _pushConstantVersion++;
+        System.Array.Clear(_descriptorTables);
+        System.Array.Clear(_reportedTables);
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;

@@ -205,6 +205,9 @@ internal sealed class TrackingResourceFactory : ResourceFactory
     protected override Sampler CreateSamplerCore(in SamplerDescription description)
         => Track(_inner.CreateSampler(description));
 
+    protected override DescriptorTable CreateDescriptorTableCore(in ResourceLayoutDescription layout)
+        => Track(_inner.CreateDescriptorTable(layout));
+
     protected override Texture CreateTextureCore(in TextureDescription description)
         => Track(_inner.CreateTexture(description));
 

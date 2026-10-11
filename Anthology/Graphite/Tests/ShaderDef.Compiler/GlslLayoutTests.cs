@@ -292,6 +292,30 @@ public class GlslLayoutTests
 
 
     [Fact]
+    public void ResourceArrays_ReflectTheirCount_AndMakeTheirSetATable()
+    {
+        ShaderDescription d = Glsl.Describe(FragmentOnly(
+            "#extension GL_EXT_nonuniform_qualifier : require\nlayout(set = 1) uniform texture2D _Textures[16]; layout(set = 1) uniform sampler _Samplers[4]; uniform uint _Index;",
+            "color = texture(sampler2D(_Textures[nonuniformEXT(_Index)], _Samplers[_Index & 3u]), vec2(0));"));
+
+        ResourceLayoutDescription table = d.ResourceLayouts.Single(l => l.Set == 1);
+        Assert.True(table.Table);
+        Assert.Equal(16u, Glsl.Element(d, "_Textures").ArrayCount);
+        Assert.Equal(4u, Glsl.Element(d, "_Samplers").ArrayCount);
+        Assert.False(d.ResourceLayouts.Single(l => l.Set == 0).Table);
+    }
+
+
+    [Fact]
+    public void UnsizedResourceArrays_Fail()
+    {
+        Assert.Contains("give it a size", Glsl.Fails(FragmentOnly(
+            "#extension GL_EXT_nonuniform_qualifier : require\nuniform texture2D _Textures[]; uniform sampler _Sampler; uniform uint _Index;",
+            "color = texture(sampler2D(_Textures[nonuniformEXT(_Index)], _Sampler), vec2(0));")).Message);
+    }
+
+
+    [Fact]
     public void PushConstants_ReflectTheBlockSizeAndEveryStageThatReadsIt()
     {
         ShaderDescription d = Glsl.Describe("""

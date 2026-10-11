@@ -82,7 +82,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         }
     }
 
-    private static (DescriptorSetLayout dsl, DescriptorResourceCounts counts) CreateDescriptorSetLayout(
+    internal static (DescriptorSetLayout dsl, DescriptorResourceCounts counts) CreateDescriptorSetLayout(
         VkGraphicsDevice gd, ref ResourceLayoutDescription desc)
     {
         ResourceLayoutElementDescription[] elems = desc.Elements;
@@ -94,7 +94,10 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
                 $"{VkDescriptorBinder.MaxSetElements} are supported per set. Split the resources across additional sets.");
         }
 
+        CheckTable(gd, in desc);
+
         DescriptorSetLayoutBinding* bindings = stackalloc DescriptorSetLayoutBinding[elems.Length];
+        DescriptorBindingFlags* bindingFlags = stackalloc DescriptorBindingFlags[elems.Length];
 
         uint uniformBufferDynamic = 0, sampledImage = 0, sampler = 0, storageBuffer = 0, storageImage = 0, combinedImageSampler = 0;
 
@@ -106,9 +109,10 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
             {
                 Binding = (uint)elem.BindingIndex,
                 DescriptorType = descType,
-                DescriptorCount = 1,
+                DescriptorCount = elem.Count,
                 StageFlags = VkFormats.ToVkShaderStages(elem.Stages),
             };
+            bindingFlags[i] = DescriptorBindingFlags.PartiallyBoundBit | DescriptorBindingFlags.UpdateAfterBindBit | DescriptorBindingFlags.UpdateUnusedWhilePendingBit;
             switch (descType)
             {
                 case DescriptorType.UniformBufferDynamic: uniformBufferDynamic++; break;
@@ -120,11 +124,19 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
             }
         }
 
+        DescriptorSetLayoutBindingFlagsCreateInfo flagsCI = new()
+        {
+            SType = StructureType.DescriptorSetLayoutBindingFlagsCreateInfo,
+            BindingCount = (uint)elems.Length,
+            PBindingFlags = bindingFlags,
+        };
         DescriptorSetLayoutCreateInfo dslCI = new()
         {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
             BindingCount = (uint)elems.Length,
             PBindings = bindings,
+            PNext = desc.Table ? &flagsCI : null,
+            Flags = desc.Table ? DescriptorSetLayoutCreateFlags.UpdateAfterBindPoolBit : 0,
         };
         gd.Vk.CreateDescriptorSetLayout(gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
         gd.Counters.Allocate(AllocBin.ResourceLayout);
@@ -136,7 +148,21 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
     /// Maps a resource kind to its Vulkan descriptor type. Uniform buffers are always dynamic;
     /// textures are separate image/sampler unless CombinedImageSampler is flagged.
     /// </summary>
-    private static DescriptorType GetDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options) => kind switch
+    private static void CheckTable(VkGraphicsDevice gd, in ResourceLayoutDescription desc)
+    {
+        if (desc.Table && !gd.Features.DescriptorIndexing)
+            throw new RenderException($"Set {desc.Set} is a descriptor table, which needs GraphicsDeviceFeatures.DescriptorIndexing.");
+
+        foreach (ResourceLayoutElementDescription element in desc.Elements)
+        {
+            if (element.Count > 1 && !desc.Table)
+                throw new RenderException($"'{PropertyID.ToString(element.Name)}' is an array of {element.Count}, which only a descriptor table set (ResourceLayoutDescription.Table) can hold.");
+            if (desc.Table && element.Kind == ResourceKind.UniformBuffer)
+                throw new RenderException($"'{PropertyID.ToString(element.Name)}' is a uniform buffer, which a descriptor table cannot hold, use a storage buffer.");
+        }
+    }
+
+    internal static DescriptorType GetDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options) => kind switch
     {
         ResourceKind.UniformBuffer => DescriptorType.UniformBufferDynamic,
         ResourceKind.StructuredBufferReadOnly => DescriptorType.StorageBuffer,

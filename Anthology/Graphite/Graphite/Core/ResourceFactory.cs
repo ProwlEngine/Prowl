@@ -113,6 +113,22 @@ public abstract partial class ResourceFactory
 
 
     /// <summary>
+    /// Makes a descriptor table for a set whose layout has <see cref="ResourceLayoutDescription.Table"/> set.
+    /// </summary>
+    /// <param name="layout">The set's layout, the same one the programs that bind the table declare.</param>
+    /// <returns>New, empty table.</returns>
+    public DescriptorTable CreateDescriptorTable(in ResourceLayoutDescription layout)
+    {
+        if (!layout.Table)
+            throw new RenderException("A descriptor table needs a layout with ResourceLayoutDescription.Table set.");
+
+        return CreateDescriptorTableCore(layout);
+    }
+
+    protected abstract DescriptorTable CreateDescriptorTableCore(in ResourceLayoutDescription layout);
+
+
+    /// <summary>
     /// Makes a graphics program.
     /// </summary>
     /// <param name="description">Wanted props.</param>

@@ -288,6 +288,8 @@ internal unsafe partial class VkGraphicsDevice
             && supported12.DescriptorBindingPartiallyBound
             && supported12.DescriptorBindingVariableDescriptorCount
             && supported12.DescriptorBindingSampledImageUpdateAfterBind
+            && supported12.DescriptorBindingStorageImageUpdateAfterBind
+            && supported12.DescriptorBindingStorageBufferUpdateAfterBind
             && supported12.DescriptorBindingUpdateUnusedWhilePending
             && supported12.ShaderSampledImageArrayNonUniformIndexing;
 
@@ -302,6 +304,8 @@ internal unsafe partial class VkGraphicsDevice
             DescriptorBindingPartiallyBound = descriptorIndexing,
             DescriptorBindingVariableDescriptorCount = descriptorIndexing,
             DescriptorBindingSampledImageUpdateAfterBind = descriptorIndexing,
+            DescriptorBindingStorageImageUpdateAfterBind = descriptorIndexing,
+            DescriptorBindingStorageBufferUpdateAfterBind = descriptorIndexing,
             DescriptorBindingUpdateUnusedWhilePending = descriptorIndexing,
             ShaderSampledImageArrayNonUniformIndexing = descriptorIndexing,
         };

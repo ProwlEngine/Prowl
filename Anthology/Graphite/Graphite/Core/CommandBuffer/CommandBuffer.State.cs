@@ -66,6 +66,27 @@ public abstract partial class CommandBuffer
     public void SetPushConstants<TData>(in TData data, uint offset = 0) where TData : unmanaged
         => SetPushConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<TData>(in data)), offset);
 
+    /// <summary>
+    /// Binds a descriptor table to a set index for the following draws and dispatches, or unbinds it with null. Every
+    /// program used while it is bound must declare that set with the table's layout.
+    /// </summary>
+    /// <param name="set">Descriptor set index.</param>
+    /// <param name="table">Table to bind, null to unbind.</param>
+    public void SetDescriptorTable(uint set, DescriptorTable? table)
+    {
+        RequireGraphExecution(nameof(SetDescriptorTable));
+        if (set >= _descriptorTables.Length)
+        {
+            if (table == null)
+                return;
+            Array.Resize(ref _descriptorTables, (int)set + 1);
+        }
+
+        _descriptorTables[set] = table;
+    }
+
+    internal DescriptorTable? DescriptorTableAt(int set) => set < _descriptorTables.Length ? _descriptorTables[set] : null;
+
     /// <summary>Binds vertex/index buffers and topology for next draws. Fully replaces old source.</summary>
     /// <param name="source">Source to bind. Not null, pass an empty one for none.</param>
     public void SetVertexSource(IVertexSource source)

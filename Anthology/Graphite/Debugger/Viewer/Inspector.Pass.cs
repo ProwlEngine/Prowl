@@ -279,6 +279,7 @@ internal sealed partial class ProfilerView
             BindIndexBufferCommand c => $"{Res(c.Buffer)} / {c.Format} / {c.IndexCount} indices",
             SetPropertiesCommand c => $"{c.Changed.Length} changed, {c.Removed.Length} removed",
             SetPushConstantsCommand c => $"{Style.Bytes(c.Data.Length)} @ {c.Offset}",
+            SetDescriptorTableCommand c => c.Layout.Length == 0 ? $"set {c.Set} / unbound" : $"set {c.Set} / {c.Entries.Length} slots written",
             DrawCommand c => $"verts {c.VertexCount} / inst {c.InstanceCount} / first {c.FirstVertex}",
             DrawIndexedCommand c => $"indices {c.IndexCount} / first index {c.FirstIndex} / inst {c.InstanceCount} / vertex offset {c.VertexOffset}",
             DispatchCommand c => $"{c.GroupCountX} x {c.GroupCountY} x {c.GroupCountZ}",

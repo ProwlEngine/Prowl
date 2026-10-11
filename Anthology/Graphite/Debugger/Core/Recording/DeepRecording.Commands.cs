@@ -188,6 +188,15 @@ public sealed partial class DeepRecording
                 pass.Commands.Add(new SetPropertiesCommand(changed.ToEquatableArray(), removed.ToEquatableArray()));
         }
 
+        public void SetDescriptorTable(uint set, ReadOnlySpan<ResourceLayoutElementDescription> layout, ReadOnlySpan<DescriptorTableEntryState> entries)
+        {
+            List<RecordedTableEntry> recorded = new(entries.Length);
+            foreach (DescriptorTableEntryState entry in entries)
+                recorded.Add(new RecordedTableEntry(entry.Index, owner.Property(entry.State)));
+
+            pass.Commands.Add(new SetDescriptorTableCommand(set, layout.ToArray().ToEquatableArray(), recorded.ToEquatableArray()));
+        }
+
         public void SetPushConstants(uint offset, ReadOnlySpan<byte> data)
             => pass.Commands.Add(new SetPushConstantsCommand(offset, owner._store.Put(data)));
 

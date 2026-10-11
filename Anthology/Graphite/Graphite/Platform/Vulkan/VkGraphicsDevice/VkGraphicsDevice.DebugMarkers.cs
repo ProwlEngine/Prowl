@@ -104,6 +104,9 @@ internal unsafe partial class VkGraphicsDevice
             case VkSampler sampler:
                 SetDebugUtilsName(ObjectType.Sampler, sampler.DeviceSampler.Handle, name);
                 break;
+            case VkDescriptorTable table:
+                SetDebugUtilsName(ObjectType.DescriptorSet, table.Set.Handle, name);
+                break;
             case VkGraphicsProgram shaderProgram:
                 foreach (ShaderModule module in shaderProgram.Modules.Values)
                 {

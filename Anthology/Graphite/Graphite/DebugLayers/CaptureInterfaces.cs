@@ -61,6 +61,8 @@ public interface IPassCommandSink
 
     void SetPushConstants(uint offset, ReadOnlySpan<byte> data);
 
+    void SetDescriptorTable(uint set, ReadOnlySpan<ResourceLayoutElementDescription> layout, ReadOnlySpan<DescriptorTableEntryState> entries);
+
     void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance);
 
     void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance);

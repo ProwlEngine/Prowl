@@ -169,6 +169,9 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             case SetPropertiesCommand properties:
                 ApplyProperties(cmd, properties);
                 break;
+            case SetDescriptorTableCommand table:
+                cmd.SetDescriptorTable(table.Set, BuildTable(table));
+                break;
             case SetPushConstantsCommand push:
                 cmd.SetPushConstants(scope.Blob(push.Data), push.Offset);
                 break;
@@ -314,6 +317,40 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 set.SetSampler(name, scope.Sampler(property.Sampler)!);
                 break;
         }
+    }
+
+    private DescriptorTable? BuildTable(SetDescriptorTableCommand command)
+    {
+        if (command.Layout.Length == 0)
+            return null;
+
+        DescriptorTable table = scope.Own(scope.Factory.CreateDescriptorTable(
+            new ResourceLayoutDescription(command.Set, command.Layout.ToArray()) { Table = true }));
+
+        foreach (RecordedTableEntry entry in command.Entries)
+        {
+            RecordedProperty property = entry.Property;
+            PropertyID name = PropertyID.Intern(property.Name);
+            switch (property.Kind)
+            {
+                case PropertyKind.Buffer:
+                    table.SetBuffer(name, entry.Index, BufferRange(property));
+                    break;
+                case PropertyKind.Texture:
+                    Texture texture = scope.Texture(property.Resource.Resource);
+                    Sampler? sampler = scope.Sampler(property.Sampler);
+                    if (NeedsView(texture, property))
+                        table.SetTexture(name, entry.Index, scope.View(texture, property.Range, property.ViewFormat), sampler);
+                    else
+                        table.SetTexture(name, entry.Index, texture, sampler);
+                    break;
+                case PropertyKind.Sampler:
+                    table.SetSampler(name, entry.Index, scope.Sampler(property.Sampler)!);
+                    break;
+            }
+        }
+
+        return table;
     }
 
     private DeviceBufferRange BufferRange(RecordedProperty property)

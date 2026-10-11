@@ -57,6 +57,12 @@ public sealed record SetPropertiesCommand(EquatableArray<RecordedProperty> Chang
 
 public sealed record SetPushConstantsCommand(uint Offset, BlobRef Data) : RecordedCommand;
 
+/// <summary>One written slot of a recorded descriptor table.</summary>
+public sealed record RecordedTableEntry(uint Index, RecordedProperty Property);
+
+/// <summary>A descriptor table bound at a set index with its written slots, or unbound when the layout is empty.</summary>
+public sealed record SetDescriptorTableCommand(uint Set, EquatableArray<ResourceLayoutElementDescription> Layout, EquatableArray<RecordedTableEntry> Entries) : RecordedCommand;
+
 public sealed record DrawCommand(uint VertexCount, uint InstanceCount, uint FirstVertex, uint FirstInstance) : RecordedCommand;
 
 public sealed record DrawIndexedCommand(uint IndexCount, uint InstanceCount, uint FirstIndex, int VertexOffset, uint FirstInstance) : RecordedCommand;

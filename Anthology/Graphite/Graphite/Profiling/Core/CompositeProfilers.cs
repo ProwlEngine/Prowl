@@ -192,6 +192,12 @@ internal sealed class CompositePassCommandSink(IPassCommandSink[] sinks) : IPass
             sink.DrawIndexed(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
     }
 
+    public void SetDescriptorTable(uint set, ReadOnlySpan<ResourceLayoutElementDescription> layout, ReadOnlySpan<DescriptorTableEntryState> entries)
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.SetDescriptorTable(set, layout, entries);
+    }
+
     public void SetPushConstants(uint offset, ReadOnlySpan<byte> data)
     {
         foreach (IPassCommandSink sink in sinks)

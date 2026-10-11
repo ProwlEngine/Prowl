@@ -19,6 +19,9 @@ internal class VkResourceFactory : ResourceFactory
         return new VkFramebuffer(_gd, description);
     }
 
+    protected override DescriptorTable CreateDescriptorTableCore(in ResourceLayoutDescription layout)
+        => new VkDescriptorTable(_gd, layout);
+
     protected override Sampler CreateSamplerCore(in SamplerDescription description)
     {
         return new VkSampler(_gd, description);

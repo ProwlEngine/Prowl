@@ -34,6 +34,9 @@ internal unsafe sealed partial class VkDescriptorBinder
         public int BoundDynOffsetCount;
         public bool Bound;
 
+        public VkDescriptorTable? Table;
+        public ResourceLayoutElementDescription[]? TableLayout;
+
         public PropertyEntry[] Entries = new PropertyEntry[16];
         public uint[] EntryVersions = new uint[16];
         public int EntryCount;
@@ -128,7 +131,11 @@ internal unsafe sealed partial class VkDescriptorBinder
             SetBindingMetadata meta = metadata[setIdx];
             SetBindState state = _setBindStates[setIdx];
 
-            if (!CanReuseSet(state, meta, graphStates))
+            if (resourceLayouts[setIdx].Table)
+            {
+                UseTable(state, setIdx, resourceLayouts[setIdx]);
+            }
+            else if (!CanReuseSet(state, meta, graphStates))
             {
                 state.EntryCount = 0;
                 _trackState = state;
@@ -152,6 +159,27 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         _preparedFirstSet = (uint)firstChanged;
         return true;
+    }
+
+    // A table set binds the table's own descriptor set, nothing is resolved from properties.
+    private void UseTable(SetBindState state, int setIdx, in ResourceLayoutDescription layout)
+    {
+        if (_cbOwner.DescriptorTableAt(setIdx) is not VkDescriptorTable table)
+            throw new RenderException($"The program declares set {setIdx} as a descriptor table, but no table is bound there. Call SetDescriptorTable.");
+
+        if (!ReferenceEquals(state.Table, table) || !ReferenceEquals(state.TableLayout, layout.Elements))
+        {
+            if (!Util.ArrayEqualsEquatable(table.Layout.Elements, layout.Elements))
+                throw new RenderException($"The descriptor table bound at set {setIdx} was created from a different layout than the program declares.");
+
+            state.Table = table;
+            state.TableLayout = layout.Elements;
+        }
+
+        state.Set = table.Set;
+        state.DynOffsetCount = 0;
+        state.IdentityLen = -1;
+        state.EntryCount = 0;
     }
 
     private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, GraphTextureStates? graphStates)
