@@ -12,6 +12,8 @@ public interface IRenderProfilerSource
 
     IReadOnlyList<Recording> Frames { get; }
 
+    Recording? Latest { get; }
+
     double TotalMilliseconds { get; }
 
     long TotalFrames { get; }

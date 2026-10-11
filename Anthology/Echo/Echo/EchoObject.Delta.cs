@@ -230,18 +230,12 @@ public sealed partial class EchoObject
             }
             else if (value.TagType == EchoType.Compound)
             {
-                target.Value = new Dictionary<string, EchoObject>(
-                    value.Tags.Select(kvp => new KeyValuePair<string, EchoObject>(kvp.Key, kvp.Value.Clone())));
-            }
-            else if (value.TagType == EchoType.Null || value.Value == null)
-            {
-                // For null values, we need to use reflection to set the private _value field directly
-                var valueField = typeof(EchoObject).GetField("_value", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                valueField?.SetValue(target, null);
+                target.Value = value.Tags.Select(kvp => new KeyValuePair<string, EchoObject>(kvp.Key, kvp.Value.Clone())).ToList();
             }
             else
             {
-                target.Value = value.Value;
+                target._ref = value._ref;
+                target._bits = value._bits;
             }
 
             // Restore parent relationships
@@ -259,17 +253,7 @@ public sealed partial class EchoObject
                 // Direct child of root
                 if (target.TagType == EchoType.Compound)
                 {
-                    var cloned = value.Clone();
-                    var dict = target.Tags;
-                    if (dict.ContainsKey(key))
-                    {
-                        var old = dict[key];
-                        old.Parent = null;
-                        old.CompoundKey = null;
-                    }
-                    dict[key] = cloned;
-                    cloned.Parent = target;
-                    cloned.CompoundKey = key;
+                    target[key] = value.Clone();
                 }
                 else if (target.TagType == EchoType.List && int.TryParse(key, out int index))
                 {
@@ -287,17 +271,7 @@ public sealed partial class EchoObject
 
                 if (parent.TagType == EchoType.Compound)
                 {
-                    var cloned = value.Clone();
-                    var dict = parent.Tags;
-                    if (dict.ContainsKey(key))
-                    {
-                        var old = dict[key];
-                        old.Parent = null;
-                        old.CompoundKey = null;
-                    }
-                    dict[key] = cloned;
-                    cloned.Parent = parent;
-                    cloned.CompoundKey = key;
+                    parent[key] = value.Clone();
                 }
                 else if (parent.TagType == EchoType.List && int.TryParse(key, out int index))
                 {
@@ -318,20 +292,7 @@ public sealed partial class EchoObject
         if (compound.TagType != EchoType.Compound)
             throw new InvalidOperationException($"Target at path '{path}' is not a compound");
 
-        var cloned = value.Clone();
-        var dict = compound.Tags;
-
-        // If key already exists, clean up old one
-        if (dict.ContainsKey(key))
-        {
-            var old = dict[key];
-            old.Parent = null;
-            old.CompoundKey = null;
-        }
-
-        dict[key] = cloned;
-        cloned.Parent = compound;
-        cloned.CompoundKey = key;
+        compound[key] = value.Clone();
     }
 
     private static void ApplyRemoveCompoundTag(EchoObject target, string path, string key)
@@ -342,13 +303,7 @@ public sealed partial class EchoObject
         if (compound.TagType != EchoType.Compound)
             throw new InvalidOperationException($"Target at path '{path}' is not a compound");
 
-        var dict = compound.Tags;
-        if (dict.TryGetValue(key, out var tag))
-        {
-            dict.Remove(key);
-            tag.Parent = null;
-            tag.CompoundKey = null;
-        }
+        compound.Remove(key);
     }
 
     private static void ApplyAddListItem(EchoObject target, string path, int index, EchoObject value)

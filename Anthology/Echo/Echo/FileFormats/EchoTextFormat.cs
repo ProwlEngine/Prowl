@@ -47,7 +47,7 @@ public sealed class EchoTextFormat : IFileFormat
 
     public static EchoObject Read(string input)
     {
-        StringTagTokenizer parser = new(input.ToCharArray());
+        StringTagTokenizer parser = new(input);
 
         if (!parser.MoveNext())
             throw new InvalidDataException("Empty input");
@@ -65,52 +65,57 @@ public sealed class EchoTextFormat : IFileFormat
 
     // Writing:
 
+    private static readonly string[] SpecialKeys = { "$id", "$type", "$dependencies" };
+    private static string Indent(int level) => TextFormatting.Spaces(level * 2);
+
     private static void WriteTag(EchoObject prop, TextWriter writer, int indentLevel)
     {
-        var indent = new string(' ', indentLevel * 2);
-
         switch (prop.TagType)
         {
             case EchoType.Null:
                 writer.Write("NULL");
                 break;
             case EchoType.Byte:
-                writer.Write(prop.ByteValue);
+                TextFormatting.WriteNumber(writer, (long)prop.ByteValue, writer.FormatProvider);
                 writer.Write('B');
                 break;
             case EchoType.sByte:
-                writer.Write(prop.sByteValue);
+                TextFormatting.WriteNumber(writer, (long)prop.sByteValue, writer.FormatProvider);
                 writer.Write('N');
                 break;
             case EchoType.Short:
-                writer.Write(prop.ShortValue);
+                TextFormatting.WriteNumber(writer, (long)prop.ShortValue, writer.FormatProvider);
                 writer.Write('S');
                 break;
             case EchoType.Int:
-                writer.Write(prop.IntValue);
+                TextFormatting.WriteNumber(writer, (long)prop.IntValue, writer.FormatProvider);
                 break;
             case EchoType.Long:
-                writer.Write(prop.LongValue);
+                TextFormatting.WriteNumber(writer, prop.LongValue, writer.FormatProvider);
                 writer.Write('L');
                 break;
             case EchoType.UShort:
-                writer.Write(prop.UShortValue);
+                TextFormatting.WriteNumber(writer, (long)prop.UShortValue, writer.FormatProvider);
                 writer.Write('V');
                 break;
             case EchoType.UInt:
-                writer.Write(prop.UIntValue);
+                TextFormatting.WriteNumber(writer, (ulong)prop.UIntValue, writer.FormatProvider);
                 writer.Write('U');
                 break;
             case EchoType.ULong:
-                writer.Write(prop.ULongValue);
+                TextFormatting.WriteNumber(writer, prop.ULongValue, writer.FormatProvider);
                 writer.Write('C');
                 break;
             case EchoType.Float:
-                writer.Write(prop.FloatValue.ToString(CultureInfo.InvariantCulture));
+                Span<char> floatBuffer = stackalloc char[32];
+                prop.FloatValue.TryFormat(floatBuffer, out int floatLength, default, CultureInfo.InvariantCulture);
+                writer.Write(floatBuffer.Slice(0, floatLength));
                 writer.Write('F');
                 break;
             case EchoType.Double:
-                writer.Write(prop.DoubleValue.ToString(CultureInfo.InvariantCulture));
+                Span<char> doubleBuffer = stackalloc char[32];
+                prop.DoubleValue.TryFormat(doubleBuffer, out int doubleLength, default, CultureInfo.InvariantCulture);
+                writer.Write(doubleBuffer.Slice(0, doubleLength));
                 writer.Write('D');
                 break;
             case EchoType.Decimal:
@@ -127,8 +132,9 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write(prop.BoolValue ? "true" : "false");
                 break;
             case EchoType.List:
+                string indent = Indent(indentLevel);
                 writer.WriteLine("[");
-                var list = (List<EchoObject>)prop.Value!;
+                var list = prop.List;
                 for (int i = 0; i < list.Count; i++)
                 {
                     writer.Write(indent);
@@ -145,7 +151,7 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write("]");
                 break;
             case EchoType.Compound:
-                WriteCompound(writer, (Dictionary<string, EchoObject>)prop.Value!, indentLevel);
+                WriteCompound(writer, prop.Tags, indentLevel);
                 break;
         }
     }
@@ -153,30 +159,26 @@ public sealed class EchoTextFormat : IFileFormat
     private static void WriteString(TextWriter writer, string value)
     {
         writer.Write('"');
-        foreach (var c in value)
+        int start = 0;
+        for (int i = 0; i < value.Length; i++)
         {
-            switch (c)
+            string? escape = value[i] switch
             {
-                case '"':
-                    writer.Write("\\\"");
-                    break;
-                case '\\':
-                    writer.Write("\\\\");
-                    break;
-                case '\n':
-                    writer.Write("\\n");
-                    break;
-                case '\r':
-                    writer.Write("\\r");
-                    break;
-                case '\t':
-                    writer.Write("\\t");
-                    break;
-                default:
-                    writer.Write(c);
-                    break;
-            }
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => null
+            };
+            if (escape == null)
+                continue;
+
+            writer.Write(value.AsSpan(start, i - start));
+            writer.Write(escape);
+            start = i + 1;
         }
+        writer.Write(value.AsSpan(start));
         writer.Write('"');
     }
 
@@ -187,19 +189,18 @@ public sealed class EchoTextFormat : IFileFormat
         writer.Write(']');
     }
 
-    private static void WriteCompound(TextWriter writer, Dictionary<string, EchoObject> dict, int indentLevel)
+    private static void WriteCompound(TextWriter writer, CompoundTags dict, int indentLevel)
     {
-        var indent = new string(' ', indentLevel * 2);
+        string indent = Indent(indentLevel);
 
         writer.WriteLine("{");
 
         bool wroteAny = false;
 
         // Write "$id", "$type", "$dependencies" keys first, if they exist
-        string[] specialKeys = ["$id", "$type", "$dependencies"];
-        foreach (var key in specialKeys)
+        foreach (var key in SpecialKeys)
         {
-            if (!dict.ContainsKey(key))
+            if (!dict.TryGetValue(key, out var special))
                 continue;
 
             if (wroteAny)
@@ -207,7 +208,7 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write(",");
                 writer.WriteLine();
             }
-            WriteCompoundElement(key, writer, dict, indentLevel, indent);
+            WriteCompoundElement(key, special, writer, indentLevel, indent);
             wroteAny = true;
         }
 
@@ -222,7 +223,7 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write(",");
                 writer.WriteLine();
             }
-            WriteCompoundElement(kvp.Key, writer, dict, indentLevel, indent);
+            WriteCompoundElement(kvp.Key, kvp.Value, writer, indentLevel, indent);
             wroteAny = true;
         }
 
@@ -231,13 +232,13 @@ public sealed class EchoTextFormat : IFileFormat
         writer.Write("}");
     }
 
-    private static void WriteCompoundElement(string key, TextWriter writer, Dictionary<string, EchoObject> dict, int indentLevel, string indent)
+    private static void WriteCompoundElement(string key, EchoObject value, TextWriter writer, int indentLevel, string indent)
     {
         writer.Write(indent);
         writer.Write("  ");
         WriteString(writer, key);
         writer.Write(": ");
-        WriteTag(dict[key], writer, indentLevel + 1);
+        WriteTag(value, writer, indentLevel + 1);
     }
 
     // Reading:
@@ -259,13 +260,13 @@ public sealed class EchoTextFormat : IFileFormat
     {
         var startPosition = parser.TokenPosition;
 
-        var dict = new Dictionary<string, EchoObject>();
+        var compound = EchoObject.NewCompound();
         while (parser.MoveNext())
         {
             switch (parser.TokenType)
             {
                 case TextTokenType.EndCompound:
-                    return new EchoObject(EchoType.Compound, dict);
+                    return compound;
                 case TextTokenType.Separator:
                     continue;
                 case TextTokenType.Value:
@@ -282,7 +283,7 @@ public sealed class EchoTextFormat : IFileFormat
 
                     var value = ReadTag(parser);
 
-                    dict.Add(name, value);
+                    compound.Add(name, value);
 
                     continue;
                 default:
@@ -382,25 +383,29 @@ public sealed class EchoTextFormat : IFileFormat
         throw new InvalidDataException($"Invalid value \"{parser.Token.ToString()}\" found while reading a tag at position {parser.TokenPosition}");
     }
 
+    // Same number styles Convert.ToInt32(string, provider) and friends use.
     private static EchoObject ReadNumberTag(StringTagTokenizer parser)
     {
-        static T ParsePrimitive<T>(StringTagTokenizer parser) where T : unmanaged
-            => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T), CultureInfo.InvariantCulture);
+        const NumberStyles Integer = NumberStyles.Integer;
+        const NumberStyles Float = NumberStyles.Float | NumberStyles.AllowThousands;
+        var invariant = CultureInfo.InvariantCulture;
+        var token = parser.Token;
+        var body = token[..^1];
 
-        return parser.Token[^1] switch
+        return token[^1] switch
         {
-            'B' => new EchoObject(ParsePrimitive<byte>(parser)),
-            'N' => new EchoObject(ParsePrimitive<sbyte>(parser)),
-            'S' => new EchoObject(ParsePrimitive<short>(parser)),
-            'I' => new EchoObject(ParsePrimitive<int>(parser)),
-            'L' => new EchoObject(ParsePrimitive<long>(parser)),
-            'V' => new EchoObject(ParsePrimitive<ushort>(parser)),
-            'U' => new EchoObject(ParsePrimitive<uint>(parser)),
-            'C' => new EchoObject(ParsePrimitive<ulong>(parser)),
-            'F' => new EchoObject(ParsePrimitive<float>(parser)),
-            'D' => new EchoObject(ParsePrimitive<double>(parser)),
-            'M' => new EchoObject(ParsePrimitive<decimal>(parser)),
-            >= '0' and <= '9' => new EchoObject((int)Convert.ChangeType(new string(parser.Token), typeof(int), CultureInfo.InvariantCulture)),
+            'B' => new EchoObject(byte.Parse(body, Integer, invariant)),
+            'N' => new EchoObject(sbyte.Parse(body, Integer, invariant)),
+            'S' => new EchoObject(short.Parse(body, Integer, invariant)),
+            'I' => new EchoObject(int.Parse(body, Integer, invariant)),
+            'L' => new EchoObject(long.Parse(body, Integer, invariant)),
+            'V' => new EchoObject(ushort.Parse(body, Integer, invariant)),
+            'U' => new EchoObject(uint.Parse(body, Integer, invariant)),
+            'C' => new EchoObject(ulong.Parse(body, Integer, invariant)),
+            'F' => new EchoObject(float.Parse(body, Float, invariant)),
+            'D' => new EchoObject(double.Parse(body, Float, invariant)),
+            'M' => new EchoObject(decimal.Parse(body, NumberStyles.Number, invariant)),
+            >= '0' and <= '9' => new EchoObject(int.Parse(token, Integer, invariant)),
             _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token.ToString()}\" at position {parser.TokenPosition}")
         };
     }
@@ -420,58 +425,140 @@ public sealed class EchoTextFormat : IFileFormat
         Value
     }
 
-    internal class StringTagTokenizer
+    internal sealed class StringTagTokenizer
     {
-        private readonly Tokenizer<TextTokenType> _tokenizer;
+        private readonly string _input;
+        private int _tokenLength;
 
-        public StringTagTokenizer(ReadOnlyMemory<char> input)
+        public StringTagTokenizer(string input) => _input = input;
+
+        public TextTokenType TokenType { get; private set; }
+        public ReadOnlySpan<char> Token => _input.AsSpan(TokenPosition, _tokenLength);
+        public int TokenPosition { get; private set; }
+        public int InputPosition { get; private set; }
+
+        public bool MoveNext()
         {
-            var symbolHandlers = new Dictionary<char, Func<TextTokenType>>
+            string input = _input;
+            int pos = InputPosition;
+            while (pos < input.Length && char.IsWhiteSpace(input[pos]))
+                pos++;
+
+            if (pos >= input.Length)
             {
-                {'{', () => HandleSingleCharToken(TextTokenType.BeginCompound)},
-                {'}', () => HandleSingleCharToken(TextTokenType.EndCompound)},
-                {'[', () => HandleOpenBracket()},
-                {']', () => HandleSingleCharToken(TextTokenType.EndList)},
-                {',', () => HandleSingleCharToken(TextTokenType.Separator)},
-                {':', () => HandleSingleCharToken(TextTokenType.NameValueSeparator)}
-            };
-
-            _tokenizer = new Tokenizer<TextTokenType>(
-                input,
-                symbolHandlers,
-                c => c is '{' or '}' or ',' or ';' or ':' or '[' or ']',
-                TextTokenType.Value,
-                TextTokenType.None
-            );
-        }
-
-        private TextTokenType HandleSingleCharToken(TextTokenType tokenType)
-        {
-            _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 1);
-            _tokenizer.IncrementInputPosition();
-            return tokenType;
-        }
-
-        private TextTokenType HandleOpenBracket()
-        {
-            if (_tokenizer.InputPosition + 2 < _tokenizer.Input.Length &&
-                _tokenizer.Input.Span[_tokenizer.InputPosition + 2] == ';')
-            {
-                _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 3);
-                _tokenizer.IncrementInputPosition(3);
-                return TextTokenType.BeginArray;
+                InputPosition = pos;
+                TokenPosition = input.Length;
+                TokenType = TextTokenType.None;
+                _tokenLength = 0;
+                return false;
             }
 
-            return HandleSingleCharToken(TextTokenType.BeginList);
+            TokenPosition = pos;
+            char first = input[pos];
+            switch (first)
+            {
+                case '{': return Single(TextTokenType.BeginCompound);
+                case '}': return Single(TextTokenType.EndCompound);
+                case ']': return Single(TextTokenType.EndList);
+                case ',': return Single(TextTokenType.Separator);
+                case ':': return Single(TextTokenType.NameValueSeparator);
+                case '[':
+                    if (pos + 2 < input.Length && input[pos + 2] == ';')
+                        return Emit(TextTokenType.BeginArray, pos + 3);
+                    return Single(TextTokenType.BeginList);
+                case '"':
+                case '\'':
+                    return ReadQuoted(first);
+            }
+
+            pos++;
+            while (pos < input.Length && !IsDelimiter(input[pos]))
+                pos++;
+            return Emit(TextTokenType.Value, pos);
         }
 
-        public bool MoveNext() => _tokenizer.MoveNext();
+        private static bool IsDelimiter(char c) =>
+            c is '{' or '}' or ',' or ';' or ':' or '[' or ']' or '"' or '\'' || char.IsWhiteSpace(c);
 
-        public string ParseQuotedStringValue() => _tokenizer.ParseQuotedStringValue();
+        private bool Single(TextTokenType type) => Emit(type, TokenPosition + 1);
 
-        public TextTokenType TokenType => _tokenizer.TokenType;
-        public ReadOnlySpan<char> Token => _tokenizer.Token;
-        public int TokenPosition => _tokenizer.TokenPosition;
-        public int InputPosition => _tokenizer.InputPosition;
+        private bool Emit(TextTokenType type, int end)
+        {
+            TokenType = type;
+            _tokenLength = end - TokenPosition;
+            InputPosition = end;
+            return true;
+        }
+
+        private bool ReadQuoted(char quote)
+        {
+            string input = _input;
+            int pos = TokenPosition + 1;
+            while (pos < input.Length)
+            {
+                char c = input[pos];
+                if (c == quote)
+                    return Emit(TextTokenType.Value, pos + 1);
+
+                if (c == '\\')
+                {
+                    if (pos + 1 >= input.Length)
+                        throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
+                    pos++;
+                }
+                pos++;
+            }
+
+            throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
+        }
+
+        public string ParseQuotedStringValue()
+        {
+            var token = Token;
+            var quote = token[0];
+            if (token[^1] != quote)
+                throw new InvalidDataException($"Missing ending quote from string \"{token.ToString()}\" at position {TokenPosition}");
+
+            var inner = token[1..^1];
+            if (inner.IndexOf('\\') < 0 && inner.IndexOf(quote) < 0)
+                return inner.ToString();
+
+            var s = new char[inner.Length];
+            var len = 0;
+            var rest = inner;
+            while (!rest.IsEmpty)
+            {
+                if (rest[0] == quote)
+                    throw new InvalidDataException($"Unescaped quote character in string \"{token.ToString()}\" at position {TokenPosition}");
+
+                if (rest[0] == '\\')
+                {
+                    if (rest.Length < 2)
+                        throw new EndOfStreamException();
+
+                    switch (rest[1])
+                    {
+                        case '\\': s[len++] = '\\'; break;
+                        case 't': s[len++] = '\t'; break;
+                        case 'n': s[len++] = '\n'; break;
+                        case 'r': s[len++] = '\r'; break;
+                        default:
+                            if (rest[1] == quote)
+                                s[len++] = quote;
+                            else
+                                throw new InvalidDataException($"Invalid escape sequence in string \"{token.ToString()}\" at position {TokenPosition}");
+                            break;
+                    }
+
+                    rest = rest[2..];
+                    continue;
+                }
+
+                s[len++] = rest[0];
+                rest = rest[1..];
+            }
+
+            return new string(s, 0, len);
+        }
     }
 }

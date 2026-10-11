@@ -14,7 +14,7 @@ internal static class CollectionReferences
     {
         if (ctx.objectToId.TryGetValue(value, out id))
         {
-            var stub = EchoObject.NewCompound();
+            var stub = EchoObject.NewCompound(1);
             stub["$id"] = new EchoObject(EchoType.Int, id);
             return stub;
         }
@@ -27,7 +27,7 @@ internal static class CollectionReferences
     // Wraps a bare-list body so it can carry an id: { "$id": N, "$values": [...] }.
     public static EchoObject WrapListBody(EchoObject listBody, int id)
     {
-        var compound = EchoObject.NewCompound();
+        var compound = EchoObject.NewCompound(2);
         compound["$id"] = new EchoObject(EchoType.Int, id);
         compound["$values"] = listBody;
         return compound;
@@ -73,8 +73,8 @@ internal static class CollectionReferences
 
     private static bool HasBody(EchoObject compound)
     {
-        foreach (var key in compound.Tags.Keys)
-            if (key != "$id" && key != "$type")
+        foreach (var tag in compound.Tags)
+            if (tag.Key != "$id" && tag.Key != "$type")
                 return true;
         return false;
     }

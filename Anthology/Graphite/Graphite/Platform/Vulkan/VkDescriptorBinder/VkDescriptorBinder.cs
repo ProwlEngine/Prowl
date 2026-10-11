@@ -299,25 +299,25 @@ internal unsafe sealed partial class VkDescriptorBinder
             switch (r.Kind)
             {
                 case ResourceKind.UniformBuffer:
-                    dst[n++] = r.Buffer.DeviceBuffer.Handle;
+                    dst[n++] = r.Buffer.DescriptorId;
                     dst[n++] = r.DescRange;
                     break;
 
                 case ResourceKind.StructuredBufferReadOnly:
                 case ResourceKind.StructuredBufferReadWrite:
-                    dst[n++] = r.Buffer.DeviceBuffer.Handle;
+                    dst[n++] = r.Buffer.DescriptorId;
                     dst[n++] = r.DescOffset;
                     dst[n++] = r.DescRange;
                     break;
 
                 case ResourceKind.TextureReadOnly:
                 case ResourceKind.TextureReadWrite:
-                    dst[n++] = r.View.ImageView.Handle;
+                    dst[n++] = r.View.DescriptorId;
                     dst[n++] = (ulong)r.Layout;
                     break;
 
                 case ResourceKind.Sampler:
-                    dst[n++] = r.Sampler.DeviceSampler.Handle;
+                    dst[n++] = r.Sampler.DescriptorId;
                     break;
             }
         }

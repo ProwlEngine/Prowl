@@ -786,12 +786,12 @@ public static class PropertyGridRenderer
                     .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
-                    paper.Box($"{id}_ci").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, acc, size: 12f);
+                    paper.Box($"{id}_ci").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiGlyphs.LayerGroup_I, acc, size: 12f);
                     paper.Box($"{id}_cc").Width(ST).Height(headH).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? $"{list.Count} elements" : $"{label}  ({list.Count})", font)
                         .TextColor(tMid).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
                     paper.Box($"{id}_cv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
-                        .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
+                        .Icon(paper, expanded ? Origami.Current.Icons.ChevronDown : Origami.Current.Icons.ChevronRight, tLo, size: 11f);
                 }
 
                 if (!expanded && anim <= 0.001f) return;
@@ -808,7 +808,7 @@ public static class PropertyGridRenderer
                         CaptureRow(idx, rowB);
                         using (rowB.Enter())
                         {
-                            var grip = paper.Box($"{id}_g_{sk}").Width(12).Height(rowH).Icon(paper, OrigamiIconSet.Grip, tDim, size: 13f);
+                            var grip = paper.Box($"{id}_g_{sk}").Width(12).Height(rowH).Icon(paper, Origami.Current.Icons.GripVertical, tDim, size: 13f);
                             GripDrag(sk, grip);
 
                             paper.Box($"{id}_i_{sk}").Width(14).Height(rowH).IsNotInteractable()
@@ -819,7 +819,7 @@ public static class PropertyGridRenderer
 
                             paper.Box($"{id}_x_{sk}").Width(18).Height(18).Rounded(m.SmallRounding).Margin(0, 0, ST, ST)
                                 .Hovered.BackgroundColor(redBg).End()
-                                .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
+                                .Icon(paper, Origami.Current.Icons.Close, tLo, size: 11f)
                                 .OnClick(idx, (j, _) => RemoveAt(j)).Cursor(PaperCursor.Pointer);
                         }
                         if (i < list.Count - 1)
@@ -859,11 +859,11 @@ public static class PropertyGridRenderer
                     // rather than blanket .StopEventPropagation(), so the wheel still bubbles to a
                     // parent ScrollView. The reorder drag (GripDrag) bubbles harmlessly - the header
                     // has no drag handler.
-                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).OnClick(e => e.StopPropagation()).Icon(paper, OrigamiIconSet.Grip, tDim, size: 12f);
+                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).OnClick(e => e.StopPropagation()).Icon(paper, Origami.Current.Icons.GripVertical, tDim, size: 12f);
                     GripDrag(sk, grip);
 
                     paper.Box($"{id}_nc_{sk}").Width(11).Height(rowH).IsNotInteractable()
-                        .Icon(paper, exp ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
+                        .Icon(paper, exp ? Origami.Current.Icons.ChevronDown : Origami.Current.Icons.ChevronRight, tLo, size: 11f);
 
                     paper.Box($"{id}_ni_{sk}").Width(UnitValue.Auto).Height(rowH).IsNotInteractable()
                         .Text(i.ToString(), mono).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
@@ -874,7 +874,7 @@ public static class PropertyGridRenderer
 
                     paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(m.SmallRounding).Margin(0, 0, ST, ST)
                         .Hovered.BackgroundColor(redBg).End()
-                        .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
+                        .Icon(paper, Origami.Current.Icons.Close, tLo, size: 11f)
                         .OnClick(i, (j, e) => { e.StopPropagation(); RemoveAt(j); }).Cursor(PaperCursor.Pointer);
                 }
 
@@ -919,13 +919,13 @@ public static class PropertyGridRenderer
                     .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
-                    paper.Box($"{id}_nli").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, color, size: 13f);
+                    paper.Box($"{id}_nli").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiGlyphs.LayerGroup_I, color, size: 13f);
                     paper.Box($"{id}_nlt").Width(UnitValue.Auto).Height(headH).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? elementType.Name : label, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
                     paper.Box($"{id}_nlc").Width(ST).Height(headH).Margin(4, 0, 0, 0).IsNotInteractable()
                         .Text($"[{list.Count}]", mono).TextColor(tLo).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
                     paper.Box($"{id}_nlv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
-                        .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
+                        .Icon(paper, expanded ? Origami.Current.Icons.ChevronDown : Origami.Current.Icons.ChevronRight, tLo, size: 11f);
                 }
 
                 if (!expanded && anim <= 0.001f) return;

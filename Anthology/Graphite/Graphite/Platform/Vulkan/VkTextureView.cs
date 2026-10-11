@@ -7,6 +7,7 @@ internal unsafe partial class VkTextureView : TextureView
 {
     private readonly VkGraphicsDevice _gd;
     private readonly ImageView _imageView;
+    internal readonly ulong DescriptorId = VkDescriptorSetCache.NextResourceId();
 
     public ImageView ImageView => _imageView;
 

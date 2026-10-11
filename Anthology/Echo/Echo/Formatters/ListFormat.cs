@@ -30,9 +30,13 @@ internal sealed class ListFormat : ISerializationFormat
         var elementType = GetElementType(targetType!);
         var list = value as IList ?? throw new InvalidOperationException("Expected IList type");
 
-        List<EchoObject> tags = new(list.Count);
-        for (int i = 0; i < list.Count; i++)
-            tags.Add(Serializer.Serialize(elementType, list[i], context));
+        List<EchoObject>? tags = PrimitiveCollections.TryWrite(list, elementType);
+        if (tags == null)
+        {
+            tags = new(list.Count);
+            for (int i = 0; i < list.Count; i++)
+                tags.Add(Serializer.Serialize(elementType, list[i], context));
+        }
         return CollectionReferences.WrapListBody(new EchoObject(tags), id);
     }
 
@@ -46,8 +50,12 @@ internal sealed class ListFormat : ISerializationFormat
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
         CollectionReferences.Register(value, list, context);
 
-        foreach (var tag in CollectionReferences.ListItems(value))
-            list.Add(Serializer.Deserialize(tag, elementType, context));
+        var items = CollectionReferences.ListItems(value);
+        if (!PrimitiveCollections.TryReadList(list, items, elementType, context))
+        {
+            foreach (var tag in items)
+                list.Add(Serializer.Deserialize(tag, elementType, context));
+        }
         return list;
     }
 }

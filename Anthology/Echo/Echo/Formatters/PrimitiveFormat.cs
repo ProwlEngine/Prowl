@@ -60,7 +60,7 @@ internal sealed class PrimitiveFormat : ISerializationFormat
     {
         try
         {
-            if (value.TagType == EchoType.ByteArray && targetType == typeof(byte[]))
+            if (value.TagType < EchoType.List && Serializer.PrimitiveTypes[(int)value.TagType] == targetType)
                 return value.Value;
 
             return Convert.ChangeType(value.Value, targetType);

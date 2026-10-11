@@ -1,489 +1,142 @@
-﻿using System.Diagnostics;
-using System.Text.Json;
-using MessagePack;
-using Newtonsoft.Json;
-using Prowl.Echo;
+﻿using Prowl.Echo;
 
 namespace Benchmarks;
 
-// Test data models
-[FixedEchoStructure]
-[GenerateSerializer]
-public partial class Person
+// Usage: Benchmarks [--filter text] [--save file.csv] [--baseline file.csv] [--batches n] [--quick] [--compare]
+public static class Program
 {
-    public string? Name;
-    public int Age;
-    public string? Email;
-    public Address? Address;
-    public List<string>? Hobbies;
-}
-
-[FixedEchoStructure]
-[GenerateSerializer]
-public partial class Address
-{
-    public string? Street;
-    public string? City;
-    public string? State;
-    public string? ZipCode;
-}
-
-[FixedEchoStructure]
-[GenerateSerializer]
-public partial class ComplexData
-{
-    public List<Person>? People;
-    public Dictionary<string, int>? Scores;
-    public DateTime Timestamp;
-    public Guid Id;
-    public double[] Coordinates = Array.Empty<double>();
-}
-
-// MessagePack models (requires attributes)
-[MessagePackObject]
-public class MsgPackPerson
-{
-    [Key(0)] public string? Name;
-    [Key(1)] public int Age;
-    [Key(2)] public string? Email;
-    [Key(3)] public MsgPackAddress? Address;
-    [Key(4)] public List<string>? Hobbies;
-}
-
-[MessagePackObject]
-public class MsgPackAddress
-{
-    [Key(0)] public string? Street;
-    [Key(1)] public string? City;
-    [Key(2)] public string? State;
-    [Key(3)] public string? ZipCode;
-}
-
-[MessagePackObject]
-public class MsgPackComplexData
-{
-    [Key(0)] public List<MsgPackPerson>? People;
-    [Key(1)] public Dictionary<string, int>? Scores;
-    [Key(2)] public DateTime Timestamp;
-    [Key(3)] public Guid Id;
-    [Key(4)] public double[] Coordinates = Array.Empty<double>();
-}
-
-public class BenchmarkResult
-{
-    public string Operation = "";
-    public double MinMs;
-    public double MaxMs;
-    public double AvgMs;
-    public double MedianMs;
-    public double StdDevMs;
-    public double TotalMs;
-    public int Iterations;
-}
-
-public class Program
-{
-    private const int WarmupIterations = 100;
-    private const int BenchmarkIterations = 50000;
-
     public static void Main(string[] args)
     {
-        PrintHeader("Prowl.Echo Serialization Benchmarks");
-        Console.WriteLine($"Warmup: {WarmupIterations} iterations");
-        Console.WriteLine($"Benchmark: {BenchmarkIterations} iterations");
-        Console.WriteLine();
-
-        // Create test data
-        var testData = CreateComplexTestData();
-
-        // Run benchmarks for each serializer
-        var results = new Dictionary<string, List<BenchmarkResult>>();
-
-        PrintSectionHeader("System.Text.Json");
-        results["System.Text.Json"] = RunSystemTextJsonBenchmark(testData);
-
-        PrintSectionHeader("Newtonsoft.Json");
-        results["Newtonsoft.Json"] = RunNewtonsoftJsonBenchmark(testData);
-
-        PrintSectionHeader("MessagePack");
-        results["MessagePack"] = RunMessagePackBenchmark(testData);
-
-        PrintSectionHeader("Prowl.Echo");
-        results["Echo"] = RunEchoBenchmark(testData);
-
-        // Print comparison summary
-        PrintComparisonSummary(results);
-    }
-
-    private static ComplexData CreateComplexTestData()
-    {
-        var random = new Random(42); // Fixed seed for consistent results
-        return new ComplexData
+        System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.High;
+        string? filter = Arg(args, "--filter");
+        string? save = Arg(args, "--save");
+        string? baselinePath = Arg(args, "--baseline");
+        if (Arg(args, "--batches") is string batches)
+            Harness.Batches = int.Parse(batches);
+        if (args.Contains("--quick"))
         {
-            Id = Guid.NewGuid(),
-            Timestamp = DateTime.Now,
-            Coordinates = Enumerable.Range(0, 100).Select(i => random.NextDouble() * 100).ToArray(),
-            Scores = Enumerable.Range(0, 50)
-                .ToDictionary(i => $"Player{i}", i => random.Next(0, 1000)),
-            People = Enumerable.Range(0, 100).Select(i => new Person
+            Harness.Batches = 7;
+            Harness.BatchMs = 10;
+            Harness.WarmupMs = 60;
+        }
+
+        if (args.Contains("--compare"))
+        {
+            Comparison.Run();
+            return;
+        }
+
+        var baseline = baselinePath != null ? Harness.Load(baselinePath) : null;
+        var scenarios = Scenarios.All();
+
+        PrintSizes(scenarios, filter);
+
+        var results = new List<Measurement>();
+        Harness.PrintHeader(baseline != null);
+        foreach (var scenario in scenarios)
+        {
+            foreach (var (op, action) in Operations(scenario))
             {
-                Name = $"Person {i}",
-                Age = random.Next(18, 80),
-                Email = $"person{i}@example.com",
-                Address = new Address
-                {
-                    Street = $"{random.Next(1, 9999)} Main St",
-                    City = "TestCity",
-                    State = "TS",
-                    ZipCode = $"{random.Next(10000, 99999)}"
-                },
-                Hobbies = Enumerable.Range(0, random.Next(2, 6))
-                    .Select(j => $"Hobby {j}")
-                    .ToList()
-            }).ToList()
-        };
-    }
+                if (filter != null && !$"{scenario.Name}.{op}".Contains(filter, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-    private static List<BenchmarkResult> RunEchoBenchmark(ComplexData testData)
-    {
-        var results = new List<BenchmarkResult>();
-
-        // Warmup
-        Console.WriteLine("  Warming up...");
-        for (int i = 0; i < WarmupIterations; i++)
-        {
-            var serialized = Serializer.Serialize(testData);
-            var deserialized = Serializer.Deserialize<ComplexData>(serialized);
-        }
-
-        // Serialization benchmark
-        Console.WriteLine("  Benchmarking serialization...");
-        results.Add(BenchmarkOperation("Serialize", BenchmarkIterations, () =>
-        {
-            var serialized = Serializer.Serialize(testData);
-        }));
-
-        // Deserialization benchmark
-        Console.WriteLine("  Benchmarking deserialization...");
-        var echoSerialized = Serializer.Serialize(testData);
-        results.Add(BenchmarkOperation("Deserialize", BenchmarkIterations, () =>
-        {
-            var deserialized = Serializer.Deserialize<ComplexData>(echoSerialized);
-        }));
-
-        // Round-trip benchmark
-        Console.WriteLine("  Benchmarking round-trip...");
-        results.Add(BenchmarkOperation("Round-trip", BenchmarkIterations, () =>
-        {
-            var serialized = Serializer.Serialize(testData);
-            var deserialized = Serializer.Deserialize<ComplexData>(serialized);
-        }));
-
-        PrintResults(results);
-        return results;
-    }
-
-    private static List<BenchmarkResult> RunSystemTextJsonBenchmark(ComplexData testData)
-    {
-        var results = new List<BenchmarkResult>();
-        var options = new JsonSerializerOptions
-        {
-            WriteIndented = false,
-            IncludeFields = true
-        };
-
-        // Warmup
-        Console.WriteLine("  Warming up...");
-        for (int i = 0; i < WarmupIterations; i++)
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(testData, options);
-            var deserialized = System.Text.Json.JsonSerializer.Deserialize<ComplexData>(json, options);
-        }
-
-        // Serialization benchmark
-        Console.WriteLine("  Benchmarking serialization...");
-        results.Add(BenchmarkOperation("Serialize", BenchmarkIterations, () =>
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(testData, options);
-        }));
-
-        // Deserialization benchmark
-        Console.WriteLine("  Benchmarking deserialization...");
-        var stjSerialized = System.Text.Json.JsonSerializer.Serialize(testData, options);
-        results.Add(BenchmarkOperation("Deserialize", BenchmarkIterations, () =>
-        {
-            var deserialized = System.Text.Json.JsonSerializer.Deserialize<ComplexData>(stjSerialized, options);
-        }));
-
-        // Round-trip benchmark
-        Console.WriteLine("  Benchmarking round-trip...");
-        results.Add(BenchmarkOperation("Round-trip", BenchmarkIterations, () =>
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(testData, options);
-            var deserialized = System.Text.Json.JsonSerializer.Deserialize<ComplexData>(json, options);
-        }));
-
-        PrintResults(results);
-        return results;
-    }
-
-    private static List<BenchmarkResult> RunNewtonsoftJsonBenchmark(ComplexData testData)
-    {
-        var results = new List<BenchmarkResult>();
-        var settings = new JsonSerializerSettings
-        {
-            Formatting = Formatting.None
-        };
-
-        // Warmup
-        Console.WriteLine("  Warming up...");
-        for (int i = 0; i < WarmupIterations; i++)
-        {
-            var json = JsonConvert.SerializeObject(testData, settings);
-            var deserialized = JsonConvert.DeserializeObject<ComplexData>(json, settings);
-        }
-
-        // Serialization benchmark
-        Console.WriteLine("  Benchmarking serialization...");
-        results.Add(BenchmarkOperation("Serialize", BenchmarkIterations, () =>
-        {
-            var json = JsonConvert.SerializeObject(testData, settings);
-        }));
-
-        // Deserialization benchmark
-        Console.WriteLine("  Benchmarking deserialization...");
-        var newtonsoftSerialized = JsonConvert.SerializeObject(testData, settings);
-        results.Add(BenchmarkOperation("Deserialize", BenchmarkIterations, () =>
-        {
-            var deserialized = JsonConvert.DeserializeObject<ComplexData>(newtonsoftSerialized, settings);
-        }));
-
-        // Round-trip benchmark
-        Console.WriteLine("  Benchmarking round-trip...");
-        results.Add(BenchmarkOperation("Round-trip", BenchmarkIterations, () =>
-        {
-            var json = JsonConvert.SerializeObject(testData, settings);
-            var deserialized = JsonConvert.DeserializeObject<ComplexData>(json, settings);
-        }));
-
-        PrintResults(results);
-        return results;
-    }
-
-    private static MsgPackComplexData ConvertToMsgPack(ComplexData data)
-    {
-        return new MsgPackComplexData
-        {
-            Id = data.Id,
-            Timestamp = data.Timestamp,
-            Coordinates = data.Coordinates,
-            Scores = data.Scores,
-            People = data.People?.Select(p => new MsgPackPerson
-            {
-                Name = p.Name,
-                Age = p.Age,
-                Email = p.Email,
-                Hobbies = p.Hobbies,
-                Address = p.Address != null ? new MsgPackAddress
-                {
-                    Street = p.Address.Street,
-                    City = p.Address.City,
-                    State = p.Address.State,
-                    ZipCode = p.Address.ZipCode
-                } : null
-            }).ToList()
-        };
-    }
-
-    private static List<BenchmarkResult> RunMessagePackBenchmark(ComplexData testData)
-    {
-        var results = new List<BenchmarkResult>();
-        var msgPackData = ConvertToMsgPack(testData);
-
-        // Warmup
-        Console.WriteLine("  Warming up...");
-        for (int i = 0; i < WarmupIterations; i++)
-        {
-            var bytes = MessagePackSerializer.Serialize(msgPackData);
-            var deserialized = MessagePackSerializer.Deserialize<MsgPackComplexData>(bytes);
-        }
-
-        // Serialization benchmark
-        Console.WriteLine("  Benchmarking serialization...");
-        results.Add(BenchmarkOperation("Serialize", BenchmarkIterations, () =>
-        {
-            var bytes = MessagePackSerializer.Serialize(msgPackData);
-        }));
-
-        // Deserialization benchmark
-        Console.WriteLine("  Benchmarking deserialization...");
-        var serializedBytes = MessagePackSerializer.Serialize(msgPackData);
-        results.Add(BenchmarkOperation("Deserialize", BenchmarkIterations, () =>
-        {
-            var deserialized = MessagePackSerializer.Deserialize<MsgPackComplexData>(serializedBytes);
-        }));
-
-        // Round-trip benchmark
-        Console.WriteLine("  Benchmarking round-trip...");
-        results.Add(BenchmarkOperation("Round-trip", BenchmarkIterations, () =>
-        {
-            var bytes = MessagePackSerializer.Serialize(msgPackData);
-            var deserialized = MessagePackSerializer.Deserialize<MsgPackComplexData>(bytes);
-        }));
-
-        PrintResults(results);
-        return results;
-    }
-
-    private static BenchmarkResult BenchmarkOperation(string operation, int iterations, Action action)
-    {
-        var times = new List<double>();
-        var sw = Stopwatch.StartNew();
-
-        for (int i = 0; i < iterations; i++)
-        {
-            var iterStart = sw.Elapsed.TotalMilliseconds;
-            action();
-            var iterEnd = sw.Elapsed.TotalMilliseconds;
-            times.Add(iterEnd - iterStart);
-        }
-
-        sw.Stop();
-
-        // Calculate statistics
-        times.Sort();
-        var min = times.Min();
-        var max = times.Max();
-        var avg = times.Average();
-        var median = times[times.Count / 2];
-        var variance = times.Average(t => Math.Pow(t - avg, 2));
-        var stdDev = Math.Sqrt(variance);
-
-        return new BenchmarkResult
-        {
-            Operation = operation,
-            MinMs = min,
-            MaxMs = max,
-            AvgMs = avg,
-            MedianMs = median,
-            StdDevMs = stdDev,
-            TotalMs = sw.Elapsed.TotalMilliseconds,
-            Iterations = iterations
-        };
-    }
-
-    private static void PrintHeader(string title)
-    {
-        var width = 80;
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("╔" + new string('═', width - 2) + "╗");
-        Console.WriteLine("║" + title.PadLeft((width + title.Length) / 2).PadRight(width - 2) + "║");
-        Console.WriteLine("╚" + new string('═', width - 2) + "╝");
-        Console.ResetColor();
-    }
-
-    private static void PrintSectionHeader(string title)
-    {
-        Console.WriteLine();
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("┌─" + new string('─', title.Length) + "─┐");
-        Console.WriteLine("│ " + title + " │");
-        Console.WriteLine("└─" + new string('─', title.Length) + "─┘");
-        Console.ResetColor();
-    }
-
-    private static void PrintResults(List<BenchmarkResult> results)
-    {
-        Console.WriteLine();
-        Console.ForegroundColor = ConsoleColor.White;
-        Console.WriteLine($"  {"Operation",-15} {"Min (ms)",10} {"Max (ms)",10} {"Avg (ms)",10} {"Median (ms)",12} {"StdDev",10} {"Total (ms)",12}");
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("  " + new string('─', 85));
-        Console.ResetColor();
-
-        foreach (var result in results)
-        {
-            Console.WriteLine($"  {result.Operation,-15} " +
-                            $"{result.MinMs,10:F4} " +
-                            $"{result.MaxMs,10:F4} " +
-                            $"{result.AvgMs,10:F4} " +
-                            $"{result.MedianMs,12:F4} " +
-                            $"{result.StdDevMs,10:F4} " +
-                            $"{result.TotalMs,12:F2}");
-        }
-    }
-
-    private static void PrintComparisonSummary(Dictionary<string, List<BenchmarkResult>> allResults)
-    {
-        Console.WriteLine();
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("╔" + new string('═', 78) + "╗");
-        Console.WriteLine("║" + "Performance Comparison Summary".PadLeft(54).PadRight(78) + "║");
-        Console.WriteLine("╚" + new string('═', 78) + "╝");
-        Console.ResetColor();
-        Console.WriteLine();
-
-        var operations = new[] { "Serialize", "Deserialize", "Round-trip" };
-
-        foreach (var operation in operations)
-        {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"  {operation}:");
-            Console.ResetColor();
-
-            var operationResults = allResults
-                .Select(kvp => new
-                {
-                    Library = kvp.Key,
-                    Result = kvp.Value.First(r => r.Operation == operation)
-                })
-                .OrderBy(x => x.Result.AvgMs)
-                .ToList();
-
-            var fastest = operationResults.First();
-
-            foreach (var item in operationResults)
-            {
-                var ratio = item.Result.AvgMs / fastest.Result.AvgMs;
-                var color = item.Library == fastest.Library
-                    ? ConsoleColor.Green
-                    : ratio < 2 ? ConsoleColor.Yellow : ConsoleColor.Red;
-
-                Console.ForegroundColor = color;
-                Console.Write($"    {item.Library,-20}");
-                Console.ResetColor();
-                Console.Write($" Avg: {item.Result.AvgMs,8:F4} ms");
-
-                if (item.Library != fastest.Library)
-                {
-                    Console.ForegroundColor = ConsoleColor.DarkGray;
-                    Console.Write($"  ({ratio:F2}x slower)");
-                    Console.ResetColor();
-                }
-                else
-                {
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.Write("  ★ Fastest");
-                    Console.ResetColor();
-                }
-
-                Console.WriteLine();
+                var m = Harness.Measure(scenario.Name, op, action);
+                results.Add(m);
+                Harness.Print(m, baseline?.GetValueOrDefault($"{m.Scenario}.{m.Op}"));
             }
-
-            Console.WriteLine();
         }
 
-        // Calculate overall winner
-        var overallScores = allResults.Select(kvp => new
-        {
-            Library = kvp.Key,
-            TotalAvg = kvp.Value.Average(r => r.AvgMs)
-        }).OrderBy(x => x.TotalAvg).ToList();
+        if (baseline != null)
+            PrintTotals(results, baseline);
 
-        Console.ForegroundColor = ConsoleColor.Magenta;
-        Console.WriteLine($"  Overall Winner: {overallScores.First().Library}");
-        Console.ResetColor();
-        Console.WriteLine($"    (Lowest average across all operations: {overallScores.First().TotalAvg:F4} ms)");
+        if (save != null)
+        {
+            Harness.Save(save, results);
+            Console.WriteLine($"Saved to {Path.GetFullPath(save)}");
+        }
+    }
+
+    private static IEnumerable<(string, Action)> Operations(Scenario s)
+    {
+        var echo = Serializer.Serialize(s.Value);
+        yield return ("Serialize", () => Serializer.Serialize(s.Value));
+        yield return ("Deserialize", () => Serializer.Deserialize(echo, s.Type));
+
+        if (!s.FileFormats)
+            yield break;
+
+        var perf = new EchoBinaryFormat();
+        var size = new EchoBinaryFormat { Options = new BinarySerializationOptions { EncodingMode = BinaryEncodingMode.Size } };
+        var stream = new MemoryStream();
+        byte[] perfBytes = perf.WriteToBytes(echo);
+        byte[] sizeBytes = size.WriteToBytes(echo);
+        string text = EchoTextFormat.Write(echo);
+
+        yield return ("BinWrite", () => { stream.SetLength(0); perf.WriteTo(echo, stream); });
+        yield return ("BinRead", () => perf.ReadFrom(new MemoryStream(perfBytes)));
+        yield return ("SizeWrite", () => { stream.SetLength(0); size.WriteTo(echo, stream); });
+        yield return ("SizeRead", () => size.ReadFrom(new MemoryStream(sizeBytes)));
+        yield return ("TextWrite", () => EchoTextFormat.Write(echo));
+        yield return ("TextRead", () => EchoTextFormat.Read(text));
+
+        IFileFormat[] others = { JsonFileFormat.Instance, YamlFileFormat.Instance, XmlFileFormat.Instance, BsonFileFormat.Instance };
+        foreach (var format in others)
+        {
+            string name = format.GetType().Name.Replace("FileFormat", "");
+            byte[] bytes = format.WriteToBytes(echo);
+            yield return (name + "Write", () => { stream.SetLength(0); format.WriteTo(echo, stream); });
+            yield return (name + "Read", () => format.ReadFrom(new MemoryStream(bytes)));
+        }
+    }
+
+    private static void PrintSizes(List<Scenario> scenarios, string? filter)
+    {
+        Console.WriteLine($"{"Scenario",-22} {"Nodes",8} {"Binary",10} {"SizeMode",10} {"Text",10}  Roundtrip");
+        Console.WriteLine(new string('-', 80));
+        foreach (var s in scenarios)
+        {
+            if (filter != null && !s.Name.Contains(filter.Split('.')[0], StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var echo = Serializer.Serialize(s.Value);
+            var again = Serializer.Serialize(Serializer.Deserialize(echo, s.Type));
+            var size = new EchoBinaryFormat { Options = new BinarySerializationOptions { EncodingMode = BinaryEncodingMode.Size } };
+            byte[] perfBytes = new EchoBinaryFormat().WriteToBytes(echo);
+            byte[] sizeBytes = size.WriteToBytes(echo);
+            string text = EchoTextFormat.Write(echo);
+
+            bool ok = echo.Equals(again)
+                && echo.Equals(new EchoBinaryFormat().ReadFromBytes(perfBytes))
+                && echo.Equals(size.ReadFromBytes(sizeBytes));
+
+            Console.Write($"{s.Name,-22} {CountNodes(echo),8} {Harness.Bytes(perfBytes.Length),10} {Harness.Bytes(sizeBytes.Length),10} {Harness.Bytes(text.Length),10}  ");
+            Console.ForegroundColor = ok ? ConsoleColor.Green : ConsoleColor.Red;
+            Console.WriteLine(ok ? "ok" : "MISMATCH");
+            Console.ResetColor();
+        }
         Console.WriteLine();
+    }
+
+    private static void PrintTotals(List<Measurement> results, Dictionary<string, Measurement> baseline)
+    {
+        var matched = results.Where(m => baseline.ContainsKey($"{m.Scenario}.{m.Op}")).ToList();
+        if (matched.Count == 0) return;
+        double time = Math.Exp(matched.Average(m => Math.Log(m.MedianNs / baseline[$"{m.Scenario}.{m.Op}"].MedianNs)));
+        double alloc = Math.Exp(matched.Average(m => Math.Log(Math.Max(1, m.AllocBytes) / Math.Max(1, baseline[$"{m.Scenario}.{m.Op}"].AllocBytes))));
+        Console.WriteLine();
+        Console.WriteLine($"Geometric mean vs baseline: time {time:F2}x, alloc {alloc:F2}x");
+    }
+
+    private static int CountNodes(EchoObject echo) => echo.TagType switch
+    {
+        EchoType.Compound => 1 + echo.Tags.Values.Sum(CountNodes),
+        EchoType.List => 1 + echo.List.Sum(CountNodes),
+        _ => 1
+    };
+
+    private static string? Arg(string[] args, string name)
+    {
+        int i = Array.IndexOf(args, name);
+        return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
     }
 }

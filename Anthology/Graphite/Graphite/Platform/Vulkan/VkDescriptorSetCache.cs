@@ -21,6 +21,10 @@ internal sealed class VkDescriptorSetCache
     // only frees back down to it (never below) when entries age out.
     private const int WarmFloorPerSet = 32;
 
+    private static ulong s_nextResourceId;
+
+    internal static ulong NextResourceId() => System.Threading.Interlocked.Increment(ref s_nextResourceId);
+
     private sealed class Entry
     {
         public DescriptorAllocationToken Token;

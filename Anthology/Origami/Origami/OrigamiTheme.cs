@@ -183,38 +183,36 @@ public sealed class OrigamiTheme
         Font = b.Font,
     };
 
-    /// <summary>
-    /// Standalone defaults — the "Nebula" palette: frosted magenta-violet glass over a dark void.
-    /// Surface stops carry alpha so panels read as translucent glass floating over whatever the
-    /// host draws behind them. Used when no host has called <see cref="Origami.SetTheme"/>.
-    /// </summary>
+    /// <summary>The default theme: Prowl's dark palette, Geist fonts and Font Awesome icons.</summary>
     public static OrigamiTheme CreateDefaults() => new()
     {
-        // Neutral surface ramp (Indigo). C200 = subtle indigo border; C300 = tab bar / glass-head;
-        // C400 = panel body glass; C500 = raised / hover surface.
+        Font = OrigamiFonts.Regular,
+        FontMedium = OrigamiFonts.Medium,
+        FontSemiBold = OrigamiFonts.SemiBold,
+        FontBold = OrigamiFonts.Bold,
+        FontMono = OrigamiFonts.Mono,
+
         Neutral = new OrigamiRamp
         {
-            C100 = Color.FromArgb(235, 6, 6, 14),
-            C200 = Color.FromArgb(33, 150, 160, 255),
-            C300 = Color.FromArgb(220, 22, 22, 40),
-            C400 = Color.FromArgb(205, 14, 14, 28),
-            C500 = Color.FromArgb(235, 24, 24, 48),
-            C600 = Color.FromArgb(245, 34, 34, 62),
-            C700 = Color.FromArgb(255, 48, 48, 78),
+            C100 = Color.FromArgb(235, 12, 12, 14),
+            C200 = Color.FromArgb(33, 160, 160, 170),
+            C300 = Color.FromArgb(220, 24, 24, 27),
+            C400 = Color.FromArgb(205, 20, 20, 23),
+            C500 = Color.FromArgb(235, 31, 31, 35),
+            C600 = Color.FromArgb(245, 39, 39, 43),
+            C700 = Color.FromArgb(255, 52, 52, 58),
         },
-        Primary = Ramp("#14153A", "#1E1F4D", "#2E3072", "#464B9E", "#6366F1", "#818CF8", "#A5B4FC"),
-        Blue = Ramp("#1A0F33", "#241547", "#372066", "#4E2E8C", "#8B5CF6", "#A78BFA", "#C4B5FD"),
+        Primary = Ramp("#00313F", "#003B52", "#064C77", "#1E67A3", "#3B82F6", "#59A8FD", "#7DD0FF"),
+        Blue = Ramp("#005826", "#005E3A", "#006959", "#00777F", "#0EA5E9", "#2AD4ED", "#47FEF0"),
         Red = Ramp("#1F0E10", "#3A181E", "#5A242C", "#8C3442", "#FB7185", "#FC8C9C", "#FAAFBA"),
         Green = Ramp("#0F1F15", "#162C20", "#1F4530", "#2D6446", "#4ADE80", "#78E6A0", "#AAF0C3"),
         Amber = Ramp("#1F1808", "#3A2A10", "#5C4017", "#825C28", "#FBBF24", "#FCD060", "#FAE0A0"),
-        // Ink ramp: C300 muted/inactive, C500 primary labels, C600+ bright emphasis.
-        Ink = Ramp("#494960", "#6A6A86", "#9090AB", "#BBBBD4", "#EAEAF7", "#FFFFFF", "#FFFFFF"),
+        Ink = Ramp("#4A4A50", "#6B6B72", "#8E8E96", "#B8B8BF", "#E4E4E7", "#FFFFFF", "#FFFFFF"),
 
-        // Semantic surfaces / borders (the frosted-glass Indigo defaults).
-        Glass = Color.FromArgb(153, 6, 6, 16),
-        Popover = Color.FromArgb(250, 22, 22, 42),
-        BorderSoft = Color.FromArgb(18, 150, 160, 255),
-        BorderStrong = Color.FromArgb(66, 150, 160, 255),
+        Glass = Color.FromArgb(153, 12, 12, 14),
+        Popover = Color.FromArgb(250, 24, 24, 27),
+        BorderSoft = Color.FromArgb(18, 160, 160, 170),
+        BorderStrong = Color.FromArgb(66, 160, 160, 170),
         Shadow = Color.FromArgb(150, 0, 0, 0),
     };
 

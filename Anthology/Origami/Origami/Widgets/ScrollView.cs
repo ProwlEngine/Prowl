@@ -66,7 +66,6 @@ public sealed class ScrollViewBuilder
     private bool _forceScrollbar;
     private float _scrollbarSize = 6f;
     private float _wheelStep = 30f;
-    private bool _trapScroll = true;
     private bool _smoothScroll = true;
     private bool _overlayScrollbars = true;
     private bool _autoHideScrollbars = true;
@@ -133,10 +132,6 @@ public sealed class ScrollViewBuilder
     /// <summary>Scroll-wheel step in pixels per click (default 30).</summary>
     public ScrollViewBuilder WheelStep(float step) { _wheelStep = MathF.Max(1f, step); return this; }
 
-    /// <summary>When true (default), a wheel scroll that moves this view stops propagating to ancestor scroll views.
-    /// At an edge the wheel passes through so the outer view keeps scrolling.</summary>
-    public ScrollViewBuilder TrapScroll(bool trap = true) { _trapScroll = trap; return this; }
-
     /// <summary>
     /// When true (default) the content eases to the scroll offset (0.33s). Turn OFF for virtualized
     /// content: the visible window is computed from the target offset, so easing the content toward it
@@ -200,7 +195,7 @@ public sealed class ScrollViewBuilder
                     float maxScroll = MathF.Max(0f, contentW - _width);
                     float scroll = Clamp(prev - (float)e.Delta * _wheelStep, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollX", scroll);
-                    if (_trapScroll && scroll != prev) e.StopPropagation();
+                    e.StopPropagation();
                 }
                 else if (_vertical)
                 {
@@ -209,7 +204,7 @@ public sealed class ScrollViewBuilder
                     float maxScroll = MathF.Max(0f, contentH - _height);
                     float scroll = Clamp(prev - (float)e.Delta * _wheelStep, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollY", scroll);
-                    if (_trapScroll && scroll != prev) e.StopPropagation();
+                    e.StopPropagation();
                 }
             });
 
