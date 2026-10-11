@@ -1103,12 +1103,14 @@ public sealed class DrawItemSink
     private WorldFrame _world = null!;
     private CullFrustum _frustum;
     private uint _cullingMask;
+    private bool _shadowView;
 
     /// <summary>Indirect items whose instance count is copied from the provider's buffer into the view's commands.</summary>
     internal readonly List<(BucketSet.TransparentItem Item, DrawList List, DeviceBuffer Source, uint Offset)> Counts = new();
 
-    internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask)
+    internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask, bool shadowView = false)
     {
+        _shadowView = shadowView;
         _camera = camera;
         _world = world;
         _frustum = frustum;
@@ -1209,7 +1211,7 @@ public sealed class DrawItemSink
         }
 
         // The rules renderables' buckets follow: built in passes and feature passes skip shadow only items, the shadow pass draws only opaque casters
-        if (!shadowsOnly)
+        if (!shadowsOnly && !_shadowView)
         {
             if (draw.Transparent)
             {
@@ -1266,7 +1268,9 @@ public sealed class DrawItemSink
                 Chunks = [],
             });
         }
-        return _pool[_used++];
+        BucketSet.TransparentItem item = _pool[_used++];
+        item.FirstCommand = -1;
+        return item;
     }
 }
 

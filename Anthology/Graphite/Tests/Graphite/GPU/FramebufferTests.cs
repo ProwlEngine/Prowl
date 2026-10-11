@@ -83,6 +83,23 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         byte[] bytes = ReadTextureBytes(depth, TextureRegion.Whole(depth, 0, 0), 4 * 4 * 4);
         Assert.Equal(0.123456789f, BitConverter.ToSingle(bytes, 5 * 4));
     }
+
+    [Fact]
+    public void D16Depth_ClearsAndReadsBackToTheNearestStep()
+    {
+        Texture depth = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.D16_UNorm, TextureUsage.DepthStencil | TextureUsage.Sampled));
+        Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depth));
+
+        GD.RunTestGraph((context, cl) =>
+        {
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Clear(0.25f)));
+            cl.SetFullViewport();
+        });
+        GD.WaitForIdle();
+
+        byte[] bytes = ReadTextureBytes(depth, TextureRegion.Whole(depth, 0, 0), 4 * 4 * 2);
+        Assert.Equal((ushort)Math.Round(0.25 * 65535), BitConverter.ToUInt16(bytes, 5 * 2));
+    }
 }
 
 #if TEST_VULKAN

@@ -914,6 +914,15 @@ public sealed partial class RenderWorld : IDisposable
         /// <summary>Renderables whose draws changed this frame: added, removed, new mesh or mesh data, materials, flags or mirroring.</summary>
         public List<int> DrawChanged { get; } = new();
 
+        /// <summary>Where shadow casters changed since the shadows last looked, each before and after, static ones apart.</summary>
+        public List<(Double3 Center, float Radius, bool Static)> ShadowChanges { get; } = new();
+
+        private void ShadowChanged(int index)
+        {
+            if (Alive[index] && (Flags[index] & RenderableFlags.CastShadows) != 0)
+                ShadowChanges.Add((WorldCenter[index], WorldRadius[index], (Flags[index] & RenderableFlags.Static) != 0));
+        }
+
         private uint _transientObjects;
 
         /// <summary>Forgets last frame's provider objects. Render thread, before any view.</summary>
@@ -941,6 +950,7 @@ public sealed partial class RenderWorld : IDisposable
             if (index >= Capacity)
                 Grow(Math.Max(index + 1, Math.Max(64, Capacity * 2)));
 
+            ShadowChanged(index);
             if ((dirt & Dirt.Removed) != 0 && Alive[index])
                 Retire(index);
             if (!host._alive[index])
@@ -1003,6 +1013,7 @@ public sealed partial class RenderWorld : IDisposable
             if ((dirt & (Dirt.Transform | Dirt.Bounds | Dirt.Draw)) != 0)
                 UpdateBounds(index);
             Attributes.Set((uint)index, attributes);
+            ShadowChanged(index);
         }
 
         /// <summary>Applies the previous transform rule: what moved last frame and not this one gets its previous transform caught up.</summary>
@@ -1026,7 +1037,9 @@ public sealed partial class RenderWorld : IDisposable
                     continue;
                 foreach (int index in users)
                 {
+                    ShadowChanged(index);
                     UpdateBounds(index);
+                    ShadowChanged(index);
                     Repad(index);
                     ChangedDraw(index);
                 }

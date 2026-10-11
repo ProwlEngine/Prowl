@@ -1251,14 +1251,14 @@ public sealed class LightingTests : IDisposable
     private static string WithPass(string shader, string pass) => shader.Insert(shader.LastIndexOf('}'), pass + "\n");
 
     // A square of half size half only shadows see, centred at x, y on the plane at depth z
-    private void AddCaster(double x, double y, double z, double half = 1)
+    private RenderableHandle AddCaster(double x, double y, double z, double half = 1, bool isStatic = false)
     {
         Material caster = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(CasterSource)));
-        _world.Add(new RenderableDesc
+        return _world.Add(new RenderableDesc
         {
             Mesh = _quad,
             Transform = Double4x4.CreateTranslation(_origin + new Double3(x, y, z)) * Double4x4.CreateScale(half / 4),
-            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly | (isStatic ? RenderableFlags.Static : 0),
         }, [caster]);
     }
 
@@ -1374,6 +1374,148 @@ public sealed class LightingTests : IDisposable
         };
         _world.AddLight(spot);
         AssertMatches(p => Reference.Local(spot, p, s_normal, albedo, 0, 0.5f), Frame());
+    }
+
+    [Fact]
+    public void ProbeCaptures_SeeTheSunsShadows()
+    {
+        // A lit wall behind the camera, which the mirror shows through the probe, the sun shining onto it past a caster
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0, 0, 0));
+        Material wall = Surface(new Float3(0.8f, 0.8f, 0.8f));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, -9.9)) * Double4x4.CreateScale(new Double3(-5, 5, -5)), LayerMask = 1 }, [wall]);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        ReflectionProbeHandle probe = _world.AddReflectionProbe(RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40)));
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, -1), Intensity = 0.1f, Shadow = new ShadowDesc { Enabled = true } });
+        RenderableHandle caster = AddCaster(0, 0, 0, half: 30);
+
+        Frame();
+        Float4[] shadowed = Frame();
+        Assert.All(shadowed, p => Assert.True(p.X < 0.01f, $"shadowed reflection {p}"));
+
+        _world.Remove(caster);
+        _world.RenderReflectionProbe(probe);
+        Frame();
+        Float4[] lit = Frame();
+        Assert.All(lit, p => Assert.True(p.X > 0.05f, $"lit reflection {p}"));
+    }
+
+    private LightDesc ShadowSpot() => new()
+    {
+        Type = LightType.Spot,
+        Position = new Double3(0, 0, 2),
+        Direction = new Float3(0, 0, 1),
+        Range = 20,
+        Intensity = 0.2f,
+        InnerAngle = 35,
+        OuterAngle = 40,
+        Static = true,
+        Shadow = new ShadowDesc { Enabled = true },
+    };
+
+    private FramePipeline Pipeline => _renderer.Frame;
+
+    [Fact]
+    public void CachedShadows_DrawAgainOnlyWhenTheirLightOrACasterNearItChanges()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        LightDesc light = ShadowSpot();
+        LightHandle handle = _world.AddLight(light);
+        RenderableHandle caster = AddCaster(1, 0.5, 6);
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+
+        // A caster far outside the light's reach changes nothing, the one in it draws the light again
+        AddCaster(200, 0, 6);
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        _world.SetTransform(caster, Double4x4.CreateTranslation(new Double3(-1, -0.5, 6)) * Double4x4.CreateScale(0.25));
+        Float4[] pixels = Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
+
+        _world.SetLight(handle, light with { Intensity = 0.3f });
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        _world.SetLight(handle, light with { Direction = Normalize(new Float3(0.05f, 0, 1)) });
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void CastersTaggedToUpdateEveryFrame_KeepTheirLightDrawing()
+    {
+        AddQuad(Surface(new Float3(0.8f, 0.8f, 0.8f)));
+        _world.AddLight(ShadowSpot());
+        string source = CasterSource.Replace("Test/Caster", "Test/AnimatedCaster").Replace("\"LightMode\" = \"ShadowCaster\"", "\"LightMode\" = \"ShadowCaster\" \"ShadowUpdate\" = \"EveryFrame\"");
+        Material animated = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(source)));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [animated]);
+        Frame();
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void StaticCasters_AreCopiedBack_WhileOnlyMovingOnesDrawAgain()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+        AddCaster(1, 0.5, 6, isStatic: true);
+        RenderableHandle moving = AddCaster(-1.5, -1.5, 6, half: 0.5);
+
+        Float4[] pixels = Frame();
+        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => MathF.Min(SquareEdge(p, 2, 1, 2), SquareEdge(p, -3, -3, 1)), pixels, 0.6f);
+
+        // From 2 through 6 to 10 the square doubles, the moving one's shadow goes from -3, -3 to -3, 3
+        _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
+        pixels = Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => MathF.Min(SquareEdge(p, 2, 1, 2), SquareEdge(p, -3, 3, 1)), pixels, 0.6f);
+
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void PointLightShadows_FallFromTheFaceTheyLieIn()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        LightDesc light = Point(new Double3(0, 0, 2), 20, 0.2f, new Float3(1, 1, 1)) with { Shadow = new ShadowDesc { Enabled = true } };
+        _world.AddLight(light);
+        AddCaster(1, 0.5, 6);
+        Float4[] pixels = Frame();
+        Assert.Equal(6, Pipeline.ShadowViewsDrawn);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), pixels, 0.6f);
+    }
+
+    // An item drawn with an instance count the GPU holds, here none
+    private sealed class IndirectItem(GpuMesh mesh, Material material, DeviceBuffer count) : RenderProvider
+    {
+        public override void Cull(in ProviderView view, DrawItemSink sink)
+            => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(0, 0, 30)) }, count, 4);
+    }
+
+    [Fact]
+    public void IndirectProviderItems_LeaveShadowViewsCastersAlone()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        Material surface = Surface(new Float3(albedo.X, albedo.Y, albedo.Z));
+        AddQuad(surface);
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+        AddCaster(1, 0.5, 6);
+        using DeviceBuffer count = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        _device.UpdateBuffer<uint>(count, 0, [0, 0, 0, 0]);
+        _world.Providers.Add(new IndirectItem(_quad, surface, count));
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
     }
 
     [Fact]

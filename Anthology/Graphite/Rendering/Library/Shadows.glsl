@@ -108,6 +108,36 @@ float Graphite_SpotShadow(int shadowSlot, vec3 lightPosition, vec3 lightDirectio
     return mix(1.0, lit, strength * fade);
 }
 
+// A point light's shadow: the cube face the biased position lies in, every face's tile the same size
+float Graphite_PointShadow(int shadowSlot, vec3 lightPosition, float depthBias, float normalBias, float strength, float filtering, vec3 position, vec3 geomNormal)
+{
+    uint first = uint(shadowSlot) * GRAPHITE_SHADOW_FACES;
+    Graphite_ShadowFace any = graphite_ShadowFaces[first];
+    float fade = any.params.y;
+    if (fade <= 0.0 || any.rect.z <= 0.0)
+        return 1.0;
+
+    vec3 toPosition = position - lightPosition;
+    float distance = length(toPosition);
+    vec3 a = abs(toPosition);
+    float axisDistance = max(a.x, max(a.y, a.z));
+    vec3 biased = Graphite_ShadowBias(position, geomNormal, -toPosition / max(distance, 1e-6), any.rect.w * axisDistance, depthBias, normalBias);
+
+    // The face picked from the biased position, so the offset never pushes it off its face
+    vec3 d = biased - lightPosition;
+    vec3 b = abs(d);
+    uint face = b.x >= b.y && b.x >= b.z ? (d.x > 0.0 ? 0u : 1u) : b.y >= b.z ? (d.y > 0.0 ? 2u : 3u) : (d.z > 0.0 ? 4u : 5u);
+    Graphite_ShadowFace f = graphite_ShadowFaces[first + face];
+    if (f.rect.z <= 0.0)
+        return 1.0;
+    vec4 clip = f.lightToClip * vec4(d, 1.0);
+    if (clip.w <= 0.0)
+        return 1.0;
+
+    float lit = Graphite_SampleShadow(floatBitsToUint(f.params.x), f.rect, f.params.z, Graphite_ShadowCoords(clip, f.rect), filtering);
+    return mix(1.0, lit, strength * fade);
+}
+
 // Whether p is inside a cascade's sphere, at least inset texels in from its edge
 bool Graphite_InCascade(vec3 p, Graphite_Cascade c, float inset)
 {

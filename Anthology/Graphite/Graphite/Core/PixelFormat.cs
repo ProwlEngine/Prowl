@@ -253,4 +253,8 @@ public enum PixelFormat : byte
     /// 32-bit float depth, no stencil.
     /// </summary>
     D32_Float,
+    /// <summary>
+    /// 16-bit normalized depth, no stencil.
+    /// </summary>
+    D16_UNorm,
 }

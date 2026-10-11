@@ -479,7 +479,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
     /// Packs every dirty material into its shader's table, moving it to a new table after a shader swap. Materials whose
     /// draws change (shader, keywords, queue, state, shadows) are added to <paramref name="drawChanged"/>. Host thread.
     /// </summary>
-    public void Extract(List<Material> drawChanged)
+    public void Extract(List<Material> drawChanged, List<Material>? recordChanged = null)
     {
         lock (_lock)
         {
@@ -517,6 +517,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
                     Span<MaterialValue> values = _resolved.AsSpan(0, count);
                     material.Resolve(values);
                     material.Shader.Schema.Pack(values, material.Table.Records.Edit(material.Slot), resources);
+                    recordChanged?.Add(material);
                 }
 
                 if ((dirt & Material.Dirt.Draw) != 0)

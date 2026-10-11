@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite.RenderGraph;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
@@ -177,69 +178,281 @@ internal struct CascadeRecord
     public Float4 Fade;
 }
 
-/// <summary>A depth page of a world's local light tiles, in the bindless table.</summary>
-internal sealed class ShadowPage(RenderTexture texture, uint slot) : IDisposable
+/// <summary>A depth page of a world's local light tiles, live ones or the static only copies, in the bindless table.</summary>
+internal sealed class ShadowPage(RenderTexture texture, uint slot, bool isStatic, GraphicsProgram clear) : IDisposable
 {
     public RenderTexture Texture { get; } = texture;
-    public ShadowTarget Target { get; } = new(texture, "Graphite.ShadowPage");
+    public ShadowTarget Target { get; } = new(texture, isStatic ? "Graphite.ShadowStaticPage" : "Graphite.ShadowPage", clear);
     public uint Slot { get; } = slot;
+    public bool IsStatic { get; } = isStatic;
     public ShadowTileAllocator Tiles { get; } = new((int)texture.Desc.Width);
     public int LastUsed;
 
-    public void Dispose() => Texture.Dispose();
+    public void Dispose()
+    {
+        Texture.Dispose();
+        Target.Release();
+    }
 }
 
-/// <summary>A shadow view drawn this frame: its camera, where in its target and the list it draws.</summary>
-internal readonly record struct ShadowDraw(CameraFrame Camera, ShadowTile Tile);
+/// <summary>A shadow view drawn into a tile this frame, the tile cleared first unless a static copy already fills it.</summary>
+internal readonly record struct ShadowDraw(CameraFrame Camera, ShadowTile Tile, bool Clear);
 
 /// <summary>A depth target the frame's shadow pipeline draws into: a world's page or one cascade of a view.</summary>
-internal sealed class ShadowTarget(RenderTexture texture, string name) : IPass
+internal sealed class ShadowTarget(RenderTexture texture, string name, GraphicsProgram clear) : IPass
 {
+    private static readonly Stack<RenderResourceID> s_free = new();
     private static int s_next;
-    private readonly RenderResourceID _id = RenderResourceID.Intern($"Graphite.Shadow.{System.Threading.Interlocked.Increment(ref s_next)}");
 
+    public RenderResourceID Id { get; } = NextId();
+
+    // Ids of targets that went are reused, so making and dropping targets interns no new names
+    private static RenderResourceID NextId()
+    {
+        lock (s_free)
+            return s_free.Count > 0 ? s_free.Pop() : RenderResourceID.Intern($"Graphite.Shadow.{s_next++}");
+    }
+
+    /// <summary>Gives the id back once the target is gone from every graph.</summary>
+    public void Release()
+    {
+        lock (s_free)
+            s_free.Push(Id);
+    }
     public RenderTexture Texture { get; } = texture;
     public readonly List<ShadowDraw> Draws = new();
     public string Name { get; } = name;
 
-    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(_id, Texture);
+    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(Id, Texture);
 
     public void Render(RenderContext context, CommandBuffer cmd)
     {
         if (Draws.Count == 0)
             return;
-        cmd.SetFramebuffer(Texture.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Clear(0f)));
-        foreach ((CameraFrame camera, ShadowTile tile) in Draws)
+        cmd.SetFramebuffer(Texture.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+        foreach ((CameraFrame camera, ShadowTile tile, bool clearFirst) in Draws)
         {
             cmd.SetViewport(new Viewport(tile.X, tile.Y, tile.Size, tile.Size, 0, 1));
             cmd.SetScissor((uint)tile.X, (uint)tile.Y, (uint)tile.Size, (uint)tile.Size);
+            if (clearFirst)
+            {
+                cmd.SetShader(clear);
+                cmd.SetVertexSource(VertexSource.None);
+                cmd.Draw(3);
+            }
             camera.Drawer.Prepare(context.Task.RingSlot);
             if (camera.FindList(PassType.ShadowCaster) is { } list)
                 camera.Drawer.DrawList(cmd, list);
         }
     }
+
+    /// <summary>Draws the far plane over a tile, depth only, so one tile clears without touching its neighbours.</summary>
+    public static GraphicsProgram TileClear(GraphicsDevice device, IShaderCompiler compiler)
+    {
+        const string source = """
+            Vertex
+            {
+            #include "Graphite/Fullscreen.glsl"
+            }
+            Fragment
+            {
+            #define GRAPHITE_NO_SOURCE 1
+            #include "Graphite/Fullscreen.glsl"
+            void main() { }
+            }
+            """;
+        ShaderDescription description = compiler.Compile(new ShaderPass { State = new PassState(), Source = source, SourceName = "Graphite/ShadowTileClear" }, [], device.BackendType);
+        description.BlendState = BlendStateDescription.Empty;
+        description.DepthStencilState = new DepthStencilStateDescription(true, true, ComparisonKind.Always);
+        description.RasterizerState = RasterizerStateDescription.CullNone;
+        GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
+        program.Name = "Graphite/ShadowTileClear";
+        return program;
+    }
 }
 
-/// <summary>A world's local light shadows on the render thread: its pages, every light's faces, the views drawing them.</summary>
+/// <summary>Copies static only tiles into their lights' live tiles, after the static pages draw and before the live ones.</summary>
+internal sealed class ShadowCopyPass : IPass
+{
+    public readonly List<(ShadowPage From, ShadowTile FromTile, ShadowPage To, ShadowTile ToTile)> Copies = new();
+    public ShadowPage[] Sources = [], Targets = [];
+
+    public string Name => "Graphite.ShadowCopies";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        foreach (ShadowPage page in Sources)
+            builder.DeclareInputTexture(page.Target.Id, TextureState.TransferSrc, TextureState.TransferSrc);
+        foreach (ShadowPage page in Targets)
+            builder.DeclareImportedTexture(page.Target.Id, page.Texture, TextureState.TransferDst, TextureState.TransferDst);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        foreach ((ShadowPage from, ShadowTile fromTile, ShadowPage to, ShadowTile toTile) in Copies)
+            cmd.CopyTexture(from.Texture.DepthTexture!, (uint)fromTile.X, (uint)fromTile.Y, 0, 0, 0, to.Texture.DepthTexture!, (uint)toTile.X, (uint)toTile.Y, 0, 0, 0, (uint)toTile.Size, (uint)toTile.Size, 1, 1);
+    }
+}
+
+/// <summary>
+/// A local light's cached shadow: a tile per face that persists and redraws only when the light, its tile or a caster
+/// near it changed. A light with both static and moving casters keeps static only copies, so moving changes copy them
+/// back and draw the moving casters alone.
+/// </summary>
+internal sealed class LightShadow
+{
+    public int Faces;
+    public int Size;
+    public float Fade;
+    public int Key;
+    public bool Dirty = true, StaticDirty = true, Split, EveryFrame, Seen;
+    public readonly ShadowPage?[] Pages = new ShadowPage?[6];
+    public readonly ShadowTile[] Tiles = new ShadowTile[6];
+    public readonly ShadowPage?[] StaticPages = new ShadowPage?[6];
+    public readonly ShadowTile[] StaticTiles = new ShadowTile[6];
+    public readonly CameraFrame?[] Cameras = new CameraFrame?[6];
+    public readonly CameraFrame?[] StaticCameras = new CameraFrame?[6];
+    public readonly ShadowFace[] Written = new ShadowFace[6];
+
+    public bool HasTiles => Pages[0] != null;
+}
+
+/// <summary>
+/// Shadowed lights in grids of cells doubling in size, each light in the level whose cells are as wide as it, so a change
+/// finds the lights its sphere touches by looking only at the cells around it.
+/// </summary>
+internal sealed class LightGrid
+{
+    private const float BaseCell = 16;
+    private readonly Dictionary<(int Level, long X, long Y, long Z), List<int>> _cells = new();
+    private readonly List<List<int>> _pool = new();
+    private readonly List<int>[] _levels = new List<int>[48];
+    private readonly HashSet<int> _found = new();
+
+    public LightGrid()
+    {
+        for (int l = 0; l < _levels.Length; l++)
+            _levels[l] = new List<int>();
+    }
+
+    public void Clear()
+    {
+        foreach (List<int> cell in _cells.Values)
+        {
+            cell.Clear();
+            _pool.Add(cell);
+        }
+        _cells.Clear();
+        foreach (List<int> level in _levels)
+            level.Clear();
+    }
+
+    public void Add(int light, Double3 center, float radius)
+    {
+        int level = Level(radius);
+        _levels[level].Add(light);
+        (long x0, long y0, long z0, long x1, long y1, long z1) = Cells(level, center, radius);
+        for (long x = x0; x <= x1; x++)
+        {
+            for (long y = y0; y <= y1; y++)
+            {
+                for (long z = z0; z <= z1; z++)
+                {
+                    if (!_cells.TryGetValue((level, x, y, z), out List<int>? list))
+                    {
+                        list = _pool.Count > 0 ? _pool[^1] : new List<int>();
+                        if (_pool.Count > 0)
+                            _pool.RemoveAt(_pool.Count - 1);
+                        _cells[(level, x, y, z)] = list;
+                    }
+                    list.Add(light);
+                }
+            }
+        }
+    }
+
+    /// <summary>The lights in cells a sphere touches, each once, to test exactly.</summary>
+    public HashSet<int> Near(Double3 center, float radius)
+    {
+        _found.Clear();
+        for (int level = 0; level < _levels.Length; level++)
+        {
+            List<int> lights = _levels[level];
+            if (lights.Count == 0)
+                continue;
+            (long x0, long y0, long z0, long x1, long y1, long z1) = Cells(level, center, radius);
+
+            // A sphere covering more cells than the level has lights looks at its lights directly
+            if ((double)(x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) >= lights.Count)
+            {
+                foreach (int light in lights)
+                    _found.Add(light);
+                continue;
+            }
+            for (long x = x0; x <= x1; x++)
+            {
+                for (long y = y0; y <= y1; y++)
+                {
+                    for (long z = z0; z <= z1; z++)
+                    {
+                        if (!_cells.TryGetValue((level, x, y, z), out List<int>? list))
+                            continue;
+                        foreach (int light in list)
+                            _found.Add(light);
+                    }
+                }
+            }
+        }
+        return _found;
+    }
+
+    private int Level(float radius)
+    {
+        int level = 0;
+        while (level < _levels.Length - 1 && CellSize(level) < 2 * radius)
+            level++;
+        return level;
+    }
+
+    private static double CellSize(int level) => BaseCell * Math.Pow(2, level);
+
+    private static (long, long, long, long, long, long) Cells(int level, Double3 center, float radius)
+    {
+        double cell = CellSize(level);
+        return ((long)Math.Floor((center.X - radius) / cell), (long)Math.Floor((center.Y - radius) / cell), (long)Math.Floor((center.Z - radius) / cell),
+            (long)Math.Floor((center.X + radius) / cell), (long)Math.Floor((center.Y + radius) / cell), (long)Math.Floor((center.Z + radius) / cell));
+    }
+}
+
+/// <summary>A world's local light shadows on the render thread: its pages, every shadowed light's cache, the grid finding them.</summary>
 internal sealed class WorldShadows(GraphicsDevice device) : IDisposable
 {
     public const int FacesPerLight = 6;
 
     public GpuTable Faces { get; } = GpuTable.Of<ShadowFace>(device, "Shadow faces", 64 * FacesPerLight);
     public readonly List<ShadowPage> Pages = new();
-    public readonly List<CameraFrame> Cameras = new();
-    public int CamerasUsed;
+    public readonly List<ShadowPage> StaticPages = new();
+    public readonly Dictionary<int, LightShadow> Lights = new();
+    public readonly LightGrid Grid = new();
+    public int PageSize;
 
-    /// <summary>The light indices whose faces hold a tile this frame, so next frame clears the ones that lost theirs.</summary>
-    public readonly List<int> Shadowed = new();
+    /// <summary>Lights whose faces hold nothing, written once.</summary>
+    public readonly HashSet<int> Zeroed = new();
 
     public void Dispose()
     {
         Faces.Dispose();
         foreach (ShadowPage page in Pages)
             page.Dispose();
-        foreach (CameraFrame camera in Cameras)
-            camera.Dispose();
+        foreach (ShadowPage page in StaticPages)
+            page.Dispose();
+        foreach (LightShadow light in Lights.Values)
+        {
+            foreach (CameraFrame? camera in light.Cameras)
+                camera?.Dispose();
+            foreach (CameraFrame? camera in light.StaticCameras)
+                camera?.Dispose();
+        }
     }
 }
 
@@ -255,9 +468,14 @@ internal sealed class ViewShadows : IDisposable
         public ShadowTarget? Target;
         public CameraFrame? Camera;
 
-        /// <summary>The world position of the centre it was last drawn around, and its radius, so a lagging cascade keeps its fit.</summary>
+        /// <summary>
+        /// What it was last drawn with: the world position of its centre, its radius and its projection times the light's
+        /// rotation, so a lagging cascade is read the way it was drawn.
+        /// </summary>
         public Double3 Center;
         public float Radius;
+        public Float4x4 Shape;
+        public RenderWorld? World;
         public bool Valid;
     }
 
@@ -339,9 +557,11 @@ internal static class ShadowMath
         return new Float4x4(new Float4(s, 0, 0, 0), new Float4(0, s, 0, 0), new Float4(0, 0, -near / (far - near), 1), new Float4(0, 0, near * far / (far - near), 0));
     }
 
-    /// <summary>A reversed Z box of half size radius around the origin down +Z: depth 1 at -radius, 0 at +radius.</summary>
-    public static Float4x4 Orthographic(float radius)
-        => new(new Float4(1f / radius, 0, 0, 0), new Float4(0, 1f / radius, 0, 0), new Float4(0, 0, -0.5f / radius, 0), new Float4(0, 0, 0.5f, 1));
+    /// <summary>A reversed Z box of half size radius around the origin down +Z: depth 1 at -reach, 0 at +radius.</summary>
+    public static Float4x4 Orthographic(float radius, float reach)
+        => new(new Float4(1f / radius, 0, 0, 0), new Float4(0, 1f / radius, 0, 0), new Float4(0, 0, -1f / (radius + reach), 0), new Float4(0, 0, radius / (radius + reach), 1));
+
+    public static Float4x4 Orthographic(float radius) => Orthographic(radius, radius);
 
     /// <summary>
     /// The cascade's centre snapped to its texel grid in the light's space in double, so the map holds still while the
@@ -373,11 +593,28 @@ internal static class ShadowMath
 internal sealed partial class FramePipeline
 {
     private readonly RenderPipeline _shadowPipeline = new() { Name = "Graphite.Shadows" };
-    private readonly List<ShadowTarget> _shadowTargets = new();
-    private ShadowTarget[] _builtShadowTargets = [];
+    private readonly List<IPass> _shadowTargets = new();
+    private IPass[] _builtShadowTargets = [];
+    private readonly List<ShadowPage> _staticShadowTargets = new(), _liveShadowTargets = new();
+    private readonly ShadowCopyPass _shadowCopies = new();
+    private readonly List<ShadowTarget> _shadowRetiredTargets = new();
+
+    /// <summary>Shadow views drawn and static copies made in the last frame, for tests.</summary>
+    internal int ShadowViewsDrawn { get; private set; }
+    internal int ShadowCopiesMade => _shadowCopies.Copies.Count;
+    private GraphicsProgram? _tileClear;
     private readonly List<(int Light, int Size, float Fade)> _shadowRequests = new();
     private readonly List<IDisposable> _shadowRetired = new();
     private Sampler? _shadowSampler;
+
+    /// <summary>Clears one tile of a depth target to the far plane.</summary>
+    public GraphicsProgram TileClearProgram => _tileClear ??= ShadowTarget.TileClear(_device, _compiler);
+
+    /// <summary>The materials whose draws or records changed this frame, whose casters' lights draw again.</summary>
+    public List<Material> ChangedMaterials { get; set; } = new();
+
+    /// <summary>The depth format of shadow pages and cascades.</summary>
+    public PixelFormat ShadowFormat { get; init; } = PixelFormat.D16_UNorm;
 
     /// <summary>The comparison sampler every shadow read goes through: linear, clamped, lit where the receiver is nearer.</summary>
     public Sampler ShadowSampler => _shadowSampler ??= _device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
@@ -393,32 +630,55 @@ internal sealed partial class FramePipeline
     private bool PrepareShadows()
     {
         _shadowTargets.Clear();
+        ShadowViewsDrawn = 0;
+        _staticShadowTargets.Clear();
+        _liveShadowTargets.Clear();
+        _shadowCopies.Copies.Clear();
         foreach (WorldFrame world in _frameWorlds)
             PrepareLocalShadows(world);
+        foreach (ShadowPage page in _staticShadowTargets)
+            _shadowTargets.Add(page.Target);
+        if (_staticShadowTargets.Count > 0)
+            _shadowTargets.Add(_shadowCopies);
+        foreach (ShadowPage page in _liveShadowTargets)
+            _shadowTargets.Add(page.Target);
         foreach (CameraFrame camera in _cameras.Values)
         {
             if (camera.LastFrame == _frame)
-                PrepareCascades(camera, Casts(camera.Desc));
+                PrepareCascades(camera, Casts(camera.Desc) ? CascadeFit.View : CascadeFit.None);
         }
         foreach (WorldFrame world in _frameWorlds)
         {
             foreach (CameraFrame camera in world.Captures())
             {
                 if (camera.LastFrame == _frame)
-                    PrepareCascades(camera, false);
+                    PrepareCascades(camera, camera.Desc.Kind == ViewKind.ReflectionProbe ? CascadeFit.Around : CascadeFit.None);
             }
         }
 
         if (!CollectionsMarshal.AsSpan(_shadowTargets).SequenceEqual(_builtShadowTargets))
         {
             _builtShadowTargets = [.. _shadowTargets];
+            _shadowCopies.Sources = [.. _staticShadowTargets];
+            _shadowCopies.Targets = [.. _liveShadowTargets];
             if (_builtShadowTargets.Length > 0)
                 _shadowPipeline.SetPasses(_builtShadowTargets);
         }
         return _builtShadowTargets.Length > 0;
     }
 
-    // Views people look at receive directional shadows, captures do not
+    private enum CascadeFit
+    {
+        None,
+
+        /// <summary>Fitted to slices of the view, refit on their stagger.</summary>
+        View,
+
+        /// <summary>Spheres around the view's position, for captures looking every way, refit each time.</summary>
+        Around,
+    }
+
+    // Views people look at fit cascades to what they see
     private static bool Casts(in ViewDesc view) => ((ViewKinds)(1 << (int)view.Kind) & ViewKinds.Cameras) != 0;
 
     private void PrepareLocalShadows(WorldFrame world)
@@ -426,65 +686,416 @@ internal sealed partial class FramePipeline
         WorldShadows shadows = world.Shadows ??= new WorldShadows(_device);
         ShadowSettings settings = world.World.ShadowSnapshot;
         WorldLighting lighting = world.World.Lighting;
-        shadows.CamerasUsed = 0;
-        foreach (int light in shadows.Shadowed)
-            shadows.Faces.Set((uint)(light * WorldShadows.FacesPerLight), default(ShadowFace));
-        shadows.Shadowed.Clear();
-
         int pageSize = (int)Math.Clamp(BitOperations.RoundUpToPowerOf2((uint)Math.Max(settings.PageSize, 256)), 256u, 16384u);
-        for (int i = shadows.Pages.Count - 1; i >= 0; i--)
+        if (shadows.PageSize != pageSize)
         {
-            ShadowPage page = shadows.Pages[i];
-            page.Target.Draws.Clear();
-            if (page.Tiles.Size != pageSize || _frame - page.LastUsed > StaleViewFrames)
-            {
-                _shadowRetired.Add(page);
-                shadows.Pages.RemoveAt(i);
-                continue;
-            }
-            page.Tiles.Reset(pageSize);
+            foreach ((int index, LightShadow light) in shadows.Lights)
+                ReleaseShadow(shadows, index, light, keepState: true);
+            RetirePages(shadows.Pages, all: true);
+            RetirePages(shadows.StaticPages, all: true);
+            shadows.PageSize = pageSize;
         }
+        foreach (ShadowPage page in shadows.Pages)
+            page.Target.Draws.Clear();
+        foreach (ShadowPage page in shadows.StaticPages)
+            page.Target.Draws.Clear();
 
+        InvalidateShadows(world, shadows, lighting);
+
+        // Which lights cast this frame and at what size, keeping their tiles while their size holds
+        foreach (LightShadow light in shadows.Lights.Values)
+            light.Seen = false;
         _shadowRequests.Clear();
+        int smallest = Math.Max(settings.MinTileSize, ShadowTileAllocator.SmallestTile);
         for (int i = 0; i < lighting.LightCapacity; i++)
         {
             if (!lighting.IsAlive(i))
                 continue;
-            ref readonly LightDesc light = ref lighting.Light(i);
-            if (light.Type != LightType.Spot || !light.Shadow.Enabled)
+            ref readonly LightDesc desc = ref lighting.Light(i);
+            if (!desc.Shadow.Enabled || desc.Type is not (LightType.Spot or LightType.Point))
                 continue;
-            (int size, float fade) = WantedTile(world, light, settings, pageSize);
-            if (size > 0)
-                _shadowRequests.Add((i, size, fade));
-            else
-                shadows.Faces.Set((uint)(i * WorldShadows.FacesPerLight), default(ShadowFace));
-        }
-
-        // Largest first, each halving until it fits a page or the budget's pages are full
-        _shadowRequests.Sort((a, b) => b.Size != a.Size ? b.Size.CompareTo(a.Size) : a.Light.CompareTo(b.Light));
-        long pageBytes = (long)pageSize * pageSize * 4;
-        int maxPages = (int)Math.Max(1, settings.Budget / pageBytes);
-        int minTile = Math.Max(ShadowTileAllocator.SmallestTile, settings.MinTileSize);
-        foreach ((int index, int wanted, float fade) in _shadowRequests)
-        {
-            ShadowPage? page = null;
-            ShadowTile tile = default;
-            for (int size = wanted; page == null && size >= Math.Min(minTile, wanted); size >>= 1)
-                page = AllocateTile(shadows, pageSize, maxPages, size, out tile);
-            if (page == null)
+            (float wanted, float fade) = WantedTile(world, desc, settings);
+            if (fade <= 0)
             {
-                shadows.Faces.Set((uint)(index * WorldShadows.FacesPerLight), default(ShadowFace));
+                ZeroFaces(shadows, i);
                 continue;
             }
-            page.LastUsed = _frame;
-            DrawSpotShadow(world, shadows, lighting.Light(index), index, page, tile, fade, pageSize);
+
+            if (!shadows.Lights.TryGetValue(i, out LightShadow? light))
+                shadows.Lights[i] = light = new LightShadow();
+            light.Seen = true;
+            light.Fade = fade;
+            int faces = desc.Type == LightType.Point ? 6 : 1;
+            int key = ShadowKey(desc);
+            if (key != light.Key || faces != light.Faces)
+            {
+                if (faces != light.Faces)
+                    ReleaseShadow(shadows, i, light, keepState: true);
+                light.Key = key;
+                light.Faces = faces;
+                light.Dirty = light.StaticDirty = true;
+            }
+
+            int largest = (int)Math.Min(BitOperations.RoundUpToPowerOf2(Math.Max(desc.Shadow.Resolution, 16u)), (uint)pageSize);
+            int size = TileSize(light.HasTiles ? light.Size : 0, wanted, Math.Min(smallest, largest), largest);
+            if (light.HasTiles && size != light.Size)
+                ReleaseShadow(shadows, i, light, keepState: true);
+            if (!light.HasTiles)
+            {
+                light.Size = size;
+                light.Dirty = light.StaticDirty = true;
+                _shadowRequests.Add((i, size, fade));
+            }
         }
+        List<int>? gone = null;
+        foreach ((int index, LightShadow light) in shadows.Lights)
+        {
+            if (!light.Seen)
+                (gone ??= new()).Add(index);
+        }
+        foreach (int index in gone ?? [])
+        {
+            ReleaseShadow(shadows, index, shadows.Lights[index], keepState: false);
+            shadows.Lights.Remove(index);
+        }
+
+        // Tiles for lights without one, largest first, each halving until its faces fit or the budget's pages are full
+        _shadowRequests.Sort((a, b) => b.Size != a.Size ? b.Size.CompareTo(a.Size) : a.Light.CompareTo(b.Light));
+        int maxPages = MaxPages(settings, pageSize);
+        foreach ((int index, int wanted, _) in _shadowRequests)
+        {
+            LightShadow light = shadows.Lights[index];
+            for (int size = wanted; !light.HasTiles && size >= Math.Min(smallest, wanted); size >>= 1)
+            {
+                if (AllocateFaces(shadows.Pages, shadows, light.Faces, size, pageSize, maxPages, light.Pages, light.Tiles, isStatic: false))
+                    light.Size = size;
+            }
+        }
+
+        bool providers = CastingProviders(world);
+        foreach ((int index, LightShadow light) in shadows.Lights)
+        {
+            ref readonly LightDesc desc = ref lighting.Light(index);
+            if (!light.HasTiles)
+            {
+                WriteFace(shadows, index, 0, default, light);
+                continue;
+            }
+            if (!light.Dirty && (light.EveryFrame || (providers && ProvidersCastInto(world, light))))
+                light.Dirty = true;
+            if (light.Dirty || light.StaticDirty)
+                RedrawShadow(world, shadows, desc, light, pageSize, maxPages);
+            for (int f = 0; f < light.Faces; f++)
+            {
+                light.Pages[f]!.LastUsed = _frame;
+                if (light.StaticPages[f] is { } staticPage)
+                    staticPage.LastUsed = _frame;
+                (Float4x4 view, Float4x4 projection, float half, _, _) = FaceView(desc, f);
+                float inverse = 1f / pageSize;
+                ShadowTile tile = light.Tiles[f];
+                WriteFace(shadows, index, f, new ShadowFace
+                {
+                    LightToClip = projection * view,
+                    Rect = new Float4(tile.X * inverse, tile.Y * inverse, tile.Size * inverse, 2 * MathF.Tan(half) / tile.Size),
+                    Params = new Float4(BitConverter.UInt32BitsToSingle(light.Pages[f]!.Slot), light.Fade, inverse, 0),
+                }, light);
+            }
+        }
+
+        RetirePages(shadows.Pages, all: false);
+        RetirePages(shadows.StaticPages, all: false);
+        foreach (ShadowPage page in shadows.StaticPages)
+            _staticShadowTargets.Add(page);
         foreach (ShadowPage page in shadows.Pages)
-            _shadowTargets.Add(page.Target);
+            _liveShadowTargets.Add(page);
     }
 
-    // The tile a light wants: twice its radius on screen in texels in the view that sees it biggest, and its fade by distance
-    private (int Size, float Fade) WantedTile(WorldFrame world, in LightDesc light, ShadowSettings settings, int pageSize)
+    // Lights whose shadows a caster's change touched: its old and new place, every user of a changed material
+    private void InvalidateShadows(WorldFrame world, WorldShadows shadows, WorldLighting lighting)
+    {
+        RenderWorld.RenderSide render = world.World.Render;
+        shadows.Grid.Clear();
+        foreach ((int index, LightShadow light) in shadows.Lights)
+        {
+            if (light.HasTiles && lighting.IsAlive(index))
+                shadows.Grid.Add(index, lighting.Light(index).Position, Math.Max(lighting.Light(index).Range, 1e-3f));
+        }
+
+        void Touch(Double3 center, float radius, bool isStatic)
+        {
+            foreach (int index in shadows.Grid.Near(center, radius))
+            {
+                ref readonly LightDesc desc = ref lighting.Light(index);
+                Double3 d = desc.Position - center;
+                double reach = desc.Range + radius;
+                if (d.X * d.X + d.Y * d.Y + d.Z * d.Z > reach * reach)
+                    continue;
+                LightShadow light = shadows.Lights[index];
+                if (isStatic)
+                    light.StaticDirty = true;
+                else
+                    light.Dirty = true;
+            }
+        }
+
+        foreach ((Double3 center, float radius, bool isStatic) in render.ShadowChanges)
+            Touch(center, radius, isStatic);
+        render.ShadowChanges.Clear();
+        foreach (Material material in ChangedMaterials)
+        {
+            foreach (int index in world.Buckets.UsersOf(material))
+            {
+                if (index < render.Capacity && render.Alive[index] && (render.Flags[index] & RenderableFlags.CastShadows) != 0)
+                    Touch(render.WorldCenter[index], render.WorldRadius[index], (render.Flags[index] & RenderableFlags.Static) != 0);
+            }
+        }
+    }
+
+    // A light's faces drawn again: static casters into the static copies when they changed, then the live tiles, either
+    // from the static copies with the moving casters over them or from every caster
+    private void RedrawShadow(WorldFrame world, WorldShadows shadows, in LightDesc desc, LightShadow light, int pageSize, int maxPages)
+    {
+        if (light.StaticDirty)
+        {
+            int statics = 0, moving = 0;
+            for (int f = 0; f < light.Faces; f++)
+            {
+                (int s, int m) = world.Buckets.CountCasters(FaceCull(desc, f), ~0u);
+                statics += s;
+                moving += m;
+            }
+            bool split = statics > 0 && (moving > 0 || CastingProviders(world));
+            if (split && light.StaticPages[0] == null && !AllocateFaces(shadows.StaticPages, shadows, light.Faces, light.Size, pageSize, maxPages, light.StaticPages, light.StaticTiles, isStatic: true))
+                split = false;
+            if (!split)
+                ReleaseStatic(light);
+            light.Split = split;
+        }
+
+        bool everyFrame = false;
+        for (int f = 0; f < light.Faces; f++)
+        {
+            (Float4x4 view, Float4x4 projection, _, float near, float far) = FaceView(desc, f);
+            ViewLayer layer = new() { View = view, Projection = projection, Position = desc.Position };
+            CullFrustum cull = FaceCull(desc, f);
+            CameraFrame camera = light.Cameras[f] ??= ShadowCamera();
+            if (light.Split)
+            {
+                if (light.StaticDirty)
+                {
+                    CameraFrame statics = light.StaticCameras[f] ??= ShadowCamera();
+                    DrawShadowView(statics, world, light.StaticPages[f]!.Texture, light.StaticTiles[f], layer, cull, near, far, CasterFilter.StaticOnly);
+                    light.StaticPages[f]!.Target.Draws.Add(new ShadowDraw(statics, light.StaticTiles[f], Clear: true));
+                    everyFrame |= EveryFrameCasters(statics);
+                }
+                _shadowCopies.Copies.Add((light.StaticPages[f]!, light.StaticTiles[f], light.Pages[f]!, light.Tiles[f]));
+                DrawShadowView(camera, world, light.Pages[f]!.Texture, light.Tiles[f], layer, cull, near, far, CasterFilter.MovingOnly);
+                light.Pages[f]!.Target.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: false));
+            }
+            else
+            {
+                DrawShadowView(camera, world, light.Pages[f]!.Texture, light.Tiles[f], layer, cull, near, far, CasterFilter.All);
+                light.Pages[f]!.Target.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: true));
+            }
+            everyFrame |= EveryFrameCasters(camera);
+        }
+        light.EveryFrame = everyFrame;
+        light.Dirty = light.StaticDirty = false;
+    }
+
+    // A face's view and projection: a spot's cone along its direction, or one of a point light's cube faces
+    private static (Float4x4 View, Float4x4 Projection, float HalfAngle, float Near, float Far) FaceView(in LightDesc desc, int face)
+    {
+        float far = Math.Max(desc.Range, 0.02f);
+        float near = Math.Clamp(far * 0.005f, 0.01f, 0.5f);
+        if (desc.Type == LightType.Point)
+            return (WorldReflections.FaceView(face), ShadowMath.Perspective(MathF.PI / 4, near, far), MathF.PI / 4, near, far);
+        float half = Math.Clamp(desc.OuterAngle, 1f, 85f) * MathF.PI / 180f;
+        (Float3 right, Float3 up, Float3 forward) = ShadowMath.Basis(desc.Direction, desc.Up);
+        return (ShadowMath.Rows(right, up, forward), ShadowMath.Perspective(half, near, far), half, near, far);
+    }
+
+    private static CullFrustum FaceCull(in LightDesc desc, int face)
+    {
+        (Float4x4 view, Float4x4 projection, _, _, _) = FaceView(desc, face);
+        return new CullFrustum(projection * view, desc.Position, nearPlane: true);
+    }
+
+    // What a light's shadow is drawn from besides its casters: where it is, how it points, its cone, range and resolution
+    private static int ShadowKey(in LightDesc desc)
+        => HashCode.Combine(desc.Type, desc.Position, desc.Direction, desc.Up, desc.Range, desc.OuterAngle, desc.Shadow.Resolution);
+
+    // A tile size for what a light wants, kept while the wish stays within three quarters of an octave around it
+    private static int TileSize(int current, float wanted, int smallest, int largest)
+    {
+        float log = MathF.Log2(Math.Max(wanted, 1));
+        if (current > 0)
+        {
+            float held = MathF.Log2(current);
+            if (log > held - 1.75f && log <= held + 0.75f)
+                return Math.Clamp(current, smallest, largest);
+        }
+        return Math.Clamp(ShadowTileAllocator.RoundUp((int)MathF.Ceiling(Math.Max(wanted, 1))), smallest, largest);
+    }
+
+    private int MaxPages(ShadowSettings settings, int pageSize)
+    {
+        long pageBytes = (long)pageSize * pageSize * (ShadowFormat == PixelFormat.D16_UNorm ? 2 : 4);
+        return (int)Math.Max(1, settings.Budget / pageBytes);
+    }
+
+    // Every face a tile of one size, all or none, live and static pages sharing the budget
+    private bool AllocateFaces(List<ShadowPage> pages, WorldShadows shadows, int faces, int size, int pageSize, int maxPages, ShadowPage?[] pageOf, ShadowTile[] tileOf, bool isStatic)
+    {
+        for (int f = 0; f < faces; f++)
+        {
+            ShadowPage? found = null;
+            ShadowTile tile = default;
+            foreach (ShadowPage page in pages)
+            {
+                if (page.Tiles.TryAllocate(size, out tile))
+                {
+                    found = page;
+                    break;
+                }
+            }
+            if (found == null && shadows.Pages.Count + shadows.StaticPages.Count < maxPages)
+            {
+                RenderTexture texture = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription((uint)pageSize, (uint)pageSize, [], ShadowFormat));
+                texture.Name = isStatic ? "Graphite static shadow page" : "Graphite shadow page";
+                found = new ShadowPage(texture, ((IMaterialResources)_textures).TextureSlot(texture.DepthTexture, MaterialPropertyType.Texture2D, "black"), isStatic, TileClearProgram);
+                found.LastUsed = _frame;
+                pages.Add(found);
+                if (!found.Tiles.TryAllocate(size, out tile))
+                    found = null;
+            }
+            if (found == null)
+            {
+                for (int g = 0; g < f; g++)
+                {
+                    pageOf[g]!.Tiles.Free(tileOf[g]);
+                    pageOf[g] = null;
+                }
+                return false;
+            }
+            pageOf[f] = found;
+            tileOf[f] = tile;
+        }
+        return true;
+    }
+
+    // A light's tiles go back to their pages and its faces read as unshadowed; its cameras go too unless it keeps its state
+    private void ReleaseShadow(WorldShadows shadows, int index, LightShadow light, bool keepState)
+    {
+        for (int f = 0; f < 6; f++)
+        {
+            if (light.Pages[f] is { } page)
+                page.Tiles.Free(light.Tiles[f]);
+            light.Pages[f] = null;
+            WriteFace(shadows, index, f, default, light);
+        }
+        ReleaseStatic(light);
+        light.Split = false;
+        light.Dirty = light.StaticDirty = true;
+        if (keepState)
+            return;
+        foreach (CameraFrame?[] cameras in new[] { light.Cameras, light.StaticCameras })
+        {
+            for (int f = 0; f < cameras.Length; f++)
+            {
+                if (cameras[f] is not { } camera)
+                    continue;
+                _textures.Untrack(camera.ViewTable);
+                _shadowRetired.Add(camera);
+                cameras[f] = null;
+            }
+        }
+    }
+
+    private static void ReleaseStatic(LightShadow light)
+    {
+        for (int f = 0; f < 6; f++)
+        {
+            if (light.StaticPages[f] is { } page)
+                page.Tiles.Free(light.StaticTiles[f]);
+            light.StaticPages[f] = null;
+        }
+    }
+
+    // Pages holding no tile for a few frames go, or every page when the page size changed
+    private void RetirePages(List<ShadowPage> pages, bool all)
+    {
+        for (int i = pages.Count - 1; i >= 0; i--)
+        {
+            ShadowPage page = pages[i];
+            if (!all && (page.Tiles.UsedTexels > 0 || _frame - page.LastUsed <= StaleViewFrames))
+                continue;
+            _shadowRetired.Add(page);
+            pages.RemoveAt(i);
+        }
+    }
+
+    private static void WriteFace(WorldShadows shadows, int index, int face, in ShadowFace record, LightShadow light)
+    {
+        uint at = (uint)(index * WorldShadows.FacesPerLight + face);
+        if (light.Written[face].Equals(record) && at < shadows.Faces.Count)
+            return;
+        light.Written[face] = record;
+        shadows.Faces.Set(at, record);
+        shadows.Zeroed.Remove(index);
+    }
+
+    // A shadowed light casting nothing still has faces for shaders to read, all unshadowed
+    private static void ZeroFaces(WorldShadows shadows, int index)
+    {
+        if (!shadows.Zeroed.Add(index))
+            return;
+        for (int f = 0; f < WorldShadows.FacesPerLight; f++)
+            shadows.Faces.Set((uint)(index * WorldShadows.FacesPerLight + f), default(ShadowFace));
+    }
+
+    // Whether a shadow view drew casters that change every frame without the world knowing
+    private bool EveryFrameCasters(CameraFrame camera)
+    {
+        if (camera.FindList(PassType.ShadowCaster) is not { } list)
+            return false;
+        if (camera.Sink.For(list) != null)
+            return true;
+        foreach (DrawCall call in list.Calls)
+        {
+            DrawProgram program = DrawPrograms[call.Program];
+            if (ShaderDefinition.PassHasTag(program.Shader.Definition.Passes![program.PassIndex], "ShadowUpdate", "EveryFrame"))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool CastingProviders(WorldFrame world)
+    {
+        foreach (RenderProvider provider in world.World.ProviderSnapshot)
+        {
+            if (provider.EnabledSnapshot && (provider.RunsOnSnapshot & ViewKinds.Shadow) != 0)
+                return true;
+        }
+        return false;
+    }
+
+    // Whether providers put anything into a cached light's views, which then draw again
+    private bool ProvidersCastInto(WorldFrame world, LightShadow light)
+    {
+        for (int f = 0; f < light.Faces; f++)
+        {
+            if (light.Cameras[f] is not { } camera || camera.FindList(PassType.ShadowCaster) is not { } list)
+                continue;
+            CullProviders(camera, camera.Desc, world, camera.ShadowCull);
+            if (camera.Sink.For(list) != null)
+                return true;
+        }
+        return false;
+    }
+
+    // The tile a light wants, twice its radius on screen in texels in the view that sees it biggest, and its fade by distance
+    private (float Wanted, float Fade) WantedTile(WorldFrame world, in LightDesc light, ShadowSettings settings)
     {
         float wanted = 0, fade = 0;
         float range = Math.Max(light.Range, 1e-3f);
@@ -508,65 +1119,18 @@ internal sealed partial class FramePipeline
             float pixels = p.c3.W > 0.5f ? range * scale : scale * range / Math.Max(distance, range);
             wanted = Math.Max(wanted, 2 * pixels * settings.TexelsPerPixel);
         }
-        if (fade <= 0)
-            return (0, 0);
-        int largest = (int)Math.Min(BitOperations.RoundUpToPowerOf2(Math.Max(light.Shadow.Resolution, 16u)), (uint)pageSize);
-        int smallest = Math.Min(Math.Max(settings.MinTileSize, ShadowTileAllocator.SmallestTile), largest);
-        return (Math.Clamp(ShadowTileAllocator.RoundUp((int)MathF.Ceiling(wanted)), smallest, largest), fade);
-    }
-
-    private ShadowPage? AllocateTile(WorldShadows shadows, int pageSize, int maxPages, int size, out ShadowTile tile)
-    {
-        foreach (ShadowPage page in shadows.Pages)
-        {
-            if (page.Tiles.TryAllocate(size, out tile))
-                return page;
-        }
-        tile = default;
-        if (shadows.Pages.Count >= maxPages)
-            return null;
-        RenderTexture texture = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription((uint)pageSize, (uint)pageSize, [], PixelFormat.D32_Float));
-        texture.Name = "Graphite shadow page";
-        ShadowPage created = new(texture, ((IMaterialResources)_textures).TextureSlot(texture.DepthTexture, MaterialPropertyType.Texture2D, "black"));
-        shadows.Pages.Add(created);
-        return created.Tiles.TryAllocate(size, out tile) ? created : null;
-    }
-
-    private void DrawSpotShadow(WorldFrame world, WorldShadows shadows, in LightDesc light, int index, ShadowPage page, ShadowTile tile, float fade, int pageSize)
-    {
-        float half = Math.Clamp(light.OuterAngle, 1f, 85f) * MathF.PI / 180f;
-        float far = Math.Max(light.Range, 0.02f);
-        float near = Math.Clamp(far * 0.005f, 0.01f, 0.5f);
-        (Float3 right, Float3 up, Float3 forward) = ShadowMath.Basis(light.Direction, light.Up);
-        Float4x4 view = ShadowMath.Rows(right, up, forward);
-        Float4x4 projection = ShadowMath.Perspective(half, near, far);
-
-        float inverse = 1f / pageSize;
-        shadows.Faces.Set((uint)(index * WorldShadows.FacesPerLight), new ShadowFace
-        {
-            LightToClip = projection * view,
-            Rect = new Float4(tile.X * inverse, tile.Y * inverse, tile.Size * inverse, 2 * MathF.Tan(half) / tile.Size),
-            Params = new Float4(BitConverter.UInt32BitsToSingle(page.Slot), fade, inverse, 0),
-        });
-        shadows.Shadowed.Add(index);
-
-        if (shadows.CamerasUsed == shadows.Cameras.Count)
-            shadows.Cameras.Add(ShadowCamera());
-        CameraFrame camera = shadows.Cameras[shadows.CamerasUsed++];
-        ViewLayer layer = new() { View = view, Projection = projection, Position = light.Position };
-        DrawShadowView(camera, world, page.Texture, tile, layer, new CullFrustum(projection * view, light.Position, nearPlane: true), near, far);
-        page.Target.Draws.Add(new ShadowDraw(camera, tile));
+        return (wanted, fade);
     }
 
     private CameraFrame ShadowCamera()
     {
-        CameraFrame camera = new(_device, this, WorldFrame.NextCaptureViewId());
+        CameraFrame camera = new(_device, this, WorldFrame.NextCaptureViewId()) { IsShadowView = true };
         _textures.TrackView(camera.ViewTable);
         return camera;
     }
 
     // A shadow view's casters into a tile of a depth target, culled against the given frustum
-    private void DrawShadowView(CameraFrame camera, WorldFrame world, RenderTexture target, ShadowTile tile, in ViewLayer layer, in CullFrustum cull, float near, float far)
+    private void DrawShadowView(CameraFrame camera, WorldFrame world, RenderTexture target, ShadowTile tile, in ViewLayer layer, in CullFrustum cull, float near, float far, CasterFilter filter)
     {
         float size = target.Desc.Width;
         ViewDesc view = new()
@@ -584,11 +1148,13 @@ internal sealed partial class FramePipeline
         };
         view.Layers[0] = layer;
         camera.ShadowCull = cull;
+        camera.ShadowFilter = filter;
+        ShadowViewsDrawn++;
         Draw(camera, view, [], world, default);
     }
 
     // Each casting directional light's cascades for the view, refit on their stagger, and the records its shaders read
-    private void PrepareCascades(CameraFrame camera, bool casts)
+    private void PrepareCascades(CameraFrame camera, CascadeFit fit)
     {
         ViewShadows state = camera.Shadows;
         WorldLighting lighting = camera.World.World.Lighting;
@@ -597,9 +1163,9 @@ internal sealed partial class FramePipeline
         for (int d = 0; d < order.Count; d++)
         {
             ref readonly LightDesc light = ref lighting.Light(order[d]);
-            if (casts && light.Shadow.Enabled)
+            if (fit != CascadeFit.None && light.Shadow.Enabled)
             {
-                PrepareLightCascades(camera, state, light, order[d]);
+                PrepareLightCascades(camera, state, light, order[d], fit == CascadeFit.Around);
                 continue;
             }
             for (int c = 0; c < ViewShadows.MaxCascades; c++)
@@ -608,7 +1174,7 @@ internal sealed partial class FramePipeline
         for (int i = state.Lights.Count - 1; i >= 0; i--)
         {
             int light = state.Lights[i].Light;
-            if (!casts || !System.Linq.Enumerable.Contains(order, light) || !lighting.Light(light).Shadow.Enabled)
+            if (fit == CascadeFit.None || !System.Linq.Enumerable.Contains(order, light) || !lighting.Light(light).Shadow.Enabled)
                 ReleaseCascades(state, i);
         }
         if (state.Records.Count == 0)
@@ -616,7 +1182,7 @@ internal sealed partial class FramePipeline
         camera.Cascades.Write<CascadeRecord>(_uploader, CollectionsMarshal.AsSpan(state.Records));
     }
 
-    private void PrepareLightCascades(CameraFrame camera, ViewShadows state, in LightDesc light, int index)
+    private void PrepareLightCascades(CameraFrame camera, ViewShadows state, in LightDesc light, int index, bool around)
     {
         int count = Math.Clamp((int)light.Shadow.Cascades, 1, ViewShadows.MaxCascades);
         uint resolution = Math.Clamp(BitOperations.RoundUpToPowerOf2(Math.Max(light.Shadow.Resolution, 1u)), 256u, 8192u);
@@ -659,18 +1225,21 @@ internal sealed partial class FramePipeline
 
         for (int c = 0; c < ViewShadows.MaxCascades; c++)
         {
+            ViewShadows.Cascade cascade = cascades[c];
             if (c >= count)
             {
+                cascade.Valid = false;
                 state.Records.Add(default);
                 continue;
             }
-            ViewShadows.Cascade cascade = cascades[c];
+            if (cascade.World != camera.World.World)
+                cascade.Valid = false;
             if (cascade.Texture == null)
             {
-                cascade.Texture = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(resolution, resolution, [], PixelFormat.D32_Float));
+                cascade.Texture = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(resolution, resolution, [], ShadowFormat));
                 cascade.Texture.Name = $"Graphite cascade {c}";
                 cascade.Slot = ((IMaterialResources)_textures).TextureSlot(cascade.Texture.DepthTexture, MaterialPropertyType.Texture2D, "black");
-                cascade.Target = new ShadowTarget(cascade.Texture, "Graphite.Cascade");
+                cascade.Target = new ShadowTarget(cascade.Texture, "Graphite.Cascade", TileClearProgram);
                 cascade.Camera = ShadowCamera();
                 cascade.Valid = false;
             }
@@ -678,32 +1247,38 @@ internal sealed partial class FramePipeline
             _shadowTargets.Add(cascade.Target);
 
             // Cascade c refits every c + 1 frames, staggered, keeping its last fit in between
-            if (!cascade.Valid || (_frame + c) % (c + 1) == 0)
+            if (around || !cascade.Valid || (_frame + c) % (c + 1) == 0)
             {
                 float sliceNear = c == 0 ? viewNear : ShadowMath.Split(c, count, splitNear, distance);
                 float sliceFar = ShadowMath.Split(c + 1, count, splitNear, distance);
                 float depth = ShadowMath.SliceSphere(sliceNear, sliceFar, extentX, extentY, orthographic, out float radius);
                 radius += padding;
+                if (around)
+                    (depth, radius) = (0, sliceFar + padding);
                 Double3 center = first.Position + new Double3(viewForward.X * depth, viewForward.Y * depth, viewForward.Z * depth);
                 cascade.Center = ShadowMath.Snap(center, right, up, forward, 2.0 * radius / resolution);
                 cascade.Radius = radius;
+                cascade.World = camera.World.World;
                 cascade.Valid = true;
 
-                Float4x4 projection = ShadowMath.Orthographic(radius);
+                // Without depth clamp the box reaches toward the light instead, so casters there still land
+                float reach = _device.Features.DepthClipDisable ? radius : radius + 2 * distance;
+                Float4x4 projection = ShadowMath.Orthographic(radius, reach);
+                cascade.Shape = projection * rotation;
                 ShadowTile whole = new(0, 0, (int)resolution);
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = cascade.Center };
-                DrawShadowView(cascade.Camera!, camera.World, cascade.Texture, whole, layer, new CullFrustum(projection * rotation, cascade.Center, nearPlane: false), -radius, radius);
-                cascade.Target.Draws.Add(new ShadowDraw(cascade.Camera!, whole));
+                DrawShadowView(cascade.Camera!, camera.World, cascade.Texture, whole, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All);
+                cascade.Target.Draws.Add(new ShadowDraw(cascade.Camera!, whole, Clear: true));
             }
 
             Double3 r = cascade.Center - first.Position;
             Float3 relative = new((float)r.X, (float)r.Y, (float)r.Z);
             state.Records.Add(new CascadeRecord
             {
-                ViewToClip = ShadowMath.Orthographic(cascade.Radius) * rotation * Float4x4.CreateTranslation(-relative),
+                ViewToClip = cascade.Shape * Float4x4.CreateTranslation(-relative),
                 Sphere = new Float4(relative.X, relative.Y, relative.Z, cascade.Radius),
                 Params = new Float4(BitConverter.UInt32BitsToSingle(cascade.Slot), 1f / resolution, count, blend),
-                Fade = new Float4(viewForward.X, viewForward.Y, viewForward.Z, distance),
+                Fade = around ? new Float4(0, 0, 0, distance) : new Float4(viewForward.X, viewForward.Y, viewForward.Z, distance),
             });
         }
     }
@@ -714,6 +1289,8 @@ internal sealed partial class FramePipeline
         {
             if (cascade.Texture != null)
                 _shadowRetired.Add(cascade.Texture);
+            if (cascade.Target != null)
+                _shadowRetiredTargets.Add(cascade.Target);
             if (cascade.Camera != null)
             {
                 _textures.Untrack(cascade.Camera.ViewTable);
@@ -730,8 +1307,17 @@ internal sealed partial class FramePipeline
         {
             if (world.Shadows == null)
                 continue;
-            for (int i = 0; i < world.Shadows.CamerasUsed; i++)
-                yield return world.Shadows.Cameras[i];
+            foreach (LightShadow light in world.Shadows.Lights.Values)
+            {
+                foreach (CameraFrame?[] cameras in new[] { light.Cameras, light.StaticCameras })
+                {
+                    foreach (CameraFrame? camera in cameras)
+                    {
+                        if (camera != null && camera.LastFrame == _frame)
+                            yield return camera;
+                    }
+                }
+            }
         }
         foreach (CameraFrame camera in AllViews())
         {

@@ -135,6 +135,8 @@ internal static partial class VkFormats
                 return Format.D32SfloatS8Uint;
             case PixelFormat.D32_Float:
                 return Format.D32Sfloat;
+            case PixelFormat.D16_UNorm:
+                return Format.D16Unorm;
             case PixelFormat.D24_UNorm_S8_UInt:
                 return Format.D24UnormS8Uint;
 

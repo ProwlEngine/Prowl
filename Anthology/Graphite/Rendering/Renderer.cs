@@ -29,7 +29,10 @@ public sealed class RendererOptions
     public float ShadowSlopeBias = 1.5f;
 
     /// <summary>The hardware constant offset every shadow caster draws with, in depth steps.</summary>
-    public float ShadowConstantBias = 0;
+    public float ShadowConstantBias = 2;
+
+    /// <summary>The depth format of shadow maps, D16_UNorm (half the memory) or D32_Float.</summary>
+    public PixelFormat ShadowFormat = PixelFormat.D16_UNorm;
 
     /// <summary>Words of vertex data per geometry page.</summary>
     public uint PageVertexWords = GeometryPool.DefaultPageVertexWords;
@@ -231,6 +234,9 @@ public sealed class Renderer : IDisposable
     private readonly GlobalRegistry _globals;
     private readonly DrawPrograms _programs = new();
     private readonly FramePipeline _frame;
+
+    /// <summary>The frame pipeline, for tests.</summary>
+    internal FramePipeline Frame => _frame;
     private readonly Dictionary<RenderWorld, WorldFrame> _worlds = new();
     private readonly List<RenderWorld> _removedWorlds = new();
 
@@ -238,6 +244,7 @@ public sealed class Renderer : IDisposable
     private readonly ConcurrentDictionary<string, bool> _reported = new(StringComparer.Ordinal);
 
     private readonly List<Material> _changedMaterials = new();
+    private readonly List<Material> _shadowMaterials = new();
     private readonly List<GpuMesh> _changedMeshes = new();
     private readonly List<DeviceBuffer> _replaced = new();
     private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiring = new();
@@ -272,8 +279,9 @@ public sealed class Renderer : IDisposable
         _materials = new MaterialSystem(device, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report) { StaleViewFrames = _options.StaleViewFrames };
+        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
+        _frame.ChangedMaterials = _shadowMaterials;
         Skies = new BuiltInSkies(this);
 
         if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)
@@ -398,7 +406,9 @@ public sealed class Renderer : IDisposable
             }
 
             _changedMaterials.Clear();
-            _materials.Extract(_changedMaterials);
+            _shadowMaterials.Clear();
+            _materials.Extract(_changedMaterials, _shadowMaterials);
+            _shadowMaterials.AddRange(_changedMaterials);
             _globals.Extract();
             foreach (WorldFrame world in _worlds.Values)
                 world.World.Extract();

@@ -23,6 +23,7 @@ public static class FormatSizeHelpers
                 return 1;
 
             case PixelFormat.R16_UNorm:
+            case PixelFormat.D16_UNorm:
             case PixelFormat.R16_SNorm:
             case PixelFormat.R16_UInt:
             case PixelFormat.R16_SInt:

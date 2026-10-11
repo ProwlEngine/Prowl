@@ -112,6 +112,14 @@ internal sealed class DrawPrograms
 /// without the camera's translation, so objects are tested at their position minus the first layer's camera in double
 /// precision. Something is visible when any layer sees it. Planes a reversed infinite projection makes degenerate are dropped.
 /// </summary>
+/// <summary>Which renderables a view culls in: all, or for a shadow's static copy and the moving casters over it, one kind.</summary>
+internal enum CasterFilter : byte
+{
+    All,
+    StaticOnly,
+    MovingOnly,
+}
+
 internal readonly struct CullFrustum
 {
     private const int MaxLayers = 6;
@@ -626,7 +634,7 @@ internal sealed class BucketSet
     /// Culls the world for one view, once for all of its passes: objects whose layer the culling mask has, not hidden,
     /// with their sphere in the frustum. Which passes an object draws in is decided by its buckets.
     /// </summary>
-    public void Cull(in CullFrustum frustum, uint cullingMask)
+    public void Cull(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All)
     {
         if (_visible.Length < _world.Capacity)
         {
@@ -641,10 +649,31 @@ internal sealed class BucketSet
         {
             _visible[index] = _world.Alive[index]
                 && (_world.Flags[index] & RenderableFlags.Hidden) == 0
+                && (filter == CasterFilter.All || ((_world.Flags[index] & RenderableFlags.Static) != 0) == (filter == CasterFilter.StaticOnly))
                 && (_world.LayerMask[index] & cullingMask) != 0
                 && frustum.Sphere(_world.WorldCenter[index], _world.WorldRadius[index]);
         }
     }
+
+    /// <summary>The static and the moving shadow casters a frustum holds, culling the world for it.</summary>
+    public (int Static, int Moving) CountCasters(in CullFrustum frustum, uint cullingMask)
+    {
+        Cull(frustum, cullingMask);
+        int statics = 0, moving = 0;
+        for (int index = 0; index < _world.Capacity; index++)
+        {
+            if (!_visible[index] || (_world.Flags[index] & RenderableFlags.CastShadows) == 0)
+                continue;
+            if ((_world.Flags[index] & RenderableFlags.Static) != 0)
+                statics++;
+            else
+                moving++;
+        }
+        return (statics, moving);
+    }
+
+    /// <summary>The renderables drawing with a material.</summary>
+    public IReadOnlyCollection<int> UsersOf(Material material) => _materialUsers.TryGetValue(material, out HashSet<int>? users) ? users : [];
 
     // Every chunk of an object is tested once per view, the first time any pass asks, and the answers are shared.
     private bool ChunkVisible(in CullFrustum frustum, int index, int chunkInMesh)

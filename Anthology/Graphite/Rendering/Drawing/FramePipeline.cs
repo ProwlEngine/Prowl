@@ -439,8 +439,12 @@ internal sealed class CameraFrame : IDisposable
     public readonly ViewShadows Shadows = new();
     public readonly GpuArray Cascades;
 
-    /// <summary>What a shadow view culls its casters against, set before it is prepared.</summary>
+    /// <summary>What a shadow view culls its casters against, and which of them it draws, set before it is prepared.</summary>
     public CullFrustum ShadowCull;
+    public CasterFilter ShadowFilter;
+
+    /// <summary>Whether this is one of the renderer's own shadow views, drawing its casters alone.</summary>
+    public bool IsShadowView { get; init; }
 
     /// <summary>This frame's instance counts copied from providers' buffers into the view's commands, as byte offsets.</summary>
     public readonly List<(DeviceBuffer Source, uint Offset, uint Destination)> Counts = new();
@@ -452,7 +456,7 @@ internal sealed class CameraFrame : IDisposable
         foreach ((BucketSet.TransparentItem item, DrawList list, DeviceBuffer source, uint offset) in Sink.Counts)
         {
             int at = Lists.IndexOf(list);
-            if (at < 0)
+            if (at < 0 || item.FirstCommand < 0)
                 continue;
             for (int c = 0; c < item.Chunks.Length; c++)
                 Counts.Add((source, offset, (uint)(CommandBases[at] + item.FirstCommand + c) * stride + 4));
@@ -1019,6 +1023,7 @@ internal sealed partial class FramePipeline : IDisposable
     private static readonly List<RenderResourceID> s_bufferIds = new();
 
     private readonly GraphicsDevice _device;
+    private readonly IShaderCompiler _compiler;
     private readonly RenderPipeline _frameStart = new();
     private readonly UploadPass _upload;
     private readonly ProbePass _probes;
@@ -1054,6 +1059,7 @@ internal sealed partial class FramePipeline : IDisposable
     {
         Report = report;
         _device = device;
+        _compiler = compiler;
         _textures = textures;
         _uploader = uploader;
         _deterministic = deterministic;
@@ -1226,6 +1232,7 @@ internal sealed partial class FramePipeline : IDisposable
             ResolvePrograms();
         }
 
+        bool providers = _providerWork.Update(_frameWorlds, Active(), _frame, _providerPipeline, Report);
         CollectBuffers(allWorlds);
         _fence.Update(Buffers, Active(), _frame, _fencePipeline);
         GraphDispatch fence = new(_fencePipeline, _frameStartViews);
@@ -1234,7 +1241,7 @@ internal sealed partial class FramePipeline : IDisposable
 
         // Providers' compute and the counts it wrote, after the uploads and before the fence every view follows
         int firstFence = _fenceAt[0];
-        if (_providerWork.Update(_frameWorlds, Active(), _frame, _providerPipeline, Report))
+        if (providers)
             _dispatches.Insert(firstFence++, new GraphDispatch(_providerPipeline, _frameStartViews));
         if (shadows)
             _dispatches.Insert(firstFence + 1, new GraphDispatch(_shadowPipeline, _frameStartViews));
@@ -1256,6 +1263,9 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (IDisposable retired in _shadowRetired)
             retired.Dispose();
         _shadowRetired.Clear();
+        foreach (ShadowTarget target in _shadowRetiredTargets)
+            target.Release();
+        _shadowRetiredTargets.Clear();
         foreach (IDisposable retired in _retired)
             retired.Dispose();
         _retired.Clear();
@@ -1336,7 +1346,7 @@ internal sealed partial class FramePipeline : IDisposable
     // The world's providers add this view's items to its lists, transparent ones kept for the sort
     private void CullProviders(CameraFrame camera, in ViewDesc view, WorldFrame world, in CullFrustum frustum)
     {
-        camera.Sink.Begin(camera, world, frustum, view.CullingMask);
+        camera.Sink.Begin(camera, world, frustum, view.CullingMask, camera.IsShadowView);
         ViewKinds kind = (ViewKinds)(1 << (int)view.Kind);
         ProviderView providerView = new(camera.Info, frustum);
         foreach (RenderProvider provider in world.World.ProviderSnapshot)
@@ -1599,8 +1609,19 @@ internal sealed partial class FramePipeline : IDisposable
         world.SkyProgram = null;
         foreach (CameraFrame camera in world.Captures())
             Untrack(camera);
-        foreach (CameraFrame camera in world.Shadows?.Cameras ?? [])
-            _textures.Untrack(camera.ViewTable);
+        foreach (LightShadow light in world.Shadows?.Lights.Values ?? System.Linq.Enumerable.Empty<LightShadow>())
+        {
+            foreach (CameraFrame? camera in light.Cameras)
+            {
+                if (camera != null)
+                    _textures.Untrack(camera.ViewTable);
+            }
+            foreach (CameraFrame? camera in light.StaticCameras)
+            {
+                if (camera != null)
+                    _textures.Untrack(camera.ViewTable);
+            }
+        }
     }
 
     // A view's table and its cascades' tables leave the sampler tables they follow
@@ -1640,13 +1661,16 @@ internal sealed partial class FramePipeline : IDisposable
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
     {
         int layers = view.LayerCount;
-        bool shadow = view.Kind == ViewKind.Shadow;
+        bool shadow = camera.IsShadowView;
         CullFrustum frustum = shadow ? camera.ShadowCull : new(view.Layers, layers);
         Array.Fill(camera.Roots, SpatialRoots.None);
         if (shadow)
         {
-            world.Buckets.Cull(frustum, view.CullingMask);
-            CullProviders(camera, view, world, frustum);
+            world.Buckets.Cull(frustum, view.CullingMask, camera.ShadowFilter);
+            if (camera.ShadowFilter == CasterFilter.StaticOnly)
+                camera.Sink.Begin(camera, world, frustum, 0);
+            else
+                CullProviders(camera, view, world, frustum);
             camera.Prepass.Clear();
             camera.Forward.Clear();
             camera.Transparent.Clear();
@@ -1761,6 +1785,16 @@ internal sealed partial class FramePipeline : IDisposable
                 _buffers.Add(table.Buffer);
 
         }
+        foreach (WorldFrame world in worlds)
+        {
+            if (world.Shadows != null)
+                _buffers.Add(world.Shadows.Faces.Buffer);
+        }
+        foreach (DeviceBuffer buffer in _providerWork.ComputeBuffers)
+        {
+            if (!_buffers.Contains(buffer))
+                _buffers.Add(buffer);
+        }
         foreach (CameraFrame camera in Active())
             camera.AddBuffers(_buffers);
 
@@ -1814,6 +1848,7 @@ internal sealed partial class FramePipeline : IDisposable
         _providerPipeline.Dispose();
         _shadowPipeline.Dispose();
         _shadowSampler?.Dispose();
+        _tileClear?.Dispose();
         _fencePipeline.Dispose();
         _probes.Dispose();
         Programs.Dispose();
@@ -2002,6 +2037,9 @@ internal sealed class ProviderWork
     private static readonly List<RenderResourceID> s_ids = new();
     private readonly List<RenderProvider> _computing = new();
     private readonly List<DeviceBuffer> _computeBuffers = new();
+
+    /// <summary>This frame's buffers providers' compute writes, which the fence orders before every reader.</summary>
+    public IReadOnlyList<DeviceBuffer> ComputeBuffers => _computeBuffers;
     private readonly List<(DeviceBuffer Source, uint Offset, DeviceBuffer Target, uint Destination)> _copies = new();
     private readonly List<DeviceBuffer> _buffers = new();
     private readonly List<DeviceBuffer> _scratch = new();

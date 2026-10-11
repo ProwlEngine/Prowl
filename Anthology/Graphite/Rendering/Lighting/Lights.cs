@@ -812,7 +812,7 @@ internal sealed class WorldLighting : IDisposable
             _ => 1u,
         };
         bool spot = light.Type == LightType.Spot;
-        bool shadowed = light.Shadow.Enabled && spot;
+        bool shadowed = light.Shadow.Enabled && (spot || light.Type == LightType.Point);
         uint flags = type | (shadowed ? 16u : 0) | slots.Flags;
         float outer = MathF.Cos(light.OuterAngle * MathF.PI / 180f);
         return new LightRecord

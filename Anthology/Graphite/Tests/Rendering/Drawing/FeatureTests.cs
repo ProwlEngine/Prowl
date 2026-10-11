@@ -1299,6 +1299,15 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
+    public void HostViewsOfTheShadowKind_DrawLikeAnyView()
+    {
+        AddQuad(new Float3(0, 1, 0));
+        ViewDesc view = View();
+        view.Kind = ViewKind.Shadow;
+        AssertAll(new Float3(0, 1, 0), Frame(view));
+    }
+
+    [Fact]
     public void Selection_OrdersBySlotThenOrder_BuiltInBeforeWorldBeforeViewOnTies()
     {
         Named view = new("view", RenderSlot.Opaque);

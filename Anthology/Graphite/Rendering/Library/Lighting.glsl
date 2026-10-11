@@ -113,7 +113,11 @@ LightSample Graphite_NewLightSample(vec3 position, float range, vec3 color, floa
 // How much of a local light reaches a surface past its shadow, 1 lit
 float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
 {
-    if (L.ShadowEnabled == 0 || L.ShadowSlot < 0 || L.Type != GRAPHITE_LIGHT_SPOT || !Graphite_ReceivesShadows())
+    if (L.ShadowEnabled == 0 || L.ShadowSlot < 0 || !Graphite_ReceivesShadows())
+        return 1.0;
+    if (L.Type == GRAPHITE_LIGHT_POINT)
+        return Graphite_PointShadow(L.ShadowSlot, L.Position, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, worldPos, geomNormal);
+    if (L.Type != GRAPHITE_LIGHT_SPOT)
         return 1.0;
     return Graphite_SpotShadow(L.ShadowSlot, L.Position, L.Direction, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, worldPos, geomNormal);
 }
