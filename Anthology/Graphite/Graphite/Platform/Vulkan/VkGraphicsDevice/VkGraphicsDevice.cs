@@ -35,7 +35,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         if (surfaceSource != null)
             surface = surfaceSource.GetSurface(Instance);
 
-        CreatePhysicalDevice();
+        CreatePhysicalDevice(vkOptions.PickPhysicalDevice);
         CreateLogicalDevice(surface, vkOptions);
 
         MemoryManager = new VkDeviceMemoryManager(

@@ -119,7 +119,7 @@ internal unsafe partial class VkGraphicsDevice
         }
     }
 
-    private void CreatePhysicalDevice()
+    private void CreatePhysicalDevice(Func<IntPtr, IntPtr>? pick)
     {
         uint deviceCount = 0;
         Vk.EnumeratePhysicalDevices(Instance, ref deviceCount, null);
@@ -154,6 +154,14 @@ internal unsafe partial class VkGraphicsDevice
                 bestScore = score;
                 PhysicalDevice = candidate;
             }
+        }
+
+        if (pick != null)
+        {
+            IntPtr picked = pick(Instance.Handle);
+            if (Array.FindIndex(physicalDevices, d => d.Handle == picked) < 0)
+                throw new RenderException("VulkanDeviceOptions.PickPhysicalDevice returned a handle that is not a physical device of this instance.");
+            PhysicalDevice = new PhysicalDevice(picked);
         }
 
         Vk.GetPhysicalDeviceProperties(PhysicalDevice, out _physicalDeviceProperties);
