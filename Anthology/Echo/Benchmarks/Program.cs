@@ -1,8 +1,8 @@
-using Prowl.Echo;
+﻿using Prowl.Echo;
 
 namespace Benchmarks;
 
-// Usage: Benchmarks [--filter text] [--save file.csv] [--baseline file.csv] [--quick] [--compare]
+// Usage: Benchmarks [--filter text] [--save file.csv] [--baseline file.csv] [--batches n] [--quick] [--compare]
 public static class Program
 {
     public static void Main(string[] args)
@@ -11,6 +11,8 @@ public static class Program
         string? filter = Arg(args, "--filter");
         string? save = Arg(args, "--save");
         string? baselinePath = Arg(args, "--baseline");
+        if (Arg(args, "--batches") is string batches)
+            Harness.Batches = int.Parse(batches);
         if (args.Contains("--quick"))
         {
             Harness.Batches = 7;

@@ -49,12 +49,8 @@ public sealed class AnyObjectFormat : ISerializationFormat
             {
                 try
                 {
-                    // Check SerializeIf condition (using cached attribute data)
-                    if (cachedField.SerializeIfCondition != null)
-                    {
-                        if (!EvaluateSerializeCondition(value, actualType, cachedField.SerializeIfCondition))
-                            continue;
-                    }
+                    if (cachedField.SerializeIf != null && !cachedField.SerializeIf(value))
+                        continue;
 
                     object? propValue = cachedField.GetValue(value);
                     if (propValue == null)
@@ -347,58 +343,5 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         value = null;
         return false;
-    }
-
-    private static bool EvaluateSerializeCondition(object instance, Type type, string conditionMemberName)
-    {
-        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
-        // Try to find a property first
-        PropertyInfo? property = type.GetProperty(conditionMemberName, flags);
-        if (property != null && property.PropertyType == typeof(bool) && property.CanRead)
-        {
-            try
-            {
-                return (bool)property.GetValue(instance)!;
-            }
-            catch (Exception ex)
-            {
-                Serializer.Logger.Error($"Failed to evaluate SerializeIf property '{conditionMemberName}'", ex);
-                return true; // Default to serializing on error
-            }
-        }
-
-        // Try to find a field
-        System.Reflection.FieldInfo? field = type.GetField(conditionMemberName, flags);
-        if (field != null && field.FieldType == typeof(bool))
-        {
-            try
-            {
-                return (bool)field.GetValue(instance)!;
-            }
-            catch (Exception ex)
-            {
-                Serializer.Logger.Error($"Failed to evaluate SerializeIf field '{conditionMemberName}'", ex);
-                return true; // Default to serializing on error
-            }
-        }
-
-        // Try to find a method
-        MethodInfo? method = type.GetMethod(conditionMemberName, flags, null, Type.EmptyTypes, null);
-        if (method != null && method.ReturnType == typeof(bool))
-        {
-            try
-            {
-                return (bool)method.Invoke(instance, null)!;
-            }
-            catch (Exception ex)
-            {
-                Serializer.Logger.Error($"Failed to evaluate SerializeIf method '{conditionMemberName}'", ex);
-                return true; // Default to serializing on error
-            }
-        }
-
-        Serializer.Logger.Warning($"SerializeIf condition member '{conditionMemberName}' not found or does not return bool on type '{type.FullName}'");
-        return true; // Default to serializing if condition not found
     }
 }

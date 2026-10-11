@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Concurrent;
@@ -17,7 +17,7 @@ internal readonly struct CachedFieldInfo
     // Key this member is (de)serialized under. Equals its name except for a member that shadows a
     // same-named base member, which is qualified so the two don't collide.
     public readonly string SerializedName;
-    public readonly string? SerializeIfCondition;
+    public readonly Func<object, bool>? SerializeIf;
     public readonly bool HasIgnoreOnNull;
     public readonly string[]? FormerNames;
 
@@ -35,24 +35,24 @@ internal readonly struct CachedFieldInfo
         else _property!.SetValue(target, value);
     }
 
-    public CachedFieldInfo(FieldInfo field, string serializedName) : this((MemberInfo)field, serializedName)
+    public CachedFieldInfo(FieldInfo field, string serializedName, Type ownerType) : this((MemberInfo)field, serializedName, ownerType)
     {
         _field = field;
     }
 
-    public CachedFieldInfo(PropertyInfo property, string serializedName) : this((MemberInfo)property, serializedName)
+    public CachedFieldInfo(PropertyInfo property, string serializedName, Type ownerType) : this((MemberInfo)property, serializedName, ownerType)
     {
         _property = property;
     }
 
-    private CachedFieldInfo(MemberInfo member, string serializedName)
+    private CachedFieldInfo(MemberInfo member, string serializedName, Type ownerType)
     {
         _field = null;
         _property = null;
         SerializedName = serializedName;
 
         var serializeIf = member.GetCustomAttribute<SerializeIfAttribute>();
-        SerializeIfCondition = serializeIf?.ConditionMemberName;
+        SerializeIf = serializeIf == null ? null : BuildSerializeIf(ownerType, serializeIf.ConditionMemberName);
 
         HasIgnoreOnNull = member.IsDefined(typeof(IgnoreOnNullAttribute), false);
 
@@ -65,6 +65,44 @@ internal readonly struct CachedFieldInfo
             break;
         }
         FormerNames = names;
+    }
+
+    private static Func<object, bool> BuildSerializeIf(Type type, string conditionMemberName)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+        Func<object, bool>? read = null;
+        PropertyInfo? property = type.GetProperty(conditionMemberName, flags);
+        FieldInfo? field = type.GetField(conditionMemberName, flags);
+        MethodInfo? method = type.GetMethod(conditionMemberName, flags, null, Type.EmptyTypes, null);
+        if (property != null && property.PropertyType == typeof(bool) && property.CanRead)
+            read = instance => (bool)property.GetValue(instance)!;
+        else if (field != null && field.FieldType == typeof(bool))
+            read = instance => (bool)field.GetValue(instance)!;
+        else if (method != null && method.ReturnType == typeof(bool))
+            read = instance => (bool)method.Invoke(instance, null)!;
+
+        if (read == null)
+        {
+            return _ =>
+            {
+                Serializer.Logger.Warning($"SerializeIf condition member '{conditionMemberName}' not found or does not return bool on type '{type.FullName}'");
+                return true;
+            };
+        }
+
+        return instance =>
+        {
+            try
+            {
+                return read(instance);
+            }
+            catch (Exception ex)
+            {
+                Serializer.Logger.Error($"Failed to evaluate SerializeIf condition '{conditionMemberName}'", ex);
+                return true;
+            }
+        };
     }
 
     private static string[] CollectFormerNames(IEnumerable<FormerlySerializedAsAttribute> attrs)
@@ -241,8 +279,8 @@ public static class ReflectionUtils
                     ? member.Name
                     : $"{member.Name}@{member.DeclaringType!.FullName}";
                 fields[i] = member is FieldInfo field
-                    ? new CachedFieldInfo(field, serializedName)
-                    : new CachedFieldInfo((PropertyInfo)member, serializedName);
+                    ? new CachedFieldInfo(field, serializedName, targetType)
+                    : new CachedFieldInfo((PropertyInfo)member, serializedName, targetType);
             }
 
             return fields;
