@@ -32,7 +32,6 @@ internal sealed class ViewerWindow : IDisposable
 
     private readonly Options _options;
     private readonly IWindow _window;
-    private readonly Backdrop _backdrop = new();
     private IInputContext _input = null!;
     private GraphicsDevice _device = null!;
     private GraphiteRenderer _renderer = null!;
@@ -100,14 +99,7 @@ internal sealed class ViewerWindow : IDisposable
             return new FontFile(stream);
         }
 
-        OrigamiTheme theme = Origami.Root;
-        theme.Font = Load("Geist-Regular.ttf");
-        theme.FontMedium = Load("Geist-Medium.ttf");
-        theme.FontSemiBold = Load("Geist-SemiBold.ttf");
-        theme.FontBold = Load("Geist-Bold.ttf");
-        theme.FontMono = Load("JetBrainsMono-Regular.ttf");
         _wordmark = Load("SpaceGrotesk-Bold.ttf");
-        _paper.AddFallbackFont(Load("fa-solid-900.ttf"));
     }
 
     private void SetupInput()
@@ -156,15 +148,13 @@ internal sealed class ViewerWindow : IDisposable
         float dpiScale = (float)_window.FramebufferSize.X / _window.Size.X;
         _paper.BeginFrame(dt, dpiScale);
         Origami.BeginFrame(_paper, dt);
-        _backdrop.Update(_paper, dt);
         if (dt > 0.0001f)
             _fps = _fps <= 0f ? 1f / dt : _fps * 0.92f + (1f / dt) * 0.08f;
 
         const float gap = 8f, top = 44f;
         float width = _window.Size.X, height = _window.Size.Y;
-        using (_paper.Column("host").Width(width).Height(height).Enter())
+        using (_paper.Column("host").Width(width).Height(height).BackgroundColor(Color.FromArgb(17, 17, 19)).Enter())
         {
-            _paper.Draw(_backdrop.Draw);
             TopBar(width);
             _dock.Draw(_paper, gap, top, width - gap * 2, height - top - gap);
         }
@@ -188,7 +178,7 @@ internal sealed class ViewerWindow : IDisposable
             .Gap(9).AlignItems(LayoutAlignment.Center).Enter())
         {
             using (_paper.Box("logo").Size(20).Rounded(6).BackgroundLinearGradient(0, 0, 1, 1, theme.Primary.C500, Color.FromArgb(189, 107, 255)).Enter())
-                _paper.Draw((vg, r) => OrigamiIconSet.Mark.Draw(vg, new Rect(new Float2((float)r.Min.X + 4, (float)r.Min.Y + 4), new Float2((float)r.Min.X + 16, (float)r.Min.Y + 16)), Color.White, 1.2f));
+                _paper.Draw((vg, r) => OrigamiGlyphs.Cube_I.Draw(vg, new Rect(new Float2((float)r.Min.X + 4, (float)r.Min.Y + 4), new Float2((float)r.Min.X + 16, (float)r.Min.Y + 16)), Color.White, 1.2f));
 
             _paper.Box("brand").Width(UnitValue.Auto).Height(UnitValue.Auto)
                 .Text("PROWL", _wordmark).FontSize(18).LetterSpacing(3f).TextColor(theme.Ink.C500).IsNotInteractable();
