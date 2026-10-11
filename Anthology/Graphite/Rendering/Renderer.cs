@@ -127,6 +127,7 @@ public sealed class Renderer : IDisposable
     private readonly List<DeviceBuffer> _replaced = new();
     private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiring = new();
     private ViewDesc[] _views = [];
+    private FrameTime _time;
     private int _viewCount;
     private ulong _lastDispatched;
 
@@ -141,6 +142,9 @@ public sealed class Renderer : IDisposable
         Device = device;
         _compiler = compiler;
         _options = options ?? new RendererOptions();
+        GraphicsDeviceFeatures features = device.Features;
+        if (!features.MultiDrawIndirect || !features.DrawIndirectBaseInstance || !features.DescriptorIndexing)
+            throw new NotSupportedException("The renderer needs multi draw indirect, a first instance in indirect draws, and descriptor indexing.");
         InternalShaders.Register();
 
         Textures = new RendererTextures(device);
@@ -212,11 +216,11 @@ public sealed class Renderer : IDisposable
                 throw new NotSupportedException("Views with several layers are not supported yet.");
         }
 
+        RaiseErrors();
         _frameDone.Wait();
         bool queued = false;
         try
         {
-            RaiseErrors();
             RemoveWorlds();
 
             _changedMaterials.Clear();
@@ -229,6 +233,7 @@ public sealed class Renderer : IDisposable
                 _views = new ViewDesc[views.Length];
             views.CopyTo(_views);
             _viewCount = views.Length;
+            _time = frame.Time;
 
             if (_thread == null)
             {
@@ -245,6 +250,7 @@ public sealed class Renderer : IDisposable
             if (!queued)
                 _frameDone.Release();
         }
+        RaiseErrors();
     }
 
     private void RemoveWorlds()
@@ -379,7 +385,7 @@ public sealed class Renderer : IDisposable
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _worlds, _worlds.Values, _lastDispatched);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _worlds, _worlds.Values, _lastDispatched, _time);
         _lastDispatched = task.Id;
     }
 }

@@ -661,11 +661,12 @@ internal sealed class BucketSet
             | (((ulong)bucket.Page & 31) << 34) | (((ulong)bucket.MeshId & 0xFFFFFF) << 10) | (bucket.ChunkInMesh & 1023);
     }
 
-    // [queueRank 6][program 16][page 8][depth 12][mesh 22]
+    // [queueRank 6][program 16][topology 2, winding 1, page 5][depth 12][mesh 22]
     private ulong PrepassKey(Bucket bucket, float distance)
     {
         ulong rank = (ulong)_queueRanks.GetValueOrDefault(bucket.Queue);
         ulong depth = (ulong)Math.Min(4095, (int)(MathF.Log2(1 + distance) * 256));
-        return (rank << 58) | ((ulong)bucket.Program << 42) | (((ulong)bucket.Page & 255) << 34) | (depth << 22) | ((ulong)bucket.MeshId & 0x3FFFFF);
+        return (rank << 58) | ((ulong)bucket.Program << 42) | (((ulong)bucket.Topology & 3) << 40) | ((bucket.Mirrored ? 1ul : 0) << 39)
+            | (((ulong)bucket.Page & 31) << 34) | (depth << 22) | ((ulong)bucket.MeshId & 0x3FFFFF);
     }
 }

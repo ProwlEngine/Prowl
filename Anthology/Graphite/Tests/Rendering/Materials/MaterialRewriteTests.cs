@@ -266,6 +266,16 @@ public sealed class MaterialRewriteTests : IDisposable
     }
 
     [Fact]
+    public void FragmentStages_ReadingMaterials_NeedAVertexStageWritingTheSlot()
+    {
+        string source = Source
+            .Replace("layout(location = 31) flat out uint graphite_MaterialSlot;", "")
+            .Replace("graphite_MaterialSlot = push.slot;", "float unused = float(push.slot);");
+        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
+        Assert.Contains("material slot", error.Message);
+    }
+
+    [Fact]
     public void RewrittenPasses_UseTheRendererSets()
     {
         ShaderDescription description = Rewrite(Source, out _);

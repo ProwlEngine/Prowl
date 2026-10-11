@@ -190,6 +190,40 @@ public sealed class GlobalsTests : IDisposable
     }
 
     [Fact]
+    public void KeywordSnapshots_ChangeOnlyAtExtraction()
+    {
+        (GlobalProperties world, _) = _registry.AddWorld();
+        _registry.Renderer.SetKeyword("FOG", "LINEAR");
+        Assert.False(world.KeywordSnapshot.ContainsKey("FOG"));
+
+        _registry.Extract();
+        Assert.Equal("LINEAR", world.KeywordSnapshot["FOG"]);
+
+        world.SetKeyword("FOG", "EXP");
+        Assert.Equal("LINEAR", world.KeywordSnapshot["FOG"]);
+        _registry.Extract();
+        Assert.Equal("EXP", world.KeywordSnapshot["FOG"]);
+        Assert.Equal("LINEAR", _registry.Renderer.KeywordSnapshot["FOG"]);
+    }
+
+    [Fact]
+    public void NewGlobals_GrowTheRegionsOnlyAtExtraction()
+    {
+        uint words = _registry.RegionWords;
+        DeviceBuffer buffer = _registry.Buffer;
+        for (int i = 0; i < 40; i++)
+            Assert.True(_registry.Declare("_Late" + i, MaterialPropertyType.Float4, out _, out _));
+
+        Assert.True(_registry.NeedsGrowth);
+        Assert.Equal(words, _registry.RegionWords);
+        Assert.Same(buffer, _registry.Buffer);
+
+        _registry.Extract();
+        Assert.False(_registry.NeedsGrowth);
+        Assert.True(_registry.RegionWords > words);
+    }
+
+    [Fact]
     public void Keywords_ResolveWorldThenRenderer()
     {
         (GlobalProperties world, _) = _registry.AddWorld();

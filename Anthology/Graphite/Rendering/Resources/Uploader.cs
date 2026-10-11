@@ -54,6 +54,9 @@ internal sealed class Uploader : IDisposable
         _scatter = scatter;
     }
 
+    /// <summary>Buffers with writes queued.</summary>
+    internal int DestinationCount => _order.Count;
+
     /// <summary>Words queued this frame.</summary>
     public uint QueuedWords => _wordCount;
 

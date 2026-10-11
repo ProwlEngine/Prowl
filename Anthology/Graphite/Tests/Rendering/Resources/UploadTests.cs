@@ -91,6 +91,16 @@ public sealed class UploadTests : IDisposable
     }
 
     [Fact]
+    public void Destinations_AreForgottenOnceRecorded()
+    {
+        using DeviceBuffer buffer = Buffer(4);
+        _uploader.Write(buffer, 0, [1]);
+        Assert.Equal(1, _uploader.DestinationCount);
+        Flush(buffer);
+        Assert.Equal(0, _uploader.DestinationCount);
+    }
+
+    [Fact]
     public void BigWrites_SplitIntoItems_AndStillCopyEveryWord()
     {
         const uint words = Uploader.MaxItemWords * 3 + 17;

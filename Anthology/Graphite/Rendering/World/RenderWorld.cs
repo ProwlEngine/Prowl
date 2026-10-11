@@ -627,7 +627,7 @@ public sealed class RenderWorld : IDisposable
 
         private void UpdateBounds(int index)
         {
-            AABB local = BoundsOverride[index] ?? Mesh[index]?.Bounds ?? default;
+            AABB local = BoundsOverride[index] ?? Mesh[index]?.Placement?.Bounds ?? default;
             (Double3 center, Float3 extents) = TransformBox(Transform[index], local);
             WorldCenter[index] = center;
             WorldExtents[index] = extents;
@@ -660,7 +660,7 @@ public sealed class RenderWorld : IDisposable
         // A slice covers every submesh of the mesh, the last given material repeating, so any draw's subMesh indexes it.
         private void WriteSlice(int index, ReadOnlySpan<Material?> given)
         {
-            int count = Math.Max(given.Length, Math.Max(Mesh[index]?.SubMeshCount ?? 1, 1));
+            int count = Math.Max(given.Length, Math.Max(Mesh[index]?.Placement?.SubMeshes.Length ?? 1, 1));
             if (!_sliceSpace.TryAllocate((uint)count, 1, out RangeAllocation range))
                 throw new InvalidOperationException("The world's material slots are full.");
 
@@ -712,7 +712,7 @@ public sealed class RenderWorld : IDisposable
         // Rebuilds a slice whose mesh gained or lost submeshes, from the materials it was given.
         private void Repad(int index)
         {
-            int wanted = Math.Max(GivenCount[index], Math.Max(Mesh[index]?.SubMeshCount ?? 1, 1));
+            int wanted = Math.Max(GivenCount[index], Math.Max(Mesh[index]?.Placement?.SubMeshes.Length ?? 1, 1));
             if (wanted == SliceCount[index])
                 return;
 

@@ -213,13 +213,16 @@ public sealed class RendererTests : IDisposable
     [Fact]
     public void ObjectsFarFromTheOrigin_DrawWhereTheCameraSeesThem()
     {
-        Double3 camera = new(10_000_000, 0, -3_000_000);
-        Add(Colored(1, 0, 0), camera + new Double3(-2, 0, 10));
-        Add(Colored(0, 1, 0), camera + new Double3(2, 0, 10));
+        // Floats at ten million are a whole unit apart, so only the low parts place these a quarter and half unit off.
+        Double3 camera = new(10_000_000.25, 0, -3_000_000);
+        Add(Colored(1, 0, 0), camera + new Double3(-2.5, 0, 10));
+        Add(Colored(0, 1, 0), camera + new Double3(2.5, 0, 10));
 
         Color32[] pixels = Frame(camera);
-        Assert.Equal(new Color32(255, 0, 0, 255), At(pixels, 4, 8));
-        Assert.Equal(new Color32(0, 255, 0, 255), At(pixels, 12, 8));
+        Assert.Equal(new Color32(255, 0, 0, 255), At(pixels, 1, 8));
+        Assert.Equal(new Color32(0, 0, 0, 255), At(pixels, 5, 8));
+        Assert.Equal(new Color32(0, 0, 0, 255), At(pixels, 10, 8));
+        Assert.Equal(new Color32(0, 255, 0, 255), At(pixels, 14, 8));
     }
 
     [Fact]
@@ -259,16 +262,24 @@ public sealed class RendererTests : IDisposable
     [Fact]
     public void TheRenderThread_DrawsTheSameFrames()
     {
+        void Scene()
+        {
+            Add(Colored(1, 0, 0), new Double3(-2, 0, 10));
+            Add(Colored(0, 1, 0), new Double3(2, 0, 20));
+            Add(Glass(0, 0, 1), new Double3(1, 0, 5));
+        }
+
+        Scene();
+        Color32[] inline = Frame();
+
         _renderer.Dispose();
         Start(RenderThreading.RenderThread);
-        Add(Colored(1, 0, 0), new Double3(-2, 0, 10));
-        Add(Colored(0, 1, 0), new Double3(2, 0, 10));
-
+        Scene();
         Color32[] pixels = Frame();
-        for (int frame = 0; frame < 500 && At(pixels, 12, 8) != new Color32(0, 255, 0, 255); frame++)
+        for (int frame = 0; frame < 500 && !pixels.AsSpan().SequenceEqual(inline); frame++)
             pixels = Frame();
-        Assert.Equal(new Color32(255, 0, 0, 255), At(pixels, 4, 8));
-        Assert.Equal(new Color32(0, 255, 0, 255), At(pixels, 12, 8));
+
+        Assert.Equal(inline, pixels);
         Assert.Empty(_errors);
     }
 }

@@ -304,6 +304,10 @@ internal sealed class CameraFrame : IDisposable
     public WorldFrame World = null!;
     public int LastFrame;
     public readonly CameraView View = new();
+
+    /// <summary>Last frame's view block, for motion: its view projection and camera position.</summary>
+    public ViewBlock Previous;
+    public bool HasPrevious;
     public readonly IRenderView[] Views;
 
     private IndirectDrawIndexedArguments[] _commands = new IndirectDrawIndexedArguments[64];
@@ -590,7 +594,7 @@ internal sealed class FramePipeline : IDisposable
     }
 
     /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
     {
         _frame++;
         _dispatches.Clear();
@@ -614,7 +618,7 @@ internal sealed class FramePipeline : IDisposable
             camera.LastFrame = _frame;
             camera.Desc = view;
             camera.World = world;
-            Prepare(camera, view, world);
+            Prepare(camera, view, world, time);
             camera.View.Target = view.Target;
             camera.View.PixelWidth = view.Target.Width;
             camera.View.PixelHeight = view.Target.Height;
@@ -650,7 +654,7 @@ internal sealed class FramePipeline : IDisposable
         }
     }
 
-    private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world)
+    private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time)
     {
         ViewLayer layer = view.Layers[0];
         Float4x4 viewProjection = layer.Projection * layer.View;
@@ -659,7 +663,17 @@ internal sealed class FramePipeline : IDisposable
         world.Buckets.Build(0, frustum, camera.Prepass);
         world.Buckets.Build(1, frustum, camera.Forward);
         world.Buckets.BuildTransparent(frustum, camera.Transparent);
-        camera.Upload(_uploader, ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance));
+        ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance);
+        block.Time = new Float4((float)time.Time, time.DeltaTime, time.FrameIndex, 0);
+        if (camera.HasPrevious)
+        {
+            block.PreviousViewProjection = camera.Previous.ViewProjection;
+            block.PreviousCameraHigh = camera.Previous.CameraHigh;
+            block.PreviousCameraLow = camera.Previous.CameraLow;
+        }
+        camera.Previous = block;
+        camera.HasPrevious = true;
+        camera.Upload(_uploader, block);
     }
 
     private void CollectBuffers(IEnumerable<WorldFrame> worlds)

@@ -112,14 +112,20 @@ internal static class MaterialRewrite
         ShaderDescription result = description;
         result.Stages = new ShaderStageDescription[description.Stages.Length];
         ShaderStages materialStages = 0;
+        SpirvModule? vertex = null;
         for (int i = 0; i < description.Stages.Length; i++)
         {
             ShaderStageDescription stage = description.Stages[i];
             StageRewriter rewriter = new(plan, stage.Stage, new SpirvModule(stage.ShaderBytes));
             if (rewriter.Run())
                 materialStages |= stage.Stage;
+            if (stage.Stage == ShaderStages.Vertex)
+                vertex = rewriter.Module;
             result.Stages[i] = stage with { ShaderBytes = rewriter.Module.ToBytes() };
         }
+
+        if ((materialStages & ShaderStages.Fragment) != 0 && vertex?.FindVariableAtLocation(SpirvModule.Output, GraphiteBindings.MaterialSlotLocation) is null or 0)
+            throw new ShaderLoadException($"{shaderName}: the fragment stage reads material properties but the vertex stage does not write the material slot. Include Graphite/Vertex.glsl.");
 
         result.ResourceLayouts = Layouts(plan, description.ResourceLayouts ?? [], frameTable, viewTable, materialStages);
         return result;
@@ -904,7 +910,7 @@ internal sealed class SpirvModule
             return;
 
         _globals.RemoveAll(i => Op(i) == OpVariable && variables.Contains(i[2]));
-        _annotations.RemoveAll(i => Op(i) == OpDecorate && variables.Contains(i[1]));
+        _annotations.RemoveAll(i => Op(i) is OpDecorate or 332 or 5632 && variables.Contains(i[1]));
         _preamble.RemoveAll(i => Op(i) == OpName && variables.Contains(i[1]));
         for (int k = 0; k < _preamble.Count; k++)
         {

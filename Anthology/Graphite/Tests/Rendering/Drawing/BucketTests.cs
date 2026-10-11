@@ -312,6 +312,23 @@ public sealed class BucketTests : IDisposable
     }
 
     [Fact]
+    public void MaterialsOfOneProgram_InDifferentQueues_DrawInTheirOwnQueue()
+    {
+        Material late = Material(_unlit);
+        Material early = Material(_unlit);
+        RenderableHandle lateObject = Add(_triangle, late);
+        RenderableHandle earlyObject = Add(_triangle, early, At(1));
+        early.RenderQueue = 1000;
+
+        DrawList list = Frame(Forward);
+        Assert.Equal(2, list.CommandCount);
+        Assert.Equal(new uint[] { (uint)earlyObject.Index, (uint)lateObject.Index }, Instances(list));
+
+        early.RenderQueue = 2400;
+        Assert.Equal(new uint[] { (uint)lateObject.Index, (uint)earlyObject.Index }, Instances(Frame(Forward)));
+    }
+
+    [Fact]
     public void LowerRenderQueues_DrawFirst()
     {
         Material late = Material(_unlit);

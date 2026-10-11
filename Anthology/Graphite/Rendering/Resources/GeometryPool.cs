@@ -26,12 +26,18 @@ public sealed class GpuMesh : IDisposable
     /// <summary>Dense id, unique among live meshes of the renderer.</summary>
     public int Id { get; }
 
-    /// <summary>Bounds of the data last uploaded.</summary>
-    public AABB Bounds { get; internal set; }
+    private sealed record Info(AABB Bounds, int SubMeshCount, int ChunkCount);
 
-    public int SubMeshCount { get; internal set; }
+    private Info _info = new(default, 0, 0);
 
-    public int ChunkCount { get; internal set; }
+    /// <summary>Bounds of the data last given, which may not be resident yet.</summary>
+    public AABB Bounds => Volatile.Read(ref _info).Bounds;
+
+    public int SubMeshCount => Volatile.Read(ref _info).SubMeshCount;
+
+    public int ChunkCount => Volatile.Read(ref _info).ChunkCount;
+
+    internal void Describe(MeshLayout layout) => Volatile.Write(ref _info, new Info(layout.Bounds, layout.SubMeshes.Length, layout.Chunks.Length));
 
     /// <summary>Bumps on every <see cref="SetData"/>.</summary>
     public uint Version => Volatile.Read(ref _version);
@@ -47,6 +53,7 @@ public sealed class GpuMesh : IDisposable
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         MeshLayout layout = new(data);
         Interlocked.Increment(ref _version);
+        Describe(layout);
         _pool.Queue(this, layout);
     }
 
@@ -73,6 +80,7 @@ internal sealed class MeshPlacement
     public required uint VertexCount;
     public required MeshChunk[] Chunks;
     public required SubMesh[] SubMeshes;
+    public required AABB Bounds;
 
     /// <summary>First index of the mesh in its page's index buffer. Chunk index starts are relative to it.</summary>
     public uint IndexBase => Indices.Offset;
@@ -161,6 +169,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
         lock (_lock)
         {
             GpuMesh mesh = new(this, _freeIds.Count > 0 ? _freeIds.Pop() : _nextId++);
+            mesh.Describe(layout);
             _pending.Add((mesh, layout));
             return mesh;
         }
@@ -209,9 +218,6 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
                 Write(uploader, placement, layout);
                 WriteRecords(mesh.Id, placement, layout);
                 mesh.Placement = placement;
-                mesh.Bounds = layout.Bounds;
-                mesh.SubMeshCount = layout.SubMeshes.Length;
-                mesh.ChunkCount = layout.Chunks.Length;
                 changed.Add(mesh);
                 spent += bytes;
             }
@@ -345,6 +351,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             Vertices = vertices,
             Indices = indices,
             ChunkRange = chunkRange,
+            Bounds = layout.Bounds,
             StreamOffsets = offsets,
             StreamsPresent = layout.StreamsPresent,
             VertexCount = layout.VertexCount,

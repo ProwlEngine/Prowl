@@ -22,7 +22,7 @@ public static class ShaderLibrary
     /// <summary>Adds every embedded resource of the assembly whose name starts with the prefix. Repeat calls do nothing.</summary>
     public static void Register(Assembly assembly)
     {
-        if (!s_assemblies.TryAdd(assembly, true))
+        if (s_assemblies.ContainsKey(assembly))
             return;
 
         foreach (string resource in assembly.GetManifestResourceNames())
@@ -34,6 +34,7 @@ public static class ShaderLibrary
             using StreamReader reader = new(stream);
             s_files[resource.Replace('\\', '/')] = reader.ReadToEnd();
         }
+        s_assemblies.TryAdd(assembly, true);
     }
 
 
