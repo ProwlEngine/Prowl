@@ -19,14 +19,18 @@ internal sealed class ArrayFormat : ISerializationFormat
         Type actualType = value.GetType();
 
         // Create a compound to store array data and type info
-        var arrCompound = EchoObject.NewCompound();
+        var arrCompound = EchoObject.NewCompound(2);
 
         if (array.Rank == 1)
         {
             // Single dimensional array
-            List<EchoObject> tags = new(array.Length);
-            foreach (var item in array)
-                tags.Add(Serializer.Serialize(elementType, item, context));
+            List<EchoObject>? tags = PrimitiveCollections.TryWrite(array, elementType);
+            if (tags == null)
+            {
+                tags = new(array.Length);
+                foreach (var item in array)
+                    tags.Add(Serializer.Serialize(elementType, item, context));
+            }
             arrCompound["array"] = new EchoObject(tags);
         }
         else
@@ -82,6 +86,13 @@ internal sealed class ArrayFormat : ISerializationFormat
             // Single dimensional array
             if (value.TryGet("array", out var arrayTag) && arrayTag.TagType == EchoType.List)
             {
+                var primitives = PrimitiveCollections.TryReadArray(arrayTag.List, elementType, context);
+                if (primitives != null)
+                {
+                    CollectionReferences.Register(value, primitives, context);
+                    return primitives;
+                }
+
                 var array = Array.CreateInstance(elementType, arrayTag.Count);
                 CollectionReferences.Register(value, array, context);
                 for (int idx = 0; idx < array.Length; idx++)
