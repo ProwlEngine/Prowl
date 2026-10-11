@@ -23,15 +23,58 @@ internal static class GraphiteBindings
     public const int TextureCubeTable = 3;
     public const int TextureCubeArrayTable = 4;
 
+    public const int Chunks = 6;
+    public const int Transforms = 7;
+    public const int PreviousTransforms = 8;
+    public const int Objects = 9;
+    public const int MaterialSlots = 10;
+
     public const int SamplerTable = 0;
     public const int Globals = 1;
+    public const int Views = 2;
 
     public const int Materials = 0;
+    public const int Instances = 1;
+    public const int DrawRecords = 2;
+    public const int Vertices = 3;
 
     /// <summary>The flat varying carrying the material slot from the vertex to the fragment stage.</summary>
     public const uint MaterialSlotLocation = 31;
 
+    /// <summary>The flat varying carrying the object index from the vertex to the fragment stage.</summary>
+    public const uint ObjectIndexLocation = 30;
+
     public const string MaterialsName = "Graphite_Materials";
+    public const string InstancesName = "Graphite_Instances";
+    public const string DrawRecordsName = "Graphite_DrawRecords";
+    public const string VerticesName = "Graphite_Vertices";
+
+    private const ShaderStages Graphics = ShaderStages.Vertex | ShaderStages.Fragment;
+
+    /// <summary>The frame table every material program declares as set 0: bindless textures, chunks and the world's object data.</summary>
+    public static ResourceLayoutDescription FrameTable(uint textures2D, uint otherTextures) => new(FrameSet,
+        new ResourceLayoutElementDescription("Graphite_Textures2D", ResourceKind.TextureReadOnly, Graphics, Texture2DTable) { ArrayCount = textures2D },
+        new ResourceLayoutElementDescription("Graphite_Textures2DArray", ResourceKind.TextureReadOnly, Graphics, Texture2DArrayTable) { ArrayCount = otherTextures },
+        new ResourceLayoutElementDescription("Graphite_Textures3D", ResourceKind.TextureReadOnly, Graphics, Texture3DTable) { ArrayCount = otherTextures },
+        new ResourceLayoutElementDescription("Graphite_TexturesCube", ResourceKind.TextureReadOnly, Graphics, TextureCubeTable) { ArrayCount = otherTextures },
+        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, Graphics, TextureCubeArrayTable) { ArrayCount = otherTextures },
+        new ResourceLayoutElementDescription("Graphite_Chunks", ResourceKind.StructuredBufferReadOnly, Graphics, Chunks),
+        new ResourceLayoutElementDescription("Graphite_Transforms", ResourceKind.StructuredBufferReadOnly, Graphics, Transforms),
+        new ResourceLayoutElementDescription("Graphite_PreviousTransforms", ResourceKind.StructuredBufferReadOnly, Graphics, PreviousTransforms),
+        new ResourceLayoutElementDescription("Graphite_Objects", ResourceKind.StructuredBufferReadOnly, Graphics, Objects),
+        new ResourceLayoutElementDescription("Graphite_MaterialSlots", ResourceKind.StructuredBufferReadOnly, Graphics, MaterialSlots))
+    {
+        Table = true,
+    };
+
+    /// <summary>The view table every material program declares as set 1: the sampler table, the world's globals and the view blocks.</summary>
+    public static ResourceLayoutDescription ViewTable(uint samplers) => new(ViewSet,
+        new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, Graphics, SamplerTable) { ArrayCount = samplers },
+        new ResourceLayoutElementDescription("Graphite_Globals", ResourceKind.StructuredBufferReadOnly, Graphics, Globals),
+        new ResourceLayoutElementDescription("Graphite_Views", ResourceKind.StructuredBufferReadOnly, Graphics, Views))
+    {
+        Table = true,
+    };
 
     public static int TextureTable(MaterialPropertyType type) => type switch
     {
