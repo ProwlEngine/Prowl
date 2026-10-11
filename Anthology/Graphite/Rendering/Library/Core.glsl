@@ -18,7 +18,7 @@ struct Graphite_ViewData
     vec4 previousCameraLow;
     vec4 screen;                    // width, height, 1 / width, 1 / height
     vec4 jitter;                    // this frame's jitter in xy, the previous frame's in zw
-    vec4 time;                      // time, delta time, frame index
+    vec4 time;                      // time, delta time, frame index, the part of time the first lost
     vec4 depth;                     // near plane, logical far distance
     vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
     uvec4 treeRoots;                // static light regions, view lights, static decal regions, view decals, all ones when empty
@@ -74,11 +74,9 @@ Graphite_ViewData Graphite_View() { return graphite_Views[graphite_Push.viewBase
 vec3 Graphite_CameraOffset(vec3 high, vec3 low)
 {
     Graphite_ViewData view = Graphite_View();
-    return (high - view.cameraHigh.xyz) + (low - view.cameraLow.xyz);
+    precise vec3 offset = (high - view.cameraHigh.xyz) + (low - view.cameraLow.xyz);
+    return offset;
 }
-
-// The camera relative position of a point given in absolute world space as a float, losing precision far from the origin.
-vec3 Graphite_RelativeFromAbsolute(vec3 world) { return Graphite_CameraOffset(world, vec3(0.0)); }
 
 // An absolute world position, as a float. Fine near the origin, for noise and other effects that need world space.
 vec3 Graphite_AbsoluteFromRelative(vec3 relative)
@@ -93,7 +91,8 @@ vec3 Graphite_TransformPoint(Graphite_Transform t, vec3 p, vec3 cameraHigh, vec3
 {
     vec3 linear = vec3(dot(t.row0.xyz, p), dot(t.row1.xyz, p), dot(t.row2.xyz, p));
     vec3 high = vec3(t.row0.w, t.row1.w, t.row2.w);
-    return linear + ((high - cameraHigh) + (t.translationLow.xyz - cameraLow));
+    precise vec3 relative = linear + ((high - cameraHigh) + (t.translationLow.xyz - cameraLow));
+    return relative;
 }
 
 // The inverse transpose of the linear part, up to scale: its cofactor matrix, exact for non uniform scale and mirroring.

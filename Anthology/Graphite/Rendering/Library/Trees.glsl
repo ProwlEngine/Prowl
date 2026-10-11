@@ -41,8 +41,8 @@ layout(set = 1, binding = 6, std430) readonly buffer Graphite_ViewDecalNodes { G
 layout(set = 1, binding = 8, std430) readonly buffer Graphite_LightRegionNodes { Graphite_TreeNode graphite_LightRegionNodes[]; };
 layout(set = 1, binding = 10, std430) readonly buffer Graphite_DecalRegionNodes { Graphite_TreeNode graphite_DecalRegionNodes[]; };
 
-// A region the view sees: the camera minus its origin, and its tree's root
-struct Graphite_RegionEntry { vec3 offset; uint root; };
+// A region the view sees: the camera minus its origin split high and low, and its tree's root
+struct Graphite_RegionEntry { vec3 offset; uint root; vec3 offsetLow; uint pad; };
 
 layout(set = 1, binding = 7, std430) readonly buffer Graphite_LightRegions { Graphite_RegionEntry graphite_LightRegions[]; };
 layout(set = 1, binding = 9, std430) readonly buffer Graphite_DecalRegions { Graphite_RegionEntry graphite_DecalRegions[]; };
@@ -71,9 +71,8 @@ struct Graphite_TreeWalk
     int sp;
     int stackBase;
     int stackEnd;
-    int child;
     uint next;
-    vec4 overlap;
+    uint overlap;            // a bit per child whose box holds the point
     uvec4 children;
     uvec4 counts;
 };
@@ -85,9 +84,8 @@ void Graphite_BeginTree(out Graphite_TreeWalk w, uint tree, uint root)
     w.stackBase = regions ? GRAPHITE_TREE_STACK : 0;
     w.stackEnd = regions ? GRAPHITE_TREE_STACK + GRAPHITE_REGION_STACK : GRAPHITE_TREE_STACK;
     w.sp = w.stackBase;
-    w.child = 4;
     w.next = root;
-    w.overlap = vec4(0.0);
+    w.overlap = 0u;
     w.children = uvec4(GRAPHITE_TREE_INVALID);
     w.counts = uvec4(0u);
 }
@@ -99,11 +97,10 @@ bool Graphite_NextLeaf(inout Graphite_TreeWalk w, vec3 p, out uint first, out ui
     last = 0u;
     for (;;)
     {
-        while (w.child < 4)
+        while (w.overlap != 0u)
         {
-            int i = w.child++;
-            if (w.overlap[i] < 0.5)
-                continue;
+            int i = findLSB(w.overlap);
+            w.overlap &= w.overlap - 1u;
 
             uint slot = w.children[i];
             if ((slot & GRAPHITE_TREE_LEAF) == 0u)
@@ -129,10 +126,10 @@ bool Graphite_NextLeaf(inout Graphite_TreeWalk w, vec3 p, out uint first, out ui
 
         Graphite_TreeNode node = Graphite_TreeNodeAt(w.tree, w.next);
         w.next = GRAPHITE_TREE_INVALID;
-        w.child = 0;
-        w.overlap = step(node.minX, vec4(p.x)) * step(vec4(p.x), node.maxX)
-                  * step(node.minY, vec4(p.y)) * step(vec4(p.y), node.maxY)
-                  * step(node.minZ, vec4(p.z)) * step(vec4(p.z), node.maxZ);
+        bvec4 inside = bvec4(uvec4(greaterThanEqual(vec4(p.x), node.minX)) & uvec4(lessThanEqual(vec4(p.x), node.maxX))
+                           & uvec4(greaterThanEqual(vec4(p.y), node.minY)) & uvec4(lessThanEqual(vec4(p.y), node.maxY))
+                           & uvec4(greaterThanEqual(vec4(p.z), node.minZ)) & uvec4(lessThanEqual(vec4(p.z), node.maxZ)));
+        w.overlap = (inside.x ? 1u : 0u) | (inside.y ? 2u : 0u) | (inside.z ? 4u : 0u) | (inside.w ? 8u : 0u);
         w.children = node.child;
         w.counts = node.count;
     }
@@ -147,7 +144,8 @@ struct Graphite_TreeQuery
     vec3 position;           // camera relative
     vec3 base;               // what moves it relative to the view's first layer, which its trees are built around
     vec3 point;              // the position in the space of the tree being walked
-    vec3 offset;             // what moves a camera relative position into that space
+    vec3 offset;             // what moves a camera relative position into that space, high and low
+    vec3 offsetLow;
     uint staticTree;
     uint viewTree;
     uint viewRoot;
@@ -164,6 +162,7 @@ void Graphite_BeginQuery(out Graphite_TreeQuery q, vec3 position, bool decals)
     q.base = view.treeOffset.xyz;
     q.point = position + q.base;
     q.offset = q.base;
+    q.offsetLow = vec3(0.0);
     q.staticTree = decals ? GRAPHITE_STATIC_DECALS : GRAPHITE_STATIC_LIGHTS;
     q.viewTree = decals ? GRAPHITE_VIEW_DECALS : GRAPHITE_VIEW_LIGHTS;
     q.viewRoot = decals ? view.treeRoots.w : view.treeRoots.y;
@@ -207,6 +206,7 @@ bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint tree, out uint first,
         if (q.phase == 1)
         {
             q.offset = q.base;
+            q.offsetLow = vec3(0.0);
             q.point = q.position + q.base;
             Graphite_BeginTree(q.items, q.viewTree, q.viewRoot);
             q.walking = true;
@@ -217,7 +217,8 @@ bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint tree, out uint first,
         {
             Graphite_RegionEntry region = Graphite_RegionAt(q.regions.tree, q.entry++);
             q.offset = q.base + region.offset;
-            q.point = q.position + q.offset;
+            q.offsetLow = region.offsetLow;
+            q.point = (q.position + q.offset) + q.offsetLow;
             Graphite_BeginTree(q.items, q.staticTree, region.root);
             q.walking = true;
             continue;

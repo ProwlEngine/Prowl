@@ -796,7 +796,8 @@ internal sealed class FramePipeline : IDisposable
         {
             ViewLayer layer = view.Layers[l];
             ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance);
-            block.Time = new Float4((float)time.Time, time.DeltaTime, time.FrameIndex, 0);
+            float timeHigh = (float)time.Time;
+            block.Time = new Float4(timeHigh, time.DeltaTime, time.FrameIndex, (float)(time.Time - timeHigh));
             Float3 offset = frustum.Relative(layer.Position);
             block.TreeOffset = new Float4(offset.X, offset.Y, offset.Z, 0);
             block.LightRegionRoot = lightRegions;

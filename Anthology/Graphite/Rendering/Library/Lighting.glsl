@@ -61,11 +61,13 @@ float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal) {
 
 float Graphite_SunShadow(vec3 worldPos, vec3 geomNormal) { return 0.0; }
 
-// Reads a light when the point, in its tree's space, is inside its sphere and the surface is on one of its layers
-bool Graphite_FetchLight(uint tree, uint index, vec3 point, vec3 offset, uint layers, out LightSample L)
+// Reads a light when the camera relative point is inside its sphere and the surface is on one of its layers. offset and
+// offsetLow move camera relative positions into the light's tree.
+bool Graphite_FetchLight(uint tree, uint index, vec3 worldPos, vec3 offset, vec3 offsetLow, uint layers, out LightSample L)
 {
     vec4 t0 = tree == GRAPHITE_STATIC_LIGHTS ? graphite_StaticLights[index].positionRange : graphite_ViewLights[index].positionRange;
-    vec3 d = point - t0.xyz;
+    precise vec3 position = (t0.xyz - offset) - offsetLow;
+    vec3 d = worldPos - position;
     if (dot(d, d) > t0.w * t0.w)
         return false;
 
@@ -74,7 +76,7 @@ bool Graphite_FetchLight(uint tree, uint index, vec3 point, vec3 offset, uint la
         return false;
 
     int typeAndFlags = floatBitsToInt(r.directionFlags.w);
-    L.Position = t0.xyz - offset;
+    L.Position = position;
     L.Range = t0.w;
     L.Color = r.colorIntensity.rgb;
     L.Intensity = r.colorIntensity.w;
@@ -119,7 +121,7 @@ bool Graphite_NextLight(inout Graphite_LightIterator it, out LightSample L)
         while (it.k < it.last)
         {
             uint index = it.k++;
-            if (Graphite_FetchLight(it.tree, index, it.query.point, it.query.offset, it.layers, L))
+            if (Graphite_FetchLight(it.tree, index, it.query.position, it.query.offset, it.query.offsetLow, it.layers, L))
                 return true;
         }
 

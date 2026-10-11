@@ -150,15 +150,7 @@ internal sealed class LightTreeBuilder
     public void Build(ReadOnlySpan<Vector4> spheres, int maxLeafSize, bool morton)
     {
         int count = spheres.Length;
-        PrimitiveCount = count;
-        _maxLeafSize = Math.Max(1, maxLeafSize);
-        _wideCount = 0;
-        _depth = 0;
-        Depth = 0;
-        _parallelDepth = (int)Math.Ceiling(Math.Log2(Math.Max(Environment.ProcessorCount, 2))) + 2;
-        if (count == 0) return;
-
-        EnsureCapacity(count);
+        if (!Begin(count, maxLeafSize)) return;
 
         LightBounds rootBounds = LightBounds.Empty;
         LightBounds rootCentroids = LightBounds.Empty;
@@ -175,6 +167,45 @@ internal sealed class LightTreeBuilder
             rootCentroids.Add(center);
         }
 
+        Finish(count, rootBounds, rootCentroids, morton);
+    }
+
+    /// <summary>Builds over boxes, like <see cref="Build(ReadOnlySpan{Vector4}, int, bool)"/> over spheres.</summary>
+    public void Build(ReadOnlySpan<LightBounds> boxes, int maxLeafSize, bool morton)
+    {
+        int count = boxes.Length;
+        if (!Begin(count, maxLeafSize)) return;
+
+        LightBounds rootBounds = LightBounds.Empty;
+        LightBounds rootCentroids = LightBounds.Empty;
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 center = (boxes[i].Min + boxes[i].Max) * 0.5f;
+            _indices[i] = i;
+            _centroids[i] = center;
+            _primBounds[i] = boxes[i];
+            rootBounds.Add(boxes[i]);
+            rootCentroids.Add(center);
+        }
+
+        Finish(count, rootBounds, rootCentroids, morton);
+    }
+
+    private bool Begin(int count, int maxLeafSize)
+    {
+        PrimitiveCount = count;
+        _maxLeafSize = Math.Max(1, maxLeafSize);
+        _wideCount = 0;
+        _depth = 0;
+        Depth = 0;
+        _parallelDepth = (int)Math.Ceiling(Math.Log2(Math.Max(Environment.ProcessorCount, 2))) + 2;
+        if (count == 0) return false;
+        EnsureCapacity(count);
+        return true;
+    }
+
+    private void Finish(int count, LightBounds rootBounds, LightBounds rootCentroids, bool morton)
+    {
         _nodes[0] = new BinaryNode { Bounds = rootBounds, LeftFirst = 0, Count = count };
         _nodeCount = 1;
 

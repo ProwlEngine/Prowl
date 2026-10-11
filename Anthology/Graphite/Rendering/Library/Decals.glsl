@@ -10,10 +10,10 @@
 
 struct Graphite_DecalRecord
 {
-    vec4 row0;               // rows of the inverse of its linear part, the high part of its centre in w
+    vec4 row0;               // rows of the inverse of its linear part, its centre in its tree's space in w
     vec4 row1;
     vec4 row2;
-    vec4 centerLow;          // low part of its centre, the order it was added in as uint bits
+    uvec4 order;             // the order it was added in
     vec4 color;              // tint, alpha scales coverage
     uvec4 textures;          // albedo, normal and mask slots in the 2D table, sampler slot
     vec4 params;             // normal strength, priority, angle fade cosine, layer mask as uint bits
@@ -30,10 +30,11 @@ Graphite_DecalRecord Graphite_DecalAt(uint tree, uint index)
     return tree == GRAPHITE_STATIC_DECALS ? graphite_StaticDecals[index] : graphite_ViewDecals[index];
 }
 
-// The unit box position of a camera relative point
-vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 worldPos)
+// The unit box position of a camera relative point. offset and offsetLow move camera relative positions into the decal's tree.
+vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 worldPos, vec3 offset, vec3 offsetLow)
 {
-    vec3 q = worldPos - Graphite_CameraOffset(vec3(d.row0.w, d.row1.w, d.row2.w), d.centerLow.xyz);
+    precise vec3 center = (vec3(d.row0.w, d.row1.w, d.row2.w) - offset) - offsetLow;
+    precise vec3 q = worldPos - center;
     return vec3(dot(d.row0.xyz, q), dot(d.row1.xyz, q), dot(d.row2.xyz, q));
 }
 
@@ -109,14 +110,14 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
         for (uint i = first; i < last; i++)
         {
             Graphite_DecalRecord d = Graphite_DecalAt(tree, i);
-            vec3 local = Graphite_DecalLocal(d, worldPos);
+            vec3 local = Graphite_DecalLocal(d, worldPos, query.offset, query.offsetLow);
             float coverage = Graphite_DecalCoverage(d, local, geomNormal, layers);
             if (coverage <= 0.0)
                 continue;
 
             // Keep the hits sorted by priority then the order they were added, dropping the lowest when full
             float priority = d.params.y;
-            uint sequence = floatBitsToUint(d.centerLow.w);
+            uint sequence = d.order.x;
             int at = hits;
             if (hits == GRAPHITE_MAX_DECALS)
             {

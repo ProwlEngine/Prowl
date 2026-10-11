@@ -309,6 +309,64 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void StaticLights_MovingBetweenRegions_EmptyingAndRefillingThem_LightCorrectly()
+    {
+        Vector3 albedo = new(0.6f, 0.6f, 0.6f);
+        double region = StaticRegions<LightRecord>.RegionSize;
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
+        LightDesc near = Point(new Double3(0.5, 0.5, 8.5), 5, 0.03f, new Float3(1, 0.9f, 0.8f));
+        LightDesc far = Point(new Double3(region * 3.5, 0, 0), 5, 1, new Float3(1, 1, 1));
+        LightHandle moving = _world.AddLight(far);
+        LightHandle other = _world.AddLight(Point(new Double3(-region * 2.5, 0, 0), 5, 1, new Float3(1, 1, 1)));
+        AssertMatches(_ => Vector3.Zero, Frame());
+
+        _world.SetLight(moving, near);
+        AssertMatches(p => Reference.Local(near, p, s_normal, albedo, 0, 0.5f), Frame());
+
+        _world.RemoveLight(other);
+        LightDesc second = Point(new Double3(-0.5, -1, 9), 4, 0.02f, new Float3(0.3f, 0.6f, 1));
+        _world.RemoveLight(moving);
+        _world.AddLight(second);
+        AssertMatches(p => Reference.Local(second, p, s_normal, albedo, 0, 0.5f), Frame());
+
+        LightHandle back = _world.AddLight(far);
+        AssertMatches(p => Reference.Local(second, p, s_normal, albedo, 0, 0.5f), Frame());
+        _world.SetLight(back, near);
+        AssertMatches(p => Reference.Local(second, p, s_normal, albedo, 0, 0.5f) + Reference.Local(near, p, s_normal, albedo, 0, 0.5f), Frame());
+    }
+
+    [Fact]
+    public void AViewSeeingThousandsOfRegions_StillFindsTheLightsNearIt()
+    {
+        AddQuad(Surface(new Float3(0.7f, 0.7f, 0.7f), 0.5f));
+        _world.AddLight(Point(new Double3(0.5, -0.5, 8), 6, 0.05f, new Float3(1, 1, 1)));
+        _world.AddLight(Point(new Double3(-1, 1, 9), 3, 0.02f, new Float3(1, 0.5f, 0.2f), isStatic: false));
+
+        Float4[] Perspective()
+        {
+            ViewDesc view = new() { World = _world, ViewId = 9, Target = _framebuffer };
+            view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+            _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+            _device.WaitForIdle();
+            Assert.Empty(_errors);
+            return ReadLayer(_target, 0);
+        }
+
+        Float4[] alone = Perspective();
+        double region = StaticRegions<LightRecord>.RegionSize;
+        for (int x = -19; x <= 19; x++)
+        {
+            for (int y = -19; y <= 19; y++)
+                _world.AddLight(Point(new Double3(x * region, y * region, 20 * region), 100, 1, new Float3(1, 1, 1)));
+        }
+        Float4[] crowded = Perspective();
+
+        Assert.True(alone.Any(p => p.X > 0.01f));
+        for (int i = 0; i < alone.Length; i++)
+            Assert.True(MathF.Abs(alone[i].X - crowded[i].X) <= 1e-5f + 1e-4f * alone[i].X, $"pixel {i}: {alone[i].X} alone, {crowded[i].X} among 1521 regions");
+    }
+
+    [Fact]
     public void ManyLights_EveryOneReachingAPixelIsFound()
     {
         Vector3 albedo = new(0.5f, 0.5f, 0.5f);

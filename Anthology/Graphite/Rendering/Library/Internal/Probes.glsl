@@ -8,7 +8,7 @@ Compute
 
     struct Graphite_ProbeSH { vec4 shAr; vec4 shAg; vec4 shAb; vec4 shBr; vec4 shBg; vec4 shBb; vec4 shC; };
     struct Graphite_Probe { vec4 high; vec4 low; Graphite_ProbeSH sh; };
-    struct Graphite_ProbeTet { uvec4 corners; ivec4 neighbours; vec4 row1; vec4 row2; vec4 row3; };
+    struct Graphite_ProbeTet { uvec4 corners; ivec4 neighbours; vec4 row1; vec4 row2; vec4 row3; };   // row1.w is 1 for a near flat one
 
     layout(set = 0, binding = 0, std430) readonly buffer Graphite_Probes { Graphite_Probe probes[]; };
     layout(set = 0, binding = 1, std430) readonly buffer Graphite_ProbeTets { Graphite_ProbeTet tets[]; };
@@ -17,12 +17,17 @@ Compute
     layout(push_constant) uniform Push { uint probeCount; uint tetCount; uint requestCount; uint pad; } push;
 
     #define INSIDE -1e-4
+    #define CLEARLY_OUTSIDE -1e-2
     #define MAX_WALK 64
     #define NO_TET 0xFFFFFFFFu
     #define DEGENERATE 0xFFFFFFFFu
 
     // A probe's position minus the point, exact when they are close however far both are from the origin
-    vec3 FromPoint(uint probe, vec3 high, vec3 low) { return (probes[probe].high.xyz - high) + (probes[probe].low.xyz - low); }
+    vec3 FromPoint(uint probe, vec3 high, vec3 low)
+    {
+        precise vec3 d = (probes[probe].high.xyz - high) + (probes[probe].low.xyz - low);
+        return d;
+    }
 
     bool Barycentric(uint t, vec3 high, vec3 low, out vec4 b)
     {
@@ -75,7 +80,12 @@ Compute
             if (b.w < lowest) { k = 3; }
             int next = tets[t].neighbours[k];
             if (next < 0)
-                return NO_TET;
+            {
+                // Past a hull face of a sound tetrahedron the point is outside the hull, else the scan decides
+                if (b[k] < CLEARLY_OUTSIDE && tets[t].row1.w < 0.5)
+                    return NO_TET;
+                break;
+            }
             t = uint(next);
         }
 

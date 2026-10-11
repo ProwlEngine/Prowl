@@ -191,15 +191,15 @@ public sealed partial class RenderWorld
             }
             Probes.ReceiveLightmaps(pages);
             Lighting.SetLightmaps(pages.Length, _lightmapEncoding);
-            _render.RefreshProbeSlots();
         }
         if (_probesDirty)
         {
             _probesDirty = false;
             Probes.ReceiveProbes(_probeData);
             Lighting.SetProbes(Probes.Active);
-            _render.RefreshProbeSlots();
         }
+        if (Probes.TakeSlotsChanged())
+            _render.RefreshProbeSlots();
     }
 
     internal WorldProbes Probes { get; private set; } = null!;
@@ -255,11 +255,22 @@ internal sealed class WorldProbes : IDisposable
 
     public int PageCount { get; private set; }
 
+    public bool TakeSlotsChanged()
+    {
+        bool changed = SlotsChanged;
+        SlotsChanged = false;
+        return changed;
+    }
+
     /// <summary>Whether a renderable on this lightmap page is lit by the probes: it has no page, or one past the end.</summary>
     public bool Wants(int page) => Active && (page < 0 || page >= PageCount);
 
+    /// <summary>Whether a renderable could be lit by the probes differently than before the last change.</summary>
+    public bool SlotsChanged { get; private set; }
+
     public void ReceiveLightmaps(ReadOnlySpan<LightmapPageRecord> pages)
     {
+        SlotsChanged |= PageCount != pages.Length;
         PageCount = pages.Length;
         for (int i = 0; i < pages.Length; i++)
             LightmapPages.Set((uint)i, pages[i]);
@@ -269,7 +280,9 @@ internal sealed class WorldProbes : IDisposable
     {
         _pending = data;
         _probesChanged = true;
-        Active = data != null && data.Positions.Length > 0;
+        bool active = data != null && data.Positions.Length > 0;
+        SlotsChanged |= Active != active;
+        Active = active;
     }
 
     /// <summary>Gives a renderable a harmonics slot. Extraction or render thread.</summary>
@@ -435,10 +448,18 @@ internal sealed class WorldProbes : IDisposable
         record.Row1 = Row(Cross(v2, v3) / det);
         record.Row2 = Row(Cross(v3, v1) / det);
         record.Row3 = Row(Cross(v1, v2) / det);
+
+        // Nearly flat ones give noisy barycentrics, so a walk that leaves the hull through one does not trust it
+        double edges = Length(v1) * Length(v2) * Length(v3);
+        record.Row1.W = Math.Abs(det) < SliverRatio * edges ? 1 : 0;
         return record;
     }
 
+    private const double SliverRatio = 1e-3;
+
     private static Float4 Row(Double3 r) => new((float)r.X, (float)r.Y, (float)r.Z, 0);
+
+    private static double Length(Double3 v) => Math.Sqrt(Dot(v, v));
 
     private static double Dot(Double3 a, Double3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 
