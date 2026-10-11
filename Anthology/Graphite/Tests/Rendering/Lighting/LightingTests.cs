@@ -2067,6 +2067,90 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void ContactHardening_KeepsTheShadowOfACasterNarrowerThanItsSearch()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddReceiver(albedo);
+        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 0.1f, AngularRadius = 45, Shadow = new ShadowDesc { Enabled = true, Filter = ShadowFilter.ContactHardening } };
+        _world.AddLight(sun);
+
+        // A small square just above the plane over one pixel: a wide disc's search would step over it, its penumbra is tiny
+        AddCaster(0.25, 0.25, 9.9, half: 0.15);
+        for (int frame = 0; frame < 4; frame++)
+            Frame();
+        float full = Reference.Directional(sun, PixelPosition(8, 8), s_normal, albedo, 0, 0.5f).X;
+        Float4 under = Frame()[8 * Size + 8];
+        Assert.True(under.X < 0.2f * full, $"under the caster {under.X} of {full}");
+    }
+
+    [Fact]
+    public void ContactHardening_LeavesASlopeUnderAWideLightLit()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        double s = Math.Sqrt(0.5);
+        Double4x4 tilt = new(new Double4(s, 0, -s, 0), new Double4(0, 1, 0, 0), new Double4(s, 0, s, 0), new Double4(0, 0, 0, 1));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, QuadDepth)) * tilt * Double4x4.CreateScale(2) }, [Surface(new Float3(albedo.X, albedo.Y, albedo.Z))]);
+        LightDesc spot = ShadowSpot() with { InnerAngle = 50, OuterAngle = 60, SourceRadius = 0.5f, Shadow = new ShadowDesc { Enabled = true, Filter = ShadowFilter.ContactHardening } };
+        _world.AddLight(spot);
+
+        // The plane casts onto itself and must not shade itself across its own slope
+        Vector3 n = Vector3.Normalize(new Vector3(-1, 0, -1));
+        Float4[] pixels = Frame();
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                Vector3 flat = PixelPosition(x, y);
+                Vector3 p = new(flat.X, flat.Y, QuadDepth - flat.X);
+                Vector3 want = Reference.Local(spot, p, n, albedo, 0, 0.5f);
+                Float4 got = pixels[y * Size + x];
+                Assert.True(MathF.Abs(want.X - got.X) <= 2e-4f + 0.02f * want.X, $"pixel {x},{y}: expected {want.X}, got {got.X}");
+            }
+        }
+    }
+
+    [Fact]
+    public void ContactHardening_ReachesTheWholePenumbraOfACasterNearTheLight()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        _world.Shadows.TexelsPerPixel = 8;
+        AddReceiver(albedo);
+        LightDesc spot = ShadowSpot() with { InnerAngle = 50, OuterAngle = 60, SourceRadius = 0.5f, Shadow = new ShadowDesc { Enabled = true, Filter = ShadowFilter.ContactHardening } };
+        _world.AddLight(spot);
+
+        // Two from the light and eight from the plane the penumbra spreads one and a half either side of the edge, so a
+        // pixel three quarters into the light still sees part of the caster
+        AddHalfCaster(4);
+        Float4[] pixels = Frame();
+        float sum = 0, full = 0;
+        for (int y = 0; y < Size; y++)
+        {
+            sum += pixels[y * Size + 9].X;
+            full += Reference.Local(spot, PixelPosition(9, y), s_normal, albedo, 0, 0.5f).X;
+        }
+        Assert.True(sum < 0.95f * full, $"three quarters out from the edge {sum} of {full}");
+    }
+
+    [Fact]
+    public void ShadowTiles_FreedToTrySomething_GoBackWhereTheyWere()
+    {
+        ShadowTileAllocator tiles = new(1024);
+        Assert.True(tiles.TryAllocate(256, out ShadowTile a));
+        Assert.True(tiles.TryAllocate(256, out ShadowTile b));
+        Assert.True(tiles.TryAllocate(512, out ShadowTile c));
+        long used = tiles.UsedTexels;
+        tiles.Free(b);
+        Assert.True(tiles.TryClaim(b));
+        Assert.Equal(used, tiles.UsedTexels);
+        Assert.False(tiles.TryClaim(a));
+
+        // Everything given back merges whole, the claimed square included
+        foreach (ShadowTile tile in new[] { a, b, c })
+            tiles.Free(tile);
+        Assert.True(tiles.TryAllocate(1024, out _));
+    }
+
+    [Fact]
     public void ShadowTiles_PackLargestFirst_AndMergeBackWhenFreed()
     {
         ShadowTileAllocator tiles = new(1024);

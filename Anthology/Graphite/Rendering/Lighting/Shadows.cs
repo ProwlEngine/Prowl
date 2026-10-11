@@ -113,6 +113,32 @@ internal sealed class ShadowTileAllocator
         return true;
     }
 
+    /// <summary>Takes a given square if it is free, so tiles freed to try something can go back where they were.</summary>
+    public bool TryClaim(ShadowTile tile)
+    {
+        for (int s = tile.Size; s <= Size; s <<= 1)
+        {
+            int x = tile.X - tile.X % s, y = tile.Y - tile.Y % s;
+            if (!FreeSet(s).Remove(Pack(x, y)))
+                continue;
+            while (s > tile.Size)
+            {
+                s >>= 1;
+                int cx = tile.X - tile.X % s, cy = tile.Y - tile.Y % s;
+                for (int i = 0; i < 4; i++)
+                {
+                    int qx = x + (i & 1) * s, qy = y + (i >> 1) * s;
+                    if (qx != cx || qy != cy)
+                        FreeSet(s).Add(Pack(qx, qy));
+                }
+                (x, y) = (cx, cy);
+            }
+            UsedTexels += (long)tile.Size * tile.Size;
+            return true;
+        }
+        return false;
+    }
+
     public void Free(ShadowTile tile)
     {
         if (!tile.IsValid)
@@ -838,8 +864,8 @@ internal sealed partial class FramePipeline
     private GraphicsProgram? _tileClear;
     private readonly List<ShadowPlan> _shadowPlans = new(), _shadowPlanPool = new(), _shadowQueue = new();
     private readonly HashSet<ShadowPage> _drainedPages = new();
-    private readonly ShadowPage?[] _resizePages = new ShadowPage?[6];
-    private readonly ShadowTile[] _resizeTiles = new ShadowTile[6];
+    private readonly ShadowPage?[] _resizePages = new ShadowPage?[6], _probePages = new ShadowPage?[6];
+    private readonly ShadowTile[] _resizeTiles = new ShadowTile[6], _probeTiles = new ShadowTile[6];
     private readonly List<IDisposable> _shadowRetired = new();
     private Sampler? _shadowSampler;
 
@@ -1047,9 +1073,26 @@ internal sealed partial class FramePipeline
             bool mandatory = !light.HasTiles || light.Dirty || light.StaticDirty;
             if (!mandatory)
             {
-                // Only sharpening or softening: the new size where it fits as things are, the old tiles kept when it does not
-                if (resizes <= 0 || !AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, maxPages, _resizePages, _resizeTiles, isStatic: false))
+                // Only sharpening or softening, paced by the budget, which a light may finish even when it has fewer faces left
+                // than it needs. The new size goes where it fits as things are or in the light's own old space, and the
+                // old tiles stay just where they were when it does not fit either way.
+                if (resizes <= 0)
                     continue;
+                if (!AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, maxPages, _resizePages, _resizeTiles, isStatic: false))
+                {
+                    for (int f = 0; f < light.Faces; f++)
+                        light.Pages[f]!.Tiles.Free(light.Tiles[f]);
+                    bool placed = AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, maxPages, _resizePages, _resizeTiles, isStatic: false);
+                    for (int f = 0; f < light.Faces; f++)
+                    {
+                        if (!placed)
+                            light.Pages[f]!.Tiles.TryClaim(light.Tiles[f]);
+                        else
+                            light.Pages[f] = null;
+                    }
+                    if (!placed)
+                        continue;
+                }
                 resizes -= light.Faces;
                 ReleaseShadow(shadows, plan.Light, light, keepState: true);
                 Array.Copy(_resizePages, light.Pages, light.Faces);
@@ -1315,15 +1358,30 @@ internal sealed partial class FramePipeline
     private static bool SplitCounted(LightShadow light) => light.Split || (light.Statics > 0 && (light.Movings > 0 || light.ProviderCasts));
 
     // Whether a static copy of a light's size could be made now: a page to spare in the budget, or a static page with room
-    private static bool StaticRoom(WorldShadows shadows, LightShadow light, int maxPages)
+    private bool StaticRoom(WorldShadows shadows, LightShadow light, int maxPages)
     {
         if (shadows.Pages.Count + shadows.StaticPages.Count < maxPages)
             return true;
-        long needed = (long)light.Faces * light.Size * light.Size;
-        long free = 0;
-        foreach (ShadowPage page in shadows.StaticPages)
-            free += (long)page.Tiles.Size * page.Tiles.Size - page.Tiles.UsedTexels;
-        return free >= needed;
+
+        // Tried in the static pages and given straight back, so the answer is what allocating would really do
+        int placed = 0;
+        for (; placed < light.Faces; placed++)
+        {
+            _probePages[placed] = null;
+            foreach (ShadowPage page in shadows.StaticPages)
+            {
+                if (page.Tiles.TryAllocate(light.Size, out _probeTiles[placed]))
+                {
+                    _probePages[placed] = page;
+                    break;
+                }
+            }
+            if (_probePages[placed] == null)
+                break;
+        }
+        for (int f = 0; f < placed; f++)
+            _probePages[f]!.Tiles.Free(_probeTiles[f]);
+        return placed == light.Faces;
     }
 
     // Whether every caster of a shadow view drew with its own program, not a stand in or nothing

@@ -111,78 +111,150 @@ float Graphite_ShadowNoiseAngle()
 #endif
 }
 
-// The mean depth of what lies nearer the light than the receiver within radius texels of it, or -1 when nothing does
-float Graphite_ShadowBlocker(uint slot, vec4 rect, float inverseSize, vec3 coords, float radius, float angle)
+// Two directions square to a direction and to each other
+void Graphite_ShadowFrame(vec3 direction, out vec3 t1, out vec3 t2)
 {
-    vec2 tileMin = rect.xy / inverseSize;
-    vec2 tileMax = (rect.xy + rect.z) / inverseSize - 1.0;
-    vec2 centre = coords.xy / inverseSize;
-    float sum = 0.0;
+    t1 = normalize(cross(abs(direction.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), direction));
+    t2 = cross(direction, t1);
+}
+
+// The cube face a direction from a point light falls in
+uint Graphite_CubeFace(vec3 d)
+{
+    vec3 b = abs(d);
+    return b.x >= b.y && b.x >= b.z ? (d.x > 0.0 ? 0u : 1u) : b.y >= b.z ? (d.y > 0.0 ? 2u : 3u) : (d.z > 0.0 ? 4u : 5u);
+}
+
+// The receiver's plane by its geometric normal, square to the light when it has none
+vec3 Graphite_ShadowPlane(vec3 geomNormal, vec3 toLight)
+{
+    return dot(geomNormal, geomNormal) > 1e-8 ? geomNormal : toLight;
+}
+
+// A depth of a perspective tile as the distance along its axis
+float Graphite_FaceAxis(vec2 nearFar, float depth)
+{
+    return nearFar.x * nearFar.y / (depth * (nearFar.y - nearFar.x) + nearFar.x);
+}
+
+struct Graphite_LocalTap
+{
+    vec3 coords;
+    uint face;
+};
+
+// One tap of a local light's soft shadow: the receiver moved square to the light, then along the light's ray back onto its
+// plane so the tap's depth follows the surface, in the face the tap falls in, a point light's picked per tap so discs
+// cross cube faces without seams. Positions are relative to the light.
+Graphite_LocalTap Graphite_LocalShadowTap(uint first, bool cube, vec3 receiver, vec3 normal, vec3 t1, vec3 t2, vec2 offset)
+{
+    vec3 q = receiver + t1 * offset.x + t2 * offset.y;
+    float along = dot(normal, q);
+    q *= clamp(abs(along) > 1e-6 ? dot(normal, receiver) / along : 1.0, 0.5, 2.0);
+    Graphite_LocalTap tap;
+    tap.face = cube ? first + Graphite_CubeFace(q) : first;
+    Graphite_ShadowFace face = graphite_ShadowFaces[tap.face];
+    tap.coords = Graphite_ShadowCoords(face.lightToClip * vec4(q, 1.0), face.rect);
+    return tap;
+}
+
+// Contact hardening for a spot or point light. Blockers are searched as far as one can shift across the light's size,
+// which is from the near plane, the centre included, and their distance along the axis taken against each tap's own;
+// the penumbra is the light's radius times how far past the blockers the receiver lies, no wider than the search.
+float Graphite_LocalContact(uint first, bool cube, Graphite_ShadowFace centre, vec3 receiver, vec3 normal, float lightRadius, float receiverAxis)
+{
+    float inverseSize = centre.params.z;
+    float texelWorld = centre.rect.w * max(receiverAxis, 1e-4);
+    float largest = centre.rect.z / inverseSize * 0.125;
+    float near = centre.depth.x;
+    float search = clamp(lightRadius * max(receiverAxis - near, 0.0) / (max(receiverAxis, 1e-4) * near * centre.rect.w), 1.5, largest);
+    vec3 t1, t2;
+    Graphite_ShadowFrame(normalize(receiver), t1, t2);
+    float angle = Graphite_ShadowNoiseAngle();
+
+    float ratio = 0.0;
     int found = 0;
-    for (int i = 0; i < GRAPHITE_SHADOW_TAPS; i++)
+    for (int i = 0; i <= GRAPHITE_SHADOW_TAPS; i++)
     {
-        vec2 texel = clamp(centre + Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * radius, tileMin, tileMax);
-        float depth = texelFetch(sampler2D(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_Samplers[0]), ivec2(texel), 0).r;
-        if (depth > coords.z)
+        vec2 offset = i < GRAPHITE_SHADOW_TAPS ? Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * search * texelWorld : vec2(0.0);
+        Graphite_LocalTap tap = Graphite_LocalShadowTap(first, cube, receiver, normal, t1, t2, offset);
+        Graphite_ShadowFace face = graphite_ShadowFaces[tap.face];
+        vec2 texel = clamp(tap.coords.xy / inverseSize, face.rect.xy / inverseSize, (face.rect.xy + face.rect.z) / inverseSize - 1.0);
+        float depth = texelFetch(sampler2D(Graphite_Textures2D[nonuniformEXT(floatBitsToUint(face.params.x))], Graphite_Samplers[0]), ivec2(texel), 0).r;
+        if (depth > tap.coords.z)
         {
-            sum += depth;
+            ratio += Graphite_FaceAxis(face.depth.xy, depth) / Graphite_FaceAxis(face.depth.xy, tap.coords.z);
             found++;
         }
     }
-    return found > 0 ? sum / float(found) : -1.0;
-}
+    if (found == 0)
+        return 1.0;
 
-// The lit fraction over a disc of radius texels, from comparisons on a turned Vogel disc kept half a texel inside the tile
-float Graphite_ShadowDisc(uint slot, vec4 rect, float inverseSize, vec3 coords, float radius, float angle)
-{
-    vec2 tileMin = rect.xy + 0.5 * inverseSize;
-    vec2 tileMax = rect.xy + rect.z - 0.5 * inverseSize;
+    float radius = clamp(lightRadius * (float(found) / max(ratio, 1e-4) - 1.0) / texelWorld, 1.5, search);
     float lit = 0.0;
     for (int i = 0; i < GRAPHITE_SHADOW_TAPS; i++)
     {
-        vec2 uv = clamp(coords.xy + Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * radius * inverseSize, tileMin, tileMax);
-        lit += texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
+        Graphite_LocalTap tap = Graphite_LocalShadowTap(first, cube, receiver, normal, t1, t2, Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * radius * texelWorld);
+        Graphite_ShadowFace face = graphite_ShadowFaces[tap.face];
+        vec2 uv = clamp(tap.coords.xy, face.rect.xy + 0.5 * inverseSize, face.rect.xy + face.rect.z - 0.5 * inverseSize);
+        lit += texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(floatBitsToUint(face.params.x))], Graphite_ShadowSampler), vec3(uv, tap.coords.z));
     }
     return lit / float(GRAPHITE_SHADOW_TAPS);
 }
 
-// Contact hardening in a perspective tile: blockers searched within the light's size at the receiver, then a penumbra of
-// the light's radius times how far the receiver lies past the blocker over the blocker's distance, both along the axis
-float Graphite_ContactShadowPerspective(uint slot, vec4 rect, float inverseSize, vec3 coords, float lightRadius, vec2 nearFar, float receiverAxis)
+// One tap of a directional light's soft shadow: the receiver moved square to the light, then along it back onto its plane
+vec3 Graphite_CascadeTap(Graphite_Cascade c, vec3 receiver, vec3 normal, vec3 toLight, vec3 t1, vec3 t2, vec2 offset)
 {
-    float texelWorld = rect.w * max(receiverAxis, 1e-4);
-    float largest = rect.z / inverseSize * 0.125;
-    float angle = Graphite_ShadowNoiseAngle();
-    float blocker = Graphite_ShadowBlocker(slot, rect, inverseSize, coords, clamp(lightRadius / texelWorld, 1.5, largest), angle);
-    if (blocker < 0.0)
-        return 1.0;
-    float blockerAxis = nearFar.x * nearFar.y / (blocker * (nearFar.y - nearFar.x) + nearFar.x);
-    float penumbra = lightRadius * max(receiverAxis - blockerAxis, 0.0) / max(blockerAxis, 1e-4);
-    return Graphite_ShadowDisc(slot, rect, inverseSize, coords, clamp(penumbra / texelWorld, 1.5, largest), angle);
+    vec3 q = receiver + t1 * offset.x + t2 * offset.y;
+    float facing = dot(normal, toLight);
+    float slide = abs(facing) > 1e-4 ? dot(normal, receiver - q) / facing : 0.0;
+    float limit = 4.0 * length(offset);
+    q += toLight * clamp(slide, -limit, limit);
+    return Graphite_ShadowCoords(c.viewToClip * vec4(q, 1.0), vec4(0.0, 0.0, 1.0, 0.0));
 }
 
-// Contact hardening in a cascade: blockers searched as far as the light's disc reaches from the slab's near end, then a
-// penumbra of the distance from blocker to receiver times the tangent of the disc's angular radius
-float Graphite_ContactShadowOrthographic(uint slot, float inverseSize, vec3 coords, float tanRadius, float depthRange, float texelWorld)
+// Contact hardening for a directional light. Blockers are searched as far as the disc reaches from no further than the
+// cascade's own depth toward the light, the centre included, kept inside the cascade; the penumbra is the mean distance
+// from blocker to receiver times the tangent of the disc's angular radius, no wider than the search.
+float Graphite_CascadeContact(Graphite_Cascade c, vec3 receiver, vec3 normal, vec3 toLight, float tanRadius, float texelWorld)
 {
-    vec4 rect = vec4(0.0, 0.0, 1.0, 0.0);
-    float largest = 0.125 / inverseSize;
+    float inverseSize = c.params.y;
+    uint slot = floatBitsToUint(c.params.x);
+    vec3 centre = Graphite_ShadowCoords(c.viewToClip * vec4(receiver, 1.0), vec4(0.0, 0.0, 1.0, 0.0));
+    vec2 edge = min(centre.xy, 1.0 - centre.xy) / inverseSize - 1.0;
+    float largest = max(min(0.125 / inverseSize, min(edge.x, edge.y)), 1.5);
+    float reach = min((1.0 - centre.z) * c.depth.x, 2.0 * c.sphere.w);
+    float search = clamp(reach * tanRadius / texelWorld, 1.5, largest);
+    vec3 t1, t2;
+    Graphite_ShadowFrame(toLight, t1, t2);
     float angle = Graphite_ShadowNoiseAngle();
-    float blocker = Graphite_ShadowBlocker(slot, rect, inverseSize, coords, clamp((1.0 - coords.z) * depthRange * tanRadius / texelWorld, 1.5, largest), angle);
-    if (blocker < 0.0)
-        return 1.0;
-    float penumbra = (blocker - coords.z) * depthRange * tanRadius;
-    return Graphite_ShadowDisc(slot, rect, inverseSize, coords, clamp(penumbra / texelWorld, 1.5, largest), angle);
-}
+    float last = 1.0 / inverseSize - 1.0;
 
-// A tile's lit fraction under its filter, contact hardening when the light has a size, the tent when it is a point
-float Graphite_LocalLit(Graphite_ShadowFace face, vec4 clip, float filtering, float lightRadius, float receiverAxis)
-{
-    vec3 coords = Graphite_ShadowCoords(clip, face.rect);
-    uint slot = floatBitsToUint(face.params.x);
-    if (filtering == GRAPHITE_SHADOW_CONTACT && lightRadius > 0.0)
-        return Graphite_ContactShadowPerspective(slot, face.rect, face.params.z, coords, lightRadius, face.depth.xy, receiverAxis);
-    return Graphite_SampleShadow(slot, face.rect, face.params.z, coords, min(filtering, 1.0));
+    float gap = 0.0;
+    int found = 0;
+    for (int i = 0; i <= GRAPHITE_SHADOW_TAPS; i++)
+    {
+        vec2 offset = i < GRAPHITE_SHADOW_TAPS ? Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * search * texelWorld : vec2(0.0);
+        vec3 coords = Graphite_CascadeTap(c, receiver, normal, toLight, t1, t2, offset);
+        float depth = texelFetch(sampler2D(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_Samplers[0]), ivec2(clamp(coords.xy / inverseSize, vec2(0.0), vec2(last))), 0).r;
+        if (depth > coords.z)
+        {
+            gap += depth - coords.z;
+            found++;
+        }
+    }
+    if (found == 0)
+        return 1.0;
+
+    float radius = clamp(gap / float(found) * c.depth.x * tanRadius / texelWorld, 1.5, search);
+    float lit = 0.0;
+    for (int i = 0; i < GRAPHITE_SHADOW_TAPS; i++)
+    {
+        vec3 coords = Graphite_CascadeTap(c, receiver, normal, toLight, t1, t2, Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * radius * texelWorld);
+        vec2 uv = clamp(coords.xy, vec2(0.5 * inverseSize), vec2(1.0 - 0.5 * inverseSize));
+        lit += texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
+    }
+    return lit / float(GRAPHITE_SHADOW_TAPS);
 }
 
 // A spot light's shadow at a camera relative position, the light's position camera relative too
@@ -201,7 +273,9 @@ float Graphite_SpotShadow(int shadowSlot, vec3 lightPosition, vec3 lightDirectio
     if (clip.w <= 0.0 || any(greaterThan(abs(clip.xy), vec2(clip.w))))
         return 1.0;
 
-    float lit = Graphite_LocalLit(face, clip, filtering, lightRadius, clip.w);
+    float lit = filtering == GRAPHITE_SHADOW_CONTACT && lightRadius > 0.0
+        ? Graphite_LocalContact(uint(shadowSlot) * GRAPHITE_SHADOW_FACES, false, face, biased - lightPosition, Graphite_ShadowPlane(geomNormal, -toPosition / max(distance, 1e-6)), lightRadius, clip.w)
+        : Graphite_SampleShadow(floatBitsToUint(face.params.x), face.rect, face.params.z, Graphite_ShadowCoords(clip, face.rect), min(filtering, 1.0));
     return mix(1.0, lit, strength * fade);
 }
 
@@ -222,16 +296,16 @@ float Graphite_PointShadow(int shadowSlot, vec3 lightPosition, float depthBias, 
 
     // The face picked from the biased position, so the offset never pushes it off its face
     vec3 d = biased - lightPosition;
-    vec3 b = abs(d);
-    uint face = b.x >= b.y && b.x >= b.z ? (d.x > 0.0 ? 0u : 1u) : b.y >= b.z ? (d.y > 0.0 ? 2u : 3u) : (d.z > 0.0 ? 4u : 5u);
-    Graphite_ShadowFace f = graphite_ShadowFaces[first + face];
+    Graphite_ShadowFace f = graphite_ShadowFaces[first + Graphite_CubeFace(d)];
     if (f.rect.z <= 0.0)
         return 1.0;
     vec4 clip = f.lightToClip * vec4(d, 1.0);
     if (clip.w <= 0.0)
         return 1.0;
 
-    float lit = Graphite_LocalLit(f, clip, filtering, lightRadius, clip.w);
+    float lit = filtering == GRAPHITE_SHADOW_CONTACT && lightRadius > 0.0
+        ? Graphite_LocalContact(first, true, f, d, Graphite_ShadowPlane(geomNormal, -toPosition / max(distance, 1e-6)), lightRadius, clip.w)
+        : Graphite_SampleShadow(floatBitsToUint(f.params.x), f.rect, f.params.z, Graphite_ShadowCoords(clip, f.rect), min(filtering, 1.0));
     return mix(1.0, lit, strength * fade);
 }
 
@@ -247,12 +321,10 @@ float Graphite_CascadeLit(Graphite_Cascade c, vec3 position, vec3 geomNormal, ve
 {
     float texelWorld = 2.0 * c.sphere.w * c.params.y;
     vec3 biased = Graphite_ShadowBias(position, geomNormal, toLight, texelWorld, depthBias, normalBias);
-    vec4 rect = vec4(0.0, 0.0, 1.0, 0.0);
-    vec3 coords = Graphite_ShadowCoords(c.viewToClip * vec4(biased, 1.0), rect);
-    uint slot = floatBitsToUint(c.params.x);
     if (filtering == GRAPHITE_SHADOW_CONTACT && tanRadius > 0.0)
-        return Graphite_ContactShadowOrthographic(slot, c.params.y, coords, tanRadius, c.depth.x, texelWorld);
-    return Graphite_SampleShadow(slot, rect, c.params.y, coords, min(filtering, 1.0));
+        return Graphite_CascadeContact(c, biased, Graphite_ShadowPlane(geomNormal, toLight), toLight, tanRadius, texelWorld);
+    vec4 rect = vec4(0.0, 0.0, 1.0, 0.0);
+    return Graphite_SampleShadow(floatBitsToUint(c.params.x), rect, c.params.y, Graphite_ShadowCoords(c.viewToClip * vec4(biased, 1.0), rect), min(filtering, 1.0));
 }
 
 // A directional light's shadow at a camera relative position: the sharpest cascade holding it, blended into the next
