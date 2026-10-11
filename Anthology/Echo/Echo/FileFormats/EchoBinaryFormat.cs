@@ -64,134 +64,103 @@ public sealed class EchoBinaryFormat : IFileFormat
         return ReadFrom(reader, Options);
     }
 
-    #region Shared ThreadLocal Collections
-
-    private static readonly ThreadLocal<Dictionary<string, int>> SharedEncodeDictionary = new(() => new Dictionary<string, int>(4096));
-    private static readonly ThreadLocal<Dictionary<int, string>> SharedDecodeDictionary = new(() => new Dictionary<int, string>(4096));
-    private static readonly ThreadLocal<StringBuilder> SharedStringBuilder = new(() => new StringBuilder(4096));
-    private static readonly ThreadLocal<List<int>> SharedCodeList = new(() => new List<int>(1024));
-
-    private static void ClearSharedCollections()
-    {
-        SharedEncodeDictionary.Value!.Clear();
-        SharedDecodeDictionary.Value!.Clear();
-        SharedStringBuilder.Value!.Clear();
-        SharedCodeList.Value!.Clear();
-    }
-
-    #endregion
-
-    #region LZW Compression Helpers
+    #region LZW Compression
+    // Codes below 256 are single bytes, every later code is an earlier code plus one byte.
     private const int MaxDictionarySize = 4096;
     private const int InitialDictionarySize = 256;
+    private const int HashSize = 8192;
 
-    private static void InitializeEncodeDictionary()
+    [ThreadStatic] private static LzwBuffers? _lzw;
+
+    private sealed class LzwBuffers
     {
-        var dict = SharedEncodeDictionary.Value!;
-        dict.Clear();
-        for (int i = 0; i < InitialDictionarySize; i++)
-            dict[((char)i).ToString()] = i;
-    }
+        // Encoder table from (prefix code << 8 | byte) to code. A slot belongs to the current string only when its stamp matches.
+        public readonly int[] HashKeys = new int[HashSize];
+        public readonly int[] HashCodes = new int[HashSize];
+        public readonly int[] HashStamps = new int[HashSize];
+        public int Stamp;
 
-    private static void InitializeDecodeDictionary()
-    {
-        var dict = SharedDecodeDictionary.Value!;
-        dict.Clear();
-        for (int i = 0; i < InitialDictionarySize; i++)
-            dict[i] = ((char)i).ToString();
-    }
+        public readonly int[] Prefix = new int[MaxDictionarySize];
+        public readonly byte[] Suffix = new byte[MaxDictionarySize];
+        public readonly int[] Length = new int[MaxDictionarySize];
 
-    private static List<int> CompressString(ReadOnlySpan<char> input)
-    {
-        if (input.Length == 0)
-            return new List<int>();
+        public byte[] Bytes = new byte[256];
+        public int[] Codes = new int[256];
 
-        InitializeEncodeDictionary();
-        var codes = SharedCodeList.Value!;
-        codes.Clear();
-
-        int nextCode = InitialDictionarySize;
-        string current = input[0].ToString();
-
-        for (int i = 1; i < input.Length; i++)
+        public int NextStamp()
         {
-            string combined = current + input[i];
-            if (SharedEncodeDictionary.Value!.TryGetValue(combined, out int code))
+            if (Stamp == int.MaxValue)
             {
-                current = combined;
+                Array.Clear(HashStamps, 0, HashSize);
+                Stamp = 0;
             }
-            else
-            {
-                codes.Add(SharedEncodeDictionary.Value![current]);
-                if (nextCode < MaxDictionarySize)
-                {
-                    SharedEncodeDictionary.Value![combined] = nextCode++;
-                }
-                current = input[i].ToString();
-            }
+            return ++Stamp;
+        }
+    }
+
+    private static LzwBuffers Lzw => _lzw ??= new LzwBuffers();
+
+    // Compresses the UTF-8 bytes rather than the chars, so any Unicode text works with a 256 symbol dictionary.
+    private static void WriteLZWCompressed(BinaryWriter writer, string input)
+    {
+        var lzw = Lzw;
+        int byteCount = Encoding.UTF8.GetByteCount(input);
+        if (byteCount == 0)
+        {
+            LEB128.WriteUnsigned(writer, 0);
+            return;
         }
 
-        if (current.Length > 0)
-            codes.Add(SharedEncodeDictionary.Value![current]);
+        if (lzw.Bytes.Length < byteCount)
+            lzw.Bytes = new byte[Math.Max(byteCount, lzw.Bytes.Length * 2)];
+        byte[] bytes = lzw.Bytes;
+        Encoding.UTF8.GetBytes(input, 0, input.Length, bytes, 0);
 
-        return codes;
-    }
+        if (lzw.Codes.Length < byteCount)
+            lzw.Codes = new int[Math.Max(byteCount, lzw.Codes.Length * 2)];
+        int[] codes = lzw.Codes;
 
-    private static string DecompressString(List<int> codes)
-    {
-        if (codes.Count == 0)
-            return string.Empty;
-
-        InitializeDecodeDictionary();
-        var sb = SharedStringBuilder.Value!;
-        sb.Clear();
-
-        string current = SharedDecodeDictionary.Value![codes[0]];
-        sb.Append(current);
+        int stamp = lzw.NextStamp();
+        int count = 0;
         int nextCode = InitialDictionarySize;
+        int current = bytes[0];
 
-        for (int i = 1; i < codes.Count; i++)
+        for (int i = 1; i < byteCount; i++)
         {
-            int code = codes[i];
-            string entry;
-
-            if (SharedDecodeDictionary.Value!.TryGetValue(code, out string? value))
+            byte next = bytes[i];
+            int key = (current << 8) | next;
+            int slot = (int)(((uint)key * 0x9E3779B1u) >> 19);
+            int found = -1;
+            while (lzw.HashStamps[slot] == stamp)
             {
-                entry = value;
-            }
-            else if (code == nextCode)
-            {
-                entry = current + current[0];
-            }
-            else
-            {
-                throw new Exception("Invalid compressed data");
+                if (lzw.HashKeys[slot] == key)
+                {
+                    found = lzw.HashCodes[slot];
+                    break;
+                }
+                slot = (slot + 1) & (HashSize - 1);
             }
 
-            sb.Append(entry);
+            if (found >= 0)
+            {
+                current = found;
+                continue;
+            }
+
+            codes[count++] = current;
             if (nextCode < MaxDictionarySize)
             {
-                SharedDecodeDictionary.Value![nextCode++] = current + entry[0];
+                lzw.HashStamps[slot] = stamp;
+                lzw.HashKeys[slot] = key;
+                lzw.HashCodes[slot] = nextCode++;
             }
-            current = entry;
+            current = next;
         }
+        codes[count++] = current;
 
-        return sb.ToString();
-    }
-
-    private static void WriteLZWCompressed(BinaryWriter writer, ReadOnlySpan<char> input)
-    {
-        // Compress the UTF-8 bytes (each reinterpreted as a 0-255 char) rather than the chars directly, so
-        // any Unicode text works with a 256-symbol dictionary. ASCII maps 1:1, so it encodes as before.
-        byte[] utf8 = Encoding.UTF8.GetBytes(input.ToString());
-        char[] symbols = new char[utf8.Length];
-        for (int i = 0; i < utf8.Length; i++)
-            symbols[i] = (char)utf8[i];
-
-        var codes = CompressString(symbols);
-        LEB128.WriteUnsigned(writer, (ulong)codes.Count);
-        foreach (int code in codes)
-            LEB128.WriteUnsigned(writer, (ulong)code);
+        LEB128.WriteUnsigned(writer, (ulong)count);
+        for (int i = 0; i < count; i++)
+            LEB128.WriteUnsigned(writer, (ulong)codes[i]);
     }
 
     private static string ReadLZWCompressed(BinaryReader reader)
@@ -200,19 +169,83 @@ public sealed class EchoBinaryFormat : IFileFormat
         if (codesCount == 0)
             return string.Empty;
 
-        SharedCodeList.Value!.Clear();
-        for (int i = 0; i < codesCount; i++)
-            SharedCodeList.Value!.Add((int)LEB128.ReadUnsigned(reader));
+        var lzw = Lzw;
+        byte[] output = lzw.Bytes;
+        int outLength = 0;
+        int nextCode = InitialDictionarySize;
+        int previous = -1;
 
-        string symbols = DecompressString(SharedCodeList.Value!);
-        byte[] utf8 = new byte[symbols.Length];
-        for (int i = 0; i < symbols.Length; i++)
-            utf8[i] = (byte)symbols[i];
-        return Encoding.UTF8.GetString(utf8);
+        for (int i = 0; i < codesCount; i++)
+        {
+            int code = (int)LEB128.ReadUnsigned(reader);
+            int start = outLength;
+
+            if (code < nextCode)
+            {
+                int length = code < InitialDictionarySize ? 1 : lzw.Length[code];
+                EnsureCapacity(ref output, outLength + length);
+                WriteEntry(lzw, output, code, start + length - 1);
+                outLength += length;
+            }
+            else if (code == nextCode && previous >= 0)
+            {
+                int length = previous < InitialDictionarySize ? 1 : lzw.Length[previous];
+                EnsureCapacity(ref output, outLength + length + 1);
+                WriteEntry(lzw, output, previous, start + length - 1);
+                output[start + length] = output[start];
+                outLength += length + 1;
+            }
+            else
+            {
+                throw new Exception("Invalid compressed data");
+            }
+
+            if (previous >= 0 && nextCode < MaxDictionarySize)
+            {
+                lzw.Prefix[nextCode] = previous;
+                lzw.Suffix[nextCode] = output[start];
+                lzw.Length[nextCode] = (previous < InitialDictionarySize ? 1 : lzw.Length[previous]) + 1;
+                nextCode++;
+            }
+            previous = code;
+        }
+
+        lzw.Bytes = output;
+        return Encoding.UTF8.GetString(output, 0, outLength);
+    }
+
+    // Writes a code's bytes backwards, ending at index end.
+    private static void WriteEntry(LzwBuffers lzw, byte[] output, int code, int end)
+    {
+        while (code >= InitialDictionarySize)
+        {
+            output[end--] = lzw.Suffix[code];
+            code = lzw.Prefix[code];
+        }
+        output[end] = (byte)code;
+    }
+
+    private static void EnsureCapacity(ref byte[] buffer, int size)
+    {
+        if (buffer.Length < size)
+            Array.Resize(ref buffer, Math.Max(size, buffer.Length * 2));
     }
     #endregion
 
     #region Writing
+
+    // Length prefixed UTF-8, as an Int32 byte count followed by the bytes.
+    private static void WriteUtf8(BinaryWriter writer, string value)
+    {
+        var lzw = Lzw;
+        int byteCount = Encoding.UTF8.GetByteCount(value);
+        if (lzw.Bytes.Length < byteCount)
+            lzw.Bytes = new byte[Math.Max(byteCount, lzw.Bytes.Length * 2)];
+        Encoding.UTF8.GetBytes(value, 0, value.Length, lzw.Bytes, 0);
+        writer.Write(byteCount);
+        writer.Write(lzw.Bytes, 0, byteCount);
+    }
+
     public static void WriteToFile(EchoObject tag, FileInfo file, BinarySerializationOptions? options = null)
     {
         using var stream = file.OpenWrite();
@@ -235,9 +268,7 @@ public sealed class EchoBinaryFormat : IFileFormat
         writer.Write(tag.Count);
         foreach (var subTag in tag.Tags)
         {
-            byte[] stringBytes = System.Text.Encoding.UTF8.GetBytes(subTag.Key);
-            writer.Write(stringBytes.Length);
-            writer.Write(stringBytes);
+            WriteUtf8(writer, subTag.Key);
             WriteTag_Performance(subTag.Value, writer, options);
         }
     }
@@ -248,7 +279,7 @@ public sealed class EchoBinaryFormat : IFileFormat
 
         foreach (var subTag in tag.Tags)
         {
-            WriteLZWCompressed(writer, subTag.Key.AsSpan());
+            WriteLZWCompressed(writer, subTag.Key);
             WriteTag_Size(subTag.Value, writer, options);
         }
     }
@@ -270,12 +301,7 @@ public sealed class EchoBinaryFormat : IFileFormat
         else if (type == EchoType.Float) writer.Write(tag.FloatValue);
         else if (type == EchoType.Double) writer.Write(tag.DoubleValue);
         else if (type == EchoType.Decimal) writer.Write(tag.DecimalValue);
-        else if (type == EchoType.String)
-        {
-            byte[] stringBytes = Encoding.UTF8.GetBytes(tag.StringValue);
-            writer.Write(stringBytes.Length);
-            writer.Write(stringBytes);
-        }
+        else if (type == EchoType.String) WriteUtf8(writer, tag.StringValue);
         else if (type == EchoType.ByteArray)
         {
             writer.Write(tag.ByteArrayValue.Length);
@@ -312,7 +338,7 @@ public sealed class EchoBinaryFormat : IFileFormat
         else if (type == EchoType.Decimal) writer.Write(tag.DecimalValue);
         else if (type == EchoType.String)
         {
-            WriteLZWCompressed(writer, tag.StringValue.AsSpan());
+            WriteLZWCompressed(writer, tag.StringValue);
         }
         else if (type == EchoType.ByteArray)
         {
@@ -334,6 +360,27 @@ public sealed class EchoBinaryFormat : IFileFormat
     #endregion
 
     #region Reading
+
+    private static string ReadUtf8(BinaryReader reader)
+    {
+        int length = reader.ReadInt32();
+        if (length == 0)
+            return string.Empty;
+
+        var lzw = Lzw;
+        if (lzw.Bytes.Length < length)
+            lzw.Bytes = new byte[Math.Max(length, lzw.Bytes.Length * 2)];
+
+        int read = 0;
+        while (read < length)
+        {
+            int n = reader.Read(lzw.Bytes, read, length - read);
+            if (n == 0) throw new EndOfStreamException();
+            read += n;
+        }
+        return Encoding.UTF8.GetString(lzw.Bytes, 0, length);
+    }
+
     public static EchoObject ReadFromFile(FileInfo file, BinarySerializationOptions? options = null)
     {
         using var stream = file.OpenRead();
@@ -356,10 +403,7 @@ public sealed class EchoBinaryFormat : IFileFormat
         EchoObject tag = EchoObject.NewCompound(tagCount);
         for (int i = 0; i < tagCount; i++)
         {
-            int nameLength = reader.ReadInt32();
-            byte[] nameBytes = reader.ReadBytes(nameLength);
-            string name = Encoding.UTF8.GetString(nameBytes);
-            tag.Add(name, ReadTag_Performance(reader, options));
+            tag.Add(ReadUtf8(reader), ReadTag_Performance(reader, options));
         }
 
         return tag;
@@ -395,12 +439,7 @@ public sealed class EchoBinaryFormat : IFileFormat
         else if (type == EchoType.Float) return new(reader.ReadSingle());
         else if (type == EchoType.Double) return new(reader.ReadDouble());
         else if (type == EchoType.Decimal) return new(reader.ReadDecimal());
-        else if (type == EchoType.String)
-        {
-            int length = reader.ReadInt32();
-            byte[] stringBytes = reader.ReadBytes(length);
-            return new(EchoType.String, Encoding.UTF8.GetString(stringBytes));
-        }
+        else if (type == EchoType.String) return new(ReadUtf8(reader));
         else if (type == EchoType.ByteArray)
         {
             int length = reader.ReadInt32();
