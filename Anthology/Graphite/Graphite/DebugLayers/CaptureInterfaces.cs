@@ -59,6 +59,8 @@ public interface IPassCommandSink
 
     void SetProperties(ReadOnlySpan<PropertyState> properties);
 
+    void SetPushConstants(uint offset, ReadOnlySpan<byte> data);
+
     void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance);
 
     void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance);

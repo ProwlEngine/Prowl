@@ -292,9 +292,40 @@ public class GlslLayoutTests
 
 
     [Fact]
-    public void PushConstants_Fail()
+    public void PushConstants_ReflectTheBlockSizeAndEveryStageThatReadsIt()
     {
-        Assert.Contains("push constants", Glsl.Fails(FragmentOnly("layout(push_constant) uniform P { vec4 x; } p;", "color = p.x;")).Message);
+        ShaderDescription d = Glsl.Describe("""
+            Shared
+            {
+                layout(push_constant) uniform Push { vec4 tint; uint index; } push;
+            }
+            Vertex { void main() { gl_Position = vec4(float(push.index)); } }
+            Fragment
+            {
+                out vec4 color;
+                void main() { color = push.tint; }
+            }
+            """);
+
+        Assert.Equal(new PushConstantRange(ShaderStages.Vertex | ShaderStages.Fragment, 20), d.PushConstants);
+        Assert.Empty(Glsl.Elements(d));
+    }
+
+
+    [Fact]
+    public void PushConstants_OfACompute_PassToItsDescription()
+    {
+        GlslProgram program = Glsl.Compile("""
+            Compute
+            {
+                layout(local_size_x = 1) in;
+                layout(push_constant) uniform Push { mat4 m; } push;
+                layout(std430) buffer Output { vec4 values[]; };
+                void main() { values[0] = push.m[0]; }
+            }
+            """);
+
+        Assert.Equal(new PushConstantRange(ShaderStages.Compute, 64), program.ToCompute().PushConstants);
     }
 
 

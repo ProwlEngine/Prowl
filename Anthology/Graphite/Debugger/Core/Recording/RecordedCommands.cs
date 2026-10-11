@@ -55,6 +55,8 @@ public sealed record BindIndexBufferCommand(TraceVersion Buffer, IndexFormat For
 /// <summary>Properties that changed since the previous table in the pass, and the names that left it.</summary>
 public sealed record SetPropertiesCommand(EquatableArray<RecordedProperty> Changed, EquatableArray<string> Removed) : RecordedCommand;
 
+public sealed record SetPushConstantsCommand(uint Offset, BlobRef Data) : RecordedCommand;
+
 public sealed record DrawCommand(uint VertexCount, uint InstanceCount, uint FirstVertex, uint FirstInstance) : RecordedCommand;
 
 public sealed record DrawIndexedCommand(uint IndexCount, uint InstanceCount, uint FirstIndex, int VertexOffset, uint FirstInstance) : RecordedCommand;

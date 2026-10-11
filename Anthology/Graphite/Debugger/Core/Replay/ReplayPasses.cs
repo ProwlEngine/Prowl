@@ -169,6 +169,9 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             case SetPropertiesCommand properties:
                 ApplyProperties(cmd, properties);
                 break;
+            case SetPushConstantsCommand push:
+                cmd.SetPushConstants(scope.Blob(push.Data), push.Offset);
+                break;
             case DrawCommand draw:
                 BindSource(cmd);
                 cmd.Draw(draw.VertexCount, draw.InstanceCount, draw.FirstVertex, draw.FirstInstance);

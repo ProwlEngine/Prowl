@@ -50,7 +50,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
         }
 
         (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
-            = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray);
+            = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray, PushConstants);
 
         ComputePipelineCreateInfo pipelineCI = new() { SType = StructureType.ComputePipelineCreateInfo };
         pipelineCI.Layout = PipelineLayout;

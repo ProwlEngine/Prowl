@@ -69,7 +69,10 @@ public sealed class GlslProgram
     /// <summary>
     /// The compute description of a compute program.
     /// </summary>
-    public ComputeDescription ToCompute() => new(Description.Stages[0], Description.ResourceLayouts, ThreadGroupSize.X, ThreadGroupSize.Y, ThreadGroupSize.Z);
+    public ComputeDescription ToCompute() => new(Description.Stages[0], Description.ResourceLayouts, ThreadGroupSize.X, ThreadGroupSize.Y, ThreadGroupSize.Z)
+    {
+        PushConstants = Description.PushConstants,
+    };
 }
 
 

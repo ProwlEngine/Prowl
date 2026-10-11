@@ -192,6 +192,12 @@ internal sealed class CompositePassCommandSink(IPassCommandSink[] sinks) : IPass
             sink.DrawIndexed(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
     }
 
+    public void SetPushConstants(uint offset, ReadOnlySpan<byte> data)
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.SetPushConstants(offset, data);
+    }
+
     public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
     {
         foreach (IPassCommandSink sink in sinks)

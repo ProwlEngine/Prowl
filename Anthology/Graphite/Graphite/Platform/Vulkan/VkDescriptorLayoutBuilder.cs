@@ -18,7 +18,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         PipelineLayout PipelineLayout,
         uint ResourceSetCount,
         DescriptorSetLayout EmptyDescriptorSetLayout)
-        Build(VkGraphicsDevice gd, ResourceLayoutDescription[] descs)
+        Build(VkGraphicsDevice gd, ResourceLayoutDescription[] descs, PushConstantRange pushConstants)
     {
         uint maxSet = 0;
         bool any = false;
@@ -50,7 +50,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
             }
         }
 
-        PipelineLayout pipelineLayout = BuildPipelineLayout(gd, dsls, setCount);
+        PipelineLayout pipelineLayout = BuildPipelineLayout(gd, dsls, setCount, pushConstants);
         return (dsls, counts, pipelineLayout, setCount, emptyDsl);
     }
 
@@ -149,16 +149,19 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         _ => throw Illegal.Value<ResourceKind>(),
     };
 
-    private static PipelineLayout BuildPipelineLayout(VkGraphicsDevice gd, DescriptorSetLayout[] dsls, uint setCount)
+    private static PipelineLayout BuildPipelineLayout(VkGraphicsDevice gd, DescriptorSetLayout[] dsls, uint setCount, PushConstantRange pushConstants)
     {
         DescriptorSetLayout* dslsPtr = stackalloc DescriptorSetLayout[(int)setCount];
         for (int i = 0; i < setCount; i++) dslsPtr[i] = dsls[i];
 
+        Silk.NET.Vulkan.PushConstantRange range = new(VkFormats.ToVkShaderStages(pushConstants.Stages), 0, pushConstants.SizeInBytes);
         PipelineLayoutCreateInfo plCI = new()
         {
             SType = StructureType.PipelineLayoutCreateInfo,
             SetLayoutCount = setCount,
             PSetLayouts = dslsPtr,
+            PushConstantRangeCount = pushConstants.SizeInBytes > 0 ? 1u : 0u,
+            PPushConstantRanges = &range,
         };
         gd.Vk.CreatePipelineLayout(gd.Device, in plCI, null, out PipelineLayout layout).CheckResult();
         return layout;

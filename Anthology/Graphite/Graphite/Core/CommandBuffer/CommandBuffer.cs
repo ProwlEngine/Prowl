@@ -19,6 +19,14 @@ public abstract partial class CommandBuffer : CommandBufferBase
 
     private protected IVertexSource? _currentVertexSource;
 
+    /// <summary>
+    /// Bytes of push constants a command buffer holds, the size every Vulkan device supports.
+    /// </summary>
+    public const int PushConstantCapacity = 128;
+
+    private protected readonly byte[] _pushConstants = new byte[PushConstantCapacity];
+    private protected uint _pushConstantVersion;
+
 
     /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
@@ -55,6 +63,8 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _computeProgram = null;
         _framebufferOutputs = null;
         _currentVertexSource = null;
+        System.Array.Clear(_pushConstants);
+        _pushConstantVersion++;
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;

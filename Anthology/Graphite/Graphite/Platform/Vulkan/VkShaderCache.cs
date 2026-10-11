@@ -14,14 +14,14 @@ internal sealed class VkShaderCache
         _gd = gd;
     }
 
-    public VkShader Acquire(ProgramKey program, ShaderStageDescription[] stages, ResourceLayoutDescription[] layouts)
+    public VkShader Acquire(ProgramKey program, ShaderStageDescription[] stages, ResourceLayoutDescription[] layouts, PushConstantRange pushConstants)
     {
-        VkShaderKey key = new(program, layouts);
+        VkShaderKey key = new(program, layouts, pushConstants);
         lock (_lock)
         {
             if (!_shaders.TryGetValue(key, out VkShader? shader))
             {
-                shader = new VkShader(_gd, key, stages, layouts);
+                shader = new VkShader(_gd, key, stages, layouts, pushConstants);
                 _shaders.Add(key, shader);
             }
 

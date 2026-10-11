@@ -33,6 +33,11 @@ public struct ComputeDescription
     public uint ThreadGroupSizeZ;
 
     /// <summary>
+    /// Push constant block of the program, none by default.
+    /// </summary>
+    public PushConstantRange PushConstants;
+
+    /// <summary>
     /// Creates new instance.
     /// </summary>
     public ComputeDescription(

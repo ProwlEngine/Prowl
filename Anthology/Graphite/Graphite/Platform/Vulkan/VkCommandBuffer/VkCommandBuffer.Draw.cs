@@ -117,6 +117,8 @@ internal unsafe partial class VkCommandBuffer
 
         if (needBind)
             _descriptorBinder.EmitBind(_currentShaderProgram.PipelineLayout, PipelineBindPoint.Graphics);
+
+        PushConstants(_currentShaderProgram, _currentShaderProgram.PipelineLayout, ref _pushedGraphics, ref _pushedGraphicsVersion);
     }
 
     private void PreDispatchCommand()
@@ -131,6 +133,22 @@ internal unsafe partial class VkCommandBuffer
 
         if (needBind)
             _descriptorBinder.EmitBind(_currentComputeProgram.PipelineLayout, PipelineBindPoint.Compute);
+
+        PushConstants(_currentComputeProgram, _currentComputeProgram.PipelineLayout, ref _pushedCompute, ref _pushedComputeVersion);
+    }
+
+    // Pushes the whole block when the program or the data changed since the last push for this bind point.
+    private void PushConstants(ShaderProgram program, PipelineLayout layout, ref ShaderProgram? pushed, ref uint pushedVersion)
+    {
+        PushConstantRange range = program.PushConstants;
+        if (range.SizeInBytes == 0 || (ReferenceEquals(pushed, program) && pushedVersion == _pushConstantVersion))
+            return;
+
+        fixed (byte* data = _pushConstants)
+            _gd.Vk.CmdPushConstants(_cb, layout, VkFormats.ToVkShaderStages(range.Stages), 0, range.SizeInBytes, data);
+
+        pushed = program;
+        pushedVersion = _pushConstantVersion;
     }
 
     private void ResolveAndBindGraphicsPipeline()

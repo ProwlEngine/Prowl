@@ -83,6 +83,7 @@ internal static class SpirvReflector
         Dictionary<(uint Set, int Binding), ResourceLayoutElementDescription> elements = [];
         List<VertexLayoutDescription> vertexLayouts = [];
         ShaderStageDescription[] stageDescriptions = new ShaderStageDescription[stages.Count];
+        PushConstantRange pushConstants = default;
         uint x = 1, y = 1, z = 1;
 
         for (int s = 0; s < stages.Count; s++)
@@ -111,7 +112,8 @@ internal static class SpirvReflector
                         break;
 
                     case StoragePushConstant:
-                        throw new ShaderCompileException("error: push constants are not supported");
+                        pushConstants = new PushConstantRange(pushConstants.Stages | flag, Math.Max(pushConstants.SizeInBytes, Align4(TypeSize(module, pointee, 0))));
+                        break;
 
                     case StorageInput when stage == GlslStage.Vertex && !IsBuiltIn(module, id, pointee):
                         vertexLayouts.Add(ReflectVertexInput(module, layout, id, pointee));
@@ -150,6 +152,7 @@ internal static class SpirvReflector
             Stages = stageDescriptions,
             VertexLayouts = [.. vertexLayouts],
             ResourceLayouts = [.. layouts],
+            PushConstants = pushConstants,
         };
 
         return (description, x, y, z);
@@ -304,6 +307,34 @@ internal static class SpirvReflector
         }
 
         elements[(set, binding)] = new ResourceLayoutElementDescription(resource.Name, kind, stage, binding, options, fields);
+    }
+
+
+    private static uint Align4(uint size) => (size + 3) & ~3u;
+
+
+    // Bytes a type covers under its explicit layout decorations, the end of its last member for a struct.
+    private static uint TypeSize(Module m, uint type, uint matrixStride)
+    {
+        (int op, uint[] operands) = m.Types[type];
+        switch (op)
+        {
+            case OpTypeStruct:
+                uint end = 0;
+                for (uint i = 0; i < operands.Length; i++)
+                    end = Math.Max(end, m.GetMember(type, i, DecorationOffset) + TypeSize(m, operands[i], m.GetMember(type, i, DecorationMatrixStride)));
+                return end;
+            case OpTypeArray:
+                return m.Constants[operands[1]] * m.Get(type, DecorationArrayStride);
+            case OpTypeMatrix:
+                return operands[1] * matrixStride;
+            case OpTypeVector:
+                return operands[1] * TypeSize(m, operands[0], 0);
+            case OpTypeFloat or OpTypeInt:
+                return operands[0] / 8;
+            default:
+                throw new ShaderCompileException("error: a push constant block holds a type that is not supported");
+        }
     }
 
 

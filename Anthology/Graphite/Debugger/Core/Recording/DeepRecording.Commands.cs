@@ -76,7 +76,8 @@ public sealed partial class DeepRecording
                 graphics.VertexLayouts.ToEquatableArray(),
                 0,
                 0,
-                0),
+                0,
+                program.PushConstants),
             ComputeProgram compute => new RecordedProgram(
                 key,
                 program.Name,
@@ -89,7 +90,8 @@ public sealed partial class DeepRecording
                 EquatableArray<VertexLayoutDescription>.Empty,
                 compute.ThreadGroupSizeX,
                 compute.ThreadGroupSizeY,
-                compute.ThreadGroupSizeZ),
+                compute.ThreadGroupSizeZ,
+                program.PushConstants),
             _ => throw new NotSupportedException($"Unknown program type {program.GetType().Name}."),
         };
 
@@ -185,6 +187,9 @@ public sealed partial class DeepRecording
             if (changed.Count > 0 || removed.Length > 0)
                 pass.Commands.Add(new SetPropertiesCommand(changed.ToEquatableArray(), removed.ToEquatableArray()));
         }
+
+        public void SetPushConstants(uint offset, ReadOnlySpan<byte> data)
+            => pass.Commands.Add(new SetPushConstantsCommand(offset, owner._store.Put(data)));
 
         public void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance)
             => pass.Commands.Add(new DrawCommand(vertexCount, instanceCount, firstVertex, firstInstance));

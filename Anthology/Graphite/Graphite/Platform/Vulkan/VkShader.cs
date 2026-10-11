@@ -25,7 +25,7 @@ internal sealed unsafe class VkShader
 
     internal IReadOnlyDictionary<ShaderStages, ShaderModule> Modules => _modules;
 
-    internal VkShader(VkGraphicsDevice gd, VkShaderKey key, ShaderStageDescription[] stages, ResourceLayoutDescription[] layouts)
+    internal VkShader(VkGraphicsDevice gd, VkShaderKey key, ShaderStageDescription[] stages, ResourceLayoutDescription[] layouts, PushConstantRange pushConstants)
     {
         _gd = gd;
         Key = key;
@@ -50,7 +50,7 @@ internal sealed unsafe class VkShader
             }
 
             (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
-                = VkDescriptorLayoutBuilder.Build(_gd, layouts);
+                = VkDescriptorLayoutBuilder.Build(_gd, layouts, pushConstants);
         }
         catch
         {

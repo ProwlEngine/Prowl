@@ -478,7 +478,10 @@ internal sealed unsafe class ReplayScope : IDisposable
         ShaderProgram built;
         if (program.IsCompute)
         {
-            built = _device.ResourceFactory.CreateComputeProgram(new ComputeDescription(stages[0], layouts, program.ThreadGroupX, program.ThreadGroupY, program.ThreadGroupZ));
+            built = _device.ResourceFactory.CreateComputeProgram(new ComputeDescription(stages[0], layouts, program.ThreadGroupX, program.ThreadGroupY, program.ThreadGroupZ)
+            {
+                PushConstants = program.PushConstants,
+            });
         }
         else
         {
@@ -488,7 +491,10 @@ internal sealed unsafe class ReplayScope : IDisposable
                 program.DepthStencil ?? default,
                 program.Rasterizer ?? default,
                 program.VertexLayouts.ToArray(),
-                layouts));
+                layouts)
+            {
+                PushConstants = program.PushConstants,
+            });
         }
 
         _programs[key] = Own(built);

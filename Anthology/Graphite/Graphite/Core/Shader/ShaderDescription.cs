@@ -38,6 +38,11 @@ public struct ShaderDescription
     public ResourceLayoutDescription[] ResourceLayouts;
 
     /// <summary>
+    /// Push constant block of the program, none by default.
+    /// </summary>
+    public PushConstantRange PushConstants;
+
+    /// <summary>
     /// New ShaderDescription, default state.
     /// </summary>
     /// <param name="stages">Per-stage descs.</param>

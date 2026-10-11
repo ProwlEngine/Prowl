@@ -10,8 +10,14 @@ public abstract class ShaderProgram : GraphicsResource
     private readonly ResourceLayoutDescription[] _resourceLayouts;
     private readonly SetBindingMetadata[] _bindingMetadata;
 
-    internal ShaderProgram(ResourceLayoutDescription[] resourceLayouts)
+    internal ShaderProgram(ResourceLayoutDescription[] resourceLayouts, PushConstantRange pushConstants)
     {
+        if (pushConstants.SizeInBytes % 4 != 0 || pushConstants.SizeInBytes > CommandBuffer.PushConstantCapacity)
+            throw new RenderException($"A push constant block of {pushConstants.SizeInBytes} bytes must be a multiple of 4 and at most {CommandBuffer.PushConstantCapacity}.");
+        if (pushConstants.SizeInBytes > 0 && pushConstants.Stages == ShaderStages.None)
+            throw new RenderException("A push constant block needs the stages that read it.");
+
+        PushConstants = pushConstants;
         _resourceLayouts = Util.ShallowClone(resourceLayouts);
         DeepCloneUniformFields(_resourceLayouts);
         _bindingMetadata = SetBindingMetadata.Build(_resourceLayouts);
@@ -22,6 +28,11 @@ public abstract class ShaderProgram : GraphicsResource
     /// Content key over the stages of this program.
     /// </summary>
     public ProgramKey Key { get; private protected set; }
+
+    /// <summary>
+    /// Push constant block of the program.
+    /// </summary>
+    public PushConstantRange PushConstants { get; }
 
     internal (PropertyID Name, ResourceKind Kind)[] StorageWriteElements { get; }
 

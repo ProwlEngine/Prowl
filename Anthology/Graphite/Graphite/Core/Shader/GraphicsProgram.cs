@@ -16,7 +16,7 @@ public abstract class GraphicsProgram : ShaderProgram
     private readonly VertexLayoutDescription[] _vertexLayouts;
 
     internal GraphicsProgram(in ShaderDescription description)
-        : base(description.ResourceLayouts)
+        : base(description.ResourceLayouts, description.PushConstants)
     {
         ShaderStageDescription[] stageDescs = description.Stages ?? Array.Empty<ShaderStageDescription>();
         _stageDescriptions = Util.ShallowClone(stageDescs);

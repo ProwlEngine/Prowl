@@ -746,7 +746,7 @@ internal sealed class GlslStageSource
 }
 
 
-internal enum GlslUsage { None, LooseUniform, Resource, Interface }
+internal enum GlslUsage { None, LooseUniform, Resource, Interface, PushConstant }
 
 
 internal enum ResourceClass { Opaque, UniformBlock, StorageBlock }
@@ -813,6 +813,9 @@ internal sealed class GlslProgramLayout
     {
         if (d.Kind == DeclKind.Variable && d.Has("uniform"))
             return GlslStageSource.IsOpaque(d.TypeName!) ? GlslUsage.Resource : GlslUsage.LooseUniform;
+
+        if (d.Kind == DeclKind.Block && d.Has("uniform") && d.LayoutKeys.ContainsKey("push_constant"))
+            return GlslUsage.PushConstant;
 
         if (d.Kind == DeclKind.Block && (d.Has("uniform") || d.Has("buffer")))
             return GlslUsage.Resource;
@@ -883,9 +886,6 @@ internal sealed class GlslProgramLayout
         bool hasSet = GlslStageSource.TryLayoutInt(d, "set", out int set);
         if (d.LayoutKeys.ContainsKey("binding") && !hasBinding || d.LayoutKeys.ContainsKey("set") && !hasSet)
             throw stage.Error(stage.Tokens[d.First].Start, $"the set and binding of '{sourceName}' must be integer literals");
-
-        if (d.LayoutKeys.ContainsKey("push_constant"))
-            throw stage.Error(stage.Tokens[d.First].Start, "push constants are not supported");
 
         if (d.Declarators.Count > 1 && hasBinding)
             throw stage.Error(stage.Tokens[d.First].Start, "an explicit binding can not be shared by several variables");
