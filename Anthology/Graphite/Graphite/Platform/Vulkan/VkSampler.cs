@@ -8,6 +8,7 @@ internal unsafe partial class VkSampler : Sampler
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkSamplerHandle _sampler;
+    internal readonly ulong DescriptorId = VkDescriptorSetCache.NextResourceId();
 
     public VkSamplerHandle DeviceSampler => _sampler;
 

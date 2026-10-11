@@ -12,6 +12,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
     private readonly VkGraphicsDevice _gd;
     private VkBufferHandle _deviceBuffer;
     private VkMemoryBlock _memory;
+    internal readonly ulong DescriptorId = VkDescriptorSetCache.NextResourceId();
 
     public VkBufferHandle DeviceBuffer => _deviceBuffer;
     public VkMemoryBlock Memory => _memory;
