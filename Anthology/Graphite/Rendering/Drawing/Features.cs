@@ -168,6 +168,15 @@ public abstract class RenderFeature
 
     public bool Enabled { get; set; } = true;
 
+    /// <summary>
+    /// Halton phases the view's projection jitters through while the feature runs, for temporal effects, 0 for none. The
+    /// host's projection stays as it gave it; shaders read the jitter from the view block.
+    /// </summary>
+    public virtual int JitterPhases => 0;
+
+    /// <summary>The texture LOD bias the view's samplers take while it jitters for this feature.</summary>
+    public virtual float JitterMipBias => 0;
+
     /// <summary>Copies settings the render thread reads. Host thread, at SubmitFrame.</summary>
     public virtual void Extract() { }
 
@@ -194,6 +203,8 @@ public abstract class RenderFeature
     internal ViewKinds RunsOnSnapshot;
     internal string? GroupSnapshot;
     internal Type? ReplacesSnapshot;
+    internal int JitterPhasesSnapshot;
+    internal float JitterMipBiasSnapshot;
 
     // Host thread, at SubmitFrame
     internal void TakeSnapshot()
@@ -203,6 +214,8 @@ public abstract class RenderFeature
         OrderSnapshot = Order;
         RunsOnSnapshot = RunsOn;
         GroupSnapshot = ExclusiveGroup;
+        JitterPhasesSnapshot = Math.Max(JitterPhases, 0);
+        JitterMipBiasSnapshot = JitterMipBias;
         Type? replaces = Replaces;
         ReplacesSnapshot = replaces != null && !replaces.IsAbstract && typeof(RenderFeature).IsAssignableFrom(replaces) ? replaces : null;
     }
@@ -318,7 +331,7 @@ internal sealed class ChainTexture(string name) : IDisposable
 /// </summary>
 internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisposable> retired) : IDisposable
 {
-    public static readonly PixelFormat[] SceneFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm];
+    public static readonly PixelFormat[] SceneFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm, PixelFormat.R16_G16_Float];
 
     public readonly ChainTexture Scene = new($"Graphite.Scene {viewId}");
     public readonly ChainTexture[] Colors = [new($"Graphite.ColorA {viewId}"), new($"Graphite.ColorB {viewId}")];
@@ -465,10 +478,10 @@ public sealed class FeatureBuilder
 
     /// <summary>
     /// A texture for this feature that keeps its last frames, read through <see cref="FeatureContext.History"/>. A graph
-    /// rebuild starts it over.
+    /// rebuild starts it over. Usage adds Sampled for a feature that reads it back in the same pass it draws it.
     /// </summary>
-    public TextureHandle History(string name, GraphTextureDesc desc, int frames = 1)
-        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.History.{name}"), desc, history: frames);
+    public TextureHandle History(string name, GraphTextureDesc desc, int frames = 1, TextureState usage = TextureState.Attachment)
+        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.History.{name}"), desc, history: frames, usage: usage);
 
     /// <summary>
     /// Asks for the visible renderables whose materials have a pass of this type, the shader pass tagged
@@ -547,6 +560,9 @@ public sealed class FeatureContext
     /// <summary>The scene's roughness and metallic, when the feature reads the scene.</summary>
     public Texture? Material => Scene?.ColorTextures[2];
 
+    /// <summary>How far each opaque surface moved across the screen since last frame, in uv, when the feature reads the scene.</summary>
+    public Texture? Motion => Scene?.ColorTextures[3];
+
     /// <summary>The colour the feature reads, when it reads or writes colour.</summary>
     public Texture? Color => _pass.Input is { } input ? Graph.GetRenderTexture(input).ColorTextures[0] : null;
 
@@ -554,6 +570,12 @@ public sealed class FeatureContext
 
     /// <summary>A texture the feature declared.</summary>
     public RenderTexture Get(TextureHandle texture) => Graph.GetRenderTexture(texture);
+
+    /// <summary>The view's first layer as shaders read it this frame, jittered when the view jitters.</summary>
+    internal ViewBlock Block => _pass.Camera.Blocks[0];
+
+    /// <summary>Whether the view drew last frame, so motion and history from then mean something.</summary>
+    public bool HasPreviousFrame => _pass.Camera.HadPrevious;
 
     /// <summary>A history texture as it was some frames ago, or null before it holds one.</summary>
     public RenderTexture? History(TextureHandle texture, int framesAgo = 1)
@@ -605,6 +627,7 @@ public sealed class FeatureContext
             {
                 Command.ClearColorTarget(1, new Color(0, 0, 0, 0));
                 Command.ClearColorTarget(2, new Color(0, 0, 0, 0));
+                Command.ClearColorTarget(3, new Color(0, 0, 0, 0));
             }
             return;
         }
@@ -621,6 +644,26 @@ public sealed class FeatureContext
             Command.SetProperties(_properties);
             Command.Draw(3);
         }
+    }
+
+    /// <summary>
+    /// Draws a fullscreen program over a texture the feature declared, Temporary or History, the colour it reads bound as
+    /// Graphite_Source, with any properties given.
+    /// </summary>
+    public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null)
+    {
+        Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+        Command.SetFullViewport();
+        Command.SetShader(program.For(View.LayerCount));
+        Command.SetVertexSource(VertexSource.None);
+        if (Color is { } source)
+        {
+            _properties.SetTexture("Graphite_Source", source, _pass.Frame.LinearSampler);
+            Command.SetProperties(_properties);
+        }
+        if (properties != null)
+            Command.SetProperties(properties);
+        Command.Draw(3);
     }
 
     /// <summary>

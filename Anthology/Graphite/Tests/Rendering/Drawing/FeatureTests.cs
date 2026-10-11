@@ -440,6 +440,139 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0.9f, 0.9f, 0.9f), Frame(View()));
     }
 
+    // Shows the scene's motion in red and green, read after the opaque pass
+    private sealed class ShowMotion(FullscreenProgram program, Sampler sampler) : RenderFeature
+    {
+        private readonly PropertySet _properties = new();
+
+        public override RenderSlot Slot => RenderSlot.AfterOpaques;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.ReadScene();
+            builder.WriteColor();
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            _properties.SetTexture("_Motion", context.Motion!, sampler);
+            context.Fullscreen(program, _properties);
+        }
+    }
+
+    private void ShowingMotion()
+    {
+        Sampler point = _device.ResourceFactory.CreateSampler(SamplerDescription.Point);
+        _owned.Add(point);
+        _world.Features.Add(new ShowMotion(Program("uniform sampler2D _Motion; void main() { outColor = vec4(texture(_Motion, vUV).rg, 0.0, 1.0); }"), point));
+    }
+
+    private RenderableHandle AddMoving(Double3 at, bool motionVectors)
+    {
+        Material material = _renderer.CreateMaterial(_unlit);
+        RenderableFlags flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows | (motionVectors ? RenderableFlags.MotionVectors : 0);
+        return _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(at), Flags = flags }, [material]);
+    }
+
+    [Fact]
+    public void MotionVectors_FollowTheCamera()
+    {
+        ShowingMotion();
+        AddMoving(new Double3(0, 0, 10), motionVectors: false);
+        Frame(View());
+
+        // The camera a unit right moves the plane a quarter of the view left in clip space, an eighth of it in uv
+        ViewDesc moved = View();
+        moved.Layers[0] = moved.Layers[0] with { Position = new Double3(1, 0, 0) };
+        AssertAll(new Float3(-0.125f, 0, 0), Frame(moved), i => i % Size < Size - 2);
+    }
+
+    [Fact]
+    public void MotionVectors_FollowObjectsThatKeepThem_AndStopWhenTheyDo()
+    {
+        ShowingMotion();
+        RenderableHandle moving = AddMoving(new Double3(0, 0, 10), motionVectors: true);
+        Frame(View());
+
+        // Up a unit is a quarter of the view up in clip space, an eighth down the image in uv
+        _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(0, 1, 10)));
+        AssertAll(new Float3(0, -0.125f, 0), Frame(View()), i => i / Size >= 2);
+        AssertAll(new Float3(0, 0, 0), Frame(View()), i => i / Size >= 2);
+    }
+
+    [Fact]
+    public void MotionVectors_OfObjectsWithoutThemShowNoObjectMotion()
+    {
+        ShowingMotion();
+        RenderableHandle moved = AddMoving(new Double3(0, 0, 10), motionVectors: false);
+        Frame(View());
+        _world.SetTransform(moved, Double4x4.CreateTranslation(new Double3(0, 1, 10)));
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    private Material Unlit(Float3 color)
+    {
+        Material material = _renderer.CreateMaterial(_unlit);
+        material.SetColor("_Color", new Float4(color.X, color.Y, color.Z, 1));
+        return material;
+    }
+
+    [Fact]
+    public void Jitter_CyclesThroughHaltonPhases_OnlyWhileAFeatureAsks()
+    {
+        AddQuad(new Float3(1, 1, 1));
+        Frame(View());
+        Assert.Equal(default, _renderer.Frame.Camera(1)!.Jitter);
+
+        using TemporalAntiAliasing taa = new(_renderer) { JitterSpread = 4 };
+        _world.Features.Add(taa);
+        List<Float2> jitters = new();
+        for (int frame = 0; frame < 5; frame++)
+        {
+            Frame(View());
+            jitters.Add(_renderer.Frame.Camera(1)!.Jitter);
+        }
+
+        // Within half a pixel, four different offsets, then the first again
+        Assert.All(jitters, j => Assert.True(MathF.Abs(j.X) <= 1f / Size && MathF.Abs(j.Y) <= 1f / Size, $"jitter {j}"));
+        Assert.Equal(4, jitters.Take(4).Distinct().Count());
+        Assert.Equal(jitters[0], jitters[4]);
+    }
+
+    [Fact]
+    public void Taa_ConvergesAStillEdgeToItsCoverage()
+    {
+        // A white plane from a quarter into the middle column onwards: pixel 8 spans 0 to 0.5, three quarters covered
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(4.125, 0, 10)) }, [Unlit(new Float3(1, 1, 1))]);
+        using TemporalAntiAliasing taa = new(_renderer) { Sharpness = 0, JitterSpread = 8 };
+        _world.Features.Add(taa);
+        Float4[] pixels = [];
+        for (int frame = 0; frame < 120; frame++)
+            pixels = Frame(View());
+        for (int y = 0; y < Size; y++)
+        {
+            Assert.InRange(pixels[y * Size + 8].X, 0.6f, 0.9f);
+            Assert.True(pixels[y * Size + 7].X < 0.01f && pixels[y * Size + 9].X > 0.99f, $"row {y}: {pixels[y * Size + 7].X}, {pixels[y * Size + 9].X}");
+        }
+    }
+
+    [Fact]
+    public void Taa_LeavesNoGhostWhereAMovingObjectWas()
+    {
+        RenderableHandle square = AddMoving(new Double3(0, 0, 10), motionVectors: true);
+        _world.SetTransform(square, Double4x4.CreateTranslation(new Double3(-2, 0, 10)) * Double4x4.CreateScale(0.25));
+        using TemporalAntiAliasing taa = new(_renderer) { Sharpness = 0 };
+        _world.Features.Add(taa);
+        for (int frame = 0; frame < 30; frame++)
+            Frame(View());
+
+        // Moved two units right, the pixels it left are background the next frame
+        _world.SetTransform(square, Double4x4.CreateTranslation(new Double3(2, 0, 10)) * Double4x4.CreateScale(0.25));
+        Float4[] pixels = Frame(View());
+        Func<int, bool> left = i => MathF.Abs(4 * ((i % Size + 0.5f) / Size * 2 - 1) + 2) < 0.5f && MathF.Abs(4 * ((i / Size + 0.5f) / Size * 2 - 1)) < 0.5f;
+        AssertAll(new Float3(0, 0, 0), pixels, left);
+    }
+
     [Fact]
     public void Viewports_DrawSideBySideIntoOneTarget()
     {

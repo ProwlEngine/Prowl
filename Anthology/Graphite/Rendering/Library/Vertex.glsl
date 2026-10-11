@@ -7,6 +7,8 @@
 
 layout(set = 2, binding = 3, std430) readonly buffer Graphite_Vertices { uint graphite_Words[]; };
 
+layout(location = 28) out vec4 graphite_MotionCurrent;
+layout(location = 29) out vec4 graphite_MotionPrevious;
 layout(location = 30) flat out uint graphite_ObjectIndex;
 layout(location = 31) flat out uint graphite_MaterialSlot;
 
@@ -102,10 +104,18 @@ void Graphite_BeginVertex()
 
 void graphite_ShaderMain();
 
+// The vertex's clip position now and last frame, for the forward pass's motion vectors
+void Graphite_EndVertex()
+{
+    graphite_MotionCurrent = gl_Position;
+    graphite_MotionPrevious = Graphite_PreviousObjectToClip(vertexPosition);
+}
+
 void main()
 {
     Graphite_BeginVertex();
     graphite_ShaderMain();
+    Graphite_EndVertex();
 }
 
 #define main graphite_ShaderMain

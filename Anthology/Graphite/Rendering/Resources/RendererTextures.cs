@@ -123,6 +123,8 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     private readonly List<Texture> _owned = new();
     private readonly List<(SamplerDescription? Description, Sampler Sampler)> _samplers = new();
     private readonly List<TableRing> _viewTables = new();
+    private readonly Dictionary<TableRing, float> _viewBias = new();
+    private readonly Dictionary<(int Slot, float Bias), Sampler> _biased = new();
     private readonly Stack<uint>[] _freeSlots = [new(), new(), new(), new(), new()];
     private readonly List<(ulong Execution, int Table, uint Slot)> _retiringSlots = new();
     private static readonly MaterialPropertyType[] s_tableTypes = [MaterialPropertyType.Texture2D, MaterialPropertyType.Texture2DArray, MaterialPropertyType.Texture3D, MaterialPropertyType.TextureCube, MaterialPropertyType.TextureCubeArray];
@@ -184,7 +186,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             _samplers.Add((sampler, _device.ResourceFactory.CreateSampler(sampler!.Value)));
             uint slot = (uint)_samplers.Count - 1;
             foreach (TableRing ring in _viewTables)
-                ring.Set("Graphite_Samplers", slot, _samplers[(int)slot].Sampler);
+                ring.Set("Graphite_Samplers", slot, Biased((int)slot, _viewBias.GetValueOrDefault(ring)));
             return slot;
         }
     }
@@ -242,11 +244,38 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         }
     }
 
+    /// <summary>Gives a view's sampler table every sampler with a texture LOD bias added, 0 for the samplers as made. Render thread.</summary>
+    internal void SetViewBias(TableRing viewTable, float bias)
+    {
+        lock (_lock)
+        {
+            if (_viewBias.GetValueOrDefault(viewTable) == bias)
+                return;
+            _viewBias[viewTable] = bias;
+            for (int i = 0; i < _samplers.Count; i++)
+                viewTable.Set("Graphite_Samplers", (uint)i, Biased(i, bias));
+        }
+    }
+
+    // A sampler slot's sampler with a LOD bias added, made once per slot and bias
+    private Sampler Biased(int slot, float bias)
+    {
+        if (bias == 0)
+            return _samplers[slot].Sampler;
+        if (_biased.TryGetValue((slot, bias), out Sampler? made))
+            return made;
+        SamplerDescription description = _samplers[slot].Description ?? SamplerDescription.Linear;
+        made = _device.ResourceFactory.CreateSampler(description with { LodBias = description.LodBias + bias });
+        _biased[(slot, bias)] = made;
+        return made;
+    }
+
     internal void Untrack(TableRing table)
     {
         lock (_lock)
         {
             _viewTables.Remove(table);
+            _viewBias.Remove(table);
         }
     }
 
@@ -256,6 +285,8 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         foreach (Texture texture in _owned)
             texture.Dispose();
         foreach ((_, Sampler sampler) in _samplers)
+            sampler.Dispose();
+        foreach (Sampler sampler in _biased.Values)
             sampler.Dispose();
     }
 

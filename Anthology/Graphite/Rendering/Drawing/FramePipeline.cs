@@ -276,7 +276,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
             color.ColorWriteMask = ColorWriteMask.None;
 
         BlendStateDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend);
-        blend.AttachmentStates = [color, gbuffer ? target : masked, gbuffer ? target : masked];
+        blend.AttachmentStates = [color, gbuffer ? target : masked, gbuffer ? target : masked, gbuffer ? target : masked];
         return blend;
     }
 
@@ -490,6 +490,13 @@ internal sealed class CameraFrame : IDisposable
     public readonly ViewBlock[] Previous = new ViewBlock[6];
     public readonly ViewBlock[] Blocks = new ViewBlock[6];
     public bool HasPrevious;
+
+    /// <summary>Whether the view had drawn before this frame, as features see it.</summary>
+    public bool HadPrevious;
+
+    /// <summary>The Halton phase of the view's jitter, and this and last frame's jitter in clip space.</summary>
+    public int JitterPhase;
+    public Float2 Jitter, PreviousJitter;
     public int LayerCount = 1;
     public readonly IRenderView[] Views;
 
@@ -1702,10 +1709,34 @@ internal sealed partial class FramePipeline : IDisposable
         float handedness = Determinant3(first.View) * first.Projection.c0.X * first.Projection.c1.Y;
         camera.Mirrored = handedness < 0;
 
+        // A feature asking for jitter offsets the projection by under a pixel, through Halton(2, 3)
+        int phases = 0;
+        float mipBias = 0;
+        foreach (RenderFeature feature in camera.Features)
+        {
+            if (feature.JitterPhasesSnapshot > phases)
+                (phases, mipBias) = (feature.JitterPhasesSnapshot, feature.JitterMipBiasSnapshot);
+        }
+        camera.HadPrevious = camera.HasPrevious;
+        camera.PreviousJitter = camera.Jitter;
+        camera.Jitter = default;
+        if (phases > 0 && !camera.IsShadowView)
+        {
+            int phase = camera.JitterPhase++ % phases + 1;
+            camera.Jitter = new Float2((Halton(phase, 2) - 0.5f) * 2f / width, (Halton(phase, 3) - 0.5f) * 2f / height);
+        }
+        _textures.SetViewBias(camera.ViewTable, phases > 0 ? mipBias : 0);
+
         for (int l = 0; l < layers; l++)
         {
             ViewLayer layer = view.Layers[l];
-            ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, width, height, view.Near, view.FarDistance);
+            Float4x4 projection = layer.Projection;
+            if (projection.c3.W > 0.5f)
+                (projection.c3.X, projection.c3.Y) = (projection.c3.X + camera.Jitter.X, projection.c3.Y + camera.Jitter.Y);
+            else
+                (projection.c2.X, projection.c2.Y) = (projection.c2.X + camera.Jitter.X, projection.c2.Y + camera.Jitter.Y);
+            ViewBlock block = ViewBlock.Create(layer.View, projection, layer.Position, width, height, view.Near, view.FarDistance);
+            block.Jitter = new Float4(camera.Jitter.X, camera.Jitter.Y, camera.PreviousJitter.X, camera.PreviousJitter.Y);
             float timeHigh = (float)time.Time;
             block.Time = new Float4(timeHigh, time.DeltaTime, time.FrameIndex, (float)(time.Time - timeHigh));
             Float3 offset = frustum.Relative(layer.Position);
@@ -1716,12 +1747,26 @@ internal sealed partial class FramePipeline : IDisposable
                 block.PreviousCameraHigh = camera.Previous[l].CameraHigh;
                 block.PreviousCameraLow = camera.Previous[l].CameraLow;
             }
-            camera.Previous[l] = block;
+            camera.Previous[l] = block with { ViewProjection = layer.Projection * layer.View };
             camera.Blocks[l] = block;
         }
         camera.HasPrevious = true;
         camera.Upload(_uploader, camera.Blocks.AsSpan(0, layers));
         camera.PlanCounts();
+    }
+
+    /// <summary>A host view's frame state, for tests.</summary>
+    internal CameraFrame? Camera(int viewId) => _cameras.GetValueOrDefault(viewId);
+
+    private static float Halton(int index, int radix)
+    {
+        float result = 0, fraction = 1f / radix;
+        for (int i = index; i > 0; i /= radix)
+        {
+            result += i % radix * fraction;
+            fraction /= radix;
+        }
+        return result;
     }
 
     // The hosts' views drawn this frame and every capture view, drawn this frame or not
