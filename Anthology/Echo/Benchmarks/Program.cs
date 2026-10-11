@@ -78,6 +78,15 @@ public static class Program
         yield return ("SizeRead", () => size.ReadFrom(new MemoryStream(sizeBytes)));
         yield return ("TextWrite", () => EchoTextFormat.Write(echo));
         yield return ("TextRead", () => EchoTextFormat.Read(text));
+
+        IFileFormat[] others = { JsonFileFormat.Instance, YamlFileFormat.Instance, XmlFileFormat.Instance, BsonFileFormat.Instance };
+        foreach (var format in others)
+        {
+            string name = format.GetType().Name.Replace("FileFormat", "");
+            byte[] bytes = format.WriteToBytes(echo);
+            yield return (name + "Write", () => { stream.SetLength(0); format.WriteTo(echo, stream); });
+            yield return (name + "Read", () => format.ReadFrom(new MemoryStream(bytes)));
+        }
     }
 
     private static void PrintSizes(List<Scenario> scenarios, string? filter)

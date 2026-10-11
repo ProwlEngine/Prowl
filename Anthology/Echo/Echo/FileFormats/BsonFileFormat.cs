@@ -26,21 +26,40 @@ public sealed class BsonFileFormat : IFileFormat
     private const byte TypeInt32 = 0x10;
     private const byte TypeInt64 = 0x12;
 
+    // Documents are written into one buffer and their length prefixes filled in afterwards.
+    [ThreadStatic] private static MemoryStream? _documentBuffer;
+    [ThreadStatic] private static byte[]? _scratch;
+
+    private static byte[] Scratch(int size)
+    {
+        if (_scratch == null || _scratch.Length < size)
+            _scratch = new byte[Math.Max(size, 256)];
+        return _scratch;
+    }
+
     public void WriteTo(EchoObject tag, Stream stream)
     {
-        using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+        var buffer = _documentBuffer ??= new MemoryStream();
+        buffer.SetLength(0);
 
-        if (tag.TagType == EchoType.Compound)
+        using (var writer = new BinaryWriter(buffer, Encoding.UTF8, leaveOpen: true))
         {
-            WriteDocument(writer, tag);
+            if (tag.TagType == EchoType.Compound)
+            {
+                WriteDocument(writer, tag);
+            }
+            else
+            {
+                // BSON requires a document at the top level; wrap non-compound values
+                var wrapper = EchoObject.NewCompound();
+                wrapper.Add("__echo_wrapped_value__", tag.Clone());
+                WriteDocument(writer, wrapper);
+            }
         }
-        else
-        {
-            // BSON requires a document at the top level; wrap non-compound values
-            var wrapper = EchoObject.NewCompound();
-            wrapper.Add("__echo_wrapped_value__", tag.Clone());
-            WriteDocument(writer, wrapper);
-        }
+
+        buffer.WriteTo(stream);
+        if (buffer.Capacity > 16 * 1024 * 1024)
+            _documentBuffer = null;
     }
 
     public EchoObject ReadFrom(Stream stream)
@@ -57,52 +76,70 @@ public sealed class BsonFileFormat : IFileFormat
 
     #region Writing
 
+    // document ::= int32 e_list \x00, where the int32 counts the whole document.
     private static void WriteDocument(BinaryWriter writer, EchoObject compound)
     {
-        using var buffer = new MemoryStream();
-        using var bufWriter = new BinaryWriter(buffer, Encoding.UTF8, leaveOpen: true);
-
+        long start = BeginDocument(writer);
         foreach (var kvp in compound.Tags)
-            WriteElement(bufWriter, kvp.Key, kvp.Value);
-
-        bufWriter.Flush();
-        var bytes = buffer.ToArray();
-
-        // document ::= int32 e_list \x00
-        writer.Write(4 + bytes.Length + 1);
-        writer.Write(bytes);
-        writer.Write((byte)0x00);
+        {
+            WriteElementType(writer, kvp.Value);
+            WriteCString(writer, kvp.Key);
+            WriteElementValue(writer, kvp.Value);
+        }
+        EndDocument(writer, start);
     }
 
     private static void WriteArray(BinaryWriter writer, EchoObject list)
     {
-        using var buffer = new MemoryStream();
-        using var bufWriter = new BinaryWriter(buffer, Encoding.UTF8, leaveOpen: true);
-
+        long start = BeginDocument(writer);
         var items = list.List;
         for (int i = 0; i < items.Count; i++)
-            WriteElement(bufWriter, i.ToString(), items[i]);
-
-        bufWriter.Flush();
-        var bytes = buffer.ToArray();
-
-        writer.Write(4 + bytes.Length + 1);
-        writer.Write(bytes);
-        writer.Write((byte)0x00);
+        {
+            WriteElementType(writer, items[i]);
+            WriteIndexName(writer, i);
+            WriteElementValue(writer, items[i]);
+        }
+        EndDocument(writer, start);
     }
 
-    private static void WriteElement(BinaryWriter writer, string name, EchoObject tag)
+    private static long BeginDocument(BinaryWriter writer)
+    {
+        long start = writer.BaseStream.Position;
+        writer.Write(0);
+        return start;
+    }
+
+    private static void EndDocument(BinaryWriter writer, long start)
+    {
+        writer.Write((byte)0x00);
+        var stream = writer.BaseStream;
+        long end = stream.Position;
+        stream.Position = start;
+        writer.Write((int)(end - start));
+        stream.Position = end;
+    }
+
+    private static void WriteElementType(BinaryWriter writer, EchoObject tag)
+    {
+        writer.Write(tag.TagType switch
+        {
+            EchoType.Null => TypeNull,
+            EchoType.Bool => TypeBoolean,
+            EchoType.Byte or EchoType.sByte or EchoType.Short or EchoType.UShort or EchoType.Int => TypeInt32,
+            EchoType.UInt or EchoType.Long or EchoType.ULong => TypeInt64,
+            EchoType.Float or EchoType.Double => TypeDouble,
+            EchoType.Decimal or EchoType.String => TypeString,
+            EchoType.ByteArray => TypeBinary,
+            EchoType.List => TypeArray,
+            _ => TypeDocument
+        });
+    }
+
+    private static void WriteElementValue(BinaryWriter writer, EchoObject tag)
     {
         switch (tag.TagType)
         {
-            case EchoType.Null:
-                writer.Write(TypeNull);
-                WriteCString(writer, name);
-                break;
-
             case EchoType.Bool:
-                writer.Write(TypeBoolean);
-                WriteCString(writer, name);
                 writer.Write(tag.BoolValue ? (byte)1 : (byte)0);
                 break;
 
@@ -111,47 +148,36 @@ public sealed class BsonFileFormat : IFileFormat
             case EchoType.Short:
             case EchoType.UShort:
             case EchoType.Int:
-                writer.Write(TypeInt32);
-                WriteCString(writer, name);
-                writer.Write(Convert.ToInt32(tag.Value));
+                writer.Write((int)tag.IntegerBits);
                 break;
 
             case EchoType.UInt:
             case EchoType.Long:
-                writer.Write(TypeInt64);
-                WriteCString(writer, name);
-                writer.Write(Convert.ToInt64(tag.Value));
+                writer.Write(tag.IntegerBits);
                 break;
 
             case EchoType.ULong:
-                writer.Write(TypeInt64);
-                WriteCString(writer, name);
                 writer.Write(unchecked((long)tag.ULongValue));
                 break;
 
             case EchoType.Float:
+                writer.Write((double)tag.FloatValue);
+                break;
+
             case EchoType.Double:
-                writer.Write(TypeDouble);
-                WriteCString(writer, name);
-                writer.Write(Convert.ToDouble(tag.Value));
+                writer.Write(tag.DoubleValue);
                 break;
 
             case EchoType.Decimal:
                 // BSON has no native decimal; store as string to preserve precision
-                writer.Write(TypeString);
-                WriteCString(writer, name);
                 WriteBsonString(writer, tag.DecimalValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 break;
 
             case EchoType.String:
-                writer.Write(TypeString);
-                WriteCString(writer, name);
                 WriteBsonString(writer, tag.StringValue);
                 break;
 
             case EchoType.ByteArray:
-                writer.Write(TypeBinary);
-                WriteCString(writer, name);
                 var bytes = tag.ByteArrayValue;
                 writer.Write(bytes.Length);
                 writer.Write((byte)0x00); // Generic binary subtype
@@ -159,32 +185,42 @@ public sealed class BsonFileFormat : IFileFormat
                 break;
 
             case EchoType.List:
-                writer.Write(TypeArray);
-                WriteCString(writer, name);
                 WriteArray(writer, tag);
                 break;
 
             case EchoType.Compound:
-                writer.Write(TypeDocument);
-                WriteCString(writer, name);
                 WriteDocument(writer, tag);
                 break;
         }
     }
 
+    private static void WriteIndexName(BinaryWriter writer, int index)
+    {
+        Span<byte> digits = stackalloc byte[11];
+        System.Buffers.Text.Utf8Formatter.TryFormat(index, digits, out int length);
+        writer.Write(digits.Slice(0, length));
+        writer.Write((byte)0x00);
+    }
+
+    private static int WriteUtf8(BinaryWriter writer, string value)
+    {
+        int count = Encoding.UTF8.GetByteCount(value);
+        var bytes = Scratch(count);
+        Encoding.UTF8.GetBytes(value, 0, value.Length, bytes, 0);
+        writer.Write(bytes, 0, count);
+        return count;
+    }
+
     private static void WriteCString(BinaryWriter writer, string value)
     {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        writer.Write(bytes);
+        WriteUtf8(writer, value);
         writer.Write((byte)0x00);
     }
 
     private static void WriteBsonString(BinaryWriter writer, string value)
     {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        writer.Write(bytes.Length + 1); // length includes the null terminator
-        writer.Write(bytes);
-        writer.Write((byte)0x00);
+        writer.Write(Encoding.UTF8.GetByteCount(value) + 1); // length includes the null terminator
+        WriteCString(writer, value);
     }
 
     #endregion
@@ -219,7 +255,7 @@ public sealed class BsonFileFormat : IFileFormat
             byte type = reader.ReadByte();
             if (type == 0x00) break;
 
-            ReadCString(reader); // discard index key
+            SkipCString(reader); // discard index key
             var value = ReadValue(reader, type);
             list.ListAdd(value);
         }
@@ -273,19 +309,44 @@ public sealed class BsonFileFormat : IFileFormat
 
     private static string ReadCString(BinaryReader reader)
     {
-        var bytes = new List<byte>();
+        var bytes = Scratch(64);
+        int count = 0;
         byte b;
         while ((b = reader.ReadByte()) != 0x00)
-            bytes.Add(b);
-        return Encoding.UTF8.GetString(bytes.ToArray());
+        {
+            if (count == bytes.Length)
+            {
+                Array.Resize(ref _scratch, count * 2);
+                bytes = _scratch;
+            }
+            bytes[count++] = b;
+        }
+        return Encoding.UTF8.GetString(bytes, 0, count);
+    }
+
+    private static void SkipCString(BinaryReader reader)
+    {
+        while (reader.ReadByte() != 0x00) { }
     }
 
     private static string ReadBsonString(BinaryReader reader)
     {
         int length = reader.ReadInt32();
-        var bytes = reader.ReadBytes(length - 1); // exclude null terminator from content
+        int count = length - 1; // exclude null terminator from content
+        if (count < 0)
+            reader.ReadBytes(count); // throws like it always has
+
+        // Like ReadBytes, a short stream yields what it has and the terminator read below throws.
+        var bytes = Scratch(count);
+        int read = 0;
+        while (read < count)
+        {
+            int n = reader.Read(bytes, read, count - read);
+            if (n == 0) break;
+            read += n;
+        }
         reader.ReadByte(); // consume null terminator
-        return Encoding.UTF8.GetString(bytes);
+        return Encoding.UTF8.GetString(bytes, 0, read);
     }
 
     #endregion

@@ -66,14 +66,7 @@ public sealed class EchoTextFormat : IFileFormat
     // Writing:
 
     private static readonly string[] SpecialKeys = { "$id", "$type", "$dependencies" };
-    private static readonly string[] Indents = new string[64];
-
-    private static string Indent(int level)
-    {
-        if (level >= Indents.Length)
-            return new string(' ', level * 2);
-        return Indents[level] ??= new string(' ', level * 2);
-    }
+    private static string Indent(int level) => TextFormatting.Spaces(level * 2);
 
     private static void WriteTag(EchoObject prop, TextWriter writer, int indentLevel)
     {
@@ -83,34 +76,34 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write("NULL");
                 break;
             case EchoType.Byte:
-                WriteNumber(writer, (long)prop.ByteValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, (long)prop.ByteValue, writer.FormatProvider);
                 writer.Write('B');
                 break;
             case EchoType.sByte:
-                WriteNumber(writer, (long)prop.sByteValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, (long)prop.sByteValue, writer.FormatProvider);
                 writer.Write('N');
                 break;
             case EchoType.Short:
-                WriteNumber(writer, (long)prop.ShortValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, (long)prop.ShortValue, writer.FormatProvider);
                 writer.Write('S');
                 break;
             case EchoType.Int:
-                WriteNumber(writer, (long)prop.IntValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, (long)prop.IntValue, writer.FormatProvider);
                 break;
             case EchoType.Long:
-                WriteNumber(writer, prop.LongValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, prop.LongValue, writer.FormatProvider);
                 writer.Write('L');
                 break;
             case EchoType.UShort:
-                WriteNumber(writer, (long)prop.UShortValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, (long)prop.UShortValue, writer.FormatProvider);
                 writer.Write('V');
                 break;
             case EchoType.UInt:
-                WriteNumber(writer, (ulong)prop.UIntValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, (ulong)prop.UIntValue, writer.FormatProvider);
                 writer.Write('U');
                 break;
             case EchoType.ULong:
-                WriteNumber(writer, prop.ULongValue, writer.FormatProvider);
+                TextFormatting.WriteNumber(writer, prop.ULongValue, writer.FormatProvider);
                 writer.Write('C');
                 break;
             case EchoType.Float:
@@ -161,21 +154,6 @@ public sealed class EchoTextFormat : IFileFormat
                 WriteCompound(writer, prop.Tags, indentLevel);
                 break;
         }
-    }
-
-    // Matches TextWriter.Write(long), which formats with the writer's own provider.
-    private static void WriteNumber(TextWriter writer, long value, IFormatProvider provider)
-    {
-        Span<char> buffer = stackalloc char[24];
-        value.TryFormat(buffer, out int length, default, provider);
-        writer.Write(buffer.Slice(0, length));
-    }
-
-    private static void WriteNumber(TextWriter writer, ulong value, IFormatProvider provider)
-    {
-        Span<char> buffer = stackalloc char[24];
-        value.TryFormat(buffer, out int length, default, provider);
-        writer.Write(buffer.Slice(0, length));
     }
 
     private static void WriteString(TextWriter writer, string value)

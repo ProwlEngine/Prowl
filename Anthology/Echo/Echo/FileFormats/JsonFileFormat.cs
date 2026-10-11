@@ -51,28 +51,16 @@ public sealed class JsonFileFormat : IFileFormat
                 writer.Write(tag.BoolValue ? "true" : "false");
                 break;
             case EchoType.Byte:
-                writer.Write(tag.ByteValue);
-                break;
             case EchoType.sByte:
-                writer.Write(tag.sByteValue);
-                break;
             case EchoType.Short:
-                writer.Write(tag.ShortValue);
-                break;
             case EchoType.Int:
-                writer.Write(tag.IntValue);
-                break;
             case EchoType.Long:
-                writer.Write(tag.LongValue);
-                break;
             case EchoType.UShort:
-                writer.Write(tag.UShortValue);
-                break;
             case EchoType.UInt:
-                writer.Write(tag.UIntValue);
+                TextFormatting.WriteNumber(writer, tag.IntegerBits, writer.FormatProvider);
                 break;
             case EchoType.ULong:
-                writer.Write(tag.ULongValue);
+                TextFormatting.WriteNumber(writer, tag.ULongValue, writer.FormatProvider);
                 break;
             case EchoType.Float:
                 WriteFloat(writer, tag.FloatValue);
@@ -103,8 +91,8 @@ public sealed class JsonFileFormat : IFileFormat
         if (float.IsNaN(value)) { writer.Write("\"NaN\""); return; }
         if (float.IsPositiveInfinity(value)) { writer.Write("\"Infinity\""); return; }
         if (float.IsNegativeInfinity(value)) { writer.Write("\"-Infinity\""); return; }
-        var s = value.ToString("R", CultureInfo.InvariantCulture);
-        writer.Write(s);
+        Span<char> buffer = stackalloc char[32];
+        var s = TextFormatting.WriteNumber(writer, value, buffer, "R", CultureInfo.InvariantCulture);
         // Ensure it looks like a float (has a decimal point)
         if (s.IndexOf('.') < 0 && s.IndexOf('E') < 0)
             writer.Write(".0");
@@ -115,8 +103,8 @@ public sealed class JsonFileFormat : IFileFormat
         if (double.IsNaN(value)) { writer.Write("\"NaN\""); return; }
         if (double.IsPositiveInfinity(value)) { writer.Write("\"Infinity\""); return; }
         if (double.IsNegativeInfinity(value)) { writer.Write("\"-Infinity\""); return; }
-        var s = value.ToString("R", CultureInfo.InvariantCulture);
-        writer.Write(s);
+        Span<char> buffer = stackalloc char[32];
+        var s = TextFormatting.WriteNumber(writer, value, buffer, "R", CultureInfo.InvariantCulture);
         if (s.IndexOf('.') < 0 && s.IndexOf('E') < 0)
             writer.Write(".0");
     }
@@ -181,16 +169,21 @@ public sealed class JsonFileFormat : IFileFormat
 
     private static void WriteIndent(TextWriter writer, int level)
     {
-        for (int i = 0; i < level; i++)
-            writer.Write("  ");
+        writer.Write(TextFormatting.Spaces(level * 2));
     }
 
     private static void WriteJsonString(TextWriter writer, string value)
     {
         writer.Write('"');
+        int start = 0;
         for (int i = 0; i < value.Length; i++)
         {
             char c = value[i];
+            if (c >= ' ' && c != '"' && c != '\\')
+                continue;
+
+            writer.Write(value.AsSpan(start, i - start));
+            start = i + 1;
             switch (c)
             {
                 case '"': writer.Write("\\\""); break;
@@ -201,25 +194,12 @@ public sealed class JsonFileFormat : IFileFormat
                 case '\r': writer.Write("\\r"); break;
                 case '\t': writer.Write("\\t"); break;
                 default:
-                    if (c < ' ')
-                    {
-                        writer.Write("\\u");
-                        writer.Write(((int)c).ToString("X4"));
-                    }
-                    else if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
-                    {
-                        // Surrogate pairs above U+001F: write raw (valid UTF-8)
-                        writer.Write(c);
-                        i++;
-                        writer.Write(value[i]);
-                    }
-                    else
-                    {
-                        writer.Write(c);
-                    }
+                    writer.Write("\\u");
+                    writer.Write(((int)c).ToString("X4"));
                     break;
             }
         }
+        writer.Write(value.AsSpan(start));
         writer.Write('"');
     }
 
@@ -263,7 +243,14 @@ public sealed class JsonFileFormat : IFileFormat
             throw new InvalidDataException($"Expected '\"' at position {index}");
         index++; // skip opening quote
 
+        int start = index;
+        while (index < json.Length && json[index] != '"' && json[index] != '\\')
+            index++;
+        if (index < json.Length && json[index] == '"')
+            return json.Substring(start, index++ - start);
+
         var sb = new StringBuilder();
+        sb.Append(json, start, index - start);
         while (index < json.Length)
         {
             char c = json[index++];
@@ -290,16 +277,14 @@ public sealed class JsonFileFormat : IFileFormat
                     case 'u':
                         if (index + 4 > json.Length)
                             throw new InvalidDataException("Unexpected end of JSON in unicode escape");
-                        var hex = json.Substring(index, 4);
-                        int codeUnit = int.Parse(hex, NumberStyles.HexNumber);
+                        int codeUnit = int.Parse(json.AsSpan(index, 4), NumberStyles.HexNumber);
                         index += 4;
                         // Handle UTF-16 surrogate pairs (RFC 8259 §7)
                         if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF)
                         {
                             if (index + 6 <= json.Length && json[index] == '\\' && json[index + 1] == 'u')
                             {
-                                var hex2 = json.Substring(index + 2, 4);
-                                int low = int.Parse(hex2, NumberStyles.HexNumber);
+                                int low = int.Parse(json.AsSpan(index + 2, 4), NumberStyles.HexNumber);
                                 if (low >= 0xDC00 && low <= 0xDFFF)
                                 {
                                     index += 6;
@@ -367,13 +352,13 @@ public sealed class JsonFileFormat : IFileFormat
             }
         }
 
-        var numStr = json.Substring(start, index - start);
+        var numStr = json.AsSpan(start, index - start);
 
         if (hasDecimal || hasExponent)
         {
             if (double.TryParse(numStr, NumberStyles.Float | NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out double d))
                 return new EchoObject(d);
-            throw new InvalidDataException($"Invalid number: {numStr}");
+            throw new InvalidDataException($"Invalid number: {numStr.ToString()}");
         }
 
         // Integer
@@ -386,7 +371,7 @@ public sealed class JsonFileFormat : IFileFormat
         if (double.TryParse(numStr, NumberStyles.Float, CultureInfo.InvariantCulture, out double dbl))
             return new EchoObject(dbl);
 
-        throw new InvalidDataException($"Invalid number: {numStr}");
+        throw new InvalidDataException($"Invalid number: {numStr.ToString()}");
     }
 
     private static EchoObject ParseObject(string json, ref int index)
@@ -486,7 +471,7 @@ public sealed class JsonFileFormat : IFileFormat
     private static EchoObject ParseLiteral(string json, ref int index, string expected, EchoObject result)
     {
         if (index + expected.Length > json.Length ||
-            json.Substring(index, expected.Length) != expected)
+            string.CompareOrdinal(json, index, expected, 0, expected.Length) != 0)
             throw new InvalidDataException($"Expected '{expected}' at position {index}");
 
         index += expected.Length;

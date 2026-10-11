@@ -68,10 +68,13 @@ public sealed class YamlFileFormat : IFileFormat
         {
             // Write indent for all entries, except the first entry when inline (after "- ")
             if (!(first && inlineKey))
-                writer.Write(new string(' ', indent));
+                writer.Write(TextFormatting.Spaces(indent));
             first = false;
 
-            writer.Write(NeedsQuoting(kvp.Key) ? QuoteString(kvp.Key) : kvp.Key);
+            if (NeedsQuoting(kvp.Key))
+                WriteQuoted(writer, kvp.Key);
+            else
+                writer.Write(kvp.Key);
             writer.Write(':');
 
             if (kvp.Value.TagType == EchoType.Compound || kvp.Value.TagType == EchoType.List)
@@ -109,7 +112,7 @@ public sealed class YamlFileFormat : IFileFormat
 
         foreach (var item in items)
         {
-            writer.Write(new string(' ', indent));
+            writer.Write(TextFormatting.Spaces(indent));
             writer.Write("- ");
 
             if (item.TagType == EchoType.Compound && item.Count > 0)
@@ -141,11 +144,11 @@ public sealed class YamlFileFormat : IFileFormat
                 writer.Write(tag.BoolValue ? "true" : "false");
                 break;
             case EchoType.String:
-                writer.Write(QuoteString(tag.StringValue));
+                WriteQuoted(writer, tag.StringValue);
                 break;
             case EchoType.ByteArray:
                 writer.Write("!!binary ");
-                writer.Write(QuoteString(Convert.ToBase64String(tag.ByteArrayValue)));
+                WriteQuoted(writer, Convert.ToBase64String(tag.ByteArrayValue));
                 break;
             case EchoType.Float:
                 {
@@ -153,7 +156,7 @@ public sealed class YamlFileFormat : IFileFormat
                     if (float.IsNaN(f)) writer.Write(".nan");
                     else if (float.IsPositiveInfinity(f)) writer.Write(".inf");
                     else if (float.IsNegativeInfinity(f)) writer.Write("-.inf");
-                    else writer.Write(f.ToString(CultureInfo.InvariantCulture));
+                    else TextFormatting.WriteNumber(writer, f, stackalloc char[32], null, CultureInfo.InvariantCulture);
                 }
                 break;
             case EchoType.Double:
@@ -162,15 +165,18 @@ public sealed class YamlFileFormat : IFileFormat
                     if (double.IsNaN(d)) writer.Write(".nan");
                     else if (double.IsPositiveInfinity(d)) writer.Write(".inf");
                     else if (double.IsNegativeInfinity(d)) writer.Write("-.inf");
-                    else writer.Write(d.ToString(CultureInfo.InvariantCulture));
+                    else TextFormatting.WriteNumber(writer, d, stackalloc char[32], null, CultureInfo.InvariantCulture);
                 }
                 break;
             case EchoType.Decimal:
                 writer.Write(tag.DecimalValue.ToString(CultureInfo.InvariantCulture));
                 break;
+            case EchoType.ULong:
+                TextFormatting.WriteNumber(writer, tag.ULongValue, CultureInfo.InvariantCulture);
+                break;
             default:
-                // All integer types
-                writer.Write(tag.StringValue);
+                // Every other integer type
+                TextFormatting.WriteNumber(writer, tag.IntegerBits, CultureInfo.InvariantCulture);
                 break;
         }
     }
@@ -203,24 +209,30 @@ public sealed class YamlFileFormat : IFileFormat
         return false;
     }
 
-    private static string QuoteString(string value)
+    private static void WriteQuoted(TextWriter writer, string value)
     {
-        var sb = new StringBuilder(value.Length + 2);
-        sb.Append('"');
-        foreach (var c in value)
+        writer.Write('"');
+        int start = 0;
+        for (int i = 0; i < value.Length; i++)
         {
-            switch (c)
+            string? escape = value[i] switch
             {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default: sb.Append(c); break;
-            }
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => null
+            };
+            if (escape == null)
+                continue;
+
+            writer.Write(value.AsSpan(start, i - start));
+            writer.Write(escape);
+            start = i + 1;
         }
-        sb.Append('"');
-        return sb.ToString();
+        writer.Write(value.AsSpan(start));
+        writer.Write('"');
     }
 
     #endregion
@@ -268,7 +280,7 @@ public sealed class YamlFileFormat : IFileFormat
         }
 
         // Sequence item
-        if (line.Content.StartsWith("- ") || line.Content == "-")
+        if (line.Content.StartsWith("- ", StringComparison.Ordinal) || line.Content == "-")
             return ParseSequence(lines, ref index, line.Indent);
 
         // Check if it's a mapping (contains an unquoted colon)
@@ -350,7 +362,7 @@ public sealed class YamlFileFormat : IFileFormat
             if (line.Indent < seqIndent) break;
             if (line.Indent > seqIndent) break;
 
-            if (!line.Content.StartsWith("- ") && line.Content != "-")
+            if (!line.Content.StartsWith("- ", StringComparison.Ordinal) && line.Content != "-")
                 break;
 
             // Strip the "- " prefix
@@ -542,7 +554,7 @@ public sealed class YamlFileFormat : IFileFormat
             return new EchoObject(EchoType.Null, null);
 
         // Handle !!binary tag
-        if (value.StartsWith("!!binary ") || value.StartsWith("!!binary\t"))
+        if (value.StartsWith("!!binary ", StringComparison.Ordinal) || value.StartsWith("!!binary\t", StringComparison.Ordinal))
         {
             var b64 = UnquoteString(value.Substring(9).Trim());
             return new EchoObject(Convert.FromBase64String(b64));
@@ -651,6 +663,9 @@ public sealed class YamlFileFormat : IFileFormat
 
     private static string UnescapeString(string value)
     {
+        if (value.IndexOf('\\') < 0)
+            return value;
+
         var sb = new StringBuilder(value.Length);
         for (int i = 0; i < value.Length; i++)
         {
