@@ -76,34 +76,32 @@ public sealed class XmlFileFormat : IFileFormat
                 break;
 
             case EchoType.Byte:
-                WriteSimpleElement(writer, sanitized, "byte", tag.ByteValue.ToString(CultureInfo.InvariantCulture));
-                break;
             case EchoType.sByte:
-                WriteSimpleElement(writer, sanitized, "sbyte", tag.sByteValue.ToString(CultureInfo.InvariantCulture));
-                break;
             case EchoType.Short:
-                WriteSimpleElement(writer, sanitized, "short", tag.ShortValue.ToString(CultureInfo.InvariantCulture));
-                break;
             case EchoType.Int:
-                WriteSimpleElement(writer, sanitized, "int", tag.IntValue.ToString(CultureInfo.InvariantCulture));
-                break;
             case EchoType.Long:
-                WriteSimpleElement(writer, sanitized, "long", tag.LongValue.ToString(CultureInfo.InvariantCulture));
-                break;
             case EchoType.UShort:
-                WriteSimpleElement(writer, sanitized, "ushort", tag.UShortValue.ToString(CultureInfo.InvariantCulture));
-                break;
             case EchoType.UInt:
-                WriteSimpleElement(writer, sanitized, "uint", tag.UIntValue.ToString(CultureInfo.InvariantCulture));
+                WriteTypeAttribute(writer, IntegerTypeName(tag.TagType));
+                TextFormatting.WriteNumber(writer, tag.IntegerBits, CultureInfo.InvariantCulture);
+                WriteEndTag(writer, sanitized);
                 break;
             case EchoType.ULong:
-                WriteSimpleElement(writer, sanitized, "ulong", tag.ULongValue.ToString(CultureInfo.InvariantCulture));
+                WriteTypeAttribute(writer, "ulong");
+                TextFormatting.WriteNumber(writer, tag.ULongValue, CultureInfo.InvariantCulture);
+                WriteEndTag(writer, sanitized);
                 break;
             case EchoType.Float:
-                WriteSimpleElement(writer, sanitized, "float", tag.FloatValue.ToString(CultureInfo.InvariantCulture));
+                Span<char> floatBuffer = stackalloc char[32];
+                WriteTypeAttribute(writer, "float");
+                TextFormatting.WriteNumber(writer, tag.FloatValue, floatBuffer, null, CultureInfo.InvariantCulture);
+                WriteEndTag(writer, sanitized);
                 break;
             case EchoType.Double:
-                WriteSimpleElement(writer, sanitized, "double", tag.DoubleValue.ToString(CultureInfo.InvariantCulture));
+                Span<char> doubleBuffer = stackalloc char[32];
+                WriteTypeAttribute(writer, "double");
+                TextFormatting.WriteNumber(writer, tag.DoubleValue, doubleBuffer, null, CultureInfo.InvariantCulture);
+                WriteEndTag(writer, sanitized);
                 break;
             case EchoType.Decimal:
                 WriteSimpleElement(writer, sanitized, "decimal", tag.DecimalValue.ToString(CultureInfo.InvariantCulture));
@@ -147,19 +145,39 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static void WriteSimpleElement(TextWriter writer, string sanitized, string type, string value)
     {
+        WriteTypeAttribute(writer, type);
+        writer.Write(value);
+        WriteEndTag(writer, sanitized);
+    }
+
+    private static void WriteTypeAttribute(TextWriter writer, string type)
+    {
         writer.Write(" type=\"");
         writer.Write(type);
         writer.Write("\">");
-        writer.Write(value);
+    }
+
+    private static void WriteEndTag(TextWriter writer, string sanitized)
+    {
         writer.Write("</");
         writer.Write(sanitized);
         writer.WriteLine('>');
     }
 
+    private static string IntegerTypeName(EchoType type) => type switch
+    {
+        EchoType.Byte => "byte",
+        EchoType.sByte => "sbyte",
+        EchoType.Short => "short",
+        EchoType.Int => "int",
+        EchoType.Long => "long",
+        EchoType.UShort => "ushort",
+        _ => "uint"
+    };
+
     private static void WriteIndent(TextWriter writer, int level)
     {
-        for (int i = 0; i < level; i++)
-            writer.Write("  ");
+        writer.Write(TextFormatting.Spaces(level * 2));
     }
 
     private static bool IsForbiddenXmlChar(char c) =>
@@ -167,18 +185,28 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static void WriteTextContent(TextWriter writer, string value)
     {
-        foreach (var c in value)
+        int start = 0;
+        for (int i = 0; i < value.Length; i++)
         {
-            if (IsForbiddenXmlChar(c)) continue; // strip forbidden XML 1.0 control chars
-            switch (c)
+            char c = value[i];
+            string? replacement = c switch
             {
-                case '&': writer.Write("&amp;"); break;
-                case '<': writer.Write("&lt;"); break;
-                case '>': writer.Write("&gt;"); break;
-                case '\r': writer.Write("&#xD;"); break;
-                default: writer.Write(c); break;
-            }
+                '&' => "&amp;",
+                '<' => "&lt;",
+                '>' => "&gt;",
+                '\r' => "&#xD;",
+                _ => null
+            };
+            bool forbidden = IsForbiddenXmlChar(c); // forbidden XML 1.0 control chars are stripped
+            if (replacement == null && !forbidden)
+                continue;
+
+            writer.Write(value.AsSpan(start, i - start));
+            if (replacement != null)
+                writer.Write(replacement);
+            start = i + 1;
         }
+        writer.Write(value.AsSpan(start));
     }
 
     private static void WriteAttrValue(TextWriter writer, string value)
@@ -210,11 +238,39 @@ public sealed class XmlFileFormat : IFileFormat
             index++;
     }
 
+    // Only the attributes Echo reads back, the last one wins like any repeated attribute.
+    private struct XmlAttributes
+    {
+        public string? Type;
+        public string? Key;
+    }
+
     private struct ParsedElement
     {
         public string Name;
-        public Dictionary<string, string> Attrs;
+        public XmlAttributes Attrs;
         public EchoObject Value;
+    }
+
+    // Element text, kept as a plain string until a second piece arrives.
+    private struct TextAccumulator
+    {
+        private string? _single;
+        private StringBuilder? _builder;
+
+        public void Append(string piece)
+        {
+            if (_builder != null)
+                _builder.Append(piece);
+            else if (_single == null)
+                _single = piece;
+            else
+                _builder = new StringBuilder(_single).Append(piece);
+        }
+
+        public void Append(string source, int start, int length) => Append(source.Substring(start, length));
+
+        public override string ToString() => _builder?.ToString() ?? _single ?? "";
     }
 
     private static ParsedElement ReadElementFull(string xml, ref int index)
@@ -250,8 +306,8 @@ public sealed class XmlFileFormat : IFileFormat
             throw new InvalidDataException($"Expected '>' at position {index}");
         index++;
 
-        var children = new List<ParsedElement>();
-        var textContent = new StringBuilder();
+        List<ParsedElement>? children = null;
+        var textContent = new TextAccumulator();
 
         while (index < xml.Length)
         {
@@ -266,15 +322,15 @@ public sealed class XmlFileFormat : IFileFormat
                 {
                     // Whitespace-only content (no child elements, no other text) is real text, e.g. a
                     // value of "   " or "\t"; the whitespace we just skipped is that content.
-                    if (children.Count == 0 && wsStart < index)
+                    if (children == null && wsStart < index)
                         textContent.Append(xml, wsStart, index - wsStart);
 
                     index += 2;
-                    ReadName(xml, ref index); // skip closing tag name
+                    SkipName(xml, ref index); // skip closing tag name
                     SkipWhitespace(xml, ref index);
                     if (index < xml.Length && xml[index] == '>') index++;
 
-                    if (children.Count > 0)
+                    if (children != null)
                     {
                         return new ParsedElement
                         {
@@ -302,7 +358,7 @@ public sealed class XmlFileFormat : IFileFormat
                 }
 
                 // CDATA
-                if (index + 8 < xml.Length && xml.Substring(index, 9) == "<![CDATA[")
+                if (index + 8 < xml.Length && string.CompareOrdinal(xml, index, "<![CDATA[", 0, 9) == 0)
                 {
                     int endCdata = xml.IndexOf("]]>", index + 9);
                     if (endCdata < 0) throw new InvalidDataException("Unterminated CDATA");
@@ -311,7 +367,7 @@ public sealed class XmlFileFormat : IFileFormat
                     continue;
                 }
 
-                children.Add(ReadElementFull(xml, ref index));
+                (children ??= new List<ParsedElement>()).Add(ReadElementFull(xml, ref index));
             }
             else
             {
@@ -327,18 +383,29 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static string ReadName(string xml, ref int index)
     {
+        int start = SkipName(xml, ref index);
+        var name = xml.AsSpan(start, index - start);
+        if (name.SequenceEqual("item")) return "item";
+        if (name.SequenceEqual("type")) return "type";
+        if (name.SequenceEqual("key")) return "key";
+        return name.ToString();
+    }
+
+    // Returns where the name starts.
+    private static int SkipName(string xml, ref int index)
+    {
         SkipWhitespace(xml, ref index);
         int start = index;
         while (index < xml.Length && !char.IsWhiteSpace(xml[index]) && xml[index] != '>' && xml[index] != '/' && xml[index] != '=')
             index++;
         if (index == start)
             throw new InvalidDataException($"Expected element/attribute name at position {index}");
-        return xml.Substring(start, index - start);
+        return start;
     }
 
-    private static Dictionary<string, string> ReadAttributes(string xml, ref int index)
+    private static XmlAttributes ReadAttributes(string xml, ref int index)
     {
-        var attrs = new Dictionary<string, string>();
+        var attrs = new XmlAttributes();
 
         while (index < xml.Length)
         {
@@ -359,20 +426,35 @@ public sealed class XmlFileFormat : IFileFormat
             char quote = xml[index];
             index++;
 
-            var sb = new StringBuilder();
-            while (index < xml.Length && xml[index] != quote)
+            int valueStart = index;
+            while (index < xml.Length && xml[index] != quote && xml[index] != '&')
+                index++;
+
+            string value;
+            if (index < xml.Length && xml[index] == quote)
             {
-                if (xml[index] == '&')
-                    sb.Append(ReadEntityRef(xml, ref index));
-                else
-                    sb.Append(xml[index++]);
+                value = xml.Substring(valueStart, index - valueStart);
+            }
+            else
+            {
+                var sb = new StringBuilder();
+                sb.Append(xml, valueStart, index - valueStart);
+                while (index < xml.Length && xml[index] != quote)
+                {
+                    if (xml[index] == '&')
+                        sb.Append(ReadEntityRef(xml, ref index));
+                    else
+                        sb.Append(xml[index++]);
+                }
+                value = sb.ToString();
             }
 
             if (index >= xml.Length)
                 throw new InvalidDataException("Unterminated attribute value");
             index++; // skip closing quote
 
-            attrs[attrName] = sb.ToString();
+            if (attrName == "type") attrs.Type = value;
+            else if (attrName == "key") attrs.Key = value;
         }
 
         return attrs;
@@ -380,7 +462,14 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static string ReadTextContent(string xml, ref int index)
     {
+        int start = index;
+        while (index < xml.Length && xml[index] != '<' && xml[index] != '&')
+            index++;
+        if (index >= xml.Length || xml[index] == '<')
+            return xml.Substring(start, index - start);
+
         var sb = new StringBuilder();
+        sb.Append(xml, start, index - start);
         while (index < xml.Length && xml[index] != '<')
         {
             if (xml[index] == '&')
@@ -419,9 +508,9 @@ public sealed class XmlFileFormat : IFileFormat
         return "?";
     }
 
-    private static EchoObject ConvertFromAttributes(Dictionary<string, string> attrs, string textContent, string elemName)
+    private static EchoObject ConvertFromAttributes(XmlAttributes attrs, string textContent, string elemName)
     {
-        attrs.TryGetValue("type", out var typeAttr);
+        var typeAttr = attrs.Type;
 
         if (typeAttr != null)
         {
@@ -452,9 +541,9 @@ public sealed class XmlFileFormat : IFileFormat
         return InferScalar(textContent);
     }
 
-    private static EchoObject ConvertFromChildElements(Dictionary<string, string> attrs, List<ParsedElement> children)
+    private static EchoObject ConvertFromChildElements(XmlAttributes attrs, List<ParsedElement> children)
     {
-        attrs.TryGetValue("type", out var typeAttr);
+        var typeAttr = attrs.Type;
 
         if (typeAttr == "list")
         {
@@ -469,7 +558,7 @@ public sealed class XmlFileFormat : IFileFormat
             var compound = EchoObject.NewCompound();
             foreach (var child in children)
             {
-                var key = child.Attrs.TryGetValue("key", out var k) ? k : child.Name;
+                var key = child.Attrs.Key ?? child.Name;
                 compound.Add(key, child.Value);
             }
             return compound;
@@ -488,7 +577,7 @@ public sealed class XmlFileFormat : IFileFormat
         var comp = EchoObject.NewCompound();
         foreach (var child in children)
         {
-            var key = child.Attrs.TryGetValue("key", out var k) ? k : child.Name;
+            var key = child.Attrs.Key ?? child.Name;
             comp.Add(key, child.Value);
         }
         return comp;
@@ -518,10 +607,21 @@ public sealed class XmlFileFormat : IFileFormat
 
     #region Helpers
 
+    private static bool IsNameChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '-' or '.';
+
     private static string SanitizeElementName(string name)
     {
         if (string.IsNullOrEmpty(name))
             return "_empty";
+
+        if (char.IsLetter(name[0]) || name[0] == '_')
+        {
+            int i = 1;
+            while (i < name.Length && IsNameChar(name[i]))
+                i++;
+            if (i == name.Length)
+                return name;
+        }
 
         var sb = new StringBuilder(name.Length);
 
@@ -530,7 +630,7 @@ public sealed class XmlFileFormat : IFileFormat
 
         foreach (var c in name)
         {
-            if (char.IsLetterOrDigit(c) || c is '_' or '-' or '.')
+            if (IsNameChar(c))
                 sb.Append(c);
             else
                 sb.Append('_');

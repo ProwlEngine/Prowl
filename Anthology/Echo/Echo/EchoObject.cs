@@ -58,6 +58,9 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
 
     public EchoType TagType { get; private set; }
 
+    // The value of any integer tag except ULong, without boxing.
+    internal long IntegerBits => _bits;
+
     public EchoObject? Parent { get; private set; }
     public string? CompoundKey { get; private set; }
     public int? ListIndex
