@@ -3,17 +3,17 @@
 // ones whose box holds the surface, and up to eight are applied, lowest priority first.
 #pragma once
 
-#extension GL_EXT_nonuniform_qualifier : require
-
 #include "Graphite/Trees.glsl"
+#include "Graphite/Textures.glsl"
 
 #define GRAPHITE_MAX_DECALS 8
 
 struct Graphite_DecalRecord
 {
-    vec4 row0;               // rows mapping its tree's space to the unit box
+    vec4 row0;               // rows of the inverse of its linear part, the high part of its centre in w
     vec4 row1;
     vec4 row2;
+    vec4 centerLow;          // low part of its centre, its id as uint bits
     vec4 color;              // tint, alpha scales coverage
     uvec4 textures;          // albedo, normal and mask slots in the 2D table, sampler slot
     vec4 params;             // normal strength, priority, angle fade cosine, layer mask as uint bits
@@ -23,24 +23,21 @@ struct Graphite_DecalRecord
 layout(set = 0, binding = 13, std430) readonly buffer Graphite_StaticDecals { Graphite_DecalRecord graphite_StaticDecals[]; };
 layout(set = 1, binding = 5, std430) readonly buffer Graphite_ViewDecals { Graphite_DecalRecord graphite_ViewDecals[]; };
 
-layout(set = 0, binding = 0) uniform texture2D Graphite_Textures2D[16384];
-layout(set = 1, binding = 0) uniform sampler Graphite_Samplers[64];
-
-// Samplers cannot live in locals, so the table is indexed at each read
-#define GRAPHITE_DECAL_TEXTURE(d, slot, uv) texture(sampler2D(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_Samplers[nonuniformEXT(d.textures.w)]), uv)
+#define GRAPHITE_DECAL_TEXTURE(d, slot, uv) GRAPHITE_SAMPLE_2D(slot, d.textures.w, uv)
 
 Graphite_DecalRecord Graphite_DecalAt(uint tree, uint index)
 {
     return tree == GRAPHITE_STATIC_DECALS ? graphite_StaticDecals[index] : graphite_ViewDecals[index];
 }
 
-vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 point)
+// The unit box position of a camera relative point
+vec3 Graphite_DecalLocal(Graphite_DecalRecord d, vec3 worldPos)
 {
-    vec4 p = vec4(point, 1.0);
-    return vec3(dot(d.row0, p), dot(d.row1, p), dot(d.row2, p));
+    vec3 q = worldPos - Graphite_CameraOffset(vec3(d.row0.w, d.row1.w, d.row2.w), d.centerLow.xyz);
+    return vec3(dot(d.row0.xyz, q), dot(d.row1.xyz, q), dot(d.row2.xyz, q));
 }
 
-// How much a decal covers a surface with this geometric normal at this local position, 0 outside it
+// How much a decal covers a surface with this geometric normal at this local position, 0 outside it or on surfaces facing away
 float Graphite_DecalCoverage(Graphite_DecalRecord d, vec3 local, vec3 geomNormal, uint layers)
 {
     if (any(greaterThan(abs(local), vec3(0.5))))
@@ -48,14 +45,11 @@ float Graphite_DecalCoverage(Graphite_DecalRecord d, vec3 local, vec3 geomNormal
     if ((floatBitsToUint(d.params.w) & layers) == 0u)
         return 0.0;
 
-    float fade = 1.0;
-    if (d.params.z > 0.0)
-    {
-        float facing = dot(geomNormal, d.axis.xyz);
-        if (facing <= d.params.z)
-            return 0.0;
-        fade = clamp((facing - d.params.z) / max(1.0 - d.params.z, 1e-4), 0.0, 1.0);
-    }
+    float facing = dot(geomNormal, d.axis.xyz);
+    float threshold = max(d.params.z, 0.0);
+    if (facing <= threshold)
+        return 0.0;
+    float fade = threshold > 0.0 ? clamp((facing - threshold) / max(1.0 - threshold, 1e-4), 0.0, 1.0) : 1.0;
     return fade * d.color.a;
 }
 
@@ -87,6 +81,9 @@ void Graphite_ApplyDecal(Graphite_DecalRecord d, vec3 local, float coverage,
     }
 }
 
+// Whether a decal with this priority and id applies before the other
+bool Graphite_DecalBefore(vec2 order, vec2 other) { return order.x < other.x || (order.x == other.x && order.y < other.y); }
+
 // Applies every decal whose box holds worldPos, camera relative, to the surface. geomNormal is the normal before
 // normal mapping, used to fade decals on surfaces turned away from them.
 void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
@@ -96,7 +93,9 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
     uint layers = Graphite_SurfaceLayers();
     uint hitTree[GRAPHITE_MAX_DECALS];
     uint hitIndex[GRAPHITE_MAX_DECALS];
-    float hitPriority[GRAPHITE_MAX_DECALS];
+    vec2 hitOrder[GRAPHITE_MAX_DECALS];
+    vec3 hitLocal[GRAPHITE_MAX_DECALS];
+    float hitCoverage[GRAPHITE_MAX_DECALS];
     int hits = 0;
 
     for (uint pass = 0u; pass < 2u; pass++)
@@ -115,21 +114,25 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
             for (uint i = first; i < last; i++)
             {
                 Graphite_DecalRecord d = Graphite_DecalAt(tree, i);
-                if (Graphite_DecalCoverage(d, Graphite_DecalLocal(d, point), geomNormal, layers) <= 0.0)
+                vec3 local = Graphite_DecalLocal(d, worldPos);
+                float coverage = Graphite_DecalCoverage(d, local, geomNormal, layers);
+                if (coverage <= 0.0)
                     continue;
 
-                // Keep the hits sorted by priority, dropping the lowest when full
-                float priority = d.params.y;
+                // Keep the hits sorted by priority then id, dropping the lowest when full
+                vec2 order = vec2(d.params.y, float(floatBitsToUint(d.centerLow.w)));
                 int at = hits;
                 if (hits == GRAPHITE_MAX_DECALS)
                 {
-                    if (priority <= hitPriority[0])
+                    if (Graphite_DecalBefore(order, hitOrder[0]))
                         continue;
                     for (int k = 0; k < hits - 1; k++)
                     {
                         hitTree[k] = hitTree[k + 1];
                         hitIndex[k] = hitIndex[k + 1];
-                        hitPriority[k] = hitPriority[k + 1];
+                        hitOrder[k] = hitOrder[k + 1];
+                        hitLocal[k] = hitLocal[k + 1];
+                        hitCoverage[k] = hitCoverage[k + 1];
                     }
                     at = hits - 1;
                 }
@@ -137,25 +140,24 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
                 {
                     hits++;
                 }
-                while (at > 0 && hitPriority[at - 1] > priority)
+                while (at > 0 && Graphite_DecalBefore(order, hitOrder[at - 1]))
                 {
                     hitTree[at] = hitTree[at - 1];
                     hitIndex[at] = hitIndex[at - 1];
-                    hitPriority[at] = hitPriority[at - 1];
+                    hitOrder[at] = hitOrder[at - 1];
+                    hitLocal[at] = hitLocal[at - 1];
+                    hitCoverage[at] = hitCoverage[at - 1];
                     at--;
                 }
                 hitTree[at] = tree;
                 hitIndex[at] = i;
-                hitPriority[at] = priority;
+                hitOrder[at] = order;
+                hitLocal[at] = local;
+                hitCoverage[at] = coverage;
             }
         }
     }
 
     for (int h = 0; h < hits; h++)
-    {
-        Graphite_DecalRecord d = Graphite_DecalAt(hitTree[h], hitIndex[h]);
-        vec3 point = hitTree[h] == GRAPHITE_STATIC_DECALS ? worldPos + view.staticDecalOffset.xyz : worldPos;
-        vec3 local = Graphite_DecalLocal(d, point);
-        Graphite_ApplyDecal(d, local, Graphite_DecalCoverage(d, local, geomNormal, layers), albedo, normal, roughness, metallic, occlusion);
-    }
+        Graphite_ApplyDecal(Graphite_DecalAt(hitTree[h], hitIndex[h]), hitLocal[h], hitCoverage[h], albedo, normal, roughness, metallic, occlusion);
 }

@@ -145,20 +145,35 @@ public struct FogDesc
 
     /// <summary>Colours the fog with the sky behind it once a sky probe exists.</summary>
     public bool UseSky;
+
+    public FogDesc()
+    {
+        Mode = FogMode.ExponentialSquared;
+        Color = new Float4(0.5f, 0.5f, 0.5f, 1);
+        Density = 0.01f;
+        Start = 20;
+        End = 100;
+    }
 }
 
-/// <summary>A world's ambient light, fog and sun.</summary>
+/// <summary>A world's ambient light, fog and sun. Changes to the world's own instance apply at the next frame.</summary>
 public sealed class EnvironmentDesc
 {
     public AmbientMode Ambient;
-    public Float4 AmbientColor = new(0.2f, 0.2f, 0.2f, 1);
-    public Float4 AmbientSky = new(0.2f, 0.2f, 0.25f, 1);
-    public Float4 AmbientGround = new(0.1f, 0.1f, 0.1f, 1);
+    public Float4 AmbientColor = new(0.43f, 0.55f, 0.65f, 1);
+    public Float4 AmbientSky = new(0.3f, 0.3f, 0.4f, 1);
+    public Float4 AmbientGround = new(0.2f, 0.2f, 0.2f, 1);
     public float AmbientIntensity = 1;
-    public FogDesc Fog;
+    public FogDesc Fog = new();
 
-    /// <summary>The directional light that is the sun, else the brightest directional light is.</summary>
+    /// <summary>The directional light that is the sun, else the most intense directional light is.</summary>
     public LightHandle Sun;
+
+    internal EnvironmentDesc Copy() => (EnvironmentDesc)MemberwiseClone();
+
+    internal bool Same(EnvironmentDesc other)
+        => Ambient == other.Ambient && AmbientColor == other.AmbientColor && AmbientSky == other.AmbientSky && AmbientGround == other.AmbientGround
+        && AmbientIntensity == other.AmbientIntensity && Fog.Equals(other.Fog) && Sun == other.Sun;
 }
 
 /// <summary>A light record as the shaders read it, 80 bytes, matching Graphite_LightRecord. Positions are in its tree's space.</summary>
@@ -172,11 +187,15 @@ internal struct LightRecord
     public Float4 Shadow;
 }
 
-/// <summary>A decal record as the shaders read it, 112 bytes, matching Graphite_DecalRecord. Its rows map its tree's space to the unit box.</summary>
+/// <summary>
+/// A decal record as the shaders read it, 128 bytes, matching Graphite_DecalRecord. Its rows are the inverse of the linear
+/// part with the high part of the centre in w, then the low part of the centre and the decal's id.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct DecalRecord
 {
     public Float4 Row0, Row1, Row2;
+    public Float4 CenterLow;
     public Float4 Color;
     public uint Albedo, Normal, Mask, Sampler;
     public Float4 Params;
@@ -203,7 +222,9 @@ internal struct WorldLightingRecord
     public const int MaxDirectional = 8;
 
     public uint DirectionalCount;
-    private uint _pad0, _pad1, _pad2;
+    public uint LightmapPages;
+    public uint HasProbes;
+    public uint LightmapEncoding;
     public Float4 AmbientColor;
     public Float4 AmbientSky;
     public Float4 AmbientGround;
@@ -219,19 +240,15 @@ public sealed partial class RenderWorld
     private readonly HandleStore<LightDesc> _lights = new();
     private readonly HandleStore<DecalDesc> _decals = new();
     private EnvironmentDesc _environment = new();
-    private bool _environmentDirty = true;
+    private EnvironmentDesc? _extractedEnvironment;
 
     internal WorldLighting Lighting { get; private set; } = null!;
 
-    /// <summary>The world's ambient light, fog and sun. Assign a new or changed one to apply it. Host thread.</summary>
+    /// <summary>The world's ambient light, fog and sun, compared at each frame so edits to it apply. Host thread.</summary>
     public EnvironmentDesc Environment
     {
         get => _environment;
-        set
-        {
-            _environment = value ?? throw new ArgumentNullException(nameof(value));
-            _environmentDirty = true;
-        }
+        set => _environment = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     public LightHandle AddLight(in LightDesc desc)
@@ -264,10 +281,11 @@ public sealed partial class RenderWorld
     {
         _lights.Extract(Lighting.ReceiveLight);
         _decals.Extract(Lighting.ReceiveDecal);
-        if (_environmentDirty)
+        ExtractBakedLighting();
+        if (_extractedEnvironment == null || !_environment.Same(_extractedEnvironment))
         {
-            Lighting.ReceiveEnvironment(_environment);
-            _environmentDirty = false;
+            _extractedEnvironment = _environment.Copy();
+            Lighting.ReceiveEnvironment(_extractedEnvironment);
         }
     }
 }
@@ -326,14 +344,14 @@ internal sealed class HandleStore<T> where T : struct
         return _items[index];
     }
 
-    public delegate void Receiver(int index, bool alive, in T item);
+    public delegate void Receiver(int index, int generation, bool alive, in T item);
 
     public void Extract(Receiver receive)
     {
         foreach (int index in _dirtyList)
         {
             _dirty[index] = false;
-            receive(index, _alive[index], _items[index]);
+            receive(index, _generation[index], _alive[index], _items[index]);
         }
         _dirtyList.Clear();
     }
@@ -369,6 +387,7 @@ internal sealed class WorldLighting : IDisposable
     private readonly LightTreeBuilder _staticDecalTree = new();
 
     private LightDesc[] _lights = new LightDesc[16];
+    private int[] _lightGeneration = new int[16];
     private bool[] _lightAlive = new bool[16];
     private int[] _lightTableIndex = new int[16];
     private readonly List<int> _staticLights = new();
@@ -390,8 +409,12 @@ internal sealed class WorldLighting : IDisposable
 
     private EnvironmentDesc _environment = new();
     private bool _worldRecordDirty = true;
+    private int _lightmapPages;
+    private LightmapEncoding _lightmapEncoding;
+    private bool _hasProbes;
     private Vector4[] _spheres = new Vector4[64];
     private readonly List<int> _culled = new();
+    private readonly List<int> _directionalOrder = new();
     private LightRecord[] _lightScratch = new LightRecord[64];
     private DecalRecord[] _decalScratch = new DecalRecord[64];
 
@@ -405,6 +428,7 @@ internal sealed class WorldLighting : IDisposable
         public uint Albedo, Normal, Mask, Sampler;
         public Float4 Params;
         public Float4 Axis;
+        public uint Id;
     }
 
     public WorldLighting(GraphicsDevice device, IMaterialResources resources, Action<string, string> report)
@@ -426,6 +450,8 @@ internal sealed class WorldLighting : IDisposable
     public GpuTable World { get; }
     public GpuTable[] Tables { get; }
 
+    public IMaterialResources Resources => _resources;
+
     /// <summary>World position the static light tree is built around. Shaders shift camera relative positions by the view's offset to it.</summary>
     public Double3 StaticLightOrigin { get; private set; }
     public Double3 StaticDecalOrigin { get; private set; }
@@ -436,19 +462,22 @@ internal sealed class WorldLighting : IDisposable
     public int StaticLightCount => _staticLights.Count;
     public int DynamicLightCount => _dynamicLights.Count;
 
-    internal void ReceiveLight(int index, bool alive, in LightDesc desc)
+    internal void ReceiveLight(int index, int generation, bool alive, in LightDesc given)
     {
         if (index >= _lights.Length)
         {
             int size = Math.Max(index + 1, _lights.Length * 2);
             Array.Resize(ref _lights, size);
+            Array.Resize(ref _lightGeneration, size);
             Array.Resize(ref _lightAlive, size);
             Array.Resize(ref _lightTableIndex, size);
         }
 
+        LightDesc desc = Normalized(given);
         LightDesc old = _lights[index];
         bool wasAlive = _lightAlive[index];
         _lights[index] = desc;
+        _lightGeneration[index] = generation;
         _lightAlive[index] = alive;
 
         bool wasStatic = wasAlive && old.Static && old.Type != LightType.Directional;
@@ -466,7 +495,7 @@ internal sealed class WorldLighting : IDisposable
             _worldRecordDirty = true;
     }
 
-    internal void ReceiveDecal(int index, bool alive, in DecalDesc desc)
+    internal void ReceiveDecal(int index, int generation, bool alive, in DecalDesc desc)
     {
         if (index >= _decals.Length)
         {
@@ -482,7 +511,7 @@ internal sealed class WorldLighting : IDisposable
         _decals[index] = desc;
         _decalAlive[index] = alive;
         if (alive)
-            _decalLooks[index] = Look(desc);
+            _decalLooks[index] = Look(desc, index);
 
         bool wasStatic = wasAlive && old.Static;
         bool isStatic = alive && desc.Static;
@@ -512,6 +541,19 @@ internal sealed class WorldLighting : IDisposable
         _worldRecordDirty = true;
     }
 
+    internal void SetLightmaps(int pages, LightmapEncoding encoding)
+    {
+        _lightmapPages = pages;
+        _lightmapEncoding = encoding;
+        _worldRecordDirty = true;
+    }
+
+    internal void SetProbes(bool hasProbes)
+    {
+        _hasProbes = hasProbes;
+        _worldRecordDirty = true;
+    }
+
     /// <summary>Repacks every decal after a bindless slot one may hold was freed. Host thread, at extraction.</summary>
     public void RepackDecals()
     {
@@ -519,7 +561,7 @@ internal sealed class WorldLighting : IDisposable
         {
             if (!_decalAlive[i])
                 continue;
-            _decalLooks[i] = Look(_decals[i]);
+            _decalLooks[i] = Look(_decals[i], i);
             if (_decals[i].Static)
                 _staticDecalRecords.Add(i);
         }
@@ -552,7 +594,7 @@ internal sealed class WorldLighting : IDisposable
             foreach (int index in _staticDecalRecords)
             {
                 if (_decalAlive[index] && _decals[index].Static)
-                    StaticDecals.Set((uint)_decalTableIndex[index], Pack(_decalLooks[index], StaticDecalOrigin));
+                    StaticDecals.Set((uint)_decalTableIndex[index], Pack(_decalLooks[index]));
             }
         }
         _staticDecalRecords.Clear();
@@ -623,7 +665,7 @@ internal sealed class WorldLighting : IDisposable
             _decalScratch = new DecalRecord[_culled.Count * 2];
         ReadOnlySpan<int> order = builder.Order;
         for (int i = 0; i < _culled.Count; i++)
-            _decalScratch[i] = Pack(_decalLooks[_culled[order[i]]], frustum.Camera);
+            _decalScratch[i] = Pack(_decalLooks[_culled[order[i]]]);
         records.Write<DecalRecord>(uploader, _decalScratch.AsSpan(0, _culled.Count));
         nodes.Write(uploader, builder.Nodes);
         return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
@@ -723,7 +765,7 @@ internal sealed class WorldLighting : IDisposable
         {
             int index = _staticDecals[order[i]];
             _decalTableIndex[index] = i;
-            StaticDecals.Set((uint)i, Pack(_decalLooks[index], StaticDecalOrigin));
+            StaticDecals.Set((uint)i, Pack(_decalLooks[index]));
         }
         WriteNodes(StaticDecalNodes, _staticDecalTree.Nodes);
         StaticDecalRoot = _staticDecalTree.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
@@ -767,23 +809,35 @@ internal sealed class WorldLighting : IDisposable
     //   +2 direction it shines, type in the low 2 bits and shadow enabled in bit 2 as int bits
     //   +3 cos of the outer and inner spot angles, shadow depth and normal bias
     //   +4 shadow strength, shadow quality, shadow slot as int bits, layer mask as uint bits
+    // Directions unit length, a zero one pointing down +Z, and the inner cone never past the outer
+    private static LightDesc Normalized(in LightDesc light)
+    {
+        LightDesc result = light;
+        Float3 d = light.Direction;
+        float length = MathF.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+        result.Direction = length > 1e-12f ? d / length : new Float3(0, 0, 1);
+        result.InnerAngle = MathF.Min(light.InnerAngle, light.OuterAngle);
+        return result;
+    }
+
     private static LightRecord Pack(in LightDesc light, Double3 origin)
     {
         Double3 p = light.Position - origin;
         int type = light.Type == LightType.Spot ? 2 : 1;
         int flags = type | ((light.Shadow.Enabled ? 1 : 0) << 2);
         bool spot = light.Type == LightType.Spot;
+        float outer = MathF.Cos(light.OuterAngle * MathF.PI / 180f);
         return new LightRecord
         {
             PositionRange = new Float4((float)p.X, (float)p.Y, (float)p.Z, light.Range),
             ColorIntensity = new Float4(light.Color.X, light.Color.Y, light.Color.Z, light.Intensity),
             DirectionFlags = new Float4(light.Direction.X, light.Direction.Y, light.Direction.Z, BitConverter.Int32BitsToSingle(flags)),
-            SpotShadow = new Float4(spot ? MathF.Cos(light.OuterAngle * MathF.PI / 180f) : -1f, spot ? MathF.Cos(light.InnerAngle * MathF.PI / 180f) : 1f, light.Shadow.Bias, light.Shadow.NormalBias),
+            SpotShadow = new Float4(spot ? outer : -1f, spot ? MathF.Max(MathF.Cos(light.InnerAngle * MathF.PI / 180f), outer + 1e-4f) : 1f, light.Shadow.Bias, light.Shadow.NormalBias),
             Shadow = new Float4(light.Shadow.Strength, light.Shadow.Quality, BitConverter.Int32BitsToSingle(-1), BitConverter.UInt32BitsToSingle(light.LayerMask)),
         };
     }
 
-    private DecalLook Look(in DecalDesc decal)
+    private DecalLook Look(in DecalDesc decal, int id)
     {
         Double4x4 m = decal.Transform;
         Double3 x = new(m.c0.X, m.c0.Y, m.c0.Z), y = new(m.c1.X, m.c1.Y, m.c1.Z), z = new(m.c2.X, m.c2.Y, m.c2.Z);
@@ -794,7 +848,8 @@ internal sealed class WorldLighting : IDisposable
         {
             Inverse = m.Invert(),
             Center = new Double3(m.c3.X, m.c3.Y, m.c3.Z),
-            Radius = (float)(0.5 * Math.Sqrt(Dot(x, x) + Dot(y, y) + Dot(z, z))),
+            Radius = (float)(0.5 * Math.Max(Math.Max(Length(x + y + z), Length(x + y - z)), Math.Max(Length(x - y + z), Length(y + z - x)))),
+            Id = (uint)id,
             Color = decal.Color,
             Albedo = _resources.TextureSlot(decal.Albedo, MaterialPropertyType.Texture2D, "white"),
             Normal = _resources.TextureSlot(decal.Normal, MaterialPropertyType.Texture2D, "normal"),
@@ -805,18 +860,18 @@ internal sealed class WorldLighting : IDisposable
         };
     }
 
-    private static double Dot(Double3 a, Double3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+    private static double Length(Double3 v) => Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 
-    // The rows map tree space, world minus origin, to the unit box: the inverse applied to the point plus the origin.
-    private static DecalRecord Pack(in DecalLook look, Double3 origin)
+    private static DecalRecord Pack(in DecalLook look)
     {
         Double4x4 inv = look.Inverse;
-        Float4 Row(double a, double b, double c, double d) => new((float)a, (float)b, (float)c, (float)(a * origin.X + b * origin.Y + c * origin.Z + d));
+        (Float3 high, Float3 low) = Precise.Split(look.Center);
         return new DecalRecord
         {
-            Row0 = Row(inv.c0.X, inv.c1.X, inv.c2.X, inv.c3.X),
-            Row1 = Row(inv.c0.Y, inv.c1.Y, inv.c2.Y, inv.c3.Y),
-            Row2 = Row(inv.c0.Z, inv.c1.Z, inv.c2.Z, inv.c3.Z),
+            Row0 = new Float4((float)inv.c0.X, (float)inv.c1.X, (float)inv.c2.X, high.X),
+            Row1 = new Float4((float)inv.c0.Y, (float)inv.c1.Y, (float)inv.c2.Y, high.Y),
+            Row2 = new Float4((float)inv.c0.Z, (float)inv.c1.Z, (float)inv.c2.Z, high.Z),
+            CenterLow = new Float4(low.X, low.Y, low.Z, BitConverter.UInt32BitsToSingle(look.Id)),
             Color = look.Color,
             Albedo = look.Albedo,
             Normal = look.Normal,
@@ -834,28 +889,18 @@ internal sealed class WorldLighting : IDisposable
         EnvironmentDesc env = _environment;
         WorldLightingRecord record = default;
 
-        int sun = -1;
-        float brightest = -1;
-        foreach (int index in _directionalLights)
-        {
-            LightDesc light = _lights[index];
-            float brightness = (0.2126f * light.Color.X + 0.7152f * light.Color.Y + 0.0722f * light.Color.Z) * light.Intensity;
-            if (env.Sun.IsValid && env.Sun.Index == index)
-            {
-                sun = index;
-                break;
-            }
-            if (brightness > brightest)
-            {
-                brightest = brightness;
-                sun = index;
-            }
-        }
+        _directionalOrder.Clear();
+        _directionalOrder.AddRange(_directionalLights);
+        _directionalOrder.Sort((a, b) => _lights[b].Intensity.CompareTo(_lights[a].Intensity));
+        int sun = _directionalOrder.Count > 0 ? _directionalOrder[0] : -1;
+        if (env.Sun.IsValid && (uint)env.Sun.Index < (uint)_lights.Length && _lightAlive[env.Sun.Index]
+            && _lightGeneration[env.Sun.Index] == env.Sun.Generation && _lights[env.Sun.Index].Type == LightType.Directional)
+            sun = env.Sun.Index;
 
         int count = 0;
         if (sun >= 0)
             record.Directional[count++] = Directional(_lights[sun]);
-        foreach (int index in _directionalLights)
+        foreach (int index in _directionalOrder)
         {
             if (index == sun)
                 continue;
@@ -867,6 +912,9 @@ internal sealed class WorldLighting : IDisposable
             record.Directional[count++] = Directional(_lights[index]);
         }
         record.DirectionalCount = (uint)count;
+        record.LightmapPages = (uint)_lightmapPages;
+        record.HasProbes = _hasProbes ? 1u : 0;
+        record.LightmapEncoding = (uint)_lightmapEncoding;
 
         record.AmbientColor = env.AmbientColor;
         record.AmbientSky = env.AmbientSky;
@@ -883,11 +931,11 @@ internal sealed class WorldLighting : IDisposable
         World.Set(0, record);
     }
 
-    // The direction stored points from the surface to the light, the opposite of where it shines.
+    // The direction stored points from the surface to the light, the opposite of where it shines. The layer mask rides in w.
     private static DirectionalRecord Directional(in LightDesc light) => new()
     {
         DirectionShadow = new Float4(-light.Direction.X, -light.Direction.Y, -light.Direction.Z, light.Shadow.Enabled ? 1 : 0),
-        Color = new Float4(light.Color.X * light.Intensity, light.Color.Y * light.Intensity, light.Color.Z * light.Intensity, light.Intensity),
+        Color = new Float4(light.Color.X * light.Intensity, light.Color.Y * light.Intensity, light.Color.Z * light.Intensity, BitConverter.UInt32BitsToSingle(light.LayerMask)),
     };
 }
 

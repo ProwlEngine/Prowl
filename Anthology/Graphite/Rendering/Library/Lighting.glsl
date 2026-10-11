@@ -7,6 +7,7 @@
 
 #include "Graphite/Trees.glsl"
 #include "Graphite/PBR.glsl"
+#include "Graphite/Textures.glsl"
 
 struct Graphite_LightRecord
 {
@@ -20,14 +21,14 @@ struct Graphite_LightRecord
 struct Graphite_Directional
 {
     vec4 directionShadow;    // surface to light direction, shadow enabled
-    vec4 color;              // colour times intensity
+    vec4 color;              // colour times intensity, layer mask as uint bits
 };
 
 layout(set = 0, binding = 11, std430) readonly buffer Graphite_StaticLights { Graphite_LightRecord graphite_StaticLights[]; };
 layout(set = 1, binding = 3, std430) readonly buffer Graphite_ViewLights { Graphite_LightRecord graphite_ViewLights[]; };
 layout(set = 0, binding = 15, std430) readonly buffer Graphite_WorldLighting
 {
-    uvec4 counts;            // directional lights
+    uvec4 counts;            // directional lights, lightmap pages, probes present, lightmap encoding (0 linear, 1 RGBM)
     vec4 ambientColor;
     vec4 ambientSky;
     vec4 ambientGround;
@@ -159,7 +160,7 @@ vec3 GetWorldViewDir(vec3 worldPos)
 vec3 GetTangentViewDir(vec3 worldPos, vec3 worldNormal, vec3 worldTangent, vec3 worldBitangent)
 {
     vec3 viewDir = GetWorldViewDir(worldPos);
-    return normalize(vec3(dot(viewDir, worldTangent), dot(viewDir, worldBitangent), dot(viewDir, worldNormal)));
+    return normalize(vec3(dot(viewDir, normalize(worldTangent)), dot(viewDir, normalize(worldBitangent)), dot(viewDir, normalize(worldNormal))));
 }
 
 // ============================================================
@@ -317,7 +318,11 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
 
 float MainDirectionalShadowFactor(vec3 worldPos, vec3 geomNormal)
 {
+#ifdef SG_NO_SHADOWS
+    return 1.0;
+#else
     return 1.0 - Graphite_SunShadow(worldPos, geomNormal);
+#endif
 }
 
 // One directional light. lightColor is color * intensity.
@@ -352,9 +357,12 @@ vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 
                          vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
     vec3 total = vec3(0.0);
+    uint layers = Graphite_SurfaceLayers();
     for (uint i = 0u; i < graphite_World.counts.x; i++)
     {
         Graphite_Directional d = graphite_World.directionals[i];
+        if ((floatBitsToUint(d.color.w) & layers) == 0u)
+            continue;
         total += ShadeDirectional(normalize(d.directionShadow.xyz), d.color.rgb,
             i == 0u ? MainDirectionalShadowFactor(worldPos, geomNormal) : 1.0, worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
     }
@@ -398,9 +406,12 @@ vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
                               float perceptualRoughness, float ao, vec3 F0)
 {
     vec3 total = vec3(0.0);
+    uint layers = Graphite_SurfaceLayers();
     for (uint i = 0u; i < graphite_World.counts.x; i++)
     {
         Graphite_Directional d = graphite_World.directionals[i];
+        if ((floatBitsToUint(d.color.w) & layers) == 0u)
+            continue;
         total += ShadeDirectionalAniso(normalize(d.directionShadow.xyz), d.color.rgb,
             i == 0u ? MainDirectionalShadowFactor(worldPos, geomNormal) : 1.0, worldNormal, viewDir, worldTangent, worldBitangent, albedo, metallic, mt, mb, perceptualRoughness, ao, F0);
     }
@@ -575,9 +586,12 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, 
     vec3 totalLight = vec3(0.0);
 
     // ---- Directional lights ----
+    uint layers = Graphite_SurfaceLayers();
     for (uint i = 0u; i < graphite_World.counts.x; i++)
     {
         Graphite_Directional d = graphite_World.directionals[i];
+        if ((floatBitsToUint(d.color.w) & layers) == 0u)
+            continue;
         totalLight += ShadeDirectionalTranslucent(normalize(d.directionShadow.xyz), d.color.rgb,
             i == 0u ? MainDirectionalShadowFactor(worldPos, geomNormal) : 1.0, worldNormal, viewDir, albedo, metallic, roughness, ao, F0, translucency, scatterPower, scatterDist, scatterScale);
     }
@@ -632,6 +646,58 @@ vec3 CalculateAmbient(vec3 worldNormal)
 
     return ambient;
 }
+
+// ============================================================
+//  Baked lighting
+// ============================================================
+
+struct Graphite_ProbeSH { vec4 shAr; vec4 shAg; vec4 shAb; vec4 shBr; vec4 shBg; vec4 shBb; vec4 shC; };
+
+layout(set = 0, binding = 16, std430) readonly buffer Graphite_LightmapPages { uvec2 graphite_LightmapPages[]; };
+layout(set = 0, binding = 17, std430) readonly buffer Graphite_ObjectProbes { Graphite_ProbeSH graphite_ObjectProbes[]; };
+
+vec3 DecodeLightmap(vec4 texel)
+{
+    return graphite_World.counts.w == 1u ? texel.rgb * (texel.a * 8.0) : texel.rgb;
+}
+
+// Diffuse irradiance over pi for a normal from packed order 2 harmonics
+vec3 ShadeSH9(Graphite_ProbeSH sh, vec3 n)
+{
+    vec4 nrm = vec4(n, 1.0);
+    vec3 x;
+    x.r = dot(sh.shAr, nrm);
+    x.g = dot(sh.shAg, nrm);
+    x.b = dot(sh.shAb, nrm);
+
+    vec4 vB = n.xyzz * n.yzzx;
+    vec3 x1;
+    x1.r = dot(sh.shBr, vB);
+    x1.g = dot(sh.shBg, vB);
+    x1.b = dot(sh.shBb, vB);
+
+    float vC = n.x * n.x - n.y * n.y;
+    vec3 x2 = sh.shC.rgb * vC;
+
+    return max(x + x1 + x2, vec3(0.0));
+}
+
+#ifdef GRAPHITE_FRAGMENT
+// The diffuse light that is not realtime: the object's lightmap, else its light probes, else the ambient light.
+// lightmapUV comes from Graphite_LightmapUV in the vertex stage.
+vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
+{
+    Graphite_ObjectData object = Graphite_Object();
+    if (object.lightmapPage >= 0 && uint(object.lightmapPage) < graphite_World.counts.y)
+    {
+        uvec2 page = graphite_LightmapPages[object.lightmapPage];
+        return DecodeLightmap(GRAPHITE_SAMPLE_2D(page.x, page.y, lightmapUV));
+    }
+    if (object.probeIndex != 0xFFFFFFFFu && graphite_World.counts.z != 0u)
+        return ShadeSH9(graphite_ObjectProbes[object.probeIndex], worldNormal);
+    return CalculateAmbient(worldNormal) * graphite_World.ambientMode.z;
+}
+#endif
 
 float SpecularOcclusion(float NdotV, float ao, float roughness)
 {

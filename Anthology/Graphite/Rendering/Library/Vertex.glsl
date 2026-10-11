@@ -69,6 +69,14 @@ vec3 Graphite_ObjectToWorldDirection(vec3 d) { return Graphite_Linear(Graphite_O
 
 vec3 Graphite_ObjectToWorldNormal(vec3 n) { return normalize(Graphite_NormalMatrix(Graphite_ObjectTransform()) * n); }
 
+// Where the vertex samples the object's lightmap: its second UV set when the mesh has one, else its first, placed on the page
+vec2 Graphite_LightmapUV()
+{
+    vec2 uv = Graphite_HasStream(5u) ? Graphite_LoadUV(1u) : Graphite_LoadUV(0u);
+    vec4 scaleOffset = Graphite_Object().lightmapScaleOffset;
+    return uv * scaleOffset.xy + scaleOffset.zw;
+}
+
 vec4 Graphite_ObjectToClip(vec3 p) { return Graphite_RelativeToClip(Graphite_ObjectToWorld(p)); }
 
 // Where the point was last frame in last frame's clip space, for motion vectors. Objects without a previous transform did not move.

@@ -71,6 +71,42 @@ public sealed class LightingTests : IDisposable
         }
         """;
 
+    private const string IndirectSource = """
+        Shader "Test/Indirect"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    layout(location = 0) out vec3 vNormal;
+                    layout(location = 1) out vec2 vLightmapUV;
+                    void main()
+                    {
+                        vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
+                        vLightmapUV = Graphite_LightmapUV();
+                        gl_Position = Graphite_ObjectToClip(vertexPosition);
+                    }
+                }
+                Fragment
+                {
+                    #include "Graphite/Lighting.glsl"
+                    layout(location = 0) in vec3 vNormal;
+                    layout(location = 1) in vec2 vLightmapUV;
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        outColor = vec4(Graphite_IndirectDiffuse(normalize(vNormal), vLightmapUV), 1.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
     private const int Size = 16;
     private const float QuadDepth = 10;
 
@@ -97,7 +133,7 @@ public sealed class LightingTests : IDisposable
         _renderer = new Renderer(_device, _compiler, new RendererOptions { Threading = RenderThreading.Inline, Deterministic = true, PageVertexWords = 1 << 16, PageIndices = 1 << 16 });
         _renderer.Error += _errors.Add;
         _world = _renderer.CreateWorld();
-        _world.Environment = new EnvironmentDesc { AmbientColor = default };
+        _world.Environment = new EnvironmentDesc { AmbientColor = default, Fog = default };
         _shader = _renderer.LoadShader(ShaderParser.Parse(Source));
 
         Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
@@ -117,6 +153,8 @@ public sealed class LightingTests : IDisposable
     public void Dispose()
     {
         _renderer.Dispose();
+        foreach (Texture texture in _textures)
+            texture.Dispose();
         _readback.Dispose();
         _framebuffer.Dispose();
         _target.Dispose();
@@ -302,13 +340,35 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void DirectionalLights_OnlyLightTheirLayers()
+    {
+        AddQuad(Surface(new Float3(0.6f, 0.6f, 0.6f), 0.4f), layer: 1);
+        LightDesc other = new() { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 0.5f, LayerMask = 2 };
+        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0.3f, -0.2f, 1), Color = new Float3(1, 0.9f, 0.8f), Intensity = 0.05f, LayerMask = 1 };
+        _world.AddLight(other);
+        _world.AddLight(sun);
+
+        AssertMatches(p => Reference.Directional(sun, p, s_normal, new Vector3(0.6f), 0, 0.4f), Frame());
+    }
+
+    [Fact]
+    public void EditingTheWorldsEnvironment_AppliesAtTheNextFrame()
+    {
+        AddQuad(Surface(new Float3(1, 1, 1)));
+        Frame();
+
+        _world.Environment.AmbientColor = new Float4(0.25f, 0.5f, 0.75f, 1);
+        AssertMatches(_ => new Vector3(0.25f, 0.5f, 0.75f), Frame());
+    }
+
+    [Fact]
     public void Ambient_UniformAndHemisphere()
     {
         AddQuad(Surface(new Float3(0.5f, 1, 0.25f)));
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1) };
+        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), Fog = default };
         AssertMatches(_ => new Vector3(0.1f, 0.4f, 0.2f), Frame());
 
-        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1) };
+        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1), Fog = default };
         AssertMatches(_ => new Vector3(0.25f, 0, 0.125f), Frame());
     }
 
@@ -331,14 +391,14 @@ public sealed class LightingTests : IDisposable
 
     private DecalDesc Decal(Double3 center, Double3 size, Float4 color, int priority = 0, bool isStatic = false, uint layer = ~0u) => new()
     {
-        Transform = Double4x4.CreateTranslation(_origin + center) * Double4x4.CreateScale(size),
+        Transform = Double4x4.CreateTranslation(_origin + center) * Double4x4.CreateScale(size.X, size.Y, -size.Z),
         Color = color,
         Priority = priority,
         Static = isStatic,
         LayerMask = layer,
     };
 
-    private void LitByAmbient() => _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(1, 1, 1, 1) };
+    private void LitByAmbient() => _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(1, 1, 1, 1), Fog = default };
 
     [Fact]
     public void Decals_ColourTheSurfaceInsideTheirBox()
@@ -374,6 +434,44 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void Decals_SkipSurfacesFacingAway()
+    {
+        LitByAmbient();
+        AddQuad(Surface(new Float3(1, 1, 1)));
+        DecalDesc decal = Decal(new Double3(0, 0, QuadDepth), new Double3(8, 8, 2), new Float4(1, 0, 0, 1));
+        decal.Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)) * Double4x4.CreateScale(8, 8, 2);
+        _world.AddDecal(decal);
+
+        AssertMatches(_ => Vector3.One, Frame());
+    }
+
+    [Fact]
+    public void DecalsOfEqualPriority_LayInTheOrderTheyWereAdded()
+    {
+        LitByAmbient();
+        AddQuad(Surface(new Float3(1, 1, 1)));
+        DecalHandle under = _world.AddDecal(Decal(new Double3(0, 0, QuadDepth), new Double3(8, 8, 2), new Float4(1, 0, 0, 1)));
+        _world.AddDecal(Decal(new Double3(0, 0, QuadDepth), new Double3(8, 8, 2), new Float4(0, 0, 1, 1)));
+        _world.AddDecal(Decal(new Double3(0, 0, QuadDepth), new Double3(8, 8, 2), new Float4(0, 1, 0, 1), isStatic: true));
+        AssertMatches(_ => new Vector3(0, 1, 0), Frame());
+
+        _world.RemoveDecal(under);
+        _world.AddDecal(Decal(new Double3(0, 0, QuadDepth), new Double3(8, 8, 2), new Float4(1, 1, 0, 1)));
+        AssertMatches(_ => new Vector3(0, 1, 0), Frame());
+    }
+
+    [Fact]
+    public void StaticDecalsFarFromTheirOrigin_StayInPlace()
+    {
+        LitByAmbient();
+        AddQuad(Surface(new Float3(1, 1, 1)));
+        _world.AddDecal(Decal(new Double3(-20_000_000, 0, 0), new Double3(1, 1, 1), new Float4(0, 0, 1, 1), isStatic: true));
+        _world.AddDecal(Decal(new Double3(1, 0, QuadDepth), new Double3(1, 8, 2), new Float4(1, 0, 0, 1), isStatic: true));
+
+        AssertMatches(p => p.X > 0.5f && p.X < 1.5f ? new Vector3(1, 0, 0) : Vector3.One, Frame());
+    }
+
+    [Fact]
     public void OnlyOpaquePassesWritingTheGBuffer_WriteIt()
     {
         ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
@@ -387,6 +485,156 @@ public sealed class LightingTests : IDisposable
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(unlit, opaque, prepass: false)));
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(lit, blended, prepass: false)));
         Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(lit, opaque, prepass: true)));
+    }
+
+    // A quad whose normal leans with position, (0.2x, 0.2y, -1) before normalizing, with UVs running 0 to 1 across it
+    private GpuMesh IndirectQuad(bool secondUVs)
+    {
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        Float3[] normals = [new(-0.8f, -0.8f, -1), new(0.8f, -0.8f, -1), new(0.8f, 0.8f, -1), new(-0.8f, 0.8f, -1)];
+        Float2[] uvs = [new(0, 0), new(1, 0), new(1, 1), new(0, 1)];
+        Float2[] junk = [new(9, 9), new(9, 9), new(9, 9), new(9, 9)];
+        List<VertexStream> streams =
+        [
+            new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
+            new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(normals.AsSpan()).ToArray() },
+            new VertexStream { Semantic = VertexSemantic.UV0, Format = VertexElementFormat.Float2, Data = MemoryMarshal.AsBytes((secondUVs ? junk : uvs).AsSpan()).ToArray() },
+        ];
+        if (secondUVs)
+            streams.Add(new VertexStream { Semantic = VertexSemantic.UV1, Format = VertexElementFormat.Float2, Data = MemoryMarshal.AsBytes(uvs.AsSpan()).ToArray() });
+        return _renderer.CreateMesh(new MeshData { VertexCount = 4, Streams = [.. streams], Indices = new uint[] { 0, 1, 2, 0, 2, 3 } });
+    }
+
+    private static Vector3 IndirectNormal(Vector3 p) => Vector3.Normalize(new Vector3(0.2f * p.X, 0.2f * p.Y, -1));
+
+    private RenderableHandle AddIndirect(GpuMesh mesh, double depth = QuadDepth, LightmapBinding? lightmap = null)
+        => _world.Add(new RenderableDesc
+        {
+            Mesh = mesh,
+            Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, depth)),
+            Lightmap = lightmap ?? LightmapBinding.None,
+        }, [_renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(IndirectSource)))]);
+
+    private readonly List<Texture> _textures = new();
+
+    private Texture Lightmap<T>(uint width, PixelFormat format, T[] texels) where T : unmanaged
+    {
+        Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, 1, 1, 1, format, TextureUsage.Sampled));
+        _device.UpdateTexture<T>(texture, texels, new TextureRegion(0, 0, 0, width, 1, 1, 0, 0));
+        _textures.Add(texture);
+        return texture;
+    }
+
+    [Fact]
+    public void Lightmaps_LightThroughTheSecondUVSet_PlacedOnTheirPage()
+    {
+        Texture other = Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(5, 5, 5, 1)]);
+        Texture gradient = Lightmap<Float4>(2, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0, 0, 0, 1), new Float4(1, 0.5f, 0.25f, 1)]);
+        _world.SetLightmaps([other, gradient], LightmapEncoding.Linear);
+        AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(1, new Float4(0.5f, 1, 0.5f, 0)));
+
+        // Bilinear between the two texel centres, clamped at the edge
+        AssertMatches(p =>
+        {
+            float u = (p.X + 4) / 8 * 0.5f + 0.5f;
+            return new Vector3(1, 0.5f, 0.25f) * Math.Clamp(u * 2 - 0.5f, 0, 1);
+        }, Frame());
+    }
+
+    [Fact]
+    public void Lightmaps_FallBackToTheFirstUVSet_AndDecodeRGBM()
+    {
+        byte[] texel = [128, 64, 255, 128];
+        _world.SetLightmaps([Lightmap<byte>(1, PixelFormat.R8_G8_B8_A8_UNorm, texel)], LightmapEncoding.RGBM);
+        AddIndirect(IndirectQuad(secondUVs: false), lightmap: new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+
+        float scale = texel[3] / 255f * 8;
+        AssertMatches(_ => new Vector3(texel[0], texel[1], texel[2]) / 255f * scale, Frame());
+    }
+
+    [Fact]
+    public void WithoutBakedLight_AmbientLightsTheSurface_AtItsIntensity()
+    {
+        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), AmbientIntensity = 0.5f, Fog = default };
+        AddIndirect(IndirectQuad(secondUVs: false));
+        AssertMatches(_ => new Vector3(0.1f, 0.2f, 0.3f), Frame());
+    }
+
+    // Eight probes on the corners of a box split into six tetrahedra along its diagonal, after a flat one the search must skip
+    private LightProbeData BoxProbes(Double3 min, Double3 max, int seed)
+    {
+        Random random = new(seed);
+        Double3[] positions = new Double3[8];
+        SphericalHarmonicsL2[] coefficients = new SphericalHarmonicsL2[8];
+        Float3 Next(float scale) => new Float3(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f, random.NextSingle() - 0.5f) * scale;
+        for (int i = 0; i < 8; i++)
+        {
+            positions[i] = _origin + new Double3((i & 1) != 0 ? max.X : min.X, (i & 2) != 0 ? max.Y : min.Y, (i & 4) != 0 ? max.Z : min.Z);
+            coefficients[i] = new SphericalHarmonicsL2
+            {
+                C0 = new Float3(1, 1, 1) + Next(0.5f), C1 = Next(0.4f), C2 = Next(0.4f), C3 = Next(0.4f),
+                C4 = Next(0.2f), C5 = Next(0.2f), C6 = Next(0.2f), C7 = Next(0.2f), C8 = Next(0.2f),
+            };
+        }
+
+        int[] tetrahedra = [0, 1, 2, 3, 0, 1, 3, 7, 0, 1, 5, 7, 0, 2, 3, 7, 0, 2, 6, 7, 0, 4, 5, 7, 0, 4, 6, 7];
+        return new LightProbeData { Positions = positions, Coefficients = coefficients, Tetrahedra = tetrahedra, Neighbours = Reference.Neighbours(tetrahedra) };
+    }
+
+    private static readonly Double3 s_boxMin = new(-1.5, -2.5, 7), s_boxMax = new(2.5, 1.5, 13);
+
+    [Fact]
+    public void LightProbes_BlendTheTetrahedronAroundAMovingRenderable()
+    {
+        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 3);
+        _world.SetLightProbes(probes);
+        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: false), depth: 8);
+
+        foreach (double depth in new[] { 8.0, 10.0, 12.0, 15.0, 9.0 })
+        {
+            _world.SetTransform(quad, Double4x4.CreateTranslation(_origin + new Double3(0, 0, depth)));
+            SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, depth));
+            AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
+        }
+    }
+
+    [Fact]
+    public void LightProbes_FarFromTheOrigin_AndReplaced_StillMatch()
+    {
+        _origin = new Double3(-7_000_000.5, 120, 4_000_000.25);
+        AddIndirect(IndirectQuad(secondUVs: false), depth: 10.5);
+        _world.SetLightProbes(BoxProbes(s_boxMin, s_boxMax, 5));
+        Frame();
+
+        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 6);
+        _world.SetLightProbes(probes);
+        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, 10.5));
+        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
+    }
+
+    [Fact]
+    public void LightProbes_WithoutTetrahedra_BlendTheNearestFour()
+    {
+        LightProbeData probes = BoxProbes(new Double3(-3, -1, 6), new Double3(1, 2, 16), 8);
+        probes.Tetrahedra = [];
+        probes.Neighbours = [];
+        _world.SetLightProbes(probes);
+        AddIndirect(IndirectQuad(secondUVs: false));
+
+        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, QuadDepth));
+        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
+    }
+
+    [Fact]
+    public void LightmappedRenderables_IgnoreTheProbes()
+    {
+        _world.SetLightProbes(BoxProbes(s_boxMin, s_boxMax, 9));
+        _world.SetLightmaps([Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.3f, 0.6f, 0.9f, 1)])], LightmapEncoding.Linear);
+        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true));
+        Frame();
+
+        _world.SetLightmap(quad, new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+        AssertMatches(_ => new Vector3(0.3f, 0.6f, 0.9f), Frame());
     }
 
     /// <summary>Prowl's lighting math on the CPU, the same expressions the shaders use.</summary>
@@ -469,6 +717,80 @@ public sealed class LightingTests : IDisposable
 
             Vector3 radiance = new Vector3(light.Color.X, light.Color.Y, light.Color.Z) * (light.Intensity * 8) * attenuation;
             return Brdf(l, Vector3.Normalize(-p), n, albedo, metallic, roughness, nl) * radiance * nl;
+        }
+
+        // Prowl's light probe sampler: the tetrahedron holding the point by barycentrics, else the nearest four by inverse squared distance
+        public static SphericalHarmonicsL2 SampleSH(LightProbeData data, Double3 point)
+        {
+            for (int t = 0; t < data.Tetrahedra.Length / 4; t++)
+            {
+                int[] c = data.Tetrahedra.AsSpan(t * 4, 4).ToArray();
+                Double3 a = data.Positions[c[0]];
+                Double3 v1 = data.Positions[c[1]] - a, v2 = data.Positions[c[2]] - a, v3 = data.Positions[c[3]] - a, vp = point - a;
+                double d = Det(v1, v2, v3);
+                if (Math.Abs(d) < 1e-12)
+                    continue;
+                double b1 = Det(vp, v2, v3) / d, b2 = Det(v1, vp, v3) / d, b3 = Det(v1, v2, vp) / d, b0 = 1 - b1 - b2 - b3;
+                if (b0 >= -1e-4 && b1 >= -1e-4 && b2 >= -1e-4 && b3 >= -1e-4)
+                    return Blend(data, c, [(float)b0, (float)b1, (float)b2, (float)b3]);
+            }
+
+            int[] nearest = Enumerable.Range(0, data.Positions.Length).OrderBy(i => Length2(data.Positions[i] - point)).Take(4).ToArray();
+            float[] weights = nearest.Select(i => 1f / ((float)Length2(data.Positions[i] - point) + 1e-6f)).ToArray();
+            float total = weights.Sum();
+            return Blend(data, nearest, weights.Select(w => w / total).ToArray());
+        }
+
+        private static double Length2(Double3 v) => v.X * v.X + v.Y * v.Y + v.Z * v.Z;
+
+        private static double Det(Double3 a, Double3 b, Double3 c)
+            => a.X * (b.Y * c.Z - b.Z * c.Y) - a.Y * (b.X * c.Z - b.Z * c.X) + a.Z * (b.X * c.Y - b.Y * c.X);
+
+        private static SphericalHarmonicsL2 Blend(LightProbeData data, int[] probes, float[] weights)
+        {
+            SphericalHarmonicsL2 r = default;
+            for (int i = 0; i < probes.Length; i++)
+            {
+                SphericalHarmonicsL2 p = data.Coefficients[probes[i]];
+                float w = weights[i];
+                r.C0 += p.C0 * w; r.C1 += p.C1 * w; r.C2 += p.C2 * w; r.C3 += p.C3 * w; r.C4 += p.C4 * w;
+                r.C5 += p.C5 * w; r.C6 += p.C6 * w; r.C7 += p.C7 * w; r.C8 += p.C8 * w;
+            }
+            return r;
+        }
+
+        // Prowl's irradiance over pi from raw coefficients
+        public static Vector3 EvaluateSH(in SphericalHarmonicsL2 sh, Vector3 n)
+        {
+            const float K0 = 0.2820947918f, K1 = 0.4886025119f, K2a = 1.0925484306f, K2b = 0.3153915652f, K2c = 0.5462742153f;
+            const float A1 = 2f / 3f, A2 = 0.25f;
+            static Vector3 V(Float3 f) => new(f.X, f.Y, f.Z);
+            Vector3 e = V(sh.C0) * K0
+                + V(sh.C1) * (A1 * K1 * n.Y) + V(sh.C2) * (A1 * K1 * n.Z) + V(sh.C3) * (A1 * K1 * n.X)
+                + V(sh.C4) * (A2 * K2a * n.X * n.Y) + V(sh.C5) * (A2 * K2a * n.Y * n.Z)
+                + V(sh.C6) * (A2 * K2b * (3 * n.Z * n.Z - 1))
+                + V(sh.C7) * (A2 * K2a * n.X * n.Z) + V(sh.C8) * (A2 * K2c * (n.X * n.X - n.Y * n.Y));
+            return Vector3.Max(e, Vector3.Zero);
+        }
+
+        // The tetrahedron across the face opposite each corner, -1 on the hull
+        public static int[] Neighbours(int[] tetrahedra)
+        {
+            int count = tetrahedra.Length / 4;
+            int[] neighbours = Enumerable.Repeat(-1, tetrahedra.Length).ToArray();
+            for (int t = 0; t < count; t++)
+            {
+                for (int k = 0; k < 4; k++)
+                {
+                    int[] face = Enumerable.Range(0, 4).Where(i => i != k).Select(i => tetrahedra[t * 4 + i]).ToArray();
+                    for (int o = 0; o < count; o++)
+                    {
+                        if (o != t && face.All(tetrahedra.AsSpan(o * 4, 4).ToArray().Contains))
+                            neighbours[t * 4 + k] = o;
+                    }
+                }
+            }
+            return neighbours;
         }
 
         public static Vector3 Directional(in LightDesc light, Vector3 p, Vector3 n, Vector3 albedo, float metallic, float roughness)

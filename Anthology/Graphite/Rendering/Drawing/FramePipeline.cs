@@ -509,6 +509,8 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         Float4 clear = camera.Desc.ClearColor;
         cmd.SetFramebuffer(context.GetRenderTexture(_target).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f)));
         cmd.SetFullViewport();
+        cmd.ClearColorTarget(1, new Color(0, 0, 0, 0));
+        cmd.ClearColorTarget(2, new Color(0, 0, 0, 0));
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
 
@@ -601,6 +603,7 @@ internal sealed class FramePipeline : IDisposable
     private readonly GraphicsDevice _device;
     private readonly RenderPipeline _frameStart = new();
     private readonly UploadPass _upload;
+    private readonly ProbePass _probes;
     private readonly Dictionary<int, CameraFrame> _cameras = new();
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
     private readonly List<GraphDispatch> _dispatches = new();
@@ -626,8 +629,9 @@ internal sealed class FramePipeline : IDisposable
         Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report);
         programs.Freed += Programs.Drop;
         _upload = new UploadPass(uploader);
+        _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
         _frameStart.Name = "Graphite.FrameStart";
-        _frameStart.SetPasses([_upload]);
+        _frameStart.SetPasses([_upload, _probes]);
 
         ShaderPass present = new() { State = new PassState(), Source = ShaderLibrary.Get(ShaderLibrary.Prefix + "Internal/Present.glsl")!, SourceName = "Graphite/Internal/Present.glsl" };
         ShaderDescription description = compiler.Compile(present, [], device.BackendType);
@@ -775,9 +779,19 @@ internal sealed class FramePipeline : IDisposable
         foreach (MaterialTable table in Materials.Tables.Values)
             _buffers.Add(table.Records.Buffer);
         _buffers.Add(Globals.Buffer);
+        _probes.Worlds.Clear();
         foreach (WorldFrame world in worlds)
         {
             RenderWorld.RenderSide render = world.World.Render;
+            WorldProbes probes = world.World.Probes;
+            _probes.Worlds.Add(probes);
+            _buffers.Add(probes.LightmapPages.Buffer);
+            _buffers.Add(probes.ProbeRecords.Buffer);
+            _buffers.Add(probes.TetRecords.Buffer);
+            _buffers.Add(probes.Requests.Buffer);
+            _buffers.Add(probes.ObjectSh);
+            world.FrameTable.Set("Graphite_LightmapPages", 0, probes.LightmapPages.Buffer);
+            world.FrameTable.Set("Graphite_ObjectProbes", 0, probes.ObjectSh);
             foreach (GpuTable table in render.Tables)
                 _buffers.Add(table.Buffer);
             WorldLighting lighting = world.World.Lighting;
@@ -805,7 +819,8 @@ internal sealed class FramePipeline : IDisposable
 
         Buffers = [.. _buffers];
         _upload.Buffers = Buffers;
-        _frameStart.SetPasses([_upload]);
+        _probes.Buffers = Buffers;
+        _frameStart.SetPasses([_upload, _probes]);
         foreach (CameraFrame camera in _cameras.Values)
             camera.Pipeline.SetPasses([camera.Scene, camera.Present]);
     }
@@ -847,6 +862,7 @@ internal sealed class FramePipeline : IDisposable
             camera.Dispose();
         _cameras.Clear();
         _frameStart.Dispose();
+        _probes.Dispose();
         Programs.Dispose();
         PresentProgram.Dispose();
         LinearSampler.Dispose();

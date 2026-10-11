@@ -177,7 +177,8 @@ public sealed partial class RenderWorld : IDisposable
     {
         _owner = owner;
         Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Report : (_, _) => { });
-        _render = new RenderSide(device);
+        Probes = new WorldProbes(device);
+        _render = new RenderSide(device, Probes);
         Grow(64);
     }
 
@@ -360,6 +361,7 @@ public sealed partial class RenderWorld : IDisposable
     {
         _render.Dispose();
         Lighting.Dispose();
+        Probes.Dispose();
     }
 
     private int Check(RenderableHandle handle)
@@ -437,9 +439,12 @@ public sealed partial class RenderWorld : IDisposable
         private ObjectAttributes[] _attributes = [];
         private readonly RangeAllocator _sliceSpace = new(MaxSliceEntries);
         private RangeAllocation[] _sliceRange = [];
+        private readonly WorldProbes _probes;
+        private uint[] _probeSlot = [];
 
-        public RenderSide(GraphicsDevice device)
+        public RenderSide(GraphicsDevice device, WorldProbes probes)
         {
+            _probes = probes;
             Transforms = GpuTable.Of<ObjectTransform>(device, "Object transforms");
             PreviousTransforms = GpuTable.Of<ObjectTransform>(device, "Object previous transforms", 64);
             Bounds = GpuTable.Of<ObjectBounds>(device, "Object bounds");
@@ -514,6 +519,7 @@ public sealed partial class RenderWorld : IDisposable
             attributes.Custom1 = host._custom1[index];
             attributes.LodFade = 1;
             attributes.LayerMask = host._layerMask[index];
+            attributes.ProbeIndex = UpdateProbeSlot(index, attributes.LightmapPage < 0);
             if (added)
                 attributes.PreviousTransform = ObjectAttributes.NoPrevious;
 
@@ -632,6 +638,24 @@ public sealed partial class RenderWorld : IDisposable
             Attributes.Set((uint)index, attributes);
         }
 
+        // Renderables without a lightmap keep a light probe slot, sampled again whenever their bounds move.
+        private uint UpdateProbeSlot(int index, bool wanted)
+        {
+            if (wanted && _probeSlot[index] == WorldProbes.NoSlot)
+                _probeSlot[index] = _probes.Assign(index);
+            else if (!wanted && _probeSlot[index] != WorldProbes.NoSlot)
+                ReleaseProbeSlot(index);
+            return _probeSlot[index];
+        }
+
+        private void ReleaseProbeSlot(int index)
+        {
+            if (_probeSlot[index] == WorldProbes.NoSlot)
+                return;
+            _probes.Release(_probeSlot[index]);
+            _probeSlot[index] = WorldProbes.NoSlot;
+        }
+
         private void UpdateBounds(int index)
         {
             AABB local = BoundsOverride[index] ?? Mesh[index]?.Placement?.Bounds ?? default;
@@ -639,6 +663,8 @@ public sealed partial class RenderWorld : IDisposable
             WorldCenter[index] = center;
             WorldExtents[index] = extents;
             WorldRadius[index] = MathF.Sqrt(extents.X * extents.X + extents.Y * extents.Y + extents.Z * extents.Z);
+            if (_probeSlot[index] != WorldProbes.NoSlot)
+                _probes.Request(_probeSlot[index]);
             (Float3 high, Float3 low) = Precise.Split(center);
             Bounds.Set((uint)index, new ObjectBounds
             {
@@ -737,9 +763,10 @@ public sealed partial class RenderWorld : IDisposable
             if (Previous[index] != ObjectAttributes.NoPrevious)
                 _freePrevious.Push(Previous[index]);
             Previous[index] = ObjectAttributes.NoPrevious;
+            ReleaseProbeSlot(index);
             Mirrored[index] = false;
             Alive[index] = false;
-            _attributes[index] = new ObjectAttributes { Flags = (uint)RenderableFlags.Hidden, PreviousTransform = ObjectAttributes.NoPrevious, LightmapPage = -1 };
+            _attributes[index] = new ObjectAttributes { Flags = (uint)RenderableFlags.Hidden, PreviousTransform = ObjectAttributes.NoPrevious, LightmapPage = -1, ProbeIndex = WorldProbes.NoSlot };
             Attributes.Set((uint)index, _attributes[index]);
             ChangedDraw(index);
         }
@@ -798,6 +825,8 @@ public sealed partial class RenderWorld : IDisposable
             int old = Previous.Length;
             Array.Resize(ref Previous, capacity);
             Array.Fill(Previous, ObjectAttributes.NoPrevious, old, capacity - old);
+            Array.Resize(ref _probeSlot, capacity);
+            Array.Fill(_probeSlot, WorldProbes.NoSlot, old, capacity - old);
         }
     }
 }

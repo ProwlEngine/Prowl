@@ -33,6 +33,8 @@ internal static class GraphiteBindings
     public const int StaticDecals = 13;
     public const int StaticDecalNodes = 14;
     public const int WorldLighting = 15;
+    public const int LightmapPages = 16;
+    public const int ObjectProbes = 17;
 
     public const int SamplerTable = 0;
     public const int Globals = 1;
@@ -76,7 +78,9 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_StaticLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLightNodes),
         new ResourceLayoutElementDescription("Graphite_StaticDecals", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecals),
         new ResourceLayoutElementDescription("Graphite_StaticDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecalNodes),
-        new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting))
+        new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting),
+        new ResourceLayoutElementDescription("Graphite_LightmapPages", ResourceKind.StructuredBufferReadOnly, Graphics, LightmapPages),
+        new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes))
     {
         Table = true,
     };

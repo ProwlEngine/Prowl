@@ -229,7 +229,10 @@ public sealed class Renderer : IDisposable
                 _materials.MarkAllRecords();
                 _globals.MarkAllDirty();
                 foreach (WorldFrame world in _worlds.Values)
+                {
                     world.World.Lighting.RepackDecals();
+                    world.World.RepackLightmaps();
+                }
             }
 
             _changedMaterials.Clear();
@@ -394,6 +397,8 @@ public sealed class Renderer : IDisposable
             world.World.Render.Flush(_uploader, _replaced);
             world.World.Lighting.Update();
             world.World.Lighting.Flush(_uploader, _replaced);
+            world.World.Probes.Update(world.World.Render, _uploader, _replaced);
+            world.World.Probes.Flush(_uploader, _replaced);
         }
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));
