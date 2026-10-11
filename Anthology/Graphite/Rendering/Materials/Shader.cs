@@ -409,6 +409,22 @@ public sealed class Shader
 
     public int FindProperty(PropertyID name) => Schema.Find(name);
 
+    private readonly Dictionary<string, int> _passIndices = new(StringComparer.Ordinal);
+
+    /// <summary>Index of the definition's pass for a pass type, or -1 when the shader has none.</summary>
+    internal int PassIndex(PassType type)
+    {
+        lock (_passIndices)
+        {
+            if (!_passIndices.TryGetValue(type.Name, out int index))
+            {
+                index = Definition.GetPassWithTag(PassType.Tag, type.Name) ?? -1;
+                _passIndices[type.Name] = index;
+            }
+            return index;
+        }
+    }
+
     internal int FindAxis(string name, out VariantScope scope)
     {
         for (int i = 0; i < MaterialAxes.Count; i++)

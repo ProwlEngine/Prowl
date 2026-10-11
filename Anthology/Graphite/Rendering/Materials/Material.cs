@@ -53,6 +53,32 @@ public sealed class Material : IDisposable
 
     internal uint Slot { get; set; }
 
+    /// <summary>What decides the material's draws, as of the last extraction. The render thread reads only this.</summary>
+    internal MaterialDraw Draw { get; set; } = null!;
+
+    internal MaterialDraw SnapshotDraw()
+    {
+        IReadOnlyList<VariantSpace> axes = _shader.MaterialAxes;
+        Keyword[] keywords = new Keyword[axes.Count];
+        ulong variant = 0;
+        ulong stride = 1;
+        for (int i = 0; i < axes.Count; i++)
+        {
+            string value = GetKeyword(axes[i].Name);
+            int index = 0;
+            for (int v = 0; v < axes[i].Values.Count; v++)
+            {
+                if (axes[i].Values[v] == value)
+                    index = v;
+            }
+            keywords[i] = new Keyword(axes[i].Name, axes[i].Values[index]);
+            variant += (ulong)index * stride;
+            stride *= (ulong)axes[i].Values.Count;
+        }
+
+        return new MaterialDraw(_shader, RenderQueue, StateOverride, CastShadows, variant, keywords);
+    }
+
     /// <summary>Swapping keeps every value whose name the new shader still has, and keeps the others for later.</summary>
     public Shader Shader
     {
@@ -464,7 +490,10 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
                 }
 
                 if ((dirt & Material.Dirt.Draw) != 0)
+                {
+                    material.Draw = material.SnapshotDraw();
                     drawChanged.Add(material);
+                }
             }
             _dirty.Clear();
         }
@@ -545,4 +574,10 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
         }
         return table;
     }
+}
+
+/// <summary>A material's draw deciding state, snapshotted at extraction: shader, queue, state, shadows and its material variant.</summary>
+internal sealed record MaterialDraw(Shader Shader, int RenderQueue, PassState? StateOverride, bool CastShadows, ulong Variant, Keyword[] Keywords)
+{
+    public bool Transparent => RenderQueue >= Shader.TransparentQueue;
 }

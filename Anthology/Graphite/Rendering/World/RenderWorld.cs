@@ -393,6 +393,8 @@ public sealed class RenderWorld : IDisposable
         private List<int> _movedThisFrame = new();
         private bool[] _moved = [];
         private ObjectAttributes[] _attributes = [];
+        private readonly RangeAllocator _sliceSpace = new(MaxSliceEntries);
+        private RangeAllocation[] _sliceRange = [];
 
         public RenderSide(GraphicsDevice device)
         {
@@ -416,6 +418,7 @@ public sealed class RenderWorld : IDisposable
         public Float4[] WorldSphere = [];
         public uint[] SliceBase = [];
         public int[] SliceCount = [];
+        public int[] GivenCount = [];
         public uint[] Previous = [];
         public Material?[] SliceMaterials = new Material?[256];
 
@@ -424,10 +427,7 @@ public sealed class RenderWorld : IDisposable
         public GpuTable Bounds { get; }
         public GpuTable Attributes { get; }
 
-        /// <summary>
-        /// The material's slot in its shader's table for every slice entry. A slice holds the materials as given, so draws
-        /// of submeshes past its end use its last entry.
-        /// </summary>
+        /// <summary>The material's slot in its shader's table for every slice entry, one entry per submesh at least.</summary>
         public GpuTable MaterialSlots { get; }
 
         /// <summary>Renderables whose draws changed this frame: added, removed, new mesh or mesh data, materials, flags or mirroring.</summary>
@@ -481,8 +481,7 @@ public sealed class RenderWorld : IDisposable
 
                 RemoveSliceEntries(index);
                 RangeAllocation slice = host._slice[index];
-                WriteSlice(index, slice.Offset, host._sliceMaterials.AsSpan((int)slice.Offset, (int)slice.Size));
-                attributes.MaterialSliceBase = slice.Offset;
+                WriteSlice(index, host._sliceMaterials.AsSpan((int)slice.Offset, (int)slice.Size));
                 ChangedDraw(index);
             }
 
@@ -530,6 +529,7 @@ public sealed class RenderWorld : IDisposable
                 foreach (int index in users)
                 {
                     UpdateBounds(index);
+                    Repad(index);
                     ChangedDraw(index);
                 }
             }
@@ -606,19 +606,28 @@ public sealed class RenderWorld : IDisposable
             Bounds.Set((uint)index, new ObjectBounds { Sphere = WorldSphere[index], Min = world.Min, Max = world.Max });
         }
 
-        private void WriteSlice(int index, uint sliceBase, ReadOnlySpan<Material?> materials)
+        // A slice covers every submesh of the mesh, the last given material repeating, so any draw's subMesh indexes it.
+        private void WriteSlice(int index, ReadOnlySpan<Material?> given)
         {
-            int end = (int)sliceBase + materials.Length;
+            int count = Math.Max(given.Length, Math.Max(Mesh[index]?.SubMeshCount ?? 1, 1));
+            if (!_sliceSpace.TryAllocate((uint)count, 1, out RangeAllocation range))
+                throw new InvalidOperationException("The world's material slots are full.");
+
+            uint sliceBase = range.Offset;
+            int end = (int)sliceBase + count;
             if (end > SliceMaterials.Length)
                 Array.Resize(ref SliceMaterials, Math.Max(end, SliceMaterials.Length * 2));
-            materials.CopyTo(SliceMaterials.AsSpan((int)sliceBase));
+            _sliceRange[index] = range;
             SliceBase[index] = sliceBase;
-            SliceCount[index] = materials.Length;
+            SliceCount[index] = count;
+            GivenCount[index] = given.Length;
+            _attributes[index].MaterialSliceBase = sliceBase;
 
-            for (int i = 0; i < materials.Length; i++)
+            for (int i = 0; i < count; i++)
             {
                 uint entry = sliceBase + (uint)i;
-                Material material = materials[i]!;
+                Material material = given[Math.Min(i, given.Length - 1)]!;
+                SliceMaterials[entry] = material;
                 if (!_materialEntries.TryGetValue(material, out HashSet<uint>? entries))
                 {
                     entries = new HashSet<uint>();
@@ -643,7 +652,23 @@ public sealed class RenderWorld : IDisposable
                 }
                 SliceMaterials[entry] = null;
             }
+
+            if (SliceCount[index] > 0)
+                _sliceSpace.Free(_sliceRange[index]);
             SliceCount[index] = 0;
+        }
+
+        // Rebuilds a slice whose mesh gained or lost submeshes, from the materials it was given.
+        private void Repad(int index)
+        {
+            int wanted = Math.Max(GivenCount[index], Math.Max(Mesh[index]?.SubMeshCount ?? 1, 1));
+            if (wanted == SliceCount[index])
+                return;
+
+            Material?[] given = SliceMaterials.AsSpan((int)SliceBase[index], GivenCount[index]).ToArray();
+            RemoveSliceEntries(index);
+            WriteSlice(index, given);
+            Attributes.Set((uint)index, _attributes[index]);
         }
 
         private void Retire(int index)
@@ -707,6 +732,8 @@ public sealed class RenderWorld : IDisposable
             Array.Resize(ref WorldSphere, capacity);
             Array.Resize(ref SliceBase, capacity);
             Array.Resize(ref SliceCount, capacity);
+            Array.Resize(ref GivenCount, capacity);
+            Array.Resize(ref _sliceRange, capacity);
             Array.Resize(ref _moved, capacity);
             Array.Resize(ref _attributes, capacity);
             int old = Previous.Length;

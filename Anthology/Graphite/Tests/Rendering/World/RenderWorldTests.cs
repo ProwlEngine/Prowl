@@ -220,6 +220,43 @@ public sealed class RenderWorldTests : IDisposable
         Assert.Equal(b.Slot, render.MaterialSlots.Get<uint>(render.SliceBase[handle.Index]));
     }
 
+    private static MeshData SubMeshes(int count)
+    {
+        Float3[] positions = [new(0, 0, 0), new(1, 0, 0), new(1, 1, 0)];
+        return new MeshData
+        {
+            VertexCount = 3,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
+            Indices = Enumerable.Repeat(new uint[] { 0, 1, 2 }, count).SelectMany(i => i).ToArray(),
+            SubMeshes = Enumerable.Range(0, count).Select(s => new SubMesh { IndexStart = (uint)s * 3, IndexCount = 3, Topology = PrimitiveTopology.TriangleList }).ToArray(),
+        };
+    }
+
+    [Fact]
+    public void Slices_CoverEverySubmesh_RepeatingTheLastMaterial_AndFollowSubmeshCountChanges()
+    {
+        GpuMesh mesh = _geometry.Create(SubMeshes(3));
+        _geometry.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
+        Material a = NewMaterial();
+        Material b = NewMaterial();
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh }, [a, b]);
+        RenderWorld.RenderSide render = Frame();
+
+        uint sliceBase = render.SliceBase[handle.Index];
+        Assert.Equal(3, render.SliceCount[handle.Index]);
+        Assert.Equal([a.Slot, b.Slot, b.Slot], Enumerable.Range(0, 3).Select(i => render.MaterialSlots.Get<uint>(sliceBase + (uint)i)));
+
+        mesh.SetData(SubMeshes(5));
+        List<GpuMesh> changed = new();
+        _geometry.Apply(_uploader, 1, long.MaxValue, changed);
+        render.Update(changed, []);
+
+        sliceBase = render.SliceBase[handle.Index];
+        Assert.Equal(5, render.SliceCount[handle.Index]);
+        Assert.Equal(sliceBase, render.Attributes.Get<ObjectAttributes>((uint)handle.Index).MaterialSliceBase);
+        Assert.Equal([a.Slot, b.Slot, b.Slot, b.Slot, b.Slot], Enumerable.Range(0, 5).Select(i => render.MaterialSlots.Get<uint>(sliceBase + (uint)i)));
+    }
+
     [Fact]
     public void MeshDataChanges_RecomputeBounds_AndChangeDraws()
     {
