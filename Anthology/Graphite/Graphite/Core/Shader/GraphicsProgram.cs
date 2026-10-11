@@ -62,6 +62,16 @@ public abstract class GraphicsProgram : ShaderProgram
     /// </summary>
     public IReadOnlyList<VertexLayoutDescription> VertexLayouts => _vertexLayouts;
 
+    /// <summary>
+    /// Builds the pipeline for drawing into targets of this layout with this topology now, so the first draw that
+    /// needs it does not. Thread safe, and does nothing once built.
+    /// </summary>
+    /// <param name="outputs">Attachment formats and sample count of the targets the program will draw into.</param>
+    /// <param name="topology">Primitive topology of the draws.</param>
+    public void BuildPipeline(in OutputDescription outputs, PrimitiveTopology topology) => BuildPipelineCore(outputs, topology);
+
+    private protected abstract void BuildPipelineCore(in OutputDescription outputs, PrimitiveTopology topology);
+
     internal VertexLayoutDescription[] VertexLayoutsArray => _vertexLayouts;
     internal ref readonly BlendStateDescription BlendStateRef => ref _blendState;
     internal ref readonly DepthStencilStateDescription DepthStencilStateRef => ref _depthStencilState;

@@ -55,6 +55,9 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
         }
     }
 
+    private protected override void BuildPipelineCore(in OutputDescription outputs, PrimitiveTopology topology)
+        => GetOrAddPipeline(new VkPipelineCacheKey(outputs, topology));
+
     internal ShaderModule GetModule(ShaderStages stage) => _shader.GetModule(stage);
 
     internal string GetEntryPoint(ShaderStages stage) => _shader.GetEntryPoint(stage);

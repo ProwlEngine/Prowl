@@ -71,13 +71,16 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             _mainSwapchain = new VkSwapchain(this, ref desc, surface);
         }
 
-        PipelineCacheCreateInfo pcCI = new()
+        fixed (byte* initialData = options.PipelineCacheData)
         {
-            SType = StructureType.PipelineCacheCreateInfo,
-            InitialDataSize = 0,
-            PInitialData = null,
-        };
-        Vk.CreatePipelineCache(Device, in pcCI, null, out DriverPipelineCache).CheckResult();
+            PipelineCacheCreateInfo pcCI = new()
+            {
+                SType = StructureType.PipelineCacheCreateInfo,
+                InitialDataSize = (nuint)(options.PipelineCacheData?.Length ?? 0),
+                PInitialData = initialData,
+            };
+            Vk.CreatePipelineCache(Device, in pcCI, null, out DriverPipelineCache).CheckResult();
+        }
 
         _vulkanInfo = new BackendInfoVulkan(this);
 

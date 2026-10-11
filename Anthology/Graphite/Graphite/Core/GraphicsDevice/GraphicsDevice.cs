@@ -240,6 +240,13 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     /// <param name="info">Vulkan backend info if successful.</param>
     /// <returns>True if this is a Vulkan device and it worked.</returns>
+    /// <summary>
+    /// Contents of the driver pipeline cache, to save and pass back through <see cref="GraphicsDeviceOptions.PipelineCacheData"/>
+    /// on the next run.
+    /// </summary>
+    /// <returns>Opaque cache bytes, empty when the backend keeps none.</returns>
+    public virtual byte[] GetPipelineCacheData() => [];
+
     public virtual bool GetVulkanInfo([NotNullWhen(true)] out BackendInfoVulkan? info)
     {
         info = null;
