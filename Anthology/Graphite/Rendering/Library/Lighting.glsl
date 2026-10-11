@@ -107,7 +107,7 @@ struct Graphite_LightIterator
 Graphite_LightIterator Graphite_BeginLights(vec3 worldPos)
 {
     Graphite_LightIterator it;
-    Graphite_BeginQuery(it.query, worldPos, false);
+    Graphite_BeginQuery(it.query, worldPos, GRAPHITE_QUERY_LIGHTS);
     it.tree = GRAPHITE_STATIC_LIGHTS;
     it.k = 0u;
     it.last = 0u;
@@ -664,7 +664,7 @@ vec3 ShadeSH9(Graphite_ProbeSH sh, vec3 n)
     return max(x + x1 + x2, vec3(0.0));
 }
 
-#ifdef GRAPHITE_FRAGMENT
+#if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
 // The diffuse light that is not realtime: the object's lightmap, ambient while its page loads, else its light probes,
 // else the ambient light.
 // lightmapUV comes from Graphite_LightmapUV in the vertex stage.
@@ -694,13 +694,133 @@ float SpecularOcclusion(float NdotV, float ao, float roughness)
 //  Reflection probes
 // ============================================================
 
-// Every probe is a layer of one cube array prefiltered by roughness across its mips, layer 0 is the sky
+// Every probe is a layer of one cube array prefiltered by roughness across its mips, layer 0 is the sky. Captured probes
+// live in regions like static lights, walked with the same trees.
+struct Graphite_ReflectionProbe
+{
+    vec4 row0;               // the box's axes, its centre in its region's space in w
+    vec4 row1;
+    vec4 row2;
+    vec4 box;                // box half size, blend distance
+    vec4 params;             // intensity, box projection, priority, array layer as uint bits
+};
+
+layout(set = 0, binding = 18, std430) readonly buffer Graphite_ReflectionProbes { Graphite_ReflectionProbe graphite_ReflectionProbes[]; };
+
+#define MAX_BLENDED_PROBES 4
+
 bool ReflectionProbesReady() { return graphite_World.reflections.w != 0u; }
 
 vec3 SampleProbeLayer(float layer, vec3 dir, float roughness)
 {
     uvec4 r = graphite_World.reflections;
     return GRAPHITE_SAMPLE_CUBE_ARRAY_LOD(r.x, r.y, vec4(dir, layer), roughness * (float(r.z) - 1.0)).rgb;
+}
+
+// A camera relative point in the probe's box space. offset and offsetLow move camera relative positions into its region.
+vec3 Graphite_ProbeLocal(Graphite_ReflectionProbe probe, vec3 worldPos, vec3 offset, vec3 offsetLow)
+{
+    precise vec3 center = (vec3(probe.row0.w, probe.row1.w, probe.row2.w) - offset) - offsetLow;
+    precise vec3 q = worldPos - center;
+    return vec3(dot(probe.row0.xyz, q), dot(probe.row1.xyz, q), dot(probe.row2.xyz, q));
+}
+
+// Projects the reflection onto the probe's box, so it lands where the reflected surface really is. p is the point in box space.
+vec3 SampleReflectionProbe(Graphite_ReflectionProbe probe, vec3 p, vec3 dir, float roughness)
+{
+    float layer = float(floatBitsToUint(probe.params.w));
+    if (probe.params.y > 0.5)
+    {
+        vec3 halfSize = probe.box.xyz;
+        vec3 d = vec3(dot(probe.row0.xyz, dir), dot(probe.row1.xyz, dir), dot(probe.row2.xyz, dir));
+        d = mix(vec3(1e-6), d, greaterThanEqual(abs(d), vec3(1e-6)));
+        vec3 far = max((halfSize - p) / d, (-halfSize - p) / d);
+        float t = max(min(min(far.x, far.y), far.z), 0.0);
+        vec3 hit = p + d * t;
+
+        // The lobe's footprint shrinks with the distance to what it reflects, so close surfaces reflect sharper
+        roughness *= sqrt(clamp(t / max(length(hit), 1e-4), 0.0, 1.0));
+        dir = probe.row0.xyz * hit.x + probe.row1.xyz * hit.y + probe.row2.xyz * hit.z;
+    }
+
+    return SampleProbeLayer(layer, dir, roughness) * probe.params.x;
+}
+
+// Blends the most important probes around the point by how far inside their boxes it is, the sky filling the rest
+vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
+{
+    // Rough lobes lean toward the normal
+    float a = roughness * roughness;
+    vec3 R = normalize(mix(N, reflect(-V, N), (1.0 - a) * (sqrt(1.0 - a) + a)));
+
+    uint index[MAX_BLENDED_PROBES];
+    vec3 local[MAX_BLENDED_PROBES];
+    float weight[MAX_BLENDED_PROBES];
+    float priority[MAX_BLENDED_PROBES];
+    int count = 0;
+
+    Graphite_TreeQuery query;
+    Graphite_BeginQuery(query, worldPos, GRAPHITE_QUERY_PROBES);
+    uint tree, first, last;
+    while (Graphite_NextRun(query, tree, first, last))
+    {
+        for (uint k = first; k < last; k++)
+        {
+            Graphite_ReflectionProbe probe = graphite_ReflectionProbes[k];
+            vec3 p = Graphite_ProbeLocal(probe, worldPos, query.offset, query.offsetLow);
+            vec3 inside3 = probe.box.xyz - abs(p);
+            float inside = min(inside3.x, min(inside3.y, inside3.z));
+            if (inside <= 0.0)
+                continue;
+
+            float w = probe.box.w > 0.0 ? clamp(inside / probe.box.w, 0.0, 1.0) : 1.0;
+            float pr = probe.params.z;
+            int at;
+            if (count < MAX_BLENDED_PROBES)
+                at = count++;
+            else if (pr > priority[MAX_BLENDED_PROBES - 1])
+                at = MAX_BLENDED_PROBES - 1;
+            else
+                continue;
+
+            index[at] = k;
+            local[at] = p;
+            weight[at] = w;
+            priority[at] = pr;
+            for (int j = at; j > 0 && priority[j] > priority[j - 1]; j--)
+            {
+                uint ti = index[j]; index[j] = index[j - 1]; index[j - 1] = ti;
+                vec3 tl = local[j]; local[j] = local[j - 1]; local[j - 1] = tl;
+                float tw = weight[j]; weight[j] = weight[j - 1]; weight[j - 1] = tw;
+                float tp = priority[j]; priority[j] = priority[j - 1]; priority[j - 1] = tp;
+            }
+        }
+    }
+
+    vec3 color = vec3(0.0);
+    float total = 0.0;
+    for (int i = 0; i < count && total < 0.999; i++)
+    {
+        float w = weight[i] * (1.0 - total);
+        color += SampleReflectionProbe(graphite_ReflectionProbes[index[i]], local[i], R, roughness) * w;
+        total += w;
+    }
+    if (total < 0.999)
+        color += SampleProbeLayer(0.0, R, roughness) * (1.0 - total);
+    return color;
+}
+
+// Specular light from the environment: the reflection probes once the sky is captured, else an approximation from the
+// ambient light, Fresnel at the view angle and a roughness falloff, as the Standard shader does. ambientLight is the
+// indirect diffuse light times occlusion.
+vec3 Graphite_IndirectSpecular(vec3 worldPos, vec3 N, vec3 V, vec3 F0, float roughness, float ao, vec3 ambientLight)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    vec3 F = EnvBRDF(F0, roughness, NdotV);
+    if (ReflectionProbesReady())
+        return EvaluateReflectionProbes(worldPos, N, V, roughness) * F * SpecularOcclusion(NdotV, ao, roughness);
+    float specOcclusion = 1.0 - roughness * roughness;
+    return ambientLight * F * mix(specOcclusion, 1.0, 0.25);
 }
 
 // ============================================================

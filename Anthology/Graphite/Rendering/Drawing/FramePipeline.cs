@@ -104,6 +104,21 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         return entry.Built ?? (entry.Failed ? null : Nearest(entry));
     }
 
+    /// <summary>Whether the wanted variant itself is built, rather than a nearby one standing in. Render thread.</summary>
+    public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
+    {
+        Get(id, mirrored, keywords);
+        DrawProgram program = programs[id];
+        IReadOnlyList<VariantSpace> axes = program.Shader.GlobalAxes;
+        ulong key = 0, stride = 1;
+        for (int i = 0; i < axes.Count; i++)
+        {
+            key += (ulong)ValueIndex(axes[i], keywords.GetValueOrDefault(axes[i].Name)) * stride;
+            stride *= (ulong)axes[i].Values.Count;
+        }
+        return _entries.TryGetValue((id, mirrored, key), out Entry? entry) && entry.Built != null;
+    }
+
     public void Dispose()
     {
         foreach (Entry entry in _entries.Values)
@@ -364,10 +379,16 @@ internal sealed class CameraFrame : IDisposable
     public readonly GpuArray LightRegionNodes;
     public readonly GpuArray DecalRegions;
     public readonly GpuArray DecalRegionNodes;
+    public readonly GpuArray ProbeRegions;
+    public readonly GpuArray ProbeRegionNodes;
     public readonly LightTreeBuilder LightTree = new();
     public readonly LightTreeBuilder DecalTree = new();
     public readonly LightTreeBuilder LightRegionTree = new();
     public readonly LightTreeBuilder DecalRegionTree = new();
+    public readonly LightTreeBuilder ProbeRegionTree = new();
+
+    /// <summary>Whether the view's basis flips handedness, as cube captures do, so every draw's winding flips too.</summary>
+    public bool Mirrored;
     public ViewDesc Desc;
     public WorldFrame World = null!;
     public int LastFrame;
@@ -406,6 +427,8 @@ internal sealed class CameraFrame : IDisposable
         LightRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Light region nodes {viewId}");
         DecalRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Decal regions {viewId}");
         DecalRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Decal region nodes {viewId}");
+        ProbeRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Probe regions {viewId}");
+        ProbeRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Probe region nodes {viewId}");
     }
 
     public void AddBuffers(List<DeviceBuffer> buffers)
@@ -422,6 +445,8 @@ internal sealed class CameraFrame : IDisposable
         buffers.Add(LightRegionNodes.Buffer);
         buffers.Add(DecalRegions.Buffer);
         buffers.Add(DecalRegionNodes.Buffer);
+        buffers.Add(ProbeRegions.Buffer);
+        buffers.Add(ProbeRegionNodes.Buffer);
     }
 
     /// <summary>The frame's draw lists in drawing order: prepass, opaque, transparent.</summary>
@@ -486,6 +511,8 @@ internal sealed class CameraFrame : IDisposable
         LightRegionNodes.Dispose();
         DecalRegions.Dispose();
         DecalRegionNodes.Dispose();
+        ProbeRegions.Dispose();
+        ProbeRegionNodes.Dispose();
     }
 }
 
@@ -536,6 +563,8 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         camera.ViewTable.Set("Graphite_LightRegionNodes", 0, camera.LightRegionNodes.Buffer);
         camera.ViewTable.Set("Graphite_DecalRegions", 0, camera.DecalRegions.Buffer);
         camera.ViewTable.Set("Graphite_DecalRegionNodes", 0, camera.DecalRegionNodes.Buffer);
+        camera.ViewTable.Set("Graphite_ProbeRegions", 0, camera.ProbeRegions.Buffer);
+        camera.ViewTable.Set("Graphite_ProbeRegionNodes", 0, camera.ProbeRegionNodes.Buffer);
         DescriptorTable viewTable = camera.ViewTable.Get(ring);
         DescriptorTable frameTable = camera.World.FrameTable.Get(ring);
 
@@ -559,7 +588,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
     private void DrawSky(CommandBuffer cmd, DescriptorTable frameTable, DescriptorTable viewTable)
     {
         WorldFrame world = camera.World;
-        if (world.SkyProgram is not ushort id || world.World.Lighting.Environment.Sky is not { IsDisposed: false, Table: { } table } sky)
+        if (!camera.Desc.Sky || world.SkyProgram is not ushort id || world.World.Lighting.Environment.Sky is not { IsDisposed: false, Table: { } table } sky)
             return;
         GraphicsProgram? program = frame.Programs.Get(id, false, world.World.Globals.KeywordSnapshot);
         if (program == null)
@@ -580,7 +609,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
         foreach (DrawCall call in list.Calls)
         {
-            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored, camera.World.World.Globals.KeywordSnapshot);
+            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.World.World.Globals.KeywordSnapshot);
             if (program == null)
                 continue;
 
@@ -642,18 +671,32 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, TableRing
     /// <summary>The draw program of the sky material's Sky pass, held while the world draws it.</summary>
     public ushort? SkyProgram;
 
-    /// <summary>The view capturing the sky into the sky probe, and the pipeline filtering it.</summary>
-    public CameraFrame? SkyCamera;
-    public RenderPipeline? Prefilter;
-    public PrefilterPass? PrefilterPass;
+    /// <summary>The views capturing the sky and the reflection probes, all six faces or one.</summary>
+    public CameraFrame? SkyCamera, ProbeCamera, ProbeFaceCamera;
 
-    /// <summary>The capture view's id, below any a host may use.</summary>
-    public int CaptureViewId { get; } = int.MinValue + Interlocked.Increment(ref s_nextCapture);
+    /// <summary>Filter pipelines, one per filling of a probe layer this frame, reused across frames.</summary>
+    public readonly List<(RenderPipeline Pipeline, PrefilterPass Pass)> Filters = new();
+    public int FiltersUsed;
+
+    /// <summary>The capture views' ids, below any a host may use.</summary>
+    public int CaptureViewId { get; } = int.MinValue + 3 * Interlocked.Increment(ref s_nextCapture);
+
+    public IEnumerable<CameraFrame> Captures()
+    {
+        if (SkyCamera != null)
+            yield return SkyCamera;
+        if (ProbeCamera != null)
+            yield return ProbeCamera;
+        if (ProbeFaceCamera != null)
+            yield return ProbeFaceCamera;
+    }
 
     public void Dispose()
     {
-        SkyCamera?.Dispose();
-        Prefilter?.Dispose();
+        foreach (CameraFrame camera in Captures())
+            camera.Dispose();
+        foreach ((RenderPipeline pipeline, _) in Filters)
+            pipeline.Dispose();
         FrameTable.Dispose();
     }
 }
@@ -684,6 +727,8 @@ internal sealed class FramePipeline : IDisposable
     private readonly List<GraphDispatch> _dispatches = new();
     private readonly List<DeviceBuffer> _buffers = new();
     private readonly List<CameraFrame> _captures = new();
+    private readonly List<Texture> _disposeAfterDispatch = new();
+    private readonly List<WorldFrame> _frameWorlds = new();
     private readonly IRenderView[] _frameStartViews = [new CameraView { ViewId = -1 }];
     private int _frame;
 
@@ -775,11 +820,19 @@ internal sealed class FramePipeline : IDisposable
         _frame++;
         _dispatches.Clear();
         _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
+        _frameWorlds.Clear();
         foreach (WorldFrame world in allWorlds)
         {
+            _frameWorlds.Add(world);
+            world.FiltersUsed = 0;
             UpdateSkyProgram(world);
-            if (world.World.Reflections.CaptureDue)
+            WorldReflections reflections = world.World.Reflections;
+            if (reflections.CaptureDue)
                 CaptureSky(world, time);
+            foreach (int index in reflections.Uploads)
+                Upload(world, index);
+            if (reflections.Capture is { } capture)
+                CaptureProbe(world, capture, time);
         }
 
         foreach (ViewDesc view in views)
@@ -811,6 +864,9 @@ internal sealed class FramePipeline : IDisposable
 
         CollectBuffers(allWorlds);
         ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches));
+        foreach (Texture texture in _disposeAfterDispatch)
+            texture.Dispose();
+        _disposeAfterDispatch.Clear();
         ReleaseStaleCameras();
         return task;
     }
@@ -852,11 +908,9 @@ internal sealed class FramePipeline : IDisposable
     private void CaptureSky(WorldFrame world, in FrameTime time)
     {
         WorldReflections reflections = world.World.Reflections;
-        if (world.SkyCamera == null)
-        {
-            world.SkyCamera = new CameraFrame(_device, this, world.CaptureViewId);
-            _textures.TrackView(world.SkyCamera.ViewTable);
-        }
+        world.SkyCamera ??= Capturing(world.CaptureViewId);
+        if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot))
+            reflections.SkyIncomplete();
 
         ViewDesc capture = new()
         {
@@ -866,19 +920,104 @@ internal sealed class FramePipeline : IDisposable
             Target = reflections.CaptureTarget!,
             CullingMask = 0,
             ClearColor = world.World.Lighting.Environment.SkyColor,
+            Near = 0.05f,
         };
         for (int face = 0; face < 6; face++)
             capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = WorldReflections.FaceProjection };
         Draw(world.SkyCamera, capture, world, time);
+        Fill(world, WorldReflections.SkyLayer, reflections.SkyCube!, 0, null);
+    }
 
-        if (world.Prefilter == null)
+    // Fills every mip of a probe layer from a cube: filtered from a capture, or copied from a baked one
+    private void Fill(WorldFrame world, int layer, Texture source, int copyMips, Action<BakedReflectionProbe>? bake)
+    {
+        if (world.FiltersUsed == world.Filters.Count)
         {
-            world.PrefilterPass = new PrefilterPass(PrefilterProgram, TrilinearClamp);
-            world.Prefilter = new RenderPipeline { Name = "Graphite.Prefilter" };
-            world.Prefilter.SetPasses([world.PrefilterPass]);
+            PrefilterPass created = new(PrefilterProgram, TrilinearClamp);
+            RenderPipeline pipeline = new() { Name = "Graphite.Prefilter" };
+            pipeline.SetPasses([created]);
+            world.Filters.Add((pipeline, created));
         }
-        world.PrefilterPass!.Source = reflections.SkyCube!;
-        _dispatches.Add(new GraphDispatch(world.Prefilter, reflections.PrefilterViews));
+        (RenderPipeline filter, PrefilterPass pass) = world.Filters[world.FiltersUsed++];
+        WorldReflections reflections = world.World.Reflections;
+        pass.Source = source;
+        pass.CopyMips = copyMips;
+        pass.Destination = reflections.Probes;
+        pass.Layer = layer;
+        pass.Readback = bake != null ? reflections.BakeBuffer(bake) : null;
+        _dispatches.Add(new GraphDispatch(filter, reflections.LayerViews(layer)));
+    }
+
+    // Copies a baked capture into its probe's layer, through a cube made from its faces
+    private void Upload(WorldFrame world, int index)
+    {
+        WorldReflections reflections = world.World.Reflections;
+        BakedReflectionProbe baked = reflections.Probe(index).Baked!;
+        Texture source = _device.ResourceFactory.CreateTexture(TextureDescription.CreateCube((uint)baked.Size, (uint)baked.Mips, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        source.Name = "Baked reflection probe";
+        for (int face = 0; face < 6; face++)
+        {
+            for (int mip = 0; mip < baked.Mips; mip++)
+            {
+                uint size = (uint)Math.Max(baked.Size >> mip, 1);
+                _device.UpdateTexture<byte>(source, baked.Faces[face * baked.Mips + mip], new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
+            }
+        }
+        Fill(world, reflections.Layer(index), source, baked.Mips, null);
+        _disposeAfterDispatch.Add(source);
+    }
+
+    // Draws the world around a probe into its capture cube, all faces or the next one, then fills its layer
+    private void CaptureProbe(WorldFrame world, ProbeCapture work, in FrameTime time)
+    {
+        WorldReflections reflections = world.World.Reflections;
+        ReflectionProbeDesc probe = reflections.Probe(work.Index);
+        Float4x4 projection = WorldReflections.FaceProjectionBetween(probe.NearClip, probe.FarClip);
+        int faces = work.EndFace - work.FirstFace;
+        if (faces == 6)
+        {
+            world.ProbeCamera ??= Capturing(world.CaptureViewId + 1);
+            ViewDesc capture = new()
+            {
+                World = world.World,
+                ViewId = world.CaptureViewId + 1,
+                LayerCount = 6,
+                Target = reflections.ProbeTarget!,
+                CullingMask = probe.CullingMask,
+                ClearColor = world.World.Lighting.Environment.SkyColor,
+                Near = probe.NearClip,
+                FarDistance = probe.FarClip,
+            };
+            for (int face = 0; face < 6; face++)
+                capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = projection, Position = probe.Position };
+            Draw(world.ProbeCamera, capture, world, time);
+        }
+        else if (faces == 1)
+        {
+            world.ProbeFaceCamera ??= Capturing(world.CaptureViewId + 2);
+            ViewDesc capture = new()
+            {
+                World = world.World,
+                ViewId = world.CaptureViewId + 2,
+                Target = reflections.ProbeFaceTargets[work.FirstFace],
+                CullingMask = probe.CullingMask,
+                ClearColor = world.World.Lighting.Environment.SkyColor,
+                Near = probe.NearClip,
+                FarDistance = probe.FarClip,
+            };
+            capture.Layers[0] = new ViewLayer { View = WorldReflections.FaceView(work.FirstFace), Projection = projection, Position = probe.Position };
+            Draw(world.ProbeFaceCamera, capture, world, time);
+        }
+
+        if (work.Prefilter)
+            Fill(world, reflections.Layer(work.Index), reflections.ProbeCube!, 0, work.Bake);
+    }
+
+    private CameraFrame Capturing(int viewId)
+    {
+        CameraFrame camera = new(_device, this, viewId);
+        _textures.TrackView(camera.ViewTable);
+        return camera;
     }
 
     /// <summary>Releases what the frame pipeline keeps for a removed world. Render thread idle.</summary>
@@ -887,17 +1026,17 @@ internal sealed class FramePipeline : IDisposable
         if (world.SkyProgram is ushort program)
             DrawPrograms.Release(program);
         world.SkyProgram = null;
-        if (world.SkyCamera != null)
-            _textures.Untrack(world.SkyCamera.ViewTable);
+        foreach (CameraFrame camera in world.Captures())
+            _textures.Untrack(camera.ViewTable);
     }
 
     // Asks for every call's program before recording, so compiles start early and deterministic ones finish here.
     private void ResolvePrograms()
     {
-        foreach (CameraFrame camera in Active())
+        foreach (WorldFrame world in _frameWorlds)
         {
-            if (camera.World.SkyProgram is ushort sky)
-                Programs.Get(sky, false, camera.World.World.Globals.KeywordSnapshot);
+            if (world.SkyProgram is ushort sky)
+                Programs.Get(sky, false, world.World.Globals.KeywordSnapshot);
         }
         foreach (CameraFrame camera in _cameras.Values)
         {
@@ -906,7 +1045,7 @@ internal sealed class FramePipeline : IDisposable
             foreach (DrawList list in camera.Lists)
             {
                 foreach (DrawCall call in list.Calls)
-                    Programs.Get(call.Program, call.Mirrored, camera.World.World.Globals.KeywordSnapshot);
+                    Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.World.World.Globals.KeywordSnapshot);
             }
         }
     }
@@ -915,16 +1054,31 @@ internal sealed class FramePipeline : IDisposable
     {
         int layers = view.LayerCount;
         CullFrustum frustum = new(view.Layers, layers);
-        world.Buckets.Cull(frustum, view.CullingMask);
-        world.Buckets.Build(0, frustum, camera.Prepass);
-        world.Buckets.Build(1, frustum, camera.Forward);
-        world.Buckets.BuildTransparent(frustum, camera.Transparent);
+        uint lightRegions = LightTreeBuilder.Invalid, decalRegions = LightTreeBuilder.Invalid, viewLights = LightTreeBuilder.Invalid;
+        uint viewDecals = LightTreeBuilder.Invalid, probeRegions = LightTreeBuilder.Invalid;
+        if (view.CullingMask == 0)
+        {
+            camera.Prepass.Clear();
+            camera.Forward.Clear();
+            camera.Transparent.Clear();
+        }
+        else
+        {
+            world.Buckets.Cull(frustum, view.CullingMask);
+            world.Buckets.Build(0, frustum, camera.Prepass);
+            world.Buckets.Build(1, frustum, camera.Forward);
+            world.Buckets.BuildTransparent(frustum, camera.Transparent);
 
-        WorldLighting lighting = world.World.Lighting;
-        uint lightRegions = lighting.BuildViewLightRegions(frustum, camera.LightRegionTree, _uploader, camera.LightRegions, camera.LightRegionNodes);
-        uint decalRegions = lighting.BuildViewDecalRegions(frustum, camera.DecalRegionTree, _uploader, camera.DecalRegions, camera.DecalRegionNodes);
-        uint viewLights = lighting.BuildViewLights(frustum, camera.LightTree, _uploader, camera.ViewLights, camera.ViewLightNodes);
-        uint viewDecals = lighting.BuildViewDecals(frustum, camera.DecalTree, _uploader, camera.ViewDecals, camera.ViewDecalNodes);
+            WorldLighting lighting = world.World.Lighting;
+            lightRegions = lighting.BuildViewLightRegions(frustum, camera.LightRegionTree, _uploader, camera.LightRegions, camera.LightRegionNodes);
+            decalRegions = lighting.BuildViewDecalRegions(frustum, camera.DecalRegionTree, _uploader, camera.DecalRegions, camera.DecalRegionNodes);
+            viewLights = lighting.BuildViewLights(frustum, camera.LightTree, _uploader, camera.ViewLights, camera.ViewLightNodes);
+            viewDecals = lighting.BuildViewDecals(frustum, camera.DecalTree, _uploader, camera.ViewDecals, camera.ViewDecalNodes);
+            probeRegions = world.World.Reflections.Regions.BuildView(frustum, camera.ProbeRegionTree, _uploader, camera.ProbeRegions, camera.ProbeRegionNodes);
+        }
+        ViewLayer first = view.Layers[0];
+        float handedness = Determinant3(first.View) * first.Projection.c0.X * first.Projection.c1.Y;
+        camera.Mirrored = handedness < 0;
 
         for (int l = 0; l < layers; l++)
         {
@@ -938,6 +1092,7 @@ internal sealed class FramePipeline : IDisposable
             block.DecalRegionRoot = decalRegions;
             block.ViewLightRoot = viewLights;
             block.ViewDecalRoot = viewDecals;
+            block.ProbeRegionRoot = probeRegions;
             if (camera.HasPrevious)
             {
                 block.PreviousViewProjection = camera.Previous[l].ViewProjection;
@@ -951,6 +1106,7 @@ internal sealed class FramePipeline : IDisposable
         camera.Upload(_uploader, camera.Blocks.AsSpan(0, layers));
     }
 
+    // The hosts' views drawn this frame and every capture view, drawn this frame or not
     private IEnumerable<CameraFrame> Active()
     {
         foreach (CameraFrame camera in _cameras.Values)
@@ -959,20 +1115,19 @@ internal sealed class FramePipeline : IDisposable
                 yield return camera;
         }
         foreach (CameraFrame camera in _captures)
-        {
-            if (camera.LastFrame == _frame)
-                yield return camera;
-        }
+            yield return camera;
     }
+
+    private static float Determinant3(in Float4x4 m)
+        => m.c0.X * (m.c1.Y * m.c2.Z - m.c2.Y * m.c1.Z)
+         - m.c1.X * (m.c0.Y * m.c2.Z - m.c2.Y * m.c0.Z)
+         + m.c2.X * (m.c0.Y * m.c1.Z - m.c1.Y * m.c0.Z);
 
     private void CollectBuffers(IEnumerable<WorldFrame> worlds)
     {
         _captures.Clear();
         foreach (WorldFrame world in worlds)
-        {
-            if (world.SkyCamera != null)
-                _captures.Add(world.SkyCamera);
-        }
+            _captures.AddRange(world.Captures());
         _buffers.Clear();
         _buffers.Add(Geometry.Chunks.Buffer);
         _buffers.Add(Geometry.Meshes.Buffer);
@@ -996,6 +1151,11 @@ internal sealed class FramePipeline : IDisposable
             _buffers.Add(probes.Requests.Buffer);
             _buffers.Add(probes.ObjectSh);
             world.FrameTable.Set("Graphite_LightmapPages", 0, probes.LightmapPages.Buffer);
+            StaticRegions<ReflectionProbeRecord> reflections = world.World.Reflections.Regions;
+            _buffers.Add(reflections.Records.Buffer);
+            _buffers.Add(reflections.Nodes.Buffer);
+            world.FrameTable.Set("Graphite_ReflectionProbes", 0, reflections.Records.Buffer);
+            world.FrameTable.Set("Graphite_ReflectionProbeNodes", 0, reflections.Nodes.Buffer);
             world.FrameTable.Set("Graphite_ObjectProbes", 0, probes.ObjectSh);
             foreach (GpuTable table in render.Tables)
                 _buffers.Add(table.Buffer);

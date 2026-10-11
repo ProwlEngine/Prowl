@@ -184,7 +184,7 @@ public sealed class EnvironmentDesc
     public Material? Sky;
 
     /// <summary>What the sky probe sees where no sky material draws.</summary>
-    public Float4 SkyColor = new(0, 0, 0, 1);
+    public Float4 SkyColor = new(0.2f, 0.3f, 0.5f, 1);
     public SkyCaptureMode SkyCapture;
 
     internal EnvironmentDesc Copy() => (EnvironmentDesc)MemberwiseClone();
@@ -306,6 +306,7 @@ public sealed partial class RenderWorld
         _lights.Extract(Lighting.ReceiveLight);
         _decals.Extract(Lighting.ReceiveDecal);
         ExtractBakedLighting();
+        ExtractReflections();
         if (_extractedEnvironment == null || !_environment.Same(_extractedEnvironment))
         {
             _extractedEnvironment = _environment.Copy();
@@ -496,11 +497,8 @@ internal sealed class WorldLighting : IDisposable
             _staticLights.Set(index, desc.Position, Math.Max(desc.Range, 1e-4f));
         else
             _staticLights.Remove(index);
-        if (old.Type == LightType.Directional || desc.Type == LightType.Directional)
-        {
+        if ((wasAlive && old.Type == LightType.Directional) || (alive && desc.Type == LightType.Directional))
             _worldRecordDirty = true;
-            SkyInputs++;
-        }
     }
 
     internal void ReceiveDecal(int index, int generation, uint sequence, bool alive, in DecalDesc desc)
@@ -534,7 +532,6 @@ internal sealed class WorldLighting : IDisposable
     {
         _environment = environment;
         _worldRecordDirty = true;
-        SkyInputs++;
     }
 
     internal void ReceiveSkyVersion(uint version) => SkyVersion = version;
@@ -542,7 +539,7 @@ internal sealed class WorldLighting : IDisposable
     /// <summary>The environment as of the last extraction.</summary>
     public EnvironmentDesc Environment => _environment;
 
-    /// <summary>Counts changes the sky may be drawn from: the environment and the directional lights.</summary>
+    /// <summary>A hash of what the sky may be drawn from besides its material: the sun's direction and the sky colour.</summary>
     public int SkyInputs { get; private set; }
 
     /// <summary>The sky material's version as of the last extraction.</summary>
@@ -826,6 +823,8 @@ internal sealed class WorldLighting : IDisposable
         if (env.Sun.IsValid && (uint)env.Sun.Index < (uint)_lights.Length && _lightAlive[env.Sun.Index]
             && _lightGeneration[env.Sun.Index] == env.Sun.Generation && _lights[env.Sun.Index].Type == LightType.Directional)
             sun = env.Sun.Index;
+
+        SkyInputs = HashCode.Combine(sun >= 0 ? _lights[sun].Direction : default, env.SkyColor);
 
         int count = 0;
         if (sun >= 0)

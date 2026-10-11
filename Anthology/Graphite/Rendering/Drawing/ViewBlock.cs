@@ -4,7 +4,7 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>One layer of a view as shaders read it through Graphite_View(), 480 bytes, matching Graphite_ViewData in Core.glsl.</summary>
+/// <summary>One layer of a view as shaders read it through Graphite_View(), 496 bytes, matching Graphite_ViewData in Core.glsl.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ViewBlock
 {
@@ -27,6 +27,10 @@ internal struct ViewBlock
 
     /// <summary>Roots of the static light regions, view light, static decal regions and view decal trees, all ones for an empty tree.</summary>
     public uint LightRegionRoot, ViewLightRoot, DecalRegionRoot, ViewDecalRoot;
+
+    /// <summary>Root of the reflection probe regions tree, all ones for an empty tree.</summary>
+    public uint ProbeRegionRoot;
+    private uint _pad0, _pad1, _pad2;
 
     /// <summary>
     /// A view block from a camera relative view matrix (rotation only) and a projection, with the camera's world position.
@@ -52,6 +56,7 @@ internal struct ViewBlock
             LightRegionRoot = uint.MaxValue,
             ViewLightRoot = uint.MaxValue,
             DecalRegionRoot = uint.MaxValue,
+            ProbeRegionRoot = uint.MaxValue,
             ViewDecalRoot = uint.MaxValue,
         };
     }

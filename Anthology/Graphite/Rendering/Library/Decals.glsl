@@ -103,7 +103,7 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
     int hits = 0;
 
     Graphite_TreeQuery query;
-    Graphite_BeginQuery(query, worldPos, true);
+    Graphite_BeginQuery(query, worldPos, GRAPHITE_QUERY_DECALS);
     uint tree, first, last;
     while (Graphite_NextRun(query, tree, first, last))
     {

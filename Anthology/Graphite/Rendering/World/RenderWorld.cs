@@ -178,7 +178,7 @@ public sealed partial class RenderWorld : IDisposable
         _owner = owner;
         Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Report : (_, _) => { });
         Probes = new WorldProbes(device);
-        Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance);
+        Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Report : (_, _) => { });
         _render = new RenderSide(device, Probes);
         Grow(64);
     }

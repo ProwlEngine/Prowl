@@ -17,7 +17,6 @@ Compute
     layout(push_constant) uniform Push { uint probeCount; uint tetCount; uint requestCount; uint pad; } push;
 
     #define INSIDE -1e-4
-    #define CLEARLY_OUTSIDE -1e-2
     #define MAX_WALK 64
     #define NO_TET 0xFFFFFFFFu
     #define DEGENERATE 0xFFFFFFFFu
@@ -81,8 +80,8 @@ Compute
             int next = tets[t].neighbours[k];
             if (next < 0)
             {
-                // Past a hull face of a sound tetrahedron the point is outside the hull, else the scan decides
-                if (b[k] < CLEARLY_OUTSIDE && tets[t].row1.w < 0.5)
+                // Past a hull face of a sound tetrahedron the point is outside the hull, past a sliver's the scan decides
+                if (tets[t].row1.w < 0.5)
                     return NO_TET;
                 break;
             }

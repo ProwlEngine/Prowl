@@ -35,6 +35,8 @@ internal static class GraphiteBindings
     public const int WorldLighting = 15;
     public const int LightmapPages = 16;
     public const int ObjectProbes = 17;
+    public const int StaticReflectionProbes = 18;
+    public const int StaticReflectionProbeNodes = 19;
 
     public const int SamplerTable = 0;
     public const int Globals = 1;
@@ -47,6 +49,8 @@ internal static class GraphiteBindings
     public const int LightRegionNodes = 8;
     public const int DecalRegions = 9;
     public const int DecalRegionNodes = 10;
+    public const int ProbeRegions = 11;
+    public const int ProbeRegionNodes = 12;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -84,7 +88,9 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_StaticDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecalNodes),
         new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting),
         new ResourceLayoutElementDescription("Graphite_LightmapPages", ResourceKind.StructuredBufferReadOnly, Graphics, LightmapPages),
-        new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes))
+        new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes),
+        new ResourceLayoutElementDescription("Graphite_ReflectionProbes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbes),
+        new ResourceLayoutElementDescription("Graphite_ReflectionProbeNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbeNodes))
     {
         Table = true,
     };
@@ -101,7 +107,9 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_LightRegions", ResourceKind.StructuredBufferReadOnly, Graphics, LightRegions),
         new ResourceLayoutElementDescription("Graphite_LightRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, LightRegionNodes),
         new ResourceLayoutElementDescription("Graphite_DecalRegions", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegions),
-        new ResourceLayoutElementDescription("Graphite_DecalRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegionNodes))
+        new ResourceLayoutElementDescription("Graphite_DecalRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegionNodes),
+        new ResourceLayoutElementDescription("Graphite_ProbeRegions", ResourceKind.StructuredBufferReadOnly, Graphics, ProbeRegions),
+        new ResourceLayoutElementDescription("Graphite_ProbeRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ProbeRegionNodes))
     {
         Table = true,
     };

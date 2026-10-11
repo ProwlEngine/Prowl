@@ -71,6 +71,9 @@ public struct ViewDesc
     public uint CullingMask;
     public Float4 ClearColor;
 
+    /// <summary>Whether the world's sky draws behind what the view sees.</summary>
+    public bool Sky;
+
     /// <summary>The projection's near plane, for linear depth.</summary>
     public float Near;
 
@@ -83,6 +86,7 @@ public struct ViewDesc
         Target = null!;
         LayerCount = 1;
         CullingMask = ~0u;
+        Sky = true;
         Near = 0.1f;
         FarDistance = 1000;
     }
@@ -224,6 +228,7 @@ public sealed class Renderer : IDisposable
         bool queued = false;
         try
         {
+            RaiseBakes();
             RemoveWorlds();
 
             if (Textures.Sweep(_lastDispatched, Device.LastCompletedExecutionId))
@@ -268,6 +273,18 @@ public sealed class Renderer : IDisposable
     }
 
     private int _frameCount;
+    private readonly List<(Action<BakedReflectionProbe> Done, BakedReflectionProbe Baked)> _bakes = new();
+
+    // Hands finished reflection probe bakes to the host, before this frame's changes are extracted
+    private void RaiseBakes()
+    {
+        _bakes.Clear();
+        ulong completed = Device.LastCompletedExecutionId;
+        foreach (WorldFrame world in _worlds.Values)
+            world.World.Reflections.CollectBakes(completed, _bakes);
+        foreach ((Action<BakedReflectionProbe> done, BakedReflectionProbe baked) in _bakes)
+            done(baked);
+    }
 
     private void RemoveWorlds()
     {
@@ -367,6 +384,8 @@ public sealed class Renderer : IDisposable
         catch (Exception e)
         {
             _uploader.Clear();
+            foreach (WorldFrame world in _worlds.Values)
+                world.World.Reflections.FrameFailed();
             Report($"frame.{e.GetType().Name}.{e.Message}", $"The frame failed: {e}");
         }
     }
@@ -402,6 +421,7 @@ public sealed class Renderer : IDisposable
         {
             world.World.Render.Flush(_uploader, _replaced);
             world.World.Reflections.Plan(_frameCount, world.World.Lighting);
+            world.World.Reflections.Flush(_uploader, _replaced);
             world.World.Lighting.Update();
             world.World.Lighting.Flush(_uploader, _replaced);
             world.World.Probes.Update(world.World.Render, _uploader, _replaced);
@@ -412,5 +432,7 @@ public sealed class Renderer : IDisposable
 
         ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _worlds, _worlds.Values, _lastDispatched, _time);
         _lastDispatched = task.Id;
+        foreach (WorldFrame world in _worlds.Values)
+            world.World.Reflections.Dispatched(task.Id);
     }
 }

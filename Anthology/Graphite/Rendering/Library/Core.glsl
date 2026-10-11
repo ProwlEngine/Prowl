@@ -22,6 +22,7 @@ struct Graphite_ViewData
     vec4 depth;                     // near plane, logical far distance
     vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
     uvec4 treeRoots;                // static light regions, view lights, static decal regions, view decals, all ones when empty
+    uvec4 probeRoots;               // reflection probe regions
 };
 
 struct Graphite_DrawRecord { uint chunk; uint view; uint flags; uint subMesh; };
@@ -127,7 +128,7 @@ vec3 Graphite_RelativeFromDepth(vec2 uv, float deviceDepth)
     return relative.xyz / relative.w;
 }
 
-#ifdef GRAPHITE_FRAGMENT
+#if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
 layout(location = 30) flat in uint graphite_ObjectIndex;
 
 uint Graphite_ObjectIndex() { return graphite_ObjectIndex; }

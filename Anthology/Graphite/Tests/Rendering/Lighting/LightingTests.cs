@@ -176,6 +176,78 @@ public sealed class LightingTests : IDisposable
         }
         """;
 
+    private const string UnlitSource = """
+        Shader "Test/Unlit"
+        {
+            Properties
+            {
+                _Color("Color", Color) = (1, 1, 1, 1)
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    uniform vec4 _Color;
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = vec4(_Color.rgb, 1.0); }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    // Shows only what the reflection probes reflect toward the camera
+    private const string ReflectSource = """
+        Shader "Test/Reflect"
+        {
+            Properties
+            {
+                _Roughness("Roughness", Float) = 0
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    layout(location = 0) out vec3 vWorld;
+                    layout(location = 1) out vec3 vNormal;
+                    void main()
+                    {
+                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
+                        gl_Position = Graphite_RelativeToClip(vWorld);
+                    }
+                }
+                Fragment
+                {
+                    #include "Graphite/Lighting.glsl"
+                    uniform float _Roughness;
+                    layout(location = 0) in vec3 vWorld;
+                    layout(location = 1) in vec3 vNormal;
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        outColor = vec4(EvaluateReflectionProbes(vWorld, normalize(vNormal), GetWorldViewDir(vWorld), _Roughness), 1.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
     private const int Size = 16;
     private const float QuadDepth = 10;
 
@@ -752,6 +824,18 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void ViewsLeavingTheSkyOut_ShowTheirClearColour()
+    {
+        _world.Environment = new EnvironmentDesc { Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 0) };
+        ViewDesc view = new() { World = _world, ViewId = 12, Target = _framebuffer, Sky = false, ClearColor = new Float4(0.25f, 0.5f, 0.75f, 1) };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+        _device.WaitForIdle();
+        Assert.Empty(_errors);
+        Assert.All(ReadLayer(_target, 0), p => Assert.True(Vector3.Distance(new Vector3(p.X, p.Y, p.Z), new Vector3(0.25f, 0.5f, 0.75f)) < 1e-3f));
+    }
+
+    [Fact]
     public void SkyProbe_HoldsTheSkyInEveryDirection()
     {
         _world.Environment = new EnvironmentDesc { Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
@@ -815,6 +899,185 @@ public sealed class LightingTests : IDisposable
         Frame();
         Frame();
         AssertMatches(p => Fogged(p, new Vector3(0.2f, 0.3f, 1)), Frame());
+    }
+
+    private static readonly Vector3 s_skyColor = new(0.1f, 0.2f, 0.4f);
+
+    // A room of single sided unlit walls, one colour per side, facing in on a centre; the camera's reflector sits on layer 2
+    private void Room(Double3 center, double half, Func<int, Float3> color)
+    {
+        Shader unlit = _renderer.LoadShader(ShaderParser.Parse(UnlitSource));
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        GpuMesh facing = _renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 4,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
+            Indices = new uint[] { 0, 2, 1, 0, 3, 2 },
+        });
+        for (int f = 0; f < 6; f++)
+        {
+            (Float3 right, Float3 up, Float3 forward) = s_faces[f];
+            Double4x4 basis = new(new Double4(right.X, right.Y, right.Z, 0), new Double4(up.X, up.Y, up.Z, 0), new Double4(forward.X, forward.Y, forward.Z, 0), new Double4(0, 0, 0, 1));
+            Material wall = _renderer.CreateMaterial(unlit);
+            Float3 c = color(f);
+            wall.SetColor("_Color", new Float4(c.X, c.Y, c.Z, 1));
+            Double3 at = _origin + center + new Double3(forward.X, forward.Y, forward.Z) * half;
+            _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(at) * basis * Double4x4.CreateScale(half / 4), LayerMask = 1 }, [wall]);
+        }
+        _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(s_skyColor.X, s_skyColor.Y, s_skyColor.Z), 0) };
+    }
+
+    private Material Reflector(float roughness = 0)
+    {
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ReflectSource)));
+        material.SetFloat("_Roughness", roughness);
+        return material;
+    }
+
+    private ReflectionProbeDesc RoomProbe(Double3 center, Float3 size, int importance = 1, float intensity = 1, float blend = 0) => new()
+    {
+        Position = _origin + center,
+        BoxSize = size,
+        BlendDistance = blend,
+        Importance = importance,
+        Intensity = intensity,
+        Mode = ReflectionProbeMode.Realtime,
+        CullingMask = 1,
+    };
+
+    [Fact]
+    public void RealtimeProbes_ReflectTheirRoom_AndTheSkyOutsideTheirBox()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
+
+        Frame();
+        AssertMatches(p => p.X < 0 ? new Vector3(0.8f, 0.5f, 0.2f) : s_skyColor, Frame());
+    }
+
+    [Fact]
+    public void BoxProjection_ReflectsTheWallEachRayReallyHits()
+    {
+        Float3[] colors = [new(1, 0, 0), new(0, 1, 0), new(0, 0, 1), new(1, 1, 0), new(0, 1, 1), new(1, 0, 1)];
+        Room(new Double3(0, 0, 10), 20, f => colors[f]);
+        _world.Add(new RenderableDesc { Mesh = IndirectQuad(secondUVs: false), Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        _world.AddReflectionProbe(RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40)));
+        Frame();
+        Float4[] pixels = Frame();
+
+        int checkedPixels = 0;
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                Vector3 p = PixelPosition(x, y);
+                Vector3 n = IndirectNormal(p);
+                Vector3 v = Vector3.Normalize(-p);
+                float a = 0;
+                Vector3 r = Vector3.Normalize(Vector3.Lerp(n, Vector3.Reflect(-v, n), (1 - a) * (MathF.Sqrt(1 - a) + a)));
+
+                // The ray from the point to the room's walls, at x, y in -20..20 and z in -10..30
+                Vector3 local = p - new Vector3(0, 0, 10);
+                Vector3 far = Vector3.Max((new Vector3(20) - local) / r, (new Vector3(-20) - local) / r);
+                float t = MathF.Min(far.X, MathF.Min(far.Y, far.Z));
+                Vector3 hit = local + r * t;
+                Vector3 edge = new Vector3(20) - Vector3.Abs(hit);
+                int axis = far.X <= far.Y && far.X <= far.Z ? 0 : far.Y <= far.Z ? 1 : 2;
+                float[] margins = [edge.X, edge.Y, edge.Z];
+                if (margins.Where((m, i) => i != axis).Min() < 1.5f)
+                    continue;
+
+                int face = axis * 2 + ((axis == 0 ? hit.X : axis == 1 ? hit.Y : hit.Z) > 0 ? 0 : 1);
+                Float3 want = colors[face];
+                Float4 got = pixels[y * Size + x];
+                Assert.True(Vector3.Distance(new Vector3(want.X, want.Y, want.Z), new Vector3(got.X, got.Y, got.Z)) < 0.02f, $"pixel {x},{y}: wall {face} {want}, got {got}");
+                checkedPixels++;
+            }
+        }
+        Assert.True(checkedPixels > 100);
+    }
+
+    [Fact]
+    public void OverlappingProbes_BlendByImportanceAndBlendDistance()
+    {
+        Vector3 wall = new(0.8f, 0.5f, 0.2f);
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(wall.X, wall.Y, wall.Z));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        _world.AddReflectionProbe(RoomProbe(new Double3(-8, 0, 10), new Float3(24, 40, 40), importance: 1, intensity: 1, blend: 2));
+        _world.AddReflectionProbe(RoomProbe(new Double3(8, 0, 10), new Float3(24, 40, 40), importance: 2, intensity: 0.5f, blend: 2));
+        Frame();
+        Frame();
+        Float4[] pixels = Frame();
+
+        AssertMatches(p =>
+        {
+            float w1 = Math.Clamp((12 - MathF.Abs(p.X + 8)) / 2, 0, 1);
+            float w2 = Math.Clamp((12 - MathF.Abs(p.X - 8)) / 2, 0, 1);
+            float total = w2 + w1 * (1 - w2);
+            return wall * (0.5f * w2 + w1 * (1 - w2)) + s_skyColor * (1 - total);
+        }, pixels);
+    }
+
+    [Fact]
+    public void SlicedCaptures_TakeSevenFrames_AndRequestsCaptureAgain()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
+        desc.TimeSlicing = ReflectionProbeTimeSlicing.IndividualFaces;
+        desc.Refresh = ReflectionProbeRefresh.OnRequest;
+        ReflectionProbeHandle probe = _world.AddReflectionProbe(desc);
+
+        for (int frame = 0; frame < 6; frame++)
+            AssertMatches(_ => s_skyColor, Frame());
+        AssertMatches(_ => new Vector3(0.8f, 0.5f, 0.2f), Frame());
+
+        _world.Environment.SkyColor = new Float4(0, 0, 0, 1);
+        _world.Environment.Sky!.SetColor("_Tint", new Float4(0, 1, 0, 1));
+        foreach (RenderableHandle wall in Enumerable.Range(0, 6).Select(i => new RenderableHandle(i, 1)))
+            _world.SetLayerMask(wall, 4);
+        for (int frame = 0; frame < 4; frame++)
+            Frame();
+        AssertMatches(_ => new Vector3(0.8f, 0.5f, 0.2f), Frame());
+
+        _world.RenderReflectionProbe(probe);
+        for (int frame = 0; frame < 6; frame++)
+            Frame();
+        AssertMatches(_ => new Vector3(0, 1, 0), Frame());
+    }
+
+    [Fact]
+    public void BakedProbes_ShowWhatABakeReadBack()
+    {
+        Room(new Double3(0, 0, 10), 20, f => new Float3(0.2f + 0.1f * f, 0.5f, 0.9f - 0.1f * f));
+        _world.Add(new RenderableDesc { Mesh = IndirectQuad(secondUVs: false), Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector(0.3f)]);
+        ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
+        ReflectionProbeHandle probe = _world.AddReflectionProbe(desc);
+        Frame();
+        Float4[] realtime = Frame();
+
+        BakedReflectionProbe? baked = null;
+        _world.BakeReflectionProbe(probe, data => baked = data);
+        for (int frame = 0; frame < 4 && baked == null; frame++)
+            Frame();
+        Assert.NotNull(baked);
+        Assert.Equal(128, baked!.Size);
+        Assert.Equal(6, baked.Mips);
+        Assert.Equal(128 * 128 * 8, baked.Faces[0].Length);
+        Assert.Equal(4 * 4 * 8, baked.Faces[6 * 6 - 1].Length);
+
+        foreach (RenderableHandle wall in Enumerable.Range(0, 6).Select(i => new RenderableHandle(i, 1)))
+            _world.Remove(wall);
+        desc.Mode = ReflectionProbeMode.Baked;
+        desc.Baked = baked;
+        _world.SetReflectionProbe(probe, desc);
+        Frame();
+        Float4[] shown = Frame();
+
+        Assert.True(realtime.Any(p => p.X > 0.1f));
+        for (int i = 0; i < realtime.Length; i++)
+            Assert.True(Vector3.Distance(new Vector3(realtime[i].X, realtime[i].Y, realtime[i].Z), new Vector3(shown[i].X, shown[i].Y, shown[i].Z)) < 0.01f, $"pixel {i}: realtime {realtime[i]}, baked {shown[i]}");
     }
 
     [Fact]
