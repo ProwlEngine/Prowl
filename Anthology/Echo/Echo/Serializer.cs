@@ -28,6 +28,13 @@ public static class Serializer
     public static IReferenceRule? ReferenceRule { get; set; }
 
     private static readonly ConcurrentDictionary<Type, ISerializationFormat> _formatCache = new();
+
+    // CLR type each primitive EchoType stores, indexed by EchoType.
+    internal static readonly Type?[] PrimitiveTypes =
+    {
+        null, typeof(byte), typeof(sbyte), typeof(short), typeof(int), typeof(long), typeof(ushort), typeof(uint),
+        typeof(ulong), typeof(float), typeof(double), typeof(decimal), typeof(string), typeof(byte[]), typeof(bool)
+    };
     private static IReadOnlyList<ISerializationFormat> _formats;
 
     static Serializer()
@@ -241,10 +248,10 @@ public static class Serializer
         context.EnterDeserialize();
         try
         {
-            var envelope = ExtractTypeEnvelope(value, target.GetType());
+            var data = ExtractTypeEnvelope(value, target.GetType(), out _, out _);
             var format = GetFormatForType(target.GetType());
             if (format is Formatters.AnyObjectFormat anyFormat)
-                anyFormat.DeserializeInto(envelope.Data, target, context);
+                anyFormat.DeserializeInto(data, target, context);
         }
         finally
         {
@@ -278,38 +285,41 @@ public static class Serializer
 
         if (value.GetType() == targetType) return value;
 
-        // STEP 1: Extract type information and data (centralized)
-        var envelope = ExtractTypeEnvelope(value, targetType);
+        if (context.OnDeserialize == null && value.TagType < EchoType.List && PrimitiveTypes[(int)value.TagType] == targetType)
+            return value.Value;
 
-        if (envelope.TypeUnresolved)
-            RecordUnresolvedDefinition(envelope.Data, context);
+        // STEP 1: Extract type information and data (centralized)
+        var data = ExtractTypeEnvelope(value, targetType, out Type? envelopeType, out bool typeUnresolved);
+
+        if (typeUnresolved)
+            RecordUnresolvedDefinition(data, context);
 
         // STEP 2: Determine actual type to deserialize to
-        var actualType = envelope.ActualType ?? targetType;
+        var actualType = envelopeType ?? targetType;
 
         // Resolve an external reference stub back to its live instance.
         if (context.ExternalReferences != null &&
-            envelope.Data.TagType == EchoType.Compound &&
-            envelope.Data.TryGet(ExternalRefKey, out var keyData))
+            data.TagType == EchoType.Compound &&
+            data.TryGet(ExternalRefKey, out var keyData))
         {
             object? key = Deserialize(keyData, typeof(object), context);
             return key == null ? null : context.ExternalReferences.ResolveReference(key, actualType);
         }
 
         IReferenceRule? rule = ReferenceRule;
-        if (rule != null && envelope.Data.TagType == EchoType.Compound && envelope.Data.TryGet(rule.Key, out var reference))
+        if (rule != null && data.TagType == EchoType.Compound && data.TryGet(rule.Key, out var reference))
             return rule.Resolve(reference.StringValue ?? "", actualType, context);
 
         // Check for deserialization override (e.g. external asset references)
         if (context.OnDeserialize != null)
         {
-            var (handled, result) = context.OnDeserialize(envelope.Data, actualType, context);
+            var (handled, result) = context.OnDeserialize(data, actualType, context);
             if (handled) return result;
         }
 
         // STEP 3: Get formatter and deserialize data (no type logic in formatter)
         var format = GetFormatForType(actualType);
-        return format.Deserialize(envelope.Data, actualType, context);
+        return format.Deserialize(data, actualType, context);
     }
 
     // Kept out of DeserializeCore so its stack frame stays small for deeply nested graphs.
@@ -434,32 +444,33 @@ public static class Serializer
 
     #region Type Extraction Logic
 
-    private static TypeEnvelope ExtractTypeEnvelope(EchoObject value, Type targetType)
+    private static EchoObject ExtractTypeEnvelope(EchoObject value, Type targetType, out Type? actualType, out bool typeUnresolved)
     {
+        typeUnresolved = false;
         // Handle compact type wrapper (for primitives)
         if (value.TagType == EchoType.Compound &&
             value.TryGet("$t", out var compactType) &&
             value.TryGet("$v", out var compactValue))
         {
             var type = TypeNameRegistry.ResolveCompactTypeName(compactType.StringValue);
-            return new TypeEnvelope { ActualType = ReconcileType(type, targetType), Data = compactValue };
+            actualType = ReconcileType(type, targetType);
+            return compactValue!;
         }
 
         // Handle full type wrapper
         if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
         {
             Type? resolved = TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue);
-            var type = ReconcileType(resolved, targetType) ?? targetType;
+            actualType = ReconcileType(resolved, targetType) ?? targetType;
+            typeUnresolved = resolved == null;
 
             // If there's a $value, use that as data
-            if (value.TryGet("$value", out var dataValue))
-                return new TypeEnvelope { ActualType = type, Data = dataValue, TypeUnresolved = resolved == null };
-
-            return new TypeEnvelope { ActualType = type, Data = value, TypeUnresolved = resolved == null };
+            return value.TryGet("$value", out var dataValue) ? dataValue! : value;
         }
 
         // No type wrapper - use as-is
-        return new TypeEnvelope { ActualType = null, Data = value };
+        actualType = null;
+        return value;
     }
 
 
@@ -473,13 +484,6 @@ public static class Serializer
             return resolved;
 
         return effectiveTarget;
-    }
-
-    private class TypeEnvelope
-    {
-        public Type? ActualType { get; set; }
-        public EchoObject Data { get; set; } = null!;
-        public bool TypeUnresolved { get; set; }
     }
 
     #endregion

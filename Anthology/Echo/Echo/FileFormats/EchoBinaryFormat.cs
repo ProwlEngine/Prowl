@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Text;
@@ -385,17 +385,17 @@ public sealed class EchoBinaryFormat : IFileFormat
         var type = (EchoType)reader.ReadByte();
 
         if (type == EchoType.Null) return new(EchoType.Null, null);
-        else if (type == EchoType.Byte) return new(EchoType.Byte, reader.ReadByte());
-        else if (type == EchoType.sByte) return new(EchoType.sByte, reader.ReadSByte());
-        else if (type == EchoType.Short) return new(EchoType.Short, reader.ReadInt16());
-        else if (type == EchoType.Int) return new(EchoType.Int, reader.ReadInt32());
-        else if (type == EchoType.Long) return new(EchoType.Long, reader.ReadInt64());
-        else if (type == EchoType.UShort) return new(EchoType.UShort, reader.ReadUInt16());
-        else if (type == EchoType.UInt) return new(EchoType.UInt, reader.ReadUInt32());
-        else if (type == EchoType.ULong) return new(EchoType.ULong, reader.ReadUInt64());
-        else if (type == EchoType.Float) return new(EchoType.Float, reader.ReadSingle());
-        else if (type == EchoType.Double) return new(EchoType.Double, reader.ReadDouble());
-        else if (type == EchoType.Decimal) return new(EchoType.Decimal, reader.ReadDecimal());
+        else if (type == EchoType.Byte) return new(reader.ReadByte());
+        else if (type == EchoType.sByte) return new(reader.ReadSByte());
+        else if (type == EchoType.Short) return new(reader.ReadInt16());
+        else if (type == EchoType.Int) return new(reader.ReadInt32());
+        else if (type == EchoType.Long) return new(reader.ReadInt64());
+        else if (type == EchoType.UShort) return new(reader.ReadUInt16());
+        else if (type == EchoType.UInt) return new(reader.ReadUInt32());
+        else if (type == EchoType.ULong) return new(reader.ReadUInt64());
+        else if (type == EchoType.Float) return new(reader.ReadSingle());
+        else if (type == EchoType.Double) return new(reader.ReadDouble());
+        else if (type == EchoType.Decimal) return new(reader.ReadDecimal());
         else if (type == EchoType.String)
         {
             int length = reader.ReadInt32();
@@ -407,7 +407,7 @@ public sealed class EchoBinaryFormat : IFileFormat
             int length = reader.ReadInt32();
             return new(EchoType.ByteArray, reader.ReadBytes(length));
         }
-        else if (type == EchoType.Bool) return new(EchoType.Bool, reader.ReadBoolean());
+        else if (type == EchoType.Bool) return new(reader.ReadBoolean());
         else if (type == EchoType.List)
         {
             var listTag = EchoObject.NewList();
@@ -425,17 +425,17 @@ public sealed class EchoBinaryFormat : IFileFormat
         var type = (EchoType)reader.ReadByte();
 
         if (type == EchoType.Null) return new(EchoType.Null, null);
-        else if (type == EchoType.Byte) return new(EchoType.Byte, reader.ReadByte());
-        else if (type == EchoType.sByte) return new(EchoType.sByte, reader.ReadSByte());
-        else if (type == EchoType.Short) return new(EchoType.Short, (short)LEB128.ReadSigned(reader));
-        else if (type == EchoType.Int) return new(EchoType.Int, (int)LEB128.ReadSigned(reader));
-        else if (type == EchoType.Long) return new(EchoType.Long, LEB128.ReadSigned(reader));
-        else if (type == EchoType.UShort) return new(EchoType.UShort, (ushort)LEB128.ReadUnsigned(reader));
-        else if (type == EchoType.UInt) return new(EchoType.UInt, (uint)LEB128.ReadUnsigned(reader));
-        else if (type == EchoType.ULong) return new(EchoType.ULong, LEB128.ReadUnsigned(reader));
-        else if (type == EchoType.Float) return new(EchoType.Float, reader.ReadSingle());
-        else if (type == EchoType.Double) return new(EchoType.Double, reader.ReadDouble());
-        else if (type == EchoType.Decimal) return new(EchoType.Decimal, reader.ReadDecimal());
+        else if (type == EchoType.Byte) return new(reader.ReadByte());
+        else if (type == EchoType.sByte) return new(reader.ReadSByte());
+        else if (type == EchoType.Short) return new((short)LEB128.ReadSigned(reader));
+        else if (type == EchoType.Int) return new((int)LEB128.ReadSigned(reader));
+        else if (type == EchoType.Long) return new(LEB128.ReadSigned(reader));
+        else if (type == EchoType.UShort) return new((ushort)LEB128.ReadUnsigned(reader));
+        else if (type == EchoType.UInt) return new((uint)LEB128.ReadUnsigned(reader));
+        else if (type == EchoType.ULong) return new(LEB128.ReadUnsigned(reader));
+        else if (type == EchoType.Float) return new(reader.ReadSingle());
+        else if (type == EchoType.Double) return new(reader.ReadDouble());
+        else if (type == EchoType.Decimal) return new(reader.ReadDecimal());
         else if (type == EchoType.String)
         {
             return new(EchoType.String, ReadLZWCompressed(reader));
@@ -445,7 +445,7 @@ public sealed class EchoBinaryFormat : IFileFormat
             int length = (int)LEB128.ReadUnsigned(reader);
             return new(EchoType.ByteArray, reader.ReadBytes(length));
         }
-        else if (type == EchoType.Bool) return new(EchoType.Bool, reader.ReadBoolean());
+        else if (type == EchoType.Bool) return new(reader.ReadBoolean());
         else if (type == EchoType.List)
         {
             var listTag = EchoObject.NewList();
