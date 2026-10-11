@@ -316,28 +316,6 @@ internal sealed partial class ProfilerView
             }
         });
 
-        TableSection("Graph resources", 0, "History = depth / ring slot this execution / validity",
-            new[] { "Resource", "Format", "Size", "Lifetime", "Origin", "History" }, new[] { 1.4f, 1.4f, 0.8f, 2f, 1f, 1.6f },
-            order.Select(name =>
-            {
-                GraphResourceInfo info = resources[name];
-                RecordedGraphResource? g = GraphResource(view, name);
-                RecordedResource? backing = g != null ? Backing(index, g) : null;
-                List<int> span = info.Writers.Concat(info.Readers).OrderBy(x => x).ToList();
-                return new Row
-                {
-                    Cells = new[]
-                    {
-                        name, Format(backing, g), Style.Bytes(SizeBytes(backing)),
-                        span.Count > 0 ? $"{passes[span[0]].Name} -> {passes[span[^1]].Name}" : "-",
-                        g?.Origin.ToString() ?? "-",
-                        g != null && g.HistoryDepth > 0 ? $"Depth {g.HistoryDepth} / slot {g.HistorySlot} / {(g.HistoryValid ? "valid" : "invalid")}" : "-",
-                    },
-                    Pick = () => _graphSelection = "r:" + name,
-                    Selected = _graphSelection == "r:" + name,
-                };
-            }).ToList(), 520f);
-
         if (recordedView.Skipped.Length > 0)
             TableSection("Skipped passes", 420, "Not in the graph this frame",
                 new[] { "Pass", "Reason" }, new[] { 1.4f, 1.4f },
