@@ -16,11 +16,13 @@ void main()
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
+#ifndef GRAPHITE_NO_SOURCE
 #ifdef GRAPHITE_LAYERED
 uniform sampler2DArray Graphite_Source;
 vec4 Graphite_SampleSource(vec2 uv) { return texture(Graphite_Source, vec3(uv, float(gl_ViewIndex))); }
 #else
 uniform sampler2D Graphite_Source;
 vec4 Graphite_SampleSource(vec2 uv) { return texture(Graphite_Source, uv); }
+#endif
 #endif
 #endif

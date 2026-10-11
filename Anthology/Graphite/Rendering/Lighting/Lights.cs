@@ -422,7 +422,7 @@ internal sealed class HandleStore<T> where T : struct
 internal sealed class WorldLighting : IDisposable
 {
     private readonly IMaterialResources _resources;
-    private readonly Action<string, string> _report;
+    private readonly Action<RendererError> _report;
     private readonly StaticRegions<LightRecord> _staticLights;
     private readonly StaticRegions<DecalRecord> _staticDecals;
 
@@ -463,7 +463,7 @@ internal sealed class WorldLighting : IDisposable
         public uint Sequence;
     }
 
-    public WorldLighting(GraphicsDevice device, IMaterialResources resources, Action<string, string> report)
+    public WorldLighting(GraphicsDevice device, IMaterialResources resources, Action<RendererError> report)
     {
         _resources = resources;
         _report = report;
@@ -567,12 +567,15 @@ internal sealed class WorldLighting : IDisposable
         _worldRecordDirty = true;
     }
 
-    /// <summary>Repacks every decal after a bindless slot one may hold was freed. Host thread, at extraction.</summary>
-    public void RepackDecals()
+    /// <summary>Repacks the decals using textures that were disposed and freed. Host thread, at extraction.</summary>
+    public void RepackDecals(HashSet<Texture> freed)
     {
+        bool Freed(Texture? texture) => texture != null && freed.Contains(texture);
+
         for (int i = 0; i < _decals.Length; i++)
         {
-            if (!_decalAlive[i])
+            DecalDesc decal = _decals[i];
+            if (!_decalAlive[i] || !(Freed(decal.Albedo) || Freed(decal.Normal) || Freed(decal.Mask)))
                 continue;
             _decalLooks[i] = Look(_decals[i], _decalSequence[i]);
             if (_decals[i].Static)
@@ -717,7 +720,7 @@ internal sealed class WorldLighting : IDisposable
     private void CheckDepth(LightTreeBuilder tree, int stack)
     {
         if ((tree.Depth - 1) * 3 > stack)
-            _report("lighting.depth", $"A light or decal tree is {tree.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped.");
+            _report(new RendererError("lighting.tree.depth", $"A light or decal tree is {tree.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped."));
     }
 
     private Span<Vector4> Spheres(int count)
@@ -836,7 +839,7 @@ internal sealed class WorldLighting : IDisposable
                 continue;
             if (count == WorldLightingRecord.MaxDirectional)
             {
-                _report("lighting.directional", $"A world has more than {WorldLightingRecord.MaxDirectional} directional lights, the rest are not drawn.");
+                _report(new RendererError("lighting.directional.full", $"A world has more than {WorldLightingRecord.MaxDirectional} directional lights, the rest are not drawn."));
                 break;
             }
             record.Directional[count++] = Directional(_lights[index]);
@@ -922,7 +925,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
     private readonly RangeAllocator _nodeSpace = new(MaxEntries);
     private readonly LightTreeBuilder _builder = new();
     private readonly Func<int, Double3, TRecord> _pack;
-    private readonly Action<string, string> _report;
+    private readonly Action<RendererError> _report;
     private Region?[] _itemRegion = new Region?[16];
     private int[] _itemSlot = new int[16];
     private Double3[] _center = new Double3[16];
@@ -932,7 +935,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
     private LightBounds[] _boxes = new LightBounds[16];
     private RegionEntry[] _entries = new RegionEntry[16];
 
-    public StaticRegions(GraphicsDevice device, string name, Func<int, Double3, TRecord> pack, Action<string, string> report)
+    public StaticRegions(GraphicsDevice device, string name, Func<int, Double3, TRecord> pack, Action<RendererError> report)
     {
         _pack = pack;
         _report = report;
@@ -1027,7 +1030,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
 
         builder.Build(_boxes.AsSpan(0, _visible.Count), RegionLeafSize, morton: true);
         if ((builder.Depth - 1) * 3 > RegionStack)
-            _report("lighting.regions", $"A view sees {_visible.Count} static light or decal regions, so deep a tree that overlapping regions may be skipped.");
+            _report(new RendererError("lighting.regions.visible", $"A view sees {_visible.Count} static light or decal regions, so deep a tree that overlapping regions may be skipped."));
 
         if (_entries.Length < _visible.Count)
             _entries = new RegionEntry[_visible.Count * 2];
@@ -1125,7 +1128,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
 
         _builder.Build(spheres, LeafSize, morton: false);
         if ((_builder.Depth - 1) * 3 > LightTreeBuilder.ShaderStack)
-            _report("lighting.depth", $"A static light or decal region is {_builder.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped.");
+            _report(new RendererError("lighting.regions.depth", $"A static light or decal region is {_builder.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped."));
         if (!_recordSpace.TryAllocate((uint)count, 1, out RangeAllocation records))
         {
             Full(region);
@@ -1165,7 +1168,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
     // The tables have no room: the region waits undrawn and tries again next frame
     private void Full(Region region)
     {
-        _report("lighting.regions.full", "The static light or decal tables are full, a region is not drawn.");
+        _report(new RendererError("lighting.regions.full", "The static light or decal tables are full, a region is not drawn."));
         _retry.Add(region);
     }
 

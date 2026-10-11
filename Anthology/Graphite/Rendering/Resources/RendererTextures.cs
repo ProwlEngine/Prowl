@@ -139,7 +139,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     internal DescriptorTable Table { get; }
 
     /// <summary>Raised once when a table is full, so textures fall back to slot 0.</summary>
-    internal Action<string, string>? Reporter { get; set; }
+    internal Action<RendererError>? Reporter { get; set; }
 
     /// <summary>Slots in the 2D texture table.</summary>
     public uint Texture2DCapacity => Textures2D;
@@ -175,7 +175,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
 
             if (_samplers.Count == Samplers)
             {
-                Reporter?.Invoke("textures.samplers.full", $"Every one of the {Samplers} sampler slots is in use, new samplers draw with the default sampler.");
+                Reporter?.Invoke(new RendererError("textures.samplers.full", $"Every one of the {Samplers} sampler slots is in use, new samplers draw with the default sampler.", RendererErrorSeverity.Warning));
                 return 0;
             }
             _samplers.Add((sampler, _device.ResourceFactory.CreateSampler(sampler!.Value)));
@@ -191,8 +191,9 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     /// <paramref name="lastDispatched"/> has completed. Returns true when a slot was freed, so records holding it repack.
     /// Host thread, at extraction.
     /// </summary>
-    internal bool Sweep(ulong lastDispatched, ulong completed)
+    internal bool Sweep(ulong lastDispatched, ulong completed, HashSet<Texture> freed)
     {
+        freed.Clear();
         lock (_lock)
         {
             for (int i = _retiringSlots.Count - 1; i >= 0; i--)
@@ -205,7 +206,6 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
                 _retiringSlots.RemoveAt(i);
             }
 
-            bool freed = false;
             for (int table = 0; table < _slots.Length; table++)
             {
                 List<Texture>? disposed = null;
@@ -219,13 +219,13 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
 
                 foreach (Texture texture in disposed)
                 {
+                    freed.Add(texture);
                     uint slot = _slots[table][texture];
                     _slots[table].Remove(texture);
                     _retiringSlots.Add((lastDispatched, table, slot));
                 }
-                freed = true;
             }
-            return freed;
+            return freed.Count > 0;
         }
     }
 
@@ -269,7 +269,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             slot = _nextSlot[table]++;
         else
         {
-            Reporter?.Invoke($"textures.{s_tableNames[table]}.full", $"Every one of the {capacity} slots of {s_tableNames[table]} is in use, new textures there show slot 0.");
+            Reporter?.Invoke(new RendererError($"textures.{s_tableNames[table]}.full", $"Every one of the {capacity} slots of {s_tableNames[table]} is in use, new textures there show slot 0."));
             return 0;
         }
         _slots[table][texture] = slot;

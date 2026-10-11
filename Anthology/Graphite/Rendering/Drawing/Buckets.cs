@@ -52,7 +52,7 @@ internal sealed class DrawPrograms
     public event Action<ushort>? Freed;
 
     /// <summary>Called once when every id is in use and a new program cannot get one.</summary>
-    public Action<string>? Reporter { get; set; }
+    public Action<RendererError>? Reporter { get; set; }
 
     public void Acquire(ushort id) => _references[id]++;
 
@@ -92,7 +92,7 @@ internal sealed class DrawPrograms
         }
         else
         {
-            Reporter?.Invoke("Every one of the 65536 draw program ids is in use, so new programs draw nothing.");
+            Reporter?.Invoke(new RendererError("programs.full", "Every one of the 65536 draw program ids is in use, so new programs draw nothing."));
             Reporter = null;
             return false;
         }
@@ -274,8 +274,12 @@ internal sealed class DrawList
 /// </summary>
 internal sealed class BucketSet
 {
-    /// <summary>Pass types drawn from buckets, opaque only. Transparent items are sorted per object.</summary>
-    public static readonly PassType[] Passes = [PassType.Prepass, PassType.Forward, PassType.ShadowCaster];
+    /// <summary>
+    /// Pass types drawn from buckets: the built in three, opaque only, then any a feature asked for, drawn for every
+    /// material with that pass. Transparent forward items are sorted per object.
+    /// </summary>
+    private readonly List<PassType> _passes = [PassType.Prepass, PassType.Forward, PassType.ShadowCaster];
+    private const int BuiltInPasses = 3;
 
     internal readonly record struct BucketId(int Pass, ushort Program, int Queue, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk);
 
@@ -321,8 +325,8 @@ internal sealed class BucketSet
     private readonly RenderWorld.RenderSide _world;
     private readonly DrawPrograms _programs;
     private readonly Dictionary<BucketId, Bucket> _buckets = new();
-    private readonly List<Bucket>[] _ordered = [new(), new(), new()];
-    private readonly bool[] _orderDirty = [true, true, true];
+    private readonly List<List<Bucket>> _ordered = [new(), new(), new()];
+    private readonly List<bool> _orderDirty = [true, true, true];
     private List<Membership>[] _members = [];
     private readonly Dictionary<Material, HashSet<int>> _materialUsers = new();
     private List<Material>?[] _objectMaterials = [];
@@ -350,6 +354,25 @@ internal sealed class BucketSet
     public int BucketCount => _buckets.Count;
 
     public int TransparentCount => _transparent.Count;
+
+    /// <summary>The index of a pass type's buckets, bucketing every renderable for it the first time it is asked for. Render thread.</summary>
+    public int Pass(PassType type)
+    {
+        int pass = _passes.IndexOf(type);
+        if (pass >= 0)
+            return pass;
+
+        pass = _passes.Count;
+        _passes.Add(type);
+        _ordered.Add(new List<Bucket>());
+        _orderDirty.Add(true);
+        for (int index = 0; index < _world.Capacity; index++)
+        {
+            if (_world.Alive[index] && _world.Mesh[index]?.Placement is { } placement)
+                AddToPass(index, pass, placement);
+        }
+        return pass;
+    }
 
     public IReadOnlyList<Bucket> Ordered(int pass)
     {
@@ -381,7 +404,8 @@ internal sealed class BucketSet
             RankQueues();
             foreach (Bucket bucket in _buckets.Values)
                 bucket.Key = Key(bucket);
-            Array.Fill(_orderDirty, true);
+            for (int i = 0; i < _orderDirty.Count; i++)
+                _orderDirty[i] = true;
             _ranksDirty = false;
         }
     }
@@ -395,7 +419,7 @@ internal sealed class BucketSet
     {
         list.Clear();
         Order(pass);
-        bool prepass = Passes[pass] == PassType.Prepass;
+        bool prepass = pass == 0;
         _prepass.Clear();
 
         List<Bucket> ordered = _ordered[pass];
@@ -551,52 +575,57 @@ internal sealed class BucketSet
         if (mesh?.Placement is not { } placement)
             return;
 
+        for (int pass = 0; pass < _passes.Count; pass++)
+            AddToPass(index, pass, placement);
+        if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
+            AddTransparent(index, placement, _world.Mirrored[index]);
+    }
+
+    // Built in passes draw opaque materials, the shadow pass only casters; a feature's pass draws every material having it
+    private void AddToPass(int index, int pass, MeshPlacement placement)
+    {
         RenderableFlags flags = _world.Flags[index];
+        bool shadows = _passes[pass] == PassType.ShadowCaster;
+        bool custom = pass >= BuiltInPasses;
+        if (shadows ? (flags & RenderableFlags.CastShadows) == 0 : (flags & RenderableFlags.ShadowsOnly) != 0)
+            return;
+
+        GpuMesh mesh = _world.Mesh[index]!;
         bool mirrored = _world.Mirrored[index];
-        for (int pass = 0; pass < Passes.Length; pass++)
+        for (int c = 0; c < placement.Chunks.Length; c++)
         {
-            bool shadows = Passes[pass] == PassType.ShadowCaster;
-            if (shadows ? (flags & RenderableFlags.CastShadows) == 0 : (flags & RenderableFlags.ShadowsOnly) != 0)
+            MeshChunk chunk = placement.Chunks[c];
+            Material? material = _world.SliceMaterials[_world.SliceBase[index] + (uint)chunk.SubMesh];
+            if (material == null || material.IsDisposed || material.Draw is not { } draw)
+                continue;
+            if ((draw.Transparent && !custom) || (shadows && !draw.CastShadows))
+                continue;
+            if (!_programs.TryGet(draw, _passes[pass], out ushort program))
                 continue;
 
-            for (int c = 0; c < placement.Chunks.Length; c++)
+            Track(material, index);
+            BucketId id = new(pass, program, draw.RenderQueue, placement.Page, placement.SubMeshes[chunk.SubMesh].Topology, mirrored, placement.FirstChunk + (uint)c);
+            if (!_buckets.TryGetValue(id, out Bucket? bucket))
             {
-                MeshChunk chunk = placement.Chunks[c];
-                Material? material = _world.SliceMaterials[_world.SliceBase[index] + (uint)chunk.SubMesh];
-                if (material == null || material.IsDisposed || material.Draw is not { } draw)
-                    continue;
-                if (draw.Transparent || (shadows && !draw.CastShadows))
-                    continue;
-                if (!_programs.TryGet(draw, Passes[pass], out ushort program))
-                    continue;
-
-                Track(material, index);
-                BucketId id = new(pass, program, draw.RenderQueue, placement.Page, placement.SubMeshes[chunk.SubMesh].Topology, mirrored, placement.FirstChunk + (uint)c);
-                if (!_buckets.TryGetValue(id, out Bucket? bucket))
+                bucket = new Bucket
                 {
-                    bucket = new Bucket
-                    {
-                        Id = id,
-                        Queue = draw.RenderQueue,
-                        MeshId = mesh.Id,
-                        ChunkInMesh = (uint)c,
-                        FirstIndex = placement.IndexBase + chunk.IndexStart,
-                        IndexCount = chunk.IndexCount,
-                        SubMesh = (uint)chunk.SubMesh,
-                        MultiChunk = placement.Chunks.Length > 1,
-                    };
-                    _buckets[id] = bucket;
-                    _programs.Acquire(program);
-                    UseQueue(bucket.Queue, 1);
-                    bucket.Key = Key(bucket);
-                    _orderDirty[pass] = true;
-                }
-                Join(bucket, index);
+                    Id = id,
+                    Queue = draw.RenderQueue,
+                    MeshId = mesh.Id,
+                    ChunkInMesh = (uint)c,
+                    FirstIndex = placement.IndexBase + chunk.IndexStart,
+                    IndexCount = chunk.IndexCount,
+                    SubMesh = (uint)chunk.SubMesh,
+                    MultiChunk = placement.Chunks.Length > 1,
+                };
+                _buckets[id] = bucket;
+                _programs.Acquire(program);
+                UseQueue(bucket.Queue, 1);
+                bucket.Key = Key(bucket);
+                _orderDirty[pass] = true;
             }
+            Join(bucket, index);
         }
-
-        if ((flags & RenderableFlags.ShadowsOnly) == 0)
-            AddTransparent(index, placement, mirrored);
     }
 
     private void AddTransparent(int index, MeshPlacement placement, bool mirrored)

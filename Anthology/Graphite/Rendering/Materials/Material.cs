@@ -180,7 +180,7 @@ public sealed class Material : IDisposable
     {
         if (!TryGet(name, out MaterialValue current) || !current.IsTexture)
         {
-            _system.Report($"{_shader.Name}.{name.Text()}", $"The shader {_shader.Name} has no texture {name.Text()} to set a scale offset on.");
+            _system.Report(new RendererError("material.texture.missing", $"The shader {_shader.Name} has no texture {name.Text()} to set a scale offset on.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{name.Text()}" });
             return;
         }
         Set(name, current.WithScaleOffset(scaleOffset));
@@ -191,7 +191,7 @@ public sealed class Material : IDisposable
     {
         if (_shader.FindAxis(axis, out VariantScope scope) >= 0 && scope == VariantScope.Global)
         {
-            _system.Report($"{_shader.Name}.{axis}", $"The axis {axis} is global in {_shader.Name}, materials cannot set it.");
+            _system.Report(new RendererError("material.keyword.global", $"The axis {axis} is global in {_shader.Name}, materials cannot set it.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{axis}" });
             return;
         }
 
@@ -326,9 +326,9 @@ public sealed class Material : IDisposable
     {
         int index = _shader.FindProperty(name);
         if (index < 0)
-            _system.Report($"{_shader.Name}.{name.Text()}", $"The shader {_shader.Name} has no property {name.Text()}. The value is kept in case the shader gains it.");
+            _system.Report(new RendererError("material.property.missing", $"The shader {_shader.Name} has no property {name.Text()}. The value is kept in case the shader gains it.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{name.Text()}" });
         else if (!MaterialSchema.Compatible(_shader.Properties[index].Type, value.Type))
-            _system.Report($"{_shader.Name}.{name.Text()}.type", $"The property {name.Text()} of {_shader.Name} is a {_shader.Properties[index].Type}, not a {value.Type}.");
+            _system.Report(new RendererError("material.property.type", $"The property {name.Text()} of {_shader.Name} is a {_shader.Properties[index].Type}, not a {value.Type}.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{name.Text()}.type" });
 
         Store(name, value);
         Changed(Dirt.Record);
@@ -415,7 +415,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
     private bool _tablesChanged;
 
     /// <summary>Called once per distinct problem, like a property the shader does not have.</summary>
-    public Action<string>? Reporter { get; set; }
+    public Action<RendererError>? Reporter { get; set; }
 
     public IReadOnlyDictionary<Shader, MaterialTable> Tables => _tables;
 
@@ -465,14 +465,14 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
         }
     }
 
-    internal void Report(string key, string message)
+    internal void Report(RendererError error)
     {
         lock (_lock)
         {
-            if (!_reported.Add(key))
+            if (!_reported.Add(error.Key ?? error.Code))
                 return;
         }
-        Reporter?.Invoke(message);
+        Reporter?.Invoke(error);
     }
 
     /// <summary>

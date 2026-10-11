@@ -62,7 +62,7 @@ public sealed class MaterialTests : IDisposable
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Shader _shader;
     private readonly MaterialSystem _system;
-    private readonly List<string> _reports = new();
+    private readonly List<RendererError> _reports = new();
 
     public MaterialTests()
     {
@@ -203,7 +203,7 @@ public sealed class MaterialTests : IDisposable
     {
         _system.Create(_shader).SetFloat("_Missing", 1);
 
-        Assert.Contains("_Missing", Assert.Single(_reports));
+        Assert.Contains("_Missing", Assert.Single(_reports).Message);
     }
 
     [Fact]

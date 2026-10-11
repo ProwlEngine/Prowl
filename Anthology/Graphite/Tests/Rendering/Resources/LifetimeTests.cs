@@ -79,7 +79,9 @@ public sealed class LifetimeTests : IDisposable
         uint slot = SlotOf(material);
 
         texture.Dispose();
-        Assert.True(_textures.Sweep(lastDispatched: 5, completed: 4));
+        HashSet<Texture> freed = new();
+        Assert.True(_textures.Sweep(lastDispatched: 5, completed: 4, freed));
+        Assert.Equal(texture, Assert.Single(freed));
         _materials.MarkAllRecords();
         _materials.Extract(new List<Material>());
         uint fallback = SlotOf(material);
@@ -91,7 +93,7 @@ public sealed class LifetimeTests : IDisposable
         _materials.Extract(new List<Material>());
         Assert.NotEqual(slot, SlotOf(other));
 
-        Assert.False(_textures.Sweep(lastDispatched: 6, completed: 5));
+        Assert.False(_textures.Sweep(lastDispatched: 6, completed: 5, freed));
         using Texture late = Texture();
         Material third = _materials.Create(_shader);
         third.SetTexture("_MainTex", late);

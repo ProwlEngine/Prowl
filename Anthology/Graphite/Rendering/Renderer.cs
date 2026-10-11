@@ -46,8 +46,11 @@ public sealed class RendererOptions
     /// <summary>Edge length of the smallest prefiltered mip, rougher reflections turn blocky below it.</summary>
     public uint SmallestProbeMip = 4;
 
-    /// <summary>Faces of reflection probes captured per world per frame, six being one whole probe.</summary>
-    public int ProbeFacesPerFrame = 6;
+    /// <summary>
+    /// Texels of reflection probe captures drawn per world per frame: each face's texels, plus every prefiltered mip's when
+    /// a probe filters. The default fits one 128 probe with its filter. The first capture of a frame always runs.
+    /// </summary>
+    public long ProbeTexelsPerFrame = 256 * 1024;
 
     /// <summary>Frames a view keeps its per view state after it was last drawn.</summary>
     public int StaleViewFrames = 8;
@@ -83,7 +86,11 @@ public enum RendererErrorSeverity : byte
 /// A problem the renderer reports once per <see cref="Code"/>, raised on the host thread at SubmitFrame. The code is
 /// stable for filtering, the message is for people.
 /// </summary>
-public readonly record struct RendererError(string Code, string Message, RendererErrorSeverity Severity = RendererErrorSeverity.Error, object? Source = null);
+public readonly record struct RendererError(string Code, string Message, RendererErrorSeverity Severity = RendererErrorSeverity.Error, object? Source = null)
+{
+    /// <summary>What the error is reported once per, the code when null.</summary>
+    internal string? Key { get; init; }
+}
 
 /// <summary>One layer of a view: a camera relative view matrix (rotation only), a reversed Z projection and the camera's world position.</summary>
 public struct ViewLayer
@@ -127,8 +134,11 @@ public struct ViewDesc
     /// <summary>What the view is for, which decides the features that run on it.</summary>
     public ViewKind Kind;
 
-    /// <summary>The part of the target the view draws into, as x, y, width and height from 0 to 1.</summary>
+    /// <summary>The part of the target the view draws into, as x, y, width and height from 0 to 1, y down from the top.</summary>
     public Float4 Viewport;
+
+    /// <summary>Clears the whole target to the clear colour before drawing into the viewport, for a view letterboxed into its target.</summary>
+    public bool ClearTarget;
 
     /// <summary>Render resolution against the viewport's size in the target, presented scaled to fit.</summary>
     public float RenderScale;
@@ -219,12 +229,12 @@ public sealed class Renderer : IDisposable
             throw new ArgumentException($"SmallestProbeMip is {_options.SmallestProbeMip}, it must be a power of two from 1 to 2048.", nameof(options));
         InternalShaders.Register();
 
-        Textures = new RendererTextures(device) { Reporter = Warn };
+        Textures = new RendererTextures(device) { Reporter = Report };
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
         _geometry = new GeometryPool(device, _options.PageVertexWords, _options.PageIndices);
-        _materials = new MaterialSystem(device, Textures) { Reporter = message => Report(message, message) };
-        _globals = new GlobalRegistry(device, Textures) { Reporter = message => Report(message, message) };
-        _programs.Reporter = message => Report(message, message);
+        _materials = new MaterialSystem(device, Textures) { Reporter = Report };
+        _globals = new GlobalRegistry(device, Textures) { Reporter = Report };
+        _programs.Reporter = Report;
         _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report) { StaleViewFrames = _options.StaleViewFrames };
         Skies = new BuiltInSkies(this);
 
@@ -251,7 +261,7 @@ public sealed class Renderer : IDisposable
         _frameDone.Wait();
         try
         {
-            RenderWorld world = new(Device, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeFacesPerFrame));
+            RenderWorld world = new(Device, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
             _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), region);
@@ -333,15 +343,15 @@ public sealed class Renderer : IDisposable
             RaiseBakes();
             RemoveWorlds();
 
-            if (Textures.Sweep(_lastDispatched, Device.LastCompletedExecutionId))
+            if (Textures.Sweep(_lastDispatched, Device.LastCompletedExecutionId, _freedTextures))
             {
                 _materials.MarkAllRecords();
                 _globals.MarkAllDirty();
                 foreach (WorldFrame world in _worlds.Values)
                 {
-                    world.World.Lighting.RepackDecals();
-                    world.World.RepackLightmaps();
-                    world.World.Reflections.RepackBaked();
+                    world.World.Lighting.RepackDecals(_freedTextures);
+                    world.World.RepackLightmaps(_freedTextures);
+                    world.World.Reflections.RepackBaked(_freedTextures);
                 }
             }
 
@@ -380,6 +390,7 @@ public sealed class Renderer : IDisposable
     }
 
     private RenderFeature[][] _viewFeatures = [];
+    private readonly HashSet<Texture> _freedTextures = new();
     private readonly HashSet<RenderFeature> _extracted = new();
 
     // Snapshots every world's and view's features and copies their settings, each feature once
@@ -403,8 +414,8 @@ public sealed class Renderer : IDisposable
             {
                 if (!_extracted.Add(feature))
                     continue;
-                feature.EnabledSnapshot = feature.Enabled;
-                if (feature.Enabled)
+                feature.TakeSnapshot();
+                if (feature.EnabledSnapshot)
                     feature.Extract();
             }
         }
@@ -488,14 +499,10 @@ public sealed class Renderer : IDisposable
         _frameDone.Dispose();
     }
 
-    internal void Report(string key, string message) => Report(key, message, RendererErrorSeverity.Error, null);
-
-    internal void Warn(string key, string message) => Report(key, message, RendererErrorSeverity.Warning, null);
-
-    internal void Report(string key, string message, RendererErrorSeverity severity, object? source)
+    internal void Report(RendererError error)
     {
-        if (_reported.TryAdd(key, true))
-            _errors.Enqueue(new RendererError(key, message, severity, source));
+        if (_reported.TryAdd(error.Key ?? error.Code, true))
+            _errors.Enqueue(error);
     }
 
     private void RaiseErrors()
@@ -535,7 +542,7 @@ public sealed class Renderer : IDisposable
             _uploader.Clear();
             foreach (WorldFrame world in _worlds.Values)
                 world.World.Reflections.FrameFailed();
-            Report($"frame.{e.GetType().Name}.{e.Message}", $"The frame failed: {e}");
+            Report(new RendererError("frame.failed", $"The frame failed: {e}", RendererErrorSeverity.Error, e) { Key = $"frame.{e.GetType().Name}.{e.Message}" });
         }
     }
 

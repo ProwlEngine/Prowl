@@ -91,7 +91,7 @@ public sealed class ProgramCacheTests : IDisposable
         _compiler = new GatedCompiler(_glsl);
         _materials = new MaterialSystem(_device, new NoResources());
         _globals = new GlobalRegistry(_device, new NoResources());
-        _cache = new ProgramCache(_device, _compiler, _globals, _programs, deterministic: false, (_, message) => _reports.Add(message));
+        _cache = new ProgramCache(_device, _compiler, _globals, _programs, deterministic: false, error => _reports.Add(error.Message));
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
     }
 

@@ -67,7 +67,7 @@ public sealed class GlobalProperties
 
     /// <summary>
     /// A storage buffer every shader declaring a buffer of this name reads, a world's over the renderer's. Null removes it.
-    /// The host keeps it alive while it is set. Host thread.
+    /// Draws reading it wait for earlier GPU writes to it. Disposing it removes it at the next SubmitFrame. Host thread.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBuffer? buffer)
     {
@@ -83,19 +83,38 @@ public sealed class GlobalProperties
     /// <summary>The resolved buffers as of the last extraction: this set's over the fallback's. The render thread reads only this.</summary>
     internal IReadOnlyDictionary<PropertyID, DeviceBuffer> BufferSnapshot { get; private set; } = new Dictionary<PropertyID, DeviceBuffer>();
 
+    /// <summary>The snapshot's distinct buffers, which views declare so their draws see earlier writes.</summary>
+    internal DeviceBuffer[] BufferList { get; private set; } = [];
+
     private readonly Dictionary<PropertyID, DeviceBuffer> _buffers = new();
     private (uint Own, uint Fallback) _bufferVersions = (uint.MaxValue, uint.MaxValue);
 
     internal void SnapshotBuffers()
     {
         (uint, uint) versions = (BufferVersion, Fallback?.BufferVersion ?? 0);
-        if (versions == _bufferVersions)
+        bool disposed = false;
+        foreach (DeviceBuffer buffer in BufferList)
+            disposed |= buffer.IsDisposed;
+        if (versions == _bufferVersions && !disposed)
             return;
 
-        Dictionary<PropertyID, DeviceBuffer> snapshot = Fallback != null ? new(Fallback._buffers) : new();
-        foreach (KeyValuePair<PropertyID, DeviceBuffer> pair in _buffers)
-            snapshot[pair.Key] = pair.Value;
+        Dictionary<PropertyID, DeviceBuffer> snapshot = new();
+        foreach (Dictionary<PropertyID, DeviceBuffer> layer in Fallback != null ? [Fallback._buffers, _buffers] : new[] { _buffers })
+        {
+            foreach (KeyValuePair<PropertyID, DeviceBuffer> pair in layer)
+            {
+                if (!pair.Value.IsDisposed)
+                    snapshot[pair.Key] = pair.Value;
+            }
+        }
+        List<DeviceBuffer> list = new();
+        foreach (DeviceBuffer buffer in snapshot.Values)
+        {
+            if (!list.Contains(buffer))
+                list.Add(buffer);
+        }
         BufferSnapshot = snapshot;
+        BufferList = [.. list];
         _bufferVersions = versions;
     }
 
@@ -176,13 +195,13 @@ public sealed class GlobalProperties
     {
         if (!_registry.Declare(name, value.Type, out GlobalProperty property, out string? error))
         {
-            _registry.Report($"global.{name.Text()}", error!);
+            _registry.Report(new RendererError("global.declare", error!, RendererErrorSeverity.Warning, this) { Key = $"global.{name.Text()}" });
             return;
         }
 
         if (!MaterialSchema.Compatible(property.Type, value.Type))
         {
-            _registry.Report($"global.{name.Text()}.type", $"The global {name.Text()} is a {property.Type}, not a {value.Type}.");
+            _registry.Report(new RendererError("global.type", $"The global {name.Text()} is a {property.Type}, not a {value.Type}.", RendererErrorSeverity.Warning, this) { Key = $"global.{name.Text()}.type" });
             return;
         }
 
@@ -250,7 +269,7 @@ internal sealed class GlobalRegistry : IDisposable
     public uint RegionWords => _table.StrideWords;
 
     /// <summary>Called once per distinct problem, like a global set with two types.</summary>
-    public Action<string>? Reporter { get; set; }
+    public Action<RendererError>? Reporter { get; set; }
 
     public bool TryGet(PropertyID name, out GlobalProperty property)
     {
@@ -341,14 +360,14 @@ internal sealed class GlobalRegistry : IDisposable
         }
     }
 
-    internal void Report(string key, string message)
+    internal void Report(RendererError error)
     {
         lock (_lock)
         {
-            if (!_reported.Add(key))
+            if (!_reported.Add(error.Key ?? error.Code))
                 return;
         }
-        Reporter?.Invoke(message);
+        Reporter?.Invoke(error);
     }
 
     /// <summary>True when globals were declared past the current region size, until the next extraction grows the regions.</summary>

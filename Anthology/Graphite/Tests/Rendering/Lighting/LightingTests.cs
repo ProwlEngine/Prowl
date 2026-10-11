@@ -1056,7 +1056,6 @@ public sealed class LightingTests : IDisposable
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
         ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
         desc.TimeSlicing = ReflectionProbeTimeSlicing.IndividualFaces;
-        desc.Refresh = ReflectionProbeRefresh.OnRequest;
         ReflectionProbeHandle probe = _world.AddReflectionProbe(desc);
 
         for (int frame = 0; frame < 6; frame++)
@@ -1117,7 +1116,6 @@ public sealed class LightingTests : IDisposable
         Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
         ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
-        desc.Refresh = ReflectionProbeRefresh.OnRequest;
         _world.AddReflectionProbe(desc);
         Frame();
         AssertMatches(_ => new Vector3(0.8f, 0.5f, 0.2f), Frame());
@@ -1240,21 +1238,51 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void ProbesCapturedOnce_FollowTheSky()
+    public void ProbesCapturedOnce_KeepTheirSkyAndPlace_UntilAskedAgain()
     {
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
         Material sky = SkyMaterial(new Float3(0.1f, 0.2f, 0.4f), 0);
         _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = sky };
         ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
         desc.Intensity = 0.5f;
-        _world.AddReflectionProbe(desc);
+        ReflectionProbeHandle probe = _world.AddReflectionProbe(desc);
         Frame();
         AssertMatches(_ => new Vector3(0.05f, 0.1f, 0.2f), Frame());
 
         sky.SetColor("_Tint", new Float4(1, 0.5f, 0, 1));
+        desc.Position += new Double3(1, 0, 0);
+        _world.SetReflectionProbe(probe, desc);
         for (int frame = 0; frame < 4; frame++)
             Frame();
+        AssertMatches(_ => new Vector3(0.05f, 0.1f, 0.2f), Frame());
+
+        _world.RenderReflectionProbe(probe);
+        Frame();
         AssertMatches(_ => new Vector3(0.5f, 0.25f, 0), Frame());
+    }
+
+    [Fact]
+    public void TheCaptureBudget_FitsMoreSmallProbesThanBigOnes()
+    {
+        int Captured(uint resolution)
+        {
+            ReflectionProbeHandle[] probes = new ReflectionProbeHandle[4];
+            for (int i = 0; i < probes.Length; i++)
+            {
+                ReflectionProbeDesc desc = RoomProbe(new Double3(100 * i, 0, 0), new Float3(10, 10, 10));
+                desc.Resolution = resolution;
+                probes[i] = _world.AddReflectionProbe(desc);
+            }
+            Frame();
+            int count = _world.Reflections.Captures.Count;
+            foreach (ReflectionProbeHandle probe in probes)
+                _world.RemoveReflectionProbe(probe);
+            return count;
+        }
+
+        // A 64 probe and its filter is about 57k texels, a 256 one about 917k, against 256k a frame
+        Assert.Equal(4, Captured(64));
+        Assert.Equal(1, Captured(256));
     }
 
     [Fact]
@@ -1308,7 +1336,6 @@ public sealed class LightingTests : IDisposable
         Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
         ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
-        desc.Refresh = ReflectionProbeRefresh.OnRequest;
         ReflectionProbeHandle first = _world.AddReflectionProbe(desc);
         Frame();
         AssertMatches(_ => new Vector3(0.8f, 0.5f, 0.2f), Frame());
@@ -1347,7 +1374,7 @@ public sealed class LightingTests : IDisposable
 
         Float4[] missing = Draw();
         RendererError error = Assert.Single(_errors);
-        Assert.Equal("global.buffer.WindField", error.Code);
+        Assert.Equal("global.buffer.missing", error.Code);
         Assert.Equal(RendererErrorSeverity.Error, error.Severity);
         Assert.All(missing, p => Assert.Equal(0f, p.X));
         _errors.Clear();
@@ -1359,6 +1386,10 @@ public sealed class LightingTests : IDisposable
 
         _world.Globals.SetBuffer("WindField", world);
         AssertMatches(_ => new Vector3(1, 0, 0.5f), Frame());
+
+        // A disposed buffer drops out, the renderer's showing through again
+        world.Dispose();
+        AssertMatches(_ => new Vector3(0.25f, 0.5f, 0.75f), Frame());
     }
 
     [Fact]

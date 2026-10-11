@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -38,6 +39,52 @@ public sealed class FeatureTests : IDisposable
                     uniform vec4 _Color;
                     layout(location = 0) out vec4 outColor;
                     void main() { outColor = vec4(_Color.rgb, 1.0); }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    // Unlit, plus an Outline pass drawing green over everything wherever the renderable is
+    private const string OutlinedSource = """
+        Shader "Test/Outlined"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = vec4(1.0, 0.0, 0.0, 1.0); }
+                }
+                ENDGLSL
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Outline" }
+                Cull Off
+                ZTest Always
+                ZWrite Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = vec4(0.0, 1.0, 0.0, 1.0); }
                 }
                 ENDGLSL
             }
@@ -93,12 +140,14 @@ public sealed class FeatureTests : IDisposable
         _device.Dispose();
     }
 
-    private void AddQuad(Float3 color, uint layer = ~0u)
+    private void AddQuad(Float3 color, uint layer = ~0u, double scale = 1)
     {
         Material material = _renderer.CreateMaterial(_unlit);
         material.SetColor("_Color", new Float4(color.X, color.Y, color.Z, 1));
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), LayerMask = layer }, [material]);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(scale), LayerMask = layer }, [material]);
     }
+
+    private static bool Centre(int i) => i % Size is >= 4 and < 12 && i / Size is >= 4 and < 12;
 
     private ViewDesc View(int id = 1)
     {
@@ -326,11 +375,261 @@ public sealed class FeatureTests : IDisposable
     private static List<string> Select(RenderFeature[] world, RenderFeature[] view, ViewKind kind = ViewKind.Game)
     {
         foreach (RenderFeature feature in world.Concat(view))
-            feature.EnabledSnapshot = feature.Enabled;
+            feature.TakeSnapshot();
         ViewDesc desc = new() { Kind = kind };
         List<RenderFeature> result = new();
-        FeatureSelection.Select(result, world, view, new FeatureView(desc, 1, 1));
+        FeatureSelection.Select(result, world, view, new FeatureView(desc, 1, 1), _ => { });
         return result.Select(f => f is Named ? f.ToString()! : f.GetType().Name).ToList();
+    }
+
+    [Fact]
+    public void AColourWrittenBeforeTheOpaques_IsCopiedIntoTheScene_ThatTheyDrawOnto()
+    {
+        AddQuad(new Float3(1, 0, 0), scale: 0.5);
+        _world.Features.Add(new Effect(Program("void main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }"), RenderSlot.AfterPrepass));
+
+        // The inverted black clear around a quad the opaque pass draws over it
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 0, 0), pixels, Centre);
+        AssertAll(new Float3(1, 1, 1), pixels, i => !Centre(i));
+    }
+
+    private sealed class Throws(bool inSetup) : RenderFeature
+    {
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            if (inSetup)
+                throw new InvalidOperationException("setup");
+            builder.WriteColor();
+        }
+
+        public override void Render(FeatureContext context) => throw new InvalidOperationException("render");
+    }
+
+    [Fact]
+    public void FeaturesThatThrow_AreReportedOnce_AndTheViewDrawsOn()
+    {
+        AddQuad(new Float3(0.25f, 0.5f, 1));
+        _world.Features.Add(new Throws(inSetup: true));
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        Assert.Equal("feature.setup", Assert.Single(_errors).Code);
+        _errors.Clear();
+        AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
+
+        _world.Features.Add(new Throws(inSetup: false));
+        for (int frame = 0; frame < 6; frame++)
+            _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        Assert.Equal("feature.render", Assert.Single(_errors).Code);
+    }
+
+    // Inverts the colour once told to, which changes what it declares
+    private sealed class Toggle(FullscreenProgram program) : RenderFeature
+    {
+        public bool On;
+
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            if (On)
+                builder.WriteColor();
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            if (On)
+                context.Fullscreen(program);
+        }
+    }
+
+    [Fact]
+    public void InvalidatingAFeature_RebuildsWhatItDeclares()
+    {
+        AddQuad(new Float3(0.25f, 0.5f, 1));
+        Toggle toggle = new(Program("void main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }"));
+        _world.Features.Add(toggle);
+        AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
+        toggle.On = true;
+        toggle.Invalidate();
+        AssertAll(new Float3(0.75f, 0.5f, 0), Frame(View()));
+    }
+
+    [Fact]
+    public void AViewportNothingDrewInto_ShowsItsClearColour_AndTheRestOfTheTargetStays()
+    {
+        AddQuad(new Float3(1, 0, 0));
+        Frame(View());
+
+        ViewDesc empty = View(2);
+        empty.Viewport = new Float4(0, 0, 0.5f, 1);
+        empty.ClearColor = new Float4(0, 0, 1, 1);
+        empty.Features = new FeatureSet
+        {
+            new Named("no prepass", RenderSlot.Prepass, replaces: typeof(PrepassFeature)),
+            new Named("no opaque", RenderSlot.Opaque, replaces: typeof(OpaqueFeature)),
+            new Named("no sky", RenderSlot.Sky, replaces: typeof(SkyFeature)),
+            new Named("no transparent", RenderSlot.Transparent, replaces: typeof(TransparentFeature)),
+        };
+        Float4[] pixels = Frame(empty);
+        AssertAll(new Float3(0, 0, 1), pixels, i => i % Size < Size / 2);
+        AssertAll(new Float3(1, 0, 0), pixels, i => i % Size >= Size / 2);
+
+        // Letterboxed, the rest of the target takes the clear colour too
+        ViewDesc letterboxed = View(3);
+        letterboxed.Viewport = new Float4(0, 0, 0.5f, 1);
+        letterboxed.ClearColor = new Float4(0, 1, 0, 1);
+        letterboxed.ClearTarget = true;
+        pixels = Frame(letterboxed);
+        AssertAll(new Float3(1, 0, 0), pixels, i => i % Size < Size / 2);
+        AssertAll(new Float3(0, 1, 0), pixels, i => i % Size >= Size / 2);
+    }
+
+    [Fact]
+    public void Selection_AReplacementTakesTheReplacedGroup()
+    {
+        Named worldSky = new("world sky", RenderSlot.Sky, replaces: typeof(SkyFeature));
+        Named viewSky = new("view sky", RenderSlot.Sky, group: "Sky");
+        List<string> both = Select([worldSky], [viewSky]);
+        Assert.Contains("view sky", both);
+        Assert.DoesNotContain("world sky", both);
+        Assert.DoesNotContain("SkyFeature", both);
+
+        // Only a concrete feature type can be replaced
+        Named everything = new("everything", RenderSlot.Opaque, replaces: typeof(RenderFeature));
+        Assert.Contains("OpaqueFeature", Select([everything], []));
+    }
+
+    private sealed class Outlines : RenderFeature
+    {
+        public static readonly PassType Outline = new("Outline");
+
+        public override RenderSlot Slot => RenderSlot.AfterOpaques;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.DrawsPass(Outline);
+            builder.DrawToScene();
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            context.BeginOutput();
+            context.DrawPass(Outline);
+        }
+    }
+
+    [Fact]
+    public void FeaturesDrawAnyPassType_IncludingRenderablesAddedLater()
+    {
+        Shader outlined = _renderer.LoadShader(ShaderParser.Parse(OutlinedSource));
+        Material material = _renderer.CreateMaterial(outlined);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
+        _world.Features.Add(new Outlines());
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(0, 1, 0), pixels, Centre);
+        AssertAll(new Float3(0, 0, 0), pixels, i => !Centre(i));
+
+        // A plain renderable stays out of the pass, another outlined one behind everything joins it
+        Material plain = _renderer.CreateMaterial(_unlit);
+        plain.SetColor("_Color", new Float4(0, 0, 1, 1));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 20)) }, [plain]);
+        pixels = Frame(View());
+        AssertAll(new Float3(0, 1, 0), pixels, Centre);
+        AssertAll(new Float3(0, 0, 1), pixels, i => !Centre(i));
+
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 30)) }, [material]);
+        AssertAll(new Float3(0, 1, 0), Frame(View()));
+    }
+
+    // Adds a quarter to what it held last frame, and publishes it
+    private sealed class Accumulate(FullscreenProgram program) : RenderFeature
+    {
+        private readonly PropertySet _properties = new();
+        private TextureHandle _total;
+
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.ReadColor();
+            _total = builder.History("Total", GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float));
+            builder.Publish("Total", _total);
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            RenderTexture? previous = context.History(_total);
+            context.Command.SetFramebuffer(context.Get(_total).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+            context.Command.SetFullViewport();
+            context.Command.SetShader(program.For(1));
+            context.Command.SetVertexSource(VertexSource.None);
+            _properties.SetTexture("Graphite_Source", context.Color!);
+            _properties.SetTexture("_Previous", previous?.ColorTextures[0] ?? context.Color!);
+            _properties.SetFloat("_HasPrevious", previous != null ? 1 : 0);
+            context.Command.SetProperties(_properties);
+            context.Command.Draw(3);
+        }
+    }
+
+    // Shows what an earlier feature published
+    private sealed class Show(FullscreenProgram program) : RenderFeature
+    {
+        private readonly PropertySet _properties = new();
+        private TextureHandle _shown;
+
+        public override RenderSlot Slot => RenderSlot.Tonemap;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            _shown = builder.Read("Total");
+            builder.WriteColor();
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            _properties.SetTexture("_Shown", context.Get(_shown).ColorTextures[0]);
+            context.Fullscreen(program, _properties);
+        }
+    }
+
+    [Fact]
+    public void HistoryTextures_HoldWhatTheFeatureWroteLastFrame()
+    {
+        _world.Features.Add(new Accumulate(Program("uniform sampler2D _Previous; uniform float _HasPrevious; void main() { outColor = vec4(texture(_Previous, vUV).rgb * _HasPrevious + 0.25, 1.0); }")));
+        _world.Features.Add(new Show(Program("uniform sampler2D _Shown; void main() { outColor = texture(_Shown, vUV) + 0.0 * Graphite_SampleSource(vUV); }")));
+        AssertAll(new Float3(0.25f, 0.25f, 0.25f), Frame(View()));
+        AssertAll(new Float3(0.5f, 0.5f, 0.5f), Frame(View()));
+        AssertAll(new Float3(0.75f, 0.75f, 0.75f), Frame(View()));
+    }
+
+    private sealed class Counter
+    {
+        public int Frames;
+    }
+
+    private sealed class Counts : RenderFeature
+    {
+        public readonly Dictionary<int, int> Seen = new();
+
+        public override RenderSlot Slot => RenderSlot.Overlay;
+        public override void Setup(FeatureBuilder builder, in FeatureView view) { }
+        public override void Render(FeatureContext context) => Seen[context.View.ViewId] = ++context.GetViewState<Counter>().Frames;
+    }
+
+    [Fact]
+    public void ViewState_IsKeptPerView()
+    {
+        Counts counts = new();
+        _world.Features.Add(counts);
+        Frame(View(1), View(2));
+        Frame(View(1));
+        Frame(View(1));
+        Assert.Equal(3, counts.Seen[1]);
+        Assert.Equal(1, counts.Seen[2]);
     }
 
     [Fact]

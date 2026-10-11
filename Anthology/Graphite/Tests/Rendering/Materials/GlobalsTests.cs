@@ -74,7 +74,7 @@ public sealed class GlobalsTests : IDisposable
     private readonly GlslShaderCompiler _compiler = new();
     private readonly GlobalRegistry _registry;
     private readonly Uploader _uploader;
-    private readonly List<string> _reports = new();
+    private readonly List<RendererError> _reports = new();
 
     public GlobalsTests()
     {
