@@ -383,8 +383,18 @@ internal sealed class CameraFrame : IDisposable
     public readonly DrawList Forward = new();
     public readonly DrawList Transparent = new();
     public readonly RenderPipeline Pipeline = new();
-    public readonly ScenePass Scene;
+    public readonly SceneDrawer Drawer;
+    public readonly FeatureChain Chain;
+    public readonly SetupPass Setup;
     public readonly PresentPass Present;
+
+    /// <summary>The features the view's graph runs, and this frame's pick.</summary>
+    public readonly List<RenderFeature> Features = new();
+    public readonly List<RenderFeature> Selected = new();
+
+    /// <summary>Whether the view's graph rebuilds before it next draws.</summary>
+    public bool Rebuild = true;
+    public FeatureView Info;
     public readonly TableRing ViewTable;
     public readonly GpuArray Instances;
     public readonly GpuArray Records;
@@ -423,16 +433,21 @@ internal sealed class CameraFrame : IDisposable
     private IndirectDrawIndexedArguments[] _commands = new IndirectDrawIndexedArguments[64];
     private DrawRecord[] _records = new DrawRecord[64];
     private uint[] _instances = new uint[256];
+    private readonly FramePipeline _frame;
+    private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
+    private readonly List<IPass> _passList = new();
 
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
-        Scene = new ScenePass(frame, this);
+        _frame = frame;
+        Drawer = new SceneDrawer(frame, this);
+        Chain = new FeatureChain(viewId);
+        Setup = new SetupPass(frame, this);
         Present = new PresentPass(frame, this);
         Views = [View];
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
         Pipeline.Name = $"Graphite.Camera {viewId}";
-        Pipeline.SetPasses([Scene, Present]);
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
         Instances = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Instances {viewId}");
         Records = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Draw records {viewId}");
@@ -448,6 +463,46 @@ internal sealed class CameraFrame : IDisposable
         DecalRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Decal region nodes {viewId}");
         ProbeRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Probe regions {viewId}");
         ProbeRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Probe region nodes {viewId}");
+    }
+
+    /// <summary>Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed.</summary>
+    public void ApplyFeatures()
+    {
+        if (!Rebuild && Same(Features, Selected))
+            return;
+        Features.Clear();
+        Features.AddRange(Selected);
+        _passList.Clear();
+        _passList.Add(Setup);
+        foreach (RenderFeature feature in Features)
+        {
+            if (!_passes.TryGetValue(feature, out FeaturePass? pass))
+                _passes[feature] = pass = new FeaturePass(feature, this, _frame);
+            _passList.Add(pass);
+        }
+        _passList.Add(Present);
+        if (_passes.Count > Features.Count)
+        {
+            foreach (RenderFeature feature in new List<RenderFeature>(_passes.Keys))
+            {
+                if (!Features.Contains(feature))
+                    _passes.Remove(feature);
+            }
+        }
+        Pipeline.SetPasses(_passList);
+        Rebuild = false;
+    }
+
+    private static bool Same(List<RenderFeature> a, List<RenderFeature> b)
+    {
+        if (a.Count != b.Count)
+            return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (a[i] != b[i])
+                return false;
+        }
+        return true;
     }
 
     public void AddBuffers(List<DeviceBuffer> buffers)
@@ -517,6 +572,7 @@ internal sealed class CameraFrame : IDisposable
     public void Dispose()
     {
         Pipeline.Dispose();
+        Chain.Dispose();
         ViewTable.Dispose();
         Instances.Dispose();
         Records.Dispose();
@@ -535,37 +591,16 @@ internal sealed class CameraFrame : IDisposable
     }
 }
 
-/// <summary>Draws a view's prepass, opaque and transparent lists into its HDR scene target.</summary>
-internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
+/// <summary>Records a view's built in draws for the core features: its table, its draw lists and its sky.</summary>
+internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
 {
-    public static readonly RenderResourceID SceneId = RenderResourceID.Intern("Graphite.Scene");
-
-    private static readonly GraphTextureDesc s_scene = GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, depth: true) with
-    {
-        ColorFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm],
-        DepthFormat = PixelFormat.D32_Float,
-    };
-
-    /// <summary>The scene target, drawn through multiview into one array layer per view layer.</summary>
-    public static GraphTextureDesc Target(int layers) => s_scene with { ArrayLayers = layers > 1 ? (uint)layers : 0 };
-
     private readonly PropertySet _properties = new();
     private (DeviceBuffer? Buffer, uint Offset, uint Size) _globals;
-    private TextureHandle _target;
+    private DescriptorTable _viewTable = null!;
 
-    public string Name => "Graphite.Scene";
-
-    public void Setup(RenderContextBuilder builder)
+    /// <summary>Fills the view's table for the frame. Recorded first in the view's graph.</summary>
+    public void Prepare(uint ring)
     {
-        _target = builder.DeclareOutputTexture(SceneId, Target(camera.LayerCount));
-        DeviceBuffer[] buffers = frame.Buffers;
-        for (int i = 0; i < buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), buffers[i], BufferAccess.AllReads);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        uint ring = context.Task.RingSlot;
         GlobalRegistry registry = frame.Globals;
         (DeviceBuffer Buffer, uint Offset, uint Size) globals = (registry.Buffer, (uint)camera.World.GlobalRegion * registry.RegionWords * 4, registry.RegionWords * 4);
         if (globals != _globals)
@@ -585,24 +620,13 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         camera.ViewTable.Set("Graphite_ProbeRegions", 0, camera.ProbeRegions.Buffer);
         camera.ViewTable.Set("Graphite_ProbeRegionNodes", 0, camera.ProbeRegionNodes.Buffer);
         SetWorldBuffers(camera.ViewTable, camera.World.World);
-        DescriptorTable viewTable = camera.ViewTable.Get(ring);
-        DescriptorTable frameTable = frame.TextureTable;
-
-        Float4 clear = camera.Desc.ClearColor;
-        cmd.SetFramebuffer(context.GetRenderTexture(_target).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f)));
-        cmd.SetFullViewport();
-        cmd.ClearColorTarget(1, new Color(0, 0, 0, 0));
-        cmd.ClearColorTarget(2, new Color(0, 0, 0, 0));
+        _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
-
-        for (int l = 0; l < camera.Lists.Length; l++)
-        {
-            if (camera.Lists[l] == camera.Transparent)
-                DrawSky(cmd, frameTable, viewTable);
-            Draw(cmd, camera.Lists[l], camera.CommandBases[l], frameTable, viewTable);
-        }
     }
+
+    /// <summary>Records one of the view's draw lists: 0 prepass, 1 opaque, 2 transparent.</summary>
+    public void DrawList(CommandBuffer cmd, int list) => Draw(cmd, camera.Lists[list], camera.CommandBases[list]);
 
     // The host's buffers a program reads, from the world's globals over the renderer's. A missing one skips the draw.
     private bool BindUserBuffers(GraphicsProgram program, Shader shader)
@@ -642,7 +666,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
     }
 
     // A fullscreen triangle at the far plane with the sky material's slot in the push constants
-    private void DrawSky(CommandBuffer cmd, DescriptorTable frameTable, DescriptorTable viewTable)
+    public void DrawSky(CommandBuffer cmd)
     {
         WorldFrame world = camera.World;
         if (!camera.Desc.Sky || world.SkyProgram is not ushort id || world.World.Lighting.Environment.Sky is not { IsDisposed: false, Table: { } table } sky)
@@ -653,15 +677,15 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
 
         cmd.SetShader(program);
         cmd.SetVertexSource(VertexSource.None);
-        cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frameTable);
-        cmd.SetDescriptorTable(GraphiteBindings.ViewSet, viewTable);
+        cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
+        cmd.SetDescriptorTable(GraphiteBindings.ViewSet, _viewTable);
         _properties.SetBuffer(GraphiteBindings.MaterialsName, table.Records.Buffer);
         cmd.SetProperties(_properties);
         cmd.SetPushConstants(new FramePipeline.Push { InstanceBase = sky.Slot });
         cmd.Draw(3);
     }
 
-    private void Draw(CommandBuffer cmd, DrawList list, int commandBase, DescriptorTable frameTable, DescriptorTable viewTable)
+    private void Draw(CommandBuffer cmd, DrawList list, int commandBase)
     {
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
         foreach (DrawCall call in list.Calls)
@@ -677,41 +701,14 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
             GeometryPage page = frame.Geometry.Pages[call.Page];
             cmd.SetShader(program);
             cmd.SetVertexSource(frame.VertexSource(call.Page, call.Topology));
-            cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frameTable);
-            cmd.SetDescriptorTable(GraphiteBindings.ViewSet, viewTable);
+            cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
+            cmd.SetDescriptorTable(GraphiteBindings.ViewSet, _viewTable);
             _properties.SetBuffer(GraphiteBindings.MaterialsName, table.Records.Buffer);
             _properties.SetBuffer(GraphiteBindings.VerticesName, page.Vertices);
             cmd.SetProperties(_properties);
             cmd.SetPushConstants(new FramePipeline.Push { DrawRecordBase = (uint)(commandBase + call.FirstCommand) });
             cmd.DrawIndexedIndirect(camera.Commands.Buffer, (uint)(commandBase + call.FirstCommand) * stride, (uint)call.CommandCount, stride);
         }
-    }
-}
-
-/// <summary>Copies the scene colour to the view's target.</summary>
-internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPass
-{
-    private readonly PropertySet _properties = new();
-    private TextureHandle _scene;
-    private TextureHandle _target;
-
-    public string Name => "Graphite.Present";
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        _scene = builder.DeclareInputTexture(ScenePass.SceneId);
-        _target = builder.DeclareViewTarget();
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        cmd.SetFramebuffer(context.GetRenderTexture(_target).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
-        cmd.SetFullViewport();
-        cmd.SetShader(camera.LayerCount > 1 ? frame.PresentLayersProgram : frame.PresentProgram);
-        cmd.SetVertexSource(VertexSource.None);
-        _properties.SetTexture("Graphite_Source", context.GetRenderTexture(_scene).ColorTextures[0], frame.LinearSampler);
-        cmd.SetProperties(_properties);
-        cmd.Draw(3);
     }
 }
 
@@ -791,6 +788,9 @@ internal sealed class FramePipeline : IDisposable
     private readonly List<DeviceBuffer> _buffers = new();
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
+    private readonly List<IDisposable> _retired = new();
+    private readonly HashSet<RenderFeature> _prepared = new();
+    private readonly List<int> _viewOrder = new();
     private readonly List<WorldFrame> _frameWorlds = new();
     private readonly IRenderView[] _frameStartViews = [new CameraView { ViewId = -1 }];
     private int _frame;
@@ -818,8 +818,7 @@ internal sealed class FramePipeline : IDisposable
         _frameStart.Name = "Graphite.FrameStart";
         _frameStart.SetPasses([_upload, _probes]);
 
-        PresentProgram = Fullscreen(device, compiler, "Internal/Present.glsl");
-        PresentLayersProgram = Fullscreen(device, compiler, "Internal/PresentLayers.glsl");
+        PresentProgram = FullscreenProgram.Create(device, compiler, "void main() { outColor = Graphite_SampleSource(vUV); }", "Graphite/Present");
         PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
         TrilinearClamp = device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
@@ -836,10 +835,7 @@ internal sealed class FramePipeline : IDisposable
     public GlobalRegistry Globals { get; }
     public DrawPrograms DrawPrograms { get; }
     public ProgramCache Programs { get; }
-    public GraphicsProgram PresentProgram { get; }
-
-    /// <summary>Copies every layer of a multiview scene into the matching view of its target.</summary>
-    public GraphicsProgram PresentLayersProgram { get; }
+    public FullscreenProgram PresentProgram { get; }
 
     public GraphicsProgram PrefilterProgram { get; }
 
@@ -890,12 +886,18 @@ internal sealed class FramePipeline : IDisposable
     }
 
     /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
     {
         _frame++;
         _dispatches.Clear();
         _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
         _frameWorlds.Clear();
+        _prepared.Clear();
+        foreach (WorldFrame world in allWorlds)
+            PrepareFeatures(world.World.FeatureSnapshot);
+        foreach (RenderFeature[] features in viewFeatures)
+            PrepareFeatures(features);
+
         foreach (WorldFrame world in allWorlds)
         {
             _frameWorlds.Add(world);
@@ -910,8 +912,10 @@ internal sealed class FramePipeline : IDisposable
                 CaptureProbe(world, capture, time);
         }
 
-        foreach (ViewDesc view in views)
+        OrderViews(views);
+        foreach (int index in _viewOrder)
         {
+            ViewDesc view = views[index];
             if (!worlds.TryGetValue(view.World, out WorldFrame? world))
                 continue;
 
@@ -926,7 +930,7 @@ internal sealed class FramePipeline : IDisposable
                 throw new InvalidOperationException($"Two views share the ViewId {view.ViewId} in one frame.");
             }
 
-            Draw(camera, view, world, time);
+            Draw(camera, view, viewFeatures[index], world, time);
         }
 
         ResolvePrograms();
@@ -942,11 +946,14 @@ internal sealed class FramePipeline : IDisposable
         foreach (Texture texture in _disposeAfterDispatch)
             texture.Dispose();
         _disposeAfterDispatch.Clear();
+        foreach (IDisposable retired in _retired)
+            retired.Dispose();
+        _retired.Clear();
         ReleaseStaleCameras();
         return task;
     }
 
-    private void Draw(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time)
+    private void Draw(CameraFrame camera, in ViewDesc view, RenderFeature[] features, WorldFrame world, in FrameTime time)
     {
         camera.LastFrame = _frame;
         camera.Desc = view;
@@ -954,14 +961,92 @@ internal sealed class FramePipeline : IDisposable
         {
             camera.LayerCount = view.LayerCount;
             camera.HasPrevious = false;
-            camera.Pipeline.SetPasses([camera.Scene, camera.Present]);
         }
         camera.World = world;
-        Prepare(camera, view, world, time);
+        uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
+        uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
+        if (camera.Chain.Ensure(_device, width, height, view.LayerCount, _retired))
+            camera.Rebuild = true;
+        camera.Info = new FeatureView(view, width, height);
+        FeatureSelection.Select(camera.Selected, world.World.FeatureSnapshot, features, camera.Info);
+        camera.ApplyFeatures();
+        Prepare(camera, view, world, time, width, height);
         camera.View.Target = view.Target;
-        camera.View.PixelWidth = view.Target.Width;
-        camera.View.PixelHeight = view.Target.Height;
+        camera.View.PixelWidth = width;
+        camera.View.PixelHeight = height;
         _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
+    }
+
+    private void PrepareFeatures(RenderFeature[] features)
+    {
+        foreach (RenderFeature feature in features)
+        {
+            if (feature.EnabledSnapshot && _prepared.Add(feature))
+                feature.PrepareFrame();
+        }
+    }
+
+    // Views by Order, each after the views it depends on. A cycle is reported and drawn in Order.
+    private void OrderViews(ReadOnlySpan<ViewDesc> views)
+    {
+        _viewOrder.Clear();
+        for (int i = 0; i < views.Length; i++)
+        {
+            int j = _viewOrder.Count - 1;
+            while (j >= 0 && views[_viewOrder[j]].Order > views[i].Order)
+                j--;
+            _viewOrder.Insert(j + 1, i);
+        }
+
+        bool dependencies = false;
+        foreach (ViewDesc view in views)
+            dependencies |= view.DependsOn is { Length: > 0 };
+        if (!dependencies)
+            return;
+
+        List<int> sorted = new(_viewOrder);
+        bool[] placed = new bool[views.Length];
+        _viewOrder.Clear();
+        while (_viewOrder.Count < sorted.Count)
+        {
+            int next = -1;
+            foreach (int index in sorted)
+            {
+                if (!placed[index] && Ready(views, index, placed))
+                {
+                    next = index;
+                    break;
+                }
+            }
+            if (next < 0)
+            {
+                Report("view.dependency.cycle", "Views depend on each other in a cycle, so the rest draw in Order.");
+                foreach (int index in sorted)
+                {
+                    if (!placed[index])
+                        _viewOrder.Add(index);
+                }
+                return;
+            }
+            placed[next] = true;
+            _viewOrder.Add(next);
+        }
+    }
+
+    // Whether every view a view depends on is placed, ones not submitted this frame counting as placed
+    private static bool Ready(ReadOnlySpan<ViewDesc> views, int index, bool[] placed)
+    {
+        if (views[index].DependsOn is not { } dependencies)
+            return true;
+        foreach (int id in dependencies)
+        {
+            for (int i = 0; i < views.Length; i++)
+            {
+                if (i != index && views[i].ViewId == id && !placed[i])
+                    return false;
+            }
+        }
+        return true;
     }
 
     // Holds the draw program of the environment's sky material while it has a Sky pass
@@ -991,6 +1076,7 @@ internal sealed class FramePipeline : IDisposable
         ViewDesc capture = new()
         {
             World = world.World,
+            Kind = ViewKind.SkyCapture,
             ViewId = world.SkyCamera.View.ViewId,
             LayerCount = 6,
             Target = scratch.All,
@@ -1000,8 +1086,8 @@ internal sealed class FramePipeline : IDisposable
         };
         for (int face = 0; face < 6; face++)
             capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = WorldReflections.FaceProjection };
-        Draw(world.SkyCamera, capture, world, time);
-        Fill(world, reflections.Sky!, scratch.Cube, null);
+        Draw(world.SkyCamera, capture, [], world, time);
+        Fill(world, -1, reflections.Sky!, scratch.Cube, null);
 
         if (world.SkyAmbient == null)
         {
@@ -1015,7 +1101,7 @@ internal sealed class FramePipeline : IDisposable
     }
 
     // Filters a captured cube into every mip of a prefiltered one
-    private void Fill(WorldFrame world, WorldReflections.Target target, Texture source, Action<BakedReflectionProbe>? bake)
+    private void Fill(WorldFrame world, int index, WorldReflections.Target target, Texture source, Action<BakedReflectionProbe>? bake)
     {
         if (world.FiltersUsed == world.Filters.Count)
         {
@@ -1028,7 +1114,7 @@ internal sealed class FramePipeline : IDisposable
         WorldReflections reflections = world.World.Reflections;
         pass.Source = source;
         pass.Destination = target.Cube;
-        pass.Readback = bake != null ? reflections.BakeBuffer(target, bake) : null;
+        pass.Readback = bake != null ? reflections.BakeBuffer(index, target, bake) : null;
         _dispatches.Add(new GraphDispatch(filter, target.Views));
     }
 
@@ -1047,6 +1133,7 @@ internal sealed class FramePipeline : IDisposable
             ViewDesc capture = new()
             {
                 World = world.World,
+                Kind = ViewKind.ReflectionProbe,
                 ViewId = camera.View.ViewId,
                 LayerCount = 6,
                 Target = scratch.All,
@@ -1057,7 +1144,7 @@ internal sealed class FramePipeline : IDisposable
             };
             for (int face = 0; face < 6; face++)
                 capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = projection, Position = probe.Position };
-            Draw(camera, capture, world, time);
+            Draw(camera, capture, [], world, time);
         }
         else if (faces == 1)
         {
@@ -1065,6 +1152,7 @@ internal sealed class FramePipeline : IDisposable
             ViewDesc capture = new()
             {
                 World = world.World,
+                Kind = ViewKind.ReflectionProbe,
                 ViewId = camera.View.ViewId,
                 Target = scratch.Faces[work.FirstFace],
                 CullingMask = probe.CullingMask,
@@ -1073,11 +1161,11 @@ internal sealed class FramePipeline : IDisposable
                 FarDistance = probe.FarClip,
             };
             capture.Layers[0] = new ViewLayer { View = WorldReflections.FaceView(work.FirstFace), Projection = projection, Position = probe.Position };
-            Draw(camera, capture, world, time);
+            Draw(camera, capture, [], world, time);
         }
 
         if (work.Prefilter)
-            Fill(world, target, scratch.Cube, work.Bake);
+            Fill(world, work.Index, target, scratch.Cube, work.Bake);
     }
 
     private CameraFrame Capturing()
@@ -1125,7 +1213,7 @@ internal sealed class FramePipeline : IDisposable
         }
     }
 
-    private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time)
+    private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
     {
         int layers = view.LayerCount;
         CullFrustum frustum = new(view.Layers, layers);
@@ -1158,7 +1246,7 @@ internal sealed class FramePipeline : IDisposable
         for (int l = 0; l < layers; l++)
         {
             ViewLayer layer = view.Layers[l];
-            ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance);
+            ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, width, height, view.Near, view.FarDistance);
             float timeHigh = (float)time.Time;
             block.Time = new Float4(timeHigh, time.DeltaTime, time.FrameIndex, (float)(time.Time - timeHigh));
             Float3 offset = frustum.Relative(layer.Position);
@@ -1247,9 +1335,16 @@ internal sealed class FramePipeline : IDisposable
         _probes.Buffers = Buffers;
         _frameStart.SetPasses([_upload, _probes]);
         foreach (CameraFrame camera in _cameras.Values)
-            camera.Pipeline.SetPasses([camera.Scene, camera.Present]);
+        {
+            camera.Rebuild = true;
+            if (camera.LastFrame == _frame)
+                camera.ApplyFeatures();
+        }
         foreach (CameraFrame camera in _captures)
-            camera.Pipeline.SetPasses([camera.Scene, camera.Present]);
+        {
+            camera.Rebuild = true;
+            camera.ApplyFeatures();
+        }
     }
 
     private static bool Same(DeviceBuffer[] a, List<DeviceBuffer> b)
@@ -1292,7 +1387,6 @@ internal sealed class FramePipeline : IDisposable
         _probes.Dispose();
         Programs.Dispose();
         PresentProgram.Dispose();
-        PresentLayersProgram.Dispose();
         PrefilterProgram.Dispose();
         SkyAmbientProgram.Dispose();
         TrilinearClamp.Dispose();

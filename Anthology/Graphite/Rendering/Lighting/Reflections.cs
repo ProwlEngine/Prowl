@@ -110,6 +110,9 @@ public sealed class BakedReflectionProbe
 {
     public int Size;
     public int Mips;
+
+    /// <summary>The texel format of every face, the renderer's reflection format when baked.</summary>
+    public PixelFormat Format = PixelFormat.R16_G16_B16_A16_Float;
     public byte[][] Faces = [];
 }
 
@@ -273,6 +276,7 @@ internal sealed class WorldReflections : IDisposable
     private bool[] _requested = new bool[8];
     private bool[] _working = new bool[8];
     private int[] _capturedAt = new int[8];
+    private int[] _generations = new int[8];
     private Texture?[] _baked = new Texture?[8];
     private uint[] _bakedSlot = new uint[8];
     private readonly List<int> _bakedDirty = new();
@@ -290,6 +294,7 @@ internal sealed class WorldReflections : IDisposable
 
     private sealed class PendingBake
     {
+        public required int Index;
         public required DeviceBuffer Buffer;
         public required Action<BakedReflectionProbe> Done;
         public required int Size;
@@ -345,6 +350,11 @@ internal sealed class WorldReflections : IDisposable
 
     public ReflectionProbeDesc Probe(int index) => _probes[index];
 
+    /// <summary>Scratch cubes made so far, for tests.</summary>
+    internal int ScratchCount => _scratchAll.Count;
+
+    internal bool HasTarget(int index) => index < _targets.Length && _targets[index] != null;
+
     public Target ProbeTarget(int index) => _targets[index]!;
 
     internal void ReceiveProbe(int index, int generation, uint sequence, bool alive, in ReflectionProbeDesc desc)
@@ -359,15 +369,17 @@ internal sealed class WorldReflections : IDisposable
             Array.Resize(ref _requested, size);
             Array.Resize(ref _working, size);
             Array.Resize(ref _capturedAt, size);
+            Array.Resize(ref _generations, size);
             Array.Resize(ref _baked, size);
             Array.Resize(ref _bakedSlot, size);
         }
 
         ReflectionProbeDesc old = _probes[index];
-        bool wasAlive = _alive[index];
+        bool wasAlive = _alive[index] && _generations[index] == generation;
+        _generations[index] = generation;
         if (!alive)
         {
-            if (wasAlive)
+            if (_alive[index])
             {
                 StopJob(index);
                 Uncapture(index);
@@ -384,11 +396,15 @@ internal sealed class WorldReflections : IDisposable
             _bakedDirty.Add(index);
         if (!wasAlive || old.Mode != desc.Mode || (desc.Mode == ReflectionProbeMode.Realtime && old.Resolution != desc.Resolution))
         {
+            if (wasAlive)
+                DropBakes(index);
             StopJob(index);
             Uncapture(index);
             ReleaseTarget(index);
             return;
         }
+        if (old.TimeSlicing != desc.TimeSlicing)
+            StopJob(index);
         if (desc.Mode == ReflectionProbeMode.Realtime && desc.Refresh == ReflectionProbeRefresh.Once
             && (old.Position != desc.Position || old.Rotation != desc.Rotation || old.NearClip != desc.NearClip || old.FarClip != desc.FarClip || old.CullingMask != desc.CullingMask))
             _requested[index] = true;
@@ -425,8 +441,22 @@ internal sealed class WorldReflections : IDisposable
     {
         _skyCaptured = false;
         foreach (Job job in _jobs)
+        {
             _working[job.Index] = false;
+            _scratchUsed.Add(job.Scratch);
+            if (job.Bake != null)
+                _bakes.Add((job.Index, job.Bake));
+        }
         _jobs.Clear();
+        for (int i = _pendingBakes.Count - 1; i >= 0; i--)
+        {
+            PendingBake bake = _pendingBakes[i];
+            if (bake.Execution != 0)
+                continue;
+            bake.Buffer.Dispose();
+            _pendingBakes.RemoveAt(i);
+            _bakes.Add((bake.Index, bake.Done));
+        }
         _joining.Clear();
         for (int i = 0; i < _probes.Length; i++)
         {
@@ -457,6 +487,11 @@ internal sealed class WorldReflections : IDisposable
                 MarkCaptured(index, frame);
         }
         _joining.Clear();
+        for (int i = 0; i < _probes.Length; i++)
+        {
+            if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Baked && _targets[i] != null && !_working[i])
+                ReleaseTarget(i);
+        }
 
         EnvironmentDesc environment = lighting.Environment;
         uint skyResolution = Pow2(environment.SkyProbeResolution, "sky probe");
@@ -485,21 +520,21 @@ internal sealed class WorldReflections : IDisposable
     }
 
     /// <summary>A buffer a bake reads a probe's cube back into, collected once its frame completes. Render thread.</summary>
-    public DeviceBuffer BakeBuffer(Target target, Action<BakedReflectionProbe> done)
+    public DeviceBuffer BakeBuffer(int index, Target target, Action<BakedReflectionProbe> done)
     {
         uint bytes = 0;
         for (int mip = 0; mip < target.Mips; mip++)
-            bytes += 6 * FaceBytes(target.Cube.Width, mip);
+            bytes += 6 * FaceBytes(target.Cube.Width, mip, target.Cube.Format);
         DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
         buffer.Name = "Reflection probe bake";
-        _pendingBakes.Add(new PendingBake { Buffer = buffer, Done = done, Size = (int)target.Cube.Width, Mips = (int)target.Mips });
+        _pendingBakes.Add(new PendingBake { Index = index, Buffer = buffer, Done = done, Size = (int)target.Cube.Width, Mips = (int)target.Mips });
         return buffer;
     }
 
-    public static uint FaceBytes(uint resolution, int mip)
+    public static uint FaceBytes(uint resolution, int mip, PixelFormat format)
     {
         uint size = Math.Max(resolution >> mip, 1);
-        return size * size * 8;
+        return size * size * format.GetSizeInBytes();
     }
 
     /// <summary>Gives this frame's bakes the execution that reads them back. Render thread, after dispatch.</summary>
@@ -522,13 +557,13 @@ internal sealed class WorldReflections : IDisposable
                 continue;
 
             ReadOnlySpan<byte> data = _device.Map<byte>(bake.Buffer);
-            BakedReflectionProbe baked = new() { Size = bake.Size, Mips = bake.Mips, Faces = new byte[6 * bake.Mips][] };
+            BakedReflectionProbe baked = new() { Size = bake.Size, Mips = bake.Mips, Format = _settings.Format, Faces = new byte[6 * bake.Mips][] };
             int offset = 0;
             for (int face = 0; face < 6; face++)
             {
                 for (int mip = 0; mip < bake.Mips; mip++)
                 {
-                    int bytes = (int)FaceBytes((uint)bake.Size, mip);
+                    int bytes = (int)FaceBytes((uint)bake.Size, mip, _settings.Format);
                     baked.Faces[face * bake.Mips + mip] = data.Slice(offset, bytes).ToArray();
                     offset += bytes;
                 }
@@ -572,7 +607,7 @@ internal sealed class WorldReflections : IDisposable
         }
 
         // Probes captured once hold the old sky in them
-        if (_skyCaptured && changed)
+        if (changed)
         {
             for (int i = 0; i < _probes.Length; i++)
             {
@@ -582,6 +617,7 @@ internal sealed class WorldReflections : IDisposable
         }
 
         SkyScratch = RentScratch(Sky!.Cube.Width);
+        _scratchUsed.Add(SkyScratch);
         _skyCaptured = true;
         _capturedFrame = frame;
         _capturedSky = sky;
@@ -649,7 +685,7 @@ internal sealed class WorldReflections : IDisposable
         {
             int faces = FacesAtOnce(index);
             if (faces > budget && Captures.Count > 0)
-                break;
+                continue;
             _requested[index] = false;
             budget -= Advance(StartJob(index), faces);
             if (budget <= 0)
@@ -684,6 +720,8 @@ internal sealed class WorldReflections : IDisposable
         _jobs.Remove(job);
         _working[job.Index] = false;
         _scratchUsed.Add(job.Scratch);
+        if (_probes[job.Index].Mode != ReflectionProbeMode.Realtime)
+            return;
         if (_captured[job.Index])
             _capturedAt[job.Index] = _frame;
         else if (joinNow)
@@ -705,6 +743,7 @@ internal sealed class WorldReflections : IDisposable
 
     private void StopJob(int index)
     {
+        _joining.Remove(index);
         if (!_working[index])
             return;
         _working[index] = false;
@@ -715,6 +754,19 @@ internal sealed class WorldReflections : IDisposable
             _scratchUsed.Add(_jobs[j].Scratch);
             _jobs.RemoveAt(j);
             break;
+        }
+    }
+
+    // Bakes asked of a probe that changed beyond keeping its capture are asked again of what it is now
+    private void DropBakes(int index)
+    {
+        foreach (Job job in _jobs)
+        {
+            if (job.Index == index && job.Bake != null)
+            {
+                _bakes.Add((index, job.Bake));
+                job.Bake = null;
+            }
         }
     }
 
@@ -803,6 +855,7 @@ internal sealed class WorldReflections : IDisposable
     // Drops the probe from the tree until it is captured or its cube shown again
     private void Uncapture(int index)
     {
+        _joining.Remove(index);
         _captured[index] = false;
         _baked[index] = null;
         _requested[index] = _alive[index] && _probes[index].Mode == ReflectionProbeMode.Realtime;
@@ -959,7 +1012,7 @@ internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler, in
                 {
                     uint size = Math.Max(resolution >> mip, 1);
                     cmd.CopyTextureToBuffer(Destination, Readback, offset, new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
-                    offset += WorldReflections.FaceBytes(resolution, mip);
+                    offset += WorldReflections.FaceBytes(resolution, mip, Destination.Format);
                 }
             }
         }

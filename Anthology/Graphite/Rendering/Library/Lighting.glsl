@@ -622,8 +622,9 @@ vec3 Graphite_SkyAmbient(vec3 worldNormal);
 
 vec3 CalculateAmbient(vec3 worldNormal)
 {
-    vec3 ambient = Graphite_SkyAmbient(worldNormal) * graphite_World.ambientMode.w;
-    ambient += graphite_World.ambientColor.rgb * graphite_World.ambientMode.x;
+    vec3 ambient = graphite_World.ambientColor.rgb * graphite_World.ambientMode.x;
+    if (graphite_World.ambientMode.w > 0.0)
+        ambient += Graphite_SkyAmbient(worldNormal) * graphite_World.ambientMode.w;
 
     float upDot = dot(worldNormal, vec3(0.0, 1.0, 0.0));
     ambient += mix(graphite_World.ambientGround.rgb, graphite_World.ambientSky.rgb, upDot * 0.5 + 0.5) * graphite_World.ambientMode.y;

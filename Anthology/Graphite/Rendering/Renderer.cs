@@ -124,6 +124,24 @@ public struct ViewDesc
     /// <summary>The logical far distance, for effects that need one with an infinite projection.</summary>
     public float FarDistance;
 
+    /// <summary>What the view is for, which decides the features that run on it.</summary>
+    public ViewKind Kind;
+
+    /// <summary>The part of the target the view draws into, as x, y, width and height from 0 to 1.</summary>
+    public Float4 Viewport;
+
+    /// <summary>Render resolution against the viewport's size in the target, presented scaled to fit.</summary>
+    public float RenderScale;
+
+    /// <summary>Features of this view alone, over the world's.</summary>
+    public FeatureSet? Features;
+
+    /// <summary>Views draw lowest Order first, each after the views it depends on.</summary>
+    public int Order;
+
+    /// <summary>ViewIds of views that draw before this one, such as ones whose targets it samples.</summary>
+    public int[]? DependsOn;
+
     public ViewDesc()
     {
         World = null!;
@@ -133,6 +151,8 @@ public struct ViewDesc
         Sky = true;
         Near = 0.1f;
         FarDistance = 1000;
+        Viewport = new Float4(0, 0, 1, 1);
+        RenderScale = 1;
     }
 }
 
@@ -193,6 +213,10 @@ public sealed class Renderer : IDisposable
         GraphicsDeviceFeatures features = device.Features;
         if (!features.MultiDrawIndirect || !features.DrawIndirectBaseInstance || !features.DescriptorIndexing)
             throw new NotSupportedException("The renderer needs multi draw indirect, a first instance in indirect draws, and descriptor indexing.");
+        if (_options.PrefilterSamples < 1)
+            throw new ArgumentException($"PrefilterSamples is {_options.PrefilterSamples}, it must be at least 1.", nameof(options));
+        if (_options.SmallestProbeMip is < 1 or > 2048 || !uint.IsPow2(_options.SmallestProbeMip))
+            throw new ArgumentException($"SmallestProbeMip is {_options.SmallestProbeMip}, it must be a power of two from 1 to 2048.", nameof(options));
         InternalShaders.Register();
 
         Textures = new RendererTextures(device) { Reporter = Warn };
@@ -257,7 +281,8 @@ public sealed class Renderer : IDisposable
         if (baked.Size <= 0 || baked.Mips <= 0 || baked.Faces.Length < 6 * baked.Mips)
             throw new ArgumentException("A baked reflection probe needs a size, mips and every face of every mip.", nameof(baked));
 
-        Texture cube = Device.ResourceFactory.CreateTexture(TextureDescription.CreateCube((uint)baked.Size, (uint)baked.Mips, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        uint texel = baked.Format.GetSizeInBytes();
+        Texture cube = Device.ResourceFactory.CreateTexture(TextureDescription.CreateCube((uint)baked.Size, (uint)baked.Mips, 1, baked.Format, TextureUsage.Sampled));
         cube.Name = "Baked reflection probe";
         for (int face = 0; face < 6; face++)
         {
@@ -265,8 +290,11 @@ public sealed class Renderer : IDisposable
             {
                 uint size = (uint)Math.Max(baked.Size >> mip, 1);
                 byte[] data = baked.Faces[face * baked.Mips + mip];
-                if (data.Length != size * size * 8)
-                    throw new ArgumentException($"Face {face} mip {mip} holds {data.Length} bytes, {size * size * 8} expected.", nameof(baked));
+                if (data.Length != size * size * texel)
+                {
+                    cube.Dispose();
+                    throw new ArgumentException($"Face {face} mip {mip} holds {data.Length} bytes, {size * size * texel} expected.", nameof(baked));
+                }
                 Device.UpdateTexture<byte>(cube, data, new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
             }
         }
@@ -290,6 +318,11 @@ public sealed class Renderer : IDisposable
                 throw new ArgumentException($"View {view.ViewId} has {view.LayerCount} layers, a view has 1 to 6.");
             if (Math.Max(view.Target.ViewCount, 1u) != view.LayerCount)
                 throw new ArgumentException($"View {view.ViewId} has {view.LayerCount} layers but its target has {Math.Max(view.Target.ViewCount, 1u)} views.");
+            if (!(view.RenderScale > 0) || !float.IsFinite(view.RenderScale))
+                throw new ArgumentException($"View {view.ViewId} has a render scale of {view.RenderScale}, it must be above 0.");
+            Float4 rect = view.Viewport;
+            if (!(rect.X >= 0 && rect.Y >= 0 && rect.Z > 0 && rect.W > 0 && rect.X + rect.Z <= 1.0001f && rect.Y + rect.W <= 1.0001f))
+                throw new ArgumentException($"View {view.ViewId} has the viewport {rect}, which must lie within 0 to 1 with a size above 0.");
         }
 
         RaiseErrors();
@@ -319,9 +352,13 @@ public sealed class Renderer : IDisposable
                 world.World.Extract();
 
             if (_views.Length < views.Length)
+            {
                 _views = new ViewDesc[views.Length];
+                _viewFeatures = new RenderFeature[views.Length][];
+            }
             views.CopyTo(_views);
             _viewCount = views.Length;
+            ExtractFeatures(views);
             _time = frame.Time;
 
             if (_thread == null)
@@ -341,6 +378,44 @@ public sealed class Renderer : IDisposable
         }
         RaiseErrors();
     }
+
+    private RenderFeature[][] _viewFeatures = [];
+    private readonly HashSet<RenderFeature> _extracted = new();
+
+    // Snapshots every world's and view's features and copies their settings, each feature once
+    private void ExtractFeatures(ReadOnlySpan<ViewDesc> views)
+    {
+        _extracted.Clear();
+        foreach (WorldFrame world in _worlds.Values)
+        {
+            world.World.FeatureSnapshot = world.World.Features.Snapshot();
+            Extract(world.World.FeatureSnapshot);
+        }
+        for (int i = 0; i < views.Length; i++)
+        {
+            _viewFeatures[i] = views[i].Features?.Snapshot() ?? [];
+            Extract(_viewFeatures[i]);
+        }
+
+        void Extract(RenderFeature[] features)
+        {
+            foreach (RenderFeature feature in features)
+            {
+                if (!_extracted.Add(feature))
+                    continue;
+                feature.EnabledSnapshot = feature.Enabled;
+                if (feature.Enabled)
+                    feature.Extract();
+            }
+        }
+    }
+
+    /// <summary>
+    /// A fullscreen program for features. The fragment code follows an include giving it vUV, outColor and
+    /// Graphite_SampleSource(uv), which samples the colour the feature reads in mono and layered views alike.
+    /// </summary>
+    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen")
+        => FullscreenProgram.Create(Device, _compiler, fragment, name);
 
     private int _frameCount;
     private readonly List<Double3> _cameras = new();
@@ -509,7 +584,7 @@ public sealed class Renderer : IDisposable
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _worlds, _worlds.Values, _lastDispatched, _time);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _worlds, _worlds.Values, _lastDispatched, _time);
         _lastDispatched = task.Id;
         foreach (WorldFrame world in _worlds.Values)
             world.World.Reflections.Dispatched(task.Id);

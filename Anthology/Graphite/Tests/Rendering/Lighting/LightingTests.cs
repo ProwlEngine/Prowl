@@ -1258,6 +1258,72 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void SkyCapturedEveryFrame_ReusesItsScratchCube()
+    {
+        _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(0.1f, 0.2f, 0.4f), 0), SkyCapture = SkyCaptureMode.EveryFrame };
+        for (int frame = 0; frame < 8; frame++)
+            Frame();
+        Assert.Equal(1, _world.Reflections.ScratchCount);
+    }
+
+    [Fact]
+    public void BakingABakedProbeWithoutACubemap_ReadsItBack_AndDropsItsCaptureCube()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
+        ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
+        desc.Mode = ReflectionProbeMode.Baked;
+        ReflectionProbeHandle probe = _world.AddReflectionProbe(desc);
+        Frame();
+
+        BakedReflectionProbe? baked = null;
+        _world.BakeReflectionProbe(probe, data => baked = data);
+        for (int frame = 0; frame < 4 && baked == null; frame++)
+            Frame();
+        Assert.NotNull(baked);
+        Assert.Equal(PixelFormat.R16_G16_B16_A16_Float, baked!.Format);
+        Frame();
+        Frame();
+        Assert.False(_world.Reflections.HasTarget(probe.Index));
+    }
+
+    [Fact]
+    public void ChangingAProbesResolution_RightAfterItsCapture_CapturesItAgain()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
+        ReflectionProbeHandle probe = _world.AddReflectionProbe(desc);
+        Frame();
+
+        desc.Resolution = 64;
+        _world.SetReflectionProbe(probe, desc);
+        Frame();
+        Frame();
+        AssertMatches(_ => new Vector3(0.8f, 0.5f, 0.2f), Frame());
+    }
+
+    [Fact]
+    public void AProbeAddedWhereOneWasRemoved_CapturesItself()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        ReflectionProbeDesc desc = RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40));
+        desc.Refresh = ReflectionProbeRefresh.OnRequest;
+        ReflectionProbeHandle first = _world.AddReflectionProbe(desc);
+        Frame();
+        AssertMatches(_ => new Vector3(0.8f, 0.5f, 0.2f), Frame());
+
+        foreach (RenderableHandle wall in Enumerable.Range(0, 6).Select(i => new RenderableHandle(i, 1)))
+            _world.SetLayerMask(wall, 4);
+        _world.RemoveReflectionProbe(first);
+        ReflectionProbeHandle second = _world.AddReflectionProbe(desc);
+        Assert.Equal(first.Index, second.Index);
+        Frame();
+        Frame();
+        AssertMatches(_ => s_skyColor, Frame());
+    }
+
+    [Fact]
     public void HostBuffers_ReachShadersByName_WorldOverRenderer_AndMissingOnesAreReported()
     {
         Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(BufferSource)));

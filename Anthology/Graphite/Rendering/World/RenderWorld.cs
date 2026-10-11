@@ -160,6 +160,12 @@ internal struct ObjectAttributes
 /// </summary>
 public sealed partial class RenderWorld : IDisposable
 {
+    /// <summary>Features every view of the world runs. Host thread.</summary>
+    public FeatureSet Features { get; } = new();
+
+    /// <summary>The features as of the last SubmitFrame. The render thread reads only this.</summary>
+    internal RenderFeature[] FeatureSnapshot = [];
+
     [Flags]
     internal enum Dirt : byte
     {
