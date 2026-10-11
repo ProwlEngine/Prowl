@@ -60,6 +60,38 @@ public sealed class RendererTests : IDisposable
         }
         """;
 
+    private const string GlassSource = """
+        Shader "Test/Glass"
+        {
+            Properties
+            {
+                _Color("Tint", Color) = (1, 1, 1, 0.5)
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Forward" "RenderQueue" = "3000" }
+                Cull Back
+                ZWrite Off
+                Blend SourceAlpha InverseSourceAlpha
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    uniform vec4 _Color;
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = _Color; }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
     private const uint Size = 16;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
@@ -199,6 +231,29 @@ public sealed class RendererTests : IDisposable
         Assert.Equal(new Color32(0, 0, 0, 255), At(Frame(), 8, 8));
         Frame();
         Assert.Single(_errors, e => e.Message.Contains("_Undeclared"));
+    }
+
+    private Material Glass(float r, float g, float b)
+    {
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(GlassSource)));
+        material.SetColor("_Color", new Float4(r, g, b, 0.5f));
+        return material;
+    }
+
+    [Fact]
+    public void TransparentObjects_BlendBackToFront_OverOpaques_AndBehindNearerOpaques()
+    {
+        Add(Colored(0, 0, 1), new Double3(0, 0, 30), new Float3(8, 8, 1));
+        Add(Glass(0, 1, 0), new Double3(0, 0, 10));
+        Add(Glass(1, 0, 0), new Double3(0, 0, 20));
+        Add(Colored(1, 1, 1), new Double3(-3, 0, 5), new Float3(2, 8, 1));
+
+        Color32[] pixels = Frame();
+        Color32 blended = At(pixels, 8, 8);
+        Assert.InRange(blended.R, 62, 66);
+        Assert.InRange(blended.G, 126, 130);
+        Assert.InRange(blended.B, 62, 66);
+        Assert.Equal(new Color32(255, 255, 255, 255), At(pixels, 1, 8));
     }
 
     [Fact]

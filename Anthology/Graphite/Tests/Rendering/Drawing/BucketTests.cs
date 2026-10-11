@@ -90,6 +90,8 @@ public sealed class BucketTests : IDisposable
     private RenderableHandle Add(GpuMesh mesh, Material material, Float4x4? transform = null, RenderableFlags flags = RenderableFlags.CastShadows, uint layer = 1)
         => _world.Add(new RenderableDesc { Mesh = mesh, Transform = (Double4x4)(transform ?? Float4x4.CreateTranslation(new Float3(0, 0, 5))), Flags = flags, LayerMask = layer }, [material]);
 
+    private const int Transparent = -1;
+
     private DrawList Frame(int pass, uint mask = ~0u, CullFrustum? frustum = null)
     {
         List<Material> changed = new();
@@ -97,9 +99,21 @@ public sealed class BucketTests : IDisposable
         _world.Extract();
         _buckets.Update(_world.Render.DrawChanged, changed);
         _buckets.Cull(frustum ?? s_frustum, mask);
-        _buckets.Build(pass, frustum ?? s_frustum, _list);
+        if (pass == Transparent)
+            _buckets.BuildTransparent(frustum ?? s_frustum, _list);
+        else
+            _buckets.Build(pass, frustum ?? s_frustum, _list);
         return _list;
     }
+
+    private Material Glass(int queue = 3000)
+    {
+        Material material = Material();
+        material.RenderQueue = queue;
+        return material;
+    }
+
+    private uint[] Instances(DrawList list) => list.Instances[..list.InstanceCount];
 
     private static Float4x4 At(float x, float y = 0, float z = 5) => Float4x4.CreateTranslation(new Float3(x, y, z));
 
@@ -225,6 +239,62 @@ public sealed class BucketTests : IDisposable
 
         Assert.Equal(0, Frame(Forward).CommandCount);
         Assert.Equal(0, _buckets.BucketCount);
+    }
+
+    [Fact]
+    public void TransparentItems_DrawBackToFront()
+    {
+        Material glass = Glass();
+        RenderableHandle near = Add(_triangle, glass, At(0, 0, 2));
+        RenderableHandle far = Add(_other, glass, At(0, 0, 8));
+        RenderableHandle middle = Add(_triangle, glass, At(1, 0, 5));
+
+        DrawList list = Frame(Transparent);
+        Assert.Equal(new uint[] { (uint)far.Index, (uint)middle.Index, (uint)near.Index }, Instances(list));
+        Assert.Equal(3, _buckets.TransparentCount);
+    }
+
+    [Fact]
+    public void AdjacentTransparentItemsOfOneChunk_ShareACommand_OthersInBetweenSplitIt()
+    {
+        Material glass = Glass();
+        Add(_triangle, glass, At(0, 0, 8));
+        Add(_triangle, glass, At(1, 0, 7));
+        DrawList list = Frame(Transparent);
+        Assert.Equal(1, list.CommandCount);
+        Assert.Equal(2u, list.Commands[0].InstanceCount);
+
+        Add(_other, glass, At(2, 0, 7.5f));
+        list = Frame(Transparent);
+        Assert.Equal(3, list.CommandCount);
+        Assert.Single(list.Calls);
+    }
+
+    [Fact]
+    public void QueueThenSortBias_OrderTransparentItems_BeforeDepth()
+    {
+        Material late = Glass(3100);
+        Material early = Glass(3000);
+        RenderableHandle lateFar = Add(_triangle, late, At(0, 0, 9));
+        RenderableHandle earlyNear = Add(_other, early, At(1, 0, 1));
+        RenderableHandle biasedFar = Add(_other, early, At(2, 0, 9));
+        _world.SetSortBias(biasedFar, 10);
+
+        Assert.Equal(new uint[] { (uint)earlyNear.Index, (uint)biasedFar.Index, (uint)lateFar.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void TransparentItems_FollowCullingAndRemoval()
+    {
+        Material glass = Glass();
+        RenderableHandle visible = Add(_triangle, glass, At(0, 0, 5));
+        RenderableHandle outside = Add(_other, glass, At(50, 0, 5));
+        Assert.Equal(new uint[] { (uint)visible.Index }, Instances(Frame(Transparent)));
+
+        _world.Remove(visible);
+        _world.Remove(outside);
+        Assert.Equal(0, Frame(Transparent).CommandCount);
+        Assert.Equal(0, _buckets.TransparentCount);
     }
 
     [Fact]

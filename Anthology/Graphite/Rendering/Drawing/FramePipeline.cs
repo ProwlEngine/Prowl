@@ -159,6 +159,7 @@ internal sealed class CameraFrame : IDisposable
 {
     public readonly DrawList Prepass = new();
     public readonly DrawList Forward = new();
+    public readonly DrawList Transparent = new();
     public readonly RenderPipeline Pipeline = new();
     public readonly ScenePass Scene;
     public readonly PresentPass Present;
@@ -183,6 +184,7 @@ internal sealed class CameraFrame : IDisposable
         Present = new PresentPass(frame);
         Views = [View];
         View.ViewId = viewId;
+        Lists = [Prepass, Forward, Transparent];
         Pipeline.Name = $"Graphite.Camera {viewId}";
         Pipeline.SetPasses([Scene, Present]);
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
@@ -200,11 +202,21 @@ internal sealed class CameraFrame : IDisposable
         buffers.Add(ViewBlocks.Buffer);
     }
 
-    /// <summary>Queues the frame's commands, draw records, instances and view block. Prepass commands come first, then forward ones.</summary>
+    /// <summary>The frame's draw lists in drawing order: prepass, opaque, transparent.</summary>
+    public DrawList[] Lists { get; }
+
+    /// <summary>Where each list's commands start in the uploaded command buffer.</summary>
+    public int[] CommandBases { get; } = new int[3];
+
+    /// <summary>Queues the frame's commands, draw records, instances and view block, the lists one after another.</summary>
     public void Upload(Uploader uploader, in ViewBlock block)
     {
-        int commands = Prepass.CommandCount + Forward.CommandCount;
-        int instances = Prepass.InstanceCount + Forward.InstanceCount;
+        int commands = 0, instances = 0;
+        foreach (DrawList list in Lists)
+        {
+            commands += list.CommandCount;
+            instances += list.InstanceCount;
+        }
         if (_commands.Length < commands)
         {
             Array.Resize(ref _commands, commands * 2);
@@ -213,17 +225,22 @@ internal sealed class CameraFrame : IDisposable
         if (_instances.Length < instances)
             Array.Resize(ref _instances, instances * 2);
 
-        Array.Copy(Prepass.Commands, _commands, Prepass.CommandCount);
-        Array.Copy(Prepass.Records, _records, Prepass.CommandCount);
-        Array.Copy(Prepass.Instances, _instances, Prepass.InstanceCount);
-        for (int i = 0; i < Forward.CommandCount; i++)
+        int commandBase = 0, instanceBase = 0;
+        for (int l = 0; l < Lists.Length; l++)
         {
-            IndirectDrawIndexedArguments command = Forward.Commands[i];
-            command.FirstInstance += (uint)Prepass.InstanceCount;
-            _commands[Prepass.CommandCount + i] = command;
-            _records[Prepass.CommandCount + i] = Forward.Records[i];
+            DrawList list = Lists[l];
+            CommandBases[l] = commandBase;
+            for (int i = 0; i < list.CommandCount; i++)
+            {
+                IndirectDrawIndexedArguments command = list.Commands[i];
+                command.FirstInstance += (uint)instanceBase;
+                _commands[commandBase + i] = command;
+            }
+            Array.Copy(list.Records, 0, _records, commandBase, list.CommandCount);
+            Array.Copy(list.Instances, 0, _instances, instanceBase, list.InstanceCount);
+            commandBase += list.CommandCount;
+            instanceBase += list.InstanceCount;
         }
-        Array.Copy(Forward.Instances, 0, _instances, Prepass.InstanceCount, Forward.InstanceCount);
 
         Commands.Write<IndirectDrawIndexedArguments>(uploader, _commands.AsSpan(0, commands));
         Records.Write<DrawRecord>(uploader, _records.AsSpan(0, commands));
@@ -242,7 +259,7 @@ internal sealed class CameraFrame : IDisposable
     }
 }
 
-/// <summary>Draws a view's prepass and opaque lists into its HDR scene target.</summary>
+/// <summary>Draws a view's prepass, opaque and transparent lists into its HDR scene target.</summary>
 internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
 {
     public static readonly RenderResourceID SceneId = RenderResourceID.Intern("Graphite.Scene");
@@ -283,8 +300,8 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
 
-        Draw(cmd, camera.Prepass, 0, frameTable, viewTable);
-        Draw(cmd, camera.Forward, camera.Prepass.CommandCount, frameTable, viewTable);
+        for (int l = 0; l < camera.Lists.Length; l++)
+            Draw(cmd, camera.Lists[l], camera.CommandBases[l], frameTable, viewTable);
     }
 
     private void Draw(CommandBuffer cmd, DrawList list, int commandBase, DescriptorTable frameTable, DescriptorTable viewTable)
@@ -484,6 +501,7 @@ internal sealed class FramePipeline : IDisposable
         world.Buckets.Cull(frustum, view.CullingMask);
         world.Buckets.Build(0, frustum, camera.Prepass);
         world.Buckets.Build(1, frustum, camera.Forward);
+        world.Buckets.BuildTransparent(frustum, camera.Transparent);
         camera.Upload(_uploader, ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance));
     }
 

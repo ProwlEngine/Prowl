@@ -155,6 +155,9 @@ internal sealed class DrawList
         CommandCount++;
     }
 
+    /// <summary>Draws one more instance with the last command, whose instances end where the list ends.</summary>
+    public void ExtendLast() => Commands[CommandCount - 1].InstanceCount++;
+
     /// <summary>Adds a command to the last call when program, page, topology and winding all match, else starts a call.</summary>
     public void Merge(ushort program, int page, PrimitiveTopology topology, bool mirrored)
     {
@@ -175,7 +178,8 @@ internal sealed class DrawList
 /// <summary>
 /// The persistent draw buckets of one world. A bucket is one indirect command: a mesh chunk drawn by one program, with
 /// the objects that use it. Buckets change only when renderables, their meshes, materials or flags change, never when
-/// objects move. Per view, culling and a compaction turn them into a <see cref="DrawList"/> per pass.
+/// objects move. Per view, culling and a compaction turn them into a <see cref="DrawList"/> per pass. Transparent
+/// submeshes are items instead, sorted per view back to front.
 /// </summary>
 internal sealed class BucketSet
 {
@@ -185,6 +189,22 @@ internal sealed class BucketSet
     internal readonly record struct BucketId(int Pass, ushort Program, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk);
 
     private readonly record struct Membership(Bucket Bucket, int Position);
+
+    private readonly record struct ChunkRef(uint Chunk, uint FirstIndex, uint IndexCount, AABB Bounds);
+
+    /// <summary>One transparent submesh of one object, with the chunks it draws.</summary>
+    private sealed class TransparentItem
+    {
+        public required int Object;
+        public required ushort Program;
+        public required int Page;
+        public required PrimitiveTopology Topology;
+        public required bool Mirrored;
+        public required int Queue;
+        public required uint SubMesh;
+        public required ChunkRef[] Chunks;
+        public int Position;
+    }
 
     internal sealed class Bucket
     {
@@ -221,6 +241,9 @@ internal sealed class BucketSet
     private bool _ranksDirty;
     private readonly HashSet<int> _rebuild = new();
     private readonly List<(ulong Key, int Bucket, int FirstInstance, int Count)> _prepass = new();
+    private readonly List<TransparentItem> _transparent = new();
+    private List<TransparentItem>?[] _transparentOf = [];
+    private readonly List<(ulong Key, TransparentItem Item)> _sorted = new();
     private bool[] _visible = [];
 
     public BucketSet(RenderWorld.RenderSide world, DrawPrograms programs)
@@ -230,6 +253,8 @@ internal sealed class BucketSet
     }
 
     public int BucketCount => _buckets.Count;
+
+    public int TransparentCount => _transparent.Count;
 
     public IReadOnlyList<Bucket> Ordered(int pass)
     {
@@ -312,6 +337,58 @@ internal sealed class BucketSet
         _prepass.Sort((a, c) => a.Key.CompareTo(c.Key));
         foreach ((_, int b, int first, int count) in _prepass)
             Emit(list, ordered[b], first, count);
+    }
+
+    /// <summary>
+    /// Fills the transparent draw list from the last <see cref="Cull"/>: every visible transparent item, sorted by queue,
+    /// sort bias, then back to front. Adjacent items of the same program, page, topology, winding and chunk share a command.
+    /// </summary>
+    public void BuildTransparent(in CullFrustum frustum, DrawList list)
+    {
+        list.Clear();
+        _sorted.Clear();
+        foreach (TransparentItem item in _transparent)
+        {
+            if (_visible[item.Object])
+                _sorted.Add((TransparentKey(item, frustum), item));
+        }
+        _sorted.Sort((a, b) => a.Key.CompareTo(b.Key));
+
+        DrawCommandRef previous = default;
+        foreach ((_, TransparentItem item) in _sorted)
+        {
+            bool multiChunk = item.Chunks.Length > 1;
+            foreach (ChunkRef chunk in item.Chunks)
+            {
+                if (multiChunk && !ChunkVisible(frustum, item.Object, chunk.Bounds))
+                    continue;
+
+                DrawCommandRef current = new(item.Program, item.Page, item.Topology, item.Mirrored, chunk.Chunk, list.CommandCount);
+                list.AddInstance((uint)item.Object);
+                if (list.CommandCount > 0 && previous == current with { Command = previous.Command } && previous.Command == list.CommandCount - 1)
+                {
+                    list.ExtendLast();
+                    continue;
+                }
+
+                list.AddCommand(
+                    new IndirectDrawIndexedArguments { IndexCount = chunk.IndexCount, InstanceCount = 1, FirstIndex = chunk.FirstIndex, FirstInstance = (uint)(list.InstanceCount - 1) },
+                    new DrawRecord { Chunk = chunk.Chunk, SubMesh = item.SubMesh });
+                list.Merge(item.Program, item.Page, item.Topology, item.Mirrored);
+                previous = current;
+            }
+        }
+    }
+
+    private readonly record struct DrawCommandRef(ushort Program, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk, int Command);
+
+    // [queueRank 6][sortBias 8][depth 32 back to front][program 12][spare 6]
+    private ulong TransparentKey(TransparentItem item, in CullFrustum frustum)
+    {
+        ulong rank = (ulong)_queueRanks.GetValueOrDefault(item.Queue);
+        ulong bias = (ulong)(_world.SortBias[item.Object] + 128);
+        ulong depth = ~BitConverter.SingleToUInt32Bits(Distance(frustum, item.Object)) & 0xFFFFFFFFu;
+        return (rank << 58) | (bias << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
     }
 
     private static void Emit(DrawList list, Bucket bucket, int first, int count)
@@ -401,6 +478,50 @@ internal sealed class BucketSet
                 Join(bucket, index);
             }
         }
+
+        if ((flags & RenderableFlags.ShadowsOnly) == 0)
+            AddTransparent(index, placement, mirrored);
+    }
+
+    private void AddTransparent(int index, MeshPlacement placement, bool mirrored)
+    {
+        for (int s = 0; s < placement.SubMeshes.Length; s++)
+        {
+            Material? material = _world.SliceMaterials[_world.SliceBase[index] + (uint)s];
+            if (material == null || material.IsDisposed || material.Draw is not { } draw || !draw.Transparent)
+                continue;
+            if (!_programs.TryGet(draw, PassType.Forward, out ushort program))
+                continue;
+
+            List<ChunkRef> chunks = new();
+            for (int c = 0; c < placement.Chunks.Length; c++)
+            {
+                MeshChunk chunk = placement.Chunks[c];
+                if (chunk.SubMesh == s)
+                    chunks.Add(new ChunkRef(placement.FirstChunk + (uint)c, placement.IndexBase + chunk.IndexStart, chunk.IndexCount, chunk.Bounds));
+            }
+            if (chunks.Count == 0)
+                continue;
+
+            Track(material, index);
+            TransparentItem item = new()
+            {
+                Object = index,
+                Program = program,
+                Page = placement.Page,
+                Topology = placement.SubMeshes[s].Topology,
+                Mirrored = mirrored,
+                Queue = draw.RenderQueue,
+                SubMesh = (uint)s,
+                Chunks = [.. chunks],
+                Position = _transparent.Count,
+            };
+            _transparent.Add(item);
+            UseQueue(item.Queue, 1);
+            if (index >= _transparentOf.Length)
+                Array.Resize(ref _transparentOf, Math.Max(index + 1, _transparentOf.Length * 2));
+            (_transparentOf[index] ??= new List<TransparentItem>()).Add(item);
+        }
     }
 
     private void Join(Bucket bucket, int index)
@@ -414,9 +535,20 @@ internal sealed class BucketSet
 
     private void RemoveObject(int index)
     {
-        if (index >= _members.Length || _members[index] is not { } members)
-            return;
+        if (index < _transparentOf.Length && _transparentOf[index] is { } items)
+        {
+            foreach (TransparentItem item in items)
+            {
+                TransparentItem last = _transparent[^1];
+                _transparent[item.Position] = last;
+                last.Position = item.Position;
+                _transparent.RemoveAt(_transparent.Count - 1);
+                UseQueue(item.Queue, -1);
+            }
+            items.Clear();
+        }
 
+        List<Membership> members = index < _members.Length && _members[index] is { } list ? list : [];
         foreach (Membership membership in members)
         {
             Bucket bucket = membership.Bucket;
