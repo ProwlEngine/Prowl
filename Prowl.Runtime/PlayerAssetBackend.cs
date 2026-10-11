@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
@@ -57,6 +58,8 @@ public class PlayerAssetBackend : AssetBackend, IDisposable
         }
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Serialized and user types are resolved by name, and the application's trim configuration must preserve them.")]
     public override Type? GetAssetType(Guid assetId)
     {
         if (!_entries.TryGetValue(assetId, out Entry? entry)) return null;

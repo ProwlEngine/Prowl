@@ -51,7 +51,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>
     /// The currently active scene. There is always one: reading this before anything has been loaded
     /// creates an empty scene, so the engine is never in a no-scene state and callers never have to
-    /// handle null. Use <see cref="Load"/> to replace it.
+    /// handle null. Use <see cref="Load(Scene)"/> to replace it.
     /// </summary>
     public static Scene Current
     {
@@ -79,7 +79,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     internal static bool EndSessionOnSwap;
 
-    /// <summary>Whether a <see cref="Load"/> is queued and has not been applied yet, so <see cref="Current"/>
+    /// <summary>Whether a <see cref="Load(Scene)"/> is queued and has not been applied yet, so <see cref="Current"/>
     /// is still the outgoing scene.</summary>
     public static bool IsLoadPending => _pendingScene != null;
 
@@ -222,7 +222,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Applies a queued <see cref="Load"/>. Driven once per frame by the game loop, right after the
+    /// Applies a queued <see cref="Load(Scene)"/>. Driven once per frame by the game loop, right after the
     /// destroy queue. Nothing is mid-callback at that point, so the outgoing scene is disposed
     /// outright rather than queued for another frame.
     /// </summary>

@@ -401,6 +401,7 @@ public class NavMeshObstacle : Component
         => Math.Min(Math.Max(0f, settings.Agent.MaxClimb) + settings.EffectiveVoxelHeight,
                     Math.Max(0f, settings.Agent.Height));
 
+    /// <param name="instance">The navmesh instance the carve is added to.</param>
     /// <param name="agentRadius">The hole is widened by it because a navmesh stores where an agent's
     /// CENTRE may be, not where its body fits: a carve that did not would let agents stand half inside
     /// the obstacle.</param>

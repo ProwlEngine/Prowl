@@ -15,6 +15,10 @@ using Prowl.Runtime.Resources;
 
 using Xunit;
 
+// These tests treat the test thread as the engine's main thread, so they block on workers rather than await,
+// which could resume on another thread.
+#pragma warning disable xUnit1031
+
 namespace Prowl.Editor.Test;
 
 /// <summary>
@@ -172,7 +176,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
-        var collected = AssetCollector.Collect(EditorAssetBackend.Instance, [sceneGuid], dependenciesOnly: true);
+        var collected = AssetCollector.Collect(EditorAssetBackend.Instance!, [sceneGuid], dependenciesOnly: true);
 
         Assert.Contains(spriteGuid, collected.AllAssets); // sub-asset itself, via parent backfill
         Assert.Contains(texGuidB, collected.AllAssets);   // what the sub-asset ITSELF depends on
@@ -238,7 +242,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
-        var collected = AssetCollector.Collect(EditorAssetBackend.Instance, [sceneGuid], dependenciesOnly: true);
+        var collected = AssetCollector.Collect(EditorAssetBackend.Instance!, [sceneGuid], dependenciesOnly: true);
 
         Assert.Contains(texGuid, collected.AllAssets);
     }
@@ -256,7 +260,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
         Guid sceneGuid = AuthorEmptyScene("Main.scene");
 
-        var collected = AssetCollector.Collect(EditorAssetBackend.Instance, [sceneGuid], dependenciesOnly: false);
+        var collected = AssetCollector.Collect(EditorAssetBackend.Instance!, [sceneGuid], dependenciesOnly: false);
 
         Assert.DoesNotContain(texGuid, collected.AllAssets);
     }

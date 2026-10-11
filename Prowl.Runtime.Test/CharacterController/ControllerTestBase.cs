@@ -258,7 +258,7 @@ public abstract class ControllerTestBase : RuntimeTestBase
 
         public CharacterController.CollisionFlags Step(Float3 walk, bool jump = false)
         {
-            Controller.GameObject.Scene.Update();
+            Controller.GameObject.Scene!.Update();
             EngineObject.ProcessDestroyed();
 
             float vertical = Velocity.Y;

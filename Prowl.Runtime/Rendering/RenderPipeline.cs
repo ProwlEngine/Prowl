@@ -396,6 +396,9 @@ public abstract class RenderPipeline : EngineObject
     /// in every pass into an O(1) array read. The array is pooled and may be longer than
     /// <paramref name="renderables"/>, hand it back with <see cref="ReturnCullResult"/> once done.
     /// </summary>
+    /// <param name="renderables">The renderables to test.</param>
+    /// <param name="worldFrustum">The frustum to test against, or null to skip the frustum test.</param>
+    /// <param name="cullingMask">The layers that are drawn.</param>
     /// <param name="alreadyCulled">Renderables an earlier, wider test culled, which stay culled without testing again.</param>
     public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask, bool[]? alreadyCulled = null)
     {
@@ -702,6 +705,12 @@ public abstract class RenderPipeline : EngineObject
     /// <param name="cmd">CommandBuffer the batches encode into. The caller is responsible
     /// for binding the target framebuffer + viewport before calling this method, and
     /// for submitting the buffer after.</param>
+    /// <param name="renderables">The renderables to draw.</param>
+    /// <param name="shaderTag">The shader tag the pass is selected by.</param>
+    /// <param name="tagValue">The value the shader tag must have.</param>
+    /// <param name="viewer">The view the batches are drawn for.</param>
+    /// <param name="culledRenderableIndices">Per index culled mask from <see cref="CullRenderables"/>.</param>
+    /// <param name="updatePreviousMatrices">Store the current matrices as the previous ones for motion vectors.</param>
     /// <param name="currentRT">Currently bound color render target, used for the
     /// GrabTexture handshake (read FB for the blit-into-grab-RT). Pass null if no
     /// pass in this batch will request a grab texture.</param>

@@ -10,6 +10,10 @@ using Prowl.Runtime.Tasks;
 
 using Xunit;
 
+// These tests treat the test thread as the engine's main thread, so they block on workers rather than await,
+// which could resume on another thread.
+#pragma warning disable xUnit1031
+
 namespace Prowl.Editor.Test;
 
 /// <summary>

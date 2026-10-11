@@ -294,6 +294,9 @@ public sealed class AudioClip : Asset, ISerializable
     /// <summary>
     /// Wraps interleaved float samples in a minimal WAVE container.
     /// </summary>
+    /// <param name="samples">Interleaved float samples.</param>
+    /// <param name="channels">Number of interleaved channels.</param>
+    /// <param name="sampleRate">Samples per second per channel.</param>
     /// <param name="sixteenBit">
     /// Store as 16 bit PCM rather than 32 bit float, halving the size for a noise floor no game source
     /// material gets near. Float keeps a procedurally built clip bit exact through a round trip, which

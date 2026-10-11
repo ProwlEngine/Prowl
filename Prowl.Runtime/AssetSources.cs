@@ -72,6 +72,7 @@ public sealed class FolderAssetSource : AssetFileSource
 
     public override string Name { get; }
 
+    /// <param name="root">The folder the files are read from.</param>
     /// <param name="name">Named after the folder when left out. Two folders with one name give their files the same GUIDs.</param>
     public FolderAssetSource(string root, string? name = null)
     {
@@ -100,6 +101,7 @@ public sealed class ZipAssetSource : AssetFileSource, IDisposable
 
     public override string Name { get; }
 
+    /// <param name="zipPath">The zip file the files are read from.</param>
     /// <param name="name">Named after the zip file when left out.</param>
     public ZipAssetSource(string zipPath, string? name = null)
         : this(File.OpenRead(zipPath), name ?? Path.GetFileNameWithoutExtension(zipPath)) { }

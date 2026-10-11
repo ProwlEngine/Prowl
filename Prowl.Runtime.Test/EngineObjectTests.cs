@@ -71,7 +71,8 @@ public class EngineObjectTests
         var a = new TestEngineObject("same");
         var b = new TestEngineObject("same");
 
-        Assert.True(a == a);
+        var alias = a;
+        Assert.True(a == alias);
         Assert.False(a == b);     // identical names, different instances
         Assert.True(a != b);
         Assert.True(a.Equals(a));
@@ -84,9 +85,9 @@ public class EngineObjectTests
         var a = new TestEngineObject();
         EngineObject? n = null;
 
-        Assert.False(a == n);
-        Assert.True(a != n);
-        Assert.True(n == null);
+        Assert.False(a == n!);
+        Assert.True(a != n!);
+        Assert.True(n! == null!);
         Assert.False(a.Equals(null));
     }
 

@@ -2555,7 +2555,7 @@ public class AudioTests : RuntimeTestBase
     public void FindDevice_MatchesOnTheNameFirst()
     {
         Assert.Null(AudioContext.FindDevice("a playback device that is not there"));
-        Assert.Null(AudioContext.FindDevice(null));
+        Assert.Null(AudioContext.FindDevice(null!));
         Assert.Null(AudioContext.FindDevice(string.Empty, -1));
 
         DeviceInfo[] devices = AudioContext.GetDevices();

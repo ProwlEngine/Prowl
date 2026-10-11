@@ -33,7 +33,7 @@ public class ChangingGravityTests() : ControllerTestBase(Gravity.Upright)
     /// <summary>One frame of a player loop with gravity along <paramref name="up"/>, keeping the speed along up between frames.</summary>
     private static void Step(CharacterController controller, Float3 up, Float3 walk, ref float rising)
     {
-        controller.GameObject.Scene.Update();
+        controller.GameObject.Scene!.Update();
         controller.Up = up;
 
         if (controller.IsGrounded && rising <= 0f) rising = -1f;

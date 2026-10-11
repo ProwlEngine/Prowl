@@ -273,6 +273,7 @@ public sealed class NavMeshWorld
     public void RemoveNavMeshData(NavMeshInstance? instance) => RemoveNavMeshData(instance, handOver: true);
 
     /// <inheritdoc cref="RemoveNavMeshData(NavMeshInstance?)"/>
+    /// <param name="instance">The navmesh to unregister.</param>
     /// <param name="handOver">Register a spare surface of the type once this one is gone.</param>
     internal void RemoveNavMeshData(NavMeshInstance? instance, bool handOver)
     {
@@ -759,8 +760,11 @@ public sealed class NavMeshWorld
         => FindClosestEdge(sourcePosition, out hit, EdgeSearchDistanceFromBounds, filter);
 
     /// <summary>Locate the closest navmesh border edge from a point.</summary>
+    /// <param name="sourcePosition">The point to search from.</param>
+    /// <param name="hit">The closest border edge found.</param>
     /// <param name="maxDistance">How far to search. Cost grows with it and an edge beyond it is
     /// not found, so pass the widest gap that matters, or <see cref="EdgeSearchDistanceFromBounds"/>.</param>
+    /// <param name="filter">Which areas and agent type the search uses.</param>
     public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter = default)
     {
         hit = default;

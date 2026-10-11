@@ -1343,7 +1343,7 @@ public sealed class AudioSource : Component
     /// </summary>
     /// <remarks>
     /// The inspector replaces the whole list rather than editing it in place, so an effect deleted
-    /// there never passes through <see cref="RemoveEffect"/> and would be dropped without ever being
+    /// there never passes through <see cref="RemoveEffect(AudioEffect)"/> and would be dropped without ever being
     /// told it was finished. What was published last is the record of what the chain used to hold.
     /// </remarks>
     private void DropEffectsNoLongerListed()

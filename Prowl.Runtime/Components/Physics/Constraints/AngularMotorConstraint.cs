@@ -82,7 +82,7 @@ public class AngularMotorConstraint : PhysicsConstraint
         {
             if (maximumForce == value) return;
             maximumForce = value;
-            if (IsLive(constraint)) constraint.MaximumForce = value;
+            if (IsLive(constraint)) constraint.MaximumTorque = value;
             WakeBodies();
         }
     }
@@ -127,7 +127,7 @@ public class AngularMotorConstraint : PhysicsConstraint
 
         // Jitter's motor drives the connected side relative to this body, so positive is negated to move this body along +axis.
         constraint.TargetVelocity = -targetVelocity;
-        constraint.MaximumForce = maximumForce;
+        constraint.MaximumTorque = maximumForce;
     }
 
 

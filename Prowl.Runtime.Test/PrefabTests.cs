@@ -24,7 +24,7 @@ public class PrefabTests : RuntimeTestBase
         return prefab;
     }
 
-    private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value));
+    private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value))!;
 
     // ---------------------------------------------------------------------
     // Instantiate

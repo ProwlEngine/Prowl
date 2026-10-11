@@ -3371,13 +3371,13 @@ public class PrefabTests : EditorTestHarness
         EditPrefabSource(guid, "Drop.prefab", src =>
         {
             OverrideComp? comp = src.GetComponent<OverrideComp>();
-            if (comp != null) src.RemoveComponent(comp);
+            if (comp is not null) src.RemoveComponent(comp);
         });
 
         PrefabUtility.RefreshAllInstances(guid);
 
         Assert.Null(instance.GetComponent<OverrideComp>());
-        Assert.Empty(instance.GetComponents<Component>().Where(c => c.SourceIdentifier != Guid.Empty));
+        Assert.DoesNotContain(instance.GetComponents<Component>(), c => c.SourceIdentifier != Guid.Empty);
         Assert.Single(instance.Children);
     }
 
@@ -3518,7 +3518,7 @@ public class PrefabTests : EditorTestHarness
     }
 
     private static GameObject InstanceRootOf(Scene scene)
-        => scene.AllObjects.First(o => o.IsPrefabInstance && o.Parent == null);
+        => scene.AllObjects.First(o => o.IsPrefabInstance && o.Parent is null);
 
     private static (LinkComp, GameObject) AddOwnContent(GameObject instance)
     {
@@ -3685,7 +3685,7 @@ public class PrefabTests : EditorTestHarness
         // Only when it is not already in one. A test that builds its tree in the open scene first is
         // modelling the real order of events, and loading a scene around it here would swap the scene
         // out from under objects it is still holding.
-        if (source.Scene == null) LoadSceneWith(source);
+        if (source.Scene is null) LoadSceneWith(source);
         Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(source, relativePath));
         Assets.Refresh();
 
@@ -4061,7 +4061,7 @@ public class PrefabTests : EditorTestHarness
         Scene.Load(reloaded);
         Scene.ProcessPendingLoad();
 
-        GameObject live = Scene.Current!.AllObjects.First(o => o.Parent == null && o.IsPrefabInstance);
+        GameObject live = Scene.Current!.AllObjects.First(o => o.Parent is null && o.IsPrefabInstance);
         Assert.Equal(outer, live.PrefabAssetId);
         Assert.Single(live.Children);
 
@@ -4541,7 +4541,7 @@ public class PrefabTests : EditorTestHarness
         PrefabEditingMode.SaveAndExit();
         Scene.ProcessPendingLoad();
 
-        GameObject live = Scene.Current!.AllObjects.First(go => go.PrefabAssetId == guid && go.Parent == null);
+        GameObject live = Scene.Current!.AllObjects.First(go => go.PrefabAssetId == guid && go.Parent is null);
         Assert.Equal(33, live.GetComponent<OverrideComp>()!.A);
     }
 
@@ -4990,7 +4990,7 @@ public class PrefabTests : EditorTestHarness
         Scene scene = LoadSceneWith(go);
 
         scene.BakedLighting.Placements[go.Identifier] = new Scene.LightmapPlacement { Index = 1, ScaleOffset = new Float4(1, 1, 0, 0) };
-        scene.BakedLighting.Lightmaps.Add(default);
+        scene.BakedLighting.Lightmaps.Add(null!);
 
         scene.BakedLighting.ClearLightmaps();
 

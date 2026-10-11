@@ -182,11 +182,11 @@ public sealed class VolumetricClouds : Component
     /// <summary>Radius of the planet in meters, which curves the cloud layers down toward the horizon.</summary>
     public float PlanetRadius = 6371000f;
 
-    [Header("Noise")]
     /// <summary>
     /// Tiling noise the clouds and flat layers are built from: R broad gradient noise, G billowy cells, B fine gradient
     /// noise, A fine cells. Empty uses the built in one.
     /// </summary>
+    [Header("Noise")]
     public Texture2D? Noise;
 
     /// <summary>

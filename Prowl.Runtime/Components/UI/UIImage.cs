@@ -68,9 +68,12 @@ public class UIImage : Graphic
     /// <summary>
     /// The sprite to display. This is the image's only source: its texture is bound, its atlas sub-rect drives
     /// the UVs, and its 9-slice border feeds <see cref="ImageType.Sliced"/>. With no sprite the image draws
-    /// nothing but still hit-tests as a <see cref="RaycastTarget"/>. New images default to the built-in UI panel.
+    /// nothing but still hit-tests as a <see cref="Graphic.RaycastTarget"/>. New images default to the built-in UI panel.
     /// </summary>
+    // Get only hands out the built-in sprite's handle and loads nothing, so it is safe before the image is attached.
+#pragma warning disable PROWLCO003
     [SerializeField] private Sprite? _sprite = AssetDatabase.Get<Sprite>(BuiltInAssets.GuidFor(DefaultSprite.UIPanel));
+#pragma warning restore PROWLCO003
     public Sprite? Sprite
     {
         get => _sprite;

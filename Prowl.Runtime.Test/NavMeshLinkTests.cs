@@ -89,7 +89,7 @@ public class NavMeshLinkTests : RuntimeTestBase
             AddLink(scene);
 
             Assert.True(surface.BuildNavMesh());
-            Assert.NotEmpty(surface.NavMeshData.Links);
+            Assert.NotEmpty(surface.NavMeshData!.Links);
             Assert.Equal(NavMeshPathStatus.PathComplete,
                 PathStatus(scene, new Float3(-6, 0, 0), new Float3(6, 0, 0)));
         }
@@ -431,7 +431,7 @@ public class NavMeshLinkTests : RuntimeTestBase
         AddLink(scene);
         Assert.True(surface.BuildNavMesh());
 
-        Runtime.NavMeshData baked = surface.NavMeshData;
+        Runtime.NavMeshData baked = surface.NavMeshData!;
         Assert.NotEmpty(baked.Links);
 
         Prowl.Echo.EchoObject echo = Prowl.Echo.Serializer.Serialize(typeof(object), baked);
@@ -587,7 +587,7 @@ public class NavMeshLinkTests : RuntimeTestBase
             {
                 sawOffMesh = true;
                 OffMeshLinkData data = agent.CurrentOffMeshLinkData;
-                if (data.Valid && data.Link != null) resolved = data.Link;
+                if (data.Valid && data.Link is not null) resolved = data.Link;
             }
             if (!agent.PathPending && agent.RemainingDistance <= 0f) break;
         }

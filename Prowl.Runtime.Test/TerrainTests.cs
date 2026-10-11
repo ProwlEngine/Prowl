@@ -556,7 +556,7 @@ public class TerrainTests
         data.SetDetailDensity(0, 10, 20, 1f);
         data.SetDetailDensity(0, 11, 20, 0.5f);
 
-        using var clone = Serializer.Deserialize<TerrainData>(Serializer.Serialize(data));
+        using var clone = Serializer.Deserialize<TerrainData>(Serializer.Serialize(data))!;
 
         Assert.Equal(64, clone.DetailResolution);
         Assert.Equal(1f, clone.GetDetailDensity(0, 10, 20), 2);
@@ -576,7 +576,7 @@ public class TerrainTests
         var echo = Serializer.Serialize(data);
         echo.Get("DetailResolution")!.Value = 32;
 
-        using var clone = Serializer.Deserialize<TerrainData>(echo);
+        using var clone = Serializer.Deserialize<TerrainData>(echo)!;
 
         Assert.Equal(32, clone.DetailResolution);
         Assert.Equal(32 * 32, clone.DetailLayers[0].Length);
@@ -859,7 +859,7 @@ public class TerrainTests
 
         var echo = Serializer.Serialize(data);
         echo.Get("HeightmapResolution")!.Value = 65;
-        using var clone = Serializer.Deserialize<TerrainData>(echo);
+        using var clone = Serializer.Deserialize<TerrainData>(echo)!;
 
         Assert.Equal(65 * 65, clone.Heights.Length);
         Assert.Equal(0f, clone.GetInterpolatedHeight(0.99f, 0.99f));
@@ -873,7 +873,7 @@ public class TerrainTests
 
         var echo = Serializer.Serialize(data);
         echo.Get("SplatmapResolution")!.Value = 64;
-        using var clone = Serializer.Deserialize<TerrainData>(echo);
+        using var clone = Serializer.Deserialize<TerrainData>(echo)!;
 
         Assert.Equal(64 * 64 * clone.LayerCount, clone.Splats.Length);
         Assert.Null(clone.Holes);
@@ -890,7 +890,7 @@ public class TerrainTests
         echo.Get("DetailPrototypes")!.List[0].Remove("HealthyColor");
         echo.Get("DetailPrototypes")!.List[0].Remove("DryColor");
         echo.Get("Trees")!.List[0].Remove("Tint");
-        using var clone = Serializer.Deserialize<TerrainData>(echo);
+        using var clone = Serializer.Deserialize<TerrainData>(echo)!;
 
         var defaults = new DetailPrototype();
         Assert.Equal(defaults.HealthyColor, clone.DetailPrototypes[0].HealthyColor);

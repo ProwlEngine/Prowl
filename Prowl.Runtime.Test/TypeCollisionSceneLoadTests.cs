@@ -69,7 +69,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
     {
         foreach (EchoObject go in sceneEcho["serializeObj"]["array"].List)
         {
-            if (!go.TryGet("Name", out var n) || n.StringValue != goName)
+            if (!go.TryGet("Name", out var n) || n!.StringValue != goName)
                 continue;
 
             var badComp = EchoObject.NewCompound();

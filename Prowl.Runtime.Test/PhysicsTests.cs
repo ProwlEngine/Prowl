@@ -1011,7 +1011,7 @@ public class PhysicsTests : RuntimeTestBase
 
     private sealed class DisableOnBegin : Component
     {
-        public override void OnCollisionBegin(Collision collision) => GetComponent<Rigidbody3D>().Enabled = false;
+        public override void OnCollisionBegin(Collision collision) => GetComponent<Rigidbody3D>()!.Enabled = false;
     }
 
     [Fact]
@@ -1554,7 +1554,7 @@ public class PhysicsTests : RuntimeTestBase
 
         Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
 
-        Collider collider = scene.AllObjects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>();
+        Collider collider = scene.AllObjects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>()!;
         collider.Center = new Float3(10, 0, 0);
         StepPhysics(scene, 2);
 
@@ -1853,7 +1853,7 @@ public class PhysicsTests : RuntimeTestBase
 
         Assert.True(scene.Physics.Raycast(from, dir, 50f, out _));
 
-        Collider collider = floor.GetComponent<BoxCollider>();
+        Collider collider = floor.GetComponent<BoxCollider>()!;
         Assert.False(scene.Physics.Raycast(from, dir, out _, 50f, QueryFilter.Default.Ignoring(collider)),
             "the ignored collider should not be reported");
     }

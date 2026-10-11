@@ -67,7 +67,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     public void ARigWithoutAChest_GetsItsRagdoll()
     {
         (Scene scene, Animator animator, _) = SetupRagdoll(chest: false);
-        Assert.False(animator.Avatar.Runtime!.Humanoid!.HasBone(HumanBodyBone.Chest));
+        Assert.False(animator.Avatar!.Runtime!.Humanoid!.HasBone(HumanBodyBone.Chest));
 
         Tick(scene, 3);
 
@@ -83,7 +83,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Assert.NotNull(Puppet(scene));
 
         var hits = new List<ShapeCastHit>();
-        Assert.Equal(0, root.GetComponent<CharacterController>().OverlapNow(hits));
+        Assert.Equal(0, root.GetComponent<CharacterController>()!.OverlapNow(hits));
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -26,7 +27,7 @@ public readonly record struct AssetResidency(
 
 /// <summary>
 /// Every asset by GUID, one object each for the whole session. Assets stay loaded while something reaches them:
-/// a live scene, an object kept with <see cref="DontDestroyOnLoad"/>, a hold, a root, or a load group. A walk from
+/// a live scene, an object kept with <see cref="Scene.DontDestroyOnLoad"/>, a hold, a root, or a load group. A walk from
 /// those roots runs about once a second, and an asset nothing reached for <see cref="GracePeriod"/> has its payload
 /// freed, sooner when over <see cref="MemoryBudget"/>. Reading an unloaded asset loads it again.
 /// </summary>
@@ -34,7 +35,10 @@ public static class AssetDatabase
 {
     private static readonly ConcurrentDictionary<Guid, Asset> s_assets = new();
 
+    // Installed when the runtime loads, so every host serializes assets by reference before anything else runs.
+#pragma warning disable CA2255
     [ModuleInitializer]
+#pragma warning restore CA2255
     internal static void InstallReferenceRule() => Serializer.ReferenceRule = new AssetReferenceRule();
 
     /// <summary>The project's or the player's own content. Mounted sources are asked before it, so they can add to it or override it.</summary>
@@ -159,6 +163,8 @@ public static class AssetDatabase
         return null;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "Asset types are created by the database and keep their parameterless constructor by contract.")]
     private static bool IsConstructible(Type type)
         => typeof(Asset).IsAssignableFrom(type) && !type.IsAbstract && type.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, Type.EmptyTypes) != null;
 
@@ -185,6 +191,8 @@ public static class AssetDatabase
     }
 
     /// <summary>An empty object of an asset type, made with its parameterless constructor, which must touch nothing.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2067:DynamicallyAccessedMembers",
+        Justification = "Asset types are created by the database and keep their parameterless constructor by contract.")]
     public static Asset CreateShell(Type type)
         => (Asset)(Activator.CreateInstance(type, nonPublic: true) ?? throw new InvalidOperationException($"Could not create a {type.Name}."));
 
@@ -542,6 +550,8 @@ public static class AssetDatabase
     // An entry whose type can't be resolved is still a candidate, and is checked once loaded.
     private static bool IsOfType<T>(ResourceEntry entry) => IsOfType(entry, typeof(T));
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Serialized and user types are resolved by name, and the application's trim configuration must preserve them.")]
     private static bool IsOfType(ResourceEntry entry, Type wanted)
     {
         Type? type = RuntimeUtils.ResolveType(entry.TypeName);
@@ -1099,6 +1109,10 @@ public sealed class AssetWalker
     }
 
     // Only an assembly that references the engine can use the attribute.
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Scans loaded assemblies for [HeldStatic] fields, which the application's trim configuration must preserve.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Scans loaded assemblies for [HeldStatic] fields, which the application's trim configuration must preserve.")]
     private static FieldInfo[] FindHeldStatics(Assembly assembly)
     {
         Assembly engine = typeof(Asset).Assembly;
@@ -1120,6 +1134,10 @@ public sealed class AssetWalker
         return fields.ToArray();
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
     private static Plan BuildPlan(Type type)
     {
         if (!CanHold(type)) return new Plan { Kind = Kind.Skip };
@@ -1151,6 +1169,8 @@ public sealed class AssetWalker
         return Expression.Lambda<Func<object, object?>>(Expression.Convert(read, typeof(object)), target).Compile();
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
     private static bool IsCollection(Type type)
     {
         if (typeof(ICollection).IsAssignableFrom(type)) return true;
@@ -1160,6 +1180,8 @@ public sealed class AssetWalker
         return false;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
     private static bool ElementCanHold(Type type)
     {
         if (type.IsArray) return CanHold(type.GetElementType()!);
@@ -1179,6 +1201,10 @@ public sealed class AssetWalker
         return result;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
     private static bool Decide(Type type)
     {
         if (type.IsPrimitive || type.IsEnum || type.IsPointer || type == typeof(string) || type == typeof(Type) || typeof(Delegate).IsAssignableFrom(type)) return false;
@@ -1263,6 +1289,8 @@ internal sealed class AssetReferenceRule : IReferenceRule
         s_pruneLinksAt = Math.Max(256, s_runtimeLinks.Count * 2);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2067:DynamicallyAccessedMembers",
+        Justification = "Asset types are created by the database and keep their parameterless constructor by contract.")]
     public object? Resolve(string reference, Type declaredType, SerializationContext context)
     {
         if (reference.StartsWith(RuntimePrefix, StringComparison.Ordinal))

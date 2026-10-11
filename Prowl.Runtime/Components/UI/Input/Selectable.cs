@@ -20,7 +20,7 @@ public enum SelectionState
 /// <summary>
 /// Base class for every interactive UI widget - buttons, toggles, sliders, dropdowns.
 /// Tracks the pointer state machine, drives a sibling <see cref="Graphic"/>'s color
-/// across the four states, fires SFX through <see cref="UISounds"/>, and exposes
+/// across the four states, fires SFX, and exposes
 /// per-instance overrides for both the colors and the audio.
 /// </summary>
 [AddComponentMenu("UI/Selectable")]

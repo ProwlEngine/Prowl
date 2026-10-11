@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 using Prowl.Echo;
@@ -135,6 +136,10 @@ internal static class MixerParameters
     }
 
     /// <summary>The fields of an effect a snapshot can move, worked out once per type.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
     private static FieldInfo[] Parameters(Type type)
     {
         if (s_parameters.TryGetValue(type, out FieldInfo[] cached)) return cached;

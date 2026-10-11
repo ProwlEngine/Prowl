@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -222,6 +223,10 @@ internal static class AssetContent
 
     public static FieldInfo[] FieldsOf(Type type) => s_fields[type];
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Serialized types keep their fields, which the application's trim configuration must preserve.")]
     private static FieldInfo[] Collect(Type type)
     {
         var fields = new List<FieldInfo>();

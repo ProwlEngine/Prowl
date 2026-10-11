@@ -1838,7 +1838,7 @@ public class PhysicsWorld
             (ReferenceEquals(_a, other._a) && ReferenceEquals(_b, other._b)) ||
             (ReferenceEquals(_a, other._b) && ReferenceEquals(_b, other._a));
 
-        public override bool Equals(object obj) => obj is OwnerPair other && Equals(other);
+        public override bool Equals(object? obj) => obj is OwnerPair other && Equals(other);
 
         public override int GetHashCode() => RuntimeHelpers.GetHashCode(_a) ^ RuntimeHelpers.GetHashCode(_b);
     }

@@ -19,7 +19,9 @@ namespace Prowl.Runtime;
 /// </summary>
 public static class EchoLogBridge
 {
+#pragma warning disable CA2255
     [ModuleInitializer]
+#pragma warning restore CA2255
     internal static void Install() => Serializer.Logger = new ProwlEchoLogger();
 
     /// <summary>

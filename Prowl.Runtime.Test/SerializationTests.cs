@@ -40,7 +40,7 @@ public sealed class CrossRefComponent : Component
 /// </summary>
 public class SerializationTests : RuntimeTestBase
 {
-    private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value));
+    private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value))!;
 
     // ---------------------------------------------------------------------
     // GameObject (custom ISerializable: GameObject.Serialize/Deserialize)
@@ -231,10 +231,10 @@ public class SerializationTests : RuntimeTestBase
 
         // Drop the "Broken" object's Transform in the serialized array to simulate the unresolved ref.
         foreach (var el in echo["serializeObj"]["array"].List)
-            if (el.TryGet("Name", out var n) && n.StringValue == "Broken")
+            if (el.TryGet("Name", out var n) && n!.StringValue == "Broken")
                 el.Remove("Transform");
 
-        var clone = Serializer.Deserialize<Scene>(echo);
+        var clone = Serializer.Deserialize<Scene>(echo)!;
 
         Assert.Equal(3, clone.AllObjects.Count());
         Assert.Contains(clone.AllObjects, g => g.Name == "Healthy1");

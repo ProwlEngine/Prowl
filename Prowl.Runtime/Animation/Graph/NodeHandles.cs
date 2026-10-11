@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Ember;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -104,7 +105,7 @@ public sealed class IntegerSetting(string key, int value = 0, string? label = nu
 /// <summary>One of an enum's values, saved by name.</summary>
 public sealed class ChoiceSetting<T>(string key, T value, string? label = null) : NodeSetting<T>(key, label) where T : struct, Enum
 {
-    private static readonly string[] s_names = Enum.GetNames<T>();
+    [ReloadIgnore] private static readonly string[] s_names = Enum.GetNames<T>();
 
     public T Default { get; } = value;
     public override NodeValueKind Kind => NodeValueKind.Text;

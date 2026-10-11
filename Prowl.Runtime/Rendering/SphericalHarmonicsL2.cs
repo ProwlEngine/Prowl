@@ -55,7 +55,7 @@ public struct SphericalHarmonicsL2
         return r;
     }
 
-    /// <summary>Weighted sum (for barycentric probe blending). <paramref name="terms"/> need not sum to 1; pass normalized weights.</summary>
+    /// <summary>Weighted sum (for barycentric probe blending). <paramref name="weights"/> need not sum to 1; pass normalized weights.</summary>
     public static SphericalHarmonicsL2 Blend(System.ReadOnlySpan<SphericalHarmonicsL2> probes, System.ReadOnlySpan<float> weights)
     {
         SphericalHarmonicsL2 r = default;

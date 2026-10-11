@@ -60,7 +60,7 @@ public sealed class MainThreadContext : SynchronizationContext
     private MainThreadContext(int threadId) => _threadId = threadId;
 
     /// <summary>The context the engine installed, or null when no loop is running.</summary>
-    public static MainThreadContext? Current { get; private set; }
+    public static new MainThreadContext? Current { get; private set; }
 
     /// <summary>
     /// The session the calling code belongs to: the current one on the main thread, and on a worker the one

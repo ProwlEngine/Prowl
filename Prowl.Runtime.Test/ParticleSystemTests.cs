@@ -33,7 +33,7 @@ public class ParticleSystemTests : RuntimeTestBase
         system.Shape.Enabled = false;
         configure?.Invoke(system);
 
-        if (parent != null) go.SetParent(parent);
+        if (parent is not null) go.SetParent(parent);
         else scene.Add(go);
         return system;
     }

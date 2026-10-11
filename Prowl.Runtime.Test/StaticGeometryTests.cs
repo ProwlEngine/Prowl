@@ -32,7 +32,7 @@ public class StaticGeometryTests : RuntimeTestBase
     }
 
     // Renderers only drop out of the batch while editing, at runtime it stays as built
-    private static void EditMode()
+    private static void EnterEditing()
     {
         Application.IsEditor = true;
         Application.IsPlaying = false;
@@ -141,7 +141,7 @@ public class StaticGeometryTests : RuntimeTestBase
     [Fact]
     public void MovingABatchedRenderer_DropsItOutOfTheBatch()
     {
-        EditMode();
+        EnterEditing();
         Scene scene = CreateScene(enable: true);
         MeshRenderer moved = AddRenderer(scene, new Float3(-5, 0, 0));
         AddRenderer(scene, new Float3(5, 0, 0));
@@ -158,7 +158,7 @@ public class StaticGeometryTests : RuntimeTestBase
     [Fact]
     public void DisablingOrUnmarkingStatic_DropsItOutOfTheBatch()
     {
-        EditMode();
+        EnterEditing();
         Scene scene = CreateScene(enable: true);
         MeshRenderer disabled = AddRenderer(scene, new Float3(0, 0, 0));
         MeshRenderer unmarked = AddRenderer(scene, new Float3(3, 0, 0));
@@ -197,7 +197,7 @@ public class StaticGeometryTests : RuntimeTestBase
     [Fact]
     public void ChangingAMaterialProperty_DropsOutRenderersThatNoLongerMatch()
     {
-        EditMode();
+        EnterEditing();
         Scene scene = CreateScene(enable: true);
         var twin = new Material(Shader.LoadDefault(DefaultShader.Standard));
         AddRenderer(scene, new Float3(0, 0, 0));
@@ -298,7 +298,7 @@ public class StaticGeometryTests : RuntimeTestBase
     [Fact]
     public void NeedsRebuild_OnceANewStaticRendererAppearsOrOneDropsOut()
     {
-        EditMode();
+        EnterEditing();
         Scene scene = CreateScene(enable: true);
         MeshRenderer first = AddRenderer(scene, Float3.Zero);
         scene.UpdateStaticGeometry();

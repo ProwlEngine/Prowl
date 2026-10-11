@@ -18,6 +18,10 @@ using Prowl.Vector;
 
 using Xunit;
 
+// These tests treat the test thread as the engine's main thread, so they block on workers rather than await,
+// which could resume on another thread.
+#pragma warning disable xUnit1031
+
 namespace Prowl.Editor.Test;
 
 public class CliTests : EditorTestHarness
@@ -31,7 +35,7 @@ public class CliTests : EditorTestHarness
     public static string SpeedOf(Speed speed, bool loud = false) => loud ? speed.ToString().ToUpperInvariant() : speed.ToString();
 
     [CliCommand("test_throw")]
-    public static void Throw() => throw new InvalidOperationException("boom");
+    internal static void Throw() => throw new InvalidOperationException("boom");
 
     [CliCommand("test_echo")]
     public static string Echo(string text) => text;

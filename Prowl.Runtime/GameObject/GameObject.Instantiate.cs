@@ -165,6 +165,8 @@ public partial class GameObject
     /// <summary>
     /// Spawn a prefab as a child of <paramref name="parent"/>, in that parent's scene.
     /// </summary>
+    /// <param name="prefab">The prefab to spawn.</param>
+    /// <param name="parent">The object the spawned prefab is parented to. Null spawns it at the scene root.</param>
     /// <param name="worldPositionStays">Keep the prefab's own transform as a world transform rather
     /// than as an offset from the parent. Off by default, so the prefab lands where the parent is.</param>
     public static GameObject? Instantiate(PrefabAsset prefab, GameObject? parent, bool worldPositionStays = false)

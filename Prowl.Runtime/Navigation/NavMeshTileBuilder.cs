@@ -142,6 +142,12 @@ internal static class NavMeshTileBuilder
     /// overlaps, without paying for a heightfield. Contours and polymeshes are NOT built here — the
     /// TileCache builds them per tile at runtime, which is what lets obstacles re-carve.
     /// </summary>
+    /// <param name="geom">The geometry to rasterize.</param>
+    /// <param name="cfg">The build configuration.</param>
+    /// <param name="bmin">Minimum corner of the tile bounds.</param>
+    /// <param name="bmax">Maximum corner of the tile bounds.</param>
+    /// <param name="tileX">Tile index along X.</param>
+    /// <param name="tileZ">Tile index along Z.</param>
     /// <param name="reusable">Scratch to build through, so its span pages survive into the next
     /// tile. Null shares the calling thread's.</param>
     public static List<byte[]> BuildTileLayers(ProwlInputGeomProvider geom, RcConfig cfg, RcVec3f bmin, RcVec3f bmax,

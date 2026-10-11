@@ -277,7 +277,7 @@ public class AnimationGraphTests : RuntimeTestBase
     public void EveryKindOfParameter_IsReadBeforeBinding_AndCarriedAcrossARebind()
     {
         (Scene scene, Animator animator, _) = BlendGraph(0f);
-        AnimationGraph asset = animator.Graph;
+        AnimationGraph asset = animator.Graph!;
         asset.Parameters.Add(new GraphParameterRecord { Name = "Aim", Kind = NodeValueKind.Target });
         asset.Parameters.Add(new GraphParameterRecord { Name = "Tag", Kind = NodeValueKind.Id });
         asset.Invalidate();
@@ -443,7 +443,7 @@ public class AnimationGraphTests : RuntimeTestBase
         Assert.Equal(3.0, Spine(root).LocalPosition.Y, 1);
 
         // The high clip's threshold moves from 1 to 2, so a parameter of 1 now sits halfway between.
-        AnimationGraph asset = animator.Graph;
+        AnimationGraph asset = animator.Graph!;
         asset.Find("blend")!.Inputs[2].Value = 2f;
         asset.Invalidate();
 
@@ -465,7 +465,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         // An edit that changes nothing about the blend, so all that could move the spine is the rebind
         // dropping the parameter back to its authored default of 1.
-        AnimationGraph asset = animator.Graph;
+        AnimationGraph asset = animator.Graph!;
         asset.Invalidate();
         System.Threading.Thread.Sleep(200);
         Update(scene, 2);
@@ -484,7 +484,7 @@ public class AnimationGraphTests : RuntimeTestBase
         (Scene scene, Animator animator, GameObject root) = BlendGraph(1f);
         Update(scene, 2);
 
-        AnimationGraph old = animator.Graph;
+        AnimationGraph old = animator.Graph!;
         var saved = Serializer.Deserialize<AnimationGraph>(Serializer.Serialize(typeof(object), old))!;
         saved.Find("blend")!.Inputs[2].Value = 2f;
         animator.Graph = saved;
@@ -501,7 +501,7 @@ public class AnimationGraphTests : RuntimeTestBase
         Update(scene, 2);
         var before = animator.GraphInstance;
 
-        animator.Graph.Invalidate();
+        animator.Graph!.Invalidate();
         Update(scene, 1);
 
         Assert.Same(before, animator.GraphInstance);
@@ -602,7 +602,7 @@ public class AnimationGraphTests : RuntimeTestBase
         (Scene scene, Animator animator, GameObject _) = BlendGraph(0.5f);
         Update(scene, 2);
 
-        AnimationGraph asset = animator.Graph;
+        AnimationGraph asset = animator.Graph!;
         AnimationGraphInstance instance = animator.GraphInstance!;
 
         IReadOnlyDictionary<string, int> nodes = NodesOf(asset, instance);
@@ -903,7 +903,7 @@ public class AnimationGraphTests : RuntimeTestBase
         (Scene scene, Animator animator, GameObject _) = BlendGraph(0.25f);
         Update(scene, 2);
 
-        AnimationGraph asset = animator.Graph;
+        AnimationGraph asset = animator.Graph!;
         AnimationGraphInstance instance = animator.GraphInstance!;
         Assert.True(asset.TryGetCompiledMaps(instance.Graph, out var nodes, out _));
 

@@ -17,7 +17,7 @@ namespace Prowl.Runtime;
 /// <see cref="NavMeshData"/> asset, which the surface registers with the scene's
 /// <see cref="NavMeshWorld"/> on enable. Rebuilds run synchronously, in the background
 /// (<see cref="BuildNavMeshAsync"/>), or per-tile for localized geometry changes
-/// (<see cref="RebuildTiles"/>).
+/// (<see cref="RebuildTiles(AABB)"/>).
 /// <para/>
 /// Registration is the whole of this component's lifecycle — there is no per-frame work — and it
 /// runs in the editor as well as in play: obstacles can only carve a live navmesh and the overlay
@@ -193,7 +193,7 @@ public class NavMeshSurface : Component
 
     /// <summary>In Volume mode the volume is an explicit statement of the bake's extent, so
     /// the tile grid spans it even where no geometry exists yet (rooms opening up later can be
-    /// added via <see cref="RebuildTiles(AABB, IReadOnlyList{NavMeshGeometrySource})"/>).</summary>
+    /// added via <see cref="RebuildTiles(AABB, IReadOnlyList{NavMeshGeometrySource}, IReadOnlyList{NavMeshAreaVolume})"/>).</summary>
     private AABB? ExplicitWorldBounds()
         => CollectObjects == NavMeshCollectObjects.Volume ? VolumeBounds : null;
 
@@ -394,6 +394,8 @@ public class NavMeshSurface : Component
     /// less is not a cheaper rebuild — partly covered tiles come back with holes. An empty source
     /// list is valid and empties the affected tiles.
     /// </summary>
+    /// <param name="worldBounds">Bounds of the changed geometry.</param>
+    /// <param name="sources">The geometry to bake the affected tiles from.</param>
     /// <param name="volumes">Area volumes applied to the rebuilt tiles. Null (the default)
     /// collects the scene's <see cref="NavMeshModifierVolume"/>s over the affected region —
     /// note that collection walks the scene's active objects, so callers who chose explicit

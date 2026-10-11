@@ -240,6 +240,7 @@ internal sealed class ReflectionProbeSystem : IDisposable
     private void RefreshTable()
     {
         int count = 0;
+        Span<Float4> record = stackalloc Float4[TexelsPerProbe];
         foreach (Slot slot in _slots)
         {
             if (!slot.Captured) continue;
@@ -250,7 +251,6 @@ internal sealed class ReflectionProbeSystem : IDisposable
             Float3 x = rotation * Float3.UnitX, y = rotation * Float3.UnitY, z = rotation * Float3.UnitZ;
             float volume = 8f * half.X * half.Y * half.Z;
 
-            Span<Float4> record = stackalloc Float4[TexelsPerProbe];
             record[0] = new Float4(x, -Float3.Dot(x, center));
             record[1] = new Float4(y, -Float3.Dot(y, center));
             record[2] = new Float4(z, -Float3.Dot(z, center));

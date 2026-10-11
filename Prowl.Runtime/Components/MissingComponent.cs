@@ -49,6 +49,8 @@ public class MissingComponent : Component, ISerializable
             compound.Remove("_prefabTemplateIdentity");
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Serialized and user types are resolved by name, and the application's trim configuration must preserve them.")]
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         _references.Clear();

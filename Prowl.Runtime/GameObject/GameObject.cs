@@ -1457,6 +1457,8 @@ public partial class GameObject : EngineObject, ISerializable
     /// does not pull in required components, since the object being copied already has whatever it needs. Null when
     /// the type's constructor throws, so one bad component is skipped rather than abandoning the whole copy.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2067:DynamicallyAccessedMembers",
+        Justification = "Component types keep their parameterless constructor by contract.")]
     internal Component? AttachBareComponent(Type type)
     {
         if (!TryConstruct(type, out Component? component) || component is null)
@@ -1539,6 +1541,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <param name="compTag">The SerializedProperty containing the component data.</param>
     /// <param name="ctx">The serialization context.</param>
+    /// <param name="existing">Components already loaded onto this object, so the recovered one is not added twice.</param>
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
         Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
     private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx, HashSet<object> existing)

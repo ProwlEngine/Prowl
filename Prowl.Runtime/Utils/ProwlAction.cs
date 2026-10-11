@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 using Prowl.Echo;
@@ -69,6 +70,8 @@ public sealed class ProwlCall
     /// Resolves and runs the call against its target. Tries, in order, a matching method, a settable
     /// property, then a field of the given name. No-op if the target or member is unset.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "A ProwlAction names a target member that the application's trim configuration must preserve.")]
     public void Invoke()
     {
         if (string.IsNullOrEmpty(_member)) return;
@@ -122,6 +125,8 @@ public sealed class ProwlCall
               "call at runtime instead of saving a cross-scene reference."
             : null;
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
+        Justification = "A ProwlAction names a target member that the application's trim configuration must preserve.")]
     private static MethodInfo? FindMethod(Type type, string name, ProwlActionArgType argType)
     {
         foreach (MethodInfo m in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))

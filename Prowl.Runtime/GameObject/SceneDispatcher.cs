@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
@@ -101,6 +102,8 @@ internal sealed class SceneDispatcher
         return callbacks;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Component subclasses are user or engine types the application's trim configuration must preserve.")]
     private static bool Overrides(Type type, string method)
         => RuntimeUtils.OverridesVirtual(type, method, typeof(Component));
 
@@ -141,6 +144,8 @@ internal sealed class SceneDispatcher
     /// Starts dispatching a component's per-frame callbacks. Called whenever it becomes enabled in an active
     /// scene; the per-tick gameplay gate decides whether they actually run.
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Component subclasses are user or engine types the application's trim configuration must preserve.")]
     public void Register(Component c)
     {
         SceneCallbacks callbacks = CallbacksOf(c);

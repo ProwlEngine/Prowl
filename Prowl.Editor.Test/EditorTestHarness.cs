@@ -74,7 +74,7 @@ public abstract class EditorTestHarness : IDisposable
     /// </summary>
     protected Guid CreatePrefabAsset(GameObject source, string relativePath = "Prefab.prefab")
     {
-        if (source.Scene == null)
+        if (source.Scene is null)
         {
             var scene = new Scene();
             scene.Add(source);

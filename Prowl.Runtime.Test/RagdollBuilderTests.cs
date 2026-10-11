@@ -41,7 +41,7 @@ public class RagdollBuilderTests
     }
 
     private static T On<T>(Dictionary<HumanBodyBone, Transform> bones, HumanBodyBone bone) where T : Component
-        => bones[bone].GameObject.GetComponent<T>();
+        => bones[bone].GameObject.GetComponent<T>()!;
 
     // Hips, chest, neck and head, and two parts per limb: every part this rig has bones for.
     [Fact]

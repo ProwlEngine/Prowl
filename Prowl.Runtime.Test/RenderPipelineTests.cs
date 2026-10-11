@@ -48,7 +48,7 @@ public class RenderPipelineTests
 
         var pipeline = new DefaultRenderPipeline();
         using var cmd = Graphics.GetCommandBuffer("Test");
-        pipeline.DrawRenderables(cmd, sorted, "RenderOrder", "Transparent", default, null, false, null, preserveOrder: true);
+        pipeline.DrawRenderables(cmd, sorted, "RenderOrder", "Transparent", default, null!, false, null, preserveOrder: true);
 
         Assert.Equal([1, 2, 3], EncodedObjectIds(cmd));
     }

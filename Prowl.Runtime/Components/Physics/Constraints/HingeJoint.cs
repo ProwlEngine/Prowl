@@ -122,7 +122,7 @@ public class HingeJoint : PhysicsJoint
             if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(hingeJoint?.Motor))
-                hingeJoint.Motor.MaximumForce = value;
+                hingeJoint.Motor.MaximumTorque = value;
             WakeBodies();
         }
     }
@@ -156,7 +156,7 @@ public class HingeJoint : PhysicsJoint
         if (hasMotor && IsLive(hingeJoint.Motor))
         {
             hingeJoint.Motor.TargetVelocity = motorTargetVelocity;
-            hingeJoint.Motor.MaximumForce = motorMaxForce;
+            hingeJoint.Motor.MaximumTorque = motorMaxForce;
         }
     }
 

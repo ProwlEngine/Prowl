@@ -686,7 +686,7 @@ public class TerrainEditor : CustomEditor
     /// list to match the mesh's <see cref="Mesh.SubMeshCount"/> when a mesh is assigned, so users see one
     /// slot per submesh; falls back to a single "Material" field when no mesh is assigned yet.
     /// </summary>
-    private void DrawPrototypeMaterials(Paper paper, string id, string label, Mesh? mesh, List<Material> materials)
+    private void DrawPrototypeMaterials(Paper paper, string id, string label, Mesh? mesh, List<Material?> materials)
     {
         var m = Origami.Current.Metrics;
         // Left accent strip (design .tr-matlist) wrapping the per-submesh fields.

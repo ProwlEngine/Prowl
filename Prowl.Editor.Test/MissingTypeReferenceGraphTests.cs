@@ -64,7 +64,7 @@ public class MissingTypeReferenceGraphTests
         // Mimic the editor: a caller-supplied context passed to the 3-arg Deserialize.
         var loaded = Serializer.Deserialize<Scene>(EchoObject.ReadFromString(text), new SerializationContext())!;
 
-        Assert.Empty(loaded.AllObjects.Where(o => o.Name == "New GameObject")); // no phantom placeholders
+        Assert.DoesNotContain(loaded.AllObjects, o => o.Name == "New GameObject"); // no phantom placeholders
         var loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
         Assert.NotNull(loadedRoot);
         Assert.Single(loadedRoot!.Children);
@@ -84,7 +84,7 @@ public class MissingTypeReferenceGraphTests
         var loaded = RoundTripWithMissing(root, nameof(MissRefComp));
 
         var h = loaded.GetComponent<AssetHolderComp>();
-        _out.WriteLine($"[control] holder present={h != null}, assetId={h?.Tex.AssetID}");
+        _out.WriteLine($"[control] holder present={h is not null}, assetId={h?.Tex.AssetID}");
         Assert.NotNull(h);
         Assert.Equal(guid, h!.Tex.AssetID); // GUID AssetRef survives when nothing points into the missing comp
     }
@@ -104,7 +104,7 @@ public class MissingTypeReferenceGraphTests
         var loaded = RoundTripWithMissing(root, nameof(MissRefComp));
 
         var h = loaded.GetComponent<AssetHolderComp>();
-        _out.WriteLine($"[crossref] holder present={h != null}, assetId={h?.Tex.AssetID}, expected={guid}");
+        _out.WriteLine($"[crossref] holder present={h is not null}, assetId={h?.Tex.AssetID}, expected={guid}");
         Assert.NotNull(h);
         Assert.Equal(guid, h!.Tex.AssetID); // EXPECTED to pass; if it fails, the AssetRef was lost -> bug reproduced
     }
@@ -133,7 +133,7 @@ public class MissingTypeReferenceGraphTests
         var loadedRoot = loaded.AllObjects.FirstOrDefault(o => o.Name == "Root");
         string Structure(GameObject g, int d = 0) =>
             new string(' ', d * 2) + g.Name + "\n" + string.Concat(g.Children.Select(c => Structure(c, d + 1)));
-        _out.WriteLine("[scene]\n" + (loadedRoot == null ? "<no Root>" : Structure(loadedRoot)));
+        _out.WriteLine("[scene]\n" + (loadedRoot is null ? "<no Root>" : Structure(loadedRoot)));
 
         // Full recovery: the deferred two-phase back-patch populates the placeholder whose body was trapped
         // inside the missing component, so the whole hierarchy - names and all - survives.

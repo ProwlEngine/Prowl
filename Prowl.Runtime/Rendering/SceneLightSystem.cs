@@ -78,6 +78,9 @@ public sealed class SceneLightSystem : IDisposable
     /// scene affects every camera. The argument is kept for forward compatibility.
     /// </para>
     /// </summary>
+    /// <param name="lights">All lights in the scene.</param>
+    /// <param name="cameraPosition">The camera position, unused for now.</param>
+    /// <param name="cullingMask">The camera layer mask, unused for now.</param>
     /// <param name="view">The view moving lights are culled to, or null to keep them all, as both eyes of a headset need.</param>
     public void Reconcile(IReadOnlyList<IRenderableLight> lights, Float3 cameraPosition, LayerMask cullingMask, Frustum? view = null)
     {

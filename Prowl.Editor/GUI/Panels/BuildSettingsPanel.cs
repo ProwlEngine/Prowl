@@ -379,7 +379,7 @@ public class BuildSettingsPanel : DockPanel
 
     private void DrawPlatformGrid(Paper paper, FontFile font)
     {
-        var slots = new List<(string name, string icon, int realIndex)>();
+        var slots = new List<(string? name, string? icon, int realIndex)>();
         for (int i = 0; i < _buildPlatforms.Count; i++)
             slots.Add((_buildPlatforms[i].Name, _buildPlatforms[i].Icon, i));
         slots.Add(("Android", EditorIcons.Mobile, -1));
@@ -398,7 +398,7 @@ public class BuildSettingsPanel : DockPanel
         }
     }
 
-    private void DrawPlatformCard(Paper paper, FontFile font, int cell, (string name, string icon, int realIndex) slot)
+    private void DrawPlatformCard(Paper paper, FontFile font, int cell, (string? name, string? icon, int realIndex) slot)
     {
         bool empty = slot.name == null;
         bool selectable = slot.realIndex >= 0;

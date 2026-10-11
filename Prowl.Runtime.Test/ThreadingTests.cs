@@ -11,6 +11,10 @@ using Prowl.Vector;
 
 using Xunit;
 
+// These tests treat the test thread as the engine's main thread, so they block on workers rather than await,
+// which could resume on another thread.
+#pragma warning disable xUnit1031
+
 namespace Prowl.Runtime.Test;
 
 /// <summary>Stands in for a user script that overrides OnDispose without calling base.</summary>
@@ -129,7 +133,7 @@ public class ThreadingTests : RuntimeTestBase
             frames++;
         }
 
-        Wait();
+        _ = Wait();
         loop.Pump();
         Assert.Equal(1, frames);
         loop.Pump();
@@ -170,7 +174,7 @@ public class ThreadingTests : RuntimeTestBase
             ran = true;
         }
 
-        Stay();
+        _ = Stay();
         Assert.True(ran);
     }
 
@@ -250,7 +254,7 @@ public class ThreadingTests : RuntimeTestBase
             resumed = true;
         }
 
-        Play();
+        _ = Play();
         MainThreadContext.Restart();
         slow.SetResult();
 
@@ -298,7 +302,7 @@ public class ThreadingTests : RuntimeTestBase
     {
         using var loop = new LoopScope();
 
-        Task<Exception?> worker = Task.Run(() => Record.Exception(() => GameTask.Run(() => throw new FormatException("boom"))));
+        Task<Exception?> worker = Task.Run<Exception?>(() => Record.Exception(() => GameTask.Run(() => throw new FormatException("boom"))));
         loop.PumpUntil(() => worker.IsCompleted);
 
         Assert.IsType<FormatException>(worker.Result);
@@ -361,7 +365,7 @@ public class ThreadingTests : RuntimeTestBase
             applied = true;
         }
 
-        using (MainThreadContext.EnterSession()) Work();
+        using (MainThreadContext.EnterSession()) _ = Work();
         Assert.True(computing.Wait(5000));
         MainThreadContext.Restart();
         release.Set();
@@ -485,7 +489,7 @@ public class ThreadingTests : RuntimeTestBase
             MainThreadContext.Restart();
         }
 
-        Restarter();
+        _ = Restarter();
         loop.Pump();
         Assert.Same(MainThreadContext.Current, SynchronizationContext.Current);
 
@@ -496,7 +500,7 @@ public class ThreadingTests : RuntimeTestBase
             resumed = true;
         }
 
-        After();
+        _ = After();
         loop.Pump();
         loop.Pump();
         Assert.True(resumed);
@@ -1036,7 +1040,7 @@ public class ThreadingTests : RuntimeTestBase
         var frame = new TimeData { DeltaTime = 0.5f };
         using var stop = new CancellationTokenSource();
 
-        Task<Exception?> reader = Task.Run(() => Record.Exception(() =>
+        Task<Exception?> reader = Task.Run<Exception?>(() => Record.Exception(() =>
         {
             while (!stop.IsCancellationRequested)
             {
