@@ -635,7 +635,7 @@ internal sealed class GlslStageSource
 
         foreach (int directive in Directives)
         {
-            if (GlslPragmas.IsVariantPragma(Str(directive)))
+            if (GlslPragmas.IsGraphitePragma(Str(directive)))
                 edits.Add((Tokens[directive].Start, Tokens[directive].Length, ""));
         }
 

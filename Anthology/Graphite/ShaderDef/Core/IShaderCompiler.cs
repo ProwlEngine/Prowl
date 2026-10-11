@@ -17,6 +17,9 @@ public interface IShaderCompiler
     /// <summary>Variant axes for the given pass.</summary>
     IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass);
 
+    /// <summary>Names the pass reads as global properties, from its global pragmas.</summary>
+    IReadOnlyList<string> GetGlobals(ShaderPass pass) => [];
+
     /// <summary>
     /// Compiles one variant of a pass for one backend. Result has no fixed-function
     /// render state, that's applied by the pass at bind time.

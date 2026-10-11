@@ -87,7 +87,7 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private readonly GlslCompilerOptions _options;
     private readonly ThreadLocal<nint> _compilers = new(() => (nint)s_api.CompilerInitialize(), trackAllValues: true);
-    private readonly ConcurrentDictionary<string, VariantSpace[]> _axes = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, (VariantSpace[] Axes, string[] Globals)> _pragmas = new(StringComparer.Ordinal);
     private int _sessionVersion;
     private bool _disposed;
 
@@ -111,13 +111,17 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
     /// </summary>
     public void Invalidate()
     {
-        _axes.Clear();
+        _pragmas.Clear();
         Interlocked.Increment(ref _sessionVersion);
     }
 
 
     /// <inheritdoc/>
     public IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass) => Axes(pass);
+
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> GetGlobals(ShaderPass pass) => Pragmas(pass).Globals;
 
 
     /// <inheritdoc/>
@@ -261,16 +265,20 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
     }
 
 
-    private VariantSpace[] Axes(ShaderPass pass)
+    private VariantSpace[] Axes(ShaderPass pass) => Pragmas(pass).Axes;
+
+
+    private (VariantSpace[] Axes, string[] Globals) Pragmas(ShaderPass pass)
     {
-        return _axes.GetOrAdd(pass.Source, _ =>
+        return _pragmas.GetOrAdd(pass.Source, _ =>
         {
             string file = FileName(pass);
             List<VariantSpace> axes = [];
+            List<string> globals = [];
             HashSet<string> visited = new(StringComparer.Ordinal);
             foreach (GlslSection section in GlslSection.Split(pass.Source, file, pass.SourceLine))
-                GlslPragmas.Collect(section.Body, file, axes, visited, (name, from) => Resolve(name, from));
-            return [.. axes];
+                GlslPragmas.Collect(section.Body, file, axes, globals, visited, (name, from) => Resolve(name, from));
+            return ([.. axes], [.. globals]);
         });
     }
 
@@ -524,10 +532,11 @@ internal sealed class GlslSection
 /// </summary>
 internal static class GlslPragmas
 {
-    public static bool IsVariantPragma(string directive)
+    /// <summary>True for the variant and global pragmas, which only Graphite reads and which are removed before compiling.</summary>
+    public static bool IsGraphitePragma(string directive)
     {
         string[] parts = Words(directive);
-        return parts.Length >= 2 && parts[0] == "pragma" && parts[1] == "variant";
+        return parts.Length >= 2 && parts[0] == "pragma" && parts[1] is "variant" or "global";
     }
 
 
@@ -562,9 +571,10 @@ internal static class GlslPragmas
 
 
     /// <summary>
-    /// Collects every variant pragma of a source and of everything it includes, whether or not the include is active.
+    /// Collects every variant and global pragma of a source and of everything it includes, whether or not the include
+    /// is active.
     /// </summary>
-    public static void Collect(string source, string file, List<VariantSpace> axes, HashSet<string> visited, Func<string, string, string?> resolve)
+    public static void Collect(string source, string file, List<VariantSpace> axes, List<string> globals, HashSet<string> visited, Func<string, string, string?> resolve)
     {
         foreach (string line in StripComments(source).Split('\n'))
         {
@@ -581,7 +591,21 @@ internal static class GlslPragmas
 
                 string? included = resolve(name, file);
                 if (included != null)
-                    Collect(included, name, axes, visited, resolve);
+                    Collect(included, name, axes, globals, visited, resolve);
+                continue;
+            }
+
+            if (parts.Length >= 2 && parts[0] == "pragma" && parts[1] == "global")
+            {
+                if (parts.Length == 2)
+                    throw new ShaderCompileException($"{file}: error: '#pragma global' needs one or more names");
+                foreach (string name in parts[2..])
+                {
+                    if (!IsIdentifier(name))
+                        throw new ShaderCompileException($"{file}: error: '{name}' in '{trimmed}' is not a valid name");
+                    if (!globals.Contains(name))
+                        globals.Add(name);
+                }
                 continue;
             }
 
