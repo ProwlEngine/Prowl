@@ -21,8 +21,6 @@ struct Graphite_ViewData
     vec4 time;                      // time, delta time, frame index, the part of time the first lost
     vec4 depth;                     // near plane, logical far distance
     vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
-    uvec4 treeRoots;                // static light regions, view lights, static decal regions, view decals, all ones when empty
-    uvec4 probeRoots;               // reflection probe regions
 };
 
 struct Graphite_DrawRecord { uint chunk; uint view; uint flags; uint subMesh; };

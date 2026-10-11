@@ -250,10 +250,15 @@ internal static class SpirvReflector
             throw new ShaderCompileException($"error: SPIR-V uses set {set} binding {binding} which no declaration has");
 
         uint arrayCount = 0;
-        if (m.Types[pointee].Op == OpTypeArray && m.Types[m.Types[pointee].Operands[0]].Op is OpTypeImage or OpTypeSampledImage or OpTypeSampler)
+        if (m.Types[pointee].Op == OpTypeArray)
         {
-            arrayCount = m.Constants[m.Types[pointee].Operands[1]];
-            pointee = m.Types[pointee].Operands[0];
+            uint element = m.Types[pointee].Operands[0];
+            bool storageBlock = m.Types[element].Op == OpTypeStruct && (storage == StorageStorageBuffer || m.Has(element, DecorationBufferBlock));
+            if (m.Types[element].Op is OpTypeImage or OpTypeSampledImage or OpTypeSampler || storageBlock)
+            {
+                arrayCount = m.Constants[m.Types[pointee].Operands[1]];
+                pointee = element;
+            }
         }
 
         (int op, uint[] operands) = m.Types[pointee];
@@ -300,7 +305,7 @@ internal static class SpirvReflector
                 throw new ShaderCompileException($"error: '{resource.SourceName}' is an unsized array of resources, give it a size");
 
             case OpTypeArray:
-                throw new ShaderCompileException($"error: '{resource.SourceName}' is an array of buffers, which is not supported");
+                throw new ShaderCompileException($"error: '{resource.SourceName}' is an array of uniform buffers, which is not supported, use storage buffers");
 
             default:
                 throw new ShaderCompileException($"error: '{resource.SourceName}' is a resource type that is not supported");

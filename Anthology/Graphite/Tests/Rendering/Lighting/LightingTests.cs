@@ -676,6 +676,53 @@ public sealed class LightingTests : IDisposable
         }
     }
 
+    [Fact]
+    public void LineIrradiance_StaysExactOnItsOwnAxis()
+    {
+        // Along the line's axis only its end on the normal's side lights: the integral of 1 / s^2 from 1 to 3, over its length
+        Vector3 n = new(0, 0, 1);
+        Assert.Equal(1f / 3, Reference.LineIrradiance(new Vector3(0, 0, 1), new Vector3(0, 0, 3), n), 1e-4f);
+        Assert.Equal(1f / 3, Reference.LineIrradiance(new Vector3(1e-4f, 0, 1), new Vector3(1e-4f, 0, 3), n), 1e-3f);
+    }
+
+    [Fact]
+    public void IesProfiles_TurnAroundTheirDirectionFromUp()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.5f));
+        LightDesc spot = new()
+        {
+            Type = LightType.Spot,
+            Position = new Double3(0, 0, 6),
+            Direction = new Float3(0, 0, 1),
+            Up = new Float3(0, 1, 0),
+            Range = 10,
+            Intensity = 0.1f,
+            InnerAngle = 40,
+            OuterAngle = 50,
+            Static = true,
+        };
+        LightHandle handle = _world.AddLight(spot);
+        Float4[] plain = Frame();
+
+        // V's first half covers from up round to down through right, the second back through left: full, then dark
+        byte[] texels = [.. Enumerable.Repeat((byte)255, 8), .. Enumerable.Repeat((byte)0, 8)];
+        Texture profile = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(2, 2, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        _device.UpdateTexture<byte>(profile, texels, new TextureRegion(0, 0, 0, 2, 2, 1, 0, 0));
+        _textures.Add(profile);
+        spot.IesProfile = profile;
+        spot.CookieSampler = SamplerDescription.Point;
+        _world.SetLight(handle, spot);
+        Float4[] profiled = Frame();
+        for (int i = 0; i < plain.Length; i++)
+        {
+            Vector3 p = PixelPosition(i % Size, i / Size);
+            if (MathF.Abs(p.X) < 0.4f)
+                continue;
+            Assert.True(MathF.Abs(profiled[i].X - (p.X > 0 ? plain[i].X : 0)) <= 1e-4f + 0.01f * plain[i].X, $"pixel {i}: {profiled[i].X} against {plain[i].X} at x {p.X}");
+        }
+    }
+
     private LightDesc Shaped(LightType type, Float3 color, float intensity) => new()
     {
         Type = type,
@@ -1068,6 +1115,117 @@ public sealed class LightingTests : IDisposable
         _world.AddDecal(decal);
 
         AssertMatches(p => p.X < 0 ? new Vector3(1, 0.5f, 0.25f) * (128 / 255f) : Vector3.Zero, Frame());
+    }
+
+    // Adds up the colours of a host set's volumes holding each point
+    private const string VolumesSource = """
+        Shader "Test/Volumes"
+        {
+            Properties
+            {
+                _Set("Set", Float) = 0
+                _Stride("Stride", Float) = 0
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    layout(location = 0) out vec3 vWorld;
+                    void main()
+                    {
+                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        gl_Position = Graphite_RelativeToClip(vWorld);
+                    }
+                }
+                Fragment
+                {
+                    #include "Graphite/Trees.glsl"
+                    #include "Graphite/Passes.glsl"
+                    uniform float _Set;
+                    uniform float _Stride;
+                    layout(location = 0) in vec3 vWorld;
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        vec3 sum = vec3(0.0);
+                        Graphite_ItemIterator it = Graphite_BeginItems(uint(_Set), uint(_Stride), vWorld);
+                        uint array, index;
+                        vec3 center;
+                        float radius;
+                        while (Graphite_NextItem(it, array, index, center, radius))
+                            sum += Graphite_SpatialVec4(array, index * uint(_Stride) + 1u).rgb;
+                        outColor = vec4(sum, 1.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Volume
+    {
+        public Float4 Color;
+    }
+
+    [Fact]
+    public void HostSpatialSets_FindTheirItemsHoldingEachPoint_StaticAndMoving_FarFromTheOrigin()
+    {
+        _origin = new Double3(5_000_000.25, -30, -2_000_000);
+        SpatialSet<Volume> volumes = _world.CreateSpatialSet<Volume>("Volumes");
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(VolumesSource)));
+        material.SetFloat("_Set", volumes.Index);
+        material.SetFloat("_Stride", volumes.Stride);
+        AddQuad(material);
+
+        SpatialHandle red = volumes.Add(_origin + new Double3(-2, 0, QuadDepth), 2.5f, new Volume { Color = new Float4(1, 0, 0, 0) }, isStatic: true);
+        SpatialHandle green = volumes.Add(_origin + new Double3(2, 1, QuadDepth), 2f, new Volume { Color = new Float4(0, 1, 0, 0) });
+
+        static Vector3 Expected(Vector3 p, (Vector3 Center, float Radius, Vector3 Color)[] items)
+            => items.Where(i => Vector3.Distance(p, i.Center) <= i.Radius).Aggregate(Vector3.Zero, (sum, i) => sum + i.Color);
+
+        (Vector3, float, Vector3)[] both = [(new Vector3(-2, 0, QuadDepth), 2.5f, new Vector3(1, 0, 0)), (new Vector3(2, 1, QuadDepth), 2f, new Vector3(0, 1, 0))];
+        Float4[] pixels = Frame();
+        Assert.Contains(pixels, p => p.X > 0.5f);
+        Assert.Contains(pixels, p => p.Y > 0.5f);
+        AssertSpatial(p => Expected(p, both), pixels);
+
+        // Moving the moving one, recolouring the static one in place, then removing it
+        volumes.Set(green, _origin + new Double3(-1, -2, QuadDepth), 2f, new Volume { Color = new Float4(0, 1, 0, 0) });
+        volumes.Set(red, _origin + new Double3(-2, 0, QuadDepth), 2.5f, new Volume { Color = new Float4(0, 0, 1, 0) }, isStatic: true);
+        AssertSpatial(p => Expected(p, [(new Vector3(-2, 0, QuadDepth), 2.5f, new Vector3(0, 0, 1)), (new Vector3(-1, -2, QuadDepth), 2f, new Vector3(0, 1, 0))]), Frame());
+        volumes.Remove(red);
+        AssertSpatial(p => Expected(p, [(new Vector3(-1, -2, QuadDepth), 2f, new Vector3(0, 1, 0))]), Frame());
+    }
+
+    // Exact where a pixel centre is well inside or outside every sphere, skipping those a float's width from an edge
+    private static void AssertSpatial(Func<Vector3, Vector3> expected, Float4[] pixels)
+    {
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                Vector3 p = PixelPosition(x, y);
+                Vector3 want = expected(p);
+                Vector3 nearby = expected(p + new Vector3(0.01f, 0.01f, 0));
+                if (want != nearby)
+                    continue;
+                Float4 got = pixels[y * Size + x];
+                Assert.True(Vector3.Distance(want, new Vector3(got.X, got.Y, got.Z)) < 1e-4f, $"pixel {x},{y}: want {want}, got {got}");
+            }
+        }
+    }
+
+    [Fact]
+    public void SpatialSetRecords_MustBeWholeWords()
+    {
+        Assert.Throws<ArgumentException>(() => _world.CreateSpatialSet<float>("Bad"));
     }
 
     [Fact]
@@ -2299,13 +2457,15 @@ public sealed class LightingTests : IDisposable
         // The cosine weighted solid angle of a sphere, or of a disk facing the point, clipped by the horizon
         public static float SphereIrradiance(float cosTheta, float sinSigma2)
         {
+            if (sinSigma2 >= 1)
+                return MathF.PI;
             if (cosTheta * cosTheta > sinSigma2)
                 return MathF.PI * sinSigma2 * MathF.Max(cosTheta, 0);
             float sinTheta = MathF.Sqrt(MathF.Max(1 - cosTheta * cosTheta, 0));
             float x = MathF.Sqrt(MathF.Max(1 / sinSigma2 - 1, 0));
             float y = Math.Clamp(-x * cosTheta / MathF.Max(sinTheta, 1e-6f), -1, 1);
             float sinThetaSqrtY = sinTheta * MathF.Sqrt(MathF.Max(1 - y * y, 0));
-            return MathF.Max((cosTheta * MathF.Acos(y) - x * sinThetaSqrtY) * sinSigma2 + MathF.Atan2(sinThetaSqrtY, x), 0);
+            return MathF.Max((cosTheta * MathF.Acos(y) - x * sinThetaSqrtY) * sinSigma2 + MathF.Atan2(sinThetaSqrtY, MathF.Max(x, 1e-6f)), 0);
         }
 
         // The cosine weighted solid angle of a quad of corners relative to the point, clipped by the horizon
@@ -2363,11 +2523,13 @@ public sealed class LightingTests : IDisposable
             }
             if (s1 <= s0)
                 return 0;
-            float bu = Vector3.Dot(a, u), c = a.LengthSquared();
-            float dd = MathF.Max(c - bu * bu, 1e-8f);
-            float q0 = MathF.Sqrt(s0 * s0 + 2 * bu * s0 + c), q1 = MathF.Sqrt(s1 * s1 + 2 * bu * s1 + c);
-            float f0 = (na * (s0 + bu) - nu * (bu * s0 + c)) / (dd * q0);
-            float f1 = (na * (s1 + bu) - nu * (bu * s1 + c)) / (dd * q1);
+            float bu = Vector3.Dot(a, u);
+            Vector3 perp = a - u * bu;
+            float dd = MathF.Max(perp.LengthSquared(), 1e-20f);
+            float np = Vector3.Dot(n, perp);
+            float q0 = MathF.Max((a + u * s0).Length(), 1e-6f), q1 = MathF.Max((a + u * s1).Length(), 1e-6f);
+            float f0 = np * (s0 + bu) / (dd * q0) - nu / q0;
+            float f1 = np * (s1 + bu) / (dd * q1) - nu / q1;
             return MathF.Max(f1 - f0, 0) / len;
         }
 

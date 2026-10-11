@@ -307,6 +307,19 @@ public class GlslLayoutTests
 
 
     [Fact]
+    public void StorageBufferArrays_ReflectTheirCount()
+    {
+        ShaderDescription d = Glsl.Describe(FragmentOnly(
+            "#extension GL_EXT_nonuniform_qualifier : require\nlayout(set = 1, std430) readonly buffer Words { uvec4 words[]; } _Words[6]; uniform uint _Index;",
+            "color = vec4(_Words[nonuniformEXT(_Index)].words[0]);"));
+
+        Assert.Equal(6u, Glsl.Element(d, "Words").ArrayCount);
+        Assert.Equal(ResourceKind.StructuredBufferReadOnly, Glsl.Element(d, "Words").Kind);
+        Assert.True(d.ResourceLayouts.Single(l => l.Set == 1).Table);
+    }
+
+
+    [Fact]
     public void UnsizedResourceArrays_Fail()
     {
         Assert.Contains("give it a size", Glsl.Fails(FragmentOnly(

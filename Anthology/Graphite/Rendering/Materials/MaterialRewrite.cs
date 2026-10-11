@@ -27,29 +27,17 @@ internal static class GraphiteBindings
     public const int SamplerTable = 0;
     public const int Globals = 1;
     public const int Views = 2;
-    public const int ViewLights = 3;
-    public const int ViewLightNodes = 4;
-    public const int ViewDecals = 5;
-    public const int ViewDecalNodes = 6;
-    public const int LightRegions = 7;
-    public const int LightRegionNodes = 8;
-    public const int DecalRegions = 9;
-    public const int DecalRegionNodes = 10;
-    public const int ProbeRegions = 11;
-    public const int ProbeRegionNodes = 12;
+    public const int SpatialRecords = 3;
+    public const int SpatialNodes = 4;
+    public const int SpatialRegions = 5;
+    public const int SpatialRoots = 6;
     public const int Chunks = 13;
     public const int Transforms = 14;
     public const int PreviousTransforms = 15;
     public const int Objects = 16;
     public const int MaterialSlots = 17;
-    public const int StaticLights = 18;
-    public const int StaticLightNodes = 19;
-    public const int StaticDecals = 20;
-    public const int StaticDecalNodes = 21;
     public const int WorldLighting = 22;
     public const int ObjectProbes = 23;
-    public const int StaticReflectionProbes = 24;
-    public const int StaticReflectionProbeNodes = 25;
     public const int SkyAmbient = 26;
     public const int Directionals = 27;
 
@@ -93,29 +81,17 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, Graphics, SamplerTable) { ArrayCount = samplers },
         new ResourceLayoutElementDescription("Graphite_Globals", ResourceKind.StructuredBufferReadOnly, Graphics, Globals),
         new ResourceLayoutElementDescription("Graphite_Views", ResourceKind.StructuredBufferReadOnly, Graphics, Views),
-        new ResourceLayoutElementDescription("Graphite_ViewLights", ResourceKind.StructuredBufferReadOnly, Graphics, ViewLights),
-        new ResourceLayoutElementDescription("Graphite_ViewLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ViewLightNodes),
-        new ResourceLayoutElementDescription("Graphite_ViewDecals", ResourceKind.StructuredBufferReadOnly, Graphics, ViewDecals),
-        new ResourceLayoutElementDescription("Graphite_ViewDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ViewDecalNodes),
-        new ResourceLayoutElementDescription("Graphite_LightRegions", ResourceKind.StructuredBufferReadOnly, Graphics, LightRegions),
-        new ResourceLayoutElementDescription("Graphite_LightRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, LightRegionNodes),
-        new ResourceLayoutElementDescription("Graphite_DecalRegions", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegions),
-        new ResourceLayoutElementDescription("Graphite_DecalRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegionNodes),
-        new ResourceLayoutElementDescription("Graphite_ProbeRegions", ResourceKind.StructuredBufferReadOnly, Graphics, ProbeRegions),
-        new ResourceLayoutElementDescription("Graphite_ProbeRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ProbeRegionNodes),
+        new ResourceLayoutElementDescription("Graphite_SpatialRecords", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialRecords) { ArrayCount = SpatialIndex.MaxSets * 2 },
+        new ResourceLayoutElementDescription("Graphite_SpatialNodes", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialNodes) { ArrayCount = SpatialIndex.MaxSets * 3 },
+        new ResourceLayoutElementDescription("Graphite_SpatialRegions", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialRegions) { ArrayCount = SpatialIndex.MaxSets },
+        new ResourceLayoutElementDescription("Graphite_SpatialRoots", ResourceKind.StructuredBufferReadOnly, Graphics, SpatialRoots),
         new ResourceLayoutElementDescription("Graphite_Chunks", ResourceKind.StructuredBufferReadOnly, Graphics, Chunks),
         new ResourceLayoutElementDescription("Graphite_Transforms", ResourceKind.StructuredBufferReadOnly, Graphics, Transforms),
         new ResourceLayoutElementDescription("Graphite_PreviousTransforms", ResourceKind.StructuredBufferReadOnly, Graphics, PreviousTransforms),
         new ResourceLayoutElementDescription("Graphite_Objects", ResourceKind.StructuredBufferReadOnly, Graphics, Objects),
         new ResourceLayoutElementDescription("Graphite_MaterialSlots", ResourceKind.StructuredBufferReadOnly, Graphics, MaterialSlots),
-        new ResourceLayoutElementDescription("Graphite_StaticLights", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLights),
-        new ResourceLayoutElementDescription("Graphite_StaticLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLightNodes),
-        new ResourceLayoutElementDescription("Graphite_StaticDecals", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecals),
-        new ResourceLayoutElementDescription("Graphite_StaticDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecalNodes),
         new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting),
         new ResourceLayoutElementDescription("Graphite_ObjectProbes", ResourceKind.StructuredBufferReadOnly, Graphics, ObjectProbes),
-        new ResourceLayoutElementDescription("Graphite_ReflectionProbes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbes),
-        new ResourceLayoutElementDescription("Graphite_ReflectionProbeNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticReflectionProbeNodes),
         new ResourceLayoutElementDescription("Graphite_SkyAmbientSH", ResourceKind.StructuredBufferReadOnly, Graphics, SkyAmbient),
         new ResourceLayoutElementDescription("Graphite_Directionals", ResourceKind.StructuredBufferReadOnly, Graphics, Directionals))
     {

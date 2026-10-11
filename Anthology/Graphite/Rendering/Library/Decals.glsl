@@ -24,14 +24,24 @@ struct Graphite_DecalRecord
     vec4 hostData;
 };
 
-layout(set = 1, binding = 20, std430) readonly buffer Graphite_StaticDecals { Graphite_DecalRecord graphite_StaticDecals[]; };
-layout(set = 1, binding = 5, std430) readonly buffer Graphite_ViewDecals { Graphite_DecalRecord graphite_ViewDecals[]; };
 
 #define GRAPHITE_DECAL_TEXTURE(d, slot, uv) GRAPHITE_SAMPLE_2D(slot, d.textures.w, uv)
 
-Graphite_DecalRecord Graphite_DecalAt(uint tree, uint index)
+Graphite_DecalRecord Graphite_DecalAt(uint array, uint index)
 {
-    return tree == GRAPHITE_STATIC_DECALS ? graphite_StaticDecals[index] : graphite_ViewDecals[index];
+    uint w = index * 10u;
+    Graphite_DecalRecord d;
+    d.row0 = Graphite_SpatialVec4(array, w);
+    d.row1 = Graphite_SpatialVec4(array, w + 1u);
+    d.row2 = Graphite_SpatialVec4(array, w + 2u);
+    d.order = Graphite_SpatialUVec4(array, w + 3u);
+    d.color = Graphite_SpatialVec4(array, w + 4u);
+    d.textures = Graphite_SpatialUVec4(array, w + 5u);
+    d.params = Graphite_SpatialVec4(array, w + 6u);
+    d.axis = Graphite_SpatialVec4(array, w + 7u);
+    d.extra = Graphite_SpatialUVec4(array, w + 8u);
+    d.hostData = Graphite_SpatialVec4(array, w + 9u);
+    return d;
 }
 
 // The unit box position of a camera relative point. offset and offsetLow move camera relative positions into the decal's tree.
@@ -112,7 +122,7 @@ void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
     int hits = 0;
 
     Graphite_TreeQuery query;
-    Graphite_BeginQuery(query, worldPos, GRAPHITE_QUERY_DECALS);
+    Graphite_BeginQuery(query, worldPos, GRAPHITE_SET_DECALS);
     uint tree, first, last;
     while (Graphite_NextRun(query, tree, first, last))
     {

@@ -56,10 +56,15 @@ public class RendererBenchmarks
                 Fragment
                 {
                     #include "Graphite/Core.glsl"
+                    #include "Graphite/Passes.glsl"
                     uniform vec4 _Color;
                     layout(location = 0) in vec3 vNormal;
                     layout(location = 0) out vec4 outColor;
-                    void main() { outColor = _Color * (0.5 + 0.5 * normalize(vNormal).y); }
+                    void main()
+                    {
+                        outColor = _Color * (0.5 + 0.5 * normalize(vNormal).y);
+                        Graphite_WriteGBuffer(vNormal, 1.0, 0.0);
+                    }
                 }
                 ENDGLSL
             }

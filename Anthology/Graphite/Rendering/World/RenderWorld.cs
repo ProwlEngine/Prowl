@@ -160,6 +160,38 @@ internal struct ObjectAttributes
 /// </summary>
 public sealed partial class RenderWorld : IDisposable
 {
+    private readonly List<Action> _hostSetExtracts = new();
+    private readonly List<SpatialIndex> _hostSets = new();
+    private readonly GraphicsDevice _device;
+    private readonly Action<RendererError> _report;
+
+    /// <summary>Every spatial set of the world, the built in ones first. Render side.</summary>
+    internal IEnumerable<SpatialIndex> SpatialSets
+    {
+        get
+        {
+            yield return Lighting.Lights;
+            yield return Lighting.Decals;
+            yield return Reflections.Regions;
+            foreach (SpatialIndex set in _hostSets)
+                yield return set;
+        }
+    }
+
+    /// <summary>A set of the host's own items found by where they are, at most 13 per world. Host thread.</summary>
+    public SpatialSet<T> CreateSpatialSet<T>(string name) where T : unmanaged
+    {
+        if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() % 16 != 0)
+            throw new ArgumentException($"A spatial set's record must be a whole number of 16 byte words, {typeof(T).Name} is {System.Runtime.CompilerServices.Unsafe.SizeOf<T>()} bytes.");
+        int slot = SpatialIndex.FirstHostSet + _hostSets.Count;
+        if (slot >= SpatialIndex.MaxSets)
+            throw new InvalidOperationException($"A world holds at most {SpatialIndex.MaxSets - SpatialIndex.FirstHostSet} spatial sets of its own.");
+        SpatialSet<T> set = new(_device, slot, name, _report);
+        _hostSets.Add(set.Render);
+        _hostSetExtracts.Add(set.Extract);
+        return set;
+    }
+
     /// <summary>Features every view of the world runs. Host thread.</summary>
     public FeatureSet Features { get; } = new();
 
@@ -211,8 +243,10 @@ public sealed partial class RenderWorld : IDisposable
     internal RenderWorld(GraphicsDevice device, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
     {
         _owner = owner;
+        _device = device;
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Action<RendererError> report = owner != null ? error => owner.Report(error with { Source = error.Source ?? this, Key = $"{error.Key ?? error.Code}.world{id}" }) : _ => { };
+        _report = report;
         Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, report);
         Probes = new WorldProbes(device);
         Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance, report, reflections ?? ReflectionSettings.Default);
@@ -415,6 +449,21 @@ public sealed partial class RenderWorld : IDisposable
         _dirty.Clear();
         _render.EndExtract();
         ExtractLighting();
+        foreach (Action extract in _hostSetExtracts)
+            extract();
+    }
+
+    /// <summary>Rebuilds the host's sets' static regions and queues their tables. Render thread.</summary>
+    internal void FlushHostSets(Uploader uploader, List<DeviceBuffer> replaced)
+    {
+        foreach (SpatialIndex set in _hostSets)
+        {
+            set.Update();
+            if (set.StaticRecords.Flush(uploader) is { } records)
+                replaced.Add(records);
+            if (set.StaticNodes.Flush(uploader) is { } nodes)
+                replaced.Add(nodes);
+        }
     }
 
     /// <summary>Removes the world from its renderer at the next frame. Host thread.</summary>
@@ -432,6 +481,8 @@ public sealed partial class RenderWorld : IDisposable
         Lighting.Dispose();
         Probes.Dispose();
         Reflections.Dispose();
+        foreach (SpatialIndex set in _hostSets)
+            set.Dispose();
     }
 
     private int Check(RenderableHandle handle)

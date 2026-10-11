@@ -1,10 +1,14 @@
-// The four wide trees of H-Forward shading. A point query walks a tree testing a node's four child boxes at once and
-// returns the leaves whose box holds the point, each a run of records. The layout matches LightTreeNode.
+// Spatial sets: the four wide trees of H-Forward shading, for lights, decals, reflection probes and any set a host makes.
+// A point query walks a tree testing a node's four child boxes at once and returns the leaves whose box holds the point,
+// each a run of records. The layout matches LightTreeNode.
 //
-// Static lights and decals live in regions of space, each with a tree around its own origin. A view has a tree over the
-// regions it sees, camera relative, whose leaves hold each region's root and the camera's offset to its origin. Moving
-// ones live in a tree per view around the camera.
+// Static items live in regions of space, each with a tree around its own origin. A view has a tree over the regions it
+// sees, camera relative, whose leaves hold each region's root and the camera's offset to its origin. Moving ones live in
+// a tree per view around the camera. Every set's buffers sit in bindless arrays indexed by the set: its records and
+// nodes, static then the view's, and the view's regions.
 #pragma once
+
+#extension GL_EXT_nonuniform_qualifier : require
 
 #include "Graphite/Core.glsl"
 
@@ -15,18 +19,10 @@
 #define GRAPHITE_TREE_STACK 48
 #define GRAPHITE_REGION_STACK 16
 
-#define GRAPHITE_STATIC_LIGHTS 0u
-#define GRAPHITE_VIEW_LIGHTS 1u
-#define GRAPHITE_STATIC_DECALS 2u
-#define GRAPHITE_VIEW_DECALS 3u
-#define GRAPHITE_STATIC_PROBES 4u
-#define GRAPHITE_LIGHT_REGIONS 5u
-#define GRAPHITE_DECAL_REGIONS 6u
-#define GRAPHITE_PROBE_REGIONS 7u
-
-#define GRAPHITE_QUERY_LIGHTS 0u
-#define GRAPHITE_QUERY_DECALS 1u
-#define GRAPHITE_QUERY_PROBES 2u
+#define GRAPHITE_SPATIAL_SETS 16
+#define GRAPHITE_SET_LIGHTS 0u
+#define GRAPHITE_SET_DECALS 1u
+#define GRAPHITE_SET_PROBES 2u
 
 struct Graphite_TreeNode
 {
@@ -40,39 +36,29 @@ struct Graphite_TreeNode
     uvec4 count;
 };
 
-layout(set = 1, binding = 19, std430) readonly buffer Graphite_StaticLightNodes { Graphite_TreeNode graphite_StaticLightNodes[]; };
-layout(set = 1, binding = 21, std430) readonly buffer Graphite_StaticDecalNodes { Graphite_TreeNode graphite_StaticDecalNodes[]; };
-layout(set = 1, binding = 4, std430) readonly buffer Graphite_ViewLightNodes { Graphite_TreeNode graphite_ViewLightNodes[]; };
-layout(set = 1, binding = 6, std430) readonly buffer Graphite_ViewDecalNodes { Graphite_TreeNode graphite_ViewDecalNodes[]; };
-layout(set = 1, binding = 8, std430) readonly buffer Graphite_LightRegionNodes { Graphite_TreeNode graphite_LightRegionNodes[]; };
-layout(set = 1, binding = 10, std430) readonly buffer Graphite_DecalRegionNodes { Graphite_TreeNode graphite_DecalRegionNodes[]; };
-layout(set = 1, binding = 25, std430) readonly buffer Graphite_ReflectionProbeNodes { Graphite_TreeNode graphite_ReflectionProbeNodes[]; };
-layout(set = 1, binding = 12, std430) readonly buffer Graphite_ProbeRegionNodes { Graphite_TreeNode graphite_ProbeRegionNodes[]; };
-
 // A region the view sees: the camera minus its origin split high and low, and its tree's root
 struct Graphite_RegionEntry { vec3 offset; uint root; vec3 offsetLow; uint pad; };
 
-layout(set = 1, binding = 7, std430) readonly buffer Graphite_LightRegions { Graphite_RegionEntry graphite_LightRegions[]; };
-layout(set = 1, binding = 9, std430) readonly buffer Graphite_DecalRegions { Graphite_RegionEntry graphite_DecalRegions[]; };
-layout(set = 1, binding = 11, std430) readonly buffer Graphite_ProbeRegions { Graphite_RegionEntry graphite_ProbeRegions[]; };
+layout(set = 1, binding = 3, std430) readonly buffer Graphite_SpatialRecords { uvec4 words[]; } graphite_SpatialRecords[GRAPHITE_SPATIAL_SETS * 2];
+layout(set = 1, binding = 4, std430) readonly buffer Graphite_SpatialNodes { Graphite_TreeNode nodes[]; } graphite_SpatialNodes[GRAPHITE_SPATIAL_SETS * 3];
+layout(set = 1, binding = 5, std430) readonly buffer Graphite_SpatialRegions { Graphite_RegionEntry entries[]; } graphite_SpatialRegions[GRAPHITE_SPATIAL_SETS];
 
-Graphite_TreeNode Graphite_TreeNodeAt(uint tree, uint index)
+// Per set: the root of the view's tree over its static regions, and of its tree of moving items
+layout(set = 1, binding = 6, std430) readonly buffer Graphite_SpatialRoots { uvec4 graphite_SpatialRoots[]; };
+
+// The records of a set: its static ones at set * 2, the view's moving ones at set * 2 + 1
+uint Graphite_StaticRecords(uint set) { return set * 2u; }
+uint Graphite_MovingRecords(uint set) { return set * 2u + 1u; }
+
+// A 16 byte word of a record array, stride words to a record
+vec4 Graphite_SpatialVec4(uint array, uint word)
 {
-    if (tree == GRAPHITE_STATIC_LIGHTS)
-        return graphite_StaticLightNodes[index];
-    if (tree == GRAPHITE_VIEW_LIGHTS)
-        return graphite_ViewLightNodes[index];
-    if (tree == GRAPHITE_STATIC_DECALS)
-        return graphite_StaticDecalNodes[index];
-    if (tree == GRAPHITE_VIEW_DECALS)
-        return graphite_ViewDecalNodes[index];
-    if (tree == GRAPHITE_STATIC_PROBES)
-        return graphite_ReflectionProbeNodes[index];
-    if (tree == GRAPHITE_LIGHT_REGIONS)
-        return graphite_LightRegionNodes[index];
-    if (tree == GRAPHITE_DECAL_REGIONS)
-        return graphite_DecalRegionNodes[index];
-    return graphite_ProbeRegionNodes[index];
+    return uintBitsToFloat(graphite_SpatialRecords[nonuniformEXT(array)].words[word]);
+}
+
+uvec4 Graphite_SpatialUVec4(uint array, uint word)
+{
+    return graphite_SpatialRecords[nonuniformEXT(array)].words[word];
 }
 
 // Nodes still to visit: an item tree's from the bottom, the regions tree's above it, so one of each can walk at once
@@ -80,7 +66,7 @@ uint graphite_TreeStack[GRAPHITE_TREE_STACK + GRAPHITE_REGION_STACK];
 
 struct Graphite_TreeWalk
 {
-    uint tree;
+    uint nodes;              // the node array walked
     int sp;
     int stackBase;
     int stackEnd;
@@ -90,10 +76,9 @@ struct Graphite_TreeWalk
     uvec4 counts;
 };
 
-void Graphite_BeginTree(out Graphite_TreeWalk w, uint tree, uint root)
+void Graphite_BeginTree(out Graphite_TreeWalk w, uint nodes, bool regions, uint root)
 {
-    bool regions = tree >= GRAPHITE_LIGHT_REGIONS;
-    w.tree = tree;
+    w.nodes = nodes;
     w.stackBase = regions ? GRAPHITE_TREE_STACK : 0;
     w.stackEnd = regions ? GRAPHITE_TREE_STACK + GRAPHITE_REGION_STACK : GRAPHITE_TREE_STACK;
     w.sp = w.stackBase;
@@ -137,7 +122,7 @@ bool Graphite_NextLeaf(inout Graphite_TreeWalk w, vec3 p, out uint first, out ui
             w.next = graphite_TreeStack[--w.sp];
         }
 
-        Graphite_TreeNode node = Graphite_TreeNodeAt(w.tree, w.next);
+        Graphite_TreeNode node = graphite_SpatialNodes[nonuniformEXT(w.nodes)].nodes[w.next];
         w.next = GRAPHITE_TREE_INVALID;
         bvec4 inside = bvec4(uvec4(greaterThanEqual(vec4(p.x), node.minX)) & uvec4(lessThanEqual(vec4(p.x), node.maxX))
                            & uvec4(greaterThanEqual(vec4(p.y), node.minY)) & uvec4(lessThanEqual(vec4(p.y), node.maxY))
@@ -149,63 +134,48 @@ bool Graphite_NextLeaf(inout Graphite_TreeWalk w, vec3 p, out uint first, out ui
     return false;
 }
 
-// Walks every tree that may hold a point: the static regions the view sees, then the view's tree of moving ones
+// Walks every tree of a set that may hold a point: the static regions the view sees, then the view's tree of moving ones
 struct Graphite_TreeQuery
 {
     Graphite_TreeWalk regions;
     Graphite_TreeWalk items;
+    uint set;
     vec3 position;           // camera relative
     vec3 base;               // what moves it relative to the view's first layer, which its trees are built around
     vec3 point;              // the position in the space of the tree being walked
     vec3 offset;             // what moves a camera relative position into that space, high and low with the layer's base
     vec3 offsetLow;
-    uint staticTree;
-    uint viewTree;
-    uint viewRoot;
+    uint movingRoot;
     uint entry;
     uint entryEnd;
     int phase;               // 0 static regions, 1 the moving tree, 2 done
     bool walking;
 };
 
-// Walks the static regions of a kind the view sees, then its tree of moving ones. Reflection probes have no moving tree.
-void Graphite_BeginQuery(out Graphite_TreeQuery q, vec3 position, uint kind)
+void Graphite_BeginQuery(out Graphite_TreeQuery q, vec3 position, uint set)
 {
     Graphite_ViewData view = Graphite_View();
-    bool decals = kind == GRAPHITE_QUERY_DECALS;
-    bool probes = kind == GRAPHITE_QUERY_PROBES;
+    uvec4 roots = graphite_SpatialRoots[set];
+    q.set = set;
     q.position = position;
     q.base = view.treeOffset.xyz;
     q.point = position + q.base;
     q.offset = vec3(0.0);
     q.offsetLow = q.base;
-    q.staticTree = probes ? GRAPHITE_STATIC_PROBES : decals ? GRAPHITE_STATIC_DECALS : GRAPHITE_STATIC_LIGHTS;
-    q.viewTree = decals ? GRAPHITE_VIEW_DECALS : GRAPHITE_VIEW_LIGHTS;
-    q.viewRoot = probes ? GRAPHITE_TREE_INVALID : decals ? view.treeRoots.w : view.treeRoots.y;
+    q.movingRoot = roots.y;
     q.entry = 0u;
     q.entryEnd = 0u;
     q.phase = 0;
     q.walking = false;
-    uint regionTree = probes ? GRAPHITE_PROBE_REGIONS : decals ? GRAPHITE_DECAL_REGIONS : GRAPHITE_LIGHT_REGIONS;
-    uint regionRoot = probes ? view.probeRoots.x : decals ? view.treeRoots.z : view.treeRoots.x;
-    Graphite_BeginTree(q.regions, regionTree, regionRoot);
-    Graphite_BeginTree(q.items, q.staticTree, GRAPHITE_TREE_INVALID);
+    Graphite_BeginTree(q.regions, set * 3u + 2u, true, roots.x);
+    Graphite_BeginTree(q.items, set * 3u, false, GRAPHITE_TREE_INVALID);
 }
 
-Graphite_RegionEntry Graphite_RegionAt(uint tree, uint index)
+// Finds the next run of records whose leaf holds the point, as [first, last) of the record array records. q.point and
+// q.offset stay those of the run's tree until the next call.
+bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint records, out uint first, out uint last)
 {
-    if (tree == GRAPHITE_LIGHT_REGIONS)
-        return graphite_LightRegions[index];
-    if (tree == GRAPHITE_DECAL_REGIONS)
-        return graphite_DecalRegions[index];
-    return graphite_ProbeRegions[index];
-}
-
-// Finds the next run of records whose leaf holds the point, as [first, last) of tree's records. q.point and q.offset
-// stay those of the run's tree until the next call.
-bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint tree, out uint first, out uint last)
-{
-    tree = q.staticTree;
+    records = Graphite_StaticRecords(q.set);
     first = 0u;
     last = 0u;
     for (;;)
@@ -214,7 +184,7 @@ bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint tree, out uint first,
         {
             if (Graphite_NextLeaf(q.items, q.point, first, last))
             {
-                tree = q.items.tree;
+                records = q.phase == 1 ? Graphite_MovingRecords(q.set) : Graphite_StaticRecords(q.set);
                 return true;
             }
             q.walking = false;
@@ -230,24 +200,71 @@ bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint tree, out uint first,
             q.offset = vec3(0.0);
             q.offsetLow = q.base;
             q.point = q.position + q.base;
-            Graphite_BeginTree(q.items, q.viewTree, q.viewRoot);
+            Graphite_BeginTree(q.items, q.set * 3u + 1u, false, q.movingRoot);
             q.walking = true;
             continue;
         }
 
         if (q.entry < q.entryEnd)
         {
-            Graphite_RegionEntry region = Graphite_RegionAt(q.regions.tree, q.entry++);
+            Graphite_RegionEntry region = graphite_SpatialRegions[nonuniformEXT(q.set)].entries[q.entry++];
             q.offset = region.offset;
             q.offsetLow = region.offsetLow + q.base;
             q.point = (q.position + q.offset) + q.offsetLow;
-            Graphite_BeginTree(q.items, q.staticTree, region.root);
+            Graphite_BeginTree(q.items, q.set * 3u, false, region.root);
             q.walking = true;
             continue;
         }
 
         if (!Graphite_NextLeaf(q.regions, q.position + q.base, q.entry, q.entryEnd))
             q.phase = 1;
+    }
+    return false;
+}
+
+// Walks the items of a host's set whose sphere holds a point. Their records start with their centre in their tree's space
+// and their radius, then the host's data: read it with Graphite_SpatialVec4(array, index * stride + 1 + i).
+struct Graphite_ItemIterator
+{
+    Graphite_TreeQuery query;
+    uint array;
+    uint k;
+    uint last;
+    uint stride;             // 16 byte words per record, the centre and radius included
+};
+
+Graphite_ItemIterator Graphite_BeginItems(uint set, uint stride, vec3 worldPos)
+{
+    Graphite_ItemIterator it;
+    Graphite_BeginQuery(it.query, worldPos, set);
+    it.array = 0u;
+    it.k = 0u;
+    it.last = 0u;
+    it.stride = stride;
+    return it;
+}
+
+// The next item holding the point: its record array and index, and its camera relative centre and radius
+bool Graphite_NextItem(inout Graphite_ItemIterator it, out uint array, out uint index, out vec3 center, out float radius)
+{
+    for (;;)
+    {
+        while (it.k < it.last)
+        {
+            index = it.k++;
+            array = it.array;
+            vec4 cr = Graphite_SpatialVec4(array, index * it.stride);
+            precise vec3 c = (cr.xyz - it.query.offset) - it.query.offsetLow;
+            vec3 d = it.query.position - c;
+            if (dot(d, d) <= cr.w * cr.w)
+            {
+                center = c;
+                radius = cr.w;
+                return true;
+            }
+        }
+        if (!Graphite_NextRun(it.query, it.array, it.k, it.last))
+            return false;
     }
     return false;
 }

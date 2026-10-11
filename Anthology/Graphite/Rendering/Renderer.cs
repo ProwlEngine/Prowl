@@ -199,7 +199,7 @@ public struct FrameDesc
 }
 
 /// <summary>A texture region read back to the host: tightly packed rows of its format, or why it could not be read.</summary>
-public readonly record struct TextureReadback(byte[] Data, uint Width, uint Height, PixelFormat Format, string? Error = null)
+public readonly record struct TextureReadback(byte[] Data, uint Width, uint Height, uint Depth, PixelFormat Format, string? Error = null)
 {
     public bool Failed => Error != null;
 }
@@ -496,7 +496,7 @@ public sealed class Renderer : IDisposable
             try
             {
                 if (request.Texture is { } texture)
-                    request.TextureDone!(new TextureReadback(data, request.Region.Width, request.Region.Height, texture.Format, request.Error));
+                    request.TextureDone!(new TextureReadback(data, request.Region.Width, request.Region.Height, request.Region.Depth, texture.Format, request.Error));
                 else
                     request.BufferDone!(new BufferReadback(data, request.Error));
             }
@@ -656,6 +656,7 @@ public sealed class Renderer : IDisposable
         catch (Exception e)
         {
             _uploader.Clear();
+            _lastDispatched = Math.Max(_lastDispatched, Device.LastBegunExecutionId);
             foreach (WorldFrame world in _worlds.Values)
                 world.World.Reflections.FrameFailed();
             foreach (ReadbackRequest request in _frameReadbacks)
@@ -715,6 +716,7 @@ public sealed class Renderer : IDisposable
             world.World.Reflections.Flush(_uploader, _replaced);
             world.World.Lighting.Update();
             world.World.Lighting.Flush(_uploader, _replaced);
+            world.World.FlushHostSets(_uploader, _replaced);
             world.World.Probes.Update(world.World.Render, _uploader, _replaced);
         }
         foreach (DeviceBuffer buffer in _replaced)

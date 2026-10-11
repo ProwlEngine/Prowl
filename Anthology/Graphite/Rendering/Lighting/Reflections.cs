@@ -306,13 +306,13 @@ internal sealed class WorldReflections : IDisposable
         _resources = resources;
         _report = report;
         _settings = settings;
-        Regions = new StaticRegions<ReflectionProbeRecord>(device, "Reflection probes", Pack, report);
+        Regions = new SpatialIndex<ReflectionProbeRecord>(device, "Reflection probes", SpatialIndex.ProbesSet, Pack, report);
         SkyAmbient = device.ResourceFactory.CreateBuffer(new BufferDescription(112, BufferUsage.StructuredBufferReadWrite));
         SkyAmbient.Name = "Sky ambient";
     }
 
     /// <summary>The captured probes, in regions with a tree each.</summary>
-    public StaticRegions<ReflectionProbeRecord> Regions { get; }
+    public SpatialIndex<ReflectionProbeRecord> Regions { get; }
 
     /// <summary>The prefiltered sky. Null until the first capture.</summary>
     public Target? Sky { get; private set; }
@@ -402,7 +402,7 @@ internal sealed class WorldReflections : IDisposable
         if (old.TimeSlicing != desc.TimeSlicing)
             StopJob(index);
         if (_captured[index])
-            Regions.Set(index, desc.Position, Radius(desc));
+            Regions.Set(index, desc.Position, Radius(desc), true);
     }
 
     internal void Request(int index)
@@ -503,9 +503,9 @@ internal sealed class WorldReflections : IDisposable
     public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
     {
         int before = replaced.Count;
-        if (Regions.Records.Flush(uploader) is { } records)
+        if (Regions.StaticRecords.Flush(uploader) is { } records)
             replaced.Add(records);
-        if (Regions.Nodes.Flush(uploader) is { } nodes)
+        if (Regions.StaticNodes.Flush(uploader) is { } nodes)
             replaced.Add(nodes);
         return replaced.Count != before;
     }
@@ -576,8 +576,7 @@ internal sealed class WorldReflections : IDisposable
         foreach (PendingBake bake in _pendingBakes)
             bake.Buffer.Dispose();
         SkyAmbient.Dispose();
-        Regions.Records.Dispose();
-        Regions.Nodes.Dispose();
+        Regions.Dispose();
     }
 
     private void PlanSky(int frame, WorldLighting lighting)
@@ -841,7 +840,7 @@ internal sealed class WorldReflections : IDisposable
     {
         _captured[index] = true;
         _capturedAt[index] = frame;
-        Regions.Set(index, _probes[index].Position, Radius(_probes[index]));
+        Regions.Set(index, _probes[index].Position, Radius(_probes[index]), true);
     }
 
     // Drops the probe from the tree until it is captured or its cube shown again

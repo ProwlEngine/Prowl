@@ -74,12 +74,15 @@ public struct LightDesc
     /// <summary>Scales the light's diffuse and specular separately, 1 for physical.</summary>
     public float DiffuseScale, SpecularScale;
 
-    /// <summary>A texture the light shines through: a 2D one for a spot, across its cone, a cube for a point, in its own space.</summary>
+    /// <summary>
+    /// A texture the light shines through: a 2D one for a spot, across its cone with U along right and V along up, a cube
+    /// for a point, in its own space of right, up and direction.
+    /// </summary>
     public Texture? Cookie;
 
     /// <summary>
-    /// A photometric profile as a 2D texture: the angle from the direction across U from 0 to 180 degrees, the angle
-    /// around it from up across V, relative intensity in R. For points and spots.
+    /// A photometric profile as a 2D texture: the angle from the direction across U's texel centres from 0 to 180 degrees,
+    /// the angle around it from up toward right across V from 0 to 360, relative intensity in R. For points and spots.
     /// </summary>
     public Texture? IesProfile;
 
@@ -477,14 +480,11 @@ internal sealed class WorldLighting : IDisposable
 {
     private readonly IMaterialResources _resources;
     private readonly Action<RendererError> _report;
-    private readonly StaticRegions<LightRecord> _staticLights;
-    private readonly StaticRegions<DecalRecord> _staticDecals;
 
     private LightDesc[] _lights = new LightDesc[16];
     private LightSlots[] _lightSlots = new LightSlots[16];
     private int[] _lightGeneration = new int[16];
     private bool[] _lightAlive = new bool[16];
-    private readonly List<int> _dynamicLights = new();
     private readonly List<int> _directionalLights = new();
     private bool _lightMembership = true;
 
@@ -492,18 +492,12 @@ internal sealed class WorldLighting : IDisposable
     private bool[] _decalAlive = new bool[16];
     private DecalLook[] _decalLooks = new DecalLook[16];
     private uint[] _decalSequence = new uint[16];
-    private readonly List<int> _dynamicDecals = new();
-    private bool _decalMembership = true;
 
     private EnvironmentDesc _environment = new();
     private bool _worldRecordDirty = true;
     private bool _hasProbes;
     private uint _probeSlot, _probeSampler, _probeMips;
-    private Vector4[] _spheres = new Vector4[64];
-    private readonly List<int> _culled = new();
     private readonly List<int> _directionalOrder = new();
-    private LightRecord[] _lightScratch = new LightRecord[64];
-    private DecalRecord[] _decalScratch = new DecalRecord[64];
 
     private struct LightSlots
     {
@@ -528,18 +522,17 @@ internal sealed class WorldLighting : IDisposable
     {
         _resources = resources;
         _report = report;
-        _staticLights = new StaticRegions<LightRecord>(device, "Static lights", Pack, report);
-        _staticDecals = new StaticRegions<DecalRecord>(device, "Static decals", (index, origin) => Pack(_decalLooks[index], origin), report);
+        Lights = new SpatialIndex<LightRecord>(device, "Lights", SpatialIndex.LightsSet, Pack, report);
+        Decals = new SpatialIndex<DecalRecord>(device, "Decals", SpatialIndex.DecalsSet, (index, origin) => Pack(_decalLooks[index], origin), report);
         World = GpuTable.Of<WorldLightingRecord>(device, "World lighting", 1);
         Directionals = GpuTable.Of<DirectionalRecord>(device, "Directional lights", 8);
         Directionals.Set(0, default(DirectionalRecord));
-        Tables = [_staticLights.Records, _staticLights.Nodes, _staticDecals.Records, _staticDecals.Nodes, World, Directionals];
+        Tables = [Lights.StaticRecords, Lights.StaticNodes, Decals.StaticRecords, Decals.StaticNodes, World, Directionals];
     }
 
-    public GpuTable StaticLights => _staticLights.Records;
-    public GpuTable StaticLightNodes => _staticLights.Nodes;
-    public GpuTable StaticDecals => _staticDecals.Records;
-    public GpuTable StaticDecalNodes => _staticDecals.Nodes;
+    /// <summary>Point, spot and area lights, static ones in regions and moving ones in a tree per view.</summary>
+    public SpatialIndex<LightRecord> Lights { get; }
+    public SpatialIndex<DecalRecord> Decals { get; }
     public GpuTable World { get; }
 
     /// <summary>Every directional light, the sun first, as many as there are.</summary>
@@ -570,10 +563,10 @@ internal sealed class WorldLighting : IDisposable
 
         if (wasAlive != alive || old.Type != desc.Type || old.Static != desc.Static)
             _lightMembership = true;
-        if (alive && desc.Static && desc.Type != LightType.Directional)
-            _staticLights.Set(index, desc.Position, Math.Max(desc.Range, 1e-4f));
+        if (alive && desc.Type != LightType.Directional)
+            Lights.Set(index, desc.Position, Math.Max(desc.Range, 1e-4f), desc.Static);
         else
-            _staticLights.Remove(index);
+            Lights.Remove(index);
         if ((wasAlive && old.Type == LightType.Directional) || (alive && desc.Type == LightType.Directional))
             _worldRecordDirty = true;
     }
@@ -616,8 +609,8 @@ internal sealed class WorldLighting : IDisposable
             if (!_lightAlive[i] || !(Freed(light.Cookie) || Freed(light.IesProfile)))
                 continue;
             _lightSlots[i] = Slots(light);
-            if (light.Static && light.Type != LightType.Directional)
-                _staticLights.Repack(i);
+            if (light.Type != LightType.Directional)
+                Lights.Repack(i);
         }
     }
 
@@ -640,12 +633,10 @@ internal sealed class WorldLighting : IDisposable
         if (alive)
             _decalLooks[index] = Look(desc, _decalSequence[index]);
 
-        if (wasAlive != alive || old.Static != desc.Static)
-            _decalMembership = true;
-        if (alive && desc.Static)
-            _staticDecals.Set(index, _decalLooks[index].Center, _decalLooks[index].Radius);
+        if (alive)
+            Decals.Set(index, _decalLooks[index].Center, _decalLooks[index].Radius, desc.Static);
         else
-            _staticDecals.Remove(index);
+            Decals.Remove(index);
     }
 
     internal void ReceiveEnvironment(EnvironmentDesc environment)
@@ -690,8 +681,7 @@ internal sealed class WorldLighting : IDisposable
             if (!_decalAlive[i] || !(Freed(decal.Albedo) || Freed(decal.Normal) || Freed(decal.Mask) || Freed(decal.Extra0) || Freed(decal.Extra1)))
                 continue;
             _decalLooks[i] = Look(_decals[i], _decalSequence[i]);
-            if (_decals[i].Static)
-                _staticDecals.Repack(i);
+            Decals.Repack(i);
         }
     }
 
@@ -700,88 +690,10 @@ internal sealed class WorldLighting : IDisposable
     {
         if (_lightMembership)
             RebuildLightLists();
-        if (_decalMembership)
-            RebuildDecalLists();
-        _staticLights.Update();
-        _staticDecals.Update();
+        Lights.Update();
+        Decals.Update();
         if (_worldRecordDirty)
             WriteWorldRecord();
-    }
-
-    /// <summary>Builds a view's tree over the static light regions it sees. Returns the root. Render thread.</summary>
-    public uint BuildViewLightRegions(in CullFrustum frustum, LightTreeBuilder builder, Uploader uploader, GpuArray entries, GpuArray nodes)
-        => _staticLights.BuildView(frustum, builder, uploader, entries, nodes);
-
-    /// <summary>Builds a view's tree over the static decal regions it sees. Returns the root. Render thread.</summary>
-    public uint BuildViewDecalRegions(in CullFrustum frustum, LightTreeBuilder builder, Uploader uploader, GpuArray entries, GpuArray nodes)
-        => _staticDecals.BuildView(frustum, builder, uploader, entries, nodes);
-
-    /// <summary>
-    /// Builds a view's moving light tree from the lights whose sphere meets its frustum, around the camera, and queues
-    /// its records and nodes. Returns the root, or Invalid when no moving light is in view. Render thread.
-    /// </summary>
-    public uint BuildViewLights(in CullFrustum frustum, LightTreeBuilder builder, Uploader uploader, GpuArray records, GpuArray nodes)
-    {
-        _culled.Clear();
-        foreach (int index in _dynamicLights)
-        {
-            LightDesc light = _lights[index];
-            if (frustum.Sphere(light.Position, Math.Max(light.Range, 1e-4f)))
-                _culled.Add(index);
-        }
-        if (_culled.Count == 0)
-            return LightTreeBuilder.Invalid;
-
-        Span<Vector4> spheres = Spheres(_culled.Count);
-        for (int i = 0; i < _culled.Count; i++)
-        {
-            LightDesc light = _lights[_culled[i]];
-            Float3 p = frustum.Relative(light.Position);
-            spheres[i] = new Vector4(p.X, p.Y, p.Z, Math.Max(light.Range, 1e-4f));
-        }
-
-        builder.Build(spheres, Math.Clamp(_culled.Count / 1024, 4, 128), morton: true);
-        CheckDepth(builder, LightTreeBuilder.ShaderStack);
-        if (_lightScratch.Length < _culled.Count)
-            _lightScratch = new LightRecord[_culled.Count * 2];
-        ReadOnlySpan<int> order = builder.Order;
-        for (int i = 0; i < _culled.Count; i++)
-            _lightScratch[i] = Pack(_culled[order[i]], frustum.Camera);
-        records.Write<LightRecord>(uploader, _lightScratch.AsSpan(0, _culled.Count));
-        nodes.Write(uploader, builder.Nodes);
-        return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
-    }
-
-    /// <summary>Builds a view's moving decal tree, like <see cref="BuildViewLights"/>.</summary>
-    public uint BuildViewDecals(in CullFrustum frustum, LightTreeBuilder builder, Uploader uploader, GpuArray records, GpuArray nodes)
-    {
-        _culled.Clear();
-        foreach (int index in _dynamicDecals)
-        {
-            if (frustum.Sphere(_decalLooks[index].Center, _decalLooks[index].Radius))
-                _culled.Add(index);
-        }
-        if (_culled.Count == 0)
-            return LightTreeBuilder.Invalid;
-
-        Span<Vector4> spheres = Spheres(_culled.Count);
-        for (int i = 0; i < _culled.Count; i++)
-        {
-            DecalLook look = _decalLooks[_culled[i]];
-            Float3 p = frustum.Relative(look.Center);
-            spheres[i] = new Vector4(p.X, p.Y, p.Z, look.Radius);
-        }
-
-        builder.Build(spheres, Math.Clamp(_culled.Count / 1024, 4, 128), morton: true);
-        CheckDepth(builder, LightTreeBuilder.ShaderStack);
-        if (_decalScratch.Length < _culled.Count)
-            _decalScratch = new DecalRecord[_culled.Count * 2];
-        ReadOnlySpan<int> order = builder.Order;
-        for (int i = 0; i < _culled.Count; i++)
-            _decalScratch[i] = Pack(_decalLooks[_culled[order[i]]], frustum.Camera);
-        records.Write<DecalRecord>(uploader, _decalScratch.AsSpan(0, _culled.Count));
-        nodes.Write(uploader, builder.Nodes);
-        return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
     }
 
     public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
@@ -804,42 +716,12 @@ internal sealed class WorldLighting : IDisposable
     private void RebuildLightLists()
     {
         _lightMembership = false;
-        _dynamicLights.Clear();
         _directionalLights.Clear();
         for (int i = 0; i < _lights.Length; i++)
         {
-            if (!_lightAlive[i])
-                continue;
-            if (_lights[i].Type == LightType.Directional)
+            if (_lightAlive[i] && _lights[i].Type == LightType.Directional)
                 _directionalLights.Add(i);
-            else if (!_lights[i].Static)
-                _dynamicLights.Add(i);
         }
-    }
-
-    private void RebuildDecalLists()
-    {
-        _decalMembership = false;
-        _dynamicDecals.Clear();
-        for (int i = 0; i < _decals.Length; i++)
-        {
-            if (_decalAlive[i] && !_decals[i].Static)
-                _dynamicDecals.Add(i);
-        }
-    }
-
-    // Each level above the last defers at most three siblings
-    private void CheckDepth(LightTreeBuilder tree, int stack)
-    {
-        if ((tree.Depth - 1) * 3 > stack)
-            _report(new RendererError("lighting.tree.depth", $"A light or decal tree is {tree.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped."));
-    }
-
-    private Span<Vector4> Spheres(int count)
-    {
-        if (_spheres.Length < count)
-            _spheres = new Vector4[Math.Max(count, _spheres.Length * 2)];
-        return _spheres.AsSpan(0, count);
     }
 
     // Directions unit length, a zero one pointing down +Z, up square to it, sizes and the inner cone in range
@@ -1349,6 +1231,276 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
             _spheres = new Vector4[Math.Max(count, _spheres.Length * 2)];
         return _spheres.AsSpan(0, count);
     }
+}
+
+/// <summary>
+/// One kind of item found by where it is, as lights, decals, reflection probes and host sets are. Static items live in
+/// regions with a tree each, rebuilt only when one changes; moving ones in a tree per view around its camera, every
+/// frame. Shaders reach a set's buffers by its slot in the view's bindless arrays.
+/// </summary>
+internal abstract class SpatialIndex(int slot) : IDisposable
+{
+    public const int MaxSets = 16;
+    public const int LightsSet = 0, DecalsSet = 1, ProbesSet = 2, FirstHostSet = 3;
+
+    public int Slot { get; } = slot;
+    public abstract GpuTable StaticRecords { get; }
+    public abstract GpuTable StaticNodes { get; }
+
+    /// <summary>Rebuilds the static regions that changed and rewrites repacked records. Render thread.</summary>
+    public abstract void Update();
+
+    /// <summary>Builds a view's trees over the regions and moving items it sees, around its camera. Returns their roots. Render thread.</summary>
+    public abstract SpatialRoots BuildView(in CullFrustum frustum, SpatialView view, Uploader uploader);
+
+    public void Dispose()
+    {
+        StaticRecords.Dispose();
+        StaticNodes.Dispose();
+    }
+}
+
+/// <summary>A set's roots in a view, matching an entry of Graphite_SpatialRoots: its regions tree and its moving tree.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct SpatialRoots
+{
+    public uint Regions, Moving;
+    private uint _pad0, _pad1;
+
+    public static readonly SpatialRoots None = new() { Regions = LightTreeBuilder.Invalid, Moving = LightTreeBuilder.Invalid };
+}
+
+/// <summary>The buffers a view builds a set's trees into each frame.</summary>
+internal sealed class SpatialView(GraphicsDevice device, string name) : IDisposable
+{
+    public readonly GpuArray Records = new(device, BufferUsage.StructuredBufferReadOnly, name + " records");
+    public readonly GpuArray Nodes = new(device, BufferUsage.StructuredBufferReadOnly, name + " nodes");
+    public readonly GpuArray RegionEntries = new(device, BufferUsage.StructuredBufferReadOnly, name + " regions");
+    public readonly GpuArray RegionNodes = new(device, BufferUsage.StructuredBufferReadOnly, name + " region nodes");
+    public readonly LightTreeBuilder Tree = new();
+    public readonly LightTreeBuilder RegionTree = new();
+
+    public void AddBuffers(List<DeviceBuffer> buffers)
+    {
+        buffers.Add(Records.Buffer);
+        buffers.Add(Nodes.Buffer);
+        buffers.Add(RegionEntries.Buffer);
+        buffers.Add(RegionNodes.Buffer);
+    }
+
+    public void Dispose()
+    {
+        Records.Dispose();
+        Nodes.Dispose();
+        RegionEntries.Dispose();
+        RegionNodes.Dispose();
+    }
+}
+
+/// <summary>A spatial set of one record type, packed for a tree around an origin by the pack function.</summary>
+internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unmanaged
+{
+    private readonly StaticRegions<TRecord> _static;
+    private readonly Func<int, Double3, TRecord> _pack;
+    private readonly Action<RendererError> _report;
+    private readonly List<int> _moving = new();
+    private readonly List<int> _culled = new();
+    private int[] _movingSlot = [];
+    private Double3[] _center = [];
+    private float[] _radius = [];
+    private TRecord[] _scratch = new TRecord[64];
+    private Vector4[] _spheres = new Vector4[64];
+
+    public SpatialIndex(GraphicsDevice device, string name, int slot, Func<int, Double3, TRecord> pack, Action<RendererError> report) : base(slot)
+    {
+        _pack = pack;
+        _report = report;
+        _static = new StaticRegions<TRecord>(device, name, pack, report);
+    }
+
+    public override GpuTable StaticRecords => _static.Records;
+    public override GpuTable StaticNodes => _static.Nodes;
+
+    /// <summary>Adds or moves an item, static ones into their region, moving ones into each view's tree.</summary>
+    public void Set(int item, Double3 center, float radius, bool isStatic)
+    {
+        Grow(item);
+        _center[item] = center;
+        _radius[item] = radius;
+        if (isStatic)
+        {
+            LeaveMoving(item);
+            _static.Set(item, center, radius);
+        }
+        else
+        {
+            _static.Remove(item);
+            if (_movingSlot[item] < 0)
+            {
+                _movingSlot[item] = _moving.Count;
+                _moving.Add(item);
+            }
+        }
+    }
+
+    public void Remove(int item)
+    {
+        _static.Remove(item);
+        if (item < _movingSlot.Length)
+            LeaveMoving(item);
+    }
+
+    /// <summary>Rewrites a static item's record without moving it. Moving items are packed every frame anyway.</summary>
+    public void Repack(int item) => _static.Repack(item);
+
+    public override void Update() => _static.Update();
+
+    public override SpatialRoots BuildView(in CullFrustum frustum, SpatialView view, Uploader uploader)
+    {
+        SpatialRoots roots = SpatialRoots.None;
+        roots.Regions = _static.BuildView(frustum, view.RegionTree, uploader, view.RegionEntries, view.RegionNodes);
+        roots.Moving = BuildMoving(frustum, view, uploader);
+        return roots;
+    }
+
+    private uint BuildMoving(in CullFrustum frustum, SpatialView view, Uploader uploader)
+    {
+        _culled.Clear();
+        foreach (int item in _moving)
+        {
+            if (frustum.Sphere(_center[item], _radius[item]))
+                _culled.Add(item);
+        }
+        if (_culled.Count == 0)
+            return LightTreeBuilder.Invalid;
+
+        if (_spheres.Length < _culled.Count)
+            _spheres = new Vector4[_culled.Count * 2];
+        for (int i = 0; i < _culled.Count; i++)
+        {
+            Float3 p = frustum.Relative(_center[_culled[i]]);
+            _spheres[i] = new Vector4(p.X, p.Y, p.Z, _radius[_culled[i]]);
+        }
+
+        LightTreeBuilder builder = view.Tree;
+        builder.Build(_spheres.AsSpan(0, _culled.Count), Math.Clamp(_culled.Count / 1024, 4, 128), morton: true);
+        if ((builder.Depth - 1) * 3 > LightTreeBuilder.ShaderStack)
+            _report(new RendererError("lighting.tree.depth", $"A tree of moving items is {builder.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped."));
+        if (_scratch.Length < _culled.Count)
+            _scratch = new TRecord[_culled.Count * 2];
+        ReadOnlySpan<int> order = builder.Order;
+        for (int i = 0; i < _culled.Count; i++)
+            _scratch[i] = _pack(_culled[order[i]], frustum.Camera);
+        view.Records.Write<TRecord>(uploader, _scratch.AsSpan(0, _culled.Count));
+        view.Nodes.Write(uploader, builder.Nodes);
+        return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
+    }
+
+    private void LeaveMoving(int item)
+    {
+        int slot = _movingSlot[item];
+        if (slot < 0)
+            return;
+        int last = _moving[^1];
+        _moving[slot] = last;
+        _movingSlot[last] = slot;
+        _moving.RemoveAt(_moving.Count - 1);
+        _movingSlot[item] = -1;
+    }
+
+    private void Grow(int item)
+    {
+        if (item < _movingSlot.Length)
+            return;
+        int old = _movingSlot.Length;
+        int size = Math.Max(item + 1, Math.Max(16, old * 2));
+        Array.Resize(ref _movingSlot, size);
+        Array.Fill(_movingSlot, -1, old, size - old);
+        Array.Resize(ref _center, size);
+        Array.Resize(ref _radius, size);
+    }
+}
+
+/// <summary>A handle to an item of a host's spatial set.</summary>
+public readonly record struct SpatialHandle(int Index, int Generation)
+{
+    public bool IsValid => Generation > 0;
+}
+
+/// <summary>
+/// Items of a host's kind found by where they are, as lights are: fog volumes, post volumes, water bodies. Shaders walk
+/// the ones holding a point with Graphite_BeginItems(Index, Stride, worldPos) and Graphite_NextItem, reading each record's
+/// data with Graphite_SpatialVec4(array, index * Stride + 1 + i). T must be a whole number of 16 byte words, laid out as
+/// the shader reads it. Static items join regions rebuilt only when one changes, moving ones a tree per view. Host thread.
+/// </summary>
+public sealed class SpatialSet<T> where T : unmanaged
+{
+    private struct Item
+    {
+        public Double3 Center;
+        public float Radius;
+        public T Record;
+        public bool Static;
+    }
+
+    private readonly HandleStore<Item> _items = new();
+    private Item[] _render = new Item[16];
+
+    internal SpatialSet(GraphicsDevice device, int slot, string name, Action<RendererError> report)
+    {
+        Index = slot;
+        Render = new SpatialIndex<SpatialRecord<T>>(device, name, slot, Pack, report);
+    }
+
+    /// <summary>The set's index, which shaders query it by.</summary>
+    public int Index { get; }
+
+    /// <summary>16 byte words per record as shaders read them, the centre and radius first.</summary>
+    public int Stride => Unsafe.SizeOf<SpatialRecord<T>>() / 16;
+
+    internal SpatialIndex<SpatialRecord<T>> Render { get; }
+
+    public SpatialHandle Add(Double3 center, float radius, in T record, bool isStatic = false)
+    {
+        (int index, int generation) = _items.Add(new Item { Center = center, Radius = radius, Record = record, Static = isStatic });
+        return new SpatialHandle(index, generation);
+    }
+
+    public void Set(SpatialHandle handle, Double3 center, float radius, in T record, bool isStatic = false)
+        => _items.Set(handle.Index, handle.Generation, new Item { Center = center, Radius = radius, Record = record, Static = isStatic });
+
+    public void Remove(SpatialHandle handle) => _items.Remove(handle.Index, handle.Generation);
+
+    public bool IsAlive(SpatialHandle handle) => _items.IsAlive(handle.Index, handle.Generation);
+
+    // At SubmitFrame, render thread idle
+    internal void Extract() => _items.Extract(Receive);
+
+    private void Receive(int index, int generation, uint sequence, bool alive, in Item item)
+    {
+        if (index >= _render.Length)
+            Array.Resize(ref _render, Math.Max(index + 1, _render.Length * 2));
+        _render[index] = item;
+        if (alive)
+            Render.Set(index, item.Center, MathF.Max(item.Radius, 1e-4f), item.Static);
+        else
+            Render.Remove(index);
+    }
+
+    private SpatialRecord<T> Pack(int index, Double3 origin)
+    {
+        Item item = _render[index];
+        Double3 c = item.Center - origin;
+        return new SpatialRecord<T> { CenterRadius = new Float4((float)c.X, (float)c.Y, (float)c.Z, MathF.Max(item.Radius, 1e-4f)), Record = item.Record };
+    }
+}
+
+/// <summary>A host set's record as shaders read it: its centre in its tree's space and radius, then the host's data.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct SpatialRecord<T> where T : unmanaged
+{
+    public Float4 CenterRadius;
+    public T Record;
 }
 
 /// <summary>Texture and sampler slots for a world without a renderer, as in tests: always slot 0.</summary>

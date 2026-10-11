@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -281,7 +282,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     {
         BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
         bool blended = color.BlendEnabled && !(color.SourceColorFactor == BlendFactor.One && color.DestinationColorFactor == BlendFactor.Zero);
-        return forward && !prepass && !blended;
+        return forward && !prepass && !blended && color.ColorWriteMask != ColorWriteMask.None;
     }
 
     internal static bool StoresGBuffer(in ShaderDescription description)
@@ -334,20 +335,20 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     }
 }
 
+/// <summary>An opaque forward pass whose fragment stage never writes the G-buffer.</summary>
+internal sealed class GBufferMissingException(string message) : Exception(message);
+
 /// <summary>
 /// A device local buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
 /// commands. It grows by doubling, and a grown buffer changes the frame's buffer set.
 /// </summary>
-/// <summary>An opaque forward pass whose fragment stage never writes the G-buffer.</summary>
-internal sealed class GBufferMissingException(string message) : Exception(message);
-
 internal sealed class GpuArray(GraphicsDevice device, BufferUsage usage, string name) : IDisposable
 {
     public DeviceBuffer Buffer { get; private set; } = Create(device, usage, name, 256);
 
     public void Write<T>(Uploader uploader, ReadOnlySpan<T> data) where T : unmanaged
     {
-        uint bytes = (uint)(data.Length * Marshal.SizeOf<T>());
+        uint bytes = (uint)(data.Length * Unsafe.SizeOf<T>());
         if (bytes > Buffer.SizeInBytes)
         {
             uint size = Buffer.SizeInBytes;
@@ -425,21 +426,13 @@ internal sealed class CameraFrame : IDisposable
     public readonly GpuArray Records;
     public readonly GpuArray Commands;
     public readonly GpuArray ViewBlocks;
-    public readonly GpuArray ViewLights;
-    public readonly GpuArray ViewLightNodes;
-    public readonly GpuArray ViewDecals;
-    public readonly GpuArray ViewDecalNodes;
-    public readonly GpuArray LightRegions;
-    public readonly GpuArray LightRegionNodes;
-    public readonly GpuArray DecalRegions;
-    public readonly GpuArray DecalRegionNodes;
-    public readonly GpuArray ProbeRegions;
-    public readonly GpuArray ProbeRegionNodes;
-    public readonly LightTreeBuilder LightTree = new();
-    public readonly LightTreeBuilder DecalTree = new();
-    public readonly LightTreeBuilder LightRegionTree = new();
-    public readonly LightTreeBuilder DecalRegionTree = new();
-    public readonly LightTreeBuilder ProbeRegionTree = new();
+
+    /// <summary>What the view builds each spatial set's trees into, by the set's slot, made the first time it sees one.</summary>
+    public readonly SpatialView?[] Spatial = new SpatialView?[SpatialIndex.MaxSets];
+
+    /// <summary>Each set's roots in this view, all empty for sets the world lacks.</summary>
+    public readonly GpuArray SpatialRoots;
+    public readonly SpatialRoots[] Roots = new SpatialRoots[SpatialIndex.MaxSets];
 
     /// <summary>Whether the view's basis flips handedness, as cube captures do, so every draw's winding flips too.</summary>
     public bool Mirrored;
@@ -459,6 +452,10 @@ internal sealed class CameraFrame : IDisposable
     private DrawRecord[] _records = new DrawRecord[64];
     private uint[] _instances = new uint[256];
     private readonly FramePipeline _frame;
+    private readonly GraphicsDevice _device;
+
+    /// <summary>The view's buffers for a set's trees.</summary>
+    public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_device, $"View {View.ViewId} set {slot}");
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private readonly List<IPass> _passList = new();
 
@@ -494,16 +491,8 @@ internal sealed class CameraFrame : IDisposable
         Records = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Draw records {viewId}");
         Commands = new GpuArray(device, BufferUsage.IndirectBuffer, $"Indirect commands {viewId}");
         ViewBlocks = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View blocks {viewId}");
-        ViewLights = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View lights {viewId}");
-        ViewLightNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View light nodes {viewId}");
-        ViewDecals = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View decals {viewId}");
-        ViewDecalNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View decal nodes {viewId}");
-        LightRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Light regions {viewId}");
-        LightRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Light region nodes {viewId}");
-        DecalRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Decal regions {viewId}");
-        DecalRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Decal region nodes {viewId}");
-        ProbeRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Probe regions {viewId}");
-        ProbeRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Probe region nodes {viewId}");
+        SpatialRoots = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Spatial roots {viewId}");
+        _device = device;
     }
 
     /// <summary>Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed.</summary>
@@ -668,16 +657,9 @@ internal sealed class CameraFrame : IDisposable
         buffers.Add(Records.Buffer);
         buffers.Add(Commands.Buffer);
         buffers.Add(ViewBlocks.Buffer);
-        buffers.Add(ViewLights.Buffer);
-        buffers.Add(ViewLightNodes.Buffer);
-        buffers.Add(ViewDecals.Buffer);
-        buffers.Add(ViewDecalNodes.Buffer);
-        buffers.Add(LightRegions.Buffer);
-        buffers.Add(LightRegionNodes.Buffer);
-        buffers.Add(DecalRegions.Buffer);
-        buffers.Add(DecalRegionNodes.Buffer);
-        buffers.Add(ProbeRegions.Buffer);
-        buffers.Add(ProbeRegionNodes.Buffer);
+        buffers.Add(SpatialRoots.Buffer);
+        foreach (SpatialView? view in Spatial)
+            view?.AddBuffers(buffers);
     }
 
     /// <summary>The frame's draw lists: prepass, opaque, transparent, then one per pass type a feature draws.</summary>
@@ -787,16 +769,9 @@ internal sealed class CameraFrame : IDisposable
         Records.Dispose();
         Commands.Dispose();
         ViewBlocks.Dispose();
-        ViewLights.Dispose();
-        ViewLightNodes.Dispose();
-        ViewDecals.Dispose();
-        ViewDecalNodes.Dispose();
-        LightRegions.Dispose();
-        LightRegionNodes.Dispose();
-        DecalRegions.Dispose();
-        DecalRegionNodes.Dispose();
-        ProbeRegions.Dispose();
-        ProbeRegionNodes.Dispose();
+        SpatialRoots.Dispose();
+        foreach (SpatialView? view in Spatial)
+            view?.Dispose();
     }
 }
 
@@ -818,16 +793,16 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
             camera.ViewTable.Set("Graphite_Globals", 0, new DeviceBufferRange(globals.Buffer, globals.Offset, globals.Size));
         }
         camera.ViewTable.Set("Graphite_Views", 0, camera.ViewBlocks.Buffer);
-        camera.ViewTable.Set("Graphite_ViewLights", 0, camera.ViewLights.Buffer);
-        camera.ViewTable.Set("Graphite_ViewLightNodes", 0, camera.ViewLightNodes.Buffer);
-        camera.ViewTable.Set("Graphite_ViewDecals", 0, camera.ViewDecals.Buffer);
-        camera.ViewTable.Set("Graphite_ViewDecalNodes", 0, camera.ViewDecalNodes.Buffer);
-        camera.ViewTable.Set("Graphite_LightRegions", 0, camera.LightRegions.Buffer);
-        camera.ViewTable.Set("Graphite_LightRegionNodes", 0, camera.LightRegionNodes.Buffer);
-        camera.ViewTable.Set("Graphite_DecalRegions", 0, camera.DecalRegions.Buffer);
-        camera.ViewTable.Set("Graphite_DecalRegionNodes", 0, camera.DecalRegionNodes.Buffer);
-        camera.ViewTable.Set("Graphite_ProbeRegions", 0, camera.ProbeRegions.Buffer);
-        camera.ViewTable.Set("Graphite_ProbeRegionNodes", 0, camera.ProbeRegionNodes.Buffer);
+        camera.ViewTable.Set("Graphite_SpatialRoots", 0, camera.SpatialRoots.Buffer);
+        for (int slot = 0; slot < camera.Spatial.Length; slot++)
+        {
+            if (camera.Spatial[slot] is not { } view)
+                continue;
+            camera.ViewTable.Set("Graphite_SpatialRecords", (uint)(slot * 2 + 1), view.Records.Buffer);
+            camera.ViewTable.Set("Graphite_SpatialNodes", (uint)(slot * 3 + 1), view.Nodes.Buffer);
+            camera.ViewTable.Set("Graphite_SpatialNodes", (uint)(slot * 3 + 2), view.RegionNodes.Buffer);
+            camera.ViewTable.Set("Graphite_SpatialRegions", (uint)slot, view.RegionEntries.Buffer);
+        }
         SetWorldBuffers(camera.ViewTable, camera.World.World);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
@@ -863,14 +838,13 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         table.Set("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);
         table.Set("Graphite_Objects", 0, render.Attributes.Buffer);
         table.Set("Graphite_MaterialSlots", 0, render.MaterialSlots.Buffer);
-        table.Set("Graphite_StaticLights", 0, lighting.StaticLights.Buffer);
-        table.Set("Graphite_StaticLightNodes", 0, lighting.StaticLightNodes.Buffer);
-        table.Set("Graphite_StaticDecals", 0, lighting.StaticDecals.Buffer);
-        table.Set("Graphite_StaticDecalNodes", 0, lighting.StaticDecalNodes.Buffer);
+        foreach (SpatialIndex set in world.SpatialSets)
+        {
+            table.Set("Graphite_SpatialRecords", (uint)(set.Slot * 2), set.StaticRecords.Buffer);
+            table.Set("Graphite_SpatialNodes", (uint)(set.Slot * 3), set.StaticNodes.Buffer);
+        }
         table.Set("Graphite_WorldLighting", 0, lighting.World.Buffer);
         table.Set("Graphite_ObjectProbes", 0, world.Probes.ObjectSh);
-        table.Set("Graphite_ReflectionProbes", 0, world.Reflections.Regions.Records.Buffer);
-        table.Set("Graphite_ReflectionProbeNodes", 0, world.Reflections.Regions.Nodes.Buffer);
         table.Set("Graphite_SkyAmbientSH", 0, world.Reflections.SkyAmbient);
         table.Set("Graphite_Directionals", 0, lighting.Directionals.Buffer);
     }
@@ -1542,8 +1516,7 @@ internal sealed class FramePipeline : IDisposable
     {
         int layers = view.LayerCount;
         CullFrustum frustum = new(view.Layers, layers);
-        uint lightRegions = LightTreeBuilder.Invalid, decalRegions = LightTreeBuilder.Invalid, viewLights = LightTreeBuilder.Invalid;
-        uint viewDecals = LightTreeBuilder.Invalid, probeRegions = LightTreeBuilder.Invalid;
+        Array.Fill(camera.Roots, SpatialRoots.None);
         if (view.CullingMask == 0)
         {
             foreach (DrawList list in camera.Lists)
@@ -1558,13 +1531,10 @@ internal sealed class FramePipeline : IDisposable
             foreach ((PassType type, DrawList list) in camera.PassLists)
                 world.Buckets.Build(world.Buckets.Pass(type), frustum, list);
 
-            WorldLighting lighting = world.World.Lighting;
-            lightRegions = lighting.BuildViewLightRegions(frustum, camera.LightRegionTree, _uploader, camera.LightRegions, camera.LightRegionNodes);
-            decalRegions = lighting.BuildViewDecalRegions(frustum, camera.DecalRegionTree, _uploader, camera.DecalRegions, camera.DecalRegionNodes);
-            viewLights = lighting.BuildViewLights(frustum, camera.LightTree, _uploader, camera.ViewLights, camera.ViewLightNodes);
-            viewDecals = lighting.BuildViewDecals(frustum, camera.DecalTree, _uploader, camera.ViewDecals, camera.ViewDecalNodes);
-            probeRegions = world.World.Reflections.Regions.BuildView(frustum, camera.ProbeRegionTree, _uploader, camera.ProbeRegions, camera.ProbeRegionNodes);
+            foreach (SpatialIndex set in world.World.SpatialSets)
+                camera.Roots[set.Slot] = set.BuildView(frustum, camera.SpatialFor(set.Slot), _uploader);
         }
+        camera.SpatialRoots.Write<SpatialRoots>(_uploader, camera.Roots);
         ViewLayer first = view.Layers[0];
         float handedness = Determinant3(first.View) * first.Projection.c0.X * first.Projection.c1.Y;
         camera.Mirrored = handedness < 0;
@@ -1577,11 +1547,6 @@ internal sealed class FramePipeline : IDisposable
             block.Time = new Float4(timeHigh, time.DeltaTime, time.FrameIndex, (float)(time.Time - timeHigh));
             Float3 offset = frustum.Relative(layer.Position);
             block.TreeOffset = new Float4(offset.X, offset.Y, offset.Z, 0);
-            block.LightRegionRoot = lightRegions;
-            block.DecalRegionRoot = decalRegions;
-            block.ViewLightRoot = viewLights;
-            block.ViewDecalRoot = viewDecals;
-            block.ProbeRegionRoot = probeRegions;
             if (camera.HasPrevious)
             {
                 block.PreviousViewProjection = camera.Previous[l].ViewProjection;
@@ -1638,9 +1603,13 @@ internal sealed class FramePipeline : IDisposable
             _buffers.Add(probes.TetRecords.Buffer);
             _buffers.Add(probes.Requests.Buffer);
             _buffers.Add(probes.ObjectSh);
-            StaticRegions<ReflectionProbeRecord> reflections = world.World.Reflections.Regions;
-            _buffers.Add(reflections.Records.Buffer);
-            _buffers.Add(reflections.Nodes.Buffer);
+            foreach (SpatialIndex set in world.World.SpatialSets)
+            {
+                if (set.Slot < SpatialIndex.ProbesSet)
+                    continue;
+                _buffers.Add(set.StaticRecords.Buffer);
+                _buffers.Add(set.StaticNodes.Buffer);
+            }
             _buffers.Add(world.World.Reflections.SkyAmbient);
 
             foreach (GpuTable table in render.Tables)
