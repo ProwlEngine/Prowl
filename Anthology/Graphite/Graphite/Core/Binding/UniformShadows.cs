@@ -91,6 +91,9 @@ internal sealed class UniformShadows
                 continue;
             }
 
+            if (valid && cache!.Hits == 0)
+                continue;
+
             Materialize(block);
             _blit[b] = true;
             pass = true;
@@ -125,6 +128,9 @@ internal sealed class UniformShadows
 
                 if (_pack[target.Block] is { } packed)
                 {
+                    if (packed.Bytes.Length == 0)
+                        packed.Bytes = new byte[packed.Layout.Size];
+
                     Copy(src, packed.Bytes, target);
                     _hits[target.Block]++;
                 }
@@ -137,6 +143,7 @@ internal sealed class UniformShadows
                 continue;
 
             cache.Version = source.Version;
+            cache.Hits = _hits[b];
             cache.Full = _hits[b] == cache.Layout.FieldCount;
             cache.Stamp = 0;
             if (cache.Full)

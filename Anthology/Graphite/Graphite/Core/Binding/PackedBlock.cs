@@ -3,8 +3,9 @@ namespace Prowl.Graphite;
 internal sealed class PackedBlock
 {
     public readonly UniformBlockLayout Layout;
-    public readonly byte[] Bytes;
+    public byte[] Bytes = System.Array.Empty<byte>();
     public uint Version;
+    public int Hits;
     public bool Full;
     public uint UploadedVersion;
     public ulong Stamp;
@@ -13,6 +14,5 @@ internal sealed class PackedBlock
     public PackedBlock(UniformBlockLayout layout)
     {
         Layout = layout;
-        Bytes = new byte[layout.Size];
     }
 }
