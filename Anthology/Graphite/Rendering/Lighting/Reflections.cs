@@ -78,6 +78,9 @@ public struct ReflectionProbeDesc
     public float NearClip, FarClip;
     public uint CullingMask;
 
+    /// <summary>Edge length of a realtime probe's cube, a power of two. Baked probes keep their baked size.</summary>
+    public uint Resolution;
+
     /// <summary>A capture to show in <see cref="ReflectionProbeMode.Baked"/> mode, null for none yet.</summary>
     public BakedReflectionProbe? Baked;
 
@@ -92,6 +95,7 @@ public struct ReflectionProbeDesc
         NearClip = 0.1f;
         FarClip = 1000;
         CullingMask = ~0u;
+        Resolution = 128;
     }
 }
 
@@ -169,21 +173,20 @@ public sealed partial class RenderWorld
 }
 
 /// <summary>
-/// The render side of a world's reflections: one cube array prefiltered by roughness across its mips, layer 0 holding the
-/// sky and one layer per probe. Captures draw six layer views, or one face a frame when sliced, then filter with GGX into
-/// every mip, reading the source mip whose texels match each sample's solid angle. Captured probes live in regions like
-/// static lights, so each pixel finds the probes around it with a tree walk.
+/// The render side of a world's reflections. The sky and every probe each have their own cube, prefiltered by roughness
+/// across its mips and found through its bindless slot, so probes keep their own resolution and nothing is ever resized.
+/// Captures draw six layer views, or one face a frame when sliced, then filter with GGX into every mip, reading the
+/// source mip whose texels match each sample's solid angle. Captured probes live in regions like static lights, so each
+/// pixel finds the probes around it with a tree walk.
 /// </summary>
 internal sealed class WorldReflections : IDisposable
 {
-    /// <summary>Edge length of every probe's cube.</summary>
-    public const uint Resolution = 128;
+    /// <summary>Edge length of the sky probe's cube.</summary>
+    public const uint SkyResolution = 128;
 
     /// <summary>The smallest prefiltered mip is 4 texels across, below that the roughest reflections turn blocky.</summary>
     public const uint SmallestMip = 4;
 
-    public const uint MipCount = 6;
-    public const int SkyLayer = 0;
     public const int PrefilterSamples = 64;
     private const int SkyFrameInterval = 2;
 
@@ -208,6 +211,38 @@ internal sealed class WorldReflections : IDisposable
         AddressModeW = SamplerAddressMode.Clamp,
     };
 
+    /// <summary>A cube a capture draws into, with a full mip chain for the filter, and its targets.</summary>
+    public sealed class Scratch(Texture cube, Framebuffer all, Framebuffer[] faces) : IDisposable
+    {
+        public Texture Cube { get; } = cube;
+        public Framebuffer All { get; } = all;
+        public Framebuffer[] Faces { get; } = faces;
+
+        public void Dispose()
+        {
+            foreach (Framebuffer face in Faces)
+                face.Dispose();
+            All.Dispose();
+            Cube.Dispose();
+        }
+    }
+
+    /// <summary>A prefiltered cube: the sky's or a probe's, its slot and the views filling its mips.</summary>
+    public sealed class Target(Texture cube, uint slot, PrefilterView[] views) : IDisposable
+    {
+        public Texture Cube { get; } = cube;
+        public uint Slot { get; } = slot;
+        public PrefilterView[] Views { get; } = views;
+        public uint Mips => Cube.MipLevels;
+
+        public void Dispose()
+        {
+            foreach (PrefilterView view in Views)
+                view.Target.Dispose();
+            Cube.Dispose();
+        }
+    }
+
     private readonly GraphicsDevice _device;
     private readonly IMaterialResources _resources;
     private readonly Action<string, string> _report;
@@ -219,25 +254,24 @@ internal sealed class WorldReflections : IDisposable
 
     private ReflectionProbeDesc[] _probes = new ReflectionProbeDesc[8];
     private bool[] _alive = new bool[8];
-    private int[] _layer = new int[8];
+    private Target?[] _targets = new Target?[8];
     private bool[] _captured = new bool[8];
     private bool[] _requested = new bool[8];
     private BakedReflectionProbe?[] _uploaded = new BakedReflectionProbe?[8];
-    private readonly Stack<int> _freeLayers = new();
-    private int _nextLayer = SkyLayer + 1;
-    private uint _layers;
     private int _slicing = -1;
     private int _joining = -1;
     private int _slicedFaces;
     private int _nextRealtime;
     private readonly List<(int Index, Action<BakedReflectionProbe> Done)> _bakes = new();
-    private readonly Dictionary<int, PrefilterView[]> _layerViews = new();
+    private readonly Dictionary<uint, Scratch> _scratch = new();
     private readonly List<PendingBake> _pendingBakes = new();
 
     private sealed class PendingBake
     {
         public required DeviceBuffer Buffer;
         public required Action<BakedReflectionProbe> Done;
+        public required int Size;
+        public required int Mips;
         public ulong Execution;
     }
 
@@ -252,23 +286,9 @@ internal sealed class WorldReflections : IDisposable
     /// <summary>The captured probes, in regions with a tree each.</summary>
     public StaticRegions<ReflectionProbeRecord> Regions { get; }
 
-    /// <summary>The prefiltered cube array, layer 0 the sky. Null until the first capture.</summary>
-    public Texture? Probes { get; private set; }
+    /// <summary>The prefiltered sky. Null until the first capture.</summary>
+    public Target? Sky { get; private set; }
 
-    /// <summary>The sky rendered into a cube with a full mip chain, the sky prefilter's source.</summary>
-    public Texture? SkyCube { get; private set; }
-
-    public Framebuffer? CaptureTarget { get; private set; }
-
-    /// <summary>A probe's faces rendered into a cube with a full mip chain, its prefilter's source.</summary>
-    public Texture? ProbeCube { get; private set; }
-
-    public Framebuffer? ProbeTarget { get; private set; }
-
-    /// <summary>One framebuffer per face of the probe cube, for captures spread one face a frame.</summary>
-    public Framebuffer[] ProbeFaceTargets { get; private set; } = [];
-
-    public uint ProbeSlot { get; private set; }
     public uint SamplerSlot { get; private set; }
 
     /// <summary>Whether the sky is captured this frame. Decided before the frame's records are written.</summary>
@@ -277,10 +297,10 @@ internal sealed class WorldReflections : IDisposable
     /// <summary>What this frame captures of a probe, if anything.</summary>
     public ProbeCapture? Capture { get; private set; }
 
-    /// <summary>Baked probes copied into their layers this frame.</summary>
-    public List<int> Uploads { get; } = new();
-
     public static Float4x4 FaceView(int face) => s_faceViews[face];
+
+    /// <summary>Prefiltered mips of a cube this size, down to 4 texels across.</summary>
+    public static uint MipsFor(uint resolution) => (uint)(Math.Log2(resolution) - Math.Log2(SmallestMip)) + 1;
 
     /// <summary>A reversed Z perspective with a 90 degree field of view between two clip planes.</summary>
     public static Float4x4 FaceProjectionBetween(float near, float far)
@@ -292,7 +312,26 @@ internal sealed class WorldReflections : IDisposable
 
     public ReflectionProbeDesc Probe(int index) => _probes[index];
 
-    public int Layer(int index) => _layer[index];
+    public Target ProbeTarget(int index) => _targets[index]!;
+
+    /// <summary>The capture cube for a resolution, made the first time one is needed.</summary>
+    public Scratch ScratchFor(uint resolution)
+    {
+        if (_scratch.TryGetValue(resolution, out Scratch? scratch))
+            return scratch;
+
+        ResourceFactory factory = _device.ResourceFactory;
+        uint fullChain = (uint)Math.Log2(resolution) + 1;
+        Texture cube = factory.CreateTexture(TextureDescription.CreateCube(resolution, fullChain, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled | TextureUsage.RenderTarget));
+        cube.Name = $"Reflection capture {resolution}";
+        Framebuffer all = factory.CreateFramebuffer(new FramebufferDescription(null, cube) { ViewCount = 6 });
+        Framebuffer[] faces = new Framebuffer[6];
+        for (uint face = 0; face < 6; face++)
+            faces[face] = factory.CreateFramebuffer(new FramebufferDescription(null, [new FramebufferAttachment(cube, face)]));
+        scratch = new Scratch(cube, all, faces);
+        _scratch[resolution] = scratch;
+        return scratch;
+    }
 
     internal void ReceiveProbe(int index, int generation, uint sequence, bool alive, in ReflectionProbeDesc desc)
     {
@@ -301,7 +340,7 @@ internal sealed class WorldReflections : IDisposable
             int size = Math.Max(index + 1, _probes.Length * 2);
             Array.Resize(ref _probes, size);
             Array.Resize(ref _alive, size);
-            Array.Resize(ref _layer, size);
+            Array.Resize(ref _targets, size);
             Array.Resize(ref _captured, size);
             Array.Resize(ref _requested, size);
             Array.Resize(ref _uploaded, size);
@@ -315,10 +354,10 @@ internal sealed class WorldReflections : IDisposable
             {
                 if (_joining == index)
                     _joining = -1;
-                _freeLayers.Push(_layer[index]);
-                Uncapture(index);
                 if (_slicing == index)
                     _slicing = -1;
+                Uncapture(index);
+                ReleaseTarget(index);
             }
             _alive[index] = false;
             _probes[index] = default;
@@ -327,18 +366,12 @@ internal sealed class WorldReflections : IDisposable
 
         _probes[index] = desc;
         _alive[index] = true;
-        if (!wasAlive)
+        if (!wasAlive || old.Mode != desc.Mode || (desc.Mode == ReflectionProbeMode.Realtime && old.Resolution != desc.Resolution))
         {
-            _layer[index] = _freeLayers.Count > 0 ? _freeLayers.Pop() : _nextLayer++;
-            Uncapture(index);
-            return;
-        }
-
-        if (old.Mode != desc.Mode)
-        {
-            Uncapture(index);
             if (_slicing == index)
                 _slicing = -1;
+            Uncapture(index);
+            ReleaseTarget(index);
             return;
         }
         if (desc.Mode == ReflectionProbeMode.Realtime && desc.Refresh == ReflectionProbeRefresh.Once
@@ -359,7 +392,7 @@ internal sealed class WorldReflections : IDisposable
     /// <summary>The sky capture this frame could not draw the sky material yet, its shader still compiling, so it runs again.</summary>
     public void SkyIncomplete() => _skyCaptured = false;
 
-    /// <summary>A frame failed after it was planned: everything it would have captured or uploaded is done again.</summary>
+    /// <summary>A frame failed after it was planned: everything it would have captured is done again.</summary>
     public void FrameFailed()
     {
         _skyCaptured = false;
@@ -367,7 +400,7 @@ internal sealed class WorldReflections : IDisposable
         _joining = -1;
         for (int i = 0; i < _probes.Length; i++)
         {
-            if (_alive[i])
+            if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Realtime)
                 Uncapture(i);
         }
     }
@@ -379,17 +412,20 @@ internal sealed class WorldReflections : IDisposable
     public void Plan(int frame, WorldLighting lighting)
     {
         Capture = null;
-        Uploads.Clear();
-        bool regrown = EnsureArray();
-        if (_joining >= 0 && !regrown && _alive[_joining])
+        if (_joining >= 0 && _alive[_joining])
             MarkCaptured(_joining);
         _joining = -1;
-        PlanSky(frame, lighting, regrown);
+
+        if (Sky == null)
+        {
+            SamplerSlot = _resources.SamplerSlot(s_sampler);
+            Sky = CreateTarget(SkyResolution, MipsFor(SkyResolution), "Sky probe");
+            lighting.SetReflections(Sky.Slot, SamplerSlot, Sky.Mips);
+        }
+        PlanSky(frame, lighting);
         PlanBaked();
         PlanRealtime();
         Regions.Update();
-        if (regrown)
-            lighting.SetReflections(ProbeSlot, SamplerSlot, MipCount);
     }
 
     public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
@@ -402,35 +438,23 @@ internal sealed class WorldReflections : IDisposable
         return replaced.Count != before;
     }
 
-    /// <summary>The views filtering into every mip of a layer, made the first time a layer is filtered.</summary>
-    public PrefilterView[] LayerViews(int layer)
-    {
-        if (_layerViews.TryGetValue(layer, out PrefilterView[]? views))
-            return views;
-
-        views = new PrefilterView[MipCount];
-        for (uint mip = 0; mip < MipCount; mip++)
-        {
-            FramebufferDescription description = new(null, [new FramebufferAttachment(Probes!, (uint)layer * 6, mip)]) { ViewCount = 6 };
-            views[mip] = new PrefilterView(_device.ResourceFactory.CreateFramebuffer(description), (int)mip, Resolution >> (int)mip);
-        }
-        _layerViews[layer] = views;
-        return views;
-    }
-
-    /// <summary>A buffer a bake reads its layer back into, collected once its frame completes. Render thread.</summary>
-    public DeviceBuffer BakeBuffer(Action<BakedReflectionProbe> done)
+    /// <summary>A buffer a bake reads a probe's cube back into, collected once its frame completes. Render thread.</summary>
+    public DeviceBuffer BakeBuffer(Target target, Action<BakedReflectionProbe> done)
     {
         uint bytes = 0;
-        for (int mip = 0; mip < MipCount; mip++)
-            bytes += 6 * FaceBytes(mip);
+        for (int mip = 0; mip < target.Mips; mip++)
+            bytes += 6 * FaceBytes(target.Cube.Width, mip);
         DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
         buffer.Name = "Reflection probe bake";
-        _pendingBakes.Add(new PendingBake { Buffer = buffer, Done = done });
+        _pendingBakes.Add(new PendingBake { Buffer = buffer, Done = done, Size = (int)target.Cube.Width, Mips = (int)target.Mips });
         return buffer;
     }
 
-    public static uint FaceBytes(int mip) => (Resolution >> mip) * (Resolution >> mip) * 8;
+    public static uint FaceBytes(uint resolution, int mip)
+    {
+        uint size = Math.Max(resolution >> mip, 1);
+        return size * size * 8;
+    }
 
     /// <summary>Gives this frame's bakes the execution that reads them back. Render thread, after dispatch.</summary>
     public void Dispatched(ulong execution)
@@ -452,14 +476,14 @@ internal sealed class WorldReflections : IDisposable
                 continue;
 
             ReadOnlySpan<byte> data = _device.Map<byte>(bake.Buffer);
-            BakedReflectionProbe baked = new() { Size = (int)Resolution, Mips = (int)MipCount, Faces = new byte[6 * MipCount][] };
+            BakedReflectionProbe baked = new() { Size = bake.Size, Mips = bake.Mips, Faces = new byte[6 * bake.Mips][] };
             int offset = 0;
             for (int face = 0; face < 6; face++)
             {
-                for (int mip = 0; mip < MipCount; mip++)
+                for (int mip = 0; mip < bake.Mips; mip++)
                 {
-                    int bytes = (int)FaceBytes(mip);
-                    baked.Faces[face * MipCount + mip] = data.Slice(offset, bytes).ToArray();
+                    int bytes = (int)FaceBytes((uint)bake.Size, mip);
+                    baked.Faces[face * bake.Mips + mip] = data.Slice(offset, bytes).ToArray();
                     offset += bytes;
                 }
             }
@@ -472,25 +496,23 @@ internal sealed class WorldReflections : IDisposable
 
     public void Dispose()
     {
-        DisposeArray();
-        foreach (Framebuffer target in ProbeFaceTargets)
-            target.Dispose();
-        ProbeTarget?.Dispose();
-        ProbeCube?.Dispose();
-        CaptureTarget?.Dispose();
-        SkyCube?.Dispose();
+        Sky?.Dispose();
+        foreach (Target? target in _targets)
+            target?.Dispose();
+        foreach (Scratch scratch in _scratch.Values)
+            scratch.Dispose();
         foreach (PendingBake bake in _pendingBakes)
             bake.Buffer.Dispose();
         Regions.Records.Dispose();
         Regions.Nodes.Dispose();
     }
 
-    private void PlanSky(int frame, WorldLighting lighting, bool regrown)
+    private void PlanSky(int frame, WorldLighting lighting)
     {
         EnvironmentDesc environment = lighting.Environment;
         Material? sky = environment.Sky is { IsDisposed: false } live ? live : null;
-        bool changed = regrown || !_skyCaptured || sky != _capturedSky || lighting.SkyVersion != _capturedVersion || lighting.SkyInputs != _capturedInputs;
-        CaptureDue = regrown || environment.SkyCapture switch
+        bool changed = !_skyCaptured || sky != _capturedSky || lighting.SkyVersion != _capturedVersion || lighting.SkyInputs != _capturedInputs;
+        CaptureDue = environment.SkyCapture switch
         {
             SkyCaptureMode.EveryFrame => true,
             SkyCaptureMode.Never => !_skyCaptured,
@@ -506,6 +528,7 @@ internal sealed class WorldReflections : IDisposable
         _capturedInputs = lighting.SkyInputs;
     }
 
+    // A baked capture becomes the probe's cube as it is, at its own size and mips
     private void PlanBaked()
     {
         for (int i = 0; i < _probes.Length; i++)
@@ -523,7 +546,18 @@ internal sealed class WorldReflections : IDisposable
                 Uncapture(i);
                 continue;
             }
-            Uploads.Add(i);
+
+            ReleaseTarget(i);
+            Target target = CreateTarget((uint)baked.Size, (uint)baked.Mips, "Baked reflection probe");
+            for (int face = 0; face < 6; face++)
+            {
+                for (int mip = 0; mip < baked.Mips; mip++)
+                {
+                    uint size = (uint)Math.Max(baked.Size >> mip, 1);
+                    _device.UpdateTexture<byte>(target.Cube, baked.Faces[face * baked.Mips + mip], new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
+                }
+            }
+            _targets[i] = target;
             MarkCaptured(i);
         }
     }
@@ -542,6 +576,7 @@ internal sealed class WorldReflections : IDisposable
                     _requested[_slicing] = true;
                     _slicing = -1;
                 }
+                EnsureRealtimeTarget(index);
                 Capture = new ProbeCapture(index, 0, 6, true, done);
                 Joins(index);
                 return;
@@ -566,6 +601,7 @@ internal sealed class WorldReflections : IDisposable
             return;
 
         int probe = _slicing;
+        EnsureRealtimeTarget(probe);
         int faces = _probes[probe].TimeSlicing == ReflectionProbeTimeSlicing.IndividualFaces ? 1 : 6;
         if (_slicedFaces < 6)
         {
@@ -587,7 +623,7 @@ internal sealed class WorldReflections : IDisposable
         _slicing = -1;
     }
 
-    // A probe captured and filtered in one frame joins the tree the next, so its capture never sees its own unfilled layer
+    // A probe captured and filtered in one frame joins the tree the next, so its capture never sees its own unfilled cube
     private void Joins(int index)
     {
         if (_captured[index])
@@ -600,6 +636,34 @@ internal sealed class WorldReflections : IDisposable
         if (!_alive[index] || _probes[index].Mode != ReflectionProbeMode.Realtime)
             return false;
         return _requested[index] || !_captured[index] || _probes[index].Refresh == ReflectionProbeRefresh.EveryFrame;
+    }
+
+    private void EnsureRealtimeTarget(int index)
+    {
+        uint resolution = Resolution(_probes[index]);
+        if (_targets[index] is { } target && target.Cube.Width == resolution)
+            return;
+        ReleaseTarget(index);
+        _targets[index] = CreateTarget(resolution, MipsFor(resolution), "Reflection probe");
+    }
+
+    private Target CreateTarget(uint resolution, uint mips, string name)
+    {
+        Texture cube = _device.ResourceFactory.CreateTexture(TextureDescription.CreateCube(resolution, mips, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled | TextureUsage.RenderTarget));
+        cube.Name = name;
+        PrefilterView[] views = new PrefilterView[mips];
+        for (uint mip = 0; mip < mips; mip++)
+        {
+            FramebufferDescription description = new(null, [new FramebufferAttachment(cube, 0, mip)]) { ViewCount = 6 };
+            views[mip] = new PrefilterView(_device.ResourceFactory.CreateFramebuffer(description), (int)mip, (int)mips, Math.Max(resolution >> (int)mip, 1));
+        }
+        return new Target(cube, _resources.TextureSlot(cube, MaterialPropertyType.TextureCube, "black"), views);
+    }
+
+    private void ReleaseTarget(int index)
+    {
+        _targets[index]?.Dispose();
+        _targets[index] = null;
     }
 
     private void MarkCaptured(int index)
@@ -617,16 +681,26 @@ internal sealed class WorldReflections : IDisposable
         Regions.Remove(index);
     }
 
+    private uint Resolution(in ReflectionProbeDesc desc)
+    {
+        uint resolution = Math.Clamp(desc.Resolution, SmallestMip, 2048);
+        if (!uint.IsPow2(resolution))
+        {
+            _report("reflection.resolution", $"A reflection probe's resolution {desc.Resolution} is not a power of two, it is rounded up.");
+            resolution = System.Numerics.BitOperations.RoundUpToPowerOf2(resolution);
+        }
+        return resolution;
+    }
+
     private static bool Valid(BakedReflectionProbe baked)
     {
-        if (baked.Size <= 0 || baked.Mips <= 0 || baked.Faces.Length < 6 * baked.Mips)
+        if (baked.Size <= 0 || baked.Mips <= 0 || baked.Mips > (int)Math.Log2(baked.Size) + 1 || baked.Faces.Length < 6 * baked.Mips)
             return false;
         for (int face = 0; face < 6; face++)
         {
             for (int mip = 0; mip < baked.Mips; mip++)
             {
-                long size = Math.Max(baked.Size >> mip, 1);
-                if (baked.Faces[face * baked.Mips + mip]?.Length != size * size * 8)
+                if (baked.Faces[face * baked.Mips + mip]?.Length != FaceBytes((uint)baked.Size, mip))
                     return false;
             }
         }
@@ -644,10 +718,11 @@ internal sealed class WorldReflections : IDisposable
 
     //   +0..+2  the box's axes, its centre in its region's space in w
     //   +3      box half size, blend distance
-    //   +4      intensity, box projection, priority, array layer as uint bits
+    //   +4      intensity, box projection, priority, the cube's slot and mip count (slot | mips << 16) as uint bits
     private ReflectionProbeRecord Pack(int index, Double3 origin)
     {
         ReflectionProbeDesc desc = _probes[index];
+        Target target = _targets[index]!;
         Float3 half = Half(desc);
         Quaternion rotation = desc.Rotation;
         Float3 x = rotation * new Float3(1, 0, 0), y = rotation * new Float3(0, 1, 0), z = rotation * new Float3(0, 0, 1);
@@ -659,83 +734,29 @@ internal sealed class WorldReflections : IDisposable
             Row1 = new Float4(y.X, y.Y, y.Z, (float)c.Y),
             Row2 = new Float4(z.X, z.Y, z.Z, (float)c.Z),
             Box = new Float4(half.X, half.Y, half.Z, MathF.Max(desc.BlendDistance, 0)),
-            Params = new Float4(MathF.Max(desc.Intensity, 0), desc.BoxProjection ? 1 : 0, desc.Importance + 1f / (1f + volume), BitConverter.UInt32BitsToSingle((uint)_layer[index])),
+            Params = new Float4(MathF.Max(desc.Intensity, 0), desc.BoxProjection ? 1 : 0, desc.Importance + 1f / (1f + volume), BitConverter.UInt32BitsToSingle(target.Slot | (target.Mips << 16))),
         };
-    }
-
-    // Grows by doubling, a new array holds nothing so everything is captured or uploaded into it again
-    private bool EnsureArray()
-    {
-        uint needed = (uint)Math.Max(_nextLayer, 2);
-        if (Probes != null && _layers >= needed)
-            return false;
-
-        uint layers = Probes != null ? _layers : 2;
-        while (layers < needed)
-            layers *= 2;
-        DisposeArray();
-
-        ResourceFactory factory = _device.ResourceFactory;
-        _layers = layers;
-        Probes = factory.CreateTexture(TextureDescription.CreateCube(Resolution, MipCount, layers, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled | TextureUsage.RenderTarget));
-        Probes.Name = "Reflection probes";
-        ProbeSlot = _resources.TextureSlot(Probes, MaterialPropertyType.TextureCubeArray, "black");
-        SamplerSlot = _resources.SamplerSlot(s_sampler);
-
-        if (SkyCube == null)
-        {
-            uint fullChain = (uint)Math.Log2(Resolution) + 1;
-            SkyCube = factory.CreateTexture(TextureDescription.CreateCube(Resolution, fullChain, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled | TextureUsage.RenderTarget));
-            SkyCube.Name = "Sky capture";
-            CaptureTarget = factory.CreateFramebuffer(new FramebufferDescription(null, SkyCube) { ViewCount = 6 });
-            ProbeCube = factory.CreateTexture(TextureDescription.CreateCube(Resolution, fullChain, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled | TextureUsage.RenderTarget));
-            ProbeCube.Name = "Reflection probe capture";
-            ProbeTarget = factory.CreateFramebuffer(new FramebufferDescription(null, ProbeCube) { ViewCount = 6 });
-            ProbeFaceTargets = new Framebuffer[6];
-            for (uint face = 0; face < 6; face++)
-                ProbeFaceTargets[face] = factory.CreateFramebuffer(new FramebufferDescription(null, [new FramebufferAttachment(ProbeCube, face)]));
-        }
-
-        _skyCaptured = false;
-        _slicing = -1;
-        for (int i = 0; i < _probes.Length; i++)
-        {
-            if (_alive[i])
-                Uncapture(i);
-        }
-        return true;
-    }
-
-    private void DisposeArray()
-    {
-        foreach (PrefilterView[] views in _layerViews.Values)
-        {
-            foreach (PrefilterView view in views)
-                view.Target.Dispose();
-        }
-        _layerViews.Clear();
-        Probes?.Dispose();
-        Probes = null;
     }
 
     private static Float4x4 Rows(Float3 x, Float3 y, Float3 z)
         => new(new Float4(x.X, y.X, z.X, 0), new Float4(x.Y, y.Y, z.Y, 0), new Float4(x.Z, y.Z, z.Z, 0), new Float4(0, 0, 0, 1));
 }
 
-/// <summary>One prefiltered mip of a probe layer as a render view: its six faces drawn at once.</summary>
-internal sealed class PrefilterView(Framebuffer target, int mip, uint size) : IRenderView
+/// <summary>One prefiltered mip of a cube as a render view: its six faces drawn at once.</summary>
+internal sealed class PrefilterView(Framebuffer target, int mip, int mips, uint size) : IRenderView
 {
     public Framebuffer Target { get; } = target;
     Framebuffer? IRenderView.Target => Target;
     public int Mip { get; } = mip;
+    public int Mips { get; } = mips;
     public uint PixelWidth { get; } = size;
     public uint PixelHeight { get; } = size;
     public int ViewId => -1 - Mip;
 }
 
 /// <summary>
-/// Fills every mip of a probe layer from a cube, run once per mip view: GGX filtered from a capture whose mips the first
-/// view builds, or copied from a baked capture's nearest mip. A bake then reads the layer back.
+/// Filters a captured cube with GGX into every roughness mip of a prefiltered cube, run once per mip view. The first view
+/// builds the source's mips, which the filter reads by each sample's solid angle. A bake then reads the cube back.
 /// </summary>
 internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler) : IPass
 {
@@ -745,7 +766,7 @@ internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler) : 
         public float Roughness;
         public float SourceSize;
         public uint SampleCount;
-        public float SourceLod;
+        private uint _pad;
     }
 
     private readonly PropertySet _properties = new();
@@ -753,13 +774,9 @@ internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler) : 
 
     public Texture Source = null!;
 
-    /// <summary>The baked capture's mip count to copy from, or 0 to filter a capture.</summary>
-    public int CopyMips;
-
-    /// <summary>Where a bake reads the filled layer back to, or null.</summary>
+    /// <summary>Where a bake reads the filled cube back to, or null.</summary>
     public DeviceBuffer? Readback;
     public Texture? Destination;
-    public int Layer;
 
     public string Name => "Graphite.Prefilter";
 
@@ -768,8 +785,8 @@ internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler) : 
     public void Render(RenderContext context, CommandBuffer cmd)
     {
         PrefilterView view = (PrefilterView)context.View;
-        int mips = (int)WorldReflections.MipCount;
-        if (view.Mip == 0 && CopyMips == 0)
+        int mips = view.Mips;
+        if (view.Mip == 0)
             cmd.GenerateMipmaps(Source);
 
         cmd.SetFramebuffer(context.GetRenderTexture(_target).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
@@ -778,26 +795,25 @@ internal sealed class PrefilterPass(GraphicsProgram program, Sampler sampler) : 
         cmd.SetVertexSource(VertexSource.None);
         _properties.SetTexture("Graphite_Source", Source, sampler);
         cmd.SetProperties(_properties);
-        float sourceLod = CopyMips > 0 ? MathF.Round(mips > 1 ? view.Mip * (CopyMips - 1) / (float)(mips - 1) : 0) : -1;
         cmd.SetPushConstants(new Push
         {
             Roughness = mips > 1 ? view.Mip / (float)(mips - 1) : 0,
             SourceSize = Source.Width,
             SampleCount = view.Mip == 0 ? 1u : WorldReflections.PrefilterSamples,
-            SourceLod = sourceLod,
         });
         cmd.Draw(3);
 
         if (Readback != null && view.Mip == mips - 1)
         {
             uint offset = 0;
+            uint resolution = Destination!.Width;
             for (int face = 0; face < 6; face++)
             {
                 for (int mip = 0; mip < mips; mip++)
                 {
-                    uint size = WorldReflections.Resolution >> mip;
-                    cmd.CopyTextureToBuffer(Destination!, Readback, offset, new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)(Layer * 6 + face)));
-                    offset += WorldReflections.FaceBytes(mip);
+                    uint size = Math.Max(resolution >> mip, 1);
+                    cmd.CopyTextureToBuffer(Destination, Readback, offset, new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
+                    offset += WorldReflections.FaceBytes(resolution, mip);
                 }
             }
         }

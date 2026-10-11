@@ -38,6 +38,22 @@ public sealed class RendererOptions
     public bool Deterministic;
 }
 
+/// <summary>
+/// The skies Graphite ships, loaded the first time they are asked for: the procedural sky lit by the world's sun, a two
+/// colour gradient (_TopColor, _BottomColor, _Exponent) and a cubemap from six images (_CubeRight, _CubeLeft, _CubeTop,
+/// _CubeBottom, _CubeFront, _CubeBack, _Tint, _Exposure).
+/// </summary>
+public sealed class BuiltInSkies(Renderer renderer)
+{
+    private Shader? _procedural, _gradient, _cubemap;
+
+    public Shader Procedural => _procedural ??= Load("Procedural");
+    public Shader Gradient => _gradient ??= Load("Gradient");
+    public Shader Cubemap => _cubemap ??= Load("Cubemap");
+
+    private Shader Load(string name) => renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Skies/{name}.shader")!));
+}
+
 /// <summary>A problem the renderer reports once, raised on the host thread at SubmitFrame.</summary>
 public readonly record struct RendererError(string Message);
 
@@ -158,6 +174,7 @@ public sealed class Renderer : IDisposable
         _globals = new GlobalRegistry(device, Textures) { Reporter = message => Report(message, message) };
         _programs.Reporter = message => Report(message, message);
         _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report);
+        Skies = new BuiltInSkies(this);
 
         if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)
         {
@@ -203,6 +220,9 @@ public sealed class Renderer : IDisposable
 
     /// <summary>Creates a material. Any thread, setters are host thread only.</summary>
     public Material CreateMaterial(Shader shader) => _materials.Create(shader);
+
+    /// <summary>The built in skies, each a shader for a material to set as <see cref="EnvironmentDesc.Sky"/>.</summary>
+    public BuiltInSkies Skies { get; }
 
     /// <summary>Loads a shader through the renderer's compiler. Any thread.</summary>
     public Shader LoadShader(ShaderDefinition definition) => new(definition, _compiler);

@@ -829,8 +829,6 @@ internal sealed class FramePipeline : IDisposable
             WorldReflections reflections = world.World.Reflections;
             if (reflections.CaptureDue)
                 CaptureSky(world, time);
-            foreach (int index in reflections.Uploads)
-                Upload(world, index);
             if (reflections.Capture is { } capture)
                 CaptureProbe(world, capture, time);
         }
@@ -909,6 +907,7 @@ internal sealed class FramePipeline : IDisposable
     {
         WorldReflections reflections = world.World.Reflections;
         world.SkyCamera ??= Capturing(world.CaptureViewId);
+        WorldReflections.Scratch scratch = reflections.ScratchFor(WorldReflections.SkyResolution);
         if (world.SkyProgram is ushort sky && !Programs.Ready(sky, false, world.World.Globals.KeywordSnapshot))
             reflections.SkyIncomplete();
 
@@ -917,7 +916,7 @@ internal sealed class FramePipeline : IDisposable
             World = world.World,
             ViewId = world.CaptureViewId,
             LayerCount = 6,
-            Target = reflections.CaptureTarget!,
+            Target = scratch.All,
             CullingMask = 0,
             ClearColor = world.World.Lighting.Environment.SkyColor,
             Near = 0.05f,
@@ -925,11 +924,11 @@ internal sealed class FramePipeline : IDisposable
         for (int face = 0; face < 6; face++)
             capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = WorldReflections.FaceProjection };
         Draw(world.SkyCamera, capture, world, time);
-        Fill(world, WorldReflections.SkyLayer, reflections.SkyCube!, 0, null);
+        Fill(world, reflections.Sky!, scratch.Cube, null);
     }
 
-    // Fills every mip of a probe layer from a cube: filtered from a capture, or copied from a baked one
-    private void Fill(WorldFrame world, int layer, Texture source, int copyMips, Action<BakedReflectionProbe>? bake)
+    // Filters a captured cube into every mip of a prefiltered one
+    private void Fill(WorldFrame world, WorldReflections.Target target, Texture source, Action<BakedReflectionProbe>? bake)
     {
         if (world.FiltersUsed == world.Filters.Count)
         {
@@ -941,30 +940,9 @@ internal sealed class FramePipeline : IDisposable
         (RenderPipeline filter, PrefilterPass pass) = world.Filters[world.FiltersUsed++];
         WorldReflections reflections = world.World.Reflections;
         pass.Source = source;
-        pass.CopyMips = copyMips;
-        pass.Destination = reflections.Probes;
-        pass.Layer = layer;
-        pass.Readback = bake != null ? reflections.BakeBuffer(bake) : null;
-        _dispatches.Add(new GraphDispatch(filter, reflections.LayerViews(layer)));
-    }
-
-    // Copies a baked capture into its probe's layer, through a cube made from its faces
-    private void Upload(WorldFrame world, int index)
-    {
-        WorldReflections reflections = world.World.Reflections;
-        BakedReflectionProbe baked = reflections.Probe(index).Baked!;
-        Texture source = _device.ResourceFactory.CreateTexture(TextureDescription.CreateCube((uint)baked.Size, (uint)baked.Mips, 1, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
-        source.Name = "Baked reflection probe";
-        for (int face = 0; face < 6; face++)
-        {
-            for (int mip = 0; mip < baked.Mips; mip++)
-            {
-                uint size = (uint)Math.Max(baked.Size >> mip, 1);
-                _device.UpdateTexture<byte>(source, baked.Faces[face * baked.Mips + mip], new TextureRegion(0, 0, 0, size, size, 1, (uint)mip, (uint)face));
-            }
-        }
-        Fill(world, reflections.Layer(index), source, baked.Mips, null);
-        _disposeAfterDispatch.Add(source);
+        pass.Destination = target.Cube;
+        pass.Readback = bake != null ? reflections.BakeBuffer(target, bake) : null;
+        _dispatches.Add(new GraphDispatch(filter, target.Views));
     }
 
     // Draws the world around a probe into its capture cube, all faces or the next one, then fills its layer
@@ -972,6 +950,8 @@ internal sealed class FramePipeline : IDisposable
     {
         WorldReflections reflections = world.World.Reflections;
         ReflectionProbeDesc probe = reflections.Probe(work.Index);
+        WorldReflections.Target target = reflections.ProbeTarget(work.Index);
+        WorldReflections.Scratch scratch = reflections.ScratchFor(target.Cube.Width);
         Float4x4 projection = WorldReflections.FaceProjectionBetween(probe.NearClip, probe.FarClip);
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)
@@ -982,7 +962,7 @@ internal sealed class FramePipeline : IDisposable
                 World = world.World,
                 ViewId = world.CaptureViewId + 1,
                 LayerCount = 6,
-                Target = reflections.ProbeTarget!,
+                Target = scratch.All,
                 CullingMask = probe.CullingMask,
                 ClearColor = world.World.Lighting.Environment.SkyColor,
                 Near = probe.NearClip,
@@ -999,7 +979,7 @@ internal sealed class FramePipeline : IDisposable
             {
                 World = world.World,
                 ViewId = world.CaptureViewId + 2,
-                Target = reflections.ProbeFaceTargets[work.FirstFace],
+                Target = scratch.Faces[work.FirstFace],
                 CullingMask = probe.CullingMask,
                 ClearColor = world.World.Lighting.Environment.SkyColor,
                 Near = probe.NearClip,
@@ -1010,7 +990,7 @@ internal sealed class FramePipeline : IDisposable
         }
 
         if (work.Prefilter)
-            Fill(world, reflections.Layer(work.Index), reflections.ProbeCube!, 0, work.Bake);
+            Fill(world, target, scratch.Cube, work.Bake);
     }
 
     private CameraFrame Capturing(int viewId)

@@ -28,6 +28,20 @@ void main()
 #ifdef GRAPHITE_FRAGMENT
 layout(location = 29) in vec2 graphite_SkyClip;
 
-// The unit world direction the pixel looks along
-vec3 Graphite_SkyDirection() { return Graphite_ViewRay(graphite_SkyClip); }
+// Vertical field of view the sky takes for orthographic views
+#define GRAPHITE_SKY_ORTHO_FOV 1.0471975512
+
+// The unit world direction the pixel looks along. An orthographic view has no directions, every ray through it is
+// parallel, so the sky is seen through a perspective of the same aspect instead.
+vec3 Graphite_SkyDirection()
+{
+    Graphite_ViewData view = Graphite_View();
+    if (view.projection[2][3] != 0.0)
+        return Graphite_ViewRay(graphite_SkyClip);
+
+    float aspect = view.projection[1][1] / max(1e-6, view.projection[0][0]);
+    float f = 1.0 / tan(GRAPHITE_SKY_ORTHO_FOV * 0.5);
+    vec3 ray = normalize(vec3(graphite_SkyClip.x * aspect / f, graphite_SkyClip.y / f, 1.0));
+    return normalize(transpose(mat3(view.view)) * ray);
+}
 #endif

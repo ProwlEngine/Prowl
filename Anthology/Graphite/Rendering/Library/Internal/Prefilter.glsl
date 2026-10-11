@@ -18,7 +18,7 @@ Fragment
     #extension GL_EXT_multiview : require
 
     uniform samplerCube Graphite_Source;
-    layout(push_constant) uniform Push { float roughness; float sourceSize; uint sampleCount; float sourceLod; } push;   // a source lod of 0 or more copies that mip
+    layout(push_constant) uniform Push { float roughness; float sourceSize; uint sampleCount; uint pad; } push;
     layout(location = 0) in vec2 vUV;
     layout(location = 0) out vec4 outColor;
 
@@ -58,11 +58,6 @@ Fragment
     void main()
     {
         vec3 n = normalize(FaceDirection(int(gl_ViewIndex), vUV));
-        if (push.sourceLod >= 0.0)
-        {
-            outColor = vec4(textureLod(Graphite_Source, n, push.sourceLod).rgb, 1.0);
-            return;
-        }
         if (push.roughness <= 0.0)
         {
             outColor = vec4(textureLod(Graphite_Source, n, 0.0).rgb, 1.0);

@@ -29,7 +29,7 @@ layout(set = 1, binding = 3, std430) readonly buffer Graphite_ViewLights { Graph
 layout(set = 0, binding = 15, std430) readonly buffer Graphite_WorldLighting
 {
     uvec4 counts;            // directional lights, lightmap pages, probes present, lightmap encoding (0 linear, 1 RGBM)
-    uvec4 reflections;       // probe cube array slot, its sampler slot, its mips, whether the sky is captured
+    uvec4 reflections;       // the sky probe's cube slot, the probes' sampler slot, the sky probe's mips, whether it is captured
     vec4 ambientColor;
     vec4 ambientSky;
     vec4 ambientGround;
@@ -694,15 +694,15 @@ float SpecularOcclusion(float NdotV, float ao, float roughness)
 //  Reflection probes
 // ============================================================
 
-// Every probe is a layer of one cube array prefiltered by roughness across its mips, layer 0 is the sky. Captured probes
-// live in regions like static lights, walked with the same trees.
+// The sky and every probe have their own cube prefiltered by roughness across its mips, found by its bindless slot.
+// Captured probes live in regions like static lights, walked with the same trees.
 struct Graphite_ReflectionProbe
 {
     vec4 row0;               // the box's axes, its centre in its region's space in w
     vec4 row1;
     vec4 row2;
     vec4 box;                // box half size, blend distance
-    vec4 params;             // intensity, box projection, priority, array layer as uint bits
+    vec4 params;             // intensity, box projection, priority, the cube's slot and mips (slot | mips << 16) as uint bits
 };
 
 layout(set = 0, binding = 18, std430) readonly buffer Graphite_ReflectionProbes { Graphite_ReflectionProbe graphite_ReflectionProbes[]; };
@@ -711,10 +711,15 @@ layout(set = 0, binding = 18, std430) readonly buffer Graphite_ReflectionProbes 
 
 bool ReflectionProbesReady() { return graphite_World.reflections.w != 0u; }
 
-vec3 SampleProbeLayer(float layer, vec3 dir, float roughness)
+// A prefiltered cube's light along dir, its mip picked by roughness
+vec3 SampleProbeCube(uint slot, uint mips, vec3 dir, float roughness)
 {
-    uvec4 r = graphite_World.reflections;
-    return GRAPHITE_SAMPLE_CUBE_ARRAY_LOD(r.x, r.y, vec4(dir, layer), roughness * (float(r.z) - 1.0)).rgb;
+    return GRAPHITE_SAMPLE_CUBE_LOD(slot, graphite_World.reflections.y, dir, roughness * (float(mips) - 1.0)).rgb;
+}
+
+vec3 SampleSkyProbe(vec3 dir, float roughness)
+{
+    return SampleProbeCube(graphite_World.reflections.x, graphite_World.reflections.z, dir, roughness);
 }
 
 // A camera relative point in the probe's box space. offset and offsetLow move camera relative positions into its region.
@@ -728,7 +733,7 @@ vec3 Graphite_ProbeLocal(Graphite_ReflectionProbe probe, vec3 worldPos, vec3 off
 // Projects the reflection onto the probe's box, so it lands where the reflected surface really is. p is the point in box space.
 vec3 SampleReflectionProbe(Graphite_ReflectionProbe probe, vec3 p, vec3 dir, float roughness)
 {
-    float layer = float(floatBitsToUint(probe.params.w));
+    uint cube = floatBitsToUint(probe.params.w);
     if (probe.params.y > 0.5)
     {
         vec3 halfSize = probe.box.xyz;
@@ -743,7 +748,7 @@ vec3 SampleReflectionProbe(Graphite_ReflectionProbe probe, vec3 p, vec3 dir, flo
         dir = probe.row0.xyz * hit.x + probe.row1.xyz * hit.y + probe.row2.xyz * hit.z;
     }
 
-    return SampleProbeLayer(layer, dir, roughness) * probe.params.x;
+    return SampleProbeCube(cube & 0xFFFFu, cube >> 16, dir, roughness) * probe.params.x;
 }
 
 // Blends the most important probes around the point by how far inside their boxes it is, the sky filling the rest
@@ -806,7 +811,7 @@ vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
         total += w;
     }
     if (total < 0.999)
-        color += SampleProbeLayer(0.0, R, roughness) * (1.0 - total);
+        color += SampleSkyProbe(R, roughness) * (1.0 - total);
     return color;
 }
 
@@ -841,7 +846,7 @@ vec3 FogColor(vec3 worldPos)
     vec3 dir = worldPos;
     dir.y = max(dir.y, 0.0);
     dir = length(dir) > 1e-4 ? normalize(dir) : vec3(0.0, 0.0, 1.0);
-    return SampleProbeLayer(0.0, dir, FOG_SKY_ROUGHNESS);
+    return SampleSkyProbe(dir, FOG_SKY_ROUGHNESS);
 }
 
 vec3 ApplyFog(vec3 color, vec3 worldPos)
