@@ -276,7 +276,8 @@ public sealed class RendererTests : IDisposable
         Start(RenderThreading.RenderThread);
         Scene();
         Color32[] pixels = Frame();
-        for (int frame = 0; frame < 500 && !pixels.AsSpan().SequenceEqual(inline); frame++)
+        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+        while (!pixels.AsSpan().SequenceEqual(inline) && watch.Elapsed < TimeSpan.FromSeconds(30))
             pixels = Frame();
 
         Assert.Equal(inline, pixels);

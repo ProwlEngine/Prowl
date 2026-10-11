@@ -230,19 +230,42 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         return MaterialRewrite.Rewrite(program.Shader.Name, description, program.Shader.Schema, compiler.GetGlobals(pass), globals, FrameLayout, ViewLayout);
     }
 
+    // Colour takes the pass's blend. The G-buffer targets are written only by an opaque pass whose fragment stage writes
+    // them, so transparent and other passes leave what the opaque surfaces wrote. The prepass writes no colour at all.
+    internal static BlendStateDescription SceneBlend(in ShaderDescription description, PassState state, bool prepass)
+    {
+        BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
+        bool blended = color.BlendEnabled && !(color.SourceColorFactor == BlendFactor.One && color.DestinationColorFactor == BlendFactor.Zero);
+        bool gbuffer = !prepass && !blended && WritesGBuffer(description);
+        BlendAttachmentDescription target = BlendAttachmentDescription.OverrideBlend;
+        BlendAttachmentDescription masked = target with { ColorWriteMask = ColorWriteMask.None };
+        if (prepass)
+            color.ColorWriteMask = ColorWriteMask.None;
+
+        BlendStateDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend);
+        blend.AttachmentStates = [color, gbuffer ? target : masked, gbuffer ? target : masked];
+        return blend;
+    }
+
+    private static bool WritesGBuffer(in ShaderDescription description)
+    {
+        foreach (ShaderStageDescription stage in description.Stages)
+        {
+            if (stage.Stage != ShaderStages.Fragment)
+                continue;
+            SpirvModule module = new(stage.ShaderBytes);
+            uint normal = module.FindVariableAtLocation(SpirvModule.Output, 1);
+            uint material = module.FindVariableAtLocation(SpirvModule.Output, 2);
+            return normal != 0 && material != 0 && module.Stores(normal) && module.Stores(material);
+        }
+        return false;
+    }
+
     private GraphicsProgram Build(DrawProgram program, ShaderDescription description, bool mirrored)
     {
         ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
-        BlendStateDescription blend = BlendStateDescription.SingleOverrideBlend;
-        if (ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name))
-        {
-            BlendAttachmentDescription attachment = blend.AttachmentStates[0];
-            attachment.ColorWriteMask = ColorWriteMask.None;
-            blend.AttachmentStates = [attachment];
-        }
-
-        description.BlendState = state.ToBlendState(blend);
+        description.BlendState = SceneBlend(description, state, ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name));
         description.DepthStencilState = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
         RasterizerStateDescription raster = state.ToRasterizerState(RasterizerStateDescription.Default);
         if (mirrored)
@@ -327,6 +350,12 @@ internal sealed class CameraFrame : IDisposable
     public readonly GpuArray Records;
     public readonly GpuArray Commands;
     public readonly GpuArray ViewBlocks;
+    public readonly GpuArray ViewLights;
+    public readonly GpuArray ViewLightNodes;
+    public readonly GpuArray ViewDecals;
+    public readonly GpuArray ViewDecalNodes;
+    public readonly LightTreeBuilder LightTree = new();
+    public readonly LightTreeBuilder DecalTree = new();
     public ViewDesc Desc;
     public WorldFrame World = null!;
     public int LastFrame;
@@ -355,6 +384,10 @@ internal sealed class CameraFrame : IDisposable
         Records = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Draw records {viewId}");
         Commands = new GpuArray(device, BufferUsage.IndirectBuffer, $"Indirect commands {viewId}");
         ViewBlocks = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View blocks {viewId}");
+        ViewLights = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View lights {viewId}");
+        ViewLightNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View light nodes {viewId}");
+        ViewDecals = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View decals {viewId}");
+        ViewDecalNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View decal nodes {viewId}");
     }
 
     public void AddBuffers(List<DeviceBuffer> buffers)
@@ -363,6 +396,10 @@ internal sealed class CameraFrame : IDisposable
         buffers.Add(Records.Buffer);
         buffers.Add(Commands.Buffer);
         buffers.Add(ViewBlocks.Buffer);
+        buffers.Add(ViewLights.Buffer);
+        buffers.Add(ViewLightNodes.Buffer);
+        buffers.Add(ViewDecals.Buffer);
+        buffers.Add(ViewDecalNodes.Buffer);
     }
 
     /// <summary>The frame's draw lists in drawing order: prepass, opaque, transparent.</summary>
@@ -419,6 +456,10 @@ internal sealed class CameraFrame : IDisposable
         Records.Dispose();
         Commands.Dispose();
         ViewBlocks.Dispose();
+        ViewLights.Dispose();
+        ViewLightNodes.Dispose();
+        ViewDecals.Dispose();
+        ViewDecalNodes.Dispose();
     }
 }
 
@@ -427,7 +468,11 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
 {
     public static readonly RenderResourceID SceneId = RenderResourceID.Intern("Graphite.Scene");
 
-    private static readonly GraphTextureDesc s_scene = GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, depth: true) with { DepthFormat = PixelFormat.D32_Float };
+    private static readonly GraphTextureDesc s_scene = GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, depth: true) with
+    {
+        ColorFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm],
+        DepthFormat = PixelFormat.D32_Float,
+    };
 
     private readonly PropertySet _properties = new();
     private (DeviceBuffer? Buffer, uint Offset, uint Size) _globals;
@@ -454,6 +499,10 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
             camera.ViewTable.Set("Graphite_Globals", 0, new DeviceBufferRange(globals.Buffer, globals.Offset, globals.Size));
         }
         camera.ViewTable.Set("Graphite_Views", 0, camera.ViewBlocks.Buffer);
+        camera.ViewTable.Set("Graphite_ViewLights", 0, camera.ViewLights.Buffer);
+        camera.ViewTable.Set("Graphite_ViewLightNodes", 0, camera.ViewLightNodes.Buffer);
+        camera.ViewTable.Set("Graphite_ViewDecals", 0, camera.ViewDecals.Buffer);
+        camera.ViewTable.Set("Graphite_ViewDecalNodes", 0, camera.ViewDecalNodes.Buffer);
         DescriptorTable viewTable = camera.ViewTable.Get(ring);
         DescriptorTable frameTable = camera.World.FrameTable.Get(ring);
 
@@ -693,6 +742,15 @@ internal sealed class FramePipeline : IDisposable
         world.Buckets.BuildTransparent(frustum, camera.Transparent);
         ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance);
         block.Time = new Float4((float)time.Time, time.DeltaTime, time.FrameIndex, 0);
+        WorldLighting lighting = world.World.Lighting;
+        Double3 lightOffset = layer.Position - lighting.StaticLightOrigin;
+        Double3 decalOffset = layer.Position - lighting.StaticDecalOrigin;
+        block.StaticLightOffset = new Float4((float)lightOffset.X, (float)lightOffset.Y, (float)lightOffset.Z, 0);
+        block.StaticDecalOffset = new Float4((float)decalOffset.X, (float)decalOffset.Y, (float)decalOffset.Z, 0);
+        block.StaticLightRoot = lighting.StaticLightRoot;
+        block.StaticDecalRoot = lighting.StaticDecalRoot;
+        block.ViewLightRoot = lighting.BuildViewLights(frustum, camera.LightTree, _uploader, camera.ViewLights, camera.ViewLightNodes);
+        block.ViewDecalRoot = lighting.BuildViewDecals(frustum, camera.DecalTree, _uploader, camera.ViewDecals, camera.ViewDecalNodes);
         if (camera.HasPrevious)
         {
             block.PreviousViewProjection = camera.Previous.ViewProjection;
@@ -722,6 +780,14 @@ internal sealed class FramePipeline : IDisposable
             RenderWorld.RenderSide render = world.World.Render;
             foreach (GpuTable table in render.Tables)
                 _buffers.Add(table.Buffer);
+            WorldLighting lighting = world.World.Lighting;
+            foreach (GpuTable table in lighting.Tables)
+                _buffers.Add(table.Buffer);
+            world.FrameTable.Set("Graphite_StaticLights", 0, lighting.StaticLights.Buffer);
+            world.FrameTable.Set("Graphite_StaticLightNodes", 0, lighting.StaticLightNodes.Buffer);
+            world.FrameTable.Set("Graphite_StaticDecals", 0, lighting.StaticDecals.Buffer);
+            world.FrameTable.Set("Graphite_StaticDecalNodes", 0, lighting.StaticDecalNodes.Buffer);
+            world.FrameTable.Set("Graphite_WorldLighting", 0, lighting.World.Buffer);
             world.FrameTable.Set("Graphite_Chunks", 0, Geometry.Chunks.Buffer);
             world.FrameTable.Set("Graphite_Transforms", 0, render.Transforms.Buffer);
             world.FrameTable.Set("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);

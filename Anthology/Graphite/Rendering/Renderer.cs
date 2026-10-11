@@ -178,7 +178,7 @@ public sealed class Renderer : IDisposable
         _frameDone.Wait();
         try
         {
-            RenderWorld world = new(Device, this);
+            RenderWorld world = new(Device, this, Textures);
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
             TableRing frameTable = new(Device, ProgramCache.FrameLayout, "Frame table");
@@ -228,6 +228,8 @@ public sealed class Renderer : IDisposable
             {
                 _materials.MarkAllRecords();
                 _globals.MarkAllDirty();
+                foreach (WorldFrame world in _worlds.Values)
+                    world.World.Lighting.RepackDecals();
             }
 
             _changedMaterials.Clear();
@@ -388,7 +390,11 @@ public sealed class Renderer : IDisposable
         _globals.Flush(_uploader, _lastDispatched);
         _replaced.Clear();
         foreach (WorldFrame world in _worlds.Values)
+        {
             world.World.Render.Flush(_uploader, _replaced);
+            world.World.Lighting.Update();
+            world.World.Lighting.Flush(_uploader, _replaced);
+        }
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));
 

@@ -20,6 +20,9 @@ struct Graphite_ViewData
     vec4 jitter;                    // this frame's jitter in xy, the previous frame's in zw
     vec4 time;                      // time, delta time, frame index
     vec4 depth;                     // near plane, logical far distance
+    vec4 staticLightOffset;         // camera minus the static light tree's origin
+    vec4 staticDecalOffset;         // camera minus the static decal tree's origin
+    uvec4 treeRoots;                // static lights, view lights, static decals, view decals, all ones when empty
 };
 
 struct Graphite_DrawRecord { uint chunk; uint view; uint flags; uint subMesh; };
@@ -35,7 +38,7 @@ struct Graphite_ObjectData
     int lightmapPage;
     uint probeIndex;
     float lodFade;
-    uint pad;
+    uint layerMask;
     vec4 lightmapScaleOffset;
     vec4 custom0;
     vec4 custom1;

@@ -119,7 +119,7 @@ internal struct ObjectAttributes
     public int LightmapPage;
     public uint ProbeIndex;
     public float LodFade;
-    private uint _pad;
+    public uint LayerMask;
     public Float4 LightmapScaleOffset;
     public Float4 Custom0;
     public Float4 Custom1;
@@ -130,7 +130,7 @@ internal struct ObjectAttributes
 /// and a dirty bit, <see cref="Extract"/> copies what changed into the render copy, and the render thread turns that
 /// into GPU records. Storage is struct of arrays keyed by a dense index with a free list.
 /// </summary>
-public sealed class RenderWorld : IDisposable
+public sealed partial class RenderWorld : IDisposable
 {
     [Flags]
     internal enum Dirt : byte
@@ -173,9 +173,10 @@ public sealed class RenderWorld : IDisposable
 
     private readonly Renderer? _owner;
 
-    internal RenderWorld(GraphicsDevice device, Renderer? owner = null)
+    internal RenderWorld(GraphicsDevice device, Renderer? owner = null, IMaterialResources? resources = null)
     {
         _owner = owner;
+        Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Report : (_, _) => { });
         _render = new RenderSide(device);
         Grow(64);
     }
@@ -343,6 +344,7 @@ public sealed class RenderWorld : IDisposable
         }
         _dirty.Clear();
         _render.EndExtract();
+        ExtractLighting();
     }
 
     /// <summary>Removes the world from its renderer at the next frame. Host thread.</summary>
@@ -351,10 +353,14 @@ public sealed class RenderWorld : IDisposable
         if (_owner != null)
             _owner.RemoveWorld(this);
         else
-            _render.Dispose();
+            DisposeRender();
     }
 
-    internal void DisposeRender() => _render.Dispose();
+    internal void DisposeRender()
+    {
+        _render.Dispose();
+        Lighting.Dispose();
+    }
 
     private int Check(RenderableHandle handle)
     {
@@ -507,6 +513,7 @@ public sealed class RenderWorld : IDisposable
             attributes.Custom0 = host._custom0[index];
             attributes.Custom1 = host._custom1[index];
             attributes.LodFade = 1;
+            attributes.LayerMask = host._layerMask[index];
             if (added)
                 attributes.PreviousTransform = ObjectAttributes.NoPrevious;
 

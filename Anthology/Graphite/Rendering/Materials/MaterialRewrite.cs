@@ -28,10 +28,19 @@ internal static class GraphiteBindings
     public const int PreviousTransforms = 8;
     public const int Objects = 9;
     public const int MaterialSlots = 10;
+    public const int StaticLights = 11;
+    public const int StaticLightNodes = 12;
+    public const int StaticDecals = 13;
+    public const int StaticDecalNodes = 14;
+    public const int WorldLighting = 15;
 
     public const int SamplerTable = 0;
     public const int Globals = 1;
     public const int Views = 2;
+    public const int ViewLights = 3;
+    public const int ViewLightNodes = 4;
+    public const int ViewDecals = 5;
+    public const int ViewDecalNodes = 6;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -62,7 +71,12 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_Transforms", ResourceKind.StructuredBufferReadOnly, Graphics, Transforms),
         new ResourceLayoutElementDescription("Graphite_PreviousTransforms", ResourceKind.StructuredBufferReadOnly, Graphics, PreviousTransforms),
         new ResourceLayoutElementDescription("Graphite_Objects", ResourceKind.StructuredBufferReadOnly, Graphics, Objects),
-        new ResourceLayoutElementDescription("Graphite_MaterialSlots", ResourceKind.StructuredBufferReadOnly, Graphics, MaterialSlots))
+        new ResourceLayoutElementDescription("Graphite_MaterialSlots", ResourceKind.StructuredBufferReadOnly, Graphics, MaterialSlots),
+        new ResourceLayoutElementDescription("Graphite_StaticLights", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLights),
+        new ResourceLayoutElementDescription("Graphite_StaticLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticLightNodes),
+        new ResourceLayoutElementDescription("Graphite_StaticDecals", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecals),
+        new ResourceLayoutElementDescription("Graphite_StaticDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, StaticDecalNodes),
+        new ResourceLayoutElementDescription("Graphite_WorldLighting", ResourceKind.StructuredBufferReadOnly, Graphics, WorldLighting))
     {
         Table = true,
     };
@@ -71,7 +85,11 @@ internal static class GraphiteBindings
     public static ResourceLayoutDescription ViewTable(uint samplers) => new(ViewSet,
         new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, Graphics, SamplerTable) { ArrayCount = samplers },
         new ResourceLayoutElementDescription("Graphite_Globals", ResourceKind.StructuredBufferReadOnly, Graphics, Globals),
-        new ResourceLayoutElementDescription("Graphite_Views", ResourceKind.StructuredBufferReadOnly, Graphics, Views))
+        new ResourceLayoutElementDescription("Graphite_Views", ResourceKind.StructuredBufferReadOnly, Graphics, Views),
+        new ResourceLayoutElementDescription("Graphite_ViewLights", ResourceKind.StructuredBufferReadOnly, Graphics, ViewLights),
+        new ResourceLayoutElementDescription("Graphite_ViewLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ViewLightNodes),
+        new ResourceLayoutElementDescription("Graphite_ViewDecals", ResourceKind.StructuredBufferReadOnly, Graphics, ViewDecals),
+        new ResourceLayoutElementDescription("Graphite_ViewDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ViewDecalNodes))
     {
         Table = true,
     };
@@ -477,6 +495,9 @@ internal static class MaterialRewrite
                 module.AddCapability(SpirvModule.CapabilitySampledImageArrayNonUniformIndexing);
                 foreach (var target in _textureTargets.Values)
                 {
+                    uint tableBinding = (uint)GraphiteBindings.TextureTable(target.Type);
+                    if (!_tableVars.ContainsKey(target.ImageType) && module.FindTable(GraphiteBindings.FrameSet, tableBinding, target.ImageType) is var shared and not 0)
+                        _tableVars[target.ImageType] = shared;
                     if (!_tableVars.ContainsKey(target.ImageType))
                     {
                         uint array = module.AddGlobal(SpirvModule.OpTypeRuntimeArray, target.ImageType);
@@ -486,6 +507,8 @@ internal static class MaterialRewrite
                         _tableVars[target.ImageType] = table;
                     }
 
+                    if (target.Combined && _samplerTable == 0)
+                        _samplerTable = module.FindTable(GraphiteBindings.ViewSet, (uint)GraphiteBindings.SamplerTable, module.TypeSampler());
                     if (target.Combined && _samplerTable == 0)
                     {
                         uint array = module.AddGlobal(SpirvModule.OpTypeRuntimeArray, module.TypeSampler());
@@ -732,6 +755,7 @@ internal sealed class SpirvModule
     public const ushort OpTypeImage = 25;
     public const ushort OpTypeSampler = 26;
     public const ushort OpTypeSampledImage = 27;
+    public const ushort OpTypeArray = 28;
     public const ushort OpTypeRuntimeArray = 29;
     public const ushort OpTypeStruct = 30;
     public const ushort OpTypePointer = 32;
@@ -904,6 +928,35 @@ internal sealed class SpirvModule
             3 => arrayed ? MaterialPropertyType.TextureCubeArray : MaterialPropertyType.TextureCube,
             _ => null,
         };
+    }
+
+    /// <summary>A variable at a set and binding holding an array, sized or not, of the given element type, or 0.</summary>
+    public uint FindTable(uint set, uint binding, uint element)
+    {
+        foreach (uint[] i in _globals)
+        {
+            if (Op(i) != OpVariable || i[3] != UniformConstant || !TryGetBinding(i[2], out uint s, out int b) || s != set || b != binding)
+                continue;
+            uint[] array = Type(Pointee(i[1]));
+            if (Op(array) is OpTypeRuntimeArray or OpTypeArray && array[2] == element)
+                return i[2];
+        }
+        return 0;
+    }
+
+    /// <summary>True when a function stores to the variable, directly or through an access chain into it.</summary>
+    public bool Stores(uint variable)
+    {
+        HashSet<uint> pointers = [variable];
+        foreach (uint[] i in _functions)
+        {
+            ushort op = Op(i);
+            if (op is OpAccessChain or OpInBoundsAccessChain && pointers.Contains(i[3]))
+                pointers.Add(i[2]);
+            else if (op == OpStore && pointers.Contains(i[1]))
+                return true;
+        }
+        return false;
     }
 
     public uint FindVariableAtLocation(uint storage, uint location)
