@@ -105,6 +105,15 @@ mat3 Graphite_NormalMatrix(Graphite_Transform t)
 
 vec4 Graphite_RelativeToClip(vec3 relative) { return Graphite_View().viewProjection * vec4(relative, 1.0); }
 
+// The unit camera relative direction a clip space position looks along, for any projection, infinite or not
+vec3 Graphite_ViewRay(vec2 clip)
+{
+    mat4 inverse = Graphite_View().inverseViewProjection;
+    vec4 near = inverse * vec4(clip, 1.0, 1.0);
+    vec4 far = inverse * vec4(clip, 0.0, 1.0);
+    return normalize(far.xyz * near.w - near.xyz * far.w);
+}
+
 float Graphite_LinearDepth(float deviceDepth)
 {
     // Reversed Z with an infinite far plane: depth is near / view distance.

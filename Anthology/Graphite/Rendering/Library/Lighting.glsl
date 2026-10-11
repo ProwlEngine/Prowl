@@ -29,6 +29,7 @@ layout(set = 1, binding = 3, std430) readonly buffer Graphite_ViewLights { Graph
 layout(set = 0, binding = 15, std430) readonly buffer Graphite_WorldLighting
 {
     uvec4 counts;            // directional lights, lightmap pages, probes present, lightmap encoding (0 linear, 1 RGBM)
+    uvec4 reflections;       // probe cube array slot, its sampler slot, its mips, whether the sky is captured
     vec4 ambientColor;
     vec4 ambientSky;
     vec4 ambientGround;
@@ -690,13 +691,37 @@ float SpecularOcclusion(float NdotV, float ao, float roughness)
 
 
 // ============================================================
+//  Reflection probes
+// ============================================================
+
+// Every probe is a layer of one cube array prefiltered by roughness across its mips, layer 0 is the sky
+bool ReflectionProbesReady() { return graphite_World.reflections.w != 0u; }
+
+vec3 SampleProbeLayer(float layer, vec3 dir, float roughness)
+{
+    uvec4 r = graphite_World.reflections;
+    return GRAPHITE_SAMPLE_CUBE_ARRAY_LOD(r.x, r.y, vec4(dir, layer), roughness * (float(r.z) - 1.0)).rgb;
+}
+
+// ============================================================
 //  Fog
 // ============================================================
 
-// The fog colour seen toward worldPos. The sky colour option arrives with the sky probe.
+// How blurred the sky is that fog takes its color from, as a sky probe roughness
+#define FOG_SKY_ROUGHNESS 0.35
+
+// The fog color seen toward worldPos, either the flat fog color or the sky behind it from the sky probe, so it
+// meets whatever sky is drawn seamlessly
 vec3 FogColor(vec3 worldPos)
 {
-    return graphite_World.fogColor.rgb;
+    if (graphite_World.fogStates.w < 0.5 || !ReflectionProbesReady())
+        return graphite_World.fogColor.rgb;
+
+    // Below the horizon the fog keeps the horizon's color rather than the ground under the sky
+    vec3 dir = worldPos;
+    dir.y = max(dir.y, 0.0);
+    dir = length(dir) > 1e-4 ? normalize(dir) : vec3(0.0, 0.0, 1.0);
+    return SampleProbeLayer(0.0, dir, FOG_SKY_ROUGHNESS);
 }
 
 vec3 ApplyFog(vec3 color, vec3 worldPos)

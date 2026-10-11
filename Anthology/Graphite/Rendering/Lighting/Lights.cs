@@ -180,11 +180,19 @@ public sealed class EnvironmentDesc
     /// <summary>The directional light that is the sun, else the most intense directional light is.</summary>
     public LightHandle Sun;
 
+    /// <summary>The sky, a material with a Sky pass, drawn behind everything and captured into the sky probe. Null for none.</summary>
+    public Material? Sky;
+
+    /// <summary>What the sky probe sees where no sky material draws.</summary>
+    public Float4 SkyColor = new(0, 0, 0, 1);
+    public SkyCaptureMode SkyCapture;
+
     internal EnvironmentDesc Copy() => (EnvironmentDesc)MemberwiseClone();
 
     internal bool Same(EnvironmentDesc other)
         => Ambient == other.Ambient && AmbientColor == other.AmbientColor && AmbientSky == other.AmbientSky && AmbientGround == other.AmbientGround
-        && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && Sun == other.Sun;
+        && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && Sun == other.Sun
+        && Sky == other.Sky && SkyColor == other.SkyColor && SkyCapture == other.SkyCapture;
 }
 
 /// <summary>A light record as the shaders read it, 80 bytes, matching Graphite_LightRecord. Positions are in its tree's space.</summary>
@@ -237,6 +245,10 @@ internal struct WorldLightingRecord
     public uint LightmapPages;
     public uint HasProbes;
     public uint LightmapEncoding;
+    public uint ProbeSlot;
+    public uint ProbeSampler;
+    public uint ProbeMips;
+    public uint ProbesReady;
     public Float4 AmbientColor;
     public Float4 AmbientSky;
     public Float4 AmbientGround;
@@ -299,6 +311,7 @@ public sealed partial class RenderWorld
             _extractedEnvironment = _environment.Copy();
             Lighting.ReceiveEnvironment(_extractedEnvironment);
         }
+        Lighting.ReceiveSkyVersion(_extractedEnvironment.Sky?.Version ?? 0);
     }
 }
 
@@ -421,6 +434,7 @@ internal sealed class WorldLighting : IDisposable
     private int _lightmapPages;
     private LightmapEncoding _lightmapEncoding;
     private bool _hasProbes;
+    private uint _probeSlot, _probeSampler, _probeMips;
     private Vector4[] _spheres = new Vector4[64];
     private readonly List<int> _culled = new();
     private readonly List<int> _directionalOrder = new();
@@ -483,7 +497,10 @@ internal sealed class WorldLighting : IDisposable
         else
             _staticLights.Remove(index);
         if (old.Type == LightType.Directional || desc.Type == LightType.Directional)
+        {
             _worldRecordDirty = true;
+            SkyInputs++;
+        }
     }
 
     internal void ReceiveDecal(int index, int generation, uint sequence, bool alive, in DecalDesc desc)
@@ -516,6 +533,26 @@ internal sealed class WorldLighting : IDisposable
     internal void ReceiveEnvironment(EnvironmentDesc environment)
     {
         _environment = environment;
+        _worldRecordDirty = true;
+        SkyInputs++;
+    }
+
+    internal void ReceiveSkyVersion(uint version) => SkyVersion = version;
+
+    /// <summary>The environment as of the last extraction.</summary>
+    public EnvironmentDesc Environment => _environment;
+
+    /// <summary>Counts changes the sky may be drawn from: the environment and the directional lights.</summary>
+    public int SkyInputs { get; private set; }
+
+    /// <summary>The sky material's version as of the last extraction.</summary>
+    public uint SkyVersion { get; private set; }
+
+    internal void SetReflections(uint slot, uint sampler, uint mips)
+    {
+        _probeSlot = slot;
+        _probeSampler = sampler;
+        _probeMips = mips;
         _worldRecordDirty = true;
     }
 
@@ -808,6 +845,10 @@ internal sealed class WorldLighting : IDisposable
         record.LightmapPages = (uint)_lightmapPages;
         record.HasProbes = _hasProbes ? 1u : 0;
         record.LightmapEncoding = (uint)_lightmapEncoding;
+        record.ProbeSlot = _probeSlot;
+        record.ProbeSampler = _probeSampler;
+        record.ProbeMips = _probeMips;
+        record.ProbesReady = _probeMips > 0 ? 1u : 0;
 
         record.AmbientColor = env.AmbientColor;
         record.AmbientSky = env.AmbientSky;

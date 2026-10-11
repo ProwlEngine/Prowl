@@ -107,6 +107,75 @@ public sealed class LightingTests : IDisposable
         }
         """;
 
+    private const string SkySource = """
+        Shader "Test/Sky"
+        {
+            Properties
+            {
+                _Tint("Tint", Color) = (1, 1, 1, 1)
+                _Gradient("Gradient", Float) = 1
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Sky" }
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Sky.glsl"
+                    void main() { }
+                }
+                Fragment
+                {
+                    #include "Graphite/Sky.glsl"
+                    uniform vec4 _Tint;
+                    uniform float _Gradient;
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        vec3 d = Graphite_SkyDirection();
+                        outColor = vec4(mix(vec3(1.0), d * 0.5 + 0.5, _Gradient) * _Tint.rgb, 1.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    // Shows the sky probe's sharpest mip in the direction each pixel looks
+    private const string ProbeViewerSource = """
+        Shader "Test/ProbeViewer"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    layout(location = 0) out vec3 vWorld;
+                    void main()
+                    {
+                        vWorld = Graphite_ObjectToWorld(vertexPosition);
+                        gl_Position = Graphite_RelativeToClip(vWorld);
+                    }
+                }
+                Fragment
+                {
+                    #include "Graphite/Lighting.glsl"
+                    layout(location = 0) in vec3 vWorld;
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        outColor = vec4(SampleProbeLayer(0.0, normalize(vWorld), 0.0), 1.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
     private const int Size = 16;
     private const float QuadDepth = 10;
 
@@ -646,6 +715,106 @@ public sealed class LightingTests : IDisposable
                 }
             }
         }
+    }
+
+    private Material SkyMaterial(Float3 tint, float gradient)
+    {
+        Material sky = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(SkySource)));
+        sky.SetColor("_Tint", new Float4(tint.X, tint.Y, tint.Z, 1));
+        sky.SetFloat("_Gradient", gradient);
+        return sky;
+    }
+
+    // The clip position of a pixel's centre, the first row at the top
+    private static (float X, float Y) PixelClip(int i) => ((i % Size + 0.5f) / Size * 2 - 1, (i / Size + 0.5f) / Size * 2 - 1);
+
+    [Fact]
+    public void Sky_FillsWhatNothingCovers_LookingAlongEachPixel()
+    {
+        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(1, 1, 1, 1), Fog = default, Sky = SkyMaterial(new Float3(1, 0.8f, 0.6f), 1) };
+        AddQuad(Surface(new Float3(0.2f, 0.3f, 0.4f)));
+
+        ViewDesc view = new() { World = _world, ViewId = 10, Target = _framebuffer };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_perspective, Position = _origin };
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+        _device.WaitForIdle();
+        Assert.Empty(_errors);
+        Float4[] pixels = ReadLayer(_target, 0);
+
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            (float x, float y) = PixelClip(i);
+            Vector3 want = MathF.Abs(x) < 0.4f && MathF.Abs(y) < 0.4f
+                ? new Vector3(0.2f, 0.3f, 0.4f)
+                : (Vector3.Normalize(new Vector3(x, y, 1)) * 0.5f + new Vector3(0.5f)) * new Vector3(1, 0.8f, 0.6f);
+            Assert.True(Vector3.Distance(want, new Vector3(pixels[i].X, pixels[i].Y, pixels[i].Z)) < 2e-3f, $"pixel {i}: want {want}, got {pixels[i]}");
+        }
+    }
+
+    [Fact]
+    public void SkyProbe_HoldsTheSkyInEveryDirection()
+    {
+        _world.Environment = new EnvironmentDesc { Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
+        using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
+        ViewDesc cube = new() { World = _world, ViewId = 11, Target = layered, LayerCount = 6 };
+        for (int f = 0; f < 6; f++)
+            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+
+        Float4[][] Capture()
+        {
+            _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
+            _device.WaitForIdle();
+            Assert.Empty(_errors);
+            return Enumerable.Range(0, 6).Select(f => ReadLayer(layers, (uint)f)).ToArray();
+        }
+
+        Float4[][] sky = Capture();
+        Material viewer = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ProbeViewerSource)));
+        for (int f = 0; f < 6; f++)
+        {
+            (Float3 right, Float3 up, Float3 forward) = s_faces[f];
+            Double4x4 basis = new(new Double4(right.X, right.Y, right.Z, 0), new Double4(up.X, up.Y, up.Z, 0), new Double4(forward.X, forward.Y, forward.Z, 0), new Double4(0, 0, 0, 1));
+            Double3 center = _origin + new Double3(forward.X, forward.Y, forward.Z) * 4.2;
+            _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(center) * basis }, [viewer]);
+        }
+        Float4[][] probe = Capture();
+
+        for (int f = 0; f < 6; f++)
+        {
+            for (int i = 0; i < Size * Size; i++)
+            {
+                Vector3 want = new(sky[f][i].X, sky[f][i].Y, sky[f][i].Z);
+                Vector3 got = new(probe[f][i].X, probe[f][i].Y, probe[f][i].Z);
+                Assert.True(Vector3.Distance(want, got) < 0.01f, $"face {f} pixel {i}: sky {want}, probe {got}");
+            }
+        }
+    }
+
+    [Fact]
+    public void FogUsingTheSky_TakesItsColour_AndFollowsItsChanges()
+    {
+        Material sky = SkyMaterial(new Float3(0.9f, 0.4f, 0.1f), 0);
+        AddQuad(Surface(new Float3(1, 1, 1)));
+        _world.Environment = new EnvironmentDesc
+        {
+            AmbientColor = new Float4(0.5f, 0.5f, 0.5f, 1),
+            Fog = new FogDesc { Mode = FogMode.Linear, Color = new Float4(0, 1, 0, 1), Start = 0, End = 20, UseSky = true },
+            Sky = sky,
+        };
+
+        Vector3 Fogged(Vector3 p, Vector3 skyColor) => Vector3.Lerp(skyColor, new Vector3(0.5f), Math.Clamp(1 - p.Length() / 20, 0, 1));
+        AssertMatches(p => Fogged(p, new Vector3(0.9f, 0.4f, 0.1f)), Frame());
+
+        sky.SetColor("_Tint", new Float4(0.2f, 0.3f, 1, 1));
+        Frame();
+        AssertMatches(p => Fogged(p, new Vector3(0.2f, 0.3f, 1)), Frame());
+
+        _world.Environment.SkyCapture = SkyCaptureMode.Never;
+        sky.SetColor("_Tint", new Float4(1, 1, 1, 1));
+        Frame();
+        Frame();
+        AssertMatches(p => Fogged(p, new Vector3(0.2f, 0.3f, 1)), Frame());
     }
 
     [Fact]

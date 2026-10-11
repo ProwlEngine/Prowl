@@ -178,6 +178,7 @@ public sealed partial class RenderWorld : IDisposable
         _owner = owner;
         Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, owner != null ? owner.Report : (_, _) => { });
         Probes = new WorldProbes(device);
+        Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance);
         _render = new RenderSide(device, Probes);
         Grow(64);
     }
@@ -186,6 +187,8 @@ public sealed partial class RenderWorld : IDisposable
     public int Count { get; private set; }
 
     internal RenderSide Render => _render;
+
+    internal WorldReflections Reflections { get; }
 
     /// <summary>Values and keywords this world's views read, falling back to the renderer's.</summary>
     public GlobalProperties Globals { get; internal set; } = null!;
@@ -362,6 +365,7 @@ public sealed partial class RenderWorld : IDisposable
         _render.Dispose();
         Lighting.Dispose();
         Probes.Dispose();
+        Reflections.Dispose();
     }
 
     private int Check(RenderableHandle handle)

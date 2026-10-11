@@ -22,6 +22,9 @@ public readonly record struct PassType(string Name)
     public static readonly PassType ShadowCaster = new("ShadowCaster");
     public static readonly PassType ObjectId = new("ObjectId");
 
+    /// <summary>A world's sky, a fullscreen triangle drawn after the opaque surfaces where nothing was drawn. See Graphite/Sky.glsl.</summary>
+    public static readonly PassType Sky = new("Sky");
+
     public override string ToString() => Name;
 }
 

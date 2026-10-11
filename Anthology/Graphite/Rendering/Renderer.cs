@@ -267,6 +267,8 @@ public sealed class Renderer : IDisposable
         RaiseErrors();
     }
 
+    private int _frameCount;
+
     private void RemoveWorlds()
     {
         foreach (RenderWorld world in _removedWorlds)
@@ -275,6 +277,7 @@ public sealed class Renderer : IDisposable
             {
                 _globals.RemoveWorld(removed.GlobalRegion);
                 Textures.Untrack(removed.FrameTable);
+                _frame.ForgetWorld(removed);
                 removed.World.DisposeRender();
                 removed.Dispose();
             }
@@ -394,9 +397,11 @@ public sealed class Renderer : IDisposable
         _materials.Flush(_uploader, _lastDispatched);
         _globals.Flush(_uploader, _lastDispatched);
         _replaced.Clear();
+        _frameCount++;
         foreach (WorldFrame world in _worlds.Values)
         {
             world.World.Render.Flush(_uploader, _replaced);
+            world.World.Reflections.Plan(_frameCount, world.World.Lighting);
             world.World.Lighting.Update();
             world.World.Lighting.Flush(_uploader, _replaced);
             world.World.Probes.Update(world.World.Render, _uploader, _replaced);
