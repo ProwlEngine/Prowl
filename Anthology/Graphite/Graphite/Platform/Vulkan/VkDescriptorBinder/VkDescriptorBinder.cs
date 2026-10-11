@@ -147,7 +147,7 @@ internal unsafe sealed partial class VkDescriptorBinder
                 _trackState = null;
                 PrepareResolvedTextures(elements, isGraphics);
                 SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
-                GatherDynOffsets(meta, state);
+                GatherDynOffsets(setIdx, state);
                 state.GraphStates = _cbOwner.GraphStates;
             }
 
@@ -341,9 +341,9 @@ internal unsafe sealed partial class VkDescriptorBinder
         return n;
     }
 
-    private void GatherDynOffsets(SetBindingMetadata meta, SetBindState state)
+    private void GatherDynOffsets(int setIdx, SetBindState state)
     {
-        int[] order = meta.SortedUboElementIndices;
+        int[] order = _plan.DynamicOffsetOrder[setIdx];
         if (state.DynOffsets.Length < order.Length)
             state.DynOffsets = new uint[order.Length];
 
