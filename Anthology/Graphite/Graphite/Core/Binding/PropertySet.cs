@@ -15,6 +15,7 @@ public sealed partial class PropertySet
     private readonly Dictionary<PropertyID, PropertyEntry> _entries;
 
     private uint _version;
+    private System.Collections.Generic.List<PackedBlock>? _packed;
 
 
     /// <summary>
@@ -41,6 +42,28 @@ public sealed partial class PropertySet
 
 
     internal Dictionary<PropertyID, PropertyEntry> Entries => _entries;
+
+
+    internal PackedBlock? FindPacked(UniformBlockLayout layout)
+    {
+        if (_packed == null)
+            return null;
+
+        for (int i = 0; i < _packed.Count; i++)
+        {
+            if (ReferenceEquals(_packed[i].Layout, layout))
+                return _packed[i];
+        }
+        return null;
+    }
+
+
+    internal PackedBlock AddPacked(UniformBlockLayout layout)
+    {
+        PackedBlock packed = new(layout);
+        (_packed ??= new()).Add(packed);
+        return packed;
+    }
 
 
     /// <summary>Sets float uniform.</summary>

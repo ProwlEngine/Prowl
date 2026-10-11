@@ -44,7 +44,7 @@ internal sealed class UniformShadows
         for (int i = 0; i < count; i++)
         {
             ShadowBlock block = _blocks[i];
-            block.Size = plan.BlockSizes[i];
+            block.Size = plan.Layouts[i].Size;
             if (block.Bytes.Length < block.Size)
                 block.Bytes = new byte[block.Size];
             else

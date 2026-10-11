@@ -25,7 +25,7 @@ public class UniformBindingPlanTests
         Assert.True(plan.TryFind("OnlyA", out var onlyA));
         Assert.Equal(new UniformFieldTarget(0, 16, 4), onlyA[0]);
         Assert.False(plan.TryFind("Missing", out _));
-        Assert.Equal(new uint[] { 20, 48 }, plan.BlockSizes);
+        Assert.Equal(new uint[] { 20, 48 }, System.Array.ConvertAll(plan.Layouts, l => l.Size));
     }
 
     [Fact]

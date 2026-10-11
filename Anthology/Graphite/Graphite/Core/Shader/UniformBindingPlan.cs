@@ -4,9 +4,25 @@ namespace Prowl.Graphite;
 
 internal readonly record struct UniformFieldTarget(int Block, uint Offset, uint Size);
 
+internal sealed class UniformBlockLayout
+{
+    public const uint MaxCachedBytes = 4096;
+
+    public readonly uint Size;
+    public readonly int FieldCount;
+
+    public UniformBlockLayout(uint size, int fieldCount)
+    {
+        Size = size;
+        FieldCount = fieldCount;
+    }
+
+    public bool Cacheable => Size <= MaxCachedBytes;
+}
+
 internal sealed class UniformBindingPlan
 {
-    public readonly uint[] BlockSizes;
+    public readonly UniformBlockLayout[] Layouts;
     public readonly int[][] ElementBlock;
     public readonly int[][] SetBlocks;
     public readonly int[][] DynamicOffsetOrder;
@@ -18,10 +34,10 @@ internal sealed class UniformBindingPlan
     private readonly UniformFieldTarget[] _targets;
 
     private UniformBindingPlan(
-        uint[] blockSizes, int[][] elementBlock, int[][] setBlocks, int[][] dynamicOffsetOrder,
+        UniformBlockLayout[] layouts, int[][] elementBlock, int[][] setBlocks, int[][] dynamicOffsetOrder,
         int[] keys, int[] first, int[] count, UniformFieldTarget[] targets)
     {
-        BlockSizes = blockSizes;
+        Layouts = layouts;
         ElementBlock = elementBlock;
         SetBlocks = setBlocks;
         DynamicOffsetOrder = dynamicOffsetOrder;
@@ -32,7 +48,7 @@ internal sealed class UniformBindingPlan
         _targets = targets;
     }
 
-    public int BlockCount => BlockSizes.Length;
+    public int BlockCount => Layouts.Length;
 
     public bool TryFind(PropertyID name, out ReadOnlySpan<UniformFieldTarget> targets)
     {
@@ -61,7 +77,7 @@ internal sealed class UniformBindingPlan
         int[][] elementBlock = new int[layouts.Length][];
         int[][] order = new int[layouts.Length][];
         int[][] setBlocks = new int[layouts.Length][];
-        System.Collections.Generic.List<uint> sizes = new();
+        System.Collections.Generic.List<UniformBlockLayout> layoutList = new();
         System.Collections.Generic.List<(PropertyID Name, UniformFieldTarget Target)> fields = new();
 
         for (int s = 0; s < layouts.Length; s++)
@@ -81,16 +97,18 @@ internal sealed class UniformBindingPlan
                 if (layouts[s].Table || blockFields == null || blockFields.Length == 0)
                     continue;
 
-                int block = sizes.Count;
+                int block = layoutList.Count;
                 elementBlock[s][i] = block;
-                sizes.Add(BlockSize(blockFields));
+                int fieldCount = 0;
                 foreach (UniformBlockField field in blockFields)
                 {
                     if (!field.Name.IsValid)
                         continue;
 
+                    fieldCount++;
                     fields.Add((field.Name, new UniformFieldTarget(block, field.Offset, field.Size)));
                 }
+                layoutList.Add(new UniformBlockLayout(BlockSize(blockFields), fieldCount));
             }
 
             setBlocks[s] = Array.FindAll(elementBlock[s], b => b >= 0);
@@ -134,7 +152,7 @@ internal sealed class UniformBindingPlan
             count[slot]++;
         }
 
-        return new UniformBindingPlan(sizes.ToArray(), elementBlock, setBlocks, order, keys, first, count, targets);
+        return new UniformBindingPlan(layoutList.ToArray(), elementBlock, setBlocks, order, keys, first, count, targets);
     }
 
     private static int Hash(int value) => (int)((uint)value * 2654435761u >> 8);
