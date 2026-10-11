@@ -37,7 +37,9 @@ public readonly record struct LightmapBinding(int Page, Float4 ScaleOffset)
 public struct RenderableDesc
 {
     public GpuMesh Mesh;
-    public Float4x4 Transform;
+
+    /// <summary>World transform in double precision, so objects far from the origin keep their precision. Float matrices convert explicitly.</summary>
+    public Double4x4 Transform;
 
     /// <summary>Which view culling masks see it.</summary>
     public uint LayerMask;
@@ -56,36 +58,52 @@ public struct RenderableDesc
     public RenderableDesc()
     {
         Mesh = null!;
-        Transform = Float4x4.Identity;
+        Transform = Double4x4.Identity;
         LayerMask = ~0u;
         Flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows;
         Lightmap = LightmapBinding.None;
     }
 }
 
-/// <summary>The world matrix as the GPU reads it: the three rows of the 3x4, 48 bytes.</summary>
+/// <summary>Splits doubles into a float and the float of what it missed, so the GPU can subtract the camera position exactly.</summary>
+internal static class Precise
+{
+    public static (Float3 High, Float3 Low) Split(Double3 value)
+    {
+        Float3 high = new((float)value.X, (float)value.Y, (float)value.Z);
+        Float3 low = new((float)(value.X - high.X), (float)(value.Y - high.Y), (float)(value.Z - high.Z));
+        return (high, low);
+    }
+}
+
+/// <summary>
+/// The world matrix as the GPU reads it, 64 bytes: the rows of the 3x3 with the high part of the translation in w, then
+/// the low part. Shaders work camera relative: the linear part times the position plus (high minus camera high) plus
+/// (low minus camera low), which keeps full precision far from the origin.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ObjectTransform
 {
     public Float4 Row0, Row1, Row2;
+    public Float4 TranslationLow;
 
-    public ObjectTransform(in Float4x4 m)
+    public ObjectTransform(in Double4x4 m)
     {
-        Row0 = new Float4(m.c0.X, m.c1.X, m.c2.X, m.c3.X);
-        Row1 = new Float4(m.c0.Y, m.c1.Y, m.c2.Y, m.c3.Y);
-        Row2 = new Float4(m.c0.Z, m.c1.Z, m.c2.Z, m.c3.Z);
+        (Float3 high, Float3 low) = Precise.Split(new Double3(m.c3.X, m.c3.Y, m.c3.Z));
+        Row0 = new Float4((float)m.c0.X, (float)m.c1.X, (float)m.c2.X, high.X);
+        Row1 = new Float4((float)m.c0.Y, (float)m.c1.Y, (float)m.c2.Y, high.Y);
+        Row2 = new Float4((float)m.c0.Z, (float)m.c1.Z, (float)m.c2.Z, high.Z);
+        TranslationLow = new Float4(low.X, low.Y, low.Z, 0);
     }
 }
 
-/// <summary>World bounds for culling: a sphere and a box, 48 bytes.</summary>
+/// <summary>World bounds for culling, 48 bytes: the center split high and low with the sphere radius, and the box half size.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ObjectBounds
 {
-    public Float4 Sphere;
-    public Float3 Min;
-    private uint _pad0;
-    public Float3 Max;
-    private uint _pad1;
+    public Float4 CenterHighRadius;
+    public Float4 CenterLow;
+    public Float4 Extents;
 }
 
 /// <summary>Per object data shaders read as needed, 80 bytes.</summary>
@@ -135,7 +153,7 @@ public sealed class RenderWorld : IDisposable
     private bool[] _alive = [];
     private GpuMesh?[] _mesh = [];
     private RangeAllocation[] _slice = [];
-    private Float4x4[] _transform = [];
+    private Double4x4[] _transform = [];
     private uint[] _layerMask = [];
     private RenderableFlags[] _flags = [];
     private Float4[] _custom0 = [];
@@ -210,7 +228,10 @@ public sealed class RenderWorld : IDisposable
         => (uint)handle.Index < (uint)_count && _alive[handle.Index] && _generation[handle.Index] == handle.Generation;
 
     /// <summary>Does nothing when the transform is equal to the stored one.</summary>
-    public void SetTransform(RenderableHandle handle, in Float4x4 transform)
+    public void SetTransform(RenderableHandle handle, in Float4x4 transform) => SetTransform(handle, (Double4x4)transform);
+
+    /// <summary>Does nothing when the transform is equal to the stored one.</summary>
+    public void SetTransform(RenderableHandle handle, in Double4x4 transform)
     {
         int index = Check(handle);
         if (_transform[index] == transform)
@@ -219,7 +240,7 @@ public sealed class RenderWorld : IDisposable
         MarkDirty(index, Dirt.Transform);
     }
 
-    public Float4x4 GetTransform(RenderableHandle handle) => _transform[Check(handle)];
+    public Double4x4 GetTransform(RenderableHandle handle) => _transform[Check(handle)];
 
     public void SetMesh(RenderableHandle handle, GpuMesh mesh)
     {
@@ -408,14 +429,15 @@ public sealed class RenderWorld : IDisposable
         public int Capacity { get; private set; }
         public bool[] Alive = [];
         public GpuMesh?[] Mesh = [];
-        public Float4x4[] Transform = [];
+        public Double4x4[] Transform = [];
         public uint[] LayerMask = [];
         public RenderableFlags[] Flags = [];
         public bool[] Mirrored = [];
         public sbyte[] SortBias = [];
         public AABB?[] BoundsOverride = [];
-        public AABB[] WorldBounds = [];
-        public Float4[] WorldSphere = [];
+        public Double3[] WorldCenter = [];
+        public Float3[] WorldExtents = [];
+        public float[] WorldRadius = [];
         public uint[] SliceBase = [];
         public int[] SliceCount = [];
         public int[] GivenCount = [];
@@ -487,7 +509,7 @@ public sealed class RenderWorld : IDisposable
 
             if ((dirt & Dirt.Transform) != 0)
             {
-                Float4x4 previous = added ? host._transform[index] : Transform[index];
+                Double4x4 previous = added ? host._transform[index] : Transform[index];
                 Transform[index] = host._transform[index];
                 bool mirrored = Determinant3(Transform[index]) < 0;
                 if (mirrored != Mirrored[index])
@@ -564,7 +586,7 @@ public sealed class RenderWorld : IDisposable
 
         private static uint SlotOf(Material material) => material.IsDisposed || material.Table == null ? uint.MaxValue : material.Slot;
 
-        private void UpdatePrevious(int index, in Float4x4 previous)
+        private void UpdatePrevious(int index, in Double4x4 previous)
         {
             ref ObjectAttributes attributes = ref _attributes[index];
             if ((Flags[index] & RenderableFlags.MotionVectors) == 0)
@@ -587,23 +609,33 @@ public sealed class RenderWorld : IDisposable
         private void UpdateBounds(int index)
         {
             AABB local = BoundsOverride[index] ?? Mesh[index]?.Bounds ?? default;
-            Float4x4 m = Transform[index];
-            Float3 center = (local.Min + local.Max) * 0.5f;
-            Float3 extents = (local.Max - local.Min) * 0.5f;
-            Float3 worldCenter = new(
-                m.c0.X * center.X + m.c1.X * center.Y + m.c2.X * center.Z + m.c3.X,
-                m.c0.Y * center.X + m.c1.Y * center.Y + m.c2.Y * center.Z + m.c3.Y,
-                m.c0.Z * center.X + m.c1.Z * center.Y + m.c2.Z * center.Z + m.c3.Z);
-            Float3 worldExtents = new(
-                MathF.Abs(m.c0.X) * extents.X + MathF.Abs(m.c1.X) * extents.Y + MathF.Abs(m.c2.X) * extents.Z,
-                MathF.Abs(m.c0.Y) * extents.X + MathF.Abs(m.c1.Y) * extents.Y + MathF.Abs(m.c2.Y) * extents.Z,
-                MathF.Abs(m.c0.Z) * extents.X + MathF.Abs(m.c1.Z) * extents.Y + MathF.Abs(m.c2.Z) * extents.Z);
+            (Double3 center, Float3 extents) = TransformBox(Transform[index], local);
+            WorldCenter[index] = center;
+            WorldExtents[index] = extents;
+            WorldRadius[index] = MathF.Sqrt(extents.X * extents.X + extents.Y * extents.Y + extents.Z * extents.Z);
+            (Float3 high, Float3 low) = Precise.Split(center);
+            Bounds.Set((uint)index, new ObjectBounds
+            {
+                CenterHighRadius = new Float4(high.X, high.Y, high.Z, WorldRadius[index]),
+                CenterLow = new Float4(low.X, low.Y, low.Z, 0),
+                Extents = new Float4(extents.X, extents.Y, extents.Z, 0),
+            });
+        }
 
-            AABB world = new() { Min = worldCenter - worldExtents, Max = worldCenter + worldExtents };
-            float radius = MathF.Sqrt(worldExtents.X * worldExtents.X + worldExtents.Y * worldExtents.Y + worldExtents.Z * worldExtents.Z);
-            WorldBounds[index] = world;
-            WorldSphere[index] = new Float4(worldCenter.X, worldCenter.Y, worldCenter.Z, radius);
-            Bounds.Set((uint)index, new ObjectBounds { Sphere = WorldSphere[index], Min = world.Min, Max = world.Max });
+        /// <summary>The world center and axis aligned half size of a local box under a transform.</summary>
+        public static (Double3 Center, Float3 Extents) TransformBox(in Double4x4 m, in AABB local)
+        {
+            Float3 c = (local.Min + local.Max) * 0.5f;
+            Float3 e = (local.Max - local.Min) * 0.5f;
+            Double3 center = new(
+                m.c0.X * c.X + m.c1.X * c.Y + m.c2.X * c.Z + m.c3.X,
+                m.c0.Y * c.X + m.c1.Y * c.Y + m.c2.Y * c.Z + m.c3.Y,
+                m.c0.Z * c.X + m.c1.Z * c.Y + m.c2.Z * c.Z + m.c3.Z);
+            Float3 extents = new(
+                (float)(Math.Abs(m.c0.X) * e.X + Math.Abs(m.c1.X) * e.Y + Math.Abs(m.c2.X) * e.Z),
+                (float)(Math.Abs(m.c0.Y) * e.X + Math.Abs(m.c1.Y) * e.Y + Math.Abs(m.c2.Y) * e.Z),
+                (float)(Math.Abs(m.c0.Z) * e.X + Math.Abs(m.c1.Z) * e.Y + Math.Abs(m.c2.Z) * e.Z));
+            return (center, extents);
         }
 
         // A slice covers every submesh of the mesh, the last given material repeating, so any draw's subMesh indexes it.
@@ -712,7 +744,7 @@ public sealed class RenderWorld : IDisposable
                 _meshUsers.Remove(mesh);
         }
 
-        private static float Determinant3(in Float4x4 m)
+        private static double Determinant3(in Double4x4 m)
             => m.c0.X * (m.c1.Y * m.c2.Z - m.c2.Y * m.c1.Z)
              - m.c1.X * (m.c0.Y * m.c2.Z - m.c2.Y * m.c0.Z)
              + m.c2.X * (m.c0.Y * m.c1.Z - m.c1.Y * m.c0.Z);
@@ -728,8 +760,9 @@ public sealed class RenderWorld : IDisposable
             Array.Resize(ref Mirrored, capacity);
             Array.Resize(ref SortBias, capacity);
             Array.Resize(ref BoundsOverride, capacity);
-            Array.Resize(ref WorldBounds, capacity);
-            Array.Resize(ref WorldSphere, capacity);
+            Array.Resize(ref WorldCenter, capacity);
+            Array.Resize(ref WorldExtents, capacity);
+            Array.Resize(ref WorldRadius, capacity);
             Array.Resize(ref SliceBase, capacity);
             Array.Resize(ref SliceCount, capacity);
             Array.Resize(ref GivenCount, capacity);

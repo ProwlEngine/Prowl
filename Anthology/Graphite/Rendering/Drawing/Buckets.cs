@@ -62,13 +62,18 @@ internal sealed class DrawPrograms
     }
 }
 
-/// <summary>The planes of a view's frustum, built from its view projection matrix. Planes a reversed infinite projection makes degenerate are dropped.</summary>
+/// <summary>
+/// The planes of a view's frustum, built from its camera relative view projection: the view without the camera's
+/// translation, so objects are tested at their position minus the camera's in double precision. Planes a reversed
+/// infinite projection makes degenerate are dropped.
+/// </summary>
 internal readonly struct CullFrustum
 {
     private readonly Float4[] _planes;
 
-    public CullFrustum(in Float4x4 viewProjection)
+    public CullFrustum(in Float4x4 viewProjection, Double3 camera)
     {
+        Camera = camera;
         Float4 row0 = new(viewProjection.c0.X, viewProjection.c1.X, viewProjection.c2.X, viewProjection.c3.X);
         Float4 row1 = new(viewProjection.c0.Y, viewProjection.c1.Y, viewProjection.c2.Y, viewProjection.c3.Y);
         Float4 row2 = new(viewProjection.c0.Z, viewProjection.c1.Z, viewProjection.c2.Z, viewProjection.c3.Z);
@@ -84,18 +89,25 @@ internal readonly struct CullFrustum
         _planes = [.. planes];
     }
 
-    public bool Sphere(Float4 sphere)
+    /// <summary>The camera position the view projection is relative to.</summary>
+    public Double3 Camera { get; }
+
+    public Float3 Relative(Double3 world) => new((float)(world.X - Camera.X), (float)(world.Y - Camera.Y), (float)(world.Z - Camera.Z));
+
+    public bool Sphere(Double3 center, float radius)
     {
+        Float3 c = Relative(center);
         foreach (Float4 p in _planes)
         {
-            if (p.X * sphere.X + p.Y * sphere.Y + p.Z * sphere.Z + p.W < -sphere.W)
+            if (p.X * c.X + p.Y * c.Y + p.Z * c.Z + p.W < -radius)
                 return false;
         }
         return true;
     }
 
-    public bool Box(Float3 center, Float3 extents)
+    public bool Box(Double3 worldCenter, Float3 extents)
     {
+        Float3 center = Relative(worldCenter);
         foreach (Float4 p in _planes)
         {
             float distance = p.X * center.X + p.Y * center.Y + p.Z * center.Z + p.W;
@@ -259,7 +271,7 @@ internal sealed class BucketSet
     /// with their sphere in the frustum, then their chunk box when the mesh has several chunks. Empty commands are left
     /// out. Prepass commands are sorted near to far by their nearest visible instance.
     /// </summary>
-    public void Build(int pass, in CullFrustum frustum, uint cullingMask, Float3 cameraPosition, DrawList list)
+    public void Build(int pass, in CullFrustum frustum, uint cullingMask, DrawList list)
     {
         list.Clear();
         Cull(frustum, cullingMask, pass);
@@ -280,7 +292,7 @@ internal sealed class BucketSet
                     continue;
                 list.AddInstance((uint)index);
                 if (prepass)
-                    nearest = MathF.Min(nearest, Distance(index, cameraPosition));
+                    nearest = MathF.Min(nearest, Distance(frustum, index));
             }
 
             int count = list.InstanceCount - first;
@@ -324,31 +336,20 @@ internal sealed class BucketSet
                 && (flags & RenderableFlags.Hidden) == 0
                 && (_world.LayerMask[index] & cullingMask) != 0
                 && (shadows ? (flags & RenderableFlags.CastShadows) != 0 : (flags & RenderableFlags.ShadowsOnly) == 0)
-                && frustum.Sphere(_world.WorldSphere[index]);
+                && frustum.Sphere(_world.WorldCenter[index], _world.WorldRadius[index]);
         }
     }
 
     private bool ChunkVisible(in CullFrustum frustum, int index, in AABB local)
     {
-        Float4x4 m = _world.Transform[index];
-        Float3 center = (local.Min + local.Max) * 0.5f;
-        Float3 extents = (local.Max - local.Min) * 0.5f;
-        Float3 worldCenter = new(
-            m.c0.X * center.X + m.c1.X * center.Y + m.c2.X * center.Z + m.c3.X,
-            m.c0.Y * center.X + m.c1.Y * center.Y + m.c2.Y * center.Z + m.c3.Y,
-            m.c0.Z * center.X + m.c1.Z * center.Y + m.c2.Z * center.Z + m.c3.Z);
-        Float3 worldExtents = new(
-            MathF.Abs(m.c0.X) * extents.X + MathF.Abs(m.c1.X) * extents.Y + MathF.Abs(m.c2.X) * extents.Z,
-            MathF.Abs(m.c0.Y) * extents.X + MathF.Abs(m.c1.Y) * extents.Y + MathF.Abs(m.c2.Y) * extents.Z,
-            MathF.Abs(m.c0.Z) * extents.X + MathF.Abs(m.c1.Z) * extents.Y + MathF.Abs(m.c2.Z) * extents.Z);
-        return frustum.Box(worldCenter, worldExtents);
+        (Double3 center, Float3 extents) = RenderWorld.RenderSide.TransformBox(_world.Transform[index], local);
+        return frustum.Box(center, extents);
     }
 
-    private float Distance(int index, Float3 camera)
+    private float Distance(in CullFrustum frustum, int index)
     {
-        Float4 sphere = _world.WorldSphere[index];
-        float dx = sphere.X - camera.X, dy = sphere.Y - camera.Y, dz = sphere.Z - camera.Z;
-        return MathF.Max(0, MathF.Sqrt(dx * dx + dy * dy + dz * dz) - sphere.W);
+        Float3 c = frustum.Relative(_world.WorldCenter[index]);
+        return MathF.Max(0, MathF.Sqrt(c.X * c.X + c.Y * c.Y + c.Z * c.Z) - _world.WorldRadius[index]);
     }
 
     private void AddObject(int index)

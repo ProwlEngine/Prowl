@@ -46,7 +46,7 @@ public sealed class BucketTests : IDisposable
     private readonly DrawList _list = new();
 
     // Sees x and y from -10 to 10 and z from 0 to 10.
-    private static readonly CullFrustum s_frustum = new(Float4x4.CreateScale(0.1f));
+    private static readonly CullFrustum s_frustum = new(Float4x4.CreateScale(0.1f), default);
 
     public BucketTests()
     {
@@ -88,15 +88,15 @@ public sealed class BucketTests : IDisposable
     private Material Material(Shader? shader = null) => _materials.Create(shader ?? _lit);
 
     private RenderableHandle Add(GpuMesh mesh, Material material, Float4x4? transform = null, RenderableFlags flags = RenderableFlags.CastShadows, uint layer = 1)
-        => _world.Add(new RenderableDesc { Mesh = mesh, Transform = transform ?? Float4x4.CreateTranslation(new Float3(0, 0, 5)), Flags = flags, LayerMask = layer }, [material]);
+        => _world.Add(new RenderableDesc { Mesh = mesh, Transform = (Double4x4)(transform ?? Float4x4.CreateTranslation(new Float3(0, 0, 5))), Flags = flags, LayerMask = layer }, [material]);
 
-    private DrawList Frame(int pass, uint mask = ~0u, Float3 camera = default)
+    private DrawList Frame(int pass, uint mask = ~0u, CullFrustum? frustum = null)
     {
         List<Material> changed = new();
         _materials.Extract(changed);
         _world.Extract();
         _buckets.Update(_world.Render.DrawChanged, changed);
-        _buckets.Build(pass, s_frustum, mask, camera, _list);
+        _buckets.Build(pass, frustum ?? s_frustum, mask, _list);
         return _list;
     }
 
@@ -251,6 +251,19 @@ public sealed class BucketTests : IDisposable
 
         DrawList list = Frame(Forward);
         Assert.Equal(_other.Placement!.FirstChunk, list.Records[0].Chunk);
+    }
+
+    [Fact]
+    public void FarFromTheOrigin_CullingIsRelativeToTheCamera()
+    {
+        Double3 camera = new(10_000_000, 0, -3_000_000);
+        Material material = Material();
+        RenderableHandle near = _world.Add(new RenderableDesc { Mesh = _triangle, Transform = Double4x4.CreateTranslation(camera + new Double3(9.5, 0, 5)), LayerMask = 1 }, [material]);
+        _world.Add(new RenderableDesc { Mesh = _other, Transform = Double4x4.CreateTranslation(camera + new Double3(10.5, 0, 5)), LayerMask = 1 }, [material]);
+
+        DrawList list = Frame(Forward, frustum: new CullFrustum(Float4x4.CreateScale(0.1f), camera));
+        Assert.Equal(1, list.InstanceCount);
+        Assert.Equal((uint)near.Index, list.Instances[0]);
     }
 
     [Fact]

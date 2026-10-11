@@ -72,7 +72,7 @@ public sealed class RenderWorldTests : IDisposable
         return _world.Render;
     }
 
-    private static Float4x4 Translate(float x, float y, float z) => Float4x4.CreateTranslation(new Float3(x, y, z));
+    private static Double4x4 Translate(double x, double y, double z) => Double4x4.CreateTranslation(new Double3(x, y, z));
 
     [Fact]
     public void AddedRenderables_GetTheirRecords_AndAreReportedAsDrawChanges()
@@ -81,7 +81,7 @@ public sealed class RenderWorldTests : IDisposable
         RenderableHandle handle = _world.Add(new RenderableDesc
         {
             Mesh = _cube,
-            Transform = Translate(10, 0, 0) * Float4x4.CreateScale(2),
+            Transform = (Double4x4)(Float4x4.CreateTranslation(new Float3(10, 0, 0)) * Float4x4.CreateScale(2)),
             ObjectId = 77,
             Custom0 = new Float4(1, 2, 3, 4),
         }, [material]);
@@ -101,9 +101,8 @@ public sealed class RenderWorldTests : IDisposable
         Assert.Equal(material.Slot, render.MaterialSlots.Get<uint>(attributes.MaterialSliceBase));
 
         ObjectBounds bounds = render.Bounds.Get<ObjectBounds>(index);
-        Assert.Equal(new Float3(8, -2, -2), bounds.Min);
-        Assert.Equal(new Float3(12, 2, 2), bounds.Max);
-        Assert.Equal(new Float4(10, 0, 0, MathF.Sqrt(12)), bounds.Sphere);
+        Assert.Equal(new Float4(10, 0, 0, MathF.Sqrt(12)), bounds.CenterHighRadius);
+        Assert.Equal(new Float4(2, 2, 2, 0), bounds.Extents);
     }
 
     [Fact]
@@ -277,7 +276,8 @@ public sealed class RenderWorldTests : IDisposable
         render.Update(changed, []);
 
         Assert.Equal([handle.Index], render.DrawChanged);
-        Assert.Equal(new Float3(4, 4, 4), render.Bounds.Get<ObjectBounds>((uint)handle.Index).Max);
+        Assert.Equal(new Double3(2, 2, 2), render.WorldCenter[handle.Index]);
+        Assert.Equal(new Float3(2, 2, 2), render.WorldExtents[handle.Index]);
     }
 
     [Fact]
@@ -302,13 +302,31 @@ public sealed class RenderWorldTests : IDisposable
     }
 
     [Fact]
+    public void FarFromTheOrigin_CameraRelativePositions_KeepFullPrecision()
+    {
+        Double3 camera = new(10_000_000, 2_000, -3_000_000);
+        Double3 position = camera + new Double3(0.25, -0.125, 0.0625);
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube, Transform = Double4x4.CreateTranslation(position) }, [NewMaterial()]);
+        ObjectTransform transform = Frame().Transforms.Get<ObjectTransform>((uint)handle.Index);
+
+        (Float3 cameraHigh, Float3 cameraLow) = Precise.Split(camera);
+        Float3 high = new(transform.Row0.W, transform.Row1.W, transform.Row2.W);
+        Float3 low = new(transform.TranslationLow.X, transform.TranslationLow.Y, transform.TranslationLow.Z);
+        Float3 relative = (high - cameraHigh) + (low - cameraLow);
+        Assert.Equal(new Float3(0.25f, -0.125f, 0.0625f), relative);
+
+        Float3 naive = new Float3((float)position.X, (float)position.Y, (float)position.Z) - new Float3((float)camera.X, (float)camera.Y, (float)camera.Z);
+        Assert.NotEqual(relative, naive);
+    }
+
+    [Fact]
     public void BoundsOverrides_ReplaceTheMeshBounds()
     {
         RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _cube }, [NewMaterial()]);
         _world.SetBounds(handle, new AABB { Min = new Float3(0, 0, 0), Max = new Float3(3, 3, 3) });
-        Assert.Equal(new Float3(3, 3, 3), Frame().Bounds.Get<ObjectBounds>((uint)handle.Index).Max);
+        Assert.Equal(new Float4(1.5f, 1.5f, 1.5f, 0), Frame().Bounds.Get<ObjectBounds>((uint)handle.Index).Extents);
 
         _world.ClearBounds(handle);
-        Assert.Equal(new Float3(1, 1, 1), Frame().Bounds.Get<ObjectBounds>((uint)handle.Index).Max);
+        Assert.Equal(new Float4(1, 1, 1, 0), Frame().Bounds.Get<ObjectBounds>((uint)handle.Index).Extents);
     }
 }
