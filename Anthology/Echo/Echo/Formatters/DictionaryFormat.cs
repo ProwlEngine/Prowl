@@ -35,10 +35,10 @@ internal sealed class DictionaryFormat : ISerializationFormat
         var dict = (IDictionary)value;
         var (keyType, valueType) = GetTypeArgs(value.GetType());
 
-        var entries = new List<EchoObject>();
+        var entries = new List<EchoObject>(dict.Count);
         foreach (DictionaryEntry kvp in dict)
         {
-            var entry = EchoObject.NewCompound();
+            var entry = EchoObject.NewCompound(2);
             entry.Add("key", Serializer.Serialize(keyType, kvp.Key, context));
             entry.Add("value", Serializer.Serialize(valueType, kvp.Value, context));
             entries.Add(entry);

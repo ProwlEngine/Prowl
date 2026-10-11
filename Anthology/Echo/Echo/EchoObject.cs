@@ -121,6 +121,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         }
     }
     public static EchoObject NewCompound() => new(EchoType.Compound, new Dictionary<string, EchoObject>());
+    public static EchoObject NewCompound(int capacity) => new(EchoType.Compound, new Dictionary<string, EchoObject>(capacity));
     public static EchoObject NewList() => new(EchoType.List, new List<EchoObject>());
 
     public EchoObject Clone()

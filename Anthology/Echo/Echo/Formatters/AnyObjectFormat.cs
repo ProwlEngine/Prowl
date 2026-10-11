@@ -1,7 +1,5 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
-
-using System.Reflection;
 
 namespace Prowl.Echo.Formatters;
 
@@ -11,7 +9,6 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var compound = EchoObject.NewCompound();
         Type actualType = value.GetType();
         int? id = null;
 
@@ -20,8 +17,9 @@ public sealed class AnyObjectFormat : ISerializationFormat
         {
             if (context.objectToId.TryGetValue(value, out int existingId))
             {
-                compound["$id"] = new(EchoType.Int, existingId);
-                return compound;
+                var stub = EchoObject.NewCompound(1);
+                stub["$id"] = new(existingId);
+                return stub;
             }
 
             id = context.nextId++;
@@ -37,6 +35,11 @@ public sealed class AnyObjectFormat : ISerializationFormat
             catch (Exception ex) { Serializer.Logger.Error($"OnBeforeSerialize threw on {actualType.FullName}", ex); }
         }
 
+        CachedFieldInfo[]? fields = value is ISerializable ? null : value.GetSerializableFields();
+
+        // Room for every field plus $id and $type.
+        var compound = fields == null ? EchoObject.NewCompound() : EchoObject.NewCompound(fields.Length + 2);
+
         // Serialize the object's data
         if (value is ISerializable serializable)
         {
@@ -45,7 +48,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
         else
         {
-            foreach (var cachedField in value.GetSerializableFields())
+            foreach (var cachedField in fields!)
             {
                 try
                 {
@@ -77,7 +80,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         // Add reference ID if needed
         if (id.HasValue)
-            compound["$id"] = new(EchoType.Int, id.Value);
+            compound["$id"] = new(id.Value);
 
         // NOTE: Type information is now handled by the centralized Serializer class
         // We don't add $type here - the Serializer will wrap this with type info if needed

@@ -413,7 +413,7 @@ public static class Serializer
     private static EchoObject CreateCompactTypeWrapper(EchoObject data, Type type)
     {
         // For primitives, embed type in the tag itself using a special format
-        var compound = EchoObject.NewCompound();
+        var compound = EchoObject.NewCompound(2);
         compound["$t"] = new EchoObject(TypeNameRegistry.GetCompactTypeName(type)); // Compact type name
         compound["$v"] = data; // Value
         return compound;
@@ -434,7 +434,7 @@ public static class Serializer
             }
         }
 
-        var compound = EchoObject.NewCompound();
+        var compound = EchoObject.NewCompound(2);
         compound["$type"] = new EchoObject(TypeNameRegistry.GetFullTypeName(type));
         compound["$value"] = data;
         return compound;

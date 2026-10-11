@@ -352,9 +352,8 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     private static EchoObject ReadCompound_Performance(BinaryReader reader, BinarySerializationOptions options)
     {
-        EchoObject tag = EchoObject.NewCompound();
-
         int tagCount = reader.ReadInt32();
+        EchoObject tag = EchoObject.NewCompound(tagCount);
         for (int i = 0; i < tagCount; i++)
         {
             int nameLength = reader.ReadInt32();
@@ -368,8 +367,8 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     private static EchoObject ReadCompound_Size(BinaryReader reader, BinarySerializationOptions options)
     {
-        EchoObject tag = EchoObject.NewCompound();
         int tagCount = (int)LEB128.ReadUnsigned(reader);
+        EchoObject tag = EchoObject.NewCompound(tagCount);
 
         for (int i = 0; i < tagCount; i++)
         {
