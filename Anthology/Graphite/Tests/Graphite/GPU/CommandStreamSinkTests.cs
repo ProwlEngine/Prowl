@@ -78,6 +78,8 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
 
     public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride) => Log.Add("DrawIndirect");
     public void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride) => Log.Add("DrawIndexedIndirect");
+    public void DrawIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride) => Log.Add("DrawIndirectCount");
+    public void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride) => Log.Add("DrawIndexedIndirectCount");
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ) => Log.Add($"Dispatch:{groupCountX}:{groupCountY}:{groupCountZ}");
     public void DispatchIndirect(in ResourceVersion buffer, uint offset) => Log.Add("DispatchIndirect");
 

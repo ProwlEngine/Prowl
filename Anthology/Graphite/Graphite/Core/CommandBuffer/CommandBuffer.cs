@@ -18,7 +18,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
     private protected ComputeProgram? _computeProgram;
 
     private protected IVertexSource? _currentVertexSource;
-    private protected uint _currentIndexCount;
 
 
     /// <summary>Merged property table. Backend reads at draw time.</summary>

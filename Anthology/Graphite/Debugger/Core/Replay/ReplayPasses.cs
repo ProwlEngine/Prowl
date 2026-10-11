@@ -175,7 +175,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 break;
             case DrawIndexedCommand draw:
                 BindSource(cmd);
-                cmd.DrawIndexed(draw.InstanceCount, draw.FirstIndex, draw.VertexOffset, draw.FirstInstance);
+                cmd.DrawIndexed(draw.IndexCount, draw.InstanceCount, draw.FirstIndex, draw.VertexOffset, draw.FirstInstance);
                 break;
             case DrawIndirectCommand draw:
                 BindSource(cmd);
@@ -184,6 +184,14 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             case DrawIndexedIndirectCommand draw:
                 BindSource(cmd);
                 cmd.DrawIndexedIndirect(scope.Buffer(draw.Buffer.Resource), draw.Offset, draw.DrawCount, draw.Stride);
+                break;
+            case DrawIndirectCountCommand draw:
+                BindSource(cmd);
+                cmd.DrawIndirectCount(scope.Buffer(draw.Buffer.Resource), draw.Offset, scope.Buffer(draw.CountBuffer.Resource), draw.CountOffset, draw.MaxDrawCount, draw.Stride);
+                break;
+            case DrawIndexedIndirectCountCommand draw:
+                BindSource(cmd);
+                cmd.DrawIndexedIndirectCount(scope.Buffer(draw.Buffer.Resource), draw.Offset, scope.Buffer(draw.CountBuffer.Resource), draw.CountOffset, draw.MaxDrawCount, draw.Stride);
                 break;
             case DispatchCommand dispatch:
                 cmd.Dispatch(dispatch.GroupCountX, dispatch.GroupCountY, dispatch.GroupCountZ);
@@ -326,6 +334,7 @@ internal static class ReplayEvents
 {
     public static bool IsEvent(RecordedCommand command)
         => command is DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
+            or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand
             or DispatchCommand or DispatchIndirectCommand
             or ClearColorTargetCommand or ClearDepthStencilCommand
             or UpdateBufferCommand or UpdateTextureCommand

@@ -204,6 +204,18 @@ internal sealed class CompositePassCommandSink(IPassCommandSink[] sinks) : IPass
             sink.DrawIndexedIndirect(in buffer, offset, drawCount, stride);
     }
 
+    public void DrawIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.DrawIndirectCount(in buffer, offset, in countBuffer, countOffset, maxDrawCount, stride);
+    }
+
+    public void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.DrawIndexedIndirectCount(in buffer, offset, in countBuffer, countOffset, maxDrawCount, stride);
+    }
+
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
         foreach (IPassCommandSink sink in sinks)

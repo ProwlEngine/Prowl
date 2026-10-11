@@ -312,7 +312,7 @@ internal sealed partial class ProfilerView
                 {
                     RecordedCommand cmd = node.Command!;
                     uint instances = cmd switch { DrawIndexedCommand d => d.InstanceCount, DrawCommand d => d.InstanceCount, _ => 1 };
-                    uint indexCount = bound.Index?.IndexCount ?? (cmd is DrawCommand dc ? dc.VertexCount : 0);
+                    uint indexCount = cmd switch { DrawIndexedCommand d => d.IndexCount, DrawCommand d => d.VertexCount, _ => bound.Index?.IndexCount ?? 0 };
                     KvSection("Draw call", 0, new Kv?[]
                     {
                     new("EID", node.CommandIndex.ToString()),

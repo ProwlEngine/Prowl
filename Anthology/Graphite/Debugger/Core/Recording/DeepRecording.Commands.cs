@@ -190,13 +190,19 @@ public sealed partial class DeepRecording
             => pass.Commands.Add(new DrawCommand(vertexCount, instanceCount, firstVertex, firstInstance));
 
         public void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
-            => pass.Commands.Add(new DrawIndexedCommand(instanceCount, firstIndex, vertexOffset, firstInstance));
+            => pass.Commands.Add(new DrawIndexedCommand(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance));
 
         public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
             => pass.Commands.Add(new DrawIndirectCommand(owner.Trace(buffer), offset, drawCount, stride));
 
         public void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
             => pass.Commands.Add(new DrawIndexedIndirectCommand(owner.Trace(buffer), offset, drawCount, stride));
+
+        public void DrawIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+            => pass.Commands.Add(new DrawIndirectCountCommand(owner.Trace(buffer), offset, owner.Trace(countBuffer), countOffset, maxDrawCount, stride));
+
+        public void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+            => pass.Commands.Add(new DrawIndexedIndirectCountCommand(owner.Trace(buffer), offset, owner.Trace(countBuffer), countOffset, maxDrawCount, stride));
 
         public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
             => pass.Commands.Add(new DispatchCommand(groupCountX, groupCountY, groupCountZ));

@@ -67,6 +67,10 @@ public interface IPassCommandSink
 
     void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride);
 
+    void DrawIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride);
+
+    void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride);
+
     void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ);
 
     void DispatchIndirect(in ResourceVersion buffer, uint offset);

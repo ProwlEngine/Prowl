@@ -26,12 +26,12 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdDraw(_cb, vertexCount, instanceCount, vertexStart, instanceStart);
     }
 
-    private protected override void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
         BindVertexBuffersFromSource();
         BindIndexBufferFromSource();
-        _gd.Vk.CmdDrawIndexed(_cb, _currentIndexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+        _gd.Vk.CmdDrawIndexed(_cb, indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
     private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
@@ -49,6 +49,21 @@ internal unsafe partial class VkCommandBuffer
         BindIndexBufferFromSource();
         VkBuffer vkBuffer = ResolveIndirectBuffer(indirectBuffer);
         _gd.Vk.CmdDrawIndexedIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
+    }
+
+    private protected override void DrawIndirectCountCore(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        PreDrawCommand();
+        BindVertexBuffersFromSource();
+        _gd.Vk.CmdDrawIndirectCount(_cb, ResolveIndirectBuffer(indirectBuffer).DeviceBuffer, offset, ResolveIndirectBuffer(countBuffer).DeviceBuffer, countOffset, maxDrawCount, stride);
+    }
+
+    private protected override void DrawIndexedIndirectCountCore(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        PreDrawCommand();
+        BindVertexBuffersFromSource();
+        BindIndexBufferFromSource();
+        _gd.Vk.CmdDrawIndexedIndirectCount(_cb, ResolveIndirectBuffer(indirectBuffer).DeviceBuffer, offset, ResolveIndirectBuffer(countBuffer).DeviceBuffer, countOffset, maxDrawCount, stride);
     }
 
     private protected override void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ)
@@ -183,7 +198,6 @@ internal unsafe partial class VkCommandBuffer
     private void BindIndexBufferFromSource()
     {
         bool has = _currentVertexSource!.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount);
-        _currentIndexCount = indexCount;
         DrawIndexed_CheckIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
 
