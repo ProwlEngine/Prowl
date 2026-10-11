@@ -115,9 +115,10 @@ internal sealed class DrawPrograms
         return true;
     }
 
-    // Whether a pass's own code discards fragments, a cutout whose shape depth alone would not keep
+    // Whether a pass's own code discards fragments outside comments, a cutout whose shape depth alone would not keep; a
+    // discard inside an included file is not seen, so such a pass needs a ShadowCaster pass of its own
     private static bool Discards(ShaderPass pass)
-        => pass.Source != null && System.Text.RegularExpressions.Regex.IsMatch(pass.Source, @"\bdiscard\b");
+        => pass.Source != null && System.Text.RegularExpressions.Regex.IsMatch(System.Text.RegularExpressions.Regex.Replace(pass.Source, @"//[^\n]*|/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline), @"\bdiscard\b");
 
     // The depth only pass with the culling of the material's Forward pass, or null when it has none, opts out, blends,
     // writes no depth or discards

@@ -1934,6 +1934,138 @@ public sealed class LightingTests : IDisposable
         Assert.True(centre.X > 1e-3f, $"lit centre {centre}");
     }
 
+    // Pixels between a tenth and nine tenths lit, against what the light alone gives them
+    private static int Penumbra(Float4[] pixels, Func<Vector3, Vector3> lit)
+    {
+        int count = 0;
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            float full = lit(PixelPosition(i % Size, i / Size)).X;
+            float ratio = full > 1e-6f ? pixels[i].X / full : 1;
+            if (ratio > 0.1f && ratio < 0.9f)
+                count++;
+        }
+        return count;
+    }
+
+    // Covers the half of the plane left of x = 0 for a light shining straight down the view, from a depth
+    private RenderableHandle AddHalfCaster(double z) => AddCaster(-10, 0, z, half: 10);
+
+    [Fact]
+    public void ContactHardening_SoftensDirectionalShadowsWithDistanceFromTheCaster()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddReceiver(albedo);
+        LightDesc sun = new() { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 0.1f, AngularRadius = 20, Shadow = new ShadowDesc { Enabled = true, Filter = ShadowFilter.ContactHardening } };
+        _world.AddLight(sun);
+        Func<Vector3, Vector3> lit = p => Reference.Directional(sun, p, s_normal, albedo, 0, 0.5f);
+
+        RenderableHandle caster = AddHalfCaster(9.8);
+        for (int frame = 0; frame < 4; frame++)
+            Frame();
+        int near = Penumbra(Frame(), lit);
+        _world.Remove(caster);
+        AddHalfCaster(6);
+        for (int frame = 0; frame < 4; frame++)
+            Frame();
+        Float4[] pixels = Frame();
+        int far = Penumbra(pixels, lit);
+        Assert.True(near <= 2 && far >= Size, $"penumbra pixels {near} from a caster 0.2 away, {far} from one 4 away");
+
+        // Well inside and outside the penumbra the shadow is whole and the light untouched
+        AssertShadowed(lit, p => p.X, pixels, 1.6f);
+    }
+
+    [Fact]
+    public void ContactHardening_SoftensLocalShadowsBySourceRadius_AndPointSourcesMatchTheTent()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        _world.Shadows.TexelsPerPixel = 8;
+        AddReceiver(albedo);
+        LightDesc spot = ShadowSpot() with { InnerAngle = 50, OuterAngle = 60, SourceRadius = 0.5f, Shadow = new ShadowDesc { Enabled = true, Filter = ShadowFilter.ContactHardening } };
+        LightHandle handle = _world.AddLight(spot);
+        Func<Vector3, Vector3> lit = p => Reference.Local(spot, p, s_normal, albedo, 0, 0.5f);
+
+        RenderableHandle caster = AddHalfCaster(9.5);
+        int near = Penumbra(Frame(), lit);
+        _world.Remove(caster);
+        AddHalfCaster(4);
+        int far = Penumbra(Frame(), lit);
+        Assert.True(near <= 2 && far >= Size, $"penumbra pixels {near} from a caster 0.5 away, {far} from one 4 away");
+
+        // A light of no size has no penumbra to measure, so it filters as the tent does
+        _world.SetLight(handle, spot with { SourceRadius = 0 });
+        Float4[] contact = Frame();
+        _world.SetLight(handle, spot with { SourceRadius = 0, Shadow = new ShadowDesc { Enabled = true, Filter = ShadowFilter.Tent } });
+        Float4[] tent = Frame();
+        for (int i = 0; i < contact.Length; i++)
+            Assert.Equal(tent[i].X, contact[i].X, 6);
+    }
+
+    [Fact]
+    public void TheShadowScale_StopsWhereSmallerTilesNoLongerHelp_AndComesBackAfterAnOverload()
+    {
+        ShadowPlanner planner = new();
+        List<ShadowPlan> Wanting() => [Plan(0, 1024), Plan(1, 1024), Plan(2, 1024)];
+
+        // Even at 64 the three overflow, so the scale sinks only until every light is at 64, four octaves, about eight steps
+        for (int frame = 0; frame < 100; frame++)
+            planner.Plan(Wanting(), 64 * 64, 64);
+        Assert.True(planner.Scale < 0.2f && planner.Scale >= MathF.Pow(ShadowPlanner.ScaleStep, -9), $"scale {planner.Scale}");
+
+        for (int frame = 0; frame < 9 * ShadowPlanner.FramesBeforeScaleRises; frame++)
+            planner.Plan(Wanting(), 1L << 30, 64);
+        Assert.Equal(1f, planner.Scale, 4);
+    }
+
+    // A frame whose errors are expected, cleared after
+    private void FrameExpectingErrors()
+    {
+        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
+        _device.WaitForIdle();
+        _errors.Clear();
+    }
+
+    [Fact]
+    public void CastersWhoseShaderFailsToCompile_LeaveTheirLightCached()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        string broken = CasterSource.Replace("Test/Caster", "Test/Broken").Replace("void main() { gl_Position", "void main() { NotAFunction(); gl_Position");
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(broken)));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [material]);
+        FrameExpectingErrors();
+        FrameExpectingErrors();
+        FrameExpectingErrors();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void AMinimumTileLargerThanAPage_StillLeavesLightsATile()
+    {
+        _world.Shadows.PageSize = 256;
+        _world.Shadows.MinTileSize = 8192;
+        AddReceiver(new Vector3(0.8f));
+        LightHandle light = _world.AddLight(ShadowSpot());
+        AddCaster(1, 0.5, 6);
+        Frame();
+        Assert.Equal(256, _renderer.ShadowsOf(_world)!.Lights[light.Index].Size);
+    }
+
+    [Fact]
+    public void ADiscardInAComment_LeavesAMaterialCastingThroughDepthAlone()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddReceiver(albedo);
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+        Material commented = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Commented").Replace("vec3 n = normalize(vNormal);", "// no discard here\n                        vec3 n = normalize(vNormal);"))));
+        AddSurfaceCaster(commented, 1, 0.5, 6);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
+    }
+
     [Fact]
     public void ShadowTiles_PackLargestFirst_AndMergeBackWhenFreed()
     {

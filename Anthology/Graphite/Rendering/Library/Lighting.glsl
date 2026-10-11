@@ -73,7 +73,7 @@ struct LightSample
     float ShadowDepthBias;
     float ShadowNormalBias;
     float ShadowStrength;
-    float ShadowFilter;      // 0 hard, 1 tent
+    float ShadowFilter;      // 0 hard, 1 tent, 2 contact hardening
     int   ShadowSlot;        // its shadow faces, -1 for none
     int   ShadowEnabled;     // 0 / 1
     uint  Flags;             // cookie 32, profile 64
@@ -116,10 +116,10 @@ float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
     if (L.ShadowEnabled == 0 || L.ShadowSlot < 0 || !Graphite_ReceivesShadows())
         return 1.0;
     if (L.Type == GRAPHITE_LIGHT_POINT)
-        return Graphite_PointShadow(L.ShadowSlot, L.Position, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, worldPos, geomNormal);
+        return Graphite_PointShadow(L.ShadowSlot, L.Position, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, L.SourceRadius, worldPos, geomNormal);
     if (L.Type != GRAPHITE_LIGHT_SPOT)
         return 1.0;
-    return Graphite_SpotShadow(L.ShadowSlot, L.Position, L.Direction, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, worldPos, geomNormal);
+    return Graphite_SpotShadow(L.ShadowSlot, L.Position, L.Direction, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, L.SourceRadius, worldPos, geomNormal);
 }
 
 Graphite_LightRecord Graphite_LightAt(uint array, uint index)
@@ -602,7 +602,7 @@ float Graphite_DirectionalLightShadow(Graphite_DirectionalLight d, uint index, v
 #else
     if (!d.shadow || !Graphite_ReceivesShadows())
         return 1.0;
-    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, worldPos, geomNormal);
+    return Graphite_DirectionalShadow(index, d.direction, d.shadowDepthBias, d.shadowNormalBias, d.shadowStrength, d.shadowFilter, d.sinRadius / max(d.cosRadius, 1e-4), worldPos, geomNormal);
 #endif
 }
 
