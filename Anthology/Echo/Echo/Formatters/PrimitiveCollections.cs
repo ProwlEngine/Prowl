@@ -68,7 +68,7 @@ internal static class PrimitiveCollections
             return true;
         }
 
-        // Only tags already of the element's own EchoType skip the serializer, so conversions behave as before.
+        // Only tags of the element's own EchoType skip the serializer.
         private bool AllOfType(List<EchoObject> tags)
         {
             for (int i = 0; i < tags.Count; i++)

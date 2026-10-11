@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Globalization;
@@ -47,7 +47,7 @@ public sealed class EchoTextFormat : IFileFormat
 
     public static EchoObject Read(string input)
     {
-        StringTagTokenizer parser = new(input.ToCharArray());
+        StringTagTokenizer parser = new(input);
 
         if (!parser.MoveNext())
             throw new InvalidDataException("Empty input");
@@ -405,25 +405,29 @@ public sealed class EchoTextFormat : IFileFormat
         throw new InvalidDataException($"Invalid value \"{parser.Token.ToString()}\" found while reading a tag at position {parser.TokenPosition}");
     }
 
+    // Same number styles Convert.ToInt32(string, provider) and friends use.
     private static EchoObject ReadNumberTag(StringTagTokenizer parser)
     {
-        static T ParsePrimitive<T>(StringTagTokenizer parser) where T : unmanaged
-            => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T), CultureInfo.InvariantCulture);
+        const NumberStyles Integer = NumberStyles.Integer;
+        const NumberStyles Float = NumberStyles.Float | NumberStyles.AllowThousands;
+        var invariant = CultureInfo.InvariantCulture;
+        var token = parser.Token;
+        var body = token[..^1];
 
-        return parser.Token[^1] switch
+        return token[^1] switch
         {
-            'B' => new EchoObject(ParsePrimitive<byte>(parser)),
-            'N' => new EchoObject(ParsePrimitive<sbyte>(parser)),
-            'S' => new EchoObject(ParsePrimitive<short>(parser)),
-            'I' => new EchoObject(ParsePrimitive<int>(parser)),
-            'L' => new EchoObject(ParsePrimitive<long>(parser)),
-            'V' => new EchoObject(ParsePrimitive<ushort>(parser)),
-            'U' => new EchoObject(ParsePrimitive<uint>(parser)),
-            'C' => new EchoObject(ParsePrimitive<ulong>(parser)),
-            'F' => new EchoObject(ParsePrimitive<float>(parser)),
-            'D' => new EchoObject(ParsePrimitive<double>(parser)),
-            'M' => new EchoObject(ParsePrimitive<decimal>(parser)),
-            >= '0' and <= '9' => new EchoObject((int)Convert.ChangeType(new string(parser.Token), typeof(int), CultureInfo.InvariantCulture)),
+            'B' => new EchoObject(byte.Parse(body, Integer, invariant)),
+            'N' => new EchoObject(sbyte.Parse(body, Integer, invariant)),
+            'S' => new EchoObject(short.Parse(body, Integer, invariant)),
+            'I' => new EchoObject(int.Parse(body, Integer, invariant)),
+            'L' => new EchoObject(long.Parse(body, Integer, invariant)),
+            'V' => new EchoObject(ushort.Parse(body, Integer, invariant)),
+            'U' => new EchoObject(uint.Parse(body, Integer, invariant)),
+            'C' => new EchoObject(ulong.Parse(body, Integer, invariant)),
+            'F' => new EchoObject(float.Parse(body, Float, invariant)),
+            'D' => new EchoObject(double.Parse(body, Float, invariant)),
+            'M' => new EchoObject(decimal.Parse(body, NumberStyles.Number, invariant)),
+            >= '0' and <= '9' => new EchoObject(int.Parse(token, Integer, invariant)),
             _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token.ToString()}\" at position {parser.TokenPosition}")
         };
     }
@@ -443,58 +447,140 @@ public sealed class EchoTextFormat : IFileFormat
         Value
     }
 
-    internal class StringTagTokenizer
+    internal sealed class StringTagTokenizer
     {
-        private readonly Tokenizer<TextTokenType> _tokenizer;
+        private readonly string _input;
+        private int _tokenLength;
 
-        public StringTagTokenizer(ReadOnlyMemory<char> input)
+        public StringTagTokenizer(string input) => _input = input;
+
+        public TextTokenType TokenType { get; private set; }
+        public ReadOnlySpan<char> Token => _input.AsSpan(TokenPosition, _tokenLength);
+        public int TokenPosition { get; private set; }
+        public int InputPosition { get; private set; }
+
+        public bool MoveNext()
         {
-            var symbolHandlers = new Dictionary<char, Func<TextTokenType>>
+            string input = _input;
+            int pos = InputPosition;
+            while (pos < input.Length && char.IsWhiteSpace(input[pos]))
+                pos++;
+
+            if (pos >= input.Length)
             {
-                {'{', () => HandleSingleCharToken(TextTokenType.BeginCompound)},
-                {'}', () => HandleSingleCharToken(TextTokenType.EndCompound)},
-                {'[', () => HandleOpenBracket()},
-                {']', () => HandleSingleCharToken(TextTokenType.EndList)},
-                {',', () => HandleSingleCharToken(TextTokenType.Separator)},
-                {':', () => HandleSingleCharToken(TextTokenType.NameValueSeparator)}
-            };
-
-            _tokenizer = new Tokenizer<TextTokenType>(
-                input,
-                symbolHandlers,
-                c => c is '{' or '}' or ',' or ';' or ':' or '[' or ']',
-                TextTokenType.Value,
-                TextTokenType.None
-            );
-        }
-
-        private TextTokenType HandleSingleCharToken(TextTokenType tokenType)
-        {
-            _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 1);
-            _tokenizer.IncrementInputPosition();
-            return tokenType;
-        }
-
-        private TextTokenType HandleOpenBracket()
-        {
-            if (_tokenizer.InputPosition + 2 < _tokenizer.Input.Length &&
-                _tokenizer.Input.Span[_tokenizer.InputPosition + 2] == ';')
-            {
-                _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 3);
-                _tokenizer.IncrementInputPosition(3);
-                return TextTokenType.BeginArray;
+                InputPosition = pos;
+                TokenPosition = input.Length;
+                TokenType = TextTokenType.None;
+                _tokenLength = 0;
+                return false;
             }
 
-            return HandleSingleCharToken(TextTokenType.BeginList);
+            TokenPosition = pos;
+            char first = input[pos];
+            switch (first)
+            {
+                case '{': return Single(TextTokenType.BeginCompound);
+                case '}': return Single(TextTokenType.EndCompound);
+                case ']': return Single(TextTokenType.EndList);
+                case ',': return Single(TextTokenType.Separator);
+                case ':': return Single(TextTokenType.NameValueSeparator);
+                case '[':
+                    if (pos + 2 < input.Length && input[pos + 2] == ';')
+                        return Emit(TextTokenType.BeginArray, pos + 3);
+                    return Single(TextTokenType.BeginList);
+                case '"':
+                case '\'':
+                    return ReadQuoted(first);
+            }
+
+            pos++;
+            while (pos < input.Length && !IsDelimiter(input[pos]))
+                pos++;
+            return Emit(TextTokenType.Value, pos);
         }
 
-        public bool MoveNext() => _tokenizer.MoveNext();
+        private static bool IsDelimiter(char c) =>
+            c is '{' or '}' or ',' or ';' or ':' or '[' or ']' or '"' or '\'' || char.IsWhiteSpace(c);
 
-        public string ParseQuotedStringValue() => _tokenizer.ParseQuotedStringValue();
+        private bool Single(TextTokenType type) => Emit(type, TokenPosition + 1);
 
-        public TextTokenType TokenType => _tokenizer.TokenType;
-        public ReadOnlySpan<char> Token => _tokenizer.Token;
-        public int TokenPosition => _tokenizer.TokenPosition;
-        public int InputPosition => _tokenizer.InputPosition;
+        private bool Emit(TextTokenType type, int end)
+        {
+            TokenType = type;
+            _tokenLength = end - TokenPosition;
+            InputPosition = end;
+            return true;
+        }
+
+        private bool ReadQuoted(char quote)
+        {
+            string input = _input;
+            int pos = TokenPosition + 1;
+            while (pos < input.Length)
+            {
+                char c = input[pos];
+                if (c == quote)
+                    return Emit(TextTokenType.Value, pos + 1);
+
+                if (c == '\\')
+                {
+                    if (pos + 1 >= input.Length)
+                        throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
+                    pos++;
+                }
+                pos++;
+            }
+
+            throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
+        }
+
+        public string ParseQuotedStringValue()
+        {
+            var token = Token;
+            var quote = token[0];
+            if (token[^1] != quote)
+                throw new InvalidDataException($"Missing ending quote from string \"{token.ToString()}\" at position {TokenPosition}");
+
+            var inner = token[1..^1];
+            if (inner.IndexOf('\\') < 0 && inner.IndexOf(quote) < 0)
+                return inner.ToString();
+
+            var s = new char[inner.Length];
+            var len = 0;
+            var rest = inner;
+            while (!rest.IsEmpty)
+            {
+                if (rest[0] == quote)
+                    throw new InvalidDataException($"Unescaped quote character in string \"{token.ToString()}\" at position {TokenPosition}");
+
+                if (rest[0] == '\\')
+                {
+                    if (rest.Length < 2)
+                        throw new EndOfStreamException();
+
+                    switch (rest[1])
+                    {
+                        case '\\': s[len++] = '\\'; break;
+                        case 't': s[len++] = '\t'; break;
+                        case 'n': s[len++] = '\n'; break;
+                        case 'r': s[len++] = '\r'; break;
+                        default:
+                            if (rest[1] == quote)
+                                s[len++] = quote;
+                            else
+                                throw new InvalidDataException($"Invalid escape sequence in string \"{token.ToString()}\" at position {TokenPosition}");
+                            break;
+                    }
+
+                    rest = rest[2..];
+                    continue;
+                }
+
+                s[len++] = rest[0];
+                rest = rest[1..];
+            }
+
+            return new string(s, 0, len);
+        }
     }
 }
