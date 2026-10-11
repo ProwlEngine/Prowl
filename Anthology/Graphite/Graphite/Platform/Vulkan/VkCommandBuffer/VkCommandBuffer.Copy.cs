@@ -94,9 +94,15 @@ internal unsafe partial class VkCommandBuffer
         _gd.Counters.RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }
 
+    // A staging buffer is read by the host once the work completes, which needs the host stage in the dependency
     private void EmitPostCopyBufferBarrier(DeviceBuffer destination)
     {
         VkBarriers.BufferScope(_gd, VkBarriers.ReadersOf(destination.Usage), out PipelineStageFlags dstStage, out AccessFlags dstAccess);
+        if ((destination.Usage & BufferUsage.Staging) != 0)
+        {
+            dstStage |= PipelineStageFlags.HostBit;
+            dstAccess |= AccessFlags.HostReadBit;
+        }
         MemoryBarrier barrier = new()
         {
             SType = StructureType.MemoryBarrier,
@@ -200,6 +206,7 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdCopyImageToBuffer(_cb, src.OptimalDeviceImage, ImageLayout.TransferSrcOptimal, dst.DeviceBuffer, 1, in copy);
         VkBarriers.Transition(_gd, _cb, src, ImageLayout.TransferSrcOptimal, layout, region.MipLevel, 1, region.ArrayLayer, 1);
         _gd.Counters.RecordBufferOp(BufferOpBin.Copy, FormatHelpers.GetRegionSize(region.Width, region.Height, region.Depth, source.Format));
+        EmitPostCopyBufferBarrier(destination);
     }
 
     private static ImageAspectFlags CopyAspectMask(VkTexture texture)
