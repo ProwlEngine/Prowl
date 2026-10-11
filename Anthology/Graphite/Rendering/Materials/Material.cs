@@ -154,7 +154,7 @@ public sealed class Material : IDisposable
     {
         if (!TryGet(name, out MaterialValue current) || !current.IsTexture)
         {
-            _system.Report($"{_shader.Name}.{name}", $"The shader {_shader.Name} has no texture {name} to set a scale offset on.");
+            _system.Report($"{_shader.Name}.{name.Text()}", $"The shader {_shader.Name} has no texture {name.Text()} to set a scale offset on.");
             return;
         }
         Set(name, current.WithScaleOffset(scaleOffset));
@@ -300,9 +300,9 @@ public sealed class Material : IDisposable
     {
         int index = _shader.FindProperty(name);
         if (index < 0)
-            _system.Report($"{_shader.Name}.{name}", $"The shader {_shader.Name} has no property {name}. The value is kept in case the shader gains it.");
+            _system.Report($"{_shader.Name}.{name.Text()}", $"The shader {_shader.Name} has no property {name.Text()}. The value is kept in case the shader gains it.");
         else if (!MaterialSchema.Compatible(_shader.Properties[index].Type, value.Type))
-            _system.Report($"{_shader.Name}.{name}.type", $"The property {name} of {_shader.Name} is a {_shader.Properties[index].Type}, not a {value.Type}.");
+            _system.Report($"{_shader.Name}.{name.Text()}.type", $"The property {name.Text()} of {_shader.Name} is a {_shader.Properties[index].Type}, not a {value.Type}.");
 
         Store(name, value);
         Changed(Dirt.Record);

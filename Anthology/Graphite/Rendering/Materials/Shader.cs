@@ -6,6 +6,12 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
+internal static class PropertyIDText
+{
+    /// <summary>The interned name, for messages.</summary>
+    public static string Text(this PropertyID id) => PropertyID.ToString(id) ?? id.ToString();
+}
+
 /// <summary>A kind of pass a shader can provide, found by a ShaderDef pass's LightMode tag.</summary>
 public readonly record struct PassType(string Name)
 {
@@ -171,15 +177,7 @@ public sealed class MaterialSchema
             ShaderProperty source = properties[i];
             MaterialPropertyType type = TypeOf(source.PropertyType);
             string[] attributes = source.Attributes ?? [];
-            (uint size, uint alignment) = type switch
-            {
-                MaterialPropertyType.Float or MaterialPropertyType.Int => (4u, 4u),
-                MaterialPropertyType.Float2 => (8u, 8u),
-                MaterialPropertyType.Float3 => (12u, 16u),
-                MaterialPropertyType.Float4 or MaterialPropertyType.Color => (16u, 16u),
-                MaterialPropertyType.Matrix => (64u, 16u),
-                _ => (8u, 4u),
-            };
+            (uint size, uint alignment) = Std430(type);
 
             offset = AlignUp(offset, alignment);
             uint propertyOffset = offset;
@@ -228,41 +226,62 @@ public sealed class MaterialSchema
             ref readonly MaterialProperty property = ref _properties[i];
             MaterialValue value = values[i];
             int word = (int)(property.Offset / 4);
-            switch (property.Type)
+            if (property.Type >= MaterialPropertyType.Texture2D)
             {
-                case MaterialPropertyType.Float:
-                    record[word] = BitConverter.SingleToUInt32Bits(value.Vector.X);
-                    break;
-                case MaterialPropertyType.Int:
-                    record[word] = (uint)(value.Type == MaterialPropertyType.Int ? value.Int : (int)value.Vector.X);
-                    break;
-                case MaterialPropertyType.Float2:
-                    WriteFloats(record, word, value.Vector, 2);
-                    break;
-                case MaterialPropertyType.Float3:
-                    WriteFloats(record, word, value.Vector, 3);
-                    break;
-                case MaterialPropertyType.Float4:
-                    WriteFloats(record, word, value.Vector, 4);
-                    break;
-                case MaterialPropertyType.Color:
-                    WriteFloats(record, word, property.Gamma ? GammaToLinear(value.Vector) : value.Vector, 4);
-                    break;
-                case MaterialPropertyType.Matrix:
-                    Float4x4 matrix = value.Matrix;
-                    WriteFloats(record, word, matrix.c0, 4);
-                    WriteFloats(record, word + 4, matrix.c1, 4);
-                    WriteFloats(record, word + 8, matrix.c2, 4);
-                    WriteFloats(record, word + 12, matrix.c3, 4);
-                    break;
-                default:
-                    record[word] = resources.TextureSlot(value.Texture, property.Type, property.DefaultTexture);
-                    record[word + 1] = resources.SamplerSlot(value.Sampler);
-                    WriteFloats(record, (int)(property.ScaleOffsetOffset / 4), value.ScaleOffset, 4);
-                    break;
+                record[word] = resources.TextureSlot(value.Texture, property.Type, property.DefaultTexture);
+                record[word + 1] = resources.SamplerSlot(value.Sampler);
+                WriteFloats(record, (int)(property.ScaleOffsetOffset / 4), value.ScaleOffset, 4);
+            }
+            else
+            {
+                WriteNumber(property.Type, value, record, word, property.Gamma);
             }
         }
     }
+
+    /// <summary>Writes a numeric value as std430 lays out a property of <paramref name="type"/>.</summary>
+    internal static void WriteNumber(MaterialPropertyType type, in MaterialValue value, Span<uint> record, int word, bool gamma)
+    {
+        switch (type)
+        {
+            case MaterialPropertyType.Float:
+                record[word] = BitConverter.SingleToUInt32Bits(value.Vector.X);
+                break;
+            case MaterialPropertyType.Int:
+                record[word] = (uint)(value.Type == MaterialPropertyType.Int ? value.Int : (int)value.Vector.X);
+                break;
+            case MaterialPropertyType.Float2:
+                WriteFloats(record, word, value.Vector, 2);
+                break;
+            case MaterialPropertyType.Float3:
+                WriteFloats(record, word, value.Vector, 3);
+                break;
+            case MaterialPropertyType.Float4:
+                WriteFloats(record, word, value.Vector, 4);
+                break;
+            case MaterialPropertyType.Color:
+                WriteFloats(record, word, gamma ? GammaToLinear(value.Vector) : value.Vector, 4);
+                break;
+            case MaterialPropertyType.Matrix:
+                Float4x4 matrix = value.Matrix;
+                WriteFloats(record, word, matrix.c0, 4);
+                WriteFloats(record, word + 4, matrix.c1, 4);
+                WriteFloats(record, word + 8, matrix.c2, 4);
+                WriteFloats(record, word + 12, matrix.c3, 4);
+                break;
+        }
+    }
+
+    /// <summary>Bytes and std430 alignment of a property. A texture is its texture and sampler index, without the scale offset.</summary>
+    internal static (uint Size, uint Alignment) Std430(MaterialPropertyType type) => type switch
+    {
+        MaterialPropertyType.Float or MaterialPropertyType.Int => (4u, 4u),
+        MaterialPropertyType.Float2 => (8u, 8u),
+        MaterialPropertyType.Float3 => (12u, 16u),
+        MaterialPropertyType.Float4 or MaterialPropertyType.Color => (16u, 16u),
+        MaterialPropertyType.Matrix => (64u, 16u),
+        _ => (8u, 4u),
+    };
 
     /// <summary>True when a value set as <paramref name="set"/> can fill a property of type <paramref name="property"/>.</summary>
     internal static bool Compatible(MaterialPropertyType property, MaterialPropertyType set)
@@ -286,7 +305,7 @@ public sealed class MaterialSchema
         return new Float4(Channel(color.X), Channel(color.Y), Channel(color.Z), color.W);
     }
 
-    private static uint AlignUp(uint value, uint alignment) => (value + alignment - 1) & ~(alignment - 1);
+    internal static uint AlignUp(uint value, uint alignment) => (value + alignment - 1) & ~(alignment - 1);
 
     private static MaterialPropertyType TypeOf(ShaderPropertyType type) => type switch
     {

@@ -199,6 +199,14 @@ public sealed class MaterialTests : IDisposable
     }
 
     [Fact]
+    public void Reports_NameTheProperty()
+    {
+        _system.Create(_shader).SetFloat("_Missing", 1);
+
+        Assert.Contains("_Missing", Assert.Single(_reports));
+    }
+
+    [Fact]
     public void MismatchedTypes_FallBackToTheDefault()
     {
         Material material = _system.Create(_shader);
