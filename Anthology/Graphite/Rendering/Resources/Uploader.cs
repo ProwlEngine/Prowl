@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Graphite.Rendering;
@@ -175,5 +176,103 @@ internal sealed class Uploader : IDisposable
         while (size < words)
             size *= 2;
         Array.Resize(ref _words, (int)size);
+    }
+}
+
+/// <summary>
+/// A GPU array of records with a CPU mirror. Records change on the CPU and only the dirty ones reach the GPU on
+/// <see cref="Flush"/>, merged into runs. Growing moves the table to a new buffer and hands the old one back to retire.
+/// </summary>
+internal sealed class GpuTable<T> : IDisposable where T : unmanaged
+{
+    private readonly GraphicsDevice _device;
+    private readonly string _name;
+    private T[] _records;
+    private bool[] _dirtyFlags;
+    private readonly List<uint> _dirty = new();
+    private uint _count;
+
+    public GpuTable(GraphicsDevice device, string name, uint initialCapacity = 256)
+    {
+        if (Unsafe.SizeOf<T>() % 4 != 0)
+            throw new ArgumentException($"{typeof(T).Name} is not a whole number of words.");
+
+        _device = device;
+        _name = name;
+        _records = new T[Math.Max(initialCapacity, 1)];
+        _dirtyFlags = new bool[_records.Length];
+        Buffer = CreateBuffer((uint)_records.Length);
+    }
+
+    public DeviceBuffer Buffer { get; private set; }
+
+    /// <summary>One past the highest index ever set.</summary>
+    public uint Count => _count;
+
+    public ref readonly T this[uint index] => ref _records[index];
+
+    public void Set(uint index, in T value)
+    {
+        if (index >= _records.Length)
+        {
+            uint size = (uint)_records.Length;
+            while (size <= index)
+                size *= 2;
+            Array.Resize(ref _records, (int)size);
+            Array.Resize(ref _dirtyFlags, (int)size);
+        }
+
+        _records[index] = value;
+        _count = Math.Max(_count, index + 1);
+        if (!_dirtyFlags[index])
+        {
+            _dirtyFlags[index] = true;
+            _dirty.Add(index);
+        }
+    }
+
+    /// <summary>
+    /// Queues the dirty records. Returns the replaced buffer when the table outgrew its buffer, which the caller retires
+    /// once the GPU is done with it, or null.
+    /// </summary>
+    public DeviceBuffer? Flush(Uploader uploader)
+    {
+        uint words = (uint)Unsafe.SizeOf<T>() / 4;
+        DeviceBuffer? replaced = null;
+        if (_count * words * 4 > Buffer.SizeInBytes)
+        {
+            replaced = Buffer;
+            Buffer = CreateBuffer((uint)_records.Length);
+            uploader.Write(Buffer, 0, Words(0, _count));
+        }
+        else if (_dirty.Count > 0)
+        {
+            _dirty.Sort();
+            int start = 0;
+            for (int i = 1; i <= _dirty.Count; i++)
+            {
+                if (i < _dirty.Count && _dirty[i] == _dirty[i - 1] + 1)
+                    continue;
+
+                uploader.Write(Buffer, _dirty[start] * words, Words(_dirty[start], _dirty[i - 1] - _dirty[start] + 1));
+                start = i;
+            }
+        }
+
+        foreach (uint index in _dirty)
+            _dirtyFlags[index] = false;
+        _dirty.Clear();
+        return replaced;
+    }
+
+    public void Dispose() => Buffer.Dispose();
+
+    private ReadOnlySpan<uint> Words(uint first, uint count) => MemoryMarshal.Cast<T, uint>(_records.AsSpan((int)first, (int)count));
+
+    private DeviceBuffer CreateBuffer(uint capacity)
+    {
+        DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(capacity * (uint)Unsafe.SizeOf<T>(), BufferUsage.StructuredBufferReadWrite));
+        buffer.Name = _name;
+        return buffer;
     }
 }

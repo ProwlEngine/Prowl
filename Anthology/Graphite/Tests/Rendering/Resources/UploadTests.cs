@@ -172,6 +172,156 @@ public sealed class UploadTests : IDisposable
         Assert.True(pool.Pages[0].VertexWords.Capacity >= 90);
         Assert.NotNull(mesh.Placement);
     }
+    private static MeshData Positions(int vertices)
+    {
+        Float3[] positions = Enumerable.Range(0, vertices).Select(i => new Float3(i, i * 2, -i)).ToArray();
+        return new MeshData
+        {
+            VertexCount = (uint)vertices,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
+            Indices = Enumerable.Range(0, vertices).Select(i => (uint)i).ToArray(),
+        };
+    }
+
+    [Fact]
+    public void Records_HaveTheirStd430Sizes()
+    {
+        Assert.Equal(96, Marshal.SizeOf<ChunkRecord>());
+        Assert.Equal(32, Marshal.SizeOf<MeshRecord>());
+    }
+
+    [Fact]
+    public void ChunkRecords_ReadBackInGlsl_FieldForField()
+    {
+        using GeometryPool pool = new(_device, 1 << 16, 1 << 16);
+        pool.Create(Positions(3));
+        GpuMesh mesh = pool.Create(Positions(3 * 2048 + 6));
+        pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
+        Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices, pool.Chunks.Buffer, pool.Meshes.Buffer);
+
+        const string source = """
+            Compute
+            {
+                layout(local_size_x = 1) in;
+
+                struct Graphite_Chunk
+                {
+                    uint streamOffsets[12];
+                    vec3 boundsMin;
+                    uint streamsPresent;
+                    vec3 boundsMax;
+                    uint page;
+                    uint firstIndex;
+                    uint indexCount;
+                    uint mesh;
+                    uint subMesh;
+                };
+
+                struct Graphite_Mesh { vec3 boundsMin; uint firstChunk; vec3 boundsMax; uint chunkCount; };
+
+                layout(set = 0, binding = 0, std430) readonly buffer Graphite_Chunks { Graphite_Chunk chunks[]; };
+                layout(set = 0, binding = 1, std430) readonly buffer Graphite_Meshes { Graphite_Mesh meshes[]; };
+                layout(set = 0, binding = 2, std430) buffer Output { float values[]; };
+                layout(push_constant) uniform Push { uint mesh; } push;
+
+                void main()
+                {
+                    Graphite_Mesh m = meshes[push.mesh];
+                    Graphite_Chunk c = chunks[m.firstChunk + 1u];
+                    values[0] = float(m.chunkCount);
+                    values[1] = m.boundsMax.x;
+                    values[2] = m.boundsMin.z;
+                    values[3] = float(c.streamOffsets[0]);
+                    values[4] = float(c.streamsPresent);
+                    values[5] = c.boundsMin.x;
+                    values[6] = c.boundsMax.y;
+                    values[7] = float(c.page);
+                    values[8] = float(c.firstIndex);
+                    values[9] = float(c.indexCount);
+                    values[10] = float(c.mesh);
+                    values[11] = float(c.subMesh);
+                }
+            }
+            """;
+        using ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(
+            _compiler.CompileCompute(new ShaderDef.ShaderPass { State = new ShaderDef.PassState(), Source = source }, [], _device.BackendType));
+        using DeviceBuffer output = Buffer(12);
+        PropertySet properties = new();
+        properties.SetBuffer("Graphite_Chunks", pool.Chunks.Buffer);
+        properties.SetBuffer("Graphite_Meshes", pool.Meshes.Buffer);
+        properties.SetBuffer("Output", output);
+        using RenderPipeline pipeline = new([new DispatchPass(program, properties, (uint)mesh.Id, [pool.Chunks.Buffer, pool.Meshes.Buffer], output)]);
+        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        _device.WaitForIdle();
+
+        MeshPlacement placement = mesh.Placement!;
+        float[] values = Read(output).Select(BitConverter.UInt32BitsToSingle).ToArray();
+        Assert.Equal(new float[]
+        {
+            2, 6149, -6149,
+            placement.StreamOffsets[0], 1, 6144, 12298, 0,
+            placement.IndexBase + 6144, 6, mesh.Id, 0,
+        }, values);
+    }
+
+    [Fact]
+    public void Tables_GrowIntoANewBuffer_KeepingEveryRecord_AndHandTheOldOneBack()
+    {
+        using GpuTable<uint> table = new(_device, "Test table", 4);
+        for (uint i = 0; i < 4; i++)
+            table.Set(i, i + 10);
+        Assert.Null(table.Flush(_uploader));
+        DeviceBuffer first = table.Buffer;
+
+        table.Set(9, 99);
+        DeviceBuffer? replaced = table.Flush(_uploader);
+        Assert.Same(first, replaced);
+        Flush(table.Buffer);
+        first.Dispose();
+
+        uint[] words = Read(table.Buffer);
+        Assert.Equal([10u, 11u, 12u, 13u, 0u, 0u, 0u, 0u, 0u, 99u], words[..10]);
+    }
+
+    [Fact]
+    public void Tables_OnlyUploadDirtyRecords()
+    {
+        using GpuTable<uint> table = new(_device, "Test table", 16);
+        for (uint i = 0; i < 16; i++)
+            table.Set(i, i);
+        table.Flush(_uploader);
+        Flush(table.Buffer);
+
+        table.Set(3, 30);
+        table.Set(2, 20);
+        table.Set(9, 90);
+        table.Set(3, 31);
+        table.Flush(_uploader);
+        Assert.Equal(3u, _uploader.QueuedWords);
+        Flush(table.Buffer);
+
+        Assert.Equal([0u, 1u, 20u, 31u, 4u, 5u, 6u, 7u, 8u, 90u, 10u], Read(table.Buffer)[..11]);
+    }
+
+    [Fact]
+    public void DisposedMeshes_ClearTheirMeshRecord_AndTheirChunksAreReused()
+    {
+        using GeometryPool pool = new(_device, 1 << 16, 1 << 16);
+        GpuMesh first = pool.Create(Positions(3));
+        pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
+        uint chunk = first.Placement!.FirstChunk;
+        Assert.Equal(1u, pool.Meshes[(uint)first.Id].ChunkCount);
+
+        first.Dispose();
+        pool.Apply(_uploader, 1, long.MaxValue, new List<GpuMesh>());
+        Assert.Equal(0u, pool.Meshes[(uint)first.Id].ChunkCount);
+
+        pool.Reclaim(1);
+        GpuMesh second = pool.Create(Positions(3));
+        pool.Apply(_uploader, 1, long.MaxValue, new List<GpuMesh>());
+        Assert.Equal(chunk, second.Placement!.FirstChunk);
+        Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices, pool.Chunks.Buffer, pool.Meshes.Buffer);
+    }
 }
 
 file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IPass
@@ -185,4 +335,24 @@ file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IPas
     }
 
     public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyBuffer(source, 0, destination, 0, source.SizeInBytes);
+}
+
+file sealed class DispatchPass(ComputeProgram program, PropertySet properties, uint push, DeviceBuffer[] inputs, DeviceBuffer output) : IPass
+{
+    public string Name => "Dispatch";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        for (int i = 0; i < inputs.Length; i++)
+            builder.DeclareImportedBuffer(RenderResourceID.Intern("DispatchInput" + i), inputs[i], BufferAccess.ShaderRead);
+        builder.DeclareImportedBuffer(RenderResourceID.Intern("DispatchOutput"), output, BufferAccess.ShaderWrite);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        cmd.SetComputeShader(program);
+        cmd.SetProperties(properties);
+        cmd.SetPushConstants(push);
+        cmd.Dispatch(1, 1, 1);
+    }
 }
