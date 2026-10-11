@@ -278,7 +278,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             .Select(a => new FramebufferAttachment(Texture(a.Texture.Resource), a.ArrayLayer, a.MipLevel))
             .ToArray();
         FramebufferAttachment? depth = command.Depth is { } d ? new FramebufferAttachment(Texture(d.Texture.Resource), d.ArrayLayer, d.MipLevel) : null;
-        return Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(depth, colors)));
+        return Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(depth, colors) { ViewCount = command.Outputs.ViewCount }));
     }
 
     public void Dispose()
@@ -349,7 +349,7 @@ internal sealed unsafe class ReplayScope : IDisposable
             ? new RenderTextureDescription(first.Width, first.Height, formats, depthValue.Format, first.SampleCount, storage)
             : new RenderTextureDescription(first.Width, first.Height, formats, false, first.SampleCount, storage);
 
-        RenderTexture texture = Own(_device.ResourceFactory.CreateRenderTexture(renderDescription));
+        RenderTexture texture = Own(_device.ResourceFactory.CreateRenderTexture(renderDescription with { ArrayLayers = first.ArrayLayers }));
         List<TraceResourceId> ids = new();
         for (int i = 0; i < colors.Length; i++)
         {

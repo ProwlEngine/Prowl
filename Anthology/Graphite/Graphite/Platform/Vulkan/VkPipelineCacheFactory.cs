@@ -257,6 +257,18 @@ internal static unsafe class VkPipelineCacheFactory
         dependencies[0] = VkBarriers.ExternalToPass(gd);
         dependencies[1] = VkBarriers.PassToExternal(gd);
 
+        uint viewMask = VkFramebuffer.ViewMask(outputDesc.ViewCount);
+        RenderPassMultiviewCreateInfo multiview = new()
+        {
+            SType = StructureType.RenderPassMultiviewCreateInfo,
+            SubpassCount = 1,
+            PViewMasks = &viewMask,
+            CorrelationMaskCount = 1,
+            PCorrelationMasks = &viewMask,
+        };
+        if (viewMask != 0)
+            renderPassCI.PNext = &multiview;
+
         renderPassCI.AttachmentCount = attachmentCount;
         renderPassCI.PAttachments = attachments;
         renderPassCI.SubpassCount = 1;

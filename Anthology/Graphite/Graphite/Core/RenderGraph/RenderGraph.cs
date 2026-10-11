@@ -153,6 +153,7 @@ public sealed class RenderGraph : IDisposable
             && a.Width == b.Width
             && a.Height == b.Height
             && a.EnableDepth == b.EnableDepth
+            && Math.Max(1, a.ArrayLayers) == Math.Max(1, b.ArrayLayers)
             && (a.ColorFormats ?? []).AsSpan().SequenceEqual(b.ColorFormats ?? []);
 
     private static void ApplyStorageUsage(

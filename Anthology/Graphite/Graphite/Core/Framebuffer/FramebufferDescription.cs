@@ -18,6 +18,12 @@ public struct FramebufferDescription
     public FramebufferAttachment[] ColorTargets;
 
     /// <summary>
+    /// Layers drawn at once through multiview, starting at each attachment's array layer. 0 or 1 for none.
+    /// Needs <see cref="GraphicsDeviceFeatures.Multiview"/>.
+    /// </summary>
+    public uint ViewCount;
+
+    /// <summary>
     /// Creates new FramebufferDescription.
     /// </summary>
     /// <param name="depthTarget">Depth texture, needs DepthStencil flag. Null ok.</param>

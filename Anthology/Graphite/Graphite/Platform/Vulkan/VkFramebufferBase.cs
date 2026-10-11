@@ -30,8 +30,9 @@ internal abstract class VkFramebufferBase : Framebuffer
 {
     public VkFramebufferBase(
         FramebufferAttachment? depthTexture,
-        IReadOnlyList<FramebufferAttachment> colorTextures)
-        : base(depthTexture, colorTextures)
+        IReadOnlyList<FramebufferAttachment> colorTextures,
+        uint viewCount = 0)
+        : base(depthTexture, colorTextures, viewCount)
     {
     }
 

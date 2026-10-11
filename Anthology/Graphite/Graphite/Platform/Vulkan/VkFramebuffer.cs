@@ -24,9 +24,10 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
     public override uint AttachmentCount { get; }
 
     public VkFramebuffer(VkGraphicsDevice gd, in FramebufferDescription description)
-        : base(description.DepthTarget, description.ColorTargets)
+        : base(description.DepthTarget, description.ColorTargets, description.ViewCount)
     {
         _gd = gd;
+        CheckViews(description);
 
         uint colorAttachmentCount = (uint)ColorTargets.Count;
         _colorAttachmentCount = colorAttachmentCount;
@@ -111,9 +112,19 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         dependencies[0] = VkBarriers.ExternalToPass(_gd);
         dependencies[1] = VkBarriers.PassToExternal(_gd);
 
+        uint viewMask = ViewMask(ViewCount);
+        RenderPassMultiviewCreateInfo multiview = new()
+        {
+            SType = StructureType.RenderPassMultiviewCreateInfo,
+            SubpassCount = 1,
+            PViewMasks = &viewMask,
+            CorrelationMaskCount = 1,
+            PCorrelationMasks = &viewMask,
+        };
         RenderPassCreateInfo renderPassCI = new()
         {
             SType = StructureType.RenderPassCreateInfo,
+            PNext = viewMask != 0 ? &multiview : null,
             AttachmentCount = attachmentCount,
             PAttachments = attachments,
             SubpassCount = 1,
@@ -147,13 +158,13 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
                 SType = StructureType.ImageViewCreateInfo,
                 Image = vkColorTarget.OptimalDeviceImage,
                 Format = vkColorTarget.VkFormat,
-                ViewType = ImageViewType.Type2D,
+                ViewType = description.ViewCount > 1 ? ImageViewType.Type2DArray : ImageViewType.Type2D,
                 SubresourceRange = new ImageSubresourceRange(
                     ImageAspectFlags.ColorBit,
                     description.ColorTargets[i].MipLevel,
                     1,
                     description.ColorTargets[i].ArrayLayer,
-                    1)
+                    Math.Max(1, description.ViewCount))
             };
             ImageView* dest = (fbAttachments + i);
             _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, dest).CheckResult();
@@ -170,7 +181,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
                 SType = StructureType.ImageViewCreateInfo,
                 Image = vkDepthTarget.OptimalDeviceImage,
                 Format = vkDepthTarget.VkFormat,
-                ViewType = description.DepthTarget.Value.Target.ArrayLayers == 1
+                ViewType = description.DepthTarget.Value.Target.ArrayLayers == 1 && description.ViewCount <= 1
                     ? ImageViewType.Type2D
                     : ImageViewType.Type2DArray,
                 SubresourceRange = new ImageSubresourceRange(
@@ -178,7 +189,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
                     description.DepthTarget.Value.MipLevel,
                     1,
                     description.DepthTarget.Value.ArrayLayer,
-                    1)
+                    Math.Max(1, description.ViewCount))
             };
             ImageView* dest = (fbAttachments + (fbAttachmentsCount - 1));
             _gd.Vk.CreateImageView(_gd.Device, in depthViewCI, null, dest).CheckResult();
@@ -215,6 +226,28 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         fbCI.RenderPass = GetRenderPass(FramebufferMode.Resting, RenderPassOps.Load);
 
         _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out deviceFramebuffer).CheckResult();
+    }
+
+    internal static uint ViewMask(uint viewCount) => viewCount > 1 ? (1u << (int)viewCount) - 1 : 0;
+
+    private void CheckViews(in FramebufferDescription description)
+    {
+        if (description.ViewCount <= 1)
+            return;
+
+        if (!_gd.Features.Multiview)
+            throw new RenderException("A framebuffer with a view count needs GraphicsDeviceFeatures.Multiview.");
+
+        foreach (FramebufferAttachment attachment in ColorTargets)
+            CheckLayers(attachment, description.ViewCount);
+        if (DepthTarget is { } depth)
+            CheckLayers(depth, description.ViewCount);
+    }
+
+    private static void CheckLayers(in FramebufferAttachment attachment, uint viewCount)
+    {
+        if (attachment.ArrayLayer + viewCount > ValidationHelpers.GetEffectiveArrayLayers(attachment.Target))
+            throw new RenderException($"A framebuffer of {viewCount} views needs {viewCount} array layers from layer {attachment.ArrayLayer} of '{attachment.Target.Name}'.");
     }
 
     private protected override VkGraphicsDevice OwnerDevice => _gd;

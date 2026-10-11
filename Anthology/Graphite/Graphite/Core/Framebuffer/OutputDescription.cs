@@ -22,6 +22,13 @@ public record struct OutputDescription
     public TextureSampleCount SampleCount;
 
     /// <summary>
+    /// Layers drawn at once through multiview, each draw seeing gl_ViewIndex. 0 or 1 for none.
+    /// </summary>
+    public uint ViewCount;
+
+    internal readonly uint Views => ViewCount <= 1 ? 1 : ViewCount;
+
+    /// <summary>
     /// New OutputDescription.
     /// </summary>
     /// <param name="depthFormat">Depth attachment format.</param>
@@ -65,16 +72,17 @@ public record struct OutputDescription
             sampleCount = fb.ColorTargets[i].Target.SampleCount;
         }
 
-        return new OutputDescription(depthFormat, colorFormats, sampleCount);
+        return new OutputDescription(depthFormat, colorFormats, sampleCount) { ViewCount = fb.ViewCount };
     }
 
     /// <inheritdoc/>
     public readonly bool Equals(OutputDescription other)
         => DepthFormat == other.DepthFormat
         && SampleCount == other.SampleCount
+        && Views == other.Views
         && ColorFormats.AsSpan().SequenceEqual(other.ColorFormats);
 
     /// <inheritdoc/>
     public override readonly int GetHashCode()
-        => HashCode.Combine(DepthFormat, SampleCount, ColorFormats.ArrayHash());
+        => HashCode.Combine(DepthFormat, SampleCount, Views, ColorFormats.ArrayHash());
 }
