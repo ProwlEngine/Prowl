@@ -150,8 +150,7 @@ public class EchoObject_Equality_Tests
         Assert.True(nested1.Equals(nested2));
 
         // Modify a deeply nested value
-        ((Dictionary<string, EchoObject>)nested2.Value!)["compound"]
-            .Get("nested").Value = false;
+        nested2["compound"].Get("nested")!.Value = false;
 
         Assert.False(nested1.Equals(nested2));
     }

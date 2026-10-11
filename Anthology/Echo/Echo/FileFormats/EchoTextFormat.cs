@@ -211,7 +211,7 @@ public sealed class EchoTextFormat : IFileFormat
         writer.Write(']');
     }
 
-    private static void WriteCompound(TextWriter writer, Dictionary<string, EchoObject> dict, int indentLevel)
+    private static void WriteCompound(TextWriter writer, CompoundTags dict, int indentLevel)
     {
         string indent = Indent(indentLevel);
 
@@ -282,13 +282,13 @@ public sealed class EchoTextFormat : IFileFormat
     {
         var startPosition = parser.TokenPosition;
 
-        var dict = new Dictionary<string, EchoObject>();
+        var compound = EchoObject.NewCompound();
         while (parser.MoveNext())
         {
             switch (parser.TokenType)
             {
                 case TextTokenType.EndCompound:
-                    return new EchoObject(EchoType.Compound, dict);
+                    return compound;
                 case TextTokenType.Separator:
                     continue;
                 case TextTokenType.Value:
@@ -305,7 +305,7 @@ public sealed class EchoTextFormat : IFileFormat
 
                     var value = ReadTag(parser);
 
-                    dict.Add(name, value);
+                    compound.Add(name, value);
 
                     continue;
                 default:

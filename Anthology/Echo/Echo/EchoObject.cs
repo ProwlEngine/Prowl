@@ -35,7 +35,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
 
     public object? Value
     {
-        get => IsBits ? _ref ??= BoxBits() : _ref;
+        get => TagType == EchoType.Compound ? Tags : IsBits ? _ref ??= BoxBits() : _ref;
         set => SetValue(value!);
     }
 
@@ -96,12 +96,10 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         }
         else if (type == EchoType.Compound)
         {
-            _ref = value ?? new Dictionary<string, EchoObject>();
-            foreach (var (key, tag) in (Dictionary<string, EchoObject>)_ref)
-            {
-                tag.Parent = this;
-                tag.CompoundKey = key;
-            }
+            if (value is IEnumerable<KeyValuePair<string, EchoObject>> entries)
+                SetCompoundEntries(entries, (value as ICollection<KeyValuePair<string, EchoObject>>)?.Count ?? 0);
+            else
+                _ref = new CompoundStorage(0);
         }
         else if (value is null || type is EchoType.String or EchoType.ByteArray or EchoType.Decimal)
             _ref = value;
@@ -120,8 +118,8 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             tags[i].ListIndex = i;
         }
     }
-    public static EchoObject NewCompound() => new(EchoType.Compound, new Dictionary<string, EchoObject>());
-    public static EchoObject NewCompound(int capacity) => new(EchoType.Compound, new Dictionary<string, EchoObject>(capacity));
+    public static EchoObject NewCompound() => NewCompound(0);
+    public static EchoObject NewCompound(int capacity) => new() { TagType = EchoType.Compound, _ref = new CompoundStorage(capacity) };
     public static EchoObject NewList() => new(EchoType.List, new List<EchoObject>());
 
     public EchoObject Clone()
@@ -139,13 +137,10 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         }
         else if (TagType == EchoType.Compound)
         {
-            // Value is a Dictionary<string, Tag>
-            var dict = (Dictionary<string, EchoObject>)Value!;
-            var newDict = new Dictionary<string, EchoObject>(dict.Count);
-            foreach (var (key, tag) in dict)
-                newDict.Add(key, tag.Clone());
-
-            return new(EchoType.Compound, newDict);
+            var clone = NewCompound(Count);
+            foreach (var (key, tag) in Tags)
+                clone.AddUnique(key, tag.Clone());
+            return clone;
         }
 
         return new EchoObject { TagType = TagType, _ref = _ref, _bits = _bits };
@@ -245,17 +240,12 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         switch (TagType)
         {
             case EchoType.Compound:
-                var thisTags = (Dictionary<string, EchoObject>)Value!;
-                var otherTags = (Dictionary<string, EchoObject>)other.Value!;
+                if (Count != other.Count) return false;
 
-                // First check if the dictionaries have the same number of keys
-                if (thisTags.Count != otherTags.Count) return false;
-
-                // Check all keys exist in both and values are equal
-                // (no SequenceEqual — dictionary enumeration order is not guaranteed)
-                foreach (var kvp in thisTags)
+                // Key order does not affect equality.
+                foreach (var kvp in Tags)
                 {
-                    if (!otherTags.TryGetValue(kvp.Key, out var otherVal) || !kvp.Value.Equals(otherVal))
+                    if (!other.TryGet(kvp.Key, out var otherVal) || !kvp.Value.Equals(otherVal))
                         return false;
                 }
                 return true;
@@ -329,7 +319,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     {
         get
         {
-            if (TagType == EchoType.Compound) return ((Dictionary<string, EchoObject>)_ref!).Count;
+            if (TagType == EchoType.Compound) return Compound.Count;
             else if (TagType == EchoType.List) return ((List<EchoObject>)_ref!).Count;
             else return 0;
         }
@@ -376,19 +366,13 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             // Handle Compound type
             if (TagType == EchoType.Compound)
             {
-                if (value is not Dictionary<string, EchoObject> dict)
+                if (value is not IEnumerable<KeyValuePair<string, EchoObject>> entries)
                 {
                     throw new InvalidOperationException(
-                        $"Cannot convert type {value.GetType().Name} to Dictionary<string, EchoObject>");
+                        $"Cannot convert type {value.GetType().Name} to compound entries");
                 }
 
-                _ref = dict;
-                // Set parent for all children
-                foreach (var (key, tag) in dict)
-                {
-                    tag.Parent = this;
-                    tag.CompoundKey = key;
-                }
+                SetCompoundEntries(entries.ToList(), (value as ICollection<KeyValuePair<string, EchoObject>>)?.Count ?? 0);
                 return;
             }
 

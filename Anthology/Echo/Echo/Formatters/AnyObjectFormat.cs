@@ -61,13 +61,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
                         // Use cached IgnoreOnNull flag
                         if (cachedField.HasIgnoreOnNull)
                             continue;
-                        compound.Add(cachedField.SerializedName, new(EchoType.Null, null));
+                        compound.AddUnique(cachedField.SerializedName, new(EchoType.Null, null));
                     }
                     else
                     {
                         // Serialize with field type as target to enable polymorphism detection
                         EchoObject tag = Serializer.Serialize(cachedField.MemberType, propValue, context);
-                        compound.Add(cachedField.SerializedName, tag);
+                        compound.AddUnique(cachedField.SerializedName, tag);
                     }
                 }
                 catch (Exception ex)
@@ -80,7 +80,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         // Add reference ID if needed
         if (id.HasValue)
-            compound["$id"] = new(id.Value);
+        {
+            // Field names can never be "$id", but an ISerializable may have written one.
+            if (fields != null)
+                compound.AddUnique("$id", new(id.Value));
+            else
+                compound["$id"] = new(id.Value);
+        }
 
         // NOTE: Type information is now handled by the centralized Serializer class
         // We don't add $type here - the Serializer will wrap this with type info if needed
@@ -101,7 +107,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
         // arrives BEFORE its definition (a forward reference) be resolved to a placeholder now and
         // back-patched when the definition shows up, so every reference ends up on one populated instance.
         EchoObject? id = null;
-        bool hasId = !targetType.IsValueType && value.TryGet("$id", out id);
+        bool hasId = !targetType.IsValueType && value.TryGet("$id", value.Count - 1, out id);
         int idValue = hasId ? id!.IntValue : 0;
         bool carriesBody = HasBody(value);
 
@@ -173,8 +179,8 @@ public sealed class AnyObjectFormat : ISerializationFormat
     /// </summary>
     private static bool HasBody(EchoObject value)
     {
-        foreach (var key in value.Tags.Keys)
-            if (key != "$id" && key != "$type")
+        foreach (var tag in value.Tags)
+            if (tag.Key != "$id" && tag.Key != "$type")
                 return true;
         return false;
     }
@@ -189,9 +195,11 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
         else
         {
-            foreach (var cachedField in result.GetSerializableFields())
+            var fields = result.GetSerializableFields();
+            for (int i = 0; i < fields.Length; i++)
             {
-                if (!TryGetFieldValue(value, cachedField, out EchoObject? fieldValue))
+                var cachedField = fields[i];
+                if (!TryGetFieldValue(value, cachedField, i, out EchoObject? fieldValue))
                     continue;
 
                 try
@@ -253,9 +261,11 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
         else
         {
-            foreach (var cachedField in target.GetSerializableFields())
+            var fields = target.GetSerializableFields();
+            for (int i = 0; i < fields.Length; i++)
             {
-                if (!TryGetFieldValue(value, cachedField, out EchoObject? fieldValue))
+                var cachedField = fields[i];
+                if (!TryGetFieldValue(value, cachedField, i, out EchoObject? fieldValue))
                     continue;
 
                 try
@@ -307,11 +317,11 @@ public sealed class AnyObjectFormat : ISerializationFormat
         }
     }
 
-    private static bool TryGetFieldValue(EchoObject compound, CachedFieldInfo cachedField, out EchoObject? value)
+    private static bool TryGetFieldValue(EchoObject compound, CachedFieldInfo cachedField, int fieldIndex, out EchoObject? value)
     {
         var fieldName = cachedField.SerializedName;
 
-        if (compound.TryGet(fieldName, out value))
+        if (compound.TryGet(fieldName, fieldIndex, out value))
             return true;
 
         // Case-insensitive fallback

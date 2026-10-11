@@ -72,6 +72,13 @@ public sealed partial class EchoObject
             if (typeof(T) == typeof(EchoObject))
                 return (T)(object)tag;
 
+            if (tag.TagType == EchoType.Compound)
+            {
+                if (typeof(T) == typeof(Dictionary<string, EchoObject>))
+                    return (T)(object)tag.Tags.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                return typeof(T).IsAssignableFrom(typeof(CompoundTags)) ? (T)(object)tag.Tags : defaultValue;
+            }
+
             // Handle primitive value types
             var value = tag.Value;
             if (value != null)
@@ -91,10 +98,6 @@ public sealed partial class EchoObject
                     ? (T)(object)tag.List
                     : defaultValue,
 
-                EchoType.Compound => typeof(T).IsAssignableTo(typeof(IDictionary<string, EchoObject>))
-                    ? (T)(object)tag.Tags
-                    : defaultValue,
-
                 _ => defaultValue
             };
         }
@@ -106,6 +109,7 @@ public sealed partial class EchoObject
 
     public EchoObject? GetEchoAt(string path) => GetValue<EchoObject>(path);
     public List<EchoObject>? GetListAt(string path) => GetValue<List<EchoObject>>(path);
+    /// <summary> A copy of the compound at the path. Changing it does not change the compound. </summary>
     public Dictionary<string, EchoObject>? GetDictionaryAt(string path) => GetValue<Dictionary<string, EchoObject>>(path);
 
     public IEnumerable<EchoObject> Where(Func<EchoObject, bool> predicate)

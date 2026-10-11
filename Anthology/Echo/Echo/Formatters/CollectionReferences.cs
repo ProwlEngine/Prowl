@@ -73,8 +73,8 @@ internal static class CollectionReferences
 
     private static bool HasBody(EchoObject compound)
     {
-        foreach (var key in compound.Tags.Keys)
-            if (key != "$id" && key != "$type")
+        foreach (var tag in compound.Tags)
+            if (tag.Key != "$id" && tag.Key != "$type")
                 return true;
         return false;
     }
