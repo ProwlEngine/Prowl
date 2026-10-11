@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Globalization;
@@ -65,52 +65,64 @@ public sealed class EchoTextFormat : IFileFormat
 
     // Writing:
 
+    private static readonly string[] SpecialKeys = { "$id", "$type", "$dependencies" };
+    private static readonly string[] Indents = new string[64];
+
+    private static string Indent(int level)
+    {
+        if (level >= Indents.Length)
+            return new string(' ', level * 2);
+        return Indents[level] ??= new string(' ', level * 2);
+    }
+
     private static void WriteTag(EchoObject prop, TextWriter writer, int indentLevel)
     {
-        var indent = new string(' ', indentLevel * 2);
-
         switch (prop.TagType)
         {
             case EchoType.Null:
                 writer.Write("NULL");
                 break;
             case EchoType.Byte:
-                writer.Write(prop.ByteValue);
+                WriteNumber(writer, (long)prop.ByteValue, writer.FormatProvider);
                 writer.Write('B');
                 break;
             case EchoType.sByte:
-                writer.Write(prop.sByteValue);
+                WriteNumber(writer, (long)prop.sByteValue, writer.FormatProvider);
                 writer.Write('N');
                 break;
             case EchoType.Short:
-                writer.Write(prop.ShortValue);
+                WriteNumber(writer, (long)prop.ShortValue, writer.FormatProvider);
                 writer.Write('S');
                 break;
             case EchoType.Int:
-                writer.Write(prop.IntValue);
+                WriteNumber(writer, (long)prop.IntValue, writer.FormatProvider);
                 break;
             case EchoType.Long:
-                writer.Write(prop.LongValue);
+                WriteNumber(writer, prop.LongValue, writer.FormatProvider);
                 writer.Write('L');
                 break;
             case EchoType.UShort:
-                writer.Write(prop.UShortValue);
+                WriteNumber(writer, (long)prop.UShortValue, writer.FormatProvider);
                 writer.Write('V');
                 break;
             case EchoType.UInt:
-                writer.Write(prop.UIntValue);
+                WriteNumber(writer, (ulong)prop.UIntValue, writer.FormatProvider);
                 writer.Write('U');
                 break;
             case EchoType.ULong:
-                writer.Write(prop.ULongValue);
+                WriteNumber(writer, prop.ULongValue, writer.FormatProvider);
                 writer.Write('C');
                 break;
             case EchoType.Float:
-                writer.Write(prop.FloatValue.ToString(CultureInfo.InvariantCulture));
+                Span<char> floatBuffer = stackalloc char[32];
+                prop.FloatValue.TryFormat(floatBuffer, out int floatLength, default, CultureInfo.InvariantCulture);
+                writer.Write(floatBuffer.Slice(0, floatLength));
                 writer.Write('F');
                 break;
             case EchoType.Double:
-                writer.Write(prop.DoubleValue.ToString(CultureInfo.InvariantCulture));
+                Span<char> doubleBuffer = stackalloc char[32];
+                prop.DoubleValue.TryFormat(doubleBuffer, out int doubleLength, default, CultureInfo.InvariantCulture);
+                writer.Write(doubleBuffer.Slice(0, doubleLength));
                 writer.Write('D');
                 break;
             case EchoType.Decimal:
@@ -127,8 +139,9 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write(prop.BoolValue ? "true" : "false");
                 break;
             case EchoType.List:
+                string indent = Indent(indentLevel);
                 writer.WriteLine("[");
-                var list = (List<EchoObject>)prop.Value!;
+                var list = prop.List;
                 for (int i = 0; i < list.Count; i++)
                 {
                     writer.Write(indent);
@@ -145,38 +158,49 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write("]");
                 break;
             case EchoType.Compound:
-                WriteCompound(writer, (Dictionary<string, EchoObject>)prop.Value!, indentLevel);
+                WriteCompound(writer, prop.Tags, indentLevel);
                 break;
         }
+    }
+
+    // Matches TextWriter.Write(long), which formats with the writer's own provider.
+    private static void WriteNumber(TextWriter writer, long value, IFormatProvider provider)
+    {
+        Span<char> buffer = stackalloc char[24];
+        value.TryFormat(buffer, out int length, default, provider);
+        writer.Write(buffer.Slice(0, length));
+    }
+
+    private static void WriteNumber(TextWriter writer, ulong value, IFormatProvider provider)
+    {
+        Span<char> buffer = stackalloc char[24];
+        value.TryFormat(buffer, out int length, default, provider);
+        writer.Write(buffer.Slice(0, length));
     }
 
     private static void WriteString(TextWriter writer, string value)
     {
         writer.Write('"');
-        foreach (var c in value)
+        int start = 0;
+        for (int i = 0; i < value.Length; i++)
         {
-            switch (c)
+            string? escape = value[i] switch
             {
-                case '"':
-                    writer.Write("\\\"");
-                    break;
-                case '\\':
-                    writer.Write("\\\\");
-                    break;
-                case '\n':
-                    writer.Write("\\n");
-                    break;
-                case '\r':
-                    writer.Write("\\r");
-                    break;
-                case '\t':
-                    writer.Write("\\t");
-                    break;
-                default:
-                    writer.Write(c);
-                    break;
-            }
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => null
+            };
+            if (escape == null)
+                continue;
+
+            writer.Write(value.AsSpan(start, i - start));
+            writer.Write(escape);
+            start = i + 1;
         }
+        writer.Write(value.AsSpan(start));
         writer.Write('"');
     }
 
@@ -189,17 +213,16 @@ public sealed class EchoTextFormat : IFileFormat
 
     private static void WriteCompound(TextWriter writer, Dictionary<string, EchoObject> dict, int indentLevel)
     {
-        var indent = new string(' ', indentLevel * 2);
+        string indent = Indent(indentLevel);
 
         writer.WriteLine("{");
 
         bool wroteAny = false;
 
         // Write "$id", "$type", "$dependencies" keys first, if they exist
-        string[] specialKeys = ["$id", "$type", "$dependencies"];
-        foreach (var key in specialKeys)
+        foreach (var key in SpecialKeys)
         {
-            if (!dict.ContainsKey(key))
+            if (!dict.TryGetValue(key, out var special))
                 continue;
 
             if (wroteAny)
@@ -207,7 +230,7 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write(",");
                 writer.WriteLine();
             }
-            WriteCompoundElement(key, writer, dict, indentLevel, indent);
+            WriteCompoundElement(key, special, writer, indentLevel, indent);
             wroteAny = true;
         }
 
@@ -222,7 +245,7 @@ public sealed class EchoTextFormat : IFileFormat
                 writer.Write(",");
                 writer.WriteLine();
             }
-            WriteCompoundElement(kvp.Key, writer, dict, indentLevel, indent);
+            WriteCompoundElement(kvp.Key, kvp.Value, writer, indentLevel, indent);
             wroteAny = true;
         }
 
@@ -231,13 +254,13 @@ public sealed class EchoTextFormat : IFileFormat
         writer.Write("}");
     }
 
-    private static void WriteCompoundElement(string key, TextWriter writer, Dictionary<string, EchoObject> dict, int indentLevel, string indent)
+    private static void WriteCompoundElement(string key, EchoObject value, TextWriter writer, int indentLevel, string indent)
     {
         writer.Write(indent);
         writer.Write("  ");
         WriteString(writer, key);
         writer.Write(": ");
-        WriteTag(dict[key], writer, indentLevel + 1);
+        WriteTag(value, writer, indentLevel + 1);
     }
 
     // Reading:
