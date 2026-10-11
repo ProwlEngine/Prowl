@@ -32,7 +32,15 @@ public abstract partial class GraphicsDevice
         ExecutionTask task = BeginExecution(pipeline.Graph.Name, profilers);
         List<Swapchain>? presents = null;
         int index = 0;
-        RunViews(task, pipeline, views, ref index, ref presents);
+        try
+        {
+            RunViews(task, pipeline, views, ref index, ref presents);
+        }
+        catch
+        {
+            CompleteExecution(task);
+            throw;
+        }
         return Finish(task, presents);
     }
 
@@ -55,8 +63,16 @@ public abstract partial class GraphicsDevice
         ExecutionTask task = BeginExecution(string.Join(", ", names), profilers);
         List<Swapchain>? presents = null;
         int index = 0;
-        foreach (GraphDispatch graph in graphs)
-            RunViews(task, graph.Pipeline, graph.Views, ref index, ref presents);
+        try
+        {
+            foreach (GraphDispatch graph in graphs)
+                RunViews(task, graph.Pipeline, graph.Views, ref index, ref presents);
+        }
+        catch
+        {
+            CompleteExecution(task);
+            throw;
+        }
 
         return Finish(task, presents);
     }

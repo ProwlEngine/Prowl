@@ -91,8 +91,46 @@ file sealed class CopyImportedPass(RenderTexture source, Texture destination) : 
     public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyTexture(source.ColorTextures[0], destination);
 }
 
+file sealed class ThrowingPass(RenderTexture target) : IPass
+{
+    private static readonly RenderResourceID s_id = RenderResourceID.Intern("Thrown");
+
+    public bool Throw = true;
+
+    public string Name => "Throwing";
+
+    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(s_id, target);
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        cmd.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(1f, 0f, 0f, 1f)), AttachmentOps.Loaded));
+        if (Throw)
+            throw new InvalidOperationException("thrown");
+    }
+}
+
 public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
+    [Fact]
+    public void Dispatch_APassThatThrows_CompletesItsExecution_SoLaterOnesRun()
+    {
+        RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(4, 4, [PixelFormat.R32_G32_B32_A32_Float], false));
+        ThrowingPass pass = new(target);
+        using RenderPipeline pipeline = new([pass]);
+        IRenderView[] view = [new DispatchView(4, 4)];
+
+        // More failures than there are executions in flight would hang without completing each one
+        for (int i = 0; i < 8; i++)
+            Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph([new GraphDispatch(pipeline, view)]));
+
+        pass.Throw = false;
+        GD.DispatchGraph([new GraphDispatch(pipeline, view)]);
+        GD.WaitForIdle();
+        Texture copy = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
+        GD.Record(cmd => cmd.CopyTexture(target.ColorTextures[0], copy)).Wait();
+        Assert.Equal(new Color(1f, 0f, 0f, 1f), ReadTexture<Color>(copy)[2, 2], ColorFuzzyComparer.Instance);
+    }
+
     [Fact]
     public void Dispatch_SeveralPipelines_RunInOrderInOneExecution()
     {

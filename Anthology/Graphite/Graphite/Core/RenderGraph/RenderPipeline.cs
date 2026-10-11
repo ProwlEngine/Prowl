@@ -103,7 +103,20 @@ public class RenderPipeline : IDisposable
                 CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
                 context.BindDeclaredTarget(passCommands, node.Accesses);
                 long recordStart = Stopwatch.GetTimestamp();
-                node.Pass.Render(context, passCommands);
+                try
+                {
+                    node.Pass.Render(context, passCommands);
+                }
+                catch
+                {
+                    // What the pass recorded is submitted and every texture goes back to resting, so the execution stays valid
+                    context.EndCommandBuffer(passCommands);
+                    context.AdoptPassStates(passCommands);
+                    context.SetCurrentPass(null);
+                    profiler?.EndPass(passInfo, passCommands.Stats);
+                    context.RestoreRestingStates("View");
+                    throw;
+                }
                 PassStats stats = passCommands.Stats;
                 context.EndCommandBuffer(passCommands);
                 context.AdoptPassStates(passCommands);
