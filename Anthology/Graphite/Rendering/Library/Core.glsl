@@ -23,7 +23,8 @@ struct Graphite_ViewData
     vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
 };
 
-struct Graphite_DrawRecord { uint chunk; uint view; uint flags; uint subMesh; };
+// flags: 1 every instance draws object, 2 subMesh holds the material slot itself
+struct Graphite_DrawRecord { uint chunk; uint object; uint flags; uint subMesh; };
 
 struct Graphite_Transform { vec4 row0; vec4 row1; vec4 row2; vec4 translationLow; };
 

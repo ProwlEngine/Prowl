@@ -1228,6 +1228,35 @@ public sealed class LightingTests : IDisposable
         Assert.Throws<ArgumentException>(() => _world.CreateSpatialSet<float>("Bad"));
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Water
+    {
+        public Float4 Tint;
+        public Float4 Depth;
+    }
+
+    [Fact]
+    public void SpatialSets_ShareTheirIndexByNameAcrossWorlds_AndRejectBadItems()
+    {
+        using RenderWorld other = _renderer.CreateWorld();
+        SpatialSet<Water> water = other.CreateSpatialSet<Water>("Water");
+        SpatialSet<Volume> volumes = _world.CreateSpatialSet<Volume>("Volumes");
+        SpatialSet<Volume> otherVolumes = other.CreateSpatialSet<Volume>("Volumes");
+        Assert.Equal(volumes.Index, otherVolumes.Index);
+        Assert.Equal(water.Index, _world.CreateSpatialSet<Water>("Water").Index);
+        Assert.NotEqual(water.Index, volumes.Index);
+
+        Assert.Throws<InvalidOperationException>(() => _world.CreateSpatialSet<Volume>("Volumes"));
+        using RenderWorld third = _renderer.CreateWorld();
+        Assert.Throws<InvalidOperationException>(() => third.CreateSpatialSet<Volume>("Water"));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => volumes.Add(new Double3(double.NaN, 0, 0), 1, default));
+        Assert.Throws<ArgumentOutOfRangeException>(() => volumes.Add(Double3.Zero, float.PositiveInfinity, default));
+        Assert.Throws<ArgumentOutOfRangeException>(() => volumes.Add(Double3.Zero, -1, default));
+        SpatialHandle item = volumes.Add(Double3.Zero, 1, default);
+        Assert.Throws<ArgumentOutOfRangeException>(() => volumes.Set(item, new Double3(0, double.PositiveInfinity, 0), 1, default));
+    }
+
     [Fact]
     public void DecalsOfEqualPriority_LayInTheOrderTheyWereAdded()
     {
@@ -2528,9 +2557,11 @@ public sealed class LightingTests : IDisposable
             float dd = MathF.Max(perp.LengthSquared(), 1e-20f);
             float np = Vector3.Dot(n, perp);
             float q0 = MathF.Max((a + u * s0).Length(), 1e-6f), q1 = MathF.Max((a + u * s1).Length(), 1e-6f);
-            float f0 = np * (s0 + bu) / (dd * q0) - nu / q0;
-            float f1 = np * (s1 + bu) / (dd * q1) - nu / q1;
-            return MathF.Max(f1 - f0, 0) / len;
+            float t0 = s0 + bu, t1 = s1 + bu;
+            float spread = t0 * t1 > 0
+                ? (t1 * t1 - t0 * t0) / (q0 * q1 * (t1 * q0 + t0 * q1))
+                : (t1 / q1 - t0 / q0) / dd;
+            return MathF.Max(np * spread - nu / q1 + nu / q0, 0) / len;
         }
 
         private static Vector3 SpherePoint(Vector3 center, float radius, Vector3 r)

@@ -295,7 +295,7 @@ public sealed class Renderer : IDisposable
             RenderWorld world = new(Device, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
-            _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), region);
+            _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), region, _programs);
             return world;
         }
         finally
@@ -429,6 +429,9 @@ public sealed class Renderer : IDisposable
     }
 
     private RenderFeature[][] _viewFeatures = [];
+
+    /// <summary>The slots of host spatial sets by name, the same in every world.</summary>
+    internal SpatialSlots SpatialSlots { get; } = new();
     private GraphDispatch[] _pipelines = [];
     private readonly ConcurrentQueue<ReadbackRequest> _readbacks = new();
     private readonly List<ReadbackRequest> _frameReadbacks = new();

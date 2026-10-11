@@ -395,9 +395,13 @@ float Graphite_LineIrradiance(vec3 a, vec3 b, vec3 n)
     float D = max(dot(perp, perp), 1e-20);
     float np = dot(n, perp);
     float q0 = max(length(a + u * s0), 1e-6), q1 = max(length(a + u * s1), 1e-6);
-    float f0 = np * (s0 + bu) / (D * q0) - nu / q0;
-    float f1 = np * (s1 + bu) / (D * q1) - nu / q1;
-    return max(f1 - f0, 0.0) / len;
+    float t0 = s0 + bu, t1 = s1 + bu;
+
+    // (t1 / q1 - t0 / q0) / D without the cancellation when both ends lie on one side of the nearest point
+    float spread = t0 * t1 > 0.0
+        ? (t1 * t1 - t0 * t0) / (q0 * q1 * (t1 * q0 + t0 * q1))
+        : (t1 / q1 - t0 / q0) / D;
+    return max(np * spread - nu / q1 + nu / q0, 0.0) / len;
 }
 
 // The point of a sphere around center nearest the ray from the surface along R
@@ -633,7 +637,8 @@ vec3 Graphite_DefaultBRDF(Graphite_Surface s, Graphite_LightContribution c)
     return (diffuse * c.diffuse + specular * (c.specular * Graphite_AreaEnergy(s.roughness, c.extent.x, c.extent.y))) * c.radiance * s.ao;
 }
 
-// The BRDF every light goes through. Define GRAPHITE_CUSTOM_BRDF and write this function to shade with your own.
+// The BRDF every light goes through. Define GRAPHITE_CUSTOM_BRDF and write this function to shade with your own; its
+// specular lobe keeps area lights' energy right by scaling with Graphite_AreaEnergy(roughness, c.extent.x, c.extent.y).
 vec3 Graphite_BRDF(Graphite_Surface s, Graphite_LightContribution c);
 
 #ifndef GRAPHITE_CUSTOM_BRDF

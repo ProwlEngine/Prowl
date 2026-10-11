@@ -493,6 +493,7 @@ public sealed class FeatureBuilder
         DeviceBuffer[] host = _pass.Camera.HostBuffers;
         for (int i = 0; i < host.Length; i++)
             _graph.DeclareImportedBuffer(FramePipeline.BufferId(i), host[i], BufferAccess.AllReads);
+        _graph.DeclareImportedBuffer(FramePipeline.BufferId(host.Length), _pass.Camera.Commands.Buffer, BufferAccess.Indirect);
     }
 
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
@@ -968,5 +969,318 @@ internal static class FeatureSelection
             if (active)
                 result.Add(feature);
         }
+    }
+}
+
+/// <summary>Providers added to a world. Host thread.</summary>
+public sealed class ProviderSet : IEnumerable<RenderProvider>
+{
+    private readonly List<RenderProvider> _providers = new();
+    private RenderProvider[] _snapshot = [];
+    private int _version, _snapshotVersion = -1;
+
+    public int Count => _providers.Count;
+
+    public void Add(RenderProvider provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        if (_providers.Contains(provider))
+            return;
+        _providers.Add(provider);
+        _version++;
+    }
+
+    public bool Remove(RenderProvider provider)
+    {
+        if (!_providers.Remove(provider))
+            return false;
+        _version++;
+        return true;
+    }
+
+    public IEnumerator<RenderProvider> GetEnumerator() => _providers.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    internal RenderProvider[] Snapshot()
+    {
+        if (_snapshotVersion != _version)
+        {
+            _snapshot = [.. _providers];
+            _snapshotVersion = _version;
+        }
+        return _snapshot;
+    }
+}
+
+/// <summary>
+/// Geometry a host draws into each view without making renderables: particles, terrain patches, GPU generated draws. Its
+/// items join the view's passes like renderables, opaque ones in the prepass and opaque pass, transparent ones sorted
+/// with the world's, and any pass type a feature draws. <see cref="Extract"/> runs on the host thread at SubmitFrame,
+/// <see cref="Cull"/> on the render thread once per view.
+/// </summary>
+public abstract class RenderProvider
+{
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>The kinds of view it draws into, read at SubmitFrame.</summary>
+    public virtual ViewKinds RunsOn => ViewKinds.All;
+
+    /// <summary>Copies what Cull reads. Host thread, at SubmitFrame.</summary>
+    public virtual void Extract() { }
+
+    /// <summary>Adds this view's items to the sink. Render thread.</summary>
+    public abstract void Cull(in ProviderView view, DrawItemSink sink);
+
+    internal bool EnabledSnapshot;
+    internal ViewKinds RunsOnSnapshot;
+}
+
+/// <summary>The view a provider culls for.</summary>
+public readonly struct ProviderView
+{
+    private readonly CullFrustum _frustum;
+
+    internal ProviderView(in FeatureView view, in CullFrustum frustum)
+    {
+        View = view;
+        _frustum = frustum;
+    }
+
+    public FeatureView View { get; }
+
+    /// <summary>The first layer's camera position.</summary>
+    public Double3 Camera => _frustum.Camera;
+
+    /// <summary>Whether any layer of the view sees a sphere.</summary>
+    public bool Sees(Double3 center, float radius) => _frustum.Sphere(center, radius);
+}
+
+/// <summary>What one of a provider's items is drawn with: its object's data, as a renderable's.</summary>
+public struct DrawItem
+{
+    public Double4x4 Transform;
+    public Float4 Custom0, Custom1;
+    public uint LayerMask;
+    public uint ObjectId;
+    public RenderableFlags Flags;
+
+    /// <summary>The distance transparent items sort back to front by, NaN for the distance to the transform's position.</summary>
+    public float SortDepth;
+
+    public DrawItem()
+    {
+        Transform = Double4x4.Identity;
+        LayerMask = ~0u;
+        SortDepth = float.NaN;
+    }
+}
+
+/// <summary>Where a provider adds its items for a view. Valid during Cull only. Render thread.</summary>
+public sealed class DrawItemSink
+{
+    private readonly List<BucketSet.TransparentItem> _pool = new();
+    private int _used;
+    private CameraFrame _camera = null!;
+    private WorldFrame _world = null!;
+    private CullFrustum _frustum;
+    private uint _cullingMask;
+
+    internal readonly List<BucketSet.TransparentItem> Transparent = new();
+
+    /// <summary>Indirect items whose instance count the view copies from the provider's buffer before drawing.</summary>
+    internal readonly List<(BucketSet.TransparentItem Item, DrawList List, DeviceBuffer Source, uint Offset)> Counts = new();
+
+    internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask)
+    {
+        _camera = camera;
+        _world = world;
+        _frustum = frustum;
+        _cullingMask = cullingMask;
+        _used = 0;
+        Transparent.Clear();
+        Counts.Clear();
+    }
+
+    /// <summary>One submesh of a mesh with a material, for one object.</summary>
+    public void Add(GpuMesh mesh, int subMesh, Material material, in DrawItem item) => Emit(mesh, subMesh, material, item, 1, false, null, 0);
+
+    /// <summary>Instances of one submesh sharing one object, shaders telling them apart by Graphite_InstanceIndex.</summary>
+    public void AddInstanced(GpuMesh mesh, int subMesh, Material material, in DrawItem item, uint count)
+    {
+        if (count > 0)
+            Emit(mesh, subMesh, material, item, count, true, null, 0);
+    }
+
+    /// <summary>
+    /// Instances of one submesh sharing one object, as many as a 32 bit count the GPU wrote at offset in instanceCount
+    /// before the view draws, by a compute pass of the host's.
+    /// </summary>
+    public void AddIndirect(GpuMesh mesh, int subMesh, Material material, in DrawItem item, DeviceBuffer instanceCount, uint offset)
+    {
+        ArgumentNullException.ThrowIfNull(instanceCount);
+        if (offset % 4 != 0 || offset + 4 > instanceCount.SizeInBytes)
+            throw new ArgumentOutOfRangeException(nameof(offset), "The instance count is a 32 bit word inside the buffer.");
+        Emit(mesh, subMesh, material, item, 0, true, instanceCount, offset);
+    }
+
+    private void Emit(GpuMesh mesh, int subMesh, Material material, in DrawItem item, uint count, bool shared, DeviceBuffer? source, uint offset)
+    {
+        ArgumentNullException.ThrowIfNull(mesh);
+        ArgumentNullException.ThrowIfNull(material);
+        if ((item.LayerMask & _cullingMask) == 0 || mesh.Placement is not { } placement || material.IsDisposed || material.Draw is not { } draw || material.Table == null)
+            return;
+        if ((uint)subMesh >= (uint)placement.SubMeshes.Length)
+            throw new ArgumentOutOfRangeException(nameof(subMesh), $"The mesh has {placement.SubMeshes.Length} submeshes.");
+
+        RenderWorld.RenderSide render = _world.World.Render;
+        ObjectAttributes attributes = new()
+        {
+            Flags = (uint)item.Flags,
+            ObjectId = item.ObjectId,
+            PreviousTransform = ObjectAttributes.NoPrevious,
+            LightmapTexture = ObjectAttributes.NoLightmap,
+            ProbeIndex = uint.MaxValue,
+            LodFade = 1,
+            LayerMask = item.LayerMask,
+            LightmapScaleOffset = new Float4(1, 1, 0, 0),
+            Custom0 = item.Custom0,
+            Custom1 = item.Custom1,
+        };
+        uint objectIndex = render.AddTransientObject(item.Transform, attributes);
+        bool mirrored = RenderWorld.RenderSide.Determinant3(item.Transform) < 0;
+        Double4x4 m = item.Transform;
+        float depth = float.IsNaN(item.SortDepth) ? Length(_frustum.Relative(new Double3(m.c3.X, m.c3.Y, m.c3.Z))) : item.SortDepth;
+
+        List<BucketSet.ChunkRef> chunks = new();
+        for (int c = 0; c < placement.Chunks.Length; c++)
+        {
+            MeshChunk chunk = placement.Chunks[c];
+            if (chunk.SubMesh == subMesh)
+                chunks.Add(new BucketSet.ChunkRef(placement.FirstChunk + (uint)c, c, placement.IndexBase + chunk.IndexStart, chunk.IndexCount));
+        }
+        BucketSet.ChunkRef[] refs = [.. chunks];
+        PrimitiveTopology topology = placement.SubMeshes[subMesh].Topology;
+        bool shadowsOnly = (item.Flags & RenderableFlags.ShadowsOnly) != 0;
+
+        void Into(DrawList? list, PassType pass, bool sorted)
+        {
+            if (!_world.Programs.TryGet(material, draw, pass, out ushort program))
+                return;
+            BucketSet.TransparentItem entry = Next();
+            entry.Provided = true;
+            entry.Object = (int)objectIndex;
+            entry.Program = program;
+            entry.Page = placement.Page;
+            entry.Topology = topology;
+            entry.Mirrored = mirrored;
+            entry.Queue = draw.RenderQueue;
+            entry.SubMesh = (uint)subMesh;
+            entry.Chunks = refs;
+            entry.Depth = depth;
+            entry.MaterialSlot = material.Slot;
+            entry.Shared = shared;
+            entry.InstanceCount = count;
+            if (sorted)
+            {
+                Transparent.Add(entry);
+            }
+            else
+            {
+                entry.FirstCommand = list!.CommandCount;
+                BucketSet.EmitProvided(list, entry);
+            }
+            if (source != null)
+                Counts.Add((entry, sorted ? _camera.Transparent : list!, source, offset));
+        }
+
+        if (!shadowsOnly)
+        {
+            if (draw.Transparent)
+            {
+                Into(null, PassType.Forward, sorted: true);
+            }
+            else
+            {
+                Into(_camera.Prepass, PassType.Prepass, sorted: false);
+                Into(_camera.Forward, PassType.Forward, sorted: false);
+            }
+            foreach ((PassType type, DrawList list) in _camera.PassLists)
+                Into(list, type, sorted: false);
+        }
+    }
+
+    private static float Length(Float3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+
+    private BucketSet.TransparentItem Next()
+    {
+        if (_used == _pool.Count)
+        {
+            _pool.Add(new BucketSet.TransparentItem
+            {
+                Pass = 1,
+                Object = 0,
+                Program = 0,
+                Page = 0,
+                Topology = default,
+                Mirrored = false,
+                Queue = 0,
+                SubMesh = 0,
+                Chunks = [],
+            });
+        }
+        return _pool[_used++];
+    }
+}
+
+/// <summary>The draw programs of providers' materials, held while the material lives and draws the same. Render thread.</summary>
+internal sealed class ProviderPrograms(DrawPrograms programs)
+{
+    private readonly Dictionary<(Material Material, string Pass), (MaterialDraw Draw, ushort Program, bool Has)> _entries = new();
+    private readonly List<(Material, string)> _stale = new();
+
+    public bool TryGet(Material material, MaterialDraw draw, PassType pass, out ushort program)
+    {
+        (Material, string) key = (material, pass.Name);
+        if (_entries.TryGetValue(key, out (MaterialDraw Draw, ushort Program, bool Has) entry))
+        {
+            if (ReferenceEquals(entry.Draw, draw))
+            {
+                program = entry.Program;
+                return entry.Has;
+            }
+            if (entry.Has)
+                programs.Release(entry.Program);
+        }
+        bool has = programs.TryGet(draw, pass, out program);
+        if (has)
+            programs.Acquire(program);
+        _entries[key] = (draw, program, has);
+        return has;
+    }
+
+    /// <summary>Lets the programs of disposed materials go.</summary>
+    public void Sweep()
+    {
+        _stale.Clear();
+        foreach (KeyValuePair<(Material Material, string Pass), (MaterialDraw Draw, ushort Program, bool Has)> pair in _entries)
+        {
+            if (pair.Key.Material.IsDisposed)
+                _stale.Add(pair.Key);
+        }
+        foreach ((Material, string) key in _stale)
+            Remove(key);
+    }
+
+    public void Clear()
+    {
+        foreach ((Material, string) key in new List<(Material, string)>(_entries.Keys))
+            Remove(key);
+    }
+
+    private void Remove((Material, string) key)
+    {
+        if (_entries.Remove(key, out (MaterialDraw Draw, ushort Program, bool Has) entry) && entry.Has)
+            programs.Release(entry.Program);
     }
 }

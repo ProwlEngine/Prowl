@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Vector;
@@ -55,6 +56,70 @@ public readonly record struct LightmapBinding
     public SamplerDescription? Sampler { get; }
 
     public bool Lightmapped { get; }
+}
+
+/// <summary>One instance of a batch: its transform relative to the batch's, and data its shaders read as Custom0 and Custom1.</summary>
+public struct InstanceData
+{
+    public Float4x4 Transform;
+    public Float4 Color;
+    public Float4 Custom;
+}
+
+/// <summary>What every instance of a batch shares.</summary>
+public struct InstanceBatchDesc
+{
+    public GpuMesh Mesh;
+
+    /// <summary>Where the batch sits, double so batches far from the origin keep their place. Instances are relative to it.</summary>
+    public Double4x4 Transform;
+    public uint LayerMask;
+    public RenderableFlags Flags;
+
+    /// <summary>The object id of the first instance, the rest following on.</summary>
+    public uint ObjectIdBase;
+    public sbyte SortBias;
+
+    public InstanceBatchDesc()
+    {
+        Mesh = null!;
+        Transform = Double4x4.Identity;
+        LayerMask = ~0u;
+    }
+}
+
+public readonly record struct InstanceBatchHandle(int Index, int Generation)
+{
+    public bool IsValid => Generation > 0;
+}
+
+/// <summary>
+/// Geometry drawn for one frame, a mesh or inline positions with optional colours and indices. Inline geometry becomes a
+/// mesh the world owns and disposes after the frame.
+/// </summary>
+public struct TransientDraw
+{
+    public GpuMesh? Mesh;
+    public ReadOnlyMemory<Float3> Positions;
+
+    /// <summary>RGBA8 colours, one per position, read as the color stream.</summary>
+    public ReadOnlyMemory<uint> Colors;
+
+    /// <summary>Indices into the positions, none for the positions in order.</summary>
+    public ReadOnlyMemory<uint> Indices;
+    public PrimitiveTopology Topology;
+    public Material Material;
+    public Double4x4 Transform;
+    public uint LayerMask;
+    public RenderableFlags Flags;
+
+    public TransientDraw()
+    {
+        Material = null!;
+        Transform = Double4x4.Identity;
+        LayerMask = ~0u;
+        Topology = PrimitiveTopology.TriangleList;
+    }
 }
 
 public struct RenderableDesc
@@ -178,22 +243,211 @@ public sealed partial class RenderWorld : IDisposable
         }
     }
 
-    /// <summary>A set of the host's own items found by where they are, at most 13 per world. Host thread.</summary>
+    /// <summary>
+    /// A set of the host's own items found by where they are. Its index is the renderer's for the name, the same in every
+    /// world, so materials shared by worlds read the same set; a renderer has room for 13 names. It draws from the next
+    /// SubmitFrame. Host thread.
+    /// </summary>
     public SpatialSet<T> CreateSpatialSet<T>(string name) where T : unmanaged
     {
+        ArgumentNullException.ThrowIfNull(name);
         if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() % 16 != 0)
             throw new ArgumentException($"A spatial set's record must be a whole number of 16 byte words, {typeof(T).Name} is {System.Runtime.CompilerServices.Unsafe.SizeOf<T>()} bytes.");
-        int slot = SpatialIndex.FirstHostSet + _hostSets.Count;
-        if (slot >= SpatialIndex.MaxSets)
-            throw new InvalidOperationException($"A world holds at most {SpatialIndex.MaxSets - SpatialIndex.FirstHostSet} spatial sets of its own.");
+        if (!_hostSetNames.Add(name))
+            throw new InvalidOperationException($"The world already has a spatial set named {name}.");
+        int slot = SpatialSlots.Slot(_owner?.SpatialSlots, name, typeof(T));
         SpatialSet<T> set = new(_device, slot, name, _report);
-        _hostSets.Add(set.Render);
+        _newHostSets.Add(set.Render);
         _hostSetExtracts.Add(set.Extract);
         return set;
     }
 
+    private readonly HashSet<string> _hostSetNames = new(StringComparer.Ordinal);
+    private readonly List<SpatialIndex> _newHostSets = new();
+    private readonly SpatialSlots SpatialSlots = new();
+
     /// <summary>Features every view of the world runs. Host thread.</summary>
     public FeatureSet Features { get; } = new();
+
+    /// <summary>Host geometry drawn into each view through its passes without being renderables. Host thread.</summary>
+    public ProviderSet Providers { get; } = new();
+
+    /// <summary>The providers as of the last SubmitFrame. The render thread reads only this.</summary>
+    internal RenderProvider[] ProviderSnapshot = [];
+
+    private sealed class InstanceBatch
+    {
+        public InstanceBatchDesc Desc;
+        public Material[] Materials = [];
+        public readonly List<RenderableHandle> Instances = new();
+        public int Generation;
+        public bool Alive;
+    }
+
+    private readonly List<InstanceBatch> _batches = new();
+    private readonly Stack<int> _freeBatches = new();
+
+    /// <summary>
+    /// Adds many instances of one mesh and material set, each an object of its own for culling, lighting and object ids.
+    /// Host thread.
+    /// </summary>
+    public InstanceBatchHandle AddInstanceBatch(in InstanceBatchDesc desc, ReadOnlySpan<Material> materials, ReadOnlySpan<InstanceData> instances)
+    {
+        ArgumentNullException.ThrowIfNull(desc.Mesh);
+        if (materials.IsEmpty)
+            throw new ArgumentException("An instance batch needs at least one material.", nameof(materials));
+        int index;
+        if (_freeBatches.Count > 0)
+        {
+            index = _freeBatches.Pop();
+        }
+        else
+        {
+            index = _batches.Count;
+            _batches.Add(new InstanceBatch());
+        }
+        InstanceBatch batch = _batches[index];
+        batch.Generation++;
+        batch.Alive = true;
+        batch.Desc = desc;
+        batch.Materials = materials.ToArray();
+        SetInstances(batch, instances);
+        return new InstanceBatchHandle(index, batch.Generation);
+    }
+
+    /// <summary>Replaces a batch's instances, adding and removing at the end when the count changes. Host thread.</summary>
+    public void SetInstances(InstanceBatchHandle handle, ReadOnlySpan<InstanceData> instances) => SetInstances(Batch(handle), instances);
+
+    /// <summary>Moves a batch or changes what its instances share, keeping their own data. Host thread.</summary>
+    public void SetInstanceBatch(InstanceBatchHandle handle, in InstanceBatchDesc desc)
+    {
+        ArgumentNullException.ThrowIfNull(desc.Mesh);
+        InstanceBatch batch = Batch(handle);
+        InstanceBatchDesc old = batch.Desc;
+        batch.Desc = desc;
+        for (int i = 0; i < batch.Instances.Count; i++)
+        {
+            RenderableHandle instance = batch.Instances[i];
+            int at = instance.Index;
+            Double4x4 relative = old.Transform.Invert() * _transform[at];
+            SetTransform(instance, desc.Transform * relative);
+            if (desc.Mesh != old.Mesh)
+                SetMesh(instance, desc.Mesh);
+            if (desc.LayerMask != old.LayerMask)
+                SetLayerMask(instance, desc.LayerMask);
+            if (desc.Flags != old.Flags)
+                SetFlags(instance, desc.Flags);
+            if (desc.ObjectIdBase != old.ObjectIdBase)
+                SetObjectId(instance, desc.ObjectIdBase + (uint)i);
+            if (desc.SortBias != old.SortBias)
+                SetSortBias(instance, desc.SortBias);
+        }
+    }
+
+    public void RemoveInstanceBatch(InstanceBatchHandle handle)
+    {
+        InstanceBatch batch = Batch(handle);
+        foreach (RenderableHandle instance in batch.Instances)
+            Remove(instance);
+        batch.Instances.Clear();
+        batch.Alive = false;
+        batch.Generation++;
+        _freeBatches.Push(handle.Index);
+    }
+
+    public bool IsAlive(InstanceBatchHandle handle)
+        => (uint)handle.Index < (uint)_batches.Count && _batches[handle.Index].Alive && _batches[handle.Index].Generation == handle.Generation;
+
+    public int InstanceCount(InstanceBatchHandle handle) => Batch(handle).Instances.Count;
+
+    private InstanceBatch Batch(InstanceBatchHandle handle)
+    {
+        if (!IsAlive(handle))
+            throw new ArgumentException("The instance batch was removed, or is not from this world.", nameof(handle));
+        return _batches[handle.Index];
+    }
+
+    private void SetInstances(InstanceBatch batch, ReadOnlySpan<InstanceData> instances)
+    {
+        InstanceBatchDesc desc = batch.Desc;
+        while (batch.Instances.Count > instances.Length)
+        {
+            Remove(batch.Instances[^1]);
+            batch.Instances.RemoveAt(batch.Instances.Count - 1);
+        }
+        for (int i = 0; i < instances.Length; i++)
+        {
+            InstanceData data = instances[i];
+            Double4x4 transform = desc.Transform * (Double4x4)data.Transform;
+            if (i < batch.Instances.Count)
+            {
+                RenderableHandle instance = batch.Instances[i];
+                SetTransform(instance, transform);
+                SetCustomData(instance, data.Color, data.Custom);
+                continue;
+            }
+            batch.Instances.Add(Add(new RenderableDesc
+            {
+                Mesh = desc.Mesh,
+                Transform = transform,
+                LayerMask = desc.LayerMask,
+                Flags = desc.Flags,
+                Custom0 = data.Color,
+                Custom1 = data.Custom,
+                ObjectId = desc.ObjectIdBase + (uint)i,
+                SortBias = desc.SortBias,
+            }, batch.Materials));
+        }
+    }
+
+    private readonly List<(RenderableHandle Handle, GpuMesh? Owned)> _transients = new();
+    private readonly List<(RenderableHandle Handle, GpuMesh? Owned)> _drawnTransients = new();
+
+    /// <summary>Draws geometry in the next frame only, through every pass its material has. Host thread.</summary>
+    public void DrawTransient(in TransientDraw draw)
+    {
+        ArgumentNullException.ThrowIfNull(draw.Material);
+        GpuMesh? owned = null;
+        GpuMesh mesh;
+        if (draw.Mesh != null)
+        {
+            mesh = draw.Mesh;
+        }
+        else
+        {
+            if (_owner == null)
+                throw new InvalidOperationException("Inline transient geometry needs a world made by a renderer.");
+            if (draw.Positions.IsEmpty)
+                throw new ArgumentException("A transient draw needs a mesh or positions.", nameof(draw));
+            uint count = (uint)draw.Positions.Length;
+            uint[] indices = draw.Indices.IsEmpty ? [.. System.Linq.Enumerable.Range(0, (int)count).Select(i => (uint)i)] : draw.Indices.ToArray();
+            List<VertexStream> streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(draw.Positions.Span).ToArray() }];
+            if (!draw.Colors.IsEmpty)
+                streams.Add(new VertexStream { Semantic = VertexSemantic.Color, Format = VertexElementFormat.Byte4_Norm, Data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(draw.Colors.Span).ToArray() });
+            mesh = owned = _owner.CreateMesh(new MeshData
+            {
+                VertexCount = count,
+                Streams = [.. streams],
+                Indices = indices,
+                SubMeshes = [new SubMesh { IndexStart = 0, IndexCount = (uint)indices.Length, Topology = draw.Topology }],
+            });
+        }
+        RenderableHandle handle = Add(new RenderableDesc { Mesh = mesh, Transform = draw.Transform, LayerMask = draw.LayerMask, Flags = draw.Flags }, [draw.Material]);
+        _transients.Add((handle, owned));
+    }
+
+    // The frame drawn, last frame's transients go: their renderables and the meshes made for them
+    private void RetireTransients()
+    {
+        foreach ((RenderableHandle handle, GpuMesh? owned) in _drawnTransients)
+        {
+            Remove(handle);
+            owned?.Dispose();
+        }
+        _drawnTransients.Clear();
+        _drawnTransients.AddRange(_transients);
+        _transients.Clear();
+    }
 
     /// <summary>The features as of the last SubmitFrame. The render thread reads only this.</summary>
     internal RenderFeature[] FeatureSnapshot = [];
@@ -439,6 +693,15 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>Copies everything that changed since the last call into the render copy. Host thread, at SubmitFrame.</summary>
     internal void Extract()
     {
+        ProviderSnapshot = Providers.Snapshot();
+        foreach (RenderProvider provider in ProviderSnapshot)
+        {
+            provider.EnabledSnapshot = provider.Enabled;
+            provider.RunsOnSnapshot = provider.RunsOn;
+            if (provider.Enabled)
+                provider.Extract();
+        }
+        RetireTransients();
         _render.BeginExtract();
         foreach (int index in _dirty)
         {
@@ -449,6 +712,8 @@ public sealed partial class RenderWorld : IDisposable
         _dirty.Clear();
         _render.EndExtract();
         ExtractLighting();
+        _hostSets.AddRange(_newHostSets);
+        _newHostSets.Clear();
         foreach (Action extract in _hostSetExtracts)
             extract();
     }
@@ -482,6 +747,8 @@ public sealed partial class RenderWorld : IDisposable
         Probes.Dispose();
         Reflections.Dispose();
         foreach (SpatialIndex set in _hostSets)
+            set.Dispose();
+        foreach (SpatialIndex set in _newHostSets)
             set.Dispose();
     }
 
@@ -605,6 +872,20 @@ public sealed partial class RenderWorld : IDisposable
 
         /// <summary>Renderables whose draws changed this frame: added, removed, new mesh or mesh data, materials, flags or mirroring.</summary>
         public List<int> DrawChanged { get; } = new();
+
+        private uint _transientObjects;
+
+        /// <summary>Forgets last frame's provider objects. Render thread, before any view.</summary>
+        public void BeginTransientObjects() => _transientObjects = 0;
+
+        /// <summary>An object record for one frame, after every renderable's, for a provider's item. Render thread.</summary>
+        public uint AddTransientObject(in Double4x4 transform, in ObjectAttributes attributes)
+        {
+            uint index = (uint)Capacity + _transientObjects++;
+            Transforms.Set(index, new ObjectTransform(transform));
+            Attributes.Set(index, attributes);
+            return index;
+        }
 
         public void BeginExtract()
         {
@@ -934,7 +1215,7 @@ public sealed partial class RenderWorld : IDisposable
                 _meshUsers.Remove(mesh);
         }
 
-        private static double Determinant3(in Double4x4 m)
+        internal static double Determinant3(in Double4x4 m)
             => m.c0.X * (m.c1.Y * m.c2.Z - m.c2.Y * m.c1.Z)
              - m.c1.X * (m.c0.Y * m.c2.Z - m.c2.Y * m.c0.Z)
              + m.c2.X * (m.c0.Y * m.c1.Z - m.c1.Y * m.c0.Z);

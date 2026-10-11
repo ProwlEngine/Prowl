@@ -188,6 +188,8 @@ internal unsafe partial class VkGraphicsDevice
             TessellationShader = supported.TessellationShader,
             DrawIndirectFirstInstance = supported.DrawIndirectFirstInstance,
             MultiDrawIndirect = supported.MultiDrawIndirect,
+            ShaderSampledImageArrayDynamicIndexing = supported.ShaderSampledImageArrayDynamicIndexing,
+            ShaderStorageBufferArrayDynamicIndexing = supported.ShaderStorageBufferArrayDynamicIndexing,
             SamplerAnisotropy = supported.SamplerAnisotropy,
             DepthClamp = supported.DepthClamp,
             DepthBiasClamp = supported.DepthBiasClamp,
@@ -299,7 +301,8 @@ internal unsafe partial class VkGraphicsDevice
             && supported12.DescriptorBindingStorageImageUpdateAfterBind
             && supported12.DescriptorBindingStorageBufferUpdateAfterBind
             && supported12.DescriptorBindingUpdateUnusedWhilePending
-            && supported12.ShaderSampledImageArrayNonUniformIndexing;
+            && supported12.ShaderSampledImageArrayNonUniformIndexing
+            && supported12.ShaderStorageBufferArrayNonUniformIndexing;
 
         PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features)
         {
@@ -316,6 +319,7 @@ internal unsafe partial class VkGraphicsDevice
             DescriptorBindingStorageBufferUpdateAfterBind = descriptorIndexing,
             DescriptorBindingUpdateUnusedWhilePending = descriptorIndexing,
             ShaderSampledImageArrayNonUniformIndexing = descriptorIndexing,
+            ShaderStorageBufferArrayNonUniformIndexing = descriptorIndexing,
         };
         PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true)
         {

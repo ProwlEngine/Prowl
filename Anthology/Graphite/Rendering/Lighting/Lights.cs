@@ -1421,6 +1421,32 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
     }
 }
 
+/// <summary>The slots host spatial sets get by name, shared by every world of a renderer. Host thread.</summary>
+internal sealed class SpatialSlots
+{
+    private readonly Dictionary<string, (int Slot, Type Type)> _slots = new(StringComparer.Ordinal);
+
+    /// <summary>The slot for a name, from the renderer's registry when the world has one, else the world's own.</summary>
+    public int Slot(SpatialSlots? renderer, string name, Type type)
+    {
+        SpatialSlots registry = renderer ?? this;
+        lock (registry._slots)
+        {
+            if (registry._slots.TryGetValue(name, out (int Slot, Type Type) known))
+            {
+                if (known.Type != type)
+                    throw new InvalidOperationException($"The spatial set {name} holds {known.Type.Name} records, not {type.Name}.");
+                return known.Slot;
+            }
+            int slot = SpatialIndex.FirstHostSet + registry._slots.Count;
+            if (slot >= SpatialIndex.MaxSets)
+                throw new InvalidOperationException($"A renderer has room for {SpatialIndex.MaxSets - SpatialIndex.FirstHostSet} spatial set names.");
+            registry._slots[name] = (slot, type);
+            return slot;
+        }
+    }
+}
+
 /// <summary>A handle to an item of a host's spatial set.</summary>
 public readonly record struct SpatialHandle(int Index, int Generation)
 {
@@ -1462,12 +1488,24 @@ public sealed class SpatialSet<T> where T : unmanaged
 
     public SpatialHandle Add(Double3 center, float radius, in T record, bool isStatic = false)
     {
+        Check(center, radius);
         (int index, int generation) = _items.Add(new Item { Center = center, Radius = radius, Record = record, Static = isStatic });
         return new SpatialHandle(index, generation);
     }
 
     public void Set(SpatialHandle handle, Double3 center, float radius, in T record, bool isStatic = false)
-        => _items.Set(handle.Index, handle.Generation, new Item { Center = center, Radius = radius, Record = record, Static = isStatic });
+    {
+        Check(center, radius);
+        _items.Set(handle.Index, handle.Generation, new Item { Center = center, Radius = radius, Record = record, Static = isStatic });
+    }
+
+    private static void Check(Double3 center, float radius)
+    {
+        if (!double.IsFinite(center.X) || !double.IsFinite(center.Y) || !double.IsFinite(center.Z))
+            throw new ArgumentOutOfRangeException(nameof(center), "An item's centre must be finite.");
+        if (!float.IsFinite(radius) || radius < 0)
+            throw new ArgumentOutOfRangeException(nameof(radius), "An item's radius must be finite and not negative.");
+    }
 
     public void Remove(SpatialHandle handle) => _items.Remove(handle.Index, handle.Generation);
 

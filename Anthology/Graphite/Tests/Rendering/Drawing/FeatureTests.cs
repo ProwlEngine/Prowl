@@ -148,6 +148,109 @@ public sealed class FeatureTests : IDisposable
         }
         """;
 
+    // Colours with the object's Custom0, shifting each instance of a shared draw a quarter of the view along X
+    private const string ObjectColorSource = """
+        Shader "Test/ObjectColor"
+        {
+            Properties
+            {
+                _Shift("Shift", Float) = 0
+            }
+
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    uniform float _Shift;
+                    void main()
+                    {
+                        vec3 p = vertexPosition + vec3(float(Graphite_InstanceIndex()) * _Shift, 0.0, 0.0);
+                        gl_Position = Graphite_ObjectToClip(p);
+                    }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    #include "Graphite/Passes.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        outColor = vec4(Graphite_Object().custom0.rgb, 1.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    // The vertex colour, for inline transient geometry
+    private const string VertexColorSource = """
+        Shader "Test/VertexColor"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" }
+                Cull Off
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    layout(location = 0) out vec4 vColor;
+                    void main()
+                    {
+                        vColor = vertexColor;
+                        gl_Position = Graphite_ObjectToClip(vertexPosition);
+                    }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    #include "Graphite/Passes.glsl"
+                    layout(location = 0) in vec4 vColor;
+                    layout(location = 0) out vec4 outColor;
+                    void main()
+                    {
+                        outColor = vec4(vColor.rgb, 1.0);
+                        Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                    }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    // Half the colour of the object's Custom0, blended over what is behind
+    private const string ObjectGlassSource = """
+        Shader "Test/ObjectGlass"
+        {
+            Pass
+            {
+                Tags { "LightMode" = "Forward" "RenderQueue" = "3000" }
+                Cull Off
+                ZWrite Off
+                Blend SourceAlpha InverseSourceAlpha
+                GLSLPROGRAM
+                Vertex
+                {
+                    #include "Graphite/Vertex.glsl"
+                    void main() { gl_Position = Graphite_ObjectToClip(vertexPosition); }
+                }
+                Fragment
+                {
+                    #include "Graphite/Core.glsl"
+                    layout(location = 0) out vec4 outColor;
+                    void main() { outColor = vec4(Graphite_Object().custom0.rgb, 0.5); }
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
     private const int Size = 16;
 
     // Orthographic and reversed Z: sees x and y from -4 to 4, and z from 0 (depth 1) to 100 (depth 0).
@@ -886,6 +989,146 @@ public sealed class FeatureTests : IDisposable
 
         publisher.On = true;
         AssertAll(new Float3(0.75f, 0.5f, 0), Frame(View()));
+    }
+
+    private Material ObjectColor(float shift = 0)
+    {
+        Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(ObjectColorSource)));
+        material.SetFloat("_Shift", shift);
+        return material;
+    }
+
+    // A quarter size quad, two units across, at x and y in the view's -4 to 4
+    private static Float4x4 Small(float x, float y) => Float4x4.CreateTranslation(new Float3(x, y, 0)) * Float4x4.CreateScale(0.25f);
+
+    // Pixels whose centre lies inside a two unit square centred at x, y
+    private static Func<int, bool> Inside(float x, float y) => i =>
+    {
+        float px = 4 * ((i % Size + 0.5f) / Size * 2 - 1), py = 4 * ((i / Size + 0.5f) / Size * 2 - 1);
+        return MathF.Abs(px - x) < 1 && MathF.Abs(py - y) < 1;
+    };
+
+    [Fact]
+    public void InstanceBatches_DrawEveryInstance_AndFollowTheirEdits()
+    {
+        Material material = ObjectColor();
+        InstanceBatchDesc desc = new() { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) };
+        InstanceData[] instances =
+        [
+            new InstanceData { Transform = Small(-2, -2), Color = new Float4(1, 0, 0, 1) },
+            new InstanceData { Transform = Small(2, 2), Color = new Float4(0, 1, 0, 1) },
+        ];
+        InstanceBatchHandle batch = _world.AddInstanceBatch(desc, [material], instances);
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 1, 0), pixels, Inside(2, 2));
+        AssertAll(new Float3(0, 0, 0), pixels, i => !Inside(-2, -2)(i) && !Inside(2, 2)(i));
+
+        // One instance, recoloured, then the whole batch moved
+        _world.SetInstances(batch, [new InstanceData { Transform = Small(-2, -2), Color = new Float4(0, 0, 1, 1) }]);
+        Assert.Equal(1, _world.InstanceCount(batch));
+        pixels = Frame(View());
+        AssertAll(new Float3(0, 0, 1), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 0, 0), pixels, Inside(2, 2));
+
+        desc.Transform = Double4x4.CreateTranslation(new Double3(4, 4, 10));
+        _world.SetInstanceBatch(batch, desc);
+        pixels = Frame(View());
+        AssertAll(new Float3(0, 0, 1), pixels, Inside(2, 2));
+        AssertAll(new Float3(0, 0, 0), pixels, Inside(-2, -2));
+
+        _world.RemoveInstanceBatch(batch);
+        Assert.False(_world.IsAlive(batch));
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    [Fact]
+    public void TransientDraws_ShowForOneFrameOnly()
+    {
+        Material color = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(VertexColorSource)));
+        Float3[] square = [new(-3, -3, 10), new(-1, -3, 10), new(-1, -1, 10), new(-3, -1, 10)];
+        uint red = 0xFF0000FFu;
+        _world.DrawTransient(new TransientDraw { Positions = square, Colors = new uint[] { red, red, red, red }, Indices = new uint[] { 0, 1, 2, 0, 2, 3 }, Material = color });
+        _world.DrawTransient(new TransientDraw { Mesh = _quad, Material = color, Transform = Double4x4.CreateTranslation(new Double3(2, 2, 10)) * Double4x4.CreateScale(0.25) });
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(1, 1, 1), pixels, Inside(2, 2));
+
+        // Gone the frame after
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    private sealed class Items(GpuMesh mesh, Material material) : RenderProvider
+    {
+        public readonly List<(Double4x4 Transform, Float4 Color, uint Instances)> Draws = new();
+        public DeviceBuffer? Count;
+        public Material Material = material;
+        public int Culls;
+
+        public override void Cull(in ProviderView view, DrawItemSink sink)
+        {
+            Culls++;
+            foreach ((Double4x4 transform, Float4 color, uint instances) in Draws)
+            {
+                DrawItem item = new() { Transform = transform, Custom0 = color };
+                if (Count != null)
+                    sink.AddIndirect(mesh, 0, Material, item, Count, 4);
+                else if (instances > 1)
+                    sink.AddInstanced(mesh, 0, Material, item, instances);
+                else
+                    sink.Add(mesh, 0, Material, item);
+            }
+        }
+    }
+
+    [Fact]
+    public void Providers_DrawTheirItemsIntoEachView_SingleInstancedAndIndirect()
+    {
+        Items items = new(_quad, ObjectColor(shift: 16));
+        _world.Providers.Add(items);
+        items.Draws.Add((Double4x4.CreateTranslation(new Double3(-2, -2, 10)) * Double4x4.CreateScale(0.25), new Float4(1, 0, 0, 1), 1));
+        Float4[] pixels = Frame(View());
+        Assert.Equal(1, items.Culls);
+        AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 0, 0), pixels, i => !Inside(-2, -2)(i));
+
+        // Two instances of one object, the second shifted four units by the shader: a quad scaled by a quarter moves 16 units of its own
+        items.Draws[0] = (items.Draws[0].Transform, new Float4(0, 1, 0, 1), 2);
+        pixels = Frame(View());
+        AssertAll(new Float3(0, 1, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 1, 0), pixels, Inside(2, -2));
+
+        // The instance count the GPU holds: one, then two
+        using DeviceBuffer count = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        _device.UpdateBuffer<uint>(count, 0, [0, 1, 0, 0]);
+        items.Count = count;
+        pixels = Frame(View());
+        AssertAll(new Float3(0, 1, 0), pixels, Inside(-2, -2));
+        AssertAll(new Float3(0, 0, 0), pixels, Inside(2, -2));
+        _device.UpdateBuffer<uint>(count, 0, [0, 2, 0, 0]);
+        pixels = Frame(View());
+        AssertAll(new Float3(0, 1, 0), pixels, Inside(2, -2));
+
+        items.Enabled = false;
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    [Fact]
+    public void ProvidedTransparentItems_SortWithTheWorlds()
+    {
+        Shader glass = _renderer.LoadShader(ShaderParser.Parse(ObjectGlassSource));
+        Material Glass() => _renderer.CreateMaterial(glass);
+
+        // The world's far red glass and a provider's near green one, in either order back to front
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 20)), Custom0 = new Float4(1, 0, 0, 1) }, [Glass()]);
+        Items items = new(_quad, Glass());
+        items.Draws.Add((Double4x4.CreateTranslation(new Double3(0, 0, 10)), new Float4(0, 1, 0, 1), 1));
+        _world.Providers.Add(items);
+        AssertAll(new Float3(0.25f, 0.5f, 0), Frame(View()));
+
+        items.Draws[0] = (Double4x4.CreateTranslation(new Double3(0, 0, 30)), new Float4(0, 1, 0, 1), 1);
+        AssertAll(new Float3(0.5f, 0.25f, 0), Frame(View()));
     }
 
     [Fact]

@@ -12,8 +12,14 @@ namespace Prowl.Graphite.Rendering;
 [StructLayout(LayoutKind.Sequential)]
 internal struct DrawRecord
 {
+    /// <summary>Every instance draws Object rather than the instance list's entry.</summary>
+    public const uint SharedObject = 1;
+
+    /// <summary>SubMesh holds the material slot itself rather than the submesh whose slot the object's slice holds.</summary>
+    public const uint DirectSlot = 2;
+
     public uint Chunk;
-    public uint View;
+    public uint Object;
     public uint Flags;
     public uint SubMesh;
 }
@@ -285,11 +291,17 @@ internal sealed class BucketSet
 
     private readonly record struct Membership(Bucket Bucket, int Position);
 
-    private readonly record struct ChunkRef(uint Chunk, int ChunkInMesh, uint FirstIndex, uint IndexCount);
+    internal readonly record struct ChunkRef(uint Chunk, int ChunkInMesh, uint FirstIndex, uint IndexCount);
 
-    /// <summary>One transparent submesh of one object, with the chunks it draws.</summary>
-    private sealed class TransparentItem
+    /// <summary>One transparent submesh of one object, with the chunks it draws, or a provider's item for one view.</summary>
+    internal sealed class TransparentItem
     {
+        public bool Provided;
+        public float Depth;
+        public uint MaterialSlot;
+        public bool Shared;
+        public uint InstanceCount;
+        public int FirstCommand;
         public required int Pass;
         public required int Object;
         public required ushort Program;
@@ -473,14 +485,14 @@ internal sealed class BucketSet
     /// Fills the transparent draw list from the last <see cref="Cull"/>: every visible transparent item, sorted by queue,
     /// sort bias, then back to front. Adjacent items of the same program, page, topology, winding and chunk share a command.
     /// </summary>
-    public void BuildTransparent(in CullFrustum frustum, DrawList list)
+    public void BuildTransparent(in CullFrustum frustum, DrawList list, IReadOnlyList<TransparentItem>? provided = null)
     {
         list.Clear();
-        AppendTransparent(frustum, list, 1);
+        AppendTransparent(frustum, list, 1, provided);
     }
 
-    // The visible transparent items of a pass, back to front, after what the list holds
-    private void AppendTransparent(in CullFrustum frustum, DrawList list, int pass)
+    // The visible transparent items of a pass, back to front, after what the list holds, providers' items among them
+    private void AppendTransparent(in CullFrustum frustum, DrawList list, int pass, IReadOnlyList<TransparentItem>? provided = null)
     {
         _sorted.Clear();
         foreach (TransparentItem item in _transparent)
@@ -488,11 +500,23 @@ internal sealed class BucketSet
             if (item.Pass == pass && _visible[item.Object])
                 _sorted.Add((TransparentKey(item, frustum), item));
         }
+        if (provided != null)
+        {
+            foreach (TransparentItem item in provided)
+                _sorted.Add((ProvidedKey(item), item));
+        }
         _sorted.Sort((a, b) => a.Key.CompareTo(b.Key));
 
         DrawCommandRef previous = new(0, -1, default, false, 0, -1);
         foreach ((_, TransparentItem item) in _sorted)
         {
+            if (item.Provided)
+            {
+                item.FirstCommand = list.CommandCount;
+                EmitProvided(list, item);
+                previous = new(0, -1, default, false, 0, -1);
+                continue;
+            }
             bool multiChunk = item.Chunks.Length > 1;
             foreach (ChunkRef chunk in item.Chunks)
             {
@@ -517,6 +541,35 @@ internal sealed class BucketSet
     }
 
     private readonly record struct DrawCommandRef(ushort Program, int Page, PrimitiveTopology Topology, bool Mirrored, uint Chunk, int Command);
+
+    // [queueRank 6][sortBias 8, the middle][depth 32 back to front][program 12][spare 6]
+    private ulong ProvidedKey(TransparentItem item)
+    {
+        ulong rank = (ulong)_queueRanks.GetValueOrDefault(item.Queue);
+        ulong depth = ~BitConverter.SingleToUInt32Bits(MathF.Max(item.Depth, 0)) & 0xFFFFFFFFu;
+        return (rank << 58) | (128ul << 50) | (depth << 18) | (((ulong)item.Program & 0xFFF) << 6);
+    }
+
+    /// <summary>A provider's item into a list: a command per chunk, through its own object or shared by its instances.</summary>
+    internal static void EmitProvided(DrawList list, TransparentItem item)
+    {
+        foreach (ChunkRef chunk in item.Chunks)
+        {
+            uint flags = DrawRecord.DirectSlot | (item.Shared ? DrawRecord.SharedObject : 0);
+            if (!item.Shared)
+                list.AddInstance((uint)item.Object);
+            list.AddCommand(
+                new IndirectDrawIndexedArguments
+                {
+                    IndexCount = chunk.IndexCount,
+                    InstanceCount = item.Shared ? item.InstanceCount : 1,
+                    FirstIndex = chunk.FirstIndex,
+                    FirstInstance = item.Shared ? 0 : (uint)(list.InstanceCount - 1),
+                },
+                new DrawRecord { Chunk = chunk.Chunk, Object = (uint)item.Object, Flags = flags, SubMesh = item.MaterialSlot });
+            list.Merge(item.Program, item.Page, item.Topology, item.Mirrored);
+        }
+    }
 
     // [queueRank 6][sortBias 8][depth 32 back to front][program 12][spare 6]
     private ulong TransparentKey(TransparentItem item, in CullFrustum frustum)

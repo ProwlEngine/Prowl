@@ -187,6 +187,8 @@ internal static class MaterialRewrite
                 }
 
                 List<ResourceLayoutElementDescription> target = layout.Set == GraphiteBindings.PassSet ? pass : user;
+                if (element.ArrayCount > 1)
+                    throw new ShaderLoadException($"{plan.ShaderName}: {element.Name.Text()} is an array of resources, which only the renderer's own tables hold.");
                 if (target == user && element.Kind is not (ResourceKind.StructuredBufferReadOnly or ResourceKind.StructuredBufferReadWrite))
                     throw new ShaderLoadException($"{plan.ShaderName}: {element.Name.Text()} is a {element.Kind}, which a material pass only reads as a material or global property. Buffers come from Globals.SetBuffer.");
                 if (target.Exists(e => e.BindingIndex == element.BindingIndex))

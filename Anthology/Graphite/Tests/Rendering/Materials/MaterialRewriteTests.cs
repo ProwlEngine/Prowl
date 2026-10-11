@@ -68,7 +68,6 @@ public sealed class MaterialRewriteTests : IDisposable
                 }
                 Fragment
                 {
-                    #include "Graphite/Passes.glsl"
                     #pragma global _Wind
                     uniform float _Scale;
                     uniform vec4 _Color;
@@ -82,7 +81,7 @@ public sealed class MaterialRewriteTests : IDisposable
                     }
 
                     void main()
-                    { Graphite_WriteGBuffer(vec3(0.0, 0.0, -1.0), 1.0, 0.0);
+                    {
                         outColor = Fetch(_MainTex, vec2(0.5)) * _Color * _Scale + vec4(_Wind);
                     }
                 }
@@ -246,6 +245,16 @@ public sealed class MaterialRewriteTests : IDisposable
         string source = Source.Replace("uniform float _Scale;", "uniform vec2 _Scale;").Replace("* _Scale", "* _Scale.x");
         ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
         Assert.Contains("_Scale", error.Message);
+    }
+
+    [Fact]
+    public void ArraysOfResources_FailToLoad()
+    {
+        string source = Source
+            .Replace("uniform sampler2D _MainTex;", "uniform sampler2D _MainTex;\n                    uniform sampler2D _Layers[2];")
+            .Replace("* _Scale + vec4(_Wind)", "* _Scale + vec4(_Wind) + texture(_Layers[1], vec2(0.5))");
+        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
+        Assert.Contains("_Layers", error.Message);
     }
 
     [Fact]

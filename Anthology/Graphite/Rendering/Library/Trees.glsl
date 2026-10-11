@@ -152,10 +152,11 @@ struct Graphite_TreeQuery
     bool walking;
 };
 
+// Queries share one traversal stack, so finish one before beginning another: they do not nest
 void Graphite_BeginQuery(out Graphite_TreeQuery q, vec3 position, uint set)
 {
     Graphite_ViewData view = Graphite_View();
-    uvec4 roots = graphite_SpatialRoots[set];
+    uvec4 roots = set < uint(GRAPHITE_SPATIAL_SETS) ? graphite_SpatialRoots[set] : uvec4(GRAPHITE_TREE_INVALID);
     q.set = set;
     q.position = position;
     q.base = view.treeOffset.xyz;

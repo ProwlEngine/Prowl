@@ -418,6 +418,26 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>The host's buffers the view's graph declares, from the world's globals.</summary>
     public DeviceBuffer[] HostBuffers = [];
 
+    /// <summary>Where the world's providers add this view's items.</summary>
+    public readonly DrawItemSink Sink = new();
+
+    /// <summary>This frame's instance counts copied from providers' buffers into the view's commands, as byte offsets.</summary>
+    public readonly List<(DeviceBuffer Source, uint Offset, uint Destination)> Counts = new();
+
+    public void PlanCounts()
+    {
+        Counts.Clear();
+        uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
+        foreach ((BucketSet.TransparentItem item, DrawList list, DeviceBuffer source, uint offset) in Sink.Counts)
+        {
+            int at = Lists.IndexOf(list);
+            if (at < 0)
+                continue;
+            for (int c = 0; c < item.Chunks.Length; c++)
+                Counts.Add((source, offset, (uint)(CommandBases[at] + item.FirstCommand + c) * stride + 4));
+        }
+    }
+
     /// <summary>What host pipelines draw an external view through.</summary>
     public ViewDraws? Draws;
     public FeatureView Info;
@@ -743,7 +763,8 @@ internal sealed class CameraFrame : IDisposable
             for (int i = 0; i < list.CommandCount; i++)
             {
                 IndirectDrawIndexedArguments command = list.Commands[i];
-                command.FirstInstance += (uint)instanceBase;
+                if ((list.Records[i].Flags & DrawRecord.SharedObject) == 0)
+                    command.FirstInstance += (uint)instanceBase;
                 _commands[commandBase + i] = command;
             }
             Array.Copy(list.Records, 0, _records, commandBase, list.CommandCount);
@@ -897,8 +918,11 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
 }
 
 /// <summary>A world as the frame pipeline draws it: its buckets, its globals region and its frame table.</summary>
-internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globalRegion) : IDisposable
+internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globalRegion, DrawPrograms programs) : IDisposable
 {
+    /// <summary>The draw programs of the materials the world's providers draw with.</summary>
+    public ProviderPrograms Programs { get; } = new(programs);
+
     private static int s_nextCapture;
 
     public RenderWorld World { get; } = world;
@@ -977,6 +1001,9 @@ internal sealed class FramePipeline : IDisposable
     private readonly RenderPipeline _fencePipeline = new() { Name = "Graphite.Fence" };
     private readonly FencePass _fence = new();
     private readonly List<int> _fenceAt = new();
+    private readonly List<DeviceBuffer> _replaced = new();
+    private readonly RenderPipeline _countPipeline = new() { Name = "Graphite.ProviderCounts" };
+    private readonly CountPass _counts = new();
     private readonly ReadbackPass _readback;
     private readonly List<int> _sortedViews = new();
     private bool[] _placed = [];
@@ -1108,6 +1135,12 @@ internal sealed class FramePipeline : IDisposable
 
         foreach (WorldFrame world in allWorlds)
         {
+            world.World.Render.BeginTransientObjects();
+            world.Programs.Sweep();
+        }
+
+        foreach (WorldFrame world in allWorlds)
+        {
             _frameWorlds.Add(world);
             world.FiltersUsed = 0;
             world.ProbeCamerasUsed = 0;
@@ -1141,6 +1174,14 @@ internal sealed class FramePipeline : IDisposable
             Draw(camera, view, viewFeatures[index], world, time);
         }
 
+        // Providers' objects, written while the views were prepared
+        foreach (WorldFrame world in _frameWorlds)
+        {
+            _replaced.Clear();
+            world.World.Render.Flush(_uploader, _replaced);
+            _retired.AddRange(_replaced);
+        }
+
         ResolvePrograms();
         if (_deterministic && Globals.NeedsGrowth)
         {
@@ -1154,6 +1195,8 @@ internal sealed class FramePipeline : IDisposable
         GraphDispatch fence = new(_fencePipeline, _frameStartViews);
         for (int i = _fenceAt.Count - 1; i >= 0; i--)
             _dispatches.Insert(_fenceAt[i], fence);
+        if (_counts.Update(Active(), _frame, _countPipeline))
+            _dispatches.Insert(_fenceAt[0] + 1, new GraphDispatch(_countPipeline, _frameStartViews));
         if (pipelines.Length > 0)
         {
             _dispatches.Add(fence);
@@ -1242,6 +1285,27 @@ internal sealed class FramePipeline : IDisposable
             catch (Exception e)
             {
                 Report(new RendererError("feature.prepare", $"{feature.GetType().Name}.PrepareFrame threw: {e}", RendererErrorSeverity.Error, feature) { Key = $"feature.prepare.{feature.GetType().FullName}" });
+            }
+        }
+    }
+
+    // The world's providers add this view's items to its lists, transparent ones kept for the sort
+    private void CullProviders(CameraFrame camera, in ViewDesc view, WorldFrame world, in CullFrustum frustum)
+    {
+        camera.Sink.Begin(camera, world, frustum, view.CullingMask);
+        ViewKinds kind = (ViewKinds)(1 << (int)view.Kind);
+        ProviderView providerView = new(camera.Info, frustum);
+        foreach (RenderProvider provider in world.World.ProviderSnapshot)
+        {
+            if (!provider.EnabledSnapshot || (provider.RunsOnSnapshot & kind) == 0)
+                continue;
+            try
+            {
+                provider.Cull(providerView, camera.Sink);
+            }
+            catch (Exception e)
+            {
+                Report(new RendererError("provider.cull", $"{provider.GetType().Name}.Cull threw: {e}", RendererErrorSeverity.Error, provider) { Key = $"provider.cull.{provider.GetType().FullName}" });
             }
         }
     }
@@ -1485,6 +1549,7 @@ internal sealed class FramePipeline : IDisposable
     /// <summary>Releases what the frame pipeline keeps for a removed world. Render thread idle.</summary>
     public void ForgetWorld(WorldFrame world)
     {
+        world.Programs.Clear();
         if (world.SkyProgram is ushort program)
             DrawPrograms.Release(program);
         world.SkyProgram = null;
@@ -1527,9 +1592,10 @@ internal sealed class FramePipeline : IDisposable
             world.Buckets.Cull(frustum, view.CullingMask);
             world.Buckets.Build(0, frustum, camera.Prepass);
             world.Buckets.Build(1, frustum, camera.Forward);
-            world.Buckets.BuildTransparent(frustum, camera.Transparent);
             foreach ((PassType type, DrawList list) in camera.PassLists)
                 world.Buckets.Build(world.Buckets.Pass(type), frustum, list);
+            CullProviders(camera, view, world, frustum);
+            world.Buckets.BuildTransparent(frustum, camera.Transparent, camera.Sink.Transparent);
 
             foreach (SpatialIndex set in world.World.SpatialSets)
                 camera.Roots[set.Slot] = set.BuildView(frustum, camera.SpatialFor(set.Slot), _uploader);
@@ -1558,6 +1624,7 @@ internal sealed class FramePipeline : IDisposable
         }
         camera.HasPrevious = true;
         camera.Upload(_uploader, camera.Blocks.AsSpan(0, layers));
+        camera.PlanCounts();
     }
 
     // The hosts' views drawn this frame and every capture view, drawn this frame or not
@@ -1669,6 +1736,7 @@ internal sealed class FramePipeline : IDisposable
         _cameras.Clear();
         _frameStart.Dispose();
         _readbackPipeline.Dispose();
+        _countPipeline.Dispose();
         _fencePipeline.Dispose();
         _probes.Dispose();
         Programs.Dispose();
@@ -1846,4 +1914,74 @@ internal sealed class FencePass : IPass
     }
 
     public void Render(RenderContext context, CommandBuffer cmd) { }
+}
+
+/// <summary>
+/// Copies the instance counts providers' GPU work wrote into every view's commands, after FrameStart and before any view
+/// draws, so indirect provider items draw as many instances as their compute passes made.
+/// </summary>
+internal sealed class CountPass : IPass
+{
+    private static readonly List<RenderResourceID> s_ids = new();
+    private readonly List<(DeviceBuffer Source, uint Offset, DeviceBuffer Target, uint Destination)> _copies = new();
+    private readonly List<DeviceBuffer> _buffers = new();
+    private DeviceBuffer[] _declared = [];
+
+    public string Name => "Graphite.ProviderCounts";
+
+    /// <summary>Gathers this frame's copies, rebuilding the pipeline when the buffers they touch change. Returns whether there are any.</summary>
+    public bool Update(IEnumerable<CameraFrame> cameras, int frame, RenderPipeline pipeline)
+    {
+        _copies.Clear();
+        _buffers.Clear();
+        foreach (CameraFrame camera in cameras)
+        {
+            if (camera.LastFrame != frame)
+                continue;
+            foreach ((DeviceBuffer source, uint offset, uint destination) in camera.Counts)
+            {
+                DeviceBuffer target = camera.Commands.Buffer;
+                _copies.Add((source, offset, target, destination));
+                if (!_buffers.Contains(source))
+                    _buffers.Add(source);
+                if (!_buffers.Contains(target))
+                    _buffers.Add(target);
+            }
+        }
+        if (_copies.Count == 0)
+            return false;
+        if (!CollectionsMarshal.AsSpan(_buffers).SequenceEqual(_declared))
+        {
+            _declared = [.. _buffers];
+            pipeline.SetPasses([this]);
+        }
+        return true;
+    }
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        for (int i = 0; i < _declared.Length; i++)
+        {
+            bool target = false;
+            foreach ((_, _, DeviceBuffer t, _) in _copies)
+                target |= t == _declared[i];
+            builder.DeclareImportedBuffer(Id(i), _declared[i], target ? BufferAccess.TransferWrite : BufferAccess.TransferRead);
+        }
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        foreach ((DeviceBuffer source, uint offset, DeviceBuffer target, uint destination) in _copies)
+            cmd.CopyBuffer(source, offset, target, destination, 4);
+    }
+
+    private static RenderResourceID Id(int index)
+    {
+        lock (s_ids)
+        {
+            while (s_ids.Count <= index)
+                s_ids.Add(RenderResourceID.Intern("Graphite.Count" + s_ids.Count));
+            return s_ids[index];
+        }
+    }
 }

@@ -21,6 +21,9 @@ Graphite_ObjectData Graphite_Object() { return graphite_Objects[graphite_Object]
 Graphite_DrawRecord Graphite_Draw() { return graphite_Draw; }
 Graphite_Transform Graphite_ObjectTransform() { return graphite_Transforms[graphite_Object]; }
 
+// The instance a provider's instanced or indirect draw is drawing, 0 to its count
+uint Graphite_InstanceIndex() { return uint(gl_InstanceIndex); }
+
 bool Graphite_HasStream(uint stream) { return (graphite_Chunk.streamsPresent & (1u << stream)) != 0u; }
 
 uint graphite_Word(uint stream, uint words, uint component) { return graphite_Words[graphite_Chunk.streamOffsets[stream] + uint(gl_VertexIndex) * words + component]; }
@@ -92,9 +95,9 @@ void Graphite_BeginVertex()
 {
     graphite_Draw = graphite_DrawRecords[graphite_Push.drawRecordBase + uint(gl_DrawID)];
     graphite_Chunk = graphite_Chunks[graphite_Draw.chunk];
-    graphite_Object = graphite_Instances[graphite_Push.instanceBase + uint(gl_InstanceIndex)];
+    graphite_Object = (graphite_Draw.flags & 1u) != 0u ? graphite_Draw.object : graphite_Instances[graphite_Push.instanceBase + uint(gl_InstanceIndex)];
     graphite_ObjectIndex = graphite_Object;
-    graphite_MaterialSlot = graphite_MaterialSlots[graphite_Objects[graphite_Object].materialSliceBase + graphite_Draw.subMesh];
+    graphite_MaterialSlot = (graphite_Draw.flags & 2u) != 0u ? graphite_Draw.subMesh : graphite_MaterialSlots[graphite_Objects[graphite_Object].materialSliceBase + graphite_Draw.subMesh];
 }
 
 void graphite_ShaderMain();
