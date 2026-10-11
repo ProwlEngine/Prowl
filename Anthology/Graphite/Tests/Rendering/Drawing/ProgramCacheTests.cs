@@ -174,6 +174,19 @@ public sealed class ProgramCacheTests : IDisposable
     }
 
     [Fact]
+    public void FreedProgramIds_DropTheirCompiledVariants()
+    {
+        _programs.Freed += _cache.Drop;
+        ushort plain = Program();
+        _programs.Acquire(plain);
+        WaitFor(plain);
+        Assert.Equal(1, _cache.EntryCount);
+
+        _programs.Release(plain);
+        Assert.Equal(0, _cache.EntryCount);
+    }
+
+    [Fact]
     public void BrokenVariants_AreReportedOnce_AndDrawNothing()
     {
         ushort broken = Program(("_BROKEN", "true"));

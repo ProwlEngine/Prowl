@@ -329,6 +329,22 @@ public sealed class BucketTests : IDisposable
     }
 
     [Fact]
+    public void ProgramIds_OfEmptiedBuckets_AreFreed()
+    {
+        Material material = Material();
+        Add(_triangle, material);
+        Frame(Forward);
+        int ids = _programs.Count;
+
+        for (int i = 0; i < 4; i++)
+        {
+            material.SetKeyword("_NORMALMAP", i % 2 == 0 ? "true" : "false");
+            Frame(Forward);
+        }
+        Assert.Equal(ids, _programs.Count);
+    }
+
+    [Fact]
     public void LowerRenderQueues_DrawFirst()
     {
         Material late = Material(_unlit);

@@ -152,6 +152,7 @@ public sealed class Renderer : IDisposable
         _geometry = new GeometryPool(device, _options.PageVertexWords, _options.PageIndices);
         _materials = new MaterialSystem(device, Textures) { Reporter = message => Report(message, message) };
         _globals = new GlobalRegistry(device, Textures) { Reporter = message => Report(message, message) };
+        _programs.Reporter = message => Report(message, message);
         _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report);
 
         if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)
@@ -222,6 +223,12 @@ public sealed class Renderer : IDisposable
         try
         {
             RemoveWorlds();
+
+            if (Textures.Sweep(_lastDispatched, Device.LastCompletedExecutionId))
+            {
+                _materials.MarkAllRecords();
+                _globals.MarkAllDirty();
+            }
 
             _changedMaterials.Clear();
             _materials.Extract(_changedMaterials);

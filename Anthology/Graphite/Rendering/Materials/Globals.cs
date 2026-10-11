@@ -289,6 +289,13 @@ internal sealed class GlobalRegistry : IDisposable
 
     public int RegionOf(GlobalProperties globals) => globals == Renderer ? 0 : _regions.IndexOf(globals);
 
+    /// <summary>Repacks every region at the next extraction, after a bindless slot a texture global may hold was freed.</summary>
+    public void MarkAllDirty()
+    {
+        lock (_lock)
+            _allDirty = true;
+    }
+
     internal void MarkDirty(GlobalProperties globals)
     {
         lock (_lock)

@@ -37,6 +37,33 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     public static readonly ResourceLayoutDescription FrameLayout = GraphiteBindings.FrameTable(RendererTextures.Textures2D, RendererTextures.OtherTextures);
     public static readonly ResourceLayoutDescription ViewLayout = GraphiteBindings.ViewTable(RendererTextures.Samplers);
 
+    /// <summary>Drops every variant of a freed draw program id, before the id is reused for another program.</summary>
+    public void Drop(ushort id)
+    {
+        List<(ushort, bool, ulong)>? keys = null;
+        foreach (((ushort Program, bool Mirrored, ulong Globals) key, Entry entry) in _entries)
+        {
+            if (key.Program != id)
+                continue;
+            (keys ??= new()).Add(key);
+            entry.Built?.Dispose();
+            Family family = new(entry.Program.Shader, entry.Program.PassIndex, entry.Program.StateOverride, entry.Mirrored);
+            if (_families.TryGetValue(family, out List<Entry>? members))
+            {
+                members.Remove(entry);
+                if (members.Count == 0)
+                    _families.Remove(family);
+            }
+        }
+        if (keys == null)
+            return;
+        foreach ((ushort, bool, ulong) key in keys)
+            _entries.Remove(key);
+    }
+
+    /// <summary>Variants known to the cache, ready, compiling or failed.</summary>
+    internal int EntryCount => _entries.Count;
+
     /// <summary>Variants still compiling on a worker.</summary>
     public int Pending
     {
@@ -548,6 +575,7 @@ internal sealed class FramePipeline : IDisposable
         Globals = globals;
         DrawPrograms = programs;
         Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report);
+        programs.Freed += Programs.Drop;
         _upload = new UploadPass(uploader);
         _frameStart.Name = "Graphite.FrameStart";
         _frameStart.SetPasses([_upload]);

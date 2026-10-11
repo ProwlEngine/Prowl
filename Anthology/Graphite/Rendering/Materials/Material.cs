@@ -374,9 +374,20 @@ internal sealed class MaterialTable(GraphicsDevice device, Shader shader) : IDis
 
     public GpuTable Records { get; } = new(device, $"Materials {shader.Name}", shader.Schema.StrideWords, 64);
 
-    public uint Allocate() => _free.Count > 0 ? _free.Pop() : _next++;
+    /// <summary>Slots held by live materials or still retiring. The table goes when this reaches zero.</summary>
+    public int Used { get; private set; }
 
-    public void Release(uint slot) => _free.Push(slot);
+    public uint Allocate()
+    {
+        Used++;
+        return _free.Count > 0 ? _free.Pop() : _next++;
+    }
+
+    public void Release(uint slot)
+    {
+        Used--;
+        _free.Push(slot);
+    }
 
     public void Dispose() => Records.Dispose();
 }
@@ -399,8 +410,9 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
     private readonly List<int> _pendingIds = new();
     private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiringBuffers = new();
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
+    private readonly HashSet<Material> _live = new();
     private MaterialValue[] _resolved = new MaterialValue[64];
-    private bool _tablesAdded;
+    private bool _tablesChanged;
 
     /// <summary>Called once per distinct problem, like a property the shader does not have.</summary>
     public Action<string>? Reporter { get; set; }
@@ -415,6 +427,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
             Material material = new(this, _freeIds.Count > 0 ? _freeIds.Pop() : _nextId++, shader);
             material.Dirty = Material.Dirt.Record | Material.Dirt.Draw;
             _dirty.Add(material);
+            _live.Add(material);
             return material;
         }
     }
@@ -432,7 +445,24 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
     internal void Free(Material material)
     {
         lock (_lock)
+        {
             _freed.Add(material);
+            _live.Remove(material);
+        }
+    }
+
+    /// <summary>Repacks every material's record at the next extraction, after a bindless slot they may hold was freed.</summary>
+    public void MarkAllRecords()
+    {
+        lock (_lock)
+        {
+            foreach (Material material in _live)
+            {
+                if (material.Dirty == Material.Dirt.None)
+                    _dirty.Add(material);
+                material.Dirty |= Material.Dirt.Record;
+            }
+        }
     }
 
     internal void Report(string key, string message)
@@ -512,8 +542,8 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
             _retiringIds.Add((lastDispatched, id));
         _pendingIds.Clear();
 
-        bool changed = _tablesAdded;
-        _tablesAdded = false;
+        bool changed = _tablesChanged;
+        _tablesChanged = false;
         foreach (MaterialTable table in _tables.Values)
         {
             if (table.Records.Flush(uploader) is { } replaced)
@@ -534,6 +564,22 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
                 continue;
             _retiringSlots[i].Table.Release(_retiringSlots[i].Slot);
             _retiringSlots.RemoveAt(i);
+        }
+
+        List<Shader>? empty = null;
+        foreach ((Shader shader, MaterialTable table) in _tables)
+        {
+            if (table.Used == 0)
+                (empty ??= new()).Add(shader);
+        }
+        if (empty != null)
+        {
+            foreach (Shader shader in empty)
+            {
+                _tables[shader].Dispose();
+                _tables.Remove(shader);
+            }
+            _tablesChanged = true;
         }
 
         for (int i = _retiringBuffers.Count - 1; i >= 0; i--)
@@ -570,7 +616,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
         {
             table = new MaterialTable(device, shader);
             _tables[shader] = table;
-            _tablesAdded = true;
+            _tablesChanged = true;
         }
         return table;
     }

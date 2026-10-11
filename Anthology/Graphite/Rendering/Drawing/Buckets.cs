@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite.ShaderDef;
@@ -31,15 +32,40 @@ internal readonly record struct DrawProgram(Shader Shader, int PassIndex, ulong 
     public override int GetHashCode() => HashCode.Combine(Shader, PassIndex, Variant, StateOverride);
 }
 
-/// <summary>Gives every distinct draw program a dense id for bucket keys.</summary>
+/// <summary>
+/// Gives every distinct draw program a dense id for bucket keys. Buckets and transparent items hold references, and an
+/// id nothing references any more is freed for reuse, its compiled programs dropped through <see cref="Freed"/>.
+/// </summary>
 internal sealed class DrawPrograms
 {
     private readonly Dictionary<DrawProgram, ushort> _ids = new();
     private readonly List<DrawProgram> _programs = new();
+    private readonly List<int> _references = new();
+    private readonly Stack<ushort> _free = new();
 
     public DrawProgram this[ushort id] => _programs[id];
 
-    public int Count => _programs.Count;
+    /// <summary>Ids in use.</summary>
+    public int Count => _ids.Count;
+
+    /// <summary>Raised when an id is freed, before it can be handed out again.</summary>
+    public event Action<ushort>? Freed;
+
+    /// <summary>Called once when every id is in use and a new program cannot get one.</summary>
+    public Action<string>? Reporter { get; set; }
+
+    public void Acquire(ushort id) => _references[id]++;
+
+    public void Release(ushort id)
+    {
+        if (--_references[id] > 0)
+            return;
+
+        _ids.Remove(_programs[id]);
+        _programs[id] = default;
+        Freed?.Invoke(id);
+        _free.Push(id);
+    }
 
     /// <summary>The program a material draws a pass type with, or false when its shader has no such pass.</summary>
     public bool TryGet(MaterialDraw draw, PassType pass, out ushort id)
@@ -50,14 +76,27 @@ internal sealed class DrawPrograms
             return false;
 
         DrawProgram program = new(draw.Shader, passIndex, draw.Variant, draw.StateOverride, draw.Keywords);
-        if (!_ids.TryGetValue(program, out id))
+        if (_ids.TryGetValue(program, out id))
+            return true;
+
+        if (_free.Count > 0)
         {
-            if (_programs.Count > ushort.MaxValue)
-                throw new InvalidOperationException("More than 65536 distinct draw programs.");
-            id = (ushort)_programs.Count;
-            _ids[program] = id;
-            _programs.Add(program);
+            id = _free.Pop();
+            _programs[id] = program;
         }
+        else if (_programs.Count <= ushort.MaxValue)
+        {
+            id = (ushort)_programs.Count;
+            _programs.Add(program);
+            _references.Add(0);
+        }
+        else
+        {
+            Reporter?.Invoke("Every one of the 65536 draw program ids is in use, so new programs draw nothing.");
+            Reporter = null;
+            return false;
+        }
+        _ids[program] = id;
         return true;
     }
 }
@@ -69,7 +108,14 @@ internal sealed class DrawPrograms
 /// </summary>
 internal readonly struct CullFrustum
 {
-    private readonly Float4[] _planes;
+    [InlineArray(6)]
+    private struct Planes
+    {
+        private Float4 _first;
+    }
+
+    private readonly Planes _planes;
+    private readonly int _count;
 
     public CullFrustum(in Float4x4 viewProjection, Double3 camera)
     {
@@ -79,14 +125,17 @@ internal readonly struct CullFrustum
         Float4 row2 = new(viewProjection.c0.Z, viewProjection.c1.Z, viewProjection.c2.Z, viewProjection.c3.Z);
         Float4 row3 = new(viewProjection.c0.W, viewProjection.c1.W, viewProjection.c2.W, viewProjection.c3.W);
 
-        List<Float4> planes = new(6);
-        foreach (Float4 plane in (Float4[])[row3 + row0, row3 - row0, row3 + row1, row3 - row1, row2, row3 - row2])
+        Planes planes = default;
+        int count = 0;
+        Span<Float4> candidates = [row3 + row0, row3 - row0, row3 + row1, row3 - row1, row2, row3 - row2];
+        foreach (Float4 plane in candidates)
         {
             float length = MathF.Sqrt(plane.X * plane.X + plane.Y * plane.Y + plane.Z * plane.Z);
             if (length > 1e-6f)
-                planes.Add(plane / length);
+                planes[count++] = plane / length;
         }
-        _planes = [.. planes];
+        _planes = planes;
+        _count = count;
     }
 
     /// <summary>The camera position the view projection is relative to.</summary>
@@ -97,8 +146,9 @@ internal readonly struct CullFrustum
     public bool Sphere(Double3 center, float radius)
     {
         Float3 c = Relative(center);
-        foreach (Float4 p in _planes)
+        for (int i = 0; i < _count; i++)
         {
+            Float4 p = _planes[i];
             if (p.X * c.X + p.Y * c.Y + p.Z * c.Z + p.W < -radius)
                 return false;
         }
@@ -108,8 +158,9 @@ internal readonly struct CullFrustum
     public bool Box(Double3 worldCenter, Float3 extents)
     {
         Float3 center = Relative(worldCenter);
-        foreach (Float4 p in _planes)
+        for (int i = 0; i < _count; i++)
         {
+            Float4 p = _planes[i];
             float distance = p.X * center.X + p.Y * center.Y + p.Z * center.Z + p.W;
             float radius = MathF.Abs(p.X) * extents.X + MathF.Abs(p.Y) * extents.Y + MathF.Abs(p.Z) * extents.Z;
             if (distance < -radius)
@@ -190,7 +241,7 @@ internal sealed class BucketSet
 
     private readonly record struct Membership(Bucket Bucket, int Position);
 
-    private readonly record struct ChunkRef(uint Chunk, uint FirstIndex, uint IndexCount, AABB Bounds);
+    private readonly record struct ChunkRef(uint Chunk, int ChunkInMesh, uint FirstIndex, uint IndexCount);
 
     /// <summary>One transparent submesh of one object, with the chunks it draws.</summary>
     private sealed class TransparentItem
@@ -216,7 +267,6 @@ internal sealed class BucketSet
         public required uint IndexCount;
         public required uint SubMesh;
         public required bool MultiChunk;
-        public required AABB ChunkBounds;
         public ulong Key;
         public int[] Objects = new int[4];
         public int Count;
@@ -245,6 +295,11 @@ internal sealed class BucketSet
     private List<TransparentItem>?[] _transparentOf = [];
     private readonly List<(ulong Key, TransparentItem Item)> _sorted = new();
     private bool[] _visible = [];
+    private int[] _chunkStamp = [];
+    private int[] _chunkStart = [];
+    private bool[] _chunkVisible = new bool[256];
+    private int _chunkCount;
+    private int _cullStamp;
 
     public BucketSet(RenderWorld.RenderSide world, DrawPrograms programs)
     {
@@ -312,7 +367,7 @@ internal sealed class BucketSet
             for (int i = 0; i < bucket.Count; i++)
             {
                 int index = bucket.Objects[i];
-                if (!_visible[index] || (bucket.MultiChunk && !ChunkVisible(frustum, index, bucket.ChunkBounds)))
+                if (!_visible[index] || (bucket.MultiChunk && !ChunkVisible(frustum, index, (int)bucket.ChunkInMesh)))
                     continue;
                 list.AddInstance((uint)index);
                 if (prepass)
@@ -360,7 +415,7 @@ internal sealed class BucketSet
             bool multiChunk = item.Chunks.Length > 1;
             foreach (ChunkRef chunk in item.Chunks)
             {
-                if (multiChunk && !ChunkVisible(frustum, item.Object, chunk.Bounds))
+                if (multiChunk && !ChunkVisible(frustum, item.Object, chunk.ChunkInMesh))
                     continue;
 
                 DrawCommandRef current = new(item.Program, item.Page, item.Topology, item.Mirrored, chunk.Chunk, list.CommandCount);
@@ -406,7 +461,13 @@ internal sealed class BucketSet
     public void Cull(in CullFrustum frustum, uint cullingMask)
     {
         if (_visible.Length < _world.Capacity)
+        {
             _visible = new bool[_world.Capacity];
+            Array.Resize(ref _chunkStamp, _world.Capacity);
+            Array.Resize(ref _chunkStart, _world.Capacity);
+        }
+        _cullStamp++;
+        _chunkCount = 0;
 
         for (int index = 0; index < _world.Capacity; index++)
         {
@@ -417,10 +478,25 @@ internal sealed class BucketSet
         }
     }
 
-    private bool ChunkVisible(in CullFrustum frustum, int index, in AABB local)
+    // Every chunk of an object is tested once per view, the first time any pass asks, and the answers are shared.
+    private bool ChunkVisible(in CullFrustum frustum, int index, int chunkInMesh)
     {
-        (Double3 center, Float3 extents) = RenderWorld.RenderSide.TransformBox(_world.Transform[index], local);
-        return frustum.Box(center, extents);
+        if (_chunkStamp[index] != _cullStamp)
+        {
+            MeshChunk[] chunks = _world.Mesh[index]!.Placement!.Chunks;
+            if (_chunkCount + chunks.Length > _chunkVisible.Length)
+                Array.Resize(ref _chunkVisible, Math.Max(_chunkCount + chunks.Length, _chunkVisible.Length * 2));
+            Double4x4 transform = _world.Transform[index];
+            for (int c = 0; c < chunks.Length; c++)
+            {
+                (Double3 center, Float3 extents) = RenderWorld.RenderSide.TransformBox(transform, chunks[c].Bounds);
+                _chunkVisible[_chunkCount + c] = frustum.Box(center, extents);
+            }
+            _chunkStamp[index] = _cullStamp;
+            _chunkStart[index] = _chunkCount;
+            _chunkCount += chunks.Length;
+        }
+        return _chunkVisible[_chunkStart[index] + chunkInMesh];
     }
 
     private float Distance(in CullFrustum frustum, int index)
@@ -468,9 +544,9 @@ internal sealed class BucketSet
                         IndexCount = chunk.IndexCount,
                         SubMesh = (uint)chunk.SubMesh,
                         MultiChunk = placement.Chunks.Length > 1,
-                        ChunkBounds = chunk.Bounds,
                     };
                     _buckets[id] = bucket;
+                    _programs.Acquire(program);
                     UseQueue(bucket.Queue, 1);
                     bucket.Key = Key(bucket);
                     _orderDirty[pass] = true;
@@ -498,7 +574,7 @@ internal sealed class BucketSet
             {
                 MeshChunk chunk = placement.Chunks[c];
                 if (chunk.SubMesh == s)
-                    chunks.Add(new ChunkRef(placement.FirstChunk + (uint)c, placement.IndexBase + chunk.IndexStart, chunk.IndexCount, chunk.Bounds));
+                    chunks.Add(new ChunkRef(placement.FirstChunk + (uint)c, c, placement.IndexBase + chunk.IndexStart, chunk.IndexCount));
             }
             if (chunks.Count == 0)
                 continue;
@@ -517,6 +593,7 @@ internal sealed class BucketSet
                 Position = _transparent.Count,
             };
             _transparent.Add(item);
+            _programs.Acquire(program);
             UseQueue(item.Queue, 1);
             if (index >= _transparentOf.Length)
                 Array.Resize(ref _transparentOf, Math.Max(index + 1, _transparentOf.Length * 2));
@@ -544,6 +621,7 @@ internal sealed class BucketSet
                 last.Position = item.Position;
                 _transparent.RemoveAt(_transparent.Count - 1);
                 UseQueue(item.Queue, -1);
+                _programs.Release(item.Program);
             }
             items.Clear();
         }
@@ -573,6 +651,7 @@ internal sealed class BucketSet
             {
                 _buckets.Remove(bucket.Id);
                 UseQueue(bucket.Queue, -1);
+                _programs.Release(bucket.Program);
                 _orderDirty[bucket.Pass] = true;
             }
         }

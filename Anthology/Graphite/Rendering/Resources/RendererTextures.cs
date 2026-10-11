@@ -24,12 +24,17 @@ internal sealed class TableRing : IDisposable
 
     public string Name { get; }
 
+    /// <summary>Changes some table has not applied yet.</summary>
+    internal int LogCount => _log.Count;
+
     public void Set(PropertyID name, uint index, object resource)
     {
         if (_desired.TryGetValue((name, index), out object? existing) && Equals(existing, resource))
             return;
         _desired[(name, index)] = resource;
         _log.Add((name, index));
+        if (_log.Count >= 1024)
+            Compact();
     }
 
     /// <summary>The table for a frame in flight slot, with every change since its last use written.</summary>
@@ -39,28 +44,16 @@ internal sealed class TableRing : IDisposable
         {
             DescriptorTable created = _device.ResourceFactory.CreateDescriptorTable(_layout);
             created.Name = $"{Name} {_tables.Count}";
-            _tables.Add((created, 0));
+            foreach (KeyValuePair<(PropertyID Name, uint Index), object> pair in _desired)
+                Write(created, pair.Key.Name, pair.Key.Index, pair.Value);
+            _tables.Add((created, _log.Count));
         }
 
         (DescriptorTable table, int applied) = _tables[(int)ringSlot];
         for (int i = applied; i < _log.Count; i++)
         {
             (PropertyID name, uint index) = _log[i];
-            switch (_desired[(name, index)])
-            {
-                case Texture texture:
-                    table.SetTexture(name, index, texture);
-                    break;
-                case Sampler sampler:
-                    table.SetSampler(name, index, sampler);
-                    break;
-                case DeviceBufferRange range:
-                    table.SetBuffer(name, index, range);
-                    break;
-                case DeviceBuffer buffer:
-                    table.SetBuffer(name, index, buffer);
-                    break;
-            }
+            Write(table, name, index, _desired[(name, index)]);
         }
         _tables[(int)ringSlot] = (table, _log.Count);
         Compact();
@@ -74,15 +67,32 @@ internal sealed class TableRing : IDisposable
         _tables.Clear();
     }
 
-    // Drops the log entries every table has applied.
+    private static void Write(DescriptorTable table, PropertyID name, uint index, object resource)
+    {
+        switch (resource)
+        {
+            case Texture texture:
+                table.SetTexture(name, index, texture);
+                break;
+            case Sampler sampler:
+                table.SetSampler(name, index, sampler);
+                break;
+            case DeviceBufferRange range:
+                table.SetBuffer(name, index, range);
+                break;
+            case DeviceBuffer buffer:
+                table.SetBuffer(name, index, buffer);
+                break;
+        }
+    }
+
+    // Drops the log entries every existing table has applied. Tables made later start from the whole desired state.
     private void Compact()
     {
-        if (_log.Count < 1024)
-            return;
-        int lowest = int.MaxValue;
+        int lowest = _log.Count;
         foreach ((_, int applied) in _tables)
             lowest = Math.Min(lowest, applied);
-        if (lowest == 0 || _tables.Count < _device.MaxExecutingTasks)
+        if (lowest == 0)
             return;
 
         _log.RemoveRange(0, lowest);
@@ -119,7 +129,9 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     private readonly List<(SamplerDescription? Description, Sampler Sampler)> _samplers = new();
     private readonly List<TableRing> _frameTables = new();
     private readonly List<TableRing> _viewTables = new();
-    private readonly List<(MaterialPropertyType Type, uint Slot, Texture Texture)> _assigned = new();
+    private readonly Stack<uint>[] _freeSlots = [new(), new(), new(), new(), new()];
+    private readonly List<(ulong Execution, int Table, uint Slot)> _retiringSlots = new();
+    private static readonly MaterialPropertyType[] s_tableTypes = [MaterialPropertyType.Texture2D, MaterialPropertyType.Texture2DArray, MaterialPropertyType.Texture3D, MaterialPropertyType.TextureCube, MaterialPropertyType.TextureCubeArray];
 
     internal RendererTextures(GraphicsDevice device)
     {
@@ -137,7 +149,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     uint IMaterialResources.TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName)
     {
         lock (_lock)
-            return Slot(texture ?? Default(defaultName, type), type);
+            return Slot(texture is { IsDisposed: false } ? texture : Default(defaultName, type), type);
     }
 
     uint IMaterialResources.SamplerSlot(SamplerDescription? sampler)
@@ -160,13 +172,60 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         }
     }
 
+    /// <summary>
+    /// Frees the slots of disposed textures: the slot shows a default texture at once and is reused once
+    /// <paramref name="lastDispatched"/> has completed. Returns true when a slot was freed, so records holding it repack.
+    /// Host thread, at extraction.
+    /// </summary>
+    internal bool Sweep(ulong lastDispatched, ulong completed)
+    {
+        lock (_lock)
+        {
+            for (int i = _retiringSlots.Count - 1; i >= 0; i--)
+            {
+                if (_retiringSlots[i].Execution > completed)
+                    continue;
+                _freeSlots[_retiringSlots[i].Table].Push(_retiringSlots[i].Slot);
+                _retiringSlots.RemoveAt(i);
+            }
+
+            bool freed = false;
+            for (int table = 0; table < _slots.Length; table++)
+            {
+                List<Texture>? disposed = null;
+                foreach (Texture texture in _slots[table].Keys)
+                {
+                    if (texture.IsDisposed)
+                        (disposed ??= new()).Add(texture);
+                }
+                if (disposed == null)
+                    continue;
+
+                Texture fallback = Default("black", s_tableTypes[table]);
+                foreach (Texture texture in disposed)
+                {
+                    uint slot = _slots[table][texture];
+                    _slots[table].Remove(texture);
+                    foreach (TableRing ring in _frameTables)
+                        ring.Set(s_tableNames[table], slot, fallback);
+                    _retiringSlots.Add((lastDispatched, table, slot));
+                }
+                freed = true;
+            }
+            return freed;
+        }
+    }
+
     internal void Track(TableRing frameTable)
     {
         lock (_lock)
         {
             _frameTables.Add(frameTable);
-            foreach ((MaterialPropertyType type, uint slot, Texture texture) in _assigned)
-                frameTable.Set(s_tableNames[GraphiteBindings.TextureTable(type)], slot, texture);
+            for (int table = 0; table < _slots.Length; table++)
+            {
+                foreach ((Texture texture, uint slot) in _slots[table])
+                    frameTable.Set(s_tableNames[table], slot, texture);
+            }
         }
     }
 
@@ -204,11 +263,13 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             return slot;
 
         uint capacity = table == 0 ? Textures2D : OtherTextures;
-        if (_nextSlot[table] == capacity)
+        if (_freeSlots[table].Count > 0)
+            slot = _freeSlots[table].Pop();
+        else if (_nextSlot[table] < capacity)
+            slot = _nextSlot[table]++;
+        else
             return 0;
-        slot = _nextSlot[table]++;
         _slots[table][texture] = slot;
-        _assigned.Add((type, slot, texture));
         foreach (TableRing ring in _frameTables)
             ring.Set(s_tableNames[table], slot, texture);
         return slot;
@@ -216,7 +277,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
 
     private Texture Default(string name, MaterialPropertyType type)
     {
-        if (type == MaterialPropertyType.Texture2D && _registeredDefaults.TryGetValue(name, out Texture? registered))
+        if (type == MaterialPropertyType.Texture2D && _registeredDefaults.TryGetValue(name, out Texture? registered) && !registered.IsDisposed)
             return registered;
         if (_defaults.TryGetValue((name, type), out Texture? existing))
             return existing;

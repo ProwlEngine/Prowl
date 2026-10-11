@@ -573,7 +573,82 @@ internal static class MaterialRewrite
 
                 output.Add(i);
             }
+            PropagateNonUniform(output);
+            RejectUnsupportedUses(output, retyped);
             module.ReplaceFunctions(output);
+        }
+
+        private readonly HashSet<uint> _nonUniform = new();
+
+        private void NonUniform(uint id)
+        {
+            if (_nonUniform.Add(id))
+                module.Decorate(id, SpirvModule.DecorationNonUniform);
+        }
+
+        // Values made from a non uniform image or sampler stay non uniform through copies, phis, selects and image extraction.
+        private void PropagateNonUniform(List<uint[]> instructions)
+        {
+            bool changed = _nonUniform.Count > 0;
+            while (changed)
+            {
+                changed = false;
+                foreach (uint[] i in instructions)
+                {
+                    ushort op = SpirvModule.Op(i);
+                    int first = op switch
+                    {
+                        SpirvModule.OpCopyObject or SpirvModule.OpImage or SpirvModule.OpSampledImage or SpirvModule.OpPhi => 3,
+                        SpirvModule.OpSelect => 4,
+                        _ => -1,
+                    };
+                    if (first < 0 || _nonUniform.Contains(i[2]))
+                        continue;
+
+                    int step = op == SpirvModule.OpPhi ? 2 : 1;
+                    for (int k = first; k < i.Length; k += step)
+                    {
+                        if (_nonUniform.Contains(i[k]))
+                        {
+                            NonUniform(i[2]);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Rewritten pointers and removed variables may only be loaded or indexed. Anything else would leave an invalid module.
+        private void RejectUnsupportedUses(List<uint[]> instructions, HashSet<uint> retyped)
+        {
+            HashSet<uint> watched = new(retyped);
+            watched.UnionWith(_textureVars.Keys);
+            if (_globalBlock != 0)
+                watched.Add(_globalBlock);
+
+            foreach (uint[] i in instructions)
+            {
+                ushort op = SpirvModule.Op(i);
+                (int First, int Step) operands = op switch
+                {
+                    SpirvModule.OpStore or SpirvModule.OpCopyMemory => (1, 1),
+                    SpirvModule.OpCopyObject => (3, 1),
+                    SpirvModule.OpPhi => (3, 2),
+                    SpirvModule.OpSelect => (4, 1),
+                    SpirvModule.OpFunctionCall => (4, 1),
+                    SpirvModule.OpLoad when i[3] == _globalBlock => (3, 1),
+                    _ => (-1, 0),
+                };
+                if (operands.First < 0)
+                    continue;
+
+                for (int k = operands.First; k < i.Length; k += operands.Step)
+                {
+                    if (watched.Contains(i[k]))
+                        throw new ShaderLoadException($"{plan.ShaderName}: a loose uniform or material texture is used in a way the material rewrite does not support (SPIR-V op {op}).");
+                }
+            }
         }
 
         private void EmitTexture(List<uint[]> output, uint resultType, uint result, Source source, int index, int sampler, uint imageType, bool combined)
@@ -581,30 +656,30 @@ internal static class MaterialRewrite
             uint uint32 = module.TypeUint();
             uint pointerUint = module.Pointer(SpirvModule.StorageBuffer, uint32);
             uint textureIndex = LoadRecordWord(output, source, index, pointerUint, uint32);
-            module.Decorate(textureIndex, SpirvModule.DecorationNonUniform);
+            NonUniform(textureIndex);
 
             uint imagePointer = module.NewId();
             output.Add([SpirvModule.Header(SpirvModule.OpAccessChain, 5), module.Pointer(SpirvModule.UniformConstant, imageType), imagePointer, _tableVars[imageType], textureIndex]);
-            module.Decorate(imagePointer, SpirvModule.DecorationNonUniform);
+            NonUniform(imagePointer);
 
             uint image = combined ? module.NewId() : result;
             output.Add([SpirvModule.Header(SpirvModule.OpLoad, 4), imageType, image, imagePointer]);
-            module.Decorate(image, SpirvModule.DecorationNonUniform);
+            NonUniform(image);
             if (!combined)
                 return;
 
             uint samplerType = module.TypeSampler();
             uint samplerIndex = LoadRecordWord(output, source, sampler, pointerUint, uint32);
-            module.Decorate(samplerIndex, SpirvModule.DecorationNonUniform);
+            NonUniform(samplerIndex);
             uint samplerPointer = module.NewId();
             output.Add([SpirvModule.Header(SpirvModule.OpAccessChain, 5), module.Pointer(SpirvModule.UniformConstant, samplerType), samplerPointer, _samplerTable, samplerIndex]);
-            module.Decorate(samplerPointer, SpirvModule.DecorationNonUniform);
+            NonUniform(samplerPointer);
             uint samplerValue = module.NewId();
             output.Add([SpirvModule.Header(SpirvModule.OpLoad, 4), samplerType, samplerValue, samplerPointer]);
-            module.Decorate(samplerValue, SpirvModule.DecorationNonUniform);
+            NonUniform(samplerValue);
 
             output.Add([SpirvModule.Header(SpirvModule.OpSampledImage, 5), resultType, result, image, samplerValue]);
-            module.Decorate(result, SpirvModule.DecorationNonUniform);
+            NonUniform(result);
         }
 
         private uint LoadRecordWord(List<uint[]> output, Source source, int index, uint pointerUint, uint uint32)
@@ -670,6 +745,12 @@ internal sealed class SpirvModule
     public const ushort OpDecorate = 71;
     public const ushort OpMemberDecorate = 72;
     public const ushort OpSampledImage = 86;
+    public const ushort OpImage = 100;
+    public const ushort OpStore = 62;
+    public const ushort OpCopyMemory = 63;
+    public const ushort OpCopyObject = 83;
+    public const ushort OpSelect = 169;
+    public const ushort OpPhi = 245;
 
     public const uint DecorationBlock = 2;
     public const uint DecorationColMajor = 5;
