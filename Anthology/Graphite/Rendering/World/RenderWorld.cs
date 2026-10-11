@@ -439,7 +439,11 @@ public sealed class RenderWorld : IDisposable
             Bounds = GpuTable.Of<ObjectBounds>(device, "Object bounds");
             Attributes = GpuTable.Of<ObjectAttributes>(device, "Object attributes");
             MaterialSlots = new GpuTable(device, "Material slots", 1);
+            Tables = [Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots];
         }
+
+        /// <summary>Every per object table, in a stable order.</summary>
+        public GpuTable[] Tables { get; }
 
         public int Capacity { get; private set; }
         public bool[] Alive = [];
@@ -585,7 +589,7 @@ public sealed class RenderWorld : IDisposable
         public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
         {
             int before = replaced.Count;
-            foreach (GpuTable table in (GpuTable[])[Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots])
+            foreach (GpuTable table in Tables)
             {
                 if (table.Flush(uploader) is { } old)
                     replaced.Add(old);
@@ -595,7 +599,7 @@ public sealed class RenderWorld : IDisposable
 
         public void Dispose()
         {
-            foreach (GpuTable table in (GpuTable[])[Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots])
+            foreach (GpuTable table in Tables)
                 table.Dispose();
         }
 

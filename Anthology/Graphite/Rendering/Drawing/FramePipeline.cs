@@ -129,8 +129,14 @@ internal sealed class GpuArray(GraphicsDevice device, BufferUsage usage, string 
     }
 }
 
-/// <summary>The view a camera pipeline draws for: its target and size.</summary>
-internal readonly record struct CameraView(Framebuffer? Target, uint PixelWidth, uint PixelHeight, int ViewId) : IRenderView;
+/// <summary>The view a camera pipeline draws for: its target and size. Kept per camera so a frame allocates nothing.</summary>
+internal sealed class CameraView : IRenderView
+{
+    public Framebuffer? Target { get; set; }
+    public uint PixelWidth { get; set; } = 1;
+    public uint PixelHeight { get; set; } = 1;
+    public int ViewId { get; set; }
+}
 
 /// <summary>The FrameStart pass: the frame's single scatter into every persistent buffer, with each declared as written.</summary>
 internal sealed class UploadPass(Uploader uploader) : IPass
@@ -160,10 +166,12 @@ internal sealed class CameraFrame : IDisposable
     public readonly GpuArray Instances;
     public readonly GpuArray Records;
     public readonly GpuArray Commands;
-    public readonly GpuArray Views;
+    public readonly GpuArray ViewBlocks;
     public ViewDesc Desc;
     public WorldFrame World = null!;
     public int LastFrame;
+    public readonly CameraView View = new();
+    public readonly IRenderView[] Views;
 
     private IndirectDrawIndexedArguments[] _commands = new IndirectDrawIndexedArguments[64];
     private DrawRecord[] _records = new DrawRecord[64];
@@ -173,16 +181,24 @@ internal sealed class CameraFrame : IDisposable
     {
         Scene = new ScenePass(frame, this);
         Present = new PresentPass(frame);
+        Views = [View];
+        View.ViewId = viewId;
         Pipeline.Name = $"Graphite.Camera {viewId}";
         Pipeline.SetPasses([Scene, Present]);
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
         Instances = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Instances {viewId}");
         Records = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Draw records {viewId}");
         Commands = new GpuArray(device, BufferUsage.IndirectBuffer, $"Indirect commands {viewId}");
-        Views = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View blocks {viewId}");
+        ViewBlocks = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View blocks {viewId}");
     }
 
-    public IEnumerable<DeviceBuffer> Buffers => [Instances.Buffer, Records.Buffer, Commands.Buffer, Views.Buffer];
+    public void AddBuffers(List<DeviceBuffer> buffers)
+    {
+        buffers.Add(Instances.Buffer);
+        buffers.Add(Records.Buffer);
+        buffers.Add(Commands.Buffer);
+        buffers.Add(ViewBlocks.Buffer);
+    }
 
     /// <summary>Queues the frame's commands, draw records, instances and view block. Prepass commands come first, then forward ones.</summary>
     public void Upload(Uploader uploader, in ViewBlock block)
@@ -212,7 +228,7 @@ internal sealed class CameraFrame : IDisposable
         Commands.Write<IndirectDrawIndexedArguments>(uploader, _commands.AsSpan(0, commands));
         Records.Write<DrawRecord>(uploader, _records.AsSpan(0, commands));
         Instances.Write<uint>(uploader, _instances.AsSpan(0, instances));
-        Views.Write<ViewBlock>(uploader, [block]);
+        ViewBlocks.Write<ViewBlock>(uploader, new ReadOnlySpan<ViewBlock>(in block));
     }
 
     public void Dispose()
@@ -222,7 +238,7 @@ internal sealed class CameraFrame : IDisposable
         Instances.Dispose();
         Records.Dispose();
         Commands.Dispose();
-        Views.Dispose();
+        ViewBlocks.Dispose();
     }
 }
 
@@ -234,6 +250,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
     private static readonly GraphTextureDesc s_scene = GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, depth: true) with { DepthFormat = PixelFormat.D32_Float };
 
     private readonly PropertySet _properties = new();
+    private (DeviceBuffer? Buffer, uint Offset, uint Size) _globals;
     private TextureHandle _target;
 
     public string Name => "Graphite.Scene";
@@ -250,8 +267,13 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
     {
         uint ring = context.Task.RingSlot;
         GlobalRegistry registry = frame.Globals;
-        camera.ViewTable.Set("Graphite_Globals", 0, new DeviceBufferRange(registry.Buffer, (uint)camera.World.GlobalRegion * registry.RegionWords * 4, registry.RegionWords * 4));
-        camera.ViewTable.Set("Graphite_Views", 0, camera.Views.Buffer);
+        (DeviceBuffer Buffer, uint Offset, uint Size) globals = (registry.Buffer, (uint)camera.World.GlobalRegion * registry.RegionWords * 4, registry.RegionWords * 4);
+        if (globals != _globals)
+        {
+            _globals = globals;
+            camera.ViewTable.Set("Graphite_Globals", 0, new DeviceBufferRange(globals.Buffer, globals.Offset, globals.Size));
+        }
+        camera.ViewTable.Set("Graphite_Views", 0, camera.ViewBlocks.Buffer);
         DescriptorTable viewTable = camera.ViewTable.Get(ring);
         DescriptorTable frameTable = camera.World.FrameTable.Get(ring);
 
@@ -354,6 +376,7 @@ internal sealed class FramePipeline : IDisposable
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
     private readonly List<GraphDispatch> _dispatches = new();
     private readonly List<DeviceBuffer> _buffers = new();
+    private readonly IRenderView[] _frameStartViews = [new CameraView { ViewId = -1 }];
     private int _frame;
 
     private readonly RendererTextures _textures;
@@ -420,7 +443,7 @@ internal sealed class FramePipeline : IDisposable
     {
         _frame++;
         _dispatches.Clear();
-        _dispatches.Add(new GraphDispatch(_frameStart, [new CameraView(null, 1, 1, -1)]));
+        _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
         foreach (ViewDesc view in views)
         {
             if (!worlds.TryGetValue(view.World, out WorldFrame? world))
@@ -441,7 +464,10 @@ internal sealed class FramePipeline : IDisposable
             camera.Desc = view;
             camera.World = world;
             Prepare(camera, view, world);
-            _dispatches.Add(new GraphDispatch(camera.Pipeline, [new CameraView(view.Target, view.Target.Width, view.Target.Height, view.ViewId)]));
+            camera.View.Target = view.Target;
+            camera.View.PixelWidth = view.Target.Width;
+            camera.View.PixelHeight = view.Target.Height;
+            _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
         }
 
         CollectBuffers(allWorlds);
@@ -455,8 +481,9 @@ internal sealed class FramePipeline : IDisposable
         ViewLayer layer = view.Layers[0];
         Float4x4 viewProjection = layer.Projection * layer.View;
         CullFrustum frustum = new(viewProjection, layer.Position);
-        world.Buckets.Build(0, frustum, view.CullingMask, camera.Prepass);
-        world.Buckets.Build(1, frustum, view.CullingMask, camera.Forward);
+        world.Buckets.Cull(frustum, view.CullingMask);
+        world.Buckets.Build(0, frustum, camera.Prepass);
+        world.Buckets.Build(1, frustum, camera.Forward);
         camera.Upload(_uploader, ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance));
     }
 
@@ -476,7 +503,8 @@ internal sealed class FramePipeline : IDisposable
         foreach (WorldFrame world in worlds)
         {
             RenderWorld.RenderSide render = world.World.Render;
-            _buffers.AddRange([render.Transforms.Buffer, render.PreviousTransforms.Buffer, render.Bounds.Buffer, render.Attributes.Buffer, render.MaterialSlots.Buffer]);
+            foreach (GpuTable table in render.Tables)
+                _buffers.Add(table.Buffer);
             world.FrameTable.Set("Graphite_Chunks", 0, Geometry.Chunks.Buffer);
             world.FrameTable.Set("Graphite_Transforms", 0, render.Transforms.Buffer);
             world.FrameTable.Set("Graphite_PreviousTransforms", 0, render.PreviousTransforms.Buffer);
@@ -486,7 +514,7 @@ internal sealed class FramePipeline : IDisposable
         foreach (CameraFrame camera in _cameras.Values)
         {
             if (camera.LastFrame == _frame)
-                _buffers.AddRange(camera.Buffers);
+                camera.AddBuffers(_buffers);
         }
 
         if (Same(Buffers, _buffers))

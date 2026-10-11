@@ -96,7 +96,8 @@ public sealed class BucketTests : IDisposable
         _materials.Extract(changed);
         _world.Extract();
         _buckets.Update(_world.Render.DrawChanged, changed);
-        _buckets.Build(pass, frustum ?? s_frustum, mask, _list);
+        _buckets.Cull(frustum ?? s_frustum, mask);
+        _buckets.Build(pass, frustum ?? s_frustum, _list);
         return _list;
     }
 

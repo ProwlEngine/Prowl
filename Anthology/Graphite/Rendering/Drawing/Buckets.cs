@@ -267,14 +267,13 @@ internal sealed class BucketSet
     }
 
     /// <summary>
-    /// Culls the world for one view and fills the draw list of a pass: objects whose layer the culling mask has, not hidden,
-    /// with their sphere in the frustum, then their chunk box when the mesh has several chunks. Empty commands are left
-    /// out. Prepass commands are sorted near to far by their nearest visible instance.
+    /// Fills the draw list of a pass from the last <see cref="Cull"/>: visible objects, then their chunk box when the mesh
+    /// has several chunks. Empty commands are left out. Prepass commands are sorted near to far by their nearest visible
+    /// instance.
     /// </summary>
-    public void Build(int pass, in CullFrustum frustum, uint cullingMask, DrawList list)
+    public void Build(int pass, in CullFrustum frustum, DrawList list)
     {
         list.Clear();
-        Cull(frustum, cullingMask, pass);
         Order(pass);
         bool prepass = Passes[pass] == PassType.Prepass;
         _prepass.Clear();
@@ -323,19 +322,20 @@ internal sealed class BucketSet
         list.Merge(bucket.Program, bucket.Page, bucket.Topology, bucket.Mirrored);
     }
 
-    private void Cull(in CullFrustum frustum, uint cullingMask, int pass)
+    /// <summary>
+    /// Culls the world for one view, once for all of its passes: objects whose layer the culling mask has, not hidden,
+    /// with their sphere in the frustum. Which passes an object draws in is decided by its buckets.
+    /// </summary>
+    public void Cull(in CullFrustum frustum, uint cullingMask)
     {
         if (_visible.Length < _world.Capacity)
             _visible = new bool[_world.Capacity];
 
-        bool shadows = Passes[pass] == PassType.ShadowCaster;
         for (int index = 0; index < _world.Capacity; index++)
         {
-            RenderableFlags flags = _world.Flags[index];
             _visible[index] = _world.Alive[index]
-                && (flags & RenderableFlags.Hidden) == 0
+                && (_world.Flags[index] & RenderableFlags.Hidden) == 0
                 && (_world.LayerMask[index] & cullingMask) != 0
-                && (shadows ? (flags & RenderableFlags.CastShadows) != 0 : (flags & RenderableFlags.ShadowsOnly) == 0)
                 && frustum.Sphere(_world.WorldCenter[index], _world.WorldRadius[index]);
         }
     }

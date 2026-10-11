@@ -155,7 +155,9 @@ public sealed class LibraryTests : IDisposable
 
         Float4x4 projection = new(new Float4(0.5f, 0, 0, 0), new Float4(0, 0.5f, 0, 0), new Float4(0, 0, 0, 0), new Float4(0, 0, 0.5f, 1));
         DrawList list = new();
-        buckets.Build(1, new CullFrustum(projection, camera), ~0u, list);
+        CullFrustum frustum = new(projection, camera);
+        buckets.Cull(frustum, ~0u);
+        buckets.Build(1, frustum, list);
         Assert.Equal(2, list.CommandCount);
         DrawCall call = Assert.Single(list.Calls);
 
