@@ -63,6 +63,17 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
+    /// Declares an existing buffer this pass reads or writes, for buffers that outlive the graph such as ones another
+    /// pipeline in the execution wrote. Usage with a write flag makes it an output, otherwise an input.
+    /// </summary>
+    public BufferHandle DeclareImportedBuffer(RenderResourceID id, DeviceBuffer existing, BufferAccess usage = BufferAccess.AllReads)
+    {
+        ArgumentNullException.ThrowIfNull(existing);
+        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: (usage & BufferAccess.AllWrites) != 0, new GraphImportedBufferResource(id, existing)));
+        return new BufferHandle(id);
+    }
+
+    /// <summary>
     /// Declares a buffer this pass writes, creating it if new. Non-zero history makes it a ring buffer of
     /// history+1 copies, rotated each execution so reads can pull prior frames by age.
     /// </summary>

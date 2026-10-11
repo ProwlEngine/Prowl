@@ -16,6 +16,7 @@
     <ItemGroup>
         <Content Include="..\Graphite\Shaders\FullScreenTriSampleTexture2D.glsl" Link="Shaders\FullScreenTriSampleTexture2D.glsl" CopyToOutputDirectory="PreserveNewest" />
         <Content Include="..\Graphite\Shaders\ComputeTextureGenerator.glsl" Link="Shaders\ComputeTextureGenerator.glsl" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="..\Graphite\Shaders\BufferAddOne.glsl" Link="Shaders\BufferAddOne.glsl" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>

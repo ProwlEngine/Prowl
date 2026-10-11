@@ -56,6 +56,30 @@ file sealed class EventsPass(RenderTexture target, RenderTexture storage, Graphi
     }
 }
 
+file sealed class ImportedBufferPass(DeviceBuffer data, DeviceBuffer result, ComputeProgram compute) : IPass
+{
+    private readonly RenderResourceID _data = RenderResourceID.Intern("imported_data");
+    private readonly RenderResourceID _result = RenderResourceID.Intern("imported_result");
+
+    public string Name => "ImportedBuffers";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        builder.DeclareImportedBuffer(_data, data, BufferAccess.ShaderRead);
+        builder.DeclareImportedBuffer(_result, result, BufferAccess.ShaderWrite);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        PropertySet properties = new();
+        properties.SetBuffer("Input", data);
+        properties.SetBuffer("Output", result);
+        cmd.SetComputeShader(compute);
+        cmd.SetProperties(properties);
+        cmd.Dispatch(1, 1, 1);
+    }
+}
+
 file sealed class UndeclaredPass(ComputeProgram compute, Texture storage) : IPass
 {
     public string Name => "Undeclared";
@@ -170,6 +194,30 @@ public class ReplayTests
 
         Assert.Equal(ReplayStatus.NotReplayable, result.Status);
         Assert.Contains("Undeclared GPU write", result.Reason);
+    }
+
+    [SkippableFact]
+    public void Replay_ImportedBuffersAreRebuiltAndTheDispatchReexecuted()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        using ComputeProgram compute = device.ResourceFactory.CreateComputeProgram(new ComputeDescription(
+            Compile("BufferAddOne.glsl")[0],
+            [new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("Input", ResourceKind.StructuredBufferReadOnly, ShaderStages.Compute, 0),
+                new ResourceLayoutElementDescription("Output", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 1))],
+            4, 1, 1));
+        using DeviceBuffer data = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
+        using DeviceBuffer result = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        device.UpdateBuffer(data, 0, new uint[] { 5, 6, 7, 8 });
+        using RenderPipeline pipeline = new(new IPass[] { new ImportedBufferPass(data, result, compute) });
+        DeepRecording deep = Record(device, pipeline, DeepMode.Full);
+
+        DeepPass pass = deep.Views[0].Passes[0];
+        ReplayResult replay = new Replayer(device, deep).Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+
+        Assert.True(replay.Status == ReplayStatus.Reexecuted, replay.Reason);
+        ReplayOutput output = Assert.Single(replay.Outputs);
+        Assert.Equal(new uint[] { 6, 7, 8, 9 }, System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(output.Data.AsSpan()).ToArray());
     }
 
     [SkippableFact]

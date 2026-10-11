@@ -236,6 +236,12 @@ internal sealed class GraphCapture
         {
             DeviceBuffer buffer = _context.GetRenderBuffer(new BufferHandle(id));
             backings.Add(new GraphBacking(buffer.ResourceId, buffer.CurrentVersion, BackingRole.Buffer, 0));
+            if (resource is GraphImportedBufferResource)
+            {
+                origin = GraphResourceOrigin.Imported;
+                bufferDesc = GraphBufferDesc.Of(buffer.SizeInBytes, buffer.Usage);
+            }
+
             if (resource is GraphBufferResource bufferResource)
             {
                 bufferDesc = bufferResource.Description;

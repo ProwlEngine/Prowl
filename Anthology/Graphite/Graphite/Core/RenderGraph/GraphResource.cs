@@ -232,6 +232,22 @@ public sealed class GraphBufferResource : GraphResource
 }
 
 /// <summary>
+/// Externally owned buffer imported into the graph. Caller keeps ownership, graph never disposes it. Its first
+/// access in a view gets a barrier against every earlier write, so a buffer another pipeline or execution wrote is
+/// safe to read once declared.
+/// </summary>
+public sealed class GraphImportedBufferResource : GraphResource
+{
+    /// <summary>External buffer this resolves to.</summary>
+    public DeviceBuffer Buffer { get; }
+
+    internal GraphImportedBufferResource(RenderResourceID id, DeviceBuffer buffer) : base(id)
+    {
+        Buffer = buffer;
+    }
+}
+
+/// <summary>
 /// Externally-owned texture imported into the graph. Caller keeps ownership, graph never disposes it.
 /// Must be in its resting layout when the execution starts; the graph returns it there when the view ends.
 /// </summary>

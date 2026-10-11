@@ -142,6 +142,7 @@ public sealed class RenderGraph : IDisposable
             && a.Description.SizeInBytes == b.Description.SizeInBytes
             && a.Description.Usage == b.Description.Usage,
         (GraphImportedTextureResource a, GraphImportedTextureResource b) => ReferenceEquals(a.Texture, b.Texture),
+        (GraphImportedBufferResource a, GraphImportedBufferResource b) => ReferenceEquals(a.Buffer, b.Buffer),
         (GraphViewTargetResource a, GraphViewTargetResource b) => a.DepthFormat == b.DepthFormat,
         _ => false,
     };

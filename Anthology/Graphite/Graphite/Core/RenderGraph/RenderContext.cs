@@ -483,6 +483,13 @@ public sealed class RenderContext
         if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
             throw new InvalidOperationException($"Buffer handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
 
+        if (resource is GraphImportedBufferResource imported)
+        {
+            if (framesAgo != 0)
+                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Imported buffer '{RenderResourceID.ToString(handle.Id)}' has no history.");
+            return imported.Buffer;
+        }
+
         if (resource is not GraphBufferResource bufferResource)
             throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a buffer. Resolve it with GetRenderTexture.");
 
