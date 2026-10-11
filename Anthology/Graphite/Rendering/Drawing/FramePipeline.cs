@@ -394,6 +394,123 @@ internal sealed class CameraView : IRenderView
     public int ViewId { get; set; }
 }
 
+/// <summary>
+/// Fills the frame's new deformed copies from their meshes, then skins the copies a view sees this frame whose bones
+/// changed. After the upload and before the fence every view follows. A copy skinned the frame it is made skips the
+/// streams the skin writes, so no two dispatches of the pass write the same words.
+/// </summary>
+internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IPass, IDisposable
+{
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Push
+    {
+        public uint Mode, First, Count, Streams;
+        public uint SourceWord, TargetWord, Normal, TargetNormal;
+        public uint Tangent, TargetTangent, BoneIndices, BoneWeights;
+        public uint BoneBase, BoneCount, Pad0, Pad1;
+    }
+
+    private const uint MaxPerDispatch = 65535 * 64;
+    private const uint SkinnedStreams = (1u << (int)VertexSemantic.Position) | (1u << (int)VertexSemantic.Normal) | (1u << (int)VertexSemantic.Tangent);
+
+    private readonly PropertySet _properties = new();
+
+    public DeviceBuffer[] Buffers = [];
+    public readonly List<RenderWorld.RenderSide> Worlds = new();
+
+    public string Name => "Graphite.Deform";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        for (int i = 0; i < Buffers.Length; i++)
+            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), Buffers[i], BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        bool bound = false;
+        foreach (RenderWorld.RenderSide world in Worlds)
+        {
+            if (world.NewCopies.Count == 0 && world.Deforming.Count == 0)
+                continue;
+            if (!bound)
+            {
+                cmd.SetComputeShader(program);
+                bound = true;
+            }
+
+            foreach ((int index, MeshPlacement from, MeshPlacement to) in world.NewCopies)
+            {
+                uint skipped = Skins(world, index) ? SkinnedStreams : 0;
+                DeviceBuffer source = geometry.Pages[from.Page].Vertices, target = geometry.Pages[to.Page].Vertices;
+                for (int s = 0; s < MeshLayout.StreamCount; s++)
+                {
+                    if ((from.StreamsPresent & (1u << s) & ~skipped) != 0)
+                        Copy(cmd, world, source, target, from.StreamOffsets[s], to.StreamOffsets[s], MeshLayout.WordsPerVertex((VertexSemantic)s) * from.VertexCount);
+                }
+                Copy(cmd, world, geometry.Pages[from.Page].Indices, geometry.Pages[to.Page].Indices, from.IndexBase, to.IndexBase, from.Indices.Size);
+            }
+
+            foreach (int index in world.Deforming)
+            {
+                if (!Skins(world, index))
+                    continue;
+                world.DeformStale[index] = false;
+                MeshPlacement from = world.Mesh[index]!.Placement!, to = world.Deformed[index]!;
+                (uint first, uint count) = world.BonesOf(index);
+                Bind(cmd, world, geometry.Pages[from.Page].Vertices, geometry.Pages[to.Page].Vertices);
+                Dispatch(cmd, new Push
+                {
+                    Mode = 1,
+                    Count = from.VertexCount,
+                    Streams = ((from.StreamsPresent >> (int)VertexSemantic.Normal) & 1) | (((from.StreamsPresent >> (int)VertexSemantic.Tangent) & 1) << 1),
+                    SourceWord = from.StreamOffsets[(int)VertexSemantic.Position],
+                    TargetWord = to.StreamOffsets[(int)VertexSemantic.Position],
+                    Normal = from.StreamOffsets[(int)VertexSemantic.Normal],
+                    TargetNormal = to.StreamOffsets[(int)VertexSemantic.Normal],
+                    Tangent = from.StreamOffsets[(int)VertexSemantic.Tangent],
+                    TargetTangent = to.StreamOffsets[(int)VertexSemantic.Tangent],
+                    BoneIndices = from.StreamOffsets[(int)VertexSemantic.BoneIndices],
+                    BoneWeights = from.StreamOffsets[(int)VertexSemantic.BoneWeights],
+                    BoneBase = first,
+                    BoneCount = count,
+                });
+            }
+        }
+    }
+
+    // Whether the renderable's copy is skinned this frame: behind its bones and seen by a view
+    private static bool Skins(RenderWorld.RenderSide world, int index)
+        => world.DeformStale[index] && world.DeformSeen[index] == world.DeformStamp && world.Deformed[index] != null;
+
+    private void Copy(CommandBuffer cmd, RenderWorld.RenderSide world, DeviceBuffer source, DeviceBuffer target, uint sourceWord, uint targetWord, uint words)
+    {
+        Bind(cmd, world, source, target);
+        Dispatch(cmd, new Push { Mode = 0, Count = words, SourceWord = sourceWord, TargetWord = targetWord });
+    }
+
+    private void Bind(CommandBuffer cmd, RenderWorld.RenderSide world, DeviceBuffer source, DeviceBuffer target)
+    {
+        _properties.SetBuffer("Graphite_DeformSource", source);
+        _properties.SetBuffer("Graphite_DeformTarget", target);
+        _properties.SetBuffer("Graphite_SkinMatrices", world.SkinMatrices.Buffer);
+        cmd.SetProperties(_properties);
+    }
+
+    // In runs of at most 65535 groups
+    private static void Dispatch(CommandBuffer cmd, Push push)
+    {
+        for (uint first = 0; first < push.Count; first += MaxPerDispatch)
+        {
+            push.First = first;
+            cmd.SetPushConstants(push);
+            cmd.Dispatch((Math.Min(MaxPerDispatch, push.Count - first) + 63) / 64, 1, 1);
+        }
+    }
+
+    public void Dispose() => program.Dispose();
+}
+
 /// <summary>The FrameStart pass: the frame's single scatter into every persistent buffer, with each declared as written.</summary>
 internal sealed class UploadPass(Uploader uploader) : IPass
 {
@@ -1034,6 +1151,7 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly RenderPipeline _frameStart = new();
     private readonly UploadPass _upload;
     private readonly ProbePass _probes;
+    private readonly DeformPass _deform;
     private readonly Dictionary<int, CameraFrame> _cameras = new();
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
     private readonly List<GraphDispatch> _dispatches = new();
@@ -1078,8 +1196,9 @@ internal sealed partial class FramePipeline : IDisposable
         programs.Freed += Programs.Drop;
         _upload = new UploadPass(uploader);
         _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
+        _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry);
         _frameStart.Name = "Graphite.FrameStart";
-        _frameStart.SetPasses([_upload, _probes]);
+        _frameStart.SetPasses([_upload, _probes, _deform]);
         _readback = new ReadbackPass(device, report);
         _readbackPipeline.SetPasses([_readback]);
 
@@ -1180,7 +1299,7 @@ internal sealed partial class FramePipeline : IDisposable
 
         foreach (WorldFrame world in allWorlds)
         {
-            world.World.Render.BeginTransientObjects();
+            world.World.Render.BeginFrame();
             world.Programs.Sweep();
         }
 
@@ -1805,9 +1924,11 @@ internal sealed partial class FramePipeline : IDisposable
             _buffers.Add(table.Records.Buffer);
         _buffers.Add(Globals.Buffer);
         _probes.Worlds.Clear();
+        _deform.Worlds.Clear();
         foreach (WorldFrame world in worlds)
         {
             RenderWorld.RenderSide render = world.World.Render;
+            _deform.Worlds.Add(render);
             WorldProbes probes = world.World.Probes;
             _probes.Worlds.Add(probes);
             _buffers.Add(probes.ProbeRecords.Buffer);
@@ -1849,7 +1970,8 @@ internal sealed partial class FramePipeline : IDisposable
         Buffers = [.. _buffers];
         _upload.Buffers = Buffers;
         _probes.Buffers = Buffers;
-        _frameStart.SetPasses([_upload, _probes]);
+        _deform.Buffers = Buffers;
+        _frameStart.SetPasses([_upload, _probes, _deform]);
     }
 
     private static bool Same(DeviceBuffer[] a, List<DeviceBuffer> b)
@@ -1896,6 +2018,7 @@ internal sealed partial class FramePipeline : IDisposable
         _tileClear?.Dispose();
         _fencePipeline.Dispose();
         _probes.Dispose();
+        _deform.Dispose();
         Programs.Dispose();
         PresentProgram.Dispose();
         ClearProgram.Dispose();

@@ -214,9 +214,10 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
                     break;
 
                 Release(mesh, lastDispatched);
-                MeshPlacement placement = Place(layout);
+                MeshPlacement placement = Place(layout.StreamsPresent, layout.VertexCount, (uint)layout.Indices.Length, layout.Chunks, layout.SubMeshes, layout.Bounds);
                 Write(uploader, placement, layout);
-                WriteRecords(mesh.Id, placement, layout);
+                WriteChunks(mesh.Id, placement);
+                WriteMesh(mesh.Id, placement);
                 mesh.Placement = placement;
                 changed.Add(mesh);
                 spent += bytes;
@@ -228,6 +229,23 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
         bool moved = Retire(Chunks.Flush(uploader), lastDispatched) | Retire(Meshes.Flush(uploader), lastDispatched);
         return moved || Pages.Count != pagesBefore;
     }
+
+    /// <summary>
+    /// Room for a copy of a placed mesh's streams and indices, with chunk records of its own naming the mesh, for a
+    /// renderable that deforms it. Its data is copied on the GPU by whoever asked. Render thread.
+    /// </summary>
+    public MeshPlacement PlaceCopy(GpuMesh mesh, MeshPlacement source)
+    {
+        MeshPlacement copy = Place(source.StreamsPresent, source.VertexCount, source.Indices.Size, source.Chunks, source.SubMeshes, source.Bounds);
+        WriteChunks(mesh.Id, copy);
+        return copy;
+    }
+
+    /// <summary>Frees a copy's ranges once <paramref name="lastDispatched"/> retires. Render thread.</summary>
+    public void ReleaseCopy(MeshPlacement copy, ulong lastDispatched) => _retiringRanges.Add((lastDispatched, copy));
+
+    /// <summary>Queues the chunk records of copies placed since <see cref="Apply"/>, retiring the buffer the table moved off. Render thread.</summary>
+    public void FlushCopies(Uploader uploader, ulong lastDispatched) => Retire(Chunks.Flush(uploader), lastDispatched);
 
     /// <summary>Returns ranges, ids and buffers freed by frames the GPU has finished. Render thread.</summary>
     public void Reclaim(ulong completedExecution)
@@ -297,16 +315,19 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
         return true;
     }
 
-    private MeshPlacement Place(MeshLayout layout)
+    private static uint StreamWords(uint streamsPresent, int stream, uint vertexCount)
+        => (streamsPresent & (1u << stream)) != 0 ? MeshLayout.WordsPerVertex((VertexSemantic)stream) * vertexCount : 0;
+
+    private MeshPlacement Place(uint streamsPresent, uint vertexCount, uint indexCount, MeshChunk[] chunks, SubMesh[] subMeshes, AABB bounds)
     {
         uint vertexWords = 0;
         for (int s = 0; s < MeshLayout.StreamCount; s++)
         {
-            if (layout.Streams[s] is { } stream)
-                vertexWords = Align(vertexWords) + (uint)stream.Length;
+            if ((streamsPresent & (1u << s)) != 0)
+                vertexWords = Align(vertexWords) + StreamWords(streamsPresent, s, vertexCount);
         }
 
-        uint indexCount = (uint)Math.Max(1, layout.Indices.Length);
+        indexCount = Math.Max(1, indexCount);
         int pageIndex = -1;
         RangeAllocation vertices = default, indices = default;
         for (int p = 0; p < Pages.Count && pageIndex < 0; p++)
@@ -330,19 +351,19 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             page.IndexSpace.TryAllocate(indexCount, 1, out indices);
         }
 
-        if (!_chunkSpace.TryAllocate((uint)Math.Max(1, layout.Chunks.Length), 1, out RangeAllocation chunkRange))
+        if (!_chunkSpace.TryAllocate((uint)Math.Max(1, chunks.Length), 1, out RangeAllocation chunkRange))
             throw new InvalidOperationException("The chunk table is full.");
 
         uint[] offsets = new uint[MeshLayout.StreamCount];
         uint cursor = vertices.Offset;
         for (int s = 0; s < MeshLayout.StreamCount; s++)
         {
-            if (layout.Streams[s] is not { } stream)
+            if ((streamsPresent & (1u << s)) == 0)
                 continue;
 
             cursor = Align(cursor);
             offsets[s] = cursor;
-            cursor += (uint)stream.Length;
+            cursor += StreamWords(streamsPresent, s, vertexCount);
         }
 
         return new MeshPlacement
@@ -351,12 +372,12 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             Vertices = vertices,
             Indices = indices,
             ChunkRange = chunkRange,
-            Bounds = layout.Bounds,
+            Bounds = bounds,
             StreamOffsets = offsets,
-            StreamsPresent = layout.StreamsPresent,
-            VertexCount = layout.VertexCount,
-            Chunks = layout.Chunks,
-            SubMeshes = layout.SubMeshes,
+            StreamsPresent = streamsPresent,
+            VertexCount = vertexCount,
+            Chunks = chunks,
+            SubMeshes = subMeshes,
         };
     }
 
@@ -382,7 +403,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             uploader.Write(page.Indices, placement.IndexBase, layout.Indices);
     }
 
-    private void WriteRecords(int meshId, MeshPlacement placement, MeshLayout layout)
+    private void WriteChunks(int meshId, MeshPlacement placement)
     {
         StreamOffsets offsets = default;
         for (int s = 0; s < MeshLayout.StreamCount; s++)
@@ -404,15 +425,16 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
                 SubMesh = (uint)chunk.SubMesh,
             });
         }
+    }
 
-        Meshes.Set((uint)meshId, new MeshRecord
+    private void WriteMesh(int meshId, MeshPlacement placement)
+        => Meshes.Set((uint)meshId, new MeshRecord
         {
-            BoundsMin = layout.Bounds.Min,
+            BoundsMin = placement.Bounds.Min,
             FirstChunk = placement.FirstChunk,
-            BoundsMax = layout.Bounds.Max,
+            BoundsMax = placement.Bounds.Max,
             ChunkCount = (uint)placement.Chunks.Length,
         });
-    }
 
     private static uint Align(uint words) => (words + StreamAlignment - 1) & ~(StreamAlignment - 1);
 }

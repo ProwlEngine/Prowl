@@ -517,6 +517,173 @@ public sealed class FeatureTests : IDisposable
         return material;
     }
 
+    // A mesh with the bone streams given and a triangle list over its vertices in order
+    private GpuMesh SkinnedMesh(Float3[] positions, ushort[] boneIndices, ushort[] boneWeights, Float3[]? normals = null, Float4[]? tangents = null)
+    {
+        uint count = (uint)positions.Length;
+        List<VertexStream> streams =
+        [
+            new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
+            new VertexStream { Semantic = VertexSemantic.BoneIndices, Format = VertexElementFormat.UShort4, Data = MemoryMarshal.AsBytes(boneIndices.AsSpan()).ToArray() },
+            new VertexStream { Semantic = VertexSemantic.BoneWeights, Format = VertexElementFormat.UShort4_Norm, Data = MemoryMarshal.AsBytes(boneWeights.AsSpan()).ToArray() },
+        ];
+        if (normals != null)
+            streams.Add(new VertexStream { Semantic = VertexSemantic.Normal, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(normals.AsSpan()).ToArray() });
+        if (tangents != null)
+            streams.Add(new VertexStream { Semantic = VertexSemantic.Tangent, Format = VertexElementFormat.Float4, Data = MemoryMarshal.AsBytes(tangents.AsSpan()).ToArray() });
+        uint[] indices = [.. Enumerable.Range(0, (int)(count / 3 * 3)).Select(i => (uint)i)];
+        GpuMesh mesh = _renderer.CreateMesh(new MeshData { VertexCount = count, Streams = [.. streams], Indices = indices });
+        _owned.Add(mesh);
+        return mesh;
+    }
+
+    // The quad as two triangles, every corner on bone 1
+    private GpuMesh SkinnedQuad()
+    {
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        ushort[] indices = new ushort[positions.Length * 4];
+        ushort[] weights = new ushort[positions.Length * 4];
+        for (int v = 0; v < positions.Length; v++)
+            (indices[v * 4], weights[v * 4]) = (1, 65535);
+        return SkinnedMesh(positions, indices, weights);
+    }
+
+    private static Float4x4 Translation(float x, float y, float z) => new(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 1, 0), new Float4(x, y, z, 1));
+
+    private static Float3 Transform(in Float4x4 m, Float3 p, float w)
+        => new(m.c0.X * p.X + m.c1.X * p.Y + m.c2.X * p.Z + m.c3.X * w,
+               m.c0.Y * p.X + m.c1.Y * p.Y + m.c2.Y * p.Z + m.c3.Y * w,
+               m.c0.Z * p.X + m.c1.Z * p.Y + m.c2.Z * p.Z + m.c3.Z * w);
+
+    // Prowl's skinning: bone index 0 is none, as are indices past the bones; under 0.01 total weight keeps the rest pose
+    private static Float3 CpuSkin(Float3 rest, float w, ReadOnlySpan<ushort> indices, ReadOnlySpan<ushort> weights, Float4x4[] bones)
+    {
+        Float3 sum = default;
+        float total = 0;
+        for (int i = 0; i < 4; i++)
+        {
+            float weight = weights[i] / 65535f;
+            total += weight;
+            if (indices[i] > 0 && weight > 0 && indices[i] <= bones.Length)
+                sum += Transform(bones[indices[i] - 1], rest, w) * weight;
+        }
+        return total < 0.01f ? rest : sum;
+    }
+
+    // A stream of the renderable's deformed copy, read back from its page
+    private float[] DeformedStream(RenderableHandle handle, VertexSemantic semantic)
+    {
+        MeshPlacement placement = _world.Render.Deformed[handle.Index]!;
+        uint words = MeshLayout.WordsPerVertex(semantic) * placement.VertexCount;
+        byte[]? bytes = null;
+        _renderer.Readback(_renderer.Frame.Geometry.Pages[placement.Page].Vertices, data => bytes = data.Data, offset: placement.StreamOffsets[(int)semantic] * 4, size: words * 4);
+        _renderer.SubmitFrame(new FrameDesc());
+        _device.WaitForIdle();
+        _renderer.SubmitFrame(new FrameDesc());
+        Assert.NotNull(bytes);
+        return MemoryMarshal.Cast<byte, float>(bytes).ToArray();
+    }
+
+    [Fact]
+    public void Skinning_MatchesACpuSkinOfTheSameMesh()
+    {
+        Random random = new(7);
+        const int count = 96;
+        Float3[] positions = new Float3[count], normals = new Float3[count];
+        Float4[] tangents = new Float4[count];
+        ushort[] indices = new ushort[count * 4], weights = new ushort[count * 4];
+        for (int v = 0; v < count; v++)
+        {
+            positions[v] = new Float3(random.NextSingle() * 4 - 2, random.NextSingle() * 4 - 2, random.NextSingle());
+            normals[v] = new Float3(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f, -1);
+            tangents[v] = new Float4(1, random.NextSingle() - 0.5f, 0, random.Next(2) * 2 - 1);
+            for (int i = 0; i < 4; i++)
+            {
+                // Bones 1 to 5 of 5, with 0 and 6 meaning none, and every tenth vertex unweighted
+                indices[v * 4 + i] = (ushort)random.Next(0, 7);
+                weights[v * 4 + i] = v % 10 == 0 ? (ushort)0 : (ushort)random.Next(0, 65536 / 4);
+            }
+        }
+        Float4x4[] bones = new Float4x4[5];
+        for (int b = 0; b < bones.Length; b++)
+        {
+            float angle = random.NextSingle() * 3, c = MathF.Cos(angle), s = MathF.Sin(angle);
+            bones[b] = new Float4x4(new Float4(c, s, 0, 0), new Float4(-s, c, 0, 0), new Float4(0, 0, 1.5f, 0), new Float4(random.NextSingle(), random.NextSingle(), random.NextSingle(), 1));
+        }
+
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = SkinnedMesh(positions, indices, weights, normals, tangents), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-8), new Float3(8)));
+        _world.SetBones(handle, bones);
+        Frame(View());
+
+        float[] skinnedPositions = DeformedStream(handle, VertexSemantic.Position);
+        float[] skinnedNormals = DeformedStream(handle, VertexSemantic.Normal);
+        float[] skinnedTangents = DeformedStream(handle, VertexSemantic.Tangent);
+        for (int v = 0; v < count; v++)
+        {
+            ReadOnlySpan<ushort> vi = indices.AsSpan(v * 4, 4), vw = weights.AsSpan(v * 4, 4);
+            Float3 position = CpuSkin(positions[v], 1, vi, vw, bones);
+            Float3 normal = CpuSkin(normals[v], 0, vi, vw, bones);
+            Float3 tangent = CpuSkin(new Float3(tangents[v].X, tangents[v].Y, tangents[v].Z), 0, vi, vw, bones);
+            normal /= MathF.Sqrt(normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z);
+            tangent /= MathF.Sqrt(tangent.X * tangent.X + tangent.Y * tangent.Y + tangent.Z * tangent.Z);
+            for (int c = 0; c < 3; c++)
+            {
+                Assert.True(MathF.Abs(skinnedPositions[v * 3 + c] - position[c]) < 1e-4f, $"vertex {v} position {c}: {skinnedPositions[v * 3 + c]} against {position[c]}");
+                Assert.True(MathF.Abs(skinnedNormals[v * 3 + c] - normal[c]) < 1e-4f, $"vertex {v} normal {c}: {skinnedNormals[v * 3 + c]} against {normal[c]}");
+                Assert.True(MathF.Abs(skinnedTangents[v * 4 + c] - tangent[c]) < 1e-4f, $"vertex {v} tangent {c}: {skinnedTangents[v * 4 + c]} against {tangent[c]}");
+            }
+            Assert.Equal(tangents[v].W, skinnedTangents[v * 4 + 3]);
+        }
+    }
+
+    [Fact]
+    public void Skinning_MovesWhatIsDrawn_AndKeepsItWhileTheBonesStay()
+    {
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = SkinnedQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-8), new Float3(8)));
+        _world.SetBones(handle, [Float4x4.Identity]);
+        AssertAll(new Float3(1, 1, 1), Frame(View()), Centre);
+
+        // Four object units right is two world units, four pixels
+        _world.SetBones(handle, [Translation(4, 0, 0)]);
+        Float4[] moved = Frame(View());
+        AssertAll(new Float3(1, 1, 1), moved, i => i % Size is >= 8 and < 16 && i / Size is >= 4 and < 12);
+        AssertAll(new Float3(0, 0, 0), moved, i => i % Size < 8);
+        AssertAll(new Float3(1, 1, 1), Frame(View()), i => i % Size is >= 8 and < 16 && i / Size is >= 4 and < 12);
+
+        // Without bones it draws its mesh as it is
+        _world.SetBones(handle, []);
+        AssertAll(new Float3(1, 1, 1), Frame(View()), Centre);
+    }
+
+    [Fact]
+    public void Skinning_WaitsForAViewToSeeTheRenderable()
+    {
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = SkinnedQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), LayerMask = 2 }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-8), new Float3(8)));
+        _world.SetBones(handle, [Translation(1, 0, 0)]);
+        ViewDesc view = View();
+        view.CullingMask = 1;
+        Frame(view);
+        Assert.Equal(-4f, DeformedStream(handle, VertexSemantic.Position)[0]);
+
+        _world.SetLayerMask(handle, ~0u);
+        Frame(view);
+        Assert.Equal(-3f, DeformedStream(handle, VertexSemantic.Position)[0]);
+    }
+
+    [Fact]
+    public void Skinning_WithoutBounds_CullsByTheRestPoseAndSaysSoOnce()
+    {
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = SkinnedQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBones(handle, [Float4x4.Identity]);
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        RendererError error = Assert.Single(_errors);
+        Assert.Equal(("deform.bounds", RendererErrorSeverity.Warning), (error.Code, error.Severity));
+    }
+
     [Fact]
     public void Jitter_CyclesThroughHaltonPhases_OnlyWhileAFeatureAsks()
     {

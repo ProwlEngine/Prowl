@@ -1445,6 +1445,46 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void SkinnedCasters_DrawTheirLightAgainOnlyWhenTheirBonesChange()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z)));
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+        RenderableHandle caster = AddCaster(1, 0.5, 6);
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        ushort[] bones = new ushort[24], weights = new ushort[24];
+        for (int v = 0; v < 6; v++)
+            (bones[v * 4], weights[v * 4]) = (1, 65535);
+        using GpuMesh skinned = _renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 6,
+            Streams =
+            [
+                new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() },
+                new VertexStream { Semantic = VertexSemantic.BoneIndices, Format = VertexElementFormat.UShort4, Data = MemoryMarshal.AsBytes(bones.AsSpan()).ToArray() },
+                new VertexStream { Semantic = VertexSemantic.BoneWeights, Format = VertexElementFormat.UShort4_Norm, Data = MemoryMarshal.AsBytes(weights.AsSpan()).ToArray() },
+            ],
+            Indices = new uint[] { 0, 1, 2, 3, 4, 5 },
+        });
+        _world.SetMesh(caster, skinned);
+        _world.SetBounds(caster, new AABB(new Float3(-16, -16, -1), new Float3(16, 16, 1)));
+        Float4x4 identity = Float4x4.Identity;
+        _world.SetBones(caster, [identity]);
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        _world.SetBones(caster, [identity]);
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+
+        // Eight object units left and four down at a quarter scale puts the caster where the moved caster test does
+        _world.SetBones(caster, [new Float4x4(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 1, 0), new Float4(-8, -4, 0, 1))]);
+        Float4[] pixels = Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, -2, -1, 2), pixels, 0.6f);
+    }
+
+    [Fact]
     public void CastersTaggedToUpdateEveryFrame_KeepTheirLightDrawing()
     {
         AddQuad(Surface(new Float3(0.8f, 0.8f, 0.8f)));

@@ -724,8 +724,10 @@ public sealed class Renderer : IDisposable
         foreach (WorldFrame world in _worlds.Values)
         {
             world.World.Render.Update(_changedMeshes, _changedMaterials);
+            world.World.Render.UpdateDeformation(_geometry, _lastDispatched);
             world.Buckets.Update(world.World.Render.DrawChanged, _changedMaterials);
         }
+        _geometry.FlushCopies(_uploader, _lastDispatched);
 
         _materials.Flush(_uploader, _lastDispatched);
         _globals.Flush(_uploader, _lastDispatched);

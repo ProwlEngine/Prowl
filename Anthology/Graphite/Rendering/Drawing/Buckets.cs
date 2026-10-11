@@ -438,7 +438,7 @@ internal sealed class BucketSet
         _orderDirty.Add(true);
         for (int index = 0; index < _world.Capacity; index++)
         {
-            if (!_world.Alive[index] || _world.Mesh[index]?.Placement is not { } placement)
+            if (!_world.Alive[index] || _world.PlacementOf(index) is not { } placement)
                 continue;
             AddToPass(index, pass, placement);
             if ((_world.Flags[index] & RenderableFlags.ShadowsOnly) == 0)
@@ -669,9 +669,20 @@ internal sealed class BucketSet
 
     /// <summary>
     /// Culls the world for one view, once for all of its passes: objects whose layer the culling mask has, not hidden,
-    /// with their sphere in the frustum. Which passes an object draws in is decided by its buckets.
+    /// with their sphere in the frustum. Which passes an object draws in is decided by its buckets. Deforming objects it
+    /// sees deform this frame.
     /// </summary>
     public void Cull(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All)
+    {
+        CullObjects(frustum, cullingMask, filter);
+        foreach (int index in _world.Deforming)
+        {
+            if (_visible[index])
+                _world.DeformSeen[index] = _world.DeformStamp;
+        }
+    }
+
+    private void CullObjects(in CullFrustum frustum, uint cullingMask, CasterFilter filter = CasterFilter.All)
     {
         if (_visible.Length < _world.Capacity)
         {
@@ -695,7 +706,7 @@ internal sealed class BucketSet
     /// <summary>The static and the moving shadow casters a frustum holds, culling the world for it.</summary>
     public (int Static, int Moving) CountCasters(in CullFrustum frustum, uint cullingMask)
     {
-        Cull(frustum, cullingMask);
+        CullObjects(frustum, cullingMask);
         int statics = 0, moving = 0;
         int pass = _passes.IndexOf(PassType.ShadowCaster);
         for (int index = 0; index < _world.Capacity; index++)
@@ -725,9 +736,12 @@ internal sealed class BucketSet
     /// <summary>The renderables drawing with a material.</summary>
     public IReadOnlyCollection<int> UsersOf(Material material) => _materialUsers.TryGetValue(material, out HashSet<int>? users) ? users : [];
 
-    // Every chunk of an object is tested once per view, the first time any pass asks, and the answers are shared.
+    // Every chunk of an object is tested once per view, the first time any pass asks, and the answers are shared. A
+    // deformed copy's chunks are wherever its bones put them, so it is as visible as its bounds
     private bool ChunkVisible(in CullFrustum frustum, int index, int chunkInMesh)
     {
+        if (_world.Deformed[index] != null)
+            return true;
         if (_chunkStamp[index] != _cullStamp)
         {
             MeshChunk[] chunks = _world.Mesh[index]!.Placement!.Chunks;
@@ -754,8 +768,7 @@ internal sealed class BucketSet
 
     private void AddObject(int index)
     {
-        GpuMesh? mesh = _world.Mesh[index];
-        if (mesh?.Placement is not { } placement)
+        if (_world.PlacementOf(index) is not { } placement)
             return;
 
         for (int pass = 0; pass < _passes.Count; pass++)

@@ -478,6 +478,7 @@ public sealed partial class RenderWorld : IDisposable
         Bounds = 8,
         Added = 16,
         Removed = 32,
+        Bones = 64,
     }
 
     private const uint MaxSliceEntries = 1u << 24;
@@ -499,6 +500,7 @@ public sealed partial class RenderWorld : IDisposable
     private sbyte[] _sortBias = [];
     private AABB[] _boundsOverride = [];
     private bool[] _hasBoundsOverride = [];
+    private Float4x4[]?[] _bones = [];
     private Dirt[] _dirt = [];
     private readonly List<int> _dirty = new();
 
@@ -520,7 +522,7 @@ public sealed partial class RenderWorld : IDisposable
         Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, report);
         Probes = new WorldProbes(device);
         Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance, report, reflections ?? ReflectionSettings.Default);
-        _render = new RenderSide(device, Probes);
+        _render = new RenderSide(device, Probes, report);
         Grow(64);
     }
 
@@ -557,6 +559,7 @@ public sealed partial class RenderWorld : IDisposable
         _lightmap[index] = desc.Lightmap;
         _sortBias[index] = desc.SortBias;
         _hasBoundsOverride[index] = false;
+        _bones[index] = null;
         _slice[index] = AllocateSlice(materials);
         Count++;
         MarkDirty(index, Dirt.Added | Dirt.Transform | Dirt.Attributes | Dirt.Draw | Dirt.Bounds);
@@ -569,6 +572,7 @@ public sealed partial class RenderWorld : IDisposable
         _alive[index] = false;
         _generation[index]++;
         _mesh[index] = null;
+        _bones[index] = null;
         FreeSlice(_slice[index]);
         _slice[index] = default;
         _free.Push(index);
@@ -704,6 +708,33 @@ public sealed partial class RenderWorld : IDisposable
         int index = Check(handle);
         _hasBoundsOverride[index] = false;
         MarkDirty(index, Dirt.Bounds);
+    }
+
+    /// <summary>
+    /// Skins the renderable's mesh, which needs bone index and weight streams, with a matrix per bone taking the rest
+    /// pose into the renderable's object space. A bone index of 0 is no bone, 1 the first matrix. An empty span stops
+    /// skinning. Nothing changes when the matrices equal the stored ones. A skinned renderable culls by its bounds
+    /// override, which should hold every pose.
+    /// </summary>
+    public void SetBones(RenderableHandle handle, ReadOnlySpan<Float4x4> skinMatrices)
+    {
+        int index = Check(handle);
+        Float4x4[]? bones = _bones[index];
+        if (skinMatrices.IsEmpty)
+        {
+            if (bones == null)
+                return;
+            _bones[index] = null;
+        }
+        else
+        {
+            if (bones != null && MemoryMarshal.AsBytes(skinMatrices).SequenceEqual(MemoryMarshal.AsBytes(bones.AsSpan())))
+                return;
+            if (bones == null || bones.Length != skinMatrices.Length)
+                _bones[index] = bones = new Float4x4[skinMatrices.Length];
+            skinMatrices.CopyTo(bones);
+        }
+        MarkDirty(index, Dirt.Bones);
     }
 
     /// <summary>Copies everything that changed since the last call into the render copy. Host thread, at SubmitFrame.</summary>
@@ -847,6 +878,7 @@ public sealed partial class RenderWorld : IDisposable
         Array.Resize(ref _sortBias, capacity);
         Array.Resize(ref _boundsOverride, capacity);
         Array.Resize(ref _hasBoundsOverride, capacity);
+        Array.Resize(ref _bones, capacity);
         Array.Resize(ref _dirt, capacity);
     }
 
@@ -870,17 +902,51 @@ public sealed partial class RenderWorld : IDisposable
         private RangeAllocation[] _sliceRange = [];
         private readonly WorldProbes _probes;
         private uint[] _probeSlot = [];
+        private readonly Action<RendererError> _report;
+        private readonly RangeAllocator _boneSpace = new(MaxSliceEntries);
+        private RangeAllocation[] _boneRange = [];
+        private MeshPlacement?[] _deformSource = [];
+        private readonly HashSet<int> _deformDirty = new();
 
-        public RenderSide(GraphicsDevice device, WorldProbes probes)
+        public RenderSide(GraphicsDevice device, WorldProbes probes, Action<RendererError> report)
         {
             _probes = probes;
+            _report = report;
             Transforms = GpuTable.Of<ObjectTransform>(device, "Object transforms");
             PreviousTransforms = GpuTable.Of<ObjectTransform>(device, "Object previous transforms", 64);
             Bounds = GpuTable.Of<ObjectBounds>(device, "Object bounds");
             Attributes = GpuTable.Of<ObjectAttributes>(device, "Object attributes");
             MaterialSlots = new GpuTable(device, "Material slots", 1);
-            Tables = [Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots];
+            SkinMatrices = GpuTable.Of<Float4x4>(device, "Skin matrices", 64);
+            Tables = [Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots, SkinMatrices];
         }
+
+        /// <summary>Every skinned renderable's matrices, each in its own range.</summary>
+        public GpuTable SkinMatrices { get; }
+
+        /// <summary>A deforming renderable's copy of its mesh, which its draws read. Null for the rest.</summary>
+        public MeshPlacement?[] Deformed = [];
+
+        /// <summary>Whether a deforming renderable's copy is behind its bones, so the next frame a view sees it deforms it.</summary>
+        public bool[] DeformStale = [];
+
+        /// <summary>The frame stamp of the last cull that saw a deforming renderable.</summary>
+        public uint[] DeformSeen = [];
+
+        /// <summary>This frame's stamp, so <see cref="DeformSeen"/> equal to it means some view sees the renderable.</summary>
+        public uint DeformStamp { get; private set; }
+
+        /// <summary>Renderables with a deformed copy.</summary>
+        public HashSet<int> Deforming { get; } = new();
+
+        /// <summary>Copies made this frame, each of a renderable, whose data the GPU copies from their mesh.</summary>
+        public List<(int Index, MeshPlacement From, MeshPlacement To)> NewCopies { get; } = new();
+
+        /// <summary>The placement a renderable draws: its deformed copy, else its mesh's.</summary>
+        public MeshPlacement? PlacementOf(int index) => Deformed[index] ?? Mesh[index]?.Placement;
+
+        /// <summary>The first skin matrix of a renderable in <see cref="SkinMatrices"/>, and how many it has.</summary>
+        public (uint First, uint Count) BonesOf(int index) => (_boneRange[index].Offset, _boneRange[index].Size);
 
         /// <summary>Every per object table, in a stable order.</summary>
         public GpuTable[] Tables { get; }
@@ -925,8 +991,12 @@ public sealed partial class RenderWorld : IDisposable
 
         private uint _transientObjects;
 
-        /// <summary>Forgets last frame's provider objects. Render thread, before any view.</summary>
-        public void BeginTransientObjects() => _transientObjects = 0;
+        /// <summary>Forgets last frame's provider objects and starts a frame of culls. Render thread, before any view.</summary>
+        public void BeginFrame()
+        {
+            _transientObjects = 0;
+            DeformStamp++;
+        }
 
         /// <summary>An object record for one frame, after every renderable's, for a provider's item. Render thread.</summary>
         public uint AddTransientObject(in Double4x4 transform, in ObjectAttributes attributes)
@@ -976,6 +1046,10 @@ public sealed partial class RenderWorld : IDisposable
             attributes.ProbeIndex = UpdateProbeSlot(index, _probes.Active && !lightmap.Lightmapped);
             if (added)
                 attributes.PreviousTransform = ObjectAttributes.NoPrevious;
+            if ((dirt & (Dirt.Bones | Dirt.Added)) != 0)
+                ReceiveBones(index, host._bones[index]);
+            if ((dirt & (Dirt.Bones | Dirt.Added | Dirt.Draw | Dirt.Bounds)) != 0)
+                _deformDirty.Add(index);
 
             if ((dirt & Dirt.Draw) != 0)
             {
@@ -1016,6 +1090,73 @@ public sealed partial class RenderWorld : IDisposable
             ShadowChanged(index);
         }
 
+        // A bone count change moves the renderable's matrices to a new range
+        private void ReceiveBones(int index, Float4x4[]? bones)
+        {
+            uint count = (uint)(bones?.Length ?? 0);
+            if (count != _boneRange[index].Size)
+            {
+                FreeBones(index);
+                if (count > 0 && !_boneSpace.TryAllocate(count, 1, out _boneRange[index]))
+                    throw new InvalidOperationException("The world's skin matrices are full.");
+            }
+            for (int i = 0; i < count; i++)
+                SkinMatrices.Set(_boneRange[index].Offset + (uint)i, bones![i]);
+            DeformStale[index] = true;
+        }
+
+        private void FreeBones(int index)
+        {
+            if (_boneRange[index].Size > 0)
+                _boneSpace.Free(_boneRange[index]);
+            _boneRange[index] = default;
+        }
+
+        /// <summary>
+        /// Makes, remakes or frees deformed copies after renderables' bones, meshes or mesh data changed. Freed ranges
+        /// wait for <paramref name="lastDispatched"/>. Render thread, after <see cref="Update"/> and before the buckets.
+        /// </summary>
+        public void UpdateDeformation(GeometryPool geometry, ulong lastDispatched)
+        {
+            const uint boneStreams = (1u << (int)VertexSemantic.BoneIndices) | (1u << (int)VertexSemantic.BoneWeights);
+            NewCopies.Clear();
+            foreach (int index in _deformDirty)
+            {
+                MeshPlacement? source = index < Capacity && Alive[index] && _boneRange[index].Size > 0 && Mesh[index]?.Placement is { } placed
+                    && (placed.StreamsPresent & boneStreams) == boneStreams ? placed : null;
+                if (source != null && source == _deformSource[index])
+                {
+                    if (BoundsOverride[index] == null)
+                        ReportBounds(index);
+                    continue;
+                }
+                if (Deformed[index] is { } old)
+                {
+                    geometry.ReleaseCopy(old, lastDispatched);
+                    Deformed[index] = null;
+                    _deformSource[index] = null;
+                    Deforming.Remove(index);
+                    ChangedDraw(index);
+                }
+                if (source == null)
+                    continue;
+
+                MeshPlacement copy = geometry.PlaceCopy(Mesh[index]!, source);
+                Deformed[index] = copy;
+                _deformSource[index] = source;
+                DeformStale[index] = true;
+                Deforming.Add(index);
+                NewCopies.Add((index, source, copy));
+                ChangedDraw(index);
+                if (BoundsOverride[index] == null)
+                    ReportBounds(index);
+            }
+            _deformDirty.Clear();
+        }
+
+        private void ReportBounds(int index)
+            => _report(new RendererError("deform.bounds", $"Renderable {index} deforms without a bounds override, so it culls by its rest pose. SetBounds with bounds holding every pose.", RendererErrorSeverity.Warning) { Key = $"deform.bounds.{index}" });
+
         /// <summary>Applies the previous transform rule: what moved last frame and not this one gets its previous transform caught up.</summary>
         public void EndExtract()
         {
@@ -1037,6 +1178,7 @@ public sealed partial class RenderWorld : IDisposable
                     continue;
                 foreach (int index in users)
                 {
+                    _deformDirty.Add(index);
                     ShadowChanged(index);
                     UpdateBounds(index);
                     ShadowChanged(index);
@@ -1231,6 +1373,8 @@ public sealed partial class RenderWorld : IDisposable
         {
             RemoveSliceEntries(index);
             RemoveMeshUser(index);
+            FreeBones(index);
+            _deformDirty.Add(index);
             Mesh[index] = null;
             if (Previous[index] != ObjectAttributes.NoPrevious)
                 _freePrevious.Push(Previous[index]);
@@ -1294,6 +1438,11 @@ public sealed partial class RenderWorld : IDisposable
             Array.Resize(ref _sliceRange, capacity);
             Array.Resize(ref _moved, capacity);
             Array.Resize(ref _attributes, capacity);
+            Array.Resize(ref _boneRange, capacity);
+            Array.Resize(ref _deformSource, capacity);
+            Array.Resize(ref Deformed, capacity);
+            Array.Resize(ref DeformStale, capacity);
+            Array.Resize(ref DeformSeen, capacity);
             int old = Previous.Length;
             Array.Resize(ref Previous, capacity);
             Array.Fill(Previous, ObjectAttributes.NoPrevious, old, capacity - old);
