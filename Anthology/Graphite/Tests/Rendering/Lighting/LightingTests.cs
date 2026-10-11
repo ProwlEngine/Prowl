@@ -1383,7 +1383,7 @@ public sealed class LightingTests : IDisposable
         Room(new Double3(0, 0, 10), 20, _ => new Float3(0, 0, 0));
         Material wall = Surface(new Float3(0.8f, 0.8f, 0.8f));
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, -9.9)) * Double4x4.CreateScale(new Double3(-5, 5, -5)), LayerMask = 1 }, [wall]);
-        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2, Flags = RenderableFlags.ReceiveShadows }, [Reflector()]);
         ReflectionProbeHandle probe = _world.AddReflectionProbe(RoomProbe(new Double3(0, 0, 10), new Float3(40, 40, 40)));
         _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, -1), Intensity = 0.1f, Shadow = new ShadowDesc { Enabled = true } });
         RenderableHandle caster = AddCaster(0, 0, 0, half: 30);
@@ -1516,6 +1516,195 @@ public sealed class LightingTests : IDisposable
         _device.UpdateBuffer<uint>(count, 0, [0, 0, 0, 0]);
         _world.Providers.Add(new IndirectItem(_quad, surface, count));
         AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
+    }
+
+    // A two unit square only shadows see, drawn with a material that has no caster pass of its own
+    private RenderableHandle AddSurfaceCaster(Material material, double x, double y, double z)
+        => _world.Add(new RenderableDesc
+        {
+            Mesh = _quad,
+            Transform = Double4x4.CreateTranslation(_origin + new Double3(x, y, z)) * Double4x4.CreateScale(0.25),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        }, [material]);
+
+    [Fact]
+    public void OpaqueMaterialsWithoutACasterPass_CastThroughOneDepthProgram()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        Material receiver = Surface(new Float3(albedo.X, albedo.Y, albedo.Z));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, QuadDepth)), Flags = RenderableFlags.ReceiveShadows }, [receiver]);
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+
+        // Three casters of three materials of one shader, which draw as one call
+        AddSurfaceCaster(Surface(new Float3(1, 0, 0)), 1, 0.5, 6);
+        AddSurfaceCaster(Surface(new Float3(0, 1, 0)), -1.5, -1.5, 6);
+        AddSurfaceCaster(Surface(new Float3(0, 0, 1)), -1.5, 1.5, 6);
+        Float4[] pixels = Frame();
+        Assert.Equal(1, Pipeline.ShadowCallsDrawn);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f),
+            p => MathF.Min(SquareEdge(p, 2, 1, 2), MathF.Min(SquareEdge(p, -3, -3, 2), SquareEdge(p, -3, 3, 2))), pixels, 0.6f);
+    }
+
+    [Fact]
+    public void MaterialsOptingOut_CastNothing()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, QuadDepth)), Flags = RenderableFlags.ReceiveShadows }, [Surface(new Float3(albedo.X, albedo.Y, albedo.Z))]);
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+
+        Material off = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/NoShadows").Replace("\"LightMode\" = \"Forward\"", "\"LightMode\" = \"Forward\" \"Shadows\" = \"Off\""))));
+        Material uncast = Surface(new Float3(1, 1, 1));
+        uncast.CastShadows = false;
+        AddSurfaceCaster(off, 1, 0.5, 6);
+        AddSurfaceCaster(uncast, -1.5, -1.5, 6);
+        AssertMatches(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), Frame());
+    }
+
+    [Fact]
+    public void DepthOnlyCasters_KeepTheirMaterialsCulling()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, QuadDepth)), Flags = RenderableFlags.ReceiveShadows }, [Surface(new Float3(albedo.X, albedo.Y, albedo.Z))]);
+        _world.AddLight(ShadowSpot());
+        Material Culled(string cull)
+            => _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Test/Lit", "Test/Cull" + cull).Replace("Cull Off", "Cull " + cull))));
+
+        // One side or the other faces the light, so exactly one of back and front culling casts, and no culling always does
+        bool Casts(Material material)
+        {
+            RenderableHandle caster = AddSurfaceCaster(material, 0, 0, 6);
+            Float4[] pixels = Frame();
+            _world.Remove(caster);
+            Float4 centre = pixels[Size / 2 * Size + Size / 2];
+            return centre.X < 1e-4f;
+        }
+        Assert.True(Casts(Culled("Off")));
+        Assert.NotEqual(Casts(Culled("Back")), Casts(Culled("Front")));
+    }
+
+    // A square only shadows see, from a provider
+    private sealed class ShadowItem(GpuMesh mesh, Material material) : RenderProvider
+    {
+        public override void Cull(in ProviderView view, DrawItemSink sink) => sink.Add(mesh, 0, material, new DrawItem
+        {
+            Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25),
+            Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        });
+    }
+
+    [Fact]
+    public void ProviderItems_CastShadows()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, QuadDepth)), Flags = RenderableFlags.ReceiveShadows }, [Surface(new Float3(albedo.X, albedo.Y, albedo.Z))]);
+        LightDesc light = ShadowSpot();
+        _world.AddLight(light);
+        _world.Providers.Add(new ShadowItem(_quad, Surface(new Float3(1, 1, 1))));
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), p => SquareEdge(p, 2, 1, 2), Frame(), 0.6f);
+    }
+
+    // A receiver that takes shadows but casts none, so a light close to it cannot shadow it with itself
+    private void AddReceiver(Vector3 albedo)
+        => _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), Flags = RenderableFlags.ReceiveShadows }, [Surface(new Float3(albedo.X, albedo.Y, albedo.Z))]);
+
+    [Fact]
+    public void StaticCastersTaggedToUpdateEveryFrame_KeepDrawingBesideMovingOnes()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        string source = CasterSource.Replace("Test/Caster", "Test/AnimatedStatic").Replace("\"LightMode\" = \"ShadowCaster\"", "\"LightMode\" = \"ShadowCaster\" \"ShadowUpdate\" = \"EveryFrame\"");
+        Material animated = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(source)));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly | RenderableFlags.Static }, [animated]);
+        AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        Frame();
+        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
+        Frame();
+        Assert.Equal(2, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void AMovingCasterReachingAStaticOnlyLight_SplitsIt()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        AddCaster(1, 0.5, 6, isStatic: true);
+        Frame();
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+
+        RenderableHandle moving = AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        _world.SetTransform(moving, Double4x4.CreateTranslation(new Double3(-1.5, 1.5, 6)) * Double4x4.CreateScale(0.5 / 4));
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+        Assert.Equal(1, Pipeline.ShadowCopiesMade);
+    }
+
+    [Fact]
+    public void ALightGivenASmallerTileThanItWants_KeepsIt()
+    {
+        _world.Shadows.PageSize = 256;
+        _world.Shadows.Budget = 256 * 256 * 2;
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot() with { Range = 20 });
+        Frame();
+
+        // The second light wants the whole page, three quarters are left
+        _world.AddLight(ShadowSpot() with { Position = new Double3(0.5, 0, 2), Range = 60 });
+        Frame();
+        Frame();
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void ALightOutOfViewForAMoment_KeepsItsShadow()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        AddCaster(1, 0.5, 6);
+        Frame();
+        Double3 at = _origin;
+        _origin = new Double3(1000, 0, 0);
+        Frame();
+        _origin = at;
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void PointLightShadows_FallFromEverySideFace()
+    {
+        Vector3 albedo = new(0.8f, 0.8f, 0.8f);
+        AddReceiver(albedo);
+        LightDesc light = Point(new Double3(0, 0, 8), 20, 0.05f, new Float3(1, 1, 1)) with { Shadow = new ShadowDesc { Enabled = true, Resolution = 512 } };
+        _world.AddLight(light);
+
+        // Halfway from the light to the plane each square doubles, landing on the +X, -X, +Y and -Y faces
+        AddCaster(1.5, 0, 9, half: 0.5);
+        AddCaster(-1.5, 0, 9, half: 0.5);
+        AddCaster(0, 1.5, 9, half: 0.5);
+        AddCaster(0, -1.5, 9, half: 0.5);
+        float Edge(Vector3 p) => MathF.Min(MathF.Min(SquareEdge(p, 3, 0, 1), SquareEdge(p, -3, 0, 1)), MathF.Min(SquareEdge(p, 0, 3, 1), SquareEdge(p, 0, -3, 1)));
+        AssertShadowed(p => Reference.Local(light, p, s_normal, albedo, 0, 0.5f), Edge, Frame(), 0.3f);
+    }
+
+    [Fact]
+    public void TheLightGrid_FindsLightsAroundAnyChange_HugeOrEndless()
+    {
+        LightGrid grid = new();
+        grid.Add(0, new Double3(-100, -100, -100), 5);
+        grid.Add(1, new Double3(1e6, 0, 0), 2000);
+        grid.Add(2, Double3.Zero, float.PositiveInfinity);
+        // Candidates for the exact test: every light a sphere touches, perhaps more
+        Assert.True(grid.Near(new Double3(-103, -100, -100), 1).IsSupersetOf([0, 2]));
+        Assert.True(grid.Near(new Double3(1e6 + 1500, 0, 0), 1).IsSupersetOf([1, 2]));
+        Assert.True(grid.Near(Double3.Zero, float.PositiveInfinity).IsSupersetOf([0, 1, 2]));
+        Assert.True(grid.Near(Double3.Zero, float.MaxValue).IsSupersetOf([0, 1, 2]));
     }
 
     [Fact]
@@ -1831,7 +2020,7 @@ public sealed class LightingTests : IDisposable
             Float3 c = color(f);
             wall.SetColor("_Color", new Float4(c.X, c.Y, c.Z, 1));
             Double3 at = _origin + center + new Double3(forward.X, forward.Y, forward.Z) * half;
-            _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(at) * basis * Double4x4.CreateScale(half / 4), LayerMask = 1 }, [wall]);
+            _world.Add(new RenderableDesc { Mesh = facing, Transform = Double4x4.CreateTranslation(at) * basis * Double4x4.CreateScale(half / 4), LayerMask = 1, Flags = RenderableFlags.ReceiveShadows }, [wall]);
         }
         _world.Environment = new EnvironmentDesc { Fog = default, AmbientColor = default, Sky = SkyMaterial(new Float3(s_skyColor.X, s_skyColor.Y, s_skyColor.Z), 0) };
     }

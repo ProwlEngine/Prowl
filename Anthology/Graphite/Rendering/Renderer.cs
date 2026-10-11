@@ -233,6 +233,9 @@ public sealed class Renderer : IDisposable
     private readonly MaterialSystem _materials;
     private readonly GlobalRegistry _globals;
     private readonly DrawPrograms _programs = new();
+
+    // Keeps the depth caster's material table, which every material casting through it draws with
+    private readonly Material _depthCasterMaterial;
     private readonly FramePipeline _frame;
 
     /// <summary>The frame pipeline, for tests.</summary>
@@ -283,6 +286,8 @@ public sealed class Renderer : IDisposable
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
         _frame.ChangedMaterials = _shadowMaterials;
         Skies = new BuiltInSkies(this);
+        _programs.DepthCaster = LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}DepthCaster.shader")!));
+        _depthCasterMaterial = CreateMaterial(_programs.DepthCaster);
 
         if (_options.Threading == RenderThreading.RenderThread && !_options.Deterministic)
         {

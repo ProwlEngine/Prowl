@@ -60,6 +60,12 @@ internal sealed class DrawPrograms
     /// <summary>Called once when every id is in use and a new program cannot get one.</summary>
     public Action<RendererError>? Reporter { get; set; }
 
+    /// <summary>
+    /// The depth only shader opaque materials without a ShadowCaster pass of their own cast through, its passes culling
+    /// back faces, front faces and none, picked by the material's Forward pass.
+    /// </summary>
+    public Shader? DepthCaster { get; set; }
+
     public void Acquire(ushort id) => _references[id]++;
 
     public void Release(ushort id)
@@ -78,10 +84,13 @@ internal sealed class DrawPrograms
     {
         id = 0;
         int passIndex = draw.Shader.PassIndex(pass);
-        if (passIndex < 0)
+        DrawProgram program;
+        if (passIndex >= 0)
+            program = new(draw.Shader, passIndex, draw.Variant, draw.StateOverride, draw.Keywords);
+        else if (pass == PassType.ShadowCaster && DepthCasterPass(draw) is int depthPass)
+            program = new(DepthCaster!, depthPass, 0, null, []);
+        else
             return false;
-
-        DrawProgram program = new(draw.Shader, passIndex, draw.Variant, draw.StateOverride, draw.Keywords);
         if (_ids.TryGetValue(program, out id))
             return true;
 
@@ -104,6 +113,24 @@ internal sealed class DrawPrograms
         }
         _ids[program] = id;
         return true;
+    }
+
+    // The depth only pass with the culling of the material's Forward pass, or null when it has none or opts out
+    private int? DepthCasterPass(MaterialDraw draw)
+    {
+        int forward = draw.Shader.PassIndex(PassType.Forward);
+        if (DepthCaster == null || forward < 0)
+            return null;
+        ShaderPass pass = draw.Shader.Definition.Passes![forward];
+        if (ShaderDefinition.PassHasTag(pass, "Shadows", "Off"))
+            return null;
+        PassState state = draw.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
+        return state.ToRasterizerState(RasterizerStateDescription.Default).CullMode switch
+        {
+            FaceCullMode.Front => 1,
+            FaceCullMode.None => 2,
+            _ => 0,
+        };
     }
 }
 
