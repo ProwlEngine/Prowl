@@ -102,43 +102,73 @@ internal sealed class DrawPrograms
 }
 
 /// <summary>
-/// The planes of a view's frustum, built from its camera relative view projection: the view without the camera's
-/// translation, so objects are tested at their position minus the camera's in double precision. Planes a reversed
-/// infinite projection makes degenerate are dropped.
+/// The planes of a view's frustums, one per layer, built from each layer's camera relative view projection: the view
+/// without the camera's translation, so objects are tested at their position minus the first layer's camera in double
+/// precision. Something is visible when any layer sees it. Planes a reversed infinite projection makes degenerate are dropped.
 /// </summary>
 internal readonly struct CullFrustum
 {
-    [InlineArray(6)]
+    private const int MaxLayers = 6;
+
+    [InlineArray(MaxLayers * 6)]
     private struct Planes
     {
         private Float4 _first;
     }
 
+    [InlineArray(MaxLayers)]
+    private struct Counts
+    {
+        private int _first;
+    }
+
     private readonly Planes _planes;
-    private readonly int _count;
+    private readonly Counts _counts;
+    private readonly int _layers;
 
     public CullFrustum(in Float4x4 viewProjection, Double3 camera)
     {
         Camera = camera;
+        _layers = 1;
+        _counts[0] = AddLayer(ref _planes, 0, viewProjection, Float3.Zero);
+    }
+
+    public CullFrustum(in ViewLayers layers, int count)
+    {
+        if (count < 1 || count > MaxLayers)
+            throw new ArgumentOutOfRangeException(nameof(count));
+        Camera = layers[0].Position;
+        _layers = count;
+        for (int l = 0; l < count; l++)
+        {
+            ViewLayer layer = layers[l];
+            _counts[l] = AddLayer(ref _planes, l * 6, layer.Projection * layer.View, Relative(layer.Position));
+        }
+    }
+
+    // A layer's planes moved from its own camera to the first layer's, offset being its camera from the first
+    private static int AddLayer(ref Planes planes, int first, in Float4x4 viewProjection, Float3 offset)
+    {
         Float4 row0 = new(viewProjection.c0.X, viewProjection.c1.X, viewProjection.c2.X, viewProjection.c3.X);
         Float4 row1 = new(viewProjection.c0.Y, viewProjection.c1.Y, viewProjection.c2.Y, viewProjection.c3.Y);
         Float4 row2 = new(viewProjection.c0.Z, viewProjection.c1.Z, viewProjection.c2.Z, viewProjection.c3.Z);
         Float4 row3 = new(viewProjection.c0.W, viewProjection.c1.W, viewProjection.c2.W, viewProjection.c3.W);
 
-        Planes planes = default;
         int count = 0;
         Span<Float4> candidates = [row3 + row0, row3 - row0, row3 + row1, row3 - row1, row2, row3 - row2];
         foreach (Float4 plane in candidates)
         {
             float length = MathF.Sqrt(plane.X * plane.X + plane.Y * plane.Y + plane.Z * plane.Z);
-            if (length > 1e-6f)
-                planes[count++] = plane / length;
+            if (length <= 1e-6f)
+                continue;
+            Float4 p = plane / length;
+            p.W -= p.X * offset.X + p.Y * offset.Y + p.Z * offset.Z;
+            planes[first + count++] = p;
         }
-        _planes = planes;
-        _count = count;
+        return count;
     }
 
-    /// <summary>The camera position the view projection is relative to.</summary>
+    /// <summary>The first layer's camera position, which positions are tested relative to.</summary>
     public Double3 Camera { get; }
 
     public Float3 Relative(Double3 world) => new((float)(world.X - Camera.X), (float)(world.Y - Camera.Y), (float)(world.Z - Camera.Z));
@@ -146,27 +176,37 @@ internal readonly struct CullFrustum
     public bool Sphere(Double3 center, float radius)
     {
         Float3 c = Relative(center);
-        for (int i = 0; i < _count; i++)
+        for (int l = 0; l < _layers; l++)
         {
-            Float4 p = _planes[i];
-            if (p.X * c.X + p.Y * c.Y + p.Z * c.Z + p.W < -radius)
-                return false;
+            bool inside = true;
+            for (int i = 0; i < _counts[l] && inside; i++)
+            {
+                Float4 p = _planes[l * 6 + i];
+                inside = p.X * c.X + p.Y * c.Y + p.Z * c.Z + p.W >= -radius;
+            }
+            if (inside)
+                return true;
         }
-        return true;
+        return false;
     }
 
     public bool Box(Double3 worldCenter, Float3 extents)
     {
         Float3 center = Relative(worldCenter);
-        for (int i = 0; i < _count; i++)
+        for (int l = 0; l < _layers; l++)
         {
-            Float4 p = _planes[i];
-            float distance = p.X * center.X + p.Y * center.Y + p.Z * center.Z + p.W;
-            float radius = MathF.Abs(p.X) * extents.X + MathF.Abs(p.Y) * extents.Y + MathF.Abs(p.Z) * extents.Z;
-            if (distance < -radius)
-                return false;
+            bool inside = true;
+            for (int i = 0; i < _counts[l] && inside; i++)
+            {
+                Float4 p = _planes[l * 6 + i];
+                float distance = p.X * center.X + p.Y * center.Y + p.Z * center.Z + p.W;
+                float radius = MathF.Abs(p.X) * extents.X + MathF.Abs(p.Y) * extents.Y + MathF.Abs(p.Z) * extents.Z;
+                inside = distance >= -radius;
+            }
+            if (inside)
+                return true;
         }
-        return true;
+        return false;
     }
 }
 

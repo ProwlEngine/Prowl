@@ -367,9 +367,11 @@ internal sealed class CameraFrame : IDisposable
     public int LastFrame;
     public readonly CameraView View = new();
 
-    /// <summary>Last frame's view block, for motion: its view projection and camera position.</summary>
-    public ViewBlock Previous;
+    /// <summary>Last frame's view block per layer, for motion: its view projection and camera position.</summary>
+    public readonly ViewBlock[] Previous = new ViewBlock[6];
+    public readonly ViewBlock[] Blocks = new ViewBlock[6];
     public bool HasPrevious;
+    public int LayerCount = 1;
     public readonly IRenderView[] Views;
 
     private IndirectDrawIndexedArguments[] _commands = new IndirectDrawIndexedArguments[64];
@@ -379,7 +381,7 @@ internal sealed class CameraFrame : IDisposable
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
         Scene = new ScenePass(frame, this);
-        Present = new PresentPass(frame);
+        Present = new PresentPass(frame, this);
         Views = [View];
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
@@ -422,8 +424,8 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>Where each list's commands start in the uploaded command buffer.</summary>
     public int[] CommandBases { get; } = new int[3];
 
-    /// <summary>Queues the frame's commands, draw records, instances and view block, the lists one after another.</summary>
-    public void Upload(Uploader uploader, in ViewBlock block)
+    /// <summary>Queues the frame's commands, draw records, instances and view blocks, the lists one after another.</summary>
+    public void Upload(Uploader uploader, ReadOnlySpan<ViewBlock> blocks)
     {
         int commands = 0, instances = 0;
         foreach (DrawList list in Lists)
@@ -459,7 +461,7 @@ internal sealed class CameraFrame : IDisposable
         Commands.Write<IndirectDrawIndexedArguments>(uploader, _commands.AsSpan(0, commands));
         Records.Write<DrawRecord>(uploader, _records.AsSpan(0, commands));
         Instances.Write<uint>(uploader, _instances.AsSpan(0, instances));
-        ViewBlocks.Write<ViewBlock>(uploader, new ReadOnlySpan<ViewBlock>(in block));
+        ViewBlocks.Write<ViewBlock>(uploader, blocks);
     }
 
     public void Dispose()
@@ -492,6 +494,9 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         DepthFormat = PixelFormat.D32_Float,
     };
 
+    /// <summary>The scene target, drawn through multiview into one array layer per view layer.</summary>
+    public static GraphTextureDesc Target(int layers) => s_scene with { ArrayLayers = layers > 1 ? (uint)layers : 0 };
+
     private readonly PropertySet _properties = new();
     private (DeviceBuffer? Buffer, uint Offset, uint Size) _globals;
     private TextureHandle _target;
@@ -500,7 +505,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
 
     public void Setup(RenderContextBuilder builder)
     {
-        _target = builder.DeclareOutputTexture(SceneId, s_scene);
+        _target = builder.DeclareOutputTexture(SceneId, Target(camera.LayerCount));
         DeviceBuffer[] buffers = frame.Buffers;
         for (int i = 0; i < buffers.Length; i++)
             builder.DeclareImportedBuffer(FramePipeline.BufferId(i), buffers[i], BufferAccess.AllReads);
@@ -568,7 +573,7 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
 }
 
 /// <summary>Copies the scene colour to the view's target.</summary>
-internal sealed class PresentPass(FramePipeline frame) : IPass
+internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPass
 {
     private readonly PropertySet _properties = new();
     private TextureHandle _scene;
@@ -586,7 +591,7 @@ internal sealed class PresentPass(FramePipeline frame) : IPass
     {
         cmd.SetFramebuffer(context.GetRenderTexture(_target).Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
         cmd.SetFullViewport();
-        cmd.SetShader(frame.PresentProgram);
+        cmd.SetShader(camera.LayerCount > 1 ? frame.PresentLayersProgram : frame.PresentProgram);
         cmd.SetVertexSource(VertexSource.None);
         _properties.SetTexture("Graphite_Source", context.GetRenderTexture(_scene).ColorTextures[0], frame.LinearSampler);
         cmd.SetProperties(_properties);
@@ -655,12 +660,8 @@ internal sealed class FramePipeline : IDisposable
         _frameStart.Name = "Graphite.FrameStart";
         _frameStart.SetPasses([_upload, _probes]);
 
-        ShaderPass present = new() { State = new PassState(), Source = ShaderLibrary.Get(ShaderLibrary.Prefix + "Internal/Present.glsl")!, SourceName = "Graphite/Internal/Present.glsl" };
-        ShaderDescription description = compiler.Compile(present, [], device.BackendType);
-        description.BlendState = BlendStateDescription.SingleOverrideBlend;
-        description.DepthStencilState = DepthStencilStateDescription.Disabled;
-        description.RasterizerState = RasterizerStateDescription.CullNone;
-        PresentProgram = device.ResourceFactory.CreateGraphicsProgram(description);
+        PresentProgram = Fullscreen(device, compiler, "Internal/Present.glsl");
+        PresentLayersProgram = Fullscreen(device, compiler, "Internal/PresentLayers.glsl");
         LinearSampler = device.ResourceFactory.CreateSampler(SamplerDescription.Linear);
     }
 
@@ -670,6 +671,19 @@ internal sealed class FramePipeline : IDisposable
     public DrawPrograms DrawPrograms { get; }
     public ProgramCache Programs { get; }
     public GraphicsProgram PresentProgram { get; }
+
+    /// <summary>Copies every layer of a multiview scene into the matching view of its target.</summary>
+    public GraphicsProgram PresentLayersProgram { get; }
+
+    private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler compiler, string file)
+    {
+        ShaderPass pass = new() { State = new PassState(), Source = ShaderLibrary.Get(ShaderLibrary.Prefix + file)!, SourceName = "Graphite/" + file };
+        ShaderDescription description = compiler.Compile(pass, [], device.BackendType);
+        description.BlendState = BlendStateDescription.SingleOverrideBlend;
+        description.DepthStencilState = DepthStencilStateDescription.Disabled;
+        description.RasterizerState = RasterizerStateDescription.CullNone;
+        return device.ResourceFactory.CreateGraphicsProgram(description);
+    }
     public Sampler LinearSampler { get; }
 
     /// <summary>Every persistent buffer the frame writes and its cameras read, in a stable order.</summary>
@@ -720,6 +734,12 @@ internal sealed class FramePipeline : IDisposable
 
             camera.LastFrame = _frame;
             camera.Desc = view;
+            if (camera.LayerCount != view.LayerCount)
+            {
+                camera.LayerCount = view.LayerCount;
+                camera.HasPrevious = false;
+                camera.Pipeline.SetPasses([camera.Scene, camera.Present]);
+            }
             camera.World = world;
             Prepare(camera, view, world, time);
             camera.View.Target = view.Target;
@@ -759,29 +779,41 @@ internal sealed class FramePipeline : IDisposable
 
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time)
     {
-        ViewLayer layer = view.Layers[0];
-        Float4x4 viewProjection = layer.Projection * layer.View;
-        CullFrustum frustum = new(viewProjection, layer.Position);
+        int layers = view.LayerCount;
+        CullFrustum frustum = new(view.Layers, layers);
         world.Buckets.Cull(frustum, view.CullingMask);
         world.Buckets.Build(0, frustum, camera.Prepass);
         world.Buckets.Build(1, frustum, camera.Forward);
         world.Buckets.BuildTransparent(frustum, camera.Transparent);
-        ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance);
-        block.Time = new Float4((float)time.Time, time.DeltaTime, time.FrameIndex, 0);
+
         WorldLighting lighting = world.World.Lighting;
-        block.LightRegionRoot = lighting.BuildViewLightRegions(frustum, camera.LightRegionTree, _uploader, camera.LightRegions, camera.LightRegionNodes);
-        block.DecalRegionRoot = lighting.BuildViewDecalRegions(frustum, camera.DecalRegionTree, _uploader, camera.DecalRegions, camera.DecalRegionNodes);
-        block.ViewLightRoot = lighting.BuildViewLights(frustum, camera.LightTree, _uploader, camera.ViewLights, camera.ViewLightNodes);
-        block.ViewDecalRoot = lighting.BuildViewDecals(frustum, camera.DecalTree, _uploader, camera.ViewDecals, camera.ViewDecalNodes);
-        if (camera.HasPrevious)
+        uint lightRegions = lighting.BuildViewLightRegions(frustum, camera.LightRegionTree, _uploader, camera.LightRegions, camera.LightRegionNodes);
+        uint decalRegions = lighting.BuildViewDecalRegions(frustum, camera.DecalRegionTree, _uploader, camera.DecalRegions, camera.DecalRegionNodes);
+        uint viewLights = lighting.BuildViewLights(frustum, camera.LightTree, _uploader, camera.ViewLights, camera.ViewLightNodes);
+        uint viewDecals = lighting.BuildViewDecals(frustum, camera.DecalTree, _uploader, camera.ViewDecals, camera.ViewDecalNodes);
+
+        for (int l = 0; l < layers; l++)
         {
-            block.PreviousViewProjection = camera.Previous.ViewProjection;
-            block.PreviousCameraHigh = camera.Previous.CameraHigh;
-            block.PreviousCameraLow = camera.Previous.CameraLow;
+            ViewLayer layer = view.Layers[l];
+            ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance);
+            block.Time = new Float4((float)time.Time, time.DeltaTime, time.FrameIndex, 0);
+            Float3 offset = frustum.Relative(layer.Position);
+            block.TreeOffset = new Float4(offset.X, offset.Y, offset.Z, 0);
+            block.LightRegionRoot = lightRegions;
+            block.DecalRegionRoot = decalRegions;
+            block.ViewLightRoot = viewLights;
+            block.ViewDecalRoot = viewDecals;
+            if (camera.HasPrevious)
+            {
+                block.PreviousViewProjection = camera.Previous[l].ViewProjection;
+                block.PreviousCameraHigh = camera.Previous[l].CameraHigh;
+                block.PreviousCameraLow = camera.Previous[l].CameraLow;
+            }
+            camera.Previous[l] = block;
+            camera.Blocks[l] = block;
         }
-        camera.Previous = block;
         camera.HasPrevious = true;
-        camera.Upload(_uploader, block);
+        camera.Upload(_uploader, camera.Blocks.AsSpan(0, layers));
     }
 
     private void CollectBuffers(IEnumerable<WorldFrame> worlds)
@@ -883,6 +915,7 @@ internal sealed class FramePipeline : IDisposable
         _probes.Dispose();
         Programs.Dispose();
         PresentProgram.Dispose();
+        PresentLayersProgram.Dispose();
         LinearSampler.Dispose();
     }
 }

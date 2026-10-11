@@ -145,6 +145,7 @@ struct Graphite_TreeQuery
     Graphite_TreeWalk regions;
     Graphite_TreeWalk items;
     vec3 position;           // camera relative
+    vec3 base;               // what moves it relative to the view's first layer, which its trees are built around
     vec3 point;              // the position in the space of the tree being walked
     vec3 offset;             // what moves a camera relative position into that space
     uint staticTree;
@@ -160,8 +161,9 @@ void Graphite_BeginQuery(out Graphite_TreeQuery q, vec3 position, bool decals)
 {
     Graphite_ViewData view = Graphite_View();
     q.position = position;
-    q.point = position;
-    q.offset = vec3(0.0);
+    q.base = view.treeOffset.xyz;
+    q.point = position + q.base;
+    q.offset = q.base;
     q.staticTree = decals ? GRAPHITE_STATIC_DECALS : GRAPHITE_STATIC_LIGHTS;
     q.viewTree = decals ? GRAPHITE_VIEW_DECALS : GRAPHITE_VIEW_LIGHTS;
     q.viewRoot = decals ? view.treeRoots.w : view.treeRoots.y;
@@ -204,8 +206,8 @@ bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint tree, out uint first,
 
         if (q.phase == 1)
         {
-            q.offset = vec3(0.0);
-            q.point = q.position;
+            q.offset = q.base;
+            q.point = q.position + q.base;
             Graphite_BeginTree(q.items, q.viewTree, q.viewRoot);
             q.walking = true;
             continue;
@@ -214,14 +216,14 @@ bool Graphite_NextRun(inout Graphite_TreeQuery q, out uint tree, out uint first,
         if (q.entry < q.entryEnd)
         {
             Graphite_RegionEntry region = Graphite_RegionAt(q.regions.tree, q.entry++);
-            q.offset = region.offset;
-            q.point = q.position + region.offset;
+            q.offset = q.base + region.offset;
+            q.point = q.position + q.offset;
             Graphite_BeginTree(q.items, q.staticTree, region.root);
             q.walking = true;
             continue;
         }
 
-        if (!Graphite_NextLeaf(q.regions, q.position, q.entry, q.entryEnd))
+        if (!Graphite_NextLeaf(q.regions, q.position + q.base, q.entry, q.entryEnd))
             q.phase = 1;
     }
     return false;

@@ -213,8 +213,10 @@ public sealed class Renderer : IDisposable
         ReadOnlySpan<ViewDesc> views = frame.Views.Span;
         foreach (ViewDesc view in views)
         {
-            if (view.LayerCount != 1)
-                throw new NotSupportedException("Views with several layers are not supported yet.");
+            if (view.LayerCount < 1 || view.LayerCount > 6)
+                throw new ArgumentException($"View {view.ViewId} has {view.LayerCount} layers, a view has 1 to 6.");
+            if (Math.Max(view.Target.ViewCount, 1u) != view.LayerCount)
+                throw new ArgumentException($"View {view.ViewId} has {view.LayerCount} layers but its target has {Math.Max(view.Target.ViewCount, 1u)} views.");
         }
 
         RaiseErrors();

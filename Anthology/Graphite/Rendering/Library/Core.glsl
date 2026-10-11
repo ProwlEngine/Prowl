@@ -20,6 +20,7 @@ struct Graphite_ViewData
     vec4 jitter;                    // this frame's jitter in xy, the previous frame's in zw
     vec4 time;                      // time, delta time, frame index
     vec4 depth;                     // near plane, logical far distance
+    vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
     uvec4 treeRoots;                // static light regions, view lights, static decal regions, view decals, all ones when empty
 };
 

@@ -517,6 +517,79 @@ public sealed class LightingTests : IDisposable
         AssertMatches(p => p.X > 0.5f && p.X < 1.5f ? new Vector3(1, 0, 0) : Vector3.One, Frame());
     }
 
+    // A reversed Z perspective with an infinite far plane and a 90 degree field of view, looking down +Z
+    private static readonly Float4x4 s_perspective = new(new Float4(1, 0, 0, 0), new Float4(0, 1, 0, 0), new Float4(0, 0, 0, 1), new Float4(0, 0, 0.1f, 0));
+
+    // A camera relative view looking along forward: the rows are its right, up and forward axes
+    private static Float4x4 Look(Float3 right, Float3 up, Float3 forward)
+        => new(new Float4(right.X, up.X, forward.X, 0), new Float4(right.Y, up.Y, forward.Y, 0), new Float4(right.Z, up.Z, forward.Z, 0), new Float4(0, 0, 0, 1));
+
+    private static readonly (Float3 Right, Float3 Up, Float3 Forward)[] s_faces =
+    [
+        (new(0, 0, -1), new(0, 1, 0), new(1, 0, 0)),
+        (new(0, 0, 1), new(0, 1, 0), new(-1, 0, 0)),
+        (new(1, 0, 0), new(0, 0, -1), new(0, 1, 0)),
+        (new(1, 0, 0), new(0, 0, 1), new(0, -1, 0)),
+        (new(1, 0, 0), new(0, 1, 0), new(0, 0, 1)),
+        (new(-1, 0, 0), new(0, 1, 0), new(0, 0, -1)),
+    ];
+
+    private Float4[] ReadLayer(Texture texture, uint layer)
+    {
+        _device.Record(cmd => cmd.CopyTextureToBuffer(texture, _readback, 0, TextureRegion.Whole(texture, 0, layer))).Wait();
+        Float4[] pixels = _device.Map<Float4>(_readback).ToArray();
+        _device.Unmap(_readback);
+        return pixels;
+    }
+
+    [Fact]
+    public void LayeredViews_DrawEachLayerExactlyLikeAViewOfItsOwn()
+    {
+        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.3f, 0.3f, 0.3f, 1), Fog = default };
+        _origin = new Double3(40_000_000.5, -12.25, 9_000_000);
+        for (int f = 0; f < 6; f++)
+        {
+            (Float3 right, Float3 up, Float3 forward) = s_faces[f];
+            Double4x4 basis = new(new Double4(right.X, right.Y, right.Z, 0), new Double4(up.X, up.Y, up.Z, 0), new Double4(forward.X, forward.Y, forward.Z, 0), new Double4(0, 0, 0, 1));
+            Double3 center = _origin + new Double3(forward.X, forward.Y, forward.Z) * 10;
+            _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(center) * basis }, [Surface(new Float3(0.2f + 0.13f * f, 0.9f - 0.1f * f, 0.5f), 0.4f)]);
+            _world.AddLight(Point(center - new Double3(forward.X, forward.Y, forward.Z) * 2 + new Double3(right.X, right.Y, right.Z), 5, 0.05f, new Float3(1, 0.9f, 0.8f), isStatic: f % 2 == 0));
+            DecalDesc decal = Decal(center - _origin, new Double3(3, 3, 3), new Float4(0, 0, 1, 0.5f), isStatic: f % 3 == 0);
+            decal.Transform = Double4x4.CreateTranslation(center + new Double3(right.X, right.Y, right.Z) * 2) * basis * Double4x4.CreateScale(3, 3, -3);
+            _world.AddDecal(decal);
+        }
+
+        using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
+        ViewDesc cube = new() { World = _world, ViewId = 7, Target = layered, LayerCount = 6 };
+        for (int f = 0; f < 6; f++)
+            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin + new Double3(0.03 * f, -0.02 * f, 0.01 * f) };
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
+        _device.WaitForIdle();
+        Assert.Empty(_errors);
+
+        for (int f = 0; f < 6; f++)
+        {
+            Float4[] got = ReadLayer(layers, (uint)f);
+            ViewDesc mono = new() { World = _world, ViewId = 8, Target = _framebuffer };
+            mono.Layers[0] = cube.Layers[f];
+            _renderer.SubmitFrame(new FrameDesc { Views = new[] { mono } });
+            _device.WaitForIdle();
+            Float4[] want = ReadLayer(_target, 0);
+
+            Assert.True(want.Any(p => p.X > 0.01f), $"layer {f} sees nothing");
+            for (int i = 0; i < want.Length; i++)
+            {
+                for (int c = 0; c < 3; c++)
+                {
+                    float w = c == 0 ? want[i].X : c == 1 ? want[i].Y : want[i].Z;
+                    float g = c == 0 ? got[i].X : c == 1 ? got[i].Y : got[i].Z;
+                    Assert.True(MathF.Abs(w - g) <= 1e-4f + 1e-3f * MathF.Abs(w), $"layer {f} pixel {i} channel {c}: alone {w}, layered {g}");
+                }
+            }
+        }
+    }
+
     [Fact]
     public void OnlyOpaquePassesWritingTheGBuffer_WriteIt()
     {
