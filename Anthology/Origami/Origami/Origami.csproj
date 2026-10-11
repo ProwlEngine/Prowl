@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources\*.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Echo\Echo\Echo.csproj" />
     <ProjectReference Include="..\..\Paper\Paper\Paper.csproj" />
   </ItemGroup>

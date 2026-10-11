@@ -874,11 +874,11 @@ public static class FileDialog
     }
     private static void DrawOpenEye(Canvas c, float cx, float cy, float s, Color col)
     {
-        OrigamiIconSet.Eye.Draw(c, new Rect(cx - s/2, cy - s/2, cx + s / 2, cy + s / 2), col);
+        Origami.Current.Icons.Eye?.Draw(c, new Rect(cx - s/2, cy - s/2, cx + s / 2, cy + s / 2), col);
     }
     private static void DrawClosedEye(Canvas c, float cx, float cy, float s, Color col)
     {
-        OrigamiIconSet.EyeOff.Draw(c, new Rect(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2), col);
+        Origami.Current.Icons.EyeOff?.Draw(c, new Rect(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2), col);
     }
 
     private static List<FileEntry> LoadDir(string path, int sortColumn, bool ascending, bool showHidden = false)

@@ -164,7 +164,7 @@ public sealed class ContextBuilder
                 // Active/checked items (e.g. the current "Sort By") show a trailing green check.
                 if (On)
                     paper.Box($"{id}_chk_{index}").Width(16).Height(RowHeight).IsNotInteractable()
-                        .Icon(paper, OrigamiIconSet.Check, theme.Green.C500, size: 13f);
+                        .Icon(paper, Origami.Current.Icons.Check, theme.Green.C500, size: 13f);
             }
         }
 
