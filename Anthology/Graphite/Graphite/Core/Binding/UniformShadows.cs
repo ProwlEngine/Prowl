@@ -11,6 +11,7 @@ internal sealed class ShadowBlock
     public uint Size;
     public bool Dirty;
     public bool Foreign;
+    public PackedBlock? Cache;
     public DeviceBufferRange Range;
     public ulong Stamp;
 
@@ -21,6 +22,9 @@ internal sealed class UniformShadows
 {
     private UniformBindingPlan? _plan;
     private ShadowBlock[] _blocks = Array.Empty<ShadowBlock>();
+    private bool[] _blit = Array.Empty<bool>();
+    private PackedBlock?[] _pack = Array.Empty<PackedBlock?>();
+    private int[] _hits = Array.Empty<int>();
 
     public ShadowBlock this[int block] => _blocks[block];
 
@@ -39,6 +43,10 @@ internal sealed class UniformShadows
             Array.Resize(ref _blocks, count);
             for (int i = old; i < count; i++)
                 _blocks[i] = new ShadowBlock();
+
+            _blit = new bool[count];
+            _pack = new PackedBlock?[count];
+            _hits = new int[count];
         }
 
         for (int i = 0; i < count; i++)
@@ -52,6 +60,7 @@ internal sealed class UniformShadows
 
             block.Dirty = true;
             block.Foreign = false;
+            block.Cache = null;
             block.Range = default;
             block.Stamp = 0;
         }
@@ -65,8 +74,74 @@ internal sealed class UniformShadows
         if (_plan == null)
             return;
 
+        bool pass = false;
+        for (int b = 0; b < _plan.BlockCount; b++)
+        {
+            UniformBlockLayout layout = _plan.Layouts[b];
+            ShadowBlock block = _blocks[b];
+            PackedBlock? cache = layout.Cacheable ? source.FindPacked(layout) : null;
+            bool valid = cache != null && cache.Version == source.Version;
+            _blit[b] = false;
+            _pack[b] = null;
+
+            if (valid && cache!.Full)
+            {
+                block.Cache = cache;
+                block.Dirty = true;
+                continue;
+            }
+
+            Materialize(block);
+            _blit[b] = true;
+            pass = true;
+            if (layout.Cacheable && !valid)
+            {
+                cache ??= source.AddPacked(layout);
+                Array.Clear(cache.Bytes);
+                _pack[b] = cache;
+                _hits[b] = 0;
+            }
+        }
+
+        if (!pass)
+            return;
+
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in source.Entries)
-            Write(kv.Key, kv.Value);
+        {
+            PropertyEntry entry = kv.Value;
+            if (entry.Kind != PropertyEntryKind.Uniform || !_plan.TryFind(kv.Key, out ReadOnlySpan<UniformFieldTarget> targets))
+                continue;
+
+            int length = (int)UniformSizes.Of(entry.UniformType);
+            ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), length);
+            foreach (UniformFieldTarget target in targets)
+            {
+                if (_blit[target.Block])
+                {
+                    ShadowBlock block = _blocks[target.Block];
+                    Copy(src, block.Data, target);
+                    block.Dirty = true;
+                }
+
+                if (_pack[target.Block] is { } packed)
+                {
+                    Copy(src, packed.Bytes, target);
+                    _hits[target.Block]++;
+                }
+            }
+        }
+
+        for (int b = 0; b < _plan.BlockCount; b++)
+        {
+            if (_pack[b] is not { } cache)
+                continue;
+
+            cache.Version = source.Version;
+            cache.Full = _hits[b] == cache.Layout.FieldCount;
+            cache.Stamp = 0;
+            if (cache.Full)
+                _blocks[b].Cache = cache;
+        }
     }
 
     public void Apply(List<PropertyID> keys, int from, PropertySet merged)
@@ -91,12 +166,27 @@ internal sealed class UniformShadows
         foreach (UniformFieldTarget target in targets)
         {
             ShadowBlock block = _blocks[target.Block];
-            Span<byte> dst = block.Data.Slice((int)target.Offset, (int)target.Size);
-            int count = Math.Min(dst.Length, length);
-            src.Slice(0, count).CopyTo(dst);
-            dst.Slice(count).Clear();
+            Materialize(block);
+            Copy(src, block.Data, target);
             block.Dirty = true;
         }
+    }
+
+    private static void Materialize(ShadowBlock block)
+    {
+        if (block.Cache == null)
+            return;
+
+        block.Cache.Bytes.AsSpan(0, (int)block.Size).CopyTo(block.Data);
+        block.Cache = null;
+    }
+
+    private static void Copy(ReadOnlySpan<byte> src, Span<byte> block, UniformFieldTarget target)
+    {
+        Span<byte> dst = block.Slice((int)target.Offset, (int)target.Size);
+        int count = Math.Min(dst.Length, src.Length);
+        src.Slice(0, count).CopyTo(dst);
+        dst.Slice(count).Clear();
     }
 }
 

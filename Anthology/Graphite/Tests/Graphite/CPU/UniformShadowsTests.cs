@@ -45,4 +45,48 @@ public class UniformShadowsTests
         float[] floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(shadows[0].Data).ToArray();
         Assert.Equal(5f, floats[1]);
     }
+
+    [Fact]
+    public void FullCoverageSetBecomesTheBlockSourceAndIsReusedUntilItChanges()
+    {
+        UniformShadows shadows = new();
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1)), new PropertySet());
+        PropertySet full = new();
+        full.SetFloat("A", 1);
+        full.SetFloat("B", 2);
+
+        shadows.Apply(full);
+        PackedBlock? first = shadows[0].Cache;
+        shadows[0].Dirty = false;
+        shadows.Apply(full);
+
+        Assert.NotNull(first);
+        Assert.Same(first, shadows[0].Cache);
+        Assert.True(shadows[0].Dirty);
+
+        full.SetFloat("B", 3);
+        shadows.Apply(full);
+
+        Assert.Equal(3f, System.BitConverter.ToSingle(shadows[0].Cache!.Bytes, 4));
+    }
+
+    [Fact]
+    public void PartialWriteOnACachedBlockStartsFromTheCachedBytes()
+    {
+        UniformShadows shadows = new();
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1)), new PropertySet());
+        PropertySet full = new();
+        full.SetFloat("A", 1);
+        full.SetFloat("B", 2);
+        shadows.Apply(full);
+        shadows.Apply(full);
+        PropertySet partial = new();
+        partial.SetFloat("B", 7);
+
+        shadows.Apply(partial);
+
+        Assert.Null(shadows[0].Cache);
+        float[] floats = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(shadows[0].Data).ToArray();
+        Assert.Equal(new float[] { 1, 7 }, floats);
+    }
 }

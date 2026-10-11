@@ -123,6 +123,20 @@ internal unsafe sealed partial class VkDescriptorBinder
     private DeviceBufferRange UploadBlock(ShadowBlock block)
     {
         ulong executionId = _cbOwner.ExecutionId;
+        if (block.Cache is { } cache)
+        {
+            if (cache.UploadedVersion != cache.Version || cache.Stamp != executionId)
+            {
+                cache.Bytes.CopyTo(CurrentExecution().AllocateTransientMapped(block.Size, out cache.Range));
+                cache.UploadedVersion = cache.Version;
+                cache.Stamp = executionId;
+            }
+
+            block.Dirty = false;
+            block.Foreign = false;
+            return cache.Range;
+        }
+
         if (block.Dirty || block.Foreign || block.Stamp != executionId)
         {
             block.Data.CopyTo(CurrentExecution().AllocateTransientMapped(block.Size, out block.Range));
