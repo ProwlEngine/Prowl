@@ -262,6 +262,52 @@ public sealed class LightingTests : IDisposable
             Assert.True(MathF.Abs(near[i].X - distant[i].X) < 2e-4f + 0.01f * near[i].X, $"pixel {i}: {near[i].X} near, {distant[i].X} far");
     }
 
+    // A light as the reference sees it, its position relative to the camera
+    private LightDesc Relative(LightDesc light)
+    {
+        light.Position -= _origin;
+        return light;
+    }
+
+    [Fact]
+    public void StaticLightsAcrossASolarSystem_LightAsPreciselyAsNearTheOrigin()
+    {
+        Vector3 albedo = new(0.7f, 0.7f, 0.7f);
+        _origin = new Double3(149_597_870_700.0, 1_234_567.25, -42_000_000.5);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.6f));
+        _world.AddLight(Point(new Double3(-149_597_870_700.0, 0, 0), 5, 1, new Float3(1, 1, 1)));
+        _world.AddLight(Point(new Double3(3, 0, 0), 5, 1, new Float3(1, 1, 1)));
+        LightDesc near = Point(_origin + new Double3(0.3, -0.2, 8.5), 2, 0.02f, new Float3(1, 0.8f, 0.6f));
+        _world.AddLight(near);
+
+        AssertMatches(p => Reference.Local(Relative(near), p, s_normal, albedo, 0, 0.6f), Frame());
+    }
+
+    [Fact]
+    public void ManyStaticLightsAcrossRegionCorners_FarAway_EveryOneIsFound()
+    {
+        Vector3 albedo = new(0.5f, 0.5f, 0.5f);
+        _origin = new Double3(StaticRegions<LightRecord>.RegionSize * 2_000_000, StaticRegions<LightRecord>.RegionSize * -3_000, 0) - new Double3(0, 0, QuadDepth);
+        AddQuad(Surface(new Float3(albedo.X, albedo.Y, albedo.Z), 0.7f));
+        Random random = new(11);
+        List<LightDesc> lights = new();
+        for (int i = 0; i < 600; i++)
+        {
+            LightDesc light = Point(_origin + new Double3(random.NextDouble() * 9 - 4.5, random.NextDouble() * 9 - 4.5, 9 + random.NextDouble() * 0.9), 0.3f + random.NextSingle() * 1.2f,
+                0.0005f + random.NextSingle() * 0.002f, new Float3(random.NextSingle(), random.NextSingle(), random.NextSingle()), isStatic: i < 500);
+            lights.Add(light);
+            _world.AddLight(light);
+        }
+
+        AssertMatches(p =>
+        {
+            Vector3 sum = Vector3.Zero;
+            foreach (LightDesc light in lights)
+                sum += Reference.Local(Relative(light), p, s_normal, albedo, 0, 0.7f);
+            return sum;
+        }, Frame());
+    }
+
     [Fact]
     public void ManyLights_EveryOneReachingAPixelIsFound()
     {
@@ -457,7 +503,7 @@ public sealed class LightingTests : IDisposable
 
         _world.RemoveDecal(under);
         _world.AddDecal(Decal(new Double3(0, 0, QuadDepth), new Double3(8, 8, 2), new Float4(1, 1, 0, 1)));
-        AssertMatches(_ => new Vector3(0, 1, 0), Frame());
+        AssertMatches(_ => new Vector3(1, 1, 0), Frame());
     }
 
     [Fact]
@@ -623,6 +669,61 @@ public sealed class LightingTests : IDisposable
 
         SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, QuadDepth));
         AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
+    }
+
+    [Fact]
+    public void ManyProbeLitRenderables_GrowAndReuseTheirSlots()
+    {
+        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 12);
+        _world.SetLightProbes(probes);
+        GpuMesh mesh = IndirectQuad(secondUVs: false);
+        List<RenderableHandle> hidden = new();
+        for (int i = 0; i < 100; i++)
+            hidden.Add(AddIndirect(mesh, depth: 50 + i * 0.1));
+        Frame();
+
+        foreach (RenderableHandle handle in hidden.Take(70))
+            _world.Remove(handle);
+        for (int i = 0; i < 80; i++)
+            AddIndirect(mesh, depth: 60 + i * 0.1);
+        AddIndirect(mesh, depth: 11);
+
+        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, 11));
+        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
+    }
+
+    [Fact]
+    public void LightmapPages_NotReadyLightWithAmbient_AndPastTheEndUseTheProbes()
+    {
+        _world.Environment = new EnvironmentDesc { AmbientColor = new Float4(0.2f, 0.4f, 0.6f, 1), Fog = default };
+        LightProbeData probes = BoxProbes(s_boxMin, s_boxMax, 13);
+        _world.SetLightProbes(probes);
+        _world.SetLightmaps([null], LightmapEncoding.Linear);
+        RenderableHandle quad = AddIndirect(IndirectQuad(secondUVs: true), lightmap: new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+        AssertMatches(_ => new Vector3(0.2f, 0.4f, 0.6f), Frame());
+
+        _world.SetLightmap(quad, new LightmapBinding(3, new Float4(1, 1, 0, 0)));
+        SphericalHarmonicsL2 sh = Reference.SampleSH(probes, _origin + new Double3(0, 0, QuadDepth));
+        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
+
+        _world.SetLightmaps([Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(0.1f, 0.2f, 0.3f, 1)])], LightmapEncoding.Linear);
+        _world.SetLightmap(quad, new LightmapBinding(0, new Float4(1, 1, 0, 0)));
+        AssertMatches(_ => new Vector3(0.1f, 0.2f, 0.3f), Frame());
+
+        _world.SetLightmap(quad, LightmapBinding.None);
+        AssertMatches(p => Reference.EvaluateSH(sh, IndirectNormal(p)), Frame());
+    }
+
+    [Fact]
+    public void LightProbeData_WithCornersOrNeighboursOutOfRange_IsRefused()
+    {
+        LightProbeData corners = BoxProbes(s_boxMin, s_boxMax, 14);
+        corners.Tetrahedra[5] = 8;
+        Assert.Throws<ArgumentException>(() => _world.SetLightProbes(corners));
+
+        LightProbeData neighbours = BoxProbes(s_boxMin, s_boxMax, 14);
+        neighbours.Neighbours[3] = 7;
+        Assert.Throws<ArgumentException>(() => _world.SetLightProbes(neighbours));
     }
 
     [Fact]

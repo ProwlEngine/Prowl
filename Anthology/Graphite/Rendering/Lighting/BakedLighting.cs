@@ -80,15 +80,16 @@ internal struct ProbeShRecord
     public Float4 Ar, Ag, Ab, Br, Bg, Bb, C;
 }
 
-/// <summary>A probe for the sampling pass, 128 bytes: its position from the probe origin, then its packed harmonics.</summary>
+/// <summary>A probe for the sampling pass, 144 bytes: its position split high and low, then its packed harmonics.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ProbeRecord
 {
-    public Float4 Position;
+    public Float4 PositionHigh;
+    public Float4 PositionLow;
     public ProbeShRecord Sh;
 }
 
-/// <summary>A tetrahedron for the sampling pass, 80 bytes. Its rows give a point's barycentrics of corners 1 to 3.</summary>
+/// <summary>A tetrahedron for the sampling pass, 80 bytes. Its rows give the barycentrics of corners 1 to 3 from a point's offset to corner 0.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ProbeTetRecord
 {
@@ -103,6 +104,8 @@ internal struct ProbeTetRecord
 [StructLayout(LayoutKind.Sequential)]
 internal struct LightmapPageRecord
 {
+    public const uint NotReady = uint.MaxValue;
+
     public uint Texture;
     public uint Sampler;
 }
@@ -116,14 +119,17 @@ public sealed partial class RenderWorld
         AddressModeW = SamplerAddressMode.Clamp,
     };
 
-    private Texture[] _lightmaps = [];
+    private Texture?[] _lightmaps = [];
     private LightmapEncoding _lightmapEncoding;
     private bool _lightmapsDirty;
     private LightProbeData? _probeData;
     private bool _probesDirty;
 
-    /// <summary>The lightmap pages renderables index with <see cref="LightmapBinding.Page"/>. Host thread.</summary>
-    public void SetLightmaps(ReadOnlySpan<Texture> pages, LightmapEncoding encoding)
+    /// <summary>
+    /// The lightmap pages renderables index with <see cref="LightmapBinding.Page"/>. A null page, one still loading, lights
+    /// its renderables with ambient light until it is set. Renderables whose page is past the end use the light probes. Host thread.
+    /// </summary>
+    public void SetLightmaps(ReadOnlySpan<Texture?> pages, LightmapEncoding encoding)
     {
         _lightmaps = pages.ToArray();
         _lightmapEncoding = encoding;
@@ -136,8 +142,8 @@ public sealed partial class RenderWorld
     /// </summary>
     public void SetLightProbes(LightProbeData? data)
     {
-        if (data != null && (data.Coefficients.Length != data.Positions.Length || data.Tetrahedra.Length % 4 != 0 || data.Neighbours.Length != data.Tetrahedra.Length))
-            throw new ArgumentException("Light probe data needs a harmonic per position and four corners and four neighbours per tetrahedron.", nameof(data));
+        if (data != null)
+            Validate(data);
 
         _probeData = data == null ? null : new LightProbeData
         {
@@ -147,6 +153,23 @@ public sealed partial class RenderWorld
             Neighbours = [.. data.Neighbours],
         };
         _probesDirty = true;
+    }
+
+    private static void Validate(LightProbeData data)
+    {
+        if (data.Coefficients.Length != data.Positions.Length || data.Tetrahedra.Length % 4 != 0 || data.Neighbours.Length != data.Tetrahedra.Length)
+            throw new ArgumentException("Light probe data needs a harmonic per position and four corners and four neighbours per tetrahedron.", nameof(data));
+        int tets = data.Tetrahedra.Length / 4;
+        foreach (int corner in data.Tetrahedra)
+        {
+            if ((uint)corner >= (uint)data.Positions.Length)
+                throw new ArgumentException($"A tetrahedron corner {corner} is not a probe.", nameof(data));
+        }
+        foreach (int neighbour in data.Neighbours)
+        {
+            if (neighbour < -1 || neighbour >= tets)
+                throw new ArgumentException($"A tetrahedron neighbour {neighbour} is not a tetrahedron or -1.", nameof(data));
+        }
     }
 
     /// <summary>Resolves the lightmap pages' slots again after a bindless slot was freed. Host thread, at extraction.</summary>
@@ -161,15 +184,21 @@ public sealed partial class RenderWorld
             LightmapPageRecord[] pages = new LightmapPageRecord[_lightmaps.Length];
             uint sampler = resources.SamplerSlot(s_lightmapSampler);
             for (int i = 0; i < pages.Length; i++)
-                pages[i] = new LightmapPageRecord { Texture = resources.TextureSlot(_lightmaps[i], MaterialPropertyType.Texture2D, "black"), Sampler = sampler };
+            {
+                Texture? page = _lightmaps[i];
+                uint slot = page is { IsDisposed: false } ? resources.TextureSlot(page, MaterialPropertyType.Texture2D, "black") : LightmapPageRecord.NotReady;
+                pages[i] = new LightmapPageRecord { Texture = slot, Sampler = sampler };
+            }
             Probes.ReceiveLightmaps(pages);
             Lighting.SetLightmaps(pages.Length, _lightmapEncoding);
+            _render.RefreshProbeSlots();
         }
         if (_probesDirty)
         {
             _probesDirty = false;
             Probes.ReceiveProbes(_probeData);
-            Lighting.SetProbes(_probeData != null && _probeData.Positions.Length > 0);
+            Lighting.SetProbes(Probes.Active);
+            _render.RefreshProbeSlots();
         }
     }
 
@@ -193,7 +222,7 @@ internal sealed class WorldProbes : IDisposable
     private bool[] _requested = new bool[64];
     private readonly List<int> _requests = new();
     private bool _requestAll;
-    private Float4[] _requestScratch = new Float4[64];
+    private Float4[] _requestScratch = new Float4[128];
     private LightProbeData? _pending;
     private bool _probesChanged;
 
@@ -211,19 +240,27 @@ internal sealed class WorldProbes : IDisposable
     public GpuArray ProbeRecords { get; }
     public GpuArray TetRecords { get; }
 
-    /// <summary>This frame's renderables to sample: bounds center from the probe origin, and harmonics slot as uint bits.</summary>
+    /// <summary>This frame's renderables to sample, two vectors each: the bounds center's high part with the harmonics slot as uint bits, then its low part.</summary>
     public GpuArray Requests { get; }
 
-    /// <summary>Harmonics per slot, written by the sampling pass. The last vector's w holds the tetrahedron it was found in.</summary>
+    /// <summary>Harmonics per slot, written by the sampling pass. The last vector's w holds the tetrahedron the walk ended in.</summary>
     public DeviceBuffer ObjectSh { get; private set; }
 
     public uint ProbeCount { get; private set; }
     public uint TetCount { get; private set; }
     public uint RequestCount { get; private set; }
-    public Double3 Origin { get; private set; }
+
+    /// <summary>Whether the world has probes. Renderables hold harmonics slots only while it does.</summary>
+    public bool Active { get; private set; }
+
+    public int PageCount { get; private set; }
+
+    /// <summary>Whether a renderable on this lightmap page is lit by the probes: it has no page, or one past the end.</summary>
+    public bool Wants(int page) => Active && (page < 0 || page >= PageCount);
 
     public void ReceiveLightmaps(ReadOnlySpan<LightmapPageRecord> pages)
     {
+        PageCount = pages.Length;
         for (int i = 0; i < pages.Length; i++)
             LightmapPages.Set((uint)i, pages[i]);
     }
@@ -232,6 +269,7 @@ internal sealed class WorldProbes : IDisposable
     {
         _pending = data;
         _probesChanged = true;
+        Active = data != null && data.Positions.Length > 0;
     }
 
     /// <summary>Gives a renderable a harmonics slot. Extraction or render thread.</summary>
@@ -299,17 +337,19 @@ internal sealed class WorldProbes : IDisposable
         RequestCount = 0;
         if (ProbeCount > 0)
         {
-            if (_requestScratch.Length < _requests.Count)
-                _requestScratch = new Float4[_requests.Count * 2];
+            if (_requestScratch.Length < _requests.Count * 2)
+                _requestScratch = new Float4[_requests.Count * 4];
             foreach (int slot in _requests)
             {
                 uint objectIndex = _slotObject[slot];
                 if (objectIndex == NoSlot)
                     continue;
-                Double3 p = render.WorldCenter[objectIndex] - Origin;
-                _requestScratch[RequestCount++] = new Float4((float)p.X, (float)p.Y, (float)p.Z, BitConverter.UInt32BitsToSingle((uint)slot));
+                (Float3 high, Float3 low) = Precise.Split(render.WorldCenter[objectIndex]);
+                _requestScratch[RequestCount * 2] = new Float4(high.X, high.Y, high.Z, BitConverter.UInt32BitsToSingle((uint)slot));
+                _requestScratch[RequestCount * 2 + 1] = new Float4(low.X, low.Y, low.Z, 0);
+                RequestCount++;
             }
-            Requests.Write<Float4>(uploader, _requestScratch.AsSpan(0, (int)RequestCount));
+            Requests.Write<Float4>(uploader, _requestScratch.AsSpan(0, (int)RequestCount * 2));
         }
 
         foreach (int slot in _requests)
@@ -345,19 +385,11 @@ internal sealed class WorldProbes : IDisposable
             return;
         }
 
-        Double3 min = new(double.MaxValue), max = new(double.MinValue);
-        foreach (Double3 p in data.Positions)
-        {
-            min = new Double3(Math.Min(min.X, p.X), Math.Min(min.Y, p.Y), Math.Min(min.Z, p.Z));
-            max = new Double3(Math.Max(max.X, p.X), Math.Max(max.Y, p.Y), Math.Max(max.Z, p.Z));
-        }
-        Origin = (min + max) * 0.5;
-
         ProbeRecord[] probes = new ProbeRecord[data.Positions.Length];
         for (int i = 0; i < probes.Length; i++)
         {
-            Double3 p = data.Positions[i] - Origin;
-            probes[i] = new ProbeRecord { Position = new Float4((float)p.X, (float)p.Y, (float)p.Z, 0), Sh = data.Coefficients[i].Pack() };
+            (Float3 high, Float3 low) = Precise.Split(data.Positions[i]);
+            probes[i] = new ProbeRecord { PositionHigh = new Float4(high.X, high.Y, high.Z, 0), PositionLow = new Float4(low.X, low.Y, low.Z, 0), Sh = data.Coefficients[i].Pack() };
         }
 
         int tetCount = data.Tetrahedra.Length / 4;
@@ -371,7 +403,8 @@ internal sealed class WorldProbes : IDisposable
         TetCount = (uint)tetCount;
     }
 
-    // Barycentrics of corners 1 to 3 by Cramer's rule over the edges from corner 0, solved in double once here.
+    // Barycentrics of corners 1 to 3 by Cramer's rule over the edges from corner 0, solved in double once here. The shader
+    // applies them to the point's offset from corner 0, taken high and low, so tetrahedra keep their precision anywhere.
     private ProbeTetRecord Tet(LightProbeData data, int t)
     {
         ReadOnlySpan<int> corners = data.Tetrahedra.AsSpan(t * 4, 4);
@@ -388,10 +421,10 @@ internal sealed class WorldProbes : IDisposable
             Neighbour3 = neighbours[3],
         };
 
-        Double3 a = data.Positions[corners[0]] - Origin;
-        Double3 v1 = data.Positions[corners[1]] - Origin - a;
-        Double3 v2 = data.Positions[corners[2]] - Origin - a;
-        Double3 v3 = data.Positions[corners[3]] - Origin - a;
+        Double3 a = data.Positions[corners[0]];
+        Double3 v1 = data.Positions[corners[1]] - a;
+        Double3 v2 = data.Positions[corners[2]] - a;
+        Double3 v3 = data.Positions[corners[3]] - a;
         double det = Dot(v1, Cross(v2, v3));
         if (Math.Abs(det) < 1e-12)
         {
@@ -399,13 +432,13 @@ internal sealed class WorldProbes : IDisposable
             return record;
         }
 
-        record.Row1 = Row(Cross(v2, v3) / det, a);
-        record.Row2 = Row(Cross(v3, v1) / det, a);
-        record.Row3 = Row(Cross(v1, v2) / det, a);
+        record.Row1 = Row(Cross(v2, v3) / det);
+        record.Row2 = Row(Cross(v3, v1) / det);
+        record.Row3 = Row(Cross(v1, v2) / det);
         return record;
     }
 
-    private static Float4 Row(Double3 r, Double3 a) => new((float)r.X, (float)r.Y, (float)r.Z, (float)-Dot(r, a));
+    private static Float4 Row(Double3 r) => new((float)r.X, (float)r.Y, (float)r.Z, 0);
 
     private static double Dot(Double3 a, Double3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 

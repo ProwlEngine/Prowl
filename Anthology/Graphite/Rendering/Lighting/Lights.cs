@@ -137,7 +137,7 @@ public enum FogMode : byte
     ExponentialSquared,
 }
 
-public struct FogDesc
+public struct FogDesc : IEquatable<FogDesc>
 {
     public FogMode Mode;
     public Float4 Color;
@@ -154,6 +154,17 @@ public struct FogDesc
         Start = 20;
         End = 100;
     }
+
+    public readonly bool Equals(FogDesc other)
+        => Mode == other.Mode && Color == other.Color && Density == other.Density && Start == other.Start && End == other.End && UseSky == other.UseSky;
+
+    public override readonly bool Equals(object? obj) => obj is FogDesc other && Equals(other);
+
+    public override readonly int GetHashCode() => HashCode.Combine(Mode, Color, Density, Start, End, UseSky);
+
+    public static bool operator ==(FogDesc a, FogDesc b) => a.Equals(b);
+
+    public static bool operator !=(FogDesc a, FogDesc b) => !a.Equals(b);
 }
 
 /// <summary>A world's ambient light, fog and sun. Changes to the world's own instance apply at the next frame.</summary>
@@ -173,7 +184,7 @@ public sealed class EnvironmentDesc
 
     internal bool Same(EnvironmentDesc other)
         => Ambient == other.Ambient && AmbientColor == other.AmbientColor && AmbientSky == other.AmbientSky && AmbientGround == other.AmbientGround
-        && AmbientIntensity == other.AmbientIntensity && Fog.Equals(other.Fog) && Sun == other.Sun;
+        && AmbientIntensity == other.AmbientIntensity && Fog == other.Fog && Sun == other.Sun;
 }
 
 /// <summary>A light record as the shaders read it, 80 bytes, matching Graphite_LightRecord. Positions are in its tree's space.</summary>
@@ -374,38 +385,32 @@ internal sealed class HandleStore<T> where T : struct
 /// <summary>
 /// The render side of a world's lights and decals, shaded with H-Forward: point and spot lights and decals live in
 /// four wide trees over their bounds, and a fragment walks them as a point query, no per frame culling. Static lights
-/// and decals build one tree each per world, only when one changes. Moving ones are culled to each view and built into
-/// a fresh tree per view every frame. Directional lights, ambient light and fog live in one world record.
+/// and decals live in regions of space with a tree each, rebuilt only when one of their members changes. Moving ones
+/// are culled to each view and built into a fresh tree per view every frame. Directional lights, ambient light and fog
+/// live in one world record.
 /// </summary>
 internal sealed class WorldLighting : IDisposable
 {
-    private const int StaticLeafSize = 8;
-
     private readonly IMaterialResources _resources;
     private readonly Action<string, string> _report;
-    private readonly LightTreeBuilder _staticLightTree = new();
-    private readonly LightTreeBuilder _staticDecalTree = new();
+    private readonly StaticRegions<LightRecord> _staticLights;
+    private readonly StaticRegions<DecalRecord> _staticDecals;
 
     private LightDesc[] _lights = new LightDesc[16];
     private int[] _lightGeneration = new int[16];
     private bool[] _lightAlive = new bool[16];
-    private int[] _lightTableIndex = new int[16];
-    private readonly List<int> _staticLights = new();
     private readonly List<int> _dynamicLights = new();
     private readonly List<int> _directionalLights = new();
     private bool _lightMembership = true;
-    private bool _staticLightsMoved = true;
-    private readonly List<int> _staticLightRecords = new();
 
     private DecalDesc[] _decals = new DecalDesc[16];
     private bool[] _decalAlive = new bool[16];
     private DecalLook[] _decalLooks = new DecalLook[16];
-    private int[] _decalTableIndex = new int[16];
-    private readonly List<int> _staticDecals = new();
+    private uint[] _decalSequence = new uint[16];
+    private int[] _decalGeneration = new int[16];
+    private uint _nextDecalSequence;
     private readonly List<int> _dynamicDecals = new();
     private bool _decalMembership = true;
-    private bool _staticDecalsMoved = true;
-    private readonly List<int> _staticDecalRecords = new();
 
     private EnvironmentDesc _environment = new();
     private bool _worldRecordDirty = true;
@@ -435,32 +440,20 @@ internal sealed class WorldLighting : IDisposable
     {
         _resources = resources;
         _report = report;
-        StaticLights = GpuTable.Of<LightRecord>(device, "Static lights", 64);
-        StaticLightNodes = GpuTable.Of<LightTreeNode>(device, "Static light nodes", 16);
-        StaticDecals = GpuTable.Of<DecalRecord>(device, "Static decals", 16);
-        StaticDecalNodes = GpuTable.Of<LightTreeNode>(device, "Static decal nodes", 16);
+        _staticLights = new StaticRegions<LightRecord>(device, "Static lights", (index, origin) => Pack(_lights[index], origin), report);
+        _staticDecals = new StaticRegions<DecalRecord>(device, "Static decals", (index, _) => Pack(_decalLooks[index]), report);
         World = GpuTable.Of<WorldLightingRecord>(device, "World lighting", 1);
-        Tables = [StaticLights, StaticLightNodes, StaticDecals, StaticDecalNodes, World];
+        Tables = [_staticLights.Records, _staticLights.Nodes, _staticDecals.Records, _staticDecals.Nodes, World];
     }
 
-    public GpuTable StaticLights { get; }
-    public GpuTable StaticLightNodes { get; }
-    public GpuTable StaticDecals { get; }
-    public GpuTable StaticDecalNodes { get; }
+    public GpuTable StaticLights => _staticLights.Records;
+    public GpuTable StaticLightNodes => _staticLights.Nodes;
+    public GpuTable StaticDecals => _staticDecals.Records;
+    public GpuTable StaticDecalNodes => _staticDecals.Nodes;
     public GpuTable World { get; }
     public GpuTable[] Tables { get; }
 
     public IMaterialResources Resources => _resources;
-
-    /// <summary>World position the static light tree is built around. Shaders shift camera relative positions by the view's offset to it.</summary>
-    public Double3 StaticLightOrigin { get; private set; }
-    public Double3 StaticDecalOrigin { get; private set; }
-
-    public uint StaticLightRoot { get; private set; } = LightTreeBuilder.Invalid;
-    public uint StaticDecalRoot { get; private set; } = LightTreeBuilder.Invalid;
-
-    public int StaticLightCount => _staticLights.Count;
-    public int DynamicLightCount => _dynamicLights.Count;
 
     internal void ReceiveLight(int index, int generation, bool alive, in LightDesc given)
     {
@@ -470,7 +463,6 @@ internal sealed class WorldLighting : IDisposable
             Array.Resize(ref _lights, size);
             Array.Resize(ref _lightGeneration, size);
             Array.Resize(ref _lightAlive, size);
-            Array.Resize(ref _lightTableIndex, size);
         }
 
         LightDesc desc = Normalized(given);
@@ -480,17 +472,12 @@ internal sealed class WorldLighting : IDisposable
         _lightGeneration[index] = generation;
         _lightAlive[index] = alive;
 
-        bool wasStatic = wasAlive && old.Static && old.Type != LightType.Directional;
-        bool isStatic = alive && desc.Static && desc.Type != LightType.Directional;
         if (wasAlive != alive || old.Type != desc.Type || old.Static != desc.Static)
             _lightMembership = true;
-        if (wasStatic || isStatic)
-        {
-            if (!wasStatic || !isStatic || old.Position != desc.Position || old.Range != desc.Range)
-                _staticLightsMoved = true;
-            else
-                _staticLightRecords.Add(index);
-        }
+        if (alive && desc.Static && desc.Type != LightType.Directional)
+            _staticLights.Set(index, desc.Position, Math.Max(desc.Range, 1e-4f));
+        else
+            _staticLights.Remove(index);
         if (old.Type == LightType.Directional || desc.Type == LightType.Directional)
             _worldRecordDirty = true;
     }
@@ -503,41 +490,31 @@ internal sealed class WorldLighting : IDisposable
             Array.Resize(ref _decals, size);
             Array.Resize(ref _decalAlive, size);
             Array.Resize(ref _decalLooks, size);
-            Array.Resize(ref _decalTableIndex, size);
+            Array.Resize(ref _decalSequence, size);
+            Array.Resize(ref _decalGeneration, size);
         }
 
         DecalDesc old = _decals[index];
         bool wasAlive = _decalAlive[index];
         _decals[index] = desc;
         _decalAlive[index] = alive;
+        if (alive && (!wasAlive || _decalGeneration[index] != generation))
+            _decalSequence[index] = _nextDecalSequence++;
+        _decalGeneration[index] = generation;
         if (alive)
-            _decalLooks[index] = Look(desc, index);
+            _decalLooks[index] = Look(desc, _decalSequence[index]);
 
-        bool wasStatic = wasAlive && old.Static;
-        bool isStatic = alive && desc.Static;
         if (wasAlive != alive || old.Static != desc.Static)
             _decalMembership = true;
-        if (wasStatic || isStatic)
-        {
-            if (!wasStatic || !isStatic || old.Transform != desc.Transform)
-                _staticDecalsMoved = true;
-            else
-                _staticDecalRecords.Add(index);
-        }
+        if (alive && desc.Static)
+            _staticDecals.Set(index, _decalLooks[index].Center, _decalLooks[index].Radius);
+        else
+            _staticDecals.Remove(index);
     }
 
     internal void ReceiveEnvironment(EnvironmentDesc environment)
     {
-        _environment = new EnvironmentDesc
-        {
-            Ambient = environment.Ambient,
-            AmbientColor = environment.AmbientColor,
-            AmbientSky = environment.AmbientSky,
-            AmbientGround = environment.AmbientGround,
-            AmbientIntensity = environment.AmbientIntensity,
-            Fog = environment.Fog,
-            Sun = environment.Sun,
-        };
+        _environment = environment;
         _worldRecordDirty = true;
     }
 
@@ -561,47 +538,32 @@ internal sealed class WorldLighting : IDisposable
         {
             if (!_decalAlive[i])
                 continue;
-            _decalLooks[i] = Look(_decals[i], i);
+            _decalLooks[i] = Look(_decals[i], _decalSequence[i]);
             if (_decals[i].Static)
-                _staticDecalRecords.Add(i);
+                _staticDecals.Repack(i);
         }
     }
 
-    /// <summary>Rebuilds the static trees that changed and rewrites the records and the world record. Render thread.</summary>
+    /// <summary>Rebuilds the static regions that changed and rewrites the records and the world record. Render thread.</summary>
     public void Update()
     {
         if (_lightMembership)
             RebuildLightLists();
         if (_decalMembership)
             RebuildDecalLists();
-
-        if (_staticLightsMoved)
-            BuildStaticLights();
-        else
-        {
-            foreach (int index in _staticLightRecords)
-            {
-                if (_lightAlive[index] && _lights[index].Static)
-                    StaticLights.Set((uint)_lightTableIndex[index], Pack(_lights[index], StaticLightOrigin));
-            }
-        }
-        _staticLightRecords.Clear();
-
-        if (_staticDecalsMoved)
-            BuildStaticDecals();
-        else
-        {
-            foreach (int index in _staticDecalRecords)
-            {
-                if (_decalAlive[index] && _decals[index].Static)
-                    StaticDecals.Set((uint)_decalTableIndex[index], Pack(_decalLooks[index]));
-            }
-        }
-        _staticDecalRecords.Clear();
-
+        _staticLights.Update();
+        _staticDecals.Update();
         if (_worldRecordDirty)
             WriteWorldRecord();
     }
+
+    /// <summary>Builds a view's tree over the static light regions it sees. Returns the root. Render thread.</summary>
+    public uint BuildViewLightRegions(in CullFrustum frustum, LightTreeBuilder builder, Uploader uploader, GpuArray entries, GpuArray nodes)
+        => _staticLights.BuildView(frustum, builder, uploader, entries, nodes);
+
+    /// <summary>Builds a view's tree over the static decal regions it sees. Returns the root. Render thread.</summary>
+    public uint BuildViewDecalRegions(in CullFrustum frustum, LightTreeBuilder builder, Uploader uploader, GpuArray entries, GpuArray nodes)
+        => _staticDecals.BuildView(frustum, builder, uploader, entries, nodes);
 
     /// <summary>
     /// Builds a view's moving light tree from the lights whose sphere meets its frustum, around the camera, and queues
@@ -628,7 +590,7 @@ internal sealed class WorldLighting : IDisposable
         }
 
         builder.Build(spheres, Math.Clamp(_culled.Count / 1024, 4, 128), morton: true);
-        CheckDepth(builder);
+        CheckDepth(builder, LightTreeBuilder.ShaderStack);
         if (_lightScratch.Length < _culled.Count)
             _lightScratch = new LightRecord[_culled.Count * 2];
         ReadOnlySpan<int> order = builder.Order;
@@ -660,7 +622,7 @@ internal sealed class WorldLighting : IDisposable
         }
 
         builder.Build(spheres, Math.Clamp(_culled.Count / 1024, 4, 128), morton: true);
-        CheckDepth(builder);
+        CheckDepth(builder, LightTreeBuilder.ShaderStack);
         if (_decalScratch.Length < _culled.Count)
             _decalScratch = new DecalRecord[_culled.Count * 2];
         ReadOnlySpan<int> order = builder.Order;
@@ -691,7 +653,6 @@ internal sealed class WorldLighting : IDisposable
     private void RebuildLightLists()
     {
         _lightMembership = false;
-        _staticLights.Clear();
         _dynamicLights.Clear();
         _directionalLights.Clear();
         for (int i = 0; i < _lights.Length; i++)
@@ -700,9 +661,7 @@ internal sealed class WorldLighting : IDisposable
                 continue;
             if (_lights[i].Type == LightType.Directional)
                 _directionalLights.Add(i);
-            else if (_lights[i].Static)
-                _staticLights.Add(i);
-            else
+            else if (!_lights[i].Static)
                 _dynamicLights.Add(i);
         }
     }
@@ -710,76 +669,17 @@ internal sealed class WorldLighting : IDisposable
     private void RebuildDecalLists()
     {
         _decalMembership = false;
-        _staticDecals.Clear();
         _dynamicDecals.Clear();
         for (int i = 0; i < _decals.Length; i++)
         {
-            if (_decalAlive[i])
-                (_decals[i].Static ? _staticDecals : _dynamicDecals).Add(i);
+            if (_decalAlive[i] && !_decals[i].Static)
+                _dynamicDecals.Add(i);
         }
     }
 
-    private void BuildStaticLights()
+    private void CheckDepth(LightTreeBuilder tree, int stack)
     {
-        _staticLightsMoved = false;
-        int count = _staticLights.Count;
-        StaticLightOrigin = Center(count, i => _lights[_staticLights[i]].Position);
-        Span<Vector4> spheres = Spheres(count);
-        for (int i = 0; i < count; i++)
-        {
-            LightDesc light = _lights[_staticLights[i]];
-            Double3 p = light.Position - StaticLightOrigin;
-            spheres[i] = new Vector4((float)p.X, (float)p.Y, (float)p.Z, Math.Max(light.Range, 1e-4f));
-        }
-
-        _staticLightTree.Build(spheres, StaticLeafSize, morton: false);
-        CheckDepth(_staticLightTree);
-        ReadOnlySpan<int> order = _staticLightTree.Order;
-        for (int i = 0; i < count; i++)
-        {
-            int index = _staticLights[order[i]];
-            _lightTableIndex[index] = i;
-            StaticLights.Set((uint)i, Pack(_lights[index], StaticLightOrigin));
-        }
-        WriteNodes(StaticLightNodes, _staticLightTree.Nodes);
-        StaticLightRoot = _staticLightTree.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
-    }
-
-    private void BuildStaticDecals()
-    {
-        _staticDecalsMoved = false;
-        int count = _staticDecals.Count;
-        StaticDecalOrigin = Center(count, i => _decalLooks[_staticDecals[i]].Center);
-        Span<Vector4> spheres = Spheres(count);
-        for (int i = 0; i < count; i++)
-        {
-            DecalLook look = _decalLooks[_staticDecals[i]];
-            Double3 p = look.Center - StaticDecalOrigin;
-            spheres[i] = new Vector4((float)p.X, (float)p.Y, (float)p.Z, look.Radius);
-        }
-
-        _staticDecalTree.Build(spheres, StaticLeafSize, morton: false);
-        CheckDepth(_staticDecalTree);
-        ReadOnlySpan<int> order = _staticDecalTree.Order;
-        for (int i = 0; i < count; i++)
-        {
-            int index = _staticDecals[order[i]];
-            _decalTableIndex[index] = i;
-            StaticDecals.Set((uint)i, Pack(_decalLooks[index]));
-        }
-        WriteNodes(StaticDecalNodes, _staticDecalTree.Nodes);
-        StaticDecalRoot = _staticDecalTree.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
-    }
-
-    private static void WriteNodes(GpuTable table, ReadOnlySpan<LightTreeNode> nodes)
-    {
-        for (int i = 0; i < nodes.Length; i++)
-            table.Set((uint)i, nodes[i]);
-    }
-
-    private void CheckDepth(LightTreeBuilder tree)
-    {
-        if (tree.Depth * 3 > LightTreeBuilder.ShaderStack)
+        if (tree.Depth * 3 > stack)
             _report("lighting.depth", $"A light or decal tree is {tree.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped.");
     }
 
@@ -788,20 +688,6 @@ internal sealed class WorldLighting : IDisposable
         if (_spheres.Length < count)
             _spheres = new Vector4[Math.Max(count, _spheres.Length * 2)];
         return _spheres.AsSpan(0, count);
-    }
-
-    private static Double3 Center(int count, Func<int, Double3> position)
-    {
-        if (count == 0)
-            return default;
-        Double3 min = new(double.MaxValue), max = new(double.MinValue);
-        for (int i = 0; i < count; i++)
-        {
-            Double3 p = position(i);
-            min = new Double3(Math.Min(min.X, p.X), Math.Min(min.Y, p.Y), Math.Min(min.Z, p.Z));
-            max = new Double3(Math.Max(max.X, p.X), Math.Max(max.Y, p.Y), Math.Max(max.Z, p.Z));
-        }
-        return (min + max) * 0.5;
     }
 
     //   +0 position in tree space, range
@@ -837,7 +723,7 @@ internal sealed class WorldLighting : IDisposable
         };
     }
 
-    private DecalLook Look(in DecalDesc decal, int id)
+    private DecalLook Look(in DecalDesc decal, uint sequence)
     {
         Double4x4 m = decal.Transform;
         Double3 x = new(m.c0.X, m.c0.Y, m.c0.Z), y = new(m.c1.X, m.c1.Y, m.c1.Z), z = new(m.c2.X, m.c2.Y, m.c2.Z);
@@ -849,7 +735,7 @@ internal sealed class WorldLighting : IDisposable
             Inverse = m.Invert(),
             Center = new Double3(m.c3.X, m.c3.Y, m.c3.Z),
             Radius = (float)(0.5 * Math.Max(Math.Max(Length(x + y + z), Length(x + y - z)), Math.Max(Length(x - y + z), Length(y + z - x)))),
-            Id = (uint)id,
+            Id = sequence,
             Color = decal.Color,
             Albedo = _resources.TextureSlot(decal.Albedo, MaterialPropertyType.Texture2D, "white"),
             Normal = _resources.TextureSlot(decal.Normal, MaterialPropertyType.Texture2D, "normal"),
@@ -890,8 +776,13 @@ internal sealed class WorldLighting : IDisposable
         WorldLightingRecord record = default;
 
         _directionalOrder.Clear();
-        _directionalOrder.AddRange(_directionalLights);
-        _directionalOrder.Sort((a, b) => _lights[b].Intensity.CompareTo(_lights[a].Intensity));
+        foreach (int index in _directionalLights)
+        {
+            int at = _directionalOrder.Count;
+            while (at > 0 && _lights[_directionalOrder[at - 1]].Intensity < _lights[index].Intensity)
+                at--;
+            _directionalOrder.Insert(at, index);
+        }
         int sun = _directionalOrder.Count > 0 ? _directionalOrder[0] : -1;
         if (env.Sun.IsValid && (uint)env.Sun.Index < (uint)_lights.Length && _lightAlive[env.Sun.Index]
             && _lightGeneration[env.Sun.Index] == env.Sun.Generation && _lights[env.Sun.Index].Type == LightType.Directional)
@@ -937,6 +828,283 @@ internal sealed class WorldLighting : IDisposable
         DirectionShadow = new Float4(-light.Direction.X, -light.Direction.Y, -light.Direction.Z, light.Shadow.Enabled ? 1 : 0),
         Color = new Float4(light.Color.X * light.Intensity, light.Color.Y * light.Intensity, light.Color.Z * light.Intensity, BitConverter.UInt32BitsToSingle(light.LayerMask)),
     };
+}
+
+/// <summary>A static region a view sees, 16 bytes: the camera minus the region's origin, and its tree's root.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RegionEntry
+{
+    public Float3 Offset;
+    public uint Root;
+}
+
+/// <summary>
+/// Static items of one kind, split into regions of space with a tree each, built around the region's own origin, so
+/// positions stay precise at any distance from the world origin. A region rebuilds only when one of its items is added,
+/// removed or moved. Each view walks a small tree over the regions it sees, built every frame from the camera's offset
+/// to each region's origin worked out in double, so precision follows the distance from the camera like everything else.
+/// </summary>
+internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
+{
+    /// <summary>The side of the cells items are grouped by, by their center. A region's tree covers its items' full bounds.</summary>
+    public const double RegionSize = 65536;
+
+    /// <summary>Stack entries the shaders keep for walking the regions tree, after the item trees' entries.</summary>
+    public const int RegionStack = 16;
+
+    private const int LeafSize = 8;
+    private const uint MaxEntries = 1u << 26;
+
+    private sealed class Region((long, long, long) key)
+    {
+        public readonly (long X, long Y, long Z) Key = key;
+        public readonly List<int> Items = new();
+        public Double3 Origin;
+        public float Radius;
+        public RangeAllocation Records, Nodes;
+        public uint Root = LightTreeBuilder.Invalid;
+        public bool Dirty;
+    }
+
+    private readonly Dictionary<(long, long, long), Region> _regions = new();
+    private readonly List<Region> _dirty = new();
+    private readonly List<Region> _visible = new();
+    private readonly List<int> _repack = new();
+    private readonly RangeAllocator _recordSpace = new(MaxEntries);
+    private readonly RangeAllocator _nodeSpace = new(MaxEntries);
+    private readonly LightTreeBuilder _builder = new();
+    private readonly Func<int, Double3, TRecord> _pack;
+    private readonly Action<string, string> _report;
+    private Region?[] _itemRegion = new Region?[16];
+    private Double3[] _center = new Double3[16];
+    private float[] _radius = new float[16];
+    private uint[] _recordIndex = new uint[16];
+    private Vector4[] _spheres = new Vector4[64];
+    private RegionEntry[] _entries = new RegionEntry[16];
+
+    public StaticRegions(GraphicsDevice device, string name, Func<int, Double3, TRecord> pack, Action<string, string> report)
+    {
+        _pack = pack;
+        _report = report;
+        Records = GpuTable.Of<TRecord>(device, name, 64);
+        Nodes = GpuTable.Of<LightTreeNode>(device, name + " nodes", 16);
+    }
+
+    public GpuTable Records { get; }
+    public GpuTable Nodes { get; }
+
+    public int RegionCount => _regions.Count;
+
+    /// <summary>Adds or moves an item. One that stays where it is only has its record rewritten.</summary>
+    public void Set(int item, Double3 center, float radius)
+    {
+        Grow(item);
+        Region region = RegionAt(center);
+        Region? old = _itemRegion[item];
+        if (old == region && _center[item] == center && _radius[item] == radius)
+        {
+            _repack.Add(item);
+            return;
+        }
+
+        if (old != null)
+        {
+            old.Items.Remove(item);
+            MarkDirty(old);
+        }
+        region.Items.Add(item);
+        _itemRegion[item] = region;
+        _center[item] = center;
+        _radius[item] = radius;
+        MarkDirty(region);
+    }
+
+    public void Remove(int item)
+    {
+        if (item >= _itemRegion.Length || _itemRegion[item] is not { } region)
+            return;
+        region.Items.Remove(item);
+        _itemRegion[item] = null;
+        MarkDirty(region);
+    }
+
+    /// <summary>Rewrites an item's record without moving it.</summary>
+    public void Repack(int item)
+    {
+        if (item < _itemRegion.Length && _itemRegion[item] != null)
+            _repack.Add(item);
+    }
+
+    /// <summary>Rebuilds the regions that changed and rewrites repacked records. Render thread.</summary>
+    public void Update()
+    {
+        foreach (Region region in _dirty)
+            Rebuild(region);
+        _dirty.Clear();
+
+        foreach (int item in _repack)
+        {
+            if (_itemRegion[item] is { } region && region.Root != LightTreeBuilder.Invalid)
+                Records.Set(_recordIndex[item], _pack(item, region.Origin));
+        }
+        _repack.Clear();
+    }
+
+    /// <summary>
+    /// Builds the tree over the regions whose bounds meet the frustum, around the camera, and queues its entries and
+    /// nodes. Returns the root, or Invalid when no region is in view. Render thread.
+    /// </summary>
+    public uint BuildView(in CullFrustum frustum, LightTreeBuilder builder, Uploader uploader, GpuArray entries, GpuArray nodes)
+    {
+        _visible.Clear();
+        foreach (Region region in _regions.Values)
+        {
+            if (region.Root != LightTreeBuilder.Invalid && frustum.Sphere(region.Origin, region.Radius))
+                _visible.Add(region);
+        }
+        if (_visible.Count == 0)
+            return LightTreeBuilder.Invalid;
+
+        Span<Vector4> spheres = Spheres(_visible.Count);
+        for (int i = 0; i < _visible.Count; i++)
+        {
+            Float3 p = frustum.Relative(_visible[i].Origin);
+            spheres[i] = new Vector4(p.X, p.Y, p.Z, _visible[i].Radius);
+        }
+
+        builder.Build(spheres, 1, morton: true);
+        if (builder.Depth * 3 > RegionStack)
+            _report("lighting.regions", $"A view sees {_visible.Count} static light or decal regions, more than the shader's region stack walks, so some may be skipped.");
+
+        if (_entries.Length < _visible.Count)
+            _entries = new RegionEntry[_visible.Count * 2];
+        ReadOnlySpan<int> order = builder.Order;
+        for (int i = 0; i < _visible.Count; i++)
+        {
+            Region region = _visible[order[i]];
+            Double3 offset = frustum.Camera - region.Origin;
+            _entries[i] = new RegionEntry { Offset = new Float3((float)offset.X, (float)offset.Y, (float)offset.Z), Root = region.Root };
+        }
+        entries.Write<RegionEntry>(uploader, _entries.AsSpan(0, _visible.Count));
+        nodes.Write(uploader, builder.Nodes);
+        return builder.NodeCount > 0 ? 0u : LightTreeBuilder.Invalid;
+    }
+
+    private Region RegionAt(Double3 center)
+    {
+        (long, long, long) key = ((long)Math.Floor(center.X / RegionSize), (long)Math.Floor(center.Y / RegionSize), (long)Math.Floor(center.Z / RegionSize));
+        if (!_regions.TryGetValue(key, out Region? region))
+        {
+            region = new Region(key);
+            _regions[key] = region;
+        }
+        return region;
+    }
+
+    private void MarkDirty(Region region)
+    {
+        if (region.Dirty)
+            return;
+        region.Dirty = true;
+        _dirty.Add(region);
+    }
+
+    private void Rebuild(Region region)
+    {
+        region.Dirty = false;
+        if (region.Records.Size > 0)
+            _recordSpace.Free(region.Records);
+        if (region.Nodes.Size > 0)
+            _nodeSpace.Free(region.Nodes);
+        region.Records = default;
+        region.Nodes = default;
+        region.Root = LightTreeBuilder.Invalid;
+        if (region.Items.Count == 0)
+        {
+            _regions.Remove(region.Key);
+            return;
+        }
+
+        Double3 min = new(double.MaxValue), max = new(double.MinValue);
+        foreach (int item in region.Items)
+        {
+            Double3 c = _center[item];
+            double r = _radius[item];
+            min = new Double3(Math.Min(min.X, c.X - r), Math.Min(min.Y, c.Y - r), Math.Min(min.Z, c.Z - r));
+            max = new Double3(Math.Max(max.X, c.X + r), Math.Max(max.Y, c.Y + r), Math.Max(max.Z, c.Z + r));
+        }
+        region.Origin = (min + max) * 0.5;
+        Double3 half = (max - min) * 0.5;
+        region.Radius = (float)Math.Sqrt(half.X * half.X + half.Y * half.Y + half.Z * half.Z);
+
+        int count = region.Items.Count;
+        Span<Vector4> spheres = Spheres(count);
+        for (int i = 0; i < count; i++)
+        {
+            int item = region.Items[i];
+            Double3 p = _center[item] - region.Origin;
+            spheres[i] = new Vector4((float)p.X, (float)p.Y, (float)p.Z, _radius[item]);
+        }
+
+        _builder.Build(spheres, LeafSize, morton: false);
+        if (_builder.Depth * 3 > LightTreeBuilder.ShaderStack)
+            _report("lighting.depth", $"A static light or decal region is {_builder.Depth} levels deep, more than the shader's traversal stack holds, so some may be skipped.");
+        if (!_recordSpace.TryAllocate((uint)count, 1, out RangeAllocation records) || !_nodeSpace.TryAllocate((uint)_builder.NodeCount, 1, out RangeAllocation nodes))
+        {
+            _report("lighting.regions.full", "The static light or decal tables are full, a region is not drawn.");
+            return;
+        }
+
+        region.Records = records;
+        region.Nodes = nodes;
+        ReadOnlySpan<int> order = _builder.Order;
+        for (int i = 0; i < count; i++)
+        {
+            int item = region.Items[order[i]];
+            _recordIndex[item] = records.Offset + (uint)i;
+            Records.Set(records.Offset + (uint)i, _pack(item, region.Origin));
+        }
+
+        // Child indices and leaf runs move to where the region's nodes and records landed in the shared tables
+        ReadOnlySpan<LightTreeNode> built = _builder.Nodes;
+        for (int i = 0; i < built.Length; i++)
+        {
+            LightTreeNode node = built[i];
+            node.Child0 = Relocate(node.Child0, nodes.Offset, records.Offset);
+            node.Child1 = Relocate(node.Child1, nodes.Offset, records.Offset);
+            node.Child2 = Relocate(node.Child2, nodes.Offset, records.Offset);
+            node.Child3 = Relocate(node.Child3, nodes.Offset, records.Offset);
+            Nodes.Set(nodes.Offset + (uint)i, node);
+        }
+        region.Root = nodes.Offset;
+    }
+
+    private static uint Relocate(uint child, uint nodeBase, uint recordBase)
+    {
+        if (child == LightTreeBuilder.Invalid)
+            return child;
+        if ((child & LightTreeBuilder.LeafBit) != 0)
+            return LightTreeBuilder.LeafBit | ((child & ~LightTreeBuilder.LeafBit) + recordBase);
+        return child + nodeBase;
+    }
+
+    private void Grow(int item)
+    {
+        if (item < _itemRegion.Length)
+            return;
+        int size = Math.Max(item + 1, _itemRegion.Length * 2);
+        Array.Resize(ref _itemRegion, size);
+        Array.Resize(ref _center, size);
+        Array.Resize(ref _radius, size);
+        Array.Resize(ref _recordIndex, size);
+    }
+
+    private Span<Vector4> Spheres(int count)
+    {
+        if (_spheres.Length < count)
+            _spheres = new Vector4[Math.Max(count, _spheres.Length * 2)];
+        return _spheres.AsSpan(0, count);
+    }
 }
 
 /// <summary>Texture and sampler slots for a world without a renderer, as in tests: always slot 0.</summary>

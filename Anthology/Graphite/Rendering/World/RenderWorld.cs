@@ -519,7 +519,7 @@ public sealed partial class RenderWorld : IDisposable
             attributes.Custom1 = host._custom1[index];
             attributes.LodFade = 1;
             attributes.LayerMask = host._layerMask[index];
-            attributes.ProbeIndex = UpdateProbeSlot(index, attributes.LightmapPage < 0);
+            attributes.ProbeIndex = UpdateProbeSlot(index, _probes.Wants(attributes.LightmapPage));
             if (added)
                 attributes.PreviousTransform = ObjectAttributes.NoPrevious;
 
@@ -638,7 +638,22 @@ public sealed partial class RenderWorld : IDisposable
             Attributes.Set((uint)index, attributes);
         }
 
-        // Renderables without a lightmap keep a light probe slot, sampled again whenever their bounds move.
+        /// <summary>Gives or takes harmonics slots after the probes or the lightmap pages changed. Extraction.</summary>
+        public void RefreshProbeSlots()
+        {
+            for (int index = 0; index < Capacity; index++)
+            {
+                if (!Alive[index])
+                    continue;
+                uint slot = UpdateProbeSlot(index, _probes.Wants(_attributes[index].LightmapPage));
+                if (_attributes[index].ProbeIndex == slot)
+                    continue;
+                _attributes[index].ProbeIndex = slot;
+                Attributes.Set((uint)index, _attributes[index]);
+            }
+        }
+
+        // Renderables the probes light keep a harmonics slot, sampled again whenever their bounds move.
         private uint UpdateProbeSlot(int index, bool wanted)
         {
             if (wanted && _probeSlot[index] == WorldProbes.NoSlot)

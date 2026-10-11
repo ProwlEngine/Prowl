@@ -13,7 +13,7 @@ struct Graphite_DecalRecord
     vec4 row0;               // rows of the inverse of its linear part, the high part of its centre in w
     vec4 row1;
     vec4 row2;
-    vec4 centerLow;          // low part of its centre, its id as uint bits
+    vec4 centerLow;          // low part of its centre, the order it was added in as uint bits
     vec4 color;              // tint, alpha scales coverage
     uvec4 textures;          // albedo, normal and mask slots in the 2D table, sampler slot
     vec4 params;             // normal strength, priority, angle fade cosine, layer mask as uint bits
@@ -81,80 +81,78 @@ void Graphite_ApplyDecal(Graphite_DecalRecord d, vec3 local, float coverage,
     }
 }
 
-// Whether a decal with this priority and id applies before the other
-bool Graphite_DecalBefore(vec2 order, vec2 other) { return order.x < other.x || (order.x == other.x && order.y < other.y); }
+// Whether a decal applies before another: lower priority first, then the one added first
+bool Graphite_DecalBefore(float priority, uint sequence, float otherPriority, uint otherSequence)
+{
+    return priority < otherPriority || (priority == otherPriority && sequence < otherSequence);
+}
 
 // Applies every decal whose box holds worldPos, camera relative, to the surface. geomNormal is the normal before
 // normal mapping, used to fade decals on surfaces turned away from them.
 void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
                           inout vec3 albedo, inout vec3 normal, inout float roughness, inout float metallic, inout float occlusion)
 {
-    Graphite_ViewData view = Graphite_View();
     uint layers = Graphite_SurfaceLayers();
     uint hitTree[GRAPHITE_MAX_DECALS];
     uint hitIndex[GRAPHITE_MAX_DECALS];
-    vec2 hitOrder[GRAPHITE_MAX_DECALS];
+    float hitPriority[GRAPHITE_MAX_DECALS];
+    uint hitSequence[GRAPHITE_MAX_DECALS];
     vec3 hitLocal[GRAPHITE_MAX_DECALS];
     float hitCoverage[GRAPHITE_MAX_DECALS];
     int hits = 0;
 
-    for (uint pass = 0u; pass < 2u; pass++)
+    Graphite_TreeQuery query;
+    Graphite_BeginQuery(query, worldPos, true);
+    uint tree, first, last;
+    while (Graphite_NextRun(query, tree, first, last))
     {
-        uint tree = pass == 0u ? GRAPHITE_STATIC_DECALS : GRAPHITE_VIEW_DECALS;
-        uint root = pass == 0u ? view.treeRoots.z : view.treeRoots.w;
-        if (root == GRAPHITE_TREE_INVALID)
-            continue;
-
-        vec3 point = pass == 0u ? worldPos + view.staticDecalOffset.xyz : worldPos;
-        Graphite_TreeWalk walk;
-        Graphite_BeginTree(walk, tree, root);
-        uint first, last;
-        while (Graphite_NextLeaf(walk, point, first, last))
+        for (uint i = first; i < last; i++)
         {
-            for (uint i = first; i < last; i++)
-            {
-                Graphite_DecalRecord d = Graphite_DecalAt(tree, i);
-                vec3 local = Graphite_DecalLocal(d, worldPos);
-                float coverage = Graphite_DecalCoverage(d, local, geomNormal, layers);
-                if (coverage <= 0.0)
-                    continue;
+            Graphite_DecalRecord d = Graphite_DecalAt(tree, i);
+            vec3 local = Graphite_DecalLocal(d, worldPos);
+            float coverage = Graphite_DecalCoverage(d, local, geomNormal, layers);
+            if (coverage <= 0.0)
+                continue;
 
-                // Keep the hits sorted by priority then id, dropping the lowest when full
-                vec2 order = vec2(d.params.y, float(floatBitsToUint(d.centerLow.w)));
-                int at = hits;
-                if (hits == GRAPHITE_MAX_DECALS)
+            // Keep the hits sorted by priority then the order they were added, dropping the lowest when full
+            float priority = d.params.y;
+            uint sequence = floatBitsToUint(d.centerLow.w);
+            int at = hits;
+            if (hits == GRAPHITE_MAX_DECALS)
+            {
+                if (Graphite_DecalBefore(priority, sequence, hitPriority[0], hitSequence[0]))
+                    continue;
+                for (int k = 0; k < hits - 1; k++)
                 {
-                    if (Graphite_DecalBefore(order, hitOrder[0]))
-                        continue;
-                    for (int k = 0; k < hits - 1; k++)
-                    {
-                        hitTree[k] = hitTree[k + 1];
-                        hitIndex[k] = hitIndex[k + 1];
-                        hitOrder[k] = hitOrder[k + 1];
-                        hitLocal[k] = hitLocal[k + 1];
-                        hitCoverage[k] = hitCoverage[k + 1];
-                    }
-                    at = hits - 1;
+                    hitTree[k] = hitTree[k + 1];
+                    hitIndex[k] = hitIndex[k + 1];
+                    hitPriority[k] = hitPriority[k + 1];
+                    hitSequence[k] = hitSequence[k + 1];
+                    hitLocal[k] = hitLocal[k + 1];
+                    hitCoverage[k] = hitCoverage[k + 1];
                 }
-                else
-                {
-                    hits++;
-                }
-                while (at > 0 && Graphite_DecalBefore(order, hitOrder[at - 1]))
-                {
-                    hitTree[at] = hitTree[at - 1];
-                    hitIndex[at] = hitIndex[at - 1];
-                    hitOrder[at] = hitOrder[at - 1];
-                    hitLocal[at] = hitLocal[at - 1];
-                    hitCoverage[at] = hitCoverage[at - 1];
-                    at--;
-                }
-                hitTree[at] = tree;
-                hitIndex[at] = i;
-                hitOrder[at] = order;
-                hitLocal[at] = local;
-                hitCoverage[at] = coverage;
+                at = hits - 1;
             }
+            else
+            {
+                hits++;
+            }
+            while (at > 0 && Graphite_DecalBefore(priority, sequence, hitPriority[at - 1], hitSequence[at - 1]))
+            {
+                hitTree[at] = hitTree[at - 1];
+                hitIndex[at] = hitIndex[at - 1];
+                hitPriority[at] = hitPriority[at - 1];
+                hitSequence[at] = hitSequence[at - 1];
+                hitLocal[at] = hitLocal[at - 1];
+                hitCoverage[at] = hitCoverage[at - 1];
+                at--;
+            }
+            hitTree[at] = tree;
+            hitIndex[at] = i;
+            hitPriority[at] = priority;
+            hitSequence[at] = sequence;
+            hitLocal[at] = local;
+            hitCoverage[at] = coverage;
         }
     }
 

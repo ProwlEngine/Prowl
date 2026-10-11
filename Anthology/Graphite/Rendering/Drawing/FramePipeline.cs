@@ -354,8 +354,14 @@ internal sealed class CameraFrame : IDisposable
     public readonly GpuArray ViewLightNodes;
     public readonly GpuArray ViewDecals;
     public readonly GpuArray ViewDecalNodes;
+    public readonly GpuArray LightRegions;
+    public readonly GpuArray LightRegionNodes;
+    public readonly GpuArray DecalRegions;
+    public readonly GpuArray DecalRegionNodes;
     public readonly LightTreeBuilder LightTree = new();
     public readonly LightTreeBuilder DecalTree = new();
+    public readonly LightTreeBuilder LightRegionTree = new();
+    public readonly LightTreeBuilder DecalRegionTree = new();
     public ViewDesc Desc;
     public WorldFrame World = null!;
     public int LastFrame;
@@ -388,6 +394,10 @@ internal sealed class CameraFrame : IDisposable
         ViewLightNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View light nodes {viewId}");
         ViewDecals = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View decals {viewId}");
         ViewDecalNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View decal nodes {viewId}");
+        LightRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Light regions {viewId}");
+        LightRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Light region nodes {viewId}");
+        DecalRegions = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Decal regions {viewId}");
+        DecalRegionNodes = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Decal region nodes {viewId}");
     }
 
     public void AddBuffers(List<DeviceBuffer> buffers)
@@ -400,6 +410,10 @@ internal sealed class CameraFrame : IDisposable
         buffers.Add(ViewLightNodes.Buffer);
         buffers.Add(ViewDecals.Buffer);
         buffers.Add(ViewDecalNodes.Buffer);
+        buffers.Add(LightRegions.Buffer);
+        buffers.Add(LightRegionNodes.Buffer);
+        buffers.Add(DecalRegions.Buffer);
+        buffers.Add(DecalRegionNodes.Buffer);
     }
 
     /// <summary>The frame's draw lists in drawing order: prepass, opaque, transparent.</summary>
@@ -460,6 +474,10 @@ internal sealed class CameraFrame : IDisposable
         ViewLightNodes.Dispose();
         ViewDecals.Dispose();
         ViewDecalNodes.Dispose();
+        LightRegions.Dispose();
+        LightRegionNodes.Dispose();
+        DecalRegions.Dispose();
+        DecalRegionNodes.Dispose();
     }
 }
 
@@ -503,6 +521,10 @@ internal sealed class ScenePass(FramePipeline frame, CameraFrame camera) : IPass
         camera.ViewTable.Set("Graphite_ViewLightNodes", 0, camera.ViewLightNodes.Buffer);
         camera.ViewTable.Set("Graphite_ViewDecals", 0, camera.ViewDecals.Buffer);
         camera.ViewTable.Set("Graphite_ViewDecalNodes", 0, camera.ViewDecalNodes.Buffer);
+        camera.ViewTable.Set("Graphite_LightRegions", 0, camera.LightRegions.Buffer);
+        camera.ViewTable.Set("Graphite_LightRegionNodes", 0, camera.LightRegionNodes.Buffer);
+        camera.ViewTable.Set("Graphite_DecalRegions", 0, camera.DecalRegions.Buffer);
+        camera.ViewTable.Set("Graphite_DecalRegionNodes", 0, camera.DecalRegionNodes.Buffer);
         DescriptorTable viewTable = camera.ViewTable.Get(ring);
         DescriptorTable frameTable = camera.World.FrameTable.Get(ring);
 
@@ -747,12 +769,8 @@ internal sealed class FramePipeline : IDisposable
         ViewBlock block = ViewBlock.Create(layer.View, layer.Projection, layer.Position, view.Target.Width, view.Target.Height, view.Near, view.FarDistance);
         block.Time = new Float4((float)time.Time, time.DeltaTime, time.FrameIndex, 0);
         WorldLighting lighting = world.World.Lighting;
-        Double3 lightOffset = layer.Position - lighting.StaticLightOrigin;
-        Double3 decalOffset = layer.Position - lighting.StaticDecalOrigin;
-        block.StaticLightOffset = new Float4((float)lightOffset.X, (float)lightOffset.Y, (float)lightOffset.Z, 0);
-        block.StaticDecalOffset = new Float4((float)decalOffset.X, (float)decalOffset.Y, (float)decalOffset.Z, 0);
-        block.StaticLightRoot = lighting.StaticLightRoot;
-        block.StaticDecalRoot = lighting.StaticDecalRoot;
+        block.LightRegionRoot = lighting.BuildViewLightRegions(frustum, camera.LightRegionTree, _uploader, camera.LightRegions, camera.LightRegionNodes);
+        block.DecalRegionRoot = lighting.BuildViewDecalRegions(frustum, camera.DecalRegionTree, _uploader, camera.DecalRegions, camera.DecalRegionNodes);
         block.ViewLightRoot = lighting.BuildViewLights(frustum, camera.LightTree, _uploader, camera.ViewLights, camera.ViewLightNodes);
         block.ViewDecalRoot = lighting.BuildViewDecals(frustum, camera.DecalTree, _uploader, camera.ViewDecals, camera.ViewDecalNodes);
         if (camera.HasPrevious)

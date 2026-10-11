@@ -7,12 +7,12 @@ Compute
     layout(local_size_x = 64) in;
 
     struct Graphite_ProbeSH { vec4 shAr; vec4 shAg; vec4 shAb; vec4 shBr; vec4 shBg; vec4 shBb; vec4 shC; };
-    struct Graphite_Probe { vec4 position; Graphite_ProbeSH sh; };
+    struct Graphite_Probe { vec4 high; vec4 low; Graphite_ProbeSH sh; };
     struct Graphite_ProbeTet { uvec4 corners; ivec4 neighbours; vec4 row1; vec4 row2; vec4 row3; };
 
     layout(set = 0, binding = 0, std430) readonly buffer Graphite_Probes { Graphite_Probe probes[]; };
     layout(set = 0, binding = 1, std430) readonly buffer Graphite_ProbeTets { Graphite_ProbeTet tets[]; };
-    layout(set = 0, binding = 2, std430) readonly buffer Graphite_ProbeRequests { vec4 requests[]; };
+    layout(set = 0, binding = 2, std430) readonly buffer Graphite_ProbeRequests { vec4 requests[]; };   // high and slot, then low
     layout(set = 0, binding = 3, std430) buffer Graphite_ProbeOutput { Graphite_ProbeSH outputs[]; };
     layout(push_constant) uniform Push { uint probeCount; uint tetCount; uint requestCount; uint pad; } push;
 
@@ -21,15 +21,19 @@ Compute
     #define NO_TET 0xFFFFFFFFu
     #define DEGENERATE 0xFFFFFFFFu
 
-    bool Barycentric(uint t, vec3 p, out vec4 b)
+    // A probe's position minus the point, exact when they are close however far both are from the origin
+    vec3 FromPoint(uint probe, vec3 high, vec3 low) { return (probes[probe].high.xyz - high) + (probes[probe].low.xyz - low); }
+
+    bool Barycentric(uint t, vec3 high, vec3 low, out vec4 b)
     {
         Graphite_ProbeTet tet = tets[t];
         b = vec4(0.0);
         if (tet.corners.x == DEGENERATE)
             return false;
-        b.y = dot(tet.row1.xyz, p) + tet.row1.w;
-        b.z = dot(tet.row2.xyz, p) + tet.row2.w;
-        b.w = dot(tet.row3.xyz, p) + tet.row3.w;
+        vec3 q = -FromPoint(tet.corners.x, high, low);
+        b.y = dot(tet.row1.xyz, q);
+        b.z = dot(tet.row2.xyz, q);
+        b.w = dot(tet.row3.xyz, q);
         b.x = 1.0 - b.y - b.z - b.w;
         return true;
     }
@@ -48,16 +52,19 @@ Compute
         sum.shC += sh.shC * w;
     }
 
-    uint FindTet(uint hint, vec3 p, out vec4 b)
+    // The tetrahedron holding the point, or NO_TET outside the hull. last is where the walk ended, the next one's start.
+    uint FindTet(uint hint, vec3 high, vec3 low, out vec4 b, out uint last)
     {
+        last = hint;
         if (push.tetCount == 0u)
             return NO_TET;
 
         uint t = hint < push.tetCount ? hint : 0u;
         for (int step = 0; step < MAX_WALK; step++)
         {
-            if (!Barycentric(t, p, b))
+            if (!Barycentric(t, high, low, b))
                 break;
+            last = t;
             if (Contains(b))
                 return t;
 
@@ -68,14 +75,17 @@ Compute
             if (b.w < lowest) { k = 3; }
             int next = tets[t].neighbours[k];
             if (next < 0)
-                break;
+                return NO_TET;
             t = uint(next);
         }
 
         for (uint i = 0u; i < push.tetCount; i++)
         {
-            if (Barycentric(i, p, b) && Contains(b))
+            if (Barycentric(i, high, low, b) && Contains(b))
+            {
+                last = i;
                 return i;
+            }
         }
         return NO_TET;
     }
@@ -86,13 +96,15 @@ Compute
         if (request >= push.requestCount)
             return;
 
-        vec3 p = requests[request].xyz;
-        uint slot = floatBitsToUint(requests[request].w);
+        vec4 high = requests[request * 2u];
+        vec3 low = requests[request * 2u + 1u].xyz;
+        uint slot = floatBitsToUint(high.w);
         uint hint = floatBitsToUint(outputs[slot].shC.w);
 
         Graphite_ProbeSH sum = Graphite_ProbeSH(vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0));
         vec4 b;
-        uint t = FindTet(hint, p, b);
+        uint last;
+        uint t = FindTet(hint, high.xyz, low, b, last);
         if (t != NO_TET)
         {
             uvec4 corners = tets[t].corners;
@@ -108,7 +120,7 @@ Compute
             uint k = min(push.probeCount, 4u);
             for (uint i = 0u; i < push.probeCount; i++)
             {
-                vec3 d = probes[i].position.xyz - p;
+                vec3 d = FromPoint(i, high.xyz, low);
                 float dsq = dot(d, d);
                 if (dsq >= dist2[k - 1u])
                     continue;
@@ -130,7 +142,7 @@ Compute
                 Accumulate(sum, nearest[j], (1.0 / (dist2[j] + 1e-6)) / total);
         }
 
-        sum.shC.w = uintBitsToFloat(t);
+        sum.shC.w = uintBitsToFloat(last);
         outputs[slot] = sum;
     }
 }

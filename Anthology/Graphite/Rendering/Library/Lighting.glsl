@@ -11,7 +11,7 @@
 
 struct Graphite_LightRecord
 {
-    vec4 positionRange;      // position in its tree's space, range
+    vec4 positionRange;      // position in its tree's space, its region's or the view's, range
     vec4 colorIntensity;
     vec4 directionFlags;     // direction it shines, type in the low 2 bits and shadow enabled in bit 2 as int bits
     vec4 spotShadow;         // cos of the outer and inner spot angles, shadow depth and normal bias
@@ -91,13 +91,11 @@ bool Graphite_FetchLight(uint tree, uint index, vec3 point, vec3 offset, uint la
     return true;
 }
 
-// Walks the static tree, then the view's tree of moving lights, returning every light whose sphere holds the point
+// Walks the static light regions the view sees, then its tree of moving lights, returning every light whose sphere holds the point
 struct Graphite_LightIterator
 {
-    Graphite_TreeWalk walk;
-    vec3 position;
-    vec3 point;
-    vec3 offset;
+    Graphite_TreeQuery query;
+    uint tree;
     uint k;
     uint last;
     uint layers;
@@ -105,24 +103,12 @@ struct Graphite_LightIterator
 
 Graphite_LightIterator Graphite_BeginLights(vec3 worldPos)
 {
-    Graphite_ViewData view = Graphite_View();
     Graphite_LightIterator it;
-    it.position = worldPos;
+    Graphite_BeginQuery(it.query, worldPos, false);
+    it.tree = GRAPHITE_STATIC_LIGHTS;
     it.k = 0u;
     it.last = 0u;
     it.layers = Graphite_SurfaceLayers();
-    if (view.treeRoots.x != GRAPHITE_TREE_INVALID)
-    {
-        it.offset = view.staticLightOffset.xyz;
-        it.point = worldPos + it.offset;
-        Graphite_BeginTree(it.walk, GRAPHITE_STATIC_LIGHTS, view.treeRoots.x);
-    }
-    else
-    {
-        it.offset = vec3(0.0);
-        it.point = worldPos;
-        Graphite_BeginTree(it.walk, GRAPHITE_VIEW_LIGHTS, view.treeRoots.y);
-    }
     return it;
 }
 
@@ -133,19 +119,12 @@ bool Graphite_NextLight(inout Graphite_LightIterator it, out LightSample L)
         while (it.k < it.last)
         {
             uint index = it.k++;
-            if (Graphite_FetchLight(it.walk.tree, index, it.point, it.offset, it.layers, L))
+            if (Graphite_FetchLight(it.tree, index, it.query.point, it.query.offset, it.layers, L))
                 return true;
         }
 
-        if (Graphite_NextLeaf(it.walk, it.point, it.k, it.last))
-            continue;
-
-        if (it.walk.tree != GRAPHITE_STATIC_LIGHTS)
+        if (!Graphite_NextRun(it.query, it.tree, it.k, it.last))
             return false;
-
-        it.offset = vec3(0.0);
-        it.point = it.position;
-        Graphite_BeginTree(it.walk, GRAPHITE_VIEW_LIGHTS, Graphite_View().treeRoots.y);
     }
     return false;
 }
@@ -683,7 +662,8 @@ vec3 ShadeSH9(Graphite_ProbeSH sh, vec3 n)
 }
 
 #ifdef GRAPHITE_FRAGMENT
-// The diffuse light that is not realtime: the object's lightmap, else its light probes, else the ambient light.
+// The diffuse light that is not realtime: the object's lightmap, ambient while its page loads, else its light probes,
+// else the ambient light.
 // lightmapUV comes from Graphite_LightmapUV in the vertex stage.
 vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
 {
@@ -691,6 +671,8 @@ vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
     if (object.lightmapPage >= 0 && uint(object.lightmapPage) < graphite_World.counts.y)
     {
         uvec2 page = graphite_LightmapPages[object.lightmapPage];
+        if (page.x == 0xFFFFFFFFu)
+            return CalculateAmbient(worldNormal) * graphite_World.ambientMode.z;
         return DecodeLightmap(GRAPHITE_SAMPLE_2D(page.x, page.y, lightmapUV));
     }
     if (object.probeIndex != 0xFFFFFFFFu && graphite_World.counts.z != 0u)

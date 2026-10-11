@@ -43,6 +43,10 @@ internal static class GraphiteBindings
     public const int ViewLightNodes = 4;
     public const int ViewDecals = 5;
     public const int ViewDecalNodes = 6;
+    public const int LightRegions = 7;
+    public const int LightRegionNodes = 8;
+    public const int DecalRegions = 9;
+    public const int DecalRegionNodes = 10;
 
     public const int Materials = 0;
     public const int Instances = 1;
@@ -93,7 +97,11 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_ViewLights", ResourceKind.StructuredBufferReadOnly, Graphics, ViewLights),
         new ResourceLayoutElementDescription("Graphite_ViewLightNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ViewLightNodes),
         new ResourceLayoutElementDescription("Graphite_ViewDecals", ResourceKind.StructuredBufferReadOnly, Graphics, ViewDecals),
-        new ResourceLayoutElementDescription("Graphite_ViewDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ViewDecalNodes))
+        new ResourceLayoutElementDescription("Graphite_ViewDecalNodes", ResourceKind.StructuredBufferReadOnly, Graphics, ViewDecalNodes),
+        new ResourceLayoutElementDescription("Graphite_LightRegions", ResourceKind.StructuredBufferReadOnly, Graphics, LightRegions),
+        new ResourceLayoutElementDescription("Graphite_LightRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, LightRegionNodes),
+        new ResourceLayoutElementDescription("Graphite_DecalRegions", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegions),
+        new ResourceLayoutElementDescription("Graphite_DecalRegionNodes", ResourceKind.StructuredBufferReadOnly, Graphics, DecalRegionNodes))
     {
         Table = true,
     };
