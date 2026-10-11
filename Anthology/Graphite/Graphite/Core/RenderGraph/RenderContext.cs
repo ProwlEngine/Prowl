@@ -565,14 +565,14 @@ public sealed class RenderContext
         (int width, int height) = desc.Resolve(_view.PixelWidth, _view.PixelHeight);
         PixelFormat[] colors = desc.ColorFormats ?? Array.Empty<PixelFormat>();
         if (desc.EnableDepth && desc.DepthFormat is PixelFormat depthFormat)
-            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, TextureSampleCount.Count1, resource.Storage) { ArrayLayers = desc.ArrayLayers };
+            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, desc.SampleCount, resource.Storage) { ArrayLayers = desc.ArrayLayers };
 
         return new RenderTextureDescription(
             (uint)width,
             (uint)height,
             colors,
             desc.EnableDepth,
-            TextureSampleCount.Count1,
+            desc.SampleCount,
             resource.Storage) { ArrayLayers = desc.ArrayLayers };
     }
 }

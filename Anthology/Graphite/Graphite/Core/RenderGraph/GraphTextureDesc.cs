@@ -43,6 +43,12 @@ public struct GraphTextureDesc
     /// </summary>
     public uint ArrayLayers;
 
+    /// <summary>
+    /// Samples per pixel of every attachment, for MSAA, one by default. Resolve into a single sample texture with
+    /// <see cref="CommandBuffer.ResolveTexture"/>.
+    /// </summary>
+    public TextureSampleCount SampleCount;
+
     private static PixelFormat[] DefaultFormats(PixelFormat[] formats)
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 
