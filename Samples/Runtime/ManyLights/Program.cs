@@ -22,6 +22,8 @@ using Prowl.Samples;
 using Prowl.Scribe;
 using Prowl.Vector;
 
+using RenderWorld = Prowl.Graphite.Rendering.RenderWorld;
+
 using static Prowl.Samples.Sample;
 
 namespace ManyLights;
@@ -50,6 +52,42 @@ public sealed class ManyLightsGame : StationGame
     private Material[] _bulbMaterials = null!;
     private Mesh _bulb = null!;
     private int _count;
+
+    // Which shadow page the panel shows, 0 none, 1 live, 2 static
+    private int _atlas;
+
+    // Shadow tile changes summed over the second so far, and over the last whole second
+    private (int Added, int Grown, int Shrunk) _counting, _second;
+    private float _countingTime;
+
+    private static readonly bool TEMP_Bench = Environment.GetEnvironmentVariable("PROWL_SHRINK_BENCH") == "1";
+    private int TEMP_ticks;
+
+    protected override void Tick()
+    {
+        if (TEMP_Bench && SampleScene.Rendering.WorldIfMade is { } benchWorld)
+        {
+            if (TEMP_ticks == 0)
+            {
+                SetLightCount(1024);
+                benchWorld.Shadows.MinTileSize = 16;
+                benchWorld.Shadows.DrawMilliseconds = 1000;
+            }
+            if (++TEMP_ticks == 2250)
+                benchWorld.Shadows.TexelsPerPixel = 0.5f;
+            RenderStats.Frame f = RenderStats.Last;
+            if (TEMP_ticks > 2250 && (f.ShadowsShrunk > 0 || f.ShadowsGrown > 0 || f.ShadowsAdded > 0))
+                Console.WriteLine($"[bench] tick {TEMP_ticks} shrunk {f.ShadowsShrunk} grown {f.ShadowsGrown} added {f.ShadowsAdded}");
+        }
+        RenderStats.Frame frame = RenderStats.Last;
+        _counting = (_counting.Added + frame.ShadowsAdded, _counting.Grown + frame.ShadowsGrown, _counting.Shrunk + frame.ShadowsShrunk);
+        _countingTime += (float)Time.UnscaledDeltaTime;
+        if (_countingTime < 1)
+            return;
+        _second = _counting;
+        _counting = default;
+        _countingTime = 0;
+    }
 
     // A few strong colors, so the bulbs share materials and batch into a handful of draws
     private static readonly Color[] Palette =
@@ -149,12 +187,27 @@ public sealed class ManyLightsGame : StationGame
 
     public override string Stats => $"{_count:N0} static point lights";
 
+    public override void DrawOverlay(Paper paper, FontFile font)
+    {
+        RenderWorld? world = SampleScene.Rendering.WorldIfMade;
+        if ((_atlas == 1 ? world?.LiveShadowAtlas : _atlas == 2 ? world?.StaticShadowAtlas : null) is { } atlas)
+            paper.Box("atlas").PositionType(PositionType.SelfDirected).AnchorLeft(20).AnchorBottom(20).Width(560).Height(560)
+                .BackgroundColor(SampleHud.Panel).Image(atlas, scaleMode: ImageScaleMode.Fit);
+    }
+
     public override void DrawControls(Paper paper, FontFile font)
     {
         Header(paper, font, "Lights");
         Label(paper, font, $"{_count:N0} on", 1);
         Button(paper, font, "Double", () => SetLightCount(Math.Max(1024, _count * 2)), 2);
         Button(paper, font, "Halve", () => SetLightCount(_count / 2), 3);
+
+        Header(paper, font, "Shadow atlas", 4);
+        RenderStats.Frame frame = RenderStats.Last;
+        Label(paper, font, $"This frame: {frame.ShadowsAdded} added, {frame.ShadowsGrown} grown, {frame.ShadowsShrunk} shrunk", 7);
+        Label(paper, font, $"Last second: {_second.Added} added, {_second.Grown} grown, {_second.Shrunk} shrunk", 8);
+        Toggle(paper, font, "Show live page", _atlas == 1, on => _atlas = on ? 1 : 0, 5);
+        Toggle(paper, font, "Show static page", _atlas == 2, on => _atlas = on ? 2 : 0, 6);
 
     }
 }

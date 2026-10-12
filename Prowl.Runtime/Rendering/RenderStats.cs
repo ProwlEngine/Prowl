@@ -24,6 +24,11 @@ public static class RenderStats
         public int ShadowDrawCalls;
         public int ShadowDrawCommands;
 
+        /// <summary>Local light shadows given tiles, grown and shrunk.</summary>
+        public int ShadowsAdded;
+        public int ShadowsGrown;
+        public int ShadowsShrunk;
+
         /// <summary>Shader variants still compiling in the background.</summary>
         public int ShaderCompiles;
     }
@@ -52,6 +57,9 @@ public static class RenderStats
             frame.DrawCommands = stats.DrawCommands;
             frame.ShadowDrawCalls = stats.ShadowDrawCalls;
             frame.ShadowDrawCommands = stats.ShadowDrawCommands;
+            frame.ShadowsAdded = stats.ShadowsAdded;
+            frame.ShadowsGrown = stats.ShadowsGrown;
+            frame.ShadowsShrunk = stats.ShadowsShrunk;
             frame.ShaderCompiles = renderer.ShaderCompilesPending;
         }
         Last = frame;

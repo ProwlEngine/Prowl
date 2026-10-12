@@ -123,6 +123,9 @@ public abstract class StationGame : Game
     /// <summary>Draws controls that apply to the whole sample into a panel under the station's own. Leave empty for no panel.</summary>
     public virtual void DrawSceneControls(Paper paper, FontFile font) { }
 
+    /// <summary>Anything the sample draws over the view outside the panels, placed by the sample itself.</summary>
+    public virtual void DrawOverlay(Paper paper, FontFile font) { }
+
     public bool HasControls => _hasControls ??= Overrides(nameof(DrawControls));
 
     /// <summary>Whether the current station has controls to show. Override to hide the panel for stations without any.</summary>
@@ -765,6 +768,8 @@ public sealed class SampleHud : Component
                 using (paper.Column("controls").Height(UnitValue.Auto).BackgroundColor(Panel).Rounded(10).Padding(14).Gap(6).Enter())
                     Game.DrawControls(paper, font);
         }
+
+        Game.DrawOverlay(paper, font);
 
         // A sample that is one world to walk around has nowhere else to go.
         if (Game.Stations.Count > 1) StationBar(paper, font, index);
