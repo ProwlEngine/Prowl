@@ -1,313 +1,210 @@
 using System;
-using System.Text;
+using System.Collections.Generic;
 
-using Prowl.Graphite.RenderGraph;
+using Prowl.Graphite.Rendering;
 using Prowl.Graphite.Samples;
-using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
+
+using Silk.NET.Input;
+using Silk.NET.Maths;
+using Silk.NET.Windowing;
 
 
 namespace Prowl.Graphite.Samples.PBRRenderer;
 
 
-internal readonly struct SceneView : IRenderView
+internal sealed class DemoWindow
 {
-    public Framebuffer Target { get; }
+    private readonly IWindow _window;
+    private readonly Dictionary<int, DemoScene> _scenes = new();
+    private readonly FlyCamera _camera = new();
+    private readonly string? _shotPath;
+    private readonly int _shotFrames;
+    private IInputContext _input = null!;
+    private GraphicsDevice _device = null!;
+    private Demo _demo = null!;
+    private DemoScene _scene = null!;
+    private double _time;
+    private ulong _frame;
+    private bool _paused;
+    private bool _looking;
+    private System.Numerics.Vector2 _lastMouse;
+    private double _titleTimer;
+    private int _titleFrames;
+    private int _startScene;
+    private bool _freeze;
+    private float? _hour;
 
-    public SceneView(uint width, uint height, Swapchain swapchain)
+    public DemoWindow(string[] args)
     {
-        Target = swapchain.Framebuffer;
-        PixelWidth = width;
-        PixelHeight = height;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--scene" && i + 1 < args.Length)
+                _startScene = int.Parse(args[++i]) - 1;
+            else if (args[i] == "--shot" && i + 1 < args.Length)
+                _shotPath = args[++i];
+            else if (args[i] == "--hour" && i + 1 < args.Length)
+                _hour = float.Parse(args[++i]);
+            else if (args[i] == "--freeze")
+                _freeze = true;
+            else if (args[i] == "--frames" && i + 1 < args.Length)
+                _shotFrames = int.Parse(args[++i]);
+        }
+
+        DeviceCreateUtilities.InitializeWindowing();
+        WindowOptions options = WindowOptions.Default with
+        {
+            Title = "Graphite Renderer",
+            Size = new Vector2D<int>(1600, 900),
+            VSync = false,
+            ShouldSwapAutomatically = false,
+            API = new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
+        };
+
+        _window = Window.Create(options);
+        _window.Load += OnLoad;
+        _window.Render += OnRender;
+        _window.Closing += OnClosing;
     }
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
+    public void Run() => _window.Run();
 
-
-// Renders the model into an offscreen "Scene" target, then runs a two-step bloom (downsample, then
-// upsample) over it into "BloomFull", and finally composites Scene + BloomFull to the swapchain. The
-// graph orders the four passes from their declared texture reads/writes; nothing here manually tracks
-// dependency order.
-internal sealed class ScenePass : RasterPass
-{
-    private readonly ModelAsset _model;
-    private readonly GraphicsProgram _shader;
-    private readonly PropertySet _properties;
-
-    private Float3 _center;
-    private float _distance;
-    private float _angle;
-
-    public ScenePass(ModelAsset model, GraphicsProgram shader, PropertySet properties)
+    private void OnLoad()
     {
-        _model = model;
-        _shader = shader;
-        _properties = properties;
-        _center = model.Bounds.Center;
-        _distance = Float3.Length(model.Bounds.Extents) * 3.0f;
+        _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { SyncToVerticalBlank = false }, GraphicsBackend.Vulkan);
+        _window.FramebufferResize += size => _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
+
+        _demo = new Demo(_device);
+        SelectScene(Math.Clamp(_startScene, 0, 2));
+        _paused = _freeze;
+        if (_hour is { } hour && _scene is ShadowsScene shadows)
+            shadows.Hour = hour;
+
+        _input = _window.CreateInput();
+        IKeyboard keyboard = _input.Keyboards[0];
+        keyboard.KeyDown += (_, key, _) => OnKey(key);
+        IMouse mouse = _input.Mice[0];
+        mouse.MouseDown += (m, button) =>
+        {
+            if (button == MouseButton.Right)
+            {
+                _looking = true;
+                _lastMouse = m.Position;
+            }
+        };
+        mouse.MouseUp += (_, button) =>
+        {
+            if (button == MouseButton.Right)
+                _looking = false;
+        };
+        mouse.MouseMove += (_, position) =>
+        {
+            if (_looking)
+                _camera.Look(position.X - _lastMouse.X, position.Y - _lastMouse.Y);
+            _lastMouse = position;
+        };
     }
 
-    public override string Name => "Scene";
-
-    public void Advance(float dt) => _angle += dt * 0.5f;
-
-    public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
-
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    private void SelectScene(int index)
     {
-        float radius = Math.Max(_distance, 0.001f);
-        Float3 eye = _center + new Float3(MathF.Sin(_angle), 0.35f, MathF.Cos(_angle)) * _distance;
+        if (!_scenes.TryGetValue(index, out DemoScene? scene))
+        {
+            scene = index switch
+            {
+                0 => new HelmetScene(_demo),
+                1 => new LightsScene(_demo),
+                _ => new ShadowsScene(_demo),
+            };
+            _scenes[index] = scene;
+        }
 
-        Float4x4 projection = Float4x4.CreatePerspectiveFov(1.0472f, 1.0f, radius * 0.02f, radius * 10.0f);
-        Float4x4 view = Float4x4.CreateLookAt(eye, _center, Float3.UnitY);
-        _properties.SetMatrix("MatrixMVP", projection * view);
-
-        cmd.SetShader(_shader);
-        cmd.SetVertexSource(_model.Mesh);
-        cmd.SetProperties(_properties);
-        cmd.DrawIndexed();
-    }
-}
-
-
-internal sealed class BloomDownsamplePass : RasterPass
-{
-    private readonly ShaderPass _bloomShader;
-    private readonly Sampler _sampler;
-    private readonly PropertySet _properties = new();
-    private static readonly Keyword UpsampleOff = new("Upsample", "false");
-
-    public BloomDownsamplePass(ShaderPass bloomShader, Sampler sampler)
-    {
-        _bloomShader = bloomShader;
-        _sampler = sampler;
+        _scene = scene;
+        _camera.Position = scene.StartPosition;
+        _camera.Yaw = scene.StartYaw;
+        _camera.Pitch = scene.StartPitch;
     }
 
-    private TextureHandle _sceneHandle;
-    private TextureHandle _bloomHalfHandle;
-
-    public override string Name => "BloomDownsample";
-
-    public override void Setup(RenderContextBuilder builder)
+    private void OnKey(Key key)
     {
-        _sceneHandle = builder.DeclareInputTexture("Scene");
-        _bloomHalfHandle = SetTarget(builder, "BloomHalf", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, 0.5f));
+        switch (key)
+        {
+            case Key.Number1: SelectScene(0); break;
+            case Key.Number2: SelectScene(1); break;
+            case Key.Number3: SelectScene(2); break;
+            case Key.Space: _paused = !_paused; break;
+            case Key.B: _demo.Bloom.Enabled = !_demo.Bloom.Enabled; break;
+            case Key.T: _demo.Tonemap.Enabled = !_demo.Tonemap.Enabled; break;
+            case Key.Minus: _demo.Tonemap.Settings.Exposure *= 0.8f; break;
+            case Key.Equal: _demo.Tonemap.Settings.Exposure *= 1.25f; break;
+            case Key.Escape: _window.Close(); break;
+            default: _scene.OnKey(key); break;
+        }
     }
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    private void OnRender(double deltaTime)
     {
-        RenderTexture scene = context.GetRenderTexture(_sceneHandle);
-        RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
+        float dt = (float)deltaTime;
+        if (!_paused)
+            _time += deltaTime;
 
+        IKeyboard keyboard = _input.Keyboards[0];
+        float speed = keyboard.IsKeyPressed(Key.ShiftLeft) ? 40f : 10f;
+        float right = (keyboard.IsKeyPressed(Key.D) ? 1 : 0) - (keyboard.IsKeyPressed(Key.A) ? 1 : 0);
+        float forward = (keyboard.IsKeyPressed(Key.W) ? 1 : 0) - (keyboard.IsKeyPressed(Key.S) ? 1 : 0);
+        float up = (keyboard.IsKeyPressed(Key.E) ? 1 : 0) - (keyboard.IsKeyPressed(Key.Q) ? 1 : 0);
+        _camera.Move(right, up, forward, speed * dt);
 
-        _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _sampler);
-        _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomHalf.Desc.Width, 0.5f / bloomHalf.Desc.Height));
-        _properties.SetFloat("offset", 1f);
+        _scene.Update((float)_time, _paused ? 0f : dt);
 
-        cmd.SetShader(_bloomShader, [UpsampleOff]);
-        cmd.SetVertexSource(VertexSource.None);
-        cmd.SetProperties(_properties);
-        cmd.Draw(3);
-    }
-}
+        Framebuffer target = _device.MainSwapchain.Framebuffer;
+        ViewDesc view = new()
+        {
+            World = _scene.World,
+            ViewId = 0,
+            Target = target,
+            ClearColor = new Float4(0.01f, 0.012f, 0.02f, 1),
+            Near = FlyCamera.Near,
+            Kind = ViewKind.Game,
+            Features = _demo.Post,
+        };
+        view.Layers[0] = _camera.Layer(target.Width / (float)Math.Max(target.Height, 1u));
 
+        _demo.Renderer.SubmitFrame(new FrameDesc
+        {
+            Views = new[] { view },
+            Time = new FrameTime { Time = _time, DeltaTime = dt, FrameIndex = _frame++ },
+        });
 
-internal sealed class BloomUpsamplePass : RasterPass
-{
-    private readonly ShaderPass _bloomShader;
-    private readonly Sampler _sampler;
-    private readonly PropertySet _properties = new();
-    private static readonly Keyword UpsampleOn = new("Upsample", "true");
+        _titleTimer += deltaTime;
+        _titleFrames++;
+        if (_titleTimer >= 0.5)
+        {
+            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 2 3 scene, B bloom, T tonemap, +/- exposure, space pause, {_scene.Controls}";
+            _titleTimer = 0;
+            _titleFrames = 0;
+        }
 
-    public BloomUpsamplePass(ShaderPass bloomShader, Sampler sampler)
-    {
-        _bloomShader = bloomShader;
-        _sampler = sampler;
-    }
-
-    private TextureHandle _bloomHalfHandle;
-    private TextureHandle _bloomFullHandle;
-
-    public override string Name => "BloomUpsample";
-
-    public override void Setup(RenderContextBuilder builder)
-    {
-        _bloomHalfHandle = builder.DeclareInputTexture("BloomHalf");
-        _bloomFullHandle = SetTarget(builder, "BloomFull", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, 1f));
-    }
-
-    public override void Render(RenderContext context, CommandBuffer cmd)
-    {
-        RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
-        RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
-
-
-        _properties.SetTexture("sourceTexture", bloomHalf.ColorTextures[0], _sampler);
-        _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomFull.Desc.Width, 0.5f / bloomFull.Desc.Height));
-        _properties.SetFloat("offset", 1f);
-
-        cmd.SetShader(_bloomShader, [UpsampleOn]);
-        cmd.SetVertexSource(VertexSource.None);
-        cmd.SetProperties(_properties);
-        cmd.Draw(3);
-    }
-}
-
-
-internal sealed class CompositePass : RasterPass
-{
-    private readonly GraphicsProgram _compositeShader;
-    private readonly Sampler _sampler;
-    private readonly PropertySet _properties = new();
-
-    private TextureHandle _sceneHandle;
-    private TextureHandle _bloomFullHandle;
-
-    public CompositePass(GraphicsProgram compositeShader, Sampler sampler)
-    {
-        _compositeShader = compositeShader;
-        _sampler = sampler;
+        if (_shotPath != null && _frame >= (ulong)_shotFrames)
+        {
+            _demo.Renderer.WaitForRenderThread();
+            _device.WaitForIdle();
+            System.Diagnostics.Process.Start("import", ["-window", "root", _shotPath])?.WaitForExit();
+            _window.Close();
+        }
     }
 
-    public override string Name => "Composite";
-
-    public override void Setup(RenderContextBuilder builder)
+    private void OnClosing()
     {
-        _sceneHandle = builder.DeclareInputTexture("Scene");
-        _bloomFullHandle = builder.DeclareInputTexture("BloomFull");
-        SetViewTarget(builder);
-    }
-
-    public override void Render(RenderContext context, CommandBuffer cmd)
-    {
-        RenderTexture scene = context.GetRenderTexture(_sceneHandle);
-        RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
-
-
-        _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
-        _properties.SetTexture("bloomTexture", bloomFull.ColorTextures[0], _sampler);
-        _properties.SetFloat("bloomIntensity", 0.6f);
-
-        cmd.SetShader(_compositeShader);
-        cmd.SetVertexSource(VertexSource.None);
-        cmd.SetProperties(_properties);
-        cmd.Draw(3);
+        _device.WaitForIdle();
+        foreach (DemoScene scene in _scenes.Values)
+            scene.Dispose();
+        _demo.Dispose();
+        _device.Dispose();
     }
 }
 
 
 public static class Program
 {
-    static GraphicsDevice device;
-    static RenderMSTracker tracker;
-
-    static ModelAsset model;
-    static GraphicsProgram unlitShader;
-    static GraphicsProgram compositeShader;
-    static ShaderDefinition bloomDef;
-    static ShaderPass bloomShader;
-    static PropertySet sceneProperties;
-    static Sampler bloomSampler;
-    static Sampler compositeSampler;
-    static Texture albedo;
-
-    static RenderPipeline pipeline;
-    static ScenePass scenePass;
-    static SceneView[] views;
-
-
-    private static void Main()
-    {
-        GraphicsDeviceOptions options = new()
-        {
-            VulkanValidationLayers = false,
-        };
-
-        SwapchainDescription swapchain = new()
-        {
-            SyncToVerticalBlank = false
-        };
-
-        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options, swapchain);
-    }
-
-
-    public static void Load(GraphicsDevice newDevice)
-    {
-        device = newDevice;
-
-        tracker = new(newDevice);
-
-        unlitShader = ShaderDefLoader.Load(device, "Shaders/Unlit.shader");
-
-        model = ModelAsset.Load(device, "Assets/Models/DamagedHelmet.glb", unwrapLightmapUVs: false);
-
-        MaterialInfo material = model.Materials.Length > 0 ? model.Materials[0] : default;
-        albedo = material.AlbedoTexture ?? model.GetDefaultWhite();
-
-        sceneProperties = new();
-        sceneProperties.SetTexture("AlbedoTexture", albedo, bloomSampler);
-        sceneProperties.SetFloat4("BaseColor", new Float4(1, 1, 1, 1));
-
-        bloomShader = LoadBloomShaderPass(device);
-        compositeShader = ShaderDefLoader.Load(device, "Shaders/Composite.shader");
-
-        SamplerDescription clampLinear = new()
-        {
-            AddressModeU = SamplerAddressMode.Clamp,
-            AddressModeV = SamplerAddressMode.Clamp,
-            AddressModeW = SamplerAddressMode.Clamp,
-            MinFilter = FilterMode.Linear,
-            MagFilter = FilterMode.Linear,
-            MipFilter = FilterMode.Linear,
-        };
-        bloomSampler = device.ResourceFactory.CreateSampler(clampLinear);
-        compositeSampler = device.ResourceFactory.CreateSampler(clampLinear);
-
-        scenePass = new(model, unlitShader, sceneProperties);
-        BloomDownsamplePass bloomDown = new(bloomShader, bloomSampler);
-        BloomUpsamplePass bloomUp = new(bloomShader, bloomSampler);
-        CompositePass composite = new(compositeShader, compositeSampler);
-
-        pipeline = new([scenePass, bloomDown, bloomUp, composite]);
-        views = new[] { new SceneView(600, 600, device.MainSwapchain) };
-    }
-
-
-    private static ShaderPass LoadBloomShaderPass(GraphicsDevice device)
-    {
-        Memory<byte>? loaded = FileLoader.Load("Shaders/Bloom.shader");
-        string source = Encoding.UTF8.GetString(loaded!.Value.Span);
-        bloomDef = ShaderParser.Parse(source);
-        bloomDef.Create(device, ShaderLoader.Compiler, new Variant(), CompileMode.All);
-
-        return bloomDef.Passes![0];
-    }
-
-
-    public static void Render(double dt)
-    {
-        tracker.Begin();
-
-        scenePass.Advance((float)dt);
-        device.DispatchGraph(pipeline, views);
-
-        tracker.End(dt);
-    }
-
-
-    public static void Close()
-    {
-        pipeline.Dispose();
-        bloomSampler.Dispose();
-        compositeSampler.Dispose();
-        compositeShader.Dispose();
-        unlitShader.Dispose();
-        model.Dispose();
-        device.Dispose();
-    }
+    private static void Main(string[] args) => new DemoWindow(args).Run();
 }
