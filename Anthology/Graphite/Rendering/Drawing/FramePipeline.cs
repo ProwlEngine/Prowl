@@ -447,7 +447,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 
             foreach ((int index, MeshPlacement from, MeshPlacement to) in world.NewCopies)
             {
-                uint skipped = Deforms(world, index) ? SkinnedStreams : 0;
+                uint skipped = world.DeformNow[index] ? SkinnedStreams : 0;
                 DeviceBuffer source = geometry.Pages[from.Page].Vertices, target = geometry.Pages[to.Page].Vertices;
                 for (int s = 0; s < MeshLayout.StreamCount; s++)
                 {
@@ -459,9 +459,8 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 
             foreach (int index in world.Deforming)
             {
-                if (!Deforms(world, index))
+                if (!world.DeformNow[index])
                     continue;
-                world.DeformStale[index] = false;
                 _jobs.Add((world, index));
                 MeshPlacement from = world.Mesh[index]!.Placement!, to = world.Deformed[index]!;
                 if (from.BlendFrames.Length == 0)
@@ -472,7 +471,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
                 for (int s = 0; s < MeshLayout.StreamCount; s++)
                 {
                     if ((from.StreamsPresent & (1u << s) & SkinnedStreams) != 0)
-                        Copy(cmd, world, source, target, from.StreamOffsets[s], to.StreamOffsets[s], MeshLayout.WordsPerVertex((VertexSemantic)s) * from.VertexCount);
+                        Copy(cmd, world, source, target, from.StreamOffsets[s], s == (int)VertexSemantic.Position ? world.PoseTarget[index] : to.StreamOffsets[s], MeshLayout.WordsPerVertex((VertexSemantic)s) * from.VertexCount);
                 }
             }
         }
@@ -513,7 +512,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
             Deltas = frame.Positions,
             Normal = frame.Normals,
             Tangent = frame.Tangents,
-            TargetWord = to.StreamOffsets[(int)VertexSemantic.Position],
+            TargetWord = world.PoseTarget[index],
             TargetNormal = to.StreamOffsets[(int)VertexSemantic.Normal],
             TargetTangent = to.StreamOffsets[(int)VertexSemantic.Tangent],
             Weight = active.Weight,
@@ -535,7 +534,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
             Count = from.VertexCount,
             Streams = ((from.StreamsPresent >> (int)VertexSemantic.Normal) & 1) | (((from.StreamsPresent >> (int)VertexSemantic.Tangent) & 1) << 1) | ownPose,
             SourceWord = from.StreamOffsets[(int)VertexSemantic.Position],
-            TargetWord = to.StreamOffsets[(int)VertexSemantic.Position],
+            TargetWord = world.PoseTarget[index],
             Normal = from.StreamOffsets[(int)VertexSemantic.Normal],
             TargetNormal = to.StreamOffsets[(int)VertexSemantic.Normal],
             Tangent = from.StreamOffsets[(int)VertexSemantic.Tangent],
@@ -547,9 +546,6 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
         });
     }
 
-    // Whether the renderable's copy deforms this frame: behind its bones or weights and seen by a view
-    private static bool Deforms(RenderWorld.RenderSide world, int index)
-        => world.DeformStale[index] && world.DeformSeen[index] == world.DeformStamp && world.Deformed[index] != null;
 
     private void Copy(CommandBuffer cmd, RenderWorld.RenderSide world, DeviceBuffer source, DeviceBuffer target, uint sourceWord, uint targetWord, uint words)
     {
@@ -1408,9 +1404,12 @@ internal sealed partial class FramePipeline : IDisposable
 
         bool shadows = PrepareShadows();
 
-        // Providers' objects, written while the views were prepared, and the shadows' faces
+        // Providers' objects, written while the views were prepared, the deforming copies' poses, and the shadows' faces,
+        // after the frame's earlier writes, as they can rewrite a record those wrote
+        _uploader.Fence();
         foreach (WorldFrame world in _frameWorlds)
         {
+            world.World.Render.PrepareDeformation();
             _replaced.Clear();
             world.World.Render.Flush(_uploader, _replaced);
             _retired.AddRange(_replaced);

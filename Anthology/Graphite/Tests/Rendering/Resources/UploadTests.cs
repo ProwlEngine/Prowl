@@ -72,6 +72,20 @@ public sealed class UploadTests : IDisposable
     }
 
     [Fact]
+    public void WritesAfterAFence_LandAfterTheOnesBeforeIt()
+    {
+        const uint words = 1 << 16;
+        using DeviceBuffer buffer = Buffer(words);
+        for (uint round = 1; round <= 32; round++)
+        {
+            _uploader.Write(buffer, 0, Enumerable.Repeat(round, (int)words).ToArray());
+            _uploader.Fence();
+        }
+        Flush(buffer);
+        Assert.All(Read(buffer), word => Assert.Equal(32u, word));
+    }
+
+    [Fact]
     public void Writes_LandAtTheirOffsets_AcrossSeveralDestinations()
     {
         using DeviceBuffer a = Buffer(64);

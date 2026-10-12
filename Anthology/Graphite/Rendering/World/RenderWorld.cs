@@ -214,7 +214,11 @@ internal struct ObjectAttributes
     public float LodFade;
     public uint LayerMask;
     public uint LightmapSampler;
-    private uint _pad0, _pad1, _pad2;
+
+    /// <summary>The first word plus one of a skinned copy's current and last frame's positions, 0 for the chunk's own and none.</summary>
+    public uint CurrentPositions;
+    public uint PreviousPositions;
+    private uint _pad0;
     public Float4 LightmapScaleOffset;
     public Float4 Custom0;
     public Float4 Custom1;
@@ -970,6 +974,18 @@ public sealed partial class RenderWorld : IDisposable
         /// <summary>Renderables with a deformed copy.</summary>
         public HashSet<int> Deforming { get; } = new();
 
+        /// <summary>Copies deforming this frame, decided by <see cref="PrepareDeformation"/>.</summary>
+        public bool[] DeformNow = [];
+
+        /// <summary>The first word of the positions a copy deforms into this frame, its current ones.</summary>
+        public uint[] PoseTarget = [];
+
+        // Whether a copy's second position range is its current one, whether its current pose was drawn, and whether a
+        // view saw it last frame
+        private bool[] _secondCurrent = [];
+        private bool[] _hasPose = [];
+        private bool[] _seenLastFrame = [];
+
         /// <summary>A renderable's blend shape weights, and the frames they pick with the weight each adds.</summary>
         public float[]?[] ShapeWeights = [];
         public (int Frame, float Weight)[][] ActiveFrames = [];
@@ -1030,7 +1046,49 @@ public sealed partial class RenderWorld : IDisposable
         public void BeginFrame()
         {
             _transientObjects = 0;
+            foreach (int index in Deforming)
+                _seenLastFrame[index] = DeformSeen[index] == DeformStamp;
             DeformStamp++;
+        }
+
+        /// <summary>
+        /// Decides which copies deform this frame, those behind their bones or weights that a view saw, and swaps the
+        /// position ranges of those keeping a previous pose, so last frame's pose stays for motion vectors. A copy that
+        /// keeps still, or that no view saw last frame, has no motion of its own. Render thread, after every cull and
+        /// before the tables flush.
+        /// </summary>
+        public void PrepareDeformation()
+        {
+            foreach (int index in Deforming)
+            {
+                MeshPlacement copy = Deformed[index]!;
+                bool deforms = DeformStale[index] && DeformSeen[index] == DeformStamp;
+                DeformNow[index] = deforms;
+                if (deforms)
+                    DeformStale[index] = false;
+                if (copy.SecondPositions == MeshPlacement.None)
+                {
+                    PoseTarget[index] = copy.StreamOffsets[(int)VertexSemantic.Position];
+                    continue;
+                }
+
+                bool moves = deforms && _hasPose[index] && _seenLastFrame[index];
+                if (deforms && _hasPose[index])
+                    _secondCurrent[index] = !_secondCurrent[index];
+                uint first = copy.StreamOffsets[(int)VertexSemantic.Position];
+                uint current = _secondCurrent[index] ? copy.SecondPositions : first;
+                uint previous = _secondCurrent[index] ? first : copy.SecondPositions;
+                PoseTarget[index] = current;
+                if (deforms)
+                    _hasPose[index] = true;
+
+                ref ObjectAttributes attributes = ref _attributes[index];
+                (uint currentWord, uint previousWord) = (current + 1, (moves ? previous : current) + 1);
+                if (attributes.CurrentPositions == currentWord && attributes.PreviousPositions == previousWord)
+                    continue;
+                (attributes.CurrentPositions, attributes.PreviousPositions) = (currentWord, previousWord);
+                Attributes.Set((uint)index, attributes);
+            }
         }
 
         /// <summary>An object record for one frame, after every renderable's, for a provider's item. Render thread.</summary>
@@ -1168,12 +1226,13 @@ public sealed partial class RenderWorld : IDisposable
             {
                 MeshPlacement? source = index < Capacity && Alive[index] && Mesh[index]?.Placement is { } placed
                     && (Skins(index, placed) || placed.BlendFrames.Length > 0) ? placed : null;
+                bool keepsPose = source != null && Skins(index, source) && (Flags[index] & RenderableFlags.MotionVectors) != 0;
                 if (source != null)
                 {
                     ActiveFrames[index] = PickFrames(source, ShapeWeights[index]);
                     DeformStale[index] = true;
                 }
-                if (source != null && source == _deformSource[index])
+                if (source != null && source == _deformSource[index] && keepsPose == (Deformed[index]!.SecondPositions != MeshPlacement.None))
                 {
                     if (BoundsOverride[index] == null)
                         ReportBounds(index);
@@ -1186,11 +1245,17 @@ public sealed partial class RenderWorld : IDisposable
                     _deformSource[index] = null;
                     Deforming.Remove(index);
                     ChangedDraw(index);
+                    if (index < Capacity && Alive[index])
+                    {
+                        (_attributes[index].CurrentPositions, _attributes[index].PreviousPositions) = (0, 0);
+                        Attributes.Set((uint)index, _attributes[index]);
+                    }
                 }
                 if (source == null)
                     continue;
 
-                MeshPlacement copy = geometry.PlaceCopy(Mesh[index]!, source);
+                MeshPlacement copy = geometry.PlaceCopy(Mesh[index]!, source, keepsPose);
+                (_secondCurrent[index], _hasPose[index]) = (false, false);
                 Deformed[index] = copy;
                 _deformSource[index] = source;
                 DeformStale[index] = true;
@@ -1539,6 +1604,11 @@ public sealed partial class RenderWorld : IDisposable
             Array.Resize(ref Deformed, capacity);
             Array.Resize(ref DeformStale, capacity);
             Array.Resize(ref DeformSeen, capacity);
+            Array.Resize(ref DeformNow, capacity);
+            Array.Resize(ref PoseTarget, capacity);
+            Array.Resize(ref _secondCurrent, capacity);
+            Array.Resize(ref _hasPose, capacity);
+            Array.Resize(ref _seenLastFrame, capacity);
             Array.Resize(ref ShapeWeights, capacity);
             int oldFrames = ActiveFrames.Length;
             Array.Resize(ref ActiveFrames, capacity);

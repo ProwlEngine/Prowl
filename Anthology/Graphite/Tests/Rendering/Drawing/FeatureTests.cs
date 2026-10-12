@@ -842,6 +842,89 @@ public sealed class FeatureTests : IDisposable
         Assert.Null(frame.Tangents);
     }
 
+    private RenderableHandle AddSkinned(bool motionVectors, uint layer = ~0u)
+    {
+        RenderableFlags flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows | (motionVectors ? RenderableFlags.MotionVectors : 0);
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = SkinnedQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), Flags = flags, LayerMask = layer }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-16), new Float3(16)));
+        _world.SetBones(handle, [Float4x4.Identity]);
+        return handle;
+    }
+
+    [Fact]
+    public void SkinnedMotion_FollowsTheBones_AndStopsWhenTheyDo()
+    {
+        ShowingMotion();
+        RenderableHandle handle = AddSkinned(motionVectors: true);
+        Frame(View());
+
+        // A unit up is an eighth of the view down the image in uv, as for a moving object
+        _world.SetBones(handle, [Translation(0, 1, 0)]);
+        AssertAll(new Float3(0, -0.125f, 0), Frame(View()), i => i / Size >= 2);
+        AssertAll(new Float3(0, 0, 0), Frame(View()), i => i / Size >= 2);
+        _world.SetBones(handle, [Translation(0, 2, 0)]);
+        AssertAll(new Float3(0, -0.125f, 0), Frame(View()), i => i / Size >= 4);
+    }
+
+    [Fact]
+    public void SkinnedMotion_AddsToTheObjectsOwnMotion()
+    {
+        ShowingMotion();
+        RenderableHandle handle = AddSkinned(motionVectors: true);
+        Frame(View());
+        _world.SetBones(handle, [Translation(0, 1, 0)]);
+        _world.SetTransform(handle, Double4x4.CreateTranslation(new Double3(0, 1, 10)));
+        AssertAll(new Float3(0, -0.25f, 0), Frame(View()), i => i / Size >= 4);
+    }
+
+    [Fact]
+    public void SkinnedMotion_IsLeftOutWithoutTheFlag()
+    {
+        ShowingMotion();
+        RenderableHandle handle = AddSkinned(motionVectors: false);
+        Frame(View());
+        _world.SetBones(handle, [Translation(0, 1, 0)]);
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
+    [Fact]
+    public void SkinnedMotion_StartsAtNothingWhenNoViewSawTheLastPose()
+    {
+        ShowingMotion();
+        RenderableHandle handle = AddSkinned(motionVectors: true);
+        ViewDesc view = View();
+        view.CullingMask = 1;
+        Frame(view);
+        _world.SetLayerMask(handle, 2);
+        _world.SetBones(handle, [Translation(0, 1, 0)]);
+        Frame(view);
+
+        _world.SetLayerMask(handle, ~0u);
+        _world.SetBones(handle, [Translation(0, 2, 0)]);
+        AssertAll(new Float3(0, 0, 0), Frame(view));
+    }
+
+    [Fact]
+    public void MorphedMotion_IsRigidOnly()
+    {
+        ShowingMotion();
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        BlendShapeFrame up = new() { Weight = 100, Vertices = [0, 1, 2, 3, 4, 5], Positions = [.. Enumerable.Repeat(new Float3(0, 1, 0), 6)] };
+        GpuMesh mesh = _renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 6,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
+            Indices = new uint[] { 0, 1, 2, 3, 4, 5 },
+            BlendShapes = [new BlendShapeData { Name = "Up", Frames = [up] }],
+        });
+        _owned.Add(mesh);
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), Flags = RenderableFlags.MotionVectors }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-16), new Float3(16)));
+        Frame(View());
+        _world.SetBlendShapeWeights(handle, [100]);
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
     [Fact]
     public void Skinning_WithoutBounds_CullsByTheRestPoseAndSaysSoOnce()
     {

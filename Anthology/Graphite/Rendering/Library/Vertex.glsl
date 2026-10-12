@@ -98,17 +98,23 @@ void Graphite_BeginVertex()
     graphite_Draw = graphite_DrawRecords[graphite_Push.drawRecordBase + uint(gl_DrawID)];
     graphite_Chunk = graphite_Chunks[graphite_Draw.chunk];
     graphite_Object = (graphite_Draw.flags & 1u) != 0u ? graphite_Draw.object : graphite_Instances[graphite_Push.instanceBase + uint(gl_InstanceIndex)];
+    uint currentPositions = graphite_Objects[graphite_Object].currentPositions;
+    if (currentPositions != 0u)
+        graphite_Chunk.streamOffsets[0] = currentPositions - 1u;
     graphite_ObjectIndex = graphite_Object;
     graphite_MaterialSlot = (graphite_Draw.flags & 2u) != 0u ? graphite_Draw.subMesh : graphite_MaterialSlots[graphite_Objects[graphite_Object].materialSliceBase + graphite_Draw.subMesh];
 }
 
 void graphite_ShaderMain();
 
-// The vertex's clip position now and last frame, for the forward pass's motion vectors
+// The vertex's clip position now and last frame, for the forward pass's motion vectors, from last frame's pose when skinned
 void Graphite_EndVertex()
 {
     graphite_MotionCurrent = gl_Position;
-    graphite_MotionPrevious = Graphite_PreviousObjectToClip(vertexPosition);
+    uint previous = Graphite_Object().previousPositions;
+    uint at = previous - 1u + uint(gl_VertexIndex) * 3u;
+    vec3 position = previous == 0u ? vertexPosition : uintBitsToFloat(uvec3(graphite_Words[at], graphite_Words[at + 1u], graphite_Words[at + 2u]));
+    graphite_MotionPrevious = Graphite_PreviousObjectToClip(position);
 }
 
 void main()

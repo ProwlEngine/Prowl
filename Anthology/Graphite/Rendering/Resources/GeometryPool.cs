@@ -77,6 +77,11 @@ internal readonly record struct BlendFrame(float Weight, uint Count, uint Vertic
 /// <summary>Where a mesh's data lives: its page, its ranges, each present stream's first word, and its chunk records.</summary>
 internal sealed class MeshPlacement
 {
+    public const uint None = uint.MaxValue;
+
+    /// <summary>The first word of a copy's second range of positions, which takes turns with its own, or none.</summary>
+    public uint SecondPositions = None;
+
     /// <summary>The mesh's blend shape frames, after its streams, and each shape's first frame and count. Copies have none.</summary>
     public BlendFrame[] BlendFrames = [];
     public (int First, int Count)[] BlendShapes = [];
@@ -243,11 +248,12 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
 
     /// <summary>
     /// Room for a copy of a placed mesh's streams and indices, with chunk records of its own naming the mesh, for a
-    /// renderable that deforms it. Its data is copied on the GPU by whoever asked. Render thread.
+    /// renderable that deforms it, and a second range of positions when it keeps last frame's pose. Its data is copied
+    /// on the GPU by whoever asked. Render thread.
     /// </summary>
-    public MeshPlacement PlaceCopy(GpuMesh mesh, MeshPlacement source)
+    public MeshPlacement PlaceCopy(GpuMesh mesh, MeshPlacement source, bool secondPositions)
     {
-        MeshPlacement copy = Place(source.StreamsPresent, source.VertexCount, source.Indices.Size, source.Chunks, source.SubMeshes, source.Bounds, []);
+        MeshPlacement copy = Place(source.StreamsPresent, source.VertexCount, source.Indices.Size, source.Chunks, source.SubMeshes, source.Bounds, [], secondPositions ? source.VertexCount * 3 : 0);
         WriteChunks(mesh.Id, copy);
         return copy;
     }
@@ -329,7 +335,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
     private static uint StreamWords(uint streamsPresent, int stream, uint vertexCount)
         => (streamsPresent & (1u << stream)) != 0 ? MeshLayout.WordsPerVertex((VertexSemantic)stream) * vertexCount : 0;
 
-    private MeshPlacement Place(uint streamsPresent, uint vertexCount, uint indexCount, MeshChunk[] chunks, SubMesh[] subMeshes, AABB bounds, BlendFrameLayout[] blendFrames)
+    private MeshPlacement Place(uint streamsPresent, uint vertexCount, uint indexCount, MeshChunk[] chunks, SubMesh[] subMeshes, AABB bounds, BlendFrameLayout[] blendFrames, uint secondPositions = 0)
     {
         uint vertexWords = 0;
         for (int s = 0; s < MeshLayout.StreamCount; s++)
@@ -339,6 +345,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
         }
         foreach (BlendFrameLayout frame in blendFrames)
             vertexWords += frame.Words;
+        vertexWords += secondPositions;
 
         indexCount = Math.Max(1, indexCount);
         int pageIndex = -1;
@@ -379,6 +386,8 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             cursor += StreamWords(streamsPresent, s, vertexCount);
         }
 
+        uint second = secondPositions > 0 ? cursor : MeshPlacement.None;
+        cursor += secondPositions;
         BlendFrame[] placedFrames = new BlendFrame[blendFrames.Length];
         for (int f = 0; f < blendFrames.Length; f++)
         {
@@ -408,6 +417,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             Chunks = chunks,
             SubMeshes = subMeshes,
             BlendFrames = placedFrames,
+            SecondPositions = second,
         };
     }
 

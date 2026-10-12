@@ -29,6 +29,7 @@ internal sealed class Uploader : IDisposable
     {
         public required DeviceBuffer Buffer;
         public readonly List<Item> Items = new();
+        public int Epoch;
     }
 
     private sealed class SlotBuffers
@@ -47,6 +48,7 @@ internal sealed class Uploader : IDisposable
     private uint[] _words = new uint[1 << 16];
     private uint _wordCount;
     private int _itemCount;
+    private int _epoch;
 
     public Uploader(GraphicsDevice device, ComputeProgram scatter)
     {
@@ -70,6 +72,7 @@ internal sealed class Uploader : IDisposable
         {
             target = _spare.Count > 0 ? _spare.Pop() : new Destination { Buffer = destination };
             target.Buffer = destination;
+            target.Epoch = _epoch;
             _destinations[destination] = target;
             _order.Add(target);
         }
@@ -84,6 +87,18 @@ internal sealed class Uploader : IDisposable
         }
 
         _wordCount += (uint)words.Length;
+    }
+
+    /// <summary>
+    /// Orders the writes queued from here after the ones before, so a word written on both sides ends as the later
+    /// write. Writes between two fences land in any order.
+    /// </summary>
+    public void Fence()
+    {
+        if (_destinations.Count == 0)
+            return;
+        _destinations.Clear();
+        _epoch++;
     }
 
     /// <summary>Queues a value, its size a multiple of 4 bytes.</summary>
@@ -121,8 +136,14 @@ internal sealed class Uploader : IDisposable
         _properties.SetBuffer("Source", slot.Source!);
 
         uint first = 0;
+        int epoch = _order[0].Epoch;
         foreach (Destination destination in _order)
         {
+            if (destination.Epoch != epoch)
+            {
+                cmd.ComputeBarrier();
+                epoch = destination.Epoch;
+            }
             _properties.SetBuffer("Destination", destination.Buffer);
             cmd.SetProperties(_properties);
             uint remaining = (uint)destination.Items.Count;
@@ -152,6 +173,7 @@ internal sealed class Uploader : IDisposable
         _destinations.Clear();
         _wordCount = 0;
         _itemCount = 0;
+        _epoch = 0;
     }
 
     public void Dispose()
