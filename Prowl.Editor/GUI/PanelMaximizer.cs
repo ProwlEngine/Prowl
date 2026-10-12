@@ -44,9 +44,6 @@ internal sealed class PanelMaximizer
     // A toggle asked for by RequestToggle, applied before the next draw.
     private DockPanel? _requested;
 
-    // Counts maximizes, so a caller holding one's token can tell whether it is still the one showing.
-    private int _generation;
-
     public PanelMaximizer(DockSpace dock) => _dock = dock;
 
     /// <summary>The panel currently filling the dock area, or null.</summary>
@@ -100,14 +97,13 @@ internal sealed class PanelMaximizer
 
     /// <summary>
     /// Fill the dock area with <paramref name="panel"/>. Only panels docked in the main layout can be
-    /// maximized; returns 0 for anything else (a floating window's panel, or one not open at all).
-    /// Otherwise returns a token for <see cref="Restore(int)"/>.
+    /// maximized; returns false for anything else (a floating window's panel, or one not open at all).
     /// </summary>
-    public int Maximize(DockPanel panel)
+    public bool Maximize(DockPanel panel)
     {
         Restore();
         DockNode? host = FindLeaf(_dock.Root, panel);
-        if (host == null) return 0;
+        if (host == null) return false;
 
         // The panel is what the user is looking at, so it is the one in front when the layout comes back.
         host.ActiveTabIndex = host.Tabs!.IndexOf(panel);
@@ -116,16 +112,7 @@ internal sealed class PanelMaximizer
         _layout = _dock.Root;
         _view = new StandIn(host, panel);
         _dock.Root = _view;
-        return ++_generation;
-    }
-
-    /// <summary>
-    /// Put the docked layout back only if the maximize <paramref name="token"/> came from is still showing,
-    /// so a caller undoing its own maximize leaves alone one the user has ended or replaced since.
-    /// </summary>
-    public void Restore(int token)
-    {
-        if (token != 0 && token == _generation) Restore();
+        return true;
     }
 
     /// <summary>

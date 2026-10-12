@@ -47,7 +47,6 @@
   "game.resolution": "해상도",
   "game.show_stats": "통계 표시",
   "game.maximize_on_play": "플레이 시 최대화",
-  "game.restore_layout": "레이아웃 복원",
 
   "dialog.delete_assets": "에셋 삭제",
   "dialog.unsaved_prefab": "저장되지 않은 Prefab 변경 사항",
