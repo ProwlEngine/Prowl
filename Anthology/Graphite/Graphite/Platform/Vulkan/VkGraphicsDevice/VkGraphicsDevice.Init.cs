@@ -241,6 +241,7 @@ internal unsafe partial class VkGraphicsDevice
         HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
 
         bool hasMaintenance1 = false;
+        bool pipelineStatistics = false;
         IntPtr[] activeExtensions = new IntPtr[props.Length];
         uint activeExtensionCount = 0;
 
@@ -262,6 +263,11 @@ internal unsafe partial class VkGraphicsDevice
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
                     hasMaintenance1 = true;
+                }
+                else if (extensionName == "VK_KHR_pipeline_executable_properties" && Environment.GetEnvironmentVariable("GRAPHITE_SHADER_STATS") == "1")
+                {
+                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
+                    pipelineStatistics = true;
                 }
                 else if (extensionName == "VK_EXT_memory_budget")
                 {
@@ -332,6 +338,10 @@ internal unsafe partial class VkGraphicsDevice
             Multiview = supported11.Multiview,
         };
 
+        PhysicalDevicePipelineExecutablePropertiesFeaturesKHR statisticsFeatures = new(sType: StructureType.PhysicalDevicePipelineExecutablePropertiesFeaturesKhr) { PipelineExecutableInfo = true };
+        if (pipelineStatistics)
+            vulkan12Features.PNext = &statisticsFeatures;
+
         DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan11Features);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
@@ -364,6 +374,8 @@ internal unsafe partial class VkGraphicsDevice
 
         Vk.TryGetInstanceExtension(Instance, out KhrSurface);
         Vk.TryGetDeviceExtension(Instance, Device, out KhrSwapchain);
+        if (pipelineStatistics && Vk.TryGetDeviceExtension(Instance, Device, out KhrPipelineExecutableProperties statistics))
+            PipelineStatistics = statistics;
 
         PhysicalDeviceVulkan12Properties driverProps = new(sType: StructureType.PhysicalDeviceVulkan12Properties);
         PhysicalDeviceProperties2 deviceProps = new(sType: StructureType.PhysicalDeviceProperties2, pNext: &driverProps);

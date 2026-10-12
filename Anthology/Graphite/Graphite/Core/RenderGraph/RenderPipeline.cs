@@ -105,9 +105,11 @@ public class RenderPipeline : IDisposable
                     context.SetCurrentPass(passInfo, node.Accesses, node.Pass.Name);
                     context.TransitionForAccesses(node.Accesses);
                     passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
+                    passCommands.PushDebugGroup(node.Pass.Name);
                     context.BindDeclaredTarget(passCommands, node.Accesses);
                     long recordStart = Stopwatch.GetTimestamp();
                     node.Pass.Render(context, passCommands);
+                    passCommands.PopDebugGroup();
                     PassStats stats = passCommands.Stats;
                     submitted = true;
                     context.EndCommandBuffer(passCommands);

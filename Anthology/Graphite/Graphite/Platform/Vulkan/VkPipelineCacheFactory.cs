@@ -280,7 +280,10 @@ internal static unsafe class VkPipelineCacheFactory
 
         pipelineCI.RenderPass = renderPass;
 
+        if (gd.PipelineStatistics != null)
+            pipelineCI.Flags |= PipelineCreateFlags.PipelineCreateCaptureStatisticsBitKhr;
         gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline).CheckResult();
+        gd.PrintPipelineStatistics(pipeline, program.Name ?? "");
 
         return new VkPipelineCacheEntry(
             pipeline,

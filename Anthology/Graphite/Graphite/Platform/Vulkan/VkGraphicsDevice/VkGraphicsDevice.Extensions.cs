@@ -10,6 +10,9 @@ internal unsafe partial class VkGraphicsDevice
     internal KhrSwapchain KhrSwapchain;
     internal ExtDebugUtils? DebugUtils;
 
+    /// <summary>Set when GRAPHITE_SHADER_STATS is 1 and the driver reports pipeline statistics, which are then printed per pipeline.</summary>
+    internal KhrPipelineExecutableProperties? PipelineStatistics;
+
     private bool _memoryBudgetSupported;
 
     public ExtensionProperties[] GetDeviceExtensionProperties()
