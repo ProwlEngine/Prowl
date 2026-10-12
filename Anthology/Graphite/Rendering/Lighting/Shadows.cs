@@ -28,11 +28,8 @@ public enum ShadowFilter : byte
 /// <summary>How a world's local light shadows are stored and sized. Host thread, read at SubmitFrame.</summary>
 public sealed class ShadowSettings
 {
-    /// <summary>The size of each square page local light tiles live in.</summary>
-    public int PageSize = 4096;
-
-    /// <summary>Bytes of pages the world may hold.</summary>
-    public long Budget = 512L << 20;
+    /// <summary>The size of the two square pages local light tiles live in, one for live tiles and one for static copies.</summary>
+    public int PageSize = 8192;
 
     /// <summary>Shadow map texels per screen pixel a light covers, before rounding to a power of two.</summary>
     public float TexelsPerPixel = 1;
@@ -323,6 +320,82 @@ internal sealed class ShadowTarget(RenderTexture texture, string name, GraphicsP
     }
 }
 
+/// <summary>
+/// Shrinks tiles without drawing them again: each page's shrinking tiles blitted at their new size into a scratch page in
+/// one command, each texel the nearest old one so depths never blend, which is what drawing at the smaller size gives.
+/// </summary>
+internal sealed class ShadowShrinkPass : IPass
+{
+    public static readonly RenderResourceID ScratchId = RenderResourceID.Intern("Graphite.ShadowScratch");
+
+    public readonly List<(ShadowPage Page, ShadowTile From, ShadowTile Scratch, ShadowTile To)> Shrinks = new();
+    public ShadowPage[] Pages = [];
+    public RenderTexture? Scratch;
+    private readonly List<TextureBlit> _blits = new();
+
+    public string Name => "Graphite.ShadowShrink";
+
+    /// <summary>The pages read this frame.</summary>
+    public void Collect()
+    {
+        HashSet<ShadowPage> pages = new();
+        foreach ((ShadowPage page, _, _, _) in Shrinks)
+            pages.Add(page);
+        Pages = [.. pages];
+    }
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        foreach (ShadowPage page in Pages)
+            builder.DeclareImportedTexture(page.Target.Id, page.Texture, TextureState.TransferDst, TextureState.TransferSrc);
+        builder.DeclareImportedTexture(ScratchId, Scratch!, TextureState.TransferDst, TextureState.TransferDst);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        foreach (ShadowPage page in Pages)
+        {
+            _blits.Clear();
+            foreach ((ShadowPage from, ShadowTile tile, ShadowTile scratch, _) in Shrinks)
+            {
+                if (from == page)
+                    _blits.Add(new TextureBlit((uint)tile.X, (uint)tile.Y, (uint)tile.Size, (uint)tile.Size, (uint)scratch.X, (uint)scratch.Y, (uint)scratch.Size, (uint)scratch.Size));
+            }
+            cmd.BlitTexture(page.Texture.DepthTexture!, Scratch!.DepthTexture!, CollectionsMarshal.AsSpan(_blits));
+        }
+    }
+}
+
+/// <summary>Blits shrunk tiles from the scratch page into their new places, before any page draws.</summary>
+internal sealed class ShadowShrinkCopyPass : IPass
+{
+    public ShadowShrinkPass? From;
+    private readonly List<TextureBlit> _blits = new();
+
+    public string Name => "Graphite.ShadowShrinkCopies";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        builder.DeclareInputTexture(ShadowShrinkPass.ScratchId, TextureState.TransferSrc, TextureState.TransferSrc);
+        foreach (ShadowPage page in From!.Pages)
+            builder.DeclareImportedTexture(page.Target.Id, page.Texture, TextureState.TransferDst, TextureState.TransferDst);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        foreach (ShadowPage page in From!.Pages)
+        {
+            _blits.Clear();
+            foreach ((ShadowPage to, _, ShadowTile scratch, ShadowTile tile) in From.Shrinks)
+            {
+                if (to == page)
+                    _blits.Add(new TextureBlit((uint)scratch.X, (uint)scratch.Y, (uint)scratch.Size, (uint)scratch.Size, (uint)tile.X, (uint)tile.Y, (uint)tile.Size, (uint)tile.Size));
+            }
+            cmd.BlitTexture(From.Scratch!.DepthTexture!, page.Texture.DepthTexture!, CollectionsMarshal.AsSpan(_blits));
+        }
+    }
+}
+
 /// <summary>Copies static only tiles into their lights' live tiles, after the static pages draw and before the live ones.</summary>
 internal sealed class ShadowCopyPass : IPass
 {
@@ -580,21 +653,27 @@ internal sealed class ShadowPlanner
     /// <summary>Wanted and desired sizes and targets for a frame, the plans sorted most important first, fitted to a capacity in texels.</summary>
     public void Plan(List<ShadowPlan> plans, long capacity, int minTile)
     {
+        foreach (ShadowPlan plan in plans)
+            plan.Wanted = Math.Clamp(plan.Wanted, minTile, plan.MaxTile);
+
+        // The scale first, so lights coming back into view after a while land on the sizes they hold rather than dropping
+        // to fit a scale that rose while they were away. With nothing to plan it stays where it is.
+        if (plans.Count > 0)
+            UpdateScale(plans, capacity, minTile);
         float scale = Scale;
         foreach (ShadowPlan plan in plans)
         {
-            plan.Wanted = Math.Clamp(plan.Wanted, minTile, plan.MaxTile);
             plan.Desired = Math.Clamp(plan.Wanted * scale, minTile, plan.MaxTile);
             plan.Target = Keep(plan.Desired, plan.Held, minTile, plan.MaxTile);
         }
         plans.Sort(static (a, b) => b.Priority != a.Priority ? b.Priority.CompareTo(a.Priority) : a.Light.CompareTo(b.Light));
         Fit(plans, capacity, minTile);
-        UpdateScale(plans, capacity, minTile);
     }
 
-    private static long Texels(ShadowPlan plan) => (long)plan.Faces * (plan.Split ? 2 : 1) * plan.Target * plan.Target;
+    // Live tiles only, static copies have pages of their own
+    private static long Texels(ShadowPlan plan) => (long)plan.Faces * plan.Target * plan.Target;
 
-    // Sizes held above what is wanted give way first, then static copies, then the least important lights halve, then they drop
+    // Sizes held above what is wanted give way first, then the least important lights halve, then they drop
     private static void Fit(List<ShadowPlan> plans, long capacity, int minTile)
     {
         long sum = 0;
@@ -611,16 +690,6 @@ internal sealed class ShadowPlanner
                 continue;
             sum -= Texels(plan);
             plan.Target = rounded;
-            sum += Texels(plan);
-        }
-
-        for (int i = plans.Count - 1; i >= 0 && sum > capacity; i--)
-        {
-            ShadowPlan plan = plans[i];
-            if (!plan.Split)
-                continue;
-            sum -= Texels(plan);
-            plan.Split = false;
             sum += Texels(plan);
         }
 
@@ -656,7 +725,7 @@ internal sealed class ShadowPlanner
             foreach (ShadowPlan plan in plans)
             {
                 int t = RoundPow2(Math.Clamp(plan.Wanted * scale, minTile, plan.MaxTile), minTile, plan.MaxTile);
-                sum += (long)plan.Faces * (plan.Split ? 2 : 1) * t * t;
+                sum += (long)plan.Faces * t * t;
             }
             return sum;
         }
@@ -709,9 +778,6 @@ internal sealed class WorldShadows(GraphicsDevice device) : IDisposable
 
     /// <summary>The world's keywords the cached shadows were drawn with.</summary>
     public IReadOnlyDictionary<string, string>? Keywords;
-
-    /// <summary>Whether static copies were given up this frame for live tiles, so none are made again until the next.</summary>
-    public bool StaticsDropped;
 
     public void Dispose()
     {
@@ -873,10 +939,15 @@ internal sealed partial class FramePipeline
 
     /// <summary>Multi draw calls the shadow views drawn in the last frame made, for tests.</summary>
     internal int ShadowCallsDrawn { get; private set; }
+
+    /// <summary>Lights given tiles this frame that held none, and lights whose tiles grew or shrank.</summary>
+    internal int ShadowsAdded { get; private set; }
+    internal int ShadowsGrown { get; private set; }
+    internal int ShadowsShrunk { get; private set; }
+    private static readonly bool TEMP_ShrinkByRedraw = Environment.GetEnvironmentVariable("GRAPHITE_SHRINK_REDRAW") == "1";
     internal int ShadowCopiesMade => _shadowCopies.Copies.Count;
     private GraphicsProgram? _tileClear;
     private readonly List<ShadowPlan> _shadowPlans = new(), _shadowPlanPool = new(), _shadowQueue = new();
-    private readonly HashSet<ShadowPage> _drainedPages = new();
     private readonly List<(int Index, LightShadow Light, float Key)> _shadowDraws = new();
 
     // Cameras faces draw with, rented for a frame each, and one that asks providers about cached faces
@@ -888,6 +959,20 @@ internal sealed partial class FramePipeline
     private readonly List<(CullFrustum Frustum, ViewLayer Layer, uint PixelHeight)> _shadowViewers = new();
     private readonly ShadowPage?[] _resizePages = new ShadowPage?[6], _probePages = new ShadowPage?[6];
     private readonly ShadowTile[] _resizeTiles = new ShadowTile[6], _probeTiles = new ShadowTile[6];
+    private readonly ShadowPage?[] _oldPages = new ShadowPage?[6];
+    private readonly ShadowTile[] _oldTiles = new ShadowTile[6];
+    private readonly ShadowShrinkPass _shrinks = new();
+    private readonly ShadowShrinkCopyPass _shrinkCopies = new();
+
+    // The scratch page shrinks are read down into, half the page, made on first use, its tiles packed again each frame, and
+    // the tiles a shrinking light holds in it this frame, live then static
+    private RenderTexture? _shrinkScratch;
+    private ShadowTileAllocator? _scratchTiles;
+    private readonly ShadowTile[] _scratchLive = new ShadowTile[6], _scratchStatic = new ShadowTile[6];
+    private bool? _blitShadows;
+
+    // Whether the device blits the shadow format, else shrinking lights draw again
+    private bool BlitShadows => _blitShadows ??= _device.SupportsBlit(ShadowFormat, depthFormat: true);
     private readonly List<IDisposable> _shadowRetired = new();
     private Sampler? _shadowSampler;
 
@@ -916,11 +1001,22 @@ internal sealed partial class FramePipeline
         _shadowTargets.Clear();
         ShadowViewsDrawn = 0;
         ShadowCallsDrawn = 0;
+        ShadowsAdded = ShadowsGrown = ShadowsShrunk = 0;
         _staticShadowTargets.Clear();
         _liveShadowTargets.Clear();
         _shadowCopies.Copies.Clear();
+        _shrinks.Shrinks.Clear();
+        _scratchTiles?.Reset(_scratchTiles.Size);
         foreach (WorldFrame world in _frameWorlds)
             PrepareLocalShadows(world);
+        if (_shrinks.Shrinks.Count > 0)
+        {
+            _shrinks.Scratch = _shrinkScratch;
+            _shrinks.Collect();
+            _shrinkCopies.From = _shrinks;
+            _shadowTargets.Add(_shrinks);
+            _shadowTargets.Add(_shrinkCopies);
+        }
         foreach (ShadowPage page in _staticShadowTargets)
             _shadowTargets.Add(page.Target);
         if (_staticShadowTargets.Count > 0)
@@ -941,7 +1037,7 @@ internal sealed partial class FramePipeline
             }
         }
 
-        if (!CollectionsMarshal.AsSpan(_shadowTargets).SequenceEqual(_builtShadowTargets))
+        if (_shrinks.Shrinks.Count > 0 || !CollectionsMarshal.AsSpan(_shadowTargets).SequenceEqual(_builtShadowTargets))
         {
             _builtShadowTargets = [.. _shadowTargets];
             _shadowCopies.Sources = [.. _staticShadowTargets];
@@ -985,7 +1081,6 @@ internal sealed partial class FramePipeline
         foreach (ShadowPage page in shadows.StaticPages)
             page.Target.Draws.Clear();
 
-        shadows.StaticsDropped = false;
         InvalidateShadows(world, shadows, lighting);
         IReadOnlyDictionary<string, string> keywords = world.World.Globals.KeywordSnapshot;
         if (!ReferenceEquals(shadows.Keywords, keywords))
@@ -1057,9 +1152,9 @@ internal sealed partial class FramePipeline
         List<int>? gone = null;
         foreach ((int index, LightShadow light) in shadows.Lights)
         {
-            // A light no view sees keeps its tiles a few frames, so panning past it does not draw it over
+            // A light no view sees keeps its tiles until the page needs the room, so turning back to it draws nothing
             bool casts = lighting.IsAlive(index) && lighting.Light(index).Shadow.Enabled && lighting.Light(index).Type is LightType.Spot or LightType.Point;
-            if (!light.Seen && (!casts || _frame - light.LastSeen > StaleViewFrames))
+            if (!light.Seen && !casts)
                 (gone ??= new()).Add(index);
         }
         foreach (int index in gone ?? [])
@@ -1068,15 +1163,12 @@ internal sealed partial class FramePipeline
             shadows.Lights.Remove(index);
         }
 
-        int maxPages = MaxPages(settings, pageSize);
-        long capacity = (long)((double)maxPages * pageSize * pageSize * ShadowPlanner.FitHeadroom);
-        shadows.Planner.Plan(_shadowPlans, capacity, minTile);
+        shadows.Planner.Plan(_shadowPlans, (long)((double)pageSize * pageSize * ShadowPlanner.FitHeadroom), minTile);
 
         // Tiles in order of importance. A light that draws anyway changes size freely, one that would only sharpen or soften waits for the budget.
         int resizes = Math.Max(settings.MaxResizesPerFrame, 0);
         _shadowQueue.Clear();
         _shadowQueue.AddRange(_shadowPlans);
-        _drainedPages.Clear();
         for (int q = 0; q < _shadowQueue.Count; q++)
         {
             ShadowPlan plan = _shadowQueue[q];
@@ -1100,16 +1192,27 @@ internal sealed partial class FramePipeline
             bool mandatory = !light.HasTiles || light.Dirty || light.StaticDirty;
             if (!mandatory)
             {
-                // Only sharpening or softening, paced by the budget, which a light may finish even when it has fewer faces left
-                // than it needs. The new size goes where it fits as things are or in the light's own old space, and the
-                // old tiles stay just where they were when it does not fit either way.
-                if (resizes <= 0)
+                // Only sharpening or softening. Sharpening draws again so it is paced by the budget, which a light may
+                // finish even when it has fewer faces left than it needs; softening reads the old tiles down and is free.
+                // The new size goes where it fits as things are or in the light's own old space, and the old tiles stay
+                // just where they were when it does not fit either way.
+                bool shrink = plan.Target < light.Size && BlitShadows && !TEMP_ShrinkByRedraw;
+                bool TEMP_redrawShrink = plan.Target < light.Size && !shrink;
+                if (!shrink && !TEMP_redrawShrink && resizes <= 0)
                     continue;
-                if (!AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, maxPages, _resizePages, _resizeTiles, isStatic: false))
+                if (shrink && !ReserveScratch(light, plan.Target, pageSize))
+                    continue;
+                Array.Copy(light.Pages, _oldPages, light.Faces);
+                Array.Copy(light.Tiles, _oldTiles, light.Faces);
+                bool oldFreed = false;
+                bool fits = AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, _resizePages, _resizeTiles, isStatic: false);
+                while (!fits && EvictUnseen(shadows))
+                    fits = AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, _resizePages, _resizeTiles, isStatic: false);
+                if (!fits)
                 {
                     for (int f = 0; f < light.Faces; f++)
                         light.Pages[f]!.Tiles.Free(light.Tiles[f]);
-                    bool placed = AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, maxPages, _resizePages, _resizeTiles, isStatic: false);
+                    bool placed = AllocateFaces(shadows.Pages, shadows, light.Faces, plan.Target, pageSize, _resizePages, _resizeTiles, isStatic: false);
                     for (int f = 0; f < light.Faces; f++)
                     {
                         if (!placed)
@@ -1118,19 +1221,43 @@ internal sealed partial class FramePipeline
                             light.Pages[f] = null;
                     }
                     if (!placed)
+                    {
+                        if (shrink)
+                            ReleaseScratch(light);
                         continue;
+                    }
+                    oldFreed = true;
                 }
-                resizes -= light.Faces;
+                if (shrink)
+                {
+                    Shrink(shadows, light, plan.Target, pageSize, oldFreed);
+                    ShadowsShrunk++;
+                    continue;
+                }
+                if (!TEMP_redrawShrink)
+                    resizes -= light.Faces;
+                if (TEMP_redrawShrink)
+                    ShadowsShrunk++;
+                else
+                    ShadowsGrown++;
                 ReleaseShadow(shadows, plan.Light, light, keepState: true);
                 Array.Copy(_resizePages, light.Pages, light.Faces);
                 Array.Copy(_resizeTiles, light.Tiles, light.Faces);
                 light.Size = plan.Target;
                 continue;
             }
+            int had = light.HasTiles ? light.Size : 0;
             if (light.HasTiles)
                 ReleaseShadow(shadows, plan.Light, light, keepState: true);
-            if (PlaceLight(shadows, light, plan.Target, pageSize, maxPages))
-                light.Size = plan.Target;
+            if (!PlaceLight(shadows, light, plan.Target, pageSize))
+                continue;
+            light.Size = plan.Target;
+            if (had == 0)
+                ShadowsAdded++;
+            else if (plan.Target > had)
+                ShadowsGrown++;
+            else
+                ShadowsShrunk++;
         }
 
         bool providers = CastingProviders(world);
@@ -1149,8 +1276,8 @@ internal sealed partial class FramePipeline
                 light.StaticDirty = true;
 
             // Moving casters reaching a light that held only static ones decide again whether it splits
-            bool retry = light.SplitDenied && StaticRoom(shadows, light, maxPages);
-            if ((light.MovingChanged || retry) && !light.Split && light.SplitAllowed && !shadows.StaticsDropped && light.Statics > 0)
+            bool retry = light.SplitDenied && StaticRoom(shadows, light);
+            if ((light.MovingChanged || retry) && !light.Split && light.SplitAllowed && light.Statics > 0)
                 light.StaticDirty = true;
             if (light.Dirty || light.StaticDirty)
                 _shadowDraws.Add((index, light, light.Priority * (1 + light.Waited)));
@@ -1170,7 +1297,7 @@ internal sealed partial class FramePipeline
             }
             light.Waited = 0;
             light.Drawn = true;
-            RedrawShadow(world, shadows, lighting.Light(index), light, pageSize, maxPages);
+            RedrawShadow(world, shadows, lighting.Light(index), light, pageSize);
         }
 
         foreach ((int index, LightShadow light) in shadows.Lights)
@@ -1202,6 +1329,8 @@ internal sealed partial class FramePipeline
 
         RetirePages(shadows.Pages, all: false);
         RetirePages(shadows.StaticPages, all: false);
+        world.World.LiveShadowAtlas = shadows.Pages.Count > 0 ? shadows.Pages[0].Texture.DepthTexture : null;
+        world.World.StaticShadowAtlas = shadows.StaticPages.Count > 0 ? shadows.StaticPages[0].Texture.DepthTexture : null;
         foreach (ShadowPage page in shadows.StaticPages)
             _staticShadowTargets.Add(page);
         foreach (ShadowPage page in shadows.Pages)
@@ -1212,6 +1341,8 @@ internal sealed partial class FramePipeline
     private void InvalidateShadows(WorldFrame world, WorldShadows shadows, WorldLighting lighting)
     {
         RenderWorld.RenderSide render = world.World.Render;
+        if (render.ShadowChanges.Count == 0 && ChangedMaterials.Count == 0)
+            return;
         shadows.Grid.Clear();
         foreach ((int index, LightShadow light) in shadows.Lights)
         {
@@ -1254,22 +1385,14 @@ internal sealed partial class FramePipeline
         }
     }
 
-    // A light's faces into the pages. When they do not fit, lights no view sees give theirs back oldest first, then static
-    // copies go, then the emptiest page is emptied and its lights packed again, until it fits or nothing is left to free.
-    private bool PlaceLight(WorldShadows shadows, LightShadow light, int size, int pageSize, int maxPages)
+    // A light's faces into the page. When they do not fit, lights no view sees give theirs back oldest first until it fits.
+    private bool PlaceLight(WorldShadows shadows, LightShadow light, int size, int pageSize)
     {
-        bool Fits() => AllocateFaces(shadows.Pages, shadows, light.Faces, size, pageSize, maxPages, light.Pages, light.Tiles, isStatic: false);
+        bool Fits() => AllocateFaces(shadows.Pages, shadows, light.Faces, size, pageSize, light.Pages, light.Tiles, isStatic: false);
 
         if (Fits())
             return true;
         while (EvictUnseen(shadows))
-        {
-            if (Fits())
-                return true;
-        }
-        if (DropStaticCopies(shadows) && Fits())
-            return true;
-        while (DrainPage(shadows, light))
         {
             if (Fits())
                 return true;
@@ -1292,35 +1415,7 @@ internal sealed partial class FramePipeline
         return true;
     }
 
-    // Empties the emptiest page not emptied yet this frame, its lights queued to be placed again. Returns whether one was.
-    private bool DrainPage(WorldShadows shadows, LightShadow placing)
-    {
-        ShadowPage? emptiest = null;
-        foreach (ShadowPage page in shadows.Pages)
-        {
-            if (!_drainedPages.Contains(page) && (emptiest == null || page.Tiles.UsedTexels < emptiest.Tiles.UsedTexels))
-                emptiest = page;
-        }
-        if (emptiest == null)
-            return false;
-        _drainedPages.Add(emptiest);
-        foreach ((int index, LightShadow other) in shadows.Lights)
-        {
-            if (other == placing || Array.IndexOf(other.Pages, emptiest) < 0)
-                continue;
-            ReleaseShadow(shadows, index, other, keepState: true);
-            foreach (ShadowPlan plan in _shadowPlans)
-            {
-                if (plan.Light == index)
-                    _shadowQueue.Add(plan);
-            }
-        }
-        return true;
-    }
-
-    // A light's faces drawn again: static casters into the static copies when they changed, then the live tiles, either
-    // from the static copies with the moving casters over them or from every caster
-    private void RedrawShadow(WorldFrame world, WorldShadows shadows, in LightDesc desc, LightShadow light, int pageSize, int maxPages)
+    private void RedrawShadow(WorldFrame world, WorldShadows shadows, in LightDesc desc, LightShadow light, int pageSize)
     {
         if (light.StaticDirty)
         {
@@ -1334,8 +1429,8 @@ internal sealed partial class FramePipeline
             light.Statics = statics;
             light.Movings = moving;
             bool wants = statics > 0 && (moving > 0 || light.ProviderCasts);
-            bool split = wants && light.SplitAllowed && !shadows.StaticsDropped;
-            if (split && light.StaticPages[0] == null && !AllocateFaces(shadows.StaticPages, shadows, light.Faces, light.Size, pageSize, maxPages, light.StaticPages, light.StaticTiles, isStatic: true))
+            bool split = wants && light.SplitAllowed;
+            if (split && light.StaticPages[0] == null && !AllocateFaces(shadows.StaticPages, shadows, light.Faces, light.Size, pageSize, light.StaticPages, light.StaticTiles, isStatic: true))
                 split = false;
             light.SplitDenied = wants && !split;
             if (!split)
@@ -1421,10 +1516,10 @@ internal sealed partial class FramePipeline
     // Whether a light holds or would hold a static copy, by its last count of casters
     private static bool SplitCounted(LightShadow light) => light.Split || (light.Statics > 0 && (light.Movings > 0 || light.ProviderCasts));
 
-    // Whether a static copy of a light's size could be made now: a page to spare in the budget, or a static page with room
-    private bool StaticRoom(WorldShadows shadows, LightShadow light, int maxPages)
+    // Whether a static copy of a light's size could be made now: a static page to spare, or one with room
+    private bool StaticRoom(WorldShadows shadows, LightShadow light)
     {
-        if (shadows.Pages.Count + shadows.StaticPages.Count < maxPages)
+        if (shadows.StaticPages.Count == 0)
             return true;
 
         // Tried in the static pages and given straight back, so the answer is what allocating would really do
@@ -1473,26 +1568,6 @@ internal sealed partial class FramePipeline
         return true;
     }
 
-    // Gives back every static copy, the lights holding them drawing whole again. Returns whether any were dropped.
-    private bool DropStaticCopies(WorldShadows shadows)
-    {
-        bool dropped = false;
-        foreach (LightShadow light in shadows.Lights.Values)
-        {
-            if (light.StaticPages[0] == null)
-                continue;
-            ReleaseStatic(light);
-            light.Split = false;
-            light.Dirty = light.StaticDirty = true;
-            dropped = true;
-        }
-
-        // The emptied static pages go now, so live tiles get their room, and nothing splits again this frame
-        dropped |= RetirePages(shadows.StaticPages, all: true);
-        shadows.StaticsDropped |= dropped;
-        return dropped;
-    }
-
     // A face's view and projection: a spot's cone along its direction, or one of a point light's cube faces
     private static (Float4x4 View, Float4x4 Projection, float HalfAngle, float Near, float Far) FaceView(in LightDesc desc, int face)
     {
@@ -1518,14 +1593,8 @@ internal sealed partial class FramePipeline
         ? HashCode.Combine(desc.Type, desc.Position, desc.Range, desc.Shadow.Resolution)
         : HashCode.Combine(desc.Type, desc.Position, desc.Direction, desc.Up, desc.Range, desc.OuterAngle, desc.Shadow.Resolution);
 
-    private int MaxPages(ShadowSettings settings, int pageSize)
-    {
-        long pageBytes = (long)pageSize * pageSize * (ShadowFormat == PixelFormat.D16_UNorm ? 2 : 4);
-        return (int)Math.Max(1, settings.Budget / pageBytes);
-    }
-
-    // Every face a tile of one size, all or none, live and static pages sharing the budget
-    private bool AllocateFaces(List<ShadowPage> pages, WorldShadows shadows, int faces, int size, int pageSize, int maxPages, ShadowPage?[] pageOf, ShadowTile[] tileOf, bool isStatic)
+    // Every face a tile of one size, all or none. Live and static pages may each number as many pages as the budget holds
+    private bool AllocateFaces(List<ShadowPage> pages, WorldShadows shadows, int faces, int size, int pageSize, ShadowPage?[] pageOf, ShadowTile[] tileOf, bool isStatic)
     {
         for (int f = 0; f < faces; f++)
         {
@@ -1539,7 +1608,7 @@ internal sealed partial class FramePipeline
                     break;
                 }
             }
-            if (found == null && shadows.Pages.Count + shadows.StaticPages.Count < maxPages)
+            if (found == null && pages.Count == 0)
             {
                 RenderTexture texture = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription((uint)pageSize, (uint)pageSize, [], ShadowFormat));
                 texture.Name = isStatic ? "Graphite static shadow page" : "Graphite shadow page";
@@ -1562,6 +1631,70 @@ internal sealed partial class FramePipeline
             tileOf[f] = tile;
         }
         return true;
+    }
+
+    // Room in the scratch page for a light's faces at their new size, the static copy's as well when it keeps one
+    private bool ReserveScratch(LightShadow light, int size, int pageSize)
+    {
+        _scratchTiles ??= new ShadowTileAllocator(pageSize / 2);
+        _shrinkScratch ??= _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription((uint)(pageSize / 2), (uint)(pageSize / 2), [], ShadowFormat));
+        int faces = light.Faces;
+        int reserved = 0;
+        for (; reserved < faces * 2; reserved++)
+        {
+            bool live = reserved < faces;
+            if (!live && light.StaticPages[0] == null)
+                break;
+            ref ShadowTile tile = ref live ? ref _scratchLive[reserved] : ref _scratchStatic[reserved - faces];
+            if (!_scratchTiles.TryAllocate(size, out tile))
+            {
+                for (int r = 0; r < reserved; r++)
+                    _scratchTiles.Free(r < faces ? _scratchLive[r] : _scratchStatic[r - faces]);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void ReleaseScratch(LightShadow light)
+    {
+        for (int f = 0; f < light.Faces; f++)
+        {
+            _scratchTiles!.Free(_scratchLive[f]);
+            if (light.StaticPages[0] != null)
+                _scratchTiles.Free(_scratchStatic[f]);
+        }
+    }
+
+    // Moves a light into the smaller tiles placed for it, its old tiles read down through the scratch page rather than drawn
+    // again, the static copy too when it keeps one. A static copy with no room left goes, the live tiles holding all its
+    // casters already.
+    private void Shrink(WorldShadows shadows, LightShadow light, int size, int pageSize, bool oldFreed)
+    {
+        for (int f = 0; f < light.Faces; f++)
+        {
+            if (!oldFreed)
+                _oldPages[f]!.Tiles.Free(_oldTiles[f]);
+            _shrinks.Shrinks.Add((_oldPages[f]!, _oldTiles[f], _scratchLive[f], _resizeTiles[f]));
+            light.Pages[f] = _resizePages[f];
+            light.Tiles[f] = _resizeTiles[f];
+        }
+        light.Size = size;
+        if (light.StaticPages[0] == null)
+            return;
+
+        Array.Copy(light.StaticPages, _oldPages, light.Faces);
+        Array.Copy(light.StaticTiles, _oldTiles, light.Faces);
+        for (int f = 0; f < light.Faces; f++)
+            _oldPages[f]!.Tiles.Free(_oldTiles[f]);
+        if (!AllocateFaces(shadows.StaticPages, shadows, light.Faces, size, pageSize, light.StaticPages, light.StaticTiles, isStatic: true))
+        {
+            Array.Clear(light.StaticPages);
+            light.Split = false;
+            return;
+        }
+        for (int f = 0; f < light.Faces; f++)
+            _shrinks.Shrinks.Add((_oldPages[f]!, _oldTiles[f], _scratchStatic[f], light.StaticTiles[f]));
     }
 
     // A light's tiles go back to their pages and its faces read as unshadowed; its cameras go too unless it keeps its state
@@ -1672,8 +1805,7 @@ internal sealed partial class FramePipeline
         return false;
     }
 
-    // A light's radius on screen in pixels in the view that sees it biggest, and its fade over the last tenth of the local distance and
-    // as it shrinks toward the smallest radius that casts
+    // A light's radius on screen in pixels in the view that sees it biggest, and its fade over the last tenth of the local distance and as it shrinks toward the smallest radius that casts
     private (float Priority, float Fade) ShadowVisibility(in LightDesc light, ShadowSettings settings)
     {
         float priority = 0, fade = 0;

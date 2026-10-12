@@ -126,6 +126,9 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <returns>Max sample count a texture of that format can use.</returns>
     public abstract TextureSampleCount GetSampleCountLimit(PixelFormat format, bool depthFormat);
 
+    /// <summary>Whether textures of a format can be both the source and the destination of <see cref="CommandBufferBase.BlitTexture"/>.</summary>
+    public abstract bool SupportsBlit(PixelFormat format, bool depthFormat);
+
     /// <summary>
     /// Maps a Dynamic or Staging buffer and returns its bytes. Call Unmap when done.
     /// </summary>

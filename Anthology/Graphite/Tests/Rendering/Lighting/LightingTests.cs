@@ -1699,7 +1699,6 @@ public sealed class LightingTests : IDisposable
     public void ALightGivenASmallerTileThanItWants_KeepsIt()
     {
         _world.Shadows.PageSize = 256;
-        _world.Shadows.Budget = 256 * 256 * 2;
         AddReceiver(new Vector3(0.8f));
         _world.AddLight(ShadowSpot() with { Range = 20 });
         Frame();
@@ -1777,58 +1776,52 @@ public sealed class LightingTests : IDisposable
         => new() { Light = light, Faces = faces, Priority = 1000 - light, Wanted = wanted, MaxTile = 1024, Held = held, Split = split };
 
     [Fact]
-    public void ShadowPlans_GiveWayInOrder_HeldSizesThenStaticCopiesThenHalvingThenDropping()
+    public void ShadowPlans_GiveWayInOrder_HeldSizesThenHalvingThenDropping_StaticCopiesOutsideTheBudget()
     {
         // Light 0 holds 512 but wants 340 now, which rounds to 256, light 1 has a static copy, light 2 is least important
         ShadowPlanner planner = new();
         List<ShadowPlan> plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
-        planner.Plan(plans, 512 * 512 + 2 * 256 * 256 + 256 * 256, 64);
+        planner.Plan(plans, 512 * 512 + 2 * 256 * 256, 64, 512 * 512 + 2 * 256 * 256);
         Assert.Equal((512, true), (plans[0].Target, plans[1].Split));
 
         plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
         planner = new();
-        planner.Plan(plans, 256 * 256 * 4, 64);
+        planner.Plan(plans, 256 * 256 * 3, 64, 256 * 256 * 3);
         Assert.Equal((256, true, 256, 256), (plans[0].Target, plans[1].Split, plans[1].Target, plans[2].Target));
 
         plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
         planner = new();
-        planner.Plan(plans, 256 * 256 * 3, 64);
-        Assert.Equal((256, false, 256, 256), (plans[0].Target, plans[1].Split, plans[1].Target, plans[2].Target));
-
-        plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
-        planner = new();
-        planner.Plan(plans, 256 * 256 * 2, 64);
-        Assert.Equal((256, 128, 128), (plans[0].Target, plans[1].Target, plans[2].Target));
+        planner.Plan(plans, 256 * 256 * 2, 64, 256 * 256 * 2);
+        Assert.Equal((256, 128, 128, true), (plans[0].Target, plans[1].Target, plans[2].Target, plans[1].Split));
 
         plans = [Plan(0, 256), Plan(1, 256), Plan(2, 256)];
         planner = new();
-        planner.Plan(plans, 64 * 64 * 2, 64);
+        planner.Plan(plans, 64 * 64 * 2, 64, 64 * 64 * 2);
         Assert.Equal((64, 64, 0), (plans[0].Target, plans[1].Target, plans[2].Target));
     }
 
     [Fact]
-    public void TheShadowScale_DropsAtOnce_AndRisesAStepAfterThirtyFramesOfRoom()
+    public void TheShadowScale_IsTheLargestThatFits_EveryFrame()
     {
         ShadowPlanner planner = new();
         List<ShadowPlan> Wanting() => [Plan(0, 320), Plan(1, 320), Plan(2, 320)];
 
-        // Three lights wanting 256 fit four fifths of a 256 page only at 128, two steps down
-        planner.Plan(Wanting(), (long)(256 * 256 * 0.8), 64);
-        Assert.Equal(0.5f, planner.Scale, 4);
+        // Three lights wanting 256 fit four fifths of a 256 page only at 128
+        List<ShadowPlan> plans = Wanting();
+        planner.Plan(plans, (long)(256 * 256 * 0.8), 64, (long)(256 * 256 * 0.8));
+        Assert.All(plans, plan => Assert.Equal(128, plan.Target));
+        Assert.InRange(planner.Scale, 0.28f, 0.57f);
 
-        long room = 256 * 256 * 4;
-        for (int frame = 0; frame < ShadowPlanner.FramesBeforeScaleRises - 1; frame++)
-            planner.Plan(Wanting(), room, 64);
-        Assert.Equal(0.5f, planner.Scale, 4);
-        planner.Plan(Wanting(), room, 64);
-        Assert.Equal(1 / ShadowPlanner.ScaleStep, planner.Scale, 4);
+        plans = Wanting();
+        planner.Plan(plans, 256 * 256 * 4, 64, 256 * 256 * 4);
+        Assert.All(plans, plan => Assert.Equal(256, plan.Target));
+        Assert.Equal(1f, planner.Scale);
     }
 
     [Fact]
     public void ATightBudget_ScalesEveryLightDown_AndKeepsThemShadowed()
     {
         _world.Shadows.PageSize = 256;
-        _world.Shadows.Budget = 256 * 256 * 2;
         _world.Shadows.TexelsPerPixel = 8;
         AddReceiver(new Vector3(0.8f));
         for (int i = 0; i < 3; i++)
@@ -1836,7 +1829,6 @@ public sealed class LightingTests : IDisposable
         Frame();
         Frame();
         WorldShadows shadows = _renderer.ShadowsOf(_world)!;
-        Assert.Equal(0.5f, shadows.Planner.Scale, 4);
         Assert.All(shadows.Lights.Values, light => Assert.Equal(128, light.Size));
         Frame();
         Assert.Equal(0, Pipeline.ShadowViewsDrawn);
@@ -1864,7 +1856,6 @@ public sealed class LightingTests : IDisposable
     public void ALightOutOfView_GivesItsTilesToLightsInViewWhenPagesRunOut()
     {
         _world.Shadows.PageSize = 512;
-        _world.Shadows.Budget = 512 * 512 * 2;
         _world.Shadows.TexelsPerPixel = 100;
         AddReceiver(new Vector3(0.8f));
         LightDesc Spot(double x, uint resolution) => ShadowSpot() with { Position = _origin + new Double3(x, 0, 2), Shadow = new ShadowDesc { Enabled = true, Resolution = resolution } };
@@ -1885,26 +1876,24 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void UnderBudgetPressure_StaticCopiesGiveTheirPagesToNewLights()
+    public void StaticCopies_HaveTheirOwnPage_SoLiveTilesKeepTheirRoom()
     {
         _world.Shadows.PageSize = 256;
-        _world.Shadows.Budget = 256 * 256 * 2 * 2;
         _world.Shadows.TexelsPerPixel = 100;
         AddReceiver(new Vector3(0.8f));
-        _world.AddLight(ShadowSpot() with { Shadow = new ShadowDesc { Enabled = true, Resolution = 128 } });
+        LightHandle split = _world.AddLight(ShadowSpot() with { Shadow = new ShadowDesc { Enabled = true, Resolution = 128 } });
         AddCaster(1, 0.5, 6, isStatic: true);
         AddCaster(-1.5, -1.5, 6, half: 0.5);
         Frame();
         Assert.Equal(1, Pipeline.ShadowCopiesMade);
 
-        // The live page holds the first light's tile and the static page its copy, so the new light needs the static page
-        LightHandle added = _world.AddLight(ShadowSpot() with { Position = new Double3(0.5, 0, 2), Shadow = new ShadowDesc { Enabled = true, Resolution = 256 } });
-        Frame();
+        LightHandle added = _world.AddLight(ShadowSpot() with { Position = new Double3(0.5, 0, 2), Shadow = new ShadowDesc { Enabled = true, Resolution = 128 } });
         Frame();
         Frame();
         WorldShadows shadows = _renderer.ShadowsOf(_world)!;
-        Assert.True(shadows.Lights[added.Index].HasTiles);
-        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+        Assert.Equal((true, true, 128, 128), (shadows.Lights[split.Index].Split, shadows.Lights[added.Index].HasTiles, shadows.Lights[split.Index].Size, shadows.Lights[added.Index].Size));
+        Assert.Single(shadows.Pages);
+        Assert.Single(shadows.StaticPages);
     }
 
     [Fact]
@@ -2092,19 +2081,12 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void TheShadowScale_StopsWhereSmallerTilesNoLongerHelp_AndComesBackAfterAnOverload()
+    public void WhenEvenTheSmallestTilesOverflow_TheLeastImportantGoUnshadowed_AndTheRestKeepTheSmallest()
     {
         ShadowPlanner planner = new();
-        List<ShadowPlan> Wanting() => [Plan(0, 1024), Plan(1, 1024), Plan(2, 1024)];
-
-        // Even at 64 the three overflow, so the scale sinks only until every light is at 64, four octaves, about eight steps
-        for (int frame = 0; frame < 100; frame++)
-            planner.Plan(Wanting(), 64 * 64, 64);
-        Assert.True(planner.Scale < 0.2f && planner.Scale >= MathF.Pow(ShadowPlanner.ScaleStep, -9), $"scale {planner.Scale}");
-
-        for (int frame = 0; frame < 9 * ShadowPlanner.FramesBeforeScaleRises; frame++)
-            planner.Plan(Wanting(), 1L << 30, 64);
-        Assert.Equal(1f, planner.Scale, 4);
+        List<ShadowPlan> plans = [Plan(0, 1024), Plan(1, 1024), Plan(2, 1024)];
+        planner.Plan(plans, 64 * 64 * 2, 64, 64 * 64 * 2);
+        Assert.Equal((64, 64, 0), (plans[0].Target, plans[1].Target, plans[2].Target));
     }
 
     // A frame whose errors are expected, cleared after

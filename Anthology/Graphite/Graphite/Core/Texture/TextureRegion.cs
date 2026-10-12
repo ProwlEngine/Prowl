@@ -106,3 +106,8 @@ public readonly struct TextureRegion
     /// </summary>
     public TextureRegion WithLayer(uint arrayLayer) => new(X, Y, Z, Width, Height, Depth, MipLevel, arrayLayer);
 }
+
+/// <summary>One region of a blit: a rectangle of the source's first mip and layer scaled into a rectangle of the destination's.</summary>
+public readonly record struct TextureBlit(
+    uint SourceX, uint SourceY, uint SourceWidth, uint SourceHeight,
+    uint DestinationX, uint DestinationY, uint DestinationWidth, uint DestinationHeight);

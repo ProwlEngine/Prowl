@@ -231,6 +231,14 @@ internal struct ObjectAttributes
 /// </summary>
 public sealed partial class RenderWorld : IDisposable
 {
+    private volatile Texture? _liveShadowAtlas, _staticShadowAtlas;
+
+    /// <summary>The page local light shadow tiles live in as of the last frame, for looking at. Null until a light casts.</summary>
+    public Texture? LiveShadowAtlas { get => _liveShadowAtlas; internal set => _liveShadowAtlas = value; }
+
+    /// <summary>The page the static copies of local light shadows live in as of the last frame. Null until one is made.</summary>
+    public Texture? StaticShadowAtlas { get => _staticShadowAtlas; internal set => _staticShadowAtlas = value; }
+
     private readonly List<Action> _hostSetExtracts = new();
     private readonly List<SpatialIndex> _hostSets = new();
     private readonly GraphicsDevice _device;

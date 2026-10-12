@@ -1510,7 +1510,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, GraphDispatch[] pipelines, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
     {
-        LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands);
+        LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk);
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
         _dispatches.Clear();
@@ -2269,6 +2269,7 @@ internal sealed partial class FramePipeline : IDisposable
         _providerPipeline.Dispose();
         _shadowPipeline.Dispose();
         _shadowSampler?.Dispose();
+        _shrinkScratch?.Dispose();
         _tileClear?.Dispose();
         _fencePipeline.Dispose();
         _probes.Dispose();
@@ -2646,6 +2647,7 @@ internal sealed class ProviderWork
 
 /// <summary>
 /// What a frame drew: the views asked for, and the indirect draw calls recorded with the draws inside them (each
-/// command one mesh piece, instanced or not), split between camera views and shadow views.
+/// command one mesh piece, instanced or not), split between camera views and shadow views, and the local light shadows
+/// that were given tiles, grew or shrank.
 /// </summary>
-public sealed record FrameStats(int Views, int DrawCalls, int DrawCommands, int ShadowDrawCalls, int ShadowDrawCommands);
+public sealed record FrameStats(int Views, int DrawCalls, int DrawCommands, int ShadowDrawCalls, int ShadowDrawCommands, int ShadowsAdded = 0, int ShadowsGrown = 0, int ShadowsShrunk = 0);
