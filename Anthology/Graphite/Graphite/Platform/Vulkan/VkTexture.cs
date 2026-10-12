@@ -123,6 +123,24 @@ internal unsafe partial class VkTexture : Texture
         InitializeLayout();
     }
 
+    // Wraps an image owned elsewhere that rests in one layout between Graphite's uses, left untouched here.
+    internal VkTexture(VkGraphicsDevice gd, in TextureDescription description, Image existingImage, TextureState restingState)
+        : base(description)
+    {
+        _gd = gd;
+        VkFormat = VkFormats.ToVkPixelFormat(Format, (description.Usage & TextureUsage.DepthStencil) != 0);
+        VkSampleCount = VkFormats.ToVkSampleCount(SampleCount);
+        _optimalImage = existingImage;
+        _actualImageArrayLayers = description.Type == TextureType.TextureCube ? 6 * ArrayLayers : ArrayLayers;
+        _isExternal = true;
+        ExternalRestingLayout = VkBarriers.Layout(this, restingState);
+    }
+
+    private readonly bool _isExternal;
+
+    /// <summary>The layout an external image rests in, null for Graphite's own textures.</summary>
+    public ImageLayout? ExternalRestingLayout { get; }
+
     private void InitializeLayout()
     {
         if ((Usage & TextureUsage.RenderTarget) != 0)
@@ -164,7 +182,7 @@ internal unsafe partial class VkTexture : Texture
         defaultView?.Dispose();
 
         // Swapchain images belong to the swapchain, not to this wrapper.
-        if (_isSwapchainTexture)
+        if (_isSwapchainTexture || _isExternal)
         {
             return;
         }

@@ -70,10 +70,16 @@ internal unsafe partial class VkGraphicsDevice
         List<IntPtr> tempStrings = [];
         try
         {
+            HashSet<string> enabled = [];
+            for (int i = 0; i < instanceExtensionCount; i++)
+                enabled.Add(Util.GetString((byte*)instanceExtensions[i]));
+
             foreach (string requiredExt in requestedInstanceExtensions)
             {
                 if (!availableInstanceExtensions.Contains(requiredExt))
                     throw new RenderException($"The required instance extension was not available: {requiredExt}");
+                if (!enabled.Add(requiredExt))
+                    continue;
 
                 IntPtr utf8Str = Marshal.StringToCoTaskMemUTF8(requiredExt);
                 instanceExtensions[instanceExtensionCount++] = utf8Str;
@@ -82,7 +88,8 @@ internal unsafe partial class VkGraphicsDevice
 
             if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
             {
-                instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8;
+                if (enabled.Add(CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+                    instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8;
                 _debugUtilsEnabled = true;
             }
 

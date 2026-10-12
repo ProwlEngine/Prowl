@@ -42,6 +42,15 @@ public class BackendInfoVulkan
     /// <summary>Queue family index of the graphics queue.</summary>
     public uint GraphicsQueueFamilyIndex => _gd.GraphicsQueueIndex;
 
+    /// <summary>Index of the graphics queue within its family.</summary>
+    public uint GraphicsQueueIndex => 0;
+
+    /// <summary>
+    /// Held around every use of the graphics queue. Native code sharing the queue, such as an OpenXR runtime, must hold it
+    /// while it may submit to the queue.
+    /// </summary>
+    public object GraphicsQueueLock => _gd.GraphicsQueueLock;
+
     /// <summary>Driver name. Can be null.</summary>
     public string DriverName => _gd.DriverName;
 

@@ -62,6 +62,18 @@ public abstract partial class ResourceFactory
     /// </remarks>
     public abstract Texture CreateTexture(ulong nativeTexture, in TextureDescription description);
 
+    /// <summary>
+    /// Wraps a native texture owned and synchronized elsewhere, such as an OpenXR swapchain image. Graphite leaves its
+    /// contents alone when wrapping, expects it in <paramref name="restingState"/> whenever Graphite uses it and returns it
+    /// there afterwards, and never frees it. Vulkan wants a valid VkImage. Description must match reality.
+    /// </summary>
+    /// <param name="nativeTexture">Backend-specific handle.</param>
+    /// <param name="description">Its real properties.</param>
+    /// <param name="restingState">The state it is in between uses, such as Attachment for an OpenXR colour swapchain image.</param>
+    /// <returns>New texture wrapping it.</returns>
+    public virtual Texture CreateTexture(ulong nativeTexture, in TextureDescription description, TextureState restingState)
+        => throw new System.NotSupportedException($"{GetType().Name} cannot wrap external textures.");
+
     protected abstract Texture CreateTextureCore(in TextureDescription description);
 
     /// <summary>

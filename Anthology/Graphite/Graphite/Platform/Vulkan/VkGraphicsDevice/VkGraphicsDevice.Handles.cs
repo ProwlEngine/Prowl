@@ -25,6 +25,8 @@ internal unsafe partial class VkGraphicsDevice
     internal PipelineCache DriverPipelineCache;
 
     private readonly object _graphicsQueueLock = new();
+
+    internal object GraphicsQueueLock => _graphicsQueueLock;
     private PhysicalDeviceProperties _physicalDeviceProperties;
     private PhysicalDeviceFeatures _physicalDeviceFeatures;
     private PhysicalDeviceVulkan11Features _enabledVulkan11Features;

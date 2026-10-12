@@ -20,7 +20,8 @@ public sealed class RenderTexture : GraphicsResource
 
     private readonly bool _owned = true;
 
-    internal RenderTexture(Framebuffer framebuffer)
+    /// <summary>Wraps an existing framebuffer, so a graph can import it. The caller keeps owning the framebuffer.</summary>
+    public RenderTexture(Framebuffer framebuffer)
     {
         _owned = false;
         Framebuffer = framebuffer;

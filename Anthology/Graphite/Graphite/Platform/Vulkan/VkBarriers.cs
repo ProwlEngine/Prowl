@@ -53,6 +53,8 @@ internal static unsafe class VkBarriers
 
     public static ImageLayout RestingLayout(VkTexture texture)
     {
+        if (texture.ExternalRestingLayout is { } external)
+            return external;
         if (texture.IsSwapchainTexture)
             return ImageLayout.PresentSrcKhr;
         if ((texture.Usage & TextureUsage.Sampled) != 0)

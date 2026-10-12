@@ -54,6 +54,9 @@ internal class VkResourceFactory : ResourceFactory
             new Image(nativeTexture));
     }
 
+    public override Texture CreateTexture(ulong nativeTexture, in TextureDescription description, TextureState restingState)
+        => new VkTexture(_gd, description, new Image(nativeTexture), restingState);
+
     protected override TextureView CreateTextureViewCore(in TextureViewDescription description)
     {
         return new VkTextureView(_gd, description);
