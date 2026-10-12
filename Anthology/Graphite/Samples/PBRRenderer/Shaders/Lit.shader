@@ -8,6 +8,7 @@ Shader "PBRRenderer/Lit"
         _Roughness("Roughness", Float) = 0.5
         _Tiling("Tiling", Float) = 1
         _Grid("Grid", Float) = 0
+        _InstanceColor("Instance Color", Float) = 0
         _BaseMap("Base Map", Texture2D) = "white" {}
         _NormalMap("Normal Map", Texture2D) = "bump" {}
         _MetalRoughMap("Metal Roughness Map", Texture2D) = "white" {}
@@ -58,6 +59,7 @@ Shader "PBRRenderer/Lit"
             uniform float _Roughness;
             uniform float _Tiling;
             uniform float _Grid;
+            uniform float _InstanceColor;
             uniform sampler2D _BaseMap;
             uniform sampler2D _NormalMap;
             uniform sampler2D _MetalRoughMap;
@@ -88,6 +90,8 @@ Shader "PBRRenderer/Lit"
                 vec3 N = normalize(mat3(t * invMax, b * invMax, n) * tangentNormal);
 
                 vec3 albedo = _BaseColor.rgb * ToLinear(texture(_BaseMap, uv).rgb);
+                if (_InstanceColor > 0.5)
+                    albedo *= Graphite_Object().custom0.rgb;
                 if (_Grid > 0.0)
                 {
                     vec2 p = Graphite_AbsoluteFromRelative(vWorld).xz / _Grid;
