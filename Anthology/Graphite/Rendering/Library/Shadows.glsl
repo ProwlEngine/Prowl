@@ -62,6 +62,20 @@ vec3 Graphite_ShadowCoords(vec4 clip, vec4 rect)
     return vec3(rect.xy + local * rect.z, clamp(ndc.z, 0.0, 1.0));
 }
 
+// One of the tent's three taps along an axis, f the texel fraction there: its weight and its offset from the base texel
+vec2 graphite_TentTap(int tap, float f)
+{
+    if (tap == 0)
+    {
+        float w = 4.0 - 3.0 * f;
+        return vec2(w, (3.0 - 2.0 * f) / w - 2.0);
+    }
+    if (tap == 1)
+        return vec2(7.0, (3.0 + f) / 7.0);
+    float w = 1.0 + 3.0 * f;
+    return vec2(w, f / w + 2.0);
+}
+
 // The lit fraction at uv of a tile of a depth texture, hard or a 5x5 tent from 9 comparisons, every tap half a texel inside the tile
 float Graphite_SampleShadow(uint slot, vec4 rect, float inverseSize, vec3 coords, float filtering)
 {
@@ -70,26 +84,22 @@ float Graphite_SampleShadow(uint slot, vec4 rect, float inverseSize, vec3 coords
     if (filtering == GRAPHITE_SHADOW_HARD)
         return texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(clamp(coords.xy, tileMin, tileMax), coords.z));
 
-    // Three bilinear taps per axis reproduce a five texel tent exactly: weights 4 - 3f, 7 and 1 + 3f summing to 12
+    // Three bilinear taps per axis reproduce a five texel tent exactly: weights 4 - 3f, 7 and 1 + 3f summing to 12, each
+    // tap's worked out where it is taken so none are held across the others
     vec2 texel = coords.xy / inverseSize;
     vec2 base = floor(texel + 0.5);
     vec2 f = texel + 0.5 - base;
     base -= 0.5;
-    vec2 w0 = 4.0 - 3.0 * f;
-    vec2 w2 = 1.0 + 3.0 * f;
-    vec2 o0 = (3.0 - 2.0 * f) / w0 - 2.0;
-    vec2 o1 = (3.0 + f) / 7.0;
-    vec2 o2 = f / w2 + 2.0;
-    vec3 wx = vec3(w0.x, 7.0, w2.x), wy = vec3(w0.y, 7.0, w2.y);
-    vec3 ox = vec3(o0.x, o1.x, o2.x), oy = vec3(o0.y, o1.y, o2.y);
 
     float lit = 0.0;
     for (int j = 0; j < 3; j++)
     {
+        vec2 y = graphite_TentTap(j, f.y);
         for (int i = 0; i < 3; i++)
         {
-            vec2 uv = clamp((base + vec2(ox[i], oy[j])) * inverseSize, tileMin, tileMax);
-            lit += wx[i] * wy[j] * texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
+            vec2 x = graphite_TentTap(i, f.x);
+            vec2 uv = clamp((base + vec2(x.y, y.y)) * inverseSize, tileMin, tileMax);
+            lit += x.x * y.x * texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
         }
     }
     return lit / 144.0;

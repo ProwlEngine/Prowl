@@ -69,7 +69,7 @@ uint graphite_TreeStack[GRAPHITE_TREE_STACK + GRAPHITE_REGION_RUNS * 2];
 // with the moving tree in the top bit, and the region entry it was found through, invalid for the moving tree. More
 // items than this at one point are left out.
 #ifndef GRAPHITE_MAX_HITS
-#define GRAPHITE_MAX_HITS 64
+#define GRAPHITE_MAX_HITS 16
 #endif
 uvec2 graphite_Hits[GRAPHITE_MAX_HITS];
 

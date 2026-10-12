@@ -97,9 +97,6 @@ public struct LightDesc
     /// <summary>The angular radius of a directional light's disk in degrees, the sun's about 0.27.</summary>
     public float AngularRadius;
 
-    /// <summary>Scales the light's diffuse and specular separately, 1 for physical.</summary>
-    public float DiffuseScale, SpecularScale;
-
     /// <summary>
     /// A texture the light shines through: a 2D one for a spot, across its cone with U along right and V along up, a cube
     /// for a point, in its own space of right, up and direction.
@@ -133,8 +130,6 @@ public struct LightDesc
         Type = LightType.Point;
         Direction = new Float3(0, 0, 1);
         Up = new Float3(0, 1, 0);
-        DiffuseScale = 1;
-        SpecularScale = 1;
         Color = new Float3(1, 1, 1);
         Intensity = 1;
         Range = 10;
@@ -845,7 +840,7 @@ internal sealed class WorldLighting : IDisposable
             ColorIntensity = new Float4(light.Color.X, light.Color.Y, light.Color.Z, light.Intensity),
             DirectionType = new Float4(light.Direction.X, light.Direction.Y, light.Direction.Z, BitConverter.UInt32BitsToSingle(flags)),
             UpSize = new Float4(light.Up.X, light.Up.Y, light.Up.Z, light.Size.X),
-            Shape = new Float4(light.Size.Y, light.SourceRadius, light.DiffuseScale, light.SpecularScale),
+            Shape = new Float4(light.Size.Y, light.SourceRadius, 0, 0),
             SpotShadow = new Float4(spot ? outer : -1f, spot ? MathF.Max(MathF.Cos(light.InnerAngle * MathF.PI / 180f), outer + 1e-4f) : 1f, light.Shadow.DepthBias, light.Shadow.NormalBias),
             Shadow = new Float4(light.Shadow.Strength, (float)light.Shadow.Filter, BitConverter.Int32BitsToSingle(shadowed ? index : -1), BitConverter.UInt32BitsToSingle(light.LayerMask)),
             Cookie = slots.Cookie,
@@ -972,7 +967,7 @@ internal sealed class WorldLighting : IDisposable
         {
             DirectionShadow = new Float4(-light.Direction.X, -light.Direction.Y, -light.Direction.Z, light.Shadow.Enabled ? 1 : 0),
             Color = new Float4(light.Color.X * light.Intensity, light.Color.Y * light.Intensity, light.Color.Z * light.Intensity, BitConverter.UInt32BitsToSingle(light.LayerMask)),
-            Params = new Float4(MathF.Sin(radius), MathF.Cos(radius), light.DiffuseScale, light.SpecularScale),
+            Params = new Float4(MathF.Sin(radius), MathF.Cos(radius), 0, 0),
             HostData = light.HostData,
             Shadow = new Float4(light.Shadow.DepthBias, light.Shadow.NormalBias, light.Shadow.Strength, (float)light.Shadow.Filter),
         };
