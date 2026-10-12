@@ -37,6 +37,10 @@ public class GameViewPanel : DockPanel
     internal RenderTexture? RenderTarget => _rt;
     private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private bool _showStats;
+
+    /// <summary> Whether play mode fills the dock area with this view. Saved with the layout, and read at the next play. </summary>
+    internal bool MaximizeOnPlay { get; private set; }
+
     private RenderStats.Frame _gameStats; // snapshot from last game render (persists when paused)
     private Rect _displayAbsRect; // game-view rect in paper coords, cached for routing UI input next frame
 
@@ -70,9 +74,23 @@ public class GameViewPanel : DockPanel
 
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
+            // Hover-scoped like the other panels' shortcuts.
+            if (paper.IsParentHovered && ShortcutManager.IsPressed("Game/ToggleMaximize"))
+                EditorApplication.Instance?.Maximizer.RequestToggle(this);
+
             DrawGameView(paper, font, width, height);
         }
     }
+
+    public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
+    {
+        if (!MaximizeOnPlay) return false;
+        state["maximizeOnPlay"] = true;
+        return true;
+    }
+
+    public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
+        => MaximizeOnPlay = state["maximizeOnPlay"]?.GetValue<bool>() == true;
 
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
@@ -90,6 +108,7 @@ public class GameViewPanel : DockPanel
                     }
                 }, EditorIcons.Expand);
                 b.Toggle(Loc.Get("game.show_stats"), () => _showStats = !_showStats, () => _showStats);
+                b.Toggle(Loc.Get("game.maximize_on_play"), () => MaximizeOnPlay = !MaximizeOnPlay, () => MaximizeOnPlay);
             }));
     }
 

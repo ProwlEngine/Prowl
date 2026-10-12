@@ -41,6 +41,10 @@ public class EditorApplication : Game
 
     private DockSpace _dockSpace = null!;
     private PanelMaximizer _panelMaximizer = null!;
+
+    /// <summary>Maximizes docked panels over the rest of the layout, and brings the layout back.</summary>
+    internal PanelMaximizer Maximizer => _panelMaximizer;
+
     private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
@@ -1805,6 +1809,8 @@ public class EditorApplication : Game
 
         // Focus the Game View tab
         FocusPanel(typeof(GameViewPanel));
+        if (FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel { MaximizeOnPlay: true } gameView)
+            _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
         // unpaced and whatever the game's own code sets from here is what it runs at.
@@ -1874,6 +1880,9 @@ public class EditorApplication : Game
             Runtime.Time.TimeStack.Push(_savedEditorTime);
             _savedEditorTime = null;
         }
+
+        if (_panelMaximizer.MaximizedPanel is GameViewPanel)
+            _panelMaximizer.Restore();
 
         // Restore the previously active tab
         RestoreActiveTab();
