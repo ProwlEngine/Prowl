@@ -567,10 +567,12 @@ public sealed class Renderer : IDisposable
 
     /// <summary>
     /// A fullscreen program for features. The fragment code follows an include giving it vUV, outColor and
-    /// Graphite_SampleSource(uv), which samples the colour the feature reads in mono and layered views alike.
+    /// Graphite_SampleSource(uv), which samples the colour the feature reads in mono and layered views alike, unless
+    /// source is false. Textures the size of the view are declared GRAPHITE_SCREEN_TEXTURE and read through
+    /// Graphite_Sample, arrays on layered views. Blend is one override attachment unless given.
     /// </summary>
-    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen")
-        => FullscreenProgram.Create(Device, _compiler, fragment, name);
+    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null)
+        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend);
 
     private int _frameCount;
     private readonly List<Double3> _cameras = new();

@@ -1,6 +1,7 @@
 // Prowl's temporal anti aliasing resolve and sharpen, on a fullscreen pass. The resolve blends the jittered frame with the
 // history reprojected by the nearest surface's motion, clipped to the neighbourhood's colour spread, in tonemapped YCoCg.
-// Sky pixels carry no motion, so they reproject their direction through last frame's view instead.
+// Sky pixels carry no motion, so they reproject their direction through last frame's view instead. Layered views resolve
+// each layer against its own history and view.
 
 float Taa_MaxChannel(vec3 c) { return max(c.r, max(c.g, c.b)); }
 
@@ -9,7 +10,7 @@ vec3 Taa_Tonemap(vec3 c) { return c / (1.0 + Taa_MaxChannel(c)); }
 vec3 Taa_InverseTonemap(vec3 c) { return c / max(1.0 - Taa_MaxChannel(c), 1e-4); }
 
 #ifdef TAA_SHARPEN
-uniform sampler2D _Resolved;
+uniform GRAPHITE_SCREEN_TEXTURE _Resolved;
 uniform vec2 _Resolution;
 uniform float _Sharpness;
 
@@ -19,26 +20,27 @@ float Taa_Luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 void main()
 {
     vec2 texel = 1.0 / _Resolution;
-    vec3 center = Taa_Tonemap(texture(_Resolved, vUV).rgb);
-    float blur = (Taa_Luma(Taa_Tonemap(texture(_Resolved, vUV + vec2(-texel.x, 0.0)).rgb))
-        + Taa_Luma(Taa_Tonemap(texture(_Resolved, vUV + vec2(texel.x, 0.0)).rgb))
-        + Taa_Luma(Taa_Tonemap(texture(_Resolved, vUV + vec2(0.0, -texel.y)).rgb))
-        + Taa_Luma(Taa_Tonemap(texture(_Resolved, vUV + vec2(0.0, texel.y)).rgb))) * 0.25;
+    vec3 center = Taa_Tonemap(Graphite_Sample(_Resolved, vUV).rgb);
+    float blur = (Taa_Luma(Taa_Tonemap(Graphite_Sample(_Resolved, vUV + vec2(-texel.x, 0.0)).rgb))
+        + Taa_Luma(Taa_Tonemap(Graphite_Sample(_Resolved, vUV + vec2(texel.x, 0.0)).rgb))
+        + Taa_Luma(Taa_Tonemap(Graphite_Sample(_Resolved, vUV + vec2(0.0, -texel.y)).rgb))
+        + Taa_Luma(Taa_Tonemap(Graphite_Sample(_Resolved, vUV + vec2(0.0, texel.y)).rgb))) * 0.25;
     float luma = Taa_Luma(center);
     float sharpened = max(luma + (luma - blur) * _Sharpness, 0.0);
     vec3 result = luma > 1e-5 ? center * (sharpened / luma) : center;
     outColor = vec4(Taa_InverseTonemap(min(result, vec3(0.999))), 1.0);
 }
 #else
-uniform sampler2D _History;
-uniform sampler2D _Motion;
-uniform sampler2D _Depth;
+#include "Graphite/Internal/PostView.glsl"
+
+uniform GRAPHITE_SCREEN_TEXTURE _History;
+uniform GRAPHITE_SCREEN_TEXTURE _Motion;
+uniform GRAPHITE_SCREEN_TEXTURE _Depth;
 uniform vec2 _Resolution;
 uniform float _HistoryValid;
 uniform float _BlendFactor;
 uniform float _MotionBlendFactor;
 uniform float _MotionScale;
-uniform mat4 _SkyReproject;
 
 // Catmull Rom history in four bilinear taps per row, sharper than bilinear
 vec4 Taa_SampleHistory(vec2 uv, vec2 texelSize)
@@ -57,9 +59,9 @@ vec4 Taa_SampleHistory(vec2 uv, vec2 texelSize)
     vec2 tc0 = (center - 1.0) * texelSize;
     vec2 tc3 = (center + 2.0) * texelSize;
     vec4 result =
-        (texture(_History, vec2(tc12.x, tc0.y)) * w12.x + texture(_History, vec2(tc0.x, tc0.y)) * w0.x + texture(_History, vec2(tc3.x, tc0.y)) * w3.x) * w0.y +
-        (texture(_History, vec2(tc12.x, tc12.y)) * w12.x + texture(_History, vec2(tc0.x, tc12.y)) * w0.x + texture(_History, vec2(tc3.x, tc12.y)) * w3.x) * w12.y +
-        (texture(_History, vec2(tc12.x, tc3.y)) * w12.x + texture(_History, vec2(tc0.x, tc3.y)) * w0.x + texture(_History, vec2(tc3.x, tc3.y)) * w3.x) * w3.y;
+        (Graphite_Sample(_History, vec2(tc12.x, tc0.y)) * w12.x + Graphite_Sample(_History, vec2(tc0.x, tc0.y)) * w0.x + Graphite_Sample(_History, vec2(tc3.x, tc0.y)) * w3.x) * w0.y +
+        (Graphite_Sample(_History, vec2(tc12.x, tc12.y)) * w12.x + Graphite_Sample(_History, vec2(tc0.x, tc12.y)) * w0.x + Graphite_Sample(_History, vec2(tc3.x, tc12.y)) * w3.x) * w12.y +
+        (Graphite_Sample(_History, vec2(tc12.x, tc3.y)) * w12.x + Graphite_Sample(_History, vec2(tc0.x, tc3.y)) * w0.x + Graphite_Sample(_History, vec2(tc3.x, tc3.y)) * w3.x) * w3.y;
     return max(result, vec4(0.0));
 }
 
@@ -81,7 +83,7 @@ vec2 Taa_Motion(vec2 uv, vec2 texelSize)
         for (int x = -1; x <= 1; x++)
         {
             vec2 at = uv + vec2(float(x), float(y)) * texelSize;
-            float depth = texture(_Depth, at).r;
+            float depth = Graphite_Sample(_Depth, at).r;
             if (depth > nearest)
             {
                 nearest = depth;
@@ -90,8 +92,9 @@ vec2 Taa_Motion(vec2 uv, vec2 texelSize)
         }
     }
     if (nearest > 0.0)
-        return texture(_Motion, nearestUV).rg;
-    vec4 previous = _SkyReproject * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, 0.0, 1.0);
+        return Graphite_Sample(_Motion, nearestUV).rg;
+    Graphite_ViewData view = Graphite_PostView();
+    vec4 previous = view.previousViewProjection * view.inverseViewProjection * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, 0.0, 1.0);
     if (abs(previous.w) < 1e-8)
         return vec2(0.0);
     vec2 previousUV = vec2(previous.x / previous.w * 0.5 + 0.5, 0.5 - previous.y / previous.w * 0.5);

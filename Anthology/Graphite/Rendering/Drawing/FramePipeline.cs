@@ -645,6 +645,9 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>What host pipelines draw an external view through.</summary>
     public ViewDraws? Draws;
     public FeatureView Info;
+
+    /// <summary>This frame's time as the host gave it.</summary>
+    public FrameTime Time;
     public readonly TableRing ViewTable;
     public readonly GpuArray Instances;
     public readonly GpuArray Records;
@@ -756,6 +759,8 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed.</summary>
     public void ApplyFeatures()
     {
+        if (EnsureScreenLighting())
+            Rebuild = true;
         if (!Rebuild && Same(Features, Selected) && !Invalidated())
             return;
 
@@ -776,6 +781,24 @@ internal sealed class CameraFrame : IDisposable
         PruneFeatures();
         Chain.ReleaseUnwritten();
         Rebuild = false;
+    }
+
+    // The screen lighting textures, sized for the view's producer, or let go without one. Returns whether they changed.
+    private bool EnsureScreenLighting()
+    {
+        foreach (RenderFeature feature in Selected)
+        {
+            if (feature is ScreenLightingFeature producer)
+            {
+                RenderTexture? visibility = Chain.ScreenVisibility.Texture, irradiance = Chain.ScreenIrradiance.Texture;
+                Chain.EnsureScreenLighting(producer.ScaleSnapshot, producer.IrradianceSnapshot);
+                return visibility != Chain.ScreenVisibility.Texture || irradiance != Chain.ScreenIrradiance.Texture;
+            }
+        }
+        bool had = Chain.ScreenVisibility.Texture != null || Chain.ScreenIrradiance.Texture != null;
+        Chain.ScreenVisibility.Release(Chain.Retired);
+        Chain.ScreenIrradiance.Release(Chain.Retired);
+        return had;
     }
 
     private Exception? TryBuild(List<RenderFeature> features)
@@ -1043,6 +1066,10 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set("Graphite_ShadowSampler", 0, frame.ShadowSampler);
         camera.ViewTable.Set("Graphite_ShadowFaces", 0, camera.World.Shadows!.Faces.Buffer);
         camera.ViewTable.Set("Graphite_Cascades", 0, camera.Cascades.Buffer);
+        FeatureChain chain = camera.Chain;
+        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, chain.ScreenVisibility is { Filled: true, Texture: not null } visibility ? visibility.ArrayView(frame.Device) : frame.NoScreenVisibility);
+        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, chain.ScreenIrradiance is { Filled: true, Texture: not null } irradiance ? irradiance.ArrayView(frame.Device) : frame.NoScreenIrradiance);
+        camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.TrilinearClamp);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
@@ -1264,7 +1291,27 @@ internal sealed partial class FramePipeline : IDisposable
         _readback = new ReadbackPass(device, report);
         _readbackPipeline.SetPasses([_readback]);
 
-        PresentProgram = FullscreenProgram.Create(device, compiler, "void main() { outColor = Graphite_SampleSource(vUV); }", "Graphite/Present");
+        PresentProgram = FullscreenProgram.Create(device, compiler, "void main() { outColor = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y)); }", "Graphite/Present");
+        PresentDecodeProgram = FullscreenProgram.Create(device, compiler, """
+            void main()
+            {
+                vec4 c = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y));
+                outColor = vec4(pow((max(c.rgb, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), c.a);
+            }
+            """, "Graphite/PresentDecode");
+        Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
+        SmaaArea = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false);
+        SmaaSearch = LoadData(device, "SmaaSearch.bin", 64, 16, mipmapped: false);
+        SmaaAreaLayered = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false, layers: 6);
+        SmaaSearchLayered = LoadData(device, "SmaaSearch.bin", 64, 16, mipmapped: false, layers: 6);
+        textures.RegisterDefault("noise", Noise);
+        NoScreenVisibility = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled));
+        NoScreenIrradiance = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        for (uint layer = 0; layer < 6; layer++)
+        {
+            device.UpdateTexture<byte>(NoScreenVisibility, [255], TextureRegion.Whole(NoScreenVisibility, 0, layer));
+            device.UpdateTexture<ushort>(NoScreenIrradiance, [0, 0, 0, 0], TextureRegion.Whole(NoScreenIrradiance, 0, layer));
+        }
         ClearProgram = FullscreenProgram.Create(device, compiler, "uniform vec4 Graphite_ClearColor; void main() { outColor = Graphite_ClearColor; }", "Graphite/Clear", source: false);
         BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
         CopyBackProgram = FullscreenProgram.Create(device, compiler, "void main() { outColor = Graphite_SampleSource(vUV); }", "Graphite/CopyBack",
@@ -1280,12 +1327,49 @@ internal sealed partial class FramePipeline : IDisposable
         LinearSampler = device.ResourceFactory.CreateSampler(SamplerDescription.Linear);
     }
 
+    public GraphicsDevice Device => _device;
     public GeometryPool Geometry { get; }
     public MaterialSystem Materials { get; }
     public GlobalRegistry Globals { get; }
     public DrawPrograms DrawPrograms { get; }
     public ProgramCache Programs { get; }
+    /// <summary>Copies the view's colour to its target with its rows reversed, the first row at the bottom of clip space.</summary>
     public FullscreenProgram PresentProgram { get; }
+
+    /// <summary>Presents display encoded colour to an sRGB target, undoing the tonemapper's encode so the target's own applies once.</summary>
+    public FullscreenProgram PresentDecodeProgram { get; }
+
+    /// <summary>Prowl's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
+    public Texture Noise { get; }
+
+    /// <summary>The SMAA reference's area and search tables, RGBA8 in its row order.</summary>
+    public Texture SmaaArea { get; }
+    public Texture SmaaSearch { get; }
+
+    /// <summary>The SMAA tables in each of six layers, for layered views.</summary>
+    public Texture SmaaAreaLayered { get; }
+    public Texture SmaaSearchLayered { get; }
+
+    /// <summary>The screen lighting a view without a producer reads: full visibility, no irradiance, six layers.</summary>
+    public Texture NoScreenVisibility { get; }
+    public Texture NoScreenIrradiance { get; }
+
+    // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked
+    private static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1)
+    {
+        using System.IO.Stream stream = typeof(FramePipeline).Assembly.GetManifestResourceStream("Graphite/Data/" + file)
+            ?? throw new InvalidOperationException($"The library has no Data/{file}.");
+        byte[] pixels = new byte[width * height * 4];
+        stream.ReadExactly(pixels);
+        uint mips = mipmapped ? (uint)Math.Log2(Math.Max(width, height)) + 1 : 1;
+        Texture texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, mips, layers, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        texture.Name = "Graphite " + System.IO.Path.GetFileNameWithoutExtension(file);
+        for (uint layer = 0; layer < layers; layer++)
+            device.UpdateTexture<byte>(texture, pixels, TextureRegion.Whole(texture, 0, layer));
+        if (mipmapped)
+            device.Record(cmd => cmd.GenerateMipmaps(texture)).Wait();
+        return texture;
+    }
 
     /// <summary>Fills a view's viewport with its clear colour when nothing drew.</summary>
     public FullscreenProgram ClearProgram { get; }
@@ -1851,6 +1935,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
     {
+        camera.Time = time;
         int layers = view.LayerCount;
         bool shadow = camera.IsShadowView;
         CullFrustum frustum = shadow ? camera.ShadowCull : new(view.Layers, layers);
@@ -2086,6 +2171,14 @@ internal sealed partial class FramePipeline : IDisposable
         _deform.Dispose();
         Programs.Dispose();
         PresentProgram.Dispose();
+        PresentDecodeProgram.Dispose();
+        Noise.Dispose();
+        SmaaArea.Dispose();
+        SmaaSearch.Dispose();
+        SmaaAreaLayered.Dispose();
+        SmaaSearchLayered.Dispose();
+        NoScreenVisibility.Dispose();
+        NoScreenIrradiance.Dispose();
         ClearProgram.Dispose();
         CopyBackProgram.Dispose();
         foreach (IDisposable retired in _retired)

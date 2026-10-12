@@ -22,6 +22,7 @@
     <ItemGroup>
         <EmbeddedResource Include="Library\**\*.glsl" LogicalName="Graphite/%(RecursiveDir)%(Filename)%(Extension)" />
         <EmbeddedResource Include="Library\**\*.shader" LogicalName="Graphite/%(RecursiveDir)%(Filename)%(Extension)" />
+        <EmbeddedResource Include="Library\Data\*.bin" LogicalName="Graphite/Data/%(Filename)%(Extension)" />
     </ItemGroup>
 
     <ItemGroup>

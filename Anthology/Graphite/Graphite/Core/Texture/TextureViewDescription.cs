@@ -31,6 +31,10 @@ public struct TextureViewDescription
     /// Format override. Null = use target's format. Must stay compatible if set.
     /// </summary>
     public PixelFormat? Format;
+    /// <summary>
+    /// Views a 2D texture as an array even with one layer, for shaders that declare an array whatever the layer count.
+    /// </summary>
+    public bool Arrayed;
 
     /// <summary>
     /// New TextureViewDescription. Unset fields default from target.

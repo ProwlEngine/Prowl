@@ -958,11 +958,35 @@ vec3 Graphite_SkyAmbient(vec3 worldNormal)
     return ShadeSH9(graphite_SkyAmbient, worldNormal);
 }
 
+// The view's screen lighting, written by its ScreenLightingFeature after the prepass: visibility, and indirect irradiance
+// with its confidence. Views without one read full visibility and no irradiance.
+layout(set = 1, binding = 31) uniform texture2DArray Graphite_ScreenVisibility;
+layout(set = 1, binding = 32) uniform texture2DArray Graphite_ScreenIrradiance;
+layout(set = 1, binding = 33) uniform sampler Graphite_ScreenSampler;
+
+#ifdef GRAPHITE_FRAGMENT
+vec3 graphite_ScreenCoord() { return vec3(gl_FragCoord.xy * Graphite_View().screen.zw, float(gl_ViewIndex)); }
+
+// How much indirect light reaches this pixel, from the view's screen lighting
+float Graphite_ScreenOcclusion() { return texture(sampler2DArray(Graphite_ScreenVisibility, Graphite_ScreenSampler), graphite_ScreenCoord()).r; }
+
+// Indirect irradiance the view's screen lighting found at this pixel, and how far to trust it over the baked light
+vec4 Graphite_ScreenIndirect() { return texture(sampler2DArray(Graphite_ScreenIrradiance, Graphite_ScreenSampler), graphite_ScreenCoord()); }
+#endif
+
 #if defined(GRAPHITE_FRAGMENT) && !defined(GRAPHITE_NO_OBJECT)
 // The diffuse light that is not realtime: the object's lightmap, ambient while it loads, else its light probes, else the
-// ambient light.
+// ambient light, occluded by the view's screen lighting and blended toward the irradiance it found.
 // lightmapUV comes from Graphite_LightmapUV in the vertex stage.
+vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV);
+
 vec3 Graphite_IndirectDiffuse(vec3 worldNormal, vec2 lightmapUV)
+{
+    vec4 screen = Graphite_ScreenIndirect();
+    return mix(graphite_BakedDiffuse(worldNormal, lightmapUV) * Graphite_ScreenOcclusion(), screen.rgb, screen.a);
+}
+
+vec3 graphite_BakedDiffuse(vec3 worldNormal, vec2 lightmapUV)
 {
     Graphite_ObjectData object = Graphite_Object();
     if (object.lightmapTexture == GRAPHITE_LIGHTMAP_LOADING)
@@ -1149,6 +1173,9 @@ vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
 // indirect diffuse light times occlusion.
 vec3 Graphite_IndirectSpecular(vec3 worldPos, vec3 N, vec3 V, vec3 F0, float roughness, float ao, vec3 ambientLight)
 {
+#ifdef GRAPHITE_FRAGMENT
+    ao *= Graphite_ScreenOcclusion();
+#endif
     float NdotV = max(dot(N, V), 0.0);
     vec3 F = EnvBRDF(F0, roughness, NdotV);
     if (ReflectionProbesReady())

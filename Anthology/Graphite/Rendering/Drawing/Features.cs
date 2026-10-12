@@ -98,6 +98,15 @@ public readonly struct FeatureView
 
     /// <summary>The first layer's camera position.</summary>
     public Double3 Position { get; }
+
+    /// <summary>A texture sized as a part of the view's render resolution, an array on layered views.</summary>
+    public GraphTextureDesc Texture(PixelFormat format, float scale = 1) => GraphTextureDesc.ViewSized(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
+
+    /// <summary>A texture of a fixed size, an array on layered views.</summary>
+    public GraphTextureDesc Texture(int width, int height, PixelFormat format) => GraphTextureDesc.Sized(width, height, false, format) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
+
+    /// <summary>A texture of one layer whatever the view, for state the view's layers share.</summary>
+    public static GraphTextureDesc Shared(int width, int height, PixelFormat format) => GraphTextureDesc.Sized(width, height, false, format);
 }
 
 /// <summary>Features added to a world or a view. Host thread.</summary>
@@ -158,7 +167,7 @@ public abstract class RenderFeature
     public abstract RenderSlot Slot { get; }
 
     /// <summary>Order inside the slot, built in features at 0.</summary>
-    public virtual int Order => 0;
+    public virtual int Order { get; set; }
 
     public virtual ViewKinds RunsOn => ViewKinds.Cameras;
     public virtual string? ExclusiveGroup => null;
@@ -218,7 +227,30 @@ public abstract class RenderFeature
         JitterMipBiasSnapshot = JitterMipBias;
         Type? replaces = Replaces;
         ReplacesSnapshot = replaces != null && !replaces.IsAbstract && typeof(RenderFeature).IsAssignableFrom(replaces) ? replaces : null;
+        if (this is ScreenLightingFeature lighting)
+            (lighting.ScaleSnapshot, lighting.IrradianceSnapshot) = (Math.Clamp(lighting.Scale, 0.0625f, 1f), lighting.WritesIrradiance);
     }
+}
+
+/// <summary>
+/// A producer of the view's screen lighting, in AfterPrepass after the depth prepass: the visibility, and optionally the
+/// indirect irradiance with its confidence, that every renderable drawn after reads through Graphite_IndirectDiffuse and
+/// Graphite_IndirectSpecular. Direct light is never touched. A view runs one, as they share the ScreenLighting group.
+/// Normals are not drawn yet, so producers rebuild them from depth.
+/// </summary>
+public abstract class ScreenLightingFeature : RenderFeature
+{
+    public override RenderSlot Slot => RenderSlot.AfterPrepass;
+    public override string? ExclusiveGroup => "ScreenLighting";
+
+    /// <summary>The part of the view's render resolution the screen lighting takes, 1/16 to 1.</summary>
+    public abstract float Scale { get; }
+
+    /// <summary>Whether the feature writes indirect irradiance as well as visibility.</summary>
+    public virtual bool WritesIrradiance => false;
+
+    internal float ScaleSnapshot = 1;
+    internal bool IrradianceSnapshot;
 }
 
 /// <summary>
@@ -227,11 +259,15 @@ public abstract class RenderFeature
 /// </summary>
 public sealed class FullscreenProgram : IDisposable
 {
-    private FullscreenProgram(GraphicsProgram mono, GraphicsProgram layered)
+    private FullscreenProgram(GraphicsProgram mono, GraphicsProgram layered, bool source)
     {
         Mono = mono;
         Layered = layered;
+        HasSource = source;
     }
+
+    /// <summary>Whether the program reads Graphite_Source.</summary>
+    internal bool HasSource { get; }
 
     internal GraphicsProgram Mono { get; }
     internal GraphicsProgram Layered { get; }
@@ -264,7 +300,7 @@ public sealed class FullscreenProgram : IDisposable
         GraphicsProgram mono = Build(false);
         try
         {
-            return new FullscreenProgram(mono, Build(true));
+            return new FullscreenProgram(mono, Build(true), source);
         }
         catch
         {
@@ -283,6 +319,10 @@ internal sealed class ChainTexture(string name) : IDisposable
     private readonly List<RenderResourceID> _ids = new();
 
     public RenderTexture? Texture;
+    private TextureView? _arrayView;
+
+    /// <summary>Whether a frame drew the texture since it was made, so readers find what a producer wrote.</summary>
+    public bool Filled;
     public int Version;
     public bool ReadSinceWrite;
     public bool Written;
@@ -310,6 +350,7 @@ internal sealed class ChainTexture(string name) : IDisposable
         if (Texture != null && Texture.Desc == desc)
             return false;
         Release(retired);
+        Filled = false;
         Texture = device.ResourceFactory.CreateRenderTexture(desc);
         Texture.Name = name;
         return true;
@@ -317,12 +358,22 @@ internal sealed class ChainTexture(string name) : IDisposable
 
     public void Release(List<IDisposable> retired)
     {
+        if (_arrayView != null)
+            retired.Add(_arrayView);
         if (Texture != null)
             retired.Add(Texture);
-        Texture = null;
+        (Texture, _arrayView, Filled) = (null, null, false);
     }
 
-    public void Dispose() => Texture?.Dispose();
+    /// <summary>The texture's first colour viewed as an array whatever its layer count, made the first time.</summary>
+    public TextureView ArrayView(GraphicsDevice device)
+        => _arrayView ??= device.ResourceFactory.CreateTextureView(new TextureViewDescription(Texture!.ColorTextures[0]) { Arrayed = true });
+
+    public void Dispose()
+    {
+        _arrayView?.Dispose();
+        Texture?.Dispose();
+    }
 }
 
 /// <summary>
@@ -335,6 +386,13 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
 
     public readonly ChainTexture Scene = new($"Graphite.Scene {viewId}");
     public readonly ChainTexture[] Colors = [new($"Graphite.ColorA {viewId}"), new($"Graphite.ColorB {viewId}")];
+
+    /// <summary>The screen lighting the forward pass reads: visibility, and indirect irradiance with its confidence.</summary>
+    public readonly ChainTexture ScreenVisibility = new($"Graphite.ScreenVisibility {viewId}");
+    public readonly ChainTexture ScreenIrradiance = new($"Graphite.ScreenIrradiance {viewId}");
+
+    /// <summary>Whether the colour is display encoded, a feature having said so through EncodesForDisplay.</summary>
+    public bool DisplayEncoded;
     public readonly List<IDisposable> Retired = retired;
 
     /// <summary>The colour features read and draw onto now: the scene, or the last colour a feature wrote.</summary>
@@ -348,8 +406,22 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
         Scene.Reset();
         Colors[0].Reset();
         Colors[1].Reset();
+        ScreenVisibility.Reset();
+        ScreenIrradiance.Reset();
         Current = Scene;
+        DisplayEncoded = false;
         Published.Clear();
+    }
+
+    /// <summary>Sizes the screen lighting textures for a producer at a part of the view's size.</summary>
+    public void EnsureScreenLighting(float scale, bool irradiance)
+    {
+        uint width = Math.Max(1, (uint)(_width * scale)), height = Math.Max(1, (uint)(_height * scale));
+        ScreenVisibility.Ensure(device, new RenderTextureDescription(width, height, PixelFormat.R8_UNorm, false) { ArrayLayers = _layers }, Retired);
+        if (irradiance)
+            ScreenIrradiance.Ensure(device, new RenderTextureDescription(width, height, PixelFormat.R16_G16_B16_A16_Float, false) { ArrayLayers = _layers }, Retired);
+        else
+            ScreenIrradiance.Release(Retired);
     }
 
     /// <summary>Sizes the textures for a view. Returns whether any was recreated.</summary>
@@ -384,6 +456,8 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
         Scene.Release(Retired);
         Colors[0].Release(Retired);
         Colors[1].Release(Retired);
+        ScreenVisibility.Release(Retired);
+        ScreenIrradiance.Release(Retired);
     }
 
     public void Dispose()
@@ -391,6 +465,8 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
         Scene.Dispose();
         Colors[0].Dispose();
         Colors[1].Dispose();
+        ScreenVisibility.Dispose();
+        ScreenIrradiance.Dispose();
     }
 }
 
@@ -472,9 +548,15 @@ public sealed class FeatureBuilder
         chain.Current = next;
     }
 
-    /// <summary>A texture for this feature alone this frame.</summary>
-    public TextureHandle Temporary(string name, GraphTextureDesc desc)
-        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.Temporary.{name}"), desc);
+    /// <summary>
+    /// Says the colour this feature writes or draws is display encoded, as a tonemapper's is, so the present undoes the
+    /// encode for targets that take linear light, sRGB and float ones. Later features keep it so.
+    /// </summary>
+    public void EncodesForDisplay() => _pass.Chain.DisplayEncoded = true;
+
+    /// <summary>A texture for this feature alone this frame, drawn and then read back in its pass by default.</summary>
+    public TextureHandle Temporary(string name, GraphTextureDesc desc, TextureState usage = TextureState.Attachment | TextureState.Sampled)
+        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.Temporary.{name}"), desc, usage: usage);
 
     /// <summary>
     /// A texture for this feature that keeps its last frames, read through <see cref="FeatureContext.History"/>. A graph
@@ -506,6 +588,33 @@ public sealed class FeatureBuilder
         DeviceBuffer[] host = _pass.Camera.HostBuffers;
         for (int i = 0; i < host.Length; i++)
             _graph.DeclareImportedBuffer(FramePipeline.BufferId(i), host[i], BufferAccess.AllReads);
+        FeatureChain chain = _pass.Chain;
+        foreach (ChainTexture lighting in (ReadOnlySpan<ChainTexture>)[chain.ScreenVisibility, chain.ScreenIrradiance])
+        {
+            if (lighting.Written)
+                _graph.DeclareInputTexture(lighting.Id, TextureState.Sampled, TextureState.Sampled);
+        }
+    }
+
+    /// <summary>
+    /// Writes the view's screen lighting, which renderables drawn after read through Graphite_IndirectDiffuse and
+    /// Graphite_IndirectSpecular: visibility always, irradiance with its confidence when asked. Its size is set by the
+    /// feature's <see cref="ScreenLightingFeature.Scale"/>. Returns the textures to draw, irradiance null when not asked.
+    /// </summary>
+    public (TextureHandle Visibility, TextureHandle? Irradiance) WriteScreenLighting(bool irradiance)
+    {
+        if (_pass.Feature is not ScreenLightingFeature producer)
+            throw new InvalidOperationException($"{_pass.Name} writes screen lighting without being a ScreenLightingFeature.");
+        if (irradiance && !producer.IrradianceSnapshot)
+            throw new InvalidOperationException($"{_pass.Name} writes screen irradiance without saying so through WritesIrradiance.");
+        FeatureChain chain = _pass.Chain;
+        ChainTexture visibility = chain.ScreenVisibility;
+        visibility.Written = true;
+        TextureHandle visibilityHandle = _graph.DeclareImportedTexture(visibility.Id, visibility.Texture!);
+        if (!irradiance)
+            return (visibilityHandle, null);
+        chain.ScreenIrradiance.Written = true;
+        return (visibilityHandle, _graph.DeclareImportedTexture(chain.ScreenIrradiance.Id, chain.ScreenIrradiance.Texture!));
     }
 
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
@@ -576,6 +685,28 @@ public sealed class FeatureContext
 
     /// <summary>Whether the view drew last frame, so motion and history from then mean something.</summary>
     public bool HasPreviousFrame => _pass.Camera.HadPrevious;
+
+    /// <summary>The frame's time as the host gave it.</summary>
+    public FrameTime Time => _pass.Camera.Time;
+
+    /// <summary>The renderer's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
+    public Texture Noise => _pass.Frame.Noise;
+
+    /// <summary>The SMAA reference's area and search tables, arrays of as many layers as the view has.</summary>
+    public (Texture Area, Texture Search) SmaaTables => View.LayerCount > 1 ? (_pass.Frame.SmaaAreaLayered, _pass.Frame.SmaaSearchLayered) : (_pass.Frame.SmaaArea, _pass.Frame.SmaaSearch);
+
+    /// <summary>The direction the world's sun shines, its chosen sun or else its brightest directional light, or null without one.</summary>
+    public Float3? SunDirection
+    {
+        get
+        {
+            WorldLighting lighting = _pass.Camera.World.World.Lighting;
+            return lighting.DirectionalOrder.Count > 0 ? lighting.Light(lighting.DirectionalOrder[0]).Direction : null;
+        }
+    }
+
+    /// <summary>The view's layers as shaders read them this frame, jittered when the view jitters.</summary>
+    internal ReadOnlySpan<ViewBlock> Blocks => _pass.Camera.Blocks.AsSpan(0, View.LayerCount);
 
     /// <summary>A history texture as it was some frames ago, or null before it holds one.</summary>
     public RenderTexture? History(TextureHandle texture, int framesAgo = 1)
@@ -651,16 +782,29 @@ public sealed class FeatureContext
     /// Graphite_Source, with any properties given.
     /// </summary>
     public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null)
+        => Fullscreen(program, target, properties, View.LayerCount, false);
+
+    /// <summary>Clears a texture the feature declared to transparent black, then draws a fullscreen program over it, for programs that discard.</summary>
+    public void FullscreenCleared(FullscreenProgram program, RenderTexture target, PropertySet? properties = null)
+        => Fullscreen(program, target, properties, View.LayerCount, true);
+
+    /// <summary>Draws a fullscreen program once over a texture of one layer, for state a layered view's layers share.</summary>
+    public void FullscreenShared(FullscreenProgram program, RenderTexture target, PropertySet? properties = null)
+        => Fullscreen(program, target, properties, 1, false);
+
+    private void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties, int layers, bool clear)
     {
-        Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Loaded));
+        if (layers == 1 && View.LayerCount > 1 && program.HasSource)
+            throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
+        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0, 0, 0, 0)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
+        Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
         Command.SetFullViewport();
-        Command.SetShader(program.For(View.LayerCount));
+        Command.SetShader(program.For(layers));
         Command.SetVertexSource(VertexSource.None);
-        if (Color is { } source)
-        {
-            _properties.SetTexture("Graphite_Source", source, _pass.Frame.LinearSampler);
-            Command.SetProperties(_properties);
-        }
+        _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
+        if (program.HasSource && Color is { } source)
+            _properties.SetTexture("Graphite_Source", source, _pass.Frame.TrilinearClamp);
+        Command.SetProperties(_properties);
         if (properties != null)
             Command.SetProperties(properties);
         Command.Draw(3);
@@ -677,7 +821,8 @@ public sealed class FeatureContext
         BeginOutput();
         Command.SetShader(program.For(View.LayerCount));
         Command.SetVertexSource(VertexSource.None);
-        _properties.SetTexture("Graphite_Source", source, _pass.Frame.LinearSampler);
+        _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
+        _properties.SetTexture("Graphite_Source", source, _pass.Frame.TrilinearClamp);
         Command.SetProperties(_properties);
         if (properties != null)
             Command.SetProperties(properties);
@@ -756,6 +901,11 @@ internal sealed class FeaturePass : IPass
         try
         {
             Feature.Render(_context);
+            if (Feature is ScreenLightingFeature)
+            {
+                Chain.ScreenVisibility.Filled |= Chain.ScreenVisibility.Written;
+                Chain.ScreenIrradiance.Filled |= Chain.ScreenIrradiance.Written;
+            }
         }
         catch (Exception e)
         {
@@ -782,6 +932,12 @@ internal sealed class SetupPass(FramePipeline frame, CameraFrame camera) : IPass
 /// <summary>A view's last pass: the colour the features left, copied into the view's viewport of its target.</summary>
 internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPass
 {
+    // sRGB targets encode what they are given and float targets hold linear light, so display encoded colour is decoded
+    // for both. Other formats take display values as they are.
+    private static bool TakesLinear(PixelFormat format) => format is PixelFormat.R8_G8_B8_A8_UNorm_SRgb or PixelFormat.B8_G8_R8_A8_UNorm_SRgb
+        or PixelFormat.R16_Float or PixelFormat.R16_G16_Float or PixelFormat.R16_G16_B16_A16_Float or PixelFormat.R11_G11_B10_Float
+        or PixelFormat.R32_Float or PixelFormat.R32_G32_Float or PixelFormat.R32_G32_B32_A32_Float;
+
     private readonly PropertySet _properties = new();
     private TextureHandle? _source;
     private TextureHandle _target;
@@ -809,7 +965,8 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
         cmd.SetVertexSource(VertexSource.None);
         if (_source is { } source)
         {
-            cmd.SetShader(frame.PresentProgram.For(camera.LayerCount));
+            bool decode = camera.Chain.DisplayEncoded && TakesLinear(target.ColorTargets[0].Target.Format);
+            cmd.SetShader((decode ? frame.PresentDecodeProgram : frame.PresentProgram).For(camera.LayerCount));
             _properties.SetTexture("Graphite_Source", context.GetRenderTexture(source).ColorTextures[0], frame.LinearSampler);
         }
         else if (!whole)

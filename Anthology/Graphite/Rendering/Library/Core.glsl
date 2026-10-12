@@ -5,23 +5,7 @@
 #extension GL_EXT_multiview : require
 #extension GL_EXT_nonuniform_qualifier : require
 
-struct Graphite_ViewData
-{
-    mat4 view;                      // rotation only, the camera translation is applied by the camera relative positions
-    mat4 projection;
-    mat4 viewProjection;
-    mat4 inverseViewProjection;
-    mat4 previousViewProjection;    // relative to the previous camera position
-    vec4 cameraHigh;
-    vec4 cameraLow;
-    vec4 previousCameraHigh;
-    vec4 previousCameraLow;
-    vec4 screen;                    // width, height, 1 / width, 1 / height
-    vec4 jitter;                    // this frame's jitter in xy, the previous frame's in zw
-    vec4 time;                      // time, delta time, frame index, the part of time the first lost
-    vec4 depth;                     // near plane, logical far distance
-    vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
-};
+#include "Graphite/ViewData.glsl"
 
 // flags: 1 every instance draws object, 2 subMesh holds the material slot itself
 struct Graphite_DrawRecord { uint chunk; uint object; uint flags; uint subMesh; };

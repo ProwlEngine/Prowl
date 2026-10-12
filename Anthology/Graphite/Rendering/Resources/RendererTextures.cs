@@ -74,6 +74,9 @@ internal sealed class TableRing : IDisposable
             case Texture texture:
                 table.SetTexture(name, index, texture);
                 break;
+            case TextureView view:
+                table.SetTexture(name, index, view);
+                break;
             case Sampler sampler:
                 table.SetSampler(name, index, sampler);
                 break;

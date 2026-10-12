@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Graphite/Core.glsl"
+#include "Graphite/Octahedral.glsl"
 
 #ifdef GRAPHITE_FRAGMENT
 layout(location = 1) out vec2 graphite_GBufferNormal;
@@ -12,26 +13,6 @@ layout(location = 3) out vec2 graphite_GBufferMotion;
 layout(location = 28) in vec4 graphite_MotionCurrent;
 layout(location = 29) in vec4 graphite_MotionPrevious;
 #endif
-
-vec2 Graphite_OctWrap(vec2 v)
-{
-    return (1.0 - abs(v.yx)) * vec2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0);
-}
-
-// A unit normal folded onto an octahedron, in -1 to 1
-vec2 Graphite_OctEncode(vec3 n)
-{
-    n /= abs(n.x) + abs(n.y) + abs(n.z);
-    return n.z >= 0.0 ? n.xy : Graphite_OctWrap(n.xy);
-}
-
-vec3 Graphite_OctDecode(vec2 e)
-{
-    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
-    if (n.z < 0.0)
-        n.xy = Graphite_OctWrap(n.xy);
-    return normalize(n);
-}
 
 #ifdef GRAPHITE_FRAGMENT
 // How far the surface moved across the screen since last frame, in uv, without the camera's jitter: last frame's view
