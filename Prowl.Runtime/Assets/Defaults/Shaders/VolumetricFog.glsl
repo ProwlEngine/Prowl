@@ -57,7 +57,8 @@ void Fog_Ray(Graphite_ViewData view, vec2 uv, out vec3 origin, out vec3 dir)
 
 #if defined(FOG_FROXEL)
 
-#define GRAPHITE_LIGHT_HOST_DATA 1
+// Fullscreen programs take no world keywords, so the fog always reads cookies and profiles
+#define GRAPHITE_LIGHT_MASKS 1
 #include "Graphite/Lighting.glsl"
 
 uniform float _FogDensity;
@@ -157,7 +158,6 @@ vec3 Fog_Scatter(vec3 color, float hostBias, vec3 viewDir, vec3 toLight, float a
     return color * (8.0 * attenuation * Fog_HenyeyGreenstein(dot(viewDir, toLight), g));
 }
 
-// Shadows take one hard tap, the cells and the temporal blend already soften them
 vec3 Fog_SampleScattering(vec3 p, vec3 viewDir, vec3 volColor)
 {
     vec3 scatter = vec3(0.0);
@@ -169,7 +169,6 @@ vec3 Fog_SampleScattering(vec3 p, vec3 viewDir, vec3 volColor)
             Graphite_DirectionalLight d = Graphite_GetDirectional(i);
             if (dot(d.hostData.rgb, d.hostData.rgb) <= 0.0)
                 continue;
-            d.shadowFilter = GRAPHITE_SHADOW_HARD;
             float shadow = d.hostData.w > 3.0 ? 1.0 : Graphite_DirectionalLightShadow(d, i, p, d.direction);
             scatter += Fog_Scatter(d.hostData.rgb, d.hostData.w, viewDir, d.direction, shadow);
         }
@@ -188,14 +187,12 @@ vec3 Fog_SampleScattering(vec3 p, vec3 viewDir, vec3 volColor)
         float attenuation = Graphite_Window(dist2, L.Range) / max(dist2, 0.01);
         if (spot)
             attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, dot(L.Direction, -toLight));
-        if (attenuation <= 0.0 || dot(L.HostData.rgb, L.HostData.rgb) <= 0.0)
+        vec4 fog = Graphite_LightHostData(L);
+        if (attenuation <= 0.0 || dot(fog.rgb, fog.rgb) <= 0.0)
             continue;
-        if (L.HostData.w <= 3.0)
-        {
-            L.ShadowFilter = GRAPHITE_SHADOW_HARD;
+        if (fog.w <= 3.0)
             attenuation *= Graphite_LocalLightShadow(L, p, toLight);
-        }
-        scatter += Fog_Scatter(L.HostData.rgb * Graphite_LightMask(L, -toLight), L.HostData.w, viewDir, toLight, attenuation);
+        scatter += Fog_Scatter(fog.rgb * Graphite_LightMask(L, -toLight), fog.w, viewDir, toLight, attenuation);
     }
     return scatter * volColor;
 }
