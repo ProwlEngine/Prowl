@@ -103,6 +103,7 @@ public class PaperRenderer : ICanvasRenderer
 
     public Int2 GetTextureSize(object texture)
     {
+        if (texture is GTexture raw) return new Int2((int)raw.Width, (int)raw.Height);
         if (texture is not Texture2D tex) throw new ArgumentException("Invalid texture type");
         return new Int2((int)tex.Width, (int)tex.Height);
     }
@@ -170,7 +171,7 @@ public class PaperRenderer : ICanvasRenderer
             Texture2D? font = drawCall.FontAtlas as Texture2D;
             ref Call call = ref calls[i];
             call.ElementCount = drawCall.ElementCount;
-            call.Texture = texture.IsValid() ? texture.GpuIfLoaded : null;
+            call.Texture = texture.IsValid() ? texture.GpuIfLoaded : drawCall.Texture as GTexture;
             call.TextureView = texture.IsValid() ? texture.DisplayViewIfLoaded : null;
             call.TextureSampler = texture.IsValid() ? Graphics.GetSampler(texture.SamplerUnchecked) : null;
             call.Font = font.IsValid() ? font.GpuIfLoaded : null;
