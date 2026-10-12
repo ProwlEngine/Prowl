@@ -79,6 +79,8 @@ public sealed record DispatchCommand(uint GroupCountX, uint GroupCountY, uint Gr
 
 public sealed record DispatchIndirectCommand(TraceVersion Buffer, uint Offset) : RecordedCommand;
 
+public sealed record ComputeBarrierCommand : RecordedCommand;
+
 public sealed record UpdateBufferCommand(TraceVersion After, uint Offset, BlobRef Data) : RecordedCommand;
 
 public sealed record UpdateTextureCommand(TraceVersion After, TextureRegion Region, BlobRef Data) : RecordedCommand;

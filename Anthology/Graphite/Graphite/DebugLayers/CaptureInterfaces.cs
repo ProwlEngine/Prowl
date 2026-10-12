@@ -79,6 +79,8 @@ public interface IPassCommandSink
 
     void DispatchIndirect(in ResourceVersion buffer, uint offset);
 
+    void ComputeBarrier();
+
     void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data);
 
     void UpdateTexture(in ResourceVersion after, in TextureRegion region, ReadOnlySpan<byte> data);

@@ -205,6 +205,9 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             case DispatchIndirectCommand dispatch:
                 cmd.DispatchIndirect(scope.Buffer(dispatch.Buffer.Resource), dispatch.Offset);
                 break;
+            case ComputeBarrierCommand:
+                cmd.ComputeBarrier();
+                break;
             case UpdateBufferCommand update:
                 fixed (byte* source = scope.Blob(update.Data))
                     cmd.UpdateBuffer(scope.Buffer(update.After.Resource), update.Offset, (IntPtr)source, (uint)update.Data.Length);

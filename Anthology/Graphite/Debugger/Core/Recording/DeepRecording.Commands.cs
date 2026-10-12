@@ -224,6 +224,8 @@ public sealed partial class DeepRecording
         public void DispatchIndirect(in ResourceVersion buffer, uint offset)
             => pass.Commands.Add(new DispatchIndirectCommand(owner.Trace(buffer), offset));
 
+        public void ComputeBarrier() => pass.Commands.Add(new ComputeBarrierCommand());
+
         public void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
         {
             pass.Written.Add(after.Resource);

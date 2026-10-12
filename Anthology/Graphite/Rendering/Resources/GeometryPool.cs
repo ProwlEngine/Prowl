@@ -68,9 +68,19 @@ public sealed class GpuMesh : IDisposable
     }
 }
 
+/// <summary>A placed blend shape frame: its weight, delta count, and the first word of each delta array, none when absent.</summary>
+internal readonly record struct BlendFrame(float Weight, uint Count, uint Vertices, uint Positions, uint Normals, uint Tangents)
+{
+    public const uint None = uint.MaxValue;
+}
+
 /// <summary>Where a mesh's data lives: its page, its ranges, each present stream's first word, and its chunk records.</summary>
 internal sealed class MeshPlacement
 {
+    /// <summary>The mesh's blend shape frames, after its streams, and each shape's first frame and count. Copies have none.</summary>
+    public BlendFrame[] BlendFrames = [];
+    public (int First, int Count)[] BlendShapes = [];
+
     public required int Page;
     public required RangeAllocation Vertices;
     public required RangeAllocation Indices;
@@ -209,12 +219,13 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
                 if (mesh.IsDisposed)
                     continue;
 
-                long bytes = ((long)layout.VertexWords + layout.Indices.Length) * 4;
+                long bytes = ((long)layout.VertexWords + layout.BlendWords + layout.Indices.Length) * 4;
                 if (spent > 0 && spent + bytes > budgetBytes)
                     break;
 
                 Release(mesh, lastDispatched);
-                MeshPlacement placement = Place(layout.StreamsPresent, layout.VertexCount, (uint)layout.Indices.Length, layout.Chunks, layout.SubMeshes, layout.Bounds);
+                MeshPlacement placement = Place(layout.StreamsPresent, layout.VertexCount, (uint)layout.Indices.Length, layout.Chunks, layout.SubMeshes, layout.Bounds, layout.BlendFrames);
+                placement.BlendShapes = layout.BlendShapes;
                 Write(uploader, placement, layout);
                 WriteChunks(mesh.Id, placement);
                 WriteMesh(mesh.Id, placement);
@@ -236,7 +247,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
     /// </summary>
     public MeshPlacement PlaceCopy(GpuMesh mesh, MeshPlacement source)
     {
-        MeshPlacement copy = Place(source.StreamsPresent, source.VertexCount, source.Indices.Size, source.Chunks, source.SubMeshes, source.Bounds);
+        MeshPlacement copy = Place(source.StreamsPresent, source.VertexCount, source.Indices.Size, source.Chunks, source.SubMeshes, source.Bounds, []);
         WriteChunks(mesh.Id, copy);
         return copy;
     }
@@ -318,7 +329,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
     private static uint StreamWords(uint streamsPresent, int stream, uint vertexCount)
         => (streamsPresent & (1u << stream)) != 0 ? MeshLayout.WordsPerVertex((VertexSemantic)stream) * vertexCount : 0;
 
-    private MeshPlacement Place(uint streamsPresent, uint vertexCount, uint indexCount, MeshChunk[] chunks, SubMesh[] subMeshes, AABB bounds)
+    private MeshPlacement Place(uint streamsPresent, uint vertexCount, uint indexCount, MeshChunk[] chunks, SubMesh[] subMeshes, AABB bounds, BlendFrameLayout[] blendFrames)
     {
         uint vertexWords = 0;
         for (int s = 0; s < MeshLayout.StreamCount; s++)
@@ -326,6 +337,8 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             if ((streamsPresent & (1u << s)) != 0)
                 vertexWords = Align(vertexWords) + StreamWords(streamsPresent, s, vertexCount);
         }
+        foreach (BlendFrameLayout frame in blendFrames)
+            vertexWords += frame.Words;
 
         indexCount = Math.Max(1, indexCount);
         int pageIndex = -1;
@@ -366,6 +379,22 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             cursor += StreamWords(streamsPresent, s, vertexCount);
         }
 
+        BlendFrame[] placedFrames = new BlendFrame[blendFrames.Length];
+        for (int f = 0; f < blendFrames.Length; f++)
+        {
+            BlendFrameLayout frame = blendFrames[f];
+            uint Take(uint[]? words)
+            {
+                if (words == null)
+                    return BlendFrame.None;
+                uint at = cursor;
+                cursor += (uint)words.Length;
+                return at;
+            }
+            uint verticesAt = Take(frame.Vertices), positionsAt = Take(frame.Positions), normalsAt = Take(frame.Normals), tangentsAt = Take(frame.Tangents);
+            placedFrames[f] = new BlendFrame(frame.Weight, (uint)frame.Vertices.Length, verticesAt, positionsAt, normalsAt, tangentsAt);
+        }
+
         return new MeshPlacement
         {
             Page = pageIndex,
@@ -378,6 +407,7 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
             VertexCount = vertexCount,
             Chunks = chunks,
             SubMeshes = subMeshes,
+            BlendFrames = placedFrames,
         };
     }
 
@@ -397,6 +427,18 @@ internal sealed class GeometryPool(GraphicsDevice device, uint pageVertexWords =
         {
             if (layout.Streams[s] is { } stream)
                 uploader.Write(page.Vertices, placement.StreamOffsets[s], stream);
+        }
+
+        for (int f = 0; f < layout.BlendFrames.Length; f++)
+        {
+            BlendFrameLayout frame = layout.BlendFrames[f];
+            BlendFrame placed = placement.BlendFrames[f];
+            uploader.Write(page.Vertices, placed.Vertices, frame.Vertices);
+            uploader.Write(page.Vertices, placed.Positions, frame.Positions);
+            if (frame.Normals != null)
+                uploader.Write(page.Vertices, placed.Normals, frame.Normals);
+            if (frame.Tangents != null)
+                uploader.Write(page.Vertices, placed.Tangents, frame.Tangents);
         }
 
         if (layout.Indices.Length > 0)

@@ -395,9 +395,11 @@ internal sealed class CameraView : IRenderView
 }
 
 /// <summary>
-/// Fills the frame's new deformed copies from their meshes, then skins the copies a view sees this frame whose bones
-/// changed. After the upload and before the fence every view follows. A copy skinned the frame it is made skips the
-/// streams the skin writes, so no two dispatches of the pass write the same words.
+/// Fills the frame's new deformed copies from their meshes, then deforms the copies a view sees this frame whose bones
+/// or blend shape weights changed: morphing copies take their rest pose, each slot of active frames adds its deltas
+/// across every copy, then skinning reads the result. Barriers fall between those steps only, as copies never share
+/// words. A copy deformed the frame it is made skips the streams the deform writes. After the upload and before the
+/// fence every view follows.
 /// </summary>
 internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IPass, IDisposable
 {
@@ -407,13 +409,15 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
         public uint Mode, First, Count, Streams;
         public uint SourceWord, TargetWord, Normal, TargetNormal;
         public uint Tangent, TargetTangent, BoneIndices, BoneWeights;
-        public uint BoneBase, BoneCount, Pad0, Pad1;
+        public uint BoneBase, BoneCount, Deltas;
+        public float Weight;
     }
 
     private const uint MaxPerDispatch = 65535 * 64;
     private const uint SkinnedStreams = (1u << (int)VertexSemantic.Position) | (1u << (int)VertexSemantic.Normal) | (1u << (int)VertexSemantic.Tangent);
 
     private readonly PropertySet _properties = new();
+    private readonly List<(RenderWorld.RenderSide World, int Index)> _jobs = new();
 
     public DeviceBuffer[] Buffers = [];
     public readonly List<RenderWorld.RenderSide> Worlds = new();
@@ -428,7 +432,9 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 
     public void Render(RenderContext context, CommandBuffer cmd)
     {
-        bool bound = false;
+        _jobs.Clear();
+        bool bound = false, morphs = false;
+        int slots = 0;
         foreach (RenderWorld.RenderSide world in Worlds)
         {
             if (world.NewCopies.Count == 0 && world.Deforming.Count == 0)
@@ -441,7 +447,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 
             foreach ((int index, MeshPlacement from, MeshPlacement to) in world.NewCopies)
             {
-                uint skipped = Skins(world, index) ? SkinnedStreams : 0;
+                uint skipped = Deforms(world, index) ? SkinnedStreams : 0;
                 DeviceBuffer source = geometry.Pages[from.Page].Vertices, target = geometry.Pages[to.Page].Vertices;
                 for (int s = 0; s < MeshLayout.StreamCount; s++)
                 {
@@ -453,34 +459,96 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 
             foreach (int index in world.Deforming)
             {
-                if (!Skins(world, index))
+                if (!Deforms(world, index))
                     continue;
                 world.DeformStale[index] = false;
+                _jobs.Add((world, index));
                 MeshPlacement from = world.Mesh[index]!.Placement!, to = world.Deformed[index]!;
-                (uint first, uint count) = world.BonesOf(index);
-                Bind(cmd, world, geometry.Pages[from.Page].Vertices, geometry.Pages[to.Page].Vertices);
-                Dispatch(cmd, new Push
+                if (from.BlendFrames.Length == 0)
+                    continue;
+                morphs = true;
+                slots = Math.Max(slots, world.ActiveFrames[index].Length);
+                DeviceBuffer source = geometry.Pages[from.Page].Vertices, target = geometry.Pages[to.Page].Vertices;
+                for (int s = 0; s < MeshLayout.StreamCount; s++)
                 {
-                    Mode = 1,
-                    Count = from.VertexCount,
-                    Streams = ((from.StreamsPresent >> (int)VertexSemantic.Normal) & 1) | (((from.StreamsPresent >> (int)VertexSemantic.Tangent) & 1) << 1),
-                    SourceWord = from.StreamOffsets[(int)VertexSemantic.Position],
-                    TargetWord = to.StreamOffsets[(int)VertexSemantic.Position],
-                    Normal = from.StreamOffsets[(int)VertexSemantic.Normal],
-                    TargetNormal = to.StreamOffsets[(int)VertexSemantic.Normal],
-                    Tangent = from.StreamOffsets[(int)VertexSemantic.Tangent],
-                    TargetTangent = to.StreamOffsets[(int)VertexSemantic.Tangent],
-                    BoneIndices = from.StreamOffsets[(int)VertexSemantic.BoneIndices],
-                    BoneWeights = from.StreamOffsets[(int)VertexSemantic.BoneWeights],
-                    BoneBase = first,
-                    BoneCount = count,
-                });
+                    if ((from.StreamsPresent & (1u << s) & SkinnedStreams) != 0)
+                        Copy(cmd, world, source, target, from.StreamOffsets[s], to.StreamOffsets[s], MeshLayout.WordsPerVertex((VertexSemantic)s) * from.VertexCount);
+                }
             }
         }
+        if (!morphs)
+        {
+            foreach ((RenderWorld.RenderSide world, int index) in _jobs)
+                Skin(cmd, world, index);
+            return;
+        }
+
+        cmd.ComputeBarrier();
+        for (int slot = 0; slot < slots; slot++)
+        {
+            foreach ((RenderWorld.RenderSide world, int index) in _jobs)
+            {
+                if (slot < world.ActiveFrames[index].Length)
+                    Morph(cmd, world, index, world.ActiveFrames[index][slot]);
+            }
+            cmd.ComputeBarrier();
+        }
+        foreach ((RenderWorld.RenderSide world, int index) in _jobs)
+            Skin(cmd, world, index);
     }
 
-    // Whether the renderable's copy is skinned this frame: behind its bones and seen by a view
-    private static bool Skins(RenderWorld.RenderSide world, int index)
+    // Adds one frame's weighted deltas to the copy's pose
+    private void Morph(CommandBuffer cmd, RenderWorld.RenderSide world, int index, (int Frame, float Weight) active)
+    {
+        MeshPlacement from = world.Mesh[index]!.Placement!, to = world.Deformed[index]!;
+        BlendFrame frame = from.BlendFrames[active.Frame];
+        bool normals = frame.Normals != BlendFrame.None, tangents = frame.Tangents != BlendFrame.None;
+        Bind(cmd, world, geometry.Pages[from.Page].Vertices, geometry.Pages[to.Page].Vertices);
+        Dispatch(cmd, new Push
+        {
+            Mode = 2,
+            Count = frame.Count,
+            Streams = (normals ? 1u : 0) | (tangents ? 2u : 0),
+            SourceWord = frame.Vertices,
+            Deltas = frame.Positions,
+            Normal = frame.Normals,
+            Tangent = frame.Tangents,
+            TargetWord = to.StreamOffsets[(int)VertexSemantic.Position],
+            TargetNormal = to.StreamOffsets[(int)VertexSemantic.Normal],
+            TargetTangent = to.StreamOffsets[(int)VertexSemantic.Tangent],
+            Weight = active.Weight,
+        });
+    }
+
+    // Skins the copy from the mesh's rest pose, or from its own pose when it morphs
+    private void Skin(CommandBuffer cmd, RenderWorld.RenderSide world, int index)
+    {
+        MeshPlacement from = world.Mesh[index]!.Placement!, to = world.Deformed[index]!;
+        if (!world.Skins(index, from))
+            return;
+        (uint first, uint count) = world.BonesOf(index);
+        uint ownPose = from.BlendFrames.Length > 0 ? 4u : 0;
+        Bind(cmd, world, geometry.Pages[from.Page].Vertices, geometry.Pages[to.Page].Vertices);
+        Dispatch(cmd, new Push
+        {
+            Mode = 1,
+            Count = from.VertexCount,
+            Streams = ((from.StreamsPresent >> (int)VertexSemantic.Normal) & 1) | (((from.StreamsPresent >> (int)VertexSemantic.Tangent) & 1) << 1) | ownPose,
+            SourceWord = from.StreamOffsets[(int)VertexSemantic.Position],
+            TargetWord = to.StreamOffsets[(int)VertexSemantic.Position],
+            Normal = from.StreamOffsets[(int)VertexSemantic.Normal],
+            TargetNormal = to.StreamOffsets[(int)VertexSemantic.Normal],
+            Tangent = from.StreamOffsets[(int)VertexSemantic.Tangent],
+            TargetTangent = to.StreamOffsets[(int)VertexSemantic.Tangent],
+            BoneIndices = from.StreamOffsets[(int)VertexSemantic.BoneIndices],
+            BoneWeights = from.StreamOffsets[(int)VertexSemantic.BoneWeights],
+            BoneBase = first,
+            BoneCount = count,
+        });
+    }
+
+    // Whether the renderable's copy deforms this frame: behind its bones or weights and seen by a view
+    private static bool Deforms(RenderWorld.RenderSide world, int index)
         => world.DeformStale[index] && world.DeformSeen[index] == world.DeformStamp && world.Deformed[index] != null;
 
     private void Copy(CommandBuffer cmd, RenderWorld.RenderSide world, DeviceBuffer source, DeviceBuffer target, uint sourceWord, uint targetWord, uint words)

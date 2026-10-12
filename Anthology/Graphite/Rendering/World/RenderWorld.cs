@@ -479,6 +479,7 @@ public sealed partial class RenderWorld : IDisposable
         Added = 16,
         Removed = 32,
         Bones = 64,
+        Weights = 128,
     }
 
     private const uint MaxSliceEntries = 1u << 24;
@@ -501,6 +502,7 @@ public sealed partial class RenderWorld : IDisposable
     private AABB[] _boundsOverride = [];
     private bool[] _hasBoundsOverride = [];
     private Float4x4[]?[] _bones = [];
+    private float[]?[] _shapeWeights = [];
     private Dirt[] _dirt = [];
     private readonly List<int> _dirty = new();
 
@@ -560,6 +562,7 @@ public sealed partial class RenderWorld : IDisposable
         _sortBias[index] = desc.SortBias;
         _hasBoundsOverride[index] = false;
         _bones[index] = null;
+        _shapeWeights[index] = null;
         _slice[index] = AllocateSlice(materials);
         Count++;
         MarkDirty(index, Dirt.Added | Dirt.Transform | Dirt.Attributes | Dirt.Draw | Dirt.Bounds);
@@ -573,6 +576,7 @@ public sealed partial class RenderWorld : IDisposable
         _generation[index]++;
         _mesh[index] = null;
         _bones[index] = null;
+        _shapeWeights[index] = null;
         FreeSlice(_slice[index]);
         _slice[index] = default;
         _free.Push(index);
@@ -737,6 +741,32 @@ public sealed partial class RenderWorld : IDisposable
         MarkDirty(index, Dirt.Bones);
     }
 
+    /// <summary>
+    /// Weights the mesh's blend shapes, one per shape from 0 to 100 like Prowl, past either end to over or undershoot.
+    /// Shapes past the span weigh 0, and an empty span rests every shape. Nothing changes when the weights equal the
+    /// stored ones. A renderable whose mesh has blend shapes culls by its bounds override, which should hold every shape.
+    /// </summary>
+    public void SetBlendShapeWeights(RenderableHandle handle, ReadOnlySpan<float> weights)
+    {
+        int index = Check(handle);
+        float[]? stored = _shapeWeights[index];
+        if (weights.IsEmpty)
+        {
+            if (stored == null)
+                return;
+            _shapeWeights[index] = null;
+        }
+        else
+        {
+            if (stored != null && weights.SequenceEqual(stored))
+                return;
+            if (stored == null || stored.Length != weights.Length)
+                _shapeWeights[index] = stored = new float[weights.Length];
+            weights.CopyTo(stored);
+        }
+        MarkDirty(index, Dirt.Weights);
+    }
+
     /// <summary>Copies everything that changed since the last call into the render copy. Host thread, at SubmitFrame.</summary>
     internal void Extract()
     {
@@ -879,6 +909,7 @@ public sealed partial class RenderWorld : IDisposable
         Array.Resize(ref _boundsOverride, capacity);
         Array.Resize(ref _hasBoundsOverride, capacity);
         Array.Resize(ref _bones, capacity);
+        Array.Resize(ref _shapeWeights, capacity);
         Array.Resize(ref _dirt, capacity);
     }
 
@@ -938,6 +969,10 @@ public sealed partial class RenderWorld : IDisposable
 
         /// <summary>Renderables with a deformed copy.</summary>
         public HashSet<int> Deforming { get; } = new();
+
+        /// <summary>A renderable's blend shape weights, and the frames they pick with the weight each adds.</summary>
+        public float[]?[] ShapeWeights = [];
+        public (int Frame, float Weight)[][] ActiveFrames = [];
 
         /// <summary>Copies made this frame, each of a renderable, whose data the GPU copies from their mesh.</summary>
         public List<(int Index, MeshPlacement From, MeshPlacement To)> NewCopies { get; } = new();
@@ -1048,7 +1083,17 @@ public sealed partial class RenderWorld : IDisposable
                 attributes.PreviousTransform = ObjectAttributes.NoPrevious;
             if ((dirt & (Dirt.Bones | Dirt.Added)) != 0)
                 ReceiveBones(index, host._bones[index]);
-            if ((dirt & (Dirt.Bones | Dirt.Added | Dirt.Draw | Dirt.Bounds)) != 0)
+            if ((dirt & (Dirt.Weights | Dirt.Added)) != 0)
+            {
+                float[]? weights = host._shapeWeights[index];
+                if (weights == null)
+                    ShapeWeights[index] = null;
+                else if (ShapeWeights[index]?.Length == weights.Length)
+                    weights.CopyTo(ShapeWeights[index]!, 0);
+                else
+                    ShapeWeights[index] = (float[])weights.Clone();
+            }
+            if ((dirt & (Dirt.Bones | Dirt.Weights | Dirt.Added | Dirt.Draw | Dirt.Bounds)) != 0)
                 _deformDirty.Add(index);
 
             if ((dirt & Dirt.Draw) != 0)
@@ -1118,12 +1163,16 @@ public sealed partial class RenderWorld : IDisposable
         /// </summary>
         public void UpdateDeformation(GeometryPool geometry, ulong lastDispatched)
         {
-            const uint boneStreams = (1u << (int)VertexSemantic.BoneIndices) | (1u << (int)VertexSemantic.BoneWeights);
             NewCopies.Clear();
             foreach (int index in _deformDirty)
             {
-                MeshPlacement? source = index < Capacity && Alive[index] && _boneRange[index].Size > 0 && Mesh[index]?.Placement is { } placed
-                    && (placed.StreamsPresent & boneStreams) == boneStreams ? placed : null;
+                MeshPlacement? source = index < Capacity && Alive[index] && Mesh[index]?.Placement is { } placed
+                    && (Skins(index, placed) || placed.BlendFrames.Length > 0) ? placed : null;
+                if (source != null)
+                {
+                    ActiveFrames[index] = PickFrames(source, ShapeWeights[index]);
+                    DeformStale[index] = true;
+                }
                 if (source != null && source == _deformSource[index])
                 {
                     if (BoundsOverride[index] == null)
@@ -1152,6 +1201,53 @@ public sealed partial class RenderWorld : IDisposable
                     ReportBounds(index);
             }
             _deformDirty.Clear();
+        }
+
+        /// <summary>Whether a renderable skins its mesh: it has bones and the mesh has bone streams.</summary>
+        public bool Skins(int index, MeshPlacement mesh)
+        {
+            const uint boneStreams = (1u << (int)VertexSemantic.BoneIndices) | (1u << (int)VertexSemantic.BoneWeights);
+            return _boneRange[index].Size > 0 && (mesh.StreamsPresent & boneStreams) == boneStreams;
+        }
+
+        // Prowl's frame pick: a lone frame scales by weight over its weight, several interpolate between the two around
+        // the weight, clamped to the last; near zero weights and picks are left out
+        private static (int Frame, float Weight)[] PickFrames(MeshPlacement mesh, float[]? weights)
+        {
+            if (weights == null || mesh.BlendShapes.Length == 0)
+                return [];
+            List<(int, float)> picked = new();
+            void Pick(int frame, float weight)
+            {
+                if (MathF.Abs(weight) >= 1e-5f)
+                    picked.Add((frame, weight));
+            }
+            for (int s = 0; s < mesh.BlendShapes.Length && s < weights.Length; s++)
+            {
+                float w = weights[s];
+                (int first, int count) = mesh.BlendShapes[s];
+                if (MathF.Abs(w) < 1e-4f || count == 0)
+                    continue;
+                float firstWeight = mesh.BlendFrames[first].Weight, lastWeight = mesh.BlendFrames[first + count - 1].Weight;
+                if (count == 1 || w <= firstWeight)
+                {
+                    Pick(first, firstWeight != 0 ? w / firstWeight : 0);
+                    continue;
+                }
+                if (w >= lastWeight)
+                {
+                    Pick(first + count - 1, 1);
+                    continue;
+                }
+                int i = 0;
+                while (i < count - 1 && mesh.BlendFrames[first + i + 1].Weight <= w)
+                    i++;
+                float a = mesh.BlendFrames[first + i].Weight, b = mesh.BlendFrames[first + i + 1].Weight;
+                float t = b > a ? (w - a) / (b - a) : 0;
+                Pick(first + i, 1 - t);
+                Pick(first + i + 1, t);
+            }
+            return [.. picked];
         }
 
         private void ReportBounds(int index)
@@ -1443,6 +1539,10 @@ public sealed partial class RenderWorld : IDisposable
             Array.Resize(ref Deformed, capacity);
             Array.Resize(ref DeformStale, capacity);
             Array.Resize(ref DeformSeen, capacity);
+            Array.Resize(ref ShapeWeights, capacity);
+            int oldFrames = ActiveFrames.Length;
+            Array.Resize(ref ActiveFrames, capacity);
+            Array.Fill(ActiveFrames, [], oldFrames, capacity - oldFrames);
             int old = Previous.Length;
             Array.Resize(ref Previous, capacity);
             Array.Fill(Previous, ObjectAttributes.NoPrevious, old, capacity - old);

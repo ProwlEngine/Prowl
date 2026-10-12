@@ -518,7 +518,7 @@ public sealed class FeatureTests : IDisposable
     }
 
     // A mesh with the bone streams given and a triangle list over its vertices in order
-    private GpuMesh SkinnedMesh(Float3[] positions, ushort[] boneIndices, ushort[] boneWeights, Float3[]? normals = null, Float4[]? tangents = null)
+    private GpuMesh SkinnedMesh(Float3[] positions, ushort[] boneIndices, ushort[] boneWeights, Float3[]? normals = null, Float4[]? tangents = null, BlendShapeData[]? shapes = null)
     {
         uint count = (uint)positions.Length;
         List<VertexStream> streams =
@@ -532,7 +532,7 @@ public sealed class FeatureTests : IDisposable
         if (tangents != null)
             streams.Add(new VertexStream { Semantic = VertexSemantic.Tangent, Format = VertexElementFormat.Float4, Data = MemoryMarshal.AsBytes(tangents.AsSpan()).ToArray() });
         uint[] indices = [.. Enumerable.Range(0, (int)(count / 3 * 3)).Select(i => (uint)i)];
-        GpuMesh mesh = _renderer.CreateMesh(new MeshData { VertexCount = count, Streams = [.. streams], Indices = indices });
+        GpuMesh mesh = _renderer.CreateMesh(new MeshData { VertexCount = count, Streams = [.. streams], Indices = indices, BlendShapes = shapes ?? [] });
         _owned.Add(mesh);
         return mesh;
     }
@@ -671,6 +671,175 @@ public sealed class FeatureTests : IDisposable
         _world.SetLayerMask(handle, ~0u);
         Frame(view);
         Assert.Equal(-3f, DeformedStream(handle, VertexSemantic.Position)[0]);
+    }
+
+    // Prowl's frame pick: one frame scales by weight over its weight, several interpolate between the two around the
+    // weight, clamped to the last, with near zero weights and pairs left out
+    private static List<(BlendShapeFrame Frame, float Weight)> CpuActiveFrames(BlendShapeData[] shapes, float[] weights)
+    {
+        List<(BlendShapeFrame, float)> active = new();
+        void Add(BlendShapeFrame frame, float weight)
+        {
+            if (MathF.Abs(weight) >= 1e-5f)
+                active.Add((frame, weight));
+        }
+        for (int s = 0; s < shapes.Length; s++)
+        {
+            float w = weights[s];
+            BlendShapeFrame[] frames = shapes[s].Frames;
+            if (MathF.Abs(w) < 1e-4f || frames.Length == 0)
+                continue;
+            float first = frames[0].Weight, last = frames[^1].Weight;
+            if (frames.Length == 1 || w <= first)
+            {
+                Add(frames[0], first != 0 ? w / first : 0);
+                continue;
+            }
+            if (w >= last)
+            {
+                Add(frames[^1], 1);
+                continue;
+            }
+            int i = 0;
+            while (i < frames.Length - 1 && frames[i + 1].Weight <= w)
+                i++;
+            float a = frames[i].Weight, b = frames[i + 1].Weight;
+            float t = b > a ? (w - a) / (b - a) : 0;
+            Add(frames[i], 1 - t);
+            Add(frames[i + 1], t);
+        }
+        return active;
+    }
+
+    private static Float3 CpuMorph(Float3 rest, int vertex, List<(BlendShapeFrame Frame, float Weight)> active, Func<BlendShapeFrame, Float3[]?> deltas)
+    {
+        foreach ((BlendShapeFrame frame, float weight) in active)
+        {
+            int at = Array.IndexOf(frame.Vertices, (uint)vertex);
+            if (at >= 0 && deltas(frame) is { } d)
+                rest += d[at] * weight;
+        }
+        return rest;
+    }
+
+    private static BlendShapeFrame RandomFrame(Random random, float weight, int vertexCount, int moved)
+    {
+        uint[] vertices = [.. Enumerable.Range(0, vertexCount).OrderBy(_ => random.Next()).Take(moved).Select(v => (uint)v)];
+        Float3 Next() => new(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f, random.NextSingle() - 0.5f);
+        return new BlendShapeFrame
+        {
+            Weight = weight,
+            Vertices = vertices,
+            Positions = [.. vertices.Select(_ => Next())],
+            Normals = [.. vertices.Select(_ => Next())],
+            Tangents = [.. vertices.Select(_ => Next())],
+        };
+    }
+
+    [Fact]
+    public void BlendShapes_MorphBeforeSkinning_AsProwlDoes()
+    {
+        Random random = new(11);
+        const int count = 60;
+        Float3[] positions = new Float3[count], normals = new Float3[count];
+        Float4[] tangents = new Float4[count];
+        ushort[] indices = new ushort[count * 4], weights = new ushort[count * 4];
+        for (int v = 0; v < count; v++)
+        {
+            positions[v] = new Float3(random.NextSingle() * 4 - 2, random.NextSingle() * 4 - 2, random.NextSingle());
+            normals[v] = new Float3(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f, -1);
+            tangents[v] = new Float4(1, random.NextSingle() - 0.5f, 0, 1);
+            (indices[v * 4], weights[v * 4]) = ((ushort)(v % 2 + 1), 65535);
+        }
+
+        // Frames that overlap on vertices, so the frames must add up one after another
+        BlendShapeData[] shapes =
+        [
+            new BlendShapeData { Name = "Single", Frames = [RandomFrame(random, 100, count, 40)] },
+            new BlendShapeData { Name = "Steps", Frames = [RandomFrame(random, 25, count, 40), RandomFrame(random, 50, count, 40), RandomFrame(random, 100, count, 40)] },
+            new BlendShapeData { Name = "Idle", Frames = [RandomFrame(random, 100, count, 40)] },
+        ];
+        float[] shapeWeights = [60, 37.5f, 0];
+        Float4x4[] bones = [Translation(0.5f, 0, 0), new Float4x4(new Float4(0, 1, 0, 0), new Float4(-1, 0, 0, 0), new Float4(0, 0, 1, 0), new Float4(0, 0, 0.25f, 1))];
+
+        GpuMesh mesh = SkinnedMesh(positions, indices, weights, normals, tangents, shapes);
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-8), new Float3(8)));
+        _world.SetBlendShapeWeights(handle, shapeWeights);
+        _world.SetBones(handle, bones);
+        Frame(View());
+
+        List<(BlendShapeFrame Frame, float Weight)> active = CpuActiveFrames(shapes, shapeWeights);
+        Assert.Equal(3, active.Count);
+        float[] gpuPositions = DeformedStream(handle, VertexSemantic.Position);
+        float[] gpuNormals = DeformedStream(handle, VertexSemantic.Normal);
+        float[] gpuTangents = DeformedStream(handle, VertexSemantic.Tangent);
+        for (int v = 0; v < count; v++)
+        {
+            ReadOnlySpan<ushort> vi = indices.AsSpan(v * 4, 4), vw = weights.AsSpan(v * 4, 4);
+            Float3 position = CpuSkin(CpuMorph(positions[v], v, active, f => f.Positions), 1, vi, vw, bones);
+            Float3 normal = CpuSkin(CpuMorph(normals[v], v, active, f => f.Normals), 0, vi, vw, bones);
+            Float3 tangent = CpuSkin(CpuMorph(new Float3(tangents[v].X, tangents[v].Y, tangents[v].Z), v, active, f => f.Tangents), 0, vi, vw, bones);
+            normal /= MathF.Sqrt(normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z);
+            tangent /= MathF.Sqrt(tangent.X * tangent.X + tangent.Y * tangent.Y + tangent.Z * tangent.Z);
+            for (int c = 0; c < 3; c++)
+            {
+                Assert.True(MathF.Abs(gpuPositions[v * 3 + c] - position[c]) < 1e-4f, $"vertex {v} position {c}: {gpuPositions[v * 3 + c]} against {position[c]}");
+                Assert.True(MathF.Abs(gpuNormals[v * 3 + c] - normal[c]) < 1e-4f, $"vertex {v} normal {c}: {gpuNormals[v * 3 + c]} against {normal[c]}");
+                Assert.True(MathF.Abs(gpuTangents[v * 4 + c] - tangent[c]) < 1e-4f, $"vertex {v} tangent {c}: {gpuTangents[v * 4 + c]} against {tangent[c]}");
+            }
+        }
+    }
+
+    [Fact]
+    public void BlendShapes_WithoutBones_MorphWhatIsDrawn_AndRestAtZero()
+    {
+        Float3[] positions = [new(-4, -4, 0), new(4, -4, 0), new(4, 4, 0), new(-4, -4, 0), new(4, 4, 0), new(-4, 4, 0)];
+        BlendShapeFrame right = new() { Weight = 100, Vertices = [0, 1, 2, 3, 4, 5], Positions = [.. Enumerable.Repeat(new Float3(4, 0, 0), 6)] };
+        GpuMesh mesh = _renderer.CreateMesh(new MeshData
+        {
+            VertexCount = 6,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
+            Indices = new uint[] { 0, 1, 2, 3, 4, 5 },
+            BlendShapes = [new BlendShapeData { Name = "Right", Frames = [right] }],
+        });
+        _owned.Add(mesh);
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-8), new Float3(8)));
+        AssertAll(new Float3(1, 1, 1), Frame(View()), Centre);
+
+        _world.SetBlendShapeWeights(handle, [100]);
+        AssertAll(new Float3(1, 1, 1), Frame(View()), i => i % Size is >= 8 and < 16 && i / Size is >= 4 and < 12);
+        _world.SetBlendShapeWeights(handle, [50]);
+        AssertAll(new Float3(1, 1, 1), Frame(View()), i => i % Size is >= 6 and < 14 && i / Size is >= 4 and < 12);
+        _world.SetBlendShapeWeights(handle, []);
+        AssertAll(new Float3(1, 1, 1), Frame(View()), Centre);
+    }
+
+    [Fact]
+    public void BlendShapes_RefuseFramesThatDoNotFitTheMesh()
+    {
+        Float3[] positions = [new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)];
+        MeshData Mesh(params BlendShapeFrame[] frames) => new()
+        {
+            VertexCount = 3,
+            Streams = [new VertexStream { Semantic = VertexSemantic.Position, Format = VertexElementFormat.Float3, Data = MemoryMarshal.AsBytes(positions.AsSpan()).ToArray() }],
+            Indices = new uint[] { 0, 1, 2 },
+            BlendShapes = [new BlendShapeData { Name = "Shape", Frames = frames }],
+        };
+        Assert.Throws<ArgumentException>(() => _renderer.CreateMesh(Mesh(new BlendShapeFrame { Vertices = [3], Positions = [default] })));
+        Assert.Throws<ArgumentException>(() => _renderer.CreateMesh(Mesh(new BlendShapeFrame { Vertices = [0, 1], Positions = [default] })));
+        Assert.Throws<ArgumentException>(() => _renderer.CreateMesh(Mesh(new BlendShapeFrame { Weight = 50, Vertices = [0], Positions = [default] }, new BlendShapeFrame { Weight = 25, Vertices = [0], Positions = [default] })));
+    }
+
+    [Fact]
+    public void BlendShapeFrames_FromDenseDeltas_KeepOnlyTheVerticesTheyMove()
+    {
+        BlendShapeFrame frame = BlendShapeFrame.FromDense(100, [default, new Float3(1, 0, 0), default], [default, default, new Float3(0, 1, 0)], null);
+        Assert.Equal([1u, 2u], frame.Vertices);
+        Assert.Equal([new Float3(1, 0, 0), default], frame.Positions);
+        Assert.Equal([default, new Float3(0, 1, 0)], frame.Normals!);
+        Assert.Null(frame.Tangents);
     }
 
     [Fact]

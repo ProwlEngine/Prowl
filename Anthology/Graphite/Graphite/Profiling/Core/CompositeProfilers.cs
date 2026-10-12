@@ -234,6 +234,12 @@ internal sealed class CompositePassCommandSink(IPassCommandSink[] sinks) : IPass
             sink.Dispatch(groupCountX, groupCountY, groupCountZ);
     }
 
+    public void ComputeBarrier()
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.ComputeBarrier();
+    }
+
     public void DispatchIndirect(in ResourceVersion buffer, uint offset)
     {
         foreach (IPassCommandSink sink in sinks)

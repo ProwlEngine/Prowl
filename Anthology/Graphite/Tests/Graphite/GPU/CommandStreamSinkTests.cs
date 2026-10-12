@@ -84,6 +84,7 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
     public void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride) => Log.Add("DrawIndexedIndirectCount");
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ) => Log.Add($"Dispatch:{groupCountX}:{groupCountY}:{groupCountZ}");
     public void DispatchIndirect(in ResourceVersion buffer, uint offset) => Log.Add("DispatchIndirect");
+    public void ComputeBarrier() => Log.Add("ComputeBarrier");
 
     public void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
     {
@@ -317,6 +318,26 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Equal(2, sink.Tables.Count);
         PropertyState last = Assert.Single(sink.Tables[1], p => p.Name == (PropertyID)"ColorNormalizationFactor");
         Assert.Equal(9, last.Uniform.Read<int>());
+    }
+
+    [SkippableFact]
+    public void ComputeBarriers_AreReportedBetweenTheirDispatches()
+    {
+        ComputeProgram compute = CreateFillProgram();
+        DeviceBuffer storage = RF.CreateBuffer(new BufferDescription(64, BufferUsage.StructuredBufferReadWrite));
+        PropertySet props = new();
+        props.SetBuffer("OutputVertices", storage);
+
+        SinkRecorder sink = Record(cl =>
+        {
+            cl.SetComputeShader(compute);
+            cl.SetProperties(props);
+            cl.Dispatch(1, 1, 1);
+            cl.ComputeBarrier();
+            cl.Dispatch(1, 1, 1);
+        });
+
+        Assert.Equal(["Dispatch:1:1:1", "ComputeBarrier", "Dispatch:1:1:1"], sink.Log.Where(e => e.StartsWith("Dispatch") || e == "ComputeBarrier"));
     }
 
     [SkippableFact]

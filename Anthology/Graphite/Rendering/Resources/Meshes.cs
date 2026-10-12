@@ -33,6 +33,47 @@ public readonly struct SubMesh
     public PrimitiveTopology Topology { get; init; }
 }
 
+/// <summary>
+/// One frame of a blend shape: the deltas it adds at <see cref="Weight"/> (0 to 100), for the vertices it moves only.
+/// Normal and tangent deltas are optional, and dropped when the mesh has no such stream.
+/// </summary>
+public sealed class BlendShapeFrame
+{
+    public float Weight = 100;
+    public uint[] Vertices = [];
+    public Float3[] Positions = [];
+    public Float3[]? Normals;
+    public Float3[]? Tangents;
+
+    /// <summary>A frame from deltas for every vertex, keeping the vertices any of them moves.</summary>
+    public static BlendShapeFrame FromDense(float weight, ReadOnlySpan<Float3> positions, ReadOnlySpan<Float3> normals, ReadOnlySpan<Float3> tangents)
+    {
+        List<uint> vertices = new();
+        for (int v = 0; v < positions.Length; v++)
+        {
+            if (positions[v] != default || (v < normals.Length && normals[v] != default) || (v < tangents.Length && tangents[v] != default))
+                vertices.Add((uint)v);
+        }
+        Float3[]? Pick(ReadOnlySpan<Float3> deltas)
+        {
+            if (deltas.IsEmpty)
+                return null;
+            Float3[] picked = new Float3[vertices.Count];
+            for (int i = 0; i < picked.Length; i++)
+                picked[i] = deltas[(int)vertices[i]];
+            return picked;
+        }
+        return new BlendShapeFrame { Weight = weight, Vertices = [.. vertices], Positions = Pick(positions)!, Normals = Pick(normals), Tangents = Pick(tangents) };
+    }
+}
+
+/// <summary>A named blend shape, its frames in rising weight.</summary>
+public sealed class BlendShapeData
+{
+    public string Name = "";
+    public BlendShapeFrame[] Frames = [];
+}
+
 /// <summary>CPU description of a mesh. Graphite keeps no copy of it after upload.</summary>
 public sealed class MeshData
 {
@@ -43,6 +84,15 @@ public sealed class MeshData
     public ReadOnlyMemory<uint> Indices;
 
     public SubMesh[] SubMeshes = [];
+
+    /// <summary>Shapes the mesh morphs by, weighted per renderable with RenderWorld.SetBlendShapeWeights.</summary>
+    public BlendShapeData[] BlendShapes = [];
+}
+
+/// <summary>A blend shape frame's words as they are placed: its weight, delta count and where each delta array starts.</summary>
+internal readonly record struct BlendFrameLayout(float Weight, uint[] Vertices, uint[] Positions, uint[]? Normals, uint[]? Tangents)
+{
+    public uint Words => (uint)(Vertices.Length + Positions.Length + (Normals?.Length ?? 0) + (Tangents?.Length ?? 0));
 }
 
 /// <summary>A part of a submesh drawn and culled as a unit, about <see cref="MeshLayout.ChunkTriangles"/> triangles.</summary>
@@ -80,6 +130,13 @@ internal sealed class MeshLayout
 
     /// <summary>Total words of vertex data across the present streams.</summary>
     public uint VertexWords { get; }
+
+    /// <summary>Every blend shape frame, shape by shape, and each shape's first frame and frame count.</summary>
+    public BlendFrameLayout[] BlendFrames { get; } = [];
+    public (int First, int Count)[] BlendShapes { get; } = [];
+
+    /// <summary>Total words of the blend shape frames.</summary>
+    public uint BlendWords { get; }
 
     public MeshLayout(MeshData data)
     {
@@ -131,7 +188,37 @@ internal sealed class MeshLayout
 
         Chunks = [.. chunks];
         Bounds = chunks.Count > 0 ? bounds : new AABB(Float3.Zero, Float3.Zero);
+
+        List<BlendFrameLayout> frames = new();
+        BlendShapes = new (int, int)[data.BlendShapes.Length];
+        for (int s = 0; s < data.BlendShapes.Length; s++)
+        {
+            BlendShapeData shape = data.BlendShapes[s];
+            BlendShapes[s] = (frames.Count, shape.Frames.Length);
+            for (int f = 0; f < shape.Frames.Length; f++)
+            {
+                BlendShapeFrame frame = shape.Frames[f];
+                if (!float.IsFinite(frame.Weight) || (f > 0 && frame.Weight <= shape.Frames[f - 1].Weight))
+                    throw new ArgumentException($"Blend shape {shape.Name} needs finite frame weights in rising order.");
+                int moved = frame.Vertices.Length;
+                if (frame.Positions.Length != moved || (frame.Normals != null && frame.Normals.Length != moved) || (frame.Tangents != null && frame.Tangents.Length != moved))
+                    throw new ArgumentException($"Blend shape {shape.Name} frame {f} needs one delta of each kind per vertex it moves.");
+                foreach (uint vertex in frame.Vertices)
+                {
+                    if (vertex >= data.VertexCount)
+                        throw new ArgumentException($"Blend shape {shape.Name} frame {f} moves vertex {vertex} of {data.VertexCount}.");
+                }
+                bool normals = frame.Normals != null && Streams[(int)VertexSemantic.Normal] != null;
+                bool tangents = frame.Tangents != null && Streams[(int)VertexSemantic.Tangent] != null;
+                BlendFrameLayout placed = new(frame.Weight, (uint[])frame.Vertices.Clone(), Words(frame.Positions), normals ? Words(frame.Normals!) : null, tangents ? Words(frame.Tangents!) : null);
+                frames.Add(placed);
+                BlendWords += placed.Words;
+            }
+        }
+        BlendFrames = [.. frames];
     }
+
+    private static uint[] Words(Float3[] deltas) => MemoryMarshal.Cast<Float3, uint>(deltas.AsSpan()).ToArray();
 
     private static AABB Empty => new() { Min = new Float3(float.MaxValue), Max = new Float3(float.MinValue) };
 
