@@ -310,7 +310,8 @@ uniform int _UseFresnel;
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
-    vec3 sceneColor = Graphite_SampleSource(vUV).rgb;
+    vec4 scene = Graphite_SampleSource(vUV);
+    vec3 sceneColor = scene.rgb;
     vec4 reflection = Graphite_Sample(_ReflectionBuffer, vUV);
     vec2 material = Graphite_Sample(_MaterialTexture, vUV).rg;
     vec3 viewNormal = SsrViewNormal(view, Graphite_Sample(_CameraNormalsTexture, vUV).xy);
@@ -328,7 +329,7 @@ void main()
 
     // Bounds runaway HDR and the one bounce feedback diverging without Fresnel
     refl = min(refl, vec3(8.0));
-    outColor = vec4(sceneColor + refl * mask, 1.0);
+    outColor = vec4(sceneColor + refl * mask, scene.a);
 }
 #else
 uniform GRAPHITE_SCREEN_TEXTURE _MainTex;

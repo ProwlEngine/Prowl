@@ -354,3 +354,47 @@ public class GlslCompilerTests
         Assert.Equal("", Glsl.Compile(VariantShader).Warnings);
     }
 }
+
+
+public class GlslCompilerCacheTests : System.IDisposable
+{
+    private readonly string _directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "GraphiteSpirvCache", System.Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        if (System.IO.Directory.Exists(_directory))
+            System.IO.Directory.Delete(_directory, true);
+    }
+
+    private GlslShaderCompiler Cached() => new(new GlslCompilerOptions { CacheDirectory = _directory });
+
+    private static byte[] Fragment(GlslProgram program) => program.Description.Stages.Single(s => s.Stage == ShaderStages.Fragment).ShaderBytes;
+
+    [Fact]
+    public void CompiledStages_AreStored_AndAnotherCompilerReadsThemBack()
+    {
+        using (GlslShaderCompiler first = Cached())
+            first.CompileProgram(Glsl.Pass(Glsl.Fullscreen), []);
+        string[] stored = System.IO.Directory.GetFiles(_directory, "*.spv");
+        Assert.Equal(2, stored.Length);
+
+        // The stored fragment stage swapped for another shader's shows the second compiler took it from the folder
+        byte[] other = Fragment(Glsl.Compile(Glsl.Fullscreen.Replace("vec4(1)", "vec4(0.5)")));
+        byte[] original = Fragment(Glsl.Compile(Glsl.Fullscreen));
+        string fragmentFile = stored.Single(f => System.IO.File.ReadAllBytes(f).SequenceEqual(original));
+        System.IO.File.WriteAllBytes(fragmentFile, other);
+
+        using GlslShaderCompiler second = Cached();
+        Assert.Equal(other, Fragment(second.CompileProgram(Glsl.Pass(Glsl.Fullscreen), [])));
+    }
+
+    [Fact]
+    public void DifferentSources_GetDifferentEntries()
+    {
+        using GlslShaderCompiler compiler = Cached();
+        compiler.CompileProgram(Glsl.Pass(Glsl.Fullscreen), []);
+        compiler.CompileProgram(Glsl.Pass(Glsl.Fullscreen.Replace("vec4(1)", "vec4(0.25)")), []);
+
+        Assert.Equal(3, System.IO.Directory.GetFiles(_directory, "*.spv").Length);
+    }
+}

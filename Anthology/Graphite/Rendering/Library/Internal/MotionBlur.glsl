@@ -26,7 +26,8 @@ void main()
 {
     Graphite_ViewData view = Graphite_PostView();
     vec2 texelSize = 1.0 / _Resolution;
-    vec3 centerColor = Graphite_SampleSource(vUV).rgb;
+    vec4 center = Graphite_SampleSource(vUV);
+    vec3 centerColor = center.rgb;
     vec2 motion = Graphite_Sample(_MotionVectorsTex, vUV).rg * _Intensity;
     float maxBlurUV = _MaxBlurRadius * max(texelSize.x, texelSize.y);
     float motionLen = length(motion);
@@ -34,7 +35,7 @@ void main()
         motion *= maxBlurUV / motionLen;
     if (length(motion * _Resolution) < 0.5)
     {
-        outColor = vec4(centerColor, 1.0);
+        outColor = center;
         return;
     }
 
@@ -51,5 +52,5 @@ void main()
         acc += Graphite_SampleSource(sampleUV).rgb * depthWeight;
         totalWeight += depthWeight;
     }
-    outColor = vec4(acc / max(totalWeight, 1e-5), 1.0);
+    outColor = vec4(acc / max(totalWeight, 1e-5), center.a);
 }

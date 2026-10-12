@@ -170,11 +170,22 @@ public struct ViewDesc
     /// <summary>Clears the whole target to the clear colour before drawing into the viewport, for a view letterboxed into its target.</summary>
     public bool ClearTarget;
 
+    /// <summary>
+    /// Draws over what its target already holds, such as views of a lower <see cref="Order"/>: the view starts transparent
+    /// without sky or clear colour, and its colour, premultiplied by its alpha as blending over transparent leaves it, is
+    /// blended over the target: transparent and additive surfaces and glow reach the views under it. For stacked cameras
+    /// such as a first person weapon or world space UI.
+    /// </summary>
+    public bool Overlay;
+
     /// <summary>Render resolution against the viewport's size in the target, presented scaled to fit.</summary>
     public float RenderScale;
 
     /// <summary>Features of this view alone, over the world's.</summary>
     public FeatureSet? Features;
+
+    /// <summary>Values of global axes for this view alone, over the world's, such as GRAPHITE_DEBUG. Copied at SubmitFrame.</summary>
+    public Keyword[]? Keywords;
 
     /// <summary>Views draw lowest Order first, each after the views it depends on.</summary>
     public int Order;
@@ -457,6 +468,11 @@ public sealed class Renderer : IDisposable
             }
             views.CopyTo(_views);
             _viewCount = views.Length;
+            for (int v = 0; v < _viewCount; v++)
+            {
+                if (_views[v].Keywords is { Length: > 0 } keywords)
+                    _views[v].Keywords = (Keyword[])keywords.Clone();
+            }
             ExtractFeatures(views);
             _pipelines = frame.Pipelines.ToArray();
             _started = frame.Started;
@@ -537,6 +553,12 @@ public sealed class Renderer : IDisposable
     /// </summary>
     public ViewDraws Draws(int viewId) => _frame.Draws(viewId);
 
+    /// <summary>The counts of the last frame recorded. Any thread.</summary>
+    public FrameStats LastFrameStats => _frame.LastStats;
+
+    /// <summary>Shader variants compiling in the background now. Draws needing one skip, or use a ready variant of the same pass, until it is done. Any thread.</summary>
+    public int ShaderCompilesPending => _frame.Programs.Compiling;
+
     // Hands finished and failed readbacks to their callbacks. Host thread, render thread idle.
     private void RaiseReadbacks()
     {
@@ -604,8 +626,20 @@ public sealed class Renderer : IDisposable
     /// source is false. Textures the size of the view are declared GRAPHITE_SCREEN_TEXTURE and read through
     /// Graphite_Sample, arrays on layered views. Blend is one override attachment unless given.
     /// </summary>
-    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null)
-        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend);
+    /// <remarks>
+    /// A lit program may include Graphite/Lighting.glsl and Graphite/Shadows.glsl and read the world's lights, shadows,
+    /// probes and bindless textures as forward passes do; its feature declares <see cref="FeatureBuilder.DrawsRenderables"/>.
+    /// </remarks>
+    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null, bool lit = false)
+        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend, lit);
+
+    /// <summary>
+    /// Creates a program making its own geometry from gl_VertexIndex, drawn by features through
+    /// <see cref="FeatureContext.DrawProcedural"/>. Its code holds both stages, the vertex one under GRAPHITE_VERTEX, and
+    /// reads the view through Graphite/Internal/PostView.glsl as fullscreen programs do.
+    /// </summary>
+    public FullscreenProgram CreateProceduralProgram(string code, string name = "Procedural", BlendStateDescription? blend = null, bool lit = false)
+        => FullscreenProgram.Create(Device, _compiler, code, name, false, blend, lit, procedural: true);
 
     private int _frameCount;
     private readonly List<Double3> _cameras = new();

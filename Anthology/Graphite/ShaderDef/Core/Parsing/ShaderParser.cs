@@ -42,7 +42,7 @@ public static class ShaderParser
 
 
     // The main parser for a shader markup language inspired by ShaderLab.
-    // Contains a property block, pass blocks, and a fallback.
+    // Contains a property block, a surface block or pass blocks or both, and a fallback.
     static ShaderDefinition ParseShader(ref Tokenizer<ShaderToken> t)
     {
         ParserUtility.ExpectKeyword(ref t, "Shader");
@@ -59,6 +59,20 @@ public static class ShaderParser
 
         List<ShaderPass> passes = new();
         HashSet<string> passNames = new();
+        if (ParserUtility.PeekKeyword(ref t, "Surface"))
+        {
+            Token<ShaderToken> surfaceToken = t.Next();
+            string model = ParserUtility.QuotedString(ref t);
+            ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+            string code = t.Peek().Kind == ShaderToken.GlslProgram ? ParserUtility.Program(ref t) : "";
+            ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+            passes.AddRange(SurfacePasses(model, code, surfaceToken));
+            foreach (ShaderPass pass in passes)
+                passNames.Add(pass.Name);
+            if (name != ShaderLibrary.Prefix + model)
+                properties = WithStandardProperties(model, properties, surfaceToken);
+        }
+
         while (ParserUtility.PeekKeyword(ref t, "Pass"))
         {
             Token<ShaderToken> passToken = t.Peek();
@@ -97,6 +111,57 @@ public static class ShaderParser
             Passes = passes.ToArray(),
             Fallback = fallback,
         };
+    }
+
+
+    // ==================== Surface ====================
+
+    // The standard passes of Graphite/Lit or Graphite/Unlit, each running the block's code, which defines
+    // void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit
+    static ShaderPass[] SurfacePasses(string model, string code, Token<ShaderToken> at)
+    {
+        string defines = model switch
+        {
+            "Lit" => "",
+            "Unlit" => "#define GRAPHITE_STANDARD_UNLIT\n",
+            _ => throw new ParseException($"Surface model must be \"Lit\" or \"Unlit\", found \"{model}\"", at.Line, at.Column),
+        };
+        if (code.Length > 0)
+            defines += "#define GRAPHITE_SURFACE_FUNCTION\n";
+
+        ShaderPass Pass(string name, string pass, string variants) => new()
+        {
+            Name = name,
+            Tags = new() { ["LightMode"] = name },
+            State = new PassState(),
+            Source = $"Shared\n{{\n#define {pass}\n{defines}{variants}}}\n"
+                + "Vertex\n{\n#include \"Graphite/Standard/Standard.glsl\"\nvoid main() { Graphite_StandardVertex(); }\n}\n"
+                + $"Fragment\n{{\n#include \"Graphite/Standard/Standard.glsl\"\n{code}\nvoid main() {{ Graphite_StandardFragment(); }}\n}}\n",
+            SourceLine = at.Line,
+        };
+
+        string litVariants = model == "Lit"
+            ? "#pragma variant _NORMALMAP\n#pragma variant _SURFACEMAP\n#pragma variant _OCCLUSIONMAP\n#pragma variant _EMISSION\n#pragma variant _PARALLAXMAP\n#pragma variant _TRANSLUCENCY\n#pragma variant _ANISOTROPIC\n"
+            : "";
+        return [Pass("Forward", "GRAPHITE_STANDARD_FORWARD", litVariants), Pass("Prepass", "GRAPHITE_STANDARD_DEPTH", ""), Pass("ShadowCaster", "GRAPHITE_STANDARD_DEPTH", "")];
+    }
+
+
+    // The standard shader's properties, then the shader's own, which replace any of the same name
+    static ShaderProperty[] WithStandardProperties(string model, ShaderProperty[] own, Token<ShaderToken> at)
+    {
+        string? source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{model}.shader")
+            ?? throw new ParseException($"Surface \"{model}\" needs Graphite's shader library registered", at.Line, at.Column);
+        List<ShaderProperty> properties = new(Parse(source).Properties ?? []);
+        foreach (ShaderProperty property in own)
+        {
+            int index = properties.FindIndex(p => p.Name == property.Name);
+            if (index >= 0)
+                properties[index] = property;
+            else
+                properties.Add(property);
+        }
+        return properties.ToArray();
     }
 
 

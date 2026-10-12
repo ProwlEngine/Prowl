@@ -13,8 +13,9 @@ namespace Prowl.Graphite.Rendering;
 /// </summary>
 public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
 {
+    private readonly EffectResources _resources;
     private readonly FullscreenProgram _resolve, _sharpen;
-    private readonly Sampler _linear, _point;
+    private bool _disposed;
     private readonly PropertySet _properties = new(), _sharpening = new();
     private Settings _settings;
 
@@ -28,16 +29,9 @@ public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
 
     public TemporalAntiAliasing(Renderer renderer)
     {
-        _resolve = renderer.CreateFullscreenProgram("#include \"Graphite/Internal/Taa.glsl\"", "Graphite/TaaResolve");
-        _sharpen = renderer.CreateFullscreenProgram("#define TAA_SHARPEN 1\n#include \"Graphite/Internal/Taa.glsl\"", "Graphite/TaaSharpen");
-        SamplerDescription clamp = SamplerDescription.Linear with
-        {
-            AddressModeU = SamplerAddressMode.Clamp,
-            AddressModeV = SamplerAddressMode.Clamp,
-            AddressModeW = SamplerAddressMode.Clamp,
-        };
-        _linear = renderer.Device.ResourceFactory.CreateSampler(clamp);
-        _point = renderer.Device.ResourceFactory.CreateSampler(clamp with { MinFilter = FilterMode.Point, MagFilter = FilterMode.Point, MipFilter = FilterMode.Point });
+        _resources = EffectResources.Acquire(renderer);
+        _resolve = _resources.Program("Taa");
+        _sharpen = _resources.Program("Taa", "#define TAA_SHARPEN 1\n");
     }
 
     /// <summary>How much history is kept, 0 to 0.99. Higher is smoother and ghosts more.</summary>
@@ -80,9 +74,9 @@ public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
         RenderTexture? previous = context.History(handle);
         Float2 resolution = new(context.View.Width, context.View.Height);
 
-        _properties.SetTexture("_History", previous?.ColorTextures[0] ?? context.Color!, _linear);
-        _properties.SetTexture("_Motion", context.Motion!, _point);
-        _properties.SetTexture("_Depth", context.Depth!, _point);
+        _properties.SetTexture("_History", previous?.ColorTextures[0] ?? context.Color!, _resources.LinearClamp);
+        _properties.SetTexture("_Motion", context.Motion!, _resources.PointClamp);
+        _properties.SetTexture("_Depth", context.Depth!, _resources.PointClamp);
         _properties.SetFloat2("_Resolution", resolution);
         _properties.SetFloat("_HistoryValid", previous != null && context.HasPreviousFrame ? 1 : 0);
         _properties.SetFloat("_BlendFactor", _settings.BlendFactor);
@@ -91,7 +85,7 @@ public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
         context.Fullscreen(_resolve, history, _properties);
 
         // Sharpened on the way out, after the history took the resolve, so sharpening never feeds back
-        _sharpening.SetTexture("_Resolved", history.ColorTextures[0], _point);
+        _sharpening.SetTexture("_Resolved", history.ColorTextures[0], _resources.PointClamp);
         _sharpening.SetFloat2("_Resolution", resolution);
         _sharpening.SetFloat("_Sharpness", _settings.Sharpness);
         context.Fullscreen(_sharpen, _sharpening);
@@ -99,9 +93,9 @@ public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
 
     public void Dispose()
     {
-        _resolve.Dispose();
-        _sharpen.Dispose();
-        _linear.Dispose();
-        _point.Dispose();
+        if (_disposed)
+            return;
+        _disposed = true;
+        _resources.Release();
     }
 }

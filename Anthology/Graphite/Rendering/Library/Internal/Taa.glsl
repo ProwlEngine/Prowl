@@ -28,7 +28,7 @@ void main()
     float luma = Taa_Luma(center);
     float sharpened = max(luma + (luma - blur) * _Sharpness, 0.0);
     vec3 result = luma > 1e-5 ? center * (sharpened / luma) : center;
-    outColor = vec4(Taa_InverseTonemap(min(result, vec3(0.999))), 1.0);
+    outColor = vec4(Taa_InverseTonemap(min(result, vec3(0.999))), Graphite_Sample(_Resolved, vUV).a);
 }
 #else
 #include "Graphite/Internal/PostView.glsl"
@@ -125,7 +125,7 @@ void main()
     vec2 historyUV = vUV - motion;
     if (_HistoryValid < 0.5 || any(lessThan(historyUV, vec2(0.0))) || any(greaterThan(historyUV, vec2(1.0))))
     {
-        outColor = vec4(Taa_InverseTonemap(max(Taa_FromYCoCg(current), vec3(0.0))), 1.0);
+        outColor = vec4(Taa_InverseTonemap(max(Taa_FromYCoCg(current), vec3(0.0))), Graphite_SampleSource(vUV).a);
         return;
     }
 
@@ -146,6 +146,6 @@ void main()
     float lumaDifference = abs(current.x - history.x) / max(max(current.x, history.x), 0.2);
     blendFactor = mix(blendFactor, max(blendFactor, 0.98), (1.0 - lumaDifference) * (1.0 - lumaDifference));
     vec3 result = Taa_FromYCoCg(mix(current, history, blendFactor));
-    outColor = vec4(Taa_InverseTonemap(max(result, vec3(0.0))), 1.0);
+    outColor = vec4(Taa_InverseTonemap(max(result, vec3(0.0))), Graphite_SampleSource(vUV).a);
 }
 #endif

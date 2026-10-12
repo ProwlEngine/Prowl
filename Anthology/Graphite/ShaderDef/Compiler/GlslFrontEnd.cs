@@ -784,7 +784,7 @@ internal sealed class GlslProgramLayout
     private GlslResource? _global;
 
 
-    public GlslProgramLayout(IReadOnlyList<GlslStageSource> stages)
+    public GlslProgramLayout(IReadOnlyList<GlslStageSource> stages, uint? defaultSet = null)
     {
         foreach (GlslStageSource stage in stages)
         {
@@ -794,6 +794,17 @@ internal sealed class GlslProgramLayout
 
         foreach (GlslStageSource stage in stages)
             CollectResources(stage);
+
+        // A program with a default set, from "#pragma resource_set N", puts every resource without an explicit set there,
+        // the loose uniform block too, so it can bind Graphite's own tables in the low sets
+        if (defaultSet is uint set)
+        {
+            foreach (GlslResource resource in Resources)
+            {
+                if (!resource.ExplicitSet)
+                    resource.Set = set;
+            }
+        }
 
         AssignBindings();
 

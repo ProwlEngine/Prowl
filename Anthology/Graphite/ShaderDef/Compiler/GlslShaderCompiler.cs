@@ -43,6 +43,12 @@ public sealed class GlslCompilerOptions
     /// Macros defined for every stage of every shader.
     /// </summary>
     public Dictionary<string, string> Defines = [];
+
+    /// <summary>
+    /// A folder compiled SPIR-V is kept in across runs, keyed by the stage's full source and settings, so a variant
+    /// compiles once per machine. Null keeps compiled stages in memory only.
+    /// </summary>
+    public string? CacheDirectory;
 }
 
 
@@ -194,7 +200,10 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
             stages.Add(new GlslStageSource(stage, preprocessed));
         }
 
-        return (stages, new GlslProgramLayout(stages));
+        // The preprocessor drops pragmas it does not know, so the default set is read from the pass's own source
+        System.Text.RegularExpressions.Match resourceSet = s_resourceSet.Match(pass.Source ?? "");
+        uint? defaultSet = resourceSet.Success ? uint.Parse(resourceSet.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : null;
+        return (stages, new GlslProgramLayout(stages, defaultSet));
     }
 
 
@@ -292,7 +301,64 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
     }
 
 
+    private static readonly System.Text.RegularExpressions.Regex s_resourceSet = new(@"#\s*pragma\s+resource_set\s+(\d+)");
+
+    private readonly ConcurrentDictionary<string, byte[]> _spirv = new(StringComparer.Ordinal);
+
+    // Bump when the compile settings below change in a way the source does not show
+    private const string CacheSalt = "graphite-spirv-1";
+
     private byte[] Run(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
+    {
+        if (preprocess)
+            return Invoke(source, stage, file, defines, preprocess, warnings);
+
+        string key = CacheKey(source, stage, defines);
+        if (_spirv.TryGetValue(key, out byte[]? cached))
+            return cached;
+
+        string? path = _options.CacheDirectory is { Length: > 0 } directory ? Path.Combine(directory, key + ".spv") : null;
+        if (path != null && File.Exists(path))
+        {
+            try
+            {
+                byte[] stored = File.ReadAllBytes(path);
+                if (stored.Length > 0 && stored.Length % 4 == 0)
+                    return _spirv[key] = stored;
+            }
+            catch (IOException) { }
+        }
+
+        byte[] bytes = Invoke(source, stage, file, defines, preprocess, warnings);
+        _spirv[key] = bytes;
+        if (path != null)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                string temporary = $"{path}.{Environment.CurrentManagedThreadId}.tmp";
+                File.WriteAllBytes(temporary, bytes);
+                File.Move(temporary, path, overwrite: true);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return bytes;
+    }
+
+    private string CacheKey(string source, GlslStage stage, Dictionary<string, string> defines)
+    {
+        StringBuilder text = new(source.Length + 128);
+        text.Append(CacheSalt).Append('|').Append(stage).Append('|').Append(_options.Optimize).Append('|').Append(_options.DebugInfo);
+        List<string> names = [.. defines.Keys];
+        names.Sort(StringComparer.Ordinal);
+        foreach (string name in names)
+            text.Append('|').Append(name).Append('=').Append(defines[name]);
+        text.Append('|').Append(source);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+    }
+
+    private byte[] Invoke(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
     {
         CompileOptions* options = s_api.CompileOptionsInitialize();
         IncludeContext context = new() { Resolve = Resolve };

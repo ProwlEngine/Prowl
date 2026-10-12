@@ -284,11 +284,11 @@ public sealed class AutoExposure : PostEffect
     {
         ViewState state = context.GetViewState<ViewState>();
         _properties.SetTexture("_MainTex", context.Color!, LinearClamp);
-        context.FullscreenShared(context.View.LayerCount > 1 ? _extractLayered : _extract, context.Get(state.Levels[0]), _properties);
+        context.Fullscreen(context.View.LayerCount > 1 ? _extractLayered : _extract, context.Get(state.Levels[0]), _properties, shared: true);
         for (int i = 1; i < state.Levels.Count; i++)
         {
             _properties.SetTexture("_MainTex", context.Get(state.Levels[i - 1]).ColorTextures[0], LinearClamp);
-            context.FullscreenShared(_downsample, context.Get(state.Levels[i]), _properties);
+            context.Fullscreen(_downsample, context.Get(state.Levels[i]), _properties, shared: true);
         }
 
         RenderTexture adapted = context.Get(state.Adapted);
@@ -299,7 +299,7 @@ public sealed class AutoExposure : PostEffect
         _properties.SetFloat("_AdaptSpeedDown", _settings.Down);
         _properties.SetFloat("_HistoryValid", previous != null ? 1 : 0);
         _properties.SetFloat("_DeltaTime", context.Time.DeltaTime);
-        context.FullscreenShared(_adapt, adapted, _properties);
+        context.Fullscreen(_adapt, adapted, _properties, shared: true);
 
         _properties.SetTexture("_AdaptedTex", adapted.ColorTextures[0], LinearClamp);
         _properties.SetFloat("_ExposureComp", _settings.Compensation);
@@ -921,7 +921,7 @@ public sealed class DepthOfField : PostEffect
         _properties.SetFloat("_ManualFocusPoint", _settings.ManualFocus);
         _properties.SetFloat("_FocusBlend", _settings.Speed > 0 ? 1 - MathF.Exp(-_settings.Speed * context.Time.DeltaTime) : 1);
         _properties.SetFloat("_FocusHistoryValid", valid ? 1 : 0);
-        context.FullscreenShared(context.View.LayerCount > 1 ? _focusLayered : _focus, focus, _properties);
+        context.Fullscreen(context.View.LayerCount > 1 ? _focusLayered : _focus, focus, _properties, shared: true);
 
         _properties.SetTexture("_FocusTex", focus.ColorTextures[0], PointClamp);
         _properties.SetFloat("_FocusStrength", _settings.Strength);
@@ -1298,11 +1298,11 @@ public sealed class Smaa : PostEffect
         _properties.SetFloat2("_Resolution", new Float2(context.View.Width, context.View.Height));
         _properties.SetFloat("_EdgeThreshold", _threshold);
         _properties.SetTexture("_MainTex", context.Color!, LinearClamp);
-        context.FullscreenCleared(_edges, edges, _properties);
+        context.Fullscreen(_edges, edges, _properties, clear: true);
         _properties.SetTexture("_MainTex", edges.ColorTextures[0], LinearClamp);
         _properties.SetTexture("_AreaTex", area, LinearClamp);
         _properties.SetTexture("_SearchTex", search, LinearClamp);
-        context.FullscreenCleared(_weights, weights, _properties);
+        context.Fullscreen(_weights, weights, _properties, clear: true);
         _properties.SetTexture("_BlendTex", weights.ColorTextures[0], LinearClamp);
         context.Fullscreen(_blend, _properties);
     }

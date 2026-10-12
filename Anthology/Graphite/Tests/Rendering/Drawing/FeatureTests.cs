@@ -384,6 +384,170 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
+    public void LitFullscreenPrograms_ReadTheWorldsLights()
+    {
+        AddQuad(new Float3(0, 0, 0));
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 1f });
+        FullscreenProgram lit = _renderer.CreateFullscreenProgram("""
+            #include "Graphite/Lighting.glsl"
+            uniform float _Scale;
+            void main()
+            {
+                // The sun shines along +Z, so from the surface it lies along -Z
+                Graphite_DirectionalLight sun = Graphite_GetDirectional(0u);
+                outColor = vec4(float(Graphite_DirectionalCount()) * _Scale, sun.direction.z * 0.5 + 0.5, 0.5, 1.0);
+            }
+            """, "Lit", lit: true);
+        _owned.Add(lit);
+        Assert.True(lit.Lit);
+
+        PropertySet properties = new();
+        properties.SetFloat("_Scale", 0.25f);
+        _world.Features.Add(new LitEffectWith(lit, properties));
+        AssertAll(new Float3(0.25f, 0f, 0.5f), Frame(View()));
+    }
+
+    // A lit fullscreen program reading the world's lights through the library, as forward passes do
+    private sealed class LitEffectWith(FullscreenProgram program, PropertySet properties) : RenderFeature
+    {
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.DrawsRenderables();
+            builder.WriteColor();
+        }
+        public override void Render(FeatureContext context) => context.Fullscreen(program, properties);
+    }
+
+    [Fact]
+    public void SurfaceFunctions_ChangeTheStandardSurface_BeforeItDraws()
+    {
+        Shader shader = _renderer.LoadShader(ShaderParser.Parse("""
+            Shader "Tests/Blue"
+            {
+                Properties { _Blue("Blue", Float) = 1.0 }
+                Surface "Unlit"
+                {
+                    GLSLPROGRAM
+                    uniform float _Blue;
+                    void Surface(inout Graphite_SurfaceData s) { s.BaseColor = vec3(0.0, s.BaseColor.g * 0.5, _Blue); }
+                    ENDGLSL
+                }
+            }
+            """));
+        Material material = _renderer.CreateMaterial(shader);
+        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+        material.SetColor("_MainColor", new Float4(0, 1, 0, 1));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
+
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(0, 0.5f, 1), pixels, Centre);
+    }
+
+    [Fact]
+    public void OverlayViews_DrawOverTheViewsBefore_LeavingTheRestShowing()
+    {
+        AddQuad(new Float3(0, 1, 0), layer: 2u, scale: 0.5);
+        ViewDesc under = View(1);
+        under.ClearColor = new Float4(1, 0, 0, 1);
+        under.CullingMask = 1u;
+        ViewDesc over = View(2);
+        over.ClearColor = new Float4(0, 0, 1, 1);
+        over.CullingMask = 2u;
+        over.Overlay = true;
+        over.Order = 1;
+
+        Float4[] pixels = Frame(under, over);
+        AssertAll(new Float3(0, 1, 0), pixels, Centre);
+        AssertAll(new Float3(1, 0, 0), pixels, i => !Centre(i) && i % Size is 0 or Size - 1);
+    }
+
+    [Fact]
+    public void OverlayViews_BlendTheirTransparentSurfacesOverTheViewsBefore()
+    {
+        Material glass = _renderer.CreateMaterial(_renderer.Standard.Unlit);
+        glass.Surface = new SurfaceSettings(SurfaceType.Transparent, Cull: SurfaceCull.Off);
+        glass.SetColor("_MainColor", new Float4(0, 0, 1, 0.5f));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5), LayerMask = 2u }, [glass]);
+        ViewDesc under = View(1);
+        under.ClearColor = new Float4(1, 0, 0, 1);
+        under.CullingMask = 1u;
+        ViewDesc over = View(2);
+        over.CullingMask = 2u;
+        over.Overlay = true;
+        over.Order = 1;
+
+        Float4[] pixels = Frame(under, over);
+        AssertAll(new Float3(0.5f, 0, 0.5f), pixels, Centre);
+        AssertAll(new Float3(1, 0, 0), pixels, i => !Centre(i) && i % Size is 0 or Size - 1);
+    }
+
+    [Fact]
+    public void ProceduralPrograms_DrawTheirOwnGeometry_BlendingOverTheTarget()
+    {
+        BlendStateDescription add = new(default, new BlendAttachmentDescription
+        {
+            BlendEnabled = true,
+            SourceColorFactor = BlendFactor.One,
+            DestinationColorFactor = BlendFactor.One,
+            ColorFunction = BlendFunction.Add,
+            SourceAlphaFactor = BlendFactor.One,
+            DestinationAlphaFactor = BlendFactor.One,
+            AlphaFunction = BlendFunction.Add,
+        });
+        FullscreenProgram quad = _renderer.CreateProceduralProgram("""
+            #include "Graphite/Internal/PostView.glsl"
+            uniform vec4 _Color;
+            uniform float _Left;
+            #ifdef GRAPHITE_VERTEX
+            void main()
+            {
+                // Two triangles over the left half, scaled by the view's width over itself to read the view here
+                Graphite_ViewData view = Graphite_PostView();
+                int corner = int[](0, 1, 2, 1, 3, 2)[gl_VertexIndex];
+                vec2 p = vec2(mix(-1.0, _Left, float(corner & 1)), (corner >> 1) == 0 ? -1.0 : 1.0);
+                gl_Position = vec4(p * view.screen.x * view.screen.z, 0.0, 1.0);
+            }
+            #else
+            void main() { outColor = _Color; }
+            #endif
+            """, "Quad", add);
+        FullscreenProgram copy = Program("uniform sampler2D _Drawn; void main() { outColor = texture(_Drawn, vUV); }");
+        _owned.Add(quad);
+        Assert.True(quad.Procedural);
+
+        Sampler point = _device.ResourceFactory.CreateSampler(SamplerDescription.Point);
+        _owned.Add(point);
+        _world.Features.Add(new ProceduralEffect(quad, copy, point));
+        AssertAll(new Float3(0.5f, 0.25f, 0f), Frame(View()), i => i % Size < Size / 2);
+        AssertAll(new Float3(0f, 0f, 0f), Frame(View()), i => i % Size >= Size / 2);
+    }
+
+    // Draws a procedural program twice into a texture of its own, once cleared and once blended over, then shows it
+    private sealed class ProceduralEffect(FullscreenProgram quad, FullscreenProgram copy, Sampler sampler) : RenderFeature
+    {
+        private readonly PropertySet _properties = new();
+        private TextureHandle _drawn;
+
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.WriteColor();
+            _drawn = builder.Temporary("Drawn", view.Texture(PixelFormat.R32_G32_B32_A32_Float));
+        }
+        public override void Render(FeatureContext context)
+        {
+            RenderTexture drawn = context.Get(_drawn);
+            _properties.SetFloat("_Left", 0f);
+            _properties.SetFloat4("_Color", new Float4(0.25f, 0.125f, 0f, 0f));
+            context.DrawProcedural(quad, drawn, 6, _properties, clear: true);
+            context.DrawProcedural(quad, drawn, 6, _properties);
+            _properties.SetTexture("_Drawn", drawn.ColorTextures[0], sampler);
+            context.Fullscreen(copy, _properties);
+        }
+    }
+
+    [Fact]
     public void ViewFeatures_RunOnlyOnTheirView_AndDisabledOnesNowhere()
     {
         AddQuad(new Float3(0.25f, 0.5f, 1));
@@ -1475,6 +1639,39 @@ public sealed class FeatureTests : IDisposable
         Float4[] pixels = ReadTarget();
         AssertAll(new Float3(1, 0, 0), pixels, Centre);
         AssertAll(new Float3(0, 0, 0), pixels, i => !Centre(i));
+    }
+
+    [Fact]
+    public void ExternalViews_DrawLitFullscreenPrograms_AsADeferredLightingPassWould()
+    {
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 1f });
+        FullscreenProgram lit = _renderer.CreateFullscreenProgram("""
+            #include "Graphite/Lighting.glsl"
+            void main() { outColor = vec4(float(Graphite_DirectionalCount()) * 0.5, Graphite_GetDirectional(0u).direction.z * 0.5 + 0.5, 1.0, 1.0); }
+            """, "HostLit", source: false, lit: true);
+        _owned.Add(lit);
+        using RenderPipeline host = new([new HostLight(_renderer, _framebuffer, 9, lit)]);
+        ViewDesc external = View(9);
+        external.External = true;
+
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { external }, Pipelines = new[] { new GraphDispatch(host, [new HostView(_framebuffer)]) } });
+        _device.WaitForIdle();
+        Assert.Empty(_errors);
+        AssertAll(new Float3(0.5f, 0f, 1f), ReadTarget());
+    }
+
+    private sealed class HostLight(Renderer renderer, Framebuffer target, int viewId, FullscreenProgram program) : IPass
+    {
+        public string Name => "HostLight";
+
+        public void Setup(RenderContextBuilder builder) => builder.DeclareViewTarget();
+
+        public void Render(RenderContext context, CommandBuffer cmd)
+        {
+            cmd.SetFramebuffer(target, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0, 0, 0, 1)), AttachmentOps.Loaded));
+            cmd.SetFullViewport();
+            renderer.Draws(viewId).DrawFullscreen(context, cmd, program);
+        }
     }
 
     private sealed class HostView(Framebuffer target) : IRenderView

@@ -263,15 +263,23 @@ public abstract class ScreenLightingFeature : RenderFeature
 /// </summary>
 public sealed class FullscreenProgram : IDisposable
 {
-    private FullscreenProgram(GraphicsProgram mono, GraphicsProgram layered, bool source)
+    private FullscreenProgram(GraphicsProgram mono, GraphicsProgram layered, bool source, bool lit, bool procedural)
     {
         Mono = mono;
         Layered = layered;
         HasSource = source;
+        Lit = lit;
+        Procedural = procedural;
     }
 
     /// <summary>Whether the program reads Graphite_Source.</summary>
     internal bool HasSource { get; }
+
+    /// <summary>Whether the program reads the world's lights, shadows and textures through Graphite's library.</summary>
+    public bool Lit { get; }
+
+    /// <summary>Whether the program writes its own vertex stage, drawn through <see cref="FeatureContext.DrawProcedural"/>.</summary>
+    public bool Procedural { get; }
 
     internal GraphicsProgram Mono { get; }
     internal GraphicsProgram Layered { get; }
@@ -284,18 +292,37 @@ public sealed class FullscreenProgram : IDisposable
         Layered.Dispose();
     }
 
-    // The fragment code follows Graphite/Fullscreen.glsl, which gives it vUV, outColor and Graphite_SampleSource
-    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null)
+    // The renderer's frame and view tables whole, so the camera's bind as they are, and the program's own resources in the user set
+    private static ResourceLayoutDescription[] LitLayouts(ResourceLayoutDescription[] compiled)
     {
+        List<ResourceLayoutElementDescription> user = new();
+        foreach (ResourceLayoutDescription layout in compiled)
+        {
+            if (layout.Set == GraphiteBindings.UserSet)
+                user.AddRange(layout.Elements);
+        }
+        return [ProgramCache.FrameLayout, ProgramCache.ViewLayout, new ResourceLayoutDescription(GraphiteBindings.PassSet, []), new ResourceLayoutDescription(GraphiteBindings.UserSet, [.. user])];
+    }
+
+    // The fragment code follows Graphite/Fullscreen.glsl, which gives it vUV, outColor and Graphite_SampleSource. A
+    // procedural program's code holds both stages, the vertex one under GRAPHITE_VERTEX
+    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false)
+    {
+        source &= !procedural;
         GraphicsProgram Build(bool layered)
         {
-            string defines = (layered ? "#define GRAPHITE_LAYERED 1\n" : "") + (source ? "" : "#define GRAPHITE_NO_SOURCE 1\n");
-            string text = $"Vertex\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n}}\nFragment\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{fragment}\n}}\n";
+            string defines = (layered ? "#define GRAPHITE_LAYERED 1\n" : "") + (source ? "" : "#define GRAPHITE_NO_SOURCE 1\n")
+                + (lit ? $"#pragma resource_set {GraphiteBindings.UserSet}\n#define GRAPHITE_NO_OBJECT 1\n" : "")
+                + (procedural ? "#define GRAPHITE_PROCEDURAL 1\n" : "");
+            string vertex = procedural ? fragment : "";
+            string text = $"Vertex\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{vertex}\n}}\nFragment\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{fragment}\n}}\n";
             ShaderPass pass = new() { State = new PassState(), Source = text, SourceName = name };
             ShaderDescription description = compiler.Compile(pass, [], device.BackendType);
             description.BlendState = blend ?? BlendStateDescription.SingleOverrideBlend;
             description.DepthStencilState = DepthStencilStateDescription.Disabled;
             description.RasterizerState = RasterizerStateDescription.CullNone;
+            if (lit)
+                description.ResourceLayouts = LitLayouts(description.ResourceLayouts ?? []);
             GraphicsProgram program = device.ResourceFactory.CreateGraphicsProgram(description);
             program.Name = layered ? name + " layered" : name;
             return program;
@@ -304,7 +331,7 @@ public sealed class FullscreenProgram : IDisposable
         GraphicsProgram mono = Build(false);
         try
         {
-            return new FullscreenProgram(mono, Build(true), source);
+            return new FullscreenProgram(mono, Build(true), source, lit, procedural);
         }
         catch
         {
@@ -622,7 +649,10 @@ public sealed class FeatureBuilder
             _pass.Lists.Add(list);
     }
 
-    /// <summary>Declares the feature records the view's renderables or sky through the context's Draw methods.</summary>
+    /// <summary>
+    /// Declares the feature records the view's renderables or sky through the context's Draw methods, or draws lit
+    /// programs, which read the view's lights, shadows and probes.
+    /// </summary>
     public void DrawsRenderables()
     {
         if (_pass.Draws)
@@ -741,7 +771,7 @@ public sealed class FeatureContext
     public Texture Noise => _pass.Frame.Noise;
 
     /// <summary>The SMAA reference's area and search tables, arrays of as many layers as the view has.</summary>
-    public (Texture Area, Texture Search) SmaaTables => View.LayerCount > 1 ? (_pass.Frame.SmaaAreaLayered, _pass.Frame.SmaaSearchLayered) : (_pass.Frame.SmaaArea, _pass.Frame.SmaaSearch);
+    internal (Texture Area, Texture Search) SmaaTables => View.LayerCount > 1 ? (_pass.Frame.SmaaAreaLayered, _pass.Frame.SmaaSearchLayered) : (_pass.Frame.SmaaArea, _pass.Frame.SmaaSearch);
 
     /// <summary>The direction the world's sun shines, its chosen sun or else its brightest directional light, or null without one.</summary>
     public Float3? SunDirection
@@ -783,6 +813,15 @@ public sealed class FeatureContext
         Drawer.DrawList(Command, list);
     }
 
+    private void BindLighting(FullscreenProgram program)
+    {
+        if (!program.Lit)
+            return;
+        if (!_pass.Draws)
+            throw new InvalidOperationException($"{_pass.Name} draws a lit fullscreen program without declaring DrawsRenderables in Setup.");
+        _pass.Camera.Drawer.BindTables(Command);
+    }
+
     private SceneDrawer Drawer => _pass.Draws ? _pass.Camera.Drawer
         : throw new InvalidOperationException($"{_pass.Name} draws renderables without declaring DrawsRenderables or DrawsPass in Setup.");
 
@@ -798,7 +837,7 @@ public sealed class FeatureContext
         bool scene = _pass.Output == _pass.Chain.Scene;
         if (_pass.Clears)
         {
-            Float4 clear = _pass.Camera.Desc.ClearColor;
+            Float4 clear = _pass.Camera.Desc.Overlay ? default : _pass.Camera.Desc.ClearColor;
             AttachmentOps depth = scene ? AttachmentOps.Clear(0f) : AttachmentOps.Loaded;
             Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), depth));
             Command.SetFullViewport();
@@ -827,21 +866,37 @@ public sealed class FeatureContext
 
     /// <summary>
     /// Draws a fullscreen program over a texture the feature declared, Temporary or History, the colour it reads bound as
-    /// Graphite_Source, with any properties given.
+    /// Graphite_Source, with any properties given. Clear first clears it to transparent black, for programs that discard.
+    /// Shared draws once over a texture of one layer, for state a layered view's layers share.
     /// </summary>
-    public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null)
-        => Fullscreen(program, target, properties, View.LayerCount, false);
+    public void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties = null, bool clear = false, bool shared = false)
+        => DrawFullscreen(program, target, properties, shared ? 1 : View.LayerCount, clear);
 
-    /// <summary>Clears a texture the feature declared to transparent black, then draws a fullscreen program over it, for programs that discard.</summary>
-    public void FullscreenCleared(FullscreenProgram program, RenderTexture target, PropertySet? properties = null)
-        => Fullscreen(program, target, properties, View.LayerCount, true);
-
-    /// <summary>Draws a fullscreen program once over a texture of one layer, for state a layered view's layers share.</summary>
-    public void FullscreenShared(FullscreenProgram program, RenderTexture target, PropertySet? properties = null)
-        => Fullscreen(program, target, properties, 1, false);
-
-    private void Fullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties, int layers, bool clear)
+    /// <summary>
+    /// Draws a procedural program's vertices over a texture the feature declared, for geometry made in the shader such as
+    /// particles, blending over what the texture holds unless cleared to transparent black first.
+    /// </summary>
+    public void DrawProcedural(FullscreenProgram program, RenderTexture target, uint vertexCount, PropertySet? properties = null, bool clear = false)
     {
+        if (!program.Procedural)
+            throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program procedurally; create it with CreateProceduralProgram.");
+        AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0, 0, 0, 0)) : AttachmentOps.Loaded;
+        Command.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(color, AttachmentOps.Loaded));
+        Command.SetFullViewport();
+        Command.SetShader(program.For(View.LayerCount));
+        Command.SetVertexSource(VertexSource.None);
+        BindLighting(program);
+        _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
+        Command.SetProperties(_properties);
+        if (properties != null)
+            Command.SetProperties(properties);
+        Command.Draw(vertexCount);
+    }
+
+    private void DrawFullscreen(FullscreenProgram program, RenderTexture target, PropertySet? properties, int layers, bool clear)
+    {
+        if (program.Procedural)
+            throw new InvalidOperationException($"{_pass.Name} draws a procedural program as a fullscreen one; draw it with DrawProcedural.");
         if (layers == 1 && View.LayerCount > 1 && program.HasSource)
             throw new InvalidOperationException($"{_pass.Name} draws a program reading the view's colour once for every layer; create it with source: false and bind what it reads.");
         AttachmentOps color = clear ? AttachmentOps.Clear(new Color(0, 0, 0, 0)) : new AttachmentOps(LoadAction.DontCare, StoreAction.Store);
@@ -849,6 +904,7 @@ public sealed class FeatureContext
         Command.SetFullViewport();
         Command.SetShader(program.For(layers));
         Command.SetVertexSource(VertexSource.None);
+        BindLighting(program);
         _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
         if (program.HasSource && Color is { } source)
             _properties.SetTexture("Graphite_Source", source, _pass.Frame.TrilinearClamp);
@@ -869,6 +925,7 @@ public sealed class FeatureContext
         BeginOutput();
         Command.SetShader(program.For(View.LayerCount));
         Command.SetVertexSource(VertexSource.None);
+        BindLighting(program);
         _properties.SetBuffer("Graphite_PostViews", _pass.Camera.ViewBlocks.Buffer);
         _properties.SetTexture("Graphite_Source", source, _pass.Frame.TrilinearClamp);
         Command.SetProperties(_properties);
@@ -1005,8 +1062,11 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
         Float4 rect = camera.Desc.Viewport;
         Float4 clear = camera.Desc.ClearColor;
         Color clearColor = new(clear.X, clear.Y, clear.Z, clear.W);
-        bool whole = rect == new Float4(0, 0, 1, 1);
-        AttachmentOps ops = whole && _source == null || camera.Desc.ClearTarget ? AttachmentOps.Clear(clearColor)
+        bool whole = rect == new Float4(0, 0, 1, 1), overlay = camera.Desc.Overlay;
+        if (overlay && _source == null)
+            return;
+        AttachmentOps ops = overlay ? AttachmentOps.Loaded
+            : whole && _source == null || camera.Desc.ClearTarget ? AttachmentOps.Clear(clearColor)
             : whole ? new AttachmentOps(LoadAction.DontCare, StoreAction.Store) : AttachmentOps.Loaded;
         cmd.SetFramebuffer(target, new TargetLoadStoreOps(ops, AttachmentOps.Loaded));
         cmd.SetViewport(new Viewport(rect.X * target.Width, rect.Y * target.Height, rect.Z * target.Width, rect.W * target.Height, 0, 1));
@@ -1014,7 +1074,7 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
         if (_source is { } source)
         {
             bool decode = camera.Chain.DisplayEncoded && TakesLinear(target.ColorTargets[0].Target.Format);
-            cmd.SetShader((decode ? frame.PresentDecodeProgram : frame.PresentProgram).For(camera.LayerCount));
+            cmd.SetShader(frame.Present(decode, overlay).For(camera.LayerCount));
             _properties.SetTexture("Graphite_Source", context.GetRenderTexture(source).ColorTextures[0], frame.LinearSampler);
         }
         else if (!whole)

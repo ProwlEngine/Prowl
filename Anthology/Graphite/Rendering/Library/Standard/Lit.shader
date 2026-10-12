@@ -37,78 +37,8 @@ Shader "Graphite/Lit"
         _ScatteringPower("Scattering Power", Float) = 0.0 [ShowIf(_TRANSLUCENCY)]
         _ScatteringDistortion("Scattering Distortion", Float) = 0.5 [ShowIf(_TRANSLUCENCY)]
         _ScatteringScale("Scattering Scale", Float) = 1.0 [ShowIf(_TRANSLUCENCY)]
+        _InstanceTint("Instance Tint", Integer) = 0 [Toggle(_INSTANCE_TINT)]
     }
 
-    Pass
-    {
-        Name "Forward"
-        Tags { "LightMode" = "Forward" }
-        GLSLPROGRAM
-        Shared
-        {
-            #define GRAPHITE_STANDARD_FORWARD
-            #pragma variant _NORMALMAP
-            #pragma variant _SURFACEMAP
-            #pragma variant _OCCLUSIONMAP
-            #pragma variant _EMISSION
-            #pragma variant _PARALLAXMAP
-            #pragma variant _TRANSLUCENCY
-            #pragma variant _ANISOTROPIC
-        }
-        Vertex
-        {
-            #include "Graphite/Standard/Standard.glsl"
-            void main() { Graphite_StandardVertex(); }
-        }
-        Fragment
-        {
-            #include "Graphite/Standard/Standard.glsl"
-            void main() { Graphite_StandardFragment(); }
-        }
-        ENDGLSL
-    }
-
-    Pass
-    {
-        Name "Prepass"
-        Tags { "LightMode" = "Prepass" }
-        GLSLPROGRAM
-        Shared
-        {
-            #define GRAPHITE_STANDARD_DEPTH
-        }
-        Vertex
-        {
-            #include "Graphite/Standard/Standard.glsl"
-            void main() { Graphite_StandardVertex(); }
-        }
-        Fragment
-        {
-            #include "Graphite/Standard/Standard.glsl"
-            void main() { Graphite_StandardFragment(); }
-        }
-        ENDGLSL
-    }
-
-    Pass
-    {
-        Name "ShadowCaster"
-        Tags { "LightMode" = "ShadowCaster" }
-        GLSLPROGRAM
-        Shared
-        {
-            #define GRAPHITE_STANDARD_DEPTH
-        }
-        Vertex
-        {
-            #include "Graphite/Standard/Standard.glsl"
-            void main() { Graphite_StandardVertex(); }
-        }
-        Fragment
-        {
-            #include "Graphite/Standard/Standard.glsl"
-            void main() { Graphite_StandardFragment(); }
-        }
-        ENDGLSL
-    }
+    Surface "Lit" { }
 }

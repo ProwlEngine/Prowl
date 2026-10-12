@@ -329,18 +329,25 @@ public sealed class BucketTests : IDisposable
     }
 
     [Fact]
-    public void ProgramIds_OfEmptiedBuckets_AreFreed()
+    public void ProgramIds_OfEmptiedBuckets_StayParked_ThenAreFreed()
     {
+        _programs.IdleFrames = 2;
         Material material = Material();
         Add(_triangle, material);
         Frame(Forward);
         int ids = _programs.Count;
 
+        // Switching back and forth keeps both variants' ids, no more
         for (int i = 0; i < 4; i++)
         {
             material.SetKeyword("_NORMALMAP", i % 2 == 0 ? "true" : "false");
+            _programs.Sweep();
             Frame(Forward);
         }
+        Assert.Equal(ids * 2, _programs.Count);
+
+        for (int i = 0; i < 3; i++)
+            _programs.Sweep();
         Assert.Equal(ids, _programs.Count);
     }
 

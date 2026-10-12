@@ -39,8 +39,9 @@ internal readonly record struct DrawProgram(Shader Shader, int PassIndex, ulong 
 }
 
 /// <summary>
-/// Gives every distinct draw program a dense id for bucket keys. Buckets and transparent items hold references, and an
-/// id nothing references any more is freed for reuse, its compiled programs dropped through <see cref="Freed"/>.
+/// Gives every distinct draw program a dense id for bucket keys. Buckets and transparent items hold references. An id
+/// nothing references stays parked for <see cref="IdleFrames"/> frames, so a renderable moving between buckets keeps its
+/// compiled programs, then is freed for reuse, its compiled programs dropped through <see cref="Freed"/>.
 /// </summary>
 internal sealed class DrawPrograms
 {
@@ -48,6 +49,12 @@ internal sealed class DrawPrograms
     private readonly List<DrawProgram> _programs = new();
     private readonly List<int> _references = new();
     private readonly Stack<ushort> _free = new();
+    private readonly Dictionary<ushort, int> _idle = new();
+    private readonly List<ushort> _expired = new();
+    private int _frame;
+
+    /// <summary>Frames an unreferenced id is kept before it is freed.</summary>
+    public int IdleFrames { get; set; } = 120;
 
     public DrawProgram this[ushort id] => _programs[id];
 
@@ -66,17 +73,37 @@ internal sealed class DrawPrograms
     /// </summary>
     public Shader? DepthCaster { get; set; }
 
-    public void Acquire(ushort id) => _references[id]++;
+    public void Acquire(ushort id)
+    {
+        _references[id]++;
+        _idle.Remove(id);
+    }
 
     public void Release(ushort id)
     {
         if (--_references[id] > 0)
             return;
+        _idle[id] = _frame;
+    }
 
-        _ids.Remove(_programs[id]);
-        _programs[id] = default;
-        Freed?.Invoke(id);
-        _free.Push(id);
+    /// <summary>Starts a frame, freeing ids unreferenced for longer than <see cref="IdleFrames"/>.</summary>
+    public void Sweep()
+    {
+        _frame++;
+        foreach ((ushort id, int since) in _idle)
+        {
+            if (_frame - since > IdleFrames)
+                _expired.Add(id);
+        }
+        foreach (ushort id in _expired)
+        {
+            _idle.Remove(id);
+            _ids.Remove(_programs[id]);
+            _programs[id] = default;
+            Freed?.Invoke(id);
+            _free.Push(id);
+        }
+        _expired.Clear();
     }
 
     /// <summary>The program a material draws a pass type with, or false when its shader has no such pass.</summary>

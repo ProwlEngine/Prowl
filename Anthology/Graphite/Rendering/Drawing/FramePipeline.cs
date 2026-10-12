@@ -69,6 +69,11 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     /// <summary>Variants known to the cache, ready, compiling or failed.</summary>
     internal int EntryCount => _entries.Count;
 
+    private int _compiling;
+
+    /// <summary>Variants compiling on a worker now. Any thread.</summary>
+    public int Compiling => Volatile.Read(ref _compiling);
+
     /// <summary>Variants still compiling on a worker.</summary>
     public int Pending
     {
@@ -180,7 +185,17 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         }
         members.Add(entry);
 
-        entry.Pending = deterministic ? DescribeNow(program, combo) : Task.Run(() => Describe(program, combo));
+        if (deterministic)
+            entry.Pending = DescribeNow(program, combo);
+        else
+        {
+            Interlocked.Increment(ref _compiling);
+            entry.Pending = Task.Run(() =>
+            {
+                try { return Describe(program, combo); }
+                finally { Interlocked.Decrement(ref _compiling); }
+            });
+        }
         return entry;
     }
 
@@ -665,6 +680,31 @@ internal sealed class CameraFrame : IDisposable
     public bool Mirrored;
     public ViewDesc Desc;
     public WorldFrame World = null!;
+
+    /// <summary>The world's global keywords with the view's own over them, what its draws pick their variants by.</summary>
+    public IReadOnlyDictionary<string, string> Keywords = new Dictionary<string, string>();
+    private IReadOnlyDictionary<string, string>? _worldKeywords;
+    private Keyword[] _viewKeywords = [];
+
+    /// <summary>Brings <see cref="Keywords"/> up to date with the world's snapshot and the view's keywords. Render thread.</summary>
+    public void ResolveKeywords()
+    {
+        IReadOnlyDictionary<string, string> world = World.World.Globals.KeywordSnapshot;
+        Keyword[] view = Desc.Keywords ?? [];
+        if (ReferenceEquals(world, _worldKeywords) && view.AsSpan().SequenceEqual(_viewKeywords))
+            return;
+        _worldKeywords = world;
+        _viewKeywords = view;
+        if (view.Length == 0)
+        {
+            Keywords = world;
+            return;
+        }
+        Dictionary<string, string> merged = new(world, StringComparer.Ordinal);
+        foreach (Keyword keyword in view)
+            merged[keyword.Name] = keyword.Value;
+        Keywords = merged;
+    }
     public int LastFrame;
     public readonly CameraView View = new();
 
@@ -1077,6 +1117,14 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
     }
 
+    /// <summary>Binds the frame's texture tables and the view's table for a program drawn without draw records.</summary>
+    public void BindTables(CommandBuffer cmd)
+    {
+        cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
+        cmd.SetDescriptorTable(GraphiteBindings.ViewSet, _viewTable);
+        cmd.SetPushConstants(new FramePipeline.Push());
+    }
+
     /// <summary>Records one of the view's draw lists.</summary>
     public void DrawList(CommandBuffer cmd, DrawList list) => Draw(cmd, list, camera.CommandBases[camera.Lists.IndexOf(list)]);
 
@@ -1121,9 +1169,9 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
     public void DrawSky(CommandBuffer cmd)
     {
         WorldFrame world = camera.World;
-        if (!camera.Desc.Sky || world.SkyProgram is not ushort id || world.World.Lighting.Environment.Sky is not { IsDisposed: false, Table: { } table } sky)
+        if (!camera.Desc.Sky || camera.Desc.Overlay || world.SkyProgram is not ushort id || world.World.Lighting.Environment.Sky is not { IsDisposed: false, Table: { } table } sky)
             return;
-        GraphicsProgram? program = frame.Programs.Get(id, false, world.World.Globals.KeywordSnapshot);
+        GraphicsProgram? program = frame.Programs.Get(id, false, camera.Keywords);
         if (program == null || !BindUserBuffers(program, sky.Shader))
             return;
 
@@ -1140,9 +1188,11 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
     private void Draw(CommandBuffer cmd, DrawList list, int commandBase)
     {
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
+        bool shadow = camera.Desc.Kind == ViewKind.Shadow;
         foreach (DrawCall call in list.Calls)
         {
-            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.World.World.Globals.KeywordSnapshot);
+            frame.CountDraw(shadow, call.CommandCount);
+            GraphicsProgram? program = frame.Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.Keywords);
             if (program == null)
                 continue;
 
@@ -1293,14 +1343,22 @@ internal sealed partial class FramePipeline : IDisposable
         _readback = new ReadbackPass(device, report);
         _readbackPipeline.SetPasses([_readback]);
 
-        PresentProgram = FullscreenProgram.Create(device, compiler, "void main() { outColor = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y)); }", "Graphite/Present");
-        PresentDecodeProgram = FullscreenProgram.Create(device, compiler, """
+        const string present = "void main() { outColor = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y)); }";
+        const string decode = """
             void main()
             {
                 vec4 c = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y));
                 outColor = vec4(pow((max(c.rgb, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), c.a);
             }
-            """, "Graphite/PresentDecode");
+            """;
+        BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
+        _present =
+        [
+            FullscreenProgram.Create(device, compiler, present, "Graphite/Present"),
+            FullscreenProgram.Create(device, compiler, present, "Graphite/PresentOver", blend: over),
+            FullscreenProgram.Create(device, compiler, decode, "Graphite/PresentDecode"),
+            FullscreenProgram.Create(device, compiler, decode, "Graphite/PresentDecodeOver", blend: over),
+        ];
         Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
         SmaaArea = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false);
         SmaaSearch = LoadData(device, "SmaaSearch.bin", 64, 16, mipmapped: false);
@@ -1337,11 +1395,13 @@ internal sealed partial class FramePipeline : IDisposable
     public GlobalRegistry Globals { get; }
     public DrawPrograms DrawPrograms { get; }
     public ProgramCache Programs { get; }
-    /// <summary>Copies the view's colour to its target with its rows reversed, the first row at the bottom of clip space.</summary>
-    public FullscreenProgram PresentProgram { get; }
+    private readonly FullscreenProgram[] _present;
 
-    /// <summary>Presents display encoded colour to an sRGB target, undoing the tonemapper's encode so the target's own applies once.</summary>
-    public FullscreenProgram PresentDecodeProgram { get; }
+    /// <summary>
+    /// Copies the view's colour to its target with its rows reversed, the first row at the bottom of clip space. Decoding
+    /// undoes a tonemapper's encode for sRGB and float targets so theirs applies once, and over blends it as premultiplied by its alpha.
+    /// </summary>
+    public FullscreenProgram Present(bool decode, bool over) => _present[(decode ? 2 : 0) + (over ? 1 : 0)];
 
     /// <summary>Prowl's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
     public Texture Noise { get; }
@@ -1436,8 +1496,22 @@ internal sealed partial class FramePipeline : IDisposable
     }
 
     /// <summary>Culls and compacts every view, then dispatches the frame. Returns the execution. Render thread.</summary>
+    private int _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands;
+
+    /// <summary>The counts of the last frame recorded. Any thread.</summary>
+    public FrameStats LastStats { get; private set; } = new(0, 0, 0, 0, 0);
+
+    // Render thread, while the frame records
+    internal void CountDraw(bool shadow, int commands)
+    {
+        if (shadow) { _shadowDrawCalls++; _shadowDrawCommands += commands; }
+        else { _drawCalls++; _drawCommands += commands; }
+    }
+
     public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, GraphDispatch[] pipelines, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
     {
+        LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands);
+        _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
         _dispatches.Clear();
         _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
@@ -1450,6 +1524,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (RenderFeature[] features in viewFeatures)
             PrepareFeatures(features);
 
+        DrawPrograms.Sweep();
         foreach (WorldFrame world in allWorlds)
         {
             world.World.Render.BeginFrame();
@@ -1569,6 +1644,7 @@ internal sealed partial class FramePipeline : IDisposable
             camera.HasPrevious = false;
         }
         camera.World = world;
+        camera.ResolveKeywords();
         if (camera.HostBuffers != world.World.Globals.BufferList)
         {
             camera.HostBuffers = world.World.Globals.BufferList;
@@ -1963,7 +2039,7 @@ internal sealed partial class FramePipeline : IDisposable
             foreach (DrawList list in camera.Lists)
             {
                 foreach (DrawCall call in list.Calls)
-                    Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.World.World.Globals.KeywordSnapshot);
+                    Programs.Get(call.Program, call.Mirrored != camera.Mirrored, camera.Keywords);
             }
         }
     }
@@ -2205,8 +2281,8 @@ internal sealed partial class FramePipeline : IDisposable
         _probes.Dispose();
         _deform.Dispose();
         Programs.Dispose();
-        PresentProgram.Dispose();
-        PresentDecodeProgram.Dispose();
+        foreach (FullscreenProgram program in _present)
+            program.Dispose();
         Noise.Dispose();
         SmaaArea.Dispose();
         SmaaSearch.Dispose();
@@ -2234,6 +2310,7 @@ public sealed class ViewDraws
 {
     private readonly FramePipeline _frame;
     private readonly CameraFrame _camera;
+    private readonly PropertySet _properties = new();
     private ulong _preparedExecution;
 
     internal ViewDraws(FramePipeline frame, CameraFrame camera)
@@ -2265,6 +2342,24 @@ public sealed class ViewDraws
     {
         Prepare(context);
         _camera.Drawer.DrawSky(cmd);
+    }
+
+    /// <summary>
+    /// Draws a fullscreen program onto the bound target with the view's layers, and the view's lights, shadows and probes
+    /// when it is lit, such as the lighting pass of a deferred pipeline. Its properties bind last.
+    /// </summary>
+    public void DrawFullscreen(RenderContext context, CommandBuffer cmd, FullscreenProgram program, PropertySet? properties = null)
+    {
+        Prepare(context);
+        cmd.SetShader(program.For(_camera.LayerCount));
+        cmd.SetVertexSource(VertexSource.None);
+        if (program.Lit)
+            _camera.Drawer.BindTables(cmd);
+        _properties.SetBuffer("Graphite_PostViews", _camera.ViewBlocks.Buffer);
+        cmd.SetProperties(_properties);
+        if (properties != null)
+            cmd.SetProperties(properties);
+        cmd.Draw(3);
     }
 
     private void Prepare(RenderContext context)
@@ -2555,3 +2650,9 @@ internal sealed class ProviderWork
         }
     }
 }
+
+/// <summary>
+/// What a frame drew: the views asked for, and the indirect draw calls recorded with the draws inside them (each
+/// command one mesh piece, instanced or not), split between camera views and shadow views.
+/// </summary>
+public sealed record FrameStats(int Views, int DrawCalls, int DrawCommands, int ShadowDrawCalls, int ShadowDrawCommands);

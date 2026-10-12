@@ -10,6 +10,7 @@ It uses GLSL shaders in conjunction with a custom ShaderLab-adjacent syntax to d
 
 - [File Structure](#file-structure)
 - [Properties Block](#properties-block)
+- [Surface Block](#surface-block)
 - [Pass Block](#pass-block)
   - [Name](#name)
   - [Tags](#tags)
@@ -29,7 +30,9 @@ Shader "ShaderName"
 {
     Properties { ... }      // optional
 
-    Pass [index]            // one or more
+    Surface "Lit" { ... }   // optional, the standard passes
+
+    Pass [index]            // one or more without a Surface block
     {
         ...
     }
@@ -42,7 +45,8 @@ Shader "ShaderName"
 |------------------|----------|----------------------------------------------------|
 | `Shader "Name"`  | Yes      | Quoted display name for the shader                 |
 | `Properties`     | No       | Metadata for engine-side tools; Graphite ignores it |
-| `Pass`           | Yes (≥1) | One block per rendering pass                       |
+| `Surface`        | No       | Graphite's standard passes running a surface function |
+| `Pass`           | Yes (≥1) | One block per rendering pass, none needed after a `Surface` block |
 | `Fallback`       | No       | Metadata for engine-side tools; Graphite ignores it |
 
 ---
@@ -116,6 +120,47 @@ inspectors built on it read.
 | `HDR`                  | `Color`            | The colour may exceed 1                                                |
 
 A material that sets an axis explicitly overrides what its properties drive.
+
+---
+
+## Surface Block
+
+The quickest way to a custom lit or unlit shader. `Surface "Lit"` or `Surface "Unlit"` gives the shader Graphite's
+standard Forward, Prepass and ShadowCaster passes with every feature of Graphite/Lit or Graphite/Unlit: shadows,
+lightmaps, probes, decals, fog, surface types and their properties. The shader's own `Properties` are added to the
+standard ones, replacing any of the same name.
+
+The optional GLSLPROGRAM block holds fragment code defining `void Surface(inout Graphite_SurfaceData s)`, which may
+change the surface before it is lit: `BaseColor`, `Alpha`, `Normal` (world space), `Metallic`, `Roughness`,
+`Occlusion` and `Emission`, reading `UV`, `UV1`, `VertexColor`, `WorldPos` (camera relative), `ViewDir` and
+`GeometryNormal`. The depth passes run it only for cutout surfaces, with the UVs, base colour and alpha filled in.
+
+```
+Shader "MyGame/Rim"
+{
+    Properties
+    {
+        _RimColor("Rim Color", Color) = (0.3, 0.6, 1.0, 1.0)
+        _RimPower("Rim Power", Float) = 3.0
+    }
+
+    Surface "Lit"
+    {
+        GLSLPROGRAM
+        uniform vec4 _RimColor;
+        uniform float _RimPower;
+
+        void Surface(inout Graphite_SurfaceData s)
+        {
+            float rim = 1.0 - max(dot(s.Normal, s.ViewDir), 0.0);
+            s.Emission += _RimColor.rgb * pow(rim, _RimPower);
+        }
+        ENDGLSL
+    }
+}
+```
+
+Further `Pass` blocks may follow, such as a pass of a type a render feature draws.
 
 ---
 

@@ -18,7 +18,7 @@ file sealed class SlotResources : IMaterialResources
 
 public sealed class StandardShaderTests : IDisposable
 {
-    private static readonly string[] s_litToggles = ["_NORMALMAP", "_SURFACEMAP", "_OCCLUSIONMAP", "_EMISSION", "_PARALLAXMAP", "_TRANSLUCENCY", "_ANISOTROPIC"];
+    private static readonly string[] s_litToggles = ["_NORMALMAP", "_SURFACEMAP", "_OCCLUSIONMAP", "_EMISSION", "_PARALLAXMAP", "_TRANSLUCENCY", "_ANISOTROPIC", "_INSTANCE_TINT"];
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
     private readonly GlslShaderCompiler _compiler = new();
@@ -55,7 +55,7 @@ public sealed class StandardShaderTests : IDisposable
             foreach (string surface in new[] { "OPAQUE", "CUTOUT", "TRANSPARENT" })
             {
                 yield return [shader, surface, Array.Empty<string>()];
-                string[] toggles = shader == "Lit" ? s_litToggles : [];
+                string[] toggles = shader == "Lit" ? s_litToggles : ["_INSTANCE_TINT"];
                 foreach (string toggle in toggles)
                     yield return [shader, surface, new[] { toggle }];
                 yield return [shader, surface, toggles];
@@ -80,9 +80,51 @@ public sealed class StandardShaderTests : IDisposable
         }
     }
 
+    private const string RimSource = """
+        Shader "Tests/Rim"
+        {
+            Properties
+            {
+                _RimColor("Rim", Color) = (1.0, 0.0, 0.0, 1.0)
+                _Metallic("Metal", Float) = 0.5
+            }
+
+            Surface "Lit"
+            {
+                GLSLPROGRAM
+                uniform vec4 _RimColor;
+                void Surface(inout Graphite_SurfaceData s)
+                {
+                    s.Emission += _RimColor.rgb * pow(1.0 - max(dot(s.Normal, s.ViewDir), 0.0), 3.0);
+                    s.Alpha *= s.VertexColor.a;
+                }
+                ENDGLSL
+            }
+        }
+        """;
+
+    [Theory]
+    [InlineData("OPAQUE")]
+    [InlineData("CUTOUT")]
+    [InlineData("TRANSPARENT")]
+    public void SurfaceShaders_TakeTheStandardPassesAndProperties_AndCompile(string surface)
+    {
+        Shader rim = new(ShaderParser.Parse(RimSource), _compiler);
+        ShaderDefinition definition = rim.Definition;
+        Assert.Equal(["Forward", "Prepass", "ShadowCaster"], definition.Passes!.Select(p => p.Name));
+        string[] names = [.. definition.Properties!.Select(p => p.Name)];
+        Assert.Contains("_MainTex", names);
+        Assert.Contains("_RimColor", names);
+        Assert.Equal(0.5f, definition.Properties!.Single(p => p.Name == "_Metallic").Value.X);
+        Assert.Equal(names.Length, names.Distinct().Count());
+
+        foreach (ShaderPass pass in definition.Passes!)
+            _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface), new Keyword("_NORMALMAP", VariantSpace.ToggleValues[1])]);
+    }
+
     [Fact]
-    public void UnlitDeclaresOnlyTheSurfaceAxis()
-        => Assert.Equal(["_SURFACE"], _unlit.MaterialAxes.Select(a => a.Name));
+    public void UnlitDeclaresOnlyTheSurfaceAndTintAxes()
+        => Assert.Equal(["_SURFACE", "_INSTANCE_TINT"], _unlit.MaterialAxes.Select(a => a.Name));
 
     [Fact]
     public void Surface_SetsQueueStateAndAxes()

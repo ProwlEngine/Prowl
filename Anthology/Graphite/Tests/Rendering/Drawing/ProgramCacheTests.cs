@@ -175,16 +175,44 @@ public sealed class ProgramCacheTests : IDisposable
     }
 
     [Fact]
-    public void FreedProgramIds_DropTheirCompiledVariants()
+    public void FreedProgramIds_DropTheirCompiledVariants_OnceIdleLongEnough()
     {
         _programs.Freed += _cache.Drop;
+        _programs.IdleFrames = 2;
         ushort plain = Program();
         _programs.Acquire(plain);
         WaitFor(plain);
         Assert.Equal(1, _cache.EntryCount);
 
         _programs.Release(plain);
+        _programs.Sweep();
+        _programs.Sweep();
+        Assert.Equal(1, _cache.EntryCount);
+        _programs.Sweep();
         Assert.Equal(0, _cache.EntryCount);
+    }
+
+    // A renderable moving between buckets releases its program and takes it again in the same frame
+    [Fact]
+    public void AProgramReleasedAndTakenAgain_KeepsItsIdAndCompiledVariants()
+    {
+        _programs.Freed += _cache.Drop;
+        ushort plain = Program();
+        _programs.Acquire(plain);
+        WaitFor(plain);
+        int compiles = _compiler.Compiles;
+
+        for (int frame = 0; frame < 300; frame++)
+        {
+            _programs.Sweep();
+            _programs.Release(plain);
+            Assert.Equal(plain, Program());
+            _programs.Acquire(plain);
+            Assert.NotNull(Get(plain));
+        }
+
+        Assert.Equal(compiles, _compiler.Compiles);
+        Assert.Equal(1, _cache.EntryCount);
     }
 
     [Fact]

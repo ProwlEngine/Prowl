@@ -1,11 +1,14 @@
-// The standard surface shared by Graphite/Lit and Graphite/Unlit. Each shader defines its pass and model in its Shared
-// section, includes this in both stages and calls Graphite_StandardVertex and Graphite_StandardFragment from main.
+// The standard surface shared by Graphite/Lit, Graphite/Unlit and every shader with a Surface block, whose passes the
+// shader parser writes: each defines its pass and model in its Shared section, includes this in both stages and calls
+// Graphite_StandardVertex and Graphite_StandardFragment from main.
 //
 // Pass defines, exactly one: GRAPHITE_STANDARD_FORWARD, GRAPHITE_STANDARD_DEPTH (prepass and shadow caster).
 // Model define: GRAPHITE_STANDARD_UNLIT for no lighting, ambient or PBR inputs.
+// GRAPHITE_SURFACE_FUNCTION: the shader defines void Surface(inout Graphite_SurfaceData s), run before lighting.
 //
 // Material axes, set by SurfaceSettings and by the properties that drive them:
 //   _SURFACE        OPAQUE, CUTOUT (alpha test against _AlphaCutoff) or TRANSPARENT (alpha reaches the target)
+//   _INSTANCE_TINT  the object's custom0, an instance batch's per instance colour, multiplies the vertex colour
 // Back faces, drawn when the material culls none, shade with a flipped frame.
 //   _NORMALMAP _SURFACEMAP _OCCLUSIONMAP _EMISSION _PARALLAXMAP _TRANSLUCENCY _ANISOTROPIC   optional lit inputs, declared by Lit
 //
@@ -13,6 +16,7 @@
 #pragma once
 
 #pragma variant _SURFACE OPAQUE CUTOUT TRANSPARENT
+#pragma variant _INSTANCE_TINT
 
 #if defined(_SURFACE_CUTOUT) || defined(_SURFACE_TRANSPARENT)
     #define GRAPHITE_STANDARD_ALPHA
@@ -31,6 +35,7 @@
         #include "Graphite/Lighting.glsl"
         #include "Graphite/Decals.glsl"
         #include "Graphite/Passes.glsl"
+        #include "Graphite/Debug.glsl"
     #endif
 #endif
 
@@ -136,6 +141,9 @@ void Graphite_StandardVertex()
 #ifdef GRAPHITE_STANDARD_FORWARD
     vWorldPos = world;
     vColor = vertexColor;
+#ifdef _INSTANCE_TINT
+    vColor *= Graphite_Object().custom0;
+#endif
 #ifdef GRAPHITE_STANDARD_LIT
     vNormal = Graphite_ObjectToWorldNormal(vertexNormal);
     vec4 tangent = vertexTangent;
@@ -154,6 +162,48 @@ void Graphite_StandardVertex()
 
 // Per slot UV set: 0 selects UV0, anything else UV1 with the material transform applied
 #define GRAPHITE_STANDARD_UV(set, uv0, uv1) ((set) == 0 ? (uv0) : (uv1))
+
+// The standard surface a Surface function may change before it is lit. Depth passes call it only for cutout surfaces,
+// with the UVs, base colour and alpha filled in and the rest at defaults.
+struct Graphite_SurfaceData
+{
+    vec2 UV;                // UV0 with the material's tiling and offset
+    vec2 UV1;               // UV1 with the same
+    vec4 VertexColor;
+    vec3 WorldPos;          // camera relative
+    vec3 ViewDir;           // from the surface toward the camera
+    vec3 GeometryNormal;    // the mesh's, facing the camera on back faces
+    vec3 BaseColor;
+    float Alpha;
+    vec3 Normal;            // world space, after the normal map
+    float Metallic;
+    float Roughness;
+    float Occlusion;
+    vec3 Emission;
+};
+
+#ifdef GRAPHITE_SURFACE_FUNCTION
+void Surface(inout Graphite_SurfaceData s);
+#endif
+
+Graphite_SurfaceData Graphite_NewSurfaceData(vec2 uv, vec2 uv1, vec3 baseColor, float alpha)
+{
+    Graphite_SurfaceData s;
+    s.UV = uv;
+    s.UV1 = uv1;
+    s.VertexColor = vec4(1.0);
+    s.WorldPos = vec3(0.0);
+    s.ViewDir = vec3(0.0, 0.0, 1.0);
+    s.GeometryNormal = vec3(0.0, 1.0, 0.0);
+    s.BaseColor = baseColor;
+    s.Alpha = alpha;
+    s.Normal = vec3(0.0, 1.0, 0.0);
+    s.Metallic = 0.0;
+    s.Roughness = 1.0;
+    s.Occlusion = 1.0;
+    s.Emission = vec3(0.0);
+    return s;
+}
 
 #ifdef GRAPHITE_STANDARD_FORWARD
 
@@ -175,6 +225,7 @@ void Graphite_StandardFragment()
 {
     vec2 uv = vUV;
     vec2 uv1 = vUV1 * _Tiling + _Offset;
+    vec3 viewDir = GetWorldViewDir(vWorldPos);
 
 #ifdef GRAPHITE_STANDARD_LIT
     vec3 N = normalize(vNormal);
@@ -192,48 +243,42 @@ void Graphite_StandardFragment()
     if (hasTangents && _Parallax > 0.0 && _ParallaxSteps > 0)
     {
         mat3 TBN = mat3(T, B, N);
-        vec3 viewDirTS = normalize(transpose(TBN) * GetWorldViewDir(vWorldPos));
+        vec3 viewDirTS = normalize(transpose(TBN) * viewDir);
         uv = ParallaxOcclusionMapping(_ParallaxMap, uv, viewDirTS, _Parallax, _ParallaxSteps);
     }
 #endif
+#else
+    vec3 N = vec3(0.0, 1.0, 0.0);
 #endif
 
     vec4 albedoTexel = texture(_MainTex, GRAPHITE_STANDARD_UV(_MainTexUV, uv, uv1));
     vec3 baseColor = albedoTexel.rgb * _MainColor.rgb * vColor.rgb;
-
-#ifdef GRAPHITE_STANDARD_ALPHA
     float alpha = albedoTexel.a * _MainColor.a * vColor.a;
-#endif
 
-#ifdef _SURFACE_CUTOUT
+#if defined(_SURFACE_CUTOUT) && !defined(GRAPHITE_SURFACE_FUNCTION)
     if (alpha < _AlphaCutoff)
         discard;
 #endif
 
-#ifdef GRAPHITE_STANDARD_UNLIT
-    vec3 color = ApplyFog(baseColor, vWorldPos);
-#ifndef _SURFACE_TRANSPARENT
-    Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), 1.0, 0.0);
-#endif
-#else
     vec3 worldNormal = N;
+    float roughness = 1.0, metallic = 0.0, ao = 1.0;
+    vec3 emission = vec3(0.0);
+
+#ifdef GRAPHITE_STANDARD_LIT
 #ifdef _NORMALMAP
     if (hasTangents)
         worldNormal = Graphite_StandardNormalMap(texture(_NormalTex, GRAPHITE_STANDARD_UV(_NormalTexUV, uv, uv1)).rgb, N, T, B, _NormalScale);
 #endif
 
     // Surface map: G roughness, B metallic, each scaling its factor
-    float roughness = _Roughness;
-    float metallic = _Metallic;
+    roughness = _Roughness;
+    metallic = _Metallic;
 #ifdef _SURFACEMAP
     vec4 surface = texture(_SurfaceTex, GRAPHITE_STANDARD_UV(_SurfaceTexUV, uv, uv1));
     roughness *= surface.g;
     metallic *= surface.b;
 #endif
-    roughness = clamp(roughness, GRAPHITE_MIN_ROUGHNESS, 1.0);
-    metallic = clamp(metallic, 0.0, 1.0);
 
-    float ao = 1.0;
 #ifdef _OCCLUSIONMAP
     ao = mix(1.0, texture(_OcclusionTex, GRAPHITE_STANDARD_UV(_OcclusionTexUV, uv, uv1)).r, _OcclusionStrength);
 #endif
@@ -250,14 +295,48 @@ void Graphite_StandardFragment()
     scatteringScale = _ScatteringScale;
 #endif
 
-    vec3 emission = vec3(0.0);
 #ifdef _EMISSION
     emission = texture(_EmissionTex, GRAPHITE_STANDARD_UV(_EmissionTexUV, uv, uv1)).rgb * _EmissiveColor.rgb * _EmissionIntensity;
 #endif
 
     Graphite_ApplyDecals(vWorldPos, N, baseColor, worldNormal, roughness, metallic, ao);
+#endif
 
-    vec3 viewDir = GetWorldViewDir(vWorldPos);
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Graphite_SurfaceData s = Graphite_NewSurfaceData(uv, uv1, baseColor, alpha);
+    s.VertexColor = vColor;
+    s.WorldPos = vWorldPos;
+    s.ViewDir = viewDir;
+    s.GeometryNormal = N;
+    s.Normal = worldNormal;
+    s.Metallic = metallic;
+    s.Roughness = roughness;
+    s.Occlusion = ao;
+    s.Emission = emission;
+    Surface(s);
+    baseColor = s.BaseColor;
+    alpha = s.Alpha;
+    worldNormal = normalize(s.Normal);
+    metallic = s.Metallic;
+    roughness = s.Roughness;
+    ao = s.Occlusion;
+    emission = s.Emission;
+#ifdef _SURFACE_CUTOUT
+    if (alpha < _AlphaCutoff)
+        discard;
+#endif
+#endif
+
+#ifdef GRAPHITE_STANDARD_UNLIT
+    vec3 color = ApplyFog(baseColor + emission, vWorldPos);
+    color = Graphite_DebugView(color, baseColor, vec3(0.0), 1.0, 0.0, 1.0, vec3(0.0), vWorldPos, vec2(0.0));
+#ifndef _SURFACE_TRANSPARENT
+    Graphite_WriteGBuffer(vec3(0.0, 1.0, 0.0), 1.0, 0.0);
+#endif
+#else
+    roughness = clamp(roughness, GRAPHITE_MIN_ROUGHNESS, 1.0);
+    metallic = clamp(metallic, 0.0, 1.0);
+    Graphite_DebugInputs(baseColor, metallic);
 
 #ifdef _ANISOTROPIC
     // RG holds a direction in the tangent plane, (0.5, 0.5) keeps the mesh tangent
@@ -284,6 +363,7 @@ void Graphite_StandardFragment()
     vec3 ambientSpecular = Graphite_IndirectSpecular(vWorldPos, worldNormal, viewDir, F0, roughness, ao, ambientLight);
 
     vec3 color = ApplyFog(ambientDiffuse + ambientSpecular + lighting + emission, vWorldPos);
+    color = Graphite_DebugView(color, baseColor, worldNormal, roughness, metallic, ao, emission, vWorldPos, vLightmapUV);
 #ifndef _SURFACE_TRANSPARENT
     Graphite_WriteGBuffer(worldNormal, roughness, metallic);
 #endif
@@ -302,7 +382,14 @@ void Graphite_StandardFragment()
 void Graphite_StandardFragment()
 {
 #ifdef _SURFACE_CUTOUT
-    if (texture(_MainTex, GRAPHITE_STANDARD_UV(_MainTexUV, vUV, vUV1 * _Tiling + _Offset)).a * _MainColor.a < _AlphaCutoff)
+    vec2 uv1 = vUV1 * _Tiling + _Offset;
+    vec4 albedo = texture(_MainTex, GRAPHITE_STANDARD_UV(_MainTexUV, vUV, uv1)) * _MainColor;
+#ifdef GRAPHITE_SURFACE_FUNCTION
+    Graphite_SurfaceData s = Graphite_NewSurfaceData(vUV, uv1, albedo.rgb, albedo.a);
+    Surface(s);
+    albedo.a = s.Alpha;
+#endif
+    if (albedo.a < _AlphaCutoff)
         discard;
 #endif
 }
