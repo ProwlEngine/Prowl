@@ -10,6 +10,9 @@
 
 #define GRAPHITE_MAX_DECALS 8
 
+// Compiled in while the world has a decal
+#pragma variant global GRAPHITE_DECALS
+
 struct Graphite_DecalRecord
 {
     vec4 row0;               // rows of the inverse of its linear part, its centre in its tree's space in w
@@ -112,6 +115,9 @@ bool Graphite_DecalBefore(float priority, uint sequence, float otherPriority, ui
 void Graphite_ApplyDecals(vec3 worldPos, vec3 geomNormal,
                           inout vec3 albedo, inout vec3 normal, inout float roughness, inout float metallic, inout float occlusion)
 {
+#ifndef GRAPHITE_DECALS
+    return;
+#endif
     uint layers = Graphite_SurfaceLayers();
     uint hitTree[GRAPHITE_MAX_DECALS];
     uint hitIndex[GRAPHITE_MAX_DECALS];

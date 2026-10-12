@@ -396,10 +396,11 @@ public sealed partial class RenderWorld
     private void ExtractLighting()
     {
         _lights.Extract(Lighting.ReceiveLight);
+        _decals.Extract(Lighting.ReceiveDecal);
         Globals?.SetKeyword("GRAPHITE_LIGHT_MASKS", VariantSpace.ToggleValues[Lighting.MaskedLights > 0 ? 1 : 0]);
         Globals?.SetKeyword("GRAPHITE_CONTACT_SHADOWS", VariantSpace.ToggleValues[Lighting.ContactLights > 0 ? 1 : 0]);
+        Globals?.SetKeyword("GRAPHITE_DECALS", VariantSpace.ToggleValues[Lighting.LiveDecals > 0 ? 1 : 0]);
         Globals?.SnapshotKeywords();
-        _decals.Extract(Lighting.ReceiveDecal);
         ExtractBakedLighting();
         ExtractReflections();
         if (_extractedEnvironment == null || !_environment.Same(_extractedEnvironment))
@@ -519,6 +520,9 @@ internal sealed class WorldLighting : IDisposable
     /// <summary>Live lights with a cookie or profile, and live lights with contact hardening shadows.</summary>
     public int MaskedLights { get; private set; }
     public int ContactLights { get; private set; }
+
+    /// <summary>Live decals.</summary>
+    public int LiveDecals { get; private set; }
 
     private DecalDesc[] _decals = new DecalDesc[16];
     private bool[] _decalAlive = new bool[16];
@@ -687,6 +691,7 @@ internal sealed class WorldLighting : IDisposable
 
         DecalDesc old = _decals[index];
         bool wasAlive = _decalAlive[index];
+        LiveDecals += (alive ? 1 : 0) - (wasAlive ? 1 : 0);
         _decals[index] = desc;
         _decalAlive[index] = alive;
         _decalSequence[index] = sequence;
