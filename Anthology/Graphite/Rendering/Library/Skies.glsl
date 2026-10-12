@@ -1,4 +1,4 @@
-// The built in skies' shared parts: the procedural sky's radiance and its sun. Sky shaders include Graphite/Sky.glsl first.
+// The built in skies' shared parts: the procedural sky's radiance and its sun, rotation and panorama mapping. Sky shaders include Graphite/Sky.glsl first.
 #pragma once
 
 #include "Graphite/Lighting.glsl"
@@ -59,13 +59,32 @@ vec3 Graphite_JodieReinhard(vec3 c)
     return mix(c / (l + 1.0), tc, tc);
 }
 
-// The procedural sky as drawn: the scattered light, the sun disk and a darker ground below the horizon
-vec3 Graphite_ProceduralSky(vec3 view, vec3 sun)
+// The procedural sky as drawn: the scattered light times tint, the sun disk scaled by sunSize (0 hides it), the light
+// at the horizon times ground below it, then exposed and tonemapped
+vec3 Graphite_ProceduralSky(vec3 view, vec3 sun, float sunSize, float sunGlow, float exposure, vec3 tint, vec3 ground)
 {
-    vec3 color = Graphite_SkyRadiance(view, sun, 1.0);
-    float sunTransmittance = exp(-dot(vec3(0.33), vec3(5.802e-6, 13.558e-6, 33.1e-6)) * 8000.0 / max(view.y, 0.02));
-    float disk = smoothstep(0.99985, 0.99999, dot(view, sun)) * step(0.0, view.y);
-    color += disk * 2000.0 * sunTransmittance * vec3(1.0, 0.9, 0.8);
-    color = mix(color, color * 0.25, smoothstep(0.0, -0.02, view.y));
-    return Graphite_JodieReinhard(color * 40.0);
+    vec3 color = Graphite_SkyRadiance(view, sun, sunGlow) * tint;
+    if (sunSize > 0.0)
+    {
+        float size2 = sunSize * sunSize;
+        float sunTransmittance = exp(-dot(vec3(0.33), vec3(5.802e-6, 13.558e-6, 33.1e-6)) * 8000.0 / max(view.y, 0.02));
+        float disk = smoothstep(1.0 - 1.5e-4 * size2, 1.0 - 1e-5 * size2, dot(view, sun)) * step(0.0, view.y);
+        color += disk * 2000.0 * sunTransmittance * vec3(1.0, 0.9, 0.8);
+    }
+    color = mix(color, color * ground, smoothstep(0.0, -0.02, view.y));
+    return Graphite_JodieReinhard(color * (40.0 * exposure));
+}
+
+// A direction turned about the up axis by degrees, for skies that rotate their image
+vec3 Graphite_RotateSkyY(vec3 dir, float degrees)
+{
+    float a = radians(degrees);
+    float s = sin(a), c = cos(a);
+    return vec3(c * dir.x - s * dir.z, dir.y, s * dir.x + c * dir.z);
+}
+
+// The texture coordinate of a direction in an equirectangular panorama: +Z at the centre, up at the top row
+vec2 Graphite_PanoramaUV(vec3 dir)
+{
+    return vec2(atan(dir.x, dir.z) * 0.15915494309 + 0.5, asin(clamp(dir.y, -1.0, 1.0)) * 0.31830988618 + 0.5);
 }

@@ -737,10 +737,11 @@ internal sealed class BucketSet
     public IReadOnlyCollection<int> UsersOf(Material material) => _materialUsers.TryGetValue(material, out HashSet<int>? users) ? users : [];
 
     // Every chunk of an object is tested once per view, the first time any pass asks, and the answers are shared. A
-    // deformed copy's chunks are wherever its bones put them, so it is as visible as its bounds
+    // deformed copy's chunks are wherever its bones put them, and a bounds override says its vertices move in the
+    // shader, so either is as visible as its bounds
     private bool ChunkVisible(in CullFrustum frustum, int index, int chunkInMesh)
     {
-        if (_world.Deformed[index] != null)
+        if (_world.Deformed[index] != null || _world.BoundsOverride[index] != null)
             return true;
         if (_chunkStamp[index] != _cullStamp)
         {

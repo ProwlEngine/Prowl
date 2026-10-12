@@ -107,13 +107,27 @@ void Graphite_BeginVertex()
 
 void graphite_ShaderMain();
 
+bool graphite_PreviousSet = false;
+vec3 graphite_PreviousPosition;
+
+// For shaders that move their vertices: the object space position the vertex had last frame, so motion vectors follow the move
+void Graphite_SetPreviousPosition(vec3 p)
+{
+    graphite_PreviousSet = true;
+    graphite_PreviousPosition = p;
+}
+
 // The vertex's clip position now and last frame, for the forward pass's motion vectors, from last frame's pose when skinned
 void Graphite_EndVertex()
 {
     graphite_MotionCurrent = gl_Position;
     uint previous = Graphite_Object().previousPositions;
     vec3 position;
-    if (previous == 0u)
+    if (graphite_PreviousSet)
+    {
+        position = graphite_PreviousPosition;
+    }
+    else if (previous == 0u)
     {
         position = vertexPosition;
     }

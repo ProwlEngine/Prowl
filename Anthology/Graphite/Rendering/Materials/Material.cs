@@ -30,6 +30,7 @@ public sealed class Material : IDisposable
     private int _renderQueue = -1;
     private PassState? _stateOverride;
     private bool _castShadows = true;
+    private SurfaceSettings? _surface;
 
     internal Material(MaterialSystem system, int id, Shader shader)
     {
@@ -76,7 +77,7 @@ public sealed class Material : IDisposable
             stride *= (ulong)axes[i].Values.Count;
         }
 
-        return new MaterialDraw(_shader, RenderQueue, StateOverride, CastShadows, variant, keywords);
+        return new MaterialDraw(_shader, RenderQueue, StateOverride, CastShadows, variant, keywords, Surface?.Type);
     }
 
     /// <summary>Swapping keeps every value whose name the new shader still has, and keeps the others for later.</summary>
@@ -120,10 +121,24 @@ public sealed class Material : IDisposable
         }
     }
 
-    /// <summary>Negative means the shader's. Queues from 2500 up draw as transparent.</summary>
+    /// <summary>
+    /// How the surface draws, which sets the render queue, render state and surface axes this material does not set
+    /// itself. Null inherits the parent's, and with none anywhere the shader's own passes decide.
+    /// </summary>
+    public SurfaceSettings? Surface
+    {
+        get => _surface ?? _parent?.Surface;
+        set
+        {
+            _surface = value;
+            Changed(Dirt.Draw);
+        }
+    }
+
+    /// <summary>Negative means the surface's, else the shader's. Without a surface, queues from 2500 up draw as transparent.</summary>
     public int RenderQueue
     {
-        get => _renderQueue >= 0 ? _renderQueue : _parent?.RenderQueue ?? _shader.RenderQueue;
+        get => _renderQueue >= 0 ? _renderQueue : _surface is { } surface ? surface.RenderQueue : _parent?.RenderQueue ?? _shader.RenderQueue;
         set
         {
             _renderQueue = value;
@@ -133,7 +148,11 @@ public sealed class Material : IDisposable
 
     public PassState? StateOverride
     {
-        get => _stateOverride ?? _parent?.StateOverride;
+        get
+        {
+            PassState? inherited = _surface is { } surface ? surface.State : _parent?.StateOverride;
+            return _stateOverride is { } local ? inherited is { } below ? local.Apply(below) : local : inherited;
+        }
         set
         {
             _stateOverride = value;
@@ -213,7 +232,7 @@ public sealed class Material : IDisposable
         if (index >= 0)
             _locals[index] = default;
         if (removed)
-            Changed(Dirt.Record);
+            Changed(index >= 0 && DrivesKeyword(index) ? Dirt.Record | Dirt.Draw : Dirt.Record);
 
         string? axis = PropertyID.ToString(name);
         if (axis != null && _keywords.Remove(axis))
@@ -244,7 +263,10 @@ public sealed class Material : IDisposable
         return _unknown != null && _unknown.TryGetValue(name, out MaterialValue value) ? value : default;
     }
 
-    /// <summary>The keyword value this material draws with for an axis: local, then the parent chain, then the axis default.</summary>
+    /// <summary>
+    /// The keyword value this material draws with for an axis: set on it or up the parent chain, else from the surface
+    /// settings, else from the property that drives it, else the axis default.
+    /// </summary>
     public string GetKeyword(string axis)
     {
         for (Material? material = this; material != null; material = material._parent)
@@ -254,7 +276,29 @@ public sealed class Material : IDisposable
         }
 
         int index = _shader.FindAxis(axis, out VariantScope scope);
-        return index >= 0 && scope == VariantScope.Material ? _shader.MaterialAxes[index].Values[0] : "";
+        if (index < 0 || scope != VariantScope.Material)
+            return "";
+        VariantSpace space = _shader.MaterialAxes[index];
+
+        if (Surface is { } surface)
+        {
+            if (axis == SurfaceSettings.SurfaceAxis && HasValue(space, surface.SurfaceKeyword))
+                return surface.SurfaceKeyword;
+        }
+
+        foreach (KeywordBinding binding in _shader.KeywordBindings)
+        {
+            if (binding.Axis != axis || !TryGet(_shader.Properties[binding.Property].Name, out MaterialValue bound))
+                continue;
+            return binding.Kind switch
+            {
+                KeywordBindingKind.Texture => VariantSpace.ToggleValues[bound.Texture != null ? 1 : 0],
+                KeywordBindingKind.Toggle => VariantSpace.ToggleValues[(bound.Type == MaterialPropertyType.Int ? bound.Int : bound.Float) != 0 ? 1 : 0],
+                _ => space.Values[Math.Clamp(bound.Type == MaterialPropertyType.Int ? bound.Int : (int)bound.Float, 0, space.Values.Count - 1)],
+            };
+        }
+
+        return space.Values[0];
     }
 
     public IEnumerable<(PropertyID Name, MaterialValue Value)> LocalValues
@@ -331,7 +375,27 @@ public sealed class Material : IDisposable
             _system.Report(new RendererError("material.property.type", $"The property {name.Text()} of {_shader.Name} is a {_shader.Properties[index].Type}, not a {value.Type}.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{name.Text()}.type" });
 
         Store(name, value);
-        Changed(Dirt.Record);
+        Changed(DrivesKeyword(index) ? Dirt.Record | Dirt.Draw : Dirt.Record);
+    }
+
+    private static bool HasValue(VariantSpace space, string value)
+    {
+        foreach (string candidate in space.Values)
+        {
+            if (candidate == value)
+                return true;
+        }
+        return false;
+    }
+
+    private bool DrivesKeyword(int property)
+    {
+        foreach (KeywordBinding binding in _shader.KeywordBindings)
+        {
+            if (binding.Property == property)
+                return true;
+        }
+        return false;
     }
 
     private void Store(PropertyID name, in MaterialValue value)
@@ -624,7 +688,8 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
 }
 
 /// <summary>A material's draw deciding state, snapshotted at extraction: shader, queue, state, shadows and its material variant.</summary>
-internal sealed record MaterialDraw(Shader Shader, int RenderQueue, PassState? StateOverride, bool CastShadows, ulong Variant, Keyword[] Keywords)
+internal sealed record MaterialDraw(Shader Shader, int RenderQueue, PassState? StateOverride, bool CastShadows, ulong Variant, Keyword[] Keywords, SurfaceType? Surface = null)
 {
-    public bool Transparent => RenderQueue >= Shader.TransparentQueue;
+    /// <summary>The surface decides when there is one, else queues from 2500 up are transparent.</summary>
+    public bool Transparent => Surface is { } surface ? surface == SurfaceType.Transparent : RenderQueue >= Shader.TransparentQueue;
 }

@@ -93,6 +93,30 @@ Properties
 }
 ```
 
+### Attributes
+
+Attributes follow the default value, each in brackets: `[Name]` or `[Name(arg, arg)]`. Arguments are numbers,
+identifiers or quoted strings. ShaderDef keeps each as text; the meanings below are what Graphite's renderer and the
+inspectors built on it read.
+
+| Attribute              | On                 | Meaning                                                                |
+|------------------------|--------------------|------------------------------------------------------------------------|
+| `Gamma`                | `Color`            | The value is entered in gamma space and stored linear                  |
+| `Range(min, max)`      | `Float`, `Integer` | Shown as a slider between the bounds                                   |
+| `Keyword(AXIS)`        | textures           | The material toggle `AXIS` is on while a texture is set                |
+| `Toggle(AXIS)`         | `Float`, `Integer` | The material toggle `AXIS` is on while the value is not zero           |
+| `KeywordEnum(AXIS)`    | `Integer`          | The material axis `AXIS` takes the value at the integer's index        |
+| `Enum(A, B, C)`        | `Integer`          | Shown as a dropdown of the names, stored as their index                |
+| `Header("Text")`       | any                | A heading drawn above the property                                     |
+| `Space`                | any                | A gap drawn above the property                                         |
+| `ShowIf(AXIS)`         | any                | Shown only while the toggle `AXIS` is on; `ShowIf(AXIS, VALUE)` for an enum axis |
+| `HideInInspector`      | any                | Not shown                                                              |
+| `NoScaleOffset`        | textures           | No per texture scale and offset shown                                  |
+| `Normal`               | textures           | Expects a tangent space normal map                                     |
+| `HDR`                  | `Color`            | The colour may exceed 1                                                |
+
+A material that sets an axis explicitly overrides what its properties drive.
+
 ---
 
 ## Pass Block
@@ -134,7 +158,13 @@ Tags { "LightMode" = "ForwardBase"  "Queue" = "Transparent" }
 ```
 
 Arbitrary key-value string pairs associated with the pass. Tags are consumed by the library or
-render pipeline; the shader system stores them but does not interpret them.
+render pipeline; the shader system stores them but does not interpret them. Graphite's renderer reads these:
+
+| Tag            | Values                                                        | Meaning                                                                 |
+|----------------|---------------------------------------------------------------|-------------------------------------------------------------------------|
+| `LightMode`    | `Prepass`, `Forward`, `ShadowCaster`, `ObjectId`, `Sky`, any other name a feature draws | The pass type the renderer draws the pass as                            |
+| `RenderQueue`  | an integer, 2500 and up transparent                           | The default render queue of the shader's materials                      |
+| `SceneColor`   | `Read`                                                        | The pass samples the view's opaque colour through `Graphite/SceneColor.glsl`. A view whose transparent list holds such a pass copies its colour after the opaque surfaces and the sky, with mips, before drawing its transparent surfaces |
 
 ---
 

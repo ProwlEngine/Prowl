@@ -1070,6 +1070,8 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set("Graphite_ScreenVisibility", 0, chain.ScreenVisibility is { Filled: true, Texture: not null } visibility ? visibility.ArrayView(frame.Device) : frame.NoScreenVisibility);
         camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, chain.ScreenIrradiance is { Filled: true, Texture: not null } irradiance ? irradiance.ArrayView(frame.Device) : frame.NoScreenIrradiance);
         camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.TrilinearClamp);
+        camera.ViewTable.Set("Graphite_SceneColor", 0, chain.SceneColor != null ? chain.SceneColorView() : frame.NoSceneColor);
+        camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.TrilinearClamp);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
         _properties.SetBuffer(GraphiteBindings.DrawRecordsName, camera.Records.Buffer);
@@ -1307,10 +1309,12 @@ internal sealed partial class FramePipeline : IDisposable
         textures.RegisterDefault("noise", Noise);
         NoScreenVisibility = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R8_UNorm, TextureUsage.Sampled));
         NoScreenIrradiance = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        NoSceneColor = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 6, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
         for (uint layer = 0; layer < 6; layer++)
         {
             device.UpdateTexture<byte>(NoScreenVisibility, [255], TextureRegion.Whole(NoScreenVisibility, 0, layer));
             device.UpdateTexture<ushort>(NoScreenIrradiance, [0, 0, 0, 0], TextureRegion.Whole(NoScreenIrradiance, 0, layer));
+            device.UpdateTexture<ushort>(NoSceneColor, [0, 0, 0, 0], TextureRegion.Whole(NoSceneColor, 0, layer));
         }
         ClearProgram = FullscreenProgram.Create(device, compiler, "uniform vec4 Graphite_ClearColor; void main() { outColor = Graphite_ClearColor; }", "Graphite/Clear", source: false);
         BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
@@ -1353,6 +1357,9 @@ internal sealed partial class FramePipeline : IDisposable
     /// <summary>The screen lighting a view without a producer reads: full visibility, no irradiance, six layers.</summary>
     public Texture NoScreenVisibility { get; }
     public Texture NoScreenIrradiance { get; }
+
+    /// <summary>The scene colour a view without a copy reads: black, six layers.</summary>
+    public Texture NoSceneColor { get; }
 
     // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked
     private static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1)
@@ -1458,7 +1465,10 @@ internal sealed partial class FramePipeline : IDisposable
             UpdateSkyProgram(world);
             WorldReflections reflections = world.World.Reflections;
             if (reflections.CaptureDue)
+            {
                 CaptureSky(world, time);
+                readbacks.Add(new ReadbackRequest { Buffer = reflections.SkyAmbient, Size = reflections.SkyAmbient.SizeInBytes, BufferDone = world.World.ReceiveSkyAmbient });
+            }
             foreach (ProbeCapture capture in reflections.Captures)
                 CaptureProbe(world, capture, time);
         }
@@ -1568,7 +1578,7 @@ internal sealed partial class FramePipeline : IDisposable
         uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
         if (!view.External && camera.Chain.Ensure(width, height, view.LayerCount))
             camera.Rebuild = true;
-        camera.Info = new FeatureView(view, width, height);
+        camera.Info = new FeatureView(view, width, height, camera.Chain.SceneColor != null);
         if (!view.External)
         {
             camera.SelectFeatures(world.World.FeatureSnapshot, features, Report);
@@ -1586,11 +1596,36 @@ internal sealed partial class FramePipeline : IDisposable
                 camera.ListFor(pass);
         }
         Prepare(camera, view, world, time, width, height);
+        if (!view.External && UpdateSceneColor(camera))
+        {
+            camera.Info = new FeatureView(view, width, height, true);
+            camera.SelectFeatures(world.World.FeatureSnapshot, features, Report);
+            camera.ApplyFeatures();
+        }
         camera.View.Target = view.Target;
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
         if (!view.External)
             _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
+    }
+
+    // Whether the view's transparent list reads the scene colour this frame. Returns whether its copy was just made, which
+    // adds the copy to the view's graph; the lists keep their order through that rebuild, so what Prepare uploaded holds.
+    private bool UpdateSceneColor(CameraFrame camera)
+    {
+        bool used = false;
+        foreach (DrawCall call in camera.Transparent.Calls)
+        {
+            DrawProgram program = DrawPrograms[call.Program];
+            if (program.Shader.PassReadsSceneColor(program.PassIndex))
+            {
+                used = true;
+                break;
+            }
+        }
+        FeatureChain chain = camera.Chain;
+        chain.SceneColorUsed = used;
+        return used && chain.SceneColor == null && chain.EnsureSceneColor();
     }
 
     /// <summary>The draws of an external view this frame. Render thread.</summary>
@@ -2179,6 +2214,7 @@ internal sealed partial class FramePipeline : IDisposable
         SmaaSearchLayered.Dispose();
         NoScreenVisibility.Dispose();
         NoScreenIrradiance.Dispose();
+        NoSceneColor.Dispose();
         ClearProgram.Dispose();
         CopyBackProgram.Dispose();
         foreach (IDisposable retired in _retired)

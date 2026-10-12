@@ -58,6 +58,37 @@ public struct SphericalHarmonicsL2
             C = new Float4(c8.X, c8.Y, c8.Z, 0),
         };
     }
+
+    /// <summary>The harmonics a packed record was made from, the inverse of <see cref="Pack"/>.</summary>
+    internal static SphericalHarmonicsL2 Unpack(in ProbeShRecord p)
+    {
+        Float3 c6 = new Float3(p.Br.Z, p.Bg.Z, p.Bb.Z) / 3f;
+        return new SphericalHarmonicsL2
+        {
+            C0 = (new Float3(p.Ar.W, p.Ag.W, p.Ab.W) + c6) / (A0 * K0),
+            C1 = new Float3(p.Ar.Y, p.Ag.Y, p.Ab.Y) / (A1 * K1),
+            C2 = new Float3(p.Ar.Z, p.Ag.Z, p.Ab.Z) / (A1 * K1),
+            C3 = new Float3(p.Ar.X, p.Ag.X, p.Ab.X) / (A1 * K1),
+            C4 = new Float3(p.Br.X, p.Bg.X, p.Bb.X) / (A2 * K2a),
+            C5 = new Float3(p.Br.Y, p.Bg.Y, p.Bb.Y) / (A2 * K2a),
+            C6 = c6 / (A2 * K2b),
+            C7 = new Float3(p.Br.W, p.Bg.W, p.Bb.W) / (A2 * K2a),
+            C8 = new Float3(p.C.X, p.C.Y, p.C.Z) / (A2 * K2c),
+        };
+    }
+
+    /// <summary>Diffuse irradiance over pi for a unit normal, as the shaders compute it, never below zero.</summary>
+    public readonly Float3 Evaluate(Float3 n)
+    {
+        ProbeShRecord p = Pack();
+        Float4 a = new(n.X, n.Y, n.Z, 1);
+        Float4 b = new(n.X * n.Y, n.Y * n.Z, n.Z * n.Z, n.Z * n.X);
+        float c = n.X * n.X - n.Y * n.Y;
+        Float3 result = new Float3(Float4.Dot(p.Ar, a), Float4.Dot(p.Ag, a), Float4.Dot(p.Ab, a))
+            + new Float3(Float4.Dot(p.Br, b), Float4.Dot(p.Bg, b), Float4.Dot(p.Bb, b))
+            + new Float3(p.C.X, p.C.Y, p.C.Z) * c;
+        return new Float3(MathF.Max(result.X, 0), MathF.Max(result.Y, 0), MathF.Max(result.Z, 0));
+    }
 }
 
 /// <summary>Baked light probes: positions, their harmonics and a tetrahedralization of them, from the host's baker.</summary>
@@ -98,6 +129,12 @@ internal struct ProbeTetRecord
     public uint Corner0, Corner1, Corner2, Corner3;
     public int Neighbour0, Neighbour1, Neighbour2, Neighbour3;
     public Float4 Row1, Row2, Row3;
+}
+
+/// <summary>A probe anchor in a world. Generation checked, so a handle of a removed anchor stays invalid.</summary>
+public readonly record struct ProbeAnchorHandle(int Index, int Generation)
+{
+    public bool IsValid => Generation > 0;
 }
 
 public sealed partial class RenderWorld
@@ -141,6 +178,24 @@ public sealed partial class RenderWorld
         }
     }
 
+    private readonly HandleStore<Double3> _probeAnchors = new();
+
+    /// <summary>
+    /// A point the light probes are sampled at for draws that are not renderables, such as a provider's items, which
+    /// name it in <see cref="DrawItem.Probe"/>. Host thread.
+    /// </summary>
+    public ProbeAnchorHandle AddProbeAnchor(Double3 position)
+    {
+        (int index, int generation) = _probeAnchors.Add(position);
+        return new ProbeAnchorHandle(index, generation);
+    }
+
+    public void SetProbeAnchor(ProbeAnchorHandle handle, Double3 position) => _probeAnchors.Set(handle.Index, handle.Generation, position);
+
+    public void RemoveProbeAnchor(ProbeAnchorHandle handle) => _probeAnchors.Remove(handle.Index, handle.Generation);
+
+    public bool IsAlive(ProbeAnchorHandle handle) => _probeAnchors.IsAlive(handle.Index, handle.Generation);
+
     private void ExtractBakedLighting()
     {
         if (_probesDirty)
@@ -149,6 +204,7 @@ public sealed partial class RenderWorld
             Probes.ReceiveProbes(_probeData);
             Lighting.SetProbes(Probes.Active);
         }
+        _probeAnchors.Extract(Probes.ReceiveAnchor);
         if (Probes.TakeSlotsChanged())
             _render.RefreshProbeSlots();
     }
@@ -169,6 +225,11 @@ internal sealed class WorldProbes : IDisposable
     private readonly Stack<uint> _freeSlots = new();
     private uint _nextSlot;
     private uint[] _slotObject = new uint[64];
+    private Double3[] _slotAnchor = new Double3[64];
+    private uint[] _anchorSlot = [];
+
+    // A slot's object index when it belongs to an anchor rather than a renderable
+    private const uint AnchorSlot = uint.MaxValue - 1;
     private bool[] _requested = new bool[64];
     private readonly List<int> _requests = new();
     private bool _requestAll;
@@ -228,11 +289,42 @@ internal sealed class WorldProbes : IDisposable
         {
             Array.Resize(ref _slotObject, Math.Max((int)slot + 1, _slotObject.Length * 2));
             Array.Resize(ref _requested, _slotObject.Length);
+            Array.Resize(ref _slotAnchor, _slotObject.Length);
         }
         _slotObject[slot] = (uint)objectIndex;
         Request(slot);
         return slot;
     }
+
+    /// <summary>Takes an anchor's position, giving it a slot sampled again whenever it moves. Extraction.</summary>
+    public void ReceiveAnchor(int index, int generation, uint sequence, bool alive, in Double3 position)
+    {
+        if (index >= _anchorSlot.Length)
+        {
+            int old = _anchorSlot.Length;
+            Array.Resize(ref _anchorSlot, Math.Max(index + 1, old * 2 + 4));
+            Array.Fill(_anchorSlot, NoSlot, old, _anchorSlot.Length - old);
+        }
+        uint slot = _anchorSlot[index];
+        if (!alive)
+        {
+            if (slot != NoSlot)
+                Release(slot);
+            _anchorSlot[index] = NoSlot;
+            return;
+        }
+        if (slot == NoSlot)
+        {
+            slot = Assign(0);
+            _anchorSlot[index] = slot;
+        }
+        _slotObject[slot] = AnchorSlot;
+        _slotAnchor[slot] = position;
+        Request(slot);
+    }
+
+    /// <summary>The harmonics slot of an anchor, none while the world has no probes. Render thread.</summary>
+    public uint AnchorSlotOf(int index) => Active && (uint)index < (uint)_anchorSlot.Length ? _anchorSlot[index] : NoSlot;
 
     public void Release(uint slot)
     {
@@ -292,7 +384,7 @@ internal sealed class WorldProbes : IDisposable
                 uint objectIndex = _slotObject[slot];
                 if (objectIndex == NoSlot)
                     continue;
-                (Float3 high, Float3 low) = Precise.Split(render.WorldCenter[objectIndex]);
+                (Float3 high, Float3 low) = Precise.Split(objectIndex == AnchorSlot ? _slotAnchor[slot] : render.WorldCenter[objectIndex]);
                 _requestScratch[RequestCount * 2] = new Float4(high.X, high.Y, high.Z, BitConverter.UInt32BitsToSingle((uint)slot));
                 _requestScratch[RequestCount * 2 + 1] = new Float4(low.X, low.Y, low.Z, 0);
                 RequestCount++;

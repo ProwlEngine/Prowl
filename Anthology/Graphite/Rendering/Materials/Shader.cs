@@ -6,9 +6,9 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
-internal static class PropertyIDText
+public static class PropertyIDText
 {
-    /// <summary>The interned name, for messages.</summary>
+    /// <summary>The interned name.</summary>
     public static string Text(this PropertyID id) => PropertyID.ToString(id) ?? id.ToString();
 }
 
@@ -340,6 +340,21 @@ public sealed class MaterialSchema
     };
 }
 
+public enum KeywordBindingKind : byte
+{
+    /// <summary>On while the texture property holds a texture.</summary>
+    Texture,
+
+    /// <summary>On while the number is not zero.</summary>
+    Toggle,
+
+    /// <summary>The axis value at the integer's index.</summary>
+    Enum,
+}
+
+/// <summary>A material axis a property drives, see <see cref="Shader.KeywordBindings"/>.</summary>
+public readonly record struct KeywordBinding(int Property, string Axis, KeywordBindingKind Kind);
+
 /// <summary>
 /// A shader the renderer can draw with: its definition, the material schema from its Properties block, and its
 /// variant axes split by scope.
@@ -351,11 +366,20 @@ public sealed class Shader
 
     public const int TransparentQueue = 2500;
 
-    internal Shader(ShaderDefinition definition, IShaderCompiler compiler)
+    /// <summary>The pass tag of a pass reading the view's opaque colour, "SceneColor" = "Read". See Graphite/SceneColor.glsl.</summary>
+    public const string SceneColorTag = "SceneColor";
+
+    private readonly bool[] _readsSceneColor;
+
+    public Shader(ShaderDefinition definition, IShaderCompiler compiler)
     {
         Definition = definition;
         Name = definition.Name ?? "";
         Schema = new MaterialSchema(definition.Properties ?? []);
+        ShaderPass[] passes = definition.Passes ?? [];
+        _readsSceneColor = new bool[passes.Length];
+        for (int i = 0; i < passes.Length; i++)
+            _readsSceneColor[i] = ShaderDefinition.PassHasTag(passes[i], SceneColorTag, "Read");
 
         Dictionary<string, VariantSpace> axes = new(StringComparer.Ordinal);
         List<VariantSpace> material = new();
@@ -383,6 +407,34 @@ public sealed class Shader
         MaterialAxes = material;
         GlobalAxes = global;
         RenderQueue = queue;
+        KeywordBindings = BindKeywords();
+    }
+
+    /// <summary>
+    /// Material axes that properties drive: a texture with [Keyword(AXIS)] turns its toggle on while a texture is set, a
+    /// number with [Toggle(AXIS)] while it is not zero, and an integer with [KeywordEnum(AXIS)] picks the value at its index.
+    /// </summary>
+    public IReadOnlyList<KeywordBinding> KeywordBindings { get; }
+
+    private KeywordBinding[] BindKeywords()
+    {
+        List<KeywordBinding> bindings = new();
+        for (int i = 0; i < Properties.Count; i++)
+        {
+            foreach (string attribute in Properties[i].Attributes)
+            {
+                KeywordBindingKind? kind = attribute.StartsWith("Keyword(", StringComparison.Ordinal) ? KeywordBindingKind.Texture
+                    : attribute.StartsWith("Toggle(", StringComparison.Ordinal) ? KeywordBindingKind.Toggle
+                    : attribute.StartsWith("KeywordEnum(", StringComparison.Ordinal) ? KeywordBindingKind.Enum
+                    : null;
+                if (kind == null || !attribute.EndsWith(')'))
+                    continue;
+                string axis = attribute[(attribute.IndexOf('(') + 1)..^1].Trim();
+                if (FindAxis(axis, out VariantScope scope) >= 0 && scope == VariantScope.Material)
+                    bindings.Add(new KeywordBinding(i, axis, kind.Value));
+            }
+        }
+        return [.. bindings];
     }
 
     public string Name { get; }
@@ -411,6 +463,11 @@ public sealed class Shader
     }
 
     public int FindProperty(PropertyID name) => Schema.Find(name);
+
+    /// <summary>Whether any pass of the shader reads the view's opaque colour through its SceneColor tag.</summary>
+    public bool ReadsSceneColor => Array.IndexOf(_readsSceneColor, true) >= 0;
+
+    internal bool PassReadsSceneColor(int passIndex) => passIndex >= 0 && passIndex < _readsSceneColor.Length && _readsSceneColor[passIndex];
 
     private readonly Dictionary<string, int> _passIndices = new(StringComparer.Ordinal);
 

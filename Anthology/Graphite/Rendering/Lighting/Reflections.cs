@@ -166,6 +166,40 @@ public sealed partial class RenderWorld
         _probeBakes.Add((handle.Index, handle.Generation, done));
     }
 
+    /// <summary>
+    /// The sky's light as order 2 harmonics, the raw radiance <see cref="AmbientMode.Sky"/> lights with. Read back after
+    /// each sky capture and taken at a later <see cref="Renderer.SubmitFrame"/>, so it trails the sky by a frame or two.
+    /// Zero until the first arrives. Host thread.
+    /// </summary>
+    public SphericalHarmonicsL2 SkyAmbient { get; private set; }
+
+    /// <summary>How many sky ambient read backs arrived, 0 before the first, so hosts see when <see cref="SkyAmbient"/> changed.</summary>
+    public int SkyAmbientVersion { get; private set; }
+
+    /// <summary>
+    /// The ambient light a surface facing <paramref name="normal"/> receives from the environment, as the shaders give it
+    /// without a lightmap or probe: uniform, hemisphere or the sky's harmonics, times the intensity. Host thread.
+    /// </summary>
+    public Float3 EvaluateAmbient(Float3 normal)
+    {
+        EnvironmentDesc env = Environment;
+        Float3 light = env.Ambient switch
+        {
+            AmbientMode.Sky => SkyAmbient.Evaluate(normal),
+            AmbientMode.Hemisphere => Maths.Lerp(new Float3(env.AmbientGround.X, env.AmbientGround.Y, env.AmbientGround.Z), new Float3(env.AmbientSky.X, env.AmbientSky.Y, env.AmbientSky.Z), normal.Y * 0.5f + 0.5f),
+            _ => new Float3(env.AmbientColor.X, env.AmbientColor.Y, env.AmbientColor.Z),
+        };
+        return light * env.AmbientIntensity;
+    }
+
+    internal void ReceiveSkyAmbient(BufferReadback readback)
+    {
+        if (readback.Failed || readback.Data.Length < Marshal.SizeOf<ProbeShRecord>())
+            return;
+        SkyAmbient = SphericalHarmonicsL2.Unpack(MemoryMarshal.Read<ProbeShRecord>(readback.Data));
+        SkyAmbientVersion++;
+    }
+
     private void ExtractReflections()
     {
         _reflectionProbes.Extract(Reflections.ReceiveProbe);

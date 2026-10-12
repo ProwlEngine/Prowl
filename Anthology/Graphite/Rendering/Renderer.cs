@@ -66,19 +66,36 @@ public sealed class RendererOptions
 }
 
 /// <summary>
-/// The skies Graphite ships, loaded the first time they are asked for: the procedural sky lit by the world's sun, a two
-/// colour gradient (_TopColor, _BottomColor, _Exponent) and a cubemap from six images (_CubeRight, _CubeLeft, _CubeTop,
-/// _CubeBottom, _CubeFront, _CubeBack, _Tint, _Exposure).
+/// The skies Graphite ships, loaded the first time they are asked for: the procedural sky lit by the world's sun
+/// (_SunSize, _SunGlow, _Exposure, _Tint, _GroundColor), a two colour gradient (_TopColor, _BottomColor, _Exponent), a
+/// cube texture (_Cubemap), an equirectangular panorama (_Panorama), both with _Tint, _Exposure and _Rotation in degrees,
+/// and a cube from six images (_CubeRight, _CubeLeft, _CubeTop, _CubeBottom, _CubeFront, _CubeBack, _Tint, _Exposure).
 /// </summary>
 public sealed class BuiltInSkies(Renderer renderer)
 {
-    private Shader? _procedural, _gradient, _cubemap;
+    private Shader? _procedural, _gradient, _cubemap, _panorama, _sixSided;
 
     public Shader Procedural => _procedural ??= Load("Procedural");
     public Shader Gradient => _gradient ??= Load("Gradient");
     public Shader Cubemap => _cubemap ??= Load("Cubemap");
+    public Shader Panorama => _panorama ??= Load("Panorama");
+    public Shader SixSided => _sixSided ??= Load("SixSided");
 
     private Shader Load(string name) => renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Skies/{name}.shader")!));
+}
+
+/// <summary>
+/// The standard surface shaders Graphite ships, loaded the first time they are asked for: Lit, physically based with
+/// optional maps and models compiled in only while a material uses them, and Unlit. Both take <see cref="SurfaceSettings"/>.
+/// </summary>
+public sealed class BuiltInStandard(Renderer renderer)
+{
+    private Shader? _lit, _unlit;
+
+    public Shader Lit => _lit ??= Load("Lit");
+    public Shader Unlit => _unlit ??= Load("Unlit");
+
+    private Shader Load(string name) => renderer.LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader")!));
 }
 
 /// <summary>A problem the renderer reports once, raised on the host thread at SubmitFrame.</summary>
@@ -205,6 +222,15 @@ public struct FrameDesc
     /// views through <see cref="Renderer.Draws"/>.
     /// </summary>
     public ReadOnlyMemory<GraphDispatch> Pipelines;
+
+    /// <summary>Runs on the render thread before the frame is prepared, for host work its submission has to follow.</summary>
+    public Action? Started;
+
+    /// <summary>
+    /// Runs on the render thread once the frame's command buffers are on the graphics queue, with false when the frame
+    /// failed. Always follows <see cref="Started"/>.
+    /// </summary>
+    public Action<bool>? Submitted;
 }
 
 /// <summary>A texture region read back to the host: tightly packed rows of its format, or why it could not be read.</summary>
@@ -289,6 +315,7 @@ public sealed class Renderer : IDisposable
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
         _frame.ChangedMaterials = _shadowMaterials;
         Skies = new BuiltInSkies(this);
+        Standard = new BuiltInStandard(this);
         _programs.DepthCaster = LoadShader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}DepthCaster.shader")!));
         _depthCasterMaterial = CreateMaterial(_programs.DepthCaster);
 
@@ -337,6 +364,8 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The built in skies, each a shader for a material to set as <see cref="EnvironmentDesc.Sky"/>.</summary>
     public BuiltInSkies Skies { get; }
+
+    public BuiltInStandard Standard { get; }
 
     /// <summary>A prefiltered cube from a bake, to show through <see cref="ReflectionProbeDesc.Cubemap"/>. The caller owns it. Any thread.</summary>
     public Texture CreateReflectionCubemap(BakedReflectionProbe baked)
@@ -430,6 +459,8 @@ public sealed class Renderer : IDisposable
             _viewCount = views.Length;
             ExtractFeatures(views);
             _pipelines = frame.Pipelines.ToArray();
+            _started = frame.Started;
+            _submitted = frame.Submitted;
             _frameReadbacks.Clear();
             while (_readbacks.TryDequeue(out ReadbackRequest? request))
                 _frameReadbacks.Add(request);
@@ -458,6 +489,8 @@ public sealed class Renderer : IDisposable
     /// <summary>The slots of host spatial sets by name, the same in every world.</summary>
     internal SpatialSlots SpatialSlots { get; } = new();
     private GraphDispatch[] _pipelines = [];
+    private Action? _started;
+    private Action<bool>? _submitted;
     private readonly ConcurrentQueue<ReadbackRequest> _readbacks = new();
     private readonly List<ReadbackRequest> _frameReadbacks = new();
     private readonly List<ReadbackRequest> _pendingReadbacks = new();
@@ -679,9 +712,16 @@ public sealed class Renderer : IDisposable
     // Errors never leave the render step, they are reported on the host thread.
     private void RunFrame()
     {
+        Action<bool>? submitted = _submitted;
+        _submitted = null;
+        bool succeeded = false;
         try
         {
+            Action? started = _started;
+            _started = null;
+            started?.Invoke();
             RenderFrame();
+            succeeded = true;
         }
         catch (Exception e)
         {
@@ -703,6 +743,15 @@ public sealed class Renderer : IDisposable
             }
             _frameReadbacks.Clear();
             Report(new RendererError("frame.failed", $"The frame failed: {e}", RendererErrorSeverity.Error, e) { Key = $"frame.{e.GetType().Name}.{e.Message}" });
+        }
+
+        try
+        {
+            submitted?.Invoke(succeeded);
+        }
+        catch (Exception e)
+        {
+            Report(new RendererError("frame.submitted", $"A frame's Submitted callback threw: {e}", RendererErrorSeverity.Error, e) { Key = $"frame.submitted.{e.GetType().Name}.{e.Message}" });
         }
     }
 

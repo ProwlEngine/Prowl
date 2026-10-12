@@ -2747,11 +2747,11 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void CubemapSky_ShowsEachImageOnItsSide()
+    public void SixSidedSky_ShowsEachImageOnItsSide()
     {
         Float3[] colors = [new(1, 0, 0), new(0, 1, 0), new(0, 0, 1), new(1, 1, 0), new(0, 1, 1), new(1, 0, 1)];
         string[] names = ["_CubeRight", "_CubeLeft", "_CubeTop", "_CubeBottom", "_CubeFront", "_CubeBack"];
-        Material cubemap = _renderer.CreateMaterial(_renderer.Skies.Cubemap);
+        Material cubemap = _renderer.CreateMaterial(_renderer.Skies.SixSided);
         for (int f = 0; f < 6; f++)
             cubemap.SetTexture(names[f], Lightmap<Float4>(1, PixelFormat.R32_G32_B32_A32_Float, [new Float4(colors[f].X, colors[f].Y, colors[f].Z, 1)]));
         cubemap.SetFloat("_Exposure", 0.5f);
@@ -2777,6 +2777,114 @@ public sealed class LightingTests : IDisposable
         _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Sky, AmbientIntensity = 1, Fog = default, Sky = SkyMaterial(new Float3(0.4f, 0.3f, 0.2f), 0) };
         Frame();
         AssertMatches(_ => new Vector3(0.2f, 0.24f, 0.2f), Frame());
+    }
+
+    [Fact]
+    public void ProceduralSky_TakesItsSunExposureTintAndGround()
+    {
+        Vector3 sun = Vector3.Normalize(new Vector3(0.3f, 0.25f, 1));
+        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(-sun.X, -sun.Y, -sun.Z), Intensity = 1 });
+        Material sky = _renderer.CreateMaterial(_renderer.Skies.Procedural);
+        sky.SetFloat("_SunSize", 3);
+        sky.SetFloat("_SunGlow", 0.5f);
+        sky.SetFloat("_Exposure", 0.7f);
+        sky.SetColor("_Tint", new Float4(1, 0.8f, 0.6f, 1));
+        sky.SetColor("_GroundColor", new Float4(0.1f, 0.3f, 0.2f, 1));
+        _world.Environment = new EnvironmentDesc { Fog = default, Sky = sky };
+
+        AssertPixels(i =>
+        {
+            (float x, float y) = PixelClip(i);
+            return Reference.ProceduralSky(Vector3.Normalize(new Vector3(x, y, 1)), sun, 3, 0.5f, 0.7f, new Vector3(1, 0.8f, 0.6f), new Vector3(0.1f, 0.3f, 0.2f));
+        }, PerspectiveFrame(16), 4e-3f);
+
+        sky.SetFloat("_Exposure", 0);
+        AssertPixels(_ => Vector3.Zero, PerspectiveFrame(16), 1e-4f);
+    }
+
+    // The six faces of a cube view from the origin, in the cube's face order
+    private Float4[][] CubeFrame(int viewId)
+    {
+        using Texture layers = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 6, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        using Framebuffer layered = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, layers) { ViewCount = 6 });
+        ViewDesc cube = new() { World = _world, ViewId = viewId, Target = layered, LayerCount = 6 };
+        for (int f = 0; f < 6; f++)
+            cube.Layers[f] = new ViewLayer { View = Look(s_faces[f].Right, s_faces[f].Up, s_faces[f].Forward), Projection = s_perspective, Position = _origin };
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { cube } });
+        _device.WaitForIdle();
+        Assert.Empty(_errors);
+        return Enumerable.Range(0, 6).Select(f => ReadLayer(layers, (uint)f)).ToArray();
+    }
+
+    [Fact]
+    public void CubemapSky_ShowsTheCubeTurnedByItsRotation()
+    {
+        Float4[] colors = [new(1, 0, 0, 1), new(0, 1, 0, 1), new(0, 0, 1, 1), new(1, 1, 0, 1), new(0, 1, 1, 1), new(1, 0, 1, 1)];
+        Texture texture = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled) with { Type = TextureType.TextureCube });
+        for (uint f = 0; f < 6; f++)
+            _device.UpdateTexture<Float4>(texture, [colors[f]], new TextureRegion(0, 0, 0, 1, 1, 1, 0, f));
+        _textures.Add(texture);
+        Material sky = _renderer.CreateMaterial(_renderer.Skies.Cubemap);
+        sky.SetTexture("_Cubemap", texture, SamplerDescription.Point);
+        sky.SetFloat("_Exposure", 0.5f);
+        _world.Environment = new EnvironmentDesc { Fog = default, Sky = sky };
+
+        Float4[][] faces = CubeFrame(17);
+        for (int f = 0; f < 6; f++)
+            AssertPixels(_ => new Vector3(colors[f].X, colors[f].Y, colors[f].Z) * 0.5f, faces[f], 1e-3f);
+
+        // A quarter turn shows on each side what was a quarter turn to its right
+        sky.SetFloat("_Rotation", 90);
+        int[] shown = [5, 4, 2, 3, 0, 1];
+        faces = CubeFrame(17);
+        for (int f = 0; f < 6; f++)
+            AssertPixels(_ => new Vector3(colors[shown[f]].X, colors[shown[f]].Y, colors[shown[f]].Z) * 0.5f, faces[f], 1e-3f);
+    }
+
+    [Fact]
+    public void PanoramaSky_MapsForwardToTheImagesCentre_AndTurnsByItsRotation()
+    {
+        Float4[] columns = [new(1, 0, 0, 1), new(0, 1, 0, 1), new(0, 0, 1, 1), new(1, 1, 0, 1)];
+        Material sky = _renderer.CreateMaterial(_renderer.Skies.Panorama);
+        sky.SetTexture("_Panorama", Lightmap<Float4>(4, PixelFormat.R32_G32_B32_A32_Float, columns), SamplerDescription.Point);
+        sky.SetColor("_Tint", new Float4(1, 0.5f, 1, 1));
+        _world.Environment = new EnvironmentDesc { Fog = default, Sky = sky };
+
+        Vector3 Column(int c) => new(columns[c].X, columns[c].Y * 0.5f, columns[c].Z);
+        AssertPixels(i => PixelClip(i).X < 0 ? Column(1) : Column(2), PerspectiveFrame(18), 1e-3f);
+
+        sky.SetFloat("_Rotation", 90);
+        AssertPixels(i => PixelClip(i).X < 0 ? Column(2) : Column(3), PerspectiveFrame(18), 1e-3f);
+    }
+
+    [Fact]
+    public void SkyAmbient_IsReadBackToTheHost_AfterTheSkyIsCaptured()
+    {
+        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Sky, AmbientIntensity = 2, Fog = default, Sky = SkyMaterial(new Float3(1, 1, 1), 1) };
+        Assert.Equal(0, _world.SkyAmbientVersion);
+        for (int frame = 0; frame < 3; frame++)
+            Frame();
+        Assert.True(_world.SkyAmbientVersion > 0);
+
+        // The sky is d * 0.5 + 0.5 per channel, whose cosine weighted mean over a normal's hemisphere is 0.5 + n / 3
+        foreach (Float3 n in new Float3[] { new(0, 1, 0), new(1, 0, 0), new(0, 0, -1), Float3.Normalize(new Float3(1, -1, 1)) })
+        {
+            Float3 want = new Float3(0.5f, 0.5f, 0.5f) + n / 3;
+            Float3 got = _world.SkyAmbient.Evaluate(n);
+            Assert.True(Float3.Length(got - want) < 0.02f, $"normal {n}: want {want}, got {got}");
+            Assert.True(Float3.Length(_world.EvaluateAmbient(n) - want * 2) < 0.04f, $"normal {n}: ambient {_world.EvaluateAmbient(n)}");
+        }
+    }
+
+    [Fact]
+    public void EvaluateAmbient_GivesTheUniformAndHemisphereLight_TheShadersUse()
+    {
+        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Uniform, AmbientColor = new Float4(0.2f, 0.4f, 0.8f, 1), AmbientIntensity = 0.5f };
+        Assert.Equal(new Float3(0.1f, 0.2f, 0.4f), _world.EvaluateAmbient(new Float3(0, 1, 0)));
+
+        _world.Environment = new EnvironmentDesc { Ambient = AmbientMode.Hemisphere, AmbientSky = new Float4(1, 0, 0, 1), AmbientGround = new Float4(0, 0, 1, 1), AmbientIntensity = 1 };
+        Assert.Equal(new Float3(1, 0, 0), _world.EvaluateAmbient(new Float3(0, 1, 0)));
+        Assert.Equal(new Float3(0.5f, 0, 0.5f), _world.EvaluateAmbient(new Float3(1, 0, 0)));
     }
 
     [Fact]
@@ -3279,8 +3387,8 @@ public sealed class LightingTests : IDisposable
             return Brdf(l, Vector3.Normalize(-p), n, albedo, metallic, roughness, nl) * radiance * nl;
         }
 
-        // Prowl's procedural sky as drawn
-        public static Vector3 ProceduralSky(Vector3 view, Vector3 sun)
+        // Graphite's procedural sky as drawn, at its defaults unless given
+        public static Vector3 ProceduralSky(Vector3 view, Vector3 sun, float sunSize = 1, float sunGlow = 1, float exposure = 1, Vector3? tint = null, Vector3? ground = null)
         {
             static Vector3 Exp(Vector3 v) => new(MathF.Exp(v.X), MathF.Exp(v.Y), MathF.Exp(v.Z));
             static float Smooth(float a, float b, float x) { float t = Math.Clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
@@ -3296,17 +3404,17 @@ public sealed class LightingTests : IDisposable
             Vector3 lit = 0.5f * (sunT + viewT) * new Vector3(1 / MathF.Sqrt(hh.X), 1 / MathF.Sqrt(hh.Y), 1 / MathF.Sqrt(hh.Z));
             Vector3 ozone = Exp(-new Vector3(-0.0026066f, 0.01647f, 0.0064102f) * sunAir);
             float spread = 1 / MathF.Sqrt(1.6156f - 1.5692f * nu);
-            float glow = 0.00010368f * spread * spread * spread;
+            float glow = 0.00010368f * sunGlow * spread * spread * spread;
             Vector3 single = ozone * lit * viewAir * (new Vector3(0.001631f, 0.0038803f, 0.010984f) * (1 + nu * nu) + new Vector3(glow));
             Vector3 bounce = new Vector3(0.031648f, 0.033978f, 0.03542f) * (up + 0.022059f) * Exp(-(new Vector3(1.8692f) + new Vector3(-0.0023863f, 0.020262f, 0.05909f)) * dep);
-            Vector3 color = (single + bounce * (Vector3.One - viewT)) * 1.7557f;
+            Vector3 color = (single + bounce * (Vector3.One - viewT)) * 1.7557f * (tint ?? Vector3.One);
 
             float sunTransmittance = MathF.Exp(-Vector3.Dot(new Vector3(0.33f), new Vector3(5.802e-6f, 13.558e-6f, 33.1e-6f)) * 8000 / MathF.Max(view.Y, 0.02f));
-            float disk = Smooth(0.99985f, 0.99999f, Vector3.Dot(view, sun)) * (view.Y >= 0 ? 1 : 0);
+            float disk = sunSize > 0 ? Smooth(1 - 1.5e-4f * sunSize * sunSize, 1 - 1e-5f * sunSize * sunSize, Vector3.Dot(view, sun)) * (view.Y >= 0 ? 1 : 0) : 0;
             color += disk * 2000 * sunTransmittance * new Vector3(1, 0.9f, 0.8f);
-            color = Vector3.Lerp(color, color * 0.25f, Smooth(0, -0.02f, view.Y));
+            color = Vector3.Lerp(color, color * (ground ?? new Vector3(0.25f)), Smooth(0, -0.02f, view.Y));
 
-            Vector3 c = color * 40;
+            Vector3 c = color * (40 * exposure);
             float l = Vector3.Dot(c, new Vector3(0.2126f, 0.7152f, 0.0722f));
             Vector3 tc = c / (c + Vector3.One);
             return Vector3.Lerp(c / (l + 1), tc, tc);

@@ -72,8 +72,9 @@ public enum ViewKinds : ushort
 /// <summary>What a feature knows about the view it runs on.</summary>
 public readonly struct FeatureView
 {
-    internal FeatureView(in ViewDesc desc, uint width, uint height)
+    internal FeatureView(in ViewDesc desc, uint width, uint height, bool sceneColor = false)
     {
+        SceneColor = sceneColor;
         World = desc.World;
         Kind = desc.Kind;
         ViewId = desc.ViewId;
@@ -98,6 +99,9 @@ public readonly struct FeatureView
 
     /// <summary>The first layer's camera position.</summary>
     public Double3 Position { get; }
+
+    /// <summary>Whether the view keeps an opaque colour copy, made once one of its transparent passes read it.</summary>
+    internal bool SceneColor { get; }
 
     /// <summary>A texture sized as a part of the view's render resolution, an array on layered views.</summary>
     public GraphTextureDesc Texture(PixelFormat format, float scale = 1) => GraphTextureDesc.ViewSized(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
@@ -399,7 +403,41 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
     public ChainTexture Current = null!;
     public readonly Dictionary<string, TextureHandle> Published = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The opaque colour with its mips that passes tagged "SceneColor" = "Read" sample, made the first time the view's
+    /// transparent list holds one and kept until the view's textures go. Used says whether this frame's list holds one.
+    /// </summary>
+    public Texture? SceneColor;
+    public bool SceneColorUsed;
+    private TextureView? _sceneColorView;
+
     private uint _width, _height, _layers;
+
+    /// <summary>Makes the scene colour for the view's size. Returns whether it did.</summary>
+    public bool EnsureSceneColor()
+    {
+        uint layers = Math.Max(_layers, 1u);
+        if (SceneColor is { } existing && existing.Width == _width && existing.Height == _height && existing.ArrayLayers == layers)
+            return false;
+        ReleaseSceneColor();
+        uint mips = (uint)Math.Log2(Math.Max(_width, _height)) + 1;
+        SceneColor = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(_width, _height, mips, layers, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        SceneColor.Name = $"Graphite.SceneColor {viewId}";
+        return true;
+    }
+
+    /// <summary>The scene colour viewed as an array whatever its layer count.</summary>
+    public TextureView SceneColorView()
+        => _sceneColorView ??= device.ResourceFactory.CreateTextureView(new TextureViewDescription(SceneColor!) { Arrayed = true });
+
+    private void ReleaseSceneColor()
+    {
+        if (_sceneColorView != null)
+            Retired.Add(_sceneColorView);
+        if (SceneColor != null)
+            Retired.Add(SceneColor);
+        (SceneColor, _sceneColorView) = (null, null);
+    }
 
     public void Reset()
     {
@@ -434,6 +472,8 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
             if (color.Texture != null)
                 changed |= EnsureColor(color);
         }
+        if (SceneColor != null)
+            EnsureSceneColor();
         return changed;
     }
 
@@ -458,10 +498,13 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
         Colors[1].Release(Retired);
         ScreenVisibility.Release(Retired);
         ScreenIrradiance.Release(Retired);
+        ReleaseSceneColor();
     }
 
     public void Dispose()
     {
+        _sceneColorView?.Dispose();
+        SceneColor?.Dispose();
         Scene.Dispose();
         Colors[0].Dispose();
         Colors[1].Dispose();
@@ -655,6 +698,8 @@ public sealed class FeatureContext
 
     internal FeatureContext(FeaturePass pass) => _pass = pass;
 
+    internal FeatureChain Chain => _pass.Chain;
+
     internal RenderContext Graph { get; set; } = null!;
 
     public CommandBuffer Command { get; internal set; } = null!;
@@ -688,6 +733,9 @@ public sealed class FeatureContext
 
     /// <summary>The frame's time as the host gave it.</summary>
     public FrameTime Time => _pass.Camera.Time;
+
+    /// <summary>Whether a feature before this one in the view encoded the colour for display, as tonemappers do.</summary>
+    public bool DisplayEncoded => _pass.Chain.DisplayEncoded;
 
     /// <summary>The renderer's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
     public Texture Noise => _pass.Frame.Noise;
@@ -1068,10 +1116,36 @@ public sealed class TransparentFeature : RenderFeature
     }
 }
 
+/// <summary>
+/// Copies the view's colour after the opaque surfaces and the sky into its scene colour and fills the mips, for passes
+/// tagged "SceneColor" = "Read" to sample through Graphite/SceneColor.glsl. Active once such a pass was in the view's
+/// transparent list, recording nothing on frames without one.
+/// </summary>
+public sealed class SceneColorFeature : RenderFeature
+{
+    internal SceneColorFeature() { }
+
+    public override RenderSlot Slot => RenderSlot.OpaqueColor;
+    public override ViewKinds RunsOn => ViewKinds.All;
+
+    public override bool IsActive(in FeatureView view) => view.SceneColor;
+
+    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadColor();
+
+    public override void Render(FeatureContext context)
+    {
+        FeatureChain chain = context.Chain;
+        if (!chain.SceneColorUsed || chain.SceneColor is not { } target || context.Color is not { } source)
+            return;
+        context.Command.CopyTexture(source, 0, 0, 0, 0, 0, target, 0, 0, 0, 0, 0, target.Width, target.Height, 1, target.ArrayLayers);
+        context.Command.GenerateMipmaps(target);
+    }
+}
+
 /// <summary>Picks a view's features each frame: built in, world and view features, filtered and ordered.</summary>
 internal static class FeatureSelection
 {
-    public static readonly RenderFeature[] BuiltIn = [new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new TransparentFeature()];
+    public static readonly RenderFeature[] BuiltIn = [new PrepassFeature(), new OpaqueFeature(), new SkyFeature(), new SceneColorFeature(), new TransparentFeature()];
 
     static FeatureSelection()
     {
@@ -1276,6 +1350,9 @@ public struct DrawItem
     /// <summary>The distance transparent items sort back to front by, NaN for the distance to the transform's position.</summary>
     public float SortDepth;
 
+    /// <summary>Where the item is lit by the world's light probes, none for ambient light only.</summary>
+    public ProbeAnchorHandle Probe;
+
     public DrawItem()
     {
         Transform = Double4x4.Identity;
@@ -1368,7 +1445,7 @@ public sealed class DrawItemSink
             ObjectId = item.ObjectId,
             PreviousTransform = ObjectAttributes.NoPrevious,
             LightmapTexture = ObjectAttributes.NoLightmap,
-            ProbeIndex = uint.MaxValue,
+            ProbeIndex = item.Probe.IsValid ? _world.World.Probes.AnchorSlotOf(item.Probe.Index) : uint.MaxValue,
             LodFade = 1,
             LayerMask = item.LayerMask,
             LightmapScaleOffset = new Float4(1, 1, 0, 0),

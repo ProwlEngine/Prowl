@@ -211,8 +211,8 @@ internal static class ParserUtility
     public static string Texture(ref Tokenizer<ShaderToken> t)
     {
         string name = QuotedString(ref t);
-        Expect(ref t, ShaderToken.OpenBrace);
-        Expect(ref t, ShaderToken.CloseBrace);
+        if (t.TryConsume(ShaderToken.OpenBrace))
+            Expect(ref t, ShaderToken.CloseBrace);
         return name;
     }
 }

@@ -6,13 +6,61 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
-/// <summary>The fullscreen programs and samplers of a stock effect, its programs built from the library's Graphite/Internal files.</summary>
-internal sealed class EffectResources : IDisposable
+/// <summary>
+/// The fullscreen programs and samplers of the stock effects, built from the library's Graphite/Internal files and
+/// shared by every effect of a renderer, so a new effect instance compiles nothing already built. Effects acquire
+/// them and release them when disposed; the last release frees them.
+/// </summary>
+internal sealed class EffectResources
 {
+    private static readonly Dictionary<Renderer, EffectResources> s_shared = new();
+
     private readonly Renderer _renderer;
     private readonly Dictionary<string, FullscreenProgram> _programs = new(StringComparer.Ordinal);
+    private int _users;
 
-    public EffectResources(Renderer renderer)
+    /// <summary>The renderer's shared resources, made on first use. Pair with <see cref="Release"/>.</summary>
+    public static EffectResources Acquire(Renderer renderer)
+    {
+        lock (s_shared)
+        {
+            if (!s_shared.TryGetValue(renderer, out EffectResources? resources))
+            {
+                resources = new EffectResources(renderer);
+                s_shared[renderer] = resources;
+            }
+            resources._users++;
+            return resources;
+        }
+    }
+
+    /// <summary>The shared resources of a renderer if any effect holds them, for tests.</summary>
+    internal static EffectResources? Peek(Renderer renderer)
+    {
+        lock (s_shared)
+            return s_shared.GetValueOrDefault(renderer);
+    }
+
+    public void Release()
+    {
+        lock (s_shared)
+        {
+            if (--_users > 0)
+                return;
+            s_shared.Remove(_renderer);
+        }
+        foreach (FullscreenProgram program in _programs.Values)
+            program.Dispose();
+        _programs.Clear();
+        LinearClamp.Dispose();
+        PointClamp.Dispose();
+        LinearRepeat.Dispose();
+    }
+
+    /// <summary>How many programs were built, for tests.</summary>
+    internal int ProgramCount => _programs.Count;
+
+    private EffectResources(Renderer renderer)
     {
         _renderer = renderer;
         SamplerDescription clamp = SamplerDescription.Linear with
@@ -34,33 +82,28 @@ internal sealed class EffectResources : IDisposable
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
     public FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null)
     {
-        string key = file + "\n" + defines;
-        if (!_programs.TryGetValue(key, out FullscreenProgram? program))
+        string key = file + "\n" + defines + (source ? "\n1" : "\n0");
+        lock (_programs)
         {
-            program = _renderer.CreateFullscreenProgram($"{defines}#include \"Graphite/Internal/{file}.glsl\"\n", $"Graphite/{file}", source, blend);
-            _programs[key] = program;
+            if (!_programs.TryGetValue(key, out FullscreenProgram? program))
+            {
+                program = _renderer.CreateFullscreenProgram($"{defines}#include \"Graphite/Internal/{file}.glsl\"\n", $"Graphite/{file}", source, blend);
+                _programs[key] = program;
+            }
+            return program;
         }
-        return program;
-    }
-
-    public void Dispose()
-    {
-        foreach (FullscreenProgram program in _programs.Values)
-            program.Dispose();
-        _programs.Clear();
-        LinearClamp.Dispose();
-        PointClamp.Dispose();
-        LinearRepeat.Dispose();
     }
 }
 
 /// <summary>
 /// A stock effect: a port of one of Prowl's image effects, its programs built from the library's Graphite/Internal files
-/// and its settings copied at Extract.
+/// and its settings copied at Extract. Effects of one renderer share their programs.
 /// </summary>
 public abstract class PostEffect(Renderer renderer) : RenderFeature, IDisposable
 {
-    private protected EffectResources Resources { get; } = new(renderer);
+    private bool _disposed;
+
+    private protected EffectResources Resources { get; } = EffectResources.Acquire(renderer);
 
     protected Sampler LinearClamp => Resources.LinearClamp;
     protected Sampler PointClamp => Resources.PointClamp;
@@ -70,7 +113,13 @@ public abstract class PostEffect(Renderer renderer) : RenderFeature, IDisposable
     protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null)
         => Resources.Program(file, defines, source, blend);
 
-    public virtual void Dispose() => Resources.Dispose();
+    public virtual void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        Resources.Release();
+    }
 
     protected static PixelFormat Hdr => PixelFormat.R16_G16_B16_A16_Float;
 }
@@ -384,6 +433,7 @@ public sealed class Gtao : ScreenLightingFeature, IDisposable
     private readonly PropertySet _properties = new();
     private Settings _settings;
     private (bool Temporal, bool Blur) _declared = (true, true);
+    private bool _disposed;
 
     private readonly record struct Settings(int Slices, int DirectionSamples, float Radius, float Intensity, float BlurRadius, bool Temporal, float TemporalResponse);
 
@@ -395,7 +445,7 @@ public sealed class Gtao : ScreenLightingFeature, IDisposable
 
     public Gtao(Renderer renderer)
     {
-        _resources = new EffectResources(renderer);
+        _resources = EffectResources.Acquire(renderer);
         _depth = _resources.Program("Gtao", "#define GTAO_DEPTH 1\n", source: false);
         _ao = _resources.Program("Gtao", "#define GTAO_AO 1\n", source: false);
         _temporal = _resources.Program("Gtao", "#define GTAO_TEMPORAL 1\n", source: false);
@@ -509,7 +559,13 @@ public sealed class Gtao : ScreenLightingFeature, IDisposable
         context.Fullscreen(_copy, visibility, _properties);
     }
 
-    public void Dispose() => _resources.Dispose();
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _resources.Release();
+    }
 }
 
 /// <summary>
