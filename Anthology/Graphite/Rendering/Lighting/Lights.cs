@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 using Vector4 = System.Numerics.Vector4;
@@ -400,6 +401,9 @@ public sealed partial class RenderWorld
     private void ExtractLighting()
     {
         _lights.Extract(Lighting.ReceiveLight);
+        Globals?.SetKeyword("GRAPHITE_LIGHT_MASKS", VariantSpace.ToggleValues[Lighting.MaskedLights > 0 ? 1 : 0]);
+        Globals?.SetKeyword("GRAPHITE_CONTACT_SHADOWS", VariantSpace.ToggleValues[Lighting.ContactLights > 0 ? 1 : 0]);
+        Globals?.SnapshotKeywords();
         _decals.Extract(Lighting.ReceiveDecal);
         ExtractBakedLighting();
         ExtractReflections();
@@ -517,6 +521,10 @@ internal sealed class WorldLighting : IDisposable
     private readonly List<int> _directionalLights = new();
     private bool _lightMembership = true;
 
+    /// <summary>Live lights with a cookie or profile, and live lights with contact hardening shadows.</summary>
+    public int MaskedLights { get; private set; }
+    public int ContactLights { get; private set; }
+
     private DecalDesc[] _decals = new DecalDesc[16];
     private bool[] _decalAlive = new bool[16];
     private DecalLook[] _decalLooks = new DecalLook[16];
@@ -596,11 +604,16 @@ internal sealed class WorldLighting : IDisposable
         LightDesc desc = Normalized(given);
         LightDesc old = _lights[index];
         bool wasAlive = _lightAlive[index];
+        if (wasAlive)
+            CountFeatures(old, _lightSlots[index], -1);
         _lights[index] = desc;
         _lightGeneration[index] = generation;
         _lightAlive[index] = alive;
         if (alive)
+        {
             _lightSlots[index] = Slots(desc);
+            CountFeatures(desc, _lightSlots[index], 1);
+        }
 
         if (wasAlive != alive || old.Type != desc.Type || old.Static != desc.Static)
             _lightMembership = true;
@@ -610,6 +623,15 @@ internal sealed class WorldLighting : IDisposable
             Lights.Remove(index);
         if ((wasAlive && old.Type == LightType.Directional) || (alive && desc.Type == LightType.Directional))
             _worldRecordDirty = true;
+    }
+
+    // The lights needing shader code that is only compiled in while one exists
+    private void CountFeatures(in LightDesc light, in LightSlots slots, int delta)
+    {
+        if ((slots.Flags & 96u) != 0)
+            MaskedLights += delta;
+        if (light.Shadow.Enabled && light.Shadow.Filter == ShadowFilter.ContactHardening)
+            ContactLights += delta;
     }
 
     // The cookie and profile's bindless slots, with the record's flags for what the light has
@@ -649,7 +671,9 @@ internal sealed class WorldLighting : IDisposable
             LightDesc light = _lights[i];
             if (!_lightAlive[i] || !(Freed(light.Cookie) || Freed(light.IesProfile)))
                 continue;
+            CountFeatures(light, _lightSlots[i], -1);
             _lightSlots[i] = Slots(light);
+            CountFeatures(light, _lightSlots[i], 1);
             if (light.Type != LightType.Directional)
                 Lights.Repack(i);
         }
@@ -978,9 +1002,6 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
     /// <summary>The side of the cells items are grouped by, by their center. A region's tree covers its items' full bounds.</summary>
     public const double RegionSize = 65536;
 
-    /// <summary>Stack entries the shaders keep for walking the regions tree, after the item trees' entries.</summary>
-    public const int RegionStack = 16;
-
     private const int LeafSize = 8;
     private const int RegionLeafSize = 4;
     private const uint MaxEntries = 1u << 26;
@@ -1110,7 +1131,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
             _boxes[i] = new LightBounds { Min = Outward(frustum, _visible[i].Min, -1), Max = Outward(frustum, _visible[i].Max, 1) };
 
         builder.Build(_boxes.AsSpan(0, _visible.Count), RegionLeafSize, morton: true);
-        if ((builder.Depth - 1) * 3 > RegionStack)
+        if ((builder.Depth - 1) * 3 > LightTreeBuilder.ShaderStack)
             _report(new RendererError("lighting.regions.visible", $"A view sees {_visible.Count} static light or decal regions, so deep a tree that overlapping regions may be skipped."));
 
         if (_entries.Length < _visible.Count)

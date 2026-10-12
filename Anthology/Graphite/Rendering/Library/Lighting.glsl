@@ -13,6 +13,9 @@
 #include "Graphite/PBR.glsl"
 #include "Graphite/Textures.glsl"
 
+// Cookies and profiles are compiled in while a light of the world has one
+#pragma variant global GRAPHITE_LIGHT_MASKS
+
 #define GRAPHITE_LIGHT_POINT 1
 #define GRAPHITE_LIGHT_SPOT 2
 #define GRAPHITE_LIGHT_RECT 3
@@ -63,22 +66,15 @@ struct LightSample
     float Intensity;
     vec3  Direction;
     int   Type;              // 1 point, 2 spot, 3 rect, 4 disk, 5 tube
-    vec3  Up;
     float SourceRadius;
-    vec2  Size;
     float DiffuseScale;
     float SpecularScale;
     float SpotCos;           // cos(outer)
     float InnerSpotCos;      // cos(inner)
-    float ShadowDepthBias;
-    float ShadowNormalBias;
-    float ShadowStrength;
-    float ShadowFilter;      // 0 hard, 1 tent, 2 contact hardening
-    int   ShadowSlot;        // its shadow faces, -1 for none
     int   ShadowEnabled;     // 0 / 1
     uint  Flags;             // cookie 32, profile 64
-    uvec3 Textures;          // cookie, profile and sampler slots
-    vec4  HostData;
+    uint  RecordArray;       // the record array and first word of its record, GRAPHITE_TREE_INVALID for a light built in the shader
+    uint  RecordWord;
 };
 
 // A point light at a camera relative position, every other field at its default, for shaders building lights themselves
@@ -91,60 +87,64 @@ LightSample Graphite_NewLightSample(vec3 position, float range, vec3 color, floa
     L.Intensity = intensity;
     L.Direction = vec3(0.0, 0.0, 1.0);
     L.Type = GRAPHITE_LIGHT_POINT;
-    L.Up = vec3(0.0, 1.0, 0.0);
     L.SourceRadius = 0.0;
-    L.Size = vec2(0.0);
     L.DiffuseScale = 1.0;
     L.SpecularScale = 1.0;
     L.SpotCos = -1.0;
     L.InnerSpotCos = 1.0;
-    L.ShadowDepthBias = 0.0;
-    L.ShadowNormalBias = 0.0;
-    L.ShadowStrength = 0.0;
-    L.ShadowFilter = 0.0;
-    L.ShadowSlot = -1;
     L.ShadowEnabled = 0;
     L.Flags = 0u;
-    L.Textures = uvec3(0u);
-    L.HostData = vec4(0.0);
+    L.RecordArray = GRAPHITE_TREE_INVALID;
+    L.RecordWord = 0u;
     return L;
 }
+
+// A word of a light's record, the default for a light built in the shader
+vec4 graphite_LightWord(LightSample L, uint word, vec4 fallback)
+{
+    return L.RecordArray == GRAPHITE_TREE_INVALID ? fallback : Graphite_SpatialVec4(L.RecordArray, L.RecordWord + word);
+}
+
+// The up direction of a rect, disk or cookie
+vec3 Graphite_LightUp(LightSample L) { return graphite_LightWord(L, 3u, vec4(0.0, 1.0, 0.0, 0.0)).xyz; }
+
+// A rect's width and height, a disk's radius or a tube's length in x
+vec2 Graphite_LightSize(LightSample L) { return vec2(graphite_LightWord(L, 3u, vec4(0.0)).w, graphite_LightWord(L, 4u, vec4(0.0)).x); }
+
+// The cookie, profile and sampler slots
+uvec3 Graphite_LightTextures(LightSample L) { return floatBitsToUint(graphite_LightWord(L, 7u, vec4(0.0)).xyz); }
+
+// The host's data for custom lighting, LightDesc.HostData
+vec4 Graphite_LightHostData(LightSample L) { return graphite_LightWord(L, 8u, vec4(0.0)); }
 
 // How much of a local light reaches a surface past its shadow, 1 lit
 float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
 {
-    if (L.ShadowEnabled == 0 || L.ShadowSlot < 0 || !Graphite_ReceivesShadows())
+    if (L.ShadowEnabled == 0 || L.RecordArray == GRAPHITE_TREE_INVALID || !Graphite_ReceivesShadows())
         return 1.0;
-    if (L.Type == GRAPHITE_LIGHT_POINT)
-        return Graphite_PointShadow(L.ShadowSlot, L.Position, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, L.SourceRadius, worldPos, geomNormal);
-    if (L.Type != GRAPHITE_LIGHT_SPOT)
+    vec4 bias = Graphite_SpatialVec4(L.RecordArray, L.RecordWord + 5u);
+    vec4 shadow = Graphite_SpatialVec4(L.RecordArray, L.RecordWord + 6u);
+    int slot = floatBitsToInt(shadow.z);
+    if (slot < 0)
         return 1.0;
-    return Graphite_SpotShadow(L.ShadowSlot, L.Position, L.Direction, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, L.SourceRadius, worldPos, geomNormal);
+    if (L.Type != GRAPHITE_LIGHT_POINT && L.Type != GRAPHITE_LIGHT_SPOT)
+        return 1.0;
+    return Graphite_LocalShadow(slot, L.Type == GRAPHITE_LIGHT_POINT, L.Position, L.Direction, bias.z, bias.w, shadow.x, shadow.y, L.SourceRadius, worldPos, geomNormal);
 }
 
-// Reads a light when the camera relative point is inside its sphere and the surface is on one of its layers, reading only
-// the words its type and flags use. offset and offsetLow move camera relative positions into the light's tree. HostData
-// is read when GRAPHITE_LIGHT_HOST_DATA is defined.
-bool Graphite_FetchLight(uint array, uint index, vec3 worldPos, vec3 offset, vec3 offsetLow, uint layers, out LightSample L)
+// Reads a light's record. offset and offsetLow move camera relative positions into the light's tree.
+void Graphite_ReadLight(uint array, uint index, vec3 offset, vec3 offsetLow, out LightSample L)
 {
     uint w = index * 9u;
     vec4 positionRange = Graphite_SpatialVec4(array, w);
-    precise vec3 position = (positionRange.xyz - offset) - offsetLow;
-    vec3 d = worldPos - position;
-    if (dot(d, d) > positionRange.w * positionRange.w)
-        return false;
-
-    vec4 shadow = Graphite_SpatialVec4(array, w + 6u);
-    if ((floatBitsToUint(shadow.w) & layers) == 0u)
-        return false;
-
     vec4 colorIntensity = Graphite_SpatialVec4(array, w + 1u);
     vec4 directionType = Graphite_SpatialVec4(array, w + 2u);
     vec4 shape = Graphite_SpatialVec4(array, w + 4u);
     uint flags = floatBitsToUint(directionType.w);
     int type = int(flags & 15u);
-    bool shadowed = ((flags >> 4) & 1u) != 0u;
+    vec2 spot = type == GRAPHITE_LIGHT_SPOT ? Graphite_SpatialVec4(array, w + 5u).xy : vec2(-1.0, 1.0);
 
+    precise vec3 position = (positionRange.xyz - offset) - offsetLow;
     L.Position = position;
     L.Range = positionRange.w;
     L.Color = colorIntensity.rgb;
@@ -154,65 +154,80 @@ bool Graphite_FetchLight(uint array, uint index, vec3 worldPos, vec3 offset, vec
     L.SourceRadius = shape.y;
     L.DiffuseScale = shape.z;
     L.SpecularScale = shape.w;
-    L.ShadowEnabled = shadowed ? 1 : 0;
-    L.ShadowStrength = shadow.x;
-    L.ShadowFilter = shadow.y;
-    L.ShadowSlot = floatBitsToInt(shadow.z);
+    L.SpotCos = spot.x;
+    L.InnerSpotCos = spot.y;
+    L.ShadowEnabled = int((flags >> 4) & 1u);
     L.Flags = flags;
-
-    vec4 upSize = type >= GRAPHITE_LIGHT_RECT || (flags & 96u) != 0u ? Graphite_SpatialVec4(array, w + 3u) : vec4(0.0, 1.0, 0.0, 0.0);
-    L.Up = upSize.xyz;
-    L.Size = vec2(upSize.w, shape.x);
-    vec4 spotShadow = type == GRAPHITE_LIGHT_SPOT || shadowed ? Graphite_SpatialVec4(array, w + 5u) : vec4(-1.0, 1.0, 0.0, 0.0);
-    L.SpotCos = spotShadow.x;
-    L.InnerSpotCos = spotShadow.y;
-    L.ShadowDepthBias = spotShadow.z;
-    L.ShadowNormalBias = spotShadow.w;
-    L.Textures = (flags & 96u) != 0u ? Graphite_SpatialUVec4(array, w + 7u).xyz : uvec3(0u);
-#ifdef GRAPHITE_LIGHT_HOST_DATA
-    L.HostData = Graphite_SpatialVec4(array, w + 8u);
-#else
-    L.HostData = vec4(0.0);
-#endif
-    return true;
+    L.RecordArray = array;
+    L.RecordWord = w;
 }
 
-// Walks the static light regions the view sees, then its tree of moving lights, returning every light whose sphere holds the point
+// Every light whose sphere holds a point and that lights the surface's layers. They are found in batches of up to
+// GRAPHITE_MAX_HITS and read one by one, so walking the trees and shading the lights never hold their registers at
+// once; a batch that fills walks again for the rest. Queries share the hit list, so shade a point's lights before
+// beginning another query.
 struct Graphite_LightIterator
 {
-    Graphite_TreeQuery query;
-    uint tree;
-    uint k;
-    uint last;
+    vec3 position;
     uint layers;
+    uint next;
+    uint count;
+    uint skip;               // lights found in earlier batches, passed over when finding the next
+    bool more;               // the last batch filled the list, so the walk may hold more
 };
 
 Graphite_LightIterator Graphite_BeginLights(vec3 worldPos)
 {
     Graphite_LightIterator it;
-    Graphite_BeginQuery(it.query, worldPos, GRAPHITE_SET_LIGHTS);
-    it.tree = 0u;
-    it.k = 0u;
-    it.last = 0u;
+    it.position = worldPos;
     it.layers = Graphite_SurfaceLayers();
+    it.next = 0u;
+    it.count = 0u;
+    it.skip = 0u;
+    it.more = true;
     return it;
+}
+
+void graphite_FindLights(inout Graphite_LightIterator it)
+{
+    it.skip += it.count;
+    it.count = 0u;
+    it.next = 0u;
+    uint seen = 0u;
+    Graphite_TreeQuery q;
+    Graphite_BeginQuery(q, it.position, GRAPHITE_SET_LIGHTS);
+    uint array, first, last;
+    while (it.count < uint(GRAPHITE_MAX_HITS) && Graphite_NextRun(q, array, first, last))
+    {
+        for (uint k = first; k < last && it.count < uint(GRAPHITE_MAX_HITS); k++)
+        {
+            vec4 positionRange = Graphite_SpatialVec4(array, k * 9u);
+            precise vec3 position = (positionRange.xyz - q.offset) - q.offsetLow;
+            vec3 d = it.position - position;
+            if (dot(d, d) > positionRange.w * positionRange.w || (floatBitsToUint(Graphite_SpatialVec4(array, k * 9u + 6u).w) & it.layers) == 0u)
+                continue;
+            if (seen++ >= it.skip)
+                graphite_Hits[it.count++] = uvec2(k | ((array & 1u) << 31), q.region);
+        }
+    }
+    it.more = it.count == uint(GRAPHITE_MAX_HITS);
 }
 
 bool Graphite_NextLight(inout Graphite_LightIterator it, out LightSample L)
 {
-    for (;;)
+    if (it.next >= it.count)
     {
-        while (it.k < it.last)
-        {
-            uint index = it.k++;
-            if (Graphite_FetchLight(it.tree, index, it.query.position, it.query.offset, it.query.offsetLow, it.layers, L))
-                return true;
-        }
-
-        if (!Graphite_NextRun(it.query, it.tree, it.k, it.last))
+        if (!it.more)
+            return false;
+        graphite_FindLights(it);
+        if (it.count == 0u)
             return false;
     }
-    return false;
+    uvec2 hit = graphite_Hits[it.next++];
+    vec3 offset, offsetLow;
+    Graphite_HitOffsets(GRAPHITE_SET_LIGHTS, hit.y, offset, offsetLow);
+    Graphite_ReadLight(GRAPHITE_SET_LIGHTS * 2u + (hit.x >> 31), hit.x & 0x7FFFFFFFu, offset, offsetLow, L);
+    return true;
 }
 
 struct Graphite_DirectionalLight
@@ -446,31 +461,35 @@ vec3 Graphite_PlanePoint(vec3 center, vec3 n, vec3 right, vec3 up, vec2 halfSize
 vec3 Graphite_LightMask(LightSample L, vec3 w)
 {
     vec3 mask = vec3(1.0);
+#ifdef GRAPHITE_LIGHT_MASKS
     if ((L.Flags & 96u) == 0u)
         return mask;
-    vec3 right = cross(L.Up, L.Direction);
-    vec3 local = vec3(dot(w, right), dot(w, L.Up), dot(w, L.Direction));
+    vec3 up = Graphite_LightUp(L);
+    uvec3 textures = Graphite_LightTextures(L);
+    vec3 right = cross(up, L.Direction);
+    vec3 local = vec3(dot(w, right), dot(w, up), dot(w, L.Direction));
     if ((L.Flags & 32u) != 0u)
     {
         if (L.Type == GRAPHITE_LIGHT_SPOT)
         {
             float tanOuter = sqrt(max(1.0 - L.SpotCos * L.SpotCos, 0.0)) / max(L.SpotCos, 1e-4);
             vec2 uv = local.xy / (max(local.z, 1e-4) * tanOuter) * 0.5 + 0.5;
-            mask *= GRAPHITE_SAMPLE_2D_LOD(L.Textures.x, L.Textures.z, uv, 0.0).rgb;
+            mask *= GRAPHITE_SAMPLE_2D_LOD(textures.x, textures.z, uv, 0.0).rgb;
         }
         else
         {
-            mask *= GRAPHITE_SAMPLE_CUBE_LOD(L.Textures.x, L.Textures.z, local, 0.0).rgb;
+            mask *= GRAPHITE_SAMPLE_CUBE_LOD(textures.x, textures.z, local, 0.0).rgb;
         }
     }
     if ((L.Flags & 64u) != 0u)
     {
         // The angle from the direction across U's texel centres, the angle around it from up across V
-        float width = float(textureSize(sampler2D(Graphite_Textures2D[nonuniformEXT(L.Textures.y)], Graphite_Samplers[nonuniformEXT(L.Textures.z)]), 0).x);
+        float width = float(textureSize(sampler2D(Graphite_Textures2D[nonuniformEXT(textures.y)], Graphite_Samplers[nonuniformEXT(textures.z)]), 0).x);
         float u = acos(clamp(local.z, -1.0, 1.0)) / PI;
         vec2 uv = vec2((u * (width - 1.0) + 0.5) / width, fract(atan(local.x, local.y) / (2.0 * PI)));
-        mask *= GRAPHITE_SAMPLE_2D_LOD(L.Textures.y, L.Textures.z, uv, 0.0).r;
+        mask *= GRAPHITE_SAMPLE_2D_LOD(textures.y, textures.z, uv, 0.0).r;
     }
+#endif
     return mask;
 }
 
@@ -529,7 +548,8 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
     else if (L.Type == GRAPHITE_LIGHT_TUBE)
     {
         c.attenuation = window / max(dist2, 0.01);
-        vec3 axis = normalize(L.Direction) * (0.5 * L.Size.x);
+        float tubeLength = Graphite_LightSize(L).x;
+        vec3 axis = normalize(L.Direction) * (0.5 * tubeLength);
         vec3 a = toLight - axis, b = toLight + axis;
         vec3 ab = b - a;
         float t = clamp(-dot(a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0);
@@ -545,7 +565,7 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
         c.specularL = dot(p, p) > 1e-12 ? normalize(p) : N;
         float lineDist = max(length(onLine), 1e-4);
         c.specular = max(dot(N, c.specularL), 0.0) * window / max(dot(onLine, onLine), 0.01);
-        c.extent = vec2(L.SourceRadius / (2.0 * lineDist), L.Size.x / (PI * lineDist));
+        c.extent = vec2(L.SourceRadius / (2.0 * lineDist), tubeLength / (PI * lineDist));
     }
     else
     {
@@ -555,10 +575,12 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
         if (front <= 0.0)
             return false;
         c.attenuation = window * front / max(dist2, 0.01);
-        vec3 right = cross(L.Up, n);
+        vec3 up = Graphite_LightUp(L);
+        vec2 size = Graphite_LightSize(L);
+        vec3 right = cross(up, n);
         bool disk = L.Type == GRAPHITE_LIGHT_DISK;
-        vec2 halfSize = disk ? vec2(L.Size.x) : 0.5 * L.Size;
-        float area = disk ? PI * halfSize.x * halfSize.x : L.Size.x * L.Size.y;
+        vec2 halfSize = disk ? vec2(size.x) : 0.5 * size;
+        float area = disk ? PI * halfSize.x * halfSize.x : size.x * size.y;
         if (area <= 0.0)
             return false;
 
@@ -569,16 +591,16 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
         }
         else
         {
-            vec3 hx = right * halfSize.x, hy = L.Up * halfSize.y;
+            vec3 hx = right * halfSize.x, hy = up * halfSize.y;
             c.diffuse = Graphite_QuadIrradiance(toLight - hx - hy, toLight + hx - hy, toLight + hx + hy, toLight - hx + hy, N) / area * window;
         }
 
-        vec3 p = Graphite_PlanePoint(toLight, n, right, L.Up, halfSize, disk, R);
+        vec3 p = Graphite_PlanePoint(toLight, n, right, up, halfSize, disk, R);
         float pDist2 = max(dot(p, p), 1e-8);
         float pDist = sqrt(pDist2);
         c.specularL = p / pDist;
         float pFront = max(dot(-c.specularL, n), 0.0);
-        c.extent = disk ? vec2(halfSize.x / (2.0 * pDist)) : L.Size / (2.0 * sqrt(PI) * pDist);
+        c.extent = disk ? vec2(halfSize.x / (2.0 * pDist)) : size / (2.0 * sqrt(PI) * pDist);
         c.specular = max(dot(N, c.specularL), 0.0) * pFront * window / max(pDist2, 0.01);
     }
 
@@ -1118,7 +1140,8 @@ vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
     float a = roughness * roughness;
     vec3 R = normalize(mix(N, reflect(-V, N), (1.0 - a) * (sqrt(1.0 - a) + a)));
 
-    Graphite_ReflectionProbe kept[MAX_BLENDED_PROBES];
+    // Each kept probe's record, read again to sample it, so the blend holds a few numbers per probe rather than its record
+    uvec2 kept[MAX_BLENDED_PROBES];
     vec3 local[MAX_BLENDED_PROBES];
     float weight[MAX_BLENDED_PROBES];
     float priority[MAX_BLENDED_PROBES];
@@ -1141,13 +1164,13 @@ vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
         else
             continue;
 
-        kept[at] = probe;
+        kept[at] = uvec2(it.tree, it.k - 1u);
         local[at] = p;
         weight[at] = w;
         priority[at] = pr;
         for (int j = at; j > 0 && priority[j] > priority[j - 1]; j--)
         {
-            Graphite_ReflectionProbe tk = kept[j]; kept[j] = kept[j - 1]; kept[j - 1] = tk;
+            uvec2 tk = kept[j]; kept[j] = kept[j - 1]; kept[j - 1] = tk;
             vec3 tl = local[j]; local[j] = local[j - 1]; local[j - 1] = tl;
             float tw = weight[j]; weight[j] = weight[j - 1]; weight[j - 1] = tw;
             float tp = priority[j]; priority[j] = priority[j - 1]; priority[j - 1] = tp;
@@ -1159,7 +1182,7 @@ vec3 EvaluateReflectionProbes(vec3 worldPos, vec3 N, vec3 V, float roughness)
     for (int i = 0; i < count && total < 0.999; i++)
     {
         float w = weight[i] * (1.0 - total);
-        color += SampleReflectionProbe(kept[i], local[i], R, roughness) * w;
+        color += SampleReflectionProbe(Graphite_ProbeAt(kept[i].x, kept[i].y), local[i], R, roughness) * w;
         total += w;
     }
     if (total < 0.999)

@@ -27,6 +27,9 @@ layout(set = 1, binding = 28) uniform samplerShadow Graphite_ShadowSampler;
 layout(set = 1, binding = 29, std430) readonly buffer Graphite_ShadowFaces { Graphite_ShadowFace graphite_ShadowFaces[]; };
 layout(set = 1, binding = 30, std430) readonly buffer Graphite_Cascades { Graphite_Cascade graphite_Cascades[]; };
 
+// Contact hardening is compiled in while a light of the world uses it
+#pragma variant global GRAPHITE_CONTACT_SHADOWS
+
 #define GRAPHITE_SHADOW_FACES 6u
 #define GRAPHITE_CASCADES 4u
 #define GRAPHITE_SHADOW_HARD 0.0
@@ -257,74 +260,60 @@ float Graphite_CascadeContact(Graphite_Cascade c, vec3 receiver, vec3 normal, ve
     return lit / float(GRAPHITE_SHADOW_TAPS);
 }
 
-// A spot light's shadow at a camera relative position, the light's position camera relative too
-float Graphite_SpotShadow(int shadowSlot, vec3 lightPosition, vec3 lightDirection, float depthBias, float normalBias, float strength, float filtering, float lightRadius, vec3 position, vec3 geomNormal)
+// A spot or point light's shadow at a camera relative position, the light's position camera relative too. A point light's
+// cube face is the one the biased position lies in, so the offset never pushes it off its face; every face's tile is the
+// same size.
+float Graphite_LocalShadow(int shadowSlot, bool cube, vec3 lightPosition, vec3 lightDirection, float depthBias, float normalBias, float strength, float filtering, float lightRadius, vec3 position, vec3 geomNormal)
 {
-    Graphite_ShadowFace face = graphite_ShadowFaces[uint(shadowSlot) * GRAPHITE_SHADOW_FACES];
-    float fade = face.params.y;
-    if (fade <= 0.0 || face.rect.z <= 0.0)
-        return 1.0;
-
-    vec3 toPosition = position - lightPosition;
-    float distance = length(toPosition);
-    float axisDistance = max(dot(toPosition, lightDirection), 0.0);
-    vec3 biased = Graphite_ShadowBias(position, geomNormal, -toPosition / max(distance, 1e-6), face.rect.w * axisDistance, depthBias, normalBias);
-    vec4 clip = face.lightToClip * vec4(biased - lightPosition, 1.0);
-    if (clip.w <= 0.0 || any(greaterThan(abs(clip.xy), vec2(clip.w))))
-        return 1.0;
-
-    float lit = filtering == GRAPHITE_SHADOW_CONTACT && lightRadius > 0.0
-        ? Graphite_LocalContact(uint(shadowSlot) * GRAPHITE_SHADOW_FACES, false, face, biased - lightPosition, Graphite_ShadowPlane(geomNormal, -toPosition / max(distance, 1e-6)), lightRadius, clip.w)
-        : Graphite_SampleShadow(floatBitsToUint(face.params.x), face.rect, face.params.z, Graphite_ShadowCoords(clip, face.rect), min(filtering, 1.0));
-    return mix(1.0, lit, strength * fade);
-}
-
-// A point light's shadow: the cube face the biased position lies in, every face's tile the same size
-float Graphite_PointShadow(int shadowSlot, vec3 lightPosition, float depthBias, float normalBias, float strength, float filtering, float lightRadius, vec3 position, vec3 geomNormal)
-{
+    // Fields are read where they are used rather than whole faces, so each light holds few registers
     uint first = uint(shadowSlot) * GRAPHITE_SHADOW_FACES;
-    Graphite_ShadowFace any = graphite_ShadowFaces[first];
-    float fade = any.params.y;
-    if (fade <= 0.0 || any.rect.z <= 0.0)
+    vec4 firstRect = graphite_ShadowFaces[first].rect;
+    float fade = graphite_ShadowFaces[first].params.y;
+    if (fade <= 0.0 || firstRect.z <= 0.0)
         return 1.0;
 
     vec3 toPosition = position - lightPosition;
-    float distance = length(toPosition);
+    vec3 toLight = -toPosition / max(length(toPosition), 1e-6);
     vec3 a = abs(toPosition);
-    float axisDistance = max(a.x, max(a.y, a.z));
-    vec3 biased = Graphite_ShadowBias(position, geomNormal, -toPosition / max(distance, 1e-6), any.rect.w * axisDistance, depthBias, normalBias);
-
-    // The face picked from the biased position, so the offset never pushes it off its face
-    vec3 d = biased - lightPosition;
-    Graphite_ShadowFace f = graphite_ShadowFaces[first + Graphite_CubeFace(d)];
-    if (f.rect.z <= 0.0)
+    float axisDistance = cube ? max(a.x, max(a.y, a.z)) : max(dot(toPosition, lightDirection), 0.0);
+    vec3 d = Graphite_ShadowBias(position, geomNormal, toLight, firstRect.w * axisDistance, depthBias, normalBias) - lightPosition;
+    uint index = cube ? first + Graphite_CubeFace(d) : first;
+    vec4 rect = graphite_ShadowFaces[index].rect;
+    if (rect.z <= 0.0)
         return 1.0;
-    vec4 clip = f.lightToClip * vec4(d, 1.0);
-    if (clip.w <= 0.0)
+    vec4 clip = graphite_ShadowFaces[index].lightToClip * vec4(d, 1.0);
+    if (clip.w <= 0.0 || (!cube && any(greaterThan(abs(clip.xy), vec2(clip.w)))))
         return 1.0;
 
-    float lit = filtering == GRAPHITE_SHADOW_CONTACT && lightRadius > 0.0
-        ? Graphite_LocalContact(first, true, f, d, Graphite_ShadowPlane(geomNormal, -toPosition / max(distance, 1e-6)), lightRadius, clip.w)
-        : Graphite_SampleShadow(floatBitsToUint(f.params.x), f.rect, f.params.z, Graphite_ShadowCoords(clip, f.rect), min(filtering, 1.0));
-    return mix(1.0, lit, strength * fade);
+#ifdef GRAPHITE_CONTACT_SHADOWS
+    if (filtering == GRAPHITE_SHADOW_CONTACT && lightRadius > 0.0)
+        return mix(1.0, Graphite_LocalContact(first, cube, graphite_ShadowFaces[index], d, Graphite_ShadowPlane(geomNormal, toLight), lightRadius, clip.w), strength * fade);
+#endif
+    vec4 params = graphite_ShadowFaces[index].params;
+    return mix(1.0, Graphite_SampleShadow(floatBitsToUint(params.x), rect, params.z, Graphite_ShadowCoords(clip, rect), min(filtering, 1.0)), strength * fade);
 }
 
 // Whether p is inside a cascade's sphere, at least inset texels in from its edge
-bool Graphite_InCascade(vec3 p, Graphite_Cascade c, float inset)
+bool Graphite_InCascade(vec3 p, uint cascade, float inset)
 {
-    vec3 d = p - c.sphere.xyz;
-    float r = c.sphere.w * (1.0 - 2.0 * inset * c.params.y);
+    vec4 sphere = graphite_Cascades[cascade].sphere;
+    vec3 d = p - sphere.xyz;
+    float r = sphere.w * (1.0 - 2.0 * inset * graphite_Cascades[cascade].params.y);
     return dot(d, d) <= r * r;
 }
 
-float Graphite_CascadeLit(Graphite_Cascade c, vec3 position, vec3 geomNormal, vec3 toLight, float depthBias, float normalBias, float filtering, float tanRadius)
+// Cascades are read by index and field where used, so the sun's shadow holds few registers
+float Graphite_CascadeLit(uint cascade, vec3 position, vec3 geomNormal, vec3 toLight, float depthBias, float normalBias, float filtering, float tanRadius)
 {
-    float texelWorld = 2.0 * c.sphere.w * c.params.y;
+    vec4 params = graphite_Cascades[cascade].params;
+    float texelWorld = 2.0 * graphite_Cascades[cascade].sphere.w * params.y;
     vec3 biased = Graphite_ShadowBias(position, geomNormal, toLight, texelWorld, depthBias, normalBias);
+#ifdef GRAPHITE_CONTACT_SHADOWS
     if (filtering == GRAPHITE_SHADOW_CONTACT && tanRadius > 0.0)
-        return Graphite_CascadeContact(c, biased, Graphite_ShadowPlane(geomNormal, toLight), toLight, tanRadius, texelWorld);
+        return Graphite_CascadeContact(graphite_Cascades[cascade], biased, Graphite_ShadowPlane(geomNormal, toLight), toLight, tanRadius, texelWorld);
+#endif
     vec4 rect = vec4(0.0, 0.0, 1.0, 0.0);
-    return Graphite_SampleShadow(floatBitsToUint(c.params.x), rect, c.params.y, Graphite_ShadowCoords(c.viewToClip * vec4(biased, 1.0), rect), min(filtering, 1.0));
+    return Graphite_SampleShadow(floatBitsToUint(params.x), rect, params.y, Graphite_ShadowCoords(graphite_Cascades[cascade].viewToClip * vec4(biased, 1.0), rect), min(filtering, 1.0));
 }
 
 // A directional light's shadow at a camera relative position: the sharpest cascade holding it, blended into the next
@@ -332,12 +321,12 @@ float Graphite_CascadeLit(Graphite_Cascade c, vec3 position, vec3 geomNormal, ve
 float Graphite_DirectionalShadow(uint directional, vec3 toLight, float depthBias, float normalBias, float strength, float filtering, float tanRadius, vec3 position, vec3 geomNormal)
 {
     uint first = directional * GRAPHITE_CASCADES;
-    Graphite_Cascade head = graphite_Cascades[first];
-    uint count = uint(head.params.z);
+    uint count = uint(graphite_Cascades[first].params.z);
     if (count == 0u)
         return 1.0;
-    float viewDepth = dot(position, head.fade.xyz);
-    float distance = head.fade.w;
+    vec4 fadeAxis = graphite_Cascades[first].fade;
+    float viewDepth = dot(position, fadeAxis.xyz);
+    float distance = fadeAxis.w;
     if (viewDepth > distance)
         return 1.0;
 
@@ -345,30 +334,33 @@ float Graphite_DirectionalShadow(uint directional, vec3 toLight, float depthBias
     int pick = -1;
     for (uint c = 0u; c < count && pick < 0; c++)
     {
-        if (Graphite_InCascade(position, graphite_Cascades[first + c], 3.0))
+        if (Graphite_InCascade(position, first + c, 3.0))
             pick = int(c);
     }
     for (uint c = 0u; c < count && pick < 0; c++)
     {
-        if (Graphite_InCascade(position, graphite_Cascades[first + c], 0.0))
+        if (Graphite_InCascade(position, first + c, 0.0))
             pick = int(c);
     }
     if (pick < 0)
         return 1.0;
 
-    Graphite_Cascade cascade = graphite_Cascades[first + uint(pick)];
-    float lit = Graphite_CascadeLit(cascade, position, geomNormal, toLight, depthBias, normalBias, filtering, tanRadius);
-
-    float blend = cascade.params.w;
-    if (blend > 0.0 && uint(pick) + 1u < count)
+    // How far into the next cascade the blend has gone, both read through one call so only one is inlined
+    uint cascade = first + uint(pick);
+    float blend = graphite_Cascades[cascade].params.w, w = 0.0;
+    if (blend > 0.0 && uint(pick) + 1u < count && Graphite_InCascade(position, cascade + 1u, 3.0))
     {
-        vec3 d = position - cascade.sphere.xyz;
-        float inner = cascade.sphere.w * (1.0 - 2.0 * 3.0 * cascade.params.y);
-        float t = sqrt(dot(d, d)) / max(inner, 1e-6);
-        float w = clamp((t - (1.0 - blend)) / blend, 0.0, 1.0);
-        Graphite_Cascade next = graphite_Cascades[first + uint(pick) + 1u];
-        if (w > 0.0 && Graphite_InCascade(position, next, 3.0))
-            lit = mix(lit, Graphite_CascadeLit(next, position, geomNormal, toLight, depthBias, normalBias, filtering, tanRadius), w);
+        vec4 sphere = graphite_Cascades[cascade].sphere;
+        vec3 d = position - sphere.xyz;
+        float inner = sphere.w * (1.0 - 2.0 * 3.0 * graphite_Cascades[cascade].params.y);
+        w = clamp((sqrt(dot(d, d)) / max(inner, 1e-6) - (1.0 - blend)) / blend, 0.0, 1.0);
+    }
+    float lit = 0.0;
+    for (uint k = 0u; k < 2u; k++)
+    {
+        float weight = k == 0u ? 1.0 - w : w;
+        if (weight > 0.0)
+            lit += weight * Graphite_CascadeLit(cascade + k, position, geomNormal, toLight, depthBias, normalBias, filtering, tanRadius);
     }
 
     float fade = smoothstep(distance * 0.9, distance, viewDepth);

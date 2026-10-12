@@ -31,12 +31,12 @@ int Graphite_DebugCascade(vec3 position)
         return -1;
     for (uint c = 0u; c < count; c++)
     {
-        if (Graphite_InCascade(position, graphite_Cascades[c], 3.0))
+        if (Graphite_InCascade(position, c, 3.0))
             return int(c);
     }
     for (uint c = 0u; c < count; c++)
     {
-        if (Graphite_InCascade(position, graphite_Cascades[c], 0.0))
+        if (Graphite_InCascade(position, c, 0.0))
             return int(c);
     }
     return -1;
