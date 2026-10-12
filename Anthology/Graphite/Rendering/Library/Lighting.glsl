@@ -62,7 +62,7 @@ struct LightSample
 {
     vec3  Position;          // camera relative
     float Range;
-    vec3  Color;
+    vec3  Color;             // for a light built in the shader, a recorded light's read through Graphite_LightRadiance
     float Intensity;
     vec3  Direction;
     int   Type;              // 1 point, 2 spot, 3 rect, 4 disk, 5 tube
@@ -75,6 +75,7 @@ struct LightSample
     uint  Flags;             // cookie 32, profile 64
     uint  RecordArray;       // the record array and first word of its record, GRAPHITE_TREE_INVALID for a light built in the shader
     uint  RecordWord;
+    float Weight;            // how much of the light a capped pixel keeps, 1 uncapped
 };
 
 // A point light at a camera relative position, every other field at its default, for shaders building lights themselves
@@ -96,6 +97,7 @@ LightSample Graphite_NewLightSample(vec3 position, float range, vec3 color, floa
     L.Flags = 0u;
     L.RecordArray = GRAPHITE_TREE_INVALID;
     L.RecordWord = 0u;
+    L.Weight = 1.0;
     return L;
 }
 
@@ -122,22 +124,30 @@ float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
 {
     if (L.ShadowEnabled == 0 || L.RecordArray == GRAPHITE_TREE_INVALID || !Graphite_ReceivesShadows())
         return 1.0;
-    vec4 bias = Graphite_SpatialVec4(L.RecordArray, L.RecordWord + 5u);
-    vec4 shadow = Graphite_SpatialVec4(L.RecordArray, L.RecordWord + 6u);
-    int slot = floatBitsToInt(shadow.z);
+    int slot = floatBitsToInt(Graphite_SpatialVec4(L.RecordArray, L.RecordWord + 6u).z);
     if (slot < 0)
         return 1.0;
     if (L.Type != GRAPHITE_LIGHT_POINT && L.Type != GRAPHITE_LIGHT_SPOT)
         return 1.0;
-    return Graphite_LocalShadow(slot, L.Type == GRAPHITE_LIGHT_POINT, L.Position, L.Direction, bias.z, bias.w, shadow.x, shadow.y, L.SourceRadius, worldPos, geomNormal);
+    return Graphite_LocalShadow(slot, L.Type == GRAPHITE_LIGHT_POINT, L.Position, L.Direction, L.SourceRadius, worldPos, geomNormal);
 }
 
-// Reads a light's record. offset and offsetLow move camera relative positions into the light's tree.
+// A light's colour times its intensity, a recorded light's read only when it is shaded, after its shadow, so the two are
+// never held together
+vec3 Graphite_LightRadiance(LightSample L)
+{
+    if (L.RecordArray == GRAPHITE_TREE_INVALID)
+        return L.Color * L.Intensity * L.Weight;
+    vec4 colorIntensity = Graphite_SpatialVec4(L.RecordArray, L.RecordWord + 1u);
+    return colorIntensity.rgb * (colorIntensity.w * L.Weight);
+}
+
+// Reads a light's record but its colour, which Graphite_LightRadiance reads when the light is shaded. offset and
+// offsetLow move camera relative positions into the light's tree.
 void Graphite_ReadLight(uint array, uint index, vec3 offset, vec3 offsetLow, out LightSample L)
 {
     uint w = index * 9u;
     vec4 positionRange = Graphite_SpatialVec4(array, w);
-    vec4 colorIntensity = Graphite_SpatialVec4(array, w + 1u);
     vec4 directionType = Graphite_SpatialVec4(array, w + 2u);
     vec4 shape = Graphite_SpatialVec4(array, w + 4u);
     uint flags = floatBitsToUint(directionType.w);
@@ -147,8 +157,8 @@ void Graphite_ReadLight(uint array, uint index, vec3 offset, vec3 offsetLow, out
     precise vec3 position = (positionRange.xyz - offset) - offsetLow;
     L.Position = position;
     L.Range = positionRange.w;
-    L.Color = colorIntensity.rgb;
-    L.Intensity = colorIntensity.w;
+    L.Color = vec3(0.0);
+    L.Intensity = 0.0;
     L.Direction = directionType.xyz;
     L.Type = type;
     L.SourceRadius = shape.y;
@@ -160,6 +170,7 @@ void Graphite_ReadLight(uint array, uint index, vec3 offset, vec3 offsetLow, out
     L.Flags = flags;
     L.RecordArray = array;
     L.RecordWord = w;
+    L.Weight = 1.0;
 }
 
 // Every light whose sphere holds a point and that lights the surface's layers. They are found in batches of up to
@@ -188,6 +199,63 @@ Graphite_LightIterator Graphite_BeginLights(vec3 worldPos)
     return it;
 }
 
+#ifdef GRAPHITE_LIGHTS_PER_PIXEL
+// The strongest lights at a point by their colour's brightness through the falloff, the rest dropped. A kept light within
+// twice the strongest dropped one fades toward it, so a light leaving the strongest fades out rather than popping, and
+// lights well above it keep all their light.
+float graphite_HitScores[GRAPHITE_LIGHTS_PER_PIXEL];
+float graphite_HitWeights[GRAPHITE_LIGHTS_PER_PIXEL];
+
+void graphite_FindLights(inout Graphite_LightIterator it)
+{
+    it.count = 0u;
+    it.next = 0u;
+    it.more = false;
+    float dropped = 0.0;
+    Graphite_TreeQuery q;
+    Graphite_BeginQuery(q, it.position, GRAPHITE_SET_LIGHTS);
+    uint array, first, last;
+    while (Graphite_NextRun(q, array, first, last))
+    {
+        for (uint k = first; k < last; k++)
+        {
+            vec4 positionRange = Graphite_SpatialVec4(array, k * 9u);
+            precise vec3 position = (positionRange.xyz - q.offset) - q.offsetLow;
+            vec3 d = it.position - position;
+            float dist2 = dot(d, d);
+            if (dist2 > positionRange.w * positionRange.w || (floatBitsToUint(Graphite_SpatialVec4(array, k * 9u + 6u).w) & it.layers) == 0u)
+                continue;
+            vec4 colorIntensity = Graphite_SpatialVec4(array, k * 9u + 1u);
+            float falloff = dist2 / max(positionRange.w * positionRange.w, 1e-6);
+            falloff = clamp(1.0 - falloff * falloff, 0.0, 1.0);
+            float score = dot(colorIntensity.rgb, vec3(0.2126, 0.7152, 0.0722)) * colorIntensity.w * falloff * falloff / max(dist2, 0.01);
+            uint at;
+            if (it.count < uint(GRAPHITE_LIGHTS_PER_PIXEL))
+                at = it.count++;
+            else if (score > graphite_HitScores[GRAPHITE_LIGHTS_PER_PIXEL - 1])
+            {
+                at = uint(GRAPHITE_LIGHTS_PER_PIXEL - 1);
+                dropped = max(dropped, graphite_HitScores[at]);
+            }
+            else
+            {
+                dropped = max(dropped, score);
+                continue;
+            }
+            uvec2 hit = uvec2(k | ((array & 1u) << 31), q.region);
+            for (; at > 0u && graphite_HitScores[at - 1u] < score; at--)
+            {
+                graphite_HitScores[at] = graphite_HitScores[at - 1u];
+                graphite_Hits[at] = graphite_Hits[at - 1u];
+            }
+            graphite_HitScores[at] = score;
+            graphite_Hits[at] = hit;
+        }
+    }
+    for (uint i = 0u; i < it.count; i++)
+        graphite_HitWeights[i] = dropped > 0.0 ? clamp((graphite_HitScores[i] - dropped) / dropped, 0.0, 1.0) : 1.0;
+}
+#else
 void graphite_FindLights(inout Graphite_LightIterator it)
 {
     it.skip += it.count;
@@ -212,6 +280,7 @@ void graphite_FindLights(inout Graphite_LightIterator it)
     }
     it.more = it.count == uint(GRAPHITE_MAX_HITS);
 }
+#endif
 
 bool Graphite_NextLight(inout Graphite_LightIterator it, out LightSample L)
 {
@@ -227,6 +296,9 @@ bool Graphite_NextLight(inout Graphite_LightIterator it, out LightSample L)
     vec3 offset, offsetLow;
     Graphite_HitOffsets(GRAPHITE_SET_LIGHTS, hit.y, offset, offsetLow);
     Graphite_ReadLight(GRAPHITE_SET_LIGHTS * 2u + (hit.x >> 31), hit.x & 0x7FFFFFFFu, offset, offsetLow, L);
+#ifdef GRAPHITE_LIGHTS_PER_PIXEL
+    L.Weight = graphite_HitWeights[it.next - 1u];
+#endif
     return true;
 }
 
@@ -504,10 +576,11 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
     vec3 N = s.normal;
     vec3 R = reflect(-s.view, N);
 
-    c.radiance = L.Color * (L.Intensity * 8.0);
+    c.radiance = vec3(8.0);
     c.diffuseL = Lc;
     c.specularL = Lc;
     c.extent = vec2(0.0);
+    float shadow = 1.0;
 
     if (L.Type == GRAPHITE_LIGHT_POINT || L.Type == GRAPHITE_LIGHT_SPOT)
     {
@@ -528,6 +601,14 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
         c.attenuation = window / max(dist2, 0.01) * cone;
         if (c.attenuation <= 0.0001)
             return false;
+
+        // The shadow before the rest of the light, so its working values and the light's are never held together, and a
+        // light wholly shadowed here does no more
+#ifndef SG_NO_SHADOWS
+        shadow = Graphite_LocalLightShadow(L, s.position, s.geomNormal);
+        if (shadow <= 0.0)
+            return false;
+#endif
 
         if (!sphere)
         {
@@ -609,9 +690,7 @@ bool Graphite_ContributeLocal(LightSample L, Graphite_Surface s, bool backLit, o
     if (c.diffuse <= 0.0 && c.specular <= 0.0 && !backLit)
         return false;
 
-#ifndef SG_NO_SHADOWS
-    c.radiance *= Graphite_LocalLightShadow(L, s.position, s.geomNormal);
-#endif
+    c.radiance *= Graphite_LightRadiance(L) * shadow;
     return true;
 }
 

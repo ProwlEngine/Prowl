@@ -187,13 +187,14 @@ internal sealed class ShadowTileAllocator
     private static (int X, int Y) Unpack(long key) => ((int)(key & 0xFFFFFFFF), (int)(key >> 32));
 }
 
-/// <summary>One face of a local light's shadow as shaders read it, 112 bytes, matching Graphite_ShadowFace. Six per light.</summary>
+/// <summary>
+/// One face of a local light's shadow as shaders read it, 48 bytes, the three vec4s Graphite_ShadowFaces holds per face.
+/// Six per light. A cube face's clip space is worked out in the shader from its near and far; a spot light uses its first
+/// face, and its second and third hold its light to clip matrix.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct ShadowFace
 {
-    /// <summary>From a position relative to the light to the face's clip space, reversed Z.</summary>
-    public Float4x4 LightToClip;
-
     /// <summary>The tile's origin and size in page uv, then the world size of a texel one unit from the light.</summary>
     public Float4 Rect;
 
@@ -1319,11 +1320,15 @@ internal sealed partial class FramePipeline
                 ShadowTile tile = light.Tiles[f];
                 WriteFace(shadows, index, f, new ShadowFace
                 {
-                    LightToClip = projection * view,
                     Rect = new Float4(tile.X * inverse, tile.Y * inverse, tile.Size * inverse, 2 * MathF.Tan(half) / tile.Size),
-                    Params = new Float4(BitConverter.UInt32BitsToSingle(light.Pages[f]!.Slot), light.Fade, inverse, 0),
-                    Depth = new Float4(near, far, 0, 0),
+                    Params = new Float4(BitConverter.UInt32BitsToSingle(light.Pages[f]!.Slot), light.Fade * desc.Shadow.Strength, inverse, (float)desc.Shadow.Filter),
+                    Depth = new Float4(near, far, desc.Shadow.DepthBias, desc.Shadow.NormalBias),
                 }, light);
+                if (desc.Type != LightType.Spot)
+                    continue;
+                Float4x4 toClip = projection * view;
+                WriteFace(shadows, index, 1, new ShadowFace { Rect = toClip.c0, Params = toClip.c1, Depth = toClip.c2 }, light);
+                WriteFace(shadows, index, 2, new ShadowFace { Rect = toClip.c3 }, light);
             }
         }
 
