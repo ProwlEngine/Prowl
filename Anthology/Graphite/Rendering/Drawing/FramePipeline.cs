@@ -475,25 +475,23 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
                 }
             }
         }
-        if (!morphs)
+        if (morphs)
         {
-            foreach ((RenderWorld.RenderSide world, int index) in _jobs)
-                Skin(cmd, world, index);
-            return;
-        }
-
-        cmd.ComputeBarrier();
-        for (int slot = 0; slot < slots; slot++)
-        {
-            foreach ((RenderWorld.RenderSide world, int index) in _jobs)
-            {
-                if (slot < world.ActiveFrames[index].Length)
-                    Morph(cmd, world, index, world.ActiveFrames[index][slot]);
-            }
             cmd.ComputeBarrier();
+            for (int slot = 0; slot < slots; slot++)
+            {
+                foreach ((RenderWorld.RenderSide world, int index) in _jobs)
+                {
+                    if (slot < world.ActiveFrames[index].Length)
+                        Morph(cmd, world, index, world.ActiveFrames[index][slot]);
+                }
+                cmd.ComputeBarrier();
+            }
         }
         foreach ((RenderWorld.RenderSide world, int index) in _jobs)
             Skin(cmd, world, index);
+        foreach (RenderWorld.RenderSide world in Worlds)
+            world.CommitDeformation();
     }
 
     // Adds one frame's weighted deltas to the copy's pose

@@ -144,6 +144,12 @@ internal sealed class Uploader : IDisposable
                 cmd.ComputeBarrier();
                 epoch = destination.Epoch;
             }
+            if (destination.Buffer.IsDisposed)
+            {
+                first += (uint)destination.Items.Count;
+                destination.Items.Clear();
+                continue;
+            }
             _properties.SetBuffer("Destination", destination.Buffer);
             cmd.SetProperties(_properties);
             uint remaining = (uint)destination.Items.Count;
@@ -161,7 +167,7 @@ internal sealed class Uploader : IDisposable
         Clear();
     }
 
-    /// <summary>Drops everything queued, for a frame that records nothing. Destinations are forgotten until written again.</summary>
+    /// <summary>Drops everything queued. Destinations are forgotten until written again.</summary>
     public void Clear()
     {
         foreach (Destination destination in _order)

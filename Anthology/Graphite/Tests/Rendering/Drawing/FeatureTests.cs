@@ -925,6 +925,57 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 0, 0), Frame(View()));
     }
 
+    // A frame that fails, two views sharing an id, after its resources were applied
+    private void FailedFrame()
+    {
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View(), View() } });
+        _device.WaitForIdle();
+        Assert.Contains(_errors, e => e.Code == "frame.failed");
+        _errors.Clear();
+    }
+
+    [Fact]
+    public void AFailedFrame_KeepsTheUploadsItApplied()
+    {
+        Frame(View());
+        AddQuad(new Float3(0.25f, 0.5f, 1));
+        FailedFrame();
+        AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
+    }
+
+    [Fact]
+    public void AFailedFrame_KeepsTheDeformedCopiesItMade()
+    {
+        GpuMesh mesh = SkinnedQuad();
+        Frame(View());
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [Unlit(new Float3(1, 1, 1))]);
+        _world.SetBounds(handle, new AABB(new Float3(-16), new Float3(16)));
+        _world.SetBones(handle, [Translation(4, 0, 0)]);
+        FailedFrame();
+        Float4[] pixels = Frame(View());
+        AssertAll(new Float3(1, 1, 1), pixels, i => i % Size is >= 8 and < 16 && i / Size is >= 4 and < 12);
+        AssertAll(new Float3(0, 0, 0), pixels, i => i % Size < 8);
+    }
+
+    [Fact]
+    public void SkinnedMotion_OfARenderableAddedWhereOneWasRemoved_StartsAtNothing()
+    {
+        ShowingMotion();
+        RenderableHandle first = AddSkinned(motionVectors: true);
+        Frame(View());
+        _world.SetBones(first, [Translation(0, 1, 0)]);
+        Frame(View());
+
+        // The same mesh, so the slot keeps its copy, posed back down
+        GpuMesh mesh = _world.Render.Mesh[first.Index]!;
+        _world.Remove(first);
+        RenderableHandle second = _world.Add(new RenderableDesc { Mesh = mesh, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)), Flags = RenderableFlags.MotionVectors }, [Unlit(new Float3(1, 1, 1))]);
+        Assert.Equal(first.Index, second.Index);
+        _world.SetBounds(second, new AABB(new Float3(-16), new Float3(16)));
+        _world.SetBones(second, [Float4x4.Identity]);
+        AssertAll(new Float3(0, 0, 0), Frame(View()));
+    }
+
     [Fact]
     public void Skinning_WithoutBounds_CullsByTheRestPoseAndSaysSoOnce()
     {

@@ -112,8 +112,16 @@ void Graphite_EndVertex()
 {
     graphite_MotionCurrent = gl_Position;
     uint previous = Graphite_Object().previousPositions;
-    uint at = previous - 1u + uint(gl_VertexIndex) * 3u;
-    vec3 position = previous == 0u ? vertexPosition : uintBitsToFloat(uvec3(graphite_Words[at], graphite_Words[at + 1u], graphite_Words[at + 2u]));
+    vec3 position;
+    if (previous == 0u)
+    {
+        position = vertexPosition;
+    }
+    else
+    {
+        uint at = previous - 1u + uint(gl_VertexIndex) * 3u;
+        position = uintBitsToFloat(uvec3(graphite_Words[at], graphite_Words[at + 1u], graphite_Words[at + 2u]));
+    }
     graphite_MotionPrevious = Graphite_PreviousObjectToClip(position);
 }
 

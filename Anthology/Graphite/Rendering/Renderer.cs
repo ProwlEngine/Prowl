@@ -683,7 +683,7 @@ public sealed class Renderer : IDisposable
         }
         catch (Exception e)
         {
-            _uploader.Clear();
+            _uploader.Fence();
             _lastDispatched = Math.Max(_lastDispatched, Device.LastBegunExecutionId);
             foreach (WorldFrame world in _worlds.Values)
                 world.World.Reflections.FrameFailed();

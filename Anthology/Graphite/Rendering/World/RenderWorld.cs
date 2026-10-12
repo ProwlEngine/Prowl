@@ -1052,10 +1052,11 @@ public sealed partial class RenderWorld : IDisposable
         }
 
         /// <summary>
-        /// Decides which copies deform this frame, those behind their bones or weights that a view saw, and swaps the
-        /// position ranges of those keeping a previous pose, so last frame's pose stays for motion vectors. A copy that
-        /// keeps still, or that no view saw last frame, has no motion of its own. Render thread, after every cull and
-        /// before the tables flush.
+        /// Decides which copies deform this frame, those behind their bones or weights that a view saw, and which
+        /// position range those keeping a previous pose deform into, so last frame's pose stays for motion vectors. A
+        /// copy that keeps still, or that no view saw last frame, has no motion of its own. Nothing is kept until
+        /// <see cref="CommitDeformation"/>, so a frame that fails first decides again. Render thread, after every cull
+        /// and before the tables flush.
         /// </summary>
         public void PrepareDeformation()
         {
@@ -1064,23 +1065,19 @@ public sealed partial class RenderWorld : IDisposable
                 MeshPlacement copy = Deformed[index]!;
                 bool deforms = DeformStale[index] && DeformSeen[index] == DeformStamp;
                 DeformNow[index] = deforms;
-                if (deforms)
-                    DeformStale[index] = false;
                 if (copy.SecondPositions == MeshPlacement.None)
                 {
                     PoseTarget[index] = copy.StreamOffsets[(int)VertexSemantic.Position];
                     continue;
                 }
 
-                bool moves = deforms && _hasPose[index] && _seenLastFrame[index];
-                if (deforms && _hasPose[index])
-                    _secondCurrent[index] = !_secondCurrent[index];
+                bool swaps = deforms && _hasPose[index];
+                bool moves = swaps && _seenLastFrame[index];
+                bool secondCurrent = _secondCurrent[index] != swaps;
                 uint first = copy.StreamOffsets[(int)VertexSemantic.Position];
-                uint current = _secondCurrent[index] ? copy.SecondPositions : first;
-                uint previous = _secondCurrent[index] ? first : copy.SecondPositions;
+                uint current = secondCurrent ? copy.SecondPositions : first;
+                uint previous = secondCurrent ? first : copy.SecondPositions;
                 PoseTarget[index] = current;
-                if (deforms)
-                    _hasPose[index] = true;
 
                 ref ObjectAttributes attributes = ref _attributes[index];
                 (uint currentWord, uint previousWord) = (current + 1, (moves ? previous : current) + 1);
@@ -1089,6 +1086,23 @@ public sealed partial class RenderWorld : IDisposable
                 (attributes.CurrentPositions, attributes.PreviousPositions) = (currentWord, previousWord);
                 Attributes.Set((uint)index, attributes);
             }
+        }
+
+        /// <summary>Keeps what the deform pass recorded this frame: the copies it filled and the poses it deformed. Render thread.</summary>
+        public void CommitDeformation()
+        {
+            foreach (int index in Deforming)
+            {
+                if (!DeformNow[index])
+                    continue;
+                DeformStale[index] = false;
+                if (Deformed[index]!.SecondPositions == MeshPlacement.None)
+                    continue;
+                if (_hasPose[index])
+                    _secondCurrent[index] = !_secondCurrent[index];
+                _hasPose[index] = true;
+            }
+            NewCopies.Clear();
         }
 
         /// <summary>An object record for one frame, after every renderable's, for a provider's item. Render thread.</summary>
@@ -1221,7 +1235,6 @@ public sealed partial class RenderWorld : IDisposable
         /// </summary>
         public void UpdateDeformation(GeometryPool geometry, ulong lastDispatched)
         {
-            NewCopies.Clear();
             foreach (int index in _deformDirty)
             {
                 MeshPlacement? source = index < Capacity && Alive[index] && Mesh[index]?.Placement is { } placed
@@ -1240,6 +1253,7 @@ public sealed partial class RenderWorld : IDisposable
                 }
                 if (Deformed[index] is { } old)
                 {
+                    NewCopies.RemoveAll(made => made.To == old);
                     geometry.ReleaseCopy(old, lastDispatched);
                     Deformed[index] = null;
                     _deformSource[index] = null;
@@ -1536,6 +1550,7 @@ public sealed partial class RenderWorld : IDisposable
             RemoveMeshUser(index);
             FreeBones(index);
             _deformDirty.Add(index);
+            (_hasPose[index], _seenLastFrame[index]) = (false, false);
             Mesh[index] = null;
             if (Previous[index] != ObjectAttributes.NoPrevious)
                 _freePrevious.Push(Previous[index]);
