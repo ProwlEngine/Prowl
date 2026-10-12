@@ -63,11 +63,11 @@ public sealed class ManyLightsGame : StationGame
         AddStation("Many lights", "Thousands of static point lights, every one casting shadows. Shadow maps are cached, so a light only draws its shadow again when something in its range changes, and lights share one atlas sized by how much of the screen they cover. More lights fill more of the plaza at the same density.",
             Float3.Zero, new Float3(0f, 14f, -40f), 0f);
 
-        SampleScene.Fog.Mode = Scene.FogParams.FogMode.Off;
-        SampleScene.Skybox.Mode = Scene.SkyboxMode.SolidColor;
-        SampleScene.Skybox.SolidColor = new Color(0.004f, 0.006f, 0.012f, 1f);
-        SampleScene.Ambient.Color = new Float4(0.2f, 0.25f, 0.4f, 1f);
-        SampleScene.Ambient.Strength = 0.04f;
+        SampleScene.Environment.Fog.Mode = FogMode.Off;
+        SampleScene.Environment.SkyMaterial = null;
+        SampleScene.Environment.SkyColor = new Color(0.004f, 0.006f, 0.012f, 1f);
+        SampleScene.Environment.Ambient.Color = new Color(0.2f, 0.25f, 0.4f, 1f);
+        SampleScene.Environment.Ambient.Intensity = 0.04f;
         MainCamera.FarClipPlane = 300f;
         CameraObject.GetComponent<FlyCamera>().Speed = 12f;
         CameraObject.GetComponent<FlyCamera>().FastSpeed = 40f;
@@ -112,7 +112,7 @@ public sealed class ManyLightsGame : StationGame
         return Add(go);
     }
 
-    /// <summary>Turns lights on or off to reach <paramref name="count"/>, creating more when needed, then merges the static geometry again.</summary>
+    /// <summary>Turns lights on or off to reach <paramref name="count"/>, creating more when needed.</summary>
     private void SetLightCount(int count)
     {
         count = Math.Clamp(count, 0, MaxLights);
@@ -121,7 +121,6 @@ public sealed class ManyLightsGame : StationGame
         for (int i = 0; i < _lights.Count; i++)
             _lights[i].Enabled = i < count;
         _count = count;
-        SampleScene.UpdateStaticGeometry();
     }
 
     // Random spots over the whole plaza, nearest the middle first, so the first lights fill a square around the center
@@ -138,7 +137,8 @@ public sealed class ManyLightsGame : StationGame
         (Float3 position, int color) = _slots[_lights.Count];
 
         GameObject go = Model("Light", _bulb, _bulbMaterials[color], position);
-        PointLight light = go.AddComponent<PointLight>();
+        Light light = go.AddComponent<Light>();
+        light.Type = LightType.Point;
         light.Color = Palette[color];
         light.Range = 6f;
         light.Intensity = 5f;
@@ -147,7 +147,7 @@ public sealed class ManyLightsGame : StationGame
 
     private float Lerp(float a, float b) => a + (b - a) * _random.NextSingle();
 
-    public override string Stats => $"{_count:N0} static point lights, {SampleScene.StaticGeometry.GroupCount} merged draw groups";
+    public override string Stats => $"{_count:N0} static point lights";
 
     public override void DrawControls(Paper paper, FontFile font)
     {
@@ -156,8 +156,5 @@ public sealed class ManyLightsGame : StationGame
         Button(paper, font, "Double", () => SetLightCount(Math.Max(1024, _count * 2)), 2);
         Button(paper, font, "Halve", () => SetLightCount(_count / 2), 3);
 
-        Header(paper, font, "Shadow atlas", 4);
-        Label(paper, font, $"{ShadowAtlas.GetSize()} x {ShadowAtlas.GetSize()}, GPU limit {Graphics.MaxTextureSize}", 5);
-        Button(paper, font, ShadowAtlas.RequestedSize >= 16384 ? "Use 8k" : "Use 16k", () => ShadowAtlas.RequestedSize = ShadowAtlas.RequestedSize >= 16384 ? 8192 : 16384, 6);
     }
 }

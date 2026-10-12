@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Echo;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -66,16 +68,15 @@ public sealed class CloudLayer
 /// <summary>
 /// Volumetric clouds over the whole scene, with optional flat cloud layers above or below them.
 /// <para/>
-/// The cloud layer is not ray marched through the view. A grid of camera facing particles covers the sky around the
-/// camera, each taking its density from a coverage map and eroding its edges with 3D noise, and only marching a few
-/// steps toward the sun to light itself. Where there is no cloud the particles collapse and cost nothing. A second,
-/// sparser grid with larger particles reaches further out. Everything is drawn at a reduced resolution and scaled
-/// up over the scene.
+/// The cloud layer is ray marched through the view at a reduced resolution, taking its density from a coverage map
+/// around the camera and eroding its edges with 3D noise, lit from a sun map drawn once a frame or by marching a few
+/// steps toward the sun. Everything is scaled up over the scene. The scene's first enabled clouds are drawn, by a
+/// <see cref="VolumetricCloudsFeature"/> in the scene's world.
 /// </summary>
 [ExecuteAlways]
 [AddComponentMenu("Rendering/Volumetric Clouds")]
 [ComponentIcon("")] // Cloud
-public sealed class VolumetricClouds : Component
+public sealed class VolumetricClouds : Component, IRenderSync
 {
     /// <summary>Height of the cloud base above zero, in meters.</summary>
     [Header("Shape")]
@@ -102,13 +103,12 @@ public sealed class VolumetricClouds : Component
     public float DetailScale = 1000f;
 
     /// <summary>
-    /// How much billowy puffs drawn on each particle eat into thin cloud, detail at screen resolution on top of
-    /// <see cref="Erosion"/>. Kept mild, since a particle's puffs are only an impression of the cloud behind it.
+    /// How much billowy puffs eat into thin cloud, detail at screen resolution on top of <see cref="Erosion"/>.
     /// </summary>
     [Range(0f, 1f)]
     public float PuffStrength = 0.5f;
 
-    /// <summary>How many puffs fit across one particle.</summary>
+    /// <summary>How many puffs fit across twice the layer's thickness.</summary>
     public float PuffScale = 10f;
 
     /// <summary>Wind speed in meters a second.</summary>
@@ -138,21 +138,9 @@ public sealed class VolumetricClouds : Component
     /// <summary>Beyond about this distance in meters the clouds fade into the sky behind them.</summary>
     public float HorizonFade = 40000f;
 
-    /// <summary>Radius in meters of the detailed particle grid around the camera.</summary>
+    /// <summary>How far the clouds reach around the camera, in meters.</summary>
     [Header("Quality")]
-    public float Radius = 16000f;
-
-    /// <summary>Particles along each side of the detailed grid. The far grid uses the same count.</summary>
-    [Range(32, 256)]
-    public int ParticleGrid = 128;
-
-    /// <summary>How much further than <see cref="Radius"/> the far grid reaches.</summary>
-    [Range(2f, 8f)]
-    public float FarRadiusMultiplier = 4f;
-
-    /// <summary>How much bigger far grid particles are than the detailed ones.</summary>
-    [Range(1f, 8f)]
-    public float FarParticleSize = 2.5f;
+    public float Reach = 64000f;
 
     /// <summary>
     /// Marches toward the sun for every pixel of cloud instead of reading the sun map, which is drawn once a frame
@@ -219,16 +207,14 @@ public sealed class VolumetricClouds : Component
 
     private Scene? _registeredScene;
 
-    /// <summary>The coverage and sun maps the renderer draws once a frame for these clouds.</summary>
-    internal CloudRenderer.CloudMaps? Maps;
+    [NonSerialized, NotHeld] private VolumetricCloudsFeature? _feature;
+    [NonSerialized, NotHeld] private RenderWorld? _world;
 
     public override void OnEnable() => JoinScene(GameObject.Scene);
 
     public override void OnDisable()
     {
         LeaveScene(_registeredScene);
-        Maps?.Dispose();
-        Maps = null;
     }
 
     internal override void JoinScene(Scene? scene)
@@ -241,6 +227,35 @@ public sealed class VolumetricClouds : Component
     {
         if (_registeredScene.IsValid()) _registeredScene!.Clouds.Remove(this);
         _registeredScene = null;
+    }
+
+    void IRenderSync.Sync(RenderWorld world)
+    {
+        bool drawn = _registeredScene.IsValid() && _registeredScene.Clouds.Count > 0 && _registeredScene.Clouds[0] == this;
+        if (!drawn || (_world != null && _world != world))
+        {
+            Release();
+            if (!drawn) return;
+        }
+
+        _feature ??= new VolumetricCloudsFeature(Graphics.Renderer!);
+        _feature.Enabled = _feature.Capture(this, world, _registeredScene!);
+        if (_world == null)
+        {
+            world.Features.Add(_feature);
+            _world = world;
+        }
+    }
+
+    void IRenderSync.Detach(RenderWorld world) => Release();
+
+    private void Release()
+    {
+        if (_feature == null) return;
+        _world?.Features.Remove(_feature);
+        Graphics.DeferDispose(_feature);
+        _feature = null;
+        _world = null;
     }
 
     public override void Update()

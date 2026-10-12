@@ -13,10 +13,12 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering.Shaders;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
+using Shader = Prowl.Runtime.Resources.Shader;
+using Material = Prowl.Runtime.Resources.Material;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Material))]
@@ -92,22 +94,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         Origami.Separator(paper, $"{id}_sep_shader").Show();
         DrawShaderPicker(paper, id, material, entry);
 
-        // Shader properties one field per property declared by the shader. Values
-        // are read live from the shader for non-overridden entries (see
-        // DrawShaderProperty), so changes to defaults in the shader graph propagate
-        // immediately no SyncShaderDefaults call needed.
-        Shader? shader = material.Shader;
-        if (shader != null)
-        {
-            Origami.Header(paper, $"{id}_h_props", "Properties").Underline().Show();
-
-            foreach (ShaderProperty prop in shader.Properties)
-            {
-                MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name}", material, prop,
-                    onChanged: () => MarkDirty(material, entry));
-            }
-
-        }
+        MaterialPropertyDrawer.DrawMaterial(paper, id, material, () => MarkDirty(material, entry));
 
         // Shown when the live material actually differs from its file, not merely because it was
         // touched at some point. Ctrl+S still commits it too, via SaveManager.

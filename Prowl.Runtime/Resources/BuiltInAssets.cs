@@ -203,6 +203,12 @@ public static class BuiltInAssets
     /// <summary>Check if a GUID corresponds to a built-in asset.</summary>
     public static bool IsBuiltIn(Guid guid) => Entries.ContainsKey(guid);
 
+    private static readonly HashSet<Guid> s_placeholders =
+        [GuidFor(DefaultTexture.White), GuidFor(DefaultTexture.Gray18), GuidFor(DefaultTexture.Normal), GuidFor(DefaultTexture.Surface), GuidFor(DefaultTexture.Emission)];
+
+    /// <summary>Whether a texture is a built in stand in (white, gray, flat normal), which a material slot treats as empty.</summary>
+    public static bool IsPlaceholderTexture(Guid guid) => s_placeholders.Contains(guid);
+
     /// <summary>
     /// Get the deterministic GUID for a specific default shader.
     /// </summary>

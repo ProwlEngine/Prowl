@@ -111,7 +111,7 @@ public sealed class LightmapBakeService
         foreach (GameObject go in scene.AllObjects)
         {
             Light? light = go.GetComponent<Light>();
-            if (light == null || !light.EnabledInHierarchy || light.BakeMode == LightBakeMode.Realtime) continue;
+            if (light.IsNotValid() || !light.EnabledInHierarchy || light.BakeMode == LightBakeMode.Realtime) continue;
             AddLight(bake, light);
         }
 
@@ -232,13 +232,8 @@ public sealed class LightmapBakeService
         Runtime.Debug.Log("[Lightmap] Cleared baked lighting.");
     }
 
-    /// <summary>Scene ambient colour as a flat sky radiance (used as ray-miss GI when sky baking is on).</summary>
-    private static Float3 SceneSkyRadiance(Scene scene)
-    {
-        Scene.AmbientLightParams a = scene.Ambient;
-        Float4 c = a.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? a.SkyColor : a.Color;
-        return new Float3((float)c.X, (float)c.Y, (float)c.Z) * a.Strength;
-    }
+    /// <summary>The scene's ambient light reaching an upward surface, as a flat sky radiance for rays that miss.</summary>
+    private static Float3 SceneSkyRadiance(Scene scene) => scene.Rendering.Ambient(Float3.UnitY);
 
     private void FinalizeBake()
     {
@@ -455,11 +450,11 @@ public sealed class LightmapBakeService
         byte[] rgba = new byte[n * 4];
         try
         {
-            if (tex.ImageFormat == TextureImageFormat.Color4b)
+            if (tex.Format == Runtime.TextureFormat.RGBA8)
             {
                 tex.GetData<byte>(rgba);
             }
-            else if (tex.ImageFormat is TextureImageFormat.UnsignedShort4 or TextureImageFormat.Short4)
+            else if (tex.Format == Runtime.TextureFormat.RGBA16)
             {
                 ushort[] tmp = new ushort[n * 4];
                 tex.GetData<ushort>(tmp);
@@ -468,7 +463,7 @@ public sealed class LightmapBakeService
             else return null; // unsupported albedo format -> flat colour
         }
         catch { return null; }
-        return bake.CreateTextureRGBA(name, w, h, rgba, 2.2f);
+        return bake.CreateTextureRGBA(name, w, h, rgba, tex.Srgb ? 2.2f : 1f);
     }
 
     private static void AddLight(BakeScene bake, Light light)
@@ -480,24 +475,26 @@ public sealed class LightmapBakeService
         bool bakeDirect = light.BakeMode == LightBakeMode.Baked; // Mixed bakes indirect only
 
         Photonic.Scene.Lights.Light bl;
-        switch (light)
+        switch (light.Type)
         {
-            case PointLight pl: bl = bake.CreatePointLight(light.GameObject.Name, xform, color, pl.Range); break;
-            case SpotLight sl:
+            case LightType.Directional:
+                // Both treat the transform's +Z as the direction the light travels.
+                bl = bake.CreateDirectionalLight(light.GameObject.Name, xform, color);
+                break;
+            case LightType.Spot:
                 {
-                    // Prowl's SpotAngle/InnerSpotAngle are OUTER/INNER half-angles in degrees; Photonic's
-                    // ConeAngle/InnerConeAngle are FULL cone angles in radians (it halves them internally).
-                    Photonic.Scene.Lights.SpotLight spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, sl.Range, 2.0f * sl.SpotAngle * Maths.Deg2Rad);
-                    spot.InnerConeAngle = 2.0f * sl.InnerSpotAngle * Maths.Deg2Rad;
+                    // Prowl's angles are half angles in degrees, Photonic's are full cone angles in radians
+                    Photonic.Scene.Lights.SpotLight spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, light.Range, 2.0f * light.OuterAngle * Maths.Deg2Rad);
+                    spot.InnerConeAngle = 2.0f * light.InnerAngle * Maths.Deg2Rad;
                     bl = spot;
                     break;
                 }
             default:
-                {
-                    // Both treat the transform's +Z as the direction the light travels.
-                    bl = bake.CreateDirectionalLight(light.GameObject.Name, xform, color);
-                    break;
-                }
+                // Photonic has no area lights, so rect, disk and tube lights bake as a point at their centre
+                if (light.Type != LightType.Point)
+                    Runtime.Debug.LogWarningOnce($"lightmap.arealight.{light.InstanceID}", $"[Lightmap] {light.GameObject.Name}: {light.Type} lights bake as point lights.");
+                bl = bake.CreatePointLight(light.GameObject.Name, xform, color, light.Range);
+                break;
         }
         bl.BakeDirect = bakeDirect;
     }

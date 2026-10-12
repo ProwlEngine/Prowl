@@ -666,9 +666,8 @@ public static class PackageImportDialog
             byte[] pixels = new byte[data.Length - 8];
             Buffer.BlockCopy(data, 8, pixels, 0, pixels.Length);
 
-            var tex = new Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
+            var tex = new Texture2D((uint)w, (uint)h);
             tex.SetData<byte>(pixels);
-            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _thumbCache[assetPath] = tex;
             return tex;
         }

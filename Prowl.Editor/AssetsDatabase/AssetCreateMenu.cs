@@ -160,7 +160,7 @@ public static class AssetCreateMenu
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
-    /// <summary> Creates a new .shader file in the project at the given relative path, with a unique name and a default PBR shader template. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
+    /// <summary> Creates a new .shader file in the project at the given relative path, with a unique name and a lit surface shader to start from. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
     public static string? CreateShader(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
@@ -169,239 +169,31 @@ public static class AssetCreateMenu
         string name = FindUniqueName(absFolder, "New Shader", ".shader");
         string filePath = Path.Combine(absFolder, name);
 
-        File.WriteAllText(filePath, @"// Custom PBR Shader
-// GPU instancing, skeletal animation, shadows, and fog are handled
-// automatically by the VertexAttributes and Lighting includes.
-//
-// Vertex utilities (from VertexAttributes.glsl):
-//   TransformClip(pos)       - position to clip space (handles instancing + skinning)
-//   TransformPosition(pos)   - position to world space
-//   TransformDirection(dir)  - normal/tangent to world space
-//   GetInstanceColor()       - vertex color with instance tint
-//   GetInstanceCustomData()  - per-instance custom vec4
-//   GetModelMatrix()         - model matrix (instanced or per-object)
-//   GetMVPMatrix()           - MVP matrix
-//
-// Lighting utilities (from Lighting.glsl):
-//   CalculateForwardLighting(worldPos, normal, viewDir, albedo, metallic, roughness, ao)
-//   CalculateAmbient(worldNormal)
-//   ApplyFog(color, worldPos)
-
-Shader ""Custom/NewShader""
-
-Properties
+        File.WriteAllText(filePath, @"// A lit surface with every feature of the standard Lit shader: shadows, lightmaps, probes, decals, fog, surface
+// types and the Lit material inputs. Surface runs before lighting and may change BaseColor, Alpha, Normal, Metallic,
+// Roughness, Occlusion and Emission, reading UV, UV1, VertexColor, WorldPos, ViewDir and GeometryNormal.
+// Surface ""Unlit"" gives the Unlit shader's passes instead.
+Shader ""Custom/New Shader""
 {
-    _MainTex (""Albedo"", Texture2D) = ""white""
-    _MainColor (""Tint"", Color) = (1.0, 1.0, 1.0, 1.0)
-    _NormalTex (""Normal"", Texture2D) = ""normal""
-    _SurfaceTex (""Surface (G Roughness, B Metallic)"", Texture2D) = ""surface""
-    _Metallic (""Metallic"", Range(0.0, 1.0)) = 1.0
-    _Roughness (""Roughness"", Range(0.0, 1.0)) = 1.0
-    _OcclusionTex (""Occlusion (R)"", Texture2D) = ""white""
-    _EmissionTex (""Emission"", Texture2D) = ""emission""
-    _EmissiveColor (""Emissive Color"", Color) = (1.0, 1.0, 1.0, 1.0)
-    _EmissionIntensity (""Emission Intensity"", Float) = 1.0
-}
+    Properties
+    {
+        _RimColor(""Rim Color"", Color) = (0.3, 0.6, 1.0, 1.0)
+        _RimPower(""Rim Power"", Float) = 3.0 [Range(0.5, 8)]
+    }
 
-// === Main Forward Lit Pass ===
-Pass ""Default""
-{
-    Tags { ""RenderOrder"" = ""Opaque"" }
-    Cull Back
+    Surface ""Lit""
+    {
+        GLSLPROGRAM
+        uniform vec4 _RimColor;
+        uniform float _RimPower;
 
-    GLSLPROGRAM
-
-        Vertex
+        void Surface(inout Graphite_SurfaceData s)
         {
-            #include ""ProwlCG""
-            #include ""VertexAttributes""
-
-            out vec2 texCoord0;
-            out vec3 worldPos;
-            out vec4 vColor;
-            out vec3 vNormal;
-            out vec3 vTangent;
-            out vec3 vBitangent;
-
-            void main()
-            {
-                gl_Position = TransformClip(vertexPosition);
-                texCoord0   = vertexTexCoord0;
-                worldPos    = TransformPosition(vertexPosition);
-                vColor      = GetInstanceColor();
-                vNormal     = TransformDirection(vertexNormal);
-#ifdef HAS_TANGENTS
-                vTangent    = TransformDirection(vertexTangent.xyz);
-                vBitangent  = cross(vNormal, vTangent);
-#endif
-            }
+            float rim = 1.0 - max(dot(s.Normal, s.ViewDir), 0.0);
+            s.Emission += _RimColor.rgb * pow(rim, _RimPower);
         }
-
-        Fragment
-        {
-            #include ""ProwlCG""
-            #include ""Lighting""
-
-            layout (location = 0) out vec4 fragColor;
-
-            in vec2 texCoord0;
-            in vec3 worldPos;
-            in vec4 vColor;
-            in vec3 vNormal;
-            in vec3 vTangent;
-            in vec3 vBitangent;
-
-            uniform sampler2D _MainTex;
-            uniform sampler2D _NormalTex;
-            uniform sampler2D _SurfaceTex;
-            uniform float _Metallic;
-            uniform float _Roughness;
-            uniform sampler2D _OcclusionTex;
-            uniform sampler2D _EmissionTex;
-            uniform vec4 _EmissiveColor;
-            uniform float _EmissionIntensity;
-            uniform vec4 _MainColor;
-
-            void main()
-            {
-                // Albedo. Colour textures are sRGB and get decoded here; _MainColor and the vertex
-                // colour are linear and multiply in afterwards.
-                vec4 albedoTexel = texture(_MainTex, texCoord0);
-                vec3 baseColor = gammaToLinearSpace(albedoTexel.rgb) * _MainColor.rgb * vColor.rgb;
-                float alpha = albedoTexel.a * _MainColor.a * vColor.a;
-
-                // Normal mapping
-                vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
-
-                // Surface: G = Roughness, B = Metallic, each scaled by its factor
-                vec4 surface = texture(_SurfaceTex, texCoord0);
-                float roughness = clamp(surface.g * _Roughness, 0.0, 1.0);
-                float metallic = clamp(surface.b * _Metallic, 0.0, 1.0);
-
-                // Ambient occlusion: R channel, 1 = unoccluded
-                float ao = texture(_OcclusionTex, texCoord0).r;
-
-                // Emission
-                vec3 emission = gammaToLinearSpace(texture(_EmissionTex, texCoord0).rgb) * _EmissiveColor.rgb * _EmissionIntensity;
-
-                // PBR lighting + ambient + fog
-                vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
-                vec3 lighting = CalculateForwardLighting(worldPos, worldNormal, viewDir,
-                                                         baseColor, metallic, roughness, ao);
-                vec3 ambient = CalculateAmbient(worldNormal) * baseColor * ao * _AmbientStrength;
-                vec3 color = ApplyFog(ambient + lighting + emission, worldPos);
-
-                fragColor = vec4(color, alpha);
-            }
-        }
-    ENDGLSL
-}
-
-// === Depth + Normals Pre-Pass (feeds GTAO, SSR, TAA and motion blur) ===
-Pass ""Prepass""
-{
-    Tags { ""LightMode"" = ""Prepass"" }
-    Cull Back
-    ZWrite On
-
-    GLSLPROGRAM
-
-        Vertex
-        {
-            #include ""ProwlCG""
-            #include ""VertexAttributes""
-
-            out vec3 vNormal;
-            out vec3 vTangent;
-            out vec3 vBitangent;
-            out vec2 texCoord0;
-            out vec4 vCurrClipNJ;
-            out vec4 vPrevClip;
-
-            void main()
-            {
-                gl_Position = TransformClip(vertexPosition); // jittered, for raster + depth
-                vNormal     = TransformDirection(vertexNormal);
-#ifdef HAS_TANGENTS
-                vTangent    = TransformDirection(vertexTangent.xyz);
-                vBitangent  = cross(vNormal, vTangent);
-#endif
-                texCoord0   = vertexTexCoord0;
-
-                // Jitter-free current and previous clip positions for motion vectors.
-                vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
-                vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * worldPos;
-                vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
-                vPrevClip = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
-            }
-        }
-
-        Fragment
-        {
-            #include ""ProwlCG""
-
-            layout (location = 0) out vec4 normalOut;
-            layout (location = 1) out vec4 motionRM;
-
-            in vec3 vNormal;
-            in vec3 vTangent;
-            in vec3 vBitangent;
-            in vec2 texCoord0;
-            in vec4 vCurrClipNJ;
-            in vec4 vPrevClip;
-
-            uniform sampler2D _NormalTex;
-            uniform sampler2D _SurfaceTex;
-            uniform float _Metallic;
-            uniform float _Roughness;
-
-            void main()
-            {
-                vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
-                normalOut = EncodeViewNormal(worldNormal);
-
-                // Motion vectors plus the roughness/metallic SSR samples. These must match the
-                // forward pass or reflections come off the wrong surface.
-                vec2 currNDC = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;
-                vec2 prevNDC = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;
-                vec4 surface = texture(_SurfaceTex, texCoord0);
-                motionRM = vec4(currNDC - prevNDC,
-                                clamp(surface.g * _Roughness, 0.0, 1.0),
-                                clamp(surface.b * _Metallic, 0.0, 1.0));
-            }
-        }
-    ENDGLSL
-}
-
-// === Shadow Caster Pass ===
-Pass ""ShadowCaster""
-{
-    Tags { ""LightMode"" = ""ShadowCaster"" }
-    Cull Back
-
-    GLSLPROGRAM
-
-        Vertex
-        {
-            #include ""ProwlCG""
-            #include ""VertexAttributes""
-
-            void main()
-            {
-                gl_Position = TransformClip(vertexPosition);
-            }
-        }
-
-        Fragment
-        {
-            #include ""ProwlCG""
-
-            void main()
-            {
-                gl_FragDepth = gl_FragCoord.z;
-            }
-        }
-    ENDGLSL
+        ENDGLSL
+    }
 }
 ");
         EditorAssetBackend.Instance?.InvalidateFolderIndex();

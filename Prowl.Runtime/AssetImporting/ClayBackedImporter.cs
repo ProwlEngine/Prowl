@@ -140,8 +140,11 @@ internal static class ClayBackedImporter
         // Skipped wholesale when materials are off, so an import that wants no materials also does
         // not decode or register the textures only those materials would have referenced.
         if (settings.ImportMaterials)
+        {
+            bool[] colour = ColourTextures(clayModel);
             for (int i = 0; i < clayModel.Textures.Count; i++)
-                textureCache[i] = ResolveModelTexture(clayModel.Textures[i], resolver);
+                textureCache[i] = ResolveModelTexture(clayModel.Textures[i], resolver, colour[i]);
+        }
 
         // 2. Materials. Left empty when the import does not want them, which makes every renderer
         // fall back to the default material rather than to a material built from the file.
@@ -257,8 +260,7 @@ internal static class ClayBackedImporter
             }
         }
 
-        // 5b. Cameras and spot lights aim down their node's -Z, so each goes on a child turned to face +Z.
-        // A directional light already shines along -Forward, and a point light has no direction.
+        // 5b. Cameras, spot and directional lights aim down their node's -Z, so each goes on a child turned to face +Z.
         if (settings.ImportCameras)
             for (int i = 0; i < clayModel.Nodes.Count; i++)
                 if (clayModel.Nodes[i].CameraIndex is int ci and >= 0)
@@ -269,7 +271,7 @@ internal static class ClayBackedImporter
                 if (clayModel.Nodes[i].LightIndex is int li and >= 0)
                 {
                     Clay.Light light = clayModel.Lights[li];
-                    BuildLight(light, light.Type == Clay.LightType.Spot ? ForwardChild(nodeGOs[i], "Light") : nodeGOs[i]);
+                    BuildLight(light, light.Type != Clay.LightType.Point ? ForwardChild(nodeGOs[i], "Light") : nodeGOs[i]);
                 }
 
         // 6. The rig, then the clips that play on it.
@@ -465,7 +467,7 @@ internal static class ClayBackedImporter
     }
 
     /// <summary>
-    /// Attaches the <see cref="Light"/> subclass matching the source type.
+    /// Attaches a <see cref="Light"/> of the source's type.
     /// </summary>
     /// <remarks>
     /// glTF intensity is photometric (lux for directional, candela for point and spot) while Prowl's
@@ -474,28 +476,25 @@ internal static class ClayBackedImporter
     /// </remarks>
     private static void BuildLight(Clay.Light src, GameObject go)
     {
-        Light light = src.Type switch
+        Light light = go.AddComponent<Light>();
+        light.Type = src.Type switch
         {
-            Clay.LightType.Directional => go.AddComponent<DirectionalLight>(),
-            Clay.LightType.Spot => go.AddComponent<SpotLight>(),
-            _ => go.AddComponent<PointLight>(),
+            Clay.LightType.Directional => LightType.Directional,
+            Clay.LightType.Spot => LightType.Spot,
+            _ => LightType.Point,
         };
-
         light.Color = src.Color;
         light.Intensity = src.Intensity;
 
         // Range is optional in glTF and means unlimited when absent, which no real-time light can
         // do, so an absent one keeps the component's own default.
-        if (light is PointLight point && src.Range is { } pointRange)
-            point.Range = pointRange;
+        if (src.Range is { } range) light.Range = range;
 
-        if (light is SpotLight spot)
+        // Both measure cone angles from the axis
+        if (light.Type == LightType.Spot)
         {
-            if (src.Range is { } spotRange) spot.Range = spotRange;
-
-            // glTF measures cone angles from the axis; Prowl's are full cone angles.
-            spot.SpotAngle = src.OuterConeAngleRadians * 2f * (180f / MathF.PI);
-            spot.InnerSpotAngle = src.InnerConeAngleRadians * 2f * (180f / MathF.PI);
+            light.OuterAngle = src.OuterConeAngleRadians * (180f / MathF.PI);
+            light.InnerAngle = src.InnerConeAngleRadians * (180f / MathF.PI);
         }
     }
 
@@ -503,49 +502,32 @@ internal static class ClayBackedImporter
     // Material bake
     // ----------------------------------------------------------------------------------------
 
-    /// <summary>
-    /// Picks the Default/Standard* or Default/Unlit* variant matching the source material's alpha
-    /// mode and sidedness. Render state (cull, blend, depth write) is baked into the shader rather
-    /// than overridden per material, so the mode has to be chosen here.
-    /// </summary>
-    private static DefaultShader SelectShader(ClayMaterial src)
+    /// <summary>The surface matching the source material's alpha mode and sidedness.</summary>
+    private static SurfaceSettings SurfaceFor(ClayMaterial src)
     {
-        bool twoSided = src.DoubleSided;
-
-        if (src.Unlit)
+        SurfaceType type = src.AlphaMode switch
         {
-            return src.AlphaMode switch
-            {
-                MaterialAlphaMode.Mask => twoSided ? DefaultShader.UnlitCutoutDoubleSided : DefaultShader.UnlitCutout,
-                MaterialAlphaMode.Blend => twoSided ? DefaultShader.UnlitTransparentDoubleSided : DefaultShader.UnlitTransparent,
-                _ => twoSided ? DefaultShader.UnlitDoubleSided : DefaultShader.Unlit,
-            };
-        }
-
-        return src.AlphaMode switch
-        {
-            MaterialAlphaMode.Mask => twoSided ? DefaultShader.StandardCutoutDoubleSided : DefaultShader.StandardCutout,
-            MaterialAlphaMode.Blend => twoSided ? DefaultShader.StandardTransparentDoubleSided : DefaultShader.StandardTransparent,
-            _ => twoSided ? DefaultShader.StandardDoubleSided : DefaultShader.Standard,
+            MaterialAlphaMode.Mask => SurfaceType.Cutout,
+            MaterialAlphaMode.Blend => SurfaceType.Transparent,
+            _ => SurfaceType.Opaque,
         };
+        return new SurfaceSettings(type, SurfaceBlend.Alpha, src.DoubleSided ? SurfaceCull.Off : SurfaceCull.Back);
     }
 
     private static PMaterial BuildMaterial(ClayMaterial src, Texture2D?[] textureCache)
     {
         // Models also import on the loader thread, which never loads other assets, so built-ins are referenced.
-        var mat = new PMaterial(Shader.GetDefault(SelectShader(src)))
+        var mat = new PMaterial(Shader.GetDefault(src.Unlit ? DefaultShader.Unlit : DefaultShader.Lit))
         {
             Name = string.IsNullOrEmpty(src.Name) ? "Material" : src.Name,
+            Surface = SurfaceFor(src),
         };
 
-        // BaseColor is linear (glTF baseColorFactor), and the Standard shaders multiply _MainColor
-        // in after decoding the albedo texture, so it crosses over untouched.
+        // BaseColor is linear (glTF baseColorFactor) and multiplies the decoded albedo, so it crosses over untouched
         mat.SetColor("_MainColor", src.BaseColor);
 
-        // An absent albedo texture means "the factor is the colour", so the neutral is white. The
-        // grid checker is the missing-texture placeholder for hand-authored materials and would
-        // otherwise get multiplied into every untextured imported material.
-        mat.SetTexture("_MainTex", OrDefault(ResolveTexture(src.BaseColorTexture, textureCache), DefaultTexture.White));
+        // Slots without a texture stay unset: the shader then leaves their input out
+        SetTextureIfAny(mat, "_MainTex", ResolveTexture(src.BaseColorTexture, textureCache));
         mat.SetInt("_MainTexUV", UVSetFor(src.BaseColorTexture, src));
 
         ApplyTextureTransform(mat, src);
@@ -553,33 +535,41 @@ internal static class ClayBackedImporter
         if (src.AlphaMode == MaterialAlphaMode.Mask)
             mat.SetFloat("_AlphaCutoff", src.AlphaCutoff);
 
-        // The unlit shaders carry only the base slots; everything below has no uniform there.
         if (src.Unlit)
             return mat;
 
-        mat.SetTexture("_NormalTex", OrDefault(ResolveTexture(src.NormalTexture, textureCache), DefaultTexture.Normal));
+        SetTextureIfAny(mat, "_NormalTex", ResolveTexture(src.NormalTexture, textureCache));
         mat.SetFloat("_NormalScale", src.NormalScale);
         mat.SetInt("_NormalTexUV", UVSetFor(src.NormalTexture, src));
 
-        // Factors multiply the texture channels, matching glTF. White is the neutral texture so a
-        // factor-only material lands on exactly its factors.
-        mat.SetTexture("_SurfaceTex", OrDefault(ResolveTexture(src.MetallicRoughnessTexture, textureCache), DefaultTexture.White));
+        // Factors multiply the texture channels, matching glTF
+        SetTextureIfAny(mat, "_SurfaceTex", ResolveTexture(src.MetallicRoughnessTexture, textureCache));
         mat.SetFloat("_Metallic", src.Metallic);
         mat.SetFloat("_Roughness", src.Roughness);
         mat.SetInt("_SurfaceTexUV", UVSetFor(src.MetallicRoughnessTexture, src));
 
-        // Occlusion is its own slot. When a model packs ORM into one image and points both
-        // occlusionTexture and metallicRoughnessTexture at it, both slots resolve to that image.
-        mat.SetTexture("_OcclusionTex", OrDefault(ResolveTexture(src.OcclusionTexture, textureCache), DefaultTexture.White));
+        // When a model packs ORM into one image both occlusion and metallic roughness point at it
+        SetTextureIfAny(mat, "_OcclusionTex", ResolveTexture(src.OcclusionTexture, textureCache));
         mat.SetFloat("_OcclusionStrength", src.OcclusionStrength);
         mat.SetInt("_OcclusionTexUV", UVSetFor(src.OcclusionTexture, src));
 
-        mat.SetTexture("_EmissionTex", OrDefault(ResolveTexture(src.EmissiveTexture, textureCache), DefaultTexture.White));
-        mat.SetColor("_EmissiveColor", src.EmissiveFactor);
-        mat.SetFloat("_EmissionIntensity", src.EmissiveStrength);
-        mat.SetInt("_EmissionTexUV", UVSetFor(src.EmissiveTexture, src));
+        Texture2D? emission = ResolveTexture(src.EmissiveTexture, textureCache);
+        bool emits = src.EmissiveStrength > 0 && (src.EmissiveFactor.R > 0 || src.EmissiveFactor.G > 0 || src.EmissiveFactor.B > 0);
+        if (emits)
+        {
+            mat.SetInt("_Emission", 1);
+            SetTextureIfAny(mat, "_EmissionTex", emission);
+            mat.SetColor("_EmissiveColor", src.EmissiveFactor);
+            mat.SetFloat("_EmissionIntensity", src.EmissiveStrength);
+            mat.SetInt("_EmissionTexUV", UVSetFor(src.EmissiveTexture, src));
+        }
 
         return mat;
+    }
+
+    private static void SetTextureIfAny(PMaterial mat, string name, Texture2D? texture)
+    {
+        if (texture.IsValid()) mat.SetTexture(name, texture);
     }
 
     private static int UVSetFor(MaterialTextureSlot? slot, ClayMaterial src)
@@ -643,19 +633,31 @@ internal static class ClayBackedImporter
         return cache[idx];
     }
 
-    // "No texture in this slot" is never resolved through IModelTextureResolver - it isn't a texture
-    // reference to look up, it's the absence of one. Falls back to the shared, GUID-tagged default
-    // texture singletons (same as always).
-    private static Texture2D OrDefault(Texture2D? tex, DefaultTexture fallback) => tex is not null ? tex : Texture2D.GetDefault(fallback);
+    // Textures some material samples as colour (base colour, emission); the rest are only read as data
+    private static bool[] ColourTextures(Model model)
+    {
+        bool[] colour = new bool[model.Textures.Count];
+        bool[] used = new bool[model.Textures.Count];
+        foreach (ClayMaterial material in model.Materials)
+        {
+            foreach (MaterialTextureSlot? slot in EnumerateSlots(material))
+                if (slot is not null && (uint)slot.TextureIndex < (uint)used.Length) used[slot.TextureIndex] = true;
+            foreach (MaterialTextureSlot? slot in new[] { material.BaseColorTexture, material.EmissiveTexture })
+                if (slot is not null && (uint)slot.TextureIndex < (uint)colour.Length) colour[slot.TextureIndex] = true;
+        }
+        for (int i = 0; i < colour.Length; i++)
+            if (!used[i]) colour[i] = true;
+        return colour;
+    }
 
-    private static Texture2D? ResolveModelTexture(ClayTexture src, IModelTextureResolver resolver)
+    private static Texture2D? ResolveModelTexture(ClayTexture src, IModelTextureResolver resolver, bool srgb)
     {
         try
         {
             if (!string.IsNullOrEmpty(src.SourcePath) && File.Exists(src.SourcePath))
-                return resolver.ResolveExternal(src.SourcePath);
+                return resolver.ResolveExternal(src.SourcePath, srgb);
             if (src.EncodedBytes is { Length: > 0 } bytes)
-                return resolver.ResolveEmbedded(src.Name, bytes, src.MimeType);
+                return resolver.ResolveEmbedded(src.Name, bytes, src.MimeType, srgb);
         }
         catch (Exception ex)
         {

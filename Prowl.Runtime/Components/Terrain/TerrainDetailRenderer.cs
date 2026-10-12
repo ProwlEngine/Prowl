@@ -2,14 +2,18 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 //
 // Procedural detail renderer. Placement lives entirely in the vertex shader, so a whole grass
-// field is a handful of draw calls with nothing uploaded per frame.
+// field is a handful of instanced draws with nothing uploaded per frame.
 
 using System;
 using System.Collections.Generic;
 
-using Prowl.Runtime.Rendering;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using Material = Prowl.Runtime.Resources.Material;
+using Mesh = Prowl.Runtime.Resources.Mesh;
 
 namespace Prowl.Runtime.Terrain;
 
@@ -17,7 +21,8 @@ namespace Prowl.Runtime.Terrain;
 /// Draws terrain details as camera-relative cascades. The draw distance is split evenly into bands;
 /// each band out doubles its cell size while sampling every other cell of the same world grid, so it
 /// draws a strict subset of the band inside it. A blade thins out with distance but never moves,
-/// which is what keeps the field stable as the camera travels.
+/// which is what keeps the field stable as the camera travels. Each view places its cascades around
+/// its own camera on the render thread.
 /// </summary>
 internal class TerrainDetailRenderer
 {
@@ -32,26 +37,64 @@ internal class TerrainDetailRenderer
     private const int kMaxJitterLevel = 3;
 
     private Mesh? _quadMesh;
-    private static Texture2D? s_defaultWhite;
+    private readonly List<TerrainMaterial> _materials = [];
 
-    private readonly List<CascadeSlot> _slots = [];
-
-    private struct CascadeSlot
+    /// <summary>One prototype's grass as the render thread draws it.</summary>
+    public readonly struct Prototype(GMaterial material, Float4 painted, float maxHeight)
     {
-        public ProceduralInstancedRenderable Renderable;
-        public PropertyState Properties;
+        public readonly GMaterial Material = material;
+        public readonly Float4 Painted = painted;
+        public readonly float MaxHeight = maxHeight;
     }
 
-    public void Initialize()
+    /// <summary>A terrain's grass for one frame, copied on the host.</summary>
+    public sealed class Frame
     {
-        if (_quadMesh.IsNotValid()) _quadMesh = CreateQuadMesh();
+        public GpuMesh Quad = null!;
+        public float Distance, Density, WanderMargin, TerrainHeight;
+        public int Cascades;
+        public int[] CellsPerSide = [];
+        public Prototype[] Prototypes = [];
+
+        /// <summary>Adds the cascades around each camera, in terrain local space. Render thread.</summary>
+        public void Cull(TerrainFrame terrain, List<Float3> cameras, in ProviderView view, DrawItemSink sink)
+        {
+            float cellSize = CascadeCellSize(Density, 0);
+            foreach (Float3 camera in cameras)
+            {
+                var centre = new Float2(camera.X, camera.Z);
+                foreach (Prototype proto in Prototypes)
+                {
+                    for (int cascade = 0; cascade < Cascades; cascade++)
+                    {
+                        CascadeBand(Distance, Cascades, cascade, out float inner, out float outer);
+                        if (!CascadeTouchesBounds(centre, inner, outer, proto.Painted, WanderMargin)) continue;
+
+                        int cellsPerSide = CellsPerSide[cascade];
+                        Int2 origin = CascadeOriginCell(camera.X, camera.Z, Density, cascade, cellsPerSide);
+
+                        float span = cellsPerSide * CascadeCellSize(Density, cascade);
+                        Float3 localMin = new(origin.X * cellSize, 0f, origin.Y * cellSize);
+                        Float3 localMax = localMin + new Float3(span, TerrainHeight + proto.MaxHeight, span);
+                        (Double3 sphereCentre, float radius) = terrain.Sphere(localMin, localMax);
+                        if (!view.Sees(sphereCentre, radius)) continue;
+
+                        DrawItem item = terrain.Item(
+                            new Float4(origin.X, origin.Y, cellsPerSide, cascade),
+                            new Float4(centre.X, centre.Y, inner, outer));
+                        sink.AddInstanced(Quad, 0, proto.Material, item, (uint)(cellsPerSide * cellsPerSide));
+                    }
+                }
+            }
+        }
     }
 
     public void Dispose()
     {
         if (_quadMesh.IsValid()) _quadMesh.Dispose();
         _quadMesh = null;
-        _slots.Clear();
+        foreach (TerrainMaterial material in _materials) material.Release();
+        _materials.Clear();
     }
 
     /// <summary>World size of one cell in a cascade. The nearest cascade owns the painted density,
@@ -125,25 +168,40 @@ internal class TerrainDetailRenderer
         return new Int2(originX * stride, originZ * stride);
     }
 
-    public void CollectRenderables(
-        TerrainData data, TerrainComponent terrain, Camera camera, Material baseMaterial,
-        List<IRenderable> renderables)
+    /// <summary>Copies what the render thread needs to draw the grass this frame, the materials made up to date. Host thread.</summary>
+    public Frame? Prepare(TerrainData data, TerrainComponent terrain, Material? baseMaterial)
     {
-        if (_quadMesh == null || data.DetailPrototypes.Count == 0) return;
+        if (data.DetailPrototypes.Count == 0) return null;
 
         IReadOnlyList<Texture2D> detailTextures = data.GetDetailTextures();
-        if (detailTextures.Count == 0) return;
+        if (detailTextures.Count == 0) return null;
 
-        Float3 camLocal = terrain.WorldToTerrain(camera.Transform.Position);
+        if (_quadMesh.IsNotValid()) _quadMesh = CreateQuadMesh();
+        _quadMesh.Upload();
+        GpuMesh? quad = _quadMesh.GpuIfLoaded;
+        if (quad == null) return null;
+
         Float3 terrainScale = terrain.Transform.LocalScale;
         float avgScale = MathF.Max(0.001f, (terrainScale.X + terrainScale.Z) * 0.5f);
-
         float distance = MathF.Max(terrain.DetailDistance, 0.01f) / avgScale;
         float density = MathF.Max(terrain.DetailDensity, 0.001f) * avgScale;
         int cascades = Math.Clamp(terrain.DetailCascades, 1, kMaxCascades);
-        var centre = new Float2(camLocal.X, camLocal.Z);
 
-        int slot = 0;
+        var frame = new Frame
+        {
+            Quad = quad,
+            Distance = distance,
+            Density = density,
+            Cascades = cascades,
+            TerrainHeight = data.Height,
+            // Blades wander out of their cell, so the painted rect reaches a little further
+            WanderMargin = (1 << kMaxJitterLevel) * 0.5f * CascadeCellSize(density, 0),
+            CellsPerSide = new int[cascades],
+        };
+        for (int cascade = 0; cascade < cascades; cascade++)
+            frame.CellsPerSide[cascade] = CascadeCellsPerSide(density, distance, cascades, cascade);
+
+        var prototypes = new List<Prototype>();
         for (int protoIdx = 0; protoIdx < data.DetailPrototypes.Count; protoIdx++)
         {
             DetailPrototype proto = data.DetailPrototypes[protoIdx];
@@ -156,83 +214,32 @@ internal class TerrainDetailRenderer
             // Nothing painted, nothing to sweep
             if (!data.TryGetDetailBounds(protoIdx, out Float4 painted)) continue;
 
-            // Blades wander out of their cell, so the painted rect reaches a little further
-            float wanderMargin = (1 << kMaxJitterLevel) * 0.5f * CascadeCellSize(density, 0);
+            while (_materials.Count <= protoIdx) _materials.Add(new TerrainMaterial());
+            TerrainMaterial material = _materials[protoIdx];
+            Material? protoMat = proto.GrassMaterial;
+            GMaterial? gpu = material.Bind(protoMat.IsValid() ? protoMat : baseMaterial);
+            if (gpu == null) continue;
 
-            Material? material = null;
-
-            for (int cascade = 0; cascade < cascades; cascade++)
-            {
-                CascadeBand(distance, cascades, cascade, out float inner, out float outer);
-                if (!CascadeTouchesBounds(centre, inner, outer, painted, wanderMargin)) continue;
-
-                if (material.IsNotValid())
-                    material = PrepareMaterial(data, terrain, baseMaterial, proto, detailTextures[textureIndex], protoIdx);
-                int cellsPerSide = CascadeCellsPerSide(density, distance, cascades, cascade);
-                float cellSize = CascadeCellSize(density, 0);
-
-                CascadeSlot slotData = GetSlot(slot++);
-                PropertyState props = slotData.Properties;
-                props.Clear();
-
-                Int2 origin = CascadeOriginCell(camLocal.X, camLocal.Z, density, cascade, cellsPerSide);
-                props.SetVector("_ScatterOriginCell", new Float2(origin.X, origin.Y));
-                props.SetFloat("_ScatterCellSize", cellSize);
-                props.SetInt("_ScatterCellsPerSide", cellsPerSide);
-                props.SetInt("_ScatterLevel", cascade);
-                props.SetInt("_ScatterMaxLevel", cascades - 1);
-                props.SetVector("_ScatterCentre", centre);
-                props.SetVector("_ScatterRadii", new Float2(inner, outer));
-                props.SetInt("_ObjectID", terrain.InstanceID);
-
-                float span = cellsPerSide * CascadeCellSize(density, cascade);
-                Float3 localMin = new(origin.X * cellSize, 0f, origin.Y * cellSize);
-                Float3 localMax = localMin + new Float3(span, data.Height + proto.MaxHeight, span);
-                AABB bounds = TransformBounds(terrain, localMin, localMax);
-
-                Float3 cascadeCentre = terrain.TerrainToWorld((localMin + localMax) * 0.5f);
-
-                slotData.Renderable.Set(_quadMesh, material, props, cellsPerSide * cellsPerSide,
-                    cascadeCentre, bounds, terrain.GameObject.LayerIndex);
-                renderables.Add(slotData.Renderable);
-            }
+            ApplyPrototype(material, data, terrain, proto, detailTextures[textureIndex], protoIdx, frame);
+            prototypes.Add(new Prototype(gpu, painted, proto.MaxHeight));
         }
+
+        frame.Prototypes = [.. prototypes];
+        return frame;
     }
 
-    private CascadeSlot GetSlot(int index)
+    /// <summary>Per-prototype values: the look parameters, the detail map and the scatter grid.</summary>
+    private static void ApplyPrototype(TerrainMaterial material, TerrainData data, TerrainComponent terrain,
+        DetailPrototype proto, Texture2D detailTexture, int protoIdx, Frame frame)
     {
-        while (_slots.Count <= index)
-        {
-            var props = new PropertyState();
-            _slots.Add(new CascadeSlot
-            {
-                Properties = props,
-                Renderable = new ProceduralInstancedRenderable(_quadMesh!, null!, props),
-            });
-        }
-        return _slots[index];
-    }
+        TerrainComponent.ApplyHeightfield(material, data);
+        terrain.ApplyWindZones(material);
 
-    /// <summary>Per-prototype material carrying the look parameters that used to be baked per blade.</summary>
-    private static Material PrepareMaterial(TerrainData data, TerrainComponent terrain, Material baseMaterial,
-        DetailPrototype proto, Texture2D detailTexture, int protoIdx)
-    {
-        // Clone per prototype: material state is read at draw time, so prototypes sharing one
-        // material would otherwise all render with the last one's texture and parameters.
-        Material? protoMat = proto.GrassMaterial;
-        Material material = (protoMat.IsValid() ? protoMat : baseMaterial).Clone();
-        terrain.ApplyDetailUniforms(material);
-
-        if (s_defaultWhite.IsNotValid()) s_defaultWhite = Texture2D.LoadDefault(DefaultTexture.White);
-        Texture2D? texRes = proto.Texture;
-        material.SetTexture("_MainTex", texRes.IsValid() ? texRes : s_defaultWhite);
-
-        material.SetKeyword("TERRAIN_BICUBIC", data.Interpolation == TerrainInterpolation.Bicubic);
-
+        material.SetTexture("_MainTex", proto.Texture);
         material.SetFloat("_Billboard", proto.RenderMode == DetailRenderMode.TextureBillboard ? 1f : 0f);
         material.SetFloat("_AlignToNormal", proto.AlignToNormal ? 1f : 0f);
 
-        material.SetVector("_ProtoSize", new Float4(proto.MinWidth, proto.MaxWidth, proto.MinHeight, proto.MaxHeight));
+        material.SetVector("_ProtoSize", new Float4(proto.MinWidth, proto.MaxWidth, proto.MinHeight, proto.MaxHeight), 4);
         material.SetColor("_ProtoHealthyColor", proto.HealthyColor);
         material.SetColor("_ProtoDryColor", proto.DryColor);
         material.SetFloat("_ProtoNoiseSpread", proto.NoiseSpread);
@@ -240,34 +247,20 @@ internal class TerrainDetailRenderer
 
         material.SetTexture("_DetailMap", detailTexture);
         material.SetInt("_DetailChannel", protoIdx % 4);
-
-        return material;
+        material.SetFloat("_ScatterCellSize", CascadeCellSize(frame.Density, 0));
+        material.SetInt("_ScatterMaxLevel", frame.Cascades - 1);
     }
 
-    private static AABB TransformBounds(TerrainComponent terrain, Float3 localMin, Float3 localMax)
-    {
-        Float3 min = new(float.MaxValue), max = new(float.MinValue);
-        for (int i = 0; i < 8; i++)
-        {
-            Float3 corner = new(
-                (i & 1) == 0 ? localMin.X : localMax.X,
-                (i & 2) == 0 ? localMin.Y : localMax.Y,
-                (i & 4) == 0 ? localMin.Z : localMax.Z);
-
-            Float3 world = terrain.TerrainToWorld(corner);
-            min = new Float3(MathF.Min(min.X, world.X), MathF.Min(min.Y, world.Y), MathF.Min(min.Z, world.Z));
-            max = new Float3(MathF.Max(max.X, world.X), MathF.Max(max.Y, world.Y), MathF.Max(max.Z, world.Z));
-        }
-        return new AABB(min, max);
-    }
-
+    // A quad standing on its base
     private static Mesh CreateQuadMesh()
     {
-        var mesh = new Mesh();
-        mesh.Vertices = [new(-0.5f, 0, 0), new(0.5f, 0, 0), new(0.5f, 1, 0), new(-0.5f, 1, 0)];
-        mesh.UV = [new(0, 0), new(1, 0), new(1, 1), new(0, 1)];
-        mesh.Normals = [Float3.UnitY, Float3.UnitY, Float3.UnitY, Float3.UnitY];
-        mesh.Indices = [0, 2, 1, 0, 3, 2];
+        var mesh = new Mesh
+        {
+            Vertices = [new(-0.5f, 0, 0), new(0.5f, 0, 0), new(0.5f, 1, 0), new(-0.5f, 1, 0)],
+            UV = [new(0, 0), new(1, 0), new(1, 1), new(0, 1)],
+            Normals = [Float3.UnitY, Float3.UnitY, Float3.UnitY, Float3.UnitY],
+            Indices = [0, 2, 1, 0, 3, 2],
+        };
         mesh.RecalculateBounds();
         mesh.Upload();
         return mesh;

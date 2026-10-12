@@ -301,16 +301,10 @@ public class UIImage : Graphic
             border.W / sh);
     }
 
-    public override void PopulateProperties(PropertyState p, in UIContext _)
+    public override Texture2D? GetMainTexture()
     {
         Texture2D? srcTex = SourceTexture;
-        p.SetTexture("_MainTex", srcTex.IsValid() ? srcTex : defaultTexture);
-        // The tint (and CanvasGroup alpha) is already baked into the vertex color in GenerateMesh,
-        // and the shader computes texture * vColor * _MainColor - so _MainColor must stay white or
-        // the color/alpha would be applied twice (a 50% tint would render at 25%).
-        p.SetColor("_MainColor", Color.White);
-        p.SetVector("_Tiling", new Float2(1, 1));
-        p.SetVector("_Offset", Float2.Zero);
+        return srcTex.IsValid() ? srcTex : defaultTexture;
     }
 
     // No OnValidate override: every property routes through SetField (for code) or its

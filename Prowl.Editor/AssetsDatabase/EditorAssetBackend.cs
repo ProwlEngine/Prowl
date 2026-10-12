@@ -1319,9 +1319,8 @@ public class EditorAssetBackend : AssetBackend
         try
         {
             (int w, int h, byte[]? pixels) = thumb.Value;
-            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
+            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h);
             tex.SetData<byte>(pixels);
-            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _thumbnailTextures[guid] = tex;
             return tex;
         }

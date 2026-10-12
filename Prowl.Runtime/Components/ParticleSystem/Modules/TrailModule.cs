@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.ParticleSystem.Modules;
@@ -232,11 +231,11 @@ public class TrailModule : ParticleSystemModule
     }
 
     /// <summary>
-    /// Writes one instance per trail segment. Each instance carries both ends of its segment (position,
-    /// width, tangent, texture coordinate and color) and the particle shader turns it into a camera facing
-    /// quad, so neighbouring segments share their edges exactly. Returns how many were written.
+    /// Writes one record per trail segment, positions relative to <paramref name="origin"/>. Each carries both ends of
+    /// its segment (position, width, tangent, texture coordinate and color) and the particle shader turns it into a
+    /// view facing quad, so neighbouring segments share their edges exactly. Returns how many were written.
     /// </summary>
-    internal int BuildSegments(ParticleSystemComponent system, ref InstanceData[] buffer, ref AABB bounds, ref bool hasBounds)
+    internal int BuildSegments(ParticleSystemComponent system, Float3 origin, ParticleRenderProvider provider, ref AABB bounds, ref bool hasBounds)
     {
         int written = 0;
         ReadOnlySpan<Particle> particles = system.Particles;
@@ -248,22 +247,22 @@ public class TrailModule : ParticleSystemModule
 
             ref TrailState s = ref _states[slot];
             Float3 head = s.InWorld ? system.SimPointToWorld(p.Position) : p.Position;
-            written = BuildTrail(system, in s, slot, head, true, TrailColor(in p), HeadWidth(system, in p), ref buffer, written, ref bounds, ref hasBounds);
+            written += BuildTrail(system, in s, slot, head, true, TrailColor(in p), HeadWidth(system, in p), origin, provider, ref bounds, ref hasBounds);
         }
 
         foreach (int slot in _orphans)
         {
             ref TrailState s = ref _states[slot];
-            written = BuildTrail(system, in s, slot, default, false, s.Color, s.Width, ref buffer, written, ref bounds, ref hasBounds);
+            written += BuildTrail(system, in s, slot, default, false, s.Color, s.Width, origin, provider, ref bounds, ref hasBounds);
         }
         return written;
     }
 
     private int BuildTrail(ParticleSystemComponent system, in TrailState s, int slot, Float3 head, bool hasHead,
-        Color color, float width, ref InstanceData[] buffer, int written, ref AABB bounds, ref bool hasBounds)
+        Color color, float width, Float3 origin, ParticleRenderProvider provider, ref AABB bounds, ref bool hasBounds)
     {
         int count = s.Count + (hasHead ? 1 : 0);
-        if (count < 2) return written;
+        if (count < 2) return 0;
 
         if (_scratchPos.Length < count)
             _scratchPos = new Float3[count * 2];
@@ -276,13 +275,12 @@ public class TrailModule : ParticleSystemModule
         if (hasHead)
             _scratchPos[count - 1] = s.InWorld ? head : system.SimPointToWorld(head);
 
-        int needed = written + count - 1;
-        if (buffer.Length < needed)
-            Array.Resize(ref buffer, Math.Max(needed, buffer.Length * 2));
-
         float totalLength = 0f;
         for (int k = 1; k < count; k++)
             totalLength += Float3.Distance(_scratchPos[k], _scratchPos[k - 1]);
+
+        Span<Float4> rows = provider.Append(count - 1);
+        int row = 0;
 
         // Walk from the head back to the tail so texture coordinates start at the particle.
         float distanceFromHead = 0f;
@@ -293,20 +291,17 @@ public class TrailModule : ParticleSystemModule
             distanceFromHead += Float3.Distance(_scratchPos[k + 1], _scratchPos[k]);
             PointData current = MakePoint(k, count, color, width, distanceFromHead, totalLength, s.ColorRandom);
 
-            buffer[written++] = new InstanceData
-            {
-                ModelRow0 = new Float4(current.Position, current.Width),
-                ModelRow1 = new Float4(next.Position, next.Width),
-                ModelRow2 = new Float4(current.Tangent, current.U),
-                ModelRow3 = new Float4(next.Tangent, next.U),
-                Color = current.Color,
-                CustomData = next.Color,
-            };
+            rows[row++] = new Float4(current.Position - origin, current.Width);
+            rows[row++] = new Float4(next.Position - origin, next.Width);
+            rows[row++] = new Float4(current.Tangent, current.U);
+            rows[row++] = new Float4(next.Tangent, next.U);
+            rows[row++] = new Float4(current.Color.R, current.Color.G, current.Color.B, current.Color.A);
+            rows[row++] = new Float4(next.Color.R, next.Color.G, next.Color.B, next.Color.A);
 
             Encapsulate(ref bounds, ref hasBounds, current.Position, current.Width * 0.5f);
             next = current;
         }
-        return written;
+        return count - 1;
     }
 
     private struct PointData

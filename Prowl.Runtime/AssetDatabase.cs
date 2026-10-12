@@ -934,7 +934,7 @@ public sealed class AssetWalker
     private static readonly ReloadCache<Type, Plan> s_plans = new(BuildPlan);
     private static readonly ReloadCache<Type, bool> s_canHold = new();
     private static readonly string[] s_skippedAssemblies =
-        ["System", "Microsoft", "Silk.NET", "Jitter2", "Prowl.Motion", "Prowl.Vector", "Prowl.Recast", "Prowl.Paper", "Prowl.Scribe", "Prowl.Echo", "Prowl.Quill", "Prowl.Ember"];
+        ["System", "Microsoft", "Silk.NET", "Jitter2", "Prowl.Motion", "Prowl.Vector", "Prowl.Recast", "Prowl.Paper", "Prowl.Scribe", "Prowl.Echo", "Prowl.Quill", "Prowl.Ember", "Prowl.Graphite"];
 
     private const int ExpandsPerClockCheck = 256;
 

@@ -1297,7 +1297,7 @@ public class HierarchyPanel : DockPanel
             go.Transform.Position = position;
             MeshRenderer renderer = go.AddComponent<MeshRenderer>();
             renderer.Mesh = mesh;
-            renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+            renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Lit));
             scene.Add(go);
             if (parent != null) go.SetParent(parent);
             Selection.Select(go);

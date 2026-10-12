@@ -66,14 +66,12 @@ internal sealed class UIFontSystem : IFontRenderer
     /// </summary>
     public object CreateTexture(int width, int height)
     {
-        var tex = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Color4b);
+        var tex = new Texture2D((uint)width, (uint)height);
 
         // Bilinear filtering hides single-pixel jaggies on diagonal glyph strokes; clamp
         // wrapping prevents UV bleed between adjacent atlas cells when the GPU samples at
         // tile boundaries.
-        Graphics.SetTextureFilters(tex.Handle, TextureMin.Linear, TextureMag.Linear);
-        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
+        tex.SetWrap(WrapMode.Clamp);
 
         return tex;
     }
@@ -83,7 +81,7 @@ internal sealed class UIFontSystem : IFontRenderer
         if (texture is not Texture2D tex) return;
 
         // Scribe hands us RGBA data (4 bytes/pixel - the single-channel SDF replicated across the
-        // channels, matching the Color4b atlas), so write it straight in like the Quill PaperRenderer
+        // channels, matching the RGBA8 atlas), so write it straight in like the Quill PaperRenderer
         // does. The old per-pixel repack treated `data` as one byte/pixel and read only the first
         // quarter of it, scattering garbage into the alpha channel - which is why nothing rendered.
         tex.SetData(new Memory<byte>(data), bounds.X, bounds.Y, (uint)bounds.Width, (uint)bounds.Height);

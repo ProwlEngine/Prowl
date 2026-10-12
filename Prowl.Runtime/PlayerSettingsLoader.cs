@@ -152,6 +152,14 @@ public static class PlayerSettingsLoader
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply audio: {ex.Message}"); }
     }
 
+    /// <summary>Makes the graphics device for the headset when the project starts XR in the player. Runs before the window opens.</summary>
+    public static void ApplyBeforeWindow(string settingsDir)
+    {
+        EchoObject? settings = Read(settingsDir, PlayerSettingsFiles.XR);
+        if (settings != null && settings.TryGet("StartInPlayer", out EchoObject? start) && start!.BoolValue)
+            XR.InitializeOnStartup = true;
+    }
+
     /// <summary>Sets the XR render scale and starts XR when the project asks a built player to, which needs the window up.</summary>
     private static void ApplyXR(string dir)
     {

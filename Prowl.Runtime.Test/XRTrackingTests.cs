@@ -97,6 +97,20 @@ public class XRTrackingTests
         Assert.True(Quaternion.Angle(quarterTurn, AsNumbers(second.Orientation)) < 1e-4f);
     }
 
+    // A camera drawing one eye fills both layers with it, a camera drawing both draws each in its own layer.
+    [Theory]
+    [InlineData(StereoTargetEyeMask.Both, StereoEye.Left, StereoEye.Right)]
+    [InlineData(StereoTargetEyeMask.Left, StereoEye.Left, StereoEye.Left)]
+    [InlineData(StereoTargetEyeMask.Right, StereoEye.Right, StereoEye.Right)]
+    public void StereoLayers_DrawTheCamerasEyes(StereoTargetEyeMask mask, StereoEye first, StereoEye second)
+    {
+        Camera camera = new GameObject("Camera").AddComponent<Camera>();
+        camera.StereoTargetEye = mask;
+
+        Assert.Equal(first, XR.EyeDrawnInLayer(camera, 0));
+        Assert.Equal(second, XR.EyeDrawnInLayer(camera, 1));
+    }
+
     private static XRHandJointPose Tip(Float3 position, float radius = 0.008f)
         => new() { Pose = new XRPose { Position = position, HasPosition = true }, Radius = radius };
 
@@ -128,5 +142,85 @@ public class XRTrackingTests
         Assert.False(XR.TryGetPlayAreaSize(out Float2 size));
         Assert.Equal(Float2.Zero, size);
         XR.Recenter();
+    }
+
+    [Fact]
+    public void OpenXRForward_BecomesProwlForward()
+    {
+        Quaternion identity = OpenXRSession.ToProwl(new Quaternionf(0, 0, 0, 1));
+        AssertClose(new Float3(0f, 0f, 1f), identity * OpenXRSession.ToProwl(new Vector3f(0, 0, -1)));
+        AssertClose(new Float3(0.5f, 1.7f, 2f), OpenXRSession.ToProwl(new Vector3f(0.5f, 1.7f, -2f)));
+    }
+
+    // Converting a pose then rotating has to land where rotating in OpenXR space then converting does.
+    [Theory]
+    [InlineData(0.3f, 0.5f, -0.2f, 0.78f)]
+    [InlineData(-0.6f, 0.1f, 0.4f, 0.68f)]
+    [InlineData(0f, 0.7071f, 0f, 0.7071f)]
+    public void OpenXRRotation_MirrorsWithPositions(float x, float y, float z, float w)
+    {
+        float length = MathF.Sqrt(x * x + y * y + z * z + w * w);
+        var xrRotation = new Quaternionf(x / length, y / length, z / length, w / length);
+        var xrPoint = new Vector3f(0.25f, -1.5f, 3f);
+
+        Float3 rotatedInXR = AsNumbers(xrRotation) * new Float3(xrPoint.X, xrPoint.Y, xrPoint.Z);
+        Float3 expected = OpenXRSession.ToProwl(new Vector3f(rotatedInXR.X, rotatedInXR.Y, rotatedInXR.Z));
+
+        Float3 actual = OpenXRSession.ToProwl(xrRotation) * OpenXRSession.ToProwl(xrPoint);
+        AssertClose(expected, actual);
+    }
+
+    // The pose each eye was drawn from goes back to the runtime, so converting there and back must change nothing.
+    [Theory]
+    [InlineData(0.3f, 0.5f, -0.2f, 0.78f)]
+    [InlineData(-0.6f, 0.1f, 0.4f, 0.68f)]
+    public void ProwlPose_ConvertsBackToTheSameOpenXRPose(float x, float y, float z, float w)
+    {
+        float length = MathF.Sqrt(x * x + y * y + z * z + w * w);
+        var rotation = new Quaternionf(x / length, y / length, z / length, w / length);
+        var position = new Vector3f(0.25f, 1.6f, -0.4f);
+
+        Assert.Equal(rotation, OpenXRSession.ToXr(OpenXRSession.ToProwl(rotation)));
+        Assert.Equal(position, OpenXRSession.ToXr(OpenXRSession.ToProwl(position)));
+    }
+
+    // The application name a runtime is given has a fixed size, and a long one is cut short rather than failing XR.
+    [Fact]
+    public unsafe void LongNames_AreCutShortToFitTheirBuffer()
+    {
+        byte* buffer = stackalloc byte[128];
+        string name = new string('\u00e9', 200);
+
+        OpenXRSession.WriteString(buffer, 128, name);
+
+        string written = OpenXRSession.ReadString(buffer);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(written) <= 127);
+        Assert.StartsWith(written, name);
+    }
+
+    [Fact]
+    public void WithoutXR_NoCameraRendersStereo()
+    {
+        Camera camera = new GameObject("Camera").AddComponent<Camera>();
+
+        Assert.False(XR.ShouldRenderStereo(camera));
+        Assert.False(XR.HasRenderedStereo(camera));
+        Assert.False(XR.IsReconnecting);
+        Assert.Equal(0f, XR.DisplayRefreshRate);
+        Assert.Throws<InvalidOperationException>(() => XR.GetEyeTarget(camera));
+    }
+
+    // Without XR asked for at startup the device is made as it always is, with nothing extra and no runtime touched.
+    [Fact]
+    public void WithoutXR_TheDeviceNeedsNothingExtra()
+    {
+        Assert.False(XR.InitializeOnStartup);
+        Prowl.Graphite.VulkanDeviceOptions options = XR.VulkanOptions();
+
+        Assert.Empty(options.InstanceExtensions);
+        Assert.Empty(options.DeviceExtensions);
+        Assert.Null(options.PickPhysicalDevice);
+        Assert.False(XR.IsDeviceReady);
+        Assert.False(XR.Start());
     }
 }

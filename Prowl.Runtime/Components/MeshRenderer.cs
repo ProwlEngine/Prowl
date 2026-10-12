@@ -1,22 +1,45 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using Material = Prowl.Runtime.Resources.Material;
+
 namespace Prowl.Runtime;
 
+/// <summary>Whether a renderer casts shadows, and whether it draws at all outside them.</summary>
+public enum ShadowCasting
+{
+    Off = 0,
+    On = 1,
+
+    /// <summary>Casts shadows but is not drawn in views.</summary>
+    ShadowsOnly = 2,
+}
+
+public static class ShadowCastingExtensions
+{
+    /// <summary>The Graphite renderable flags the setting gives.</summary>
+    public static RenderableFlags ToFlags(this ShadowCasting casting) => casting switch
+    {
+        ShadowCasting.On => RenderableFlags.CastShadows,
+        ShadowCasting.ShadowsOnly => RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly,
+        _ => RenderableFlags.None,
+    };
+}
+
 /// <summary>
-/// Renders a static mesh with one or more materials (one per submesh).
-/// For single-material meshes, use Materials[0] or the legacy Material property.
+/// Renders a mesh with one material per submesh. Single material meshes use Materials[0] or <see cref="Material"/>.
 /// </summary>
 [AddComponentMenu("Rendering/Mesh Renderer")]
-[ComponentIcon("\uf1b2")] // Cube
-public class MeshRenderer : Component, IMaterialRenderer
+[ComponentIcon("")] // Cube
+public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
 {
     int IMaterialRenderer.MaterialSlotCount => Materials.Count;
     Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(Materials, slot);
@@ -24,96 +47,54 @@ public class MeshRenderer : Component, IMaterialRenderer
 
     public Mesh? Mesh;
 
-    /// <summary>Materials array one per submesh. Legacy single-material meshes use index 0.</summary>
+    /// <summary>Materials, one per submesh. Submeshes past the list draw with its last material.</summary>
     public List<Material> Materials = [];
 
-    /// <summary>Legacy single-material accessor. Gets/sets Materials[0].</summary>
+    /// <summary>Gets or sets Materials[0].</summary>
     public Material? Material
     {
         get => Materials.Count > 0 ? Materials[0] : default;
         set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
     }
 
+    public ShadowCasting ShadowCasting = ShadowCasting.On;
+    public bool ReceiveShadows = true;
 
-    // Per-instance property blocks and renderables, reused across frames so a static scene collects without allocating.
-    // The command buffer snapshots these at encode time, so mutating them next frame is safe.
-    [System.NonSerialized, NotHeld] private PropertyState[] _propCache;
-    [System.NonSerialized, NotHeld] private MeshRenderable[] _renderableCache;
-    [System.NonSerialized, NotHeld] private Mesh _propMesh;
+    [System.NonSerialized, NotHeld] private readonly RenderableState _renderable = new();
+    [System.NonSerialized, NotHeld] private GMaterial[] _gpuMaterials = [];
 
-    private int _visualVersion;
+    /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
+    public RenderableHandle Renderable => _renderable.Handle;
 
-    // The merged static geometry drawing this renderer's covered submeshes, see Scene.UpdateStaticGeometry
-    [System.NonSerialized, NotHeld] internal StaticGeometry.Source? StaticSource;
+    /// <summary>Kept for callers from before the renderer pushed its own changes. Does nothing.</summary>
+    public void MarkVisuallyDirty() { }
 
-    internal int VisualVersion => _visualVersion;
-
-    /// <summary>
-    /// Tells the renderer this object looks different in a way the engine cannot see, such as a vertex shader driven
-    /// by your own values, so cached shadows holding it are drawn again. Moving it or changing its mesh or material
-    /// is picked up on its own.
-    /// </summary>
-    public void MarkVisuallyDirty() => _visualVersion++;
-
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    void IRenderSync.Sync(RenderWorld world)
     {
-        // Something still loading is skipped this frame rather than waited on.
         Mesh? mesh = Mesh;
-        if (mesh is not { IsLoaded: true } || Materials.Count == 0) return;
-
-        StaticGeometry.Source? batched = StaticSource;
-        if (batched is { AllCovered: true }) return;
-
-        int subCount = mesh.SubMeshCount;
-        if (_propCache == null || _propCache.Length != subCount)
+        if (mesh.IsNotValid() || !mesh.IsLoaded)
         {
-            _propCache = new PropertyState[subCount];
-            _renderableCache = new MeshRenderable[subCount];
-            for (int i = 0; i < subCount; i++)
-                _propCache[i] = new PropertyState();
+            if (mesh.IsValid() && mesh.State == AssetState.Unloaded) _ = mesh.LoadAsync();
+            _renderable.Detach(world);
+            return;
         }
+        mesh.Upload();
 
-        // LocalToWorldMatrix is cached on Transform, so this is cheap for a static renderer.
-        Float4x4 world = Transform.LocalToWorldMatrix;
-        Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
-
-        for (int s = 0; s < subCount; s++)
+        Float4x4 matrix = Transform.LocalToWorldMatrix;
+        _renderable.Sync(world, new RenderableState.Desc
         {
-            if (batched != null && batched.Covers(s)) continue;
-            Material? mat = s < Materials.Count ? Materials[s] : Materials[^1];
-            if (mat is not { IsLoaded: true }) continue;
-
-            // Refilled in place, so a renderer whose values did not change keeps its draw snapshot. A new mesh
-            // or GI mode would leave keys behind, so those start from empty.
-            PropertyState props = _propCache[s];
-            if (_propMesh != mesh) props.Clear();
-            int giMode = props.GetInt("_GIMode");
-            FillProperties(props, mesh, giAnchor);
-            if (props.GetInt("_GIMode") != giMode)
-            {
-                props.Clear();
-                FillProperties(props, mesh, giAnchor);
-            }
-
-            MeshRenderable renderable = _renderableCache[s] ??= new MeshRenderable(mesh, mat, world, 0);
-            renderable.Set(mesh, mat, world, GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1);
-            renderable.IsStatic = GameObject.IsStatic;
-            renderable.VisualVersion = _visualVersion;
-            renderables.Add(renderable);
-        }
-        _propMesh = mesh;
+            Mesh = mesh.GpuIfLoaded,
+            Materials = RenderableState.MaterialsFor(Materials, mesh.SubMeshCount, ref _gpuMaterials),
+            Transform = (Double4x4)matrix,
+            TransformVersion = Transform.WorldVersion,
+            Flags = RenderableState.FlagsFor(GameObject, false, ReceiveShadows) | ShadowCasting.ToFlags(),
+            LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
+            ObjectId = (uint)InstanceID,
+            Lightmap = BakedLightingBinding.For(GameObject),
+        });
     }
 
-    private void FillProperties(PropertyState props, Mesh mesh, Float3 giAnchor)
-    {
-        props.SetInt("_ObjectID", InstanceID);
-        // A blend-shape mesh forces the BLENDSHAPES shader variant (keyword is mesh-derived).
-        // MeshRenderer doesn't drive morph weights, so pin the morph loop to a no-op rather than
-        // inherit a stale count from a previous skinned draw using the same program.
-        if (mesh.HasBlendShapes)
-            props.SetInt("morphActiveCount", 0);
-        LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
-    }
+    void IRenderSync.Detach(RenderWorld world) => _renderable.Detach(world);
 
     /// <summary>
     /// Raycast against this renderer's mesh in world space.
@@ -141,5 +122,75 @@ public class MeshRenderer : Component, IMaterialRenderer
             return true;
         }
         return false;
+    }
+}
+
+/// <summary>
+/// Draws one mesh many times in a single batch, each instance with its own transform, relative to this object, and
+/// colour. Materials read the colour as their tint when their shader takes one, such as Lit and Unlit with Instance
+/// Tint on. Set the instances whenever they change; they stay until set again.
+/// </summary>
+public sealed class InstancedMeshRenderer : Component, IRenderSync
+{
+    public Mesh? Mesh;
+    public Material? Material;
+    public ShadowCasting ShadowCasting = ShadowCasting.On;
+
+    private InstanceData[] _instances = [];
+    private int _count;
+    private bool _dirty;
+    private InstanceBatchHandle _batch;
+    private (GpuMesh? Mesh, GMaterial? Material, RenderableFlags Flags) _bound;
+
+    /// <summary>Instances drawn.</summary>
+    public int Count => _count;
+
+    /// <summary>Replaces every instance. Colours are optional, white where missing.</summary>
+    public void SetInstances(System.ReadOnlySpan<Float4x4> transforms, System.ReadOnlySpan<Color> colors = default)
+    {
+        if (_instances.Length < transforms.Length) _instances = new InstanceData[transforms.Length];
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Color c = i < colors.Length ? colors[i] : Color.White;
+            _instances[i] = new InstanceData { Transform = transforms[i], Color = new Float4(c.R, c.G, c.B, c.A) };
+        }
+        _count = transforms.Length;
+        _dirty = true;
+    }
+
+    void IRenderSync.Sync(RenderWorld world)
+    {
+        if (Mesh.IsNotValid() || Material.IsNotValid() || _count == 0)
+        {
+            ((IRenderSync)this).Detach(world);
+            return;
+        }
+        Mesh.Upload();
+        if (Mesh.GpuIfLoaded is not { } mesh || Material.GpuMaterial is not { } material) return;
+
+        Float4x4 matrix = Transform.LocalToWorldMatrix;
+        RenderableFlags flags = RenderableState.FlagsFor(GameObject, false, true) | ShadowCasting.ToFlags();
+        var desc = new InstanceBatchDesc { Mesh = mesh, Transform = (Double4x4)matrix, LayerMask = RenderableState.LayerBit(GameObject.LayerIndex), Flags = flags };
+        System.ReadOnlySpan<InstanceData> instances = new(_instances, 0, _count);
+
+        if (!_batch.IsValid || _bound.Mesh != mesh || _bound.Material != material || _bound.Flags != flags)
+        {
+            if (_batch.IsValid) world.RemoveInstanceBatch(_batch);
+            _batch = world.AddInstanceBatch(desc, [material], instances);
+            _bound = (mesh, material, flags);
+        }
+        else
+        {
+            world.SetInstanceBatch(_batch, desc);
+            if (_dirty) world.SetInstances(_batch, instances);
+        }
+        _dirty = false;
+    }
+
+    void IRenderSync.Detach(RenderWorld world)
+    {
+        if (_batch.IsValid) world.RemoveInstanceBatch(_batch);
+        _batch = default;
+        _bound = default;
     }
 }

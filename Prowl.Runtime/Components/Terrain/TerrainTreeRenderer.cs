@@ -3,45 +3,185 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using Material = Prowl.Runtime.Resources.Material;
+using Mesh = Prowl.Runtime.Resources.Mesh;
+
 namespace Prowl.Runtime.Terrain;
 
+/// <summary>
+/// Places a terrain's trees in the world once, when they or the terrain change, and lets each view draw the ones
+/// within <see cref="TerrainComponent.TreeDistance"/> of its camera that it can see.
+/// </summary>
 internal class TerrainTreeRenderer
 {
-    private readonly List<Float4x4> _transforms = [];
-    private readonly List<Float4> _colors = [];
-    private readonly List<Rendering.InstanceData> _instanceDataList = [];
-    private static Material? s_defaultStandardMat;
-    private static readonly PropertyState s_emptyProps = new();
+    private int _signature;
+    private bool _placed;
+    private Instances[] _instances = [];
 
-    public void CollectRenderables(
-        TerrainData data, TerrainComponent terrain, Camera camera,
-        float maxDistance, List<IRenderable> renderables)
+    /// <summary>One prototype's trees. Its arrays are never changed once built.</summary>
+    public sealed class Instances
     {
-        if (data.Trees.Count == 0 || data.TreePrototypes.Count == 0) return;
+        public int Prototype;
+        public Double4x4[] Transforms = [];
+        public Float4[] Tints = [];
+        public Float2[] Local = [];
+        public Double3[] Centres = [];
+        public float[] Radii = [];
+    }
 
-        Float3 camLocal = terrain.WorldToTerrain(camera.Transform.Position);
-        camLocal.Y = 0; // Project to terrain XZ plane for 2D distance checks
+    /// <summary>Trees of one prototype with what they draw with this frame.</summary>
+    public readonly struct Batch(Instances instances, GpuMesh mesh, GMaterial[] materials)
+    {
+        public readonly Instances Instances = instances;
+        public readonly GpuMesh Mesh = mesh;
+        public readonly GMaterial[] Materials = materials;
+    }
+
+    /// <summary>A terrain's trees for one frame, copied on the host.</summary>
+    public sealed class Frame
+    {
+        public Batch[] Batches = [];
+        public float Distance;
+        public RenderableFlags Flags;
+        public uint LayerMask;
+        public ProbeAnchorHandle Probe;
+        public uint ObjectId;
+
+        /// <summary>Adds the trees near any of the cameras, in terrain local space, that the view sees. Render thread.</summary>
+        public void Cull(List<Float3> cameras, in ProviderView view, DrawItemSink sink)
+        {
+            float maxDistSq = Distance * Distance;
+            foreach (Batch batch in Batches)
+            {
+                Instances trees = batch.Instances;
+                for (int i = 0; i < trees.Transforms.Length; i++)
+                {
+                    if (!Near(trees.Local[i], cameras, maxDistSq) || !view.Sees(trees.Centres[i], trees.Radii[i])) continue;
+                    var item = new DrawItem
+                    {
+                        Transform = trees.Transforms[i],
+                        Custom0 = trees.Tints[i],
+                        LayerMask = LayerMask,
+                        ObjectId = ObjectId,
+                        Flags = Flags,
+                        Probe = Probe,
+                    };
+                    for (int sub = 0; sub < batch.Materials.Length; sub++)
+                        sink.Add(batch.Mesh, sub, batch.Materials[sub], item);
+                }
+            }
+        }
+
+        private static bool Near(Float2 local, List<Float3> cameras, float maxDistSq)
+        {
+            foreach (Float3 camera in cameras)
+            {
+                float dx = local.X - camera.X, dz = local.Y - camera.Z;
+                if (dx * dx + dz * dz <= maxDistSq) return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>Copies what the render thread needs to draw the trees this frame, placing them again when they changed. Host thread.</summary>
+    public Frame? Prepare(TerrainData data, TerrainComponent terrain)
+    {
+        if (data.Trees.Count == 0 || data.TreePrototypes.Count == 0) return null;
+
+        Float4x4 terrainToWorld = terrain.Transform.LocalToWorldMatrix;
+        int signature = Signature(data, terrainToWorld);
+        if (signature != _signature || !_placed)
+        {
+            _signature = signature;
+            _placed = true;
+            _instances = Place(data, terrainToWorld);
+        }
+
+        var batches = new List<Batch>();
+        foreach (Instances trees in _instances)
+        {
+            TreePrototype proto = data.TreePrototypes[trees.Prototype];
+            GpuMesh? mesh = TerrainComponent.GpuMeshOf(proto.Mesh);
+            if (mesh == null) continue;
+
+            // One draw per submesh, so trees with multi-material meshes render each with its own material
+            int subMeshCount = proto.Mesh!.SubMeshCount;
+            var materials = new GMaterial[subMeshCount];
+            bool ready = true;
+            for (int sub = 0; sub < subMeshCount && ready; sub++)
+            {
+                Material? material = sub < proto.Materials.Count ? proto.Materials[sub] : null;
+                GMaterial? gpu = TerrainComponent.GpuMaterialOf(material) ?? RenderableState.DefaultGpuMaterial;
+                if (gpu == null) ready = false;
+                else materials[sub] = gpu;
+            }
+            if (ready) batches.Add(new Batch(trees, mesh, materials));
+        }
+        if (batches.Count == 0) return null;
+
+        GameObject go = terrain.GameObject;
+        return new Frame
+        {
+            Batches = [.. batches],
+            Distance = terrain.TreeDistance,
+            Flags = terrain.RenderFlags,
+            LayerMask = RenderableState.LayerBit(go.LayerIndex),
+            ObjectId = (uint)terrain.InstanceID,
+            Probe = terrain.ProbeAnchor,
+        };
+    }
+
+    // Everything the placed trees depend on, so they are placed again only when one of them moves
+    private static int Signature(TerrainData data, Float4x4 terrainToWorld)
+    {
+        var hash = new HashCode();
+        hash.Add(terrainToWorld);
+        hash.Add(data.Size);
+        hash.Add(data.Height);
+        hash.Add(data.Interpolation);
+        hash.Add(data.HeightsVersion);
+        hash.Add(data.HolesVersion);
+        foreach (TreePrototype proto in data.TreePrototypes)
+        {
+            Mesh? mesh = proto.Mesh;
+            hash.Add(mesh.IsValid() ? mesh.InstanceID : 0);
+            hash.Add(mesh.IsValid() && mesh.IsLoaded ? mesh.bounds.GetHashCode() : 0);
+        }
+        foreach (TreeInstance tree in data.Trees)
+        {
+            hash.Add(tree.Position);
+            hash.Add(tree.PrototypeIndex);
+            hash.Add(tree.Rotation);
+            hash.Add(tree.WidthScale);
+            hash.Add(tree.HeightScale);
+            hash.Add(tree.Tint);
+        }
+        return hash.ToHashCode();
+    }
+
+    private static Instances[] Place(TerrainData data, Float4x4 terrainToWorld)
+    {
         float terrainSize = data.Size;
-        float maxDistSq = maxDistance * maxDistance;
+        var result = new List<Instances>();
+        var transforms = new List<Float4x4>();
+        var tints = new List<Float4>();
+        var locals = new List<Float2>();
 
         for (int protoIdx = 0; protoIdx < data.TreePrototypes.Count; protoIdx++)
         {
-            TreePrototype proto = data.TreePrototypes[protoIdx];
-            Mesh? mesh = proto.Mesh;
-            if (mesh == null) continue;
+            Mesh? mesh = data.TreePrototypes[protoIdx].Mesh;
+            if (mesh.IsNotValid() || !mesh.IsLoaded) continue;
 
-            if (s_defaultStandardMat.IsNotValid()) s_defaultStandardMat = Material.LoadDefault(DefaultMaterial.Standard);
-
-            _transforms.Clear();
-            _colors.Clear();
-            _instanceDataList.Clear();
-
+            transforms.Clear();
+            tints.Clear();
+            locals.Clear();
             foreach (TreeInstance tree in data.Trees)
             {
                 if (tree.PrototypeIndex != protoIdx) continue;
@@ -52,58 +192,37 @@ internal class TerrainTreeRenderer
                 float lz = tree.Position.Y * terrainSize;
                 float ly = data.GetInterpolatedHeight(tree.Position.X, tree.Position.Y);
 
-                // Distance check in local space
-                float dx = lx - (float)camLocal.X;
-                float dz = lz - (float)camLocal.Z;
-                if (dx * dx + dz * dz > maxDistSq) continue;
-
-                // Build local transform, then apply terrain world matrix
                 Float4x4 localTransform = Float4x4.CreateTranslation(new Float3(lx, ly, lz))
                     * Float4x4.FromAxisAngle(new Float3(0, 1, 0), tree.Rotation)
                     * Float4x4.CreateScale(new Float3(tree.WidthScale, tree.HeightScale, tree.WidthScale));
 
-                Float4x4 worldTransform = terrain.Transform.LocalToWorldMatrix * localTransform;
-                var color = new Float4(tree.Tint.R, tree.Tint.G, tree.Tint.B, tree.Tint.A);
-                _transforms.Add(worldTransform);
-                _colors.Add(color);
-                _instanceDataList.Add(new Rendering.InstanceData(worldTransform, color));
+                transforms.Add(terrainToWorld * localTransform);
+                tints.Add(new Float4(tree.Tint.R, tree.Tint.G, tree.Tint.B, tree.Tint.A));
+                locals.Add(new Float2(lx, lz));
             }
+            if (transforms.Count == 0) continue;
 
-            if (_instanceDataList.Count == 0) continue;
+            AABB bounds = mesh.bounds;
+            Float3 meshCentre = (bounds.Min + bounds.Max) * 0.5f;
+            float meshRadius = Float3.Length(bounds.Max - bounds.Min) * 0.5f;
 
-            // Bounds from actual positions + mesh extents
-            float meshExtent = mesh.bounds.Size.X > 0 ? MathF.Max(mesh.bounds.Size.X, mesh.bounds.Size.Z) * 0.5f : 5f;
-            float meshHeight = mesh.bounds.Size.Y > 0 ? mesh.bounds.Size.Y : 20f;
-            Float3 bmin = new(float.MaxValue), bmax = new(float.MinValue);
-            foreach (Float4x4 tr in _transforms)
+            var trees = new Instances
             {
-                float tx = tr[0, 3], ty = tr[1, 3], tz = tr[2, 3];
-                bmin = new Float3(MathF.Min(bmin.X, tx - meshExtent), MathF.Min(bmin.Y, ty), MathF.Min(bmin.Z, tz - meshExtent));
-                bmax = new Float3(MathF.Max(bmax.X, tx + meshExtent), MathF.Max(bmax.Y, ty + meshHeight), MathF.Max(bmax.Z, tz + meshExtent));
-            }
-
-            // One instanced draw per submesh so trees with multi-material meshes render each
-            // submesh with its own material.
-            int subMeshCount = mesh.SubMeshCount;
-            InstanceData[] instanceArr = [.. _instanceDataList];
-            Float3 sortPos = (bmin + bmax) * 0.5f;
-            AABB worldBounds = new AABB(bmin, bmax);
-
-            for (int sub = 0; sub < subMeshCount; sub++)
+                Prototype = protoIdx,
+                Transforms = new Double4x4[transforms.Count],
+                Tints = [.. tints],
+                Local = [.. locals],
+                Centres = new Double3[transforms.Count],
+                Radii = new float[transforms.Count],
+            };
+            for (int i = 0; i < transforms.Count; i++)
             {
-                Material? mat = null;
-                if (sub < proto.Materials.Count) mat = proto.Materials[sub];
-                if (mat.IsNotValid()) mat = s_defaultStandardMat;
-                if (mat == null) continue;
-
-                renderables.Add(new InstancedMeshRenderable(
-                    mesh, mat, instanceArr,
-                    sortPos,
-                    terrain.GameObject.LayerIndex,
-                    s_emptyProps,
-                    worldBounds,
-                    subMeshIndex: subMeshCount > 1 ? sub : -1));
+                trees.Transforms[i] = (Double4x4)transforms[i];
+                trees.Centres[i] = Float4x4.TransformPoint(meshCentre, transforms[i]);
+                trees.Radii[i] = meshRadius * TerrainComponent.MaxScale(transforms[i]);
             }
+            result.Add(trees);
         }
+        return [.. result];
     }
 }

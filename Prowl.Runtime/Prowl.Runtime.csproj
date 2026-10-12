@@ -29,27 +29,24 @@
   <ItemGroup>
     <ProjectReference Include="..\External\jitterphysics2\src\Jitter2\Jitter2.csproj" />
 
-    <!-- <ProjectReference Include="..\..\Anthology\Aperture\Aperture\Aperture.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Clay\Clay\Clay.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Echo\Echo\Echo.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Paper\Paper\Paper.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Recast\Recast\Prowl.Recast.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Motion\Motion\Motion.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
-    <PackageReference Include="Prowl.Aperture" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Motion" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
-    
+    <ProjectReference Include="..\..\Anthology\Aperture\Aperture\Aperture.csproj" />
+    <ProjectReference Include="..\..\Anthology\Clay\Clay\Clay.csproj" />
+    <ProjectReference Include="..\..\Anthology\Echo\Echo\Echo.csproj" />
+    <ProjectReference Include="..\..\Anthology\Paper\Paper\Paper.csproj" />
+    <ProjectReference Include="..\..\Anthology\Recast\Recast\Prowl.Recast.csproj" />
+    <ProjectReference Include="..\..\Anthology\Motion\Motion\Motion.csproj" />
+    <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" />
+    <ProjectReference Include="..\..\Anthology\Ember\Contracts\Prowl.Ember.Contracts.csproj" />
+    <ProjectReference Include="..\..\Anthology\Graphite\Graphite\Prowl.Graphite.csproj" />
+    <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+    <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    <ProjectReference Include="..\..\Anthology\Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
+
     <PackageReference Include="Silk.NET" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR.Extensions.KHR" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR.Extensions.EXT" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
-    <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
     <!-- EngineObject null-safety analyzer (?./??/??= on EngineObject). Analyzes this project's own source. -->
     <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

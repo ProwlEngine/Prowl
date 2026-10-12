@@ -110,7 +110,7 @@ Attributes: `[RequireComponent(typeof(A), typeof(B))]` (adds missing components 
 - `Scene.Current.Add(go)`, `Remove(go)`, `RootObjects`, `AllObjects`, `FindObjectsOfType<T>()` (instance methods)
 - `Scene.Load(sceneAsset)` blocks, `await Scene.LoadAsync(sceneAsset)` loads in the background. Both swap at the end of the frame.
 - `Scene.DontDestroyOnLoad(go)` keeps a root object across loads.
-- `Scene.Current.Physics` has the raycasts (main thread only, see the prowl-physics skill). `Fog`, `Ambient` and `Skybox` hold environment settings.
+- `Scene.Current.Physics` has the raycasts (main thread only, see the prowl-physics skill). `Environment` holds the sky material, ambient light and fog.
 
 ## Time, input, logging
 

@@ -5,11 +5,15 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using Material = Prowl.Runtime.Resources.Material;
+using Mesh = Prowl.Runtime.Resources.Mesh;
 
 namespace Prowl.Runtime.Terrain;
 
@@ -18,12 +22,12 @@ namespace Prowl.Runtime.Terrain;
 ///
 /// Textured details are placed in the vertex shader by <see cref="TerrainDetailRenderer"/>, but a
 /// mesh prototype renders with its own user-authored materials, which know nothing about procedural
-/// placement. Those get instance buffers built here instead.
+/// placement. Those get instances built here instead, one set around each camera that draws the
+/// terrain, which views of that camera then frustum cull on the render thread.
 ///
-/// One buffer covers the whole draw distance around the camera rather than one per patch, so a
-/// prototype costs a draw per submesh no matter how far it reaches. The buffer is built with a
-/// margin of slack and only rebuilt once the camera has spent it, and placement is seeded from the
-/// world cell index, so a rebuild puts every instance back exactly where it was.
+/// A set covers the whole draw distance around its camera. It is built with a margin of slack and
+/// only rebuilt once the camera has spent it, and placement is seeded from the world cell index, so
+/// a rebuild puts every instance back exactly where it was.
 /// </summary>
 internal class TerrainMeshDetailRenderer
 {
@@ -33,32 +37,91 @@ internal class TerrainMeshDetailRenderer
     private const int MaxInstancesPerPrototype = 20000;
 
     /// <summary>
-    /// Slack around the draw distance, as a fraction of it. The buffer reaches this much further
+    /// Slack around the draw distance, as a fraction of it. The set reaches this much further
     /// than it needs to and is rebuilt once the camera has moved that far, which means anything
     /// inside the draw distance was already in the previous build: instances never pop in.
     /// </summary>
     private const float kRebuildMargin = 0.15f;
 
-    private static Material? s_defaultStandardMat;
-    private static readonly PropertyState s_emptyProps = new();
-
-    private readonly Dictionary<int, Build> _builds = [];
+    // Builds per camera view, by prototype
+    private readonly Dictionary<int, Dictionary<int, Build>> _builds = [];
+    private readonly List<int> _stale = [];
+    private GMaterial[] _materialScratch = [];
 
     // Painted cells in range of a rebuild, by distance from the camera then cell, reused between rebuilds
     private static readonly List<(float DistanceSq, int Cell)> s_cells = [];
     private static readonly Comparison<(float DistanceSq, int Cell)> s_nearestFirst =
         (a, b) => a.DistanceSq != b.DistanceSq ? a.DistanceSq.CompareTo(b.DistanceSq) : a.Cell.CompareTo(b.Cell);
 
-    private sealed class Build
+    /// <summary>One prototype's instances around one camera. Its arrays are never changed once built.</summary>
+    public sealed class Build
     {
-        public InstanceData[] Instances = [];
-        public IRenderable[] Renderables = [];
+        public Double4x4[] Transforms = [];
+        public Float4[] Tints = [];
+        public Float4[] Wind = [];
+        public Double3[] Centres = [];
+        public float[] Radii = [];
         public Float2 Centre;
         public float Distance;
         public int DetailsVersion = -1;
         public int HeightsVersion = -1;
         public int HolesVersion = -1;
         public Float4x4 LocalToWorld;
+        public Mesh? Mesh;
+        public int Prototype;
+    }
+
+    /// <summary>A build with what it draws with this frame.</summary>
+    public readonly struct Batch(Build build, GpuMesh mesh, GMaterial[] materials)
+    {
+        public readonly Build Build = build;
+        public readonly GpuMesh Mesh = mesh;
+        public readonly GMaterial[] Materials = materials;
+    }
+
+    /// <summary>A terrain's mesh details for one frame, by camera view. Copied on the host.</summary>
+    public sealed class Frame
+    {
+        public readonly Dictionary<int, Batch[]> Views = [];
+        public RenderableFlags Flags;
+        public uint LayerMask;
+        public ProbeAnchorHandle Probe;
+        public uint ObjectId;
+
+        /// <summary>Adds the instances a view sees: its camera's set, or every camera's for -1. Render thread.</summary>
+        public void Cull(int viewId, in ProviderView view, DrawItemSink sink)
+        {
+            if (viewId >= 0)
+            {
+                if (Views.TryGetValue(viewId, out Batch[]? batches)) Cull(batches, view, sink);
+                return;
+            }
+            foreach (Batch[] batches in Views.Values) Cull(batches, view, sink);
+        }
+
+        private void Cull(Batch[] batches, in ProviderView view, DrawItemSink sink)
+        {
+            foreach (Batch batch in batches)
+            {
+                Build build = batch.Build;
+                for (int i = 0; i < build.Transforms.Length; i++)
+                {
+                    if (!view.Sees(build.Centres[i], build.Radii[i])) continue;
+                    var item = new DrawItem
+                    {
+                        Transform = build.Transforms[i],
+                        Custom0 = build.Tints[i],
+                        Custom1 = build.Wind[i],
+                        LayerMask = LayerMask,
+                        ObjectId = ObjectId,
+                        Flags = Flags,
+                        Probe = Probe,
+                    };
+                    for (int sub = 0; sub < batch.Materials.Length; sub++)
+                        sink.Add(batch.Mesh, sub, batch.Materials[sub], item);
+                }
+            }
+        }
     }
 
     private static readonly float[] s_ditherTable =
@@ -97,17 +160,76 @@ internal class TerrainMeshDetailRenderer
     /// <summary>Radius a build reaches: the draw distance plus the slack it is allowed to spend.</summary>
     public static float BuildRadius(float distance) => distance * (1f + kRebuildMargin);
 
-    public void CollectRenderables(
-        TerrainData data, TerrainComponent terrain, Camera camera, List<IRenderable> renderables)
+    /// <summary>
+    /// Brings the sets of every camera up to date and copies what the render thread draws, the cameras by view id and
+    /// world position. Host thread.
+    /// </summary>
+    public Frame? Prepare(TerrainData data, TerrainComponent terrain, List<(int ViewId, Double3 Position)> cameras)
     {
-        if (data.DetailPrototypes.Count == 0) return;
+        _stale.Clear();
+        foreach (int viewId in _builds.Keys)
+            if (!cameras.Exists(c => c.ViewId == viewId)) _stale.Add(viewId);
+        foreach (int viewId in _stale) _builds.Remove(viewId);
 
-        Float3 camLocal = terrain.WorldToTerrain(camera.Transform.Position);
+        if (data.DetailPrototypes.Count == 0 || cameras.Count == 0) return null;
+
+        GameObject go = terrain.GameObject;
+        var frame = new Frame
+        {
+            Flags = terrain.RenderFlags,
+            LayerMask = RenderableState.LayerBit(go.LayerIndex),
+            ObjectId = (uint)terrain.InstanceID,
+            Probe = terrain.ProbeAnchor,
+        };
+
+        var batches = new List<Batch>();
+        foreach ((int viewId, Double3 position) in cameras)
+        {
+            batches.Clear();
+            foreach (Build build in Collect(data, terrain, viewId, (Float3)position))
+            {
+                GpuMesh? mesh = TerrainComponent.GpuMeshOf(build.Mesh);
+                if (mesh == null) continue;
+                GMaterial[] materials = MaterialsFor(data, build);
+                if (materials.Length > 0) batches.Add(new Batch(build, mesh, materials));
+            }
+            if (batches.Count > 0) frame.Views[viewId] = [.. batches];
+        }
+        return frame.Views.Count > 0 ? frame : null;
+    }
+
+    // One material per submesh, Standard where the prototype names none or its material is not loaded yet
+    private GMaterial[] MaterialsFor(TerrainData data, Build build)
+    {
+        DetailPrototype? proto = build.Prototype < data.DetailPrototypes.Count ? data.DetailPrototypes[build.Prototype] : null;
+
+        int subMeshCount = build.Mesh.IsValid() ? build.Mesh.SubMeshCount : 0;
+        if (_materialScratch.Length != subMeshCount) _materialScratch = new GMaterial[subMeshCount];
+        for (int sub = 0; sub < subMeshCount; sub++)
+        {
+            Material? material = proto != null && sub < proto.Materials.Count ? proto.Materials[sub] : null;
+            GMaterial? gpu = TerrainComponent.GpuMaterialOf(material) ?? RenderableState.DefaultGpuMaterial;
+            if (gpu == null) return [];
+            _materialScratch[sub] = gpu;
+        }
+        return [.. _materialScratch];
+    }
+
+    /// <summary>The sets around one camera, rebuilding those it has moved out of or whose data changed. Host thread.</summary>
+    internal List<Build> Collect(TerrainData data, TerrainComponent terrain, int viewId, Float3 cameraWorld)
+    {
+        var result = new List<Build>();
+        if (data.DetailPrototypes.Count == 0) return result;
+
+        Float3 camLocal = terrain.WorldToTerrain(cameraWorld);
         Float4x4 terrainToWorld = terrain.Transform.LocalToWorldMatrix;
         Float3 terrainScale = terrain.Transform.LocalScale;
         float avgScale = MathF.Max(0.001f, (terrainScale.X + terrainScale.Z) * 0.5f);
         float distance = MathF.Max(terrain.DetailDistance, 0.01f) / avgScale;
         var centre = new Float2(camLocal.X, camLocal.Z);
+
+        if (!_builds.TryGetValue(viewId, out Dictionary<int, Build>? builds))
+            _builds[viewId] = builds = [];
 
         for (int protoIdx = 0; protoIdx < data.DetailPrototypes.Count; protoIdx++)
         {
@@ -116,29 +238,28 @@ internal class TerrainMeshDetailRenderer
             if (protoIdx >= data.DetailLayers.Count) continue;
 
             Mesh? mesh = proto.Mesh;
-            if (mesh == null) continue;
+            if (mesh.IsNotValid()) continue;
 
             // Nothing painted, nothing to place
             if (!data.TryGetDetailBounds(protoIdx, out Float4 painted)) continue;
 
-            if (!_builds.TryGetValue(protoIdx, out Build? build))
-                _builds[protoIdx] = build = new Build();
-
-            if (build.DetailsVersion != data.DetailsVersion
+            if (!builds.TryGetValue(protoIdx, out Build? build)
+                || build.Mesh != mesh
+                || build.DetailsVersion != data.DetailsVersion
                 || build.HeightsVersion != data.HeightsVersion
                 || build.HolesVersion != data.HolesVersion
                 || build.LocalToWorld != terrainToWorld
                 || BuildIsStale(build.Centre, build.Distance, centre, distance))
             {
-                Rebuild(build, data, terrain, terrainToWorld, proto, protoIdx, mesh, centre, distance, painted);
+                builds[protoIdx] = build = Rebuild(data, terrainToWorld, proto, protoIdx, mesh, centre, distance, painted);
             }
 
-            for (int i = 0; i < build.Renderables.Length; i++)
-                renderables.Add(build.Renderables[i]);
+            if (build.Transforms.Length > 0) result.Add(build);
         }
+        return result;
     }
 
-    private static void Rebuild(Build build, TerrainData data, TerrainComponent terrain, Float4x4 terrainToWorld, DetailPrototype proto,
+    private static Build Rebuild(TerrainData data, Float4x4 terrainToWorld, DetailPrototype proto,
         int protoIdx, Mesh mesh, Float2 centre, float distance, Float4 painted)
     {
         byte[] densityMap = data.DetailLayers[protoIdx];
@@ -147,15 +268,9 @@ internal class TerrainMeshDetailRenderer
         float cellSize = terrainSize / detailRes;
         float radius = BuildRadius(distance);
 
-        build.Centre = centre;
-        build.Distance = distance;
-        build.DetailsVersion = data.DetailsVersion;
-        build.HeightsVersion = data.HeightsVersion;
-        build.HolesVersion = data.HolesVersion;
-        build.LocalToWorld = terrainToWorld;
-
-        var instances = new List<InstanceData>();
-        float minY = float.MaxValue, maxY = float.MinValue;
+        var transforms = new List<Float4x4>();
+        var tints = new List<Float4>();
+        var wind = new List<Float4>();
 
         // Only the cells that are both in range and actually painted
         int startX = Math.Max(0, (int)MathF.Floor(MathF.Max(centre.X - radius, painted.X) / cellSize));
@@ -183,14 +298,14 @@ internal class TerrainMeshDetailRenderer
 
         foreach ((float _, int cell) in s_cells)
         {
-            if (instances.Count >= MaxInstancesPerPrototype) break;
+            if (transforms.Count >= MaxInstancesPerPrototype) break;
             int cx = cell % detailRes, cz = cell / detailRes;
             float rawDensity = densityMap[cell] * (1f / 255f);
 
             float dither = s_ditherTable[(cx & 7) + (cz & 7) * 8];
             // Ordered dither, so a faint cell still averages out to its share of an instance
             int count = Math.Clamp((int)(rawDensity * MaxInstancesPerCell + dither), 0, MaxInstancesPerCell);
-            count = Math.Min(count, MaxInstancesPerPrototype - instances.Count);
+            count = Math.Min(count, MaxInstancesPerPrototype - transforms.Count);
             if (count <= 0) continue;
 
             // Seeded from the world cell, so a rebuild reproduces the same scatter exactly
@@ -207,8 +322,6 @@ internal class TerrainMeshDetailRenderer
                 float wx = u * terrainSize;
                 float wz = v * terrainSize;
                 float wy = data.GetInterpolatedHeight(u, v);
-                minY = MathF.Min(minY, wy);
-                maxY = MathF.Max(maxY, wy);
 
                 float noise = NoiseAt(wx * proto.NoiseSpread, wz * proto.NoiseSpread);
                 float densityScale = MathF.Min(1f, rawDensity * 2f);
@@ -216,73 +329,52 @@ internal class TerrainMeshDetailRenderer
                 float sw = proto.MinWidth + sizeT * (proto.MaxWidth - proto.MinWidth);
                 float sh = proto.MinHeight + sizeT * (proto.MaxHeight - proto.MinHeight);
 
-                Float4x4 transform = terrainToWorld * Float4x4.CreateTranslation(new Float3(wx, wy, wz))
+                transforms.Add(terrainToWorld * Float4x4.CreateTranslation(new Float3(wx, wy, wz))
                     * Float4x4.FromAxisAngle(new Float3(0, 1, 0), rotY)
-                    * Float4x4.CreateScale(new Float3(sw, sh, sw));
+                    * Float4x4.CreateScale(new Float3(sw, sh, sw)));
 
                 Color tint = Color.Lerp(proto.HealthyColor, proto.DryColor, 1f - noise);
-                instances.Add(new InstanceData(transform,
-                    new Float4(tint.R, tint.G, tint.B, tint.A),
-                    new Float4(windPhase, proto.BendFactor, 0, 0)));
+                tints.Add(new Float4(tint.R, tint.G, tint.B, tint.A));
+                wind.Add(new Float4(windPhase, proto.BendFactor, 0, 0));
             }
         }
 
-        if (instances.Count >= MaxInstancesPerPrototype)
+        if (transforms.Count >= MaxInstancesPerPrototype)
         {
             Debug.LogWarningOnce("terrain_mesh_detail_budget",
                 $"Mesh detail prototype {protoIdx} hit its {MaxInstancesPerPrototype} instance budget. " +
                 "The furthest painted cells are left bare. Paint it more sparsely or shorten Detail Distance.");
         }
 
-        build.Instances = [.. instances];
-        build.Renderables = build.Instances.Length == 0
-            ? []
-            : BuildRenderables(build.Instances, terrain, proto, mesh, centre, radius,
-                minY == float.MaxValue ? 0f : minY, maxY == float.MinValue ? 0f : maxY);
-    }
+        // Spheres around each instance's mesh bounds, for the views' frustum tests
+        AABB bounds = mesh.bounds;
+        Float3 meshCentre = (bounds.Min + bounds.Max) * 0.5f;
+        float meshRadius = Float3.Length(bounds.Max - bounds.Min) * 0.5f;
 
-    private static IRenderable[] BuildRenderables(InstanceData[] instances, TerrainComponent terrain,
-        DetailPrototype proto, Mesh mesh, Float2 centre, float radius, float minY, float maxY)
-    {
-        float pad = MathF.Max(proto.MaxWidth, proto.MaxHeight);
-        Float3 localMin = new(centre.X - radius - pad, minY - pad, centre.Y - radius - pad);
-        Float3 localMax = new(centre.X + radius + pad, maxY + pad, centre.Y + radius + pad);
-        AABB bounds = TransformBounds(terrain, localMin, localMax);
-        Float3 sortPosition = terrain.TerrainToWorld(new Float3(centre.X, (minY + maxY) * 0.5f, centre.Y));
-
-        if (s_defaultStandardMat.IsNotValid()) s_defaultStandardMat = Resources.Material.LoadDefault(DefaultMaterial.Standard);
-
-        int subMeshCount = mesh.SubMeshCount;
-        var result = new IRenderable[subMeshCount];
-        for (int sub = 0; sub < subMeshCount; sub++)
+        var build = new Build
         {
-            Material material = null!;
-            if (sub < proto.Materials.Count) material = proto.Materials[sub];
-            if (material.IsNotValid()) material = s_defaultStandardMat!;
-
-            result[sub] = new InstancedMeshRenderable(
-                mesh, material, instances, sortPosition,
-                terrain.GameObject.LayerIndex, s_emptyProps, bounds,
-                subMeshIndex: subMeshCount > 1 ? sub : -1);
-        }
-        return result;
-    }
-
-    private static AABB TransformBounds(TerrainComponent terrain, Float3 localMin, Float3 localMax)
-    {
-        Float3 min = new(float.MaxValue), max = new(float.MinValue);
-        for (int i = 0; i < 8; i++)
+            Centre = centre,
+            Distance = distance,
+            DetailsVersion = data.DetailsVersion,
+            HeightsVersion = data.HeightsVersion,
+            HolesVersion = data.HolesVersion,
+            LocalToWorld = terrainToWorld,
+            Mesh = mesh,
+            Prototype = protoIdx,
+            Transforms = new Double4x4[transforms.Count],
+            Tints = [.. tints],
+            Wind = [.. wind],
+            Centres = new Double3[transforms.Count],
+            Radii = new float[transforms.Count],
+        };
+        for (int i = 0; i < transforms.Count; i++)
         {
-            Float3 corner = new(
-                (i & 1) == 0 ? localMin.X : localMax.X,
-                (i & 2) == 0 ? localMin.Y : localMax.Y,
-                (i & 4) == 0 ? localMin.Z : localMax.Z);
-
-            Float3 world = terrain.TerrainToWorld(corner);
-            min = new Float3(MathF.Min(min.X, world.X), MathF.Min(min.Y, world.Y), MathF.Min(min.Z, world.Z));
-            max = new Float3(MathF.Max(max.X, world.X), MathF.Max(max.Y, world.Y), MathF.Max(max.Z, world.Z));
+            Float4x4 transform = transforms[i];
+            build.Transforms[i] = (Double4x4)transform;
+            build.Centres[i] = Float4x4.TransformPoint(meshCentre, transform);
+            build.Radii[i] = meshRadius * TerrainComponent.MaxScale(transform);
         }
-        return new AABB(min, max);
+        return build;
     }
 
     private static float NoiseAt(float x, float z)

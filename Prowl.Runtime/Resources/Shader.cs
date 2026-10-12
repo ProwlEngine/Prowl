@@ -1,241 +1,220 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 using Prowl.Echo;
-using Prowl.Runtime.Rendering.Shaders;
-using Prowl.Vector;
+using Prowl.Graphite.Rendering;
+using Prowl.Graphite.ShaderDef;
+
+using GShader = Prowl.Graphite.Rendering.Shader;
 
 namespace Prowl.Runtime.Resources;
 
 /// <summary>
-/// The Shader class itself doesnt do much, It stores the properties of the shader and the shader code and Keywords.
-/// This is used in conjunction with the Material class to create shader variants with the correct keywords and to render things
+/// A shader in Graphite's ShaderDef format: its source, the parsed definition, and the Graphite shader materials draw
+/// with, which declares the material's properties and keyword axes. A source that fails to parse leaves the shader
+/// without a Graphite shader, and its materials draw with the Invalid shader.
 /// </summary>
-public sealed class Shader : Asset, ISerializationCallbackReceiver
+public sealed class Shader : Asset, ISerializable
 {
-    [SerializeField]
-    private ShaderProperty[] _properties = [];
-    public IEnumerable<ShaderProperty> Properties { get { EnsureLoaded(); return _properties; } }
+    private static readonly ConcurrentDictionary<string, string> s_sourcePaths = new(StringComparer.Ordinal);
 
-    /// <summary>The properties without loading, empty once unloaded, for the render thread.</summary>
-    internal ShaderProperty[] LoadedProperties => _properties ?? [];
-
-
-    [SerializeField]
-    private ShaderPass[] _passes = [];
-    public IEnumerable<ShaderPass> Passes { get { EnsureLoaded(); return _passes; } }
-
-    // Walked every draw, so iterating it never allocates an enumerator.
-    internal ReadOnlySpan<ShaderPass> LoadedPasses { get { EnsureLoaded(); return _passes; } }
-
-    /// <summary>Loads the default textures and creates their handles, so the render thread only binds what exists.</summary>
-    internal void PrepareDefaultTextures()
-    {
-        EnsureLoaded();
-        foreach (ShaderProperty property in _properties)
-        {
-            if (property.PropertyType == ShaderPropertyType.Texture2D && property.Texture2DValue is { IsDisposed: false, HandleIfLoaded: null } texture2D)
-                _ = texture2D.Handle;
-            else if (property.PropertyType == ShaderPropertyType.Texture3D && property.Texture3DValue is { IsDisposed: false, HandleIfLoaded: null } texture3D)
-                _ = texture3D.Handle;
-        }
-    }
-
-
-    private Dictionary<string, int> _nameIndexLookup = [];
-    private Dictionary<string, List<int>> _tagIndexLookup = [];
-
+    private string _source = "";
+    private string _sourcePath = "";
+    [NotHeld] private GShader? _gpu;
+    private string? _error;
 
     internal Shader() : base("New Shader") { }
 
-    public Shader(string name, ShaderProperty[] properties, ShaderPass[] passes) : base(name)
+    /// <summary>A shader from ShaderDef source. <paramref name="sourcePath"/> is the file includes resolve against.</summary>
+    public static Shader FromSource(string source, string sourcePath = "")
     {
-        _properties = properties;
-        _passes = passes;
-
-        OnAfterDeserialize();
+        Shader shader = new();
+        shader.SetSource(source, sourcePath);
+        return shader;
     }
 
-    private void RegisterPass(ShaderPass pass, int index)
+    /// <summary>The ShaderDef source.</summary>
+    public string Source { get { EnsureLoaded(); return _source; } }
+
+    /// <summary>The file the source came from, which relative includes resolve against.</summary>
+    public string SourcePath { get { EnsureLoaded(); return _sourcePath; } }
+
+    /// <summary>The Graphite shader, null when the source failed to parse.</summary>
+    public GShader? GpuShader { get { EnsureLoaded(); return _gpu; } }
+
+    /// <summary>The Graphite shader without loading, for code that runs every frame.</summary>
+    internal GShader? GpuIfLoaded => IsLoaded ? _gpu : null;
+
+    /// <summary>Why the source failed to parse, null when it parsed.</summary>
+    public string? Error { get { EnsureLoaded(); return _error; } }
+
+    /// <summary>The properties a material of this shader has, in declaration order.</summary>
+    public IReadOnlyList<MaterialProperty> Properties { get { EnsureLoaded(); return (IReadOnlyList<MaterialProperty>?)_gpu?.Properties ?? []; } }
+
+    /// <summary>The keyword axes a material sets, each with its values.</summary>
+    public IReadOnlyList<VariantSpace> Keywords { get { EnsureLoaded(); return (IReadOnlyList<VariantSpace>?)_gpu?.MaterialAxes ?? []; } }
+
+    /// <summary>The render queue its materials draw in by default, 2500 and up transparent.</summary>
+    public int RenderQueue { get { EnsureLoaded(); return _gpu?.RenderQueue ?? GShader.DefaultRenderQueue; } }
+
+    /// <summary>Whether the shader has a pass of this type, such as ShadowCaster.</summary>
+    public bool HasPass(PassType type) { EnsureLoaded(); return _gpu?.HasPass(type) ?? false; }
+
+    public MaterialProperty? FindProperty(string name)
     {
-        if (!string.IsNullOrWhiteSpace(pass.Name))
+        EnsureLoaded();
+        if (_gpu == null) return null;
+        int index = _gpu.FindProperty(name);
+        return index < 0 ? null : _gpu.Properties[index];
+    }
+
+    /// <summary>A shader of Graphite's library, such as "Graphite/Standard/Lit.shader", sharing the renderer's instance.</summary>
+    internal static Shader FromLibrary(string libraryPath)
+    {
+        Shader shader = new();
+        shader.SetSource(LibrarySource(libraryPath), libraryPath, Graphics.LibraryShader(libraryPath));
+        return shader;
+    }
+
+    /// <summary>Replaces the source and parses it again. Materials of the shader pick the new one up.</summary>
+    public void SetSource(string source, string sourcePath = "") => SetSource(source, sourcePath, null);
+
+    private void SetSource(string source, string sourcePath, GShader? built)
+    {
+        _source = source ?? "";
+        _sourcePath = sourcePath ?? "";
+        _error = null;
+        _gpu = null;
+        try
         {
-            if (!_nameIndexLookup.TryAdd(pass.Name, index))
-                throw new InvalidOperationException($"Pass with name {pass.Name} conflicts with existing pass at index {_nameIndexLookup[pass.Name]}. Ensure no two passes have equal names.");
-        }
-
-        foreach (KeyValuePair<string, string> pair in pass.Tags)
-        {
-            if (string.IsNullOrWhiteSpace(pair.Key))
-                continue;
-
-            if (!_tagIndexLookup.TryGetValue(pair.Key, out _))
-                _tagIndexLookup.Add(pair.Key, []);
-
-            _tagIndexLookup[pair.Key].Add(index);
-        }
-    }
-
-    public ShaderPass GetPass(int passIndex)
-    {
-        EnsureLoaded();
-        passIndex = Maths.Clamp(passIndex, 0, _passes.Length - 1);
-        return _passes[passIndex];
-    }
-
-    public ShaderPass GetPass(string passName)
-    {
-        EnsureLoaded();
-        return _passes[GetPassIndex(passName)];
-    }
-
-    public int GetPassIndex(string passName)
-    {
-        EnsureLoaded();
-        return _nameIndexLookup.GetValueOrDefault(passName, -1);
-    }
-
-    public int? GetPassWithTag(string tag, string? tagValue = null)
-    {
-        EnsureLoaded();
-        List<int> passes = GetPassesWithTag(tag, tagValue);
-        return passes.Count > 0 ? passes[0] : null;
-    }
-
-    public List<int> GetPassesWithTag(string tag, string? tagValue = null)
-    {
-        EnsureLoaded();
-        List<int> passes = [];
-
-        if (_tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
-        {
-            foreach (int index in passesWithTag)
+            ShaderDefinition definition = ShaderParser.Parse(_source);
+            if (definition.Name is { Length: > 0 } declared)
             {
-                ShaderPass pass = _passes[index];
-
-                if (pass.HasTag(tag, tagValue))
-                    passes.Add(index);
+                Name = declared;
+                if (_sourcePath.Length > 0) s_sourcePaths[declared] = _sourcePath;
             }
+            _gpu = built ?? Graphics.Renderer?.LoadShader(definition) ?? new GShader(definition, Graphics.Compiler);
         }
-
-        return passes;
+        catch (Exception e)
+        {
+            _error = e.Message;
+            Debug.LogError($"Shader '{(_sourcePath.Length > 0 ? _sourcePath : Name)}' failed to parse: {e.Message}");
+        }
     }
+
+    private static readonly System.Text.RegularExpressions.Regex s_include = new(@"^[ \t]*#include[ \t]+""([^""]+)""[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
-    /// Loads a shader from a file path
+    /// Inlines the includes of a source that are neither Graphite's nor Prowl's library, each once, through
+    /// <paramref name="resolve"/>. Library includes stay for the compiler. An include it cannot find stays as written.
     /// </summary>
+    public static string ExpandIncludes(string source, Func<string, string?> resolve)
+    {
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        string Expand(string text, int depth) => s_include.Replace(text, match =>
+        {
+            string name = match.Groups[1].Value;
+            if (name.StartsWith("Graphite/", StringComparison.Ordinal) || name.StartsWith(BuiltInShaders.Prefix, StringComparison.Ordinal) || depth > 16)
+                return match.Value;
+            if (!seen.Add(name)) return "";
+            string? included = resolve(name);
+            return included == null ? match.Value : Expand(included, depth + 1);
+        });
+        return Expand(source, 0);
+    }
+
+    /// <summary>The source file of a shader by the name it declares, for includes relative to it.</summary>
+    internal static string? SourcePathOf(string shaderName) => s_sourcePaths.TryGetValue(shaderName, out string? path) ? path : null;
+
+    /// <summary>Loads a shader from a ShaderDef file.</summary>
     public static Shader LoadFromFile(string filePath)
     {
         if (!System.IO.File.Exists(filePath))
             throw new System.IO.FileNotFoundException($"Shader file not found: {filePath}");
-
-        string shaderCode = System.IO.File.ReadAllText(filePath);
-
-        if (!AssetImporting.ShaderParser.ParseShader(filePath, shaderCode, path =>
-        {
-            // Include resolver for #include directives
-            string? absolutePath = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(filePath)!, path));
-            if (System.IO.File.Exists(absolutePath))
-                return System.IO.File.ReadAllText(absolutePath);
-
-            // Then try embedded resources (for default includes like VertexAttributes, Fragment, etc.)
-            try
-            {
-                return EmbeddedResources.ReadAllText(path);
-            }
-            catch
-            {
-                // Also try with Assets/Defaults/ prefix
-                try
-                {
-                    return EmbeddedResources.ReadAllText($"Assets/Defaults/{path}");
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-        }, out Shader? shader))
-        {
-            throw new System.Exception($"Failed to parse shader: {filePath}");
-        }
-
-        if (shader.IsNotValid())
-            throw new System.Exception($"Shader parsing returned null: {filePath}");
-
-        return shader;
+        return FromSource(System.IO.File.ReadAllText(filePath), filePath);
     }
 
-    /// <summary>
-    /// Get the shared instance of a default embedded shader. Returns the same instance
-    /// across the whole app so ShaderPass variant caches aren't defeated by repeated
-    /// re-parsing the parse happens exactly once per shader enum value.
-    /// </summary>
+    /// <summary>The shared instance of a built in shader.</summary>
     public static Shader LoadDefault(DefaultShader shader) => BuiltInAssets.Load<Shader>(BuiltInAssets.GuidFor(shader));
 
     /// <summary>The built-in shader without loading it, for code that runs while another asset loads.</summary>
     internal static Shader GetDefault(DefaultShader shader) => AssetDatabase.Get<Shader>(BuiltInAssets.GuidFor(shader))!;
 
-    /// <summary>
-    /// Raw parse of a default embedded shader invoked by <see cref="BuiltInAssets"/>
-    /// on the first cache miss. Public callers should use <see cref="LoadDefault"/>.
-    /// </summary>
+    /// <summary>Parses a built in shader, called by <see cref="BuiltInAssets"/> on its first use.</summary>
     internal static Shader ParseDefault(DefaultShader shader)
     {
-        string fileName = shader.ToString();
+        if (LibraryPathOf(shader) is { } library)
+            return FromLibrary(library);
+        string path = $"Assets/Defaults/Shaders/{shader}.shader";
+        return FromSource(EmbeddedResources.ReadAllText(path), path);
+    }
 
-        string resourcePath = $"Assets/Defaults/{fileName}.shader";
-        string shaderCode = EmbeddedResources.ReadAllText(resourcePath);
+    /// <summary>Raw source text of a built in shader.</summary>
+    public static string GetDefaultSource(DefaultShader shader)
+        => LibraryPathOf(shader) is { } library ? LibrarySource(library) : EmbeddedResources.ReadAllText($"Assets/Defaults/Shaders/{shader}.shader");
 
-        if (!AssetImporting.ShaderParser.ParseShader(resourcePath, shaderCode, path =>
+    // The compiler registers Graphite's library on first use
+    private static string LibrarySource(string libraryPath)
+    {
+        _ = Graphics.Compiler;
+        return ShaderLibrary.Get(libraryPath) ?? throw new ArgumentException($"Graphite's library has no shader {libraryPath}.");
+    }
+
+    private static string? LibraryPathOf(DefaultShader shader) => shader switch
+    {
+        DefaultShader.Lit => "Graphite/Standard/Lit.shader",
+        DefaultShader.Unlit => "Graphite/Standard/Unlit.shader",
+        DefaultShader.ProceduralSky => "Graphite/Skies/Procedural.shader",
+        DefaultShader.GradientSky => "Graphite/Skies/Gradient.shader",
+        DefaultShader.CubemapSky => "Graphite/Skies/Cubemap.shader",
+        DefaultShader.PanoramaSky => "Graphite/Skies/Panorama.shader",
+        DefaultShader.SixSidedSky => "Graphite/Skies/SixSided.shader",
+        _ => null,
+    };
+
+    /// <summary>
+    /// The shaders of the standard family before Graphite, by the GUID materials stored, and what replaces each: Lit or
+    /// Unlit with the surface the old file stood for.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<Guid, (DefaultShader Shader, SurfaceSettings Surface, bool Anisotropic)> Legacy = BuildLegacy();
+
+    private static Dictionary<Guid, (DefaultShader, SurfaceSettings, bool)> BuildLegacy()
+    {
+        Dictionary<Guid, (DefaultShader, SurfaceSettings, bool)> legacy = [];
+        foreach (string family in new[] { "Standard", "StandardAnisotropic", "Unlit" })
         {
-            // Include resolver for embedded resources
-            try
+            foreach ((string mode, SurfaceType type) in new[] { ("", SurfaceType.Opaque), ("Cutout", SurfaceType.Cutout), ("Transparent", SurfaceType.Transparent) })
             {
-                return EmbeddedResources.ReadAllText(path);
+                foreach ((string sides, SurfaceCull cull) in new[] { ("", SurfaceCull.Back), ("DoubleSided", SurfaceCull.Off) })
+                {
+                    string name = family + mode + sides;
+                    if (name == "Unlit") continue;
+                    legacy[BuiltInAssets.DeterministicGuid($"$Default:Shader/{name}")] =
+                        (family == "Unlit" ? DefaultShader.Unlit : DefaultShader.Lit, new SurfaceSettings(type, SurfaceBlend.Alpha, cull), family == "StandardAnisotropic");
+                }
             }
-            catch
-            {
-                return null;
-            }
-        }, out Shader? result))
-        {
-            throw new System.Exception($"Failed to parse default shader: {shader}");
         }
-
-        if (result.IsNotValid())
-            throw new System.Exception($"Default shader parsing returned null: {shader}");
-
-        return result;
+        return legacy;
     }
 
     /// <summary>
-    /// Raw source text of an embedded default shader. Tooling that only needs the declared
-    /// <c>Shader "path"</c> can read it from here without paying for a full parse.
-    /// </summary>
-    public static string GetDefaultSource(DefaultShader shader) =>
-        EmbeddedResources.ReadAllText($"Assets/Defaults/{shader}.shader");
-
-    /// <summary>
-    /// Pulls the declared path out of the <c>Shader "Some/Path"</c> line at the top of a shader
-    /// source, without running the parser. Leading comments and blank lines are skipped, so this
-    /// works on files that open with a header comment. Returns <c>null</c> when no declaration is
-    /// found in the first few lines.
+    /// Pulls the declared name out of the <c>Shader "Some/Path"</c> line at the top of a shader source, without parsing
+    /// it. Leading comments and blank lines are skipped. Null when no declaration is found.
     /// </summary>
     public static string? ReadDeclaredPath(string source)
     {
         if (string.IsNullOrEmpty(source)) return null;
 
         int i = 0;
-        const char byteOrderMark = (char)0xFEFF; // shader files are often BOM-prefixed
+        const char byteOrderMark = (char)0xFEFF;
         while (i < source.Length && source[i] == byteOrderMark) i++;
 
         while (i < source.Length)
         {
-            // Skip whitespace and any line comment ahead of the declaration.
             while (i < source.Length && char.IsWhiteSpace(source[i])) i++;
             if (i + 1 < source.Length && source[i] == '/' && source[i + 1] == '/')
             {
@@ -265,28 +244,18 @@ public sealed class Shader : Asset, ISerializationCallbackReceiver
         return i < source.Length ? source[start..i] : null;
     }
 
-    /// <summary>
-    /// Loads a default shader include file (for use by shader parser)
-    /// </summary>
-    internal static string LoadDefaultInclude(DefaultShaderInclude include)
+    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        string fileName = include.ToString();
-
-        return EmbeddedResources.ReadAllText($"Assets/Defaults/{fileName}.glsl");
+        SerializeHeader(compoundTag);
+        compoundTag.Add("Source", new(_source));
+        compoundTag.Add("SourcePath", new(_sourcePath));
     }
 
-    public void OnBeforeSerialize() { }
-
-    public void OnAfterDeserialize()
+    public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        for (int i = 0; i < _passes.Length; i++)
-            RegisterPass(_passes[i], i);
+        DeserializeHeader(value);
+        SetSource(value.Get("Source")?.StringValue ?? "", value.Get("SourcePath")?.StringValue ?? "");
     }
 
-    protected override void OnUnload()
-    {
-        foreach (ShaderPass pass in _passes ?? [])
-            pass.Dispose();
-    }
-
+    protected override void OnUnload() => _gpu = null;
 }

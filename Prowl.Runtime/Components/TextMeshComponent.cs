@@ -4,12 +4,16 @@
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Scribe;
 using Prowl.Vector;
 
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using Material = Prowl.Runtime.Resources.Material;
+using Shader = Prowl.Runtime.Resources.Shader;
 using ScribeAlign = Prowl.Scribe.TextAlignment;
 using TAlignment = Prowl.Runtime.UI.TextAlignment;
 
@@ -27,7 +31,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Text Mesh")]
 [ComponentIcon("T")] // Text
-public class TextMeshComponent : Component, IMaterialRenderer, IColorTint
+public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRenderSync
 {
     int IMaterialRenderer.MaterialSlotCount => 1;
     Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
@@ -81,6 +85,8 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint
     [SerializeField] private Material? _material;
     public Material? Material { get => _material; set => SetField(ref _material, value); }
 
+    public ShadowCasting ShadowCasting = ShadowCasting.Off;
+
     // Shared world-space text material (Default/DefaultTextMesh - SDF, tagged Transparent so the scene
     // pipeline draws it). Distinct from the canvas text material, which is UI-tagged and only drawn by
     // the canvas path. Lazy-allocated and reused across every TextMeshComponent that doesn't override it.
@@ -102,10 +108,15 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint
     }
 
     [SerializeIgnore] private Mesh? _mesh;
-    [SerializeIgnore] private PropertyState? _props;
     [SerializeIgnore] private bool _dirty = true;
     [SerializeIgnore] private bool _hasGeometry;
     [SerializeIgnore] private int _lastAtlasVersion = -1;
+    [System.NonSerialized, NotHeld] private readonly RenderableState _renderable = new();
+    [System.NonSerialized, NotHeld] private readonly OwnedMaterial _ownMaterial = new();
+    [System.NonSerialized, NotHeld] private readonly GMaterial[] _gpuMaterials = new GMaterial[1];
+
+    /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
+    public RenderableHandle Renderable => _renderable.Handle;
 
     private void SetField<T>(ref T field, T value)
     {
@@ -114,7 +125,7 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint
         _dirty = true;
     }
 
-    /// <summary>Force the cached mesh to rebuild on the next collect (e.g. after editing the font asset).</summary>
+    /// <summary>Force the cached mesh to rebuild on the next sync (e.g. after editing the font asset).</summary>
     public void MarkDirty() => _dirty = true;
 
     public override void OnDisable()
@@ -125,34 +136,53 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint
         _dirty = true;
     }
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    void IRenderSync.Sync(RenderWorld world)
     {
-        // The shared atlas can grow (new glyph / pixel-size), which shifts every glyph's UVs; rebuild
-        // when that happens, when a property changed, or when the mesh hasn't been built yet.
+        // The shared atlas can grow (new glyph or pixel size), which shifts every glyph's UVs, so that rebuilds too
         int atlasVersion = unchecked(UIFontSystem.Default.System.AtlasVersion * 31 + (_font is FontAsset f ? f.ContentVersion : 0));
-        if (_dirty || _mesh == null || atlasVersion != _lastAtlasVersion)
+        if (_dirty || _mesh.IsNotValid() || atlasVersion != _lastAtlasVersion)
         {
             RebuildMesh();
             _lastAtlasVersion = atlasVersion;
             _dirty = false;
         }
 
-        if (!_hasGeometry || _mesh == null) return;
+        Mesh? mesh = _mesh;
+        Material material = ResolveMaterial();
+        GMaterial? gpu = _hasGeometry && mesh.IsValid() && material.IsLoaded ? _ownMaterial.Of(material.GpuMaterial) : null;
+        if (gpu == null)
+        {
+            if (material.State == AssetState.Unloaded) _ = material.LoadAsync();
+            Detach(world);
+            return;
+        }
 
-        Material mat = ResolveMaterial();
-        if (mat == null) return;
-
-        _props ??= new PropertyState();
-        _props.Clear();
         Texture2D atlasTex = UIFontSystem.Default.Atlas;
-        Texture2D atlas = atlasTex.IsValid() ? atlasTex : Texture2D.LoadDefault(DefaultTexture.White);
-        _props.SetTexture("_MainTex", atlas);
-        _props.SetColor("_MainColor", Color.White);
-        _props.SetVector("_Tiling", new Float2(1, 1));
-        _props.SetVector("_Offset", Float2.Zero);
-        _props.SetInt("_ObjectID", InstanceID);
+        _ownMaterial.SetTexture("_MainTex", atlasTex.IsValid() ? atlasTex : Texture2D.LoadDefault(DefaultTexture.White));
+        _ownMaterial.SetColor("_MainColor", Color.White);
+        _ownMaterial.SetVector("_Tiling", new Float2(1, 1));
+        _ownMaterial.SetVector("_Offset", Float2.Zero);
+        _gpuMaterials[0] = gpu;
 
-        renderables.Add(new MeshRenderable(_mesh, mat, Transform.LocalToWorldMatrix, GameObject.LayerIndex, _props));
+        Float4x4 matrix = Transform.LocalToWorldMatrix;
+        _renderable.Sync(world, new RenderableState.Desc
+        {
+            Mesh = mesh.GpuIfLoaded,
+            Materials = _gpuMaterials,
+            Transform = (Double4x4)matrix,
+            TransformVersion = Transform.WorldVersion,
+            Flags = RenderableState.FlagsFor(GameObject, false, false) | ShadowCasting.ToFlags(),
+            LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
+            ObjectId = (uint)InstanceID,
+        });
+    }
+
+    void IRenderSync.Detach(RenderWorld world) => Detach(world);
+
+    private void Detach(RenderWorld world)
+    {
+        _renderable.Detach(world);
+        _ownMaterial.Release();
     }
 
     // ============================================================

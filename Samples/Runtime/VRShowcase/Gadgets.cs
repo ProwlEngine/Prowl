@@ -280,7 +280,7 @@ public sealed class ZipHook : Component
 /// <summary>A torch whose trigger switches its spot light on and off. The beam follows the way the hand points.</summary>
 public sealed class Flashlight : Component
 {
-    public SpotLight Lamp = null!;
+    public Light Lamp = null!;
 
     private Grabbable _item = null!;
     private bool _wasPulled;

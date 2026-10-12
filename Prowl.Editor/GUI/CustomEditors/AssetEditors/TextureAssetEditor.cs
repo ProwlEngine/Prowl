@@ -97,8 +97,8 @@ public class TextureAssetEditor : ImportSettingsEditor
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
             {
                 EditorGUI.StatChip(paper, $"{id}_st_size", $"{tex.Width} x {tex.Height}", font);
-                EditorGUI.StatChip(paper, $"{id}_st_fmt", tex.ImageFormat.ToString(), font);
-                EditorGUI.StatChip(paper, $"{id}_st_mip", tex.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
+                EditorGUI.StatChip(paper, $"{id}_st_fmt", tex.Srgb ? $"{tex.Format} sRGB" : tex.Format.ToString(), font);
+                EditorGUI.StatChip(paper, $"{id}_st_mip", tex.MipCount > 1 ? $"{tex.MipCount} Mips" : "No Mipmaps", font);
                 paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
             }
         }
@@ -111,40 +111,46 @@ public class TextureAssetEditor : ImportSettingsEditor
 
         EditorGUI.SectionHeader(paper, $"{id}_settings_hdr", "Import Settings", first: tex.IsNotValid());
 
-        bool genMips = settings.TryGet("generateMipmaps", out EchoObject? mipTag) && mipTag.BoolValue;
-        EditorGUI.SettingsToggle(paper, $"{id}_mips", "Generate Mipmaps", genMips,
-            v => { settings["generateMipmaps"] = new EchoObject(v); }, separator: false);
+        string texturePath = metaPath[..^".meta".Length];
+        SpriteEditTarget spriteTarget = Importers.SpriteEditRegistry.Get(entry.Guid);
 
-        TextureMin currentMin = settings.TryGet("minFilter", out EchoObject? minTag)
-            ? (TextureMin)minTag.IntValue : TextureMin.LinearMipmapLinear;
-        EditorGUI.Row(paper, $"{id}_min", "Min Filter", () =>
-            Origami.EnumDropdown(paper, $"{id}_min_v", currentMin,
-                v => { settings["minFilter"] = new EchoObject((int)v); }).Show());
+        TextureImportType type = TextureImporter.TypeOf(settings, texturePath);
+        EditorGUI.Row(paper, $"{id}_type", "Texture Type", () =>
+            Origami.EnumDropdown(paper, $"{id}_type_v", type, v => ApplyType(settings, spriteTarget, v)).Show());
 
-        TextureMag currentMag = settings.TryGet("magFilter", out EchoObject? magTag)
-            ? (TextureMag)magTag.IntValue : TextureMag.Linear;
-        EditorGUI.Row(paper, $"{id}_mag", "Mag Filter", () =>
-            Origami.EnumDropdown(paper, $"{id}_mag_v", currentMag,
-                v => { settings["magFilter"] = new EchoObject((int)v); }).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_srgb", "sRGB (Colour)", TextureImporter.IsSrgb(settings, texturePath),
+            v => { settings["srgb"] = new EchoObject(v); });
 
-        TextureWrap currentWrap = settings.TryGet("wrapMode", out EchoObject? wrapTag)
-            ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
-        EditorGUI.Row(paper, $"{id}_wrap", "Wrap Mode", () =>
-            Origami.EnumDropdown(paper, $"{id}_wrap_v", currentWrap,
-                v => { settings["wrapMode"] = new EchoObject((int)v); }).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_mips", "Generate Mipmaps", settings.TryGet("generateMipmaps", out EchoObject? mipTag) && mipTag.BoolValue,
+            v => { settings["generateMipmaps"] = new EchoObject(v); });
+
+        EnumRow(paper, $"{id}_filter", "Filter", settings, "filter", FilterMode.Trilinear);
+        if (EnumOf(settings, "filter", FilterMode.Trilinear) != FilterMode.Point)
+        {
+            int anisotropy = settings.TryGet("anisotropy", out EchoObject? anisoTag) ? anisoTag.IntValue : 0;
+            EditorGUI.Row(paper, $"{id}_aniso", "Anisotropy", () =>
+                Origami.IntSlider(paper, $"{id}_aniso_v", anisotropy, v => { settings["anisotropy"] = new EchoObject(v); }, 0, 16).Show());
+        }
+
+        EnumRow(paper, $"{id}_wrapu", "Wrap U", settings, "wrapU", WrapMode.Repeat);
+        EnumRow(paper, $"{id}_wrapv", "Wrap V", settings, "wrapV", WrapMode.Repeat);
+        if (EnumOf(settings, "wrapU", WrapMode.Repeat) == WrapMode.Border || EnumOf(settings, "wrapV", WrapMode.Repeat) == WrapMode.Border)
+            EnumRow(paper, $"{id}_border", "Border Colour", settings, "borderColor", TextureBorderColor.TransparentBlack);
 
         // Sprite settings: mode + a button to open the full Sprite Editor, which edits the shared sprite
         // object. Fold any edit of it back into the compound so the inspector's diff can see it.
-        SpriteEditTarget spriteTarget = Importers.SpriteEditRegistry.Get(entry.Guid);
         if (spriteTarget.Dirty) FoldSpriteSettings(entry, settings);
-        Origami.Header(paper, $"{id}_sprite_hdr", "Sprite").Show();
-        EditorGUI.Row(paper, $"{id}_spmode", "Sprite Mode", () =>
-            Origami.EnumDropdown(paper, $"{id}_spmode_v", spriteTarget.Settings.Mode,
-                v => { spriteTarget.Settings.Mode = v; spriteTarget.Dirty = true; }).Show());
+        if (type == TextureImportType.Sprite || spriteTarget.Settings.Mode != Importers.SpriteMode.None)
+        {
+            Origami.Header(paper, $"{id}_sprite_hdr", "Sprite").Show();
+            EditorGUI.Row(paper, $"{id}_spmode", "Sprite Mode", () =>
+                Origami.EnumDropdown(paper, $"{id}_spmode_v", spriteTarget.Settings.Mode,
+                    v => { spriteTarget.Settings.Mode = v; spriteTarget.Dirty = true; }).Show());
 
-        if (spriteTarget.Settings.Mode != Importers.SpriteMode.None)
-            Origami.Button(paper, $"{id}_spopen", $"{EditorIcons.PenToSquare}  Open Sprite Editor",
-                () => SpriteEditorWindow.OpenFor(entry.Guid)).Width(200).Show();
+            if (spriteTarget.Settings.Mode != Importers.SpriteMode.None)
+                Origami.Button(paper, $"{id}_spopen", $"{EditorIcons.PenToSquare}  Open Sprite Editor",
+                    () => SpriteEditorWindow.OpenFor(entry.Guid)).Width(200).Show();
+        }
 
         // The settings on screen are defaults, not what the meta actually holds, so saving would replace
         // the real slicing with them. Say so and keep the save locked out until the meta is fixed.
@@ -155,5 +161,32 @@ public class TextureAssetEditor : ImportSettingsEditor
 
         DrawApplyRevertBar(paper, id, entry, asset);
     }
+
+    // A type sets the settings that suit it; sRGB then follows the type until set by hand.
+    private static void ApplyType(EchoObject settings, SpriteEditTarget sprite, TextureImportType type)
+    {
+        settings["textureType"] = new EchoObject((int)type);
+        settings.Remove("srgb");
+        if (type is TextureImportType.Sprite or TextureImportType.Lut)
+        {
+            settings["generateMipmaps"] = new EchoObject(false);
+            settings["filter"] = new EchoObject((int)FilterMode.Bilinear);
+            settings["wrapU"] = new EchoObject((int)WrapMode.Clamp);
+            settings["wrapV"] = new EchoObject((int)WrapMode.Clamp);
+        }
+        if (type == TextureImportType.Sprite && sprite.Settings.Mode == SpriteMode.None)
+        {
+            sprite.Settings.Mode = SpriteMode.Single;
+            sprite.Dirty = true;
+        }
+    }
+
+    private static T EnumOf<T>(EchoObject settings, string key, T fallback) where T : struct, Enum
+        => settings.TryGet(key, out EchoObject? tag) ? (T)Enum.ToObject(typeof(T), tag.IntValue) : fallback;
+
+    private static void EnumRow<T>(Paper paper, string id, string label, EchoObject settings, string key, T fallback) where T : struct, Enum
+        => EditorGUI.Row(paper, id, label, () =>
+            Origami.EnumDropdown(paper, $"{id}_v", EnumOf(settings, key, fallback),
+                v => { settings[key] = new EchoObject(Convert.ToInt32(v)); }).Show());
 
 }

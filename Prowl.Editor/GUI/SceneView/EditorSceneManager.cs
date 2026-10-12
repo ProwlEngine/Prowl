@@ -79,12 +79,12 @@ public static class EditorSceneManager
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         Camera cam = camGo.AddComponent<Camera>();
         cam.Depth = -1;
-        cam.HDR = true;
         scene.Add(camGo);
 
         var lightGo = new GameObject("Directional Light");
         lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        DirectionalLight light = lightGo.AddComponent<DirectionalLight>();
+        Light light = lightGo.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.Intensity = 1f;
         scene.Add(lightGo);
 
@@ -262,10 +262,6 @@ public static class EditorSceneManager
             // override list yet. Saving without it would write a scene whose instances silently lose
             // those edits the next time they are refreshed.
             PrefabUtility.ReconcileOpenScene();
-
-            // Stored with the scene, so a loaded scene or a build draws its static objects merged without building them
-            if (Scene.Current.StaticGeometry.NeedsRebuild(Scene.Current))
-                Scene.Current.UpdateStaticGeometry();
 
             EchoObject echo = Serializer.Serialize(typeof(object), Scene.Current);
             if (echo == null)

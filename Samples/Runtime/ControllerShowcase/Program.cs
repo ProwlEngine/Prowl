@@ -93,7 +93,8 @@ public sealed class ControllerShowcaseGame : StationGame
         AddStation("Controller playground", "One open world full of everything a character controller has to cope with: stairs and slopes, low ceilings and tight gaps, traps that press from several sides, curves, rough ground, moving platforms, jump pads, teleporters, and gravity that pulls sideways, upward or toward a little planet. Walk up to anything and the line below says what it is testing.", Float3.Zero, new Float3(0f, 5f, -12f), 1f);
 
         var sun = new GameObject("Sun");
-        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        Light light = sun.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.ShadowDistance = 70f;
         light.Intensity = 0.6f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);

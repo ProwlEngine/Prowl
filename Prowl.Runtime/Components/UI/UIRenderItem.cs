@@ -1,10 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.UI;
 
@@ -27,18 +25,18 @@ internal readonly struct UIClip
 }
 
 /// <summary>
-/// One drawable UI primitive. Wraps a <see cref="UIBehaviour"/>'s baked mesh and material
-/// and exposes them through <see cref="IRenderable"/> so the existing
-/// <c>DrawRenderables</c> batcher can consume them unchanged.
+/// One drawable UI primitive: a <see cref="UIBehaviour"/>'s baked mesh and material, its model matrix and its
+/// mask clip. <see cref="UIRendering"/> draws world space items as provider items and screen space items as an
+/// overlay over each game view.
 /// </summary>
 /// <remarks>
 /// Items are pooled via <see cref="UIRenderTree"/>. Direct construction from outside
 /// the UI namespace is discouraged.
 /// </remarks>
-internal sealed class UIRenderItem : IRenderable
+internal sealed class UIRenderItem
 {
     // -------- Identity --------
-    public UIBehaviour Owner = null!;            // back-reference for property population
+    public UIBehaviour Owner = null!;
     public GameCanvas  Canvas = null!;           // owning canvas (used when refreshing model matrices)
 
     // -------- GPU payload --------
@@ -47,13 +45,11 @@ internal sealed class UIRenderItem : IRenderable
 
     // -------- Per-frame state --------
     public Float4x4      Model;                  // canvas-local-pixel x canvas-world (see GameCanvas.BuildItemModel)
-    public PropertyState Props = new();          // reused; never reallocated
 
     // -------- Sort + lifecycle --------
     public long   SortKey;                       // (SortOrder << 42) | (canvasDiscriminator << 21) | depthFirstIndex
     public UISurface Surface;                    // mirrors Canvas.RenderMode, frozen at rebuild time
     public Float4x4 LastOwnerWorld;              // owner's world matrix at the last model refresh
-    public UIDirtyFlags PropertyCacheState;      // tracks whether Props needs repopulating
 
     // -------- Clip (mask) state (set by the canvas during BuildRecursive) --------
     public bool         HasClip;
@@ -63,68 +59,8 @@ internal sealed class UIRenderItem : IRenderable
     public float        ClipRadius;
     public float        ClipSoftness;
 
-    // ============================================================
-    // IRenderable implementation
-    // ============================================================
-
-    public Material GetMaterial() => Material;
-    public int GetLayer() => Owner.GameObject.LayerIndex;
-    public int GetSubMeshIndex() => -1;
-
-    /// <summary>
-    /// Position used by the back-to-front sorter. We extract the translation from
-    /// <see cref="Model"/> via <c>TransformPoint(Float3.Zero, Model)</c> because
-    /// <c>Float4x4</c> in this engine has no <c>.Translation</c> property - it
-    /// stores columns (c0..c3) and is row-major in API surface only.
-    /// </summary>
-    public Float3 GetPosition() => Float4x4.TransformPoint(Float3.Zero, Model);
-
-    public void GetRenderingData(ViewerData v, out PropertyState p, out Mesh m, out Float4x4 model, out InstanceData[]? inst)
-    {
-        // Repopulate Props only when the owning behaviour reports a Material/Hierarchy change.
-        // The first call after a rebuild always writes (Initialize resets PropertyCacheState to All),
-        // and any property edit dirties the canvas -> full rebuild -> fresh item -> repopulate, so a
-        // persisted item on a static frame can safely skip this.
-        if ((PropertyCacheState & (UIDirtyFlags.Material | UIDirtyFlags.Hierarchy)) != 0)
-        {
-            Props.Clear();
-            Props.SetInt("_ObjectID", Owner.InstanceID);
-            Owner.PopulateProperties(Props, UIContext.Default);
-            PropertyCacheState = UIDirtyFlags.None;
-        }
-
-        // Clip uniforms are refreshed every frame (ClipToLocal follows the mask's transform via
-        // RefreshModelIfDirty), so they live outside the cached-property block above.
-        if (HasClip)
-        {
-            Props.SetFloat("_ClipEnable", 1f);
-            Props.SetMatrix("_ClipToLocal", ClipToLocal);
-            Props.SetVector("_ClipRect", ClipRect);
-            Props.SetFloat("_ClipRadius", ClipRadius);
-            Props.SetFloat("_ClipSoftness", ClipSoftness);
-        }
-        else
-        {
-            Props.SetFloat("_ClipEnable", 0f);
-        }
-
-        p = Props; m = Mesh; model = Model; inst = null;
-    }
-
-    public void GetCullingData(out bool ok, out AABB bounds)
-    {
-        // Mesh.bounds is the local AABB filled by RecalculateBounds() during Bake.
-        // For overlay/camera surfaces this AABB is in canvas-local pixel space,
-        // and `Model` resolves to that same space when the projection is the screen
-        // ortho (so transforming by Model still yields a meaningful AABB).
-        ok = Mesh.IsValid();
-        if (!ok) { bounds = default; return; }
-        bounds = Mesh.bounds.TransformBy(Model);
-    }
-
-    // ============================================================
-    // Lifecycle helpers
-    // ============================================================
+    /// <summary>Set when the mesh's mask space positions, which world space drawing keeps in UV1, need writing again.</summary>
+    public bool         ClipCoordsDirty;
 
     /// <summary>
     /// Called from <see cref="GameCanvas.RebuildIfDirty"/> to populate fields after
@@ -139,7 +75,7 @@ internal sealed class UIRenderItem : IRenderable
         SortKey = sortKey;
         Surface = surface;
         LastOwnerWorld = owner.Transform.LocalToWorldMatrix;
-        PropertyCacheState = UIDirtyFlags.All;   // forces first GetRenderingData to populate
+        ClipCoordsDirty = true;
 
         if (clip is { } c)
         {
@@ -158,7 +94,7 @@ internal sealed class UIRenderItem : IRenderable
     }
 
     /// <summary>
-    /// Called once per frame, before the pipeline draws this surface, by
+    /// Called once per frame, before the UI is drawn, by
     /// <see cref="UIRenderTree.RefreshTransforms"/>. Patches <see cref="Model"/>
     /// when only the transforms have changed (no mesh rebuild needed).
     /// </summary>
@@ -177,5 +113,6 @@ internal sealed class UIRenderItem : IRenderable
         if (HasClip && ClipSource != null)
             ClipToLocal = Canvas.BuildItemModel(ClipSource).Invert();
         LastOwnerWorld = world;
+        ClipCoordsDirty = true;
     }
 }

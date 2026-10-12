@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -12,7 +12,11 @@ using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-using static Prowl.Runtime.VertexFormat;
+using Prowl.Graphite.Rendering;
+
+using GBlendShapeData = Prowl.Graphite.Rendering.BlendShapeData;
+using GBlendShapeFrame = Prowl.Graphite.Rendering.BlendShapeFrame;
+using GVertexSemantic = Prowl.Graphite.Rendering.VertexSemantic;
 
 namespace Prowl.Runtime.Resources;
 
@@ -144,7 +148,6 @@ public class Mesh : Asset, ISerializable
                 indices = null;
                 // Blend-shape deltas are indexed by vertex; a vertex-count change invalidates them.
                 _blendShapes = Array.Empty<BlendShape>();
-                _morphDirty = true;
             }
         }
     }
@@ -206,9 +209,11 @@ public class Mesh : Asset, ISerializable
     public int VertexCount { get { EnsureLoaded(); return vertices?.Length ?? 0; } }
     public int IndexCount { get { EnsureLoaded(); return indices?.Length ?? 0; } }
 
-    public GraphicsVertexArray? VertexArrayObject { get { EnsureLoaded(); return vertexArrayObject; } }
-    public GraphicsBuffer VertexBuffer { get { EnsureLoaded(); return vertexBuffer; } }
-    public GraphicsBuffer IndexBuffer { get { EnsureLoaded(); return indexBuffer; } }
+    /// <summary>The Graphite mesh, made by <see cref="Upload"/>. Null when headless or before the mesh has geometry.</summary>
+    public GpuMesh? GpuMesh { get { EnsureLoaded(); return _gpuMesh; } }
+
+    /// <summary>The Graphite mesh without loading, for code that runs every frame.</summary>
+    internal GpuMesh? GpuIfLoaded => IsLoaded ? _gpuMesh : null;
 
     public bool HasNormals { get { EnsureLoaded(); return (normals?.Length ?? 0) > 0; } }
     public bool HasTangents { get { EnsureLoaded(); return (tangents?.Length ?? 0) > 0; } }
@@ -228,19 +233,11 @@ public class Mesh : Asset, ISerializable
     // ─────────────────────── Blend shapes (morph targets) ───────────────────────
     private BlendShape[] _blendShapes = Array.Empty<BlendShape>();
 
-    // GPU morph deltas, built lazily from _blendShapes. Each layer is one BlendShapeFrame, its deltas at
-    // layer * vertexCount + vertexID, positions first, then normals and tangents when any frame has them
-    private ShaderDataTable? _morphDeltas;
-    private int _morphNormalBase = -1, _morphTangentBase = -1;
-    private int[] _morphLayerOffsets = Array.Empty<int>(); // per-shape starting layer
-    private int _morphLayerCount;
-    private bool _morphDirty = true;
-
     /// <summary>The blend shapes (morph targets) on this mesh.</summary>
     public BlendShape[] BlendShapes
     {
         get { EnsureLoaded(); return _blendShapes; }
-        set { EnsureLoaded(); _blendShapes = value ?? Array.Empty<BlendShape>(); _morphDirty = true; }
+        set { EnsureLoaded(); _blendShapes = value ?? Array.Empty<BlendShape>(); changed = true; }
     }
 
     public bool HasBlendShapes { get { EnsureLoaded(); return _blendShapes.Length > 0; } }
@@ -273,128 +270,6 @@ public class Mesh : Asset, ISerializable
         if (shapeIndex < 0 || shapeIndex >= _blendShapes.Length) return 0f;
         BlendShapeFrame[] frames = _blendShapes[shapeIndex].Frames;
         return (frameIndex >= 0 && frameIndex < frames.Length) ? frames[frameIndex].Weight : 0f;
-    }
-
-    // GPU morph resources (valid after EnsureMorphDeltas).
-    internal ShaderDataTable? MorphDeltas { get { EnsureLoaded(); return _morphDeltas; } }
-
-    /// <summary>Where the normal deltas start in <see cref="MorphDeltas"/>, -1 when no frame has any.</summary>
-    internal int MorphNormalBase { get { EnsureLoaded(); return _morphNormalBase; } }
-
-    /// <summary>Where the tangent deltas start in <see cref="MorphDeltas"/>, -1 when no frame has any.</summary>
-    internal int MorphTangentBase { get { EnsureLoaded(); return _morphTangentBase; } }
-
-    public int MorphLayerCount { get { EnsureLoaded(); return _morphLayerCount; } }
-
-    /// <summary>Global morph-texture layer (row block) for a given shape's frame.</summary>
-    public int GetMorphLayerIndex(int shapeIndex, int frameIndex)
-    {
-        EnsureLoaded();
-        return _morphLayerOffsets[shapeIndex] + frameIndex;
-    }
-
-    /// <summary>Builds the GPU morph deltas from the blend-shape data if dirty. Cheap no-op otherwise.</summary>
-    internal void EnsureMorphDeltas()
-    {
-        EnsureLoaded();
-        if (!_morphDirty) return;
-        BuildMorphDeltas();
-    }
-
-    private void BuildMorphDeltas()
-    {
-        _morphDirty = false;
-        DisposeMorphDeltas();
-        _morphLayerCount = 0;
-
-        if (_blendShapes.Length == 0 || vertices == null || vertices.Length == 0)
-            return;
-
-        int vtx = vertices.Length;
-
-        // Flatten frames into layers and record per-shape offsets.
-        _morphLayerOffsets = new int[_blendShapes.Length];
-        int layers = 0;
-        bool anyNormals = false, anyTangents = false;
-        for (int s = 0; s < _blendShapes.Length; s++)
-        {
-            _morphLayerOffsets[s] = layers;
-            BlendShapeFrame[] frames = _blendShapes[s].Frames;
-            layers += frames.Length;
-            foreach (BlendShapeFrame f in frames)
-            {
-                if (f.DeltaNormals != null) anyNormals = true;
-                if (f.DeltaTangents != null) anyTangents = true;
-            }
-        }
-        if (layers == 0) return;
-
-        long total = (long)layers * vtx;
-        long texels = total * (1 + (anyNormals ? 1 : 0) + (anyTangents ? 1 : 0));
-        if (texels > int.MaxValue / 2)
-        {
-            Debug.LogError($"[Mesh] Blend-shape morph data ({layers} layers x {vtx} verts) is too large; morphs disabled for '{Name}'.");
-            return;
-        }
-
-        _morphLayerCount = layers;
-        int perKind = (int)total;
-        var pos = new Float4[perKind];
-        Float4[]? nrm = anyNormals ? new Float4[perKind] : null;
-        Float4[]? tan = anyTangents ? new Float4[perKind] : null;
-
-        for (int s = 0; s < _blendShapes.Length; s++)
-        {
-            BlendShapeFrame[] frames = _blendShapes[s].Frames;
-            for (int fi = 0; fi < frames.Length; fi++)
-            {
-                BlendShapeFrame f = frames[fi];
-                long baseIdx = (long)(_morphLayerOffsets[s] + fi) * vtx;
-
-                Float3[] dv = f.DeltaVertices;
-                int count = Math.Min(vtx, dv.Length);
-                for (int v = 0; v < count; v++)
-                    pos[(int)(baseIdx + v)] = new Float4(dv[v].X, dv[v].Y, dv[v].Z, 0f);
-
-                if (nrm != null && f.DeltaNormals != null)
-                {
-                    Float3[] dn = f.DeltaNormals;
-                    int cn = Math.Min(vtx, dn.Length);
-                    for (int v = 0; v < cn; v++)
-                        nrm[(int)(baseIdx + v)] = new Float4(dn[v].X, dn[v].Y, dn[v].Z, 0f);
-                }
-                if (tan != null && f.DeltaTangents != null)
-                {
-                    Float3[] dt = f.DeltaTangents;
-                    int ct = Math.Min(vtx, dt.Length);
-                    for (int v = 0; v < ct; v++)
-                        tan[(int)(baseIdx + v)] = new Float4(dt[v].X, dt[v].Y, dt[v].Z, 0f);
-                }
-            }
-        }
-
-        _morphDeltas = new ShaderDataTable("ProwlMorphDeltas", "_MorphDeltaTex", GraphicsFeature.VertexStorageBuffers);
-        _morphDeltas.EnsureCapacity((int)texels);
-        _morphDeltas.Write(0, pos);
-        int next = perKind;
-        if (nrm != null)
-        {
-            _morphNormalBase = next;
-            _morphDeltas.Write(next, nrm);
-            next += perKind;
-        }
-        if (tan != null)
-        {
-            _morphTangentBase = next;
-            _morphDeltas.Write(next, tan);
-        }
-    }
-
-    private void DisposeMorphDeltas()
-    {
-        _morphDeltas?.Dispose();
-        _morphDeltas = null;
-        _morphNormalBase = _morphTangentBase = -1;
     }
 
     // Submesh support: each submesh defines a range within the shared index buffer
@@ -478,19 +353,8 @@ public class Mesh : Asset, ISerializable
     IndexFormat indexFormat = IndexFormat.UInt16;
     Topology meshTopology = Topology.Triangles;
 
-    GraphicsVertexArray? vertexArrayObject;
-    GraphicsBuffer vertexBuffer;
-    GraphicsBuffer indexBuffer;
-
-    // Instanced rendering - cached VAO and buffer (created lazily on first instanced draw)
-    GraphicsVertexArray? instancedVAO;
-    GraphicsBuffer? instanceBuffer;
-    int instanceBufferCapacity = 0;
-
-    // Track last uploaded state for buffer reuse optimization
-    private int lastVertexCount = 0;
-    private int lastIndexCount = 0;
-    private VertexFormat lastVertexLayout = null;
+    // Kept across reloads, so renderables drawing the mesh see its new geometry
+    [SerializeIgnore, NotContent, NotHeld] private GpuMesh? _gpuMesh;
 
     /// <summary>Cached physics bake (see <see cref="PhysicsWorld.BakeMesh"/>).</summary>
     internal BakedPhysicsMesh? BakedPhysics;
@@ -518,230 +382,159 @@ public class Mesh : Asset, ISerializable
         // Buffers are only deleted when the mesh is disposed
     }
 
+    /// <summary>
+    /// Hands the geometry to Graphite when it changed since the last upload. Invalid geometry is reported and skipped,
+    /// leaving the previous upload, so a mesh mid edit never takes the frame down.
+    /// </summary>
     public void Upload()
     {
         EnsureLoaded();
-        if (changed == false && vertexArrayObject != null)
+        if (!changed && _gpuMesh != null)
             return;
-
         changed = false;
 
-        // Invalid geometry is a data problem, not a programmer error: it commonly comes from a
-        // procedural or imported mesh mid edit. Uploading such a mesh is skipped (VAO stays null, so
-        // callers that check VertexArrayObject simply do not draw it) and reported instead of
-        // throwing into the render loop, which would take down the whole frame.
+        if (Graphics.Renderer == null)
+            return;
+
         if (vertices == null || vertices.Length == 0)
             { WarnUploadSkipped("mesh has no vertices"); return; }
 
         if (indices == null || indices.Length == 0)
             { WarnUploadSkipped("mesh has no indices"); return; }
 
-        switch (meshTopology)
+        MeshData data;
+        try
         {
-            case Topology.Triangles:
-                if (indices.Length % 3 != 0)
-                    { WarnUploadSkipped($"triangle mesh index count {indices.Length} is not a multiple of 3"); return; }
-                break;
-            case Topology.TriangleStrip:
-                if (indices.Length < 3)
-                    { WarnUploadSkipped($"triangle strip mesh has {indices.Length} indices, needs at least 3"); return; }
-                break;
-
-            case Topology.Lines:
-                if (indices.Length % 2 != 0)
-                    { WarnUploadSkipped($"line mesh index count {indices.Length} is not a multiple of 2"); return; }
-                break;
-
-            case Topology.LineStrip:
-                if (indices.Length < 2)
-                    { WarnUploadSkipped($"line strip mesh has {indices.Length} indices, needs at least 2"); return; }
-                break;
+            data = BuildMeshData();
         }
-
-        VertexFormat layout = GetVertexLayout(this);
-
-        if (layout == null)
+        catch (Exception e)
         {
-            Debug.LogError($"[Mesh] Failed to get vertex layout for this mesh!");
+            WarnUploadSkipped(e.Message);
             return;
         }
 
-        byte[] vertexBlob = MakeVertexDataBlob(layout, out int vertexBlobLength);
-        ReadOnlySpan<byte> vertexData = vertexBlob.AsSpan(0, vertexBlobLength);
-
-        // Check if we can reuse existing buffers
-        bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && VertexLayoutMatches(lastVertexLayout, layout);
-        bool canReuseIndexBuffer = indexBuffer != null && lastIndexCount == indices.Length;
-
-        // Resource creation and reuse both flow through CommandBuffers submitted in
-        // order: Graphics.CreateBuffer enqueues a create+upload CB, and reuses encode
-        // an UpdateBuffer here. Any rendering CB submitted after this Upload is
-        // guaranteed to see the new data because the executor preserves submit order.
-        using CommandBuffer cmd = Graphics.GetCommandBuffer("Mesh.Upload");
-
-        if (canReuseVertexBuffer)
+        try
         {
-            cmd.UpdateBuffer<byte>(vertexBuffer, vertexData);
-        }
-        else
-        {
-            vertexBuffer?.Dispose();
-            vertexBuffer = new GraphicsBuffer(BufferType.VertexBuffer, vertexData, true);
-            lastVertexCount = vertices.Length;
-            lastVertexLayout = layout;
-        }
-
-        // Both paths above copy the data, so the pooled blob can go back straight away.
-        ArrayPool<byte>.Shared.Return(vertexBlob);
-
-        if (indexFormat == IndexFormat.UInt16)
-        {
-            ushort[] data = new ushort[indices.Length];
-            for (int i = 0; i < indices.Length; i++)
-            {
-                if (indices[i] > ushort.MaxValue)
-                    { WarnUploadSkipped($"index {indices[i]} exceeds the 16-bit range (use IndexFormat.UInt32)"); return; }
-                data[i] = (ushort)indices[i];
-            }
-
-            if (canReuseIndexBuffer)
-            {
-                cmd.UpdateBuffer<ushort>(indexBuffer, data);
-            }
+            if (_gpuMesh == null || _gpuMesh.IsDisposed)
+                _gpuMesh = Graphics.Renderer.CreateMesh(data);
             else
-            {
-                indexBuffer?.Dispose();
-                indexBuffer = Graphics.CreateBuffer(BufferType.ElementsBuffer, data, true);
-                lastIndexCount = indices.Length;
-            }
+                _gpuMesh.SetData(data);
         }
-        else if (indexFormat == IndexFormat.UInt32)
+        catch (Exception e)
         {
-            if (canReuseIndexBuffer)
-            {
-                cmd.UpdateBuffer<uint>(indexBuffer, indices);
-            }
-            else
-            {
-                indexBuffer?.Dispose();
-                indexBuffer = Graphics.CreateBuffer(BufferType.ElementsBuffer, indices, true);
-                lastIndexCount = indices.Length;
-            }
-        }
-
-        Graphics.Submit(cmd);
-
-        // VAO recreation must come AFTER the upload submit so the create-VAO CB is
-        // sequenced behind the buffer create/update CBs. CreateGLObject (run later on
-        // the render thread) then binds buffers whose handles are already valid.
-        if (!canReuseVertexBuffer || !canReuseIndexBuffer || vertexArrayObject == null)
-        {
-            vertexArrayObject?.Dispose();
-            vertexArrayObject = Graphics.CreateVertexArray(layout, vertexBuffer, indexBuffer);
-
-            // The instanced VAO points at the old buffers too; EnsureInstanceVAO rebuilds it.
-            if (instancedVAO != null) Graphics.DeferDispose(instancedVAO);
-            instancedVAO = null;
+            WarnUploadSkipped(e.Message);
         }
     }
 
-    /// <summary>Logs an upload skipped reason so <see cref="Upload"/> can bail without throwing into a
-    /// render or update loop.</summary>
+    /// <summary>Logs why an upload was skipped, so <see cref="Upload"/> can bail without throwing into a loop.</summary>
     private void WarnUploadSkipped(string reason)
         => Debug.LogWarning($"[Mesh] Upload skipped ({Name ?? "unnamed"}): {reason}");
 
-    /// <summary>
-    /// Ensures the instanced rendering VAO and buffer exist for this mesh with
-    /// enough capacity for <paramref name="instanceCount"/> instances. Does NOT
-    /// upload data caller must encode a <c>cmd.UpdateBuffer(instanceBuffer, ...)</c>
-    /// in the same CommandBuffer as their <c>cmd.DrawIndexedInstanced</c> so the
-    /// upload is sequenced against the draw.
-    ///
-    /// <para>
-    /// The instanceBuffer is shared per-mesh across all InstancedMeshRenderables
-    /// using this mesh. Multiple batches can encode different uploads + draws into
-    /// one CommandBuffer; the executor processes them in order so each draw sees
-    /// its own data. If <paramref name="instanceCount"/> exceeds current capacity,
-    /// the old buffer is queued for DEFERRED dispose (after frame end) so previously
-    /// encoded commands holding the old handle still execute against valid GL state.
-    /// </para>
-    /// </summary>
-    /// <param name="instanceCount">Maximum number of instances this call needs to draw.</param>
-    /// <param name="instanceBuf">Output: the instance buffer to upload data into via cmd.UpdateBuffer.</param>
-    /// <returns>The instanced VAO to bind for drawing.</returns>
-    public GraphicsVertexArray EnsureInstanceVAO(int instanceCount, out GraphicsBuffer instanceBuf)
+    // The mesh as Graphite takes it: one stream per attribute, 32 bit indices, list topologies for what Vulkan lacks
+    private MeshData BuildMeshData()
     {
-        EnsureLoaded();
-        Upload();
+        int count = vertices!.Length;
+        List<VertexStream> streams = [Stream(GVertexSemantic.Position, Graphite.VertexElementFormat.Float3, vertices)];
+        if (normals is { Length: > 0 } && normals.Length == count) streams.Add(Stream(GVertexSemantic.Normal, Graphite.VertexElementFormat.Float3, normals));
+        if (tangents is { Length: > 0 } && tangents.Length == count) streams.Add(Stream(GVertexSemantic.Tangent, Graphite.VertexElementFormat.Float4, tangents));
+        if (colors is { Length: > 0 } && colors.Length == count) streams.Add(Stream(GVertexSemantic.Color, Graphite.VertexElementFormat.Float4, colors));
+        else if (colors32 is { Length: > 0 } && colors32.Length == count) streams.Add(Stream(GVertexSemantic.Color, Graphite.VertexElementFormat.Byte4_Norm, colors32));
+        if (uv is { Length: > 0 } && uv.Length == count) streams.Add(Stream(GVertexSemantic.UV0, Graphite.VertexElementFormat.Float2, uv));
+        if (uv2 is { Length: > 0 } && uv2.Length == count) streams.Add(Stream(GVertexSemantic.UV1, Graphite.VertexElementFormat.Float2, uv2));
+        if (boneIndices is { Length: > 0 } && boneIndices.Length == count) streams.Add(Stream(GVertexSemantic.BoneIndices, Graphite.VertexElementFormat.Float4, boneIndices));
+        if (boneWeights is { Length: > 0 } && boneWeights.Length == count) streams.Add(Stream(GVertexSemantic.BoneWeights, Graphite.VertexElementFormat.Float4, boneWeights));
 
-        // Base upload was skipped (invalid geometry), so there is no VAO to instance from. Bail.
-        if (vertexArrayObject == null)
+        List<uint> outIndices = new(indices!.Length);
+        List<SubMesh> subMeshes = [];
+        int subCount = _subMeshes.Count > 0 ? _subMeshes.Count : 1;
+        for (int s = 0; s < subCount; s++)
         {
-            instanceBuf = null;
-            return null;
+            SubMeshDescriptor sub = GetSubMesh(s);
+            int start = Math.Clamp(sub.IndexStart, 0, indices.Length);
+            int length = Math.Clamp(sub.IndexCount, 0, indices.Length - start);
+            uint first = (uint)outIndices.Count;
+            AppendAsList(indices.AsSpan(start, length), sub.Topology, outIndices);
+            subMeshes.Add(new SubMesh { IndexStart = first, IndexCount = (uint)outIndices.Count - first, Topology = GraphicsFormats.ToTopology(sub.Topology) });
         }
 
-        if (instanceBuffer == null || instanceCount > instanceBufferCapacity)
+        GBlendShapeData[] shapes = new GBlendShapeData[_blendShapes.Length];
+        for (int i = 0; i < shapes.Length; i++)
         {
-            // Grow with 50% headroom to amortise resizes.
-            instanceBufferCapacity = (int)(instanceCount * 1.5f);
-
-            // Defer-dispose the old buffer: earlier batches in the SAME outer
-            // CommandBuffer hold the old handle in their encoded opcodes, and
-            // would crash if we deleted the GL object before those commands
-            // executed. Graphics.FlushDeferredDisposes() runs at end of frame.
-            if (instanceBuffer != null) Graphics.DeferDispose(instanceBuffer);
-            if (instancedVAO != null) Graphics.DeferDispose(instancedVAO);
-
-            // Create the buffer with placeholder data sized to capacity. Real
-            // per-batch data is uploaded by the caller via cmd.UpdateBuffer.
-            var placeholder = new Rendering.InstanceData[instanceBufferCapacity];
-            instanceBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, placeholder, dynamic: true);
-            instancedVAO = null;
+            BlendShape shape = _blendShapes[i];
+            GBlendShapeFrame[] frames = new GBlendShapeFrame[shape.Frames.Length];
+            for (int f = 0; f < frames.Length; f++)
+            {
+                BlendShapeFrame frame = shape.Frames[f];
+                frames[f] = GBlendShapeFrame.FromDense(frame.Weight, Fit(frame.DeltaVertices, count), Fit(frame.DeltaNormals, count), Fit(frame.DeltaTangents, count));
+            }
+            shapes[i] = new GBlendShapeData { Name = shape.Name ?? "", Frames = frames };
         }
 
-        if (instancedVAO == null)
+        return new MeshData
         {
-            var instanceFormat = new VertexFormat(
-            [
-                new Element((VertexSemantic)8, VertexType.Float, 4, divisor: 1),  // ModelRow0
-                new Element((VertexSemantic)9, VertexType.Float, 4, divisor: 1),  // ModelRow1
-                new Element((VertexSemantic)10, VertexType.Float, 4, divisor: 1), // ModelRow2
-                new Element((VertexSemantic)11, VertexType.Float, 4, divisor: 1), // ModelRow3
-                new Element((VertexSemantic)12, VertexType.Float, 4, divisor: 1), // Color (RGBA)
-                new Element((VertexSemantic)13, VertexType.Float, 4, divisor: 1), // CustomData
-            ]);
-            VertexFormat meshFormat = GetVertexLayout(this);
-            instancedVAO = Graphics.CreateVertexArray(
-                meshFormat,
-                vertexBuffer,
-                indexBuffer,
-                instanceFormat,
-                instanceBuffer
-            );
-        }
-
-        instanceBuf = instanceBuffer;
-        return instancedVAO;
+            VertexCount = (uint)count,
+            Streams = [.. streams],
+            Indices = outIndices.ToArray(),
+            SubMeshes = [.. subMeshes],
+            BlendShapes = shapes,
+        };
     }
 
-    private bool VertexLayoutMatches(VertexFormat a, VertexFormat b)
+    private static Float3[] Fit(Float3[]? deltas, int count)
     {
-        if (a == null || b == null) return false;
-        if (a.Size != b.Size) return false;
-        if (a.Elements.Length != b.Elements.Length) return false;
+        if (deltas == null) return [];
+        if (deltas.Length == count) return deltas;
+        Float3[] fitted = new Float3[count];
+        deltas.AsSpan(0, Math.Min(count, deltas.Length)).CopyTo(fitted);
+        return fitted;
+    }
 
-        for (int i = 0; i < a.Elements.Length; i++)
+    private static VertexStream Stream<T>(GVertexSemantic semantic, Graphite.VertexElementFormat format, T[] data) where T : unmanaged
+        => new() { Semantic = semantic, Format = format, Data = MemoryMarshal.AsBytes(data.AsSpan()).ToArray() };
+
+    // Lists stay as they are, loops, fans and quads become lists Vulkan can draw
+    private static void AppendAsList(ReadOnlySpan<uint> source, Topology topology, List<uint> output)
+    {
+        switch (topology)
         {
-            Element elemA = a.Elements[i];
-            Element elemB = b.Elements[i];
-            if (elemA.Semantic != elemB.Semantic ||
-                elemA.Type != elemB.Type ||
-                elemA.Count != elemB.Count)
-                return false;
+            case Topology.LineLoop:
+                for (int i = 0; i < source.Length; i++)
+                {
+                    output.Add(source[i]);
+                    output.Add(source[(i + 1) % source.Length]);
+                }
+                break;
+            case Topology.TriangleFan:
+                for (int i = 1; i + 1 < source.Length; i++)
+                {
+                    output.Add(source[0]);
+                    output.Add(source[i]);
+                    output.Add(source[i + 1]);
+                }
+                break;
+            case Topology.Quads:
+                for (int i = 0; i + 3 < source.Length; i += 4)
+                {
+                    output.Add(source[i]); output.Add(source[i + 1]); output.Add(source[i + 2]);
+                    output.Add(source[i]); output.Add(source[i + 2]); output.Add(source[i + 3]);
+                }
+                break;
+            case Topology.Triangles:
+                for (int i = 0; i + 2 < source.Length; i += 3)
+                {
+                    output.Add(source[i]); output.Add(source[i + 1]); output.Add(source[i + 2]);
+                }
+                break;
+            case Topology.Lines:
+                for (int i = 0; i + 1 < source.Length; i += 2)
+                {
+                    output.Add(source[i]); output.Add(source[i + 1]);
+                }
+                break;
+            default:
+                foreach (uint index in source) output.Add(index);
+                break;
         }
-
-        return true;
     }
 
     public void RecalculateBounds()
@@ -1450,23 +1243,9 @@ public class Mesh : Asset, ISerializable
 
     private void DeleteGPUBuffers()
     {
-        vertexArrayObject?.Dispose();
-        vertexArrayObject = null;
-        vertexBuffer?.Dispose();
-        vertexBuffer = null;
-        indexBuffer?.Dispose();
-        indexBuffer = null;
-
-        // Clean up instanced rendering resources
-        instancedVAO?.Dispose();
-        instancedVAO = null;
-        instanceBuffer?.Dispose();
-        instanceBuffer = null;
-        instanceBufferCapacity = 0;
-
-        // Morph deltas will be rebuilt from CPU blend-shape data on next use.
-        DisposeMorphDeltas();
-        _morphDirty = true;
+        if (!IsDisposed) return;
+        Graphics.DeferDispose(_gpuMesh);
+        _gpuMesh = null;
     }
 
     private T ReadVertexData<T>(T value)
@@ -1488,104 +1267,6 @@ public class Mesh : Asset, ISerializable
             throw new ArgumentException("Array length should match vertices length");
         changed = true;
         target = value;
-    }
-
-    internal static VertexFormat GetVertexLayout(Mesh mesh)
-    {
-        List<Element> elements = [new Element(VertexSemantic.Position, VertexType.Float, 3)];
-
-        if (mesh.HasUV)
-            elements.Add(new Element(VertexSemantic.TexCoord0, VertexType.Float, 2));
-
-        if (mesh.HasUV2)
-            elements.Add(new Element(VertexSemantic.TexCoord1, VertexType.Float, 2));
-
-        if (mesh.HasNormals)
-            elements.Add(new Element(VertexSemantic.Normal, VertexType.Float, 3, 0, true));
-
-        if (mesh.HasColors || mesh.HasColors32)
-            elements.Add(new Element(VertexSemantic.Color, VertexType.Float, 4));
-
-        if (mesh.HasTangents)
-            elements.Add(new Element(VertexSemantic.Tangent, VertexType.Float, 4, 0, true));
-
-        if (mesh.HasBoneIndices)
-            elements.Add(new Element(VertexSemantic.BoneIndex, VertexType.Float, 4));
-
-        if (mesh.HasBoneWeights)
-            elements.Add(new Element(VertexSemantic.BoneWeight, VertexType.Float, 4));
-
-        return new VertexFormat([.. elements]);
-    }
-
-    // Interleaves the vertex attributes into a buffer rented from ArrayPool<byte>.Shared, which the
-    // caller returns once the data has been handed to the GPU.
-    internal byte[] MakeVertexDataBlob(VertexFormat layout, out int length)
-    {
-        length = layout.Size * vertices.Length;
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(length);
-        Span<float> dst = MemoryMarshal.Cast<byte, float>(buffer.AsSpan(0, length));
-
-        bool hasUV = HasUV, hasUV2 = HasUV2, hasNormals = HasNormals, hasTangents = HasTangents;
-        bool hasColors = HasColors, hasColors32 = !hasColors && HasColors32;
-        bool hasBoneIndices = HasBoneIndices, hasBoneWeights = HasBoneWeights;
-
-        int k = 0;
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            Float3 p = vertices[i];
-            dst[k++] = p.X; dst[k++] = p.Y; dst[k++] = p.Z;
-
-            if (hasUV)
-            {
-                Float2 t = uv[i];
-                dst[k++] = t.X; dst[k++] = t.Y;
-            }
-
-            if (hasUV2)
-            {
-                Float2 t = uv2[i];
-                dst[k++] = t.X; dst[k++] = t.Y;
-            }
-
-            if (hasNormals)
-            {
-                Float3 n = normals[i];
-                dst[k++] = n.X; dst[k++] = n.Y; dst[k++] = n.Z;
-            }
-
-            if (hasColors || hasColors32)
-            {
-                Color c = hasColors ? colors[i] : (Color)colors32[i];
-                dst[k++] = c.R; dst[k++] = c.G; dst[k++] = c.B; dst[k++] = c.A;
-            }
-
-            if (hasTangents)
-            {
-                Float4 t = tangents[i];
-                dst[k++] = t.X; dst[k++] = t.Y; dst[k++] = t.Z; dst[k++] = t.W;
-            }
-
-            if (hasBoneIndices)
-            {
-                Float4 b = boneIndices[i];
-                dst[k++] = b.X; dst[k++] = b.Y; dst[k++] = b.Z; dst[k++] = b.W;
-            }
-
-            if (hasBoneWeights)
-            {
-                Float4 w = boneWeights[i];
-                dst[k++] = w.X; dst[k++] = w.Y; dst[k++] = w.Z; dst[k++] = w.W;
-            }
-        }
-
-        if (k != dst.Length)
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-            throw new InvalidOperationException($"[Mesh] Vertex data blob wrote {k * sizeof(float)} bytes but the layout expects {length}");
-        }
-
-        return buffer;
     }
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
@@ -1980,7 +1661,6 @@ public class Mesh : Asset, ISerializable
                         list[i] = bs;
                     }
                     _blendShapes = list;
-                    _morphDirty = true;
                 }
                 catch { /* Old format without blend shapes ignore */ }
             }

@@ -3,180 +3,210 @@
 
 using System;
 
+using GTexture = Prowl.Graphite.Texture;
+using GTextureDescription = Prowl.Graphite.TextureDescription;
+using GTextureView = Prowl.Graphite.TextureView;
+
 namespace Prowl.Runtime.Resources;
 
 /// <summary>
-/// This is the base class for all texture types and manages some of their internal workings.
+/// The base of every texture: its format, mip levels, sampling settings, and the Graphite texture holding its texels.
+/// Headless there is no Graphite texture, and uploads and reads do nothing.
 /// </summary>
 public abstract class Texture : Asset
 {
+    [NotHeld] private GTexture? _gpu;
+    [NotHeld] private GTextureView? _displayView;
 
-    private protected const TextureMin DefaultMinFilter = TextureMin.Nearest, DefaultMipmapMinFilter = TextureMin.NearestMipmapLinear;
-    private protected const TextureMag DefaultMagFilter = TextureMag.Nearest;
+    /// <summary>The Graphite texture, null when headless or before the texture has a size.</summary>
+    public GTexture? GpuTexture { get { EnsureLoaded(); return _gpu; } }
 
-    private GraphicsTexture? _handle;
-    /// <summary>The handle for the GL Texture Object, created on first use.</summary>
-    public GraphicsTexture Handle { get { EnsureLoaded(); return _handle ??= CreateHandle(); } }
+    /// <summary>The Graphite texture without loading, null when not loaded, for code that runs every frame.</summary>
+    internal GTexture? GpuIfLoaded => IsLoaded ? _gpu : null;
 
-    private protected TextureImageFormat ImageFormatUnchecked => _imageFormat;
-    private protected bool IsMipmappedUnchecked => _isMipmapped;
+    /// <summary>
+    /// A view of an sRGB texture's texels without the sRGB decode, for UI that composes in display space. Null when the
+    /// texture is not sRGB, where the texture itself already samples undecoded.
+    /// </summary>
+    public GTextureView? DisplayView { get { EnsureLoaded(); return _displayView; } }
 
-    /// <summary>The handle if one exists, without loading or creating anything. For the render thread's bindings.</summary>
-    internal GraphicsTexture? HandleIfLoaded => IsLoaded ? _handle : null;
+    internal GTextureView? DisplayViewIfLoaded => IsLoaded ? _displayView : null;
 
-    /// <summary>Whether compute kernels may write this texture through an image. Set before the texture is first used.</summary>
+    /// <summary>Whether compute kernels may write this texture through an image. Set before the texture is first sized.</summary>
     private protected bool RandomWrite;
-    private protected int RandomWriteLevels = 1;
 
-    private GraphicsTexture CreateHandle()
-    {
-        GraphicsTexture handle = Graphics.CreateTexture(_type, _imageFormat, RandomWrite, RandomWriteLevels);
-        Graphics.SetWrapS(handle, _wrapMode);
-        Graphics.SetWrapT(handle, _wrapMode);
-        Graphics.SetTextureFilters(handle, _minFilter, _magFilter);
-        return handle;
-    }
+    private TextureFormat _format;
+    private bool _srgb;
+    private uint _mipCount = 1;
+    private FilterMode _filter = FilterMode.Bilinear;
+    private WrapMode _wrapU, _wrapV, _wrapW;
+    private TextureBorderColor _borderColor;
+    private uint _anisotropy;
 
-    private readonly TextureType _type;
-    /// <summary>The type of this <see cref="Texture"/>, such as 1D, 2D, Multisampled 2D, Array 2D, CubeMap, etc.</summary>
-    public TextureType Type { get { EnsureLoaded(); return _type; } }
+    /// <summary>The texel format.</summary>
+    public TextureFormat Format { get { EnsureLoaded(); return _format; } }
 
-    private TextureMin _minFilter;
-    private TextureMag _magFilter;
-    private TextureWrap _wrapMode;
-    public TextureMin MinFilter { get { EnsureLoaded(); return _minFilter; } protected set => _minFilter = value; }
-    public TextureMag MagFilter { get { EnsureLoaded(); return _magFilter; } protected set => _magFilter = value; }
-    public TextureWrap WrapMode { get { EnsureLoaded(); return _wrapMode; } protected set => _wrapMode = value; }
+    /// <summary>Whether the texels are sRGB encoded colour, which the GPU decodes to linear when sampling. Only RGBA8 has an sRGB form.</summary>
+    public bool Srgb { get { EnsureLoaded(); return _srgb; } }
 
-    private TextureImageFormat _imageFormat;
-    /// <summary>The format for this <see cref="Texture"/>'s image.</summary>
-    public TextureImageFormat ImageFormat { get { EnsureLoaded(); return _imageFormat; } }
+    /// <summary>Mip levels the texture holds, 1 when it has none.</summary>
+    public uint MipCount { get { EnsureLoaded(); return _mipCount; } }
 
-    private bool _isMipmapped;
-    /// <summary>Gets whether this <see cref="Texture"/> is mipmapped.</summary>
-    public bool IsMipmapped { get { EnsureLoaded(); return _isMipmapped; } private set => _isMipmapped = value; }
+    public FilterMode Filter { get { EnsureLoaded(); return _filter; } set { EnsureLoaded(); _filter = value; } }
+    public WrapMode WrapU { get { EnsureLoaded(); return _wrapU; } set { EnsureLoaded(); _wrapU = value; } }
+    public WrapMode WrapV { get { EnsureLoaded(); return _wrapV; } set { EnsureLoaded(); _wrapV = value; } }
+    public WrapMode WrapW { get { EnsureLoaded(); return _wrapW; } set { EnsureLoaded(); _wrapW = value; } }
 
-    /// <summary>False if this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
-    private readonly bool isNotMipmappable;
+    /// <summary>What a <see cref="WrapMode.Border"/> axis returns outside the texture.</summary>
+    public TextureBorderColor BorderColor { get { EnsureLoaded(); return _borderColor; } set { EnsureLoaded(); _borderColor = value; } }
 
-    /// <summary>Gets whether this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
-    public bool IsMipmappable { get { EnsureLoaded(); return !isNotMipmappable; } }
+    /// <summary>Anisotropic filtering samples, 0 or 1 for none. Ignored by Point filtering.</summary>
+    public uint Anisotropy { get { EnsureLoaded(); return _anisotropy; } set { EnsureLoaded(); _anisotropy = value; } }
 
-    /// <summary>
-    /// Creates a <see cref="Texture"/> with specified <see cref="TextureType"/> and <see cref="TextureImageFormat"/>.
-    /// </summary>
-    /// <param name="type">The type of texture (or texture target) the texture will be.</param>
-    /// <param name="imageFormat">The type of image format this texture will store.</param>
-    internal Texture(TextureType type, TextureImageFormat imageFormat) : base("New Texture")
-    {
-        if (!Enum.IsDefined(typeof(TextureType), type))
-            throw new FormatException("Invalid texture target");
-
-        if (!Enum.IsDefined(typeof(TextureImageFormat), imageFormat))
-            throw new FormatException("Invalid texture image format");
-
-        _type = type;
-        _imageFormat = imageFormat;
-        _isMipmapped = false;
-        isNotMipmappable = !IsTextureTypeMipmappable(type);
-        _minFilter = DefaultMinFilter;
-        _magFilter = DefaultMagFilter;
-        _wrapMode = TextureWrap.Repeat;
-    }
-
-    private protected void AdoptImageFormat(TextureImageFormat imageFormat)
+    /// <summary>Sets the wrap of every axis.</summary>
+    public void SetWrap(WrapMode wrap)
     {
         EnsureLoaded();
-
-        if (!Enum.IsDefined(typeof(TextureImageFormat), imageFormat))
-            throw new FormatException("Invalid texture image format");
-
-        if (_imageFormat == imageFormat) return;
-
-        _handle?.Dispose();
-        _handle = null;
-        _imageFormat = imageFormat;
-        _isMipmapped = false;
+        _wrapU = _wrapV = _wrapW = wrap;
     }
 
-    /// <summary>
-    /// Sets this <see cref="Texture"/>'s minifying and magnifying filters.
-    /// </summary>
-    /// <param name="minFilter">The desired minifying filter for the <see cref="Texture"/>.</param>
-    /// <param name="magFilter">The desired magnifying filter for the <see cref="Texture"/>.</param>
-    public void SetTextureFilters(TextureMin minFilter, TextureMag magFilter)
+    private protected TextureFormat FormatUnchecked => _format;
+    private protected uint MipCountUnchecked => _mipCount;
+
+    /// <summary>The sampler the texture's settings describe, which materials bind it with.</summary>
+    public Graphite.SamplerDescription Sampler { get { EnsureLoaded(); return SamplerUnchecked; } }
+
+    /// <summary>The sampler without loading, for code that runs every frame.</summary>
+    internal Graphite.SamplerDescription SamplerUnchecked
+        => GraphicsFormats.ToSampler(_filter, _wrapU, _wrapV, _wrapW, _mipCount, _anisotropy, _borderColor);
+
+    internal Texture(TextureFormat format, bool srgb, WrapMode wrap) : base("New Texture")
     {
-        EnsureLoaded();
-        Graphics.SetTextureFilters(Handle, minFilter, magFilter);
-        _minFilter = minFilter;
-        _magFilter = magFilter;
+        SetFormat(format, srgb);
+        _wrapU = _wrapV = _wrapW = wrap;
     }
 
-    /// <summary>
-    /// Generates mipmaps for this <see cref="Texture"/>.
-    /// </summary>
-    /// <exception cref="InvalidOperationException"/>
+    /// <summary>Changes the format, dropping the Graphite texture until the next allocation.</summary>
+    private protected void SetFormat(TextureFormat format, bool srgb)
+    {
+        if (!Enum.IsDefined(format))
+            throw new FormatException($"Invalid texture format {(int)format}");
+        srgb &= GraphicsFormats.SupportsSrgb(format);
+        if (_format != format || _srgb != srgb) ReplaceGpu(null);
+        _format = format;
+        _srgb = srgb;
+    }
+
+    /// <summary>Loads the settings a serialized texture carries.</summary>
+    private protected void SetSampling(FilterMode filter, WrapMode u, WrapMode v, WrapMode w, uint anisotropy, TextureBorderColor border)
+    {
+        _filter = filter;
+        _wrapU = u;
+        _wrapV = v;
+        _wrapW = w;
+        _anisotropy = anisotropy;
+        _borderColor = border;
+    }
+
+    /// <summary>The Graphite format of this texture.</summary>
+    private protected Graphite.PixelFormat GpuFormat => GraphicsFormats.ToPixelFormat(_format, _srgb);
+
+    /// <summary>The usage a Graphite texture of this texture's format needs.</summary>
+    private protected Graphite.TextureUsage Usage
+    {
+        get
+        {
+            Graphite.TextureUsage usage = Graphite.TextureUsage.Sampled;
+            if (GraphicsFormats.IsDepth(_format)) usage |= Graphite.TextureUsage.DepthStencil;
+            else usage |= Graphite.TextureUsage.RenderTarget;
+            if (RandomWrite) usage |= Graphite.TextureUsage.Storage;
+            return usage;
+        }
+    }
+
+    /// <summary>The Graphite description of this texture with the given mip levels.</summary>
+    private protected abstract GTextureDescription Describe(uint mips);
+
+    /// <summary>Mip levels a full chain of this texture's size has.</summary>
+    private protected abstract uint FullMipCount { get; }
+
+    /// <summary>Array layers the GPU holds, six per cube.</summary>
+    private protected virtual uint GpuLayers => 1;
+
+    /// <summary>Makes a new Graphite texture with the given mip levels, dropping the old one once the GPU is done with it. Nothing headless.</summary>
+    private protected GTexture? Allocate(uint mips)
+    {
+        _mipCount = Math.Clamp(mips, 1, FullMipCount);
+        if (Graphics.Device == null)
+        {
+            ReplaceGpu(null);
+            return null;
+        }
+        GTexture texture = Graphics.Device.ResourceFactory.CreateTexture(Describe(_mipCount));
+        texture.Name = Name;
+        ReplaceGpu(texture);
+        return texture;
+    }
+
+    private void ReplaceGpu(GTexture? texture)
+    {
+        Graphics.DeferDispose(_displayView);
+        Graphics.DeferDispose(_gpu);
+        _gpu = texture;
+        _displayView = null;
+        if (texture != null && texture.Format == Graphite.PixelFormat.R8_G8_B8_A8_UNorm_SRgb)
+            _displayView = Graphics.Device!.ResourceFactory.CreateTextureView(
+                new Graphite.TextureViewDescription(texture, format: Graphite.PixelFormat.R8_G8_B8_A8_UNorm));
+    }
+
+    /// <summary>Uploads texels into a region of a mip and layer.</summary>
+    private protected void Upload(ReadOnlySpan<byte> data, uint x, uint y, uint z, uint width, uint height, uint depth, uint mip = 0, uint layer = 0)
+    {
+        if (_gpu == null) return;
+        Graphics.Device!.UpdateTexture<byte>(_gpu, data, new Graphite.TextureRegion(x, y, z, width, height, depth, mip, layer));
+    }
+
+    /// <summary>Reads a mip and layer back to the CPU. Empty headless.</summary>
+    private protected byte[] Download(uint mip = 0, uint layer = 0)
+    {
+        if (_gpu == null) return [];
+        return Graphics.ReadTexture(_gpu, mip, layer);
+    }
+
+    /// <summary>Gives the texture a full mip chain if it lacks one, and fills every level from level 0.</summary>
     public void GenerateMipmaps()
     {
         EnsureLoaded();
-
-        if (isNotMipmappable)
-            throw new InvalidOperationException(string.Concat("This texture type is not mipmappable! Type: ", _type.ToString()));
-
-        Graphics.GenerateMipmap(Handle);
-        _isMipmapped = true;
-        Graphics.SetTextureFilters(Handle, _isMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
+        if (_mipCount < FullMipCount)
+        {
+            GTexture? old = _gpu;
+            uint layers = GpuLayers;
+            GTexture? chain = Allocate(FullMipCount);
+            if (old != null && chain != null)
+                Graphics.RunNow(cmd => cmd.CopyTexture(old, 0, 0, 0, 0, 0, chain, 0, 0, 0, 0, 0, old.Width, old.Height, old.Depth, layers), "Mip chain");
+        }
+        if (_gpu != null && _mipCount > 1)
+        {
+            GTexture texture = _gpu;
+            Graphics.RunNow(cmd => cmd.GenerateMipmaps(texture), "Mipmaps");
+        }
     }
 
-    /// <summary>Records that every mip level was uploaded by hand rather than generated.</summary>
-    private protected void MarkMipmapped()
-    {
-        _isMipmapped = true;
-        Graphics.SetTextureFilters(Handle, DefaultMipmapMinFilter, DefaultMagFilter);
-    }
+    /// <summary>The size of a mip level along an axis.</summary>
+    private protected static uint MipSize(uint size, uint mip) => Math.Max(1u, size >> (int)mip);
 
-    protected override void OnUnload()
-    {
-        _handle?.Dispose();
-        _handle = null;
-    }
+    /// <summary>Mip levels a full chain of the given size has.</summary>
+    private protected static uint FullChain(uint width, uint height, uint depth = 1)
+        => 1 + (uint)Math.Floor(Math.Log2(Math.Max(width, Math.Max(height, Math.Max(depth, 1u)))));
 
-    // A runtime texture nothing references still has to free its GPU handle. Handle.Dispose only enqueues a
-    // render thread command, so it is safe from the finalizer thread. Database textures are never collected.
+    protected override void OnUnload() => ReplaceGpu(null);
+
+    // A runtime texture nothing references still has to free its GPU texture. Database textures are never collected.
     ~Texture()
     {
         if (!Registered) Dispose();
     }
 
-    /// <summary>
-    /// Gets whether the specified <see cref="TextureType"/> type is mipmappable.
-    /// </summary>
-    public static bool IsTextureTypeMipmappable(TextureType textureType)
-    {
-        return textureType == TextureType.Texture2D || textureType == TextureType.Texture3D
-            || textureType == TextureType.TextureCubeMap;
-    }
-
-    /// <summary>Bytes per texel for a given image format.</summary>
-    public static int GetBytesPerPixel(TextureImageFormat format) => format switch
-    {
-        TextureImageFormat.Color4b => 4,
-        TextureImageFormat.Byte => 1,
-
-        TextureImageFormat.Short or TextureImageFormat.UnsignedShort => 2,
-        TextureImageFormat.Short2 or TextureImageFormat.UnsignedShort2 => 4,
-        TextureImageFormat.Short3 or TextureImageFormat.UnsignedShort3 => 6,
-        TextureImageFormat.Short4 or TextureImageFormat.UnsignedShort4 => 8,
-
-        TextureImageFormat.Float or TextureImageFormat.Int or TextureImageFormat.UnsignedInt => 4,
-        TextureImageFormat.Float2 or TextureImageFormat.Int2 or TextureImageFormat.UnsignedInt2 => 8,
-        TextureImageFormat.Float3 or TextureImageFormat.Int3 or TextureImageFormat.UnsignedInt3 => 12,
-        TextureImageFormat.Float4 or TextureImageFormat.Int4 or TextureImageFormat.UnsignedInt4 => 16,
-
-        TextureImageFormat.Depth16f => 2,
-        TextureImageFormat.Depth24f or TextureImageFormat.Depth24Stencil8 => 4,
-        TextureImageFormat.Depth32f => 4,
-
-        _ => 4,
-    };
+    /// <summary>Bytes per texel of a format.</summary>
+    public static int GetBytesPerPixel(TextureFormat format) => GraphicsFormats.BytesPerTexel(format);
 }

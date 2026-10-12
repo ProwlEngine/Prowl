@@ -278,9 +278,15 @@ public static class RuntimeImporters
         => s_byExtension.TryGetValue(Path.GetExtension(path), out RuntimeImporter? importer) ? importer : null;
 }
 
-/// <summary>Images, as textures that repeat and have mipmaps.</summary>
+/// <summary>
+/// Images, as textures that repeat and have mipmaps. They are sRGB colour unless the file name names data, such as
+/// "Bricks Normal" or "panel_mask". The editor's texture importer uses the same names for its default type.
+/// </summary>
 internal sealed class TextureRuntimeImporter : RuntimeImporter
 {
+    private static readonly string[] s_normalWords = ["normal", "normals", "normalmap", "nrm", "nor"];
+    private static readonly string[] s_dataWords = ["mask", "height", "displacement", "roughness", "metallic", "surface", "occlusion", "ao", "orm", "data"];
+
     public override IReadOnlyList<string> Extensions { get; } = [".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".exr", ".hdr", ".webp"];
 
     public override Type AssetType => typeof(Texture2D);
@@ -288,9 +294,21 @@ internal sealed class TextureRuntimeImporter : RuntimeImporter
     public override void Import(RuntimeImportContext context)
     {
         using Stream stream = context.Open();
-        Texture2D texture = Texture2D.FromStream(stream, generateMipmaps: true);
-        texture.SetWrapModes(TextureWrap.Repeat, TextureWrap.Repeat);
+        Texture2D texture = Texture2D.FromStream(stream, mipmaps: true, srgb: !NamesData(context.Path));
         context.SetMain(texture);
+    }
+
+    /// <summary>Whether the file name names a normal map.</summary>
+    internal static bool NamesNormalMap(string path) => NameHasWord(path, s_normalWords);
+
+    /// <summary>Whether the file name names linear data: a normal map, mask, height, roughness and the like.</summary>
+    internal static bool NamesData(string path) => NamesNormalMap(path) || NameHasWord(path, s_dataWords);
+
+    private static bool NameHasWord(string path, string[] words)
+    {
+        foreach (string word in System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant().Split([' ', '_', '-', '.'], StringSplitOptions.RemoveEmptyEntries))
+            if (Array.IndexOf(words, word) >= 0) return true;
+        return false;
     }
 }
 
@@ -358,20 +376,23 @@ internal sealed class ShaderRuntimeImporter : RuntimeImporter
 
     public override void Import(RuntimeImportContext context)
     {
-        string? Include(string path)
-        {
-            // Already relative to the source's root, the parser joins it to the including file's folder
-            try { return context.Source.ReadAllText(AssetFileSource.Combine("", path)); }
-            catch (Exception) { }
-            try { return EmbeddedResources.ReadAllText(path); }
-            catch (Exception) { }
-            try { return EmbeddedResources.ReadAllText($"Assets/Defaults/{path}"); }
-            catch (Exception) { return null; }
-        }
+        string? Include(string path) => ReadInclude(context, path);
 
-        if (!ShaderParser.ParseShader(context.Path, context.ReadAllText(), Include, out Shader? shader) || shader.IsNotValid())
-            throw new InvalidDataException($"'{context.Path}' is not a shader that parses.");
-        context.SetMain(shader!);
+        Shader shader = Shader.FromSource(Shader.ExpandIncludes(context.ReadAllText(), Include), context.Path);
+        if (shader.Error != null)
+            throw new InvalidDataException($"'{context.Path}' is not a shader that parses: {shader.Error}");
+        context.SetMain(shader);
+    }
+
+    /// <summary>An include beside the including file, as written or with .glsl added. Null when neither exists.</summary>
+    internal static string? ReadInclude(RuntimeImportContext context, string path)
+    {
+        foreach (string candidate in new[] { path, path + ".glsl" })
+        {
+            try { return context.Source.ReadAllText(AssetFileSource.Combine(context.Path, candidate)); }
+            catch (Exception) { }
+        }
+        return null;
     }
 }
 
@@ -384,16 +405,9 @@ internal sealed class ComputeShaderRuntimeImporter : RuntimeImporter
 
     public override void Import(RuntimeImportContext context)
     {
-        string? Include(string path)
-        {
-            // Already relative to the source's root, the parser joins it to the including file's folder
-            try { return context.Source.ReadAllText(AssetFileSource.Combine("", path)); }
-            catch (Exception) { }
-            try { return EmbeddedResources.ReadAllText($"Assets/Defaults/{System.IO.Path.GetFileName(path)}"); }
-            catch (Exception) { return null; }
-        }
+        string? Include(string path) => ShaderRuntimeImporter.ReadInclude(context, path);
 
-        string source = ShaderParser.ExpandIncludes(context.Path, context.ReadAllText(), Include);
+        string source = Shader.ExpandIncludes(context.ReadAllText(), Include);
         context.SetMain(ComputeShader.FromSource(System.IO.Path.GetFileNameWithoutExtension(context.Path), source));
     }
 }

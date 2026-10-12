@@ -19,7 +19,7 @@ public class EditorModelImporter : AssetImporter
     // 8: normals now come from Clay, which splits vertices on hard edges.
     // 12: Clay negates X instead of Z, so models face +Z as authored, and cameras and lights sit on a child.
     // 13: only cameras and spot lights sit on a turned child, directional and point lights stay on the node.
-    private const int BaseVersion = 14;
+    private const int BaseVersion = 16;
     /// <summary> Combined version: the importer's own base version plus the aggregate version from MeshFeatureRegistry, so any change to mesh feature generation invalidates the cache. </summary>
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
@@ -204,7 +204,8 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
         _db = EditorAssetBackend.Instance;
     }
 
-    public Texture2D? ResolveExternal(string sourcePath)
+    // A texture file keeps its own import settings, its sRGB setting included
+    public Texture2D? ResolveExternal(string sourcePath, bool srgb)
     {
         if (_db == null || string.IsNullOrEmpty(_assetsRoot)) return null;
 
@@ -231,12 +232,12 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
         return AssetDatabase.Get<Texture2D>(entry.Guid);
     }
 
-    public Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
+    public Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType, bool srgb)
     {
         try
         {
             using var ms = new MemoryStream(encodedBytes);
-            var tex = Texture2D.LoadFromStream(ms, generateMipmaps: true);
+            var tex = Texture2D.FromStream(ms, mipmaps: true, srgb: srgb);
             tex.Name = string.IsNullOrEmpty(name) ? "EmbeddedTexture" : name;
             _ctx.AddSubAsset(tex.Name, tex, SubAssetIdentity.Order);
             return tex;

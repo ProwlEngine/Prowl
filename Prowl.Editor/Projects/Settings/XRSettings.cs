@@ -45,6 +45,6 @@ public class XRSettings : ProjectSettingsBase
             v => { RenderScale = v; Apply(); });
 
         Origami.Label(paper, "xr_info",
-            "  Needs an OpenXR runtime with OpenGL support, such as SteamVR or the Meta app. Render scale applies the next time XR starts.").Show();
+            "  Needs an OpenXR runtime with Vulkan support, such as SteamVR or the Meta app, and the editor started with --xr and the headset connected. Render scale applies the next time XR starts.").Show();
     }
 }

@@ -2,239 +2,116 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 
 using Prowl.Echo;
 
 namespace Prowl.Runtime.Resources;
 
 /// <summary>
-/// A six-faced environment <see cref="Texture"/>. Faces are square and indexed 0..5 in GL
-/// order: +X, -X, +Y, -Y, +Z, -Z. Supports a full mip chain (used by reflection probes to
-/// store a roughness-convolved, GGX-prefiltered environment) and can be rendered into per
-/// face and per mip via <see cref="GetFaceTarget"/>. Made with a layer count it is a cubemap array,
-/// a <c>samplerCubeArray</c> holding that many cubes, which lives only at runtime and is never saved.
+/// A six-faced environment <see cref="Texture"/>. Faces are square and indexed 0..5: +X, -X, +Y, -Y, +Z, -Z, each
+/// with its top row first. Supports a full mip chain, such as a GGX prefiltered environment. Made with a layer count it
+/// is a cubemap array, a <c>samplerCubeArray</c> holding that many cubes, which lives only at runtime and is never saved.
 /// </summary>
 public sealed class Cubemap : Texture, ISerializable
 {
     private uint _size;
-    private int _mipLevels;
 
     /// <summary>Edge length of each (square) face, in texels.</summary>
-    public uint Size { get { EnsureLoaded(); return _size; } private set => _size = value; }
-
-    /// <summary>Number of mip levels allocated (1 when no chain).</summary>
-    public int MipLevels { get { EnsureLoaded(); return _mipLevels; } private set => _mipLevels = value; }
+    public uint Size { get { EnsureLoaded(); return _size; } }
 
     /// <summary>How many cubes a cubemap array holds, 0 for a plain cubemap.</summary>
     public int Layers { get; private set; }
 
-    // Render-target framebuffers are created lazily per (face, mip) and reused.
-    private readonly Dictionary<int, GraphicsFrameBuffer> _faceTargets = [];
-    // Shared depth buffer for capture (scene rendering into a face needs a depth test).
-    private Texture2D? _captureDepth;
+    public Cubemap() : base(TextureFormat.RGBA16Float, false, WrapMode.Clamp) { }
 
-    public Cubemap() : base(TextureType.TextureCubeMap, TextureImageFormat.Short4) { }
-
-    /// <summary>
-    /// Creates a cubemap with empty storage for all six faces.
-    /// </summary>
-    /// <param name="size">Edge length of each face.</param>
-    /// <param name="mipChain">Allocate a full mip chain (for prefiltered roughness levels).</param>
-    /// <param name="imageFormat">Texel format. Defaults to RGBA16F (Short4) for HDR.</param>
-    public Cubemap(uint size, bool mipChain = false, TextureImageFormat imageFormat = TextureImageFormat.Short4)
-        : base(TextureType.TextureCubeMap, imageFormat)
+    /// <summary>Creates a cubemap with empty storage for all six faces, HDR half floats by default, with a full mip chain when mipmaps is set.</summary>
+    public Cubemap(uint size, bool mipmaps = false, TextureFormat format = TextureFormat.RGBA16Float, bool srgb = false)
+        : base(format, srgb, WrapMode.Clamp)
     {
-        Recreate(size, mipChain);
+        Recreate(size, mipmaps);
     }
 
     /// <summary>Creates a cubemap array of <paramref name="layers"/> cubes, each with <paramref name="mipLevels"/> levels.</summary>
-    public Cubemap(uint size, int mipLevels, int layers, TextureImageFormat imageFormat = TextureImageFormat.Short4)
-        : base(TextureType.TextureCubeMapArray, imageFormat)
+    public Cubemap(uint size, int mipLevels, int layers, TextureFormat format = TextureFormat.RGBA16Float)
+        : base(format, false, WrapMode.Clamp)
     {
         Layers = Math.Max(1, layers);
-        Allocate(size, Math.Clamp(mipLevels, 1, MipCountFor(size)));
+        Resize(size, (uint)Math.Max(1, mipLevels));
     }
 
     /// <summary>Allocates (or reallocates) all six faces and mip levels, discarding contents.</summary>
-    public void Recreate(uint size, bool mipChain) => Allocate(size, mipChain ? MipCountFor(size) : 1);
-
-    private unsafe void Allocate(uint size, int mipLevels)
+    public void Recreate(uint size, bool mipmaps)
     {
         EnsureLoaded();
-        ValidateSize(size);
-
-        Size = size;
-        MipLevels = mipLevels;
-
-        if (Layers > 0)
-        {
-            for (int mip = 0; mip < MipLevels; mip++)
-                Graphics.TexImage3D(Handle, mip, MipSize(mip), MipSize(mip), (uint)(Layers * 6), null);
-            Graphics.SetTextureMaxLevel(Handle, MipLevels - 1);
-        }
-        else
-        {
-            for (int face = 0; face < 6; face++)
-                for (int mip = 0; mip < MipLevels; mip++)
-                    Graphics.TexImageCubeFace(Handle, face, mip, MipSize(mip), (void*)0);
-        }
-
-        TextureMin min = MipLevels > 1 ? TextureMin.LinearMipmapLinear : TextureMin.Linear;
-        Graphics.SetTextureFilters(Handle, min, TextureMag.Linear);
-        MinFilter = min;
-        MagFilter = TextureMag.Linear;
-        SetWrapModes(TextureWrap.ClampToEdge);
+        Resize(size, mipmaps ? FullChain(size, size) : 1);
     }
 
-    public uint MipSize(int mip) { EnsureLoaded(); return Math.Max(1u, Size >> mip); }
-
-    internal static int MipCountFor(uint size)
+    private void Resize(uint size, uint mips)
     {
-        int levels = 1;
-        while (size > 1) { size >>= 1; levels++; }
-        return levels;
+        if (size <= 0 || size > Graphics.MaxTextureSize)
+            throw new ArgumentOutOfRangeException(nameof(size), size, "Cubemap face size must be in (0, MaxTextureSize].");
+        _size = size;
+        Allocate(mips);
+        Filter = MipCount > 1 ? FilterMode.Trilinear : FilterMode.Bilinear;
     }
 
-    public void SetWrapModes(TextureWrap wrap)
+    private protected override Graphite.TextureDescription Describe(uint mips)
     {
-        EnsureLoaded();
-        Graphics.SetWrapS(Handle, wrap);
-        Graphics.SetWrapT(Handle, wrap);
-        Graphics.SetWrapR(Handle, wrap);
-        WrapMode = wrap;
+        Graphite.TextureDescription description = Graphite.TextureDescription.CreateCube(_size, mips, (uint)Math.Max(1, Layers), GpuFormat, Usage);
+        if (Layers > 0) description.Type = Graphite.TextureType.TextureCube;
+        return description;
     }
 
-    /// <summary>Bytes per texel for this cubemap's format.</summary>
-    public int BytesPerPixel()
-    {
-        EnsureLoaded();
-        switch (ImageFormat)
-        {
-            case TextureImageFormat.Color4b: return 4;
-            case TextureImageFormat.Byte: return 1;
-            case TextureImageFormat.Float: return 4;
-            case TextureImageFormat.Float2: return 8;
-            case TextureImageFormat.Float3: return 12;
-            case TextureImageFormat.Float4: return 16;
-            case TextureImageFormat.Short:
-            case TextureImageFormat.UnsignedShort: return 2;
-            case TextureImageFormat.Short2:
-            case TextureImageFormat.UnsignedShort2: return 4;
-            case TextureImageFormat.Short3:
-            case TextureImageFormat.UnsignedShort3: return 6;
-            case TextureImageFormat.Short4:
-            case TextureImageFormat.UnsignedShort4: return 8;
-            default: return 4;
-        }
-    }
+    private protected override uint FullMipCount => FullChain(_size, _size);
+
+    private protected override uint GpuLayers => 6u * (uint)Math.Max(1, Layers);
+
+    /// <summary>Edge length of a face at a mip level.</summary>
+    public uint FaceSize(int mip) { EnsureLoaded(); return MipSize(_size, (uint)mip); }
 
     /// <summary>Total bytes for one face at the given mip level.</summary>
     public int FaceByteSize(int mip)
     {
-        EnsureLoaded();
-        uint s = MipSize(mip);
-        return (int)(s * s) * BytesPerPixel();
+        uint s = FaceSize(mip);
+        return (int)(s * s) * GetBytesPerPixel(Format);
     }
 
-    /// <summary>Upload pixel data into one face's mip level.</summary>
-    public unsafe void SetFaceData<T>(int face, Memory<T> data, int mip = 0) where T : unmanaged
+    /// <summary>Upload pixel data into one face's mip level, rows top first.</summary>
+    public void SetFaceData<T>(int face, Memory<T> data, int mip = 0, int layer = 0) where T : unmanaged
     {
         EnsureLoaded();
-        fixed (void* ptr = data.Span)
-            Graphics.TexImageCubeFace(Handle, face, mip, MipSize(mip), ptr);
+        uint size = FaceSize(mip);
+        Upload(System.Runtime.InteropServices.MemoryMarshal.AsBytes<T>(data.Span)[..FaceByteSize(mip)], 0, 0, 0, size, size, 1, (uint)mip, (uint)(layer * 6 + face));
     }
 
-    /// <summary>Read back one face's mip level into <paramref name="destination"/>.
-    /// Blocks until the GPU read completes.</summary>
-    public void GetFaceData(int face, byte[] destination, int mip = 0)
+    /// <summary>Reads one face's mip level back, rows top first. Waits for the GPU, zeroes headless.</summary>
+    public void GetFaceData(int face, byte[] destination, int mip = 0, int layer = 0)
     {
         EnsureLoaded();
-        Graphics.GetTexImageCubeFace(Handle, face, mip, destination);
-    }
-
-    /// <summary>A framebuffer that renders into one face at one mip level, of cube <paramref name="layer"/>
-    /// in an array. With <paramref name="withDepth"/> it also attaches a shared depth buffer (sized to the
-    /// full face) so scene geometry can depth-test during capture. Cached and reused;
-    /// disposed with the cubemap.</summary>
-    public GraphicsFrameBuffer GetFaceTarget(int face, int mip, bool withDepth = false, int layer = 0)
-    {
-        EnsureLoaded();
-        int key = ((layer * 6 + face) * 64 + mip) * 2 + (withDepth ? 1 : 0);
-        if (_faceTargets.TryGetValue(key, out GraphicsFrameBuffer? fb) && !fb.IsDisposed)
-            return fb;
-
-        uint s = MipSize(mip);
-
-        GraphicsFrameBuffer.Attachment[] attachments;
-        var color = new GraphicsFrameBuffer.Attachment
-        {
-            Texture = Handle,
-            IsDepth = false,
-            IsCubeFace = true,
-            CubeFace = face,
-            MipLevel = mip,
-            Layer = layer,
-        };
-
-        if (withDepth)
-        {
-            if (_captureDepth.IsNotValid()) _captureDepth = new Texture2D(Size, Size, false, TextureImageFormat.Depth24f);
-            attachments =
-            [
-                color,
-                new GraphicsFrameBuffer.Attachment { Texture = _captureDepth.Handle, IsDepth = true },
-            ];
-        }
-        else
-        {
-            attachments = [color];
-        }
-
-        fb = Graphics.CreateFramebuffer(attachments, s, s);
-        _faceTargets[key] = fb;
-        return fb;
+        byte[] data = Download((uint)mip, (uint)(layer * 6 + face));
+        data.AsSpan(0, Math.Min(data.Length, destination.Length)).CopyTo(destination);
     }
 
     protected internal override long EstimateBytes()
-        => (long)(6UL * (ulong)Math.Max(1, Layers) * _size * _size * (ulong)GetBytesPerPixel(ImageFormatUnchecked) * (_mipLevels > 1 ? 4.0 / 3.0 : 1.0));
-
-    protected override void OnUnload()
-    {
-        if (_faceTargets != null)
-        {
-            foreach (GraphicsFrameBuffer fb in _faceTargets.Values)
-                fb?.Dispose();
-            _faceTargets.Clear();
-        }
-        if (_captureDepth.IsValid()) _captureDepth.Dispose();
-        _captureDepth = null;
-        base.OnUnload();
-    }
-
-    private static void ValidateSize(uint size)
-    {
-        if (size <= 0 || size > Graphics.MaxCubeMapTextureSize)
-            throw new ArgumentOutOfRangeException(nameof(size), size, "Cubemap face size must be in (0, MaxCubeMapTextureSize].");
-    }
+        => (long)(6UL * (ulong)Math.Max(1, Layers) * _size * _size * (ulong)GetBytesPerPixel(FormatUnchecked) * (MipCountUnchecked > 1 ? 4.0 / 3.0 : 1.0));
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
         SerializeHeader(compoundTag);
         compoundTag.Add("Size", new(Size));
-        compoundTag.Add("MipLevels", new(MipLevels));
-        compoundTag.Add("ImageFormat", new((int)ImageFormat));
-        compoundTag.Add("MinFilter", new((int)MinFilter));
-        compoundTag.Add("MagFilter", new((int)MagFilter));
-        compoundTag.Add("Wrap", new((int)WrapMode));
+        compoundTag.Add("MipLevels", new((int)MipCount));
+        compoundTag.Add("Format", new((int)Format));
+        compoundTag.Add("Srgb", new(Srgb));
+        compoundTag.Add("Filter", new((int)Filter));
+        compoundTag.Add("Anisotropy", new(Anisotropy));
 
         EchoObject faces = EchoObject.NewList();
         for (int face = 0; face < 6; face++)
         {
-            for (int mip = 0; mip < MipLevels; mip++)
+            for (int mip = 0; mip < MipCount; mip++)
             {
                 byte[] dest = new byte[FaceByteSize(mip)];
-                Graphics.GetTexImageCubeFace(Handle, face, mip, dest);
+                GetFaceData(face, dest, mip);
                 faces.ListAdd(new(dest));
             }
         }
@@ -245,29 +122,18 @@ public sealed class Cubemap : Texture, ISerializable
     {
         uint size = value["Size"].UIntValue;
         int mipLevels = value["MipLevels"].IntValue;
-        TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
-        var minFilter = (TextureMin)value["MinFilter"].IntValue;
-        var magFilter = (TextureMag)value["MagFilter"].IntValue;
-        var wrap = (TextureWrap)value["Wrap"].IntValue;
 
-        Type[] param = [typeof(uint), typeof(bool), typeof(TextureImageFormat)];
-        object[] values = [size, mipLevels > 1, imageFormat];
-        typeof(Cubemap).GetConstructor(param)!.Invoke(this, values);
-
+        SetFormat((TextureFormat)value["Format"].IntValue, value.Get("Srgb")?.BoolValue ?? false);
+        Resize(size, (uint)Math.Max(1, mipLevels));
         DeserializeHeader(value);
 
         EchoObject faces = value["Faces"];
         int idx = 0;
         for (int face = 0; face < 6; face++)
-        {
-            for (int mip = 0; mip < MipLevels && idx < faces.Count; mip++, idx++)
-            {
-                byte[] data = faces[idx].ByteArrayValue;
-                SetFaceData(face, new Memory<byte>(data), mip);
-            }
-        }
+            for (int mip = 0; mip < mipLevels && idx < faces.Count; mip++, idx++)
+                if (mip < MipCount) SetFaceData(face, new Memory<byte>(faces[idx].ByteArrayValue), mip);
 
-        SetTextureFilters(minFilter, magFilter);
-        SetWrapModes(wrap);
+        SetSampling((FilterMode)(value.Get("Filter")?.IntValue ?? (int)Filter), WrapMode.Clamp, WrapMode.Clamp, WrapMode.Clamp,
+            value.Get("Anisotropy")?.UIntValue ?? 0, TextureBorderColor.TransparentBlack);
     }
 }

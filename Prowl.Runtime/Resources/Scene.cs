@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -363,9 +363,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore, NotHeld]
     internal readonly List<VolumetricClouds> Clouds = [];
 
-    /// <summary>This scene's reflection probes, and the sky probe surfaces outside them reflect.</summary>
     [SerializeIgnore, NotHeld]
-    internal readonly ReflectionProbeSystem ReflectionProbes = new();
+    private SceneRendering? _rendering;
+
+    /// <summary>The scene's link to Graphite: its render world and what keeps state in it.</summary>
+    public SceneRendering Rendering { get { EnsureNotDisposed(); return _rendering ??= new SceneRendering(this); } }
 
     /// <summary>
     /// Called once after a hot reload has migrated the scene graph in place: each GameObject drops removed
@@ -403,82 +405,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore]
     private bool _isActive = false;
 
-    public struct FogParams
-    {
-        public enum FogMode
-        {
-            Off,
-            Linear,
-            Exponential,
-            ExponentialSquared
-        }
-        public FogMode Mode = FogMode.ExponentialSquared;
-        public Color Color = new(0.5f, 0.5f, 0.5f, 1.0f);
-        public float Start = 20;
-        public float End = 100;
-        public float Density = 0.01f;
-
-        /// <summary>Colors the fog with the sky drawn in each view direction, taken from the sky probe, instead of Color.</summary>
-        public bool UseSky = false;
-
-        public bool IsFogLinear => Mode == FogMode.Linear;
-
-        public FogParams()
-        {
-        }
-    }
-
-    public FogParams Fog = new();
-
-    public struct AmbientLightParams
-    {
-        public enum AmbientMode
-        {
-            Uniform,
-            Hemisphere
-        }
-
-        public AmbientMode Mode = AmbientMode.Uniform;
-
-        public float Strength = 1f;
-
-        // Uniform ambient
-        public Float4 Color = new(0.43f, 0.55f, 0.65f, 1.0f);
-
-        // Hemisphere ambient
-        public Float4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
-        public Float4 GroundColor = new(0.2f, 0.2f, 0.2f, 1.0f);
-
-        public bool UseHemisphere => Mode == AmbientMode.Hemisphere;
-
-        public AmbientLightParams()
-        {
-        }
-    }
-
-    public AmbientLightParams Ambient = new();
-
-    public enum SkyboxMode
-    {
-        Procedural,
-        SolidColor,
-        Gradient,
-        Material
-    }
-
-    public struct SkyboxParams
-    {
-        public SkyboxMode Mode = SkyboxMode.Procedural;
-        public Color SolidColor = new(0.2f, 0.3f, 0.5f, 1f);
-        public Color GradientTop = new(0.4f, 0.6f, 0.9f, 1f);
-        public Color GradientBottom = new(0.8f, 0.8f, 0.7f, 1f);
-        public float GradientExponent = 1f;
-        public Resources.Material? CustomMaterial;
-
-        public SkyboxParams() { }
-    }
-
-    public SkyboxParams Skybox = new();
+    /// <summary>The scene's sky, ambient light and fog.</summary>
+    public SceneEnvironment Environment = new();
 
     /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
     public struct LightmapPlacement
@@ -559,24 +487,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public LightmapBakeSettings LightmapBake = new();
 
     [SerializeField, NotHeld]
-    private StaticGeometry? _staticGeometry = new();
-
-    /// <summary>This scene's static renderers merged for drawing, see <see cref="UpdateStaticGeometry"/>.</summary>
-    public StaticGeometry StaticGeometry { get { EnsureNotDisposed(); return _staticGeometry ??= new(); } }
-
-    /// <summary>
-    /// Merges every static MeshRenderer into world space geometry that draws in a few calls, replacing what was
-    /// merged before. The editor does this when a scene is saved, and the result is stored with it. Call it after
-    /// creating or changing static objects at runtime. A static renderer that changes afterwards drops out of the
-    /// merged geometry and draws on its own until this is called again.
-    /// </summary>
-    public void UpdateStaticGeometry()
-    {
-        EnsureNotDisposed();
-        MainThreadContext.AssertOwner(this);
-        StaticGeometry.Build(this);
-    }
-
     [NonSerialized] private LightProbeVolume? _probeVolume;
 
     /// <summary>Runtime probe sampler built from <see cref="BakedLighting"/> (lazy). Null when there are no baked probes.</summary>
@@ -593,7 +503,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>Drop the cached probe volume so the next access rebuilds it (call after a rebake).</summary>
-    public void InvalidateProbeVolume() { EnsureNotDisposed(); _probeVolume = null; }
+    public void InvalidateProbeVolume() { EnsureNotDisposed(); _probeVolume = null; BakedLightingVersion++; }
+
+    /// <summary>Moves whenever the baked lighting changes, so the render world takes the new probes.</summary>
+    [SerializeIgnore, NonSerialized]
+    internal int BakedLightingVersion;
 
     /// <summary> The number of registered, non-disposed objects. </summary>
     public int Count { get { EnsureNotDisposed(); return _allObj.Count(o => !o.IsDisposed); } }
@@ -1002,8 +916,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out Scene? scene) || ReferenceEquals(scene, this));
 
-        _staticGeometry?.Clear();
-        ReflectionProbes.Dispose();
 
         // Clear the physics world
         _physics.Clear();
@@ -1022,6 +934,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Clear any remaining references
         _allObj.Clear();
         _allObjSet.Clear();
+
+        _rendering?.Dispose();
+        _rendering = null;
 
         // Remove all identifiers and reference to any possible gameobject that could hold a
         // user-defined script as it might leave the ALC alive
@@ -1111,17 +1026,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Collects render data from all active components for the given camera.
     /// Components add their renderables and lights to the provided lists.
     /// </summary>
-    public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
-    {
-        if (IsDisposed) return;
-        using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-        StaticGeometry.Collect(this, renderables);
-        _dispatcher.RunRenderCollect(camera, renderables, lights);
-    }
-
-    /// <summary>
-    /// Draws gizmos for all active GameObjects and their components.
-    /// </summary>
     public void DrawGizmos()
     {
         if (IsDisposed) return;
@@ -1187,7 +1091,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             foreach (Component component in go._components)
             {
-                if (component is Camera camera && camera.EnabledInHierarchy && camera.Target == null
+                if (component is Camera camera && camera.EnabledInHierarchy && camera.Target == null && camera.Background != CameraBackground.None
                     && (main == null || camera.Depth > main.Depth))
                     main = camera;
             }
@@ -1196,34 +1100,26 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Renders all cameras in this scene, sorted by depth.
+    /// Adds a view to this frame for every active camera of the scene, lowest depth first. Cameras without a target of
+    /// their own draw into <paramref name="target"/>, or the window when it is null.
     /// </summary>
-    /// <param name="target">Optional render target to render into</param>
+    /// <param name="target">Where cameras without a target of their own draw, null for the window.</param>
     /// <param name="displayGizmos">Draw the gizmos and Debug.Draw shapes queued this frame on top</param>
     /// <returns>True if any cameras were rendered, false otherwise</returns>
     public bool Render(RenderTexture? target = null, bool displayGizmos = false)
     {
         if (IsDisposed) return false;
-        // Renderables are now collected per-camera inside pipeline.Render()
 
-        List<Camera> Cameras = GatherActiveCameras();
-
-        if (Cameras.Count == 0)
+        List<Camera> cameras = GatherActiveCameras();
+        if (cameras.Count == 0)
             return false;
 
-        foreach (Camera? cam in Cameras)
+        Rendering.Sync();
+        foreach (Camera cam in cameras)
         {
-            // One broken camera (bad effect, disposed RT, failed GPU alloc) must not take down the
-            // other cameras or the whole frame. Contain it and keep rendering the rest.
             try
             {
-                RenderPipeline? camPipeline = cam.Pipeline;
-                RenderPipeline pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
-
-                // A camera with its own Target asset draws there; everything else draws into `target`
-                // (null for the backbuffer). Nothing on the camera is touched, so there is nothing to
-                // restore and nothing a scene save could catch mid-render.
-                pipeline.Render(cam, new RenderingData { FallbackTarget = target, DisplayGizmos = displayGizmos });
+                cam.Render(new CameraRenderOptions { FallbackTarget = target, DisplayGizmos = displayGizmos });
             }
             catch (Exception ex)
             {

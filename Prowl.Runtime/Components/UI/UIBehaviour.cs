@@ -105,8 +105,11 @@ public abstract class UIBehaviour : Component
     /// </summary>
     public virtual bool IsContentPending => false;
 
-    /// <summary>Subclasses bind per-item shader properties (textures, scalars). Called every frame the item is visible.</summary>
-    public virtual void PopulateProperties(PropertyState props, in UIContext context) { }
+    /// <summary>The texture this element draws with as the material's _MainTex, or null to keep the material's own.</summary>
+    public virtual Texture2D? GetMainTexture() => null;
+
+    /// <summary>Whether the element's geometry samples the SDF glyph atlas rather than a colour texture.</summary>
+    internal virtual bool IsSdfText => false;
 
     /// <summary>The material this element draws with. Default returns the shared `DefaultUI` material.</summary>
     public virtual Material GetMaterial() => GameCanvas.SharedUIMaterial;

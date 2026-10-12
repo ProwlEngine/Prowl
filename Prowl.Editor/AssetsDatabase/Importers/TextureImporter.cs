@@ -34,44 +34,22 @@ public class TextureImporter : AssetImporter
 {
     // 5: sprite sub-asset GUIDs derive from the slice's persistent Id instead of its name.
     // 6: decoded by Aperture rather than ImageMagick
+    // 7: Graphite sampling settings, sRGB colour textures, stored mips
     /// <summary> The import-format version. Incremented when the importer's output changes, triggering reimport of all assets using this importer. </summary>
-    public override int Version => 6;
+    public override int Version => 7;
 
-    /// <summary> Imports the texture from disk, applies mipmap generation, filter and wrap settings, and builds sprite sub-assets when sprite mode is enabled. </summary>
     public override bool Import(ImportContext ctx)
     {
-        // Settings are guaranteed to have defaults merged by EditorAssetDatabase.RunImport
-        bool generateMipmaps = ctx.Settings?.TryGet("generateMipmaps", out EchoObject? mipTag) == true && mipTag.BoolValue;
+        EchoObject settings = ctx.Settings ?? EchoObject.NewCompound();
+        bool mipmaps = ReadBool(settings, "generateMipmaps", true);
 
-        // Load texture WITHOUT mipmaps first we'll generate them after applying settings
-        var texture = Texture2D.FromFile(ctx.AbsolutePath, false);
+        var texture = Texture2D.FromFile(ctx.AbsolutePath, mipmaps, IsSrgb(settings, ctx.AbsolutePath));
         texture.Name = ctx.FileName;
-
-        // Read filter/wrap settings (defaults merged by RunImport)
-        TextureMin minFilter = ctx.Settings?.TryGet("minFilter", out EchoObject? minTag2) == true
-            ? (TextureMin)minTag2.IntValue : (generateMipmaps ? TextureMin.LinearMipmapLinear : TextureMin.Linear);
-        TextureMag magFilter = ctx.Settings?.TryGet("magFilter", out EchoObject? magTag) == true
-            ? (TextureMag)magTag.IntValue : TextureMag.Linear;
-        TextureWrap wrapMode = ctx.Settings?.TryGet("wrapMode", out EchoObject? wrapTag) == true
-            ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
-
-        // Generate mipmaps if requested (must happen before setting mipmap filters)
-        if (generateMipmaps)
-            texture.GenerateMipmaps();
-
-        // Downgrade mipmap filters if no mipmaps
-        if (!generateMipmaps)
-        {
-            minFilter = minFilter switch
-            {
-                TextureMin.NearestMipmapNearest or TextureMin.NearestMipmapLinear => TextureMin.Nearest,
-                TextureMin.LinearMipmapNearest or TextureMin.LinearMipmapLinear => TextureMin.Linear,
-                _ => minFilter
-            };
-        }
-
-        texture.SetTextureFilters(minFilter, magFilter);
-        texture.SetWrapModes(wrapMode, wrapMode);
+        texture.Filter = ReadEnum(settings, "filter", FilterMode.Trilinear);
+        texture.WrapU = ReadEnum(settings, "wrapU", WrapMode.Repeat);
+        texture.WrapV = ReadEnum(settings, "wrapV", WrapMode.Repeat);
+        texture.BorderColor = ReadEnum(settings, "borderColor", TextureBorderColor.TransparentBlack);
+        texture.Anisotropy = (uint)Math.Clamp(settings.TryGet("anisotropy", out EchoObject? aniso) ? aniso.IntValue : 0, 0, 16);
 
         ctx.SetMainAsset(texture);
 
@@ -89,17 +67,57 @@ public class TextureImporter : AssetImporter
         return true;
     }
 
-    /// <summary> Returns the default import settings compound, with mipmap generation enabled, linear mipmap filtering, repeat wrapping, and default sprite settings. </summary>
+    /// <summary>
+    /// Mipmaps, Trilinear filtering, repeat wrapping and default sprite settings. The texture type and sRGB are left out,
+    /// so they follow the file name until set: "Bricks Normal" is a normal map, "Panel Mask" a mask.
+    /// </summary>
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();
         s["generateMipmaps"] = new EchoObject(true);
-        s["minFilter"] = new EchoObject((int)TextureMin.LinearMipmapLinear);
-        s["magFilter"] = new EchoObject((int)TextureMag.Linear);
-        s["wrapMode"] = new EchoObject((int)TextureWrap.Repeat);
+        s["filter"] = new EchoObject((int)FilterMode.Trilinear);
+        s["wrapU"] = new EchoObject((int)WrapMode.Repeat);
+        s["wrapV"] = new EchoObject((int)WrapMode.Repeat);
+        s["anisotropy"] = new EchoObject(0);
         s["sprite"] = Serializer.Serialize(typeof(SpriteImportSettings), new SpriteImportSettings());
         return s;
     }
+
+    /// <summary>The texture type the settings name, or the one the file name suggests when they name none.</summary>
+    public static TextureImportType TypeOf(EchoObject? settings, string path)
+    {
+        if (settings != null && settings.TryGet("textureType", out EchoObject? type)) return (TextureImportType)type.IntValue;
+        if (TextureRuntimeImporter.NamesNormalMap(path)) return TextureImportType.NormalMap;
+        return TextureRuntimeImporter.NamesData(path) ? TextureImportType.Mask : TextureImportType.Default;
+    }
+
+    /// <summary>Whether the texture is sRGB colour: the explicit setting, else colour for Default and Sprite textures.</summary>
+    public static bool IsSrgb(EchoObject? settings, string path)
+    {
+        if (settings != null && settings.TryGet("srgb", out EchoObject? srgb)) return srgb.BoolValue;
+        return TypeOf(settings, path) is TextureImportType.Default or TextureImportType.Sprite;
+    }
+
+    private static bool ReadBool(EchoObject settings, string key, bool fallback)
+        => settings.TryGet(key, out EchoObject? tag) ? tag.BoolValue : fallback;
+
+    private static T ReadEnum<T>(EchoObject settings, string key, T fallback) where T : struct, Enum
+        => settings.TryGet(key, out EchoObject? tag) ? (T)Enum.ToObject(typeof(T), tag.IntValue) : fallback;
+}
+
+/// <summary>What a texture holds, which picks its sRGB default and the settings the inspector suggests.</summary>
+public enum TextureImportType
+{
+    /// <summary>Colour, sampled through sRGB.</summary>
+    Default,
+    /// <summary>A tangent space normal map, linear.</summary>
+    NormalMap,
+    /// <summary>Data such as masks, roughness, height or occlusion, linear.</summary>
+    Mask,
+    /// <summary>A 2D or UI image: colour, no mips, clamped.</summary>
+    Sprite,
+    /// <summary>A colour lookup table: linear, no mips, clamped.</summary>
+    Lut,
 }
 
 // Everything below supports the texture's sprite sub-assets (config, slicing tools, sub-asset building, and
@@ -564,13 +582,13 @@ public static class SpriteSlicer
             int count = w * h;
             byte[] alpha = new byte[count];
 
-            if (tex.ImageFormat == TextureImageFormat.Color4b)
+            if (tex.Format == TextureFormat.RGBA8)
             {
                 byte[] rgba = new byte[count * 4];
                 tex.GetData<byte>(rgba.AsMemory());
                 for (int i = 0; i < count; i++) alpha[i] = rgba[i * 4 + 3];
             }
-            else if (tex.ImageFormat == TextureImageFormat.UnsignedShort4)
+            else if (tex.Format == TextureFormat.RGBA16)
             {
                 ushort[] rgba = new ushort[count * 4];
                 tex.GetData<ushort>(rgba.AsMemory());

@@ -244,17 +244,15 @@ public class TextComponent : Graphic, ILayoutElement
         return layout.GetCursorIndex(new Float2(x, 0f));
     }
 
-    public override void PopulateProperties(PropertyState p, in UIContext _)
+    public override Texture2D? GetMainTexture()
     {
         // Always re-read the atlas through System.Texture - it can be replaced when the
         // atlas grows. Falls back to a 1x1 white texture if Scribe hasn't allocated yet.
         Texture2D? atlasTex = UIFontSystem.Default.Atlas;
-        Texture2D atlas = atlasTex.IsValid() ? atlasTex : Texture2D.LoadDefault(DefaultTexture.White);
-        p.SetTexture("_MainTex", atlas);
-        p.SetColor("_MainColor", Color.White);
-        p.SetVector("_Tiling", new Float2(1, 1));
-        p.SetVector("_Offset", Float2.Zero);
+        return atlasTex.IsValid() ? atlasTex : Texture2D.LoadDefault(DefaultTexture.White);
     }
+
+    internal override bool IsSdfText => true;
 
     // ============================================================
     // Alignment helpers

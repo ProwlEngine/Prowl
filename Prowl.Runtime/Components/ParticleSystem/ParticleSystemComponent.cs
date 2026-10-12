@@ -9,6 +9,8 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using RenderWorld = Prowl.Graphite.Rendering.RenderWorld;
+
 namespace Prowl.Runtime.ParticleSystem;
 
 public enum SimulationSpace
@@ -82,7 +84,7 @@ public struct EmitParams
 }
 
 /// <summary>
-/// A CPU simulated particle system drawn with GPU instancing. Settings are grouped into modules, much
+/// A CPU simulated particle system drawn as instances the vertex shader turns to face each view. Settings are grouped into modules, much
 /// like the particle systems artists already know.
 /// <para>
 /// In edit mode a system only simulates while it, or anything above it in the hierarchy, is selected,
@@ -92,7 +94,7 @@ public struct EmitParams
 [AddComponentMenu("Effects/Particle System")]
 [ExecuteAlways]
 [ComponentIcon("")] // WandMagicSparkles
-public class ParticleSystemComponent : Component
+public class ParticleSystemComponent : Component, IRenderSync
 {
     #region Main
 
@@ -522,7 +524,6 @@ public class ParticleSystemComponent : Component
         _previewActive = false;
         ClearParticles();
         ReleaseSubEmitters();
-        Renderer.ReleaseMeshes();
     }
 
     public override void OnValidate()
@@ -609,27 +610,38 @@ public class ParticleSystemComponent : Component
     /// <summary>Records that a camera sees the system this frame, which keeps a culled system simulating.</summary>
     internal void MarkVisible() => _lastVisibleFrame = Time.FrameCount;
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    void IRenderSync.Sync(RenderWorld world)
     {
-        if (_count == 0 && !Trails.HasOrphans && CullingMode == ParticleCullingMode.AlwaysSimulate)
-            return;
+        if (_count > 0 || Trails.HasOrphans || CullingMode != ParticleCullingMode.AlwaysSimulate)
+            RefreshSpaces();
+        Renderer.Sync(this, world);
+        Light.Sync(this, world);
+    }
 
-        RefreshSpaces();
+    void IRenderSync.Detach(RenderWorld world)
+    {
+        Renderer.Detach();
+        Light.Detach();
+    }
 
-        bool visible = Renderer.Collect(this, camera, renderables);
-        if (!visible && CullingMode != ParticleCullingMode.AlwaysSimulate)
+    /// <summary>
+    /// Marks the system visible when a camera view of this frame sees it. Called once the frame's views are known, at
+    /// submit, since several views can draw a frame.
+    /// </summary>
+    internal void CheckVisibility(RenderWorld world)
+    {
+        if (CullingMode == ParticleCullingMode.AlwaysSimulate) return;
+
+        bool visible = Renderer.SeenThisFrame(this, world);
+        if (!visible)
         {
             // Nothing drawn yet, so judge by where it can emit, or a culled system could never start.
-            Frustum frustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
             AABB shape = Shape.LocalBounds().TransformBy(_emitterToWorld);
-            visible = frustum.Intersects(new AABB(shape.Min - new Float3(1f), shape.Max + new Float3(1f)))
-                || (_hasBounds && frustum.Intersects(_worldBounds));
+            visible = ParticleBuffers.AnyViewSees(world, new AABB(shape.Min - new Float3(1f), shape.Max + new Float3(1f)), 0f)
+                || (_hasBounds && ParticleBuffers.AnyViewSees(world, _worldBounds, 0f));
         }
         if (visible)
             MarkVisible();
-
-        if (Light.Enabled && _count > 0)
-            Light.Collect(this, lights);
     }
 
     public override void DrawGizmosSelected()

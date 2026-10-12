@@ -252,7 +252,7 @@ public static class ThumbnailGenerator
             byte[] pixels = new byte[w * h * 4];
             rt.MainTexture.GetData<byte>(pixels);
 
-            // Flip vertically OpenGL RT has Y=0 at bottom, we store top-down
+            // Render targets hold their bottom row first, thumbnails top first
             FlipVertical(pixels, w, h);
 
             return pixels;
@@ -314,11 +314,11 @@ public static class ThumbnailGenerator
     {
         int count = tw * th;
         byte[] outp = new byte[count * 4];
-        if (tex.ImageFormat == TextureImageFormat.Color4b)
+        if (tex.Format == Runtime.TextureFormat.RGBA8)
         {
             tex.GetData<byte>(outp.AsMemory());
         }
-        else if (tex.ImageFormat == TextureImageFormat.UnsignedShort4)
+        else if (tex.Format == Runtime.TextureFormat.RGBA16)
         {
             ushort[] s = new ushort[count * 4];
             tex.GetData<ushort>(s.AsMemory());

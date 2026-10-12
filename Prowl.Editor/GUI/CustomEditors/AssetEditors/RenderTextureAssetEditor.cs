@@ -32,7 +32,8 @@ public class RenderTextureAssetEditor : AssetImporterEditor
         public int Width = 1;
         public int Height = 1;
         public bool HasDepth;
-        public List<TextureImageFormat> Formats = [];
+        public bool Srgb;
+        public List<TextureFormat> Formats = [];
     }
 
     /// <summary>Per asset, so edits survive looking at something else and coming back. Per-instance
@@ -48,6 +49,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             Width = rt.Width,
             Height = rt.Height,
             HasDepth = rt.HasDepthAttachment,
+            Srgb = rt.Srgb,
             Formats = [.. rt.TextureFormats],
         };
         s_edits[entry.Guid] = seeded;
@@ -88,6 +90,10 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             v => edits.HasDepth = v)
             .LabelRight("Depth Attachment").Show();
 
+        Origami.Checkbox(paper, $"{id}_srgb", edits.Srgb,
+            v => edits.Srgb = v)
+            .LabelRight("sRGB (RGBA8 colour attachments)").Show();
+
         Origami.Header(paper, $"{id}_fmt_hdr", "Color Attachments").Show();
 
         for (int i = 0; i < edits.Formats.Count; i++)
@@ -103,7 +109,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             .Margin(0, 0, 0, Origami.Current.Metrics.SpacingLarge).Enter())
         {
             Origami.Button(paper, $"{id}_fmt_add", $"{EditorIcons.Plus}  Add",
-                () => edits.Formats.Add(TextureImageFormat.Color4b)).Width(90).Show();
+                () => edits.Formats.Add(TextureFormat.RGBA8)).Width(90).Show();
 
             if (edits.Formats.Count > 0)
                 Origami.Button(paper, $"{id}_fmt_rem", $"{EditorIcons.Minus}  Remove",
@@ -121,7 +127,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             // source of truth, and the reimport is what rebuilds every camera's view of this asset.
             var described = new RenderTexture();
             Description edits = s_edits[entry.Guid];
-            described.Configure(edits.Width, edits.Height, edits.HasDepth, [.. edits.Formats]);
+            described.Configure(edits.Width, edits.Height, edits.HasDepth, [.. edits.Formats], edits.Srgb);
             described.Name = Path.GetFileNameWithoutExtension(entry.Path);
 
             EchoObject echo = Serializer.Serialize(typeof(object), described);

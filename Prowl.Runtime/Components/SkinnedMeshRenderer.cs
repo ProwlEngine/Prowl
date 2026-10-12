@@ -3,12 +3,15 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using Material = Prowl.Runtime.Resources.Material;
 
 namespace Prowl.Runtime;
 
@@ -17,11 +20,11 @@ namespace Prowl.Runtime;
 /// Bones are referenced by path (relative to this GO's root)
 /// Paths like "Armature/Hips/Spine" are resolved via Transform.Find().
 /// Supports multiple materials via submeshes.
-/// Bone matrices are uploaded via a float texture (no uniform array size limit).
+/// Graphite skins and morphs the mesh on the GPU from the skin matrices and blend shape weights pushed here.
 /// </summary>
 [AddComponentMenu("Rendering/Skinned Mesh Renderer")]
 [ComponentIcon("\uf1b3")] // Cubes
-public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
+public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRenderSync
 {
     int IMaterialRenderer.MaterialSlotCount => Materials.Count;
     Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(Materials, slot);
@@ -45,9 +48,11 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
     [SerializeField]
     public string[]? BonePaths;
 
+    /// <summary>Tint every material draws with in place of its own _MainColor.</summary>
     public Color MainColor = Color.White;
 
-
+    public ShadowCasting ShadowCasting = ShadowCasting.On;
+    public bool ReceiveShadows = true;
 
     // Resolved at runtime
     [System.NonSerialized] private Transform? _rootBone;
@@ -56,17 +61,19 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
     [System.NonSerialized] private bool _resolved;
 
     // Skinning is only recomputed when the skeleton actually moves. The dirty check is the sum of every
-    // bone's Transform.Version plus the renderer's - versions are monotonic, so an unchanged sum means a
-    // static pose (skip the whole skin loop + texture upload). This also dedups redundant per-camera
-    // OnRenderCollect calls in the same frame (nothing changed between cameras).
+    // bone's Transform.Version plus the renderer's ancestors: versions are monotonic, so an unchanged sum
+    // means a static pose and the whole skin loop is skipped.
     [System.NonSerialized] private ulong _lastSkeletonVersion = ulong.MaxValue;
+    [System.NonSerialized] private Mesh? _skinnedMesh;
     [System.NonSerialized] private AABB _cachedBounds;
     // Reused per-recompute memo so bones sharing ancestors don't re-walk the chain to root each:
     // O(bones + depth) world-matrix builds instead of O(bones * depth).
     [System.NonSerialized] private readonly Dictionary<Transform, Float4x4> _worldMemo = [];
 
-    // Skin matrices for the vertex shader, four columns a bone
-    [System.NonSerialized] private ShaderDataTable? _boneTable;
+    [System.NonSerialized, NotHeld] private readonly RenderableState _renderable = new();
+    [System.NonSerialized, NotHeld] private GMaterial[] _baseMaterials = [];
+    [System.NonSerialized, NotHeld] private GMaterial[] _gpuMaterials = [];
+    [System.NonSerialized, NotHeld] private OwnedMaterial[] _tinted = [];
 
     /// <summary>
     /// Per-blend-shape weights (0-100). Length tracks the mesh's blend-shape count.
@@ -75,9 +82,8 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
     [SerializeField, HideInInspector]
     private float[]? _blendShapeWeights;
 
-    // Active morph layers, rebuilt each frame from the current weights: (layerIndex, weight, 0, 0) each
-    [System.NonSerialized] private ShaderDataTable? _morphWeightTable;
-    [System.NonSerialized] private readonly List<Float4> _activeMorphLayers = [];
+    /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
+    public RenderableHandle Renderable => _renderable.Handle;
 
     /// <summary>Number of blend shapes on the shared mesh (0 if none).</summary>
     public int BlendShapeCount
@@ -231,10 +237,8 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
     }
 
     /// <summary>
-    /// Recompute the skinning matrices, world-space bounds and bone table for the current pose.
-    /// Called only when the skeleton has actually moved (see the version check in OnRenderCollect).
-    /// Each bone's world matrix is built once via <see cref="WorldMatrixOf"/> (memoized so shared
-    /// ancestors aren't re-walked) and reused for both the skin matrix and the bounds corner.
+    /// Recompute the skin matrices and the bounds of the current pose, both in this renderer's object space.
+    /// Called only when the skeleton has actually moved (see the version check in Sync).
     /// </summary>
     private void RecomputeSkinning(Mesh mesh)
     {
@@ -250,11 +254,10 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
             Transform? bone = _bones[i];
             if (bone != null && i < mesh.BindPoses!.Length)
             {
-                Float4x4 boneWorld = WorldMatrixOf(bone);
-                _skinMatrices![i] = worldToLocal * boneWorld * mesh.BindPoses[i];
+                Float4x4 boneLocal = worldToLocal * WorldMatrixOf(bone);
+                _skinMatrices![i] = boneLocal * mesh.BindPoses[i];
 
-                // Bone world position is the translation column of its world matrix (reuses the walk above).
-                Float4 p = boneWorld.Translation;
+                Float4 p = boneLocal.Translation;
                 if (p.X < minX) minX = p.X; if (p.Y < minY) minY = p.Y; if (p.Z < minZ) minZ = p.Z;
                 if (p.X > maxX) maxX = p.X; if (p.Y > maxY) maxY = p.Y; if (p.Z > maxZ) maxZ = p.Z;
                 anyBone = true;
@@ -266,20 +269,14 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
         }
 
         // Pad by the mesh's max extent so vertices attached to edge bones aren't clipped.
-        if (anyBone)
-        {
-            float padding = MathF.Max(MathF.Max(mesh.bounds.Size.X, mesh.bounds.Size.Y), mesh.bounds.Size.Z) * 0.5f;
-            Float3 pad = new Float3(padding);
-            _cachedBounds = new AABB(new Float3(minX, minY, minZ) - pad, new Float3(maxX, maxY, maxZ) + pad);
-        }
-        else
-        {
-            _cachedBounds = mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
-        }
+        _cachedBounds = anyBone ? Padded(mesh, new AABB(new Float3(minX, minY, minZ), new Float3(maxX, maxY, maxZ))) : mesh.bounds;
+    }
 
-        _boneTable ??= new ShaderDataTable("ProwlBones", "_BoneTex", GraphicsFeature.VertexStorageBuffers);
-        _boneTable.EnsureCapacity(_skinMatrices!.Length * 4);
-        _boneTable.Write(0, MemoryMarshal.Cast<Float4x4, Float4>(_skinMatrices));
+    private static AABB Padded(Mesh mesh, AABB bounds)
+    {
+        float padding = MathF.Max(MathF.Max(mesh.bounds.Size.X, mesh.bounds.Size.Y), mesh.bounds.Size.Z) * 0.5f;
+        Float3 pad = new(padding);
+        return new AABB(bounds.Min - pad, bounds.Max + pad);
     }
 
     /// <summary>
@@ -298,173 +295,99 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint
         return world;
     }
 
-    public override void OnDisable()
-    {
-        _boneTable?.Dispose();
-        _boneTable = null;
-        _morphWeightTable?.Dispose();
-        _morphWeightTable = null;
-    }
-
-    // Set by PrepareBlendShapes each frame; consumed by ApplyBlendShapeProps per submesh.
-    [System.NonSerialized] private bool _morphReady;
-    [System.NonSerialized] private int _morphActiveCount;
-
-    /// <summary>
-    /// Once per frame: builds the mesh's static deltas (first use), resolves the current weights into
-    /// active morph layers, and writes them to the per-renderer weight table. Cheap when idle.
-    /// </summary>
-    private void PrepareBlendShapes(Mesh mesh)
-    {
-        _morphReady = false;
-        _morphActiveCount = 0;
-
-        int shapeCount = mesh.BlendShapeCount;
-        EnsureWeightsArray(shapeCount);
-
-        // Skip all morph work (including building the deltas) while every weight is zero,
-        // so un-morphed meshes cost no VRAM or per-frame upload. The shader loop is a no-op then.
-        bool anyActive = false;
-        for (int s = 0; s < shapeCount; s++)
-            if (MathF.Abs(_blendShapeWeights![s]) >= 1e-4f) { anyActive = true; break; }
-        if (!anyActive)
-            return;
-
-        mesh.EnsureMorphDeltas();
-        if (mesh.MorphDeltas == null)
-            return; // Morph deltas unavailable (e.g. data too large) shader loop stays a no-op.
-
-        // Resolve weights -> active (layer, weight) pairs, interpolating between frames by weight.
-        _activeMorphLayers.Clear();
-        for (int s = 0; s < shapeCount; s++)
-        {
-            float w = _blendShapeWeights![s];
-            if (MathF.Abs(w) < 1e-4f) continue;
-
-            int frameCount = mesh.GetBlendShapeFrameCount(s);
-            if (frameCount <= 0) continue;
-
-            if (frameCount == 1)
-            {
-                float fw = mesh.GetBlendShapeFrameWeight(s, 0);
-                AddMorphLayer(mesh.GetMorphLayerIndex(s, 0), fw != 0f ? w / fw : 0f);
-                continue;
-            }
-
-            float first = mesh.GetBlendShapeFrameWeight(s, 0);
-            float last = mesh.GetBlendShapeFrameWeight(s, frameCount - 1);
-            if (w <= first)
-            {
-                AddMorphLayer(mesh.GetMorphLayerIndex(s, 0), first != 0f ? w / first : 0f);
-            }
-            else if (w >= last)
-            {
-                AddMorphLayer(mesh.GetMorphLayerIndex(s, frameCount - 1), 1f);
-            }
-            else
-            {
-                int i = 0;
-                while (i < frameCount - 1 && mesh.GetBlendShapeFrameWeight(s, i + 1) <= w) i++;
-                float a = mesh.GetBlendShapeFrameWeight(s, i);
-                float b = mesh.GetBlendShapeFrameWeight(s, i + 1);
-                float t = b > a ? (w - a) / (b - a) : 0f;
-                AddMorphLayer(mesh.GetMorphLayerIndex(s, i), 1f - t);
-                AddMorphLayer(mesh.GetMorphLayerIndex(s, i + 1), t);
-            }
-        }
-
-        _morphActiveCount = _activeMorphLayers.Count;
-        _morphWeightTable ??= new ShaderDataTable("ProwlMorphWeights", "_MorphWeightTex", GraphicsFeature.VertexStorageBuffers);
-        _morphWeightTable.EnsureCapacity(Math.Max(1, _morphActiveCount));
-        _morphWeightTable.Write(0, CollectionsMarshal.AsSpan(_activeMorphLayers));
-        _morphReady = true;
-    }
-
-    /// <summary>Binds the morph uniforms onto a submesh's <see cref="PropertyState"/>. Cheap dictionary writes.</summary>
-    private void ApplyBlendShapeProps(Mesh mesh, PropertyState props)
-    {
-        if (!_morphReady || !mesh.MorphDeltas!.Bind(props) || !_morphWeightTable!.Bind(props))
-        {
-            props.SetInt("morphActiveCount", 0);
-            return;
-        }
-
-        props.SetInt("morphActiveCount", _morphActiveCount);
-        props.SetInt("morphVertexCount", mesh.VertexCount);
-        props.SetInt("morphNormalBase", mesh.MorphNormalBase);
-        props.SetInt("morphTangentBase", mesh.MorphTangentBase);
-    }
-
-    private void AddMorphLayer(int layer, float weight)
-    {
-        if (MathF.Abs(weight) < 1e-5f) return;
-        _activeMorphLayers.Add(new Float4(layer, weight, 0f, 0f));
-    }
-
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    void IRenderSync.Sync(RenderWorld world)
     {
         Mesh? mesh = SharedMesh;
-        if (mesh == null || Materials.Count == 0) return;
+        if (mesh.IsNotValid() || !mesh.IsLoaded || Materials.Count == 0)
+        {
+            if (mesh.IsValid() && mesh.State == AssetState.Unloaded) _ = mesh.LoadAsync();
+            Detach(world);
+            return;
+        }
+        mesh.Upload();
 
         Resolve();
 
-        AABB worldBounds;
-        if (_bones != null && _bones.Length > 0 && mesh.BindPoses != null)
+        Float4x4 matrix = Transform.LocalToWorldMatrix;
+        bool skinned = _bones != null && _bones.Length > 0 && mesh.BindPoses != null;
+        if (skinned)
         {
-            if (_skinMatrices == null || _skinMatrices.Length != _bones.Length)
+            if (_skinMatrices == null || _skinMatrices.Length != _bones!.Length)
             {
-                _skinMatrices = new Float4x4[_bones.Length];
-                _lastSkeletonVersion = ulong.MaxValue; // force a recompute after a bone-count change
+                _skinMatrices = new Float4x4[_bones!.Length];
+                _lastSkeletonVersion = ulong.MaxValue;
             }
 
-            // Dirty check: sum of monotonic Transform.Versions across every bone and the renderer's own
-            // ancestor chain (so moving a shared character root, which bumps none of the bones, still
-            // refreshes the world-space bounds used for culling). Unchanged sum => static pose, so the
-            // cached skin matrices, bone table and bounds from last frame are still valid.
             ulong version = 0;
             for (Transform? t = Transform; t != null; t = t.Parent)
                 version += t.Version;
             for (int i = 0; i < _bones.Length; i++)
                 if (_bones[i] != null) version += _bones[i]!.Version;
 
-            if (version != _lastSkeletonVersion || _boneTable == null)
+            if (version != _lastSkeletonVersion || _skinnedMesh != mesh)
             {
                 _lastSkeletonVersion = version;
+                _skinnedMesh = mesh;
                 RecomputeSkinning(mesh);
             }
+        }
 
-            worldBounds = _cachedBounds;
+        AABB? bounds = skinned ? _cachedBounds : mesh.HasBlendShapes ? Padded(mesh, mesh.bounds) : null;
+
+        _renderable.Sync(world, new RenderableState.Desc
+        {
+            Mesh = mesh.GpuIfLoaded,
+            Materials = TintedMaterials(mesh.SubMeshCount),
+            Transform = (Double4x4)matrix,
+            TransformVersion = Transform.WorldVersion,
+            Flags = RenderableState.FlagsFor(GameObject, false, ReceiveShadows, motionVectors: true) | ShadowCasting.ToFlags(),
+            LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
+            ObjectId = (uint)InstanceID,
+            Lightmap = BakedLightingBinding.For(GameObject),
+            Bounds = bounds,
+        });
+
+        RenderableHandle handle = _renderable.Handle;
+        if (!handle.IsValid) return;
+
+        world.SetBones(handle, skinned ? _skinMatrices : ReadOnlySpan<Float4x4>.Empty);
+
+        int shapeCount = mesh.BlendShapeCount;
+        if (shapeCount > 0)
+        {
+            EnsureWeightsArray(shapeCount);
+            world.SetBlendShapeWeights(handle, _blendShapeWeights);
         }
         else
         {
-            worldBounds = mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+            world.SetBlendShapeWeights(handle, ReadOnlySpan<float>.Empty);
         }
+    }
 
-        // Resolve blend-shape weights -> active morph layers + weight texture (once per frame).
-        if (mesh.HasBlendShapes)
-            PrepareBlendShapes(mesh);
-
-        // Each submesh draws with its material, the last one reused for extra submeshes.
-        int subCount = mesh.SubMeshCount;
-        for (int s = 0; s < subCount && Materials.Count > 0; s++)
+    // Each slot's material as a child carrying MainColor as its _MainColor
+    private GMaterial[] TintedMaterials(int subMeshCount)
+    {
+        GMaterial[] materials = RenderableState.MaterialsFor(Materials, subMeshCount, ref _baseMaterials);
+        if (_tinted.Length != materials.Length)
         {
-            Material? mat = s < Materials.Count ? Materials[s] : Materials[^1];
-            if (mat is not { IsLoaded: true }) continue;
-
-            PropertyState props = new();
-            props.SetInt("_ObjectID", InstanceID);
-            props.SetColor("_MainColor", MainColor);
-            Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
-            LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
-            if (_boneTable != null && _boneTable.Bind(props))
-                props.SetInt("boneCount", _skinMatrices?.Length ?? 0);
-
-            if (mesh.HasBlendShapes)
-                ApplyBlendShapeProps(mesh, props);
-
-            renderables.Add(new SkinnedMeshRenderable(
-                mesh, mat, Transform.LocalToWorldMatrix,
-                GameObject.LayerIndex, worldBounds, props, subMeshIndex: s));
+            foreach (OwnedMaterial old in _tinted) old.Release();
+            _tinted = new OwnedMaterial[materials.Length];
+            for (int i = 0; i < _tinted.Length; i++) _tinted[i] = new OwnedMaterial();
         }
+        if (_gpuMaterials.Length != materials.Length) _gpuMaterials = new GMaterial[materials.Length];
+        for (int i = 0; i < materials.Length; i++)
+        {
+            _gpuMaterials[i] = _tinted[i].Of(materials[i])!;
+            _tinted[i].SetColor("_MainColor", MainColor);
+        }
+        return _gpuMaterials;
+    }
+
+    void IRenderSync.Detach(RenderWorld world) => Detach(world);
+
+    private void Detach(RenderWorld world)
+    {
+        _renderable.Detach(world);
+        foreach (OwnedMaterial tinted in _tinted) tinted.Release();
     }
 }

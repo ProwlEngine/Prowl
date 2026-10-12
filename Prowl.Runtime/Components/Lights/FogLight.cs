@@ -7,9 +7,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Add to a GameObject with a Light to make it contribute to volumetric fog.
-/// Without this component, the light renders normally but does not produce visible scattering
-/// in the volumetric fog effect.
+/// Tunes how a Light scatters in volumetric fog. Lights without one scatter at their own colour and intensity.
 /// </summary>
 [AddComponentMenu("Rendering/Fog Light")]
 [RequireComponent(typeof(Light))]

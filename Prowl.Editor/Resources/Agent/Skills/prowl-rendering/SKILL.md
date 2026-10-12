@@ -74,11 +74,12 @@ The viewmodel camera is a child of the world camera, and the arms and gun object
 
 ## Environment
 
-`Scene.Current.Fog`, `Ambient` and `Skybox` are struct fields. Set them directly, for example `Scene.Current.Fog.Mode = Scene.FogParams.FogMode.Off`. Copying one into a local and changing the local does nothing. Fog is on by default (exponential squared, density 0.01).
+`Scene.Current.Environment` holds the sky, ambient light and fog. `SkyMaterial` is a Material whose shader has a Sky pass, usually from `SceneEnvironment.CreateSkyMaterial(BuiltInSky.Procedural)` (also Gradient, Cubemap, Panorama, SixSided), null shows `SkyColor`. `Ambient` (Mode Uniform, Hemisphere or Sky, Intensity, colours) and `Fog` (Mode Off, Linear, Exponential, ExponentialSquared, Color, Density, Start, End, UseSky) are struct fields: set them directly, for example `Scene.Current.Environment.Fog.Mode = FogMode.Off` (FogMode and AmbientMode are in Prowl.Graphite.Rendering). Copying one into a local and changing the local does nothing. Fog is on by default (exponential squared, density 0.01).
 
 ## Lights and lightmaps
 
-- `DirectionalLight`, `PointLight`, `SpotLight`. The brightest directional light is the sun.
+- One `Light` component, its `Type` one of `LightType.Directional`, `Point`, `Spot`, `Rect`, `Disk`, `Tube`. It shines along Forward. Spot angles are half angles (`InnerAngle`, `OuterAngle`), rects use `Width` and `Height`, disks `Width` as the diameter, tubes `Length` and `SourceRadius`. `Cookie` (2D for a spot, cubemap for a point) and `IesProfile` work on points and spots. Directional, point and spot lights cast shadows (`CastShadows`, `ShadowResolution`, `ShadowFilter`, directional `Cascades` and `ShadowDistance`). The brightest directional light is the sun.
+- Renderers take `ShadowCasting` (`Off`, `On`, `ShadowsOnly`) and `ReceiveShadows`.
 - Only objects with `IsStatic` set get lightmaps. The bake runs from the Environment panel and only progresses while that panel is open.
 
 ## Particles

@@ -534,19 +534,17 @@ public class SceneManagementTests : RuntimeTestBase
     {
         Scene first = CreateScene(enable: true);
         GameObject keeper = CreateGameObject("Keeper");
-        keeper.AddComponent<ReflectionProbe>();
         GameCanvas canvas = keeper.AddComponent<GameCanvas>();
         first.Add(keeper);
         Scene.Load(first);
         Scene.ProcessPendingLoad();
         Scene.DontDestroyOnLoad(keeper);
-        Assert.Equal(1, first.ReflectionProbes.Count);
+        Assert.Equal([canvas], first.Canvases);
 
         Scene second = CreateScene();
         Scene.Load(second);
         Scene.ProcessPendingLoad();
 
-        Assert.Equal(1, second.ReflectionProbes.Count);
         Assert.Equal([canvas], second.Canvases);
     }
 

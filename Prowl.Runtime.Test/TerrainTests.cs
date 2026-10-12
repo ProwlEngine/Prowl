@@ -455,16 +455,18 @@ public class TerrainTests
     }
 
     [Fact]
-    public void DetailTexturesRebuildWhenDensitiesChange()
+    public void DetailTexturesRepackInPlaceWhenDensitiesChange()
     {
         using var data = new TerrainData();
         data.ResizeDetailMaps(32);
         Texture2D first = data.GetDetailTextures()[0];
+        Assert.False(data.TryGetDetailBounds(0, out _));
 
         data.SetDetailDensity(0, 4, 4, 1f);
-        Texture2D second = data.GetDetailTextures()[0];
 
-        Assert.NotSame(first, second);
+        // Materials keep the texture they were given, so the repack writes into the same one
+        Assert.Same(first, data.GetDetailTextures()[0]);
+        Assert.True(data.TryGetDetailBounds(0, out _));
     }
 
     [Fact]
@@ -683,31 +685,28 @@ public class TerrainTests
     [Fact]
     public void GrassShaderResolvesTheScatterInclude()
     {
-        // A missing include is not a parse failure, it silently pastes nothing, so check that the
-        // placement code actually made it into the vertex stage.
-        string source = Shader.LoadDefault(DefaultShader.Grass).Passes.First().VertexSource;
-
-        Assert.Contains("scatterResolve", source);
+        // A missing include only fails when the variant compiles on a device, so check it resolves headless
+        Assert.Contains("#include \"Prowl/TerrainScatter.glsl\"", Shader.LoadDefault(DefaultShader.Grass).Source);
+        Assert.Contains("scatterResolve", BuiltInShaders.Resolve("Prowl/TerrainScatter.glsl"));
     }
 
     [Fact]
-    public void EveryScatterUniformIsOneTheRendererWrites()
+    public void EveryScatterUniformIsAGrassPropertyTheRendererWrites()
     {
-        // Tripwire: a uniform added to TerrainScatter.glsl that TerrainDetailRenderer never sets
-        // reads as zero and quietly breaks placement. Add it to the renderer, then to this list.
-        string[] expected =
-        [
-            "_ScatterOriginCell", "_ScatterCellSize", "_ScatterCellsPerSide", "_ScatterLevel",
-            "_ScatterMaxLevel", "_ScatterCentre", "_ScatterRadii",
-        ];
+        // Tripwire: a uniform added to TerrainScatter.glsl must be a Grass property and set by TerrainDetailRenderer,
+        // or it reads as zero and quietly breaks placement. Add it to both, then to this list.
+        string[] expected = ["_ScatterCellSize", "_ScatterMaxLevel"];
 
-        string source = Shader.LoadDefault(DefaultShader.Grass).Passes.First().VertexSource;
+        string source = BuiltInShaders.Resolve("Prowl/TerrainScatter.glsl")!;
         string[] declared = [.. Regex.Matches(source, @"uniform\s+\w+\s+(_Scatter\w+)\s*;")
             .Select(m => m.Groups[1].Value)
             .Distinct()
             .OrderBy(n => n)];
 
         Assert.Equal(expected.OrderBy(n => n).ToArray(), declared);
+        Shader grass = Shader.LoadDefault(DefaultShader.Grass);
+        foreach (string name in declared)
+            Assert.NotNull(grass.FindProperty(name));
     }
 
     #endregion
@@ -931,23 +930,12 @@ public class TerrainSceneTests : RuntimeTestBase
                 data.SetDetailDensity(0, x, z, density);
     }
 
-    private List<Float3> CollectMeshDetails(Scene scene, TerrainComponent terrain, Float3 cameraPosition)
+    private static List<Float3> CollectMeshDetails(Scene scene, TerrainComponent terrain, Float3 cameraPosition)
     {
-        GameObject cameraObject = CreateGameObject("Camera");
-        scene.Add(cameraObject);
-        cameraObject.Transform.Position = cameraPosition;
-        Camera camera = cameraObject.AddComponent<Camera>();
-
-        var renderables = new List<IRenderable>();
-        new TerrainMeshDetailRenderer().CollectRenderables(terrain.Data!, terrain, camera, renderables);
-
         var positions = new List<Float3>();
-        foreach (IRenderable renderable in renderables)
-        {
-            renderable.GetRenderingData(default, out _, out _, out _, out InstanceData[]? instances);
-            foreach (InstanceData instance in instances!)
-                positions.Add(Float4x4.TransformPoint(Float3.Zero, instance.GetMatrix()));
-        }
+        foreach (var build in new TerrainMeshDetailRenderer().Collect(terrain.Data!, terrain, 0, cameraPosition))
+            foreach (Double4x4 t in build.Transforms)
+                positions.Add(new Float3((float)t.c3.X, (float)t.c3.Y, (float)t.c3.Z));
         return positions;
     }
 

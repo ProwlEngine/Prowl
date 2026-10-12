@@ -57,7 +57,8 @@ public sealed class ScriptingShowcaseGame : StationGame
         _stone = Lit(new Color(0.08f, 0.08f, 0.09f, 1f), 0f, 0.8f);
 
         var sun = new GameObject("Sun");
-        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        Light light = sun.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.ShadowDistance = 60f;
         light.Intensity = 0.6f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
@@ -302,10 +303,10 @@ public sealed class ScriptingShowcaseGame : StationGame
 
         // Textures belong to the main thread, so hop back before touching one.
         await GameTask.MainThread();
-        var texture = new Texture2D((uint)size, (uint)size);
+        var texture = new Texture2D((uint)size, (uint)size, srgb: true);
         texture.SetData(new Memory<Color32>(pixels));
         texture.GenerateMipmaps();
-        texture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
+        texture.Filter = FilterMode.Trilinear;
         _canvas.SetTexture("_MainTex", texture);
         _paintStatus = $"painted in {timer.ElapsedMilliseconds} ms without stalling a frame";
     }

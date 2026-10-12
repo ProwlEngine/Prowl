@@ -24,8 +24,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
-    <PackageReference Include="Prowl.Ember" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Ember.Analyzers" Version="$(ProwlPackageVersion)" />
+    <ProjectReference Include="..\..\Anthology\Ember\Ember\Prowl.Ember.csproj" />
+    <ProjectReference Include="..\..\Anthology\Ember\Analyzers\Prowl.Ember.Analyzers.csproj" OutputItemType="Analyzer" />
     <!-- EngineObject null-safety analyzer: analyzes the editor's own source, and (as a normal reference) is
          copied to output + made available in-process so RoslynScriptBackend applies it to user scripts too. -->
     <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" />
@@ -43,14 +43,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- <ProjectReference Include="..\..\Anthology\Origami\Origami\Origami.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Photonic\Photonic\Photonic.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Rosetta\Rosetta\Rosetta.csproj" /> -->
-    <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
-    <PackageReference Include="Prowl.Origami" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Photonic" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Rosetta" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
+    <ProjectReference Include="..\..\Anthology\Origami\Origami\Origami.csproj" />
+    <ProjectReference Include="..\..\Anthology\Photonic\Photonic\Photonic.csproj" />
+    <ProjectReference Include="..\..\Anthology\Rosetta\Rosetta\Rosetta.csproj" />
+    <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
   </ItemGroup>
 

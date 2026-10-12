@@ -3,44 +3,35 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite;
+using Prowl.Graphite.RenderGraph;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Quill;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using GRenderPipeline = Prowl.Graphite.RenderGraph.RenderPipeline;
+using GTexture = Prowl.Graphite.Texture;
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
+using IndexFormat = Prowl.Graphite.IndexFormat;
+
 namespace Prowl.Runtime.GUI;
 
+/// <summary>
+/// Draws Paper's canvas through Graphite. Each frame's geometry and draw calls are copied when Paper hands them over,
+/// and drawn by a host pipeline after the frame's views, into <see cref="Target"/> or the window, so the UI can show
+/// what the views drew. Backdrop blur captures what is under a frosted shape and blurs it with dual Kawase.
+/// </summary>
 public class PaperRenderer : ICanvasRenderer
 {
-    private GraphicsProgram _shaderProgram;
-    private GraphicsVertexArray _vertexArrayObject;
-    private GraphicsBuffer _vertexBuffer;
-    private GraphicsBuffer _elementBuffer;
-    private Texture2D _defaultTexture;
-
-    private Float4x4 _projection;
-    private int _fbWidth;
-    private int _fbHeight;
-
-    // Backdrop blur (dual Kawase, shares the UI shader's BlurDown/BlurUp passes)
-    public bool SupportsBackdropBlur => true;
-    // If the frosted glass appears vertically mirrored, flip this to 0.
-    private const int BackdropFlipY = 1;
-    private const int BlurDownPass = 1;
-    private const int BlurUpPass = 2;
-    // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The UI
-    // shader composites straight from the base level, so this also decides the resolution the
-    // backdrop is sampled at. Quarter is four times cheaper across every pass and is imperceptible
-    // above roughly an eight pixel radius, since detail finer than the blur is destroyed anyway.
+    // How far below the target the blur pyramid starts: 1 is half resolution, 2 a quarter
     private const int BlurBaseShift = 2;
-
     private const int MaxBlurLevels = 6;
 
-    // Measured blur of the pipeline below, as a standard deviation in screen pixels. Rows are 1 to 4
-    // iterations, columns are offsets 1 to 3 in steps of 0.25. Offset 3 on one row matches offset 1 on
-    // the next, so walking the table gives one continuous range of strengths with no jump between rows.
+    // Measured blur of the pipeline, as a standard deviation in screen pixels. Rows are 1 to 4 iterations, columns are
+    // offsets 1 to 3 in steps of 0.25. Offset 3 on one row matches offset 1 on the next, so the table is one smooth range.
     private static readonly float[,] BlurSigmaTable =
     {
         { 4.17f, 5.02f, 5.69f, 6.36f, 6.93f, 7.43f, 7.86f, 8.32f, 8.72f },
@@ -50,134 +41,64 @@ public class PaperRenderer : ICanvasRenderer
     };
     private const float BlurOffsetMin = 1f;
     private const float BlurOffsetStep = 0.25f;
-    // Measured blur of the half resolution capture alone, the sharpest backdrop available.
     private const float CaptureSigma = 0.866f;
-    // A blur radius maps to a standard deviation of a quarter of it.
     private const float SigmaPerRadius = 0.25f;
-    private static readonly TextureImageFormat[] BlurFormat = [TextureImageFormat.Color4b];
-    private Resources.Material _blurMat;
 
-    // The blur targets live as long as the renderer and are only resized when the framebuffer is.
-    // The capture is half the framebuffer, and each pyramid level halves again from a quarter.
-    private RenderTexture? _blurCapture;
-    private readonly RenderTexture?[] _blurLevels = new RenderTexture?[MaxBlurLevels];
-    private int _blurTargetWidth;
-    private int _blurTargetHeight;
+    private static readonly Keyword BlurDown = new("MODE", "DOWN");
+    private static readonly Keyword BlurUp = new("MODE", "UP");
+    private static readonly Keyword BlurCopy = new("MODE", "COPY");
 
-    // Whether anything has been drawn since the pyramid was last built, and the radius it was built
-    // for. A frosted draw with neither changed can reuse the blur it already has.
-    private bool _backdropDirty = true;
-    private float _lastBlurRadius = -1f;
+    private Texture2D _defaultTexture = null!;
+    private int _fbWidth;
+    private int _fbHeight;
+    private readonly Dictionary<Framebuffer, (GRenderPipeline Pipeline, UiPass Pass)> _pipelines = [];
+
+    public bool SupportsBackdropBlur => true;
+
+    /// <summary>Where the UI draws, null for the window.</summary>
+    public RenderTexture? Target { get; set; }
+
+    // A pipeline per target, since the graph imports the target it draws into when it is built
+    private GRenderPipeline PipelineFor(Framebuffer target)
+    {
+        if (_pipelines.TryGetValue(target, out (GRenderPipeline Pipeline, UiPass Pass) entry))
+            return entry.Pipeline;
+
+        List<Framebuffer> stale = [];
+        foreach (Framebuffer framebuffer in _pipelines.Keys)
+            if (framebuffer.IsDisposed) stale.Add(framebuffer);
+        foreach (Framebuffer framebuffer in stale)
+        {
+            (GRenderPipeline pipeline, UiPass pass) = _pipelines[framebuffer];
+            Graphics.DeferDispose(pass);
+            Graphics.DeferDispose(pipeline);
+            _pipelines.Remove(framebuffer);
+        }
+
+        UiPass created = new(new Graphite.RenderTexture(target));
+        entry = (new GRenderPipeline([created]) { Name = "Paper" }, created);
+        _pipelines[target] = entry;
+        return entry.Pipeline;
+    }
 
     public void Initialize(int width, int height)
     {
-        InitializeShaders();
-
-        _vertexBuffer = Graphics.CreateBuffer<byte>(BufferType.VertexBuffer, Array.Empty<byte>(), true);
-        _elementBuffer = Graphics.CreateBuffer<uint>(BufferType.ElementsBuffer, Array.Empty<uint>(), true);
-
-        // Vertex format matches Quill's Vertex struct (20 bytes):
-        //   0: Float2     position     (offset 0)
-        //   1: Float2     UV           (offset 8)
-        //   2: UByte4     color        (offset 16, normalized)
-        var vertexFormat = new VertexFormat(
-        [
-            new((VertexFormat.VertexSemantic)0, VertexFormat.VertexType.Float, 2, 0),
-            new((VertexFormat.VertexSemantic)1, VertexFormat.VertexType.Float, 2, 0),
-            new((VertexFormat.VertexSemantic)2, VertexFormat.VertexType.UnsignedByte, 4, 0, true),
-        ]);
-
-        _vertexArrayObject = Graphics.CreateVertexArray(vertexFormat, _vertexBuffer, _elementBuffer);
-
-        _defaultTexture = new Texture2D(1, 1);
+        _defaultTexture = new Texture2D(1, 1) { Name = "Paper White" };
         _defaultTexture.SetData(new Memory<byte>([255, 255, 255, 255]), 0, 0, 1, 1);
-
         UpdateProjection(width, height);
     }
 
-    /// <summary>The framebuffer the UI draws into, null for the window. Backdrop blur captures from it and draws back into it.</summary>
-    public GraphicsFrameBuffer? Target { get; set; }
-
     public void UpdateProjection(int width, int height)
     {
-        _fbWidth = width;
-        _fbHeight = height;
-        _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
+        _fbWidth = Math.Max(1, width);
+        _fbHeight = Math.Max(1, height);
     }
-
-    public void Cleanup()
-    {
-        _vertexBuffer?.Dispose();
-        _elementBuffer?.Dispose();
-        _vertexArrayObject?.Dispose();
-        _shaderProgram?.Dispose();
-        if (_defaultTexture.IsValid()) _defaultTexture.Dispose();
-        ReleaseBlurTargets();
-    }
-
-    private void ReleaseBlurTargets()
-    {
-        if (_blurCapture.IsValid()) _blurCapture.Dispose();
-        _blurCapture = null;
-        for (int i = 0; i < MaxBlurLevels; i++)
-        {
-            if (_blurLevels[i].IsValid()) _blurLevels[i]!.Dispose();
-            _blurLevels[i] = null;
-        }
-
-        _blurTargetWidth = _blurTargetHeight = 0;
-        _lastBlurRadius = -1f;
-    }
-
-    private void EnsureBlurTargets()
-    {
-        if (_blurCapture.IsValid() && _blurTargetWidth == _fbWidth && _blurTargetHeight == _fbHeight)
-            return;
-
-        _blurCapture = Resize(_blurCapture, _fbWidth >> 1, _fbHeight >> 1);
-        for (int i = 0; i < MaxBlurLevels; i++)
-            _blurLevels[i] = Resize(_blurLevels[i], _fbWidth >> (i + BlurBaseShift), _fbHeight >> (i + BlurBaseShift));
-
-        _blurTargetWidth = _fbWidth;
-        _blurTargetHeight = _fbHeight;
-        _lastBlurRadius = -1f;
-
-        static RenderTexture Resize(RenderTexture? target, int width, int height)
-        {
-            width = Math.Max(1, width);
-            height = Math.Max(1, height);
-            if (target.IsNotValid()) return new RenderTexture(width, height, false, BlurFormat);
-            target!.Configure(width, height, false, BlurFormat);
-            return target;
-        }
-    }
-
-    private void InitializeShaders()
-    {
-        var shader = Shader.LoadDefault(DefaultShader.UI);
-        if (shader.IsNotValid())
-        {
-            Debug.LogError("Failed to load UI shader.");
-            return;
-        }
-
-        Rendering.Shaders.ShaderPass pass = shader.GetPass(0);
-        if (!pass.TryGetVariantProgram((Dictionary<string, bool>?)null, out _shaderProgram))
-            Debug.LogError("Failed to compile UI shader.");
-    }
-
-    private static Float4 ToFloat4(Color32 color)
-        => new(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
 
     public object CreateTexture(uint width, uint height)
     {
-        var tex = new Texture2D(width, height);
-
-        Graphics.SetTextureFilters(tex.Handle, TextureMin.Linear, TextureMag.Linear);
-        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
-
-        return tex;
+        var texture = new Texture2D(width, height) { Name = "Paper Texture" };
+        texture.SetWrap(WrapMode.Clamp);
+        return texture;
     }
 
     public Int2 GetTextureSize(object texture)
@@ -192,116 +113,106 @@ public class PaperRenderer : ICanvasRenderer
         tex.SetData(new Memory<byte>(data), bounds.Min.X, bounds.Min.Y, (uint)bounds.Size.X, (uint)bounds.Size.Y);
     }
 
+    private static Float4 ToFloat4(Color32 color) => new(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
+
+    // One draw call's values, worked out on the main thread so the render thread reads nothing of Paper's
+    private struct Call
+    {
+        public int ElementCount;
+        public GTexture? Texture, Font;
+        public TextureView? TextureView;
+        public Sampler? TextureSampler, FontSampler;
+        public Float2 AtlasTexel;
+        public Float4 ScissorTransform; public Float2 ScissorTranslation, ScissorExtent;
+        public Float4 BrushTransform; public Float2 BrushTranslation;
+        public int BrushType;
+        public Float4 BrushColor1, BrushColor2, BrushParams;
+        public Float2 BrushParams2;
+        public Float4 TextureTransform; public Float2 TextureTranslation;
+        public float Blur;
+    }
+
+    /// <summary>A frame of UI as copied from Paper, and the target it draws into.</summary>
+    private sealed class UiView : IRenderView
+    {
+        public required Framebuffer Framebuffer;
+        public required uint Width, Height;
+        public required int Id;
+        public required byte[] Vertices;
+        public required uint[] Indices;
+        public required Call[] Calls;
+        public required float SdfRange;
+        public required bool Clear;
+        public required Sampler LinearClamp;
+        public required GTexture White;
+
+        public uint PixelWidth => Width;
+        public uint PixelHeight => Height;
+        public int ViewId => Id;
+        public string Name => "Paper";
+    }
+
+    private readonly int _viewId = Graphics.NewViewId();
+
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
-        if (drawCalls.Count == 0) return;
+        if (Graphics.Device == null) return;
+        RenderTexture? target = Target.IsValid() ? Target : Graphics.WindowTarget;
+        if (target.IsNotValid() || target.Framebuffer is not { } framebuffer) return;
 
         float fbScale = canvas.FramebufferScale;
-
-        var state = new RasterizerState
+        GTexture white = _defaultTexture.GpuTexture!;
+        Call[] calls = new Call[drawCalls.Count];
+        for (int i = 0; i < calls.Length; i++)
         {
-            DepthTest = false,
-            DoBlend = true,
-            BlendSrc = RasterizerState.Blending.One,
-            BlendDst = RasterizerState.Blending.OneMinusSrcAlpha,
-            Blend = RasterizerState.BlendMode.Add,
-            CullFace = RasterizerState.PolyFace.None,
-        };
-
-        if (_blurMat.IsNotValid()) _blurMat = new Resources.Material(Shader.LoadDefault(DefaultShader.UI));
-
-        using CommandBuffer cmd = Graphics.GetCommandBuffer("Paper UI");
-
-        cmd.SetRasterState(state);
-        cmd.SetShader(_shaderProgram);
-        cmd.SetMatrix("projection", in _projection);
-        cmd.SetTexture("backdropTexture", _defaultTexture);
-
-        // Upload raw Vertex data (20 bytes per vertex). The canvas hands out its backing store
-        // directly, so this reinterprets it in place rather than copying the geometry out twice.
-        if (canvas.VertexCount > 0)
-            cmd.UpdateBuffer<byte>(_vertexBuffer, MemoryMarshal.AsBytes(canvas.Vertices));
-
-        if (canvas.IndexCount > 0)
-            cmd.UpdateBuffer<uint>(_elementBuffer, canvas.Indices);
-
-        // A new frame means the framebuffer behind any frosted shape has changed.
-        _backdropDirty = true;
-
-        int indexOffset = 0;
-        foreach (DrawCall drawCall in drawCalls)
-        {
-            // Backdrop blur: capture the framebuffer behind this shape, blur it, then restore
-            // the UI render state so the shape composites over the blurred backdrop.
-            float blurAmount = (float)drawCall.Brush.BackdropBlur;
-            if (blurAmount > 0f)
-            {
-                RenderTexture blurred = RenderBackdropBlur(cmd, blurAmount, out float blurMix);
-
-                cmd.SetRenderTarget(Target);
-                cmd.SetViewport(0, 0, (uint)_fbWidth, (uint)_fbHeight);
-                cmd.SetRasterState(state);
-                cmd.SetShader(_shaderProgram);
-                cmd.SetMatrix("projection", in _projection);
-                cmd.SetTexture("backdropTexture", blurred.MainTexture);
-                cmd.SetTexture("backdropSharpTexture", _blurCapture!.MainTexture);
-                cmd.SetFloat("backdropMix", blurMix);
-                cmd.SetVector("viewportSize", new Float2(_fbWidth, _fbHeight));
-                cmd.SetInt("backdropFlipY", BackdropFlipY);
-            }
-            cmd.SetFloat("backdropBlurAmount", blurAmount);
-
-            // Texture. The brush/shape texture goes on texture0; the font atlas is bound separately
-            // as a persistent sampler so text batches into the same draw call as surrounding shapes.
+            DrawCall drawCall = drawCalls[i];
             Texture2D? texture = drawCall.Texture as Texture2D;
-            cmd.SetTexture("texture0", texture.IsValid() ? texture : _defaultTexture);
-
-            Texture2D? fontTexture = drawCall.FontAtlas as Texture2D;
-            cmd.SetTexture("fontTexture", fontTexture.IsValid() ? fontTexture : _defaultTexture);
-
-            // Font atlas metrics, so the text distance field resolves at any zoom.
-            Int2 atlasSize = fontTexture.IsValid() ? new Int2((int)fontTexture.Width, (int)fontTexture.Height) : new Int2(1, 1);
-            cmd.SetVector("atlasTexelSize", new Float2(
-                atlasSize.X > 0 ? 1f / atlasSize.X : 0f,
-                atlasSize.Y > 0 ? 1f / atlasSize.Y : 0f));
-            cmd.SetFloat("sdfPxRange", canvas.Text.FontEngine.DistanceRange);
-
-            // Scissor and brush transforms are 2D affines with the framebuffer scale already folded
-            // in, so the shader needs neither a matrix nor a dpi divide.
-            drawCall.GetScissor(fbScale, out Float4 scissorXf, out Float2 scissorT, out Float2 extent);
-            cmd.SetVector("scissorTransform", scissorXf);
-            cmd.SetVector("scissorTranslation", scissorT);
-            cmd.SetVector("scissorExt", extent);
-
-            // Brush
-            drawCall.GetBrushTransform(fbScale, out Float4 brushXf, out Float2 brushT);
-            cmd.SetVector("brushTransform", brushXf);
-            cmd.SetVector("brushTranslation", brushT);
-            cmd.SetInt("brushType", (int)drawCall.Brush.Type);
-            cmd.SetVector("brushColor1", ToFloat4(drawCall.Brush.Color1));
-            cmd.SetVector("brushColor2", ToFloat4(drawCall.Brush.Color2));
-            cmd.SetVector("brushParams", new Float4(
-                drawCall.Brush.Point1.X, drawCall.Brush.Point1.Y,
-                drawCall.Brush.Point2.X, drawCall.Brush.Point2.Y));
-            cmd.SetVector("brushParams2", new Float2(
-                drawCall.Brush.CornerRadii, drawCall.Brush.Feather));
-            drawCall.GetTextureTransform(fbScale, out Float4 texXf, out Float2 texT);
-            cmd.SetVector("textureTransform", texXf);
-            cmd.SetVector("textureTranslation", texT);
-
-            cmd.DrawIndexed(_vertexArrayObject, Topology.Triangles, (uint)drawCall.ElementCount, (uint)indexOffset, 0, true);
-            indexOffset += drawCall.ElementCount;
-            if (drawCall.ElementCount > 0) _backdropDirty = true;
+            Texture2D? font = drawCall.FontAtlas as Texture2D;
+            ref Call call = ref calls[i];
+            call.ElementCount = drawCall.ElementCount;
+            call.Texture = texture.IsValid() ? texture.GpuIfLoaded : null;
+            call.TextureView = texture.IsValid() ? texture.DisplayViewIfLoaded : null;
+            call.TextureSampler = texture.IsValid() ? Graphics.GetSampler(texture.SamplerUnchecked) : null;
+            call.Font = font.IsValid() ? font.GpuIfLoaded : null;
+            call.FontSampler = font.IsValid() ? Graphics.GetSampler(font.SamplerUnchecked) : null;
+            Int2 atlasSize = font.IsValid() ? new Int2((int)font.Width, (int)font.Height) : new Int2(1, 1);
+            call.AtlasTexel = new Float2(atlasSize.X > 0 ? 1f / atlasSize.X : 0f, atlasSize.Y > 0 ? 1f / atlasSize.Y : 0f);
+            drawCall.GetScissor(fbScale, out call.ScissorTransform, out call.ScissorTranslation, out call.ScissorExtent);
+            drawCall.GetBrushTransform(fbScale, out call.BrushTransform, out call.BrushTranslation);
+            call.BrushType = (int)drawCall.Brush.Type;
+            call.BrushColor1 = ToFloat4(drawCall.Brush.Color1);
+            call.BrushColor2 = ToFloat4(drawCall.Brush.Color2);
+            call.BrushParams = new Float4(drawCall.Brush.Point1.X, drawCall.Brush.Point1.Y, drawCall.Brush.Point2.X, drawCall.Brush.Point2.Y);
+            call.BrushParams2 = new Float2(drawCall.Brush.CornerRadii, drawCall.Brush.Feather);
+            drawCall.GetTextureTransform(fbScale, out call.TextureTransform, out call.TextureTranslation);
+            call.Blur = (float)drawCall.Brush.BackdropBlur;
         }
 
-        Graphics.Submit(cmd);
+        bool drawnUnder = false;
+        foreach (Graphite.Rendering.ViewDesc view in Graphics.FrameViews)
+            if (view.Target == framebuffer) drawnUnder = true;
+
+        UiView frame = new()
+        {
+            Framebuffer = framebuffer,
+            Width = (uint)target.Width,
+            Height = (uint)target.Height,
+            Id = _viewId,
+            Vertices = MemoryMarshal.AsBytes(canvas.Vertices).ToArray(),
+            Indices = canvas.Indices.ToArray(),
+            Calls = calls,
+            SdfRange = canvas.Text.FontEngine.DistanceRange,
+            Clear = !drawnUnder,
+            LinearClamp = Graphics.GetSampler(SamplerDescription.Linear with { AddressModeU = SamplerAddressMode.Clamp, AddressModeV = SamplerAddressMode.Clamp, AddressModeW = SamplerAddressMode.Clamp }),
+            White = white,
+        };
+        Graphics.AddPipeline(new GraphDispatch(PipelineFor(framebuffer), [frame]));
     }
 
     /// <summary>
     /// Maps a pixel blur radius onto dual Kawase iterations and a sample offset using the measured
-    /// <see cref="BlurSigmaTable"/>, so blur strength follows the radius smoothly. <paramref name="blurMix"/>
-    /// is how much of the blurred result to use over the sharp capture, below 1 only for radii weaker than
-    /// the pyramid's lightest blur.
+    /// <see cref="BlurSigmaTable"/>. <paramref name="blurMix"/> is how much of the blurred result to use over the sharp
+    /// capture, below 1 only for radii weaker than the pyramid's lightest blur.
     /// </summary>
     private static void ComputeBlurParams(float radius, out int iterations, out float offset, out float blurMix)
     {
@@ -313,7 +224,6 @@ public class PaperRenderer : ICanvasRenderer
 
         if (sigma <= minSigma)
         {
-            // Blending two kernels adds their variances by weight, so this weight gives the wanted spread.
             float capture = CaptureSigma * CaptureSigma;
             blurMix = Math.Clamp((sigma * sigma - capture) / (minSigma * minSigma - capture), 0f, 1f);
             return;
@@ -331,48 +241,208 @@ public class PaperRenderer : ICanvasRenderer
         offset = BlurOffsetMin + (col - 1 + t) * BlurOffsetStep;
     }
 
-    /// <summary>
-    /// Captures the backbuffer and dual Kawase blurs it, returning the pyramid's base level for the
-    /// UI shader's backdrop composite. When nothing has been drawn since the last blur and the radius
-    /// is unchanged, the existing result is returned without redoing any of it.
-    /// </summary>
-    private RenderTexture RenderBackdropBlur(CommandBuffer cmd, float radius, out float blurMix)
+    // Draws a frame of UI into its target. Render thread.
+    private sealed class UiPass(Graphite.RenderTexture target) : IPass, IDisposable
     {
-        EnsureBlurTargets();
-        ComputeBlurParams(radius, out int iterations, out float offset, out blurMix);
-        RenderTexture baseLevel = _blurLevels[0]!;
-        if (!_backdropDirty && radius == _lastBlurRadius)
-            return baseLevel;
+        private ShaderPass? _canvasPass;
+        private GraphicsProgram? _canvas;
+        private ShaderPass? _blur;
+        private readonly PropertySet _properties = new();
+        private readonly PropertySet _blurProperties = new();
 
-        _backdropDirty = false;
-        _lastBlurRadius = radius;
+        private readonly GTexture?[] _blurTex = new GTexture?[MaxBlurLevels];
+        private readonly Framebuffer?[] _blurFB = new Framebuffer?[MaxBlurLevels];
+        private GTexture? _capture;
+        private Framebuffer? _captureFB;
+        private uint _builtW, _builtH;
+        private PixelFormat _builtFormat;
 
-        // A linear blit at exactly half size averages each two by two block, so the capture is a
-        // proper box filter. Blitting straight to quarter size would skip most pixels and shimmer
-        // as things move behind the glass.
-        RenderTexture capture = _blurCapture!;
-        cmd.SetRenderTargets(capture.frameBuffer, Target);
-        cmd.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, capture.Width, capture.Height, ClearFlags.Color, BlitFilter.Linear);
+        public string Name => "Paper";
 
-        // The step down to the base level only filters, so it uses the tightest spread and leaves
-        // the radius to the passes below it.
-        _blurMat.SetFloat("_Offset", 1f);
-        cmd.Blit(capture, baseLevel, _blurMat, BlurDownPass);
+        // Imported so the backdrop blur may sample what is already in the target
+        public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture("Paper Target", target, TextureState.Attachment | TextureState.Sampled);
 
-        _blurMat.SetFloat("_Offset", offset);
-        for (int i = 0; i < iterations; i++)
-            cmd.Blit(_blurLevels[i], _blurLevels[i + 1], _blurMat, BlurDownPass);
+        private void EnsurePrograms(GraphicsDevice device)
+        {
+            if (_canvas != null) return;
+            ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/PaperCanvas.shader"));
+            definition.Create(device, Graphics.Compiler, new Variant(), CompileMode.All);
+            _canvasPass = definition.Passes![0];
+            _blur = definition.Passes[1];
 
-        for (int i = iterations; i > 0; i--)
-            cmd.Blit(_blurLevels[i], _blurLevels[i - 1], _blurMat, BlurUpPass);
+            if (!_canvasPass.GetVariant(0).TryGetDescription(device.BackendType, out ShaderDescription description))
+                throw new InvalidOperationException("The Paper canvas shader did not compile.");
+            description.VertexLayouts =
+            [
+                new VertexLayoutDescription(0, (uint)Vertex.SizeInBytes,
+                    new VertexElementDescription("aPosition", VertexElementFormat.Float2, 0),
+                    new VertexElementDescription("aTexCoord", VertexElementFormat.Float2, 8),
+                    new VertexElementDescription("aColor", VertexElementFormat.Byte4_Norm, 16))
+            ];
+            description.BlendState = _canvasPass.State.ToBlendState(BlendStateDescription.SingleDisabled);
+            description.DepthStencilState = _canvasPass.State.ToDepthStencilState(DepthStencilStateDescription.Disabled);
+            description.RasterizerState = _canvasPass.State.ToRasterizerState(new(FaceCullMode.None, FrontFace.Clockwise, true, false));
+            _canvas = device.ResourceFactory.CreateGraphicsProgram(description);
+        }
 
-        return baseLevel;
+        public void Render(RenderContext context, CommandBuffer cmd)
+        {
+            UiView view = context.ViewAs<UiView>();
+            GraphicsDevice device = Graphics.Device!;
+            EnsurePrograms(device);
+            bool hasGeometry = view.Calls.Length > 0 && view.Vertices.Length > 0 && view.Indices.Length > 0;
+
+            DeviceBuffer? vertices = null, indices = null;
+            if (hasGeometry)
+            {
+                vertices = device.RentTransientBuffer(context.Task, new BufferDescription((uint)view.Vertices.Length, BufferUsage.VertexBuffer));
+                indices = device.RentTransientBuffer(context.Task, new BufferDescription((uint)(view.Indices.Length * sizeof(uint)), BufferUsage.IndexBuffer));
+                cmd.UpdateBuffer<byte>(vertices, 0, view.Vertices);
+                cmd.UpdateBuffer<uint>(indices, 0, view.Indices);
+            }
+
+            Framebuffer target = view.Framebuffer;
+            cmd.SetFramebuffer(target, view.Clear ? new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0f, 0f, 0f, 1f)), AttachmentOps.Loaded) : new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+            if (!hasGeometry) return;
+
+            // Targets hold their bottom row first, as Graphite presents views
+            Float4x4 projection = Float4x4.CreateOrthoOffCenter(0, view.Width, 0, view.Height, -1, 1);
+            bool backdropDirty = true;
+            float lastRadius = -1f;
+            int indexOffset = 0;
+            foreach (Call call in view.Calls)
+            {
+                float blurMix = 1f;
+                GTexture? backdrop = null;
+                if (call.Blur > 0f)
+                {
+                    backdrop = Backdrop(cmd, device, view, call.Blur, ref backdropDirty, ref lastRadius, out blurMix);
+                    cmd.SetFramebuffer(target, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+                }
+
+                _properties.SetMatrix("projection", projection);
+                // Paper composes in display space, so sRGB textures are read through their undecoded view
+                if (call.TextureView != null) _properties.SetTexture("texture0", call.TextureView, call.TextureSampler ?? view.LinearClamp);
+                else _properties.SetTexture("texture0", call.Texture ?? view.White, call.TextureSampler ?? view.LinearClamp);
+                _properties.SetTexture("fontTexture", call.Font ?? view.White, call.FontSampler ?? view.LinearClamp);
+                _properties.SetFloat2("atlasTexelSize", call.AtlasTexel);
+                _properties.SetFloat("sdfPxRange", view.SdfRange);
+                _properties.SetFloat4("scissorTransform", call.ScissorTransform);
+                _properties.SetFloat2("scissorTranslation", call.ScissorTranslation);
+                _properties.SetFloat2("scissorExt", call.ScissorExtent);
+                _properties.SetFloat4("brushTransform", call.BrushTransform);
+                _properties.SetFloat2("brushTranslation", call.BrushTranslation);
+                _properties.SetInt("brushType", call.BrushType);
+                _properties.SetFloat4("brushColor1", call.BrushColor1);
+                _properties.SetFloat4("brushColor2", call.BrushColor2);
+                _properties.SetFloat4("brushParams", call.BrushParams);
+                _properties.SetFloat2("brushParams2", call.BrushParams2);
+                _properties.SetFloat4("textureTransform", call.TextureTransform);
+                _properties.SetFloat2("textureTranslation", call.TextureTranslation);
+                _properties.SetFloat2("viewportSize", new Float2(view.Width, view.Height));
+                _properties.SetFloat("backdropBlurAmount", call.Blur);
+                _properties.SetFloat("backdropMix", blurMix);
+                _properties.SetTexture("backdropTexture", backdrop ?? view.White, view.LinearClamp);
+                _properties.SetTexture("backdropSharpTexture", backdrop != null ? _capture! : view.White, view.LinearClamp);
+
+                if (call.ElementCount > 0)
+                {
+                    VertexSource source = new VertexSource()
+                        .SetBuffer("aPosition", vertices!)
+                        .SetIndexBuffer(indices!, IndexFormat.UInt32, (uint)call.ElementCount);
+                    cmd.SetShader(_canvas!);
+                    cmd.SetVertexSource(source);
+                    cmd.SetProperties(_properties);
+                    cmd.DrawIndexed(1, (uint)indexOffset, 0, 0);
+                    backdropDirty = true;
+                }
+                indexOffset += call.ElementCount;
+            }
+        }
+
+        // Copies what is in the target at half size, then dual Kawase blurs it into the pyramid's base level
+        private GTexture Backdrop(CommandBuffer cmd, GraphicsDevice device, UiView view, float radius, ref bool dirty, ref float lastRadius, out float blurMix)
+        {
+            EnsureTargets(device, view);
+            ComputeBlurParams(radius, out int iterations, out float offset, out blurMix);
+            if (!dirty && radius == lastRadius)
+                return _blurTex[0]!;
+            dirty = false;
+            lastRadius = radius;
+
+            GTexture source = view.Framebuffer.ColorTargets[0].Target;
+            Blit(cmd, source, _captureFB!, BlurCopy, 1f, view.LinearClamp);
+            Blit(cmd, _capture!, _blurFB[0]!, BlurDown, 1f, view.LinearClamp);
+            for (int i = 0; i < iterations; i++)
+                Blit(cmd, _blurTex[i]!, _blurFB[i + 1]!, BlurDown, offset, view.LinearClamp);
+            for (int i = iterations; i > 0; i--)
+                Blit(cmd, _blurTex[i]!, _blurFB[i - 1]!, BlurUp, offset, view.LinearClamp);
+            return _blurTex[0]!;
+        }
+
+        private void Blit(CommandBuffer cmd, GTexture source, Framebuffer target, Keyword mode, float offset, Sampler sampler)
+        {
+            cmd.SetFramebuffer(target, new TargetLoadStoreOps(new AttachmentOps(LoadAction.DontCare, StoreAction.Store), AttachmentOps.Discard));
+            _blurProperties.SetTexture("_MainTex", source, sampler);
+            _blurProperties.SetFloat("_Offset", offset);
+            cmd.SetShader(_blur!, [mode]);
+            cmd.SetVertexSource(VertexSource.None);
+            cmd.SetProperties(_blurProperties);
+            cmd.Draw(3);
+        }
+
+        private void EnsureTargets(GraphicsDevice device, UiView view)
+        {
+            PixelFormat format = view.Framebuffer.ColorTargets[0].Target.Format;
+            if (_capture != null && _builtW == view.Width && _builtH == view.Height && _builtFormat == format) return;
+            Release();
+            _builtW = view.Width;
+            _builtH = view.Height;
+            _builtFormat = format;
+            (_capture, _captureFB) = Make(device, Math.Max(1, view.Width >> 1), Math.Max(1, view.Height >> 1), format);
+            for (int i = 0; i < MaxBlurLevels; i++)
+                (_blurTex[i], _blurFB[i]) = Make(device, Math.Max(1, view.Width >> (i + BlurBaseShift)), Math.Max(1, view.Height >> (i + BlurBaseShift)), format);
+        }
+
+        private static (GTexture, Framebuffer) Make(GraphicsDevice device, uint width, uint height, PixelFormat format)
+        {
+            GTexture texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, 1, 1, format, TextureUsage.Sampled | TextureUsage.RenderTarget));
+            texture.Name = "Paper Blur";
+            return (texture, device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, texture)));
+        }
+
+        public void Release()
+        {
+            _captureFB?.Dispose();
+            _capture?.Dispose();
+            (_capture, _captureFB) = (null, null);
+            for (int i = 0; i < MaxBlurLevels; i++)
+            {
+                _blurFB[i]?.Dispose();
+                _blurTex[i]?.Dispose();
+                _blurFB[i] = null;
+                _blurTex[i] = null;
+            }
+        }
+
+        public void Dispose()
+        {
+            Release();
+            _canvas?.Dispose();
+        }
     }
 
-    public void Dispose()
+    public void Cleanup()
     {
-        Cleanup();
-        if (_blurMat.IsValid()) _blurMat.Dispose();
-        _blurMat = null;
+        Graphics.Renderer?.WaitForRenderThread();
+        foreach ((GRenderPipeline pipeline, UiPass pass) in _pipelines.Values)
+        {
+            pass.Dispose();
+            pipeline.Dispose();
+        }
+        _pipelines.Clear();
+        if (_defaultTexture.IsValid()) _defaultTexture.Dispose();
     }
+
+    public void Dispose() => Cleanup();
 }
