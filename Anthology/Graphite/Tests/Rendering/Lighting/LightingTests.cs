@@ -1963,6 +1963,7 @@ public sealed class LightingTests : IDisposable
     [Fact]
     public void ALightPastTheShadowDistance_LosesItsShadowAtOnce()
     {
+        _world.Shadows.MinScreenRadius = 0;
         AddReceiver(new Vector3(0.8f));
         _world.AddLight(ShadowSpot() with { Position = new Double3(0, 0, 8), Range = 3 });
         AddCaster(0, 0, 9, half: 0.5);
@@ -1970,6 +1971,21 @@ public sealed class LightingTests : IDisposable
         Assert.True(centre.X < 1e-4f, $"shadowed centre {centre}");
 
         _world.Shadows.LocalDistance = 1;
+        centre = Frame()[Size / 2 * Size + Size / 2];
+        Assert.True(centre.X > 1e-3f, $"lit centre {centre}");
+    }
+
+    [Fact]
+    public void ALightSmallerOnScreenThanTheLimit_CastsNoShadow()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot() with { Position = new Double3(0, 0, 8), Range = 3 });
+        AddCaster(0, 0, 9, half: 0.5);
+        _world.Shadows.MinScreenRadius = 0;
+        Float4 centre = Frame()[Size / 2 * Size + Size / 2];
+        Assert.True(centre.X < 1e-4f, $"shadowed centre {centre}");
+
+        _world.Shadows.MinScreenRadius = 1000;
         centre = Frame()[Size / 2 * Size + Size / 2];
         Assert.True(centre.X > 1e-3f, $"lit centre {centre}");
     }

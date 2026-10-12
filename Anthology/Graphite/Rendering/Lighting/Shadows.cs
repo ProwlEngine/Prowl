@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
@@ -43,6 +44,13 @@ public sealed class ShadowSettings
 
     /// <summary>Local lights farther than this from every view cast no shadow, fading out over the last tenth.</summary>
     public float LocalDistance = 100;
+
+    /// <summary>Local lights smaller on screen than this radius in pixels cast no shadow, fading in up to twice it.</summary>
+    public float MinScreenRadius = 16;
+
+    /// <summary>Milliseconds a frame may spend preparing shadow draws, the most important lights first and always at least one.
+    /// Lights left waiting keep their last shadow, or none yet.</summary>
+    public float DrawMilliseconds = 2.5f;
 
     internal ShadowSettings Copy() => (ShadowSettings)MemberwiseClone();
 }
@@ -369,6 +377,11 @@ internal sealed class LightShadow
     public readonly CameraFrame?[] Cameras = new CameraFrame?[6];
     public readonly CameraFrame?[] StaticCameras = new CameraFrame?[6];
     public readonly ShadowFace[] Written = new ShadowFace[6];
+
+    /// <summary>Its priority this frame, frames it waited on the draw budget, and whether its tiles hold a drawing.</summary>
+    public float Priority;
+    public int Waited;
+    public bool Drawn;
 
     public bool HasTiles => Pages[0] != null;
 }
@@ -864,6 +877,7 @@ internal sealed partial class FramePipeline
     private GraphicsProgram? _tileClear;
     private readonly List<ShadowPlan> _shadowPlans = new(), _shadowPlanPool = new(), _shadowQueue = new();
     private readonly HashSet<ShadowPage> _drainedPages = new();
+    private readonly List<(int Index, LightShadow Light, float Key)> _shadowDraws = new();
     private readonly ShadowPage?[] _resizePages = new ShadowPage?[6], _probePages = new ShadowPage?[6];
     private readonly ShadowTile[] _resizeTiles = new ShadowTile[6], _probeTiles = new ShadowTile[6];
     private readonly List<IDisposable> _shadowRetired = new();
@@ -1004,6 +1018,7 @@ internal sealed partial class FramePipeline
             light.Seen = true;
             light.LastSeen = _frame;
             light.Fade = fade;
+            light.Priority = priority;
             int faces = desc.Type == LightType.Point ? 6 : 1;
             int key = ShadowKey(desc);
             if (key != light.Key || faces != light.Faces)
@@ -1107,20 +1122,11 @@ internal sealed partial class FramePipeline
         }
 
         bool providers = CastingProviders(world);
+        _shadowDraws.Clear();
         foreach ((int index, LightShadow light) in shadows.Lights)
         {
-            ref readonly LightDesc desc = ref lighting.Light(index);
-            if (!light.HasTiles)
-            {
-                WriteFace(shadows, index, 0, default, light);
+            if (!light.HasTiles || !light.Seen)
                 continue;
-            }
-            if (!light.Seen)
-            {
-                for (int f = 0; f < WorldShadows.FacesPerLight; f++)
-                    WriteFace(shadows, index, f, default, light);
-                continue;
-            }
             if (!light.Dirty && light.EveryFrame)
                 light.Dirty = true;
             if (providers && !light.ProviderCasts && ProvidersCastInto(world, light))
@@ -1135,7 +1141,35 @@ internal sealed partial class FramePipeline
             if ((light.MovingChanged || retry) && !light.Split && light.SplitAllowed && !shadows.StaticsDropped && light.Statics > 0)
                 light.StaticDirty = true;
             if (light.Dirty || light.StaticDirty)
-                RedrawShadow(world, shadows, desc, light, pageSize, maxPages);
+                _shadowDraws.Add((index, light, light.Priority * (1 + light.Waited)));
+        }
+
+        // Lights with nothing drawn yet go first, then by priority grown with the frames each has waited
+        _shadowDraws.Sort((a, b) => a.Light.Drawn != b.Light.Drawn ? a.Light.Drawn.CompareTo(b.Light.Drawn) : b.Key.CompareTo(a.Key));
+        long start = Stopwatch.GetTimestamp();
+        double budget = Math.Max(settings.DrawMilliseconds, 0);
+        for (int d = 0; d < _shadowDraws.Count; d++)
+        {
+            (int index, LightShadow light, _) = _shadowDraws[d];
+            if (d > 0 && Stopwatch.GetElapsedTime(start).TotalMilliseconds >= budget)
+            {
+                light.Waited++;
+                continue;
+            }
+            light.Waited = 0;
+            light.Drawn = true;
+            RedrawShadow(world, shadows, lighting.Light(index), light, pageSize, maxPages);
+        }
+
+        foreach ((int index, LightShadow light) in shadows.Lights)
+        {
+            if (!light.HasTiles || !light.Seen || !light.Drawn)
+            {
+                for (int f = 0; f < WorldShadows.FacesPerLight; f++)
+                    WriteFace(shadows, index, f, default, light);
+                continue;
+            }
+            ref readonly LightDesc desc = ref lighting.Light(index);
             for (int f = 0; f < light.Faces; f++)
             {
                 light.Pages[f]!.LastUsed = _frame;
@@ -1512,6 +1546,7 @@ internal sealed partial class FramePipeline
         }
         ReleaseStatic(light);
         light.Split = false;
+        light.Drawn = false;
         light.Dirty = light.StaticDirty = true;
         if (keepState)
             return;
@@ -1613,12 +1648,14 @@ internal sealed partial class FramePipeline
         return false;
     }
 
-    // A light's radius on screen in pixels in the view that sees it biggest, and its fade over the last tenth of the local distance
+    // A light's radius on screen in pixels in the view that sees it biggest, and its fade over the last tenth of the local distance and
+    // as it shrinks toward the smallest radius that casts
     private (float Priority, float Fade) ShadowVisibility(WorldFrame world, in LightDesc light, ShadowSettings settings)
     {
         float priority = 0, fade = 0;
         float range = Math.Max(light.Range, 0.02f);
         float distanceLimit = Math.Max(settings.LocalDistance, 0.01f);
+        float sizeLimit = Math.Max(settings.MinScreenRadius, 0);
         foreach (CameraFrame camera in _cameras.Values)
         {
             if (camera.LastFrame != _frame || camera.World != world || !Casts(camera.Desc))
@@ -1633,8 +1670,10 @@ internal sealed partial class FramePipeline
             if (edge > distanceLimit)
                 continue;
             float t = Math.Clamp((Math.Max(edge, 0) - distanceLimit * 0.9f) / (distanceLimit * 0.1f), 0, 1);
-            fade = Math.Max(fade, 1 - t * t * (3 - 2 * t));
-            priority = Math.Max(priority, ScreenRadius(layer.Projection, camera.View.PixelHeight, distanceSquared, range));
+            float radius = ScreenRadius(layer.Projection, camera.View.PixelHeight, distanceSquared, range);
+            float s = sizeLimit > 0 ? Math.Clamp((radius - sizeLimit) / sizeLimit, 0, 1) : 1;
+            fade = Math.Max(fade, (1 - t * t * (3 - 2 * t)) * s * s * (3 - 2 * s));
+            priority = Math.Max(priority, radius);
         }
         return (priority, fade);
     }
