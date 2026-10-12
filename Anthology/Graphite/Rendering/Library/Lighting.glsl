@@ -128,7 +128,6 @@ float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
 bool Graphite_FetchLight(uint array, uint index, vec3 worldPos, vec3 offset, vec3 offsetLow, uint layers, out LightSample L)
 {
     uint w = index * 9u;
-    graphite_DebugTested++;
     vec4 positionRange = Graphite_SpatialVec4(array, w);
     precise vec3 position = (positionRange.xyz - offset) - offsetLow;
     vec3 d = worldPos - position;
