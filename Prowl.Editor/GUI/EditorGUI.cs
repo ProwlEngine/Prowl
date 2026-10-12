@@ -401,14 +401,15 @@ public static class EditorGUI
     }
 
     /// <summary>A small 24x24 icon button used in panel tab-bar headers.</summary>
-    public static void HeaderIconButton(Paper paper, string id, string icon, Action onClick)
+    public static void HeaderIconButton(Paper paper, string id, string icon, Action onClick, string? tooltip = null)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
-        paper.Box(id).Width(24).Height(24).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        ElementBuilder button = paper.Box(id).Width(24).Height(24).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(icon, font).TextColor(EditorTheme.Ink300).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(_ => onClick());
+        if (tooltip != null) button.Tooltip(tooltip);
     }
 
     /// <summary>A 26x26 icon button used in panel toolbars. Highlights with accent when active.</summary>
