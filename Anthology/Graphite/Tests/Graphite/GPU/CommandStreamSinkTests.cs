@@ -296,7 +296,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     }
 
     [SkippableFact]
-    public void SetMutatedAfterSetProperties_ReportsNewValueAtNextDraw()
+    public void SetMutatedThenReapplied_ReportsNewValueAtNextDraw()
     {
         (Framebuffer fb, _) = CreateTarget();
         GraphicsProgram program = CreatePointProgram();
@@ -312,6 +312,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             cl.SetProperties(props);
             cl.Draw(1);
             props.SetInt("ColorNormalizationFactor", 9);
+            cl.SetProperties(props);
             cl.Draw(1);
         });
 

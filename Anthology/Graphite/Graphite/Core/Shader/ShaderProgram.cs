@@ -9,6 +9,7 @@ public abstract class ShaderProgram : GraphicsResource
 {
     private readonly ResourceLayoutDescription[] _resourceLayouts;
     private readonly SetBindingMetadata[] _bindingMetadata;
+    private readonly UniformBindingPlan _bindingPlan;
 
     internal ShaderProgram(ResourceLayoutDescription[] resourceLayouts, PushConstantRange pushConstants)
     {
@@ -21,6 +22,7 @@ public abstract class ShaderProgram : GraphicsResource
         _resourceLayouts = Util.ShallowClone(resourceLayouts);
         DeepCloneUniformFields(_resourceLayouts);
         _bindingMetadata = SetBindingMetadata.Build(_resourceLayouts);
+        _bindingPlan = UniformBindingPlan.Build(_resourceLayouts);
         StorageWriteElements = FindStorageWriteElements(_resourceLayouts);
     }
 
@@ -60,6 +62,8 @@ public abstract class ShaderProgram : GraphicsResource
     internal ResourceLayoutDescription[] ResourceLayoutsArray => _resourceLayouts;
 
     internal SetBindingMetadata[] BindingMetadata => _bindingMetadata;
+
+    internal UniformBindingPlan BindingPlan => _bindingPlan;
 
     private protected static void DeepCloneUniformFields(ResourceLayoutDescription[] layouts)
     {

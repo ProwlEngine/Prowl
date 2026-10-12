@@ -15,6 +15,7 @@ public sealed partial class PropertySet
     private readonly Dictionary<PropertyID, PropertyEntry> _entries;
 
     private uint _version;
+    private System.Collections.Generic.List<PackedBlock>? _packed;
 
 
     /// <summary>
@@ -41,6 +42,28 @@ public sealed partial class PropertySet
 
 
     internal Dictionary<PropertyID, PropertyEntry> Entries => _entries;
+
+
+    internal PackedBlock? FindPacked(UniformBlockLayout layout)
+    {
+        if (_packed == null)
+            return null;
+
+        for (int i = 0; i < _packed.Count; i++)
+        {
+            if (ReferenceEquals(_packed[i].Layout, layout))
+                return _packed[i];
+        }
+        return null;
+    }
+
+
+    internal PackedBlock AddPacked(UniformBlockLayout layout)
+    {
+        PackedBlock packed = new(layout);
+        (_packed ??= new()).Add(packed);
+        return packed;
+    }
 
 
     /// <summary>Sets float uniform.</summary>
@@ -73,7 +96,7 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds buffer to slot as is. On a uniform block it never receives loose uniforms; use SetUniformBuffer for that.
+    /// Binds buffer to slot as is. On a uniform block it never receives loose uniforms.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBufferRange range)
     {
@@ -91,12 +114,12 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Backs a uniform block with a caller-owned buffer range. Loose uniforms are written over the whole block at draw time; unset fields are zeroed.
+    /// Binds a caller-owned buffer range to a uniform block as is. Loose uniforms never write into it.
     /// </summary>
     public void SetUniformBuffer(PropertyID name, DeviceBufferRange range)
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetUniformBuffer));
-        GetOrCreate(name).SetBuffer(range, backedBlock: true);
+        GetOrCreate(name).SetBuffer(range);
         unchecked { _version++; }
     }
 
@@ -144,6 +167,9 @@ public sealed partial class PropertySet
     {
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
         {
+            if (kv.Value.Kind == PropertyEntryKind.Uniform)
+                continue;
+
             _entries[kv.Key] = kv.Value;
             changedKeys.Add(kv.Key);
             defaultKeys.Remove(kv.Key);
@@ -157,6 +183,9 @@ public sealed partial class PropertySet
     {
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in defaults.Entries)
         {
+            if (kv.Value.Kind == PropertyEntryKind.Uniform)
+                continue;
+
             if (_entries.ContainsKey(kv.Key) && !defaultKeys.Contains(kv.Key))
                 continue;
 

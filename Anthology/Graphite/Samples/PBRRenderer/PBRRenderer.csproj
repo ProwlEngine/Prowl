@@ -8,6 +8,7 @@
 
     <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
+        <ProjectReference Include="../../Rendering/Prowl.Graphite.Rendering.csproj" />
         <ProjectReference Include="../../../Clay/Clay/Clay.csproj" />
         <ProjectReference Include="../../../Photonic/Photonic/Photonic.csproj" />
         <ProjectReference Include="../../../Unwrapper/Unwrapper/Unwrapper.csproj" />

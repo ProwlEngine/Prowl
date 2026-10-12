@@ -33,6 +33,8 @@ public abstract partial class CommandBuffer : CommandBufferBase
     /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
 
+    private readonly UniformShadows _uniformShadows = new();
+
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
@@ -46,6 +48,8 @@ public abstract partial class CommandBuffer : CommandBufferBase
     internal System.Collections.Generic.List<PropertyID> ChangedPropertyKeys => _changedPropertyKeys;
 
     internal bool AllPropertiesChanged => _allPropertiesChanged;
+
+    internal UniformShadows UniformShadows => _uniformShadows;
 
     internal void ConsumePropertyChanges()
     {
@@ -70,6 +74,7 @@ public abstract partial class CommandBuffer : CommandBufferBase
         System.Array.Clear(_descriptorTables);
         System.Array.Clear(_reportedTables);
         _activeProperties.Clear();
+        _uniformShadows.Reset();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
         _lastAppliedDefaults = null;

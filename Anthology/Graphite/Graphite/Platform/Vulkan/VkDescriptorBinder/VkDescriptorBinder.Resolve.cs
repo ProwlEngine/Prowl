@@ -1,7 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 using Silk.NET.Vulkan;
 
@@ -42,7 +40,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             {
                 case ResourceKind.UniformBuffer:
                     {
-                        DeviceBufferRange range = ResolveUboRange(in elem, meta, i, out r.Missing);
+                        DeviceBufferRange range = ResolveUboRange(in elem, _plan.ElementBlock[setIdx][i], out r.Missing);
                         r.Buffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         r.DescRange = range.SizeInBytes;
                         r.DynOffset = range.Offset;
@@ -98,25 +96,57 @@ internal unsafe sealed partial class VkDescriptorBinder
         return new DeviceBufferRange(_gd.NullStructuredRW, 0, _gd.NullStructuredRW.SizeInBytes);
     }
 
-    private DeviceBufferRange ResolveUboRange(
-        in ResourceLayoutElementDescription elem, SetBindingMetadata meta, int elemIndex, out bool missing)
+    private DeviceBufferRange ResolveUboRange(in ResourceLayoutElementDescription elem, int block, out bool missing)
     {
         missing = false;
         PropertyEntry? uboEntry = FindProperty(elem.Name, PropertyEntryKind.Buffer);
 
-        if (uboEntry is { BackedBlock: true } && elem.UniformFields is { Length: > 0 })
+        if (uboEntry != null)
         {
-            return BuildBackedUbo(elem.Name, elem.UniformFields, meta.UniformBlockSizes[elemIndex], uboEntry.Buffer!.Value);
+            if (block >= 0)
+            {
+                ShadowBlock skipped = _shadows[block];
+                if (skipped.Dirty)
+                    ReportSkippedUniform(elem.Name, skipped.LastWritten);
+
+                skipped.Dirty = false;
+                skipped.Foreign = true;
+            }
+            return uboEntry.Buffer!.Value;
         }
 
-        if (uboEntry != null)
-            return uboEntry.Buffer!.Value;
-
-        if (elem.UniformFields is { Length: > 0 })
-            return BuildTransientUbo(elem.UniformFields, meta.UniformBlockSizes[elemIndex]);
+        if (block >= 0)
+            return UploadBlock(_shadows[block]);
 
         missing = true;
         return AllocateExecutionTransient(16);
+    }
+
+    private DeviceBufferRange UploadBlock(ShadowBlock block)
+    {
+        ulong executionId = _cbOwner.ExecutionId;
+        if (block.Cache is { } cache)
+        {
+            if (cache.UploadedVersion != cache.Version || cache.Stamp != executionId)
+            {
+                cache.Bytes.CopyTo(CurrentExecution().AllocateTransientMapped(block.Size, out cache.Range));
+                cache.UploadedVersion = cache.Version;
+                cache.Stamp = executionId;
+            }
+
+            block.Dirty = false;
+            block.Foreign = false;
+            return cache.Range;
+        }
+
+        if (block.Dirty || block.Foreign || block.Stamp != executionId)
+        {
+            block.Data.CopyTo(CurrentExecution().AllocateTransientMapped(block.Size, out block.Range));
+            block.Stamp = executionId;
+            block.Dirty = false;
+            block.Foreign = false;
+        }
+        return block.Range;
     }
 
     private VkTextureView ResolveTextureView(in ResourceLayoutElementDescription elem, out bool missing)
@@ -169,59 +199,4 @@ internal unsafe sealed partial class VkDescriptorBinder
         CurrentExecution().AllocateTransientMapped(sizeInBytes, out DeviceBufferRange range);
         return range;
     }
-
-    private DeviceBufferRange BuildBackedUbo(PropertyID name, UniformBlockField[] fields, uint blockSize, DeviceBufferRange target)
-    {
-        ValidateBackedUbo(name, blockSize, target);
-
-        if (_uboScratch.Length < blockSize)
-            _uboScratch = new byte[blockSize];
-
-        PackUniformFields(fields, _uboScratch.AsSpan(0, (int)blockSize));
-
-        fixed (byte* scratchPtr = _uboScratch)
-            _gd.UpdateBuffer(target.Buffer, target.Offset, (IntPtr)scratchPtr, blockSize);
-
-        return target;
-    }
-
-    private DeviceBufferRange BuildTransientUbo(UniformBlockField[] fields, uint blockSize)
-    {
-        Span<byte> mapped = CurrentExecution().AllocateTransientMapped(blockSize, out DeviceBufferRange range);
-        PackUniformFields(fields, mapped);
-        return range;
-    }
-
-    private void PackUniformFields(UniformBlockField[] fields, Span<byte> dst)
-    {
-        dst.Clear();
-        for (int i = 0; i < fields.Length; i++)
-        {
-            ref UniformBlockField field = ref fields[i];
-            PropertyEntry? uEntry = FindProperty(field.Name, PropertyEntryKind.Uniform);
-            if (uEntry == null)
-                continue;
-
-            CopyUniform(uEntry, dst.Slice((int)field.Offset, (int)field.Size));
-        }
-    }
-
-    private static void CopyUniform(PropertyEntry entry, Span<byte> dst)
-    {
-        int count = Math.Min(dst.Length, (int)UniformSize(entry.UniformType));
-        MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), count).CopyTo(dst);
-        dst.Slice(count).Clear();
-    }
-
-    private static uint UniformSize(UniformScalarType type) => type switch
-    {
-        UniformScalarType.Float1 or UniformScalarType.Int1 or UniformScalarType.UInt1 => 4,
-        UniformScalarType.Float2 or UniformScalarType.Int2 or UniformScalarType.UInt2 or UniformScalarType.Double1 => 8,
-        UniformScalarType.Float3 or UniformScalarType.Int3 or UniformScalarType.UInt3 => 12,
-        UniformScalarType.Float4 or UniformScalarType.Int4 or UniformScalarType.UInt4 or UniformScalarType.Double2 or UniformScalarType.Float2x2 => 16,
-        UniformScalarType.Double3 => 24,
-        UniformScalarType.Double4 => 32,
-        UniformScalarType.Float3x3 => 36,
-        _ => 64,
-    };
 }

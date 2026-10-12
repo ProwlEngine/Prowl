@@ -9,99 +9,11 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     private const uint Count = Side * Side;
 
     [SkippableFact]
-    public void RepeatedDispatches_UnchangedExplicitUniforms_AllCorrect()
+    public void CallerOwnedBuffer_IsBoundAsIs_LooseUniformsNeverWriteIntoIt()
     {
-
-        const int n = 5;
         ComputeProgram program = CreateProgram(TwoFields());
         DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        GD.UpdateBuffer(ubo, 0, new uint[] { 0, 0, 0, 0 });
-
-        DeviceBuffer[] sources = new DeviceBuffer[n];
-        DeviceBuffer[] destinations = new DeviceBuffer[n];
-        float[][] seeds = new float[n][];
-
-        PropertySet props = new();
-        props.SetUniformBuffer("Params", ubo);
-        props.SetInt("Width", (int)Side);
-        props.SetInt("Height", (int)Side);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            for (int i = 0; i < n; i++)
-            {
-                sources[i] = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-                destinations[i] = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-
-                float[] seed = new float[Count];
-                for (int j = 0; j < Count; j++) seed[j] = i * 1000 + j;
-                seeds[i] = seed;
-                GD.UpdateBuffer(sources[i], 0, seed);
-
-                props.SetBuffer("Source", sources[i]);
-                props.SetBuffer("Destination", destinations[i]);
-                cl.SetProperties(props);
-                cl.Dispatch(1, 1, 1);
-            }
-        });
-        GD.WaitForIdle();
-
-        for (int i = 0; i < n; i++)
-            AssertCopiedSource(seeds[i], destinations[i]);
-    }
-
-    [SkippableFact]
-    public void ChangingUniform_BetweenDispatches_TakesEffect()
-    {
-
-        ComputeProgram program = CreateProgram(TwoFields());
-        DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        GD.UpdateBuffer(ubo, 0, new uint[] { 0, 0, 0, 0 });
-
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-
-        PropertySet props = new();
-        props.SetUniformBuffer("Params", ubo);
-        props.SetBuffer("Source", source);
-        props.SetBuffer("Destination", destination);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-
-            props.SetInt("Width", 3);
-            props.SetInt("Height", 5);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-
-            props.SetInt("Width", 11);
-            props.SetInt("Height", 22);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-
-        });
-        GD.WaitForIdle();
-
-        DeviceBuffer readback = GetReadback(ubo);
-        Span<uint> map = GD.Map<uint>(readback);
-        uint width = map[0];
-        uint height = map[1];
-        GD.Unmap(readback);
-
-        Assert.Equal(11u, width);
-        Assert.Equal(22u, height);
-    }
-
-    [SkippableFact]
-    public void UnsetBytes_InExplicitBuffer_AreLeftIntact()
-    {
-
-        ComputeProgram program = CreateProgram(TwoFields());
-        DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        uint sentinel = 0xAAAAAAAA;
-        GD.UpdateBuffer(ubo, 0, new uint[] { sentinel, sentinel, sentinel, sentinel });
+        GD.UpdateBuffer(ubo, 0, new uint[] { Side, Side, 0, 0 });
 
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
@@ -111,50 +23,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
 
         PropertySet props = new();
         props.SetUniformBuffer("Params", ubo);
-        props.SetInt("Width", (int)Side);
-        props.SetInt("Height", (int)Side);
-        props.SetBuffer("Source", source);
-        props.SetBuffer("Destination", destination);
-
-        GD.RunTestGraph((context, cl) =>
-        {
-            cl.SetComputeShader(program);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-            cl.Dispatch(1, 1, 1);
-        });
-        GD.WaitForIdle();
-
-        AssertCopiedSource(seed, destination);
-
-        DeviceBuffer readback = GetReadback(ubo);
-        Span<uint> map = GD.Map<uint>(readback);
-        Assert.Equal(Side, map[0]);
-        Assert.Equal(Side, map[1]);
-        Assert.Equal(sentinel, map[2]);
-        Assert.Equal(sentinel, map[3]);
-        GD.Unmap(readback);
-    }
-
-    [SkippableFact]
-    public void NonContiguousSetFields_UnsetBytesZeroed_BlockWrittenWhole()
-    {
-
-        ComputeProgram program = CreateProgram(ThreeFields());
-        DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        uint sentinel = 0xAAAAAAAA;
-        GD.UpdateBuffer(ubo, 0, new uint[] { sentinel, sentinel, sentinel, sentinel });
-
-        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
-        float[] seed = new float[Count];
-        for (int i = 0; i < Count; i++) seed[i] = i;
-        GD.UpdateBuffer(source, 0, seed);
-
-        PropertySet props = new();
-        props.SetUniformBuffer("Params", ubo);
-        props.SetInt("Width", (int)Side);
-        props.SetInt("Padding1", 777);
+        props.SetInt("Width", 3);
+        props.SetInt("Height", 5);
         props.SetBuffer("Source", source);
         props.SetBuffer("Destination", destination);
 
@@ -171,9 +41,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         DeviceBuffer readback = GetReadback(ubo);
         Span<uint> map = GD.Map<uint>(readback);
         Assert.Equal(Side, map[0]);
-        Assert.Equal(0u, map[1]);
-        Assert.Equal(777u, map[2]);
-        Assert.Equal(sentinel, map[3]);
+        Assert.Equal(Side, map[1]);
         GD.Unmap(readback);
     }
 
@@ -192,13 +60,6 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     [
         new UniformBlockField("Width", 0, sizeof(uint), UniformScalarType.Int1),
         new UniformBlockField("Height", sizeof(uint), sizeof(uint), UniformScalarType.Int1),
-    ];
-
-    private static UniformBlockField[] ThreeFields() =>
-    [
-        new UniformBlockField("Width", 0, sizeof(uint), UniformScalarType.Int1),
-        new UniformBlockField("Height", sizeof(uint), sizeof(uint), UniformScalarType.Int1),
-        new UniformBlockField("Padding1", 2 * sizeof(uint), sizeof(uint), UniformScalarType.Int1),
     ];
 
     private ComputeProgram CreateProgram(UniformBlockField[] fields)
