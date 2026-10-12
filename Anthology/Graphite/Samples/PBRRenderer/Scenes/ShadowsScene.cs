@@ -28,7 +28,7 @@ internal sealed class ShadowsScene : DemoScene
     {
         Random random = new(11);
 
-        Add(Demo.Cube, Lit(new Float3(0.42f, 0.4f, 0.36f), 0f, 0.9f, grid: 4f), new Double3(0, -0.25, 0), new Double3(400, 0.5, 400));
+        Add(Demo.Cube, Lit(new Float3(0.42f, 0.4f, 0.36f), 0f, 0.9f, grid: 4f), new Double3(0, -0.25, 0), new Double3(700, 0.5, 700));
 
         Material stone = Lit(new Float3(0.72f, 0.69f, 0.62f), 0f, 0.8f);
         Material capital = Lit(new Float3(0.6f, 0.57f, 0.5f), 0f, 0.75f);
@@ -39,7 +39,7 @@ internal sealed class ShadowsScene : DemoScene
                 if (x == 0 && z == 0)
                     continue;
                 double height = 4 + random.NextDouble() * 6;
-                Double3 position = new(x * 9 + (random.NextDouble() - 0.5) * 3, 0, z * 9 + (random.NextDouble() - 0.5) * 3);
+                Double3 position = new(x * 16 + (random.NextDouble() - 0.5) * 6, 0, z * 16 + (random.NextDouble() - 0.5) * 6);
                 Add(Demo.Cylinder, stone, position + new Double3(0, height * 0.5, 0), new Double3(2.2, height, 2.2));
                 Add(Demo.Cube, capital, position + new Double3(0, height + 0.3, 0), new Double3(3.2, 0.6, 3.2));
             }
@@ -52,7 +52,7 @@ internal sealed class ShadowsScene : DemoScene
         {
             float t = i / (float)(colors.Length - 1);
             bool metal = i < 4;
-            Add(Demo.Sphere, Lit(colors[i], metal ? 1f : 0f, metal ? 0.02f + t * 0.5f : 0.12f), new Double3(-9 + i * 3, 1.3, 30), new Double3(2.6, 2.6, 2.6));
+            Add(Demo.Sphere, Lit(colors[i], metal ? 1f : 0f, metal ? 0.02f + t * 0.5f : 0.12f), new Double3(-9 + i * 3, 1.3, 80), new Double3(2.6, 2.6, 2.6));
         }
 
         _bulbMaterial = Lit(new Float3(0, 0, 0), 0f, 1f, new Float3(9f, 6.5f, 3.5f));
@@ -60,7 +60,7 @@ internal sealed class ShadowsScene : DemoScene
         for (int i = 0; i < Lanterns; i++)
         {
             double side = i % 2 == 0 ? -1 : 1;
-            Double3 foot = new(side * 5, 0, 38 - (i / 2) * 11);
+            Double3 foot = new(side * 5, 0, 88 - (i / 2) * 11);
             Add(Demo.Cylinder, pole, foot + new Double3(0, 2.5, 0), new Double3(0.2, 5, 0.2));
             Double3 head = foot + new Double3(0, 5.2, 0);
             _bulbs.Add(Add(Demo.Sphere, _bulbMaterial, head, new Double3(0.5, 0.5, 0.5), flags: RenderableFlags.None));
@@ -87,7 +87,7 @@ internal sealed class ShadowsScene : DemoScene
             Color = new Float3(1f, 0.95f, 0.85f),
             Intensity = 0.6f,
             AngularRadius = 0.5f,
-            Shadow = new ShadowDesc { Enabled = true, Resolution = 4096, Cascades = 4, Distance = 160, CascadeBlend = 0.15f },
+            Shadow = new ShadowDesc { Enabled = true, Resolution = 4096, Cascades = 4, Distance = 260, CascadeBlend = 0.15f },
         };
         ApplySun();
         _sun = World.AddLight(_sunDesc);
@@ -97,7 +97,7 @@ internal sealed class ShadowsScene : DemoScene
             Ambient = AmbientMode.Sky,
             Sun = _sun,
             Sky = Track(demo.Renderer.CreateMaterial(demo.Renderer.Skies.Procedural)),
-            Fog = new FogDesc { Mode = FogMode.ExponentialSquared, Density = 0.006f, UseSky = true },
+            Fog = new FogDesc { Mode = FogMode.ExponentialSquared, Density = 0.004f, UseSky = true },
         };
     }
 
@@ -109,7 +109,7 @@ internal sealed class ShadowsScene : DemoScene
 
     public override string Name => "Shadows";
 
-    public override Double3 StartPosition => new(0, 3.5, 46);
+    public override Double3 StartPosition => new(0, 3.5, 96);
 
     public override float StartYaw => MathF.PI;
 

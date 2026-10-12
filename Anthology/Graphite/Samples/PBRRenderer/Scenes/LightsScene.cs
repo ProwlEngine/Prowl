@@ -12,9 +12,10 @@ namespace Prowl.Graphite.Samples.PBRRenderer;
 
 internal sealed class LightsScene : DemoScene
 {
-    private const int MaxLights = 16384;
-    private const int Grid = 15;
-    private const float Spacing = 6f;
+    private const int MaxLights = 262144;
+    private const int Grid = 60;
+    private const float Spacing = 10f;
+    private const int DynamicStride = 8;
 
     private readonly Random _random = new(7);
     private readonly Double3[] _base = new Double3[MaxLights];
@@ -23,11 +24,11 @@ internal sealed class LightsScene : DemoScene
     private readonly List<LightHandle> _handles = new();
     private readonly LightHandle[] _spots = new LightHandle[4];
     private readonly LightDesc[] _spotDescs = new LightDesc[4];
-    private int _target = 2048;
+    private int _target = 250000;
 
     public LightsScene(Demo demo) : base(demo)
     {
-        Add(Demo.Cube, Lit(new Float3(0.55f, 0.55f, 0.57f), 0f, 0.55f, grid: 2f), new Double3(0, -0.25, 0), new Double3(200, 0.5, 200));
+        Add(Demo.Cube, Lit(new Float3(0.55f, 0.55f, 0.57f), 0f, 0.55f, grid: 2f), new Double3(0, -0.25, 0), new Double3(800, 0.5, 800));
 
         Material[] pillars =
         [
@@ -39,16 +40,16 @@ internal sealed class LightsScene : DemoScene
         {
             for (int z = 0; z < Grid; z++)
             {
-                double height = 2 + _random.NextDouble() * 7;
+                double height = 2 + _random.NextDouble() * 8;
                 Double3 position = new((x - Grid / 2) * Spacing, height * 0.5, (z - Grid / 2) * Spacing);
-                Add(Demo.Cube, pillars[(x * 7 + z * 3) % pillars.Length], position, new Double3(1.6, height, 1.6));
+                Add(Demo.Cube, pillars[(x * 7 + z * 3) % pillars.Length], position, new Double3(2.4, height, 2.4));
             }
         }
 
         for (int i = 0; i < MaxLights; i++)
         {
             double angle = _random.NextDouble() * Math.PI * 2;
-            double radius = Math.Sqrt(_random.NextDouble()) * 48;
+            double radius = Math.Sqrt(_random.NextDouble()) * 300;
             _base[i] = new Double3(Math.Cos(angle) * radius, 0.8 + _random.NextDouble() * 2.7, Math.Sin(angle) * radius);
             _motion[i] = new Float3(1.5f + (float)_random.NextDouble() * 2.5f, (float)(_random.NextDouble() * Math.PI * 2), 0.3f + (float)_random.NextDouble() * 0.9f);
             _descs[i] = new LightDesc
@@ -56,10 +57,10 @@ internal sealed class LightsScene : DemoScene
                 Type = LightType.Point,
                 Position = _base[i],
                 Color = Hsv((float)_random.NextDouble(), 0.75f, 1f),
-                Intensity = 0.3f,
-                Range = 7f,
+                Intensity = 0.15f,
+                Range = 5f,
                 SourceRadius = 0.08f,
-                Static = i % 2 == 0,
+                Static = i % DynamicStride != 0,
             };
         }
         SetCount(_target);
@@ -105,7 +106,7 @@ internal sealed class LightsScene : DemoScene
         });
         Add(Demo.Cylinder, Lit(new Float3(0, 0, 0), 0f, 1f, new Float3(9f, 2f, 7f)), new Double3(24, 6.05, 12), new Double3(6, 0.1, 6), flags: RenderableFlags.None);
 
-        Double3[] corners = [new(-34, 15, -34), new(34, 15, -34), new(34, 15, 34), new(-34, 15, 34)];
+        Double3[] corners = [new(-120, 40, -120), new(120, 40, -120), new(120, 40, 120), new(-120, 40, 120)];
         for (int i = 0; i < _spots.Length; i++)
         {
             _spotDescs[i] = new LightDesc
@@ -114,8 +115,8 @@ internal sealed class LightsScene : DemoScene
                 Position = corners[i],
                 Direction = Float3.Normalize(new Float3((float)-corners[i].X, (float)-corners[i].Y, (float)-corners[i].Z)),
                 Color = i % 2 == 0 ? new Float3(1f, 0.95f, 0.85f) : new Float3(0.7f, 0.85f, 1f),
-                Intensity = 120f,
-                Range = 80f,
+                Intensity = 3000f,
+                Range = 260f,
                 SourceRadius = 0.2f,
                 InnerAngle = 5f,
                 OuterAngle = 11f,
@@ -130,7 +131,7 @@ internal sealed class LightsScene : DemoScene
             Direction = Float3.Normalize(new Float3(-0.3f, -1f, -0.4f)),
             Color = new Float3(0.55f, 0.65f, 1f),
             Intensity = 0.04f,
-            Shadow = new ShadowDesc { Enabled = true, Resolution = 2048, Cascades = 4, Distance = 140 },
+            Shadow = new ShadowDesc { Enabled = true, Resolution = 2048, Cascades = 4, Distance = 400 },
         });
 
         World.Environment = new EnvironmentDesc
@@ -139,25 +140,25 @@ internal sealed class LightsScene : DemoScene
             AmbientColor = new Float4(0.03f, 0.04f, 0.07f, 1),
             SkyColor = new Float4(0.01f, 0.015f, 0.03f, 1),
             Sun = moon,
-            Fog = new FogDesc { Mode = FogMode.ExponentialSquared, Color = new Float4(0.02f, 0.03f, 0.05f, 1), Density = 0.012f },
+            Fog = new FogDesc { Mode = FogMode.ExponentialSquared, Color = new Float4(0.02f, 0.03f, 0.05f, 1), Density = 0.004f },
         };
     }
 
     public override string Name => "Lights";
 
-    public override Double3 StartPosition => new(0, 14, 62);
+    public override Double3 StartPosition => new(0, 60, 345);
 
     public override float StartYaw => MathF.PI;
 
-    public override float StartPitch => -0.25f;
+    public override float StartPitch => -0.3f;
 
     public override string Controls => "Up and Down double and halve the point lights";
 
-    public override string Status => $"{_handles.Count} point lights, 3 area lights, 4 shadowed spots";
+    public override string Status => $"{_handles.Count} point lights ({_handles.Count / DynamicStride} moving), 3 area lights, 4 shadowed spots";
 
     public override void Update(float time, float deltaTime)
     {
-        for (int i = 1; i < _handles.Count; i += 2)
+        for (int i = 0; i < _handles.Count; i += DynamicStride)
         {
             Float3 motion = _motion[i];
             float angle = time * motion.Z + motion.Y;
@@ -168,7 +169,7 @@ internal sealed class LightsScene : DemoScene
         for (int i = 0; i < _spots.Length; i++)
         {
             float angle = time * 0.25f + i * MathF.PI * 0.5f;
-            Double3 aim = new(Math.Cos(angle) * 22, 0, Math.Sin(angle) * 22);
+            Double3 aim = new(Math.Cos(angle) * 90, 0, Math.Sin(angle) * 90);
             Double3 from = _spotDescs[i].Position;
             Float3 direction = Float3.Normalize(new Float3((float)(aim.X - from.X), (float)(aim.Y - from.Y), (float)(aim.Z - from.Z)));
             _spotDescs[i].Direction = direction;

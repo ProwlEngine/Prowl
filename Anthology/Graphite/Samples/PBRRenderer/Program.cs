@@ -34,6 +34,9 @@ internal sealed class DemoWindow
     private int _startScene;
     private bool _freeze;
     private float? _hour;
+    private bool _noBloom;
+    private bool _noTonemap;
+    private bool _noVsync;
 
     public DemoWindow(string[] args)
     {
@@ -45,6 +48,12 @@ internal sealed class DemoWindow
                 _shotPath = args[++i];
             else if (args[i] == "--hour" && i + 1 < args.Length)
                 _hour = float.Parse(args[++i]);
+            else if (args[i] == "--nobloom")
+                _noBloom = true;
+            else if (args[i] == "--notonemap")
+                _noTonemap = true;
+            else if (args[i] == "--novsync")
+                _noVsync = true;
             else if (args[i] == "--freeze")
                 _freeze = true;
             else if (args[i] == "--frames" && i + 1 < args.Length)
@@ -71,11 +80,19 @@ internal sealed class DemoWindow
 
     private void OnLoad()
     {
-        _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { SyncToVerticalBlank = false }, GraphicsBackend.Vulkan);
-        _window.FramebufferResize += size => _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
+        _device = DeviceCreateUtilities.CreateDevice(_window, new GraphicsDeviceOptions { PreferDepthRangeZeroToOne = true }, new SwapchainDescription { SyncToVerticalBlank = true }, GraphicsBackend.Vulkan);
+        _window.FramebufferResize += size =>
+        {
+            _demo?.Renderer.WaitForRenderThread();
+            _device.WaitForIdle();
+            _device.ResizeMainWindow((uint)size.X, (uint)size.Y);
+        };
 
+        _device.SyncToVerticalBlank = !_noVsync;
         _demo = new Demo(_device);
-        SelectScene(Math.Clamp(_startScene, 0, 2));
+        _demo.Bloom.Enabled = !_noBloom;
+        _demo.Tonemap.Enabled = !_noTonemap;
+        SelectScene(Math.Clamp(_startScene, 0, 3));
         _paused = _freeze;
         if (_hour is { } hour && _scene is ShadowsScene shadows)
             shadows.Hour = hour;
@@ -113,7 +130,8 @@ internal sealed class DemoWindow
             {
                 0 => new HelmetScene(_demo),
                 1 => new LightsScene(_demo),
-                _ => new ShadowsScene(_demo),
+                2 => new ShadowsScene(_demo),
+                _ => new InstancingScene(_demo),
             };
             _scenes[index] = scene;
         }
@@ -131,8 +149,10 @@ internal sealed class DemoWindow
             case Key.Number1: SelectScene(0); break;
             case Key.Number2: SelectScene(1); break;
             case Key.Number3: SelectScene(2); break;
+            case Key.Number4: SelectScene(3); break;
             case Key.Space: _paused = !_paused; break;
             case Key.B: _demo.Bloom.Enabled = !_demo.Bloom.Enabled; break;
+            case Key.V: _device.SyncToVerticalBlank = !_device.SyncToVerticalBlank; break;
             case Key.T: _demo.Tonemap.Enabled = !_demo.Tonemap.Enabled; break;
             case Key.Minus: _demo.Tonemap.Settings.Exposure *= 0.8f; break;
             case Key.Equal: _demo.Tonemap.Settings.Exposure *= 1.25f; break;
@@ -179,7 +199,7 @@ internal sealed class DemoWindow
         _titleFrames++;
         if (_titleTimer >= 0.5)
         {
-            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 2 3 scene, B bloom, T tonemap, +/- exposure, space pause, {_scene.Controls}";
+            _window.Title = $"Graphite Renderer - {_scene.Name} - {_scene.Status} - {_titleFrames / _titleTimer:0} fps - 1 2 3 4 scene, B bloom, T tonemap, V vsync, +/- exposure, space pause, {_scene.Controls}";
             _titleTimer = 0;
             _titleFrames = 0;
         }

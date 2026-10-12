@@ -44,7 +44,7 @@ internal sealed class FlyCamera
         return new ViewLayer
         {
             View = new Float4x4(new Float4(r.X, u.X, f.X, 0), new Float4(r.Y, u.Y, f.Y, 0), new Float4(r.Z, u.Z, f.Z, 0), new Float4(0, 0, 0, 1)),
-            Projection = new Float4x4(new Float4(focal / aspect, 0, 0, 0), new Float4(0, -focal, 0, 0), new Float4(0, 0, 0, 1), new Float4(0, 0, Near, 0)),
+            Projection = new Float4x4(new Float4(focal / aspect, 0, 0, 0), new Float4(0, focal, 0, 0), new Float4(0, 0, 0, 1), new Float4(0, 0, Near, 0)),
             Position = Position,
         };
     }
