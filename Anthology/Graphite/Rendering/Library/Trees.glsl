@@ -166,7 +166,7 @@ void Graphite_BeginQuery(out Graphite_TreeQuery q, vec3 position, uint set)
     q.movingRoot = roots.y;
     q.entry = 0u;
     q.entryEnd = 0u;
-    q.phase = 0;
+    q.phase = roots.x == GRAPHITE_TREE_INVALID && roots.y == GRAPHITE_TREE_INVALID ? 2 : 0;
     q.walking = false;
     Graphite_BeginTree(q.regions, set * 3u + 2u, true, roots.x);
     Graphite_BeginTree(q.items, set * 3u, false, GRAPHITE_TREE_INVALID);
