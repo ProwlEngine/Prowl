@@ -101,6 +101,10 @@ internal sealed class PanelMaximizer
     /// </summary>
     public bool Maximize(DockPanel panel)
     {
+        // Checked before anything changes, so a panel that can't be maximized leaves the current maximize alone.
+        // Against LayoutRoot, as while another panel is maximized a docked one is in the layout set aside.
+        if (FindLeaf(LayoutRoot, panel) == null) return false;
+
         Restore();
         DockNode? host = FindLeaf(_dock.Root, panel);
         if (host == null) return false;

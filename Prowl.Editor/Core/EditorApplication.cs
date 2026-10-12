@@ -69,6 +69,7 @@ public class EditorApplication : Game
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
     private TimeData? _savedEditorTime;
+    private bool _maximizedForPlay; // play mode maximized the Game view, so stopping restores the layout
 
 
     /// <summary> Initializes the editor window with the given title, width and height, restoring saved position and maximization state from EditorSettings. </summary>
@@ -1810,7 +1811,7 @@ public class EditorApplication : Game
         // Focus the Game View tab
         FocusPanel(typeof(GameViewPanel));
         if (FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel { MaximizeOnPlay: true } gameView)
-            _panelMaximizer.Maximize(gameView);
+            _maximizedForPlay = _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
         // unpaced and whatever the game's own code sets from here is what it runs at.
@@ -1881,8 +1882,10 @@ public class EditorApplication : Game
             _savedEditorTime = null;
         }
 
-        if (_panelMaximizer.MaximizedPanel is GameViewPanel)
+        // Only a maximize play mode made. One the user made before play is theirs to keep.
+        if (_maximizedForPlay && _panelMaximizer.MaximizedPanel is GameViewPanel)
             _panelMaximizer.Restore();
+        _maximizedForPlay = false;
 
         // Restore the previously active tab
         RestoreActiveTab();
