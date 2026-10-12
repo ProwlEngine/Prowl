@@ -122,59 +122,59 @@ float Graphite_LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
     return Graphite_SpotShadow(L.ShadowSlot, L.Position, L.Direction, L.ShadowDepthBias, L.ShadowNormalBias, L.ShadowStrength, L.ShadowFilter, L.SourceRadius, worldPos, geomNormal);
 }
 
-Graphite_LightRecord Graphite_LightAt(uint array, uint index)
-{
-    uint w = index * 9u;
-    Graphite_LightRecord r;
-    r.positionRange = Graphite_SpatialVec4(array, w);
-    r.colorIntensity = Graphite_SpatialVec4(array, w + 1u);
-    r.directionType = Graphite_SpatialVec4(array, w + 2u);
-    r.upSize = Graphite_SpatialVec4(array, w + 3u);
-    r.shape = Graphite_SpatialVec4(array, w + 4u);
-    r.spotShadow = Graphite_SpatialVec4(array, w + 5u);
-    r.shadow = Graphite_SpatialVec4(array, w + 6u);
-    r.textures = Graphite_SpatialUVec4(array, w + 7u);
-    r.hostData = Graphite_SpatialVec4(array, w + 8u);
-    return r;
-}
-
-// Reads a light when the camera relative point is inside its sphere and the surface is on one of its layers. offset and
-// offsetLow move camera relative positions into the light's tree.
+// Reads a light when the camera relative point is inside its sphere and the surface is on one of its layers, reading only
+// the words its type and flags use. offset and offsetLow move camera relative positions into the light's tree. HostData
+// is read when GRAPHITE_LIGHT_HOST_DATA is defined.
 bool Graphite_FetchLight(uint array, uint index, vec3 worldPos, vec3 offset, vec3 offsetLow, uint layers, out LightSample L)
 {
-    vec4 t0 = Graphite_SpatialVec4(array, index * 9u);
-    precise vec3 position = (t0.xyz - offset) - offsetLow;
+    uint w = index * 9u;
+    graphite_DebugTested++;
+    vec4 positionRange = Graphite_SpatialVec4(array, w);
+    precise vec3 position = (positionRange.xyz - offset) - offsetLow;
     vec3 d = worldPos - position;
-    if (dot(d, d) > t0.w * t0.w)
+    if (dot(d, d) > positionRange.w * positionRange.w)
         return false;
 
-    Graphite_LightRecord r = Graphite_LightAt(array, index);
-    if ((floatBitsToUint(r.shadow.w) & layers) == 0u)
+    vec4 shadow = Graphite_SpatialVec4(array, w + 6u);
+    if ((floatBitsToUint(shadow.w) & layers) == 0u)
         return false;
 
-    uint flags = floatBitsToUint(r.directionType.w);
+    vec4 colorIntensity = Graphite_SpatialVec4(array, w + 1u);
+    vec4 directionType = Graphite_SpatialVec4(array, w + 2u);
+    vec4 shape = Graphite_SpatialVec4(array, w + 4u);
+    uint flags = floatBitsToUint(directionType.w);
+    int type = int(flags & 15u);
+    bool shadowed = ((flags >> 4) & 1u) != 0u;
+
     L.Position = position;
-    L.Range = t0.w;
-    L.Color = r.colorIntensity.rgb;
-    L.Intensity = r.colorIntensity.w;
-    L.Direction = r.directionType.xyz;
-    L.Type = int(flags & 15u);
-    L.Up = r.upSize.xyz;
-    L.Size = vec2(r.upSize.w, r.shape.x);
-    L.SourceRadius = r.shape.y;
-    L.DiffuseScale = r.shape.z;
-    L.SpecularScale = r.shape.w;
-    L.ShadowEnabled = int((flags >> 4) & 1u);
-    L.SpotCos = r.spotShadow.x;
-    L.InnerSpotCos = r.spotShadow.y;
-    L.ShadowDepthBias = r.spotShadow.z;
-    L.ShadowNormalBias = r.spotShadow.w;
-    L.ShadowStrength = r.shadow.x;
-    L.ShadowFilter = r.shadow.y;
-    L.ShadowSlot = floatBitsToInt(r.shadow.z);
+    L.Range = positionRange.w;
+    L.Color = colorIntensity.rgb;
+    L.Intensity = colorIntensity.w;
+    L.Direction = directionType.xyz;
+    L.Type = type;
+    L.SourceRadius = shape.y;
+    L.DiffuseScale = shape.z;
+    L.SpecularScale = shape.w;
+    L.ShadowEnabled = shadowed ? 1 : 0;
+    L.ShadowStrength = shadow.x;
+    L.ShadowFilter = shadow.y;
+    L.ShadowSlot = floatBitsToInt(shadow.z);
     L.Flags = flags;
-    L.Textures = r.textures.xyz;
-    L.HostData = r.hostData;
+
+    vec4 upSize = type >= GRAPHITE_LIGHT_RECT || (flags & 96u) != 0u ? Graphite_SpatialVec4(array, w + 3u) : vec4(0.0, 1.0, 0.0, 0.0);
+    L.Up = upSize.xyz;
+    L.Size = vec2(upSize.w, shape.x);
+    vec4 spotShadow = type == GRAPHITE_LIGHT_SPOT || shadowed ? Graphite_SpatialVec4(array, w + 5u) : vec4(-1.0, 1.0, 0.0, 0.0);
+    L.SpotCos = spotShadow.x;
+    L.InnerSpotCos = spotShadow.y;
+    L.ShadowDepthBias = spotShadow.z;
+    L.ShadowNormalBias = spotShadow.w;
+    L.Textures = (flags & 96u) != 0u ? Graphite_SpatialUVec4(array, w + 7u).xyz : uvec3(0u);
+#ifdef GRAPHITE_LIGHT_HOST_DATA
+    L.HostData = Graphite_SpatialVec4(array, w + 8u);
+#else
+    L.HostData = vec4(0.0);
+#endif
     return true;
 }
 
