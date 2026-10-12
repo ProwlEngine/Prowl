@@ -49,6 +49,7 @@ public enum DefaultShader
     ProceduralSkybox,
     GradientSkybox,
     CubemapSkybox,
+    PanoramaSkybox,
     Tonemapper,
     SSR,
     FXAA,
