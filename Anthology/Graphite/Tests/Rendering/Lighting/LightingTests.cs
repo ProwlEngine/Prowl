@@ -1961,6 +1961,39 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
+    public void AKeywordACasterReads_RedrawsTheCachedShadow()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        string source = CasterSource.Replace("Test/Caster", "Test/KeywordCaster").Replace("#include \"Graphite/Vertex.glsl\"", "#include \"Graphite/Vertex.glsl\"\n#pragma variant global CASTER_WIND");
+        Assert.Contains("CASTER_WIND", source);
+        Material caster = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(source)));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(1, 0.5, 6)) * Double4x4.CreateScale(0.25), Flags = RenderableFlags.CastShadows | RenderableFlags.ShadowsOnly }, [caster]);
+        Frame();
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+
+        _world.Globals.SetKeyword("CASTER_WIND", "On");
+        Frame();
+        Assert.Equal(1, Pipeline.ShadowViewsDrawn);
+    }
+
+    [Fact]
+    public void AProviderCastingIntoACachedLight_RedrawsIt()
+    {
+        AddReceiver(new Vector3(0.8f));
+        _world.AddLight(ShadowSpot());
+        AddCaster(-1.5, -1.5, 6, half: 0.5);
+        Frame();
+        Frame();
+        Assert.Equal(0, Pipeline.ShadowViewsDrawn);
+
+        _world.Providers.Add(new ShadowItem(_quad, Surface(new Float3(1, 1, 1))));
+        Frame();
+        Assert.True(Pipeline.ShadowViewsDrawn > 0);
+    }
+
+    [Fact]
     public void ALightPastTheShadowDistance_LosesItsShadowAtOnce()
     {
         _world.Shadows.MinScreenRadius = 0;

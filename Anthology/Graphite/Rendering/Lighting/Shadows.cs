@@ -205,6 +205,9 @@ internal struct ShadowFace
 
     /// <summary>The near and far distance along the face's axis, unused.</summary>
     public Float4 Depth;
+
+    public static bool Same(in ShadowFace a, in ShadowFace b) =>
+        MemoryMarshal.AsBytes(new ReadOnlySpan<ShadowFace>(in a)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<ShadowFace>(in b)));
 }
 
 /// <summary>One cascade of a directional light in a view as shaders read it, 128 bytes, matching Graphite_Cascade. Four per light.</summary>
@@ -374,8 +377,12 @@ internal sealed class LightShadow
     public readonly ShadowTile[] Tiles = new ShadowTile[6];
     public readonly ShadowPage?[] StaticPages = new ShadowPage?[6];
     public readonly ShadowTile[] StaticTiles = new ShadowTile[6];
-    public readonly CameraFrame?[] Cameras = new CameraFrame?[6];
-    public readonly CameraFrame?[] StaticCameras = new CameraFrame?[6];
+    /// <summary>The view and frustum each face last drew with, for asking providers whether they cast into it.</summary>
+    public readonly ViewDesc[] Views = new ViewDesc[6];
+    public readonly CullFrustum[] Culls = new CullFrustum[6];
+
+    /// <summary>The shaders its casters last drew with, and its static copy's, so a global keyword they read redraws them.</summary>
+    public readonly List<Shader> Shaders = new(), StaticShaders = new();
     public readonly ShadowFace[] Written = new ShadowFace[6];
 
     /// <summary>Its priority this frame, frames it waited on the draw budget, and whether its tiles hold a drawing.</summary>
@@ -713,13 +720,6 @@ internal sealed class WorldShadows(GraphicsDevice device) : IDisposable
             page.Dispose();
         foreach (ShadowPage page in StaticPages)
             page.Dispose();
-        foreach (LightShadow light in Lights.Values)
-        {
-            foreach (CameraFrame? camera in light.Cameras)
-                camera?.Dispose();
-            foreach (CameraFrame? camera in light.StaticCameras)
-                camera?.Dispose();
-        }
     }
 }
 
@@ -878,6 +878,14 @@ internal sealed partial class FramePipeline
     private readonly List<ShadowPlan> _shadowPlans = new(), _shadowPlanPool = new(), _shadowQueue = new();
     private readonly HashSet<ShadowPage> _drainedPages = new();
     private readonly List<(int Index, LightShadow Light, float Key)> _shadowDraws = new();
+
+    // Cameras faces draw with, rented for a frame each, and one that asks providers about cached faces
+    private readonly Stack<CameraFrame> _shadowCameraPool = new();
+    private readonly List<CameraFrame> _shadowCamerasDrawn = new();
+    private CameraFrame? _providerProbe;
+
+    // The views lights cast for this frame, each with its frustum, first layer and height in pixels
+    private readonly List<(CullFrustum Frustum, ViewLayer Layer, uint PixelHeight)> _shadowViewers = new();
     private readonly ShadowPage?[] _resizePages = new ShadowPage?[6], _probePages = new ShadowPage?[6];
     private readonly ShadowTile[] _resizeTiles = new ShadowTile[6], _probeTiles = new ShadowTile[6];
     private readonly List<IDisposable> _shadowRetired = new();
@@ -986,16 +994,20 @@ internal sealed partial class FramePipeline
             shadows.Keywords = keywords;
             foreach (LightShadow light in shadows.Lights.Values)
             {
-                foreach (CameraFrame? camera in light.Cameras)
-                    light.Dirty |= ReadsChangedKeyword(camera, before, keywords);
-                foreach (CameraFrame? camera in light.StaticCameras)
-                    light.StaticDirty |= ReadsChangedKeyword(camera, before, keywords);
+                light.Dirty |= ReadsChangedKeyword(light.Shaders, before, keywords);
+                light.StaticDirty |= ReadsChangedKeyword(light.StaticShaders, before, keywords);
             }
         }
 
         // Which lights cast this frame, how important each is and the size it wants
         foreach (LightShadow light in shadows.Lights.Values)
             light.Seen = false;
+        _shadowViewers.Clear();
+        foreach (CameraFrame camera in _cameras.Values)
+        {
+            if (camera.LastFrame == _frame && camera.World == world && Casts(camera.Desc))
+                _shadowViewers.Add((new CullFrustum(camera.Desc.Layers, camera.Desc.LayerCount), camera.Desc.Layers[0], camera.View.PixelHeight));
+        }
         _shadowPlans.Clear();
         int minTile = ShadowTileAllocator.RoundUp(Math.Clamp(settings.MinTileSize, ShadowTileAllocator.SmallestTile, pageSize));
         for (int i = 0; i < lighting.LightCapacity; i++)
@@ -1005,7 +1017,7 @@ internal sealed partial class FramePipeline
             ref readonly LightDesc desc = ref lighting.Light(i);
             if (!desc.Shadow.Enabled || desc.Type is not (LightType.Spot or LightType.Point))
                 continue;
-            (float priority, float fade) = ShadowVisibility(world, desc, settings);
+            (float priority, float fade) = ShadowVisibility(desc, settings);
             if (fade <= 0)
             {
                 if (!shadows.Lights.ContainsKey(i))
@@ -1332,21 +1344,25 @@ internal sealed partial class FramePipeline
         }
 
         bool everyFrame = false, staticEveryFrame = false, providerCasts = false, complete = true, staticComplete = true;
+        light.Shaders.Clear();
+        if (light.StaticDirty)
+            light.StaticShaders.Clear();
         for (int f = 0; f < light.Faces; f++)
         {
             (Float4x4 view, Float4x4 projection, _, float near, float far) = FaceView(desc, f);
             ViewLayer layer = new() { View = view, Projection = projection, Position = desc.Position };
             CullFrustum cull = FaceCull(desc, f);
-            CameraFrame camera = light.Cameras[f] ??= ShadowCamera();
+            CameraFrame camera = RentShadowCamera();
             if (light.Split)
             {
                 if (light.StaticDirty)
                 {
-                    CameraFrame statics = light.StaticCameras[f] ??= ShadowCamera();
+                    CameraFrame statics = RentShadowCamera();
                     DrawShadowView(statics, world, light.StaticPages[f]!.Texture, light.StaticTiles[f], layer, cull, near, far, CasterFilter.StaticOnly);
                     light.StaticPages[f]!.Target.Draws.Add(new ShadowDraw(statics, light.StaticTiles[f], Clear: true));
                     staticEveryFrame |= EveryFrameCasters(statics);
                     staticComplete &= ShadowReady(statics);
+                    CollectShaders(statics, light.StaticShaders);
                 }
                 _shadowCopies.Copies.Add((light.StaticPages[f]!, light.StaticTiles[f], light.Pages[f]!, light.Tiles[f]));
                 DrawShadowView(camera, world, light.Pages[f]!.Texture, light.Tiles[f], layer, cull, near, far, CasterFilter.MovingOnly);
@@ -1360,6 +1376,9 @@ internal sealed partial class FramePipeline
             everyFrame |= EveryFrameCasters(camera);
             providerCasts |= camera.FindList(PassType.ShadowCaster) is { } list && camera.Sink.For(list) != null;
             complete &= ShadowReady(camera);
+            CollectShaders(camera, light.Shaders);
+            light.Views[f] = camera.Desc;
+            light.Culls[f] = cull;
         }
         light.EveryFrame = everyFrame;
         light.ProviderCasts = providerCasts;
@@ -1372,20 +1391,31 @@ internal sealed partial class FramePipeline
         light.StaticDirty = !staticComplete;
     }
 
-    // Whether a shadow view drew a caster whose shader has a global keyword that changed
-    private bool ReadsChangedKeyword(CameraFrame? camera, IReadOnlyDictionary<string, string>? before, IReadOnlyDictionary<string, string> after)
+    // Whether a caster shader has a global keyword that changed
+    private static bool ReadsChangedKeyword(List<Shader> shaders, IReadOnlyDictionary<string, string>? before, IReadOnlyDictionary<string, string> after)
     {
-        if (camera?.FindList(PassType.ShadowCaster) is not { } list)
-            return false;
-        foreach (DrawCall call in list.Calls)
+        foreach (Shader shader in shaders)
         {
-            foreach (VariantSpace axis in DrawPrograms[call.Program].Shader.GlobalAxes)
+            foreach (VariantSpace axis in shader.GlobalAxes)
             {
                 if (before == null || before.GetValueOrDefault(axis.Name) != after.GetValueOrDefault(axis.Name))
                     return true;
             }
         }
         return false;
+    }
+
+    // The shaders a shadow view drew with, added to a light's
+    private void CollectShaders(CameraFrame camera, List<Shader> into)
+    {
+        if (camera.FindList(PassType.ShadowCaster) is not { } list)
+            return;
+        foreach (DrawCall call in list.Calls)
+        {
+            Shader shader = DrawPrograms[call.Program].Shader;
+            if (!into.Contains(shader))
+                into.Add(shader);
+        }
     }
 
     // Whether a light holds or would hold a static copy, by its last count of casters
@@ -1550,17 +1580,9 @@ internal sealed partial class FramePipeline
         light.Dirty = light.StaticDirty = true;
         if (keepState)
             return;
-        foreach (CameraFrame?[] cameras in new[] { light.Cameras, light.StaticCameras })
-        {
-            for (int f = 0; f < cameras.Length; f++)
-            {
-                if (cameras[f] is not { } camera)
-                    continue;
-                _textures.Untrack(camera.ViewTable);
-                _shadowRetired.Add(camera);
-                cameras[f] = null;
-            }
-        }
+        light.Shaders.Clear();
+        light.StaticShaders.Clear();
+        Array.Clear(light.Views);
     }
 
     private static void ReleaseStatic(LightShadow light)
@@ -1592,7 +1614,7 @@ internal sealed partial class FramePipeline
     private static void WriteFace(WorldShadows shadows, int index, int face, in ShadowFace record, LightShadow light)
     {
         uint at = (uint)(index * WorldShadows.FacesPerLight + face);
-        if (light.Written[face].Equals(record) && at < shadows.Faces.Count)
+        if (ShadowFace.Same(light.Written[face], record) && at < shadows.Faces.Count)
             return;
         light.Written[face] = record;
         shadows.Faces.Set(at, record);
@@ -1637,12 +1659,14 @@ internal sealed partial class FramePipeline
     // Whether providers put anything into a cached light's views, which then draw again
     private bool ProvidersCastInto(WorldFrame world, LightShadow light)
     {
+        _providerProbe ??= ShadowCamera();
+        DrawList list = _providerProbe.ListFor(PassType.ShadowCaster);
         for (int f = 0; f < light.Faces; f++)
         {
-            if (light.Cameras[f] is not { } camera || camera.FindList(PassType.ShadowCaster) is not { } list)
+            if (light.Views[f].World == null)
                 continue;
-            CullProviders(camera, camera.Desc, world, camera.ShadowCull);
-            if (camera.Sink.For(list) != null)
+            CullProviders(_providerProbe, light.Views[f], world, light.Culls[f]);
+            if (_providerProbe.Sink.For(list) != null)
                 return true;
         }
         return false;
@@ -1650,27 +1674,23 @@ internal sealed partial class FramePipeline
 
     // A light's radius on screen in pixels in the view that sees it biggest, and its fade over the last tenth of the local distance and
     // as it shrinks toward the smallest radius that casts
-    private (float Priority, float Fade) ShadowVisibility(WorldFrame world, in LightDesc light, ShadowSettings settings)
+    private (float Priority, float Fade) ShadowVisibility(in LightDesc light, ShadowSettings settings)
     {
         float priority = 0, fade = 0;
         float range = Math.Max(light.Range, 0.02f);
         float distanceLimit = Math.Max(settings.LocalDistance, 0.01f);
         float sizeLimit = Math.Max(settings.MinScreenRadius, 0);
-        foreach (CameraFrame camera in _cameras.Values)
+        foreach ((CullFrustum frustum, ViewLayer layer, uint pixelHeight) in _shadowViewers)
         {
-            if (camera.LastFrame != _frame || camera.World != world || !Casts(camera.Desc))
+            if (!frustum.Sphere(light.Position, range))
                 continue;
-            ViewDesc view = camera.Desc;
-            if (!new CullFrustum(view.Layers, view.LayerCount).Sphere(light.Position, range))
-                continue;
-            ViewLayer layer = view.Layers[0];
             Double3 d = light.Position - layer.Position;
             float distanceSquared = (float)(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
             float edge = MathF.Sqrt(distanceSquared) - range;
             if (edge > distanceLimit)
                 continue;
             float t = Math.Clamp((Math.Max(edge, 0) - distanceLimit * 0.9f) / (distanceLimit * 0.1f), 0, 1);
-            float radius = ScreenRadius(layer.Projection, camera.View.PixelHeight, distanceSquared, range);
+            float radius = ScreenRadius(layer.Projection, pixelHeight, distanceSquared, range);
             float s = sizeLimit > 0 ? Math.Clamp((radius - sizeLimit) / sizeLimit, 0, 1) : 1;
             fade = Math.Max(fade, (1 - t * t * (3 - 2 * t)) * s * s * (3 - 2 * s));
             priority = Math.Max(priority, radius);
@@ -1689,6 +1709,21 @@ internal sealed partial class FramePipeline
         if (inner <= radius * radius * 0.1f)
             return float.MaxValue;
         return radius / MathF.Sqrt(inner) * scaleY * halfHeight;
+    }
+
+    // A camera for one face this frame, back in the pool once the frame dispatched
+    private CameraFrame RentShadowCamera()
+    {
+        CameraFrame camera = _shadowCameraPool.Count > 0 ? _shadowCameraPool.Pop() : ShadowCamera();
+        _shadowCamerasDrawn.Add(camera);
+        return camera;
+    }
+
+    private void ReturnShadowCameras()
+    {
+        foreach (CameraFrame camera in _shadowCamerasDrawn)
+            _shadowCameraPool.Push(camera);
+        _shadowCamerasDrawn.Clear();
     }
 
     private CameraFrame ShadowCamera()
@@ -1879,18 +1914,9 @@ internal sealed partial class FramePipeline
         {
             if (world.Shadows == null)
                 continue;
-            foreach (LightShadow light in world.Shadows.Lights.Values)
-            {
-                foreach (CameraFrame?[] cameras in new[] { light.Cameras, light.StaticCameras })
-                {
-                    foreach (CameraFrame? camera in cameras)
-                    {
-                        if (camera != null && camera.LastFrame == _frame)
-                            yield return camera;
-                    }
-                }
-            }
         }
+        foreach (CameraFrame camera in _shadowCamerasDrawn)
+            yield return camera;
         foreach (CameraFrame camera in AllViews())
         {
             foreach ((_, _, ViewShadows.Cascade[] cascades) in camera.Shadows.Lights)

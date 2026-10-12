@@ -18,7 +18,7 @@ public enum RenderableFlags : ushort
 {
     None = 0,
 
-    /// <summary>A hint: joins the static cluster structure and the static shadow layer.</summary>
+    /// <summary>A hint: joins the static culling tree and the static shadow layer. One that moves anyway is culled as moving from then on.</summary>
     Static = 1 << 0,
     CastShadows = 1 << 1,
     ReceiveShadows = 1 << 2,
@@ -1031,6 +1031,10 @@ public sealed partial class RenderWorld : IDisposable
         /// <summary>Renderables whose draws changed this frame: added, removed, new mesh or mesh data, materials, flags or mirroring.</summary>
         public List<int> DrawChanged { get; } = new();
 
+        /// <summary>Renderables whose world bounds changed this frame.</summary>
+        public List<int> BoundsChanged { get; } = new();
+        private readonly HashSet<int> _boundsChangedSet = new();
+
         /// <summary>Where shadow casters changed since the shadows last looked, each before and after, static ones apart.</summary>
         public List<(Double3 Center, float Radius, bool Static)> ShadowChanges { get; } = new();
 
@@ -1118,6 +1122,8 @@ public sealed partial class RenderWorld : IDisposable
         {
             DrawChanged.Clear();
             _drawChangedSet.Clear();
+            BoundsChanged.Clear();
+            _boundsChangedSet.Clear();
             (_movedLastFrame, _movedThisFrame) = (_movedThisFrame, _movedLastFrame);
             _movedThisFrame.Clear();
         }
@@ -1452,6 +1458,8 @@ public sealed partial class RenderWorld : IDisposable
             WorldCenter[index] = center;
             WorldExtents[index] = extents;
             WorldRadius[index] = MathF.Sqrt(extents.X * extents.X + extents.Y * extents.Y + extents.Z * extents.Z);
+            if (_boundsChangedSet.Add(index))
+                BoundsChanged.Add(index);
             if (_probeSlot[index] != WorldProbes.NoSlot)
                 _probes.Request(_probeSlot[index]);
             (Float3 high, Float3 low) = Precise.Split(center);

@@ -152,7 +152,7 @@ public sealed class LibraryTests : IDisposable
         List<Material> changed = new();
         materials.Extract(changed);
         world.Extract();
-        buckets.Update(world.Render.DrawChanged, changed);
+        buckets.Update(world.Render.DrawChanged, world.Render.BoundsChanged, changed);
 
         Float4x4 projection = new(new Float4(0.5f, 0, 0, 0), new Float4(0, 0.5f, 0, 0), new Float4(0, 0, 0, 0), new Float4(0, 0, 0.5f, 1));
         DrawList list = new();

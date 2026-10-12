@@ -8,6 +8,173 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
 
+/// <summary>
+/// Four wide trees over a world's renderables for culling: one over the static ones, built with the binned search when
+/// they change, and one over the rest, built in Morton order on frames something in it moved. A static renderable that
+/// moves is culled as moving from then on. A node wholly inside the frustum gives everything under it without testing.
+/// </summary>
+internal sealed class RenderableTree(RenderWorld.RenderSide world)
+{
+    private const int LeafSize = 4;
+    private const byte None = 0, Static = 1, Moving = 2;
+
+    private sealed class Tree(bool morton)
+    {
+        public readonly bool Morton = morton;
+        public readonly List<int> Members = new();
+        public readonly LightTreeBuilder Builder = new();
+        public int[] Leaves = [];
+        public Double3 Origin;
+        public bool Dirty;
+        private LightBounds[] _boxes = [];
+
+        public void Build(RenderWorld.RenderSide world)
+        {
+            Dirty = false;
+            int count = Members.Count;
+            if (_boxes.Length < count)
+                _boxes = new LightBounds[Math.Max(count, _boxes.Length * 2)];
+            Origin = count > 0 ? world.WorldCenter[Members[0]] : default;
+            for (int i = 0; i < count; i++)
+            {
+                int index = Members[i];
+                Double3 d = world.WorldCenter[index] - Origin;
+                System.Numerics.Vector3 center = new((float)d.X, (float)d.Y, (float)d.Z);
+                Float3 e = world.WorldExtents[index];
+
+                // Float rounding of the center is covered so a box never shrinks off what it holds
+                System.Numerics.Vector3 pad = System.Numerics.Vector3.Abs(center) * 1e-6f + new System.Numerics.Vector3(1e-4f);
+                System.Numerics.Vector3 extents = new System.Numerics.Vector3(e.X, e.Y, e.Z) + pad;
+                _boxes[i] = new LightBounds { Min = center - extents, Max = center + extents };
+            }
+            Builder.Build(_boxes.AsSpan(0, count), LeafSize, Morton);
+            ReadOnlySpan<int> order = Builder.Order;
+            if (Leaves.Length < order.Length)
+                Leaves = new int[Math.Max(order.Length, Leaves.Length * 2)];
+            for (int i = 0; i < order.Length; i++)
+                Leaves[i] = Members[order[i]];
+        }
+    }
+
+    private readonly Tree _static = new(morton: false), _moving = new(morton: true);
+    private byte[] _in = [];
+    private int[] _slot = [];
+    private bool[] _demoted = [];
+    private readonly Stack<uint> _stack = new();
+
+    public void Update(IReadOnlyList<int> drawChanged, IReadOnlyList<int> boundsChanged)
+    {
+        if (_in.Length < world.Capacity)
+        {
+            Array.Resize(ref _in, world.Capacity);
+            Array.Resize(ref _slot, world.Capacity);
+            Array.Resize(ref _demoted, world.Capacity);
+        }
+        foreach (int index in boundsChanged)
+        {
+            if (_in[index] == Static)
+                _demoted[index] = true;
+        }
+        foreach (int index in drawChanged)
+            Place(index);
+        foreach (int index in boundsChanged)
+        {
+            Place(index);
+            if (_in[index] == Moving)
+                _moving.Dirty = true;
+        }
+        if (_static.Dirty)
+            _static.Build(world);
+        if (_moving.Dirty)
+            _moving.Build(world);
+    }
+
+    private void Place(int index)
+    {
+        if (!world.Alive[index])
+            _demoted[index] = false;
+        byte want = !world.Alive[index] ? None : (world.Flags[index] & RenderableFlags.Static) != 0 && !_demoted[index] ? Static : Moving;
+        if (want == _in[index])
+            return;
+        if (_in[index] != None)
+        {
+            Tree from = _in[index] == Static ? _static : _moving;
+            int last = from.Members[^1];
+            from.Members[_slot[index]] = last;
+            _slot[last] = _slot[index];
+            from.Members.RemoveAt(from.Members.Count - 1);
+            from.Dirty = true;
+        }
+        _in[index] = want;
+        if (want == None)
+            return;
+        Tree to = want == Static ? _static : _moving;
+        _slot[index] = to.Members.Count;
+        to.Members.Add(index);
+        to.Dirty = true;
+    }
+
+    /// <summary>Every renderable whose box may touch the frustum, a superset of those that do.</summary>
+    public void Cull(in CullFrustum frustum, List<int> into)
+    {
+        into.Clear();
+        Cull(_static, frustum, into);
+        Cull(_moving, frustum, into);
+    }
+
+    private void Cull(Tree tree, in CullFrustum frustum, List<int> into)
+    {
+        if (tree.Builder.NodeCount == 0)
+            return;
+        ReadOnlySpan<LightTreeNode> nodes = tree.Builder.Nodes;
+        Float3 offset = frustum.Relative(tree.Origin);
+        _stack.Clear();
+        _stack.Push(0);
+        while (_stack.Count > 0)
+        {
+            ref readonly LightTreeNode node = ref nodes[(int)_stack.Pop()];
+            for (int i = 0; i < 4; i++)
+            {
+                uint child = node.Child(i);
+                if (child == LightTreeBuilder.Invalid)
+                    continue;
+                LightBounds box = node.Box(i);
+                System.Numerics.Vector3 c = (box.Min + box.Max) * 0.5f, e = (box.Max - box.Min) * 0.5f;
+                int side = frustum.Classify(new Float3(c.X + offset.X, c.Y + offset.Y, c.Z + offset.Z), new Float3(e.X, e.Y, e.Z));
+                if (side == 0)
+                    continue;
+                if ((child & LightTreeBuilder.LeafBit) != 0)
+                    AddRun(tree, child, node.Count(i), into);
+                else if (side == 2)
+                    AddAll(tree, nodes, child, into);
+                else
+                    _stack.Push(child);
+            }
+        }
+    }
+
+    private static void AddRun(Tree tree, uint child, uint count, List<int> into)
+    {
+        int first = (int)(child & ~LightTreeBuilder.LeafBit);
+        into.AddRange(tree.Leaves.AsSpan(first, (int)count));
+    }
+
+    private static void AddAll(Tree tree, ReadOnlySpan<LightTreeNode> nodes, uint start, List<int> into)
+    {
+        ref readonly LightTreeNode node = ref nodes[(int)start];
+        for (int i = 0; i < 4; i++)
+        {
+            uint child = node.Child(i);
+            if (child == LightTreeBuilder.Invalid)
+                continue;
+            if ((child & LightTreeBuilder.LeafBit) != 0)
+                AddRun(tree, child, node.Count(i), into);
+            else
+                AddAll(tree, nodes, child, into);
+        }
+    }
+}
+
 /// <summary>What a draw record tells the vertex shader: the chunk, the view layer block, flags and the submesh for the material lookup.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct DrawRecord
@@ -278,6 +445,30 @@ internal readonly struct CullFrustum
         return false;
     }
 
+    /// <summary>Whether a box relative to the camera is outside every layer (0), crosses one (1) or is wholly inside one (2).</summary>
+    public int Classify(Float3 center, Float3 extents)
+    {
+        int result = 0;
+        for (int l = 0; l < _layers; l++)
+        {
+            int layer = 2;
+            for (int i = 0; i < _counts[l] && layer > 0; i++)
+            {
+                Float4 p = _planes[l * 6 + i];
+                float distance = p.X * center.X + p.Y * center.Y + p.Z * center.Z + p.W;
+                float radius = MathF.Abs(p.X) * extents.X + MathF.Abs(p.Y) * extents.Y + MathF.Abs(p.Z) * extents.Z;
+                if (distance < -radius)
+                    layer = 0;
+                else if (distance < radius)
+                    layer = 1;
+            }
+            if (layer == 2)
+                return 2;
+            result = Math.Max(result, layer);
+        }
+        return result;
+    }
+
     public bool Box(Double3 worldCenter, Float3 extents)
     {
         Float3 center = Relative(worldCenter);
@@ -409,6 +600,12 @@ internal sealed class BucketSet
         public ulong Key;
         public int[] Objects = new int[4];
         public int Count;
+
+        /// <summary>Its place in its pass's order, and the objects a sparse build found in it.</summary>
+        public int OrderIndex;
+        public int BuildStamp;
+        public int[] Found = new int[4];
+        public int FoundCount;
         public int Pass => Id.Pass;
         public ushort Program => Id.Program;
         public int Page => Id.Page;
@@ -436,6 +633,11 @@ internal sealed class BucketSet
     private List<TransparentItem>?[] _transparentOf = [];
     private readonly List<(ulong Key, TransparentItem Item)> _sorted = new();
     private bool[] _visible = [];
+    private readonly List<int> _visibleList = new();
+    private readonly List<int> _candidates = new();
+    private readonly List<Bucket> _touched = new();
+    private int _buildStamp;
+    private readonly RenderableTree _tree;
     private int[] _chunkStamp = [];
     private int[] _chunkStart = [];
     private bool[] _chunkVisible = new bool[256];
@@ -446,6 +648,7 @@ internal sealed class BucketSet
     {
         _world = world;
         _programs = programs;
+        _tree = new RenderableTree(world);
     }
 
     public int BucketCount => _buckets.Count;
@@ -481,9 +684,13 @@ internal sealed class BucketSet
         return _ordered[pass];
     }
 
-    /// <summary>Rebuilds the buckets of renderables whose draws changed, and of every renderable using a material whose draws changed. Render thread.</summary>
-    public void Update(IReadOnlyList<int> drawChanged, IReadOnlyList<Material> changedMaterials)
+    /// <summary>
+    /// Rebuilds the buckets of renderables whose draws changed, and of every renderable using a material whose draws
+    /// changed, and moves changed renderables in the culling trees. Render thread.
+    /// </summary>
+    public void Update(IReadOnlyList<int> drawChanged, IReadOnlyList<int> boundsChanged, IReadOnlyList<Material> changedMaterials)
     {
+        _tree.Update(drawChanged, boundsChanged);
         _rebuild.Clear();
         foreach (int index in drawChanged)
             _rebuild.Add(index);
@@ -527,16 +734,41 @@ internal sealed class BucketSet
         bool prepass = pass == 0;
         _prepass.Clear();
 
-        List<Bucket> ordered = _ordered[pass];
-        for (int b = 0; b < ordered.Count; b++)
+        // The visible objects' buckets of this pass, in the pass's order, each with its objects in index order
+        _buildStamp++;
+        _touched.Clear();
+        foreach (int index in _visibleList)
         {
-            Bucket bucket = ordered[b];
+            if (index >= _members.Length || _members[index] is not { } members)
+                continue;
+            foreach (Membership membership in members)
+            {
+                Bucket found = membership.Bucket;
+                if (found.Pass != pass)
+                    continue;
+                if (found.BuildStamp != _buildStamp)
+                {
+                    found.BuildStamp = _buildStamp;
+                    found.FoundCount = 0;
+                    _touched.Add(found);
+                }
+                if (found.FoundCount == found.Found.Length)
+                    Array.Resize(ref found.Found, found.Found.Length * 2);
+                found.Found[found.FoundCount++] = index;
+            }
+        }
+        _touched.Sort((a, c) => a.OrderIndex.CompareTo(c.OrderIndex));
+
+        for (int b = 0; b < _touched.Count; b++)
+        {
+            Bucket bucket = _touched[b];
             int first = list.InstanceCount;
             float nearest = float.MaxValue;
-            for (int i = 0; i < bucket.Count; i++)
+            Array.Sort(bucket.Found, 0, bucket.FoundCount);
+            for (int i = 0; i < bucket.FoundCount; i++)
             {
-                int index = bucket.Objects[i];
-                if (!_visible[index] || (bucket.MultiChunk && !ChunkVisible(frustum, index, (int)bucket.ChunkInMesh)))
+                int index = bucket.Found[i];
+                if (bucket.MultiChunk && !ChunkVisible(frustum, index, (int)bucket.ChunkInMesh))
                     continue;
                 list.AddInstance((uint)index);
                 if (prepass)
@@ -559,7 +791,7 @@ internal sealed class BucketSet
         {
             _prepass.Sort((a, c) => a.Key.CompareTo(c.Key));
             foreach ((_, int b, int first, int count) in _prepass)
-                Emit(list, ordered[b], first, count);
+                Emit(list, _touched[b], first, count);
         }
         foreach (TransparentItem item in provided?.Opaque ?? [])
         {
@@ -704,7 +936,7 @@ internal sealed class BucketSet
         CullObjects(frustum, cullingMask, filter);
         foreach (int index in _world.Deforming)
         {
-            if (_visible[index])
+            if (index < _visible.Length && _visible[index])
                 _world.DeformSeen[index] = _world.DeformStamp;
         }
     }
@@ -719,14 +951,22 @@ internal sealed class BucketSet
         }
         _cullStamp++;
         _chunkCount = 0;
+        foreach (int index in _visibleList)
+            _visible[index] = false;
+        _visibleList.Clear();
 
-        for (int index = 0; index < _world.Capacity; index++)
+        _tree.Cull(frustum, _candidates);
+        foreach (int index in _candidates)
         {
-            _visible[index] = _world.Alive[index]
+            if (_world.Alive[index]
                 && (_world.Flags[index] & RenderableFlags.Hidden) == 0
                 && (filter == CasterFilter.All || ((_world.Flags[index] & RenderableFlags.Static) != 0) == (filter == CasterFilter.StaticOnly))
                 && (_world.LayerMask[index] & cullingMask) != 0
-                && frustum.Sphere(_world.WorldCenter[index], _world.WorldRadius[index]);
+                && frustum.Sphere(_world.WorldCenter[index], _world.WorldRadius[index]))
+            {
+                _visible[index] = true;
+                _visibleList.Add(index);
+            }
         }
     }
 
@@ -736,9 +976,9 @@ internal sealed class BucketSet
         CullObjects(frustum, cullingMask);
         int statics = 0, moving = 0;
         int pass = _passes.IndexOf(PassType.ShadowCaster);
-        for (int index = 0; index < _world.Capacity; index++)
+        foreach (int index in _visibleList)
         {
-            if (!_visible[index] || !InPass(index, pass))
+            if (!InPass(index, pass))
                 continue;
             if ((_world.Flags[index] & RenderableFlags.Static) != 0)
                 statics++;
@@ -1000,6 +1240,8 @@ internal sealed class BucketSet
                 ordered.Add(bucket);
         }
         ordered.Sort((a, b) => a.Key != b.Key ? a.Key.CompareTo(b.Key) : a.Chunk.CompareTo(b.Chunk));
+        for (int i = 0; i < ordered.Count; i++)
+            ordered[i].OrderIndex = i;
         _orderDirty[pass] = false;
     }
 

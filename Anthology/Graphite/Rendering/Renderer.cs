@@ -810,7 +810,7 @@ public sealed class Renderer : IDisposable
         {
             world.World.Render.Update(_changedMeshes, _changedMaterials);
             world.World.Render.UpdateDeformation(_geometry, _lastDispatched);
-            world.Buckets.Update(world.World.Render.DrawChanged, _changedMaterials);
+            world.Buckets.Update(world.World.Render.DrawChanged, world.World.Render.BoundsChanged, _changedMaterials);
         }
         _geometry.FlushCopies(_uploader, _lastDispatched);
 

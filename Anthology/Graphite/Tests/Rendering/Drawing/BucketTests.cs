@@ -97,7 +97,7 @@ public sealed class BucketTests : IDisposable
         List<Material> changed = new();
         _materials.Extract(changed);
         _world.Extract();
-        _buckets.Update(_world.Render.DrawChanged, changed);
+        _buckets.Update(_world.Render.DrawChanged, _world.Render.BoundsChanged, changed);
         _buckets.Cull(frustum ?? s_frustum, mask);
         if (pass == Transparent)
             _buckets.BuildTransparent(frustum ?? s_frustum, _list);
@@ -395,5 +395,55 @@ public sealed class BucketTests : IDisposable
         Frame(Forward);
         Assert.True(_buckets.BucketCount < buckets);
         Assert.Equal(0, _buckets.BucketCount);
+    }
+
+    [Fact]
+    public void StaticObjectsThatMove_AreCulledWhereTheyAre()
+    {
+        Material material = Material();
+        RenderableHandle handle = Add(_triangle, material, flags: RenderableFlags.Static);
+        Add(_triangle, material, At(1), RenderableFlags.Static);
+        Assert.Equal(2, Frame(Forward).InstanceCount);
+
+        _world.SetTransform(handle, At(50));
+        Assert.Equal(1, Frame(Forward).InstanceCount);
+        _world.SetTransform(handle, At(-2));
+        Assert.Equal(2, Frame(Forward).InstanceCount);
+
+        _world.Remove(handle);
+        Assert.Equal(1, Frame(Forward).InstanceCount);
+    }
+
+    [Fact]
+    public void ManyObjects_TheTreesCullJustAsTestingEachOneWould()
+    {
+        Material material = Material();
+        Random random = new(7);
+        List<(RenderableHandle Handle, Float3 Position)> objects = new();
+        for (int i = 0; i < 3000; i++)
+        {
+            Float3 position = new((float)(random.NextDouble() * 60 - 30), (float)(random.NextDouble() * 60 - 30), (float)(random.NextDouble() * 30 - 10));
+            RenderableFlags flags = i % 3 == 0 ? RenderableFlags.CastShadows : RenderableFlags.Static | RenderableFlags.CastShadows;
+            objects.Add((Add(_triangle, material, Float4x4.CreateTranslation(position), flags), position));
+        }
+
+        for (int frame = 0; frame < 3; frame++)
+        {
+            for (int i = 0; i < objects.Count; i += 7)
+            {
+                Float3 position = objects[i].Position + new Float3(frame * 3 - 3, 0, 0);
+                objects[i] = (objects[i].Handle, position);
+                _world.SetTransform(objects[i].Handle, Float4x4.CreateTranslation(position));
+            }
+            DrawList list = Frame(Shadows);
+            HashSet<uint> expected = new();
+            foreach ((RenderableHandle handle, _) in objects)
+            {
+                if (s_frustum.Sphere(_world.Render.WorldCenter[handle.Index], _world.Render.WorldRadius[handle.Index]))
+                    expected.Add((uint)handle.Index);
+            }
+            Assert.NotEmpty(expected);
+            Assert.Equal(expected.OrderBy(i => i), Instances(list).OrderBy(i => i));
+        }
     }
 }

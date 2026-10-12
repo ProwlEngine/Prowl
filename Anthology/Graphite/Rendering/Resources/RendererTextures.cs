@@ -15,6 +15,9 @@ internal sealed class TableRing : IDisposable
     private readonly List<(PropertyID Name, uint Index)> _log = new();
     private readonly List<(DescriptorTable Table, int Applied)> _tables = new();
 
+    /// <summary>The LOD bias its samplers carry. Set only by the render thread, which reads it without the texture lock.</summary>
+    internal float SamplerBias;
+
     public TableRing(GraphicsDevice device, ResourceLayoutDescription layout, string name)
     {
         _device = device;
@@ -126,7 +129,6 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     private readonly List<Texture> _owned = new();
     private readonly List<(SamplerDescription? Description, Sampler Sampler)> _samplers = new();
     private readonly List<TableRing> _viewTables = new();
-    private readonly Dictionary<TableRing, float> _viewBias = new();
     private readonly Dictionary<(int Slot, float Bias), Sampler> _biased = new();
     private readonly Stack<uint>[] _freeSlots = [new(), new(), new(), new(), new()];
     private readonly List<(ulong Execution, int Table, uint Slot)> _retiringSlots = new();
@@ -189,7 +191,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             _samplers.Add((sampler, _device.ResourceFactory.CreateSampler(sampler!.Value)));
             uint slot = (uint)_samplers.Count - 1;
             foreach (TableRing ring in _viewTables)
-                ring.Set("Graphite_Samplers", slot, Biased((int)slot, _viewBias.GetValueOrDefault(ring)));
+                ring.Set("Graphite_Samplers", slot, Biased((int)slot, ring.SamplerBias));
             return slot;
         }
     }
@@ -242,6 +244,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         lock (_lock)
         {
             _viewTables.Add(viewTable);
+            viewTable.SamplerBias = 0;
             for (int i = 0; i < _samplers.Count; i++)
                 viewTable.Set("Graphite_Samplers", (uint)i, _samplers[i].Sampler);
         }
@@ -250,11 +253,11 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     /// <summary>Gives a view's sampler table every sampler with a texture LOD bias added, 0 for the samplers as made. Render thread.</summary>
     internal void SetViewBias(TableRing viewTable, float bias)
     {
+        if (viewTable.SamplerBias == bias)
+            return;
         lock (_lock)
         {
-            if (_viewBias.GetValueOrDefault(viewTable) == bias)
-                return;
-            _viewBias[viewTable] = bias;
+            viewTable.SamplerBias = bias;
             for (int i = 0; i < _samplers.Count; i++)
                 viewTable.Set("Graphite_Samplers", (uint)i, Biased(i, bias));
         }
@@ -278,7 +281,6 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         lock (_lock)
         {
             _viewTables.Remove(table);
-            _viewBias.Remove(table);
         }
     }
 

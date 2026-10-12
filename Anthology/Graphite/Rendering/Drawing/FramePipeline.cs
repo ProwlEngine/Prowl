@@ -1620,6 +1620,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (Texture texture in _disposeAfterDispatch)
             texture.Dispose();
         _disposeAfterDispatch.Clear();
+        ReturnShadowCameras();
         foreach (IDisposable retired in _shadowRetired)
             retired.Dispose();
         _shadowRetired.Clear();
@@ -1995,19 +1996,6 @@ internal sealed partial class FramePipeline : IDisposable
         world.SkyProgram = null;
         foreach (CameraFrame camera in world.Captures())
             Untrack(camera);
-        foreach (LightShadow light in world.Shadows?.Lights.Values ?? System.Linq.Enumerable.Empty<LightShadow>())
-        {
-            foreach (CameraFrame? camera in light.Cameras)
-            {
-                if (camera != null)
-                    _textures.Untrack(camera.ViewTable);
-            }
-            foreach (CameraFrame? camera in light.StaticCameras)
-            {
-                if (camera != null)
-                    _textures.Untrack(camera.ViewTable);
-            }
-        }
     }
 
     // A view's table and its cascades' tables leave the sampler tables they follow
@@ -2271,6 +2259,11 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (CameraFrame camera in _cameras.Values)
             camera.Dispose();
         _cameras.Clear();
+        ReturnShadowCameras();
+        foreach (CameraFrame camera in _shadowCameraPool)
+            camera.Dispose();
+        _shadowCameraPool.Clear();
+        _providerProbe?.Dispose();
         _frameStart.Dispose();
         _readbackPipeline.Dispose();
         _providerPipeline.Dispose();
