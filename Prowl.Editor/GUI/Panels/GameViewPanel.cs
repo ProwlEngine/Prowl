@@ -92,6 +92,15 @@ public class GameViewPanel : DockPanel
     public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
         => MaximizeOnPlay = state["maximizeOnPlay"]?.GetValue<bool>() == true;
 
+    // The layout is otherwise only written on save, so the choice is written straight away. Not during play, where
+    // the other panels' state is the play session's and must not be kept.
+    private void ToggleMaximizeOnPlay()
+    {
+        MaximizeOnPlay = !MaximizeOnPlay;
+        if (!Application.IsPlaying)
+            EditorApplication.Instance?.SaveDockLayout();
+    }
+
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
@@ -108,7 +117,7 @@ public class GameViewPanel : DockPanel
                     }
                 }, EditorIcons.Expand);
                 b.Toggle(Loc.Get("game.show_stats"), () => _showStats = !_showStats, () => _showStats);
-                b.Toggle(Loc.Get("game.maximize_on_play"), () => MaximizeOnPlay = !MaximizeOnPlay, () => MaximizeOnPlay);
+                b.Toggle(Loc.Get("game.maximize_on_play"), ToggleMaximizeOnPlay, () => MaximizeOnPlay);
             }));
     }
 

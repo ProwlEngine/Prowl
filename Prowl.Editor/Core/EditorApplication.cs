@@ -1591,7 +1591,7 @@ public class EditorApplication : Game
         _dockSpace.Root = root;
     }
 
-    private void SaveDockLayout()
+    internal void SaveDockLayout()
     {
         if (Project.Current == null) return;
         try
