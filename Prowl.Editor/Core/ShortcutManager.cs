@@ -303,6 +303,9 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolScale", "Scale Tool", KeyCode.R);
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
 
+        // Game View
+        ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
+
         // Hierarchy
         ShortcutManager.Register("Hierarchy/Delete", "Delete Selected", KeyCode.Delete);
         ShortcutManager.Register("Hierarchy/Duplicate", "Duplicate Selected", KeyCode.D, ctrl: true);

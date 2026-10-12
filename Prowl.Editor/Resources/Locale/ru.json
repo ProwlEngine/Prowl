@@ -46,6 +46,7 @@
 
   "game.resolution": "Разрешение",
   "game.show_stats": "Показать статистику",
+  "game.maximize_on_play": "Развернуть при запуске игры",
 
   "dialog.delete_assets": "Удалить ассеты",
   "dialog.unsaved_prefab": "Несохранённые изменения Prefab",

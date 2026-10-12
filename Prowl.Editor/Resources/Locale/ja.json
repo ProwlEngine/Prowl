@@ -46,6 +46,7 @@
 
   "game.resolution": "解像度",
   "game.show_stats": "統計を表示",
+  "game.maximize_on_play": "再生時に最大化",
 
   "dialog.delete_assets": "アセットを削除",
   "dialog.unsaved_prefab": "未保存のPrefabの変更",
