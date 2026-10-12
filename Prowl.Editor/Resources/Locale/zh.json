@@ -46,6 +46,8 @@
 
   "game.resolution": "分辨率",
   "game.show_stats": "显示统计信息",
+  "game.maximize_on_play": "播放时最大化",
+  "game.restore_layout": "恢复布局",
 
   "dialog.delete_assets": "删除资产",
   "dialog.unsaved_prefab": "未保存的Prefab更改",

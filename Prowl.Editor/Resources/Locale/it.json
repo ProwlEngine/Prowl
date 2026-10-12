@@ -46,6 +46,8 @@
 
   "game.resolution": "Risoluzione",
   "game.show_stats": "Mostra statistiche",
+  "game.maximize_on_play": "Massimizza in riproduzione",
+  "game.restore_layout": "Ripristina layout",
 
   "dialog.delete_assets": "Elimina asset",
   "dialog.unsaved_prefab": "Modifiche al Prefab non salvate",
