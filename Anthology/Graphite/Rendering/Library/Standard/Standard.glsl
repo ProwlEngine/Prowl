@@ -352,9 +352,11 @@ void Graphite_StandardFragment()
     }
     vec3 lighting = CalculateForwardLightingAniso(vWorldPos, worldNormal, N, viewDir, anisoTangent, anisoBitangent,
                                                   baseColor, metallic, roughness, _Anisotropy, ao);
-#else
+#elif defined(_TRANSLUCENCY)
     vec3 lighting = CalculateForwardLighting(vWorldPos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao,
                                              translucency, scatteringPower, scatteringDistortion, scatteringScale);
+#else
+    vec3 lighting = CalculateForwardLighting(vWorldPos, worldNormal, N, viewDir, baseColor, metallic, roughness, ao);
 #endif
 
     vec3 ambientLight = Graphite_IndirectDiffuse(worldNormal, vLightmapUV) * ao;
@@ -374,6 +376,13 @@ void Graphite_StandardFragment()
 #else
     fragColor = vec4(color, 1.0);
 #endif
+    uint accepted = 0u;
+    Graphite_LightIterator dbg = Graphite_BeginLights(vWorldPos);
+    LightSample DL;
+    graphite_DebugNodes = 0u;
+    graphite_DebugTested = 0u;
+    while (Graphite_NextLight(dbg, DL)) accepted++;
+    fragColor = vec4(float(graphite_DebugNodes) / 64.0, float(graphite_DebugTested) / 255.0, float(accepted) / 64.0, 1.0);
 }
 
 #else
