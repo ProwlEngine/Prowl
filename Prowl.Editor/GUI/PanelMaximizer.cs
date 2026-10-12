@@ -41,6 +41,12 @@ internal sealed class PanelMaximizer
     private DockPanel? _toggle;
     private DockNode? _toggleLeaf;
 
+    // A toggle asked for by RequestToggle, applied before the next draw.
+    private DockPanel? _requested;
+
+    // Counts maximizes, so a caller holding one's token can tell whether it is still the one showing.
+    private int _generation;
+
     public PanelMaximizer(DockSpace dock) => _dock = dock;
 
     /// <summary>The panel currently filling the dock area, or null.</summary>
@@ -61,6 +67,7 @@ internal sealed class PanelMaximizer
     /// </summary>
     public void Draw(Paper paper, float x, float y, float w, float h)
     {
+        ApplyRequest();
         ApplyDoubleClick(paper);
         Sync();
 
@@ -86,14 +93,21 @@ internal sealed class PanelMaximizer
     }
 
     /// <summary>
-    /// Fill the dock area with <paramref name="panel"/>. Only panels docked in the main layout can be
-    /// maximized; returns false for anything else (a floating window's panel, or one not open at all).
+    /// Maximize <paramref name="panel"/>, or bring the layout back if it already is, before the dock next draws.
+    /// For a panel asking from its own OnGUI, which runs while the dock is still walking the tree this swaps.
     /// </summary>
-    public bool Maximize(DockPanel panel)
+    public void RequestToggle(DockPanel panel) => _requested = panel;
+
+    /// <summary>
+    /// Fill the dock area with <paramref name="panel"/>. Only panels docked in the main layout can be
+    /// maximized; returns 0 for anything else (a floating window's panel, or one not open at all).
+    /// Otherwise returns a token for <see cref="Restore(int)"/>.
+    /// </summary>
+    public int Maximize(DockPanel panel)
     {
         Restore();
         DockNode? host = FindLeaf(_dock.Root, panel);
-        if (host == null) return false;
+        if (host == null) return 0;
 
         // The panel is what the user is looking at, so it is the one in front when the layout comes back.
         host.ActiveTabIndex = host.Tabs!.IndexOf(panel);
@@ -102,7 +116,16 @@ internal sealed class PanelMaximizer
         _layout = _dock.Root;
         _view = new StandIn(host, panel);
         _dock.Root = _view;
-        return true;
+        return ++_generation;
+    }
+
+    /// <summary>
+    /// Put the docked layout back only if the maximize <paramref name="token"/> came from is still showing,
+    /// so a caller undoing its own maximize leaves alone one the user has ended or replaced since.
+    /// </summary>
+    public void Restore(int token)
+    {
+        if (token != 0 && token == _generation) Restore();
     }
 
     /// <summary>
@@ -162,6 +185,14 @@ internal sealed class PanelMaximizer
         if (_view == null) return;
         bool intact = _dock.Root == _view && _view.Tabs is { Count: 1 } tabs && tabs[0] == _panel;
         if (!intact) Restore();
+    }
+
+    private void ApplyRequest()
+    {
+        if (_requested is not { } panel) return;
+        _requested = null;
+        if (_panel == panel) Restore();
+        else Maximize(panel);
     }
 
     // A double-click registers on the second press, but that click's release still has to reach the tab
