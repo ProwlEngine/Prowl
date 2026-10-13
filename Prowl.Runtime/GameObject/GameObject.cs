@@ -91,11 +91,22 @@ public partial class GameObject : EngineObject, ISerializable
         set => LayerIndex = TagLayerManager.GetLayerIndex(value);
     }
 
-    /// <summary> The Static flag of this GameObject, Changing this may not behave as expected! </summary>
+    /// <summary>
+    /// The Static flag of this GameObject. While playing, a static object's renderers and lights sync into the render
+    /// world once and are then left alone, so moving it does nothing until it is made non static again.
+    /// </summary>
     public bool IsStatic
     {
         get => _static;
-        set => _static = value;
+        set
+        {
+            if (_static == value) return;
+            _static = value;
+            Scene? scene = Scene;
+            if (!scene.IsValid()) return;
+            foreach (Component component in _components)
+                if (component is Rendering.IRenderSync member) scene.Rendering.Refresh(member);
+        }
     }
 
     /// <summary> The Identifier of this GameObject </summary>
