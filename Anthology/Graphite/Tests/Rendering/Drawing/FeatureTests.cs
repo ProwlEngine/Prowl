@@ -356,10 +356,10 @@ public sealed class FeatureTests : IDisposable
     }
 
     // Draws nothing onto the scene in place of a built in feature
-    private sealed class Nothing(Type replaces, RenderSlot slot) : RenderFeature
+    private sealed class Nothing(string group, RenderSlot slot) : RenderFeature
     {
         public override RenderSlot Slot => slot;
-        public override Type? Replaces => replaces;
+        public override string? ExclusiveGroup => group;
         public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.DrawToColor();
         public override void Render(FeatureContext context) => context.BeginOutput();
     }
@@ -568,7 +568,7 @@ public sealed class FeatureTests : IDisposable
         AddQuad(new Float3(1, 1, 1));
         ViewDesc view = View();
         view.ClearColor = new Float4(0.1f, 0.2f, 0.3f, 1);
-        _world.Features.Add(new Nothing(typeof(OpaqueFeature), RenderSlot.Opaque));
+        _world.Features.Add(new Nothing("Opaque", RenderSlot.Opaque));
         AssertAll(new Float3(0.1f, 0.2f, 0.3f), Frame(view));
     }
 
@@ -1288,13 +1288,12 @@ public sealed class FeatureTests : IDisposable
         Assert.Equal("view.dependency.cycle", Assert.Single(_errors).Code);
     }
 
-    private sealed class Named(string name, RenderSlot slot, int order = 0, ViewKinds runsOn = ViewKinds.Cameras, string? group = null, Type? replaces = null) : RenderFeature
+    private sealed class Named(string name, RenderSlot slot, int order = 0, ViewKinds runsOn = ViewKinds.Cameras, string? group = null) : RenderFeature
     {
         public override RenderSlot Slot => slot;
         public override int Order => order;
         public override ViewKinds RunsOn => runsOn;
         public override string? ExclusiveGroup => group;
-        public override Type? Replaces => replaces;
         public override void Setup(FeatureBuilder builder, in FeatureView view) { }
         public override void Render(FeatureContext context) { }
         public override string ToString() => name;
@@ -1337,7 +1336,7 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
-    public void FeaturesThatThrow_AreReportedOnce_AndTheViewDrawsOn()
+    public void FeaturesThatThrowInSetup_AreLeftOut_ThrowingWhileRecordingFailsTheFrame()
     {
         AddQuad(new Float3(0.25f, 0.5f, 1));
         _world.Features.Add(new Throws(inSetup: true));
@@ -1350,7 +1349,7 @@ public sealed class FeatureTests : IDisposable
         for (int frame = 0; frame < 6; frame++)
             _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
         _device.WaitForIdle();
-        Assert.Equal("feature.render", Assert.Single(_errors).Code);
+        Assert.Equal("frame.failed", Assert.Single(_errors).Code);
     }
 
     // Inverts the colour once told to, which changes what it declares
@@ -1396,10 +1395,10 @@ public sealed class FeatureTests : IDisposable
         empty.ClearColor = new Float4(0, 0, 1, 1);
         empty.Features = new FeatureSet
         {
-            new Named("no prepass", RenderSlot.Prepass, replaces: typeof(PrepassFeature)),
-            new Named("no opaque", RenderSlot.Opaque, replaces: typeof(OpaqueFeature)),
-            new Named("no sky", RenderSlot.Sky, replaces: typeof(SkyFeature)),
-            new Named("no transparent", RenderSlot.Transparent, replaces: typeof(TransparentFeature)),
+            new Named("no prepass", RenderSlot.Prepass, group: "Prepass"),
+            new Named("no opaque", RenderSlot.Opaque, group: "Opaque"),
+            new Named("no sky", RenderSlot.Sky, group: "Sky"),
+            new Named("no transparent", RenderSlot.Transparent, group: "Transparent"),
         };
         Float4[] pixels = Frame(empty);
         AssertAll(new Float3(0, 0, 1), pixels, i => i % Size < Size / 2);
@@ -1413,21 +1412,6 @@ public sealed class FeatureTests : IDisposable
         pixels = Frame(letterboxed);
         AssertAll(new Float3(1, 0, 0), pixels, i => i % Size < Size / 2);
         AssertAll(new Float3(0, 1, 0), pixels, i => i % Size >= Size / 2);
-    }
-
-    [Fact]
-    public void Selection_AReplacementTakesTheReplacedGroup()
-    {
-        Named worldSky = new("world sky", RenderSlot.Sky, replaces: typeof(SkyFeature));
-        Named viewSky = new("view sky", RenderSlot.Sky, group: "Sky");
-        List<string> both = Select([worldSky], [viewSky]);
-        Assert.Contains("view sky", both);
-        Assert.DoesNotContain("world sky", both);
-        Assert.DoesNotContain("SkyFeature", both);
-
-        // Only a concrete feature type can be replaced
-        Named everything = new("everything", RenderSlot.Opaque, replaces: typeof(RenderFeature));
-        Assert.Contains("OpaqueFeature", Select([everything], []));
     }
 
     private sealed class Outlines : RenderFeature
@@ -2128,7 +2112,7 @@ public sealed class FeatureTests : IDisposable
         Assert.Contains("view sky", both);
         Assert.DoesNotContain("world sky", both);
 
-        Named opaque = new("opaque", RenderSlot.Opaque, replaces: typeof(OpaqueFeature));
+        Named opaque = new("opaque", RenderSlot.Opaque, group: "Opaque");
         Assert.DoesNotContain("OpaqueFeature", Select([opaque], []));
         Assert.Contains("opaque", Select([opaque], []));
     }

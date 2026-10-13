@@ -158,11 +158,12 @@ public sealed class FeatureSet : IEnumerable<RenderFeature>
 }
 
 /// <summary>
-/// Work a host adds to views: a pass in a slot of every view of a world, or of one view. Its slot, order, kinds, group,
-/// replaced type and Enabled are read at SubmitFrame along with <see cref="Extract"/> on the host thread, everything else
-/// runs on the render thread. A feature replacing a built in one names its type in <see cref="Replaces"/> and takes its
-/// exclusive group. Of features sharing an <see cref="ExclusiveGroup"/> the view's wins over the world's, which wins over
-/// the built in one. A feature that throws is reported and left out of that view.
+/// Work a host adds to views: a pass in a slot of every view of a world, or of one view. Its slot, order, kinds, group
+/// and Enabled are read at SubmitFrame along with <see cref="Extract"/> on the host thread, everything else runs on the
+/// render thread. Of features sharing an <see cref="ExclusiveGroup"/> the view's wins over the world's, which wins over
+/// the built in one, so a feature replaces a built in one by taking its group: Prepass, Opaque, Sky, SceneColor or
+/// Transparent. A feature that throws in Setup is reported and left out of that view; one that throws while recording
+/// fails the frame.
 /// </summary>
 public abstract class RenderFeature
 {
@@ -175,9 +176,6 @@ public abstract class RenderFeature
 
     public virtual ViewKinds RunsOn => ViewKinds.Cameras;
     public virtual string? ExclusiveGroup => null;
-
-    /// <summary>A concrete feature type this one stands in for.</summary>
-    public virtual Type? Replaces => null;
 
     public bool Enabled { get; set; } = true;
 
@@ -215,7 +213,6 @@ public abstract class RenderFeature
     internal int OrderSnapshot;
     internal ViewKinds RunsOnSnapshot;
     internal string? GroupSnapshot;
-    internal Type? ReplacesSnapshot;
     internal int JitterPhasesSnapshot;
     internal float JitterMipBiasSnapshot;
 
@@ -229,8 +226,6 @@ public abstract class RenderFeature
         GroupSnapshot = ExclusiveGroup;
         JitterPhasesSnapshot = Math.Max(JitterPhases, 0);
         JitterMipBiasSnapshot = JitterMipBias;
-        Type? replaces = Replaces;
-        ReplacesSnapshot = replaces != null && !replaces.IsAbstract && typeof(RenderFeature).IsAssignableFrom(replaces) ? replaces : null;
         if (this is ScreenLightingFeature lighting)
             (lighting.ScaleSnapshot, lighting.IrradianceSnapshot) = (Math.Clamp(lighting.Scale, 0.0625f, 1f), lighting.WritesIrradiance);
     }
@@ -1003,19 +998,11 @@ internal sealed class FeaturePass : IPass
         _context.Graph = context;
         _context.Command = cmd;
         _context.View = Camera.Info;
-        try
+        Feature.Render(_context);
+        if (Feature is ScreenLightingFeature)
         {
-            Feature.Render(_context);
-            if (Feature is ScreenLightingFeature)
-            {
-                Chain.ScreenVisibility.Filled |= Chain.ScreenVisibility.Written;
-                Chain.ScreenIrradiance.Filled |= Chain.ScreenIrradiance.Written;
-            }
-        }
-        catch (Exception e)
-        {
-            Frame.Report(new RendererError("feature.render", $"{Name} threw while recording, so view {Camera.View.ViewId} runs without it: {e}", RendererErrorSeverity.Error, Feature) { Key = $"feature.render.{Id}" });
-            Camera.Fail(Feature);
+            Chain.ScreenVisibility.Filled |= Chain.ScreenVisibility.Written;
+            Chain.ScreenIrradiance.Filled |= Chain.ScreenIrradiance.Written;
         }
     }
 }
@@ -1097,6 +1084,7 @@ public sealed class PrepassFeature : RenderFeature
     internal PrepassFeature() { }
 
     public override RenderSlot Slot => RenderSlot.Prepass;
+    public override string? ExclusiveGroup => "Prepass";
     public override ViewKinds RunsOn => ViewKinds.All;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -1118,6 +1106,7 @@ public sealed class OpaqueFeature : RenderFeature
     internal OpaqueFeature() { }
 
     public override RenderSlot Slot => RenderSlot.Opaque;
+    public override string? ExclusiveGroup => "Opaque";
     public override ViewKinds RunsOn => ViewKinds.All;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -1161,6 +1150,7 @@ public sealed class TransparentFeature : RenderFeature
     internal TransparentFeature() { }
 
     public override RenderSlot Slot => RenderSlot.Transparent;
+    public override string? ExclusiveGroup => "Transparent";
     public override ViewKinds RunsOn => ViewKinds.All;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -1186,6 +1176,7 @@ public sealed class SceneColorFeature : RenderFeature
     internal SceneColorFeature() { }
 
     public override RenderSlot Slot => RenderSlot.OpaqueColor;
+    public override string? ExclusiveGroup => "SceneColor";
     public override ViewKinds RunsOn => ViewKinds.All;
 
     public override bool IsActive(in FeatureView view) => view.SceneColor;
@@ -1213,9 +1204,6 @@ internal static class FeatureSelection
             feature.TakeSnapshot();
     }
 
-    [ThreadStatic]
-    private static List<string?>? t_groups;
-
     public static void Select(List<RenderFeature> result, RenderFeature[] world, RenderFeature[] view, in FeatureView info, Action<RendererError> report, IReadOnlyDictionary<RenderFeature, int>? failed = null)
     {
         result.Clear();
@@ -1223,40 +1211,16 @@ internal static class FeatureSelection
         Add(result, world, info, report, failed);
         Add(result, view, info, report, failed);
 
-        // A replacement takes the group of what it replaces
-        List<string?> groups = t_groups ??= new();
-        groups.Clear();
-        foreach (RenderFeature feature in result)
-        {
-            string? group = feature.GroupSnapshot;
-            if (group == null && feature.ReplacesSnapshot is { } type)
-            {
-                foreach (RenderFeature other in result)
-                {
-                    if (other != feature && type.IsInstanceOfType(other) && other.GroupSnapshot != null)
-                    {
-                        group = other.GroupSnapshot;
-                        break;
-                    }
-                }
-            }
-            groups.Add(group);
-        }
-
         // Later entries win: the view's over the world's over the built in ones
         for (int i = result.Count - 1; i > 0; i--)
         {
-            if (i >= result.Count)
+            if (i >= result.Count || result[i].GroupSnapshot is not { } group)
                 continue;
-            RenderFeature feature = result[i];
             for (int j = i - 1; j >= 0; j--)
             {
-                bool replaced = feature.ReplacesSnapshot is { } type && type.IsInstanceOfType(result[j]);
-                bool grouped = groups[i] is { } group && groups[j] == group;
-                if (replaced || grouped)
+                if (result[j].GroupSnapshot == group)
                 {
                     result.RemoveAt(j);
-                    groups.RemoveAt(j);
                     i--;
                 }
             }

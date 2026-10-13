@@ -24,7 +24,7 @@ public class RenderGraphSolverTests
         var a = new TestPass("A", outputs: new[] { ("conflict_shared", Desc.Color()) });
         var b = new TestPass("B", outputs: new[] { ("conflict_shared", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true)) });
 
-        Assert.Throws<InvalidOperationException>(() => Build(a, b));
+        Assert.Throws<RenderGraphException>(() => Build(a, b));
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class RenderGraphSolverTests
             inputs: new[] { "cycle_y" },
             outputs: new[] { ("cycle_x", Desc.Color()) });
 
-        Assert.Throws<InvalidOperationException>(() => Build(a, b));
+        Assert.Throws<RenderGraphException>(() => Build(a, b));
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class RenderGraphSolverTests
             inputs: new[] { "never_produced" },
             outputs: new[] { ("orphan_out", Desc.Color()) });
 
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Build(reader));
+        InvalidOperationException ex = Assert.Throws<RenderGraphException>(() => Build(reader));
         Assert.Contains("Orphan", ex.Message);
         Assert.Contains("never_produced", ex.Message);
     }

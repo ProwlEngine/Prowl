@@ -733,15 +733,6 @@ internal sealed class CameraFrame : IDisposable
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private readonly List<IPass> _passList = new();
 
-    /// <summary>Leaves a feature out of this view from the next frame, until it or the view's features change.</summary>
-    public void Fail(RenderFeature feature)
-    {
-        if (Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0)
-            return;
-        _failed[feature] = feature.Version;
-        Rebuild = true;
-    }
-
     // Features that failed on this view with their version, left out until they or the view's features change
     private readonly Dictionary<RenderFeature, int> _failed = new();
     private readonly List<RenderFeature> _unfiltered = new();
@@ -804,13 +795,17 @@ internal sealed class CameraFrame : IDisposable
         if (!Rebuild && Same(Features, Selected) && !Invalidated())
             return;
 
-        // Built now, so a feature that breaks the graph is left out of this view instead of failing the frame
+        // Built now, so a host feature that breaks the graph is left out of this view instead of failing the frame
         while (TryBuild(Selected) is { } error)
         {
-            RenderFeature? blamed = (error as FeatureSetupException)?.Feature;
-            if (blamed != null && Array.IndexOf(FeatureSelection.BuiltIn, blamed) >= 0)
+            RenderFeature? culprit = error switch
+            {
+                FeatureSetupException setup => setup.Feature,
+                RenderGraphException { Pass: FeaturePass pass } => pass.Feature,
+                _ => null,
+            };
+            if (culprit == null || Array.IndexOf(FeatureSelection.BuiltIn, culprit) >= 0)
                 throw error;
-            RenderFeature culprit = blamed ?? FindCulprit() ?? throw error;
             _failed[culprit] = culprit.Version;
             _report(new RendererError("feature.setup", $"{culprit.GetType().Name} broke the graph of view {View.ViewId}, which runs without it: {error.InnerException ?? error}", RendererErrorSeverity.Error, culprit) { Key = $"feature.setup.{View.ViewId}.{culprit.GetType().FullName}" });
             FeatureSelection.Select(Selected, _worldFeatures, _viewFeatures, Info, _report, _failed);
@@ -862,34 +857,6 @@ internal sealed class CameraFrame : IDisposable
         {
             return e;
         }
-    }
-
-    // The first host feature whose joining the built in ones and the host features before it breaks the graph
-    private RenderFeature? FindCulprit()
-    {
-        List<RenderFeature> kept = new(), trial = new();
-        foreach (RenderFeature feature in Selected)
-        {
-            if (Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0)
-                kept.Add(feature);
-        }
-        if (TryBuild(kept) != null)
-            return null;
-        foreach (RenderFeature feature in Selected)
-        {
-            if (kept.Contains(feature))
-                continue;
-            trial.Clear();
-            foreach (RenderFeature other in Selected)
-            {
-                if (other == feature || kept.Contains(other))
-                    trial.Add(other);
-            }
-            if (TryBuild(trial) != null)
-                return feature;
-            kept.Add(feature);
-        }
-        return null;
     }
 
     // Passes and states are kept while their feature is in the world's or view's set, so ids and history survive toggles

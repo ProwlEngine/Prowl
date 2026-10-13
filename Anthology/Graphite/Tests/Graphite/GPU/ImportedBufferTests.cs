@@ -100,7 +100,7 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer first = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
         DeviceBuffer second = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly));
 
-        Assert.Throws<InvalidOperationException>(() => new RenderPipeline([new TwoImportsPass(first, second)]).Graph);
+        Assert.ThrowsAny<InvalidOperationException>(() => new RenderPipeline([new TwoImportsPass(first, second)]).Graph);
     }
 
 

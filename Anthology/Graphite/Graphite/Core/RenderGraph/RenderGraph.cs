@@ -116,8 +116,8 @@ public sealed class RenderGraph : IDisposable
                     continue;
 
                 if (!resources.TryAdd(output.Id, output) && !SameDeclaration(resources[output.Id], output))
-                    throw new InvalidOperationException(
-                        $"Pass '{pass.Name}' declares resource '{RenderResourceID.ToString(output.Id)}' with a different description than an earlier declaration.");
+                    throw new RenderGraphException(
+                        $"Pass '{pass.Name}' declares resource '{RenderResourceID.ToString(output.Id)}' with a different description than an earlier declaration.", pass);
             }
 
             nodes[i] = new PassNode(pass, builder.Accesses.ToArray());
@@ -164,24 +164,25 @@ public sealed class RenderGraph : IDisposable
         foreach (PassNode node in nodes)
         {
             foreach (ResourceAccess access in node.Accesses)
-                ApplyStorageUsage(node.Pass.Name, access, resources);
+                ApplyStorageUsage(node.Pass, access, resources);
         }
     }
 
-    private static void ApplyStorageUsage(string passName, in ResourceAccess access, Dictionary<RenderResourceID, GraphResource> resources)
+    private static void ApplyStorageUsage(IPass pass, in ResourceAccess access, Dictionary<RenderResourceID, GraphResource> resources)
     {
+        string passName = pass.Name;
         GraphResource resource = resources[access.Id];
         if (resource is GraphViewTargetResource)
         {
             if (!access.IsOutput)
-                throw new InvalidOperationException($"Pass '{passName}' reads the view target; it can only be written.");
+                throw new RenderGraphException($"Pass '{passName}' reads the view target; it can only be written.", pass);
             return;
         }
 
         if (access.IsTexture != (resource is GraphTextureResource or GraphImportedTextureResource))
-            throw new InvalidOperationException(
+            throw new RenderGraphException(
                 $"Pass '{passName}' declares resource '{RenderResourceID.ToString(access.Id)}' as a " +
-                $"{(access.IsTexture ? "texture" : "buffer")}, but it is a {(access.IsTexture ? "buffer" : "texture")}.");
+                $"{(access.IsTexture ? "texture" : "buffer")}, but it is a {(access.IsTexture ? "buffer" : "texture")}.", pass);
 
         if (!access.IsTexture || (access.TextureUsage & TextureState.Storage) == 0)
             return;
@@ -196,9 +197,9 @@ public sealed class RenderGraph : IDisposable
                 foreach (Texture color in imported.Texture.ColorTextures)
                 {
                     if ((color.Usage & TextureUsage.Storage) == 0)
-                        throw new InvalidOperationException(
+                        throw new RenderGraphException(
                             $"Pass '{passName}' declares imported texture '{RenderResourceID.ToString(access.Id)}' as Storage, " +
-                            "but its color textures were not created with TextureUsage.Storage.");
+                            "but its color textures were not created with TextureUsage.Storage.", pass);
                 }
                 break;
         }
@@ -213,9 +214,9 @@ public sealed class RenderGraph : IDisposable
             foreach (ResourceAccess access in node.Accesses)
             {
                 if (!access.IsOutput && !resources.ContainsKey(access.Id))
-                    throw new InvalidOperationException(
+                    throw new RenderGraphException(
                         $"Pass '{node.Pass.Name}' reads resource '{RenderResourceID.ToString(access.Id)}' but no pass " +
-                        "outputs it and it is not declared centrally on the pipeline.");
+                        "outputs it and it is not declared centrally on the pipeline.", node.Pass);
             }
         }
     }
@@ -278,7 +279,7 @@ public sealed class RenderGraph : IDisposable
             }
 
             if (next < 0)
-                throw new InvalidOperationException("Render graph has a cyclic resource dependency and cannot be ordered.");
+                throw new RenderGraphException("Render graph has a cyclic resource dependency and cannot be ordered.", null);
 
             scheduled[next] = true;
             order[emitted++] = next;
