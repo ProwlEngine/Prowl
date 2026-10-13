@@ -577,6 +577,7 @@ public class EditorApplication : Game
         _nebula ??= new GUI.NebulaBackground(paper);
         GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
+        HandlePlayModeShortcuts();
         DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -614,6 +615,12 @@ public class EditorApplication : Game
         }
     }
 
+    private void HandlePlayModeShortcuts()
+    {
+        if (ShortcutManager.IsPressed("Game/TogglePlay")) RequestTogglePlayMode();
+        else if (ShortcutManager.IsPressed("Game/TogglePause")) TogglePause();
+    }
+
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
     private void DrawPlayPill(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
     {
@@ -628,15 +635,18 @@ public class EditorApplication : Game
             // amber Pause when paused; step stays neutral.
             ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.Stop_I : EditorIcons.Play_I)
                 .OnClick(RequestTogglePlayMode)
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Game/TogglePlay"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
 
             ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I, TogglePause).Style(ButtonStyle.Ghost);
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Game/TogglePause"))
             if (Application.IsPaused) pause.Warning();
             pause.Show();
 
             Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I, StepOneFrame)
+                .Tooltip(Loc.Get("game.step"))
                 .Style(ButtonStyle.Ghost).Show();
         }
     }
