@@ -336,4 +336,6 @@ Shader "Default/Particle"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }

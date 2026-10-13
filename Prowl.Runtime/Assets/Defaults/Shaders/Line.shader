@@ -70,4 +70,6 @@ Shader "Default/Line"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }

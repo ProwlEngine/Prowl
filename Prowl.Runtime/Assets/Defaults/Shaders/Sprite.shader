@@ -62,4 +62,6 @@ Shader "Default/Sprite"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }

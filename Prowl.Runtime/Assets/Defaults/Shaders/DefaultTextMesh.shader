@@ -64,4 +64,6 @@ Shader "UI/Text Mesh"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }

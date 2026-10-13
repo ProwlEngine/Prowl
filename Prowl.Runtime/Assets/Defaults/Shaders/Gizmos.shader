@@ -31,4 +31,6 @@ Shader "Hidden/Gizmos"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }

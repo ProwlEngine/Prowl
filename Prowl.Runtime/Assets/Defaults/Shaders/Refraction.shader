@@ -98,4 +98,6 @@ Shader "Default/Refraction"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }

@@ -302,4 +302,6 @@ Shader "Default/Terrain"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }

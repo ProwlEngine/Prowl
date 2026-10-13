@@ -184,4 +184,6 @@ Shader "Default/Grass"
         }
         ENDGLSL
     }
+
+    Fallback "Graphite/Fallback"
 }
