@@ -11,7 +11,7 @@
 //   4  Lights           point and spot lights with shadows, hard and soft
 //   5  Many lights      hundreds of small point lights without shadows
 //   6  Fog              volumetric fog, fog volumes and lights that scatter in it
-//   7  Instancing       thousands of renderers sharing a mesh and material
+//   7  Instancing       thousands of cubes as moving, static or immediate instanced draws
 //   8  Render textures  a second camera drawing into a texture shown on a monitor
 //   9  Clouds           volumetric clouds and flat cloud layers over the whole scene
 //
@@ -181,7 +181,15 @@ public sealed class RenderingShowcaseGame : StationGame
 
     public override void DrawSceneControls(Paper paper, FontFile font)
     {
-        Header(paper, font, "Scene");
+        RenderStats.Frame frame = RenderStats.Last;
+        Header(paper, font, "Last frame");
+        Label(paper, font, $"Frame time  {frame.FrameTimeMs:0.00} ms", 0);
+        Label(paper, font, $"Draw calls  {frame.DrawCalls:N0}  ({frame.DrawCommands:N0} meshes)", 1);
+        Label(paper, font, $"Shadow draw calls  {frame.ShadowDrawCalls:N0}  ({frame.ShadowDrawCommands:N0} meshes)", 2);
+        Label(paper, font, $"Scene sync  {frame.SyncMs:0.00} ms", 3);
+        Label(paper, font, $"Synced  {frame.Synced:N0}    static, left alone  {frame.Parked:N0}", 4);
+
+        Header(paper, font, "Scene", 1);
         Slider(paper, font, "Time of day", _hours, 0f, 24f, v => { _hours = v; SetTimeOfDay(v); }, "0.0");
         Toggle(paper, font, "Run the clock", _animateSky, v => _animateSky = v);
         Slider(paper, font, "Sun strength", _sunStrength, 0f, 3f, v => { _sunStrength = v; SetTimeOfDay(_hours); });
@@ -480,13 +488,17 @@ public sealed class RenderingShowcaseGame : StationGame
     //  7  Instancing
     // ----------------------------------------------------------------
 
+    private enum CubeMode { Moving, Static, Immediate }
+
     private GameObject _cubeRoot = null!;
+    private Wave _wave = null!;
     private InstancedWave _instancedWave = null!;
+    private CubeMode _cubeMode = CubeMode.Immediate;
     private int _cubeCount;
 
     private void BuildInstancing(Float3 c)
     {
-        AddStation("Instancing", "The same field of cubes drawn two ways. As separate GameObjects every MeshRenderer is its own draw call. As one InstancedMeshRenderer, the whole field is a few instanced draws, with a color per instance.", c, new Float3(0f, 14f, -20f), 0f);
+        AddStation("Instancing", "The same field of cubes drawn three ways. Graphite batches all of them into a few draws on the GPU, so the difference is the CPU. As moving GameObjects every cube syncs its transform each frame. Made static they sync once and are then left alone, so they stop. Drawn with Graphics.DrawMeshInstanced one script fills one array a frame, with a colour per cube and no GameObjects.", c, new Float3(0f, 14f, -20f), 0f);
 
         Mesh cube = Mesh.CreateCube(new Float3(0.4f, 0.4f, 0.4f));
         Material material = Lit(new Color(0.6f, 0.6f, 0.62f, 1f), 0.5f, 0.35f);
@@ -503,11 +515,11 @@ public sealed class RenderingShowcaseGame : StationGame
                 go.SetParent(_cubeRoot);
                 cubes.Add(go.Transform);
             }
-        Wave wave = _cubeRoot.AddComponent<Wave>();
-        wave.Cubes = cubes;
-        wave.Center = c;
+        _wave = _cubeRoot.AddComponent<Wave>();
+        _wave.Cubes = cubes;
+        _wave.Center = c;
 
-        // The same field as a single component that draws every cube with GPU instancing.
+        // The same field drawn by one script each frame, with no GameObject per cube.
         GameObject instanced = Add(new GameObject("Instanced Cubes"));
         instanced.Transform.Position = c;
         _instancedWave = instanced.AddComponent<InstancedWave>();
@@ -521,23 +533,20 @@ public sealed class RenderingShowcaseGame : StationGame
 
     private void InstancingControls(Paper paper, FontFile font)
     {
-        bool instanced = _instancedWave.GameObject.Enabled;
         Header(paper, font, "Draw the cubes as");
-        Toggle(paper, font, $"{_cubeCount:N0} GameObjects", !instanced, _ => SetInstanced(false));
-        Toggle(paper, font, "One instanced renderable", instanced, _ => SetInstanced(true), 1);
-
-        RenderStats.Frame frame = RenderStats.Last;
-        Header(paper, font, "Last frame", 1);
-        Label(paper, font, $"Draw calls  {frame.DrawCalls:N0}", 0);
-        Label(paper, font, $"Meshes drawn  {frame.DrawCommands:N0}", 1);
-        Label(paper, font, $"Shadow draw calls  {frame.ShadowDrawCalls:N0}", 2);
-        Label(paper, font, $"Frame time  {frame.FrameTimeMs:0.0} ms", 3);
+        Toggle(paper, font, $"{_cubeCount:N0} moving GameObjects", _cubeMode == CubeMode.Moving, _ => SetCubeMode(CubeMode.Moving));
+        Toggle(paper, font, $"{_cubeCount:N0} static GameObjects", _cubeMode == CubeMode.Static, _ => SetCubeMode(CubeMode.Static), 1);
+        Toggle(paper, font, "Graphics.DrawMeshInstanced", _cubeMode == CubeMode.Immediate, _ => SetCubeMode(CubeMode.Immediate), 2);
     }
 
-    private void SetInstanced(bool instanced)
+    private void SetCubeMode(CubeMode mode)
     {
-        _cubeRoot.Enabled = !instanced;
-        _instancedWave.GameObject.Enabled = instanced;
+        _cubeMode = mode;
+        _cubeRoot.Enabled = mode != CubeMode.Immediate;
+        _wave.Enabled = mode == CubeMode.Moving;
+        foreach (Transform cube in _wave.Cubes)
+            cube.GameObject.IsStatic = mode == CubeMode.Static;
+        _instancedWave.GameObject.Enabled = mode == CubeMode.Immediate;
     }
 
     // ----------------------------------------------------------------
@@ -696,7 +705,7 @@ public sealed class Wanderer : Component
 }
 
 /// <summary>
-/// Moves a whole field of cubes drawn by one InstancedMeshRenderer: each frame it fills one array of transforms and
+/// Moves a whole field of cubes drawn with Graphics.DrawMeshInstanced: each frame it fills one array of transforms and
 /// colours, so no GameObject exists per cube.
 /// </summary>
 public sealed class InstancedWave : Component
@@ -706,16 +715,8 @@ public sealed class InstancedWave : Component
     public int Side = 64;
     public float Spacing = 0.45f;
 
-    private InstancedMeshRenderer _renderer = null!;
     private Float4x4[] _transforms = [];
     private Color[] _colors = [];
-
-    public override void Start()
-    {
-        _renderer = AddComponent<InstancedMeshRenderer>();
-        _renderer.Mesh = Mesh;
-        _renderer.Material = Material;
-    }
 
     public override void Update()
     {
@@ -726,16 +727,17 @@ public sealed class InstancedWave : Component
         }
 
         float t = Time.TimeSinceStartup;
+        Float3 center = Transform.Position;
         int i = 0;
         for (int x = 0; x < Side; x++)
             for (int z = 0; z < Side; z++)
             {
                 float px = (x - Side * 0.5f) * Spacing, pz = (z - Side * 0.5f) * Spacing;
                 float wave = MathF.Sin(MathF.Sqrt(px * px + pz * pz) * 0.6f - t * 2.5f) * 0.5f + 0.5f;
-                _transforms[i] = Float4x4.CreateTranslation(new Float3(px, 0.2f + wave * 1.5f, pz));
+                _transforms[i] = Float4x4.CreateTranslation(center + new Float3(px, 0.2f + wave * 1.5f, pz));
                 _colors[i++] = Hsv(0.55f + wave * 0.4f, 0.7f, 0.9f);
             }
-        _renderer.SetInstances(_transforms, _colors);
+        Graphics.DrawMeshInstanced(Mesh, Material, _transforms, _colors, scene: GameObject.Scene);
     }
 }
 

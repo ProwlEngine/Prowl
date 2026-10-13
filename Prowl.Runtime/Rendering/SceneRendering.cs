@@ -3,11 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using GMaterial = Prowl.Graphite.Rendering.Material;
 using SphericalHarmonicsL2 = Prowl.Runtime.Rendering.SphericalHarmonicsL2;
 
 namespace Prowl.Runtime.Rendering;
@@ -44,6 +46,16 @@ public sealed class SceneRendering : IDisposable
     private RenderWorld? _world;
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<Light> _directionals = [];
+
+    // Instances drawn for one frame through Graphics.DrawMeshInstanced, a batch for each mesh, material and settings
+    private sealed class ImmediateBatch
+    {
+        public readonly List<InstanceData> Instances = [];
+        public InstanceBatchHandle Handle;
+    }
+
+    private readonly Dictionary<(GpuMesh Mesh, GMaterial Material, RenderableFlags Flags, uint LayerMask), ImmediateBatch> _immediate = [];
+    private readonly List<(GpuMesh, GMaterial, RenderableFlags, uint)> _immediateGone = [];
 
     internal SceneRendering(Scene scene) => _scene = scene;
 
@@ -96,6 +108,41 @@ public sealed class SceneRendering : IDisposable
         if (_parked.Remove(member)) _members.Add(member);
     }
 
+    /// <summary>Adds instances to this frame's batch of a mesh and material, drawn at the next sync and then gone.</summary>
+    internal void DrawInstanced(GpuMesh mesh, GMaterial material, RenderableFlags flags, uint layerMask, ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Color> colors)
+    {
+        if (!_immediate.TryGetValue((mesh, material, flags, layerMask), out ImmediateBatch? batch))
+            _immediate[(mesh, material, flags, layerMask)] = batch = new ImmediateBatch();
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Color c = i < colors.Length ? colors[i] : Color.White;
+            batch.Instances.Add(new InstanceData { Transform = transforms[i], Color = new Float4(c.R, c.G, c.B, c.A) });
+        }
+    }
+
+    // Brings each immediate batch to this frame's instances, removing the ones nothing drew
+    private void SyncImmediate(RenderWorld world)
+    {
+        foreach (((GpuMesh mesh, GMaterial material, RenderableFlags flags, uint layerMask) key, ImmediateBatch batch) in _immediate)
+        {
+            if (batch.Instances.Count == 0 || key.mesh.IsDisposed || key.material.IsDisposed)
+            {
+                if (batch.Handle.IsValid) world.RemoveInstanceBatch(batch.Handle);
+                _immediateGone.Add(key);
+                continue;
+            }
+            ReadOnlySpan<InstanceData> instances = CollectionsMarshal.AsSpan(batch.Instances);
+            if (batch.Handle.IsValid)
+                world.SetInstances(batch.Handle, instances);
+            else
+                batch.Handle = world.AddInstanceBatch(new InstanceBatchDesc { Mesh = key.mesh, Transform = Double4x4.Identity, LayerMask = key.layerMask, Flags = key.flags }, [key.material], instances);
+            batch.Instances.Clear();
+        }
+        foreach ((GpuMesh, GMaterial, RenderableFlags, uint) key in _immediateGone)
+            _immediate.Remove(key);
+        _immediateGone.Clear();
+    }
+
     internal void AddDirectional(Light light) { if (!_directionals.Contains(light)) _directionals.Add(light); }
     internal void RemoveDirectional(Light light) => _directionals.Remove(light);
 
@@ -108,6 +155,8 @@ public sealed class SceneRendering : IDisposable
         RenderWorld? world = World;
         if (world == null || _syncedFrame == Graphics.FrameIndex) return;
         _syncedFrame = Graphics.FrameIndex;
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        int synced = _members.Count;
 
         bool playing = Application.IsPlaying;
         if (!playing && _parked.Count > 0)
@@ -128,8 +177,10 @@ public sealed class SceneRendering : IDisposable
             i--;
         }
 
+        SyncImmediate(world);
         SyncEnvironment(world);
         SyncProbes(world);
+        RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }
 
     private Scene.BakedLightingData? _probesFrom;
@@ -190,7 +241,7 @@ public sealed class SceneRendering : IDisposable
     {
         if (_world != null)
         {
-            foreach (IRenderSync member in _members)
+            foreach (IRenderSync member in _memberSet)
             {
                 try { member.Detach(_world); }
                 catch (Exception e) { Debug.LogError($"Removing {member.GetType().Name} from the render world threw: {e}"); }
@@ -200,6 +251,8 @@ public sealed class SceneRendering : IDisposable
         }
         _members.Clear();
         _memberSet.Clear();
+        _parked.Clear();
+        _immediate.Clear();
         _directionals.Clear();
     }
 }
