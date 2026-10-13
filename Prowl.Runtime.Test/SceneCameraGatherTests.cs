@@ -139,19 +139,15 @@ public class SceneCameraGatherTests : RuntimeTestBase
     }
 
     [Fact]
-    public void DisabledCameraComponent_IsStillReturned()
+    public void DisabledCameraComponent_IsSkipped()
     {
-        // Preserved from the old expression: GetComponentsInChildren ignores the component's own
-        // Enabled flag, so Camera.Enabled = false did NOT exclude it here. Camera.Render is what
-        // honours it downstream. Locking this in so the rewrite doesn't silently change behaviour.
         Scene scene = CreateScene(enable: true);
         GameObject go = CreateGameObject("Cam");
         Camera cam = go.AddComponent<Camera>();
         scene.Add(go);
         cam.Enabled = false;
 
-        Assert.Single(scene.GatherActiveCameras());
-        AssertMatchesLegacy(scene);
+        Assert.Empty(scene.GatherActiveCameras());
     }
 
     [Fact]

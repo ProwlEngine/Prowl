@@ -60,25 +60,8 @@ public sealed class ManyLightsGame : StationGame
     private (int Added, int Grown, int Shrunk) _counting, _second;
     private float _countingTime;
 
-    private static readonly bool TEMP_Bench = Environment.GetEnvironmentVariable("PROWL_SHRINK_BENCH") == "1";
-    private int TEMP_ticks;
-
     protected override void Tick()
     {
-        if (TEMP_Bench && SampleScene.Rendering.WorldIfMade is { } benchWorld)
-        {
-            if (TEMP_ticks == 0)
-            {
-                SetLightCount(1024);
-                benchWorld.Shadows.MinTileSize = 16;
-                benchWorld.Shadows.DrawMilliseconds = 1000;
-            }
-            if (++TEMP_ticks == 2250)
-                benchWorld.Shadows.TexelsPerPixel = 0.5f;
-            RenderStats.Frame f = RenderStats.Last;
-            if (TEMP_ticks > 2250 && (f.ShadowsShrunk > 0 || f.ShadowsGrown > 0 || f.ShadowsAdded > 0))
-                Console.WriteLine($"[bench] tick {TEMP_ticks} shrunk {f.ShadowsShrunk} grown {f.ShadowsGrown} added {f.ShadowsAdded}");
-        }
         RenderStats.Frame frame = RenderStats.Last;
         _counting = (_counting.Added + frame.ShadowsAdded, _counting.Grown + frame.ShadowsGrown, _counting.Shrunk + frame.ShadowsShrunk);
         _countingTime += (float)Time.UnscaledDeltaTime;

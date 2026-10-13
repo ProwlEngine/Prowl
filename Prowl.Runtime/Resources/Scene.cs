@@ -1068,7 +1068,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             foreach (Component component in go._components)
             {
-                if (component is Camera camera)
+                if (component is Camera camera && camera.EnabledInHierarchy)
                 {
                     cameras.Add(camera);
                 }
