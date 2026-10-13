@@ -19,7 +19,7 @@ internal static class BakedLightingBinding
     public static GLightmapBinding For(GameObject renderer)
     {
         Scene? scene = renderer.IsValid() ? renderer.Scene : null;
-        if (!scene.IsValid()) return GLightmapBinding.None;
+        if (!scene.IsValid() || scene.BakedLighting.Placements.Count == 0) return GLightmapBinding.None;
 
         Scene.LightmapPlacement? placement = scene.BakedLighting.PlacementFor(renderer.Identifier);
         if (placement is not { } p || p.Index < 0 || p.Index >= scene.BakedLighting.Lightmaps.Count)

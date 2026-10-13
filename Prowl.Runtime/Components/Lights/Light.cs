@@ -4,6 +4,7 @@
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 using GLightType = Prowl.Graphite.Rendering.LightType;
@@ -167,6 +168,11 @@ public class Light : Component, IRenderSync
 
     [System.NonSerialized, NotHeld] private LightHandle _handle;
     [System.NonSerialized, NotHeld] private LightDesc _last;
+    [System.NonSerialized, NotHeld] private uint _poseVersion;
+    [System.NonSerialized, NotHeld] private (Double3 Position, Float3 Forward, Float3 Up) _pose;
+
+    // The FogLight beside this light, which registers itself when it joins the scene
+    [System.NonSerialized, NotHeld] internal FogLight? Fog;
     [System.NonSerialized, NotHeld] private RenderWorld? _world;
     [System.NonSerialized, NotHeld] private Scene? _sunScene;
 
@@ -190,13 +196,13 @@ public class Light : Component, IRenderSync
     /// <summary>The light as Graphite describes it, from the settings and the transform.</summary>
     public LightDesc Describe()
     {
-        Float3 position = Transform.Position;
+        (Double3 position, Float3 forward, Float3 up) = Pose();
         var desc = new LightDesc
         {
             Type = (GLightType)Type,
-            Position = new Double3(position.X, position.Y, position.Z),
-            Direction = Float3.Normalize(Transform.Forward),
-            Up = Float3.Normalize(Transform.Up),
+            Position = position,
+            Direction = forward,
+            Up = up,
             Color = new Float3(Color.R, Color.G, Color.B),
             Intensity = Intensity,
             Range = Maths.Max(Range, 0.01f),
@@ -261,6 +267,24 @@ public class Light : Component, IRenderSync
         return desc;
     }
 
+    // The transform's world position and axes, read again only when its world matrix changed
+    private (Double3 Position, Float3 Forward, Float3 Up) Pose()
+    {
+        Transform transform = Transform;
+        _ = transform.LocalToWorldMatrix;
+        if (MainThreadContext.OnMainThread && _poseVersion == transform.WorldVersion && _poseVersion != 0)
+            return _pose;
+
+        Float3 position = transform.Position;
+        (Double3, Float3, Float3) pose = (new Double3(position.X, position.Y, position.Z), Float3.Normalize(transform.Forward), Float3.Normalize(transform.Up));
+        if (MainThreadContext.OnMainThread)
+        {
+            _pose = pose;
+            _poseVersion = transform.WorldVersion;
+        }
+        return pose;
+    }
+
     // What volumetric fog reads as the light's HostData: its scattering colour times intensity, then its scattering bias
     // with 4 added when it casts no fog shadows
     private Float4 FogData()
@@ -268,8 +292,8 @@ public class Light : Component, IRenderSync
         Color color = Color;
         float intensity = Intensity, bias = 0f;
         bool shadows = true;
-        FogLight? fog = GetComponent<FogLight>();
-        if (fog.IsValid() && fog.EnabledInHierarchy)
+        FogLight? fog = Fog;
+        if (fog.IsValid() && fog.GameObject == GameObject && fog.EnabledInHierarchy)
         {
             intensity *= fog.IntensityMultiplier;
             if (fog.UseOverrideColor) color = fog.OverrideColor;
@@ -339,6 +363,8 @@ public class Light : Component, IRenderSync
         && a.Shadow.Enabled == b.Shadow.Enabled && a.Shadow.Resolution == b.Shadow.Resolution && a.Shadow.DepthBias == b.Shadow.DepthBias
         && a.Shadow.NormalBias == b.Shadow.NormalBias && a.Shadow.Cascades == b.Shadow.Cascades && a.Shadow.Distance == b.Shadow.Distance
         && a.Shadow.CascadeBlend == b.Shadow.CascadeBlend && a.Shadow.Strength == b.Shadow.Strength && a.Shadow.Filter == b.Shadow.Filter;
+
+    public override void OnAddedToScene() => Fog = GetComponent<FogLight>();
 
     public override void DrawGizmos()
     {

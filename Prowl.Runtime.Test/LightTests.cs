@@ -85,22 +85,18 @@ public class LightTests : RuntimeTestBase
     }
 
     [Fact]
-    public void ShadowSettings_AndScales_PassThrough()
+    public void ShadowSettings_PassThrough()
     {
         Light light = Make(LightType.Point);
         light.ShadowResolution = ShadowResolution._2048;
         light.ShadowFilter = ShadowFilter.ContactHardening;
         light.ShadowStrength = 0.5f;
-        light.DiffuseScale = 0.25f;
-        light.SpecularScale = 2f;
         light.LayerMask = LayerMask.FromMask(0b101);
         LightDesc desc = light.Describe();
         Assert.True(desc.Shadow.Enabled);
         Assert.Equal(2048u, desc.Shadow.Resolution);
         Assert.Equal(Graphite.Rendering.ShadowFilter.ContactHardening, desc.Shadow.Filter);
         Assert.Equal(0.5f, desc.Shadow.Strength);
-        Assert.Equal(0.25f, desc.DiffuseScale);
-        Assert.Equal(2f, desc.SpecularScale);
         Assert.Equal(0b101u, desc.LayerMask);
     }
 

@@ -64,6 +64,8 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
     // bone's Transform.Version plus the renderer's ancestors: versions are monotonic, so an unchanged sum
     // means a static pose and the whole skin loop is skipped.
     [System.NonSerialized] private ulong _lastSkeletonVersion = ulong.MaxValue;
+    [System.NonSerialized] private RenderableHandle _bonesHandle;
+    [System.NonSerialized] private bool _bonesSkinned;
     [System.NonSerialized] private Mesh? _skinnedMesh;
     [System.NonSerialized] private AABB _cachedBounds;
     // Reused per-recompute memo so bones sharing ancestors don't re-walk the chain to root each:
@@ -310,6 +312,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
 
         Float4x4 matrix = Transform.LocalToWorldMatrix;
         bool skinned = _bones != null && _bones.Length > 0 && mesh.BindPoses != null;
+        bool posed = false;
         if (skinned)
         {
             if (_skinMatrices == null || _skinMatrices.Length != _bones!.Length)
@@ -329,6 +332,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
                 _lastSkeletonVersion = version;
                 _skinnedMesh = mesh;
                 RecomputeSkinning(mesh);
+                posed = true;
             }
         }
 
@@ -350,7 +354,11 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
         RenderableHandle handle = _renderable.Handle;
         if (!handle.IsValid) return false;
 
-        world.SetBones(handle, skinned ? _skinMatrices : ReadOnlySpan<Float4x4>.Empty);
+        if (posed || handle != _bonesHandle || skinned != _bonesSkinned)
+        {
+            world.SetBones(handle, skinned ? _skinMatrices : ReadOnlySpan<Float4x4>.Empty);
+            (_bonesHandle, _bonesSkinned) = (handle, skinned);
+        }
 
         int shapeCount = mesh.BlendShapeCount;
         if (shapeCount > 0)

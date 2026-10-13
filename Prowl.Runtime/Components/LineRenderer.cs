@@ -1,7 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
@@ -136,17 +138,8 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync
         _lastTextureTiling = TextureTiling;
     }
 
-    private static bool PointsEqual(List<Float3> a, List<Float3> b)
-    {
-        if (a.Count != b.Count) return false;
-
-        for (int i = 0; i < a.Count; i++)
-        {
-            if (!a[i].Equals(b[i])) return false;
-        }
-
-        return true;
-    }
+    private static bool PointsEqual(List<Float3> a, List<Float3> b) =>
+        CollectionsMarshal.AsSpan(a).SequenceEqual(CollectionsMarshal.AsSpan(b));
 
     public void MarkDirty()
     {

@@ -265,7 +265,12 @@ internal sealed class OwnedMaterial
             _child = parent.CreateChild();
             _parent = parent;
         }
-        if (_child.Shader != parent.Shader) _child.Shader = parent.Shader;
+        if (_child.Shader != parent.Shader)
+        {
+            _child.Shader = parent.Shader;
+            _textures.Clear();
+            _values.Clear();
+        }
         if (_child.CastShadows != parent.CastShadows) _child.CastShadows = parent.CastShadows;
         return _child;
     }
@@ -273,13 +278,13 @@ internal sealed class OwnedMaterial
     /// <summary>Gives the child a texture when its shader has the property and the texture or its sampler changed.</summary>
     public void SetTexture(string name, Texture2D? texture)
     {
-        if (_child == null || _child.Shader.FindProperty(name) < 0) return;
+        if (_child == null) return;
         GTexture? gpu = texture.IsValid() ? texture.GpuIfLoaded : null;
         if (texture.IsValid() && gpu == null && texture.State == AssetState.Unloaded) _ = texture.LoadAsync();
         Prowl.Graphite.SamplerDescription sampler = texture.IsValid() ? texture.SamplerUnchecked : Prowl.Graphite.SamplerDescription.Linear;
         if (_textures.TryGetValue(name, out var bound) && bound.Texture == gpu && bound.Sampler.Equals(sampler)) return;
-        _child.SetTexture(name, gpu, sampler);
         _textures[name] = (gpu, sampler);
+        if (_child.Shader.FindProperty(name) >= 0) _child.SetTexture(name, gpu, sampler);
     }
 
     /// <summary>Gives the child a colour when its shader has the property and the colour changed.</summary>
@@ -299,10 +304,10 @@ internal sealed class OwnedMaterial
 
     private bool Unchanged(string name, Float4 value)
     {
-        if (_child == null || _child.Shader.FindProperty(name) < 0) return true;
+        if (_child == null) return true;
         if (_values.TryGetValue(name, out Float4 bound) && bound == value) return true;
         _values[name] = value;
-        return false;
+        return _child.Shader.FindProperty(name) < 0;
     }
 
     /// <summary>Frees the child once the frames using it finish.</summary>

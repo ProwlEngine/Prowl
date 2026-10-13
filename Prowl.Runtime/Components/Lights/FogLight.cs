@@ -34,4 +34,10 @@ public sealed class FogLight : Component
     /// &lt;0 = more back-scatter.
     /// </summary>
     [SerializeField] public float ScatteringBias = 0.0f;
+
+    public override void OnAddedToScene()
+    {
+        Light? light = GetComponent<Light>();
+        if (light.IsValid()) light.Fog = this;
+    }
 }
