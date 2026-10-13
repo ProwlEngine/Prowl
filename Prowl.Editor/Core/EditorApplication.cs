@@ -634,18 +634,21 @@ public class EditorApplication : Game
             // Ghost buttons tint their icon by variant: green Play when stopped, red Stop while playing,
             // amber Pause when paused; step stays neutral.
             ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.Stop_I : EditorIcons.Play_I)
-                .OnClick(RequestTogglePlayMode)
+                .OnClick(() => { paper.ClearFocus(); RequestTogglePlayMode(); })
                 .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Game/TogglePlay"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
 
-            ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I, TogglePause).Style(ButtonStyle.Ghost);
+            ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I,
+                () => { paper.ClearFocus(); TogglePause(); })
                 .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Game/TogglePause"))
+                .Style(ButtonStyle.Ghost);
             if (Application.IsPaused) pause.Warning();
             pause.Show();
 
-            Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I, StepOneFrame)
+            Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I,
+                () => { paper.ClearFocus(); StepOneFrame(); })
                 .Tooltip(Loc.Get("game.step"))
                 .Style(ButtonStyle.Ghost).Show();
         }
