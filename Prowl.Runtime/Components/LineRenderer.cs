@@ -59,13 +59,13 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync
     /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
     public RenderableHandle Renderable => _renderable.Handle;
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         Material? material = Material;
         if (material.IsNotValid() || Points == null || Points.Count < 2)
         {
             _renderable.Detach(world);
-            return;
+            return false;
         }
 
         if (NeedsRebuild())
@@ -79,7 +79,7 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync
         if (mesh.IsNotValid())
         {
             _renderable.Detach(world);
-            return;
+            return false;
         }
         mesh.Upload();
 
@@ -96,6 +96,7 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync
             ObjectId = (uint)InstanceID,
             Bounds = WidenedBounds(),
         });
+        return false;
     }
 
     void IRenderSync.Detach(RenderWorld world) => _renderable.Detach(world);

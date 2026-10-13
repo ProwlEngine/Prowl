@@ -610,12 +610,13 @@ public class ParticleSystemComponent : Component, IRenderSync
     /// <summary>Records that a camera sees the system this frame, which keeps a culled system simulating.</summary>
     internal void MarkVisible() => _lastVisibleFrame = Time.FrameCount;
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         if (_count > 0 || Trails.HasOrphans || CullingMode != ParticleCullingMode.AlwaysSimulate)
             RefreshSpaces();
         Renderer.Sync(this, world);
         Light.Sync(this, world);
+        return false;
     }
 
     void IRenderSync.Detach(RenderWorld world)

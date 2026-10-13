@@ -295,14 +295,14 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
         return world;
     }
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         Mesh? mesh = SharedMesh;
         if (mesh.IsNotValid() || !mesh.IsLoaded || Materials.Count == 0)
         {
             if (mesh.IsValid() && mesh.State == AssetState.Unloaded) _ = mesh.LoadAsync();
             Detach(world);
-            return;
+            return false;
         }
         mesh.Upload();
 
@@ -348,7 +348,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
         });
 
         RenderableHandle handle = _renderable.Handle;
-        if (!handle.IsValid) return;
+        if (!handle.IsValid) return false;
 
         world.SetBones(handle, skinned ? _skinMatrices : ReadOnlySpan<Float4x4>.Empty);
 
@@ -362,6 +362,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
         {
             world.SetBlendShapeWeights(handle, ReadOnlySpan<float>.Empty);
         }
+        return false;
     }
 
     // Each slot's material as a child carrying MainColor as its _MainColor

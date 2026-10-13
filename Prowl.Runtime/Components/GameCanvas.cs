@@ -264,7 +264,11 @@ public class GameCanvas : Component, IRenderSync
 
     internal override void JoinScene(Scene? scene) => RegisterIn(scene);
 
-    void IRenderSync.Sync(RenderWorld world) => UIRendering.Join(this, world);
+    bool IRenderSync.Sync(RenderWorld world)
+    {
+        UIRendering.Join(this, world);
+        return false;
+    }
 
     void IRenderSync.Detach(RenderWorld world) => UIRendering.Leave(this, world);
 

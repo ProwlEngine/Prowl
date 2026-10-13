@@ -69,18 +69,19 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
     /// <summary>Kept for callers from before the renderer pushed its own changes. Does nothing.</summary>
     public void MarkVisuallyDirty() { }
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         Mesh? mesh = Mesh;
         if (mesh.IsNotValid() || !mesh.IsLoaded)
         {
             if (mesh.IsValid() && mesh.State == AssetState.Unloaded) _ = mesh.LoadAsync();
             _renderable.Detach(world);
-            return;
+            return false;
         }
         mesh.Upload();
 
         Float4x4 matrix = Transform.LocalToWorldMatrix;
+        LightmapBinding lightmap = BakedLightingBinding.For(GameObject);
         _renderable.Sync(world, new RenderableState.Desc
         {
             Mesh = mesh.GpuIfLoaded,
@@ -90,8 +91,9 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
             Flags = RenderableState.FlagsFor(GameObject, false, ReceiveShadows) | ShadowCasting.ToFlags(),
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
-            Lightmap = BakedLightingBinding.For(GameObject),
+            Lightmap = lightmap,
         });
+        return GameObject.IsStatic && RenderableState.MaterialsReady(Materials) && !(lightmap.Lightmapped && lightmap.Texture == null);
     }
 
     void IRenderSync.Detach(RenderWorld world) => _renderable.Detach(world);
@@ -158,15 +160,15 @@ public sealed class InstancedMeshRenderer : Component, IRenderSync
         _dirty = true;
     }
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         if (Mesh.IsNotValid() || Material.IsNotValid() || _count == 0)
         {
             ((IRenderSync)this).Detach(world);
-            return;
+            return false;
         }
         Mesh.Upload();
-        if (Mesh.GpuIfLoaded is not { } mesh || Material.GpuMaterial is not { } material) return;
+        if (Mesh.GpuIfLoaded is not { } mesh || Material.GpuMaterial is not { } material) return false;
 
         Float4x4 matrix = Transform.LocalToWorldMatrix;
         RenderableFlags flags = RenderableState.FlagsFor(GameObject, false, true) | ShadowCasting.ToFlags();
@@ -185,6 +187,7 @@ public sealed class InstancedMeshRenderer : Component, IRenderSync
             if (_dirty) world.SetInstances(_batch, instances);
         }
         _dirty = false;
+        return false;
     }
 
     void IRenderSync.Detach(RenderWorld world)

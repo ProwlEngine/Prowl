@@ -83,7 +83,9 @@ public static class Graphics
     private static GlslShaderCompiler CreateCompiler()
     {
         ShaderLibrary.Register(typeof(Renderer).Assembly);
-        return new GlslShaderCompiler(new GlslCompilerOptions { ResolveInclude = Resolve, CacheDirectory = ShaderCacheDirectory });
+        // PROWL_SHADER_DEBUG_INFO=1 keeps source lines in the shaders, so GPU profilers map their findings back to the GLSL
+        bool debugInfo = Environment.GetEnvironmentVariable("PROWL_SHADER_DEBUG_INFO") == "1";
+        return new GlslShaderCompiler(new GlslCompilerOptions { ResolveInclude = Resolve, CacheDirectory = ShaderCacheDirectory, DebugInfo = debugInfo });
     }
 
     private static readonly Dictionary<string, GShader> s_libraryShaders = new(StringComparer.Ordinal);

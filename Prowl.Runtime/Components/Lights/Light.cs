@@ -120,12 +120,6 @@ public class Light : Component, IRenderSync
     [ShowIf(nameof(IsDirectional))]
     public float AngularRadius = 0.27f;
 
-    /// <summary>Scales the light's diffuse, 1 for physical.</summary>
-    public float DiffuseScale = 1.0f;
-
-    /// <summary>Scales the light's specular, 1 for physical.</summary>
-    public float SpecularScale = 1.0f;
-
     /// <summary>A texture the light shines through: a 2D texture across a spot's cone, a cubemap around a point.</summary>
     [ShowIf(nameof(HasProfile))]
     public Texture? Cookie;
@@ -206,8 +200,6 @@ public class Light : Component, IRenderSync
             Color = new Float3(Color.R, Color.G, Color.B),
             Intensity = Intensity,
             Range = Maths.Max(Range, 0.01f),
-            DiffuseScale = DiffuseScale,
-            SpecularScale = SpecularScale,
             LayerMask = LayerMask.Mask,
             Static = GameObject.IsStatic,
             HostData = FogData(),
@@ -287,13 +279,13 @@ public class Light : Component, IRenderSync
         return new Float4(color.R * intensity, color.G * intensity, color.B * intensity, bias + (shadows ? 0f : 4f));
     }
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         if (_world != null && _world != world) Remove();
         if (BakeMode == LightBakeMode.Baked)
         {
             Remove();
-            return;
+            return false;
         }
 
         LightDesc desc = Describe();
@@ -315,7 +307,11 @@ public class Light : Component, IRenderSync
             _sunScene.Rendering.AddDirectional(this);
         }
         else if (!IsDirectional) LeaveSuns();
+        return GameObject.IsStatic && (!HasProfile || (Ready(Cookie) && Ready(IesProfile)));
     }
+
+    // A texture the light was given is in the world, none or loaded
+    private static bool Ready(Texture? texture) => texture.IsNotValid() || texture.IsLoaded;
 
     void IRenderSync.Detach(RenderWorld world) => Remove();
 
@@ -342,8 +338,7 @@ public class Light : Component, IRenderSync
         && System.Nullable.Equals(a.CookieSampler, b.CookieSampler) && a.HostData == b.HostData
         && a.Shadow.Enabled == b.Shadow.Enabled && a.Shadow.Resolution == b.Shadow.Resolution && a.Shadow.DepthBias == b.Shadow.DepthBias
         && a.Shadow.NormalBias == b.Shadow.NormalBias && a.Shadow.Cascades == b.Shadow.Cascades && a.Shadow.Distance == b.Shadow.Distance
-        && a.Shadow.CascadeBlend == b.Shadow.CascadeBlend && a.Shadow.Strength == b.Shadow.Strength && a.Shadow.Filter == b.Shadow.Filter
-        && a.DiffuseScale == b.DiffuseScale && a.SpecularScale == b.SpecularScale;
+        && a.Shadow.CascadeBlend == b.Shadow.CascadeBlend && a.Shadow.Strength == b.Shadow.Strength && a.Shadow.Filter == b.Shadow.Filter;
 
     public override void DrawGizmos()
     {

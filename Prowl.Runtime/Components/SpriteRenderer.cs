@@ -70,14 +70,14 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
     public RenderableHandle Renderable => _renderable.Handle;
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         Sprite? sprite = Sprite;
         Texture2D? tex = sprite.IsValid() ? sprite.Texture : null;
         if (sprite.IsNotValid() || tex.IsNotValid() || tex.Width == 0 || tex.Height == 0 || sprite.Rect.Width <= 0 || sprite.Rect.Height <= 0)
         {
             Detach(world);
-            return;
+            return false;
         }
 
         EnsureMesh(sprite);
@@ -85,7 +85,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
         if (mesh.IsNotValid())
         {
             Detach(world);
-            return;
+            return false;
         }
 
         Material assigned = Material;
@@ -95,7 +95,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
         {
             if (material.State == AssetState.Unloaded) _ = material.LoadAsync();
             _renderable.Detach(world);
-            return;
+            return false;
         }
         _material.SetTexture("_MainTex", tex);
         foreach (KeyValuePair<string, Texture2D> secondary in sprite.SecondaryTextures)
@@ -122,6 +122,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
         });
+        return false;
     }
 
     void IRenderSync.Detach(RenderWorld world) => Detach(world);

@@ -136,7 +136,7 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRend
         _dirty = true;
     }
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         // The shared atlas can grow (new glyph or pixel size), which shifts every glyph's UVs, so that rebuilds too
         int atlasVersion = unchecked(UIFontSystem.Default.System.AtlasVersion * 31 + (_font is FontAsset f ? f.ContentVersion : 0));
@@ -154,7 +154,7 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRend
         {
             if (material.State == AssetState.Unloaded) _ = material.LoadAsync();
             Detach(world);
-            return;
+            return false;
         }
 
         Texture2D atlasTex = UIFontSystem.Default.Atlas;
@@ -175,6 +175,7 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRend
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
         });
+        return false;
     }
 
     void IRenderSync.Detach(RenderWorld world) => Detach(world);

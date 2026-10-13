@@ -229,13 +229,13 @@ public sealed class VolumetricClouds : Component, IRenderSync
         _registeredScene = null;
     }
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         bool drawn = _registeredScene.IsValid() && _registeredScene.Clouds.Count > 0 && _registeredScene.Clouds[0] == this;
         if (!drawn || (_world != null && _world != world))
         {
             Release();
-            if (!drawn) return;
+            if (!drawn) return false;
         }
 
         _feature ??= new VolumetricCloudsFeature(Graphics.Renderer!);
@@ -245,6 +245,7 @@ public sealed class VolumetricClouds : Component, IRenderSync
             world.Features.Add(_feature);
             _world = world;
         }
+        return false;
     }
 
     void IRenderSync.Detach(RenderWorld world) => Release();

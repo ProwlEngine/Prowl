@@ -161,7 +161,7 @@ public class TerrainComponent : Component, IRenderSync
         else world.SetProbeAnchor(_probeAnchor, position);
     }
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         SyncProbeAnchor(world);
         _provider ??= new TerrainProvider();
@@ -171,6 +171,7 @@ public class TerrainComponent : Component, IRenderSync
         TerrainFrame? frame = null;
         try { frame = BuildFrame(); }
         finally { _provider.Publish(frame); }
+        return false;
     }
 
     void IRenderSync.Detach(RenderWorld world)

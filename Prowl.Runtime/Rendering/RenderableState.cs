@@ -169,6 +169,16 @@ public sealed class RenderableState
         return buffer;
     }
 
+    /// <summary>Whether every material given is in the world as itself, none still loading.</summary>
+    public static bool MaterialsReady(System.Collections.Generic.IReadOnlyList<Material?> materials)
+    {
+        for (int i = 0; i < materials.Count; i++)
+        {
+            if (materials[i].IsValid() && !materials[i]!.IsLoaded) return false;
+        }
+        return true;
+    }
+
     private static Material? s_default;
 
     /// <summary>The Graphite material drawn where a renderer's own is not ready.</summary>

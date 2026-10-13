@@ -122,7 +122,7 @@ public class ReflectionProbe : Component, IRenderSync
     [Button("Clear Baked")]
     public void ClearBaked() => SetBaked(null);
 
-    void IRenderSync.Sync(RenderWorld world)
+    bool IRenderSync.Sync(RenderWorld world)
     {
         if (_world != null && _world != world) Remove();
 
@@ -180,6 +180,7 @@ public class ReflectionProbe : Component, IRenderSync
             _bakeRequested = false;
             world.BakeReflectionProbe(_handle, baked => SetBaked(new BakedCubemap { Size = baked.Size, Mips = baked.Mips, Faces = baked.Faces }));
         }
+        return false;
     }
 
     private static bool Same(in ReflectionProbeDesc a, in ReflectionProbeDesc b)

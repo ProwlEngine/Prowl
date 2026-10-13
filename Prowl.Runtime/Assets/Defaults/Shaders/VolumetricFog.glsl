@@ -186,7 +186,10 @@ vec3 Fog_SampleScattering(vec3 p, vec3 viewDir, vec3 volColor)
         vec3 toLight = d * inversesqrt(max(dist2, 1e-8));
         float attenuation = Graphite_Window(dist2, L.Range) / max(dist2, 0.01);
         if (spot)
-            attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, dot(L.Direction, -toLight));
+        {
+            vec2 spotCos = Graphite_LightSpotCos(L);
+            attenuation *= smoothstep(spotCos.x, spotCos.y, dot(Graphite_LightDirection(L), -toLight));
+        }
         vec4 fog = Graphite_LightHostData(L);
         if (attenuation <= 0.0 || dot(fog.rgb, fog.rgb) <= 0.0)
             continue;

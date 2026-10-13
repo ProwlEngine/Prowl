@@ -18,8 +18,12 @@ namespace Prowl.Runtime.Rendering;
 /// </summary>
 public interface IRenderSync
 {
-    /// <summary>Brings the world up to date with the component. Main thread, once a frame the scene renders.</summary>
-    void Sync(RenderWorld world);
+    /// <summary>
+    /// Brings the world up to date with the component. Main thread, once a frame the scene renders. Returns true when the
+    /// component is static and wholly in the world, nothing of it still loading, so while playing it is left alone from then
+    /// on; static objects do not change at runtime, and <see cref="SceneRendering.Refresh"/> syncs one again if one does.
+    /// </summary>
+    bool Sync(RenderWorld world);
 
     /// <summary>Removes everything the component added to the world.</summary>
     void Detach(RenderWorld world);
@@ -34,6 +38,9 @@ public sealed class SceneRendering : IDisposable
     private readonly Scene _scene;
     private readonly List<IRenderSync> _members = [];
     private readonly HashSet<IRenderSync> _memberSet = [];
+
+    // Static members wholly in the world while playing, not synced again until refreshed or the game stops
+    private readonly HashSet<IRenderSync> _parked = [];
     private RenderWorld? _world;
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<Light> _directionals = [];
@@ -75,12 +82,18 @@ public sealed class SceneRendering : IDisposable
     public void Remove(IRenderSync member)
     {
         if (!_memberSet.Remove(member)) return;
-        _members.Remove(member);
+        if (!_parked.Remove(member)) _members.Remove(member);
         if (_world != null)
         {
             try { member.Detach(_world); }
             catch (Exception e) { Debug.LogError($"Removing {member.GetType().Name} from the render world threw: {e}"); }
         }
+    }
+
+    /// <summary>Syncs a static member again next frame, for one a script changed at runtime.</summary>
+    public void Refresh(IRenderSync member)
+    {
+        if (_parked.Remove(member)) _members.Add(member);
     }
 
     internal void AddDirectional(Light light) { if (!_directionals.Contains(light)) _directionals.Add(light); }
@@ -96,11 +109,23 @@ public sealed class SceneRendering : IDisposable
         if (world == null || _syncedFrame == Graphics.FrameIndex) return;
         _syncedFrame = Graphics.FrameIndex;
 
+        bool playing = Application.IsPlaying;
+        if (!playing && _parked.Count > 0)
+        {
+            _members.AddRange(_parked);
+            _parked.Clear();
+        }
         for (int i = 0; i < _members.Count; i++)
         {
             IRenderSync member = _members[i];
-            try { member.Sync(world); }
+            bool settled = false;
+            try { settled = member.Sync(world); }
             catch (Exception e) { Debug.LogErrorOnce($"RenderSync.{member.GetType().Name}", $"Syncing {member.GetType().Name} into the render world threw: {e}"); }
+            if (!settled || !playing) continue;
+            _parked.Add(member);
+            _members[i] = _members[^1];
+            _members.RemoveAt(_members.Count - 1);
+            i--;
         }
 
         SyncEnvironment(world);
