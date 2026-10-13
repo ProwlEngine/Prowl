@@ -98,6 +98,15 @@ internal sealed class ShadowLights
     }
 
     public List<(int Index, LightShadow Light)>.Enumerator GetEnumerator() => _list.GetEnumerator();
+
+    public IEnumerable<LightShadow> Values
+    {
+        get
+        {
+            foreach ((_, LightShadow light) in _list)
+                yield return light;
+        }
+    }
 }
 
 /// <summary>A square of a page, in texels.</summary>
@@ -1162,7 +1171,7 @@ internal sealed partial class FramePipeline
             _shadowViewers.Add((new CullFrustum(camera.Desc.Layers, camera.Desc.LayerCount), layer.Position, pixels, layer.Projection.c3.W > 0.5f));
         }
         _shadowPlans.Clear();
-        int minTile = ShadowTileAllocator.RoundUp(Math.Clamp(settings.MinTileSize, ShadowTileAllocator.SmallestTile, pageSize));
+        int minTile = ShadowTileAllocator.RoundUp(Math.Clamp(settings.MinTileSize, ShadowTileAllocator.SmallestTile, pageSize / 2));
         for (int i = 0; i < lighting.LightCapacity; i++)
         {
             if (!lighting.IsAlive(i))

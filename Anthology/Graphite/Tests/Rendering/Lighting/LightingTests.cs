@@ -548,7 +548,7 @@ public sealed class LightingTests : IDisposable
         List<LightDesc> lights = new();
         for (int i = 0; i < 3500; i++)
         {
-            LightDesc light = Point(new Double3(random.NextDouble() * 9 - 4.5, random.NextDouble() * 9 - 4.5, 9 + random.NextDouble() * 0.9), 0.3f + random.NextSingle() * 1.2f,
+            LightDesc light = Point(new Double3(random.NextDouble() * 9 - 4.5, random.NextDouble() * 9 - 4.5, 9 + random.NextDouble() * 0.9), 0.1f + random.NextSingle() * 0.15f,
                 0.0005f + random.NextSingle() * 0.002f, new Float3(random.NextSingle(), random.NextSingle(), random.NextSingle()), isStatic: i < 3000);
             lights.Add(light);
             _world.AddLight(light);
@@ -1776,44 +1776,47 @@ public sealed class LightingTests : IDisposable
         => new() { Light = light, Faces = faces, Priority = 1000 - light, Wanted = wanted, MaxTile = 1024, Held = held, Split = split };
 
     [Fact]
-    public void ShadowPlans_GiveWayInOrder_HeldSizesThenHalvingThenDropping_StaticCopiesOutsideTheBudget()
+    public void ShadowPlans_ShrinkTogether_ThenDropTheLeastImportant_StaticCopiesOutsideTheBudget()
     {
         // Light 0 holds 512 but wants 340 now, which rounds to 256, light 1 has a static copy, light 2 is least important
         ShadowPlanner planner = new();
         List<ShadowPlan> plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
-        planner.Plan(plans, 512 * 512 + 2 * 256 * 256, 64, 512 * 512 + 2 * 256 * 256);
+        planner.Plan(plans, 512 * 512 + 2 * 256 * 256, 64);
         Assert.Equal((512, true), (plans[0].Target, plans[1].Split));
 
         plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
         planner = new();
-        planner.Plan(plans, 256 * 256 * 3, 64, 256 * 256 * 3);
+        planner.Plan(plans, 256 * 256 * 3, 64);
         Assert.Equal((256, true, 256, 256), (plans[0].Target, plans[1].Split, plans[1].Target, plans[2].Target));
 
         plans = [Plan(0, 340, held: 512), Plan(1, 256, held: 256, split: true), Plan(2, 256, held: 256)];
         planner = new();
-        planner.Plan(plans, 256 * 256 * 2, 64, 256 * 256 * 2);
-        Assert.Equal((256, 128, 128, true), (plans[0].Target, plans[1].Target, plans[2].Target, plans[1].Split));
+        planner.Plan(plans, 256 * 256 * 2, 64);
+        Assert.Equal((128, 128, 128, true), (plans[0].Target, plans[1].Target, plans[2].Target, plans[1].Split));
 
         plans = [Plan(0, 256), Plan(1, 256), Plan(2, 256)];
         planner = new();
-        planner.Plan(plans, 64 * 64 * 2, 64, 64 * 64 * 2);
+        planner.Plan(plans, 64 * 64 * 2, 64);
         Assert.Equal((64, 64, 0), (plans[0].Target, plans[1].Target, plans[2].Target));
     }
 
     [Fact]
-    public void TheShadowScale_IsTheLargestThatFits_EveryFrame()
+    public void TheShadowScale_DropsAtOnce_AndClimbsBackOverFrames()
     {
         ShadowPlanner planner = new();
         List<ShadowPlan> Wanting() => [Plan(0, 320), Plan(1, 320), Plan(2, 320)];
 
         // Three lights wanting 256 fit four fifths of a 256 page only at 128
         List<ShadowPlan> plans = Wanting();
-        planner.Plan(plans, (long)(256 * 256 * 0.8), 64, (long)(256 * 256 * 0.8));
+        planner.Plan(plans, (long)(256 * 256 * 0.8), 64);
         Assert.All(plans, plan => Assert.Equal(128, plan.Target));
         Assert.InRange(planner.Scale, 0.28f, 0.57f);
 
-        plans = Wanting();
-        planner.Plan(plans, 256 * 256 * 4, 64, 256 * 256 * 4);
+        for (int frame = 0; frame < 64; frame++)
+        {
+            plans = Wanting();
+            planner.Plan(plans, 256 * 256 * 4, 64);
+        }
         Assert.All(plans, plan => Assert.Equal(256, plan.Target));
         Assert.Equal(1f, planner.Scale);
     }
@@ -2085,7 +2088,7 @@ public sealed class LightingTests : IDisposable
     {
         ShadowPlanner planner = new();
         List<ShadowPlan> plans = [Plan(0, 1024), Plan(1, 1024), Plan(2, 1024)];
-        planner.Plan(plans, 64 * 64 * 2, 64, 64 * 64 * 2);
+        planner.Plan(plans, 64 * 64 * 2, 64);
         Assert.Equal((64, 64, 0), (plans[0].Target, plans[1].Target, plans[2].Target));
     }
 
@@ -2122,7 +2125,7 @@ public sealed class LightingTests : IDisposable
         LightHandle light = _world.AddLight(ShadowSpot());
         AddCaster(1, 0.5, 6);
         Frame();
-        Assert.Equal(256, _renderer.ShadowsOf(_world)!.Lights[light.Index].Size);
+        Assert.Equal(128, _renderer.ShadowsOf(_world)!.Lights[light.Index].Size);
     }
 
     [Fact]
@@ -3541,7 +3544,7 @@ public sealed class LightingTests : IDisposable
             Vector3 surface = -v * 5;
             Vector3 at = surface + center;
             LightDesc light = new() { Type = type, Position = new Double3(at.X, at.Y, at.Z), Direction = new Float3(axis.X, axis.Y, axis.Z), Up = new Float3(up.X, up.Y, up.Z),
-                SourceRadius = radius, Size = new Float2(size.X, size.Y), Range = 1e6f, Intensity = 1 / 8f, Color = new Float3(1, 1, 1), DiffuseScale = 0 };
+                SourceRadius = radius, Size = new Float2(size.X, size.Y), Range = 1e6f, Intensity = 1 / 8f, Color = new Float3(1, 1, 1) };
             float estimate = Area(light, surface, n, Vector3.One, 1, roughness).X;
 
             const int steps = 300;
@@ -3816,7 +3819,7 @@ public sealed class LightingTests : IDisposable
             }
 
             Vector3 radiance = V(light.Color) * (light.Intensity * 8);
-            return Shade(ld, diffuse * light.DiffuseScale, ls, specular * light.SpecularScale, v, n, albedo, metallic, roughness) * radiance;
+            return Shade(ld, diffuse, ls, specular, v, n, albedo, metallic, roughness) * radiance;
         }
     }
 }
