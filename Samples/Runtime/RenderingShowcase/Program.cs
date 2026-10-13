@@ -7,18 +7,20 @@
 // A row of stations, each built around a part of the renderer:
 //   1  Materials        the Standard shader across metallic and roughness
 //   2  Surface maps     albedo, normal, parallax, surface and emission textures
-//   3  Transparency     cutout, transparent, double sided and refraction shaders
-//   4  Lights           point and spot lights with shadows, hard and soft
-//   5  Many lights      hundreds of small point lights without shadows
-//   6  Fog              volumetric fog, fog volumes and lights that scatter in it
-//   7  Instancing       thousands of cubes as moving, static or immediate instanced draws
-//   8  Render textures  a second camera drawing into a texture shown on a monitor
-//   9  Clouds           volumetric clouds and flat cloud layers over the whole scene
+//   3  Decals           projected albedo, normal and mask textures on walls, floors and curved surfaces
+//   4  Transparency     cutout, transparent, double sided and refraction shaders
+//   5  Lights           point and spot lights with hard, soft and contact hardening shadows
+//   6  Area lights      rectangle, disk and tube lights, their shapes showing in reflections
+//   7  Many lights      hundreds of small point lights without shadows
+//   8  Fog              volumetric fog, fog volumes and lights that scatter in it
+//   9  Instancing       thousands of cubes as moving, static or immediate instanced draws
+//   0  Render textures  a second camera drawing into a texture shown on a monitor
+//   -  Clouds           volumetric clouds and flat cloud layers over the whole scene
 //
 // Textures and materials load from the sample's Assets folder.
 //
 // Controls:
-//   1 to 9      Jump to a station
+//   1 to 9, 0, -  Jump to a station
 //   WASD, Q/E   Fly, hold Right Mouse to look, Shift to go faster
 //   F1          Hide the HUD
 //   The panels on the right hold each station's own controls and the scene wide settings:
@@ -48,12 +50,11 @@ internal class Program
 public sealed class RenderingShowcaseGame : StationGame
 {
     private const float StationSpacing = 30f;
-    private const int StationCount = 9;
-    private const int FogStation = 5;
-    private const int CloudStation = 8;
+    private const int SurfaceStation = 1, DecalStation = 2, LightStation = 4, AreaLightStation = 5, ManyLightStation = 6;
+    private const int FogStation = 7, InstancingStation = 8, CloudStation = 10, StationCount = 11;
 
     // The time of day each station is shown at, in hours.
-    private static readonly float[] StationHours = [14f, 15f, 13f, 22f, 22f, 23f, 11f, 14f, 16f];
+    private static readonly float[] StationHours = [14f, 15f, 13f, 13f, 22f, 22f, 22f, 23f, 11f, 14f, 16f];
 
     private Light _sun = null!;
     private VolumetricFog _fog = null!;
@@ -96,13 +97,15 @@ public sealed class RenderingShowcaseGame : StationGame
 
         BuildMaterials(StationCenter(0));
         BuildSurfaceMaps(StationCenter(1));
-        BuildTransparency(StationCenter(2));
-        BuildLights(StationCenter(3));
-        BuildManyLights(StationCenter(4));
-        BuildFog(StationCenter(5));
-        BuildInstancing(StationCenter(6));
-        BuildRenderTextures(StationCenter(7));
-        BuildClouds(StationCenter(8));
+        BuildDecals(StationCenter(2));
+        BuildTransparency(StationCenter(3));
+        BuildLights(StationCenter(4));
+        BuildAreaLights(StationCenter(5));
+        BuildManyLights(StationCenter(6));
+        BuildFog(StationCenter(7));
+        BuildInstancing(StationCenter(8));
+        BuildRenderTextures(StationCenter(9));
+        BuildClouds(StationCenter(10));
     }
 
     protected override void OnStationChanged(int index)
@@ -124,6 +127,11 @@ public sealed class RenderingShowcaseGame : StationGame
 
     protected override void Tick()
     {
+        if (_cycleTint)
+        {
+            Color tint = Hsv(Time.TimeSinceStartup * 0.08f % 1f, 0.75f, 0.9f);
+            _splat.Color = new Color(tint.R, tint.G, tint.B, _splat.Color.A);
+        }
         if (_animateSky)
         {
             _hours = (_hours + Time.DeltaTime * 1.5f) % 24f;
@@ -157,25 +165,28 @@ public sealed class RenderingShowcaseGame : StationGame
             string common = $"{frame.DrawCalls} draw calls ({frame.DrawCommands} meshes), {frame.ShadowDrawCalls} shadow draw calls";
             return CurrentStation switch
             {
-                4 => $"{_wanderers.Count(w => w.GameObject.Enabled)} point lights    {common}",
-                6 => $"{_cubeCount:N0} cubes    {common}",
+                ManyLightStation => $"{_wanderers.Count(w => w.GameObject.Enabled)} point lights    {common}",
+                InstancingStation => $"{_cubeCount:N0} cubes    {common}",
                 _ => common,
             };
         }
     }
 
-    public override bool HasStationControls => CurrentStation is 1 or 3 or 4 or 5 or 6 or 8;
+    public override bool HasStationControls => CurrentStation is SurfaceStation or DecalStation or LightStation or AreaLightStation
+        or ManyLightStation or FogStation or InstancingStation or CloudStation;
 
     public override void DrawControls(Paper paper, FontFile font)
     {
         switch (CurrentStation)
         {
-            case 1: SurfaceControls(paper, font); break;
-            case 3: LightControls(paper, font); break;
-            case 4: ManyLightControls(paper, font); break;
-            case 5: FogControls(paper, font); break;
-            case 6: InstancingControls(paper, font); break;
-            case 8: CloudControls(paper, font); break;
+            case SurfaceStation: SurfaceControls(paper, font); break;
+            case DecalStation: DecalControls(paper, font); break;
+            case LightStation: LightControls(paper, font); break;
+            case AreaLightStation: AreaLightControls(paper, font); break;
+            case ManyLightStation: ManyLightControls(paper, font); break;
+            case FogStation: FogControls(paper, font); break;
+            case InstancingStation: InstancingControls(paper, font); break;
+            case CloudStation: CloudControls(paper, font); break;
         }
     }
 
@@ -293,7 +304,71 @@ public sealed class RenderingShowcaseGame : StationGame
     }
 
     // ----------------------------------------------------------------
-    //  3  Transparency
+    //  3  Decals
+    // ----------------------------------------------------------------
+
+    private Decal _splat = null!;
+    private Decal _crater = null!;
+    private Decal _hazard = null!;
+    private bool _cycleTint = true;
+
+    private void BuildDecals(Float3 c)
+    {
+        AddStation("Decals", "Decals project textures onto whatever is inside their box. The splat takes its colour from the decal's tint, the crater dents the wall with a normal map, the puddle makes the ground glossy through a mask texture, and the hazard sign slides across the curved pillar, wrapping around it and fading where the surface turns away. Deepen its box to reach the wall behind.", c, new Float3(0f, 3f, -8f), 1.2f);
+
+        Material plaster = Lit(new Color(0.75f, 0.73f, 0.7f, 1f), 0f, 0.8f);
+        Add(Block("Decal Wall", new Float3(10f, 4f, 0.4f), plaster, c + new Float3(0f, 2f, 2f)));
+        Add(Model("Decal Pillar", Mesh.CreateCylinder(0.6f, 4f, 48), plaster, c + new Float3(2.5f, 2f, 0.6f)));
+        Add(Model("Decal Ball", Mesh.CreateSphere(0.7f, 32, 48), Lit(new Color(0.3f, 0.32f, 0.36f, 1f), 0.6f, 0.4f), c + new Float3(-3.2f, 0.7f, -1f)));
+
+        // A decal's Forward points out of the surfaces it lands on: back along -Z for the wall's front, up for the floor
+        Quaternion fromWall = Quaternion.LookRotation(-Float3.UnitZ, Float3.UnitY);
+        Quaternion fromFloor = Quaternion.LookRotation(Float3.UnitY, Float3.UnitZ);
+
+        _splat = AddDecal("Paint Splat", c + new Float3(-2.2f, 2.3f, 1.8f), fromWall, new Float3(2.2f, 2.2f, 0.6f), Load<Texture2D>("Textures/Decal Splat"));
+        _splat.Color = new Color(0.9f, 0.2f, 0.3f, 1f);
+
+        _crater = AddDecal("Crater", c + new Float3(0.3f, 2.1f, 1.8f), fromWall, new Float3(2f, 2f, 0.6f), Load<Texture2D>("Textures/Decal Crater"));
+        _crater.Normal = Load<Texture2D>("Textures/Decal Crater Normal");
+        _crater.NormalStrength = 1.5f;
+
+        Decal puddle = AddDecal("Puddle", c + new Float3(-0.8f, 0f, -1.4f), fromFloor, new Float3(3.5f, 2.6f, 0.4f), Load<Texture2D>("Textures/Decal Puddle"));
+        puddle.Mask = Load<Texture2D>("Textures/Decal Puddle Mask");
+
+        _hazard = AddDecal("Hazard Sign", c + new Float3(2.2f, 1.6f, -0.2f), fromWall, new Float3(1.6f, 1.6f, 3f), Load<Texture2D>("Textures/Decal Hazard"));
+        _hazard.AngleFade = 0.3f;
+        Slide slide = _hazard.AddComponent<Slide>();
+        slide.Origin = _hazard.Transform.Position;
+        slide.Offset = new Float3(1.2f, 0.3f, 0f);
+    }
+
+    private Decal AddDecal(string name, Float3 position, Quaternion rotation, Float3 size, Texture2D albedo)
+    {
+        var go = new GameObject(name);
+        go.Transform.Position = position;
+        go.Transform.Rotation = rotation;
+        Decal decal = go.AddComponent<Decal>();
+        decal.Size = size;
+        decal.Albedo = albedo;
+        Add(go);
+        return decal;
+    }
+
+    private void DecalControls(Paper paper, FontFile font)
+    {
+        Header(paper, font, "Paint splat");
+        Toggle(paper, font, "Cycle the tint", _cycleTint, v => _cycleTint = v);
+        Slider(paper, font, "Coverage", _splat.Color.A, 0f, 1f, v => _splat.Color = new Color(_splat.Color.R, _splat.Color.G, _splat.Color.B, v));
+        Header(paper, font, "Crater", 1);
+        Slider(paper, font, "Normal strength", _crater.NormalStrength, 0f, 2f, v => _crater.NormalStrength = v);
+        Header(paper, font, "Hazard sign", 2);
+        Toggle(paper, font, "Slide", _hazard.GetComponent<Slide>()!.Enabled, v => _hazard.GetComponent<Slide>()!.Enabled = v, 1);
+        Slider(paper, font, "Angle fade", _hazard.AngleFade, 0f, 0.95f, v => _hazard.AngleFade = v);
+        Slider(paper, font, "Box depth", _hazard.Size.Z, 0.2f, 4f, v => _hazard.Size = new Float3(_hazard.Size.X, _hazard.Size.Y, v), "0.0");
+    }
+
+    // ----------------------------------------------------------------
+    //  4  Transparency
     // ----------------------------------------------------------------
 
     private void BuildTransparency(Float3 c)
@@ -326,15 +401,16 @@ public sealed class RenderingShowcaseGame : StationGame
     }
 
     // ----------------------------------------------------------------
-    //  4  Lights
+    //  5  Lights
     // ----------------------------------------------------------------
 
     private Light _orbitLight = null!;
     private Light _spotLight = null!;
+    private GameObject _orbitBulb = null!;
 
     private void BuildLights(Float3 c)
     {
-        AddStation("Lights", "It is night here, so only local lights matter. The warm point light circles the pillars casting cube map shadows in every direction, and the cool spot light sweeps across them with a cone shadow. Switch shadows off or between hard and soft.", c, new Float3(0f, 6f, -11f), 0.5f);
+        AddStation("Lights", "It is night here, so only local lights matter. The warm point light circles the pillars casting cube map shadows in every direction, and the cool spot light sweeps across them with a cone shadow. Both use contact hardening shadows: sharp where a pillar meets the floor and softer the further the shadow falls from it, more so the bigger the light. Switch to hard or tent filtering to compare.", c, new Float3(0f, 6f, -11f), 0.5f);
 
         for (int i = 0; i < 5; i++)
         {
@@ -351,6 +427,9 @@ public sealed class RenderingShowcaseGame : StationGame
         _orbitLight.Range = 14f;
         _orbitLight.Intensity = 6f;
         _orbitLight.ShadowResolution = ShadowResolution._1024;
+        _orbitLight.ShadowFilter = ShadowFilter.ContactHardening;
+        _orbitLight.SourceRadius = 0.12f;
+        _orbitBulb = orbit;
         Orbit orbiter = orbit.AddComponent<Orbit>();
         orbiter.Center = c + new Float3(0f, 1.2f, 0f);
         orbiter.Radius = 4.5f;
@@ -364,6 +443,8 @@ public sealed class RenderingShowcaseGame : StationGame
         _spotLight.OuterAngle = 35f;
         _spotLight.InnerAngle = 25f;
         _spotLight.ShadowResolution = ShadowResolution._1024;
+        _spotLight.ShadowFilter = ShadowFilter.ContactHardening;
+        _spotLight.SourceRadius = 0.2f;
         spot.Transform.Position = c + new Float3(-6f, 7f, -5f);
         Sweep sweep = spot.AddComponent<Sweep>();
         sweep.Target = c;
@@ -376,14 +457,101 @@ public sealed class RenderingShowcaseGame : StationGame
         Header(paper, font, "Point light");
         Toggle(paper, font, "Point shadows", _orbitLight.CastShadows, v => _orbitLight.CastShadows = v);
         Cycle(paper, font, "Point shadow filter", _orbitLight.ShadowFilter, v => _orbitLight.ShadowFilter = v);
+        Slider(paper, font, "Point light size", _orbitLight.SourceRadius, 0.01f, 0.5f, v =>
+        {
+            _orbitLight.SourceRadius = v;
+            _orbitBulb.Transform.LocalScale = new Float3(v / 0.12f);
+        });
         Header(paper, font, "Spot light", 1);
         Toggle(paper, font, "Spot shadows", _spotLight.CastShadows, v => _spotLight.CastShadows = v);
         Cycle(paper, font, "Spot shadow filter", _spotLight.ShadowFilter, v => _spotLight.ShadowFilter = v);
+        Slider(paper, font, "Spot light size", _spotLight.SourceRadius, 0.01f, 0.6f, v => _spotLight.SourceRadius = v, "0.00", 1);
         Slider(paper, font, "Spot angle", _spotLight.OuterAngle, 10f, 80f, v => { _spotLight.OuterAngle = v; _spotLight.InnerAngle = v * 0.7f; }, "0");
     }
 
     // ----------------------------------------------------------------
-    //  5  Many lights
+    //  6  Area lights
+    // ----------------------------------------------------------------
+
+    private Light _rectLight = null!, _diskLight = null!, _tubeLight = null!;
+    private GameObject _rectPanel = null!, _diskPanel = null!, _tubePanel = null!;
+
+    private void BuildAreaLights(Float3 c)
+    {
+        AddStation("Area lights", "Lights with a shape instead of a point. The rectangle stands behind the spheres like a softbox, the disk hangs above them and the tube lies along the front. Each lights the scene by its whole surface, so the polished floor and spheres reflect the actual shape, stretched and blurred by their roughness. Area lights cast no shadows yet.", c, new Float3(0f, 3.5f, -9f), 1f);
+
+        Add(Block("Polished Floor", new Float3(14f, 0.04f, 10f), Lit(new Color(0.03f, 0.03f, 0.035f, 1f), 0f, 0.12f), c + new Float3(0f, 0.02f, 0f)));
+        float[] roughness = [0.05f, 0.25f, 0.5f, 0.8f];
+        for (int i = 0; i < roughness.Length; i++)
+        {
+            Add(Model("Metal Sphere", Mesh.CreateSphere(0.55f, 32, 48), Lit(new Color(0.95f, 0.95f, 0.95f, 1f), 1f, roughness[i]), c + new Float3((i - 1.5f) * 1.6f, 0.6f, 0.6f)));
+            Add(Model("Plastic Sphere", Mesh.CreateSphere(0.4f, 32, 48), Lit(new Color(0.8f, 0.15f, 0.12f, 1f), 0f, roughness[i]), c + new Float3((i - 1.5f) * 1.6f, 0.45f, -1f)));
+        }
+
+        // The rectangle and the disk shine along Forward, the tube lies along it
+        (_rectLight, _rectPanel) = AddAreaLight(LightType.Rect, new Color(1f, 0.85f, 0.7f, 1f), c + new Float3(0f, 1.6f, 3.5f), Quaternion.LookRotation(-Float3.UnitZ, Float3.UnitY), Mesh.CreateCube(Float3.One));
+        _rectLight.Width = 4f;
+        _rectLight.Height = 1.6f;
+
+        (_diskLight, _diskPanel) = AddAreaLight(LightType.Disk, new Color(0.6f, 0.8f, 1f, 1f), c + new Float3(-3.5f, 3.2f, -0.2f), Quaternion.LookRotation(-Float3.UnitY, Float3.UnitZ), Mesh.CreateCylinder(0.5f, 1f, 48));
+        _diskLight.Width = 1.6f;
+
+        (_tubeLight, _tubePanel) = AddAreaLight(LightType.Tube, new Color(1f, 0.35f, 0.75f, 1f), c + new Float3(0.5f, 0.3f, -2.6f), Quaternion.LookRotation(Float3.UnitX, Float3.UnitY), Mesh.CreateCylinder(0.5f, 1f, 24));
+        _tubeLight.Length = 5f;
+        _tubeLight.SourceRadius = 0.05f;
+        UpdateAreaPanels();
+    }
+
+    // A light and the unlit shape that shows where it is, kept apart so the shape can be scaled to the light's size
+    private (Light, GameObject) AddAreaLight(LightType type, Color color, Float3 position, Quaternion rotation, Mesh shape)
+    {
+        var go = new GameObject($"{type} Light");
+        go.Transform.Position = position;
+        go.Transform.Rotation = rotation;
+        Light light = go.AddComponent<Light>();
+        light.Type = type;
+        light.Color = color;
+        light.Intensity = 6f;
+        light.Range = 12f;
+        Add(go);
+        GameObject panel = Add(Model($"{type} Shape", shape, Unlit(new Color(color.R * 6f, color.G * 6f, color.B * 6f, 1f)), position));
+        return (light, panel);
+    }
+
+    private void UpdateAreaPanels()
+    {
+        _rectPanel.Transform.Rotation = _rectLight.Transform.Rotation;
+        _rectPanel.Transform.LocalScale = new Float3(_rectLight.Width, _rectLight.Height, 0.02f);
+        _diskPanel.Transform.LocalScale = new Float3(_diskLight.Width, 0.02f, _diskLight.Width);
+        _tubePanel.Transform.LocalEulerAngles = new Float3(0f, 0f, 90f);
+        float thickness = Maths.Max(_tubeLight.SourceRadius * 2f, 0.02f);
+        _tubePanel.Transform.LocalScale = new Float3(thickness, _tubeLight.Length, thickness);
+        foreach ((Light light, GameObject panel) in new[] { (_rectLight, _rectPanel), (_diskLight, _diskPanel), (_tubeLight, _tubePanel) })
+            panel.Enabled = light.GameObject.Enabled;
+    }
+
+    private void AreaLightControls(Paper paper, FontFile font)
+    {
+        Header(paper, font, "Rectangle");
+        Toggle(paper, font, "On", _rectLight.GameObject.Enabled, v => { _rectLight.GameObject.Enabled = v; UpdateAreaPanels(); });
+        Slider(paper, font, "Width", _rectLight.Width, 0.2f, 8f, v => { _rectLight.Width = v; UpdateAreaPanels(); }, "0.0");
+        Slider(paper, font, "Height", _rectLight.Height, 0.2f, 3f, v => { _rectLight.Height = v; UpdateAreaPanels(); }, "0.0");
+        Slider(paper, font, "Intensity", _rectLight.Intensity, 0f, 20f, v => _rectLight.Intensity = v, "0.0");
+
+        Header(paper, font, "Disk", 1);
+        Toggle(paper, font, "On", _diskLight.GameObject.Enabled, v => { _diskLight.GameObject.Enabled = v; UpdateAreaPanels(); }, 1);
+        Slider(paper, font, "Diameter", _diskLight.Width, 0.2f, 4f, v => { _diskLight.Width = v; UpdateAreaPanels(); }, "0.0", 1);
+        Slider(paper, font, "Intensity", _diskLight.Intensity, 0f, 20f, v => _diskLight.Intensity = v, "0.0", 1);
+
+        Header(paper, font, "Tube", 2);
+        Toggle(paper, font, "On", _tubeLight.GameObject.Enabled, v => { _tubeLight.GameObject.Enabled = v; UpdateAreaPanels(); }, 2);
+        Slider(paper, font, "Length", _tubeLight.Length, 0.2f, 8f, v => { _tubeLight.Length = v; UpdateAreaPanels(); }, "0.0", 2);
+        Slider(paper, font, "Radius", _tubeLight.SourceRadius, 0f, 0.3f, v => { _tubeLight.SourceRadius = v; UpdateAreaPanels(); }, "0.00", 2);
+        Slider(paper, font, "Intensity", _tubeLight.Intensity, 0f, 20f, v => _tubeLight.Intensity = v, "0.0", 2);
+    }
+
+    // ----------------------------------------------------------------
+    //  7  Many lights
     // ----------------------------------------------------------------
 
     private readonly List<Wanderer> _wanderers = [];
@@ -428,7 +596,7 @@ public sealed class RenderingShowcaseGame : StationGame
     }
 
     // ----------------------------------------------------------------
-    //  6  Fog
+    //  8  Fog
     // ----------------------------------------------------------------
 
     private void BuildFog(Float3 c)
@@ -485,7 +653,7 @@ public sealed class RenderingShowcaseGame : StationGame
     }
 
     // ----------------------------------------------------------------
-    //  7  Instancing
+    //  9  Instancing
     // ----------------------------------------------------------------
 
     private enum CubeMode { Moving, Static, Immediate }
@@ -550,7 +718,7 @@ public sealed class RenderingShowcaseGame : StationGame
     }
 
     // ----------------------------------------------------------------
-    //  8  Render textures
+    //  0  Render textures
     // ----------------------------------------------------------------
 
     private void BuildRenderTextures(Float3 c)
@@ -586,7 +754,7 @@ public sealed class RenderingShowcaseGame : StationGame
     }
 
     // ----------------------------------------------------------------
-    //  9  Clouds
+    //  -  Clouds
     // ----------------------------------------------------------------
 
     private void BuildClouds(Float3 c)
@@ -670,6 +838,17 @@ public sealed class Pan : Component
 
     public override void Update()
         => Transform.LocalEulerAngles = new Float3(Pitch, Center + MathF.Sin(Time.TimeSinceStartup * 0.4f) * Range, 0f);
+}
+
+/// <summary>Slides back and forth between its origin and the origin plus an offset.</summary>
+public sealed class Slide : Component
+{
+    public Float3 Origin;
+    public Float3 Offset;
+    public float Speed = 0.5f;
+
+    public override void Update()
+        => Transform.Position = Origin + Offset * MathF.Sin(Time.TimeSinceStartup * Speed);
 }
 
 /// <summary>Drifts smoothly around inside a box, picking a new destination whenever it arrives.</summary>

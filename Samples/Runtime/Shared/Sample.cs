@@ -70,7 +70,13 @@ public abstract class StationGame : Game
     [
         KeyCode.Number1, KeyCode.Number2, KeyCode.Number3, KeyCode.Number4, KeyCode.Number5,
         KeyCode.Number6, KeyCode.Number7, KeyCode.Number8, KeyCode.Number9, KeyCode.Number0,
+        KeyCode.Minus, KeyCode.Equal,
     ];
+
+    private static readonly string[] StationKeyNames = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
+
+    /// <summary>The key that jumps to a station, empty past the last one.</summary>
+    public static string StationKey(int index) => index < StationKeyNames.Length ? StationKeyNames[index] : "";
 
     public override void Initialize()
     {
@@ -145,7 +151,13 @@ public abstract class StationGame : Game
     {
         get
         {
-            string range = Stations.Count >= 10 ? "1 to 9, 0" : $"1 to {Stations.Count}";
+            string range = Stations.Count switch
+            {
+                >= 12 => "1 to 9, 0, -, =",
+                11 => "1 to 9, 0, -",
+                10 => "1 to 9, 0",
+                _ => $"1 to {Stations.Count}",
+            };
             string keys = Stations.Count > 1 ? $"{range}  stations    {MoveKeys}" : MoveKeys;
             return string.IsNullOrEmpty(ExtraKeys) ? keys : keys + "    " + ExtraKeys;
         }
@@ -786,7 +798,7 @@ public sealed class SampleHud : Component
             if (!Game.CompactHud)
             {
                 paper.Box("title").Height(30)
-                    .Text(Game.Stations.Count > 1 ? $"{(index + 1) % 10}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
+                    .Text(Game.Stations.Count > 1 ? $"{StationGame.StationKey(index)}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("description").Height(UnitValue.Auto)
@@ -827,7 +839,7 @@ public sealed class SampleHud : Component
                     .Width(UnitValue.Stretch()).Height(34)
                     .BackgroundColor(current ? Accent : Panel).Rounded(8)
                     .Hovered.BackgroundColor(current ? Accent : ControlHover).End()
-                    .Text($"{(i + 1) % 10}  {Game.Stations[i].Name}", font).FontSize(14)
+                    .Text($"{StationGame.StationKey(i)}  {Game.Stations[i].Name}", font).FontSize(14)
                     .TextColor(current ? new Color(0.05f, 0.05f, 0.08f, 1f) : Bright)
                     .Alignment(TextAlignment.MiddleCenter)
                     .TextTruncate()
