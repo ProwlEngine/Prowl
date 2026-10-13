@@ -800,6 +800,8 @@ public class Mesh : Asset, ISerializable
         Mesh mesh = new();
 
         List<Float3> vertices = [];
+        List<Float3> normals = [];
+        List<Float4> tangents = [];
         List<Float2> uvs = [];
         List<uint> indices = [];
 
@@ -818,7 +820,14 @@ public class Mesh : Asset, ISerializable
                 float z = MathF.Sin(phi) * MathF.Sin(theta);
 
                 vertices.Add(new Float3(x, y, z) * radius);
+                normals.Add(new Float3(x, y, z));
                 uvs.Add(new Float2(u, v));
+
+                // Along increasing u, with the sign saying which way increasing v runs
+                Float3 tangent = new(-MathF.Sin(theta), 0, MathF.Cos(theta));
+                Float3 bitangent = new(MathF.Cos(phi) * MathF.Cos(theta), -MathF.Sin(phi), MathF.Cos(phi) * MathF.Sin(theta));
+                float handedness = Float3.Dot(Float3.Cross(tangent, new Float3(x, y, z)), bitangent) < 0f ? -1f : 1f;
+                tangents.Add(new Float4(tangent.X, tangent.Y, tangent.Z, handedness));
             }
         }
 
@@ -840,12 +849,12 @@ public class Mesh : Asset, ISerializable
         }
 
         mesh.vertices = [.. vertices];
+        mesh.normals = [.. normals];
+        mesh.tangents = [.. tangents];
         mesh.uv = [.. uvs];
         mesh.indices = [.. indices];
 
         mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
 
         return mesh;
     }
