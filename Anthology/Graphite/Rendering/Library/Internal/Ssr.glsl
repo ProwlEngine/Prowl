@@ -1,3 +1,4 @@
+#pragma variant SSR COPY RAYCAST BLUR RESOLVE TEMPORAL REPROJECT COMBINE
 // Prowl's stochastic screen space reflections. RayCast traces a GGX importance sampled ray per pixel against the depth,
 // SceneBlur builds the convolved scene pyramid, Resolve gathers neighbouring rays weighted by BRDF over pdf and picks a
 // pyramid level by a roughness cone, Temporal reprojects and clamps against history, Reproject moves last frame's

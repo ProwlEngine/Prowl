@@ -104,7 +104,7 @@ public sealed class ShaderPass : IDisposable
         _variants!.Seed(known);
         _created = true;
 
-        if (mode == CompileMode.All)
+        if (mode == CompileMode.All && compiler != null)
             CompileAll();
     }
 

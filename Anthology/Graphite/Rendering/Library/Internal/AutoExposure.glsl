@@ -1,3 +1,5 @@
+#pragma variant AE APPLY EXTRACT DOWNSAMPLE ADAPT
+#pragma variant AE_LAYERED_SOURCE
 // Prowl's auto exposure: the log luminance of the colour at half resolution, box downsampled to a few texels, adapted
 // over time toward their geometric mean with separate speeds up and down, then applied as a multiply. Measuring reads
 // the first layer only, so a layered view's layers share one exposure.

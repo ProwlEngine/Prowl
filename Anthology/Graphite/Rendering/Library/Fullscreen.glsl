@@ -1,5 +1,7 @@
 // Fullscreen programs: the triangle in the vertex stage, the source colour and its sampling in the fragment stage, layered views through multiview.
 // Procedural programs (GRAPHITE_PROCEDURAL) write their own vertex stage and varyings, making geometry from gl_VertexIndex.
+#pragma variant GRAPHITE_LAYERED
+#pragma variant GRAPHITE_NO_SOURCE
 #ifdef GRAPHITE_LAYERED
 #extension GL_EXT_multiview : require
 #endif

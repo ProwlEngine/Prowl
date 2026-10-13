@@ -232,10 +232,21 @@ public sealed class ProgramCacheTests : IDisposable
         });
         try
         {
+            using System.IO.MemoryStream file = new();
+            BakedVariants.Write(file);
+            BakedVariants.Clear();
+            file.Position = 0;
+            BakedVariants.Read(file);
+
             ShaderPass player = ShaderParser.Parse(Source).Passes![0];
             PassVariants baked = player.Variants(null, _device.BackendType);
-            Assert.Equal(VariantState.Ready, baked.Request(0, CompilePolicy.BakedOnly, out _, out _));
+            Assert.Equal(VariantState.Ready, baked.Request(0, CompilePolicy.BakedOnly, out ShaderDescription loaded, out _));
             Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.BakedOnly, out _, out _));
+            Assert.Equal(source.Globals, baked.Globals);
+            loaded.BlendState = BlendStateDescription.SingleOverrideBlend;
+            loaded.DepthStencilState = DepthStencilStateDescription.Disabled;
+            loaded.RasterizerState = RasterizerStateDescription.CullNone;
+            using GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(loaded);
         }
         finally
         {

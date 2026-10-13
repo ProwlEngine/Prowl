@@ -1,3 +1,4 @@
+#pragma variant TAA_SHARPEN
 // Prowl's temporal anti aliasing resolve and sharpen, on a fullscreen pass. The resolve blends the jittered frame with the
 // history reprojected by the nearest surface's motion, clipped to the neighbourhood's colour spread, in tonemapped YCoCg.
 // Sky pixels carry no motion, so they reproject their direction through last frame's view instead. Layered views resolve

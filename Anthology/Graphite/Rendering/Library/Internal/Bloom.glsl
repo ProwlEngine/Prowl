@@ -1,3 +1,4 @@
+#pragma variant BLOOM COMPOSITE PREFILTER DOWNSAMPLE UPSAMPLE
 // Prowl's dual filter bloom: a soft knee threshold into half resolution, a chain of 4x4 downsamples, upsamples that mix
 // each level with the blurred one below by scatter, then the composite adding it to the colour.
 

@@ -76,7 +76,37 @@ public sealed class PassVariants
         _source = pass.Source;
         _session = compiler?.SessionVersion ?? 0;
         SeedBaked();
+        lock (s_live)
+        {
+            s_live.RemoveAll(live => !live.TryGetTarget(out _));
+            s_live.Add(new WeakReference<PassVariants>(this));
+        }
     }
+
+    private static readonly List<WeakReference<PassVariants>> s_live = new();
+
+    /// <summary>Every pass's variants made in this process and still in use.</summary>
+    public static List<PassVariants> Live
+    {
+        get
+        {
+            List<PassVariants> live = new();
+            lock (s_live)
+            {
+                foreach (WeakReference<PassVariants> reference in s_live)
+                {
+                    if (reference.TryGetTarget(out PassVariants? variants))
+                        live.Add(variants);
+                }
+            }
+            return live;
+        }
+    }
+
+    /// <summary>Raised after any variant of any pass compiled, outside the lock.</summary>
+    public static event Action<PassVariants, Keyword[]>? VariantCompiled;
+
+    public ShaderPass Pass => _pass;
 
     public IShaderCompiler? Compiler { get; }
     public GraphicsBackend Backend { get; }
@@ -142,6 +172,47 @@ public sealed class PassVariants
             return _variants[key];
     }
 
+    /// <summary>The compute variant if it is compiled, without compiling it.</summary>
+    public ComputeDescription? CompiledCompute(int key)
+    {
+        lock (this)
+        {
+            Refresh();
+            return _compute[key];
+        }
+    }
+
+    /// <summary>Whether the pass was used as a compute program.</summary>
+    public bool IsCompute
+    {
+        get
+        {
+            lock (this)
+                return Array.Exists(_compute, compute => compute != null);
+        }
+    }
+
+    /// <summary>Compiles every variant now, as compute programs when asked. Failures are kept, not thrown.</summary>
+    public void CompileAll(bool compute = false)
+    {
+        compute |= IsCompute;
+        for (int key = 0; key < Count; key++)
+        {
+            if (!compute)
+            {
+                Request(key, CompilePolicy.Sync, out _, out _);
+                continue;
+            }
+            try
+            {
+                RequireCompute(key);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+    }
+
     /// <summary>The variant if it is compiled for the backend, without compiling it.</summary>
     public Variant? Compiled(int key)
     {
@@ -193,9 +264,11 @@ public sealed class PassVariants
         error = null;
         Exception? raised = null;
         VariantState state;
+        bool fresh = false;
         lock (this)
         {
             Refresh();
+            bool before = _variants[key] is { } had && had.IsCompiledFor(Backend);
             state = Poll(key, ref raised);
             if (state == VariantState.Pending && _pending[key] == null)
             {
@@ -226,12 +299,17 @@ public sealed class PassVariants
                 }
             }
             if (state == VariantState.Ready)
+            {
                 _variants[key]!.TryGetDescription(Backend, out description);
+                fresh = !before;
+            }
             else if (state == VariantState.Failed)
                 error = _failures[key];
         }
         if (raised != null)
             CompileFailed?.Invoke(_combos[key], raised);
+        if (fresh)
+            VariantCompiled?.Invoke(this, _combos[key]);
         return state;
     }
 
@@ -259,6 +337,7 @@ public sealed class PassVariants
             {
                 ComputeDescription description = Compiler.CompileCompute(_pass, _combos[key], Backend);
                 _compute[key] = description;
+                VariantCompiled?.Invoke(this, _combos[key]);
                 return description;
             }
             catch (Exception e)

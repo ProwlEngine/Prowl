@@ -643,8 +643,8 @@ public sealed class Renderer : IDisposable
     /// A lit program may include Graphite/Lighting.glsl and Graphite/Shadows.glsl and read the world's lights, shadows,
     /// probes and bindless textures as forward passes do; its feature declares <see cref="FeatureBuilder.DrawsRenderables"/>.
     /// </remarks>
-    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null, bool lit = false)
-        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend, lit);
+    public FullscreenProgram CreateFullscreenProgram(string fragment, string name = "Fullscreen", bool source = true, BlendStateDescription? blend = null, bool lit = false, string variant = "")
+        => FullscreenProgram.Create(Device, _compiler, fragment, name, source, blend, lit, variant: variant);
 
     /// <summary>
     /// Creates a program making its own geometry from gl_VertexIndex, drawn by features through

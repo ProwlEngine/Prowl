@@ -353,8 +353,7 @@ internal sealed class ShadowTarget(RenderTexture texture, string name, GraphicsP
         }
     }
 
-    /// <summary>Draws the far plane over a tile, depth only, so one tile clears without touching its neighbours.</summary>
-    public static GraphicsProgram TileClear(GraphicsDevice device, IShaderCompiler? compiler)
+    internal static ShaderPass TileClearPass()
     {
         const string source = """
             Vertex
@@ -368,7 +367,13 @@ internal sealed class ShadowTarget(RenderTexture texture, string name, GraphicsP
             void main() { }
             }
             """;
-        ShaderDescription description = new ShaderPass { State = new PassState(), Source = source, SourceName = "Graphite/ShadowTileClear" }.Variants(compiler, device.BackendType).Require();
+        return new ShaderPass { State = new PassState(), Source = source, SourceName = "Graphite/ShadowTileClear" };
+    }
+
+    /// <summary>Draws the far plane over a tile, depth only, so one tile clears without touching its neighbours.</summary>
+    public static GraphicsProgram TileClear(GraphicsDevice device, IShaderCompiler? compiler)
+    {
+        ShaderDescription description = TileClearPass().Variants(compiler, device.BackendType).Require();
         description.BlendState = BlendStateDescription.Empty;
         description.DepthStencilState = new DepthStencilStateDescription(true, true, ComparisonKind.Always);
         description.RasterizerState = RasterizerStateDescription.CullNone;

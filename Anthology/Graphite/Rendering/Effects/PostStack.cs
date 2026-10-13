@@ -87,7 +87,7 @@ internal sealed class EffectResources
         {
             if (!_programs.TryGetValue(key, out FullscreenProgram? program))
             {
-                program = _renderer.CreateFullscreenProgram($"{defines}#include \"Graphite/Internal/{file}.glsl\"\n", $"Graphite/{file}", source, blend);
+                program = _renderer.CreateFullscreenProgram(InternalShaders.PostFragment(file), $"Graphite/{file}", source, blend, variant: defines);
                 _programs[key] = program;
             }
             return program;
@@ -1017,7 +1017,7 @@ public abstract class DisplayEffect : PostEffect
 
     private protected DisplayEffect(Renderer renderer, string define, int order) : base(renderer)
     {
-        _program = Program("Cinematic", $"#define {define} 1\n");
+        _program = Program("Cinematic", $"#define CINEMATIC_{define} 1\n");
         Order = order;
     }
 

@@ -1,3 +1,4 @@
+#pragma variant CINEMATIC VIGNETTE PIXELATION CHROMATIC_ABERRATION SHARPEN EDGE_DETECTION COLOR_GRADING LUT FILM_GRAIN
 // Prowl's cinematic effects on display referred colour, one per define, each its own pass: pixelation, chromatic
 // aberration, CAS sharpening, Sobel edges, colour grading, a strip LUT, film grain and vignette.
 
@@ -5,7 +6,7 @@ uniform vec2 _Resolution;
 
 float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
-#if defined(PIXELATION)
+#if defined(CINEMATIC_PIXELATION)
 uniform float _PixelSize;
 
 void main()
@@ -14,7 +15,7 @@ void main()
     vec2 uv = floor(vUV * pixelCount) / pixelCount;
     outColor = vec4(Graphite_SampleSource(uv).rgb, Graphite_SampleSource(vUV).a);
 }
-#elif defined(CHROMATIC_ABERRATION)
+#elif defined(CINEMATIC_CHROMATIC_ABERRATION)
 uniform float _ChromaticIntensity;
 uniform float _ChromaticDistortion;
 
@@ -29,7 +30,7 @@ void main()
     vec4 source = Graphite_SampleSource(vUV);
     outColor = vec4(Graphite_SampleSource(vUV + offsetR).r, source.g, Graphite_SampleSource(vUV - offsetB).b, source.a);
 }
-#elif defined(SHARPEN)
+#elif defined(CINEMATIC_SHARPEN)
 uniform float _SharpenAmount;
 uniform float _SharpenRadius;
 
@@ -50,7 +51,7 @@ void main()
     float w = sqrt(min(1.0 - mx, mn) / max(mx, 0.001)) * mix(-0.125, -0.2, _SharpenAmount);
     outColor = vec4((w * (a + b + d + e) + c) / (4.0 * w + 1.0), Graphite_SampleSource(vUV).a);
 }
-#elif defined(EDGE_DETECTION)
+#elif defined(CINEMATIC_EDGE_DETECTION)
 uniform float _EdgeIntensity;
 uniform vec4 _EdgeColor;
 uniform float _EdgeBackgroundFade;
@@ -75,7 +76,7 @@ void main()
     vec4 source = Graphite_SampleSource(vUV);
     outColor = vec4(mix(source.rgb * _EdgeBackgroundFade, _EdgeColor.rgb, edge), source.a);
 }
-#elif defined(COLOR_GRADING)
+#elif defined(CINEMATIC_COLOR_GRADING)
 uniform float _PostExposure;
 uniform float _Contrast;
 uniform float _Saturation;
@@ -99,7 +100,7 @@ void main()
     color = pow(max(color, vec3(0.0)), 1.0 / max(vec3(1.0) + _Gamma.rgb, vec3(0.01)));
     outColor = vec4(max(color, vec3(0.0)), source.a);
 }
-#elif defined(LUT)
+#elif defined(CINEMATIC_LUT)
 uniform sampler2D _LUTTex;
 uniform float _LUTContribution;
 uniform float _LUTSize;
@@ -121,7 +122,7 @@ void main()
     vec3 graded2 = texture(_LUTTex, vec2(innerUV.x * invSize + sliceHigh * invSize, innerUV.y)).rgb;
     outColor = vec4(mix(color, mix(graded1, graded2, sliceFrac), _LUTContribution), source.a);
 }
-#elif defined(FILM_GRAIN)
+#elif defined(CINEMATIC_FILM_GRAIN)
 uniform float _Time;
 uniform float _GrainIntensity;
 uniform float _GrainResponse;

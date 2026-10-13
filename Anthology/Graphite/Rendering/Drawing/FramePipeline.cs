@@ -1384,14 +1384,7 @@ internal sealed partial class FramePipeline : IDisposable
         _readback = new ReadbackPass(device, report);
         _readbackPipeline.SetPasses([_readback]);
 
-        const string present = "void main() { outColor = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y)); }";
-        const string decode = """
-            void main()
-            {
-                vec4 c = Graphite_SampleSource(vec2(vUV.x, 1.0 - vUV.y));
-                outColor = vec4(pow((max(c.rgb, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), c.a);
-            }
-            """;
+        const string present = InternalShaders.Present, decode = InternalShaders.Decode;
         BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
         _present =
         [
@@ -1415,9 +1408,9 @@ internal sealed partial class FramePipeline : IDisposable
             device.UpdateTexture<ushort>(NoScreenIrradiance, [0, 0, 0, 0], TextureRegion.Whole(NoScreenIrradiance, 0, layer));
             device.UpdateTexture<ushort>(NoSceneColor, [0, 0, 0, 0], TextureRegion.Whole(NoSceneColor, 0, layer));
         }
-        ClearProgram = FullscreenProgram.Create(device, compiler, "uniform vec4 Graphite_ClearColor; void main() { outColor = Graphite_ClearColor; }", "Graphite/Clear", source: false);
+        ClearProgram = FullscreenProgram.Create(device, compiler, InternalShaders.Clear, "Graphite/Clear", source: false);
         BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
-        CopyBackProgram = FullscreenProgram.Create(device, compiler, "void main() { outColor = Graphite_SampleSource(vUV); }", "Graphite/CopyBack",
+        CopyBackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.CopyBack, "Graphite/CopyBack",
             blend: new BlendStateDescription(default, BlendAttachmentDescription.OverrideBlend, untouched, untouched));
         PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
@@ -1503,8 +1496,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler? compiler, string file)
     {
-        ShaderPass pass = new() { State = new PassState(), Source = ShaderLibrary.Get(ShaderLibrary.Prefix + file)!, SourceName = "Graphite/" + file };
-        ShaderDescription description = pass.Variants(compiler, device.BackendType).Require();
+        ShaderDescription description = InternalShaders.FilePass(file).Variants(compiler, device.BackendType).Require();
         description.BlendState = BlendStateDescription.SingleOverrideBlend;
         description.DepthStencilState = DepthStencilStateDescription.Disabled;
         description.RasterizerState = RasterizerStateDescription.CullNone;

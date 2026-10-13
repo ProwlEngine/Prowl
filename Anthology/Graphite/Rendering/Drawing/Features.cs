@@ -299,20 +299,54 @@ public sealed class FullscreenProgram : IDisposable
         return [ProgramCache.FrameLayout, ProgramCache.ViewLayout, new ResourceLayoutDescription(GraphiteBindings.PassSet, []), new ResourceLayoutDescription(GraphiteBindings.UserSet, [.. user])];
     }
 
-    // The fragment code follows Graphite/Fullscreen.glsl, which gives it vUV, outColor and Graphite_SampleSource. A
-    // procedural program's code holds both stages, the vertex one under GRAPHITE_VERTEX
-    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false)
+    /// <summary>
+    /// The pass a fullscreen program compiles from. The fragment code follows Graphite/Fullscreen.glsl, which gives it vUV,
+    /// outColor and Graphite_SampleSource, and its layered and sourceless forms as variants. A procedural program's code
+    /// holds both stages, the vertex one under GRAPHITE_VERTEX.
+    /// </summary>
+    public static ShaderPass Pass(string fragment, string name, bool lit = false, bool procedural = false)
+    {
+        string defines = (lit ? $"#pragma resource_set {GraphiteBindings.UserSet}\n#define GRAPHITE_NO_OBJECT 1\n" : "")
+            + (procedural ? "#define GRAPHITE_PROCEDURAL 1\n" : "");
+        string vertex = procedural ? fragment : "";
+        string text = $"Vertex\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{vertex}\n}}\nFragment\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{fragment}\n}}\n";
+        return new ShaderPass { State = new PassState(), Source = text, SourceName = name };
+    }
+
+    // Each "#define NAME 1" line as the keyword it picks: the toggle called NAME, or the value of the axis NAME starts with
+    private static List<Keyword> Keywords(IReadOnlyList<VariantSpace> axes, string variant)
+    {
+        List<Keyword> keywords = new();
+        foreach (string line in variant.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2 || parts[0] != "#define")
+                throw new ArgumentException($"A variant is #define lines, not '{line}'.", nameof(variant));
+            string define = parts[1];
+            Keyword? found = null;
+            foreach (VariantSpace axis in axes)
+            {
+                if (axis.IsToggle && axis.Name == define)
+                    found = new Keyword(axis.Name, "true");
+                else if (!axis.IsToggle && define.StartsWith(axis.Name + "_", StringComparison.Ordinal) && System.Linq.Enumerable.Contains(axis.Values, define[(axis.Name.Length + 1)..]))
+                    found = new Keyword(axis.Name, define[(axis.Name.Length + 1)..]);
+            }
+            keywords.Add(found ?? throw new ArgumentException($"No variant axis declares {define}.", nameof(variant)));
+        }
+        return keywords;
+    }
+
+    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false, string variant = "")
     {
         source &= !procedural;
+        PassVariants variants = Pass(fragment, name, lit, procedural).Variants(compiler, device.BackendType);
+        List<Keyword> keywords = Keywords(variants.Axes, variant);
+        keywords.Add(new Keyword("GRAPHITE_NO_SOURCE", source ? "false" : "true"));
         GraphicsProgram Build(bool layered)
         {
-            string defines = (layered ? "#define GRAPHITE_LAYERED 1\n" : "") + (source ? "" : "#define GRAPHITE_NO_SOURCE 1\n")
-                + (lit ? $"#pragma resource_set {GraphiteBindings.UserSet}\n#define GRAPHITE_NO_OBJECT 1\n" : "")
-                + (procedural ? "#define GRAPHITE_PROCEDURAL 1\n" : "");
-            string vertex = procedural ? fragment : "";
-            string text = $"Vertex\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{vertex}\n}}\nFragment\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{fragment}\n}}\n";
-            ShaderPass pass = new() { State = new PassState(), Source = text, SourceName = name };
-            ShaderDescription description = pass.Variants(compiler, device.BackendType).Require();
+            if (!variants.TryGetKey([.. keywords, new Keyword("GRAPHITE_LAYERED", layered ? "true" : "false")], out int key))
+                throw new ArgumentException($"{name} has no variant '{variant}'.", nameof(variant));
+            ShaderDescription description = variants.Require(key);
             description.BlendState = blend ?? BlendStateDescription.SingleOverrideBlend;
             description.DepthStencilState = DepthStencilStateDescription.Disabled;
             description.RasterizerState = RasterizerStateDescription.CullNone;

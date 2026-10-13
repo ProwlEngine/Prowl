@@ -55,9 +55,8 @@ public sealed class ShaderDefinition
     /// yet or failed, falls back to the fallback variant instead of throwing. Fallback must itself
     /// have a compiled description for the active backend, or resolving throws anyway.
     /// </summary>
-    public void Create(GraphicsDevice device, IShaderCompiler compiler, Variant fallback, CompileMode mode = CompileMode.OnDemand)
+    public void Create(GraphicsDevice device, IShaderCompiler? compiler, Variant fallback, CompileMode mode = CompileMode.OnDemand)
     {
-        ArgumentNullException.ThrowIfNull(compiler);
         ArgumentNullException.ThrowIfNull(fallback);
 
         BindAll(device, compiler, mode, fallback);
@@ -72,7 +71,7 @@ public sealed class ShaderDefinition
         for (int i = 0; i < Passes.Length; i++)
         {
             ShaderPass pass = Passes[i];
-            VariantSpace[] axes = compiler != null ? [.. compiler.GetAxes(pass)] : [];
+            VariantSpace[] axes = [.. pass.AxesWith(compiler)];
             pass.Bind(device, Name ?? "", i, axes, [], compiler, mode, fallback);
         }
 

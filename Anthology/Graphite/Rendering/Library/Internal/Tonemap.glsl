@@ -1,3 +1,4 @@
+#pragma variant TONEMAP CLAMP MELON ACES ACES_SIMPLE AGX REINHARD_SIMPLE REINHARD_LUMA REINHARD_WHITE ROMBINDAHOUSE UNCHARTED2
 // Prowl's tonemapper: one operator by define, clamped to 0 to 1, encoded to display gamma, then contrast and saturation
 // in display space. Without an operator define it only clamps.
 
