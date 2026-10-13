@@ -31,6 +31,22 @@ public static class RenderStats
 
         /// <summary>Shader variants still compiling in the background.</summary>
         public int ShaderCompiles;
+
+        /// <summary>Main thread time spent pushing scene changes into the render worlds.</summary>
+        public float SyncMs;
+
+        /// <summary>Renderers, lights and probes synced, and static ones left alone while playing.</summary>
+        public int Synced;
+        public int Parked;
+    }
+
+    private static Frame s_sync;
+
+    internal static void AddSceneSync(double milliseconds, int synced, int parked)
+    {
+        s_sync.SyncMs += (float)milliseconds;
+        s_sync.Synced += synced;
+        s_sync.Parked += parked;
     }
 
     private static readonly float[] s_frameTimeHistory = new float[120];
@@ -48,7 +64,14 @@ public static class RenderStats
     /// <summary>Takes the renderer's counts of its last frame and this frame's time.</summary>
     public static void EndFrame()
     {
-        Frame frame = new() { FrameTimeMs = (float)Time.UnscaledDeltaTime * 1000f };
+        Frame frame = new()
+        {
+            FrameTimeMs = (float)Time.UnscaledDeltaTime * 1000f,
+            SyncMs = s_sync.SyncMs,
+            Synced = s_sync.Synced,
+            Parked = s_sync.Parked,
+        };
+        s_sync = default;
         if (Graphics.Renderer is { } renderer)
         {
             Graphite.Rendering.FrameStats stats = renderer.LastFrameStats;

@@ -10,6 +10,7 @@ using Prowl.Graphite.Rendering;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 using Silk.NET.Windowing;
 
@@ -319,6 +320,29 @@ public static class Graphics
         byte[] data = Device.Map<byte>(staging).ToArray();
         Device.Unmap(staging);
         return data;
+    }
+
+    /// <summary>
+    /// Draws a mesh once per transform, in world space, for this frame only, so call it every frame the instances should
+    /// show, from Update or anywhere before the scene renders. Each colour tints its instance where the material's shader
+    /// reads it, as Lit and Unlit do with Instance Tint on, and is white where missing. Draws into the current scene
+    /// unless given one, and draws nothing while the mesh or material is still loading.
+    /// </summary>
+    public static void DrawMeshInstanced(Mesh mesh, Material material, ReadOnlySpan<Float4x4> transforms, ReadOnlySpan<Color> colors = default,
+        ShadowCasting shadowCasting = ShadowCasting.On, int layer = 0, Scene? scene = null)
+    {
+        if (Renderer == null || transforms.IsEmpty || mesh.IsNotValid() || material.IsNotValid()) return;
+        if (!mesh.IsLoaded || !material.IsLoaded)
+        {
+            if (mesh.State == AssetState.Unloaded) _ = mesh.LoadAsync();
+            if (material.State == AssetState.Unloaded) _ = material.LoadAsync();
+            return;
+        }
+        mesh.Upload();
+        if (mesh.GpuIfLoaded is not { } gpuMesh || material.GpuMaterial is not { } gpuMaterial) return;
+        if (scene.IsNotValid()) scene = Scene.Current;
+        RenderableFlags flags = shadowCasting.ToFlags() | RenderableFlags.ReceiveShadows;
+        scene.Rendering.DrawInstanced(gpuMesh, gpuMaterial, flags, Rendering.RenderableState.LayerBit(layer), transforms, colors);
     }
 
     /// <summary>Disposes a GPU object once the frames that may use it have finished.</summary>
