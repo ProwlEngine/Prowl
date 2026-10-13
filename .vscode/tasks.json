@@ -8,10 +8,13 @@
             "args": [
                 "build",
                 "${workspaceFolder}/Prowl.Editor/Prowl.Editor.csproj",
-                "-c", "Debug"
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
@@ -21,270 +24,301 @@
             "args": [
                 "build",
                 "${workspaceFolder}/Prowl.Editor/Prowl.Editor.csproj",
-                "-c", "Release"
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: AudioDemo Debug",
+            "label": "build: HelloProwl Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/AudioDemo/AudioDemo.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/HelloProwl/HelloProwl.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: AudioDemo Release",
+            "label": "build: HelloProwl Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/AudioDemo/AudioDemo.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/HelloProwl/HelloProwl.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: BananaMan Debug",
+            "label": "build: RenderingShowcase Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/BananaMan/BananaMan.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/RenderingShowcase/RenderingShowcase.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: BananaMan Release",
+            "label": "build: RenderingShowcase Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/BananaMan/BananaMan.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/RenderingShowcase/RenderingShowcase.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: CarPhysicsDemo Debug",
+            "label": "build: PhysicsShowcase Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/CarPhysicsDemo/CarPhysicsDemo.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/PhysicsShowcase/PhysicsShowcase.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: CarPhysicsDemo Release",
+            "label": "build: PhysicsShowcase Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/CarPhysicsDemo/CarPhysicsDemo.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/PhysicsShowcase/PhysicsShowcase.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: FlyCamera Debug",
+            "label": "build: VehicleShowcase Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/FlyCamera/FlyCamera.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/VehicleShowcase/VehicleShowcase.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: FlyCamera Release",
+            "label": "build: VehicleShowcase Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/FlyCamera/FlyCamera.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/VehicleShowcase/VehicleShowcase.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: LifecycleTest Debug",
+            "label": "build: ControllerShowcase Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/LifecycleTest/LifecycleTest.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/ControllerShowcase/ControllerShowcase.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: LifecycleTest Release",
+            "label": "build: ControllerShowcase Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/LifecycleTest/LifecycleTest.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/ControllerShowcase/ControllerShowcase.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: PhysicsCubes Debug",
+            "label": "build: ParticleShowcase Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/PhysicsCubes/PhysicsCubes.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/ParticleShowcase/ParticleShowcase.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: PhysicsCubes Release",
+            "label": "build: ParticleShowcase Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/PhysicsCubes/PhysicsCubes.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/ParticleShowcase/ParticleShowcase.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: PhysicsTesterDemo Debug",
+            "label": "build: ScriptingShowcase Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/PhysicsTesterDemo/PhysicsTesterDemo.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/ScriptingShowcase/ScriptingShowcase.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: PhysicsTesterDemo Release",
+            "label": "build: ScriptingShowcase Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/PhysicsTesterDemo/PhysicsTesterDemo.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/ScriptingShowcase/ScriptingShowcase.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: ShapeCastDemo Debug",
+            "label": "build: VRBasics Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/ShapeCastDemo/ShapeCastDemo.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/VRBasics/VRBasics.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: ShapeCastDemo Release",
+            "label": "build: VRBasics Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/ShapeCastDemo/ShapeCastDemo.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/VRBasics/VRBasics.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: SimpleCube Debug",
+            "label": "build: VRShowcase Debug",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/SimpleCube/SimpleCube.csproj",
-                "-c", "Debug"
+                "${workspaceFolder}/Samples/Runtime/VRShowcase/VRShowcase.csproj",
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "build: SimpleCube Release",
+            "label": "build: VRShowcase Release",
             "command": "dotnet",
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Samples/SimpleCube/SimpleCube.csproj",
-                "-c", "Release"
+                "${workspaceFolder}/Samples/Runtime/VRShowcase/VRShowcase.csproj",
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "build: VoxelEngine Debug",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "build",
-                "${workspaceFolder}/Samples/VoxelEngine/VoxelEngine.csproj",
-                "-c", "Debug"
-            ],
-            "group": "build",
-            "presentation": { "reveal": "silent" },
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "build: VoxelEngine Release",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "build",
-                "${workspaceFolder}/Samples/VoxelEngine/VoxelEngine.csproj",
-                "-c", "Release"
-            ],
-            "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         }
     ]
