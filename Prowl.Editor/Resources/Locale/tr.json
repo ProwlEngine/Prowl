@@ -47,6 +47,11 @@
   "game.resolution": "Cozunurluk",
   "game.show_stats": "Istatistikleri Goster",
   "game.maximize_on_play": "Oynatirken Buyut",
+  "game.play": "Başlat",
+  "game.stop": "Durdur",
+  "game.pause": "Duraklat",
+  "game.resume": "Devam et",
+  "game.step": "Bir kare ilerlet",
 
   "dialog.delete_assets": "Varliklari Sil",
   "dialog.unsaved_prefab": "Kaydedilmemis Prefab Degisiklikleri",

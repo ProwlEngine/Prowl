@@ -47,6 +47,11 @@
   "game.resolution": "分辨率",
   "game.show_stats": "显示统计信息",
   "game.maximize_on_play": "播放时最大化",
+  "game.play": "播放",
+  "game.stop": "停止",
+  "game.pause": "暂停",
+  "game.resume": "继续",
+  "game.step": "前进一帧",
 
   "dialog.delete_assets": "删除资产",
   "dialog.unsaved_prefab": "未保存的Prefab更改",

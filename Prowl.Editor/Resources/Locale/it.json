@@ -47,6 +47,11 @@
   "game.resolution": "Risoluzione",
   "game.show_stats": "Mostra statistiche",
   "game.maximize_on_play": "Massimizza in riproduzione",
+  "game.play": "Avvia",
+  "game.stop": "Ferma",
+  "game.pause": "Pausa",
+  "game.resume": "Riprendi",
+  "game.step": "Avanza di un fotogramma",
 
   "dialog.delete_assets": "Elimina asset",
   "dialog.unsaved_prefab": "Modifiche al Prefab non salvate",

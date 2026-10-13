@@ -47,6 +47,11 @@
   "game.resolution": "Resolution",
   "game.show_stats": "Show Stats",
   "game.maximize_on_play": "Maximize on Play",
+  "game.play": "Play",
+  "game.stop": "Stop",
+  "game.pause": "Pause",
+  "game.resume": "Resume",
+  "game.step": "Step One Frame",
 
   "dialog.delete_assets": "Delete Assets",
   "dialog.unsaved_prefab": "Unsaved Prefab Changes",

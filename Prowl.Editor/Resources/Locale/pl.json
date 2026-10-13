@@ -47,6 +47,11 @@
   "game.resolution": "Rozdzielczosc",
   "game.show_stats": "Pokaz statystyki",
   "game.maximize_on_play": "Maksymalizuj przy odtwarzaniu",
+  "game.play": "Uruchom",
+  "game.stop": "Zatrzymaj",
+  "game.pause": "Wstrzymaj",
+  "game.resume": "Wznów",
+  "game.step": "Przejdź o jedną klatkę",
 
   "dialog.delete_assets": "Usun assety",
   "dialog.unsaved_prefab": "Niezapisane zmiany Prefabu",
