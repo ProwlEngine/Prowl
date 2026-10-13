@@ -183,6 +183,67 @@ public sealed class ProgramCacheTests : IDisposable
     }
 
     [Fact]
+    public void EditingThePassSource_RecompilesBuiltAndFailedVariants()
+    {
+        ushort plain = Program();
+        ushort broken = Program(("_BROKEN", "true"));
+        WaitFor(plain);
+        Stopwatch first = Stopwatch.StartNew();
+        while (!_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot) && first.Elapsed < TimeSpan.FromSeconds(20))
+            Thread.Sleep(5);
+        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        int compiles = _compiler.Compiles;
+
+        _shader.Definition.Passes![0].Source += Environment.NewLine;
+        Assert.False(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
+        WaitFor(plain);
+        Assert.False(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Stopwatch watch = Stopwatch.StartNew();
+        while (!_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot) && watch.Elapsed < TimeSpan.FromSeconds(20))
+            Thread.Sleep(5);
+        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Assert.True(_compiler.Compiles >= compiles + 2);
+    }
+
+    [Fact]
+    public void AnAxisDeclaredDifferentlyInTwoPasses_IsRejected()
+    {
+        const string twoPasses = """
+            Shader "Test/Mismatch"
+            {
+                Pass { Tags { "LightMode" = "Forward" } GLSLPROGRAM Shared { #pragma variant MODE A B } Vertex { void main() { } } Fragment { void main() { } } ENDGLSL }
+                Pass { Tags { "LightMode" = "Prepass" } GLSLPROGRAM Shared { #pragma variant MODE X Y Z } Vertex { void main() { } } Fragment { void main() { } } ENDGLSL }
+            }
+            """;
+        Assert.Throws<InvalidOperationException>(() => new Shader(ShaderParser.Parse(twoPasses), _compiler));
+    }
+
+    [Fact]
+    public void BakedVariants_LoadWithoutACompiler()
+    {
+        ShaderPass compiled = ShaderParser.Parse(Source).Passes![0];
+        PassVariants source = compiled.Variants(_compiler, _device.BackendType);
+        ShaderDescription description = source.Require();
+        BakedVariants.Add(compiled.SourceName, compiled.Source, new BakedVariants.Pass
+        {
+            Axes = [.. source.Axes],
+            Globals = [.. source.Globals],
+            Variants = [new Variant(source.Combo(0), [(_device.BackendType, description)])],
+        });
+        try
+        {
+            ShaderPass player = ShaderParser.Parse(Source).Passes![0];
+            PassVariants baked = player.Variants(null, _device.BackendType);
+            Assert.Equal(VariantState.Ready, baked.Request(0, CompilePolicy.BakedOnly, out _, out _));
+            Assert.Equal(VariantState.Failed, baked.Request(1, CompilePolicy.BakedOnly, out _, out _));
+        }
+        finally
+        {
+            BakedVariants.Clear();
+        }
+    }
+
+    [Fact]
     public void FailedVariants_DrawWithThePassDefault()
     {
         ushort broken = Program(("_BROKEN", "true"));

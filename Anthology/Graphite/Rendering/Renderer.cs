@@ -267,7 +267,7 @@ public readonly record struct BufferReadback(byte[] Data, string? Error = null)
 public sealed class Renderer : IDisposable
 {
     private readonly RendererOptions _options;
-    private readonly IShaderCompiler _compiler;
+    private readonly IShaderCompiler? _compiler;
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;
     private readonly MaterialSystem _materials;
@@ -305,7 +305,7 @@ public sealed class Renderer : IDisposable
     private volatile bool _stopping;
     private bool _disposed;
 
-    public Renderer(GraphicsDevice device, IShaderCompiler compiler, RendererOptions? options = null)
+    public Renderer(GraphicsDevice device, IShaderCompiler? compiler, RendererOptions? options = null)
     {
         Device = device;
         _compiler = compiler;

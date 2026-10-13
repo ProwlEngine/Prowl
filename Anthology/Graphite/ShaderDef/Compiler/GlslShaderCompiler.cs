@@ -93,7 +93,7 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private readonly GlslCompilerOptions _options;
     private readonly ThreadLocal<nint> _compilers = new(() => (nint)s_api.CompilerInitialize(), trackAllValues: true);
-    private readonly ConcurrentDictionary<string, (VariantSpace[] Axes, string[] Globals)> _pragmas = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, string[] Globals)> _pragmas = new();
     private int _sessionVersion;
     private bool _disposed;
 
@@ -279,9 +279,9 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private (VariantSpace[] Axes, string[] Globals) Pragmas(ShaderPass pass)
     {
-        return _pragmas.GetOrAdd(pass.Source, _ =>
+        string file = FileName(pass);
+        return _pragmas.GetOrAdd((file, pass.Source), _ =>
         {
-            string file = FileName(pass);
             List<VariantSpace> axes = [];
             List<string> globals = [];
             HashSet<string> visited = new(StringComparer.Ordinal);

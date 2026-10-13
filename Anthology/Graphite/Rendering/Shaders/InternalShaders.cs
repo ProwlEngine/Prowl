@@ -12,7 +12,7 @@ internal static class InternalShaders
     /// <summary>Makes sure includes can reach the renderer's library files.</summary>
     public static void Register() { }
 
-    public static ComputeProgram Compute(GraphicsDevice device, IShaderCompiler compiler, string file)
+    public static ComputeProgram Compute(GraphicsDevice device, IShaderCompiler? compiler, string file)
     {
         string name = ShaderLibrary.Prefix + file;
         string source = ShaderLibrary.Get(name) ?? throw new InvalidOperationException($"The shader library has no {name}.");

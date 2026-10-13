@@ -354,7 +354,7 @@ internal sealed class ShadowTarget(RenderTexture texture, string name, GraphicsP
     }
 
     /// <summary>Draws the far plane over a tile, depth only, so one tile clears without touching its neighbours.</summary>
-    public static GraphicsProgram TileClear(GraphicsDevice device, IShaderCompiler compiler)
+    public static GraphicsProgram TileClear(GraphicsDevice device, IShaderCompiler? compiler)
     {
         const string source = """
             Vertex

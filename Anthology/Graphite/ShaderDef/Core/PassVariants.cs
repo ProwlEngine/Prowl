@@ -47,6 +47,7 @@ public sealed class PassVariants
     private readonly ComputeDescription?[] _compute;
     private string _source;
     private int _session;
+    private int _revision;
 
     internal PassVariants(ShaderPass pass, VariantSpace[] axes, IShaderCompiler? compiler, GraphicsBackend backend)
     {
@@ -74,11 +75,28 @@ public sealed class PassVariants
         }
         _source = pass.Source;
         _session = compiler?.SessionVersion ?? 0;
+        SeedBaked();
     }
 
     public IShaderCompiler? Compiler { get; }
     public GraphicsBackend Backend { get; }
     public IReadOnlyList<VariantSpace> Axes => _axes;
+
+    /// <summary>The globals the pass reads, from the compiler or the baked pass.</summary>
+    public IReadOnlyList<string> Globals => Compiler?.GetGlobals(_pass) ?? BakedVariants.Find(_pass)?.Globals ?? [];
+
+    /// <summary>Moves whenever the pass source or compiler session changed and every variant was dropped.</summary>
+    public int Revision
+    {
+        get
+        {
+            lock (this)
+            {
+                Refresh();
+                return _revision;
+            }
+        }
+    }
     public int Count => _combos.Length;
 
     /// <summary>Raised once per variant failure, outside the lock.</summary>
@@ -324,6 +342,24 @@ public sealed class PassVariants
         Array.Clear(_pending);
         Array.Clear(_failures);
         Array.Clear(_compute);
+        _revision++;
+        SeedBaked();
+    }
+
+    private void SeedBaked()
+    {
+        if (BakedVariants.Find(_pass) is not { } baked)
+            return;
+        foreach (Variant variant in baked.Variants)
+        {
+            if (TryGetFullKey(variant.Keywords, out int key))
+                _variants[key] = variant;
+        }
+        foreach (((GraphicsBackend backend, int key), ComputeDescription description) in baked.Compute)
+        {
+            if (backend == Backend && (uint)key < (uint)_compute.Length)
+                _compute[key] = description;
+        }
     }
 
     private bool TryGetFullKey(Keyword[] keywords, out int key)

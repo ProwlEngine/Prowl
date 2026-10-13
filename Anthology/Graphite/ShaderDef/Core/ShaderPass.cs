@@ -74,12 +74,17 @@ public sealed class ShaderPass : IDisposable
         {
             if (_variants == null || _variants.Compiler != compiler || _variants.Backend != backend)
             {
-                VariantSpace[] axes = compiler != null ? [.. compiler.GetAxes(this)] : _variants != null ? [.. _variants.Axes] : [];
+                VariantSpace[] axes = [.. AxesWith(compiler)];
                 Adopt(new PassVariants(this, axes, compiler, backend));
             }
             return _variants!;
         }
     }
+
+
+    /// <summary>The pass's variant axes, from the compiler or, without one, the baked pass.</summary>
+    public IReadOnlyList<VariantSpace> AxesWith(IShaderCompiler? compiler)
+        => compiler?.GetAxes(this) ?? BakedVariants.Find(this)?.Axes ?? (IReadOnlyList<VariantSpace>?)_variants?.Axes ?? [];
 
 
     /// <summary>

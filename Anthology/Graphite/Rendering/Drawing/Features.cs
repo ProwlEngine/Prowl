@@ -301,7 +301,7 @@ public sealed class FullscreenProgram : IDisposable
 
     // The fragment code follows Graphite/Fullscreen.glsl, which gives it vUV, outColor and Graphite_SampleSource. A
     // procedural program's code holds both stages, the vertex one under GRAPHITE_VERTEX
-    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false)
+    internal static FullscreenProgram Create(GraphicsDevice device, IShaderCompiler? compiler, string fragment, string name, bool source = true, BlendStateDescription? blend = null, bool lit = false, bool procedural = false)
     {
         source &= !procedural;
         GraphicsProgram Build(bool layered)

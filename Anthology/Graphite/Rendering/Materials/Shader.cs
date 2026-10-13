@@ -374,7 +374,7 @@ public sealed class Shader
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
     public Shader? Fallback { get; set; }
 
-    public Shader(ShaderDefinition definition, IShaderCompiler compiler)
+    public Shader(ShaderDefinition definition, IShaderCompiler? compiler)
     {
         Definition = definition;
         Name = definition.Name ?? "";
@@ -390,12 +390,14 @@ public sealed class Shader
         int queue = DefaultRenderQueue;
         foreach (ShaderPass pass in definition.Passes ?? [])
         {
-            foreach (VariantSpace axis in compiler.GetAxes(pass))
+            foreach (VariantSpace axis in pass.AxesWith(compiler))
             {
                 if (axes.TryGetValue(axis.Name, out VariantSpace existing))
                 {
                     if (existing.Scope != axis.Scope)
                         throw new InvalidOperationException($"The shader {Name} declares the axis {axis.Name} as both material and global.");
+                    if (!System.Linq.Enumerable.SequenceEqual(existing.Values, axis.Values))
+                        throw new InvalidOperationException($"The shader {Name} declares the axis {axis.Name} with values {string.Join(" ", existing.Values)} in one pass and {string.Join(" ", axis.Values)} in another.");
                     continue;
                 }
 

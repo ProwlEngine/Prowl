@@ -17,7 +17,7 @@ namespace Prowl.Graphite.Rendering;
 /// value, else with the matching pass of the shader's declared fallback. Compiles follow the policy, blocking in deterministic mode. Only compiles and rewrites run on
 /// workers, programs are created on the render thread. Failures are reported once.
 /// </summary>
-internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compiler, GlobalRegistry globals, DrawPrograms programs, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async) : IDisposable
+internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compiler, GlobalRegistry globals, DrawPrograms programs, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async, Action<IDisposable>? retire = null) : IDisposable
 {
     private sealed class Entry
     {
@@ -25,6 +25,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         public required bool Mirrored;
         public required PassVariants Variants;
         public required int Key;
+        public required int Revision;
         public Task<ShaderDescription>? Rewriting;
         public GraphicsProgram? Built;
         public bool Failed;
@@ -32,7 +33,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
 
     private readonly record struct Family(Shader Shader, int PassIndex, PassState? StateOverride, bool Mirrored);
 
-    private readonly CompilePolicy _policy = deterministic ? CompilePolicy.Sync : policy;
+    private readonly CompilePolicy _policy = compiler == null ? CompilePolicy.BakedOnly : deterministic ? CompilePolicy.Sync : policy;
     private readonly Dictionary<(ushort Program, bool Mirrored, ulong Globals), Entry> _entries = new();
     private readonly Dictionary<Family, int> _families = new();
     private readonly Dictionary<Family, Entry> _defaults = new();
@@ -194,7 +195,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         PassVariants variants = program.Shader.Definition.Passes![program.PassIndex].Variants(compiler, device.BackendType);
         if (!variants.TryGetKey(combo, out int key))
             key = 0;
-        Entry entry = new() { Program = program, Mirrored = mirrored, Variants = variants, Key = key };
+        Entry entry = new() { Program = program, Mirrored = mirrored, Variants = variants, Key = key, Revision = variants.Revision };
         Family family = FamilyOf(entry);
         _families[family] = _families.GetValueOrDefault(family) + 1;
         Interlocked.Increment(ref _compiling);
@@ -209,7 +210,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         {
             if (!_defaults.TryGetValue(family, out Entry? fallback))
             {
-                fallback = new Entry { Program = wanted.Program, Mirrored = wanted.Mirrored, Variants = wanted.Variants, Key = 0 };
+                fallback = new Entry { Program = wanted.Program, Mirrored = wanted.Mirrored, Variants = wanted.Variants, Key = 0, Revision = wanted.Variants.Revision };
                 Interlocked.Increment(ref _compiling);
                 _defaults[family] = fallback;
             }
@@ -242,7 +243,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
                 keywords[a] = new Keyword(fallback.MaterialAxes[a].Name, fallback.MaterialAxes[a].Values[0]);
             DrawProgram program = new(fallback, i, 0, wanted.Program.StateOverride, keywords);
             Interlocked.Increment(ref _compiling);
-            return new Entry { Program = program, Mirrored = wanted.Mirrored, Variants = passes[i].Variants(compiler, device.BackendType), Key = 0 };
+            PassVariants variants = passes[i].Variants(compiler, device.BackendType);
+            return new Entry { Program = program, Mirrored = wanted.Mirrored, Variants = variants, Key = 0, Revision = variants.Revision };
         }
         return null;
     }
@@ -251,6 +253,23 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     // until the next extraction has grown the regions to hold them.
     private void Complete(Entry entry)
     {
+        int revision = entry.Variants.Revision;
+        if (revision != entry.Revision)
+        {
+            entry.Revision = revision;
+            entry.Rewriting = null;
+            if (entry.Built != null)
+            {
+                Retire(entry.Built);
+                entry.Built = null;
+                Interlocked.Increment(ref _compiling);
+            }
+            else if (entry.Failed)
+            {
+                entry.Failed = false;
+                Interlocked.Increment(ref _compiling);
+            }
+        }
         if (entry.Built != null || entry.Failed)
             return;
         DrawProgram program = entry.Program;
@@ -264,7 +283,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
                 Fail(entry, error!);
                 return;
             }
-            entry.Rewriting = _policy == CompilePolicy.Async ? Task.Run(() => Rewrite(program, compiled)) : RewriteNow(program, compiled);
+            IReadOnlyList<string> passGlobals = entry.Variants.Globals;
+            entry.Rewriting = _policy == CompilePolicy.Async ? Task.Run(() => Rewrite(program, compiled, passGlobals)) : RewriteNow(program, compiled, passGlobals);
         }
 
         if (!entry.Rewriting.IsCompleted || globals.NeedsGrowth)
@@ -297,11 +317,19 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
             Interlocked.Decrement(ref _compiling);
     }
 
-    private Task<ShaderDescription> RewriteNow(DrawProgram program, ShaderDescription compiled)
+    private void Retire(GraphicsProgram program)
+    {
+        if (retire != null)
+            retire(program);
+        else
+            program.Dispose();
+    }
+
+    private Task<ShaderDescription> RewriteNow(DrawProgram program, ShaderDescription compiled, IReadOnlyList<string> passGlobals)
     {
         try
         {
-            return Task.FromResult(Rewrite(program, compiled));
+            return Task.FromResult(Rewrite(program, compiled, passGlobals));
         }
         catch (Exception e)
         {
@@ -320,10 +348,9 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
     }
 
     // Worker thread: the material rewrite, nothing that touches the device.
-    private ShaderDescription Rewrite(DrawProgram program, ShaderDescription compiled)
+    private ShaderDescription Rewrite(DrawProgram program, ShaderDescription compiled, IReadOnlyList<string> passGlobals)
     {
-        ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
-        return MaterialRewrite.Rewrite(program.Shader.Name, compiled, program.Shader.Schema, compiler.GetGlobals(pass), globals, FrameLayout, ViewLayout);
+        return MaterialRewrite.Rewrite(program.Shader.Name, compiled, program.Shader.Schema, passGlobals, globals, FrameLayout, ViewLayout);
     }
 
     // Colour takes the pass's blend. Every opaque forward pass writes the G-buffer, so it always matches the surface that
@@ -1302,7 +1329,7 @@ internal sealed partial class FramePipeline : IDisposable
     private static readonly List<RenderResourceID> s_bufferIds = new();
 
     private readonly GraphicsDevice _device;
-    private readonly IShaderCompiler _compiler;
+    private readonly IShaderCompiler? _compiler;
     private readonly RenderPipeline _frameStart = new();
     private readonly UploadPass _upload;
     private readonly ProbePass _probes;
@@ -1335,7 +1362,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, IShaderCompiler compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
+    public FramePipeline(GraphicsDevice device, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
     {
         Report = report;
         _device = device;
@@ -1347,7 +1374,7 @@ internal sealed partial class FramePipeline : IDisposable
         Materials = materials;
         Globals = globals;
         DrawPrograms = programs;
-        Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report, policy);
+        Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report, policy, _retired.Add);
         programs.Freed += Programs.Drop;
         _upload = new UploadPass(uploader);
         _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
@@ -1474,7 +1501,7 @@ internal sealed partial class FramePipeline : IDisposable
     public DescriptorTable TextureTable => _textures.Table;
     public Sampler TrilinearClamp { get; }
 
-    private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler compiler, string file)
+    private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler? compiler, string file)
     {
         ShaderPass pass = new() { State = new PassState(), Source = ShaderLibrary.Get(ShaderLibrary.Prefix + file)!, SourceName = "Graphite/" + file };
         ShaderDescription description = pass.Variants(compiler, device.BackendType).Require();
