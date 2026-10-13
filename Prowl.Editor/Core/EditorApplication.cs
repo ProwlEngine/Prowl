@@ -1778,10 +1778,6 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
-        // Clear any input (Play button can be sticky, e.g. Jumping in a game can unplay unless you unfocus it yourself.
-        PaperInstance.ClearFocus();
-
-
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
