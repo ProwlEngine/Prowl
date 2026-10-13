@@ -229,7 +229,7 @@ public class SceneViewPanel : DockPanel
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
         paper.Box("sv_move_btn")
-            .Tooltip(Loc.Get("scene.tool_move"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_move"), "Scene/ToolTranslate"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
@@ -239,7 +239,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
 
         paper.Box("sv_rotate_btn")
-            .Tooltip(Loc.Get("scene.tool_rotate"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_rotate"), "Scene/ToolRotate"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
@@ -249,7 +249,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
 
         paper.Box("sv_scale_btn")
-            .Tooltip(Loc.Get("scene.tool_scale"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_scale"), "Scene/ToolScale"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
@@ -259,7 +259,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
 
         paper.Box("sv_universal_btn")
-            .Tooltip(Loc.Get("scene.tool_universal"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_universal"), "Scene/ToolUniversal"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)

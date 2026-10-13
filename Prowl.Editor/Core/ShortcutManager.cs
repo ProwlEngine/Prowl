@@ -134,6 +134,17 @@ public static class ShortcutManager
     }
 
     /// <summary>
+    /// Like <see cref="IsPressed"/>, but also hides the key from gameplay until it's released. Shortcuts run
+    /// in the GUI, after gameplay has updated, so without this the game reads the same press next frame.
+    /// </summary>
+    public static bool TryConsume(string id)
+    {
+        if (!IsPressed(id)) return false;
+        GUI.GameViewInputHandler.SuppressKeyUntilRelease(_shortcuts[id].Binding.Key);
+        return true;
+    }
+
+    /// <summary>
     /// The platform's "command" modifier Cmd (Super) on macOS, Ctrl everywhere else.
     /// All shortcut bindings declared with <c>ctrl: true</c> are routed through this.
     /// </summary>
@@ -147,6 +158,10 @@ public static class ShortcutManager
     /// <summary>Get the effective binding for a shortcut.</summary>
     public static ShortcutBinding? GetBinding(string id)
         => _shortcuts.TryGetValue(id, out ShortcutDefinition? def) ? def.Binding : null;
+
+    /// <summary>Formats a tooltip using the shortcut's current binding.</summary>
+    public static string GetTooltip(string label, string id)
+        => GetBinding(id) is { } binding ? $"{label} ({GetDisplayString(binding)})" : label;
 
     /// <summary>Get the default binding for a shortcut.</summary>
     public static ShortcutBinding? GetDefault(string id)
@@ -304,6 +319,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
 
         // Game View
+        ShortcutManager.Register("Game/TogglePlay", "Play / Stop", KeyCode.F5);
+        ShortcutManager.Register("Game/TogglePause", "Pause / Resume", KeyCode.F7);
         ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
 
         // Hierarchy

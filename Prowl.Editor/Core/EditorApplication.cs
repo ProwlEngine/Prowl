@@ -395,6 +395,8 @@ public class EditorApplication : Game
     /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
+        (Input.Current as GameViewInputHandler)?.UpdateSuppressedKeys();
+
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
@@ -577,6 +579,7 @@ public class EditorApplication : Game
         _nebula ??= new GUI.NebulaBackground(paper);
         GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
+        HandlePlayModeShortcuts();
         DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -614,6 +617,12 @@ public class EditorApplication : Game
         }
     }
 
+    private void HandlePlayModeShortcuts()
+    {
+        if (ShortcutManager.TryConsume("Game/TogglePlay")) RequestTogglePlayMode();
+        else if (ShortcutManager.TryConsume("Game/TogglePause")) TogglePause();
+    }
+
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
     private void DrawPlayPill(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
     {
@@ -626,17 +635,23 @@ public class EditorApplication : Game
         {
             // Ghost buttons tint their icon by variant: green Play when stopped, red Stop while playing,
             // amber Pause when paused; step stays neutral.
-            ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
-                .OnClick(RequestTogglePlayMode)
+            ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.Stop_I : EditorIcons.Play_I)
+                .OnClick(() => { paper.ClearFocus(); RequestTogglePlayMode(); })
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Game/TogglePlay"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
 
-            ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I, TogglePause).Style(ButtonStyle.Ghost);
+            ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I,
+                () => { paper.ClearFocus(); TogglePause(); })
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Game/TogglePause"))
+                .Style(ButtonStyle.Ghost);
             if (Application.IsPaused) pause.Warning();
             pause.Show();
 
-            Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I, StepOneFrame)
+            Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I,
+                () => { paper.ClearFocus(); StepOneFrame(); })
+                .Tooltip(Loc.Get("game.step"))
                 .Style(ButtonStyle.Ghost).Show();
         }
     }
@@ -1765,7 +1780,6 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
-
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
@@ -1873,6 +1887,7 @@ public class EditorApplication : Game
         // Pop play-mode input handler
         if (Input.Current is GameViewInputHandler)
             Input.PopHandler();
+        GameViewInputHandler.ClearSuppressedKeys();
 
         // Restore editor time
         if (_savedEditorTime != null)
