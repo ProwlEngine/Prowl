@@ -75,7 +75,7 @@ public class GameViewPanel : DockPanel
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
             // Hover-scoped like the other panels' shortcuts.
-            if (paper.IsParentHovered && ShortcutManager.IsPressed("Game/ToggleMaximize"))
+            if (paper.IsParentHovered && ShortcutManager.TryConsume("Game/ToggleMaximize"))
                 EditorApplication.Instance?.Maximizer.RequestToggle(this);
 
             DrawGameView(paper, font, width, height);

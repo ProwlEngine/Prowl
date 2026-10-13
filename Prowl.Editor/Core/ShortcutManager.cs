@@ -134,6 +134,17 @@ public static class ShortcutManager
     }
 
     /// <summary>
+    /// Like <see cref="IsPressed"/>, but also hides the key from gameplay until it's released. Shortcuts run
+    /// in the GUI, after gameplay has updated, so without this the game reads the same press next frame.
+    /// </summary>
+    public static bool TryConsume(string id)
+    {
+        if (!IsPressed(id)) return false;
+        GUI.GameViewInputHandler.SuppressKeyUntilRelease(_shortcuts[id].Binding.Key);
+        return true;
+    }
+
+    /// <summary>
     /// The platform's "command" modifier Cmd (Super) on macOS, Ctrl everywhere else.
     /// All shortcut bindings declared with <c>ctrl: true</c> are routed through this.
     /// </summary>

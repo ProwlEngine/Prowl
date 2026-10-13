@@ -20,6 +20,21 @@ public class GameViewInputHandler : IInputHandler
 {
     private readonly IInputHandler _real;
 
+    // Static so a shortcut that enters play is suppressed before this wrapper exists. Hidden from everyone,
+    // editor included, until released: the editor only cares about the next press, which needs a release first.
+    private static readonly HashSet<KeyCode> s_suppressedKeys = [];
+    private static readonly KeyCode[] s_keyCodes = [.. Enum.GetValues<KeyCode>().Distinct()];
+
+    internal static void SuppressKeyUntilRelease(KeyCode key) => s_suppressedKeys.Add(key);
+
+    // On leaving play, so nothing carries over into the next session.
+    internal static void ClearSuppressedKeys() => s_suppressedKeys.Clear();
+
+    // Called each frame from BeginGui, after the window samples input. Keeps the release edge hidden too,
+    // since the next Update reads the same cached state.
+    internal void UpdateSuppressedKeys()
+        => s_suppressedKeys.RemoveWhere(key => !_real.GetKey(key) && !_real.GetKeyUp(key));
+
     /// <summary>
     /// Set to true each frame by GameViewPanel when it's hovered.
     /// Reset to false at the start of each frame.
@@ -99,12 +114,15 @@ public class GameViewInputHandler : IInputHandler
     }
 
     // Keyboard filtered only during gameplay execution outside game view. Simulated input reaches gameplay either way.
-    public bool IsAnyKeyDown => (!ShouldFilter && _real.IsAnyKeyDown) || SimulatedInput.AnyKey;
+    public bool IsAnyKeyDown => (!ShouldFilter && HasPhysicalKey) || SimulatedInput.AnyKey;
+    private bool HasPhysicalKey => s_suppressedKeys.Count > 0
+        ? s_keyCodes.Any(key => !s_suppressedKeys.Contains(key) && _real.GetKey(key))
+        : _real.IsAnyKeyDown;
     public char? GetPressedChar() => ShouldFilter ? null : _real.GetPressedChar();
     public string InputString => ShouldFilter ? string.Empty : _real.InputString;
-    public bool GetKey(KeyCode key) => (!ShouldFilter && _real.GetKey(key)) || SimulatedInput.GetKey(key);
-    public bool GetKeyDown(KeyCode key) => (!ShouldFilter && _real.GetKeyDown(key)) || SimulatedInput.GetKeyDown(key);
-    public bool GetKeyUp(KeyCode key) => (!ShouldFilter && _real.GetKeyUp(key)) || SimulatedInput.GetKeyUp(key);
+    public bool GetKey(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKey(key)) || SimulatedInput.GetKey(key);
+    public bool GetKeyDown(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKeyDown(key)) || SimulatedInput.GetKeyDown(key);
+    public bool GetKeyUp(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKeyUp(key)) || SimulatedInput.GetKeyUp(key);
 
     public Int2 MapWindowPosition(Int2 windowPos) => ToViewport(windowPos);
 

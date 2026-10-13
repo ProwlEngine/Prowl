@@ -395,6 +395,8 @@ public class EditorApplication : Game
     /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
+        (Input.Current as GameViewInputHandler)?.UpdateSuppressedKeys();
+
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
@@ -617,8 +619,8 @@ public class EditorApplication : Game
 
     private void HandlePlayModeShortcuts()
     {
-        if (ShortcutManager.IsPressed("Game/TogglePlay")) RequestTogglePlayMode();
-        else if (ShortcutManager.IsPressed("Game/TogglePause")) TogglePause();
+        if (ShortcutManager.TryConsume("Game/TogglePlay")) RequestTogglePlayMode();
+        else if (ShortcutManager.TryConsume("Game/TogglePause")) TogglePause();
     }
 
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
@@ -1885,6 +1887,7 @@ public class EditorApplication : Game
         // Pop play-mode input handler
         if (Input.Current is GameViewInputHandler)
             Input.PopHandler();
+        GameViewInputHandler.ClearSuppressedKeys();
 
         // Restore editor time
         if (_savedEditorTime != null)
