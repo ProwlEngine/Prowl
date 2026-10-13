@@ -39,7 +39,7 @@
   "scene.tool_move": "Sposta",
   "scene.tool_rotate": "Ruota",
   "scene.tool_scale": "Ridimensiona",
-  "scene.tool_universal": "Universale (Sposta, Ruota, Ridimensiona)",
+  "scene.tool_universal": "Universale",
   "scene.pivot_center": "Perno: Centro",
   "scene.orientation_local": "Orientamento: Locale",
   "scene.snap_enabled": "Aggancio",

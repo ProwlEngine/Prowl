@@ -39,7 +39,7 @@
   "scene.tool_move": "Déplacer",
   "scene.tool_rotate": "Faire pivoter",
   "scene.tool_scale": "Redimensionner",
-  "scene.tool_universal": "Universel (Déplacer, Faire pivoter, Redimensionner)",
+  "scene.tool_universal": "Universel",
   "scene.pivot_center": "Pivot: Centre",
   "scene.orientation_local": "Orientation: Locale",
   "scene.snap_enabled": "Magnetisme",

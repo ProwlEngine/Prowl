@@ -39,7 +39,7 @@
   "scene.tool_move": "Mover",
   "scene.tool_rotate": "Rotar",
   "scene.tool_scale": "Escalar",
-  "scene.tool_universal": "Universal (Mover, Rotar, Escalar)",
+  "scene.tool_universal": "Universal",
   "scene.pivot_center": "Pivote: Centro",
   "scene.orientation_local": "Orientacion: Local",
   "scene.snap_enabled": "Ajuste",

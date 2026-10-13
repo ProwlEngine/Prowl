@@ -39,7 +39,7 @@
   "scene.tool_move": "Verschieben",
   "scene.tool_rotate": "Drehen",
   "scene.tool_scale": "Skalieren",
-  "scene.tool_universal": "Universal (Verschieben, Drehen, Skalieren)",
+  "scene.tool_universal": "Universal",
   "scene.pivot_center": "Drehpunkt: Mitte",
   "scene.orientation_local": "Ausrichtung: Lokal",
   "scene.snap_enabled": "Raster",

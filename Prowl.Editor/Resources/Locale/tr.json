@@ -39,7 +39,7 @@
   "scene.tool_move": "Taşı",
   "scene.tool_rotate": "Döndür",
   "scene.tool_scale": "Ölçekle",
-  "scene.tool_universal": "Evrensel (Taşı, Döndür, Ölçekle)",
+  "scene.tool_universal": "Evrensel",
   "scene.pivot_center": "Pivot: Merkez",
   "scene.orientation_local": "Yonelim: Yerel",
   "scene.snap_enabled": "Yapisma",
