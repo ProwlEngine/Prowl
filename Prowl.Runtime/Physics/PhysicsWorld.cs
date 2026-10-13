@@ -709,8 +709,36 @@ public class PhysicsWorld
     }
 
     private void OnPreStep(TimeStep timeStep) => InvokeStepEvent(PreStep, timeStep.StepDt, nameof(PreStep));
-    private void OnPreSubStep(TimeStep timeStep) => InvokeStepEvent(PreSubStep, timeStep.SubstepDt, nameof(PreSubStep));
+    private void OnPreSubStep(TimeStep timeStep)
+    {
+        InvokeStepEvent(PreSubStep, timeStep.SubstepDt, nameof(PreSubStep));
+        ClampBodyVelocities();
+    }
     private void OnPostStep(TimeStep timeStep) => InvokeStepEvent(PostStep, timeStep.StepDt, nameof(PostStep));
+
+    private const float MaxLinearVelocity = 1000000f;
+    private const float MaxAngularVelocity = 7f;
+
+    private void ClampBodyVelocities()
+    {
+        foreach (ref RigidBodyData body in World.RawData.ActiveRigidBodies)
+        {
+            if (body.MotionType != MotionType.Dynamic) continue;
+
+            ClampVelocity(ref body.Velocity, MaxLinearVelocity);
+            ClampVelocity(ref body.AngularVelocity, MaxAngularVelocity);
+            ClampVelocity(ref body.DeltaVelocity, MaxLinearVelocity);
+            ClampVelocity(ref body.DeltaAngularVelocity, MaxAngularVelocity);
+        }
+    }
+
+
+    private static void ClampVelocity(ref JVector velocity, float max)
+    {
+        float squared = velocity.LengthSquared();
+        if (!float.IsFinite(squared)) velocity = JVector.Zero;
+        else if (squared > max * max) velocity = velocity * (max / MathF.Sqrt(squared));
+    }
 
     // Step callbacks fire inside Jitter's World.Step. A throwing subscriber (e.g. a wheel raycasting
     // against a disposed body) must not unwind through the solver and crash. Isolate each subscriber
