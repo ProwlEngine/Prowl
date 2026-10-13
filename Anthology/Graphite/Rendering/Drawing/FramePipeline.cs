@@ -12,29 +12,31 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>
-/// The Level 0 programs of draw programs: the variant compiled with the view's global keywords, put through the
-/// material rewrite, with its pass state, the material's state override and the winding of mirrored objects.
-/// A variant compiles on a worker the first time it is asked for, and until it is ready draws use the nearest
-/// compiled variant of the same pass: the one differing in the fewest axes, ties going to axis defaults. Only the
-/// compile and rewrite run on the worker, programs are created on the render thread. In deterministic mode compiles
-/// block instead. Programs that fail to compile are reported once and draw nothing.
+/// Draw programs built from each pass's shared compiled variants: the material rewrite and the pipeline state of the
+/// draw put on top. A variant not ready yet, or failed, draws with the pass's default variant, every axis at its first
+/// value, else with the matching pass of the shader's declared fallback. Compiles follow the policy, blocking in deterministic mode. Only compiles and rewrites run on
+/// workers, programs are created on the render thread. Failures are reported once.
 /// </summary>
-internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compiler, GlobalRegistry globals, DrawPrograms programs, bool deterministic, Action<RendererError> report) : IDisposable
+internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compiler, GlobalRegistry globals, DrawPrograms programs, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async) : IDisposable
 {
     private sealed class Entry
     {
         public required DrawProgram Program;
         public required bool Mirrored;
-        public required int[] Values;
-        public Task<ShaderDescription>? Pending;
+        public required PassVariants Variants;
+        public required int Key;
+        public Task<ShaderDescription>? Rewriting;
         public GraphicsProgram? Built;
         public bool Failed;
     }
 
     private readonly record struct Family(Shader Shader, int PassIndex, PassState? StateOverride, bool Mirrored);
 
+    private readonly CompilePolicy _policy = deterministic ? CompilePolicy.Sync : policy;
     private readonly Dictionary<(ushort Program, bool Mirrored, ulong Globals), Entry> _entries = new();
-    private readonly Dictionary<Family, List<Entry>> _families = new();
+    private readonly Dictionary<Family, int> _families = new();
+    private readonly Dictionary<Family, Entry> _defaults = new();
+    private readonly Dictionary<Family, Entry?> _declared = new();
 
     /// <summary>The hardware constant and slope offsets shadow casters draw with.</summary>
     public (float Constant, float Slope) ShadowBias { get; set; } = (0, 1.5f);
@@ -51,13 +53,21 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
             if (key.Program != id)
                 continue;
             (keys ??= new()).Add(key);
+            Forget(entry);
             entry.Built?.Dispose();
-            Family family = new(entry.Program.Shader, entry.Program.PassIndex, entry.Program.StateOverride, entry.Mirrored);
-            if (_families.TryGetValue(family, out List<Entry>? members))
+            Family family = FamilyOf(entry);
+            if (--_families[family] > 0)
+                continue;
+            _families.Remove(family);
+            if (_defaults.Remove(family, out Entry? fallback))
             {
-                members.Remove(entry);
-                if (members.Count == 0)
-                    _families.Remove(family);
+                Forget(fallback);
+                fallback.Built?.Dispose();
+            }
+            if (_declared.Remove(family, out Entry? declared) && declared != null)
+            {
+                Forget(declared);
+                declared.Built?.Dispose();
             }
         }
         if (keys == null)
@@ -71,10 +81,10 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
 
     private int _compiling;
 
-    /// <summary>Variants compiling on a worker now. Any thread.</summary>
+    /// <summary>Programs not built yet and not failed. Any thread.</summary>
     public int Compiling => Volatile.Read(ref _compiling);
 
-    /// <summary>Variants still compiling on a worker.</summary>
+    /// <summary>Programs not built yet and not failed.</summary>
     public int Pending
     {
         get
@@ -82,15 +92,36 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
             int pending = 0;
             foreach (Entry entry in _entries.Values)
             {
-                if (entry.Pending != null)
+                if (entry.Built == null && !entry.Failed)
                     pending++;
             }
             return pending;
         }
     }
 
-    /// <summary>The program to draw with now: the wanted variant when it is ready, else the nearest ready one, else null. Render thread.</summary>
+    /// <summary>The program to draw with now: the wanted variant when it is built, else a fallback, else null. Render thread.</summary>
     public GraphicsProgram? Get(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
+    {
+        Entry entry = Wanted(id, mirrored, keywords);
+        return entry.Built ?? Fallback(entry);
+    }
+
+    private readonly Dictionary<GraphicsProgram, PropertyID[]> _userBuffers = new();
+
+    /// <summary>The buffers a program reads that the host sets through Globals.SetBuffer.</summary>
+    public PropertyID[] UserBuffers(GraphicsProgram program)
+    {
+        lock (_userBuffers)
+            return _userBuffers.TryGetValue(program, out PropertyID[]? buffers) ? buffers : [];
+    }
+
+    /// <summary>Whether the wanted variant itself is built, rather than a fallback standing in. Render thread.</summary>
+    public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords).Built != null;
+
+    /// <summary>Whether the wanted variant failed to compile, so it never becomes ready. Render thread.</summary>
+    public bool Failed(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords).Failed;
+
+    private Entry Wanted(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
     {
         DrawProgram program = programs[id];
         IReadOnlyList<VariantSpace> axes = program.Shader.GlobalAxes;
@@ -108,157 +139,174 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
             entry = Create(program, mirrored, globalValues);
             _entries[(id, mirrored, key)] = entry;
         }
-
         Complete(entry);
-        return entry.Built ?? (entry.Failed ? null : Nearest(entry));
-    }
-
-    private readonly Dictionary<GraphicsProgram, PropertyID[]> _userBuffers = new();
-
-    /// <summary>The buffers a program reads that the host sets through Globals.SetBuffer.</summary>
-    public PropertyID[] UserBuffers(GraphicsProgram program)
-    {
-        lock (_userBuffers)
-            return _userBuffers.TryGetValue(program, out PropertyID[]? buffers) ? buffers : [];
-    }
-
-    /// <summary>Whether the wanted variant itself is built, rather than a nearby one standing in. Render thread.</summary>
-    public bool Ready(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords)?.Built != null;
-
-    /// <summary>Whether the wanted variant failed to compile, so it never becomes ready. Render thread.</summary>
-    public bool Failed(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords) => Wanted(id, mirrored, keywords)?.Failed == true;
-
-    private Entry? Wanted(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
-    {
-        Get(id, mirrored, keywords);
-        DrawProgram program = programs[id];
-        IReadOnlyList<VariantSpace> axes = program.Shader.GlobalAxes;
-        ulong key = 0, stride = 1;
-        for (int i = 0; i < axes.Count; i++)
-        {
-            key += (ulong)ValueIndex(axes[i], keywords.GetValueOrDefault(axes[i].Name)) * stride;
-            stride *= (ulong)axes[i].Values.Count;
-        }
-        return _entries.TryGetValue((id, mirrored, key), out Entry? entry) ? entry : null;
+        return entry;
     }
 
     public void Dispose()
     {
-        foreach (Entry entry in _entries.Values)
+        HashSet<PassVariants> variants = new();
+        foreach (Entry entry in Every())
         {
+            variants.Add(entry.Variants);
             try
             {
-                entry.Pending?.Wait();
+                entry.Rewriting?.Wait();
             }
             catch (AggregateException)
             {
             }
             entry.Built?.Dispose();
         }
+        foreach (PassVariants pass in variants)
+            pass.WaitPending();
         _entries.Clear();
         _families.Clear();
+        _defaults.Clear();
+        _declared.Clear();
     }
+
+    private IEnumerable<Entry> Every()
+    {
+        foreach (Entry entry in _entries.Values)
+            yield return entry;
+        foreach (Entry entry in _defaults.Values)
+            yield return entry;
+        foreach (Entry? entry in _declared.Values)
+        {
+            if (entry != null)
+                yield return entry;
+        }
+    }
+
+    private static Family FamilyOf(Entry entry) => new(entry.Program.Shader, entry.Program.PassIndex, entry.Program.StateOverride, entry.Mirrored);
 
     private Entry Create(DrawProgram program, bool mirrored, ReadOnlySpan<int> globalValues)
     {
         IReadOnlyList<VariantSpace> materialAxes = program.Shader.MaterialAxes;
         IReadOnlyList<VariantSpace> globalAxes = program.Shader.GlobalAxes;
-        int[] values = new int[materialAxes.Count + globalAxes.Count];
-        Keyword[] combo = new Keyword[values.Length];
+        Keyword[] combo = new Keyword[materialAxes.Count + globalAxes.Count];
         for (int i = 0; i < materialAxes.Count; i++)
-        {
-            values[i] = ValueIndex(materialAxes[i], program.Keywords[i].Value);
             combo[i] = program.Keywords[i];
-        }
         for (int i = 0; i < globalAxes.Count; i++)
-        {
-            values[materialAxes.Count + i] = globalValues[i];
             combo[materialAxes.Count + i] = new Keyword(globalAxes[i].Name, globalAxes[i].Values[globalValues[i]]);
-        }
 
-        Entry entry = new() { Program = program, Mirrored = mirrored, Values = values };
-        Family family = new(program.Shader, program.PassIndex, program.StateOverride, mirrored);
-        if (!_families.TryGetValue(family, out List<Entry>? members))
-        {
-            members = new List<Entry>();
-            _families[family] = members;
-        }
-        members.Add(entry);
-
-        if (deterministic)
-            entry.Pending = DescribeNow(program, combo);
-        else
-        {
-            Interlocked.Increment(ref _compiling);
-            entry.Pending = Task.Run(() =>
-            {
-                try { return Describe(program, combo); }
-                finally { Interlocked.Decrement(ref _compiling); }
-            });
-        }
+        PassVariants variants = program.Shader.Definition.Passes![program.PassIndex].Variants(compiler, device.BackendType);
+        if (!variants.TryGetKey(combo, out int key))
+            key = 0;
+        Entry entry = new() { Program = program, Mirrored = mirrored, Variants = variants, Key = key };
+        Family family = FamilyOf(entry);
+        _families[family] = _families.GetValueOrDefault(family) + 1;
+        Interlocked.Increment(ref _compiling);
         return entry;
     }
 
-    private Task<ShaderDescription> DescribeNow(DrawProgram program, Keyword[] combo)
+    // What stands in for a variant not built: the pass's default variant, else the declared fallback shader's pass of the same kind
+    private GraphicsProgram? Fallback(Entry wanted)
+    {
+        Family family = FamilyOf(wanted);
+        if (wanted.Key != 0)
+        {
+            if (!_defaults.TryGetValue(family, out Entry? fallback))
+            {
+                fallback = new Entry { Program = wanted.Program, Mirrored = wanted.Mirrored, Variants = wanted.Variants, Key = 0 };
+                Interlocked.Increment(ref _compiling);
+                _defaults[family] = fallback;
+            }
+            Complete(fallback);
+            if (fallback.Built != null)
+                return fallback.Built;
+        }
+
+        if (!_declared.TryGetValue(family, out Entry? declared))
+            _declared[family] = declared = Declared(wanted);
+        if (declared == null)
+            return null;
+        Complete(declared);
+        return declared.Built;
+    }
+
+    private Entry? Declared(Entry wanted)
+    {
+        Shader shader = wanted.Program.Shader;
+        if (shader.Fallback is not { } fallback || fallback == shader)
+            return null;
+        string? kind = shader.Definition.Passes![wanted.Program.PassIndex].Tags?.GetValueOrDefault(PassType.Tag);
+        ShaderPass[] passes = fallback.Definition.Passes ?? [];
+        for (int i = 0; i < passes.Length; i++)
+        {
+            if (passes[i].Tags?.GetValueOrDefault(PassType.Tag) != kind)
+                continue;
+            Keyword[] keywords = new Keyword[fallback.MaterialAxes.Count];
+            for (int a = 0; a < keywords.Length; a++)
+                keywords[a] = new Keyword(fallback.MaterialAxes[a].Name, fallback.MaterialAxes[a].Values[0]);
+            DrawProgram program = new(fallback, i, 0, wanted.Program.StateOverride, keywords);
+            Interlocked.Increment(ref _compiling);
+            return new Entry { Program = program, Mirrored = wanted.Mirrored, Variants = passes[i].Variants(compiler, device.BackendType), Key = 0 };
+        }
+        return null;
+    }
+
+    // The shared variant once compiled, then the material rewrite on a worker. A variant that declared new globals waits
+    // until the next extraction has grown the regions to hold them.
+    private void Complete(Entry entry)
+    {
+        if (entry.Built != null || entry.Failed)
+            return;
+        DrawProgram program = entry.Program;
+        if (entry.Rewriting == null)
+        {
+            VariantState state = entry.Variants.Request(entry.Key, _policy, out ShaderDescription compiled, out Exception? error);
+            if (state == VariantState.Pending)
+                return;
+            if (state == VariantState.Failed)
+            {
+                Fail(entry, error!);
+                return;
+            }
+            entry.Rewriting = _policy == CompilePolicy.Async ? Task.Run(() => Rewrite(program, compiled)) : RewriteNow(program, compiled);
+        }
+
+        if (!entry.Rewriting.IsCompleted || globals.NeedsGrowth)
+            return;
+        Task<ShaderDescription> rewritten = entry.Rewriting;
+        entry.Rewriting = null;
+        try
+        {
+            entry.Built = Build(program, rewritten.GetAwaiter().GetResult(), entry.Mirrored);
+            Interlocked.Decrement(ref _compiling);
+        }
+        catch (Exception e)
+        {
+            Fail(entry, e);
+        }
+    }
+
+    private void Fail(Entry entry, Exception e)
+    {
+        entry.Failed = true;
+        Interlocked.Decrement(ref _compiling);
+        DrawProgram program = entry.Program;
+        report(new RendererError(e is GBufferMissingException ? "shader.gbuffer.missing" : "shader.compile", $"{program.Shader.Name}: {e.Message}", RendererErrorSeverity.Error, program.Shader) { Key = $"program.{program.Shader.Name}.{program.PassIndex}.{entry.Key}" });
+    }
+
+    // An entry that never finished no longer counts as compiling
+    private void Forget(Entry entry)
+    {
+        if (entry.Built == null && !entry.Failed)
+            Interlocked.Decrement(ref _compiling);
+    }
+
+    private Task<ShaderDescription> RewriteNow(DrawProgram program, ShaderDescription compiled)
     {
         try
         {
-            return Task.FromResult(Describe(program, combo));
+            return Task.FromResult(Rewrite(program, compiled));
         }
         catch (Exception e)
         {
             return Task.FromException<ShaderDescription>(e);
         }
-    }
-
-    // A variant that declared new globals waits until the next extraction has grown the regions to hold them.
-    private void Complete(Entry entry)
-    {
-        if (entry.Pending is not { IsCompleted: true } pending || globals.NeedsGrowth)
-            return;
-
-        entry.Pending = null;
-        DrawProgram program = entry.Program;
-        try
-        {
-            ShaderDescription description = pending.GetAwaiter().GetResult();
-            entry.Built = Build(program, description, entry.Mirrored);
-        }
-        catch (Exception e)
-        {
-            entry.Failed = true;
-            report(new RendererError(e is GBufferMissingException ? "shader.gbuffer.missing" : "shader.compile", $"{program.Shader.Name}: {e.Message}", RendererErrorSeverity.Error, program.Shader) { Key = $"program.{program.Shader.Name}.{program.PassIndex}.{string.Join(",", entry.Values)}" });
-        }
-    }
-
-    // The ready variant of the same pass differing in the fewest axes, ties going to the one whose differences are defaults.
-    private GraphicsProgram? Nearest(Entry wanted)
-    {
-        GraphicsProgram? best = null;
-        (int Differences, int NonDefault) bestScore = (int.MaxValue, int.MaxValue);
-        foreach (Entry candidate in _families[new Family(wanted.Program.Shader, wanted.Program.PassIndex, wanted.Program.StateOverride, wanted.Mirrored)])
-        {
-            Complete(candidate);
-            if (candidate.Built == null)
-                continue;
-
-            int differences = 0, nonDefault = 0;
-            for (int i = 0; i < wanted.Values.Length; i++)
-            {
-                if (candidate.Values[i] == wanted.Values[i])
-                    continue;
-                differences++;
-                if (candidate.Values[i] != 0)
-                    nonDefault++;
-            }
-
-            if ((differences, nonDefault).CompareTo(bestScore) < 0)
-            {
-                bestScore = (differences, nonDefault);
-                best = candidate.Built;
-            }
-        }
-        return best;
     }
 
     private static int ValueIndex(VariantSpace axis, string? value)
@@ -271,12 +319,11 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler compil
         return 0;
     }
 
-    // Worker thread: the compile and the material rewrite, nothing that touches the device.
-    private ShaderDescription Describe(DrawProgram program, Keyword[] combo)
+    // Worker thread: the material rewrite, nothing that touches the device.
+    private ShaderDescription Rewrite(DrawProgram program, ShaderDescription compiled)
     {
         ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
-        ShaderDescription description = compiler.Compile(pass, combo, device.BackendType);
-        return MaterialRewrite.Rewrite(program.Shader.Name, description, program.Shader.Schema, compiler.GetGlobals(pass), globals, FrameLayout, ViewLayout);
+        return MaterialRewrite.Rewrite(program.Shader.Name, compiled, program.Shader.Schema, compiler.GetGlobals(pass), globals, FrameLayout, ViewLayout);
     }
 
     // Colour takes the pass's blend. Every opaque forward pass writes the G-buffer, so it always matches the surface that
@@ -1288,7 +1335,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, IShaderCompiler compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report)
+    public FramePipeline(GraphicsDevice device, IShaderCompiler compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
     {
         Report = report;
         _device = device;
@@ -1300,7 +1347,7 @@ internal sealed partial class FramePipeline : IDisposable
         Materials = materials;
         Globals = globals;
         DrawPrograms = programs;
-        Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report);
+        Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report, policy);
         programs.Freed += Programs.Drop;
         _upload = new UploadPass(uploader);
         _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
@@ -1430,7 +1477,7 @@ internal sealed partial class FramePipeline : IDisposable
     private static GraphicsProgram Fullscreen(GraphicsDevice device, IShaderCompiler compiler, string file)
     {
         ShaderPass pass = new() { State = new PassState(), Source = ShaderLibrary.Get(ShaderLibrary.Prefix + file)!, SourceName = "Graphite/" + file };
-        ShaderDescription description = compiler.Compile(pass, [], device.BackendType);
+        ShaderDescription description = pass.Variants(compiler, device.BackendType).Require();
         description.BlendState = BlendStateDescription.SingleOverrideBlend;
         description.DepthStencilState = DepthStencilStateDescription.Disabled;
         description.RasterizerState = RasterizerStateDescription.CullNone;

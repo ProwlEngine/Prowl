@@ -312,7 +312,7 @@ public sealed class FullscreenProgram : IDisposable
             string vertex = procedural ? fragment : "";
             string text = $"Vertex\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{vertex}\n}}\nFragment\n{{\n{defines}#include \"Graphite/Fullscreen.glsl\"\n{fragment}\n}}\n";
             ShaderPass pass = new() { State = new PassState(), Source = text, SourceName = name };
-            ShaderDescription description = compiler.Compile(pass, [], device.BackendType);
+            ShaderDescription description = pass.Variants(compiler, device.BackendType).Require();
             description.BlendState = blend ?? BlendStateDescription.SingleOverrideBlend;
             description.DepthStencilState = DepthStencilStateDescription.Disabled;
             description.RasterizerState = RasterizerStateDescription.CullNone;

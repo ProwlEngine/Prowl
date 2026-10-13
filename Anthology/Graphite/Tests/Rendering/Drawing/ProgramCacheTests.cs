@@ -147,31 +147,48 @@ public sealed class ProgramCacheTests : IDisposable
     }
 
     [Fact]
-    public void VariantsNotReadyYet_DrawWithTheNearestReadyVariant_ThenTheirOwn()
+    public void VariantsNotReadyYet_DrawWithThePassDefault_ThenTheirOwn()
     {
-        GraphicsProgram plain = WaitFor(Program());
-
         _compiler.GatedAxis = "_TINT";
         _compiler.GatedValue = "true";
         ushort tinted = Program(("_TINT", "true"));
-        Assert.Same(plain, Get(tinted));
+        Stopwatch watch = Stopwatch.StartNew();
+        GraphicsProgram? fallback;
+        while ((fallback = Get(tinted)) == null && watch.Elapsed < TimeSpan.FromSeconds(20))
+            Thread.Sleep(5);
+        Assert.NotNull(fallback);
+        Assert.False(_cache.Ready(tinted, false, _globals.Renderer.KeywordSnapshot));
 
         _compiler.Gate.Set();
-        GraphicsProgram own = WaitFor(tinted);
-        Assert.NotSame(plain, own);
+        watch.Restart();
+        while (!_cache.Ready(tinted, false, _globals.Renderer.KeywordSnapshot) && watch.Elapsed < TimeSpan.FromSeconds(20))
+            Thread.Sleep(5);
+        Assert.NotSame(fallback, Get(tinted));
     }
 
     [Fact]
-    public void NearestVariants_PreferFewerDifferences_ThenAxisDefaults()
+    public void ADefaultVariantNotReady_DrawsTheDeclaredFallbackShader()
     {
-        WaitFor(Program(("_QUALITY", "LOW")));
-        WaitFor(Program(("_TINT", "true"), ("_QUALITY", "HIGH")));
-        GraphicsProgram off = WaitFor(Program(("_QUALITY", "OFF")));
-        WaitFor(Program(("_TINT", "true"), ("_BROKEN", "false"), ("_QUALITY", "LOW")));
+        _shader.Fallback = new Shader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!), _compiler);
+        _compiler.GatedAxis = "_TINT";
+        _compiler.GatedValue = "false";
+        ushort plain = Program();
+        Stopwatch watch = Stopwatch.StartNew();
+        GraphicsProgram? fallback;
+        while ((fallback = Get(plain)) == null && watch.Elapsed < TimeSpan.FromSeconds(20))
+            Thread.Sleep(5);
+        Assert.NotNull(fallback);
+        Assert.StartsWith("Graphite/Fallback", fallback!.Name);
+        Assert.False(_cache.Ready(plain, false, _globals.Renderer.KeywordSnapshot));
+    }
 
-        _compiler.GatedAxis = "_QUALITY";
-        _compiler.GatedValue = "HIGH";
-        Assert.Same(off, Get(Program(("_QUALITY", "HIGH"))));
+    [Fact]
+    public void FailedVariants_DrawWithThePassDefault()
+    {
+        ushort broken = Program(("_BROKEN", "true"));
+        GraphicsProgram fallback = WaitFor(broken);
+        Assert.True(_cache.Failed(broken, false, _globals.Renderer.KeywordSnapshot));
+        Assert.Same(fallback, Get(broken));
     }
 
     [Fact]

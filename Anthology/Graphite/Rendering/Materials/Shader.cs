@@ -371,6 +371,9 @@ public sealed class Shader
 
     private readonly bool[] _readsSceneColor;
 
+    /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
+    public Shader? Fallback { get; set; }
+
     public Shader(ShaderDefinition definition, IShaderCompiler compiler)
     {
         Definition = definition;

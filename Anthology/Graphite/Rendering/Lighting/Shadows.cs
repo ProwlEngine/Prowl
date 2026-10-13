@@ -368,7 +368,7 @@ internal sealed class ShadowTarget(RenderTexture texture, string name, GraphicsP
             void main() { }
             }
             """;
-        ShaderDescription description = compiler.Compile(new ShaderPass { State = new PassState(), Source = source, SourceName = "Graphite/ShadowTileClear" }, [], device.BackendType);
+        ShaderDescription description = new ShaderPass { State = new PassState(), Source = source, SourceName = "Graphite/ShadowTileClear" }.Variants(compiler, device.BackendType).Require();
         description.BlendState = BlendStateDescription.Empty;
         description.DepthStencilState = new DepthStencilStateDescription(true, true, ComparisonKind.Always);
         description.RasterizerState = RasterizerStateDescription.CullNone;

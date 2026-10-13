@@ -17,7 +17,7 @@ internal static class InternalShaders
         string name = ShaderLibrary.Prefix + file;
         string source = ShaderLibrary.Get(name) ?? throw new InvalidOperationException($"The shader library has no {name}.");
         ShaderPass pass = new() { State = new PassState(), Source = source, SourceName = name };
-        ComputeProgram program = device.ResourceFactory.CreateComputeProgram(compiler.CompileCompute(pass, [], device.BackendType));
+        ComputeProgram program = device.ResourceFactory.CreateComputeProgram(pass.Variants(compiler, device.BackendType).RequireCompute());
         program.Name = name;
         return program;
     }

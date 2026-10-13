@@ -127,7 +127,7 @@ public sealed class LifetimeTests : IDisposable
     [Fact]
     public void DrawProgramIds_AreFreedWhenUnreferenced_AndReusedForTheNextProgram()
     {
-        DrawPrograms programs = new();
+        DrawPrograms programs = new() { IdleFrames = 0 };
         List<ushort> freed = new();
         programs.Freed += freed.Add;
         Material plain = _materials.Create(_shader);
@@ -139,9 +139,11 @@ public sealed class LifetimeTests : IDisposable
         programs.Acquire(first);
         programs.Acquire(first);
         programs.Release(first);
+        programs.Sweep();
         Assert.Empty(freed);
 
         programs.Release(first);
+        programs.Sweep();
         Assert.Equal([first], freed);
         Assert.Equal(0, programs.Count);
 

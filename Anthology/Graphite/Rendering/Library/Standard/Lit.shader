@@ -41,4 +41,6 @@ Shader "Graphite/Lit"
     }
 
     Surface "Lit" { }
+
+    Fallback "Graphite/Fallback"
 }

@@ -46,6 +46,9 @@ public sealed class RendererOptions
     /// </summary>
     public bool Deterministic;
 
+    /// <summary>When shader variants compile. Deterministic forces Sync, players with only baked shaders use BakedOnly.</summary>
+    public CompilePolicy Compile = CompilePolicy.Async;
+
     /// <summary>Format of reflection probe and sky probe cubes. B10G11R11 halves their memory, alpha is never used.</summary>
     public PixelFormat ReflectionFormat = PixelFormat.R16_G16_B16_A16_Float;
 
@@ -322,7 +325,7 @@ public sealed class Renderer : IDisposable
         _materials = new MaterialSystem(device, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
         _frame.ChangedMaterials = _shadowMaterials;
         Skies = new BuiltInSkies(this);
@@ -406,7 +409,17 @@ public sealed class Renderer : IDisposable
     }
 
     /// <summary>Loads a shader through the renderer's compiler. Any thread.</summary>
-    public Shader LoadShader(ShaderDefinition definition) => new(definition, _compiler);
+    /// <summary>A shader for materials. A Fallback naming "Graphite/Fallback" draws flat grey in its place while it compiles.</summary>
+    public Shader LoadShader(ShaderDefinition definition)
+    {
+        Shader shader = new(definition, _compiler);
+        if (definition.Fallback == FallbackShaderName)
+            shader.Fallback = _fallbackShader ??= new Shader(ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Fallback.shader")!), _compiler);
+        return shader;
+    }
+
+    public const string FallbackShaderName = "Graphite/Fallback";
+    private Shader? _fallbackShader;
 
     /// <summary>
     /// Extracts every change since the last frame and queues the frame. Waits for the render thread to finish the

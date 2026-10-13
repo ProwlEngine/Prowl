@@ -13,4 +13,6 @@ Shader "Graphite/Unlit"
     }
 
     Surface "Unlit" { }
+
+    Fallback "Graphite/Fallback"
 }
