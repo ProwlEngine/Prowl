@@ -148,6 +148,10 @@ public static class ShortcutManager
     public static ShortcutBinding? GetBinding(string id)
         => _shortcuts.TryGetValue(id, out ShortcutDefinition? def) ? def.Binding : null;
 
+    /// <summary>Formats a tooltip using the shortcut's current binding.</summary>
+    public static string GetTooltip(string label, string id)
+        => GetBinding(id) is { } binding ? $"{label} ({GetDisplayString(binding)})" : label;
+
     /// <summary>Get the default binding for a shortcut.</summary>
     public static ShortcutBinding? GetDefault(string id)
         => _shortcuts.TryGetValue(id, out ShortcutDefinition? def) ? def.Default : null;
@@ -304,6 +308,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
 
         // Game View
+        ShortcutManager.Register("Game/TogglePlay", "Play / Stop", KeyCode.F5);
+        ShortcutManager.Register("Game/TogglePause", "Pause / Resume", KeyCode.F7);
         ShortcutManager.Register("Game/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
 
         // Hierarchy
