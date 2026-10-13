@@ -19,10 +19,13 @@ public class GameViewInputHandlerTests
         public readonly HashSet<KeyCode> Held = [];
         public readonly HashSet<KeyCode> Pressed = [];
         public readonly HashSet<KeyCode> Released = [];
+        public string Typed = string.Empty;
         bool IInputHandler.GetKey(KeyCode key) => Held.Contains(key);
         bool IInputHandler.GetKeyDown(KeyCode key) => Pressed.Contains(key);
         bool IInputHandler.GetKeyUp(KeyCode key) => Released.Contains(key);
         bool IInputHandler.IsAnyKeyDown => Held.Count > 0;
+        string IInputHandler.InputString => Typed;
+        char? IInputHandler.GetPressedChar() => Typed.Length > 0 ? Typed[0] : null;
     }
 
     [Theory]
@@ -55,6 +58,12 @@ public class GameViewInputHandlerTests
             Assert.False(game.GetKeyDown(key));
             Assert.False(game.IsAnyKeyDown);
 
+            // No typed text reaches gameplay UI while the shortcut is held, so a rebound Space can't type a space.
+            real.Typed = " ";
+            Assert.Equal(string.Empty, game.InputString);
+            Assert.Null(game.GetPressedChar());
+            real.Typed = string.Empty;
+
             // Other keys are unaffected.
             real.Held.Add(KeyCode.A);
             Assert.True(game.GetKey(KeyCode.A));
@@ -81,6 +90,8 @@ public class GameViewInputHandlerTests
             Input.UpdateActions(0.016f);
             Assert.True(action.IsPressed());
             Assert.True(game.GetKeyDown(key));
+            real.Typed = " ";
+            Assert.Equal(" ", game.InputString);
         }
         finally
         {

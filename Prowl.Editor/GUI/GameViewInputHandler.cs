@@ -118,8 +118,10 @@ public class GameViewInputHandler : IInputHandler
     private bool HasPhysicalKey => s_suppressedKeys.Count > 0
         ? s_keyCodes.Any(key => !s_suppressedKeys.Contains(key) && _real.GetKey(key))
         : _real.IsAnyKeyDown;
-    public char? GetPressedChar() => ShouldFilter ? null : _real.GetPressedChar();
-    public string InputString => ShouldFilter ? string.Empty : _real.InputString;
+    // Typed characters don't say which key made them, so drop them all while a shortcut key is held. Otherwise a
+    // shortcut rebound to a key that types (Space, a letter) still types into gameplay UI, key repeats included.
+    public char? GetPressedChar() => ShouldFilter || s_suppressedKeys.Count > 0 ? null : _real.GetPressedChar();
+    public string InputString => ShouldFilter || s_suppressedKeys.Count > 0 ? string.Empty : _real.InputString;
     public bool GetKey(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKey(key)) || SimulatedInput.GetKey(key);
     public bool GetKeyDown(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKeyDown(key)) || SimulatedInput.GetKeyDown(key);
     public bool GetKeyUp(KeyCode key) => (!ShouldFilter && !s_suppressedKeys.Contains(key) && _real.GetKeyUp(key)) || SimulatedInput.GetKeyUp(key);
