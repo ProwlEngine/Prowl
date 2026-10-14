@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -118,6 +119,11 @@ public static unsafe class Graphics
     private static long s_framesCompleted;
     private static readonly object s_frameLock = new();
 
+    // While the main thread waits in EndFrameAndWait: when the wait started (0 when not waiting), and how much of it
+    // the render thread has spent presenting, which with vsync on is the display holding the frame. Guarded by s_frameLock.
+    private static long s_waitStartedAt;
+    private static long s_presentedDuringWait;
+
     /// <summary>
     /// How many frames may be in the pipeline at once. With 2 the main thread builds the next frame while the render
     /// thread finishes the current one, so neither waits on the other, at one frame of extra input latency. 1 waits for
@@ -211,10 +217,16 @@ public static unsafe class Graphics
 
     internal static void EndFrameAndWait()
     {
+        using FrameStatScope stats = FrameStats.RenderWait.Scope();
+
         int inFlight = XR.IsRunning ? 1 : System.Math.Max(1, MaxFramesInFlight);
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        long present;
         lock (s_frameLock)
         {
+            s_waitStartedAt = start;
+            s_presentedDuringWait = 0;
+
             long frame = ++s_framesSubmitted;
             Enqueue(new RenderJob(null, IsFrameEnd: true));
 
@@ -222,15 +234,26 @@ public static unsafe class Graphics
             long mustBeDone = frame - inFlight + 1;
             while (s_framesCompleted < mustBeDone)
                 System.Threading.Monitor.Wait(s_frameLock);
+
+            present = s_presentedDuringWait;
+            s_waitStartedAt = 0;
         }
         long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
         LastFrameWaitMs = (float)(elapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+
+        // The part of the wait the render thread spent presenting is vsync holding the frame, so it is idle time.
+        FrameStats.Transfer(FrameStats.RenderWait, FrameStats.Idle, System.Math.Min(present, elapsed));
     }
 
-    private static void CompleteFrame(long frames)
+    private static void CompleteFrame(long frames, long presentStartedAt = 0)
     {
         lock (s_frameLock)
         {
+            // Only the part of the present the main thread spent waiting through counts.
+            if (presentStartedAt != 0 && s_waitStartedAt != 0)
+                s_presentedDuringWait += System.Math.Max(0,
+                    System.Diagnostics.Stopwatch.GetTimestamp() - System.Math.Max(presentStartedAt, s_waitStartedAt));
+
             s_framesCompleted += frames;
             System.Threading.Monitor.PulseAll(s_frameLock);
         }
@@ -412,9 +435,12 @@ public static unsafe class Graphics
                 if (job.IsFrameEnd)
                 {
                     ApplyPendingSwapInterval();
+                    // Only a vsynced present is the display holding the frame. With vsync off, a swap that
+                    // blocks is the GPU catching up, which has to stay render wait.
+                    long presentStartedAt = s_appliedSwapInterval > 0 ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
                     try { Window.InternalWindow.GLContext!.SwapBuffers(); }
                     catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
-                    finally { CompleteFrame(1); }
+                    finally { CompleteFrame(1, presentStartedAt); }
                     continue;
                 }
                 if (job.Callback != null)
