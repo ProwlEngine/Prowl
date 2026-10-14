@@ -241,6 +241,24 @@ public class FrameStatsTests
     }
 
     [Fact]
+    public void TransferFromInsideTheScopeMovesItsTimeSoFar()
+    {
+        FrameStat waiting = FrameStats.GetCategory("Test.WaitingScope");
+        FrameStat idle = FrameStats.GetCategory("Test.WaitingIdle");
+
+        FrameStats.Start();
+        using (waiting.Scope())
+        {
+            Spin(10);
+            FrameStats.Transfer(waiting, idle, long.MaxValue);
+        }
+        FrameStats.EndFrame();
+
+        Assert.True(idle.GetSample(0).Ms >= 9, $"idle {idle.GetSample(0).Ms}");
+        Assert.True(waiting.GetSample(0).Ms < 1, $"waiting {waiting.GetSample(0).Ms}");
+    }
+
+    [Fact]
     public void TransferFromAnEmptyCategoryMovesNothing()
     {
         FrameStat empty = FrameStats.GetCategory("Test.Empty");
