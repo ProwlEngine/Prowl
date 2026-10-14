@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 namespace Prowl.Prism.Glsl;
 
 /// <summary>
@@ -6,8 +7,9 @@ namespace Prowl.Prism.Glsl;
 /// function-like macros), <c>#undef</c>, the conditional family
 /// (<c>#if/#ifdef/#ifndef/#elif/#else/#endif</c>) with <c>#if</c> constant-expression
 /// evaluation and the <c>defined</c> operator, <c>##</c> token pasting, the predefined
-/// macros <c>__LINE__ / __FILE__ / __VERSION__</c>, and records <c>#version</c>. Callers
-/// may inject macros up front (this is how shader variants are compiled).
+/// macros <c>__LINE__ / __FILE__ / __VERSION__</c>, records <c>#version</c>, and resolves
+/// <c>#include</c> through an <see cref="IncludeCallback"/>. Callers may inject macros up front
+/// (this is how shader variants are compiled).
 ///
 /// It consumes the raw token stream (including <see cref="TokenKind.Hash"/>) and produces
 /// a clean token stream for the <see cref="Parser"/>.
@@ -36,34 +38,51 @@ public sealed class Preprocessor
     int _lineOffset;   // added to a token's physical line by #line, so __LINE__ reports the adjusted number
     int _directiveLine;   // physical line of the directive currently being processed, for diagnostics
 
+    readonly IncludeCallback? _includes;
+    readonly HashSet<string> _included = [];   // include-once: the Name of every file entered so far
+    readonly List<string> _includedFiles = [];   // the same names, in the order they were entered
+    string _currentFile = "";   // Name of the file being processed; "" is the main source
+    int _file;   // __FILE__ of the file being processed: 0 for the main source, then 1, 2, ... in include order
+    int _includeDepth;
+    const int MaxIncludeDepth = 64;   // nested #include depth; cycles end sooner, through include-once
+    int _condFloor;   // #if depth when the current file began; its directives may not close an outer #if
+    bool _sawVersion;
+
+    Preprocessor(IncludeCallback? includes) => _includes = includes;
+
     /// <summary>
     /// Preprocesses a shader source into a token stream. The returned list is owned by the caller.
     /// </summary>
-    public static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas) Process(string source, IReadOnlyDictionary<string, string>? defines = null)
+    public static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas) Process(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
-        var r = ProcessPooled(source, defines);
+        var r = ProcessPooled(source, defines, includes);
         // The pooled buffer is reused by the next call on this thread, so a public caller gets a copy.
         return (new List<Token>(r.Tokens), r.Version, r.IsEs, r.Extensions, r.Pragmas);
     }
 
+    /// <summary>
+    /// Preprocesses a shader source and returns the result as GLSL text, along with the state the preprocessor found.
+    /// Unlike <see cref="Process"/>, this does not run the version, reserved-word, or ES checks, so it can return text
+    /// for source that the compiler would reject.
+    /// </summary>
+    public static PreprocessResult Preprocess(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
+    {
+        var output = new List<Token>();
+        var pp = Execute(source, defines, includes, new List<Token>(), output);
+        var macros = pp._macros.Select(m => new MacroDefinition(m.Key, m.Value.IsFunction ? m.Value.Parameters : null, Spell(m.Value.Body)));
+        return new PreprocessResult(pp.Emit(output), pp._version, pp._isEs, pp._extensions, pp._pragmas, macros.ToList(), pp._includedFiles);
+    }
+
     // The internal form returns the pooled token buffer directly; the parser consumes it before the next
     // compile on this thread can reuse it.
-    internal static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas) ProcessPooled(string source, IReadOnlyDictionary<string, string>? defines = null)
+    internal static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas) ProcessPooled(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
-        var pp = new Preprocessor();
-        if (defines is not null)
-            foreach (var (name, value) in defines) pp.Define(name, value);
-
         // The main input/output token lists are the two biggest front-end allocations (~18K tokens each);
         // pool them per-thread. Both are fully consumed within one compile (input by Run, output by the
         // parser) before the next compile reuses them, so reuse is safe. Nested macro/paste tokenizations
         // use the allocating Tokenize overload and never touch these buffers.
-        var input = _inputBuf ??= [];
-        Lexer.Tokenize(Splice(source), input);
         var output = _outputBuf ??= [];
-        output.Clear();
-        pp.Run(input, output);
-        if (pp._cond.Count > 0) throw new GlslParseException("unterminated #if / #ifdef");
+        var pp = Execute(source, defines, includes, _inputBuf ??= [], output);
         // glslang compiles ES only for SPIR-V from version 310 on ("#version: ES shaders for SPIR-V
         // require version 310 or higher"); since a version-less shader defaults to ES 100, this gate
         // is what rejects version-less input the same way glslang does.
@@ -78,6 +97,19 @@ public sealed class Preprocessor
         return (output, pp._version, pp._isEs, pp._extensions, pp._pragmas);
     }
 
+    static Preprocessor Execute(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, List<Token> input, List<Token> output)
+    {
+        var pp = new Preprocessor(includes);
+        if (defines is not null)
+            foreach (var (name, value) in defines) pp.Define(name, value);
+
+        Lexer.Tokenize(Splice(source), input);
+        output.Clear();
+        pp.Run(input, output);
+        if (pp._cond.Count > 0) throw new GlslParseException("unterminated #if / #ifdef");
+        return pp;
+    }
+
     bool Emitting => _cond.Count == 0 || _cond[^1].Emitting;
 
     void Run(List<Token> input, List<Token> output)
@@ -86,7 +118,7 @@ public sealed class Preprocessor
         while (input[i].Kind != TokenKind.End)
         {
             bool lineStart = i == 0 || input[i].Line != input[i - 1].Line;
-            if (lineStart && input[i].Kind == TokenKind.Hash) i = Directive(input, i);
+            if (lineStart && input[i].Kind == TokenKind.Hash) i = Directive(input, i, output);
             else if (Emitting) { _sawCode = true; i = ExpandOne(input, i, output); }
             else i++;
         }
@@ -94,7 +126,7 @@ public sealed class Preprocessor
 
     // ---- directives ----
 
-    int Directive(List<Token> input, int i)
+    int Directive(List<Token> input, int i, List<Token> output)
     {
         int line = _directiveLine = input[i].Line;
         i++;   // past '#'
@@ -110,6 +142,7 @@ public sealed class Preprocessor
             case "elif": Elif(() => EvalIf(dir.Skip(1))); break;
             case "else": Else(); break;
             case "endif": PopIf(); break;
+            case "include": if (Emitting) IncludeDirective(dir, output); break;
             default:
                 if (Emitting) Active(name, dir);
                 break;
@@ -144,6 +177,54 @@ public sealed class Preprocessor
         _lineOffset = n - (dir[0].Line + 1);
     }
 
+    // `#include "name"` or `#include <name>`. Reached only while the directive is active, so a header inside a
+    // false #if is never resolved. The file is spliced in at this point, sharing the macro and #if state, and
+    // each file is entered once: the first resolution of its Name enters it, later ones are skipped.
+    void IncludeDirective(List<Token> dir, List<Token> output)
+    {
+        int line = _directiveLine;
+        if (_includes is null)
+            throw new GlslParseException("#include requires an include callback", line);
+        var (header, isSystem) = HeaderName(dir, line);
+        var file = _includes(header, isSystem, _currentFile)
+            ?? throw new GlslParseException($"cannot open include file '{Clip(header)}'", line);
+        if (_included.Contains(file.Name)) return;
+        if (_includeDepth >= MaxIncludeDepth)
+            throw new GlslParseException($"#include nested too deeply (limit {MaxIncludeDepth})", line);
+
+        _included.Add(file.Name);
+        _includedFiles.Add(file.Name);
+        var saved = (_currentFile, _file, _lineOffset, _condFloor);
+        (_currentFile, _file, _lineOffset, _condFloor) = (file.Name, _includedFiles.Count, 0, _cond.Count);
+        _includeDepth++;
+        try
+        {
+            Run(Lexer.Tokenize(Splice(file.Content)), output);
+            if (_cond.Count != _condFloor)
+                throw new GlslParseException($"unterminated #if / #ifdef in included file '{Clip(header)}'", line);
+        }
+        finally
+        {
+            _includeDepth--;
+            (_currentFile, _file, _lineOffset, _condFloor) = saved;
+            _directiveLine = line;
+        }
+    }
+
+    static (string Name, bool IsSystem) HeaderName(List<Token> dir, int line)
+    {
+        if (dir.Count > 1 && dir[1].Kind == TokenKind.StringConst && dir[1].Text.Length > 0)
+            return (dir[1].Text, false);
+        if (dir.Count > 1 && dir[1].Kind == TokenKind.Operator && dir[1].Text == "<")
+        {
+            var name = new StringBuilder();
+            for (int j = 2; j < dir.Count && dir[j].Text != ">"; j++) name.Append(dir[j].Text);
+            if (name.Length > 0 && dir.Any(t => t.Kind == TokenKind.Operator && t.Text == ">"))
+                return (name.ToString(), true);
+        }
+        throw new GlslParseException("'#include' : must be followed by a header name", line);
+    }
+
     // GLSL words reserved for future use that may not appear as identifiers (glslang Scan.cpp ReservedSet).
     // The ACTIVE keywords are NOT here: Prism's lexer emits every word (including `void`, `float`,
     // `return`...) as an Identifier token and the parser classifies them contextually, so this stream-level
@@ -171,6 +252,7 @@ public sealed class Preprocessor
         if (!SupportedVersions.Contains(v))
             throw new GlslParseException($"version not supported: {v}", dir[0].Line);
         _version = v;
+        _sawVersion = true;
         // GLSL 100 only exists as ES (desktop GLSL never had a version 100); glslang classifies it as
         // ES even without the profile keyword.
         if (v == 100) _isEs = true;
@@ -206,7 +288,7 @@ public sealed class Preprocessor
 
     void Elif(Func<bool> condition)
     {
-        if (_cond.Count == 0) throw new GlslParseException("#elif without #if", _directiveLine);
+        if (_cond.Count <= _condFloor) throw new GlslParseException("#elif without #if", _directiveLine);
         var f = _cond[^1];
         bool take = f.ParentEmitting && !f.AnyTaken && condition();
         f.Emitting = take;
@@ -215,7 +297,7 @@ public sealed class Preprocessor
 
     void Else()
     {
-        if (_cond.Count == 0) throw new GlslParseException("#else without #if", _directiveLine);
+        if (_cond.Count <= _condFloor) throw new GlslParseException("#else without #if", _directiveLine);
         var f = _cond[^1];
         f.Emitting = f.ParentEmitting && !f.AnyTaken;
         f.AnyTaken = true;
@@ -223,7 +305,7 @@ public sealed class Preprocessor
 
     void PopIf()
     {
-        if (_cond.Count == 0) throw new GlslParseException("#endif without #if", _directiveLine);
+        if (_cond.Count <= _condFloor) throw new GlslParseException("#endif without #if", _directiveLine);
         _cond.RemoveAt(_cond.Count - 1);
     }
 
@@ -286,7 +368,7 @@ public sealed class Preprocessor
             switch (t.Text)
             {
                 case "__LINE__": output.Add(Int(t.Line + _lineOffset)); return i + 1;
-                case "__FILE__": output.Add(Int(0)); return i + 1;
+                case "__FILE__": output.Add(Int(_file)); return i + 1;
                 case "__VERSION__": output.Add(Int(_version)); return i + 1;
             }
             if (_macros.TryGetValue(t.Text, out var macro))
@@ -559,6 +641,33 @@ public sealed class Preprocessor
     }
     static bool Adjacent(Token a, Token b) => a.Line == b.Line && b.Column == a.Column + a.Text.Length;
     static Token Int(long value) => new(TokenKind.IntConst, value.ToString(), 0, 0);
+
+    // Renders the preprocessed tokens as GLSL. Tokens are spaced on one line and a new line starts wherever
+    // the source line changes. The #version and #extension directives are kept up front, since the text
+    // must still declare them; everything else the preprocessor consumed is gone.
+    string Emit(List<Token> tokens)
+    {
+        var sb = new StringBuilder();
+        if (_sawVersion) sb.Append("#version ").Append(_version).Append(_isEs ? " es" : "").Append('\n');
+        foreach (var ext in _extensions) sb.Append("#extension ").Append(ext).Append(" : enable\n");
+        int line = 0;
+        foreach (var t in tokens)
+        {
+            if (t.Kind == TokenKind.End) continue;
+            // Line 0 marks a token the preprocessor made (__FILE__, #if results), which stays on the current line.
+            if (t.Line != 0 && t.Line != line) { sb.Append('\n'); line = t.Line; }
+            else sb.Append(' ');
+            sb.Append(Spelling(t));
+        }
+        return sb.Append('\n').ToString();
+    }
+
+    static string Spell(IEnumerable<Token> tokens) => string.Join(' ', tokens.Where(t => t.Kind != TokenKind.End).Select(Spelling));
+
+    static string Spelling(Token t) => t.Kind == TokenKind.StringConst
+        ? "\"" + t.Text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\t", "\\t").Replace("\r", "\\r") + "\""
+        : t.Text;
+
     static string Name(List<Token> dir, int index) =>
         index < dir.Count ? dir[index].Text : throw new GlslParseException("preprocessor directive is missing a name");
 }

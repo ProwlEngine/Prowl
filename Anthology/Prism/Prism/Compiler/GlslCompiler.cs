@@ -11,7 +11,8 @@ public enum ShaderStage { Vertex, Fragment, Compute, Geometry, TessControl, Tess
 /// <summary>
 /// The public entry point: compiles GLSL source text into a SPIR-V module.
 /// Pipeline is parse (with preprocessor) -> lower -> serialize. The optional defines dictionary
-/// selects shader variants; the target selects the SPIR-V version and defaults to 1.0.
+/// selects shader variants; the target selects the SPIR-V version and defaults to 1.0. The optional
+/// includes callback resolves <c>#include</c> directives; without it, an include is a compile error.
 /// </summary>
 public static class GlslCompiler
 {
@@ -22,10 +23,10 @@ public static class GlslCompiler
 
     public static Prowl.Prism.SpirVModule Compile(string source, ShaderStage stage,
         SpirVVersion target = SpirVVersion.V1_0, IReadOnlyDictionary<string, string>? defines = null, bool optimize = false,
-        bool autoMapLocations = false) =>
+        bool autoMapLocations = false, IncludeCallback? includes = null) =>
         (_lane ??= new CompileLane()).Run(() =>
         {
-            var unit = Parser.Parse(source, defines);
+            var unit = Parser.Parse(source, defines, includes);
             var module = (_lowerer ??= new Lowerer()).Reset(stage, target, autoMapLocations).Lower(unit);
             var words = module.Serialize();
             if (optimize) words = Optimizer.SpirVOptimizer.Optimize(words);
@@ -34,8 +35,15 @@ public static class GlslCompiler
 
     public static byte[] CompileToBytes(string source, ShaderStage stage,
         SpirVVersion target = SpirVVersion.V1_0, IReadOnlyDictionary<string, string>? defines = null, bool optimize = false,
-        bool autoMapLocations = false) =>
-        Compile(source, stage, target, defines, optimize, autoMapLocations).ToBytes();
+        bool autoMapLocations = false, IncludeCallback? includes = null) =>
+        Compile(source, stage, target, defines, optimize, autoMapLocations, includes).ToBytes();
+
+    /// <summary>
+    /// Runs only the preprocessor. Returns the preprocessed GLSL text and the state it found (version, extensions,
+    /// pragmas, defines, and included files), so a host can lay out a program before compiling it.
+    /// </summary>
+    public static PreprocessResult Preprocess(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null) =>
+        Preprocessor.Preprocess(source, defines, includes);
 }
 
 /// <summary>

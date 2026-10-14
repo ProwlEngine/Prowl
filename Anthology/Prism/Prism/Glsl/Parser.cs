@@ -53,9 +53,9 @@ public sealed class Parser
         _pragmas = pragmas ?? [];
     }
 
-    public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines = null)
+    public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
-        var (tokens, version, isEs, extensions, pragmas) = Preprocessor.ProcessPooled(source, defines);
+        var (tokens, version, isEs, extensions, pragmas) = Preprocessor.ProcessPooled(source, defines, includes);
         return new Parser(tokens, version, isEs, extensions, pragmas).ParseTranslationUnit();
     }
 

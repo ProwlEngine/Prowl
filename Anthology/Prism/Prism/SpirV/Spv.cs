@@ -19,6 +19,7 @@ public enum SpirVVersion : uint
     V1_2 = 0x00010200,
     V1_3 = 0x00010300,
     V1_4 = 0x00010400,
+    V1_5 = 0x00010500,   // Vulkan 1.2's SPIR-V version
 }
 
 public enum SourceLanguage : uint { Unknown = 0, ESSL = 1, GLSL = 2 }

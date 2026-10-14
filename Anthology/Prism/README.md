@@ -10,6 +10,7 @@ An **GLSL to SPIR-V** shader compiler for the Prowl Game Engine. Hand a shader s
   - `##` token pasting
   - Predefined `__LINE__`, `__FILE__`, and `__VERSION__`
   - Recursion and expansion-depth guards
+  - `#include "name"` and `#include <name>`, resolved by a host callback, entered once per file, skipped inside inactive `#if` blocks
 
 - **Parser**
   - GLSL 3.3-4.6 grammar
@@ -31,7 +32,7 @@ An **GLSL to SPIR-V** shader compiler for the Prowl Game Engine. Hand a shader s
   - Structural validation gate
 
 - **Targets**
-  - Vulkan SPIR-V 1.0-1.4
+  - Vulkan SPIR-V 1.0-1.5
   - All shader stages: vertex, fragment, compute, geometry, tessellation, mesh, task, ray generation, intersection, any-hit, closest-hit, miss, and callable
 
 ## Usage
@@ -53,6 +54,27 @@ byte[] spirv = module.ToBytes(); // Feed to vkCreateShaderModule
 byte[] variant = GlslCompiler.CompileToBytes(source, ShaderStage.Fragment,
     SpirVVersion.V1_4, defines: new Dictionary<string, string> { ["SHADOWS"] = "1" }, optimize: true,
     autoMapLocations: true);
+```
+
+### Includes
+
+`#include` is resolved by a callback the host provides. The callback returns the file's name and contents, or `null` if the header cannot be found. Each file is entered once, keyed by the name it returns.
+
+```csharp
+IncludeCallback resolve = (headerName, isSystem, requestingName) =>
+    File.Exists(headerName) ? new IncludeResult(Path.GetFullPath(headerName), File.ReadAllText(headerName)) : null;
+
+byte[] spirv = GlslCompiler.CompileToBytes(source, ShaderStage.Fragment, includes: resolve);
+```
+
+### Preprocessing Only
+
+`GlslCompiler.Preprocess` runs the preprocessor without compiling. It returns the preprocessed GLSL text, along with the version, extensions, pragmas, defines, and included files it found.
+
+```csharp
+PreprocessResult pre = GlslCompiler.Preprocess(source, includes: resolve);
+string text = pre.Text;              // directives removed, macros expanded, includes spliced in
+IReadOnlyList<MacroDefinition> defines = pre.Defines;
 ```
 
 ### Error Handling
