@@ -613,8 +613,8 @@
   "frame_stats.cat_render": "Building each camera's draw commands. GPU time is not included",
   "frame_stats.cat_ui": "Laying out and drawing the UI",
   "frame_stats.cat_editor": "The editor's own work: panels, gizmos and tools",
-  "frame_stats.cat_render_wait": "Waiting for the render thread to finish earlier frames. High values mean rendering is the bottleneck",
-  "frame_stats.cat_idle": "Holding the frame rate down: the frame limiter sleeping, or waiting for vsync",
+  "frame_stats.cat_render_wait": "Waiting for the render thread to finish and present earlier frames, vsync included. High values with vsync off mean rendering is the bottleneck",
+  "frame_stats.cat_idle": "The frame limiter holding the frame rate down",
   "frame_stats.cat_gc": "Garbage collection pauses",
   "frame_stats.cat_other": "Frame time no category claimed"
 }

@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "카메라별 그리기 명령 생성. GPU 시간은 포함되지 않습니다",
   "frame_stats.cat_ui": "UI 레이아웃과 그리기",
   "frame_stats.cat_editor": "에디터 자체 작업: 패널, 기즈모, 도구",
-  "frame_stats.cat_render_wait": "렌더 스레드가 이전 프레임을 끝낼 때까지 기다리는 시간. 값이 높으면 렌더링이 병목입니다",
-  "frame_stats.cat_idle": "프레임 속도 제한: 프레임 리미터 대기 또는 VSync 대기",
+  "frame_stats.cat_render_wait": "렌더 스레드가 이전 프레임을 끝내고 표시할 때까지 기다리는 시간 (VSync 포함). VSync를 끈 상태에서 값이 높으면 렌더링이 병목입니다",
+  "frame_stats.cat_idle": "프레임 리미터가 프레임 속도를 제한하는 시간",
   "frame_stats.cat_gc": "가비지 컬렉션으로 인한 일시정지",
   "frame_stats.cat_other": "어떤 카테고리에도 속하지 않은 프레임 시간"
 }

@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "Construction des commandes de dessin de chaque camera. Le temps GPU n'est pas inclus",
   "frame_stats.cat_ui": "Mise en page et dessin de l'interface",
   "frame_stats.cat_editor": "Le travail propre a l'editeur : panneaux, gizmos et outils",
-  "frame_stats.cat_render_wait": "Attente que le thread de rendu termine les images precedentes. Des valeurs elevees signifient que le rendu est le goulot d'etranglement",
-  "frame_stats.cat_idle": "Limitation de la frequence d'images : le limiteur en sommeil ou l'attente de la VSync",
+  "frame_stats.cat_render_wait": "Attente que le thread de rendu termine et presente les images precedentes, VSync compris. Des valeurs elevees sans VSync signifient que le rendu est le goulot d'etranglement",
+  "frame_stats.cat_idle": "Le limiteur d'images qui plafonne la frequence d'images",
   "frame_stats.cat_gc": "Pauses du ramasse-miettes",
   "frame_stats.cat_other": "Temps d'image qu'aucune categorie n'a reclame"
 }

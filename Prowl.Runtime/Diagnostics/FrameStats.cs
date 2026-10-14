@@ -51,10 +51,10 @@ public static class FrameStats
     public static readonly FrameStat UI = new("UI", Hex(0xb4, 0x86, 0x9f));
     public static readonly FrameStat Editor = new("Editor", Hex(0x9a, 0x9c, 0xa8));
 
-    /// <summary>Main thread blocked while the render thread executes earlier frames' commands.</summary>
+    /// <summary>Main thread blocked until the render thread has finished and presented earlier frames, vsync included.</summary>
     public static readonly FrameStat RenderWait = new("Render Wait", Hex(0x2a, 0x9d, 0x8f));
 
-    /// <summary>Holding the frame rate down: the frame limiter sleeping, or the main thread waiting on a vsynced present.</summary>
+    /// <summary>The frame limiter sleeping to hold the target frame rate.</summary>
     public static readonly FrameStat Idle = new("Idle", Hex(0x5c, 0x5c, 0x66));
 
     /// <summary>Garbage collector pauses. Filled in at frame end, never scoped.</summary>
@@ -145,21 +145,6 @@ public static class FrameStats
     {
         CloseSegment(Stopwatch.GetTimestamp());
         s_current = parent;
-    }
-
-    /// <summary>
-    /// Moves time charged to <paramref name="from"/> this frame, including an open scope's time so far, over to
-    /// <paramref name="to"/>, for a wait whose cause is only known once it is over. Never moves more than it holds.
-    /// </summary>
-    internal static void Transfer(FrameStat from, FrameStat to, long stopwatchTicks)
-    {
-        if (Environment.CurrentManagedThreadId != s_mainThreadId) return;
-
-        CloseSegment(Stopwatch.GetTimestamp());
-        long ticks = Math.Min(stopwatchTicks, from.Ticks);
-        if (ticks <= 0) return;
-        from.Ticks -= ticks;
-        to.Ticks += ticks;
     }
 
     // Charges the time since the last boundary to whichever category is on top, minus any GC pause

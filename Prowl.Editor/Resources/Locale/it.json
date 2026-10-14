@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "Creazione dei comandi di disegno per ogni telecamera. Il tempo della GPU non e incluso",
   "frame_stats.cat_ui": "Layout e disegno dell'interfaccia",
   "frame_stats.cat_editor": "Il lavoro dell'editor stesso: pannelli, gizmo e strumenti",
-  "frame_stats.cat_render_wait": "Attesa che il thread di rendering completi i frame precedenti. Valori alti indicano che il rendering e il collo di bottiglia",
-  "frame_stats.cat_idle": "Limitazione del frame rate: il limitatore in pausa o l'attesa del VSync",
+  "frame_stats.cat_render_wait": "Attesa che il thread di rendering completi e presenti i frame precedenti, VSync incluso. Valori alti senza VSync indicano che il rendering e il collo di bottiglia",
+  "frame_stats.cat_idle": "Il limitatore di frame che contiene il frame rate",
   "frame_stats.cat_gc": "Pause della garbage collection",
   "frame_stats.cat_other": "Tempo di frame non attribuito a nessuna categoria"
 }

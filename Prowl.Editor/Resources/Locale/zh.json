@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "为每个摄像机构建绘制命令。不包括 GPU 时间",
   "frame_stats.cat_ui": "UI 布局和绘制",
   "frame_stats.cat_editor": "编辑器自身的工作：面板、Gizmo 和工具",
-  "frame_stats.cat_render_wait": "等待渲染线程完成之前的帧。数值高表示渲染是瓶颈",
-  "frame_stats.cat_idle": "限制帧率：帧率限制器休眠或等待垂直同步",
+  "frame_stats.cat_render_wait": "等待渲染线程完成并呈现之前的帧（包括垂直同步）。关闭垂直同步时数值高表示渲染是瓶颈",
+  "frame_stats.cat_idle": "帧率限制器压制帧率",
   "frame_stats.cat_gc": "垃圾回收造成的暂停",
   "frame_stats.cat_other": "未被任何类别占用的帧时间"
 }

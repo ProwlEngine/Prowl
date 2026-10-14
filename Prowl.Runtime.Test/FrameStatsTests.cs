@@ -83,21 +83,6 @@ public class FrameStatsTests
     }
 
     [Fact]
-    public void TransferMovesAtMostWhatTheSourceHolds()
-    {
-        FrameStat from = FrameStats.GetCategory("Test.From");
-        FrameStat to = FrameStats.GetCategory("Test.To");
-
-        FrameStats.Start();
-        using (from.Scope()) Spin(10);
-        FrameStats.Transfer(from, to, long.MaxValue);
-        FrameStats.EndFrame();
-
-        Assert.Equal(0, from.GetSample(0).Ms);
-        Assert.True(to.GetSample(0).Ms >= 9, $"to {to.GetSample(0).Ms}");
-    }
-
-    [Fact]
     public void ScopesOffTheMainThreadRecordNothing()
     {
         FrameStat offThread = FrameStats.GetCategory("Test.OffThread");
@@ -256,38 +241,6 @@ public class FrameStatsTests
     }
 
     [Fact]
-    public void TransferFromInsideTheScopeMovesItsTimeSoFar()
-    {
-        FrameStat waiting = FrameStats.GetCategory("Test.WaitingScope");
-        FrameStat idle = FrameStats.GetCategory("Test.WaitingIdle");
-
-        FrameStats.Start();
-        using (waiting.Scope())
-        {
-            Spin(10);
-            FrameStats.Transfer(waiting, idle, long.MaxValue);
-        }
-        FrameStats.EndFrame();
-
-        Assert.True(idle.GetSample(0).Ms >= 9, $"idle {idle.GetSample(0).Ms}");
-        Assert.True(waiting.GetSample(0).Ms < 1, $"waiting {waiting.GetSample(0).Ms}");
-    }
-
-    [Fact]
-    public void TransferFromAnEmptyCategoryMovesNothing()
-    {
-        FrameStat empty = FrameStats.GetCategory("Test.Empty");
-        FrameStat to = FrameStats.GetCategory("Test.EmptyTo");
-
-        FrameStats.Start();
-        FrameStats.Transfer(empty, to, 1_000_000);
-        FrameStats.EndFrame();
-
-        Assert.Equal(0, empty.GetSample(0).Ms);
-        Assert.Equal(0, to.GetSample(0).Ms);
-    }
-
-    [Fact]
     public void StartDropsAHalfCountedFrame()
     {
         FrameStat leftover = FrameStats.GetCategory("Test.Leftover");
@@ -314,7 +267,7 @@ public class FrameStatsTests
     // Always on in shipped games, so the engine's per-frame use must never make garbage. Timing is left to the
     // benchmarks; allocation is exact, so it can be checked here.
     [Fact]
-    public void ScopesTransfersAndFrameEndsAllocateNothing()
+    public void ScopesAndFrameEndsAllocateNothing()
     {
         FrameStat custom = FrameStats.GetCategory("Test.NoAlloc");
         FrameStats.GetCategory("Test.NoAllocNamed");
@@ -325,8 +278,7 @@ public class FrameStatsTests
             using (FrameStats.Physics.Scope()) { }
             using (custom.Scope()) { }
             using (FrameStats.Scope("Test.NoAllocNamed")) { }
-            using (FrameStats.RenderWait.Scope())
-                FrameStats.Transfer(FrameStats.RenderWait, FrameStats.Idle, 10);
+            using (FrameStats.RenderWait.Scope()) { }
             FrameStats.EndFrame();
         }
 
@@ -431,37 +383,6 @@ public class FrameStatsTests
 
         Assert.Equal(0, worker.GetSample(0).Calls);
         Assert.True(main.GetSample(0).Ms >= 9, $"main {main.GetSample(0).Ms}");
-    }
-
-    [Fact]
-    public void TransferOffTheMainThreadMovesNothing()
-    {
-        FrameStat from = FrameStats.GetCategory("Test.TransferFrom");
-        FrameStat to = FrameStats.GetCategory("Test.TransferTo");
-
-        FrameStats.Start();
-        using (from.Scope()) Spin(5);
-        OnOtherThread(() => FrameStats.Transfer(from, to, long.MaxValue));
-        FrameStats.EndFrame();
-
-        Assert.Equal(0, to.GetSample(0).Ms);
-        Assert.True(from.GetSample(0).Ms >= 4);
-    }
-
-    [Fact]
-    public void TransferOfANegativeAmountOrToItselfChangesNothing()
-    {
-        FrameStat stat = FrameStats.GetCategory("Test.TransferSelf");
-        FrameStat other = FrameStats.GetCategory("Test.TransferNegative");
-
-        FrameStats.Start();
-        using (stat.Scope()) Spin(10);
-        FrameStats.Transfer(stat, stat, long.MaxValue);
-        FrameStats.Transfer(stat, other, -1_000_000);
-        FrameStats.EndFrame();
-
-        Assert.True(stat.GetSample(0).Ms >= 9, $"stat {stat.GetSample(0).Ms}");
-        Assert.Equal(0, other.GetSample(0).Ms);
     }
 
     [Fact]

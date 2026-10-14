@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "Budowanie polecen rysowania dla kazdej kamery. Nie obejmuje czasu GPU",
   "frame_stats.cat_ui": "Uklad i rysowanie interfejsu",
   "frame_stats.cat_editor": "Wlasna praca edytora: panele, gizmo i narzedzia",
-  "frame_stats.cat_render_wait": "Czekanie, az watek renderowania skonczy wczesniejsze klatki. Wysokie wartosci oznaczaja, ze waskim gardlem jest renderowanie",
-  "frame_stats.cat_idle": "Ograniczanie liczby klatek: limiter klatek w uspieniu lub czekanie na VSync",
+  "frame_stats.cat_render_wait": "Czekanie, az watek renderowania skonczy i wyswietli wczesniejsze klatki, wliczajac VSync. Wysokie wartosci bez VSync oznaczaja, ze waskim gardlem jest renderowanie",
+  "frame_stats.cat_idle": "Limiter klatek ograniczajacy liczbe klatek",
   "frame_stats.cat_gc": "Przerwy na odsmiecanie pamieci",
   "frame_stats.cat_other": "Czas klatki nieprzypisany do zadnej kategorii"
 }

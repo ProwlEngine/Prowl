@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "Generacion de los comandos de dibujo de cada camara. No incluye el tiempo de GPU",
   "frame_stats.cat_ui": "Maquetacion y dibujo de la interfaz",
   "frame_stats.cat_editor": "El trabajo propio del editor: paneles, gizmos y herramientas",
-  "frame_stats.cat_render_wait": "Espera a que el hilo de renderizado termine los fotogramas anteriores. Valores altos indican que el renderizado es el cuello de botella",
-  "frame_stats.cat_idle": "Limitacion de la tasa de fotogramas: el limitador durmiendo o la espera de VSync",
+  "frame_stats.cat_render_wait": "Espera a que el hilo de renderizado termine y presente los fotogramas anteriores, VSync incluido. Valores altos sin VSync indican que el renderizado es el cuello de botella",
+  "frame_stats.cat_idle": "El limitador de fotogramas conteniendo la tasa de fotogramas",
   "frame_stats.cat_gc": "Pausas de la recoleccion de basura",
   "frame_stats.cat_other": "Tiempo de fotograma que ninguna categoria reclamo"
 }

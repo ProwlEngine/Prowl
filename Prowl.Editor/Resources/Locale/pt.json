@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "Criacao dos comandos de desenho de cada camera. O tempo de GPU nao esta incluido",
   "frame_stats.cat_ui": "Layout e desenho da interface",
   "frame_stats.cat_editor": "O trabalho do proprio editor: paineis, gizmos e ferramentas",
-  "frame_stats.cat_render_wait": "Espera para a thread de renderizacao terminar os quadros anteriores. Valores altos indicam que a renderizacao e o gargalo",
-  "frame_stats.cat_idle": "Limitacao da taxa de quadros: o limitador dormindo ou a espera pelo VSync",
+  "frame_stats.cat_render_wait": "Espera para a thread de renderizacao terminar e apresentar os quadros anteriores, VSync incluido. Valores altos sem VSync indicam que a renderizacao e o gargalo",
+  "frame_stats.cat_idle": "O limitador de quadros segurando a taxa de quadros",
   "frame_stats.cat_gc": "Pausas da coleta de lixo",
   "frame_stats.cat_other": "Tempo de quadro que nenhuma categoria reivindicou"
 }

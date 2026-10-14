@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "Her kamera icin cizim komutlarinin olusturulmasi. GPU suresi dahil degildir",
   "frame_stats.cat_ui": "Arayuzun yerlesimi ve cizimi",
   "frame_stats.cat_editor": "Editorun kendi isi: paneller, gizmolar ve araclar",
-  "frame_stats.cat_render_wait": "Render is parcaciginin onceki kareleri bitirmesini bekleme. Yuksek degerler darbogazin render oldugunu gosterir",
-  "frame_stats.cat_idle": "Kare hizini sinirlama: kare sinirlayicinin uyumasi ya da VSync beklemesi",
+  "frame_stats.cat_render_wait": "Render is parcaciginin onceki kareleri bitirip gostermesini bekleme, VSync dahil. VSync kapaliyken yuksek degerler darbogazin render oldugunu gosterir",
+  "frame_stats.cat_idle": "Kare hizini sinirlayan kare sinirlayici",
   "frame_stats.cat_gc": "Cop toplama duraklamalari",
   "frame_stats.cat_other": "Hicbir kategorinin ustlenmedigi kare suresi"
 }

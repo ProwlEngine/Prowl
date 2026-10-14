@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "各カメラの描画コマンドの作成。GPU 時間は含まれません",
   "frame_stats.cat_ui": "UI のレイアウトと描画",
   "frame_stats.cat_editor": "エディター自体の処理：パネル、ギズモ、ツール",
-  "frame_stats.cat_render_wait": "レンダースレッドが前のフレームを処理し終えるのを待つ時間。値が高い場合はレンダリングがボトルネックです",
-  "frame_stats.cat_idle": "フレームレートの抑制：フレームリミッターの待機、または VSync の待機",
+  "frame_stats.cat_render_wait": "レンダースレッドが前のフレームを処理して表示し終えるのを待つ時間（VSync を含む）。VSync オフで値が高い場合はレンダリングがボトルネックです",
+  "frame_stats.cat_idle": "フレームリミッターによるフレームレートの抑制",
   "frame_stats.cat_gc": "ガベージコレクションによる停止",
   "frame_stats.cat_other": "どのカテゴリにも割り当てられなかったフレーム時間"
 }

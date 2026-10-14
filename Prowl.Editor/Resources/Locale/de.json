@@ -603,8 +603,8 @@
   "frame_stats.cat_render": "Erstellen der Zeichenbefehle fuer jede Kamera. GPU-Zeit ist nicht enthalten",
   "frame_stats.cat_ui": "Layout und Zeichnen der Benutzeroberflaeche",
   "frame_stats.cat_editor": "Die Arbeit des Editors selbst: Panels, Gizmos und Werkzeuge",
-  "frame_stats.cat_render_wait": "Warten, bis der Render-Thread fruehere Frames abgearbeitet hat. Hohe Werte bedeuten, dass das Rendern der Engpass ist",
-  "frame_stats.cat_idle": "Begrenzung der Framerate: der Framelimiter schlaeft oder es wird auf VSync gewartet",
+  "frame_stats.cat_render_wait": "Warten, bis der Render-Thread fruehere Frames abgearbeitet und angezeigt hat, VSync eingeschlossen. Hohe Werte ohne VSync bedeuten, dass das Rendern der Engpass ist",
+  "frame_stats.cat_idle": "Der Framelimiter begrenzt die Framerate",
   "frame_stats.cat_gc": "Pausen durch die Garbage Collection",
   "frame_stats.cat_other": "Framezeit, die keine Kategorie beansprucht hat"
 }
