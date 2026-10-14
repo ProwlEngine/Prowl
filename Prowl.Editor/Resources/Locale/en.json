@@ -44,6 +44,7 @@
   "scene.pivot_center": "Pivot: Center",
   "scene.orientation_local": "Orientation: Local",
   "scene.snap_enabled": "Snap",
+  "scene.settings": "View Settings",
 
   "game.resolution": "Resolution",
   "game.show_stats": "Show Stats",
@@ -53,6 +54,7 @@
   "game.pause": "Pause",
   "game.resume": "Resume",
   "game.step": "Step One Frame",
+  "game.settings": "Game Settings",
 
   "dialog.delete_assets": "Delete Assets",
   "dialog.unsaved_prefab": "Unsaved Prefab Changes",
@@ -73,8 +75,10 @@
   "project.copy_path": "Copy Path",
   "project.delete": "Delete",
   "project.reimport": "Reimport",
+  "project.refresh": "Refresh",
   "project.rename": "Rename",
   "project.show_in_explorer": "Show in Explorer",
+  "project.options": "Options",
 
   "toast.cursor_locked": "Cursor Locked",
   "toast.cursor_locked_msg": "Press Escape to release.",
@@ -153,6 +157,7 @@
   "console.log_success": "LogSuccess",
   "console.show_time": "Show Time",
   "console.multi_line": "Multi Line",
+  "console.options": "Options",
 
   "inspector.nothing_selected": "Nothing Selected",
   "inspector.nothing_selected_hint": "Select an asset or object to inspect it.",
@@ -187,6 +192,7 @@
   "inspector.count": "Count",
   "inspector.message": "Message",
   "inspector.stack_trace": "Stack Trace",
+  "inspector.options": "Component Options",
 
   "hierarchy.back": "Back",
   "hierarchy.save_and_exit": "Save & Exit",

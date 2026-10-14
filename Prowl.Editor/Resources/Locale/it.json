@@ -44,6 +44,7 @@
   "scene.pivot_center": "Perno: Centro",
   "scene.orientation_local": "Orientamento: Locale",
   "scene.snap_enabled": "Aggancio",
+  "scene.settings": "Impostazioni vista",
 
   "game.resolution": "Risoluzione",
   "game.show_stats": "Mostra statistiche",
@@ -53,6 +54,7 @@
   "game.pause": "Pausa",
   "game.resume": "Riprendi",
   "game.step": "Avanza di un fotogramma",
+  "game.settings": "Impostazioni di gioco",
 
   "dialog.delete_assets": "Elimina asset",
   "dialog.unsaved_prefab": "Modifiche al Prefab non salvate",
@@ -73,8 +75,10 @@
   "project.copy_path": "Copia percorso",
   "project.delete": "Elimina",
   "project.reimport": "Reimporta",
+  "project.refresh": "Aggiorna",
   "project.rename": "Rinomina",
   "project.show_in_explorer": "Mostra in Esplora risorse",
+  "project.options": "Opzioni",
 
   "toast.cursor_locked": "Cursore bloccato",
   "toast.cursor_locked_msg": "Premi Escape per rilasciare.",
@@ -97,6 +101,7 @@
   "console.log_success": "LogSuccesso",
   "console.show_time": "Mostra orario",
   "console.multi_line": "Multi riga",
+  "console.options": "Opzioni",
 
   "launcher.search": "Cerca progetti",
   "launcher.open_project": "Apri progetto",
@@ -180,6 +185,7 @@
   "inspector.count": "Conteggio",
   "inspector.message": "Messaggio",
   "inspector.stack_trace": "Traccia dello stack",
+  "inspector.options": "Opzioni del componente",
 
   "menu.file": "File",
   "menu.file.new_scene": "Nuova scena",

@@ -44,6 +44,7 @@
   "scene.pivot_center": "Pivot: Center",
   "scene.orientation_local": "Orientation: Local",
   "scene.snap_enabled": "Snap",
+  "scene.settings": "视图设置",
 
   "game.resolution": "分辨率",
   "game.show_stats": "显示统计信息",
@@ -53,6 +54,7 @@
   "game.pause": "暂停",
   "game.resume": "继续",
   "game.step": "前进一帧",
+  "game.settings": "游戏设置",
 
   "dialog.delete_assets": "删除资产",
   "dialog.unsaved_prefab": "未保存的Prefab更改",
@@ -73,8 +75,10 @@
   "project.copy_path": "复制路径",
   "project.delete": "删除",
   "project.reimport": "重新导入",
+  "project.refresh": "刷新",
   "project.rename": "重命名",
   "project.show_in_explorer": "在资源管理器中显示",
+  "project.options": "选项",
 
   "toast.cursor_locked": "光标已锁定",
   "toast.cursor_locked_msg": "按Escape释放。",
@@ -97,6 +101,7 @@
   "console.log_success": "成功日志",
   "console.show_time": "显示时间",
   "console.multi_line": "多行",
+  "console.options": "选项",
 
   "launcher.search": "搜索项目",
   "launcher.open_project": "打开项目",
@@ -180,6 +185,7 @@
   "inspector.count": "次数",
   "inspector.message": "消息",
   "inspector.stack_trace": "堆栈跟踪",
+  "inspector.options": "组件选项",
 
   "menu.file": "文件",
   "menu.file.new_scene": "新建场景",

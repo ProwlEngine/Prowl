@@ -104,7 +104,7 @@ public class GameViewPanel : DockPanel
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        EditorGUI.HeaderIconButton(paper, "gv_hdr_settings", EditorIcons.Gear, () =>
+        EditorGUI.HeaderIconButton(paper, "gv_hdr_settings", EditorIcons.Gear, Loc.Get("game.settings"), () =>
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
                 b.Header(Loc.Get("panel.game"));

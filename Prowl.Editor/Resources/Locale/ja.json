@@ -44,6 +44,7 @@
   "scene.pivot_center": "Pivot: Center",
   "scene.orientation_local": "Orientation: Local",
   "scene.snap_enabled": "Snap",
+  "scene.settings": "ビュー設定",
 
   "game.resolution": "解像度",
   "game.show_stats": "統計を表示",
@@ -53,6 +54,7 @@
   "game.pause": "一時停止",
   "game.resume": "再開",
   "game.step": "1フレーム進める",
+  "game.settings": "ゲーム設定",
 
   "dialog.delete_assets": "アセットを削除",
   "dialog.unsaved_prefab": "未保存のPrefabの変更",
@@ -73,8 +75,10 @@
   "project.copy_path": "パスをコピー",
   "project.delete": "削除",
   "project.reimport": "再インポート",
+  "project.refresh": "更新",
   "project.rename": "名前変更",
   "project.show_in_explorer": "エクスプローラーで表示",
+  "project.options": "オプション",
 
   "toast.cursor_locked": "カーソルがロックされました",
   "toast.cursor_locked_msg": "Escapeで解除します。",
@@ -97,6 +101,7 @@
   "console.log_success": "成功ログ",
   "console.show_time": "時刻を表示",
   "console.multi_line": "複数行",
+  "console.options": "オプション",
 
   "launcher.search": "プロジェクトを検索",
   "launcher.open_project": "プロジェクトを開く",
@@ -180,6 +185,7 @@
   "inspector.count": "回数",
   "inspector.message": "メッセージ",
   "inspector.stack_trace": "スタックトレース",
+  "inspector.options": "コンポーネントのオプション",
 
   "hierarchy.back": "戻る",
   "hierarchy.save_and_exit": "保存して終了",

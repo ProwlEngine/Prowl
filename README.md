@@ -350,6 +350,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/paulbartrum">
+                    <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
+                    <br />
+                    <sub><b>paulbartrum</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/UBTL">
                     <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
                     <br />
@@ -370,6 +377,8 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <sub><b>Jotham</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/notgiven688">
                     <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
@@ -377,8 +386,6 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <sub><b>notgiven688</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/recore67">
                     <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>

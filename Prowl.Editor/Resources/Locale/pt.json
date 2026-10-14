@@ -44,6 +44,7 @@
   "scene.pivot_center": "Pivo: Centro",
   "scene.orientation_local": "Orientacao: Local",
   "scene.snap_enabled": "Ajuste",
+  "scene.settings": "Configuracoes de vista",
 
   "game.resolution": "Resolucao",
   "game.show_stats": "Mostrar estatisticas",
@@ -53,6 +54,7 @@
   "game.pause": "Pausar",
   "game.resume": "Retomar",
   "game.step": "Avançar um quadro",
+  "game.settings": "Configuracoes do jogo",
 
   "dialog.delete_assets": "Excluir Assets",
   "dialog.unsaved_prefab": "Alteracoes nao salvas no Prefab",
@@ -73,8 +75,10 @@
   "project.copy_path": "Copiar Caminho",
   "project.delete": "Excluir",
   "project.reimport": "Reimportar",
+  "project.refresh": "Atualizar",
   "project.rename": "Renomear",
   "project.show_in_explorer": "Mostrar no Explorador",
+  "project.options": "Opcoes",
 
   "toast.cursor_locked": "Cursor Bloqueado",
   "toast.cursor_locked_msg": "Pressione Escape para liberar.",
@@ -97,6 +101,7 @@
   "console.log_success": "LogSucesso",
   "console.show_time": "Mostrar hora",
   "console.multi_line": "Varias linhas",
+  "console.options": "Opcoes",
 
   "launcher.search": "Buscar projetos",
   "launcher.open_project": "Abrir projeto",
@@ -180,6 +185,7 @@
   "inspector.count": "Contagem",
   "inspector.message": "Mensagem",
   "inspector.stack_trace": "Rastreamento de pilha",
+  "inspector.options": "Opcoes do componente",
 
   "menu.file": "Arquivo",
   "menu.file.new_scene": "Nova cena",

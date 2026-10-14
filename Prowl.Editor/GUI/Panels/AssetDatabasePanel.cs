@@ -222,9 +222,9 @@ public class AssetDatabasePanel : DockPanel
                 using (paper.Row("adb_search_wrap").Width(160).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "adb_search", _searchText, v => _searchText = v, "Filter by name/path").Width(160).Height(24).Show();
 
-                EditorGUI.ToolbarIconBtn(paper, "adb_unloaded_f", EditorIcons.Circle, _showUnloaded, () => _showUnloaded = !_showUnloaded);
-                EditorGUI.ToolbarIconBtn(paper, "adb_unreached_f", EditorIcons.Hourglass, _showOnlyUnreached, () => _showOnlyUnreached = !_showOnlyUnreached);
-                EditorGUI.ToolbarIconBtn(paper, "adb_paths_f", EditorIcons.Crosshairs, AssetDatabase.RecordReachPaths,
+                EditorGUI.ToolbarIconBtn(paper, "adb_unloaded_f", EditorIcons.Circle, "Show unloaded assets", _showUnloaded, () => _showUnloaded = !_showUnloaded);
+                EditorGUI.ToolbarIconBtn(paper, "adb_unreached_f", EditorIcons.Hourglass, "Show only unreached assets", _showOnlyUnreached, () => _showOnlyUnreached = !_showOnlyUnreached);
+                EditorGUI.ToolbarIconBtn(paper, "adb_paths_f", EditorIcons.Crosshairs, "Record reach paths", AssetDatabase.RecordReachPaths,
                     () => AssetDatabase.RecordReachPaths = !AssetDatabase.RecordReachPaths);
 
                 using (paper.Row("adb_type_wrap").Width(120).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
@@ -238,7 +238,7 @@ public class AssetDatabasePanel : DockPanel
 
                 paper.Box("adb_sp");
 
-                EditorGUI.ToolbarIconBtn(paper, "adb_export", EditorIcons.Clipboard, false, () => ExportToClipboard(paper));
+                EditorGUI.ToolbarIconBtn(paper, "adb_export", EditorIcons.Clipboard, "Export to clipboard", false, () => ExportToClipboard(paper));
                 EditorGUI.CtaButton(paper, "adb_unused", "Unload Unused", EditorTheme.Accent, () =>
                     Runtime.Debug.Log($"[Assets] Unloaded {AssetDatabase.UnloadUnused()} assets nothing was using."));
             }
