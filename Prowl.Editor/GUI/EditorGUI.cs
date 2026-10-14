@@ -436,15 +436,13 @@ public static class EditorGUI
     }
 
     /// <summary>A read-only info chip for displaying asset statistics inline.</summary>
-    public static void StatChip(Paper paper, string id, string text, Scribe.FontFile font, string? tooltip = null)
+    public static void StatChip(Paper paper, string id, string text, Scribe.FontFile font)
     {
-        ElementBuilder chip = paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(9, 9, 0, 0)
+        paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(9, 9, 0, 0)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .IsNotInteractable()
             .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter);
-        // Hover is what shows a tooltip, so a chip with one has to stay interactable.
-        if (tooltip != null) chip.Tooltip(tooltip);
-        else chip.IsNotInteractable();
     }
 
     /// <summary>A purple-tinted banner shown when a drag payload can be dropped in the current area.</summary>
