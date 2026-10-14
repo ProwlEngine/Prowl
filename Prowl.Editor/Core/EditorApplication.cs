@@ -40,6 +40,7 @@ public class EditorApplication : Game
     public static OrigamiUI.PropertyGridConfig PropertyGridConfig { get; private set; } = null!;
 
     private DockSpace _dockSpace = null!;
+    private bool _sceneGizmosDrawn;
     private PanelMaximizer _panelMaximizer = null!;
 
     /// <summary>Maximizes docked panels over the rest of the layout, and brings the layout back.</summary>
@@ -2069,6 +2070,18 @@ public class EditorApplication : Game
         Application.IsGameplayExecuting = false;
 
         Navigation.NavMeshBakeService.Instance.Poll();
+    }
+
+    public override void BeginRender()
+    {
+        _sceneGizmosDrawn = false;
+    }
+
+    /// <summary>Queues component gizmos once per rendered frame, on demand from a visible Scene view.</summary>
+    internal void DrawSceneGizmos(Runtime.Resources.Scene scene)
+    {
+        if (_sceneGizmosDrawn || !scene.IsValid()) return;
+        _sceneGizmosDrawn = true;
 
         // Editor gizmos are a scene-view concept, and the scene view edits UI in world space, so queue
         // them with the world-space canvas override active - otherwise the canvas wireframe would be
@@ -2077,9 +2090,8 @@ public class EditorApplication : Game
         GameCanvas.EditorWorldSpaceOverride = true;
         try
         {
-            // Always allow gizmos in editor (even when not playing)
-            if (scene != null)
-                scene.DrawGizmos();
+            // Visible Scene views keep their gizmos while playing as well as while editing.
+            scene.DrawGizmos();
 
             if (Selection.Count > 0)
             {

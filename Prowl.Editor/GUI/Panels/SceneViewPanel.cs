@@ -36,6 +36,8 @@ public class SceneViewPanel : DockPanel
     private readonly HandleContext _handles = new();
     private readonly SceneToolContext _toolContext;
     private EditorCamera? _editorCamera;
+    /// <summary>Includes restored settings before the camera is created on the first draw.</summary>
+    internal bool ShowGizmos => _editorCamera?.ShowGizmos ?? _pendingGizmos ?? true;
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
     private bool _gizmoHasMoved;
@@ -358,7 +360,7 @@ public class SceneViewPanel : DockPanel
             }
 
             // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
-            DrawSelectionGizmos();
+            DrawSceneGizmos(EditorApplication.Instance, scene);
             _editorCamera.Render(scene);
         }
         catch (Exception ex)
@@ -792,6 +794,14 @@ public class SceneViewPanel : DockPanel
 
         // Last resort: place 10 units in front of camera
         return ray.Origin + ray.Direction * 10f;
+    }
+
+    /// <summary>Called only by views that are drawing; disabled gizmos do not consume the frame's shared pass.</summary>
+    internal void DrawSceneGizmos(EditorApplication? editor, Scene scene)
+    {
+        if (!ShowGizmos) return;
+        editor?.DrawSceneGizmos(scene);
+        DrawSelectionGizmos();
     }
 
     private void DrawSelectionGizmos()
