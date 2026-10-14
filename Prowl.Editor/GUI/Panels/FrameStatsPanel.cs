@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
@@ -38,7 +39,7 @@ public class FrameStatsPanel : DockPanel
 
     // Enough columns to fill a wide chart at the narrowest column width.
     private const int ColumnCapacity = 2048;
-    private const float MinColumnW = 1f, MaxColumnW = 32f;
+    private const float MinColumnW = 1f, MaxColumnW = 32f, DefaultColumnW = 4f;
     private const float ToolbarH = 34f;
     private const float HeaderH = 22f;
     private const float ValueW = 64f;
@@ -61,11 +62,13 @@ public class FrameStatsPanel : DockPanel
     private int _rate = 2;
     private int _scale;
     private bool _stackMax;
-    // Chart height once the splitter has been dragged; until then it follows the panel's height.
-    private float _graphH = -1;
+    // Chart height as a share of the space below the toolbar, once the splitter has been dragged; until then a default.
+    private float _split = -1;
     private float _graphHAtDragStart;
+    // When to write the layout after a setting changed, so a drag or a run of scroll steps is one write. 0 when not due.
+    private long _saveAt;
     // Scrolling over the chart zooms: wider columns show fewer frames in more detail.
-    private float _columnW = 4f;
+    private float _columnW = DefaultColumnW;
     // How many of the newest columns fit across the chart; the table and Auto scale describe only these.
     private int _visibleColumns;
     // Where the chart was last laid out, so the table can tell which column the pointer is over before the chart
@@ -90,17 +93,82 @@ public class FrameStatsPanel : DockPanel
         _visibleColumns = Math.Min(_history.Count, (int)MathF.Ceiling(width / _columnW));
         _hoveredAgo = HoveredColumn(paper);
 
-        float maxGraphH = Math.Max(MinGraphH, height - ToolbarH - SplitterH - MinTableH);
-        float graphH = Math.Clamp(_graphH < 0 ? Math.Clamp(height * 0.4f, 90f, 240f) : _graphH, MinGraphH, maxGraphH);
+        SaveIfDue();
+
+        float below = height - ToolbarH - SplitterH;
+        float maxGraphH = Math.Max(MinGraphH, below - MinTableH);
+        float graphH = Math.Clamp(_split < 0 ? Math.Clamp(height * 0.4f, 90f, 240f) : _split * below, MinGraphH, maxGraphH);
 
         using (paper.Column("fs_root").Size(width, height).Enter())
         {
             DrawToolbar(paper);
             DrawGraph(paper, font, graphH);
-            DrawSplitter(paper, graphH, maxGraphH);
+            DrawSplitter(paper, graphH, maxGraphH, below);
             DrawTable(paper, font, width, height - ToolbarH - graphH - SplitterH);
         }
     }
+
+    #region Saved state
+
+    // Kept with the dock layout: the toolbar choices, the split, the zoom and which categories are hidden.
+    public override bool SerializeState(JsonObject state)
+    {
+        state["rate"] = _rate;
+        state["scale"] = _scale;
+        state["stackMax"] = _stackMax;
+        state["columnWidth"] = (double)_columnW;
+        if (_split >= 0) state["split"] = (double)_split;
+
+        var hidden = new JsonArray();
+        foreach (FrameStat c in _hidden) hidden.Add(c.Name);
+        state["hidden"] = hidden;
+        return true;
+    }
+
+    public override void RestoreState(JsonObject state)
+    {
+        if (TryRead(state["rate"], out int rate) && rate >= 0 && rate < RateSeconds.Length) _rate = rate;
+        if (TryRead(state["scale"], out int scale) && scale >= 0 && scale < ScaleMs.Length) _scale = scale;
+        if (TryRead(state["stackMax"], out bool stackMax)) _stackMax = stackMax;
+        if (TryRead(state["columnWidth"], out double columnW)) _columnW = Math.Clamp((float)columnW, MinColumnW, MaxColumnW);
+        if (TryRead(state["split"], out double split) && split > 0 && split < 1) _split = (float)split;
+
+        // Only categories that exist now. One game code makes later stays shown, rather than being made empty here.
+        if (state["hidden"] is JsonArray names)
+        {
+            _hidden.Clear();
+            foreach (JsonNode? node in names)
+                if (TryRead(node, out string? name) && FindCategory(name!) is { } category)
+                    _hidden.Add(category);
+        }
+    }
+
+    private static bool TryRead<T>(JsonNode? node, out T? value)
+    {
+        value = default;
+        return node is JsonValue v && v.TryGetValue(out value);
+    }
+
+    private static FrameStat? FindCategory(string name)
+    {
+        foreach (FrameStat c in FrameStats.Categories)
+            if (string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))
+                return c;
+        return null;
+    }
+
+    // The layout is otherwise only written on save, so a change is written a moment after it settles. Not during
+    // play, where the other panels' state is the play session's and must not be kept.
+    private void SaveSoon() => _saveAt = Stopwatch.GetTimestamp() + Stopwatch.Frequency;
+
+    private void SaveIfDue()
+    {
+        if (_saveAt == 0 || Stopwatch.GetTimestamp() < _saveAt || Runtime.Application.IsPlaying) return;
+        _saveAt = 0;
+        EditorApplication.Instance?.SaveDockLayout();
+    }
+
+    #endregion
 
     private void SetPaused(bool paused)
     {
@@ -116,12 +184,16 @@ public class FrameStatsPanel : DockPanel
     }
 
     // A divider line with a taller grab area, dragged to trade chart height for table height.
-    private void DrawSplitter(Paper paper, float graphH, float maxGraphH)
+    private void DrawSplitter(Paper paper, float graphH, float maxGraphH, float below)
     {
         using (paper.Column("fs_split").Height(SplitterH).Cursor(PaperCursor.ResizeVertical)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .OnDragStart(_ => _graphHAtDragStart = graphH)
-            .OnDragging(e => _graphH = Math.Clamp(_graphHAtDragStart + (float)e.TotalDelta.Y, MinGraphH, maxGraphH))
+            .OnDragging(e =>
+            {
+                _split = Math.Clamp(_graphHAtDragStart + (float)e.TotalDelta.Y, MinGraphH, maxGraphH) / below;
+                SaveSoon();
+            })
             .Enter())
         {
             paper.Box("fs_split_line").Height(1).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
@@ -159,11 +231,11 @@ public class FrameStatsPanel : DockPanel
 
                 paper.Box("fs_sp");
 
-                ToolbarDropdown(paper, "fs_rate", 100, Loc.Get("frame_stats.rate_tip"), _rate, v => _rate = v,
+                ToolbarDropdown(paper, "fs_rate", 100, Loc.Get("frame_stats.rate_tip"), _rate, v => { _rate = v; SaveSoon(); },
                     [Loc.Get("frame_stats.rate_every_frame"), "0.05 s", "0.1 s", "0.25 s", "1 s"]);
-                ToolbarDropdown(paper, "fs_mode", 66, Loc.Get("frame_stats.mode_tip"), _stackMax ? 1 : 0, v => _stackMax = v == 1,
+                ToolbarDropdown(paper, "fs_mode", 66, Loc.Get("frame_stats.mode_tip"), _stackMax ? 1 : 0, v => { _stackMax = v == 1; SaveSoon(); },
                     [Caps(Loc.Get("frame_stats.mode_avg")), Caps(Loc.Get("frame_stats.mode_max"))]);
-                ToolbarDropdown(paper, "fs_scale", 80, Loc.Get("frame_stats.scale_tip"), _scale, v => _scale = v,
+                ToolbarDropdown(paper, "fs_scale", 80, Loc.Get("frame_stats.scale_tip"), _scale, v => { _scale = v; SaveSoon(); },
                     [Loc.Get("frame_stats.scale_auto"), "8 ms", "16 ms", "33 ms", "66 ms"]);
             }
             EditorGUI.Divider(paper, "fs_tb_div");
@@ -190,6 +262,7 @@ public class FrameStatsPanel : DockPanel
             {
                 e.StopPropagation();
                 _columnW = Math.Clamp(_columnW * MathF.Exp(e.Delta * 0.15f), MinColumnW, MaxColumnW);
+                SaveSoon();
             })
             .OnPostLayout((handle, rect) =>
             {
@@ -368,7 +441,11 @@ public class FrameStatsPanel : DockPanel
 
         using (paper.Row(id).Height(RowH).Padding(10, 18, 0, 0).Gap(8)
             .BackgroundColor(_hovered == c ? EditorTheme.Hover : Color.Transparent)
-            .OnClick(c, (cat, _) => { if (!_hidden.Remove(cat)) _hidden.Add(cat); })
+            .OnClick(c, (cat, _) =>
+            {
+                if (!_hidden.Remove(cat)) _hidden.Add(cat);
+                SaveSoon();
+            })
             .OnHover(c, (cat, _) => _hovered = cat)
             .OnLeave(_ => { if (_hovered == c) _hovered = null; })
             .Tooltip(c.Name, CategoryTooltip(c))

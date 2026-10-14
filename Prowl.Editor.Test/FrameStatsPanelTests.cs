@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 using Prowl.Editor.GUI.Panels;
 using Prowl.Runtime.Diagnostics;
@@ -312,5 +313,77 @@ public class FrameStatsPanelTests
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.Equal(0, allocated);
+    }
+
+    // Through JSON text, the way the dock layout file stores it.
+    private static JsonObject RoundTrip(FrameStatsPanel panel)
+    {
+        var state = new JsonObject();
+        Assert.True(panel.SerializeState(state));
+        return (JsonObject)JsonNode.Parse(state.ToJsonString())!;
+    }
+
+    [Fact]
+    public void SettingsSurviveSavingAndRestoring()
+    {
+        var saved = new JsonObject
+        {
+            ["rate"] = 4,
+            ["scale"] = 2,
+            ["stackMax"] = true,
+            ["columnWidth"] = 12.5,
+            ["split"] = 0.25,
+            ["hidden"] = new JsonArray("Physics", "render"),
+        };
+        var panel = new FrameStatsPanel();
+        panel.RestoreState((JsonObject)JsonNode.Parse(saved.ToJsonString())!);
+
+        JsonObject restored = RoundTrip(panel);
+
+        Assert.Equal(4, restored["rate"]!.GetValue<int>());
+        Assert.Equal(2, restored["scale"]!.GetValue<int>());
+        Assert.True(restored["stackMax"]!.GetValue<bool>());
+        Assert.Equal(12.5, restored["columnWidth"]!.GetValue<double>(), 3);
+        Assert.Equal(0.25, restored["split"]!.GetValue<double>(), 3);
+        // Names match whatever the case, and come back as the category's own name.
+        Assert.Equal(["Physics", "Render"], restored["hidden"]!.AsArray().Select(n => n!.GetValue<string>()).Order());
+    }
+
+    [Fact]
+    public void ANewPanelSavesItsDefaults()
+    {
+        JsonObject state = RoundTrip(new FrameStatsPanel());
+
+        Assert.Equal(2, state["rate"]!.GetValue<int>());
+        Assert.Null(state["split"]);
+        Assert.Equal(["Idle"], state["hidden"]!.AsArray().Select(n => n!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void BadSavedValuesAreIgnored()
+    {
+        var saved = new JsonObject
+        {
+            ["rate"] = 99,
+            ["scale"] = -1,
+            ["stackMax"] = "yes",
+            ["columnWidth"] = 1000.0,
+            ["split"] = 1.5,
+            ["hidden"] = new JsonArray("NoSuchCategory." + Guid.NewGuid(), 7),
+        };
+        var panel = new FrameStatsPanel();
+        int categoriesBefore = FrameStats.Categories.Count;
+
+        panel.RestoreState((JsonObject)JsonNode.Parse(saved.ToJsonString())!);
+        JsonObject state = RoundTrip(panel);
+
+        Assert.Equal(2, state["rate"]!.GetValue<int>());
+        Assert.Equal(0, state["scale"]!.GetValue<int>());
+        Assert.False(state["stackMax"]!.GetValue<bool>());
+        Assert.Equal(32.0, state["columnWidth"]!.GetValue<double>(), 3);
+        Assert.Null(state["split"]);
+        Assert.Empty(state["hidden"]!.AsArray());
+        // An unknown name is skipped, not made into an empty category.
+        Assert.Equal(categoriesBefore, FrameStats.Categories.Count);
     }
 }
