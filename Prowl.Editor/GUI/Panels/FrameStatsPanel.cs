@@ -95,7 +95,7 @@ public class FrameStatsPanel : DockPanel
 
         using (paper.Column("fs_root").Size(width, height).Enter())
         {
-            DrawToolbar(paper, font);
+            DrawToolbar(paper);
             DrawGraph(paper, font, graphH);
             DrawSplitter(paper, graphH, maxGraphH);
             DrawTable(paper, font, width, height - ToolbarH - graphH - SplitterH);
@@ -147,7 +147,7 @@ public class FrameStatsPanel : DockPanel
 
     #region Toolbar
 
-    private void DrawToolbar(Paper paper, FontFile font)
+    private void DrawToolbar(Paper paper)
     {
         using (paper.Column("fs_tb_col").Height(ToolbarH).Enter())
         {
