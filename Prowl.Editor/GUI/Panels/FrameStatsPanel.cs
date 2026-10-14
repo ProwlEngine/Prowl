@@ -157,10 +157,6 @@ public class FrameStatsPanel : DockPanel
                     Loc.Get(_paused ? "frame_stats.resume_tip" : "frame_stats.pause_tip"), _paused, () => SetPaused(!_paused));
                 EditorGUI.ToolbarIconBtn(paper, "fs_clear", EditorIcons.Trash, Loc.Get("frame_stats.clear_tip"), false, Clear);
 
-                if (ShownColumn is { } shown)
-                    EditorGUI.StatChip(paper, "fs_chip_peak", Loc.Get("frame_stats.peak", new { ms = shown.PeakMs.ToString("0.00") }), font,
-                        Loc.Get("frame_stats.peak_tip"));
-
                 paper.Box("fs_sp");
 
                 ToolbarDropdown(paper, "fs_rate", 100, Loc.Get("frame_stats.rate_tip"), _rate, v => _rate = v,

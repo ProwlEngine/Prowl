@@ -571,8 +571,6 @@
   "frame_stats.pause_tip": "一時停止：列の追加を止めてグラフを固定します",
   "frame_stats.resume_tip": "ライブ表示を再開",
   "frame_stats.clear_tip": "グラフをクリアして収集をやり直します",
-  "frame_stats.peak": "ピーク {{ms}} ms",
-  "frame_stats.peak_tip": "列の中で最も遅かった1フレーム（グラフに表示中のカテゴリのみで計算）",
   "frame_stats.rate_every_frame": "毎フレーム",
   "frame_stats.rate_tip": "各列がフレームを集める時間。間隔を長くするとスクロールが遅くなり、グラフが滑らかになります",
   "frame_stats.mode_avg": "平均",

@@ -581,8 +581,6 @@
   "frame_stats.pause_tip": "Pause: stop adding columns so the chart holds still",
   "frame_stats.resume_tip": "Resume the live view",
   "frame_stats.clear_tip": "Clear the chart and start collecting again",
-  "frame_stats.peak": "Peak {{ms}} ms",
-  "frame_stats.peak_tip": "The slowest single frame in the column, counting only the categories shown in the chart",
   "frame_stats.rate_every_frame": "Every frame",
   "frame_stats.rate_tip": "How long each column collects frames for. Longer intervals scroll slower and smooth out the chart",
   "frame_stats.mode_avg": "Avg",

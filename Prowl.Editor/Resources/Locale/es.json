@@ -571,8 +571,6 @@
   "frame_stats.pause_tip": "Pausar: dejar de anadir columnas para que el grafico se quede quieto",
   "frame_stats.resume_tip": "Reanudar la vista en vivo",
   "frame_stats.clear_tip": "Vaciar el grafico y empezar a recoger de nuevo",
-  "frame_stats.peak": "Pico {{ms}} ms",
-  "frame_stats.peak_tip": "El fotograma individual mas lento de la columna, contando solo las categorias mostradas en el grafico",
   "frame_stats.rate_every_frame": "Cada fotograma",
   "frame_stats.rate_tip": "Cuanto tiempo recoge fotogramas cada columna. Los intervalos mas largos se desplazan mas despacio y suavizan el grafico",
   "frame_stats.mode_avg": "Media",

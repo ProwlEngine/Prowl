@@ -571,8 +571,6 @@
   "frame_stats.pause_tip": "Wstrzymaj: przestan dodawac kolumny, aby wykres sie zatrzymal",
   "frame_stats.resume_tip": "Wznow podglad na zywo",
   "frame_stats.clear_tip": "Wyczysc wykres i zacznij zbierac od nowa",
-  "frame_stats.peak": "Szczyt {{ms}} ms",
-  "frame_stats.peak_tip": "Najwolniejsza pojedyncza klatka w kolumnie, liczac tylko kategorie widoczne na wykresie",
   "frame_stats.rate_every_frame": "Kazda klatka",
   "frame_stats.rate_tip": "Jak dlugo kazda kolumna zbiera klatki. Dluzsze odstepy przewijaja sie wolniej i wygladzaja wykres",
   "frame_stats.mode_avg": "Sr.",

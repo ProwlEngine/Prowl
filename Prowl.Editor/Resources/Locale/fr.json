@@ -571,8 +571,6 @@
   "frame_stats.pause_tip": "Pause : arrete d'ajouter des colonnes pour figer le graphique",
   "frame_stats.resume_tip": "Reprendre la vue en direct",
   "frame_stats.clear_tip": "Vider le graphique et recommencer la collecte",
-  "frame_stats.peak": "Pic {{ms}} ms",
-  "frame_stats.peak_tip": "L'image la plus lente de la colonne, en ne comptant que les categories affichees dans le graphique",
   "frame_stats.rate_every_frame": "Chaque image",
   "frame_stats.rate_tip": "Duree pendant laquelle chaque colonne collecte des images. Des intervalles plus longs defilent plus lentement et lissent le graphique",
   "frame_stats.mode_avg": "Moy",
