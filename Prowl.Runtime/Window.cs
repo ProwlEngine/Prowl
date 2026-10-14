@@ -5,6 +5,8 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
+using Prowl.Runtime.Diagnostics;
+
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
@@ -317,6 +319,9 @@ public static class Window
     {
         long lastTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         long freq = System.Diagnostics.Stopwatch.Frequency;
+
+        FrameStats.Start();
+
         while (!ShouldExit())
         {
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -337,6 +342,8 @@ public static class Window
             Graphics.EndFrameAndWait();
 
             Application.WaitForNextFrame();
+
+            FrameStats.EndFrame();
         }
     }
 
