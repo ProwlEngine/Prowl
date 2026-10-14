@@ -39,7 +39,7 @@ public class ProjectPanel : DockPanel
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        EditorGUI.HeaderIconButton(paper, "proj_hdr_refresh", EditorIcons.ArrowRotateRight, () =>
+        EditorGUI.HeaderIconButton(paper, "proj_hdr_refresh", EditorIcons.ArrowRotateRight, Loc.Get("project.refresh"), () =>
         {
             if (EditorAssetBackend.Instance != null)
             {
@@ -291,12 +291,12 @@ public class ProjectPanel : DockPanel
                 paper.Box("proj_tb_spacer");
 
                 ToolbarIconBtn(paper, "proj_view", IsListView ? EditorIcons.TableCellsLarge : EditorIcons.List,
-                    false, () => _thumbnailSize = IsListView ? 64f : 24f);
+                    IsListView ? Loc.Get("project.grid_view") : Loc.Get("project.list_view"), false, () => _thumbnailSize = IsListView ? 64f : 24f);
 
                 using (paper.Row("proj_search_wrap").Width(150).Height(25).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "proj_search", _searchText, v => _searchText = v, Loc.Get("project.search")).Width(150).Height(25).Show();
 
-                ToolbarIconBtn(paper, "proj_opts", EditorIcons.EllipsisVertical, false,
+                ToolbarIconBtn(paper, "proj_opts", EditorIcons.EllipsisVertical, Loc.Get("project.options"), false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
             paper.Box("proj_tb_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
