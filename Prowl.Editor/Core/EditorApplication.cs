@@ -22,6 +22,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -395,6 +396,8 @@ public class EditorApplication : Game
     /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
+        using FrameStatScope stats = FrameStats.Editor.Scope();
+
         (Input.Current as GameViewInputHandler)?.UpdateSuppressedKeys();
 
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
@@ -763,6 +766,8 @@ public class EditorApplication : Game
     /// <summary> Ends the editor GUI frame: draws the on-boarding guide overlay, renders Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips), plays the intro animation, and pops the Origami theme. </summary>
     public override void EndGui(Paper paper)
     {
+        using FrameStatScope stats = FrameStats.Editor.Scope();
+
         // On-boarding guide overlay (above panels/header, below Origami's popovers/toasts).
         GUI.EditorGuide.Draw(paper, (float)Time.UnscaledDeltaTime);
 
@@ -2056,6 +2061,8 @@ public class EditorApplication : Game
 
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
+        using FrameStatScope stats = FrameStats.Editor.Scope();
+
         Tasks.EditorTask.Poll();
         PreviewWidget.ReleaseUndrawn();
 
