@@ -413,7 +413,7 @@ public static class EditorGUI
     }
 
     /// <summary>A 26x26 icon button used in panel toolbars. Highlights with accent when active.</summary>
-    public static void ToolbarIconBtn(Paper paper, string id, string glyph, string label, bool active, Action onClick, string? tooltip = null)
+    public static void ToolbarIconBtn(Paper paper, string id, string glyph, string label, bool active, Action onClick)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -422,7 +422,7 @@ public static class EditorGUI
             .Transition(GuiProp.BackgroundColor, 0.15f)
             .Hovered.BackgroundColor(active ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Text(glyph, font).TextColor(active ? EditorTheme.Accent : EditorTheme.Ink300).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
-            .Tooltip( tooltip ?? label )
+            .Tooltip(label)
             .OnClick(_ => onClick());
     }
 
