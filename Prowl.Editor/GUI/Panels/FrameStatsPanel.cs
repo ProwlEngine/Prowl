@@ -78,8 +78,8 @@ public class FrameStatsPanel : DockPanel
 
     private int SelectedAgo => _history.AgoOf(_selectedId);
 
-    // The column the toolbar and the table describe: the hovered one, else the selected one, else the newest.
-    private int ShownAgo => _hoveredAgo >= 0 ? _hoveredAgo : Math.Max(0, SelectedAgo);
+    // The column the table describes: the selected one, else the hovered one, else the newest.
+    private int ShownAgo => SelectedAgo >= 0 ? SelectedAgo : Math.Max(0, _hoveredAgo);
     private History.Column? ShownColumn => _history.Ago(ShownAgo);
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -316,7 +316,7 @@ public class FrameStatsPanel : DockPanel
         FontFile mono = EditorTheme.FontMono ?? font;
         canvas.DrawText($"{scaleMs:0.#} ms", x + w - 6, y + 4, EditorTheme.InkDim, fs, mono, 0, new Float2(1, 0));
 
-        if ((_history.Ago(hoveredAgo) ?? _history.Ago(selectedAgo)) is { } readout)
+        if ((_history.Ago(selectedAgo) ?? _history.Ago(hoveredAgo)) is { } readout)
             canvas.DrawText(Loc.Get("frame_stats.readout", new
             {
                 frames = readout.Frames,
@@ -411,7 +411,7 @@ public class FrameStatsPanel : DockPanel
         using (paper.Row("fs_hdr").Height(HeaderH).Padding(10, 18, 0, 0).Gap(8).Enter())
         {
             HeaderCell(paper, font, "fs_h_name", Loc.Get("frame_stats.col_category"), null, fs, TextAlignment.MiddleLeft, null);
-            string nowKey = _hoveredAgo >= 0 ? "frame_stats.col_hovered" : SelectedAgo >= 0 ? "frame_stats.col_selected" : "frame_stats.col_now";
+            string nowKey = SelectedAgo >= 0 ? "frame_stats.col_selected" : _hoveredAgo >= 0 ? "frame_stats.col_hovered" : "frame_stats.col_now";
             HeaderCell(paper, font, "fs_h_now", Loc.Get(nowKey),
                 Loc.Get("frame_stats.col_now_tip"), fs, TextAlignment.MiddleRight, ValueW);
             HeaderCell(paper, font, "fs_h_avg", Loc.Get("frame_stats.col_avg"), Loc.Get("frame_stats.col_avg_tip"), fs, TextAlignment.MiddleRight, ValueW);
