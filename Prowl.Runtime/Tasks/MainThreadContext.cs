@@ -9,6 +9,7 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime.Tasks;
@@ -330,6 +331,8 @@ public sealed class MainThreadContext : SynchronizationContext
     /// </remarks>
     public void Pump()
     {
+        using FrameStatScope stats = FrameStats.Async.Scope();
+
         // A restart inside async code leaves the thread on the old context once the runtime restores it.
         if (!ReferenceEquals(SynchronizationContext.Current, this)) SetSynchronizationContext(this);
 
