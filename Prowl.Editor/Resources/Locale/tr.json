@@ -584,6 +584,7 @@
   "frame_stats.col_category": "Kategori",
   "frame_stats.col_now": "Simdi",
   "frame_stats.col_selected": "Secili",
+  "frame_stats.col_hovered": "Imlecte",
   "frame_stats.col_avg": "Ort.",
   "frame_stats.col_max": "Maks.",
   "frame_stats.col_calls": "Cagri",

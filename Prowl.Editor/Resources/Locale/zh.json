@@ -584,6 +584,7 @@
   "frame_stats.col_category": "类别",
   "frame_stats.col_now": "当前",
   "frame_stats.col_selected": "所选",
+  "frame_stats.col_hovered": "悬停",
   "frame_stats.col_avg": "平均",
   "frame_stats.col_max": "最大",
   "frame_stats.col_calls": "调用",

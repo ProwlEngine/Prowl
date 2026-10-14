@@ -594,6 +594,7 @@
   "frame_stats.col_category": "Category",
   "frame_stats.col_now": "Now",
   "frame_stats.col_selected": "Selected",
+  "frame_stats.col_hovered": "Hovered",
   "frame_stats.col_avg": "Avg",
   "frame_stats.col_max": "Max",
   "frame_stats.col_calls": "Calls",

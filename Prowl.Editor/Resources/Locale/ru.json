@@ -584,6 +584,7 @@
   "frame_stats.col_category": "Категория",
   "frame_stats.col_now": "Сейчас",
   "frame_stats.col_selected": "Выбрано",
+  "frame_stats.col_hovered": "Под курсором",
   "frame_stats.col_avg": "Сред.",
   "frame_stats.col_max": "Макс.",
   "frame_stats.col_calls": "Вызовы",

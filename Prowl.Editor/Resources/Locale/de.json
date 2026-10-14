@@ -584,6 +584,7 @@
   "frame_stats.col_category": "Kategorie",
   "frame_stats.col_now": "Aktuell",
   "frame_stats.col_selected": "Auswahl",
+  "frame_stats.col_hovered": "Unter Zeiger",
   "frame_stats.col_avg": "Mittel",
   "frame_stats.col_max": "Max",
   "frame_stats.col_calls": "Aufrufe",

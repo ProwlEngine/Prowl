@@ -584,6 +584,7 @@
   "frame_stats.col_category": "카테고리",
   "frame_stats.col_now": "현재",
   "frame_stats.col_selected": "선택",
+  "frame_stats.col_hovered": "커서 위치",
   "frame_stats.col_avg": "평균",
   "frame_stats.col_max": "최대",
   "frame_stats.col_calls": "호출",

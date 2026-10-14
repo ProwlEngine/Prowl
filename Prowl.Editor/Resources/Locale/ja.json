@@ -584,6 +584,7 @@
   "frame_stats.col_category": "カテゴリ",
   "frame_stats.col_now": "現在",
   "frame_stats.col_selected": "選択",
+  "frame_stats.col_hovered": "ホバー中",
   "frame_stats.col_avg": "平均",
   "frame_stats.col_max": "最大",
   "frame_stats.col_calls": "呼び出し",

@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 using Prowl.Editor.GUI.Panels;
 using Prowl.Runtime.Diagnostics;
@@ -23,7 +25,7 @@ public class FrameStatsPanelTests
 {
     private static readonly TimeSpan Now = TimeSpan.Zero;
     private static readonly TimeSpan Never = TimeSpan.MaxValue;
-    private static bool All(FrameStat _) => true;
+    private static readonly HashSet<FrameStat> NoneHidden = [];
 
     private static void Spin(double ms)
     {
@@ -62,7 +64,7 @@ public class FrameStatsPanelTests
         History history = Fresh();
 
         Frames(4, stat);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
 
         History.Column column = Assert.IsType<History.Column>(history.Ago(0));
         Assert.Equal(1, history.Count);
@@ -76,12 +78,12 @@ public class FrameStatsPanelTests
         History history = Fresh();
 
         Frames(3);
-        history.Sample(Never, All);
+        history.Sample(Never, NoneHidden);
         Frames(2);
-        history.Sample(Never, All);
+        history.Sample(Never, NoneHidden);
         Assert.Equal(0, history.Count);
 
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
         Assert.Equal(5, history.Ago(0)!.Frames);
     }
 
@@ -90,7 +92,7 @@ public class FrameStatsPanelTests
     {
         History history = Fresh();
 
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
 
         Assert.Equal(0, history.Count);
     }
@@ -104,7 +106,7 @@ public class FrameStatsPanelTests
         for (int frames = 1; frames <= 5; frames++)
         {
             Frames(frames);
-            history.Sample(Now, All);
+            history.Sample(Now, NoneHidden);
         }
 
         Assert.Equal(3, history.Count);
@@ -119,17 +121,17 @@ public class FrameStatsPanelTests
     {
         History history = Fresh(capacity: 3);
         Frames(1);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
         long id = history.IdOf(0);
 
         Frames(1);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
         Assert.Equal(1, history.AgoOf(id));
 
         for (int i = 0; i < 2; i++)
         {
             Frames(1);
-            history.Sample(Now, All);
+            history.Sample(Now, NoneHidden);
         }
         Assert.Equal(-1, history.AgoOf(id));
         Assert.Equal(-1, history.AgoOf(-1));
@@ -141,10 +143,10 @@ public class FrameStatsPanelTests
         History history = Fresh();
 
         Frames(3);
-        history.Sample(Never, All);
+        history.Sample(Never, NoneHidden);
         Frames(2);
         history.Skip();
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
 
         Assert.Equal(0, history.Count);
     }
@@ -154,7 +156,7 @@ public class FrameStatsPanelTests
     {
         History history = Fresh();
         Frames(2);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
 
         history.Clear();
 
@@ -172,7 +174,7 @@ public class FrameStatsPanelTests
         using (big.Scope()) Spin(10);
         using (small.Scope()) Spin(2);
         FrameStats.EndFrame();
-        history.Sample(Now, c => c == small);
+        history.Sample(Now, new HashSet<FrameStat>(FrameStats.Categories.Where(c => c != small)));
 
         float peak = history.Ago(0)!.PeakMs;
         Assert.True(peak >= 1.9f && peak < 9, $"peak {peak}");
@@ -186,11 +188,11 @@ public class FrameStatsPanelTests
 
         // One column of a single 10 ms frame, then one of three empty frames: 10 ms over 4 frames.
         Frames(1, stat, spinMs: 10);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
         Frames(3);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
 
-        History.Totals totals = history.Summarise(FrameStats.Categories.Count);
+        History.Totals totals = history.Summarise(FrameStats.Categories.Count, history.Count);
         float avg = totals.AvgMs[IndexOf(stat)];
         Assert.True(avg >= 2.4f && avg < 4f, $"avg {avg}, an unweighted mean would be about 5");
         Assert.True(totals.MaxMs[IndexOf(stat)] >= 9.9f);
@@ -201,7 +203,7 @@ public class FrameStatsPanelTests
     {
         History history = Fresh();
 
-        History.Totals totals = history.Summarise(FrameStats.Categories.Count);
+        History.Totals totals = history.Summarise(FrameStats.Categories.Count, history.Count);
 
         Assert.Equal(0, totals.AvgFrameMs);
         Assert.All(totals.AvgMs, ms => Assert.Equal(0, ms));
@@ -212,7 +214,7 @@ public class FrameStatsPanelTests
     {
         History history = Fresh();
         Frames(1);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
 
         FrameStats.GetCategory("PanelTest.Late." + Guid.NewGuid());
         int late = FrameStats.Categories.Count - 1;
@@ -221,7 +223,7 @@ public class FrameStatsPanelTests
         Assert.Equal(0, column.Avg(late));
         Assert.Equal(0, column.Max(late));
         Assert.Equal(0, column.Calls(late));
-        Assert.Equal(0, history.Summarise(FrameStats.Categories.Count).AvgMs[late]);
+        Assert.Equal(0, history.Summarise(FrameStats.Categories.Count, history.Count).AvgMs[late]);
     }
 
     [Fact]
@@ -230,28 +232,85 @@ public class FrameStatsPanelTests
         History history = Fresh();
 
         Frames(FrameStats.HistoryLength + 10);
-        history.Sample(Now, All);
+        history.Sample(Now, NoneHidden);
 
         Assert.Equal(FrameStats.HistoryLength, history.Ago(0)!.Frames);
     }
 
     [Theory]
-    [InlineData(0f, 8f)]
-    [InlineData(7.9f, 8f)]
-    [InlineData(8.1f, 12f)]
+    [InlineData(0f, 0.5f)]       // nothing to show still gets a usable scale
+    [InlineData(0.3f, 0.5f)]     // under the floor
+    [InlineData(1.4f, 2f)]       // fills the chart, rather than a sixth of an 8 ms one
+    [InlineData(2.5f, 3f)]
+    [InlineData(4f, 5f)]
+    [InlineData(6f, 8f)]
+    [InlineData(8f, 10f)]        // headroom, so the tallest column never touches the top
     [InlineData(16.67f, 20f)]
-    [InlineData(40f, 40f)]
-    public void AutoScaleRoundsUpTo4MsAndNeverGoesUnder8(float tallest, float expected)
+    [InlineData(40f, 50f)]
+    [InlineData(95f, 150f)]
+    public void AutoScaleFitsTheTallestColumnToARoundNumber(float tallest, float expected)
     {
-        Assert.Equal(expected, FrameStatsPanel.AutoScaleMs(tallest));
+        Assert.Equal(expected, FrameStatsPanel.AutoScaleMs(tallest), 0.001f);
+    }
+
+    [Fact]
+    public void AutoScaleAlwaysLeavesRoomAboveTheTallestColumn()
+    {
+        for (float tallest = 0.5f; tallest < 200f; tallest *= 1.07f)
+        {
+            float scale = FrameStatsPanel.AutoScaleMs(tallest);
+            Assert.True(scale >= tallest * 1.09f, $"{tallest} ms got {scale} ms");
+            Assert.True(scale <= tallest * 1.1f * 1.5f + 0.001f, $"{tallest} ms got {scale} ms, more than half empty");
+        }
     }
 
     [Theory]
-    [InlineData(199.5f, 0)]   // the right edge is the newest column
-    [InlineData(0f, 199)]     // the left edge is the oldest
-    [InlineData(100f, 99)]
-    public void ColumnsCountBackFromTheRightEdge(float x, int expectedAgo)
+    [InlineData(199.5f, 1f, 0)]   // the right edge is the newest column
+    [InlineData(0.5f, 1f, 199)]   // and the left edge the oldest that fits
+    [InlineData(196.5f, 4f, 0)]   // wider columns: still the newest within its 4 px
+    [InlineData(195.5f, 4f, 1)]
+    public void ColumnsCountBackFromTheRightEdge(float x, float columnW, int expectedAgo)
     {
-        Assert.Equal(expectedAgo, FrameStatsPanel.ColumnAt(x, width: 200f, columns: 200));
+        Assert.Equal(expectedAgo, FrameStatsPanel.ColumnAt(x, width: 200f, columnW));
+    }
+
+    [Fact]
+    public void SummariseCoversOnlyTheNewestColumnsAskedFor()
+    {
+        History history = Fresh();
+        Frames(3);
+        history.Sample(Now, NoneHidden);
+        Frames(1);
+        history.Sample(Now, NoneHidden);
+
+        // Only the newest column, of one frame, against both columns' four frames.
+        History.Totals newest = history.Summarise(FrameStats.Categories.Count, 1);
+        History.Totals both = history.Summarise(FrameStats.Categories.Count, 2);
+        Assert.Equal(FrameStats.GetFrameMs(0), newest.AvgFrameMs, 0.001f);
+        Assert.True(both.AvgFrameMs >= 0);
+    }
+
+    [Fact]
+    public void TakingInColumnsAllocatesNothingOnceTheRingIsFull()
+    {
+        History history = Fresh(capacity: 4);
+        // Fill the ring, and let every per-category buffer grow to size.
+        for (int i = 0; i < 8; i++)
+        {
+            Frames(1);
+            history.Sample(Now, NoneHidden);
+        }
+        history.Summarise(FrameStats.Categories.Count, history.Count);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100; i++)
+        {
+            FrameStats.EndFrame();
+            history.Sample(Now, NoneHidden);
+            history.Summarise(FrameStats.Categories.Count, history.Count);
+        }
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, allocated);
     }
 }

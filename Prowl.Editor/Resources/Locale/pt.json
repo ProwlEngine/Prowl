@@ -584,6 +584,7 @@
   "frame_stats.col_category": "Categoria",
   "frame_stats.col_now": "Agora",
   "frame_stats.col_selected": "Selecao",
+  "frame_stats.col_hovered": "Sob cursor",
   "frame_stats.col_avg": "Media",
   "frame_stats.col_max": "Max",
   "frame_stats.col_calls": "Chamadas",

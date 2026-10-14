@@ -584,6 +584,7 @@
   "frame_stats.col_category": "Categorie",
   "frame_stats.col_now": "Actuel",
   "frame_stats.col_selected": "Selection",
+  "frame_stats.col_hovered": "Survole",
   "frame_stats.col_avg": "Moy",
   "frame_stats.col_max": "Max",
   "frame_stats.col_calls": "Appels",

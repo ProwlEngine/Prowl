@@ -584,6 +584,7 @@
   "frame_stats.col_category": "Categoria",
   "frame_stats.col_now": "Ahora",
   "frame_stats.col_selected": "Seleccion",
+  "frame_stats.col_hovered": "Bajo cursor",
   "frame_stats.col_avg": "Media",
   "frame_stats.col_max": "Max",
   "frame_stats.col_calls": "Llamadas",

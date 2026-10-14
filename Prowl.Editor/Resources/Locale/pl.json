@@ -584,6 +584,7 @@
   "frame_stats.col_category": "Kategoria",
   "frame_stats.col_now": "Teraz",
   "frame_stats.col_selected": "Wybrana",
+  "frame_stats.col_hovered": "Pod kursorem",
   "frame_stats.col_avg": "Sr.",
   "frame_stats.col_max": "Maks.",
   "frame_stats.col_calls": "Wywolania",
