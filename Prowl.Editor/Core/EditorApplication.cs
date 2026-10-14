@@ -358,6 +358,9 @@ public class EditorApplication : Game
         return new Prowl.Scribe.FontFile(stream);
     }
 
+    // The whole Paper frame is the editor's interface. The game's own UI, drawn inside the Game view, still counts as UI.
+    protected override FrameStat GuiFrameStat => FrameStats.Editor;
+
     /// <summary> Sets the Paper resolution and framebuffer scale, accounting for content scale and user scale. </summary>
     protected override void PreparePaperFrame()
     {
@@ -396,8 +399,6 @@ public class EditorApplication : Game
     /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
-        using FrameStatScope stats = FrameStats.Editor.Scope();
-
         (Input.Current as GameViewInputHandler)?.UpdateSuppressedKeys();
 
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
@@ -766,8 +767,6 @@ public class EditorApplication : Game
     /// <summary> Ends the editor GUI frame: draws the on-boarding guide overlay, renders Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips), plays the intro animation, and pops the Origami theme. </summary>
     public override void EndGui(Paper paper)
     {
-        using FrameStatScope stats = FrameStats.Editor.Scope();
-
         // On-boarding guide overlay (above panels/header, below Origami's popovers/toasts).
         GUI.EditorGuide.Draw(paper, (float)Time.UnscaledDeltaTime);
 

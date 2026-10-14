@@ -41,6 +41,9 @@ public abstract class Game
 
     public bool DrawGizmos { get; set; }
 
+    /// <summary>What the GUI frame counts as in <see cref="FrameStats"/>: the game's UI here, the editor's own in the editor.</summary>
+    protected virtual FrameStat GuiFrameStat => FrameStats.UI;
+
     /// <summary>
     /// Added a separate method to initialize the window as it might be needed to restore the latest saved state of the window (size, position, etc.) when the game is launched again.
     /// This allows for better user experience by remembering their preferences.
@@ -191,7 +194,7 @@ public abstract class Game
                     Graphics.Submit(preGui);
                 }
 
-                using (FrameStats.UI.Scope())
+                using (GuiFrameStat.Scope())
                 {
                     // Sync Paper's logical resolution + DPI to the window each frame.
                     PreparePaperFrame();
