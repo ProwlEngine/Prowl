@@ -16,6 +16,7 @@ using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Ember;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
@@ -416,7 +417,12 @@ public static class AssetDatabase
     }
 
     /// <summary>Publishes finished background loads. Called at the start of every frame.</summary>
-    public static void Pump() => AssetLoader.Pump();
+    public static void Pump()
+    {
+        using FrameStatScope stats = FrameStats.Assets.Scope();
+
+        AssetLoader.Pump();
+    }
 
     /// <summary>Stops loading and frees every payload while graphics and audio are still up.</summary>
     public static void Shutdown()
@@ -720,6 +726,8 @@ public static class AssetDatabase
     /// </summary>
     public static void EndFrame()
     {
+        using FrameStatScope stats = FrameStats.Assets.Scope();
+
         if (!IsWalking)
         {
             if (Stopwatch.GetElapsedTime(s_lastWalk, Stopwatch.GetTimestamp()) < WalkInterval) return;
