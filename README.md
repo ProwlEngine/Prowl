@@ -232,26 +232,26 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/dimmerly">
+                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
+                    <br />
+                    <sub><b>Dimmer</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/Acissathar">
                     <img src="https://avatars.githubusercontent.com/u/10227954?v=4" width="100;" alt="Acissathar"/>
                     <br />
                     <sub><b>Will</b></sub>
                 </a>
             </td>
+		</tr>
+		<tr>
             <td align="center">
                 <a href="https://github.com/brmassa">
                     <img src="https://avatars.githubusercontent.com/u/13696218?v=4" width="100;" alt="brmassa"/>
                     <br />
                     <sub><b>Bruno Massa</b></sub>
-                </a>
-            </td>
-		</tr>
-		<tr>
-            <td align="center">
-                <a href="https://github.com/dimmerly">
-                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
-                    <br />
-                    <sub><b>Dimmer</b></sub>
                 </a>
             </td>
             <td align="center">
