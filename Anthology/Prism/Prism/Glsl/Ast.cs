@@ -91,10 +91,11 @@ public sealed record Block(IReadOnlyList<Stmt> Statements) : Stmt;
 public sealed record VarDeclStmt(Qualifiers Qualifiers, TypeRef Type, IReadOnlyList<Declarator> Declarators) : Stmt;
 public sealed record ExprStmt(Expr Expression) : Stmt;
 public sealed record IfStmt(Expr Cond, Stmt Then, Stmt? Else, uint SelControl = 0) : Stmt;
-public sealed record ForStmt(Stmt? Init, Expr? Cond, Expr? Update, Stmt Body, uint LoopControl = 0, uint DepLength = 0) : Stmt;
-public sealed record WhileStmt(Expr Cond, Stmt Body, uint LoopControl = 0, uint DepLength = 0) : Stmt;
-public sealed record DoWhileStmt(Stmt Body, Expr Cond, uint LoopControl = 0, uint DepLength = 0) : Stmt;
-public sealed record SwitchStmt(Expr Value, IReadOnlyList<SwitchCase> Cases) : Stmt;
+// LoopParams holds the operands of the SPIR-V 1.4 loop controls (MinIterations..PartialCount) set in LoopControl.
+public sealed record ForStmt(Stmt? Init, Expr? Cond, Expr? Update, Stmt Body, uint LoopControl = 0, uint DepLength = 0, IReadOnlyList<uint>? LoopParams = null) : Stmt;
+public sealed record WhileStmt(Expr Cond, Stmt Body, uint LoopControl = 0, uint DepLength = 0, IReadOnlyList<uint>? LoopParams = null) : Stmt;
+public sealed record DoWhileStmt(Stmt Body, Expr Cond, uint LoopControl = 0, uint DepLength = 0, IReadOnlyList<uint>? LoopParams = null) : Stmt;
+public sealed record SwitchStmt(Expr Value, IReadOnlyList<SwitchCase> Cases, uint SelControl = 0) : Stmt;
 public sealed record SwitchCase(Expr? Label, IReadOnlyList<Stmt> Body)
 {
     public int Line { get; set; }   // the 'case'/'default' token's line (0 = unset)

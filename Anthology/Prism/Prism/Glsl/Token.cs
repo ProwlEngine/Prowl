@@ -8,6 +8,8 @@ public enum TokenKind
     UintConst,
     Int64Const,    // an 'l'-suffixed literal
     Uint64Const,   // a 'ul'/'lu'-suffixed literal
+    Int16Const,    // an 's'-suffixed literal (int16_t)
+    Uint16Const,   // a 'us'-suffixed literal (uint16_t)
     FloatConst,
     DoubleConst,   // an 'lf'-suffixed literal
     HalfConst,     // an 'hf'-suffixed literal (float16_t)

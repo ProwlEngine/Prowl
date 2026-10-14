@@ -13,6 +13,7 @@ public sealed class Parser
         "noperspective", "smooth", "centroid", "patch", "sample", "precise", "invariant",
         "coherent", "volatile", "restrict", "readonly", "writeonly", "highp", "mediump", "lowp",
         "perprimitiveEXT", "taskPayloadSharedEXT", "pervertexEXT",
+        "nonprivate", "devicecoherent", "queuefamilycoherent", "workgroupcoherent", "subgroupcoherent", "shadercallcoherent",
         "rayPayloadEXT", "rayPayloadInEXT", "hitAttributeEXT", "callableDataEXT", "callableDataInEXT", "shaderRecordEXT",
         "rayPayloadNV", "rayPayloadInNV", "hitAttributeNV", "callableDataNV", "callableDataInNV",
     ];
@@ -26,6 +27,7 @@ public sealed class Parser
     // that carries them (a local one is hoisted to module scope, where SPIR-V types live anyway).
     readonly List<Decl> _pendingDecls = [];
     int _i;
+    int _invariantAllFrom = -1;   // token index of `#pragma STDGL invariant(all)`: later outputs are invariant
     // Recursion depth guard. Expression/statement handling is recursive descent in the parser and recursive
     // again over the AST in the lowerer, so unbounded nesting would overflow the stack -- which in .NET is an
     // uncatchable process kill, not an exception. The limit is far above any real shader and is chosen with
@@ -53,27 +55,21 @@ public sealed class Parser
         _pragmas = pragmas ?? [];
     }
 
-    public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
+    public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null) =>
+        Parse(source, defines, includes, null);
+
+    /// <summary>Parses for a known stage, which selects the stage macro glslang predefines (GL_FRAGMENT_SHADER, ...).</summary>
+    public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, Prowl.Prism.Compiler.ShaderStage? stage)
     {
-        var (tokens, version, isEs, extensions, pragmas, names) = Preprocessor.ProcessPooled(source, defines, includes);
+        var (tokens, version, isEs, extensions, pragmas, names, invariantAllFrom) = Preprocessor.ProcessPooled(source, defines, includes, stage);
         try
         {
-            return new Parser(tokens, version, isEs, extensions, pragmas).ParseTranslationUnit() with { SourceNames = names };
+            return new Parser(tokens, version, isEs, extensions, pragmas) { _invariantAllFrom = invariantAllFrom }.ParseTranslationUnit() with { SourceNames = names };
         }
         catch (GlslParseException e) when (!e.Located)
         {
             throw e.Resolve(names);
         }
-    }
-
-    /// <summary>Parses a constant expression from a token list (used by the preprocessor for #if).</summary>
-    internal static Expr ParseConstExpr(List<Token> tokens)
-    {
-        var parser = new Parser(tokens, 0);
-        var expr = parser.ParseExpression();
-        if (!parser.IsKind(TokenKind.End))
-            throw new GlslParseException($"unexpected '{parser.Cur.Text}' in preprocessor expression");
-        return expr;
     }
 
     // ---- top level ----
@@ -116,7 +112,11 @@ public sealed class Parser
     {
         if (IsText("struct")) return ParseStructDef();
 
+        int declStart = _i;
         var quals = ParseQualifiers();
+        // After `#pragma STDGL invariant(all)`, glslang makes every user output declared from then on invariant.
+        if (_invariantAllFrom >= 0 && declStart >= _invariantAllFrom && quals.Has("out") && !quals.Has("invariant"))
+            quals = quals with { Words = [.. quals.Words, "invariant"] };
         if (AcceptKind(TokenKind.Semicolon)) return new LayoutDecl(quals);   // e.g. layout(...) in;
         // A qualified inline struct definition, e.g. `const struct S { .. } v = S(..);`.
         if (IsText("struct"))
@@ -369,39 +369,128 @@ public sealed class Parser
         return new Block(stmts);
     }
 
-    // GL_EXT_control_flow_attributes: `[[unroll]]`, `[[dont_unroll]]`, `[[flatten]]`, `[[branch]]`,
-    // `[[dependency_length(N)]]` before a loop/if become LoopControl/SelectionControl operands.
+    // GL_EXT_control_flow_attributes: `[[a, b(N), ...]]` before an if/switch/loop, applied the way glslang's
+    // handleSelectionAttributes / handleSwitchAttributes / handleLoopAttributes do. An unknown attribute, or one with
+    // the wrong kind of argument, is only a warning there and is ignored here.
     Stmt ParseAttributedStatement()
     {
         Advance(); Advance();   // [[
-        string attr = Expect(TokenKind.Identifier, "attribute name").Text;
-        int arg = 0;
-        if (AcceptKind(TokenKind.LParen))
+        var attrs = new List<(string Name, bool HasArg, int? Arg, int Line)>();
+        do
         {
-            var argTok = Advance();
-            if (!int.TryParse(argTok.Text, out arg))
-                throw new GlslParseException($"attribute '{attr}' expects an integer argument, found '{argTok.Text}'", argTok.Line);
-            Expect(TokenKind.RParen);
-        }
+            var nameTok = Expect(TokenKind.Identifier, "attribute name");
+            bool hasArg = false;
+            int? arg = null;
+            if (AcceptKind(TokenKind.LParen))
+            {
+                hasArg = true;
+                arg = ParseAttributeArg(nameTok.Text);
+                Expect(TokenKind.RParen);
+            }
+            attrs.Add((nameTok.Text, hasArg, arg, nameTok.Line));
+        } while (AcceptKind(TokenKind.Comma));
         Expect(TokenKind.RBracket);
         Expect(TokenKind.RBracket);   // ]]
         var inner = ParseStatement();
-        (uint loop, uint dep) = attr switch
+
+        if (inner is IfStmt or SwitchStmt)
         {
-            "unroll" => (1u, 0u),
-            "dont_unroll" => (2u, 0u),
-            "dependency_length" => (8u, (uint)arg),
-            _ => (0u, 0u),
-        };
-        return (inner, attr) switch
+            bool flatten = false, dontFlatten = false;
+            foreach (var a in attrs)
+            {
+                if (a.HasArg) continue;
+                if (a.Name == "flatten") flatten = true;
+                else if (a.Name is "branch" or "dont_flatten") dontFlatten = true;
+            }
+            uint sel = flatten ? 1u : dontFlatten ? 2u : 0u;
+            return inner switch
+            {
+                IfStmt i => i with { SelControl = sel },
+                SwitchStmt sw => sw with { SelControl = sel },
+                _ => inner,
+            };
+        }
+        if (inner is not (ForStmt or WhileStmt or DoWhileStmt)) return inner;
+
+        bool unroll = false, dontUnroll = false;
+        int dependency = 0;
+        uint minIter = 0, maxIter = uint.MaxValue, multiple = 1, peel = 0, partial = 0;
+        foreach (var a in attrs)
         {
-            (IfStmt i, "flatten") => i with { SelControl = 1 },
-            (IfStmt i, "branch") => i with { SelControl = 2 },
-            (ForStmt f, _) when loop != 0 => f with { LoopControl = loop, DepLength = dep },
-            (WhileStmt w, _) when loop != 0 => w with { LoopControl = loop, DepLength = dep },
-            (DoWhileStmt d, _) when loop != 0 => d with { LoopControl = loop, DepLength = dep },
+            bool noArg = !a.HasArg;
+            bool intArg = a.Arg is not null;
+            uint u = unchecked((uint)(a.Arg ?? 0));
+            switch (a.Name)
+            {
+                case "unroll": if (noArg) unroll = true; break;
+                case "loop" or "dont_unroll": if (noArg) { dontUnroll = true; peel = partial = 0; } break;
+                case "dependency_infinite": if (noArg) dependency = -1; break;
+                case "dependency_length":
+                    if (!intArg) break;
+                    if (a.Arg <= 0) throw new GlslParseException("'dependency_length' : must be positive", a.Line);
+                    dependency = a.Arg!.Value;
+                    break;
+                case "min_iterations": if (intArg) minIter = u; break;
+                case "max_iterations": if (intArg) maxIter = u; break;
+                case "iteration_multiple":
+                    if (!intArg) break;
+                    if (u == 0) throw new GlslParseException("'iteration_multiple' : must be greater than or equal to 1", a.Line);
+                    multiple = u;
+                    break;
+                case "peel_count": if (intArg) { peel = u; dontUnroll = false; } break;
+                case "partial_count": if (intArg) { partial = u; dontUnroll = false; } break;
+            }
+        }
+        // glslang's TranslateLoopControl.
+        uint control = 0, depLength = 0;
+        var loopParams = new List<uint>();
+        if (dontUnroll) control |= 2;
+        if (unroll) control |= 1;
+        if (dependency == -1) control |= 4;
+        else if (dependency > 0) { control |= 8; depLength = (uint)dependency; }
+        if (minIter > 0) { control |= 0x10; loopParams.Add(minIter); }
+        if (maxIter < uint.MaxValue) { control |= 0x20; loopParams.Add(maxIter); }
+        if (multiple > 1) { control |= 0x40; loopParams.Add(multiple); }
+        if (peel > 0) { control |= 0x80; loopParams.Add(peel); }
+        if (partial > 0) { control |= 0x100; loopParams.Add(partial); }
+        IReadOnlyList<uint>? extra = loopParams.Count > 0 ? loopParams : null;
+        return inner switch
+        {
+            ForStmt f => f with { LoopControl = control, DepLength = depLength, LoopParams = extra },
+            WhileStmt w => w with { LoopControl = control, DepLength = depLength, LoopParams = extra },
+            DoWhileStmt d => d with { LoopControl = control, DepLength = depLength, LoopParams = extra },
             _ => inner,
         };
+    }
+
+    // An attribute's argument. glslang takes it from a constant expression and uses it only when it is an int
+    // constant; a literal of another type (2u, 1.0, true) is ignored. Other expressions are not supported.
+    int? ParseAttributeArg(string attr)
+    {
+        bool negate = false;
+        if (IsKind(TokenKind.Operator) && Cur.Text == "-") { Advance(); negate = true; }
+        var argTok = Advance();
+        if (argTok.Kind == TokenKind.IntConst && TryParseIntLiteral(argTok.Text, out uint value))
+            return unchecked(negate ? -(int)value : (int)value);
+        if (argTok.Kind is TokenKind.UintConst or TokenKind.FloatConst or TokenKind.DoubleConst or TokenKind.HalfConst
+            or TokenKind.BoolConst or TokenKind.Int64Const or TokenKind.Uint64Const)
+            return null;
+        throw new GlslParseException($"attribute '{attr}' expects an integer argument, found '{argTok.Text}'", argTok.Line);
+    }
+
+    static bool TryParseIntLiteral(string text, out uint value)
+    {
+        value = 0;
+        try
+        {
+            ulong v = text.StartsWith("0x") || text.StartsWith("0X") ? Convert.ToUInt64(text[2..], 16)
+                : text.Length > 1 && text[0] == '0' ? Convert.ToUInt64(text, 8)
+                : ulong.Parse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture);
+            if (v > uint.MaxValue) return false;
+            value = (uint)v;
+            return true;
+        }
+        catch (Exception e) when (e is FormatException or OverflowException or ArgumentException) { return false; }
     }
 
     Stmt ParseStatement()
@@ -673,7 +762,7 @@ public sealed class Parser
     {
         switch (Cur.Kind)
         {
-            case TokenKind.IntConst or TokenKind.UintConst or TokenKind.Int64Const or TokenKind.Uint64Const
+            case TokenKind.IntConst or TokenKind.UintConst or TokenKind.Int64Const or TokenKind.Uint64Const or TokenKind.Int16Const or TokenKind.Uint16Const
                 or TokenKind.FloatConst or TokenKind.DoubleConst or TokenKind.HalfConst or TokenKind.BoolConst or TokenKind.StringConst:
                 var lit = Advance();
                 return new Literal(lit.Kind, lit.Text);
@@ -822,6 +911,7 @@ public sealed class Parser
         "rgba16", "rg16", "r16",
         "rgb10_a2", "rgb10_a2ui", "r11f_g11f_b10f",
         "rgba8", "rg8", "r8",
+        "rgba16_snorm", "rg16_snorm", "r16_snorm", "r64ui", "r64i",
     ];
 
     // Expects an identifier that is not a reserved keyword (used for user-declared names).

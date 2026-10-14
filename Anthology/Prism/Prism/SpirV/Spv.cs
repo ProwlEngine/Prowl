@@ -229,6 +229,10 @@ public enum Capability : uint { Shader = 1, Float16 = 9, Float64 = 10, Int64 = 1
     GroupNonUniform = 61, GroupNonUniformVote = 62, GroupNonUniformArithmetic = 63, GroupNonUniformBallot = 64,
     GroupNonUniformShuffle = 65, GroupNonUniformShuffleRelative = 66, GroupNonUniformClustered = 67, GroupNonUniformQuad = 68,
     GroupNonUniformRotateKHR = 6026, QuadControlKHR = 5087,
+    ImageRect = 36, Int64ImageEXT = 5016, ShaderClockKHR = 5055, Groups = 18,
+    InputAttachmentArrayDynamicIndexing = 5303, UniformTexelBufferArrayDynamicIndexing = 5304, StorageTexelBufferArrayDynamicIndexing = 5305,
+    InputAttachmentArrayNonUniformIndexing = 5310, UniformTexelBufferArrayNonUniformIndexing = 5311, StorageTexelBufferArrayNonUniformIndexing = 5312,
+    FragmentDensityEXT = 5291, ShaderViewportMaskNV = 5255, ShaderStereoViewNV = 5259, PerViewAttributesNV = 5260,
     Int64Atomics = 12,
     AtomicFloat32MinMaxEXT = 5612, AtomicFloat64MinMaxEXT = 5613, AtomicFloat16MinMaxEXT = 5616,
     AtomicFloat32AddEXT = 6033, AtomicFloat64AddEXT = 6034, AtomicFloat16AddEXT = 6095,
@@ -262,5 +266,6 @@ public enum ImageFormat : uint
     Rg32i = 25, Rg16i = 26, Rg8i = 27, R16i = 28, R8i = 29,
     Rgba32ui = 30, Rgba16ui = 31, Rgba8ui = 32, R32ui = 33,
     Rgb10a2ui = 34, Rg32ui = 35, Rg16ui = 36, Rg8ui = 37, R16ui = 38, R8ui = 39,
+    R64ui = 40, R64i = 41,
 }
 

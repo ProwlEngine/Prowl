@@ -26,9 +26,13 @@ public static class GlslCompiler
         bool autoMapLocations = false, IncludeCallback? includes = null) =>
         (_lane ??= new CompileLane()).Run(() =>
         {
-            var unit = Parser.Parse(source, defines, includes);
+            var unit = Parser.Parse(source, defines, includes, stage);
             var module = (_lowerer ??= new Lowerer()).Reset(stage, target, autoMapLocations).Lower(unit);
             var words = module.Serialize();
+            // glslang type-checks uncalled functions too: re-lower a fresh parse (the AST carries per-compile
+            // memos) with every body reachable, only for its errors.
+            if (_lowerer.SkippedUncalledFunctions)
+                new Lowerer().Reset(stage, target, autoMapLocations).ValidateAllFunctions().Lower(Parser.Parse(source, defines, includes));
             if (optimize) _lowerer.ReleaseCompileState();   // the front-end's state is dead weight while optimizing
             if (optimize) words = Optimizer.SpirVOptimizer.Optimize(words);
             return new Prowl.Prism.SpirVModule(words);

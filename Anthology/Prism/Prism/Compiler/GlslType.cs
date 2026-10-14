@@ -16,7 +16,7 @@ public sealed record ScalarType(Scalar Kind) : GlslType;
 public sealed record VectorType(Scalar Component, int Size) : GlslType;
 public sealed record MatrixType(int Columns, int Rows, Scalar Component = Scalar.Float) : GlslType;   // columns x rows
 public sealed record SamplerType(Dim Dim, bool Arrayed, bool Shadow, Scalar Sampled = Scalar.Float, bool Multisampled = false) : GlslType;   // combined sampled image
-public sealed record TextureType(Dim Dim, bool Arrayed, bool Shadow) : GlslType;   // bare image (separate texture)
+public sealed record TextureType(Dim Dim, bool Arrayed, bool Shadow, Scalar Sampled = Scalar.Float, bool Multisampled = false) : GlslType;   // bare image (separate texture)
 public sealed record ImageType(Dim Dim, bool Arrayed, ImageFormat Format, Scalar Sampled = Scalar.Float, bool Multisampled = false) : GlslType;   // storage image (image2D/uimage2D/iimage2D)
 public sealed record PureSamplerType(bool Shadow = false) : GlslType;                // bare sampler state (sampler / samplerShadow)
 public sealed record AccelStructType : GlslType;                                   // accelerationStructureEXT
@@ -201,8 +201,47 @@ public static class Types
         "iimage2D" => new ImageType(Dim.D2, Arrayed: false, ImageFormat.Unknown, Scalar.Int),
         "iimage3D" => new ImageType(Dim.D3, Arrayed: false, ImageFormat.Unknown, Scalar.Int),
         "iimage2DArray" => new ImageType(Dim.D2, Arrayed: true, ImageFormat.Unknown, Scalar.Int),
-        _ => null,
+        _ => ResolveOpaque(name),
     };
+
+    // The full opaque-type family glslang declares: [i|u|i64|u64|f16] + sampler|texture|image + 1D|2D|3D|Cube|
+    // 2DRect|Buffer|2DMS + [Array] + [Shadow], and [i|u]subpassInput[MS].
+    static GlslType? ResolveOpaque(string name)
+    {
+        string rest = name;
+        Scalar sampled = Scalar.Float;
+        foreach (var (prefix, kind) in new[] { ("i64", Scalar.Int64), ("u64", Scalar.UInt64), ("f16", Scalar.Half), ("i", Scalar.Int), ("u", Scalar.UInt) })
+            if (rest.StartsWith(prefix, StringComparison.Ordinal) && !rest.StartsWith("image", StringComparison.Ordinal))
+            {
+                sampled = kind; rest = rest[prefix.Length..]; break;
+            }
+        string? cls = rest.StartsWith("sampler", StringComparison.Ordinal) ? "sampler"
+            : rest.StartsWith("texture", StringComparison.Ordinal) ? "texture"
+            : rest.StartsWith("image", StringComparison.Ordinal) ? "image" : null;
+        if (cls is null) return null;
+        rest = rest[cls.Length..];
+        Dim dim; bool ms = false;
+        if (rest.StartsWith("2DRect", StringComparison.Ordinal)) { dim = Dim.Rect; rest = rest[6..]; }
+        else if (rest.StartsWith("2DMS", StringComparison.Ordinal)) { dim = Dim.D2; ms = true; rest = rest[4..]; }
+        else if (rest.StartsWith("1D", StringComparison.Ordinal)) { dim = Dim.D1; rest = rest[2..]; }
+        else if (rest.StartsWith("2D", StringComparison.Ordinal)) { dim = Dim.D2; rest = rest[2..]; }
+        else if (rest.StartsWith("3D", StringComparison.Ordinal)) { dim = Dim.D3; rest = rest[2..]; }
+        else if (rest.StartsWith("Cube", StringComparison.Ordinal)) { dim = Dim.Cube; rest = rest[4..]; }
+        else if (rest.StartsWith("Buffer", StringComparison.Ordinal)) { dim = Dim.Buffer; rest = rest[6..]; }
+        else return null;
+        bool arrayed = rest.StartsWith("Array", StringComparison.Ordinal);
+        if (arrayed) rest = rest[5..];
+        bool shadow = rest == "Shadow";
+        if (rest.Length > 0 && !shadow) return null;
+        if (arrayed && dim is Dim.D3 or Dim.Rect or Dim.Buffer) return null;
+        if (shadow && (cls == "image" || sampled != Scalar.Float || dim is Dim.D3 or Dim.Buffer || ms)) return null;
+        return cls switch
+        {
+            "sampler" => new SamplerType(dim, arrayed, shadow, sampled, ms),
+            "texture" => new TextureType(dim, arrayed, shadow, sampled, ms),
+            _ => new ImageType(dim, arrayed, ImageFormat.Unknown, sampled, ms),
+        };
+    }
 
     public static bool IsTypeName(string name) => Resolve(name) is not null;
 

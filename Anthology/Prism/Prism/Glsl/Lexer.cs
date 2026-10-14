@@ -211,9 +211,12 @@ public sealed class Lexer
     }
 
     // An integer literal's suffix: 'u' is unsigned, 'l' is 64-bit, and the two may combine in either
-    // order and case ('ul' / 'lu'). Returns null when there is no suffix.
+    // order and case ('ul' / 'lu'); 's' is 16-bit ('s' / 'us', GL_EXT_shader_explicit_arithmetic_types).
+    // Returns null when there is no suffix.
     TokenKind? IntegerSuffix()
     {
+        if (_pos < _src.Length && _src[_pos] is 's' or 'S') { _pos++; return TokenKind.Int16Const; }
+        if (_pos + 1 < _src.Length && _src[_pos] is 'u' or 'U' && _src[_pos + 1] is 's' or 'S') { _pos += 2; return TokenKind.Uint16Const; }
         bool unsigned = false, wide = false;
         int p = _pos;
         while (p < _src.Length)

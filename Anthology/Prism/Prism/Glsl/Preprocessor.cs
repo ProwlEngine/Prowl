@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Prowl.Prism.Compiler;
 namespace Prowl.Prism.Glsl;
 
 /// <summary>
@@ -7,7 +8,8 @@ namespace Prowl.Prism.Glsl;
 /// function-like macros), <c>#undef</c>, the conditional family
 /// (<c>#if/#ifdef/#ifndef/#elif/#else/#endif</c>) with <c>#if</c> constant-expression
 /// evaluation and the <c>defined</c> operator, <c>##</c> token pasting, the predefined
-/// macros <c>__LINE__ / __FILE__ / __VERSION__</c>, records <c>#version</c>, and resolves
+/// macros <c>__LINE__ / __FILE__ / __VERSION__</c> and glslang's preamble (<c>VULKAN</c>,
+/// <c>GL_ES</c>, the supported-extension macros, ...), records <c>#version</c>, and resolves
 /// <c>#include</c> through an <see cref="IncludeCallback"/>. Callers may inject macros up front
 /// (this is how shader variants are compiled).
 ///
@@ -56,7 +58,13 @@ public sealed class Preprocessor
     int _condFloor;   // #if depth when the current file began; its directives may not close an outer #if
     bool _sawVersion;
 
-    Preprocessor(IncludeCallback? includes) => _includes = includes;
+    int _invariantAllFrom = -1;   // output index of the first `#pragma STDGL invariant(all)`, or -1
+
+    Preprocessor(IncludeCallback? includes, ShaderStage? stage)
+    {
+        _includes = includes;
+        _stage = stage;
+    }
 
     /// <summary>
     /// Preprocesses a shader source into a token stream. The returned list is owned by the caller.
@@ -78,21 +86,21 @@ public sealed class Preprocessor
     public static PreprocessResult Preprocess(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
         var output = new List<Token>();
-        var pp = Execute(source, defines, includes, new List<Token>(), output);
-        var macros = pp._macros.Select(m => new MacroDefinition(m.Key, m.Value.IsFunction ? m.Value.Parameters : null, Spell(m.Value.Body)));
+        var pp = Execute(source, defines, includes, new List<Token>(), output, null);
+        var macros = pp._macros.Where(m => !pp._predefined.Contains(m.Key)).Select(m => new MacroDefinition(m.Key, m.Value.IsFunction ? m.Value.Parameters : null, Spell(m.Value.Body)));
         return new PreprocessResult(pp.Emit(output), pp._version, pp._isEs, pp._extensions, pp._pragmas, macros.ToList(), pp._includedFiles);
     }
 
     // The internal form returns the pooled token buffer directly; the parser consumes it before the next
     // compile on this thread can reuse it.
-    internal static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas, List<string?> SourceNames) ProcessPooled(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
+    internal static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas, List<string?> SourceNames, int InvariantAllFrom) ProcessPooled(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null, ShaderStage? stage = null)
     {
         // The main input/output token lists are the two biggest front-end allocations (~18K tokens each);
         // pool them per-thread. Both are fully consumed within one compile (input by Run, output by the
         // parser) before the next compile reuses them, so reuse is safe. Nested macro/paste tokenizations
         // use the allocating Tokenize overload and never touch these buffers.
         var output = _outputBuf ??= [];
-        var pp = Execute(source, defines, includes, _inputBuf ??= [], output);
+        var pp = Execute(source, defines, includes, _inputBuf ??= [], output, stage);
         try
         {
             // glslang compiles ES only for SPIR-V from version 310 on ("#version: ES shaders for SPIR-V
@@ -111,18 +119,18 @@ public sealed class Preprocessor
             throw e.Resolve(pp._segmentNames);
         }
         output.Add(new Token(TokenKind.End, "", 0, 0));
-        return (output, pp._version, pp._isEs, pp._extensions, pp._pragmas, pp._segmentNames);
+        return (output, pp._version, pp._isEs, pp._extensions, pp._pragmas, pp._segmentNames, pp._invariantAllFrom);
     }
 
-    static Preprocessor Execute(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, List<Token> input, List<Token> output)
+    static Preprocessor Execute(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, List<Token> input, List<Token> output, ShaderStage? stage)
     {
-        var pp = new Preprocessor(includes);
+        var pp = new Preprocessor(includes, stage);
         if (defines is not null)
             foreach (var (name, value) in defines) pp.Define(name, value);
 
         try
         {
-            Lexer.Tokenize(Splice(source), input);
+            Lexer.Tokenize(Splice(source, pp._joins), input);
             output.Clear();
             pp.Run(input, output);
             if (pp._cond.Count > 0) throw new GlslParseException("unterminated #if / #ifdef");
@@ -139,6 +147,7 @@ public sealed class Preprocessor
     void Run(List<Token> input, List<Token> output)
     {
         int i = 0;
+        var stream = new PpStream(input);
         while (input[i].Kind != TokenKind.End)
         {
             bool lineStart = i == 0 || input[i].Line != input[i - 1].Line;
@@ -146,10 +155,17 @@ public sealed class Preprocessor
             else if (Emitting)
             {
                 _sawCode = true;
+                EnsurePreamble();
                 var token = input[i];
+                // glslang's scanner (outside any #if) requires a decimal point or exponent before a float suffix.
+                if (_cond.Count == 0 && token.Kind is TokenKind.FloatConst or TokenKind.HalfConst or TokenKind.DoubleConst
+                    && token.Text.IndexOfAny(['.', 'e', 'E']) < 0 && !token.Text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                    throw new GlslParseException("'' : float literal needs a decimal point or exponent", Locate(token.Line));
                 int start = output.Count;
                 _site = Locate(token.Line);
-                i = ExpandOne(input, i, output);
+                stream.Pos = i;
+                ExpandSourceToken(stream, output);
+                i = stream.Pos;
                 Place(output, start, token, Locate(token.Line));
             }
             else i++;
@@ -180,23 +196,24 @@ public sealed class Preprocessor
         while (input[i].Kind != TokenKind.End && input[i].Line == line) dir.Add(input[i++]);
 
         string name = dir.Count > 0 ? dir[0].Text : "";
+        if (name != "version") EnsurePreamble();
         switch (name)
         {
-            case "if": PushIf(() => EvalIf(dir.Skip(1))); break;
+            case "if": PushIf(() => EvalIf(dir, "#if")); break;
             case "ifdef": PushIf(() => _macros.ContainsKey(Name(dir, 1))); break;
             case "ifndef": PushIf(() => !_macros.ContainsKey(Name(dir, 1))); break;
-            case "elif": Elif(() => EvalIf(dir.Skip(1))); break;
+            case "elif": Elif(() => EvalIf(dir, "#elif")); break;
             case "else": Else(); break;
             case "endif": PopIf(); break;
             case "include": if (Emitting) IncludeDirective(dir, output); break;
             default:
-                if (Emitting) Active(name, dir);
+                if (Emitting) Active(name, dir, output);
                 break;
         }
         return i;
     }
 
-    void Active(string name, List<Token> dir)
+    void Active(string name, List<Token> dir, List<Token> output)
     {
         switch (name)
         {
@@ -205,7 +222,7 @@ public sealed class Preprocessor
             case "version": VersionDirective(dir); break;
             case "error": throw new GlslParseException("#error: " + string.Join(' ', dir.Skip(1).Select(t => t.Text)), _directiveLine);
             case "extension": ExtensionDirective(dir); break;
-            case "pragma": if (dir.Count > 1) _pragmas.Add(dir[1].Text); break;
+            case "pragma": PragmaDirective(dir, output); break;
             case "line": LineDirective(dir); break;
             case "": _sawCode = true; break;   // a bare '#' is inert content, but like glslang it still
                                                // counts as code, so a later '#version' is too late
@@ -216,14 +233,38 @@ public sealed class Preprocessor
     // `#version N [profile]`. The core profile (explicit, or the default from 150 on) predefines
     // GL_core_profile, which shaders test with #ifdef.
     // `#line N` makes the following source line report line number N (so __LINE__ on it yields N).
+    // Like glslang, both numbers are macro-expanded preprocessor expressions: `#line N F` also sets the source-string
+    // number __FILE__ reports, and `#line N "name"` (GL_GOOGLE_cpp_style_line_directive) names the file instead.
+    // Before GLSL 330 (desktop) the line AFTER the next one is N, as glslang's lineDirectiveShouldSetNextLine says.
     void LineDirective(List<Token> dir)
     {
-        if (dir.Count < 2 || !int.TryParse(dir[1].Text, out int n))
+        var s = new PpStream(dir) { Pos = 1 };
+        var tok = Scan(s);
+        if (tok.T.Kind == TokenKind.End)
             throw new GlslParseException("#line must be followed by a line number", _directiveLine);
-        _lineOffset = n - (dir[0].Line + 1);
+        int n = Eval(s, ref tok, 0, false, 0);
         // A file name starts a segment of its own. A bare #line keeps the file it was already in.
-        string? name = dir.Count > 2 && dir[2].Kind == TokenKind.StringConst ? dir[2].Text : _segmentNames[_segment];
+        string? name = _segmentNames[_segment];
+        int? file = null;
+        if (tok.T.Kind == TokenKind.StringConst) { name = tok.T.Text; tok = Scan(s); }
+        else if (tok.T.Kind != TokenKind.End) file = Eval(s, ref tok, 0, false, 0);
+        if (tok.T.Kind != TokenKind.End)
+            throw new GlslParseException("'#line' : unexpected tokens following directive", _directiveLine);
+        if (file is int f) _file = f;
+        bool setsNextLine = _isEs || _version >= 330;
+        int next = dir[0].Line + 1 + (_joins.TryGetValue(dir[0].Line, out var joined) ? joined.Count : 0);
+        _lineOffset = unchecked(n - next + (setsNextLine ? 0 : 1));
         NewSegment(name);
+    }
+
+    // `#pragma STDGL invariant(all)` makes every user output declared after it invariant (glslang's
+    // setInvariantAll, applied in globalQualifierFixCheck as each `out` declaration is parsed). The position is
+    // recorded as an index into the output token stream, where the parser picks it up.
+    void PragmaDirective(List<Token> dir, List<Token> output)
+    {
+        if (dir.Count > 1) _pragmas.Add(dir[1].Text);
+        if (dir.Count > 4 && dir[1].Text == "STDGL" && dir[2].Text == "invariant" && dir[4].Text == "all" && _invariantAllFrom < 0)
+            _invariantAllFrom = output.Count;
     }
 
     void NewSegment(string? name)
@@ -251,14 +292,15 @@ public sealed class Preprocessor
 
         _included.Add(file.Name);
         _includedFiles.Add(file.Name);
-        var saved = (_currentFile, _file, _lineOffset, _condFloor, _segment);
+        var saved = (_currentFile, _file, _lineOffset, _condFloor, _segment, _joins);
         (_currentFile, _file, _lineOffset, _condFloor) = (file.Name, _includedFiles.Count, 0, _cond.Count);
         NewSegment(file.Name);
         _includeDepth++;
         try
         {
             List<Token> tokens;
-            try { tokens = Lexer.Tokenize(Splice(file.Content)); }
+            _joins = [];
+            try { tokens = Lexer.Tokenize(Splice(file.Content, _joins)); }
             catch (GlslParseException e) when (!e.Located) { throw e.WithCode(Locate(e.Code)); }
             Run(tokens, output);
             if (_cond.Count != _condFloor)
@@ -267,7 +309,7 @@ public sealed class Preprocessor
         finally
         {
             _includeDepth--;
-            (_currentFile, _file, _lineOffset, _condFloor, _segment) = saved;
+            (_currentFile, _file, _lineOffset, _condFloor, _segment, _joins) = saved;
             _directiveLine = line;
         }
     }
@@ -320,8 +362,10 @@ public sealed class Preprocessor
         if (dir.Count > 2 && dir[2].Text is not ("core" or "compatibility" or "es"))
             throw new GlslParseException($"invalid profile '{dir[2].Text}' in #version directive", _directiveLine);
         _isEs = dir.Count > 2 && dir[2].Text == "es";
-        bool core = dir.Count > 2 ? dir[2].Text == "core" : _version >= 150;
-        if (core) Define("GL_core_profile", "1");
+        // glslang's DeduceVersionProfile: the ES-only versions need the profile spelled out.
+        if (v is 300 or 310 or 320 && dir.Count <= 2)
+            throw new GlslParseException("#version: versions 300, 310, and 320 require specifying the 'es' profile");
+        _compatibility = dir.Count > 2 && dir[2].Text == "compatibility";
     }
 
     // `#extension NAME : behavior` records the extension (it becomes an OpSourceExtension) and predefines
@@ -335,9 +379,9 @@ public sealed class Preprocessor
         string behavior = dir[3].Text;
         if (behavior is not ("require" or "enable" or "warn" or "disable"))
             throw new GlslParseException($"invalid #extension behavior '{behavior}'", _directiveLine);
-        if (behavior == "disable") { _macros.Remove(ext); return; }
+        // glslang defines no macro for an #extension: the supported extensions' macros come from the preamble.
+        if (behavior == "disable") return;
         if (ext != "all" && !_extensions.Contains(ext)) _extensions.Add(ext);
-        if (ext != "all") Define(ext, "1");
     }
 
     void PushIf(Func<bool> condition)
@@ -414,46 +458,163 @@ public sealed class Preprocessor
     }
 
     // ---- macro expansion ----
+    //
+    // Expansion reads from a stack of inputs, like glslang's TPpContext: the source tokens at the bottom and, above
+    // them, the replacement list of each macro being expanded. A macro stays hidden (glslang's 'busy') while its
+    // replacement list is on the stack, and a list is popped only when a read goes past its end. So the last name a
+    // replacement produces can take its arguments from the source that follows the invocation (`#define A B` makes
+    // `A(1)` call B), while a macro's own name inside its expansion is never expanded again.
 
-    void ExpandTokens(IReadOnlyList<Token> input, List<Token> output)
+    // A token on the expansion stack. Painted marks a token of an argument that was already macro-expanded, which
+    // glslang does not expand a second time (its fullyExpanded flag).
+    readonly record struct PTok(Token T, bool Painted = false);
+
+    sealed class Frame(List<PTok> tokens, string? macro)
     {
-        int i = 0;
-        while (i < input.Count) i = ExpandOne(input, i, output);
+        public readonly List<PTok> Tokens = tokens;
+        public readonly string? Macro = macro;   // the macro hidden while this replacement list is read
+        public int Pos;
     }
 
-    int ExpandOne(IReadOnlyList<Token> input, int i, List<Token> output)
+    sealed class PpStream(IReadOnlyList<Token> source, bool tracksLine = true)
     {
-        var t = input[i];
-        if (t.Kind == TokenKind.Identifier && !_hidden.Contains(t.Text))
+        public readonly IReadOnlyList<Token> Source = source;
+        public readonly bool TracksLine = tracksLine;   // reading a source token moves the current line
+        public int Pos;   // the next source token
+        public readonly List<Frame> Frames = [];
+        public bool FromFrame, FromMacro;   // where the last token read came from
+    }
+
+    enum Expansion { NotStarted, Started, Undefined }
+
+    int _curLine;   // the physical line of the last source token read: what __LINE__ in a macro body reports
+    Dictionary<int, List<int>> _joins = [];   // line continuations of the file being read (see Splice)
+
+    // The physical line of a token of the file being read: its line plus the continuations joined before it.
+    int Physical(Token t)
+    {
+        if (_joins.Count == 0 || !_joins.TryGetValue(t.Line, out var cols)) return t.Line;
+        int line = t.Line;
+        foreach (int c in cols) if (t.Column >= c) line++;
+        return line;
+    }
+    int _prescanDepth;
+
+    bool Next(PpStream s, out PTok tok)
+    {
+        while (s.Frames.Count > 0)
         {
-            switch (t.Text)
+            var f = s.Frames[^1];
+            if (f.Pos < f.Tokens.Count)
             {
-                case "__LINE__": output.Add(Int(t.Line + _lineOffset)); return i + 1;
-                case "__FILE__": output.Add(Int(_file)); return i + 1;
-                case "__VERSION__": output.Add(Int(_version)); return i + 1;
+                tok = f.Tokens[f.Pos++];
+                s.FromFrame = true;
+                s.FromMacro = f.Macro is not null;
+                return true;
             }
-            if (_macros.TryGetValue(t.Text, out var macro))
-            {
-                if (!macro.IsFunction)
-                {
-                    Rescan(t.Text, Substitute(macro, null), output);
-                    return i + 1;
-                }
-                if (i + 1 < input.Count && input[i + 1].Kind == TokenKind.LParen)
-                {
-                    var (args, next) = CollectArgs(input, i + 1);
-                    if (args.Count != macro.Parameters.Count)
-                        throw new GlslParseException($"'{t.Text}' : macro expects {macro.Parameters.Count} argument(s), but got {args.Count}", _site);
-                    // Arguments are macro-expanded BEFORE substitution, and before this macro is hidden, so an
-                    // argument may legally name the macro being expanded (ID(ID(x))) or another macro whose
-                    // expansion the body re-uses (TWICE(ADD(a,b))). Operands of ## keep their raw spelling.
-                    Rescan(t.Text, Substitute(macro, ExpandArgs(macro, args)), output);
-                    return next;
-                }
-            }
+            PopFrame(s);
         }
-        output.Add(t);
-        return i + 1;
+        s.FromFrame = s.FromMacro = false;
+        if (s.Pos < s.Source.Count && s.Source[s.Pos].Kind != TokenKind.End)
+        {
+            var t = s.Source[s.Pos++];
+            if (s.TracksLine) _curLine = Physical(t);
+            tok = new PTok(t);
+            return true;
+        }
+        tok = default;
+        return false;
+    }
+
+    PTok Scan(PpStream s) => Next(s, out var tok) ? tok : new PTok(new Token(TokenKind.End, "", 0, 0));
+
+    // Puts back the token the last Next returned. Next pops only exhausted lists before reading, so the list it
+    // read from is still on top.
+    static void Unget(PpStream s)
+    {
+        if (s.FromFrame) s.Frames[^1].Pos--;
+        else s.Pos--;
+    }
+
+    void PushFrame(PpStream s, List<PTok> tokens, string? macro)
+    {
+        if (s.Frames.Count >= MaxExpansionDepth)
+            throw new GlslParseException($"macro expansion of '{Clip(macro ?? s.Frames[^1].Macro ?? "")}' is nested too deeply (limit {MaxExpansionDepth})", _site);
+        if ((_expansionBudget -= tokens.Count) < 0)
+            throw new GlslParseException($"macro expansion of '{Clip(macro ?? "")}' is too large (limit {MaxExpansionTokens} tokens)", _site);
+        if (macro is not null) _hidden.Add(macro);
+        s.Frames.Add(new Frame(tokens, macro));
+    }
+
+    void PopFrame(PpStream s)
+    {
+        var f = s.Frames[^1];
+        s.Frames.RemoveAt(s.Frames.Count - 1);
+        if (f.Macro is not null) _hidden.Remove(f.Macro);
+    }
+
+    // Whether an expansion still has tokens to deliver; exhausted lists are popped (and their macros unhidden).
+    bool Pending(PpStream s)
+    {
+        while (s.Frames.Count > 0)
+        {
+            var f = s.Frames[^1];
+            if (f.Pos < f.Tokens.Count) return true;
+            PopFrame(s);
+        }
+        return false;
+    }
+
+    // Reads one source token and, if it starts a macro expansion, everything that expansion produces (which may
+    // consume further source tokens as arguments).
+    void ExpandSourceToken(PpStream s, List<Token> output)
+    {
+        if (!Next(s, out var tok)) return;
+        Expand(s, tok, output);
+        while (Pending(s) && Next(s, out tok)) Expand(s, tok, output);
+    }
+
+    void Expand(PpStream s, PTok tok, List<Token> output)
+    {
+        if (IsName(tok.T) && MacroExpand(s, tok, false) != Expansion.NotStarted) return;
+        output.Add(tok.T);
+    }
+
+    static bool IsName(Token t) => t.Kind is TokenKind.Identifier or TokenKind.BoolConst;
+
+    // glslang's MacroExpand: pushes the expansion of the name just read, if it has one. A function-like macro
+    // expands only when the next token is '('. With expandUndefined (#if), an undefined name reads as 0.
+    Expansion MacroExpand(PpStream s, PTok tok, bool expandUndefined)
+    {
+        if (tok.Painted) return Expansion.NotStarted;
+        var t = tok.T;
+        switch (t.Text)
+        {
+            case "__LINE__":
+                // A source token is on the line just read; one from a replacement list or an argument carries the
+                // line it was given when the invocation was read.
+                int line = s.TracksLine && !s.FromFrame ? _curLine : t.Line;
+                PushFrame(s, [new PTok(Int(unchecked(line + _lineOffset)))], null);
+                return Expansion.Started;
+            case "__FILE__": PushFrame(s, [new PTok(Int(_file))], null); return Expansion.Started;
+            case "__VERSION__": PushFrame(s, [new PTok(Int(_version))], null); return Expansion.Started;
+        }
+        if (!_macros.TryGetValue(t.Text, out var macro))
+        {
+            if (!expandUndefined) return Expansion.NotStarted;
+            PushFrame(s, [new PTok(Int(0))], null);
+            return Expansion.Undefined;
+        }
+        if (_hidden.Contains(t.Text)) return Expansion.NotStarted;
+        List<List<Token>>? args = null;
+        if (macro.IsFunction)
+        {
+            if (!Next(s, out var paren)) return Expansion.NotStarted;
+            if (paren.T.Kind != TokenKind.LParen) { Unget(s); return Expansion.NotStarted; }
+            args = CollectArgs(s, t.Text, macro.Parameters.Count);
+        }
+        PushFrame(s, Substitute(macro, args), t.Text);
+        return Expansion.Started;
     }
 
     // The _hidden set stops a macro expanding itself, but nothing bounds how much a chain of distinct macros
@@ -462,80 +623,108 @@ public sealed class Preprocessor
     const int MaxExpansionTokens = 4_000_000;
     int _expansionBudget = MaxExpansionTokens;
 
-    // The token budget bounds the VOLUME of an expansion, but expansion is recursive: a ladder of
-    // distinct macros (#define M1 (M0+M0); #define M2 (M1+M1); ...) nests Rescan/ExpandTokens/ExpandOne
-    // one level per link, and a long enough chain walks the C# stack off the end -- an uncatchable
-    // StackOverflowException that kills the host process (glslang rejects such sources with a clean
-    // "macro expansion too deep" instead). Cap the nesting depth at 256, mirroring the parser's
-    // expression-nesting limit; no real shader expands macros anywhere near that deep.
+    // A ladder of distinct macros (#define M1 (M0+M0); #define M2 (M1+M1); ...) stacks one replacement list per
+    // link; glslang rejects such sources with a clean "macro expansion too deep". Cap the stack at 256, mirroring
+    // the parser's expression-nesting limit; no real shader expands macros anywhere near that deep.
     const int MaxExpansionDepth = 256;
-    int _expansionDepth;
 
-    void Rescan(string macro, List<Token> expanded, List<Token> output)
+    // The arguments of a function-like macro call, read raw (unexpanded) after its '('. A __LINE__ in an argument
+    // takes the line being read, as in glslang.
+    List<List<Token>> CollectArgs(PpStream s, string name, int parameterCount)
     {
-        if (++_expansionDepth > MaxExpansionDepth)
-            throw new GlslParseException($"macro expansion of '{macro}' is nested too deeply (limit {MaxExpansionDepth})", _site);
-        try
+        var args = new List<List<Token>>();
+        var current = new List<Token>();
+        int depth = 0;
+        while (true)
         {
-            if ((_expansionBudget -= expanded.Count) < 0)
-                throw new GlslParseException($"macro expansion of '{macro}' is too large (limit {MaxExpansionTokens} tokens)", _site);
-            _hidden.Add(macro);
-            ExpandTokens(expanded, output);
-            _hidden.Remove(macro);
+            if (!Next(s, out var tok))
+                throw new GlslParseException($"'macro expansion' : End of input in macro {Clip(name)}", _site);
+            var t = tok.T;
+            if (t.Kind == TokenKind.RParen && depth == 0) break;
+            if (t.Kind == TokenKind.Comma && depth == 0) { args.Add(current); current = []; continue; }
+            if (t.Kind == TokenKind.LParen) depth++;
+            else if (t.Kind == TokenKind.RParen) depth--;
+            if (t.Text == "__LINE__") t = t with { Line = _curLine };
+            current.Add(t);
         }
-        finally { _expansionDepth--; }
+        // `F()` passes one empty argument to a one-parameter macro.
+        if (current.Count > 0 || args.Count > 0 || parameterCount == 1) args.Add(current);
+        if (args.Count != parameterCount)
+            throw new GlslParseException($"'{Clip(name)}' : macro expects {parameterCount} argument(s), but got {args.Count}", _site);
+        return args;
     }
 
-    // Pre-expands each argument. A parameter that is an operand of ## in the body is pasted with its raw
-    // spelling, so those arguments are left unexpanded.
-    List<List<Token>> ExpandArgs(Macro macro, List<List<Token>> args)
-    {
-        var result = new List<List<Token>>(args.Count);
-        for (int p = 0; p < args.Count; p++)
-        {
-            if (p < macro.Parameters.Count && IsPasteOperand(macro, macro.Parameters[p])) { result.Add(args[p]); continue; }
-            var expanded = new List<Token>();
-            ExpandTokens(args[p], expanded);
-            result.Add(expanded);
-        }
-        return result;
-    }
-
-    static bool IsPasteOperand(Macro macro, string parameter)
+    // The replacement list with the arguments substituted. A parameter next to ## takes its argument's raw tokens;
+    // anywhere else it takes the argument macro-expanded on its own beforehand (glslang's PrescanMacroArg). A
+    // __LINE__ in the body reports the line the invocation ended on.
+    List<PTok> Substitute(Macro macro, List<List<Token>>? args)
     {
         var body = macro.Body;
+        List<PTok>[]? expanded = null;
+        if (args is not null)
+        {
+            expanded = new List<PTok>[args.Count];
+            for (int p = 0; p < args.Count; p++) expanded[p] = Prescan(args[p]);
+        }
+        var result = new List<PTok>(body.Count);
         for (int j = 0; j < body.Count; j++)
         {
-            if (body[j].Kind != TokenKind.Operator || body[j].Text != "##") continue;
-            if (j > 0 && body[j - 1].Text == parameter) return true;
-            if (j + 1 < body.Count && body[j + 1].Text == parameter) return true;
-        }
-        return false;
-    }
-
-    List<Token> Substitute(Macro macro, List<List<Token>>? args)
-    {
-        var result = new List<Token>();
-        foreach (var bt in macro.Body)
-        {
-            int p = macro.IsFunction ? macro.Parameters.IndexOf(bt.Text) : -1;
-            if (p >= 0 && args is not null && p < args.Count) result.AddRange(args[p]);
-            else result.Add(bt);
+            var bt = body[j];
+            int p = args is not null && bt.Kind == TokenKind.Identifier ? macro.Parameters.LastIndexOf(bt.Text) : -1;
+            if (p >= 0 && p < args!.Count)
+            {
+                if (IsPaste(body, j - 2) || IsPaste(body, j + 1))
+                    foreach (var a in args[p]) result.Add(new PTok(a));
+                else result.AddRange(expanded![p]);
+            }
+            else result.Add(new PTok(bt.Text == "__LINE__" ? bt with { Line = _curLine } : bt));
         }
         return Paste(result);
     }
 
-    static List<Token> Paste(List<Token> body)
+    static bool IsPaste(List<Token> body, int k) =>
+        k >= 0 && k + 1 < body.Count && body[k].Kind == TokenKind.Hash && body[k + 1].Kind == TokenKind.Hash;
+
+    // Macro-expands one argument in isolation: a function-like macro at its end does not reach past it for a '('.
+    // The result is not expanded again, except a trailing function-like macro name, which the replacement list
+    // may still call.
+    List<PTok> Prescan(List<Token> arg)
     {
-        var result = new List<Token>();
+        if (++_prescanDepth > Parser.MaxNestingDepth)
+            throw new GlslParseException($"macro arguments are nested too deeply (limit {Parser.MaxNestingDepth})", _site);
+        try
+        {
+            var s = new PpStream(arg, tracksLine: false);
+            var output = new List<Token>();
+            while (Next(s, out var tok)) Expand(s, tok, output);
+            var result = new List<PTok>(output.Count);
+            for (int k = 0; k < output.Count; k++)
+            {
+                var t = output[k];
+                bool callable = k == output.Count - 1 && t.Kind == TokenKind.Identifier
+                    && _macros.TryGetValue(t.Text, out var m) && m.IsFunction;
+                result.Add(new PTok(t, !callable));
+            }
+            return result;
+        }
+        finally { _prescanDepth--; }
+    }
+
+    static List<PTok> Paste(List<PTok> body)
+    {
+        bool any = false;
+        foreach (var t in body) if (t.T.Kind == TokenKind.Hash) { any = true; break; }
+        if (!any) return body;
+        var result = new List<PTok>();
         for (int j = 0; j < body.Count; j++)
         {
-            if (body[j].Kind == TokenKind.Hash && j + 1 < body.Count && body[j + 1].Kind == TokenKind.Hash)
+            if (body[j].T.Kind == TokenKind.Hash && j + 1 < body.Count && body[j + 1].T.Kind == TokenKind.Hash)
             {
-                string left = result.Count > 0 ? result[^1].Text : "";
-                string right = j + 2 < body.Count ? body[j + 2].Text : "";
+                string left = result.Count > 0 ? result[^1].T.Text : "";
+                string right = j + 2 < body.Count ? body[j + 2].T.Text : "";
                 if (result.Count > 0) result.RemoveAt(result.Count - 1);
-                result.AddRange(Lexer.Tokenize(left + right).Where(t => t.Kind != TokenKind.End));
+                foreach (var t in Lexer.Tokenize(left + right))
+                    if (t.Kind != TokenKind.End) result.Add(new PTok(t));
                 j += 2;
             }
             else result.Add(body[j]);
@@ -543,132 +732,304 @@ public sealed class Preprocessor
         return result;
     }
 
-    static (List<List<Token>> Args, int Next) CollectArgs(IReadOnlyList<Token> input, int i)
-    {
-        i++;   // past '('
-        var args = new List<List<Token>>();
-        var current = new List<Token>();
-        int depth = 0;
-        while (i < input.Count && input[i].Kind != TokenKind.End)
-        {
-            var t = input[i++];
-            if (t.Kind == TokenKind.RParen && depth == 0) break;
-            if (t.Kind == TokenKind.Comma && depth == 0) { args.Add(current); current = []; continue; }
-            if (t.Kind == TokenKind.LParen) depth++;
-            else if (t.Kind == TokenKind.RParen) depth--;
-            current.Add(t);
-        }
-        if (current.Count > 0 || args.Count > 0) args.Add(current);
-        return (args, i);
-    }
-
     // ---- #if evaluation ----
+    //
+    // A port of glslang's TPpContext::eval: 32-bit int arithmetic on plain integer literals, names macro-expanded
+    // as they are reached (an undefined name, `true` included, reads as 0), `defined NAME` / `defined(NAME)`, and
+    // no conditional operator. INT_MIN / -1 and INT_MIN % -1 are 0, and -INT_MIN is INT_MIN, as in glslang.
 
-    bool EvalIf(IEnumerable<Token> tokens)
+    const int PrecUnary = 12;
+
+    static int BinaryPrecedence(Token t) => t.Kind != TokenKind.Operator ? -1 : t.Text switch
     {
-        var withoutDefined = ReplaceDefined(tokens.ToList());
-        var expanded = new List<Token>();
-        ExpandTokens(withoutDefined, expanded);
+        "||" => 2, "&&" => 3, "|" => 4, "^" => 5, "&" => 6, "==" or "!=" => 7,
+        "<" or ">" or "<=" or ">=" => 8, "<<" or ">>" => 9, "+" or "-" => 10, "*" or "/" or "%" => 11,
+        _ => -1,
+    };
 
-        var final = new List<Token>();
-        foreach (var t in expanded)
-            final.Add(t.Kind == TokenKind.Identifier ? Int(0) : t);   // undefined identifier -> 0
-        final.Add(new Token(TokenKind.End, "", 0, 0));
-
-        return Eval(Parser.ParseConstExpr(final)) != 0;
+    bool EvalIf(List<Token> dir, string label)
+    {
+        var s = new PpStream(dir) { Pos = 1 };
+        var tok = Scan(s);
+        int value = Eval(s, ref tok, 0, false, 0);
+        if (tok.T.Kind != TokenKind.End)
+            throw new GlslParseException($"'{label}' : unexpected tokens following directive", _directiveLine);
+        return value != 0;
     }
 
-    List<Token> ReplaceDefined(List<Token> tokens)
+    GlslParseException EvalError(string message) => new($"'preprocessor evaluation' : {message}", _directiveLine);
+
+    int Eval(PpStream s, ref PTok tok, int precedence, bool shortCircuit, int depth)
     {
-        var result = new List<Token>();
-        for (int j = 0; j < tokens.Count; j++)
+        if (depth > Parser.MaxNestingDepth)
+            throw new GlslParseException($"expression nesting is too deep (limit {Parser.MaxNestingDepth})", _directiveLine);
+        int res;
+        var t = tok.T;
+        if (t.Kind == TokenKind.Identifier && t.Text == "defined")
         {
-            if (tokens[j].Kind == TokenKind.Identifier && tokens[j].Text == "defined")
+            if (s.FromMacro)
+                throw new GlslParseException("'defined' : cannot use in preprocessor expression when expanded from macros", _directiveLine);
+            bool close = false;
+            tok = Scan(s);
+            if (tok.T.Kind == TokenKind.LParen) { close = true; tok = Scan(s); }
+            if (!IsName(tok.T)) throw EvalError("incorrect directive, expected identifier");
+            res = _macros.ContainsKey(tok.T.Text) ? 1 : 0;
+            tok = Scan(s);
+            if (close)
             {
-                string name;
-                if (j + 1 < tokens.Count && tokens[j + 1].Kind == TokenKind.LParen)
-                {
-                    if (j + 3 >= tokens.Count || tokens[j + 3].Kind != TokenKind.RParen)
-                        throw new GlslParseException("malformed 'defined(...)' in #if expression", Locate(tokens[j].Line));
-                    name = tokens[j + 2].Text;   // defined ( NAME )
-                    j += 3;
-                }
-                else
-                {
-                    if (j + 1 >= tokens.Count)
-                        throw new GlslParseException("'defined' requires an operand in #if expression", Locate(tokens[j].Line));
-                    name = tokens[j + 1].Text;   // defined NAME
-                    j += 1;
-                }
-                result.Add(Int(_macros.ContainsKey(name) ? 1 : 0));
+                if (tok.T.Kind != TokenKind.RParen) throw EvalError("expected ')'");
+                tok = Scan(s);
             }
-            else result.Add(tokens[j]);
         }
-        return result;
+        else if (IsName(t))
+        {
+            tok = EvalToToken(s, tok, shortCircuit);
+            return Eval(s, ref tok, precedence, shortCircuit, depth + 1);
+        }
+        else if (t.Kind == TokenKind.IntConst)
+        {
+            res = ParseInt(t.Text);
+            tok = Scan(s);
+        }
+        else if (t.Kind == TokenKind.LParen)
+        {
+            tok = Scan(s);
+            res = Eval(s, ref tok, 0, shortCircuit, depth + 1);
+            if (tok.T.Kind != TokenKind.RParen) throw EvalError("expected ')'");
+            tok = Scan(s);
+        }
+        else if (t.Kind == TokenKind.Operator && t.Text is "+" or "-" or "~" or "!")
+        {
+            tok = Scan(s);
+            res = Eval(s, ref tok, PrecUnary, shortCircuit, depth + 1);
+            res = t.Text switch
+            {
+                "-" => res == int.MinValue ? int.MinValue : -res,
+                "~" => ~res,
+                "!" => res == 0 ? 1 : 0,
+                _ => res,
+            };
+        }
+        else throw EvalError("bad expression");
+
+        tok = EvalToToken(s, tok, shortCircuit);
+        while (tok.T.Kind is not (TokenKind.RParen or TokenKind.End))
+        {
+            int prec = BinaryPrecedence(tok.T);
+            if (prec < 0 || prec <= precedence) break;
+            string op = tok.T.Text;
+            int left = res;
+            // Once a || with a true (1) left side or a && with a false left side is seen, the rest of this
+            // subexpression is short-circuited, which only relaxes the ES undefined-name error in glslang.
+            if (!shortCircuit && ((op == "||" && left == 1) || (op == "&&" && left == 0))) shortCircuit = true;
+            tok = Scan(s);
+            res = Eval(s, ref tok, prec, shortCircuit, depth + 1);
+            if (op is "/" or "%" && res == 0)
+            {
+                // glslang reports a division by zero even on a short-circuited side; Prism keeps the guard idiom
+                // (`#if N != 0 && 100/N > 2`) working there and reads the divisor as 1, like glslang's recovery.
+                if (!shortCircuit) throw EvalError("division by 0");
+                res = 1;
+            }
+            res = Apply(op, left, res);
+        }
+        return res;
     }
 
-    long Eval(Expr e) => e switch
+    // Expands names until the first token that is not one (glslang's evalToToken).
+    PTok EvalToToken(PpStream s, PTok tok, bool shortCircuit)
     {
-        Literal l => EvalLiteral(l),
-        Ident => 0,
-        Unary u => u.Op switch
+        while (IsName(tok.T) && tok.T.Text != "defined")
         {
-            "-" => -Eval(u.Operand),
-            "+" => Eval(u.Operand),
-            "!" => Eval(u.Operand) == 0 ? 1 : 0,
-            "~" => ~Eval(u.Operand),
-            _ => throw new GlslParseException($"invalid operator '{u.Op}' in #if"),
-        },
-        // && and || short-circuit: the untaken side is never evaluated, which is what makes the usual
-        // guard idiom (`#if N != 0 && 100/N > 2`) safe when the guard is false.
-        Binary { Op: "&&" } b => Eval(b.Left) == 0 ? 0 : Eval(b.Right) != 0 ? 1 : 0,
-        Binary { Op: "||" } b => Eval(b.Left) != 0 ? 1 : Eval(b.Right) != 0 ? 1 : 0,
-        Binary b => EvalBinary(b.Op, Eval(b.Left), Eval(b.Right)),
-        // The preprocessor expression grammar has no conditional operator.
-        Conditional => throw new GlslParseException("'#if' : unexpected tokens following directive"),
-        _ => throw new GlslParseException("invalid #if expression"),
-    };
+            switch (MacroExpand(s, tok, true))
+            {
+                case Expansion.NotStarted:
+                    throw EvalError("can't evaluate expression");
+                case Expansion.Undefined when !shortCircuit && _isEs:
+                    throw EvalError($"undefined macro in expression not allowed in es profile {Clip(tok.T.Text)}");
+            }
+            tok = Scan(s);
+        }
+        return tok;
+    }
 
-    static long EvalBinary(string op, long a, long b) => op switch
+    static int Apply(string op, int a, int b) => unchecked(op switch
     {
-        "+" => a + b, "-" => a - b, "*" => a * b,
-        "/" => b == 0 ? throw new GlslParseException("division by zero in #if") : a / b,
-        "%" => b == 0 ? throw new GlslParseException("division by zero in #if") : a % b,
-        "<<" => a << (int)b, ">>" => a >> (int)b,
-        "<" => a < b ? 1 : 0, ">" => a > b ? 1 : 0, "<=" => a <= b ? 1 : 0, ">=" => a >= b ? 1 : 0,
+        "||" => a != 0 || b != 0 ? 1 : 0,
+        "&&" => a != 0 && b != 0 ? 1 : 0,
+        "|" => a | b, "^" => a ^ b, "&" => a & b,
         "==" => a == b ? 1 : 0, "!=" => a != b ? 1 : 0,
-        "&" => a & b, "^" => a ^ b, "|" => a | b,
-        "&&" => a != 0 && b != 0 ? 1 : 0, "||" => a != 0 || b != 0 ? 1 : 0,
-        "^^" => (a != 0) ^ (b != 0) ? 1 : 0,
+        ">" => a > b ? 1 : 0, ">=" => a >= b ? 1 : 0, "<" => a < b ? 1 : 0, "<=" => a <= b ? 1 : 0,
+        "<<" => a << b, ">>" => a >> b,
+        "+" => a + b, "-" => a - b, "*" => a * b,
+        "/" => a == int.MinValue && b == -1 ? 0 : a / b,
+        "%" => a == int.MinValue && b == -1 ? 0 : a % b,
         _ => throw new GlslParseException($"invalid operator '{op}' in #if"),
-    };
+    });
 
-    static long EvalLiteral(Literal l) => l.Kind switch
-    {
-        TokenKind.BoolConst => l.Text == "true" ? 1 : 0,
-        // Only plain integers: a u/l suffix or a float is outside the preprocessor's expression grammar.
-        TokenKind.IntConst => ParseInt(l.Text),
-        _ => throw new GlslParseException($"'preprocessor evaluation' : bad expression"),
-    };
-
-    // Integer literals in #if follow the same lexical rules as the language: 0x hex, a leading 0 is octal,
-    // otherwise decimal. (Reading a leading-zero literal as decimal here would make `#if 010 == 8` disagree
-    // with the compiler, which reads 010 as 8.) A malformed or out-of-range literal is a source error.
-    static long ParseInt(string text)
+    // An integer literal in #if follows the language's lexical rules (0x hex, a leading 0 octal, otherwise decimal)
+    // and holds 32 bits, as in glslang's scanner: a larger value is an error, and 0x80000000..0xFFFFFFFF wrap to
+    // negative ints.
+    int ParseInt(string text)
     {
         string t = text.TrimEnd('u', 'U', 'l', 'L');
+        bool hex = t.StartsWith("0x") || t.StartsWith("0X"), octal = !hex && t.Length > 1 && t[0] == '0';
+        ulong v;
         try
         {
-            return
-                t.StartsWith("0x") || t.StartsWith("0X") ? (long)Convert.ToUInt64(t[2..], 16) :
-                t.Length > 1 && t[0] == '0' ? (long)Convert.ToUInt64(t, 8) :
-                (long)ulong.Parse(t, CultureInfo.InvariantCulture);
+            v = hex ? Convert.ToUInt64(t[2..], 16) : octal ? Convert.ToUInt64(t, 8) : ulong.Parse(t, NumberStyles.None, CultureInfo.InvariantCulture);
         }
-        catch (Exception e) when (e is FormatException or OverflowException or ArgumentException)
+        catch (OverflowException) { v = ulong.MaxValue; }
+        catch (Exception e) when (e is FormatException or ArgumentException)
         {
-            throw new GlslParseException($"invalid integer literal '{Clip(text)}' in #if");
+            throw new GlslParseException($"invalid integer literal '{Clip(text)}' in #if", _directiveLine);
+        }
+        if (v > uint.MaxValue)
+            throw new GlslParseException($"'' : {(hex ? "hexadecimal" : octal ? "octal" : "numeric")} literal too big", _directiveLine);
+        return unchecked((int)(uint)v);
+    }
+
+    // ---- predefined macros ----
+
+    // glslang's system preamble for a Vulkan (-V) compile (TParseVersions::getPreamble): the extensions it supports,
+    // the profile macros, GL_FRAGMENT_PRECISION_HIGH, VULKAN 100 and, for desktop GLSL, the stage. It depends on
+    // the version, so it is defined once #version has been seen (at the first other directive or code). A macro
+    // the caller already defined keeps the caller's value.
+    bool _preambleDone, _compatibility;
+    readonly HashSet<string> _predefined = [];
+    readonly ShaderStage? _stage;
+
+    void EnsurePreamble()
+    {
+        if (_preambleDone) return;
+        _preambleDone = true;
+        int v = _version;
+        if (_isEs)
+        {
+            Predefine(EsPreamble);
+            if (v >= 300) Predefine("GL_NV_shader_noperspective_interpolation");
+            if (v >= 310) Predefine("GL_EXT_null_initializer", "GL_EXT_subgroup_uniform_control_flow", "GL_EXT_maximal_reconvergence");
+        }
+        else
+        {
+            Predefine(DesktopPreamble);
+            if (v >= 150)
+            {
+                Predefine("GL_core_profile");
+                if (_compatibility) Predefine("GL_compatibility_profile");
+            }
+            if (v >= 140) Predefine("GL_EXT_null_initializer", "GL_EXT_subgroup_uniform_control_flow", "GL_EXT_maximal_reconvergence");
+            if (v >= 130) Predefine("GL_FRAGMENT_PRECISION_HIGH");
+        }
+        if ((!_isEs && v >= 140) || (_isEs && v >= 310))
+            Predefine("GL_EXT_device_group", "GL_EXT_multiview", "GL_NV_shader_sm_builtins");
+        if ((!_isEs && v >= 130) || (_isEs && v >= 300))
+            Predefine("GL_EXT_texture_offset_non_const");
+        if (v >= 300) Predefine("GL_OVR_multiview", "GL_OVR_multiview2");
+        Predefine("GL_GOOGLE_cpp_style_line_directive", "GL_GOOGLE_include_directive", "GL_KHR_blend_equation_advanced",
+            "GL_EXT_terminate_invocation");
+        PredefineValue("VULKAN", "100");
+        if (!_isEs && _stage is ShaderStage stage)
+        {
+            string? name = stage switch
+            {
+                ShaderStage.Vertex => "GL_VERTEX_SHADER",
+                ShaderStage.TessControl => "GL_TESSELLATION_CONTROL_SHADER",
+                ShaderStage.TessEvaluation => "GL_TESSELLATION_EVALUATION_SHADER",
+                ShaderStage.Geometry => "GL_GEOMETRY_SHADER",
+                ShaderStage.Fragment => "GL_FRAGMENT_SHADER",
+                ShaderStage.Compute => "GL_COMPUTE_SHADER",
+                ShaderStage.RayGen => "GL_RAY_GENERATION_SHADER_EXT",
+                ShaderStage.Intersection => "GL_INTERSECTION_SHADER_EXT",
+                ShaderStage.AnyHit => "GL_ANY_HIT_SHADER_EXT",
+                ShaderStage.ClosestHit => "GL_CLOSEST_HIT_SHADER_EXT",
+                ShaderStage.Miss => "GL_MISS_SHADER_EXT",
+                ShaderStage.Callable => "GL_CALLABLE_SHADER_EXT",
+                ShaderStage.Task => "GL_TASK_SHADER_NV",
+                ShaderStage.Mesh => "GL_MESH_SHADER_NV",
+                _ => null,
+            };
+            if (name is not null) Predefine(name);
         }
     }
+
+    void Predefine(params string[] names)
+    {
+        foreach (var name in names) PredefineValue(name, "1");
+    }
+
+    void PredefineValue(string name, string value)
+    {
+        if (_macros.ContainsKey(name)) return;
+        _macros[name] = new Macro(false, [], [new Token(TokenKind.IntConst, value, 0, 0)]);
+        _predefined.Add(name);
+    }
+
+    static readonly string[] EsPreamble =
+    [
+        "GL_ES", "GL_FRAGMENT_PRECISION_HIGH", "GL_OES_texture_3D", "GL_OES_standard_derivatives", "GL_EXT_frag_depth",
+        "GL_OES_EGL_image_external", "GL_OES_EGL_image_external_essl3", "GL_EXT_YUV_target", "GL_EXT_shader_texture_lod",
+        "GL_EXT_shadow_samplers", "GL_EXT_fragment_shading_rate",
+        "GL_ANDROID_extension_pack_es31a", "GL_OES_sample_variables", "GL_OES_shader_image_atomic",
+        "GL_OES_shader_multisample_interpolation", "GL_OES_texture_storage_multisample_2d_array", "GL_EXT_geometry_shader",
+        "GL_EXT_geometry_point_size", "GL_EXT_gpu_shader5", "GL_EXT_primitive_bounding_box", "GL_EXT_shader_io_blocks",
+        "GL_EXT_tessellation_shader", "GL_EXT_tessellation_point_size", "GL_EXT_texture_buffer", "GL_EXT_texture_cube_map_array",
+        "GL_EXT_shader_implicit_conversions", "GL_EXT_shader_integer_mix", "GL_EXT_blend_func_extended",
+        "GL_OES_geometry_shader", "GL_OES_geometry_point_size", "GL_OES_gpu_shader5", "GL_OES_primitive_bounding_box",
+        "GL_OES_shader_io_blocks", "GL_OES_tessellation_shader", "GL_OES_tessellation_point_size", "GL_OES_texture_buffer",
+        "GL_OES_texture_cube_map_array", "GL_EXT_shader_non_constant_global_initializers",
+        "GL_QCOM_image_processing", "GL_QCOM_image_processing2", "GL_QCOM_tile_shading", "GL_QCOM_cooperative_matrix_conversion",
+    ];
+
+    static readonly string[] DesktopPreamble =
+    [
+        "GL_ARB_texture_rectangle", "GL_ARB_shading_language_420pack", "GL_ARB_texture_gather", "GL_ARB_gpu_shader5",
+        "GL_ARB_separate_shader_objects", "GL_ARB_compute_shader", "GL_ARB_tessellation_shader", "GL_ARB_enhanced_layouts",
+        "GL_ARB_texture_cube_map_array", "GL_ARB_texture_multisample", "GL_ARB_shader_texture_lod",
+        "GL_ARB_explicit_attrib_location", "GL_ARB_explicit_uniform_location", "GL_ARB_shader_image_load_store",
+        "GL_ARB_shader_atomic_counters", "GL_ARB_shader_draw_parameters", "GL_ARB_shader_group_vote",
+        "GL_ARB_derivative_control", "GL_ARB_shader_texture_image_samples", "GL_ARB_viewport_array",
+        "GL_ARB_gpu_shader_int64", "GL_ARB_gpu_shader_fp64", "GL_ARB_shader_ballot", "GL_ARB_sparse_texture2",
+        "GL_ARB_sparse_texture_clamp", "GL_ARB_shader_stencil_export", "GL_ARB_sample_shading", "GL_ARB_shader_image_size",
+        "GL_ARB_shading_language_packing", "GL_ARB_post_depth_coverage", "GL_ARB_fragment_shader_interlock",
+        "GL_ARB_uniform_buffer_object", "GL_ARB_shader_bit_encoding", "GL_ARB_shader_storage_buffer_object",
+        "GL_ARB_texture_query_lod", "GL_ARB_vertex_attrib_64bit", "GL_NV_gpu_shader5", "GL_ARB_draw_instanced",
+        "GL_ARB_fragment_coord_conventions",
+        "GL_EXT_shader_non_constant_global_initializers", "GL_EXT_shader_image_load_formatted", "GL_EXT_post_depth_coverage",
+        "GL_EXT_control_flow_attributes", "GL_EXT_nonuniform_qualifier", "GL_EXT_shader_16bit_storage",
+        "GL_EXT_shader_8bit_storage", "GL_EXT_samplerless_texture_functions", "GL_EXT_scalar_block_layout",
+        "GL_EXT_fragment_invocation_density", "GL_EXT_buffer_reference", "GL_EXT_buffer_reference2",
+        "GL_EXT_buffer_reference_uvec2", "GL_EXT_demote_to_helper_invocation", "GL_EXT_debug_printf",
+        "GL_EXT_fragment_shading_rate", "GL_EXT_shared_memory_block", "GL_EXT_shader_integer_mix",
+        "GL_EXT_spec_constant_composites",
+        "GL_KHR_shader_subgroup_basic", "GL_KHR_shader_subgroup_vote", "GL_KHR_shader_subgroup_arithmetic",
+        "GL_KHR_shader_subgroup_ballot", "GL_KHR_shader_subgroup_shuffle", "GL_KHR_shader_subgroup_shuffle_relative",
+        "GL_KHR_shader_subgroup_clustered", "GL_KHR_shader_subgroup_quad",
+        "GL_KHR_cooperative_matrix",
+        "GL_EXT_shader_image_int64", "GL_EXT_shader_atomic_int64", "GL_EXT_shader_realtime_clock", "GL_EXT_ray_tracing",
+        "GL_EXT_ray_query", "GL_EXT_ray_flags_primitive_culling", "GL_EXT_ray_cull_mask", "GL_EXT_ray_tracing_position_fetch",
+        "GL_EXT_spirv_intrinsics", "GL_EXT_mesh_shader",
+        "GL_AMD_shader_ballot", "GL_AMD_shader_trinary_minmax", "GL_AMD_shader_explicit_vertex_parameter",
+        "GL_AMD_gcn_shader", "GL_AMD_gpu_shader_half_float", "GL_AMD_texture_gather_bias_lod", "GL_AMD_gpu_shader_int16",
+        "GL_AMD_shader_image_load_store_lod", "GL_AMD_shader_fragment_mask", "GL_AMD_gpu_shader_half_float_fetch",
+        "GL_INTEL_shader_integer_functions2",
+        "GL_NV_sample_mask_override_coverage", "GL_NV_geometry_shader_passthrough", "GL_NV_viewport_array2",
+        "GL_NV_shader_atomic_int64", "GL_NV_conservative_raster_underestimation", "GL_NV_shader_subgroup_partitioned",
+        "GL_NV_shading_rate_image", "GL_NV_ray_tracing", "GL_NV_ray_tracing_motion_blur", "GL_NV_fragment_shader_barycentric",
+        "GL_NV_compute_shader_derivatives", "GL_NV_shader_texture_footprint", "GL_NV_mesh_shader", "GL_NV_cooperative_matrix",
+        "GL_NV_integer_cooperative_matrix", "GL_NV_shader_invocation_reorder", "GL_NV_cooperative_matrix2",
+        "GL_QCOM_image_processing", "GL_QCOM_image_processing2", "GL_QCOM_tile_shading", "GL_QCOM_cooperative_matrix_conversion",
+        "GL_EXT_shader_explicit_arithmetic_types", "GL_EXT_shader_explicit_arithmetic_types_int8",
+        "GL_EXT_shader_explicit_arithmetic_types_int16", "GL_EXT_shader_explicit_arithmetic_types_int32",
+        "GL_EXT_shader_explicit_arithmetic_types_int64", "GL_EXT_shader_explicit_arithmetic_types_float16",
+        "GL_EXT_shader_explicit_arithmetic_types_float32", "GL_EXT_shader_explicit_arithmetic_types_float64",
+        "GL_EXT_shader_subgroup_extended_types_int8", "GL_EXT_shader_subgroup_extended_types_int16",
+        "GL_EXT_shader_subgroup_extended_types_int64", "GL_EXT_shader_subgroup_extended_types_float16",
+        "GL_EXT_shader_atomic_float", "GL_EXT_shader_atomic_float2",
+        "GL_EXT_fragment_shader_barycentric", "GL_EXT_shader_quad_control", "GL_EXT_texture_array",
+        "GL_EXT_control_flow_attributes2",
+        "GL_EXT_integer_dot_product", "GL_EXT_bfloat16", "GL_EXT_float_e5m2", "GL_EXT_float_e4m3",
+    ];
 
     // Diagnostics must not embed unbounded token text: a 100,000-digit literal or a megabyte macro
     // name would produce a megabyte error message (which also deadlocks naive hosts draining stderr
@@ -680,11 +1041,13 @@ public sealed class Preprocessor
     // A backslash-newline joins the next physical line onto the current one. The newlines removed by the
     // join are re-emitted at the end of the joined line, so every later line keeps its original number --
     // otherwise diagnostics and __LINE__ drift by one per continuation for the rest of the file.
-    static string Splice(string source)
+    // Each join is recorded in `joins` (joined line -> the column at which each further physical line starts), so
+    // __LINE__ can still report the physical line, as glslang does.
+    static string Splice(string source, Dictionary<int, List<int>>? joins = null)
     {
         if (source.IndexOf('\\') < 0) return source;   // nothing to join
         var sb = new System.Text.StringBuilder(source.Length);
-        int pending = 0;
+        int pending = 0, line = 1, lineStart = 0;
         for (int i = 0; i < source.Length; i++)
         {
             char c = source[i];
@@ -692,10 +1055,25 @@ public sealed class Preprocessor
             {
                 int j = i + 1;
                 if (j < source.Length && source[j] == '\r') j++;
-                if (j < source.Length && source[j] == '\n') { pending++; i = j; continue; }
+                if (j < source.Length && source[j] == '\n')
+                {
+                    pending++;
+                    i = j;
+                    if (joins is not null)
+                    {
+                        if (!joins.TryGetValue(line, out var cols)) joins[line] = cols = [];
+                        cols.Add(sb.Length - lineStart + 1);
+                    }
+                    continue;
+                }
             }
             sb.Append(c);
-            if (c == '\n') { for (; pending > 0; pending--) sb.Append('\n'); }
+            if (c == '\n')
+            {
+                line++;
+                for (; pending > 0; pending--) { sb.Append('\n'); line++; }
+                lineStart = sb.Length;
+            }
         }
         for (; pending > 0; pending--) sb.Append('\n');
         return sb.ToString();
