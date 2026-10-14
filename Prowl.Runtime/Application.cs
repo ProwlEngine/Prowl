@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Runtime.Diagnostics;
+
 namespace Prowl.Runtime;
 
 /// <summary>
@@ -99,6 +101,8 @@ public static class Application
     /// <summary>Blocks until the next frame is due. The run loops call this, once per frame.</summary>
     internal static void WaitForNextFrame()
     {
+        using FrameStatScope stats = FrameStats.Idle.Scope();
+
         // A running XR session paces the loop through the headset's own frame timing.
         if (XR.IsPacingFrames) return;
         s_limiter.Wait();
