@@ -148,13 +148,14 @@ public static class FrameStats
     }
 
     /// <summary>
-    /// Moves time already charged to <paramref name="from"/> this frame over to <paramref name="to"/>, for a wait
-    /// whose cause is only known once it is over. Never moves more than <paramref name="from"/> holds.
+    /// Moves time charged to <paramref name="from"/> this frame, including an open scope's time so far, over to
+    /// <paramref name="to"/>, for a wait whose cause is only known once it is over. Never moves more than it holds.
     /// </summary>
     internal static void Transfer(FrameStat from, FrameStat to, long stopwatchTicks)
     {
         if (Environment.CurrentManagedThreadId != s_mainThreadId) return;
 
+        CloseSegment(Stopwatch.GetTimestamp());
         long ticks = Math.Min(stopwatchTicks, from.Ticks);
         if (ticks <= 0) return;
         from.Ticks -= ticks;
