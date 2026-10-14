@@ -48,22 +48,17 @@ public static class BakedVariants
         return hash;
     }
 
-    /// <summary>Takes in everything compiled so far by each pass's variants.</summary>
-    public static void Capture(IEnumerable<PassVariants> passes)
+    /// <summary>Takes in the compiled variants of a pass at the given keys.</summary>
+    public static void Capture(PassVariants variants, IEnumerable<int> keys)
     {
-        foreach (PassVariants variants in passes)
+        Pass baked = new() { Axes = [.. variants.Axes], Globals = [.. variants.Globals] };
+        foreach (int key in keys)
         {
-            Pass baked = new() { Axes = [.. variants.Axes], Globals = [.. variants.Globals] };
-            for (int key = 0; key < variants.Count; key++)
-            {
-                if (variants.Compiled(key) is { } variant)
-                    baked.Variants.Add(variant);
-                if (variants.CompiledCompute(key) is { } compute)
-                    baked.Compute[(variants.Backend, key)] = compute;
-            }
-            if (baked.Variants.Count > 0 || baked.Compute.Count > 0)
-                Add(variants.Pass.SourceName, variants.Pass.Source, baked);
+            if (variants.Compiled(key) is { } variant)
+                baked.Variants.Add(variant);
         }
+        if (baked.Variants.Count > 0)
+            Add(variants.Pass.SourceName, variants.Pass.Source, baked);
     }
 
     public static void Write(Stream stream)

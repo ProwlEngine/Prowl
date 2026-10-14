@@ -7,7 +7,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
-using Silk.NET.Shaderc;
+using Prowl.Prism.Compiler;
+using Prowl.Prism.Glsl;
+using Prowl.Prism.SpirV;
 
 
 namespace Prowl.Graphite.ShaderDef.Compiler;
@@ -33,11 +35,6 @@ public sealed class GlslCompilerOptions
     /// Runs the SPIR-V optimizer.
     /// </summary>
     public bool Optimize = true;
-
-    /// <summary>
-    /// Emits debug information for shader debuggers.
-    /// </summary>
-    public bool DebugInfo;
 
     /// <summary>
     /// Macros defined for every stage of every shader.
@@ -85,14 +82,9 @@ public sealed class GlslProgram
 /// <summary>
 /// Compiles GLSLPROGRAM passes to SPIR-V through shaderc. Thread safe, one instance can serve every shader.
 /// </summary>
-public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
+public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 {
-    private static readonly Shaderc s_api = Shaderc.GetApi();
-    private static readonly PfnIncludeResolveFn s_resolve = new(ResolveCallback);
-    private static readonly PfnIncludeResultReleaseFn s_release = new(ReleaseCallback);
-
     private readonly GlslCompilerOptions _options;
-    private readonly ThreadLocal<nint> _compilers = new(() => (nint)s_api.CompilerInitialize(), trackAllValues: true);
     private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, string[] Globals)> _pragmas = new();
     private int _sessionVersion;
     private bool _disposed;
@@ -232,19 +224,7 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
     }
 
 
-    /// <summary>
-    /// Releases the native compilers.
-    /// </summary>
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        foreach (nint compiler in _compilers.Values)
-            s_api.CompilerRelease((Silk.NET.Shaderc.Compiler*)compiler);
-        _compilers.Dispose();
-    }
+    public void Dispose() => _disposed = true;
 
 
     private static string FileName(ShaderPass pass)
@@ -306,7 +286,7 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
     private readonly ConcurrentDictionary<string, byte[]> _spirv = new(StringComparer.Ordinal);
 
     // Bump when the compile settings below change in a way the source does not show
-    private const string CacheSalt = "graphite-spirv-1";
+    private const string CacheSalt = "graphite-prism-1";
 
     private byte[] Run(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
     {
@@ -349,7 +329,7 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
     private string CacheKey(string source, GlslStage stage, Dictionary<string, string> defines)
     {
         StringBuilder text = new(source.Length + 128);
-        text.Append(CacheSalt).Append('|').Append(stage).Append('|').Append(_options.Optimize).Append('|').Append(_options.DebugInfo);
+        text.Append(CacheSalt).Append('|').Append(stage).Append('|').Append(_options.Optimize);
         List<string> names = [.. defines.Keys];
         names.Sort(StringComparer.Ordinal);
         foreach (string name in names)
@@ -360,112 +340,26 @@ public sealed unsafe class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private byte[] Invoke(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
     {
-        CompileOptions* options = s_api.CompileOptionsInitialize();
-        IncludeContext context = new() { Resolve = Resolve };
-        GCHandle handle = GCHandle.Alloc(context);
-        CompilationResult* result = null;
+        IncludeResult? Include(string name, bool system, string from)
+            => Resolve(name, from) is { } text ? new IncludeResult(name, GlslPragmas.StripOnce(text, out _)) : null;
         try
         {
-            s_api.CompileOptionsSetTargetEnv(options, TargetEnv.Vulkan, (1u << 22) | (2u << 12));
-            s_api.CompileOptionsSetTargetSpirv(options, SpirvVersion.Shaderc15);
-            s_api.CompileOptionsSetOptimizationLevel(options, _options.Optimize ? OptimizationLevel.Performance : OptimizationLevel.Zero);
-            if (_options.DebugInfo)
-                s_api.CompileOptionsSetGenerateDebugInfo(options);
-
-            foreach ((string name, string value) in defines)
-                s_api.CompileOptionsAddMacroDefinition(options, name, (nuint)Encoding.UTF8.GetByteCount(name), value, (nuint)Encoding.UTF8.GetByteCount(value));
-
-            s_api.CompileOptionsSetIncludeCallbacks(options, s_resolve, s_release, (void*)GCHandle.ToIntPtr(handle));
-
-            ShaderKind kind = stage switch
+            if (preprocess)
+                return Encoding.UTF8.GetBytes(GlslCompiler.Preprocess(source, defines, Include).Text);
+            ShaderStage kind = stage switch
             {
-                GlslStage.Vertex => ShaderKind.VertexShader,
-                GlslStage.Fragment => ShaderKind.FragmentShader,
-                _ => ShaderKind.ComputeShader,
+                GlslStage.Vertex => ShaderStage.Vertex,
+                GlslStage.Fragment => ShaderStage.Fragment,
+                _ => ShaderStage.Compute,
             };
-
-            Silk.NET.Shaderc.Compiler* compiler = (Silk.NET.Shaderc.Compiler*)_compilers.Value;
-            nuint length = (nuint)Encoding.UTF8.GetByteCount(source);
-            result = preprocess
-                ? s_api.CompileIntoPreprocessedText(compiler, source, length, kind, file, "main", options)
-                : s_api.CompileIntoSpv(compiler, source, length, kind, file, "main", options);
-
-            string messages = s_api.ResultGetErrorMessageS(result) ?? "";
-            if (s_api.ResultGetCompilationStatus(result) != CompilationStatus.Success)
-                throw new ShaderCompileException(messages.TrimEnd());
-
-            if (!preprocess && s_api.ResultGetNumWarnings(result) > 0)
-                warnings.Append(messages);
-
-            byte[] bytes = new byte[(int)s_api.ResultGetLength(result)];
-            fixed (byte* destination = bytes)
-                Buffer.MemoryCopy(s_api.ResultGetBytes(result), destination, bytes.Length, bytes.Length);
-            return bytes;
+            return GlslCompiler.CompileToBytes(source, kind, SpirVVersion.V1_5, defines, _options.Optimize, includes: Include);
         }
-        finally
+        catch (GlslParseException e)
         {
-            if (result != null)
-                s_api.ResultRelease(result);
-            s_api.CompileOptionsRelease(options);
-            handle.Free();
+            // Prism reports the file and line its #line directives and includes gave the error; the pass is the fallback.
+            string where = e.File ?? file;
+            throw new ShaderCompileException(e.Line > 0 ? $"{where}:{e.Line}: error: {e.Text}" : $"{where}: error: {e.Text}");
         }
-    }
-
-
-    private sealed class IncludeContext
-    {
-        public required Func<string, string, string?> Resolve;
-        public readonly HashSet<string> Once = new(StringComparer.Ordinal);
-    }
-
-
-    private static IncludeResult* ResolveCallback(void* userData, byte* requested, int type, byte* requesting, nuint depth)
-    {
-        IncludeContext context = (IncludeContext)GCHandle.FromIntPtr((nint)userData).Target!;
-        string name = Marshal.PtrToStringUTF8((nint)requested) ?? "";
-        string from = Marshal.PtrToStringUTF8((nint)requesting) ?? "";
-
-        string resolvedName = name;
-        string content;
-        string? source = null;
-        try
-        {
-            source = context.Resolve(name, from);
-        }
-        catch (Exception exception)
-        {
-            content = $"resolving '{name}' threw {exception.GetType().Name}: {exception.Message}";
-            return Allocate("", content);
-        }
-
-        if (source == null)
-            return Allocate("", $"'{name}' was not found");
-
-        content = GlslPragmas.StripOnce(source, out bool once);
-        if (once && !context.Once.Add(name))
-            content = "";
-
-        return Allocate(resolvedName, content);
-    }
-
-
-    private static IncludeResult* Allocate(string name, string content)
-    {
-        IncludeResult* result = (IncludeResult*)NativeMemory.Alloc((nuint)sizeof(IncludeResult));
-        result->SourceName = (byte*)Marshal.StringToCoTaskMemUTF8(name);
-        result->SourceNameLength = (nuint)Encoding.UTF8.GetByteCount(name);
-        result->Content = (byte*)Marshal.StringToCoTaskMemUTF8(content);
-        result->ContentLength = (nuint)Encoding.UTF8.GetByteCount(content);
-        result->UserData = null;
-        return result;
-    }
-
-
-    private static void ReleaseCallback(void* userData, IncludeResult* result)
-    {
-        Marshal.FreeCoTaskMem((nint)result->SourceName);
-        Marshal.FreeCoTaskMem((nint)result->Content);
-        NativeMemory.Free(result);
     }
 }
 

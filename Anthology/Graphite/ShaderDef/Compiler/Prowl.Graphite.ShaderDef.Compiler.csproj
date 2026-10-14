@@ -10,19 +10,16 @@
 
     <PropertyGroup>
         <PackageId>Prowl.Graphite.ShaderDef.Compiler</PackageId>
-        <Description>The GLSL shader compiler for Prowl.Graphite.ShaderDef, built on shaderc.</Description>
+        <Description>The GLSL shader compiler for Prowl.Graphite.ShaderDef, built on Prism.</Description>
         <PackageTags>graphics api Vulkan glsl spirv compiler shader</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
         <ProjectReference Include="..\Core\Prowl.Graphite.ShaderDef.csproj" />
+        <ProjectReference Include="..\..\..\Prism\Prism\Prowl.Prism.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="Silk.NET.Shaderc" Version="$(SilkNetVersion)" />
-        <PackageReference Include="Silk.NET.Shaderc.Native" Version="$(SilkNetVersion)" />
-    </ItemGroup>
 
     <ItemGroup>
         <EmbeddedResource Include="Library\**\*.glsl" LogicalName="Graphite/%(RecursiveDir)%(Filename)%(Extension)" />
