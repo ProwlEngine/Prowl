@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.PaperUI;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Vector;
 
 using Silk.NET.Maths;
@@ -23,6 +24,8 @@ public static class PaperInputBridge
 
     public static void Pump(Paper paper, Float2 pointerPos, bool receivesInput = true)
     {
+        using FrameStatScope stats = FrameStats.Input.Scope();
+
         if (!receivesInput)
         {
             paper.SetPointerState(PaperMouseBtn.Unknown, -1f, -1f, false, true);

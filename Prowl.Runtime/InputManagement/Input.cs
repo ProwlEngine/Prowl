@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.PaperUI;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -304,6 +305,8 @@ public static class Input
     /// </summary>
     internal static void UpdateActions(float deltaTime)
     {
+        using FrameStatScope stats = FrameStats.Input.Scope();
+
         _currentTime += deltaTime;
 
         if (s_vibrationEnds.Count > 0) StopExpiredVibrations();

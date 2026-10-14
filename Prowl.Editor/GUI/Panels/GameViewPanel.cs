@@ -11,6 +11,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -285,9 +286,14 @@ public class GameViewPanel : DockPanel
                 try
                 {
                     PaperInputBridge.Pump(_gamePaper!, pointerInRT, hovered && pointerInside);
-                    _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
-                    scene.OnGui(_gamePaper);
-                    _gamePaper.EndFrame();
+
+                    // Counted as UI, the same as in a build, not as the editor drawing it.
+                    using (FrameStats.UI.Scope())
+                    {
+                        _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
+                        scene.OnGui(_gamePaper);
+                        _gamePaper.EndFrame();
+                    }
                 }
                 finally
                 {

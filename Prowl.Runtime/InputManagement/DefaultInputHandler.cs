@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.PaperUI;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Vector;
 
 using Silk.NET.GLFW;
@@ -164,6 +165,8 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     internal void LateUpdate()
     {
+        using FrameStatScope stats = FrameStats.Input.Scope();
+
         // Before sampling, so this frame reports the clamped position and the delta at the wall is zero
         ConfineCursor();
 
