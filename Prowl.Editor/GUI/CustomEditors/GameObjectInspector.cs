@@ -436,8 +436,8 @@ public static class GameObjectInspector
         bool expanded = SectionHeader(paper, font, $"gi_transform_{goId}", EditorIcons.ArrowsUpDownLeftRight,
             Loc.Get("inspector.transform"), EditorTheme.Ink500, () =>
             {
-                EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, () => ResetTransform(go));
-                EditorGUI.HeaderIconButton(paper, "gi_tf_dots", EditorIcons.EllipsisVertical, () =>
+                EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, Loc.Get("inspector.reset"), () => ResetTransform(go));
+                EditorGUI.HeaderIconButton(paper, "gi_tf_dots", EditorIcons.EllipsisVertical, Loc.Get("inspector.options"), () =>
                     Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
                         b.Item(Loc.Get("inspector.reset"), () => ResetTransform(go), icon: EditorIcons.ArrowRotateRight)));
             });
@@ -873,7 +873,7 @@ public static class GameObjectInspector
                         Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
                             v => { bool old = comp.Enabled; Guid cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { Component? c = Undo.FindComponent(cId); if (c != null) { c.Enabled = old; c.OnValidate(); } }, () => { Component? c = Undo.FindComponent(cId); if (c != null) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
                             .NoLabel().Show();
-                    EditorGUI.HeaderIconButton(paper, $"{compId}_gear", EditorIcons.EllipsisVertical, () =>
+                    EditorGUI.HeaderIconButton(paper, $"{compId}_gear", EditorIcons.EllipsisVertical, Loc.Get("inspector.options"), () =>
                         Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
                             BuildComponentContextMenu(b, go, comp, capturedI)));
                 },

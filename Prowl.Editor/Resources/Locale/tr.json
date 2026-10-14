@@ -43,6 +43,7 @@
   "scene.pivot_center": "Pivot: Merkez",
   "scene.orientation_local": "Yonelim: Yerel",
   "scene.snap_enabled": "Yapisma",
+  "scene.settings": "Gorunum Ayarlari",
 
   "game.resolution": "Cozunurluk",
   "game.show_stats": "Istatistikleri Goster",
@@ -52,6 +53,7 @@
   "game.pause": "Duraklat",
   "game.resume": "Devam et",
   "game.step": "Bir kare ilerlet",
+  "game.settings": "Oyun Ayarlari",
 
   "dialog.delete_assets": "Varliklari Sil",
   "dialog.unsaved_prefab": "Kaydedilmemis Prefab Degisiklikleri",
@@ -72,8 +74,10 @@
   "project.copy_path": "Yolu Kopyala",
   "project.delete": "Sil",
   "project.reimport": "Yeniden Ice Aktar",
+  "project.refresh": "Yenile",
   "project.rename": "Yeniden Adlandir",
   "project.show_in_explorer": "Gezginde Goster",
+  "project.options": "Secenekler",
 
   "toast.cursor_locked": "Imlec Kilitlendi",
   "toast.cursor_locked_msg": "Serbest birakmak icin Escape'e basin.",
@@ -96,6 +100,7 @@
   "console.log_success": "LogBasari",
   "console.show_time": "Zamani Goster",
   "console.multi_line": "Cok Satirli",
+  "console.options": "Secenekler",
 
   "launcher.search": "Proje ara",
   "launcher.open_project": "Proje ac",
@@ -179,6 +184,7 @@
   "inspector.count": "Sayi",
   "inspector.message": "Mesaj",
   "inspector.stack_trace": "Yigin Izleme",
+  "inspector.options": "Bilesen Secenekleri",
 
   "menu.file": "Dosya",
   "menu.file.new_scene": "Yeni Sahne",

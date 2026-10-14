@@ -43,6 +43,7 @@
   "scene.pivot_center": "Os: Srodek",
   "scene.orientation_local": "Orientacja: Lokalna",
   "scene.snap_enabled": "Przyciaganie",
+  "scene.settings": "Ustawienia widoku",
 
   "game.resolution": "Rozdzielczosc",
   "game.show_stats": "Pokaz statystyki",
@@ -52,6 +53,7 @@
   "game.pause": "Wstrzymaj",
   "game.resume": "Wznów",
   "game.step": "Przejdź o jedną klatkę",
+  "game.settings": "Ustawienia gry",
 
   "dialog.delete_assets": "Usun assety",
   "dialog.unsaved_prefab": "Niezapisane zmiany Prefabu",
@@ -72,8 +74,10 @@
   "project.copy_path": "Kopiuj sciezke",
   "project.delete": "Usun",
   "project.reimport": "Reimportuj",
+  "project.refresh": "Odswiez",
   "project.rename": "Zmien nazwe",
   "project.show_in_explorer": "Pokaz w eksploratorze",
+  "project.options": "Opcje",
 
   "toast.cursor_locked": "Kursor zablokowany",
   "toast.cursor_locked_msg": "Nacisnij Escape, aby odblokowac.",
@@ -96,6 +100,7 @@
   "console.log_success": "LogSukces",
   "console.show_time": "Pokaz czas",
   "console.multi_line": "Wiele linii",
+  "console.options": "Opcje",
 
   "launcher.search": "Szukaj projektow",
   "launcher.open_project": "Otworz projekt",
@@ -179,6 +184,7 @@
   "inspector.count": "Liczba",
   "inspector.message": "Wiadomosc",
   "inspector.stack_trace": "Slad stosu",
+  "inspector.options": "Opcje komponentu",
 
   "menu.file": "Plik",
   "menu.file.new_scene": "Nowa scena",

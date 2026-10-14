@@ -43,6 +43,7 @@
   "scene.pivot_center": "Pivot: Center",
   "scene.orientation_local": "Orientation: Local",
   "scene.snap_enabled": "Snap",
+  "scene.settings": "뷰 설정",
 
   "game.resolution": "해상도",
   "game.show_stats": "통계 표시",
@@ -52,6 +53,7 @@
   "game.pause": "일시 정지",
   "game.resume": "재개",
   "game.step": "한 프레임 진행",
+  "game.settings": "게임 설정",
 
   "dialog.delete_assets": "에셋 삭제",
   "dialog.unsaved_prefab": "저장되지 않은 Prefab 변경 사항",
@@ -72,8 +74,10 @@
   "project.copy_path": "경로 복사",
   "project.delete": "삭제",
   "project.reimport": "재가져오기",
+  "project.refresh": "새로고침",
   "project.rename": "이름 변경",
   "project.show_in_explorer": "탐색기에서 표시",
+  "project.options": "옵션",
 
   "toast.cursor_locked": "커서 잠김",
   "toast.cursor_locked_msg": "Escape를 눌러 해제하세요.",
@@ -96,6 +100,7 @@
   "console.log_success": "성공 로그",
   "console.show_time": "시간 표시",
   "console.multi_line": "여러 줄",
+  "console.options": "옵션",
 
   "launcher.search": "프로젝트 검색",
   "launcher.open_project": "프로젝트 열기",
@@ -179,6 +184,7 @@
   "inspector.count": "횟수",
   "inspector.message": "메시지",
   "inspector.stack_trace": "스택 추적",
+  "inspector.options": "컴포넌트 옵션",
 
   "menu.file": "파일",
   "menu.file.new_scene": "새 씬",
