@@ -1,0 +1,9 @@
+#version 460
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { uvec4 values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    uvec4 x = values[i];
+    values[i] = min(x, 7u) + max(x, 3u) + clamp(x, 1u, 5u);
+}

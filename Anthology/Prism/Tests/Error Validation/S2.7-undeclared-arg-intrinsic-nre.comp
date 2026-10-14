@@ -1,0 +1,12 @@
+// S2.7 undeclared identifier passed as an intrinsic argument (memoryBarrier's semantics param):
+// EvalConstCore yields null for the unresolved identifier and Materialize(null) NREs
+// (Lowerer.Materialize ~line 2458). glslang: "undeclared identifier" error.
+// Found by fuzzing. Expected today: raw NullReferenceException (BUG).
+#version 460
+#extension GL_KHR_memory_scope_semantics : require
+layout(local_size_x = 64) in;
+layout(std430, binding=0) buffer Data { uint values[]; };
+void main(){
+  memoryBarrier(gl_ScopeWorkgroup, gl_ScopeQueueFamily, q85);
+  values[0] = 1u;
+}

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Prism\Prowl.Prism.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- GLSL sources: the byte-parity corpus (valid shaders, flat topic-prefixed files under the
+         SPIR-V version folders) and the intentionally-broken error corpus (its own flat folder).
+         The adversarial robustness corpus has been merged into these two: reference-accepted cases
+         joined the parity corpus, reference-rejected cases joined Error Validation. -->
+    <EmbeddedResource Include="Corpus\**\*.*" LogicalName="corpus/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Error Validation\**\*.*" LogicalName="errors/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Golden references, generated and validated ahead of time from the reference compiler (+ its
+         performance pipeline). Tests byte-compare Prism's output against these and never run the
+         external toolchain. Golden file names keep the corpus stage extension
+         ("quad.frag.spv") so same-named snippets across stages don't collide; %(Filename) keeps the
+         ".frag" part, and the ".spv" suffix is re-appended explicitly. -->
+    <EmbeddedResource Include="Golden\Unoptimized\**\*.spv" LogicalName="golden/unopt/%(RecursiveDir)%(Filename).spv" />
+    <EmbeddedResource Include="Golden\Optimized\**\*.spv" LogicalName="golden/opt/%(RecursiveDir)%(Filename).spv" />
+    <EmbeddedResource Include="Golden\AutoMap\**\*.spv" LogicalName="golden/automap/%(RecursiveDir)%(Filename).spv" />
+    <!-- Error-message goldens: the normalized reference diagnostic per Error Validation shader, the
+         reference for what the compiler should complain about. -->
+    <EmbeddedResource Include="Golden\Errors\**\*.txt" LogicalName="golden/errors/%(RecursiveDir)%(Filename).txt" />
+    <EmbeddedResource Include="golden-manifest.json" LogicalName="golden/manifest.json" />
+  </ItemGroup>
+
+</Project>

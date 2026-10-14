@@ -1,0 +1,8 @@
+#version 450
+layout(local_size_x=1) in;
+struct Inner { float a; vec3 b; };
+struct Outer1 { Inner i; float t; };
+struct Outer2 { Inner i; vec4 t; };
+layout(std140,set=0,binding=0) uniform U { Outer1 o1; Outer2 o2; } u;
+layout(std430,set=0,binding=1) buffer B { Outer1 o1; Outer2 o2; float o; } b;
+void main() { b.o = u.o1.i.a + u.o2.i.b.z + b.o1.t + b.o2.t.w; }

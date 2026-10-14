@@ -1,0 +1,11 @@
+#version 460
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { int values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    int64_t a = int64_t(values[i]);
+    int64_t r = min(a, int64_t(7)) + max(a, int64_t(-3)) + clamp(a, int64_t(0), int64_t(5));
+    values[i] = int(r);
+}

@@ -1,0 +1,10 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x = 1) in;
+layout(buffer_reference, std430) buffer Node {
+    int value;
+};
+layout(set = 0, binding = 0) uniform Params { Node head; };
+void main() {
+    head.value = head.value + 1;
+}

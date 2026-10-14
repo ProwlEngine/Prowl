@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:6: 'w' : vector swizzle selection out of range 
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

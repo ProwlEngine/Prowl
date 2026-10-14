@@ -1,0 +1,7 @@
+#version 460
+layout(local_size_x = 64) in;
+layout(binding = 0) buffer B { uint data[]; };
+void main() {
+    uint i = gl_LocalInvocationIndex;
+    data[i] = data[63 - i] + (7 - i);
+}

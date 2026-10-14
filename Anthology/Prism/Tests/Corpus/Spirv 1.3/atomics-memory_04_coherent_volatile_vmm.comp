@@ -1,0 +1,13 @@
+#version 460
+#pragma use_vulkan_memory_model
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) coherent buffer CData { uint cvals[]; };
+layout(std430, set = 0, binding = 1) volatile buffer VData { uint vvals[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    uint a = cvals[i];
+    cvals[i] = a + 1u;
+    uint b = vvals[i];
+    vvals[i] = b + a;
+}

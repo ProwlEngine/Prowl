@@ -1,0 +1,4 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0, rgba32f) uniform readonly image2D img;
+void main() { imageStore(img, ivec2(0), vec4(1.0)); }

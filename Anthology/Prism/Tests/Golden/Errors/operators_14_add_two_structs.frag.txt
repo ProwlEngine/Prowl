@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:11: '+' :  wrong operand types: no operation '+' exists that takes a left-hand operand of type ' temp structure{ global highp float a,  global highp float b}' and a right operand of type ' temp structure{ global highp float a,  global highp float b}' (or there is no acceptable conversion)
+ERROR: <shader>:11: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

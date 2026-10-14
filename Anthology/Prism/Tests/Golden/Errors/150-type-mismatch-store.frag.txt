@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:2: '=' :  cannot convert from ' const 3-component vector of float' to ' temp highp 2-component vector of float'
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

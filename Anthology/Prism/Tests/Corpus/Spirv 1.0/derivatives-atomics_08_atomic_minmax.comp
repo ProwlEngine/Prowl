@@ -1,0 +1,14 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    int lo;
+    int hi;
+};
+
+void main() {
+    int v = int(gl_GlobalInvocationID.x);
+    atomicMin(lo, v);
+    atomicMax(hi, v);
+}

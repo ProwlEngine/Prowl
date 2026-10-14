@@ -1,0 +1,7 @@
+// S4.1 unguarded UInt32.Parse in Lowerer.LocalSizeDims (~line 8104):
+// float literal in local_size -> raw FormatException escaping Compile (no line info,
+// not GlslParseException). Other layout ints (location/binding/constant_id) are guarded.
+// Expected today: raw FormatException (BUG).
+#version 450
+layout(local_size_x = 1e400) in;
+void main(){}

@@ -1,0 +1,7 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+struct S{ vec2 st; };
+void bump(inout vec2 v){ v += 1.0; }
+layout(std430,set=0,binding=1) buffer C { S arr[2]; } c;
+void main(){ bump(c.arr[0].st); o = c.arr[0].st.y; }

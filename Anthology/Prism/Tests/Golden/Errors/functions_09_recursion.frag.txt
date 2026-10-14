@@ -1,0 +1,4 @@
+<shader>
+ERROR: Linking fragment stage: Recursion detected:
+    f(i1; calling f(i1;
+

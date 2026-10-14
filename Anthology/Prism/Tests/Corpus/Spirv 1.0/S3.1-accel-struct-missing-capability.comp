@@ -1,0 +1,9 @@
+// S3.1 capability tracking gap: accelerationStructureEXT uniform emits
+// OpTypeAccelerationStructureKHR without Capability RayQueryKHR -> spirv-val rejects.
+// #extension GL_EXT_ray_query is parsed but not mapped to capabilities.
+// Expected today: compiles + INVALID module (BUG).
+#version 460
+#extension GL_EXT_ray_query : require
+layout(local_size_x = 1) in;
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
+void main() { }

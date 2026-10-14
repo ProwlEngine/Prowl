@@ -1,0 +1,20 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    vec4 v;
+    uint packedU;
+    uint packedS;
+    uint rPackedU;
+    vec4 rUnpackedU;
+    uint rPackedS;
+    vec4 rUnpackedS;
+};
+
+void main() {
+    rPackedU = packUnorm4x8(v);
+    rUnpackedU = unpackUnorm4x8(packedU);
+    rPackedS = packSnorm4x8(v);
+    rUnpackedS = unpackSnorm4x8(packedS);
+}

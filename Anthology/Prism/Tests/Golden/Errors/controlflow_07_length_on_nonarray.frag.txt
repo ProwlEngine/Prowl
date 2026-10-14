@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:7: 'length' : does not operate on this type:  temp highp float
+ERROR: <shader>:7: '=' :  cannot convert from ' temp highp float' to ' temp highp int'
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

@@ -1,0 +1,19 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
+
+struct Payload
+{
+    uvec3 origin;
+    uint total;
+};
+taskPayloadSharedEXT Payload payload;
+
+void main()
+{
+    payload.origin = gl_GlobalInvocationID;
+    payload.total = gl_NumWorkGroups.x * gl_NumWorkGroups.y * gl_NumWorkGroups.z;
+
+    EmitMeshTasksEXT(gl_NumWorkGroups.x, 2u, 1u);
+}

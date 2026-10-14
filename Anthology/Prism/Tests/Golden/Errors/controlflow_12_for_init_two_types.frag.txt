@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:7: '' :  syntax error, unexpected FLOAT, expecting IDENTIFIER
+ERROR: 1 compilation errors.  No code generated.
+
+

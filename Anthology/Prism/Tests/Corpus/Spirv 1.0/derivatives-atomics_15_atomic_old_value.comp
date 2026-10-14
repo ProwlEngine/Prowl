@@ -1,0 +1,15 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    uint nextIndex;
+    uint slots[256];
+};
+
+void main() {
+    uint idx = atomicAdd(nextIndex, 1u);
+    if (idx < 256u) {
+        slots[idx] = gl_GlobalInvocationID.x;
+    }
+}

@@ -1,0 +1,7 @@
+#version 450
+layout(constant_id=0) const int N = 4;
+layout(constant_id=1) const bool FLAG = true;
+layout(constant_id=2) const float F = 1.5;
+layout(local_size_x_id=3, local_size_y=1, local_size_z=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+void main() { float a[N]; for(int i=0;i<N;++i) a[i]=F; o = FLAG ? a[N-1] : 0.0; }

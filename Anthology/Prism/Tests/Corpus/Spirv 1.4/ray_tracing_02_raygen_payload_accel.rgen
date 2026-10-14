@@ -1,0 +1,12 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
+layout(location = 0) rayPayloadEXT vec4 payload;
+layout(location = 1) callableDataEXT float cd;
+
+void main()
+{
+    payload = vec4(1.0);
+    cd = 2.0;
+}

@@ -1,0 +1,14 @@
+#version 460
+
+#define ACCUM(i) sum += float(i) * 0.1
+
+layout(local_size_x = 1) in;
+layout(std430, binding = 0) buffer Out { float result; };
+
+void main() {
+    float sum = 0.0;
+    ACCUM(1);
+    ACCUM(2);
+    ACCUM(3);
+    result = sum;
+}

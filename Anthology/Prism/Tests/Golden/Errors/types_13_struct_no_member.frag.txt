@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:3: 'b' : no such field in structure 's'
+ERROR: <shader>:3: '=' :  cannot convert from ' temp structure{ temp highp int a}' to ' temp highp float'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

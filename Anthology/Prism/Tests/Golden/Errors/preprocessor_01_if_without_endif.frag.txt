@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:6: '' : missing #endif 
+ERROR: 1 compilation errors.  No code generated.
+
+

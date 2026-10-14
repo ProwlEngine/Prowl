@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:2: 'return' : non-void function must return a value 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

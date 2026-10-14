@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:3: 'highp' : overloaded functions must have the same parameter precision qualifiers for argument 1
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

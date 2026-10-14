@@ -1,0 +1,13 @@
+#version 460
+#extension GL_KHR_shader_subgroup_clustered : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { uint values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    uint v = values[i];
+    uint s = subgroupClusteredAdd(v, 4u) + subgroupClusteredMul(v, 4u)
+           + subgroupClusteredMin(v, 2u) + subgroupClusteredMax(v, 2u)
+           + subgroupClusteredAnd(v, 8u) + subgroupClusteredOr(v, 8u) + subgroupClusteredXor(v, 16u);
+    values[i] = s;
+}

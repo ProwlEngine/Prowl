@@ -1,0 +1,12 @@
+#version 460 core
+
+// uimageBuffer: unsigned-integer imageLoad/imageStore with a scalar integer coordinate.
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0, r32ui) uniform uimageBuffer img;
+
+void main() {
+    int coord = int(gl_GlobalInvocationID.x);
+    uvec4 texel = imageLoad(img, coord);
+    imageStore(img, coord, texel + uvec4(2u));
+}

@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x=1) in;
+struct P { vec4 a; vec3 b; float c; };
+struct Q { P inner; mat4 m; float arr[3]; };
+layout(std430,set=0,binding=0) buffer B { float o; };
+P makeP(float x) { P p; p.a = vec4(x); p.b = vec3(x); p.c = x; return p; }
+Q makeQ(float x) { Q q; q.inner = makeP(x); q.m = mat4(x); q.arr[0]=x; q.arr[1]=x*2.0; q.arr[2]=x*3.0; return q; }
+void mutate(inout Q q, float k) { q.inner.a.x += k; q.arr[1] -= k; q.m[2][2] *= k; }
+float reduce(Q q) { return q.inner.a.x + q.inner.b.y + q.inner.c + q.m[1][1] + q.arr[2]; }
+void main() { Q q = makeQ(2.0); mutate(q, 3.0); Q r = q; mutate(r, 1.0); o = reduce(q) + reduce(r); }

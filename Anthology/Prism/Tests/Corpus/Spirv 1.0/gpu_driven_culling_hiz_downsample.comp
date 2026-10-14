@@ -1,0 +1,45 @@
+#version 460 core
+
+// Builds one mip level of a Hierarchical-Z pyramid from the previous mip.
+// Convention: standard Z, 0.0 = near, 1.0 = far. MAX of the 4 samples is
+// therefore the most conservative (furthest) depth for occlusion testing,
+// since anything nearer than that stored value cannot be hidden by it.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, r32f) uniform readonly image2D srcMip;
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D dstMip;
+
+layout(push_constant) uniform PushConstants
+{
+    ivec2 srcMipSize;
+    ivec2 dstMipSize;
+} pc;
+
+void main()
+{
+    ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
+    if (dstCoord.x >= pc.dstMipSize.x || dstCoord.y >= pc.dstMipSize.y)
+    {
+        return;
+    }
+
+    ivec2 srcBase = dstCoord * 2;
+    ivec2 srcMax = pc.srcMipSize - ivec2(1);
+
+    // Clamp each of the 2x2 taps independently so odd source dimensions
+    // stay conservative (the clamped tap duplicates the edge texel).
+    ivec2 c00 = min(srcBase + ivec2(0, 0), srcMax);
+    ivec2 c10 = min(srcBase + ivec2(1, 0), srcMax);
+    ivec2 c01 = min(srcBase + ivec2(0, 1), srcMax);
+    ivec2 c11 = min(srcBase + ivec2(1, 1), srcMax);
+
+    float d00 = imageLoad(srcMip, c00).r;
+    float d10 = imageLoad(srcMip, c10).r;
+    float d01 = imageLoad(srcMip, c01).r;
+    float d11 = imageLoad(srcMip, c11).r;
+
+    float maxDepth = max(max(d00, d10), max(d01, d11));
+
+    imageStore(dstMip, dstCoord, vec4(maxDepth, 0.0, 0.0, 0.0));
+}

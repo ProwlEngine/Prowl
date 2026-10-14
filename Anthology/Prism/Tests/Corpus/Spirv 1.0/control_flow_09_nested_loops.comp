@@ -1,0 +1,26 @@
+#version 460 core
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(std430, binding = 0) buffer data_buffer
+{
+    float values[];
+};
+
+void main()
+{
+    uint width = gl_NumWorkGroups.x * gl_WorkGroupSize.x * 2u;
+    uint base_x = gl_GlobalInvocationID.x;
+    uint base_y = gl_GlobalInvocationID.y;
+
+    for (uint row = 0u; row < 2u; row = row + 1u)
+    {
+        for (uint col = 0u; col < 2u; col = col + 1u)
+        {
+            uint x = base_x * 2u + col;
+            uint y = base_y * 2u + row;
+            uint index = y * width + x;
+            values[index] = float(index);
+        }
+    }
+}

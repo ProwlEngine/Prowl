@@ -1,0 +1,21 @@
+#version 460
+#extension GL_EXT_shader_atomic_float2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data {
+    float16_t sum;
+    float16_t lo;
+    float16_t hi;
+    float16_t xchg;
+    float16_t results[];
+};
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    float16_t v = float16_t(i);
+    float16_t a = atomicAdd(sum, v);
+    float16_t b = atomicMin(lo, v);
+    float16_t c = atomicMax(hi, v);
+    float16_t d = atomicExchange(xchg, v);
+    results[i] = a + b + c + d;
+}

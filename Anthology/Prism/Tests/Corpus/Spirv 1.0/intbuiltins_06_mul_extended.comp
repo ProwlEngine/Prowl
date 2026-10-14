@@ -1,0 +1,25 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    uint ua;
+    uint ub;
+    int ia;
+    int ib;
+    uint rUMsb;
+    uint rULsb;
+    int rIMsb;
+    int rILsb;
+};
+
+void main() {
+    uint umsb, ulsb;
+    umulExtended(ua, ub, umsb, ulsb);
+    rUMsb = umsb;
+    rULsb = ulsb;
+    int imsb, ilsb;
+    imulExtended(ia, ib, imsb, ilsb);
+    rIMsb = imsb;
+    rILsb = ilsb;
+}

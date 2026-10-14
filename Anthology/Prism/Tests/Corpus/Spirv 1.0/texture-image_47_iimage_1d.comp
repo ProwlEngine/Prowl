@@ -1,0 +1,12 @@
+#version 460 core
+
+// iimage1D: signed-integer imageLoad/imageStore with a scalar integer coordinate.
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0, r32i) uniform iimage1D img;
+
+void main() {
+    int coord = int(gl_GlobalInvocationID.x);
+    ivec4 texel = imageLoad(img, coord);
+    imageStore(img, coord, texel - ivec4(1));
+}

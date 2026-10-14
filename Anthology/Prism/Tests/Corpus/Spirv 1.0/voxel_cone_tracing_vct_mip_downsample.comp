@@ -1,0 +1,45 @@
+#version 460 core
+
+// Generates one level of the +X anisotropic voxel mip chain from the level
+// below it. The other 5 directional chains (-X, +Y, -Y, +Z, -Z) use the
+// exact same kernel with axis-appropriate child offsets; a real engine
+// dispatches this shader 6 times, once per direction, with a different
+// source/destination image pair bound each time.
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+layout(set = 0, binding = 0) uniform sampler3D uSrcMip;
+layout(rgba16f, set = 0, binding = 1) uniform image3D uDstMip;
+
+layout(push_constant) uniform MipPush
+{
+    int srcMipLevel;
+    int dstResolution;
+} pc;
+
+void main()
+{
+    ivec3 dstCoord = ivec3(gl_GlobalInvocationID);
+    if (any(greaterThanEqual(dstCoord, ivec3(pc.dstResolution))))
+        return;
+
+    ivec3 srcBase = dstCoord * 2;
+
+    // For the +X chain, the child at local x=0 faces -X (it is hit first
+    // by a ray marching in +X) so it is the "front" sample; the child at
+    // x=1 is "back" and gets attenuated by the front voxel's opacity.
+    vec4 result = vec4(0.0);
+    for (int z = 0; z < 2; ++z)
+    {
+        for (int y = 0; y < 2; ++y)
+        {
+            vec4 front = texelFetch(uSrcMip, srcBase + ivec3(0, y, z), pc.srcMipLevel);
+            vec4 back = texelFetch(uSrcMip, srcBase + ivec3(1, y, z), pc.srcMipLevel);
+            vec4 combined = front + back * (1.0 - front.a);
+            result += combined;
+        }
+    }
+    result *= 0.25; // isotropic average across the y,z child pairs
+
+    imageStore(uDstMip, dstCoord, result);
+}

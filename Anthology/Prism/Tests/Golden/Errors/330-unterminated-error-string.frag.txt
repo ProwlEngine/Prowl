@@ -1,0 +1,10 @@
+<shader>
+ERROR: #version: ES shaders for SPIR-V require version 310 or higher
+ERROR: <shader>:1: 'string' : End of line in string 
+ERROR: <shader>:1: '#error' : never closed  
+ERROR: <shader>:1: '' : compilation terminated 
+ERROR: 4 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

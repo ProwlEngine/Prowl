@@ -1,0 +1,7 @@
+#version 450
+layout(constant_id=0) const bool P = true;
+layout(constant_id=1) const bool Q = false;
+const bool R = P && !Q;
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer Buf { float o; };
+void main() { o = R ? 1.0 : 2.0; }

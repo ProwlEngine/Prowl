@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:3: 'assign' :  l-value required (can't modify a const)
+ERROR: <shader>:3: 'out' : Non-L-value cannot be passed for 'out' or 'inout' parameters. 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: 'sampler2D' : sampler/image types can only be used in uniform variables or function parameters: s
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

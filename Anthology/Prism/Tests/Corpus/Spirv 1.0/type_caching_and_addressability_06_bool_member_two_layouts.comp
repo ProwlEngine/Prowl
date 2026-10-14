@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { bool flag; float v; };
+layout(std140,set=0,binding=0) uniform U { S s; } u;
+layout(std430,set=0,binding=1) buffer B { S s; float o; } b;
+void main() { b.o = (u.s.flag ? 1.0 : 0.0) + (b.s.flag ? 2.0 : 0.0) + u.s.v; }

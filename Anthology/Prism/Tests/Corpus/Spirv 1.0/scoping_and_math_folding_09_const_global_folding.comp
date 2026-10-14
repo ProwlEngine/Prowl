@@ -1,0 +1,9 @@
+#version 450
+layout(local_size_x=1) in;
+const int A = 2;
+const int B = A * 3;
+const float C = float(B) / 2.0;
+const vec3 V = vec3(C);
+const mat2 M = mat2(C);
+layout(std430,set=0,binding=0) buffer B2 { float o; };
+void main() { float arr[B]; arr[0] = C; o = arr[0] + V.z + M[1][1]; }

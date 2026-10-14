@@ -1,0 +1,31 @@
+{
+  "glslangSha16": "F64DE046FE4E7F9D",
+  "spirvOptSha16": "CE98DEC7BE9CA655",
+  "spirvValSha16": "85FCA62318139B83",
+  "unoptimizedGoldens": 1266,
+  "optimizedGoldens": 1258,
+  "autoMapGoldens": 5,
+  "collidingVerified": 1,
+  "errorCorpusVerified": 414,
+  "spirvValExceptions": [
+    "Spirv 1.0/interface_18_fragcoord_redecl.frag",
+    "Spirv 1.0/layout-frontend_11_dependency_length.frag",
+    "Spirv 1.0/matrix_and_layout_03_scalar_layout_shapes.comp",
+    "Spirv 1.0/scalar_block_layout_01_scalar_layout_ubo.frag",
+    "Spirv 1.0/stages-exec-modes_01_pixel_center_integer.frag",
+    "Spirv 1.0/texture-image_15_texture_size_rect.frag",
+    "Spirv 1.0/texture-image_34_sampler_2d_rect.frag",
+    "Spirv 1.0/texture-image_35_sampler_2d_rect_shadow.frag"
+  ],
+  "optimizedMissing": [
+    "Spirv 1.0/interface_18_fragcoord_redecl.frag",
+    "Spirv 1.0/layout-frontend_11_dependency_length.frag",
+    "Spirv 1.0/matrix_and_layout_03_scalar_layout_shapes.comp",
+    "Spirv 1.0/scalar_block_layout_01_scalar_layout_ubo.frag",
+    "Spirv 1.0/stages-exec-modes_01_pixel_center_integer.frag",
+    "Spirv 1.0/texture-image_15_texture_size_rect.frag",
+    "Spirv 1.0/texture-image_34_sampler_2d_rect.frag",
+    "Spirv 1.0/texture-image_35_sampler_2d_rect_shadow.frag"
+  ],
+  "failures": []
+}

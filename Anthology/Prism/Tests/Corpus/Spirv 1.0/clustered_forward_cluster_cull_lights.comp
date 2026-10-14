@@ -1,0 +1,120 @@
+#version 460 core
+
+// Cooperatively culls the global light list against every cluster AABB.
+// One thread handles one cluster; the workgroup loads lights in batches of
+// BATCH_SIZE into shared memory so every thread in the group reuses the same
+// fetch instead of each cluster re-reading the whole light buffer.
+#define BATCH_SIZE 64
+#define MAX_LIGHTS_PER_CLUSTER 128
+
+layout(local_size_x = BATCH_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform ClusterCullData {
+    mat4 viewMatrix;
+    uint lightCount;
+    uint clusterCount;
+    uint pad0;
+    uint pad1;
+} uCullData;
+
+struct ClusterAABB {
+    vec4 minPoint;
+    vec4 maxPoint;
+};
+
+struct Light {
+    vec4 position;   // world-space xyz, w = radius
+    vec4 color;      // rgb = color, a = intensity
+    vec4 direction;  // world-space spot direction xyz, w = cos(outerConeAngle)
+    vec4 params;     // x = cos(innerConeAngle), y = lightType (0=point,1=spot), zw unused
+};
+
+struct LightGridEntry {
+    uint offset;
+    uint count;
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer AABBsBuffer {
+    ClusterAABB aabbs[];
+} bAABBs;
+
+layout(std430, set = 0, binding = 2) readonly buffer LightsBuffer {
+    Light lights[];
+} bLights;
+
+layout(std430, set = 0, binding = 3) buffer LightIndexList {
+    uint indices[];
+} bLightIndexList;
+
+layout(std430, set = 0, binding = 4) buffer LightIndexCounter {
+    uint counter;
+} bLightIndexCounter;
+
+layout(std430, set = 0, binding = 5) writeonly buffer LightGrid {
+    LightGridEntry entries[];
+} bLightGrid;
+
+shared vec4 sharedLightPositionRadius[BATCH_SIZE]; // view-space xyz, w = radius
+shared uint sharedLightGlobalIndex[BATCH_SIZE];
+
+// closest point on the AABB to the sphere center, compared against radius squared
+bool sphereIntersectsAABB(vec3 center, float radius, vec3 minPoint, vec3 maxPoint) {
+    vec3 closest = clamp(center, minPoint, maxPoint);
+    vec3 delta = closest - center;
+    return dot(delta, delta) <= (radius * radius);
+}
+
+void main() {
+    uint clusterIndex = gl_GlobalInvocationID.x;
+    bool clusterValid = clusterIndex < uCullData.clusterCount;
+
+    vec3 clusterMin = vec3(0.0);
+    vec3 clusterMax = vec3(0.0);
+    if (clusterValid) {
+        clusterMin = bAABBs.aabbs[clusterIndex].minPoint.xyz;
+        clusterMax = bAABBs.aabbs[clusterIndex].maxPoint.xyz;
+    }
+
+    // per-thread scratch list, flushed with a single atomic reservation so the
+    // final range this cluster owns in the global light index list is contiguous
+    uint localLightIndices[MAX_LIGHTS_PER_CLUSTER];
+    uint localLightCount = 0;
+
+    uint numBatches = (uCullData.lightCount + BATCH_SIZE - 1) / BATCH_SIZE;
+    for (uint batch = 0; batch < numBatches; batch++) {
+        uint loadIndex = batch * BATCH_SIZE + gl_LocalInvocationID.x;
+        if (loadIndex < uCullData.lightCount) {
+            vec3 worldPos = bLights.lights[loadIndex].position.xyz;
+            vec4 viewPos = uCullData.viewMatrix * vec4(worldPos, 1.0);
+            sharedLightPositionRadius[gl_LocalInvocationID.x] = vec4(viewPos.xyz, bLights.lights[loadIndex].position.w);
+            sharedLightGlobalIndex[gl_LocalInvocationID.x] = loadIndex;
+        } else {
+            sharedLightPositionRadius[gl_LocalInvocationID.x] = vec4(0.0, 0.0, 0.0, -1.0);
+            sharedLightGlobalIndex[gl_LocalInvocationID.x] = 0;
+        }
+        barrier();
+
+        uint batchCount = min(uint(BATCH_SIZE), uCullData.lightCount - batch * BATCH_SIZE);
+        if (clusterValid) {
+            for (uint i = 0; i < batchCount; i++) {
+                vec4 lightPosRadius = sharedLightPositionRadius[i];
+                if (lightPosRadius.w > 0.0 && sphereIntersectsAABB(lightPosRadius.xyz, lightPosRadius.w, clusterMin, clusterMax)) {
+                    if (localLightCount < uint(MAX_LIGHTS_PER_CLUSTER)) {
+                        localLightIndices[localLightCount] = sharedLightGlobalIndex[i];
+                        localLightCount++;
+                    }
+                }
+            }
+        }
+        barrier();
+    }
+
+    if (clusterValid) {
+        uint startOffset = atomicAdd(bLightIndexCounter.counter, localLightCount);
+        for (uint i = 0; i < localLightCount; i++) {
+            bLightIndexList.indices[startOffset + i] = localLightIndices[i];
+        }
+        bLightGrid.entries[clusterIndex].offset = startOffset;
+        bLightGrid.entries[clusterIndex].count = localLightCount;
+    }
+}

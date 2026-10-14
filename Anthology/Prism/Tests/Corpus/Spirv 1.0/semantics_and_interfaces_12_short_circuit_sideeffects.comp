@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { int counter; int gate; float o; };
+bool bump() { counter += 1; return true; }
+void main() {
+  bool r1 = (gate != 0) && bump();
+  bool r2 = (gate == 0) || bump();
+  bool r3 = (gate != 0) && (gate != 0) && bump();
+  o = float(counter) + (r1 ? 1.0 : 0.0) + (r2 ? 2.0 : 0.0) + (r3 ? 4.0 : 0.0);
+}

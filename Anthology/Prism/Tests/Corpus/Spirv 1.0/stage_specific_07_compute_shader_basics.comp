@@ -1,0 +1,19 @@
+#version 460 core
+
+// exercises gl_GlobalInvocationID, gl_LocalInvocationID, gl_WorkGroupID, gl_NumWorkGroups
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) buffer Output { float results[]; };
+
+void main()
+{
+    uvec3 global_id = gl_GlobalInvocationID;
+    uvec3 local_id = gl_LocalInvocationID;
+    uvec3 work_group_id = gl_WorkGroupID;
+    uvec3 num_groups = gl_NumWorkGroups;
+
+    uint flat_index = global_id.x + global_id.y * (num_groups.x * gl_WorkGroupSize.x);
+
+    results[flat_index] = float(local_id.x + local_id.y) + float(work_group_id.x + work_group_id.y);
+}

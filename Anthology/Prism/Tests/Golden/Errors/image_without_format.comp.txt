@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:3: 'image variables not declared 'writeonly' and without a format layout qualifier' : not supported for this version or the enabled extensions 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:6: '' :  syntax error, unexpected SEMICOLON, expecting RIGHT_PAREN or COMMA
+ERROR: 1 compilation errors.  No code generated.
+
+

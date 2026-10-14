@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'assign' :  l-value of swizzle cannot have duplicate components 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

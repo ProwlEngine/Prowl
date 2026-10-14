@@ -1,0 +1,12 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    float accum;
+};
+
+void main() {
+    atomicAdd(accum, 1.0);
+}

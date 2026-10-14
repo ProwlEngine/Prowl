@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std140,set=0,binding=0) uniform U { layout(row_major) mat4 r; layout(column_major) mat4 c; } u;
+layout(std430,set=0,binding=1) buffer B { mat4 m; float o; } b;
+void main() { b.o = u.r[0][0] + u.c[1][1] + b.m[2][2]; mat4 local = u.r; b.o += local[3][3]; }

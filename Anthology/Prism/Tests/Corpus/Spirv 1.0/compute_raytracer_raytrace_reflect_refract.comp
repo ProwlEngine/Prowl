@@ -1,0 +1,343 @@
+#version 460 core
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#define BVH_STACK_SIZE 32
+#define PI 3.14159265359
+#define RAY_EPSILON 0.001
+#define RAY_MAX_T 100000.0
+#define MAX_BOUNCES 8
+
+struct BVHNode
+{
+    vec3 aabbMin;
+    int leftChildOrFirstTriangle;
+    vec3 aabbMax;
+    int triangleCountOrRightChild;
+};
+
+struct Material
+{
+    vec4 albedo;
+    vec4 emissive;
+    float roughness;
+    float metallic;
+    float ior;
+    float matPad0;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer BVHNodeBuffer
+{
+    BVHNode nodes[];
+} bvhBuffer;
+
+layout(std430, set = 0, binding = 1) readonly buffer TriangleIndexBuffer
+{
+    int indices[];
+} triIndexBuffer;
+
+layout(std430, set = 0, binding = 2) readonly buffer TriangleVertexBuffer
+{
+    vec4 positions[];
+} triVertexBuffer;
+
+layout(std430, set = 0, binding = 3) readonly buffer TriangleAttribBuffer
+{
+    vec4 normalAndMaterial[];
+} triAttribBuffer;
+
+layout(std430, set = 0, binding = 4) readonly buffer MaterialBuffer
+{
+    Material materials[];
+} materialBuffer;
+
+layout(set = 0, binding = 5, rgba32f) uniform image2D accumImage;
+
+layout(push_constant) uniform PushConstants
+{
+    mat4 invViewProj;
+    vec3 cameraPos;
+    int frameIndex;
+    vec3 lightVector;
+    int lightType;
+    vec3 lightColor;
+    float lightIntensity;
+    ivec2 imageSize;
+    vec2 pad0;
+} pc;
+
+bool intersectAABB(vec3 origin, vec3 invDir, vec3 aabbMin, vec3 aabbMax, float tMax, out float tNear)
+{
+    vec3 t0 = (aabbMin - origin) * invDir;
+    vec3 t1 = (aabbMax - origin) * invDir;
+    vec3 tSmall = min(t0, t1);
+    vec3 tBig = max(t0, t1);
+    float tMinVal = max(max(tSmall.x, tSmall.y), tSmall.z);
+    float tMaxVal = min(min(tBig.x, tBig.y), tBig.z);
+    tNear = max(tMinVal, 0.0);
+    return tMaxVal >= tNear && tMinVal <= tMax;
+}
+
+bool intersectTriangle(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, out float t, out float u, out float v)
+{
+    const float EPSILON = 1e-7;
+    vec3 edge1 = v1 - v0;
+    vec3 edge2 = v2 - v0;
+    vec3 pvec = cross(dir, edge2);
+    float det = dot(edge1, pvec);
+    if (abs(det) < EPSILON)
+    {
+        return false;
+    }
+    float invDet = 1.0 / det;
+    vec3 tvec = origin - v0;
+    u = dot(tvec, pvec) * invDet;
+    if (u < 0.0 || u > 1.0)
+    {
+        return false;
+    }
+    vec3 qvec = cross(tvec, edge1);
+    v = dot(dir, qvec) * invDet;
+    if (v < 0.0 || u + v > 1.0)
+    {
+        return false;
+    }
+    t = dot(edge2, qvec) * invDet;
+    return t > EPSILON;
+}
+
+bool traverseBVH(vec3 origin, vec3 dir, float maxDist, bool anyHit, out float hitT, out int hitTriIndex, out vec2 hitBary)
+{
+    hitT = maxDist;
+    hitTriIndex = -1;
+    hitBary = vec2(0.0);
+    vec3 invDir = 1.0 / dir;
+
+    int stack[BVH_STACK_SIZE];
+    int stackPtr = 0;
+    stack[stackPtr] = 0;
+    stackPtr++;
+
+    while (stackPtr > 0)
+    {
+        stackPtr--;
+        int nodeIndex = stack[stackPtr];
+        BVHNode node = bvhBuffer.nodes[nodeIndex];
+
+        float tNear;
+        if (!intersectAABB(origin, invDir, node.aabbMin, node.aabbMax, hitT, tNear))
+        {
+            continue;
+        }
+
+        if (node.triangleCountOrRightChild == 0)
+        {
+            int leftChild = node.leftChildOrFirstTriangle;
+            int rightChild = leftChild + 1;
+            if (stackPtr < BVH_STACK_SIZE - 1)
+            {
+                stack[stackPtr] = leftChild;
+                stackPtr++;
+                stack[stackPtr] = rightChild;
+                stackPtr++;
+            }
+        }
+        else
+        {
+            int firstTri = node.leftChildOrFirstTriangle;
+            int triCount = node.triangleCountOrRightChild;
+            for (int i = 0; i < triCount; i++)
+            {
+                int triIndex = triIndexBuffer.indices[firstTri + i];
+                vec3 v0 = triVertexBuffer.positions[triIndex * 3 + 0].xyz;
+                vec3 v1 = triVertexBuffer.positions[triIndex * 3 + 1].xyz;
+                vec3 v2 = triVertexBuffer.positions[triIndex * 3 + 2].xyz;
+
+                float t, u, v;
+                if (intersectTriangle(origin, dir, v0, v1, v2, t, u, v))
+                {
+                    if (t < hitT)
+                    {
+                        hitT = t;
+                        hitTriIndex = triIndex;
+                        hitBary = vec2(u, v);
+                        if (anyHit)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return hitTriIndex >= 0;
+}
+
+// PCG hash, see O'Neill "PCG: A Family of Simple Fast Space-Efficient Statistically Good Algorithms"
+uint pcgHash(uint seedValue)
+{
+    uint state = seedValue * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float randomFloat(inout uint seed)
+{
+    seed = pcgHash(seed);
+    return float(seed) / 4294967295.0;
+}
+
+void buildONB(vec3 n, out vec3 t, out vec3 b)
+{
+    float signZ = n.z >= 0.0 ? 1.0 : -1.0;
+    float a = -1.0 / (signZ + n.z);
+    float bTerm = n.x * n.y * a;
+    t = vec3(1.0 + signZ * n.x * n.x * a, signZ * bTerm, -signZ * n.x);
+    b = vec3(bTerm, signZ + n.y * n.y * a, -n.y);
+}
+
+vec3 cosineSampleHemisphere(vec3 normal, inout uint seed)
+{
+    float u1 = randomFloat(seed);
+    float u2 = randomFloat(seed);
+    float r = sqrt(u1);
+    float theta = 2.0 * PI * u2;
+
+    vec3 tangent, bitangent;
+    buildONB(normal, tangent, bitangent);
+
+    vec3 localDir = vec3(r * cos(theta), r * sin(theta), sqrt(max(0.0, 1.0 - u1)));
+    return normalize(tangent * localDir.x + bitangent * localDir.y + normal * localDir.z);
+}
+
+vec3 sampleGGXHalfVector(vec3 normal, float roughness, inout uint seed)
+{
+    float u1 = randomFloat(seed);
+    float u2 = randomFloat(seed);
+    float alpha = max(roughness * roughness, 0.001);
+
+    float phi = 2.0 * PI * u1;
+    float cosTheta = sqrt((1.0 - u2) / (1.0 + (alpha * alpha - 1.0) * u2));
+    float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+
+    vec3 tangent, bitangent;
+    buildONB(normal, tangent, bitangent);
+
+    vec3 h = tangent * (sinTheta * cos(phi)) + bitangent * (sinTheta * sin(phi)) + normal * cosTheta;
+    return normalize(h);
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 f0)
+{
+    float m = clamp(1.0 - cosTheta, 0.0, 1.0);
+    return f0 + (vec3(1.0) - f0) * (m * m * m * m * m);
+}
+
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    if (pixelCoord.x >= pc.imageSize.x || pixelCoord.y >= pc.imageSize.y)
+    {
+        return;
+    }
+
+    vec2 pixelCenter = vec2(pixelCoord) + vec2(0.5);
+    vec2 ndc = (pixelCenter / vec2(pc.imageSize)) * 2.0 - 1.0;
+
+    vec4 farWorld = pc.invViewProj * vec4(ndc.x, ndc.y, 1.0, 1.0);
+    farWorld /= farWorld.w;
+
+    vec3 rayOrigin = pc.cameraPos;
+    vec3 rayDir = normalize(farWorld.xyz - rayOrigin);
+
+    vec3 throughput = vec3(1.0);
+    vec3 radiance = vec3(0.0);
+
+    uint baseSeed = uint(pixelCoord.x) * 1973u ^ uint(pixelCoord.y) * 9277u ^ uint(pc.frameIndex) * 26699u;
+
+    for (int bounce = 0; bounce < MAX_BOUNCES; bounce++)
+    {
+        float hitT;
+        int hitTriIndex;
+        vec2 hitBary;
+        bool hit = traverseBVH(rayOrigin, rayDir, RAY_MAX_T, false, hitT, hitTriIndex, hitBary);
+
+        if (!hit)
+        {
+            vec3 skyColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), 0.5 * (rayDir.y + 1.0));
+            radiance += throughput * skyColor;
+            break;
+        }
+
+        vec4 na = triAttribBuffer.normalAndMaterial[hitTriIndex];
+        vec3 normal = normalize(na.xyz);
+        if (dot(normal, rayDir) > 0.0)
+        {
+            normal = -normal;
+        }
+        int materialId = floatBitsToInt(na.w);
+        Material mat = materialBuffer.materials[materialId];
+
+        radiance += throughput * mat.emissive.rgb;
+
+        vec3 hitPos = rayOrigin + rayDir * hitT;
+
+        uint seed = pcgHash(baseSeed ^ (uint(bounce) * 40503u));
+
+        float cosView = max(dot(normal, -rayDir), 0.0001);
+        vec3 f0 = mix(vec3(0.04), mat.albedo.rgb, mat.metallic);
+        vec3 fresnel = fresnelSchlick(cosView, f0);
+        float fresnelMax = max(fresnel.r, max(fresnel.g, fresnel.b));
+        float specProb = clamp(fresnelMax * 0.5 + mat.metallic * 0.5, 0.05, 0.95);
+
+        float chooseSpec = randomFloat(seed);
+        vec3 newDir;
+        vec3 brdfWeight;
+        bool killPath = false;
+
+        if (chooseSpec < specProb)
+        {
+            vec3 h = sampleGGXHalfVector(normal, mat.roughness, seed);
+            newDir = reflect(rayDir, h);
+            if (dot(newDir, normal) <= 0.0)
+            {
+                killPath = true;
+                brdfWeight = vec3(0.0);
+            }
+            else
+            {
+                brdfWeight = fresnel / specProb;
+            }
+        }
+        else
+        {
+            newDir = cosineSampleHemisphere(normal, seed);
+            vec3 diffuseColor = mat.albedo.rgb * (1.0 - mat.metallic);
+            brdfWeight = diffuseColor * (vec3(1.0) - fresnel) / max(1.0 - specProb, 0.001);
+        }
+
+        if (killPath)
+        {
+            break;
+        }
+
+        throughput *= brdfWeight;
+
+        if (bounce > 3)
+        {
+            float survive = clamp(max(throughput.r, max(throughput.g, throughput.b)), 0.05, 1.0);
+            if (randomFloat(seed) > survive)
+            {
+                break;
+            }
+            throughput /= survive;
+        }
+
+        rayOrigin = hitPos + normal * RAY_EPSILON;
+        rayDir = newDir;
+    }
+
+    vec4 oldColor = imageLoad(accumImage, pixelCoord);
+    vec3 blended = mix(oldColor.rgb, radiance, 1.0 / float(pc.frameIndex + 1));
+    imageStore(accumImage, pixelCoord, vec4(blended, 1.0));
+}

@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0) uniform sampler2D a;
+layout(set=0,binding=1) uniform sampler2D b;
+layout(std430,set=0,binding=2) buffer B { vec4 o; };
+void main() { a = b; o = texture(a, vec2(0.0)); }

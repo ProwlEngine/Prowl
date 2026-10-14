@@ -1,0 +1,146 @@
+#version 460 core
+
+// Tile binning pass: transforms triangles to screen space, culls, and appends
+// surviving triangle indices into per tile bin lists for the fine raster pass.
+// Tile size matches the fine pass workgroup (8x8 pixels) so the fine pass can
+// service one thread per pixel with local_size_x = 8, local_size_y = 8.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#define TILE_SIZE 8
+
+struct TriCacheEntry {
+    vec4 screenPos0; // xy = screen pixel pos, z = depth01, w = 1/clipW
+    vec4 screenPos1;
+    vec4 screenPos2;
+    uvec4 vertexIndices; // xyz = original vertex indices, w unused
+};
+
+layout(set = 0, binding = 2, std430) readonly buffer VertexPositionsSSBO {
+    vec4 positions[];
+} vertexPositions;
+
+layout(set = 0, binding = 6, std430) readonly buffer IndexBufferSSBO {
+    uint indices[];
+} indexBuffer;
+
+layout(set = 0, binding = 7, std430) buffer TileBinCountSSBO {
+    uint counts[];
+} tileBinCount;
+
+layout(set = 0, binding = 8, std430) buffer TileBinIndicesSSBO {
+    uint triIndex[];
+} tileBinIndices;
+
+layout(set = 0, binding = 9, std430) buffer TriangleCacheSSBO {
+    TriCacheEntry entries[];
+} triangleCache;
+
+layout(set = 0, binding = 10, std140) uniform SceneUniforms {
+    mat4 viewProj;
+    vec4 lightDirWS;
+    vec4 lightColor;
+} scene;
+
+layout(push_constant) uniform BinPushConstants {
+    uint screenWidth;
+    uint screenHeight;
+    uint tileCountX;
+    uint tileCountY;
+    uint maxTrisPerTile;
+    uint triangleCount;
+    float nearZ;
+} pc;
+
+float edgeFunction(vec2 a, vec2 b, vec2 c) {
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+void main() {
+    uint triIndex = gl_GlobalInvocationID.x;
+    if (triIndex >= pc.triangleCount) {
+        return;
+    }
+
+    uint i0 = indexBuffer.indices[triIndex * 3u + 0u];
+    uint i1 = indexBuffer.indices[triIndex * 3u + 1u];
+    uint i2 = indexBuffer.indices[triIndex * 3u + 2u];
+
+    vec4 worldPos0 = vertexPositions.positions[i0];
+    vec4 worldPos1 = vertexPositions.positions[i1];
+    vec4 worldPos2 = vertexPositions.positions[i2];
+
+    vec4 clip0 = scene.viewProj * worldPos0;
+    vec4 clip1 = scene.viewProj * worldPos1;
+    vec4 clip2 = scene.viewProj * worldPos2;
+
+    // Simplified near plane clip: reject the whole triangle if any vertex is
+    // at or behind the near plane instead of clipping it against the plane.
+    // A real polygon clipper would generate new vertices here, but for a
+    // tile binner this reject only approximation is a common, cheap tradeoff.
+    if (clip0.w <= pc.nearZ || clip1.w <= pc.nearZ || clip2.w <= pc.nearZ) {
+        return;
+    }
+
+    float invW0 = 1.0 / clip0.w;
+    float invW1 = 1.0 / clip1.w;
+    float invW2 = 1.0 / clip2.w;
+
+    vec3 ndc0 = clip0.xyz * invW0;
+    vec3 ndc1 = clip1.xyz * invW1;
+    vec3 ndc2 = clip2.xyz * invW2;
+
+    vec2 screenDims = vec2(float(pc.screenWidth), float(pc.screenHeight));
+
+    vec2 screen0 = vec2((ndc0.x * 0.5 + 0.5), (1.0 - (ndc0.y * 0.5 + 0.5))) * screenDims;
+    vec2 screen1 = vec2((ndc1.x * 0.5 + 0.5), (1.0 - (ndc1.y * 0.5 + 0.5))) * screenDims;
+    vec2 screen2 = vec2((ndc2.x * 0.5 + 0.5), (1.0 - (ndc2.y * 0.5 + 0.5))) * screenDims;
+
+    float depth0 = ndc0.z * 0.5 + 0.5;
+    float depth1 = ndc1.z * 0.5 + 0.5;
+    float depth2 = ndc2.z * 0.5 + 0.5;
+
+    float signedArea = edgeFunction(screen0, screen1, screen2);
+    // Front faces wind counterclockwise in this screen space. Reject
+    // back facing and degenerate triangles.
+    if (signedArea <= 0.0) {
+        return;
+    }
+
+    vec2 aabbMin = min(screen0, min(screen1, screen2));
+    vec2 aabbMax = max(screen0, max(screen1, screen2));
+
+    aabbMin = clamp(aabbMin, vec2(0.0), screenDims);
+    aabbMax = clamp(aabbMax, vec2(0.0), screenDims);
+
+    if (aabbMax.x <= aabbMin.x || aabbMax.y <= aabbMin.y) {
+        return;
+    }
+
+    TriCacheEntry entry;
+    entry.screenPos0 = vec4(screen0, depth0, invW0);
+    entry.screenPos1 = vec4(screen1, depth1, invW1);
+    entry.screenPos2 = vec4(screen2, depth2, invW2);
+    entry.vertexIndices = uvec4(i0, i1, i2, 0u);
+    triangleCache.entries[triIndex] = entry;
+
+    int tileMinX = int(floor(aabbMin.x / float(TILE_SIZE)));
+    int tileMaxX = int(floor((aabbMax.x - 0.0001) / float(TILE_SIZE)));
+    int tileMinY = int(floor(aabbMin.y / float(TILE_SIZE)));
+    int tileMaxY = int(floor((aabbMax.y - 0.0001) / float(TILE_SIZE)));
+
+    tileMinX = clamp(tileMinX, 0, int(pc.tileCountX) - 1);
+    tileMaxX = clamp(tileMaxX, 0, int(pc.tileCountX) - 1);
+    tileMinY = clamp(tileMinY, 0, int(pc.tileCountY) - 1);
+    tileMaxY = clamp(tileMaxY, 0, int(pc.tileCountY) - 1);
+
+    for (int ty = tileMinY; ty <= tileMaxY; ty++) {
+        for (int tx = tileMinX; tx <= tileMaxX; tx++) {
+            uint tileIndex = uint(ty) * pc.tileCountX + uint(tx);
+            uint slot = atomicAdd(tileBinCount.counts[tileIndex], 1u);
+            if (slot < pc.maxTrisPerTile) {
+                tileBinIndices.triIndex[tileIndex * pc.maxTrisPerTile + slot] = triIndex;
+            }
+        }
+    }
+}

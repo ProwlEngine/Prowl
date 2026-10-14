@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std140,set=0,binding=0) uniform U { uint a; } u;
+layout(std430,set=0,binding=1) buffer B { uint o; };
+void main() { o = atomicAdd(u.a, 1u); }

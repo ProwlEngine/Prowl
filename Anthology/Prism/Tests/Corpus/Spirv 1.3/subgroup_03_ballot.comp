@@ -1,0 +1,21 @@
+#version 460
+#extension GL_KHR_shader_subgroup_ballot : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { uint values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    bool cond = values[i] > 10u;
+    uvec4 ballot = subgroupBallot(cond);
+    uint count = subgroupBallotBitCount(ballot);
+    uint first = subgroupBroadcastFirst(values[i]);
+    uint b = subgroupBroadcast(values[i], 0u);
+    bool inv = subgroupInverseBallot(ballot);
+    bool bit = subgroupBallotBitExtract(ballot, 0u);
+    uint lsb = subgroupBallotFindLSB(ballot);
+    uint msb = subgroupBallotFindMSB(ballot);
+    uint incl = subgroupBallotInclusiveBitCount(ballot);
+    uint excl = subgroupBallotExclusiveBitCount(ballot);
+    values[i] = count + first + b + lsb + msb + incl + excl
+              + (inv ? 1u : 0u) + (bit ? 2u : 0u) + gl_SubgroupEqMask.x;
+}

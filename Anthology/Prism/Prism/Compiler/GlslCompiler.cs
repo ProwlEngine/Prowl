@@ -1,0 +1,69 @@
+using System.Collections.Concurrent;
+using Prowl.Prism.Glsl;
+using Prowl.Prism.SpirV;
+
+namespace Prowl.Prism.Compiler;
+
+/// <summary>The pipeline stage a shader is compiled for (its SPIR-V entry-point model).</summary>
+public enum ShaderStage { Vertex, Fragment, Compute, Geometry, TessControl, TessEvaluation, Mesh, Task,
+    RayGen, Intersection, AnyHit, ClosestHit, Miss, Callable }
+
+/// <summary>
+/// The public entry point: compiles GLSL source text into a SPIR-V module.
+/// Pipeline is parse (with preprocessor) -> lower -> serialize. The optional defines dictionary
+/// selects shader variants; the target selects the SPIR-V version and defaults to 1.0.
+/// </summary>
+public static class GlslCompiler
+{
+    // Reused across compiles on the compile lane (thread-static), so the front-end reaches ~zero steady-
+    // state allocation. Concurrent compiles on different threads each get their own lane and pools.
+    [ThreadStatic] static Lowerer? _lowerer;
+    [ThreadStatic] static CompileLane? _lane;
+
+    public static Prowl.Prism.SpirVModule Compile(string source, ShaderStage stage,
+        SpirVVersion target = SpirVVersion.V1_0, IReadOnlyDictionary<string, string>? defines = null, bool optimize = false,
+        bool autoMapLocations = false) =>
+        (_lane ??= new CompileLane()).Run(() =>
+        {
+            var unit = Parser.Parse(source, defines);
+            var module = (_lowerer ??= new Lowerer()).Reset(stage, target, autoMapLocations).Lower(unit);
+            var words = module.Serialize();
+            if (optimize) words = Optimizer.SpirVOptimizer.Optimize(words);
+            return new Prowl.Prism.SpirVModule(words);
+        });
+
+    public static byte[] CompileToBytes(string source, ShaderStage stage,
+        SpirVVersion target = SpirVVersion.V1_0, IReadOnlyDictionary<string, string>? defines = null, bool optimize = false,
+        bool autoMapLocations = false) =>
+        Compile(source, stage, target, defines, optimize, autoMapLocations).ToBytes();
+}
+
+/// <summary>
+/// One compile lane per calling thread: the parser and lowerer recurse once per nesting level, and
+/// glslang's acceptance zone runs to ~5,000-deep paren nesting - far beyond what a default 1 MB
+/// thread stack survives - so the pipeline executes on a dedicated 64 MB stack. The lane is reused
+/// across compiles from the same thread, which keeps the ThreadStatic pools above warm.
+/// </summary>
+sealed class CompileLane
+{
+    readonly Thread _thread;
+    readonly BlockingCollection<(Func<object> Work, TaskCompletionSource<object?> Done)> _queue = new();
+
+    public CompileLane()
+    {
+        _thread = new Thread(() =>
+        {
+            foreach (var (work, done) in _queue.GetConsumingEnumerable())
+                try { done.SetResult(work()); }
+                catch (Exception e) { done.SetException(e); }
+        }, maxStackSize: 64 * 1024 * 1024) { IsBackground = true, Name = "Prism compile" };
+        _thread.Start();
+    }
+
+    public T Run<T>(Func<T> work)
+    {
+        var done = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _queue.Add((() => work()!, done));
+        return (T)done.Task.GetAwaiter().GetResult()!;
+    }
+}

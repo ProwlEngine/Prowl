@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:5: '' : duplicate member name: a
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking vertex stage: Missing entry point: Each stage requires one entry point
+

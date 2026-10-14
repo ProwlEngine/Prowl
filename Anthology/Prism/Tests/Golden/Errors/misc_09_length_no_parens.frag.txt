@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'length' : incomplete method syntax 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

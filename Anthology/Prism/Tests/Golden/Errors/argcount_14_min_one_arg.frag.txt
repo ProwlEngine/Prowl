@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:6: 'min' : no matching overloaded function found 
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

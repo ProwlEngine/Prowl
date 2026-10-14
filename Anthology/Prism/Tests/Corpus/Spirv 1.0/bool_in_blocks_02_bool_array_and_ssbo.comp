@@ -1,0 +1,37 @@
+#version 460 core
+
+// Bool arrays in a buffer block, written as well as read, so the uint<->bool conversion has to work in
+// both directions and through a dynamic index.
+
+layout(local_size_x = 8) in;
+
+layout(std430, set = 0, binding = 0) buffer Flags
+{
+    bool enabled[8];
+    bvec2 pairs[4];
+    uint counter;
+};
+
+layout(std430, set = 0, binding = 1) buffer Out
+{
+    float results[];
+};
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    int k = int(i) & 7;
+
+    bool a = enabled[k];
+    bvec2 p = pairs[k & 3];
+
+    enabled[k] = !a;
+    pairs[k & 3] = bvec2(p.y, p.x);
+
+    float v = 0.0;
+    if (a) v += 1.0;
+    if (p.x) v += 2.0;
+    if (p.y && !a) v += 4.0;
+
+    results[i] = v;
+}

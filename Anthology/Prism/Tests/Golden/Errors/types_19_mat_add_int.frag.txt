@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: '=' :  cannot convert from ' temp highp 2X2 matrix of float' to ' temp highp float'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

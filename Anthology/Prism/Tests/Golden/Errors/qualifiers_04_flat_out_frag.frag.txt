@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:3: 'flat/smooth/noperspective' : can't use interpolation qualifier on a fragment output 
+ERROR: <shader>:3: 'location' : SPIR-V requires location for user input/output 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

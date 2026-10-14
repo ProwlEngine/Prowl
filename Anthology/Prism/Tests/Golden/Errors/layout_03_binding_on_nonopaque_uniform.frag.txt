@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:4: 'non-opaque uniforms outside a block' : not allowed when using GLSL for Vulkan 
+ERROR: <shader>:4: 'binding' : requires block, or sampler/image, or atomic-counter type 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

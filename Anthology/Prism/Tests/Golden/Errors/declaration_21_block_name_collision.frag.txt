@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:9: 'BlockB' : nameless block contains a member that already has a name at global scope 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

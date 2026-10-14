@@ -1,0 +1,18 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(set = 0, binding = 0) uniform sampler2D uInput;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D uOutput;
+const float kWeights[5] = float[5](0.227027, 0.194594, 0.121621, 0.054054, 0.016216);
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uOutput);
+    if (coord.x >= size.x || coord.y >= size.y) return;
+    vec2 uv = (vec2(coord) + 0.5) / vec2(size);
+    vec2 texel = 1.0 / vec2(size);
+    vec3 result = texture(uInput, uv).rgb * kWeights[0];
+    for (int i = 1; i < 5; ++i) {
+        result += texture(uInput, uv + vec2(texel.x * float(i), 0.0)).rgb * kWeights[i];
+        result += texture(uInput, uv - vec2(texel.x * float(i), 0.0)).rgb * kWeights[i];
+    }
+    imageStore(uOutput, coord, vec4(result, 1.0));
+}

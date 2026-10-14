@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:5: '' : boolean expression expected 
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:4: '' :  syntax error, unexpected end of file
+ERROR: 1 compilation errors.  No code generated.
+
+

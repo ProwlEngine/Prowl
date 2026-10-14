@@ -1,0 +1,21 @@
+#version 460
+#extension GL_EXT_shared_memory_block : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { uint values[]; };
+layout(std430) shared Blk {
+    uint entries[64];
+    uint total;
+} sm;
+void main()
+{
+    uint l = gl_LocalInvocationID.x;
+    sm.entries[l] = gl_GlobalInvocationID.x;
+    barrier();
+    if (l == 0u) {
+        uint s = 0u;
+        for (uint k = 0u; k < 64u; ++k) s += sm.entries[k];
+        sm.total = s;
+    }
+    barrier();
+    values[gl_GlobalInvocationID.x] = sm.total;
+}

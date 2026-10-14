@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:3: 'in' :  cannot initialize this type of qualifier  
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

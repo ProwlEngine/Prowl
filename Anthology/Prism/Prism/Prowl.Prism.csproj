@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Prism</PackageId>
+    <Title>Prowl.Prism</Title>
+    <Description>A GLSL to SPIR-V compiler for the Prowl engine. Parses GLSL (preprocessor, token stream,
+    full AST), lowers to SPIR-V with a spirv-opt-shaped optimizer pipeline, and targets Vulkan SPIR-V 1.0-1.4.
+    Byte-for-byte matched against glslang's front-end output over a 1200+ shader corpus.</Description>
+    <PackageTags>shader;glsl;glsl-to-spirv;spirv;vulkan;compiler;gamedev;game-engine;prowl;dotnet;csharp</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- Trimmed SPIR-V grammar (opcode operand shapes + enum parameters). Drives the optimizer's
+       operand model so it can identify id operands for use-replacement. Regenerate from
+       SPIRV-Headers unified1 grammar when upgrading. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Optimizer\spirv.grammar.min.json">
+      <LogicalName>spirv.grammar.min.json</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

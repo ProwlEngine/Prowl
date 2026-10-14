@@ -1,0 +1,72 @@
+#version 460 core
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D colorTex;
+layout(set = 0, binding = 1) uniform sampler2D normalTex;
+layout(set = 0, binding = 2) uniform sampler2D positionTex;
+layout(set = 0, binding = 3, rgba32f) writeonly uniform image2D denoisedOutput;
+
+layout(push_constant) uniform PushConstants
+{
+    int stepWidth;
+    float colorPhi;
+    float normalPhi;
+    float positionPhi;
+    ivec2 imageSize;
+    vec2 pad0;
+} pc;
+
+const float KERNEL_1D[5] = float[](1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0);
+
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    if (pixelCoord.x >= pc.imageSize.x || pixelCoord.y >= pc.imageSize.y)
+    {
+        return;
+    }
+
+    vec3 centerColor = texelFetch(colorTex, pixelCoord, 0).rgb;
+    vec3 centerNormal = texelFetch(normalTex, pixelCoord, 0).xyz;
+    vec3 centerPosition = texelFetch(positionTex, pixelCoord, 0).xyz;
+
+    ivec2 clampMax = pc.imageSize - ivec2(1, 1);
+    int sampleStride = max(pc.stepWidth, 1);
+
+    vec3 sumColor = vec3(0.0);
+    float sumWeight = 0.0;
+
+    for (int j = -2; j <= 2; j++)
+    {
+        for (int i = -2; i <= 2; i++)
+        {
+            ivec2 offset = ivec2(i, j) * sampleStride;
+            ivec2 samplePixel = clamp(pixelCoord + offset, ivec2(0, 0), clampMax);
+
+            vec3 sampleColor = texelFetch(colorTex, samplePixel, 0).rgb;
+            vec3 sampleNormal = texelFetch(normalTex, samplePixel, 0).xyz;
+            vec3 samplePosition = texelFetch(positionTex, samplePixel, 0).xyz;
+
+            float kernelWeight = KERNEL_1D[i + 2] * KERNEL_1D[j + 2];
+
+            vec3 colorDiff = centerColor - sampleColor;
+            float colorDist2 = dot(colorDiff, colorDiff);
+            float colorWeight = min(exp(-colorDist2 / max(pc.colorPhi, 0.0001)), 1.0);
+
+            vec3 normalDiff = centerNormal - sampleNormal;
+            float normalDist2 = max(dot(normalDiff, normalDiff), 0.0);
+            float normalWeight = min(exp(-normalDist2 / max(pc.normalPhi, 0.0001)), 1.0);
+
+            vec3 positionDiff = centerPosition - samplePosition;
+            float positionDist2 = dot(positionDiff, positionDiff);
+            float positionWeight = min(exp(-positionDist2 / max(pc.positionPhi, 0.0001)), 1.0);
+
+            float weight = kernelWeight * colorWeight * normalWeight * positionWeight;
+            sumColor += sampleColor * weight;
+            sumWeight += weight;
+        }
+    }
+
+    vec3 result = (sumWeight > 0.0001) ? (sumColor / sumWeight) : centerColor;
+    imageStore(denoisedOutput, pixelCoord, vec4(result, 1.0));
+}

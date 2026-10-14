@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: '+' :  wrong operand types: no operation '+' exists that takes a left-hand operand of type ' temp highp 3-component vector of float' and a right operand of type ' temp highp 2-component vector of float' (or there is no acceptable conversion)
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

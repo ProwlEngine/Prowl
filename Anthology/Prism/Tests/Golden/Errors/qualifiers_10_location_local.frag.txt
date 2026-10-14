@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'location' : can only apply to uniform, buffer, in, or out storage qualifiers 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

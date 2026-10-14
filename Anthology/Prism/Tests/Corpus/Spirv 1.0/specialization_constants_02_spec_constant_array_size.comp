@@ -1,0 +1,37 @@
+#version 460 core
+
+// Specialization constant used as a compile-time array size, resolved at pipeline creation.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(constant_id = 0) const int KERNEL_SIZE = 8;
+
+layout(std430, set = 0, binding = 0) buffer InputBuffer
+{
+    float samples[];
+};
+
+layout(std430, set = 0, binding = 1) buffer OutputBuffer
+{
+    float sums[];
+};
+
+void main()
+{
+    uint tid = gl_GlobalInvocationID.x;
+
+    float weights[KERNEL_SIZE];
+    for (int i = 0; i < KERNEL_SIZE; i++)
+    {
+        weights[i] = 1.0 / float(KERNEL_SIZE) * float(i + 1);
+    }
+
+    float total = 0.0;
+    for (int i = 0; i < KERNEL_SIZE; i++)
+    {
+        uint sampleIndex = tid * uint(KERNEL_SIZE) + uint(i);
+        total += samples[sampleIndex] * weights[i];
+    }
+
+    sums[tid] = total;
+}

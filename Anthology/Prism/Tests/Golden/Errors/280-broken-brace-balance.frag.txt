@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:2: '' :  syntax error, unexpected end of file, expecting RIGHT_BRACE
+ERROR: 1 compilation errors.  No code generated.
+
+

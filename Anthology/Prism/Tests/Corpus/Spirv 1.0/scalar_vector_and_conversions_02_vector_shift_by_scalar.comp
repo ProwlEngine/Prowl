@@ -1,0 +1,9 @@
+#version 460
+layout(local_size_x = 1) in;
+layout(binding = 0) buffer B { uvec4 result; };
+void main() {
+    uvec4 a = uvec4(16u, 32u, 64u, 128u);
+    a >>= 2u;
+    ivec4 b = ivec4(1, 2, 3, 4) << 1;
+    result = a + uvec4(b);
+}
