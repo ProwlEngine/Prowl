@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Editor.Core.Diagnostics;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
@@ -359,7 +360,7 @@ public class EditorApplication : Game
     }
 
     // The whole Paper frame is the editor's interface. The game's own UI, drawn inside the Game view, still counts as UI.
-    protected override FrameStat GuiFrameStat => FrameStats.Editor;
+    protected override FrameStat GuiFrameStat => EditorFrameStats.UI;
 
     /// <summary> Sets the Paper resolution and framebuffer scale, accounting for content scale and user scale. </summary>
     protected override void PreparePaperFrame()
@@ -404,7 +405,8 @@ public class EditorApplication : Game
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
-        Undo.FlushFrame();
+        using (FrameStats.Editor.Scope())
+            Undo.FlushFrame();
 
         // Escape always releases the cursor in editor.
         if (Input.GetKeyDown(KeyCode.Escape) && (Input.CursorLockState != CursorLockMode.None || !Input.CursorVisible))
@@ -430,11 +432,13 @@ public class EditorApplication : Game
             }
             else if (ShortcutManager.IsPressed("Global/Undo"))
             {
-                Undo.PerformUndo();
+                using (FrameStats.Editor.Scope())
+                    Undo.PerformUndo();
             }
             else if (ShortcutManager.IsPressed("Global/Redo"))
             {
-                Undo.PerformRedo();
+                using (FrameStats.Editor.Scope())
+                    Undo.PerformRedo();
             }
         }
 
@@ -464,7 +468,8 @@ public class EditorApplication : Game
         paper.Canvas.SetAntiAlias(EditorTheme.AntiAliasing);
 
         // Save system update (Ctrl+S + auto-save) - after theme push so toasts get icons
-        SaveManager.Update((float)Time.UnscaledDeltaTime);
+        using (FrameStats.Editor.Scope())
+            SaveManager.Update((float)Time.UnscaledDeltaTime);
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -475,6 +480,7 @@ public class EditorApplication : Game
             GUI.EditorGuide.ArmAutoStart(); // let the tour play once for this freshly-opened project
             if (Project.Current != null)
             {
+                using FrameStatScope projectStats = FrameStats.Editor.Scope();
                 Window.InternalWindow.Title = $"Prowl Editor - {Project.Current.Name}";
 
                 // Project settings load first, since some decide how assets import
@@ -507,15 +513,20 @@ public class EditorApplication : Game
         // rather than trusting whatever it happened to catch.
         bool focused = Window.IsFocused;
         if (focused && !_wasFocused)
+        {
+            using FrameStatScope assetStats = EditorFrameStats.Assets.Scope();
             EditorAssetBackend.Instance?.Refresh();
+        }
         bool cliActive = CliServer.IsActive;
         if (focused != _wasFocused || cliActive != _wasCliActive)
             ApplyFramePacing();
         _wasFocused = focused;
         _wasCliActive = cliActive;
 
-        ExternalAssetDrop.ProcessPending();
-        CliServer.Update();
+        using (EditorFrameStats.Assets.Scope())
+            ExternalAssetDrop.ProcessPending();
+        using (FrameStats.Editor.Scope())
+            CliServer.Update();
 
         if (_quitRequested)
         {
@@ -527,6 +538,7 @@ public class EditorApplication : Game
         bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || cliActive || ExternalAssetDrop.ForceProcessActive;
         if (canProcessAssets)
         {
+            using FrameStatScope assetStats = EditorFrameStats.Assets.Scope();
             EditorAssetBackend.Instance?.ProcessFileChanges();
 
             // Lazy thumbnail generation one per frame
@@ -537,12 +549,16 @@ public class EditorApplication : Game
         // outstanding: the project's first scene load is waiting on that compile, and reimport gating
         // (or an unfocused window) must not be able to strand the editor with no scene open.
         if (canProcessAssets || ScriptAssemblyManager.AwaitingStartupCompile)
+        {
+            using FrameStatScope scriptStats = EditorFrameStats.Scripts.Scope();
             ScriptAssemblyManager.Update();
+        }
 
         // The project's scene opens only once its scripts have been built, so it is never deserialized
         // against types that do not exist yet.
         if (_sceneLoadPending && !ScriptAssemblyManager.AwaitingStartupCompile)
         {
+            using FrameStatScope sceneStats = FrameStats.Editor.Scope();
             _sceneLoadPending = false;
             EditorSceneManager.EnsureSceneLoaded();
         }
@@ -2074,7 +2090,8 @@ public class EditorApplication : Game
 
         Application.IsGameplayExecuting = false;
 
-        Navigation.NavMeshBakeService.Instance.Poll();
+        using (FrameStats.Navigation.Scope())
+            Navigation.NavMeshBakeService.Instance.Poll();
 
         // Editor gizmos are a scene-view concept, and the scene view edits UI in world space, so queue
         // them with the world-space canvas override active - otherwise the canvas wireframe would be
@@ -2083,6 +2100,7 @@ public class EditorApplication : Game
         GameCanvas.EditorWorldSpaceOverride = true;
         try
         {
+            using FrameStatScope gizmoStats = EditorFrameStats.Gizmos.Scope();
             // Always allow gizmos in editor (even when not playing)
             if (scene != null)
                 scene.DrawGizmos();

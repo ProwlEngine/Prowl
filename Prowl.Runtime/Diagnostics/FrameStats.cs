@@ -14,6 +14,7 @@ namespace Prowl.Runtime.Diagnostics;
 /// <code>
 /// using FrameStatScope stats = FrameStats.Physics.Scope();  // built-in category, to the end of the method
 /// using (FrameStats.Scope("AI")) UpdateAgents();             // your own, created on first use
+/// using (FrameStats.Scope("AI/Paths")) FindPaths();          // grouped under AI in viewers
 /// float avg = FrameStats.Render.GetStats(60).Avg;            // ms per frame, last 60 frames
 /// </code>
 /// Nested scopes count only their own time, so a frame's categories add up to its length, with unscoped
@@ -49,13 +50,14 @@ public static class FrameStats
     public static readonly FrameStat Audio = new("Audio", Hex(0xbd, 0xb2, 0xff));
     public static readonly FrameStat Render = new("Render", Hex(0x8a, 0xc9, 0x26));
     public static readonly FrameStat UI = new("UI", Hex(0xb4, 0x86, 0x9f));
-    public static readonly FrameStat Editor = new("Editor", Hex(0x9a, 0x9c, 0xa8));
+    /// <summary>The editor's own work. Its subcategories are made by the editor.</summary>
+    public static readonly FrameStat Editor = new("Editor", Hex(0x9a, 0x9c, 0xa8), hiddenByDefault: true);
 
     /// <summary>Main thread blocked until the render thread has finished and presented earlier frames, vsync included.</summary>
-    public static readonly FrameStat RenderWait = new("Render Wait", Hex(0x2a, 0x9d, 0x8f));
+    public static readonly FrameStat RenderWait = new("Render Wait", Hex(0x2a, 0x9d, 0x8f), hiddenByDefault: true);
 
     /// <summary>The frame limiter sleeping to hold the target frame rate.</summary>
-    public static readonly FrameStat Idle = new("Idle", Hex(0x5c, 0x5c, 0x66));
+    public static readonly FrameStat Idle = new("Idle", Hex(0x5c, 0x5c, 0x66), hiddenByDefault: true);
 
     /// <summary>Garbage collector pauses. Filled in at frame end, never scoped.</summary>
     public static readonly FrameStat GC = new("GC", Hex(0x00, 0xf5, 0xd4));
@@ -74,7 +76,7 @@ public static class FrameStats
     private static long s_gcAtSegment;
     private static long s_gcAtFrame;
 
-    /// <summary>Every category registered so far, in registration order.</summary>
+    /// <summary>Every category registered so far, subcategories included, in registration order. A parent always comes before its subcategories.</summary>
     public static IReadOnlyList<FrameStat> Categories => s_categories;
 
     /// <summary>Number of frames recorded since startup, including those that have left the history.</summary>
@@ -86,28 +88,42 @@ public static class FrameStats
     /// <summary>Length of a recorded frame in milliseconds. 0 is the most recent frame.</summary>
     public static float GetFrameMs(int framesAgo) => s_frameMs[Slot(framesAgo)];
 
-    /// <summary>Returns the category with this name, creating it the first time it is asked for.</summary>
-    public static FrameStat GetCategory(string name)
+    /// <summary>
+    /// Returns the category at this path, creating it the first time it is asked for. A path such as
+    /// "Editor/Gizmos" makes a subcategory, and its parents too if they do not exist yet. Paths match whatever
+    /// the case. <paramref name="color"/> is used only when the category is created; otherwise one is picked
+    /// from its path.
+    /// </summary>
+    public static FrameStat GetCategory(string path, Color? color = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         lock (s_registryLock)
         {
-            return s_byName.TryGetValue(name, out FrameStat? existing)
-                ? existing
-                : new FrameStat(name, DefaultColor(name));
+            if (s_byName.TryGetValue(path, out FrameStat? existing))
+                return existing;
+
+            int slash = path.LastIndexOf('/');
+            string name = path[(slash + 1)..];
+            if (string.IsNullOrWhiteSpace(name) || (slash >= 0 && string.IsNullOrWhiteSpace(path[..slash])))
+                throw new ArgumentException($"Frame stat path '{path}' has an empty part.", nameof(path));
+
+            FrameStat? parent = slash < 0 ? null : GetCategory(path[..slash]);
+            return new FrameStat(name, color ?? DefaultColor(path), parent);
         }
     }
 
-    /// <summary>Opens a scope on the named category. See <see cref="FrameStat.Scope"/>.</summary>
+    /// <summary>Opens a scope on the category at this path. See <see cref="FrameStat.Scope"/>.</summary>
     public static FrameStatScope Scope(string category) => GetCategory(category).Scope();
 
     internal static void Register(FrameStat category)
     {
         lock (s_registryLock)
         {
-            if (!s_byName.TryAdd(category.Name, category))
-                throw new ArgumentException($"A frame stat named '{category.Name}' already exists.");
+            if (!s_byName.TryAdd(category.Path, category))
+                throw new ArgumentException($"A frame stat named '{category.Path}' already exists.");
+            category.Index = s_categories.Length;
             s_categories = [.. s_categories, category];
+            category.Parent?.AddChild(category);
         }
     }
 
@@ -215,11 +231,11 @@ public static class FrameStats
 
     private static Color Hex(byte r, byte g, byte b) => Color32.FromArgb(255, r, g, b);
 
-    // Categories made on the fly get a stable colour from their name, so they keep it across runs.
-    private static Color DefaultColor(string name)
+    // Categories made on the fly get a stable colour from their path, so they keep it across runs.
+    private static Color DefaultColor(string path)
     {
         uint hash = 2166136261;
-        foreach (char ch in name)
+        foreach (char ch in path)
             hash = (hash ^ char.ToLowerInvariant(ch)) * 16777619;
         return s_palette[hash % (uint)s_palette.Length];
     }

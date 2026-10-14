@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text.Json.Nodes;
 
+using Prowl.Editor.Core.Diagnostics;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Runtime.Diagnostics;
 
@@ -333,7 +334,9 @@ public class FrameStatsPanelTests
             ["stackMax"] = true,
             ["columnWidth"] = 12.5,
             ["split"] = 0.25,
-            ["hidden"] = new JsonArray("Physics", "render"),
+            ["shown"] = new JsonObject { ["Physics"] = false, ["render wait"] = true },
+            ["otherHidden"] = new JsonArray("Editor"),
+            ["expanded"] = new JsonArray("Editor"),
         };
         var panel = new FrameStatsPanel();
         panel.RestoreState((JsonObject)JsonNode.Parse(saved.ToJsonString())!);
@@ -345,18 +348,47 @@ public class FrameStatsPanelTests
         Assert.True(restored["stackMax"]!.GetValue<bool>());
         Assert.Equal(12.5, restored["columnWidth"]!.GetValue<double>(), 3);
         Assert.Equal(0.25, restored["split"]!.GetValue<double>(), 3);
-        // Names match whatever the case, and come back as the category's own name.
-        Assert.Equal(["Physics", "Render"], restored["hidden"]!.AsArray().Select(n => n!.GetValue<string>()).Order());
+        Assert.False(restored["shown"]!["Physics"]!.GetValue<bool>());
+        Assert.Equal(["Editor"], restored["otherHidden"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal(["Editor"], restored["expanded"]!.AsArray().Select(n => n!.GetValue<string>()));
+
+        // Paths match whatever the case.
+        var reopened = new FrameStatsPanel();
+        reopened.RestoreState(restored);
+        Assert.True(reopened.IsHidden(FrameStats.Physics));
+        Assert.False(reopened.IsHidden(FrameStats.RenderWait));
+        Assert.True(reopened.IsExpanded(FrameStats.Editor));
     }
 
     [Fact]
-    public void ANewPanelSavesItsDefaults()
+    public void ANewPanelFollowsEachCategoryDefault()
     {
-        JsonObject state = RoundTrip(new FrameStatsPanel());
+        var panel = new FrameStatsPanel();
 
+        Assert.True(panel.IsHidden(FrameStats.Idle));
+        Assert.True(panel.IsHidden(FrameStats.RenderWait));
+        Assert.True(panel.IsRowHidden(FrameStats.Editor));
+        Assert.True(panel.IsHidden(EditorFrameStats.UI));
+        Assert.False(panel.IsHidden(FrameStats.Render));
+        Assert.False(panel.IsExpanded(FrameStats.Editor));
+
+        // Defaults are not written out, so a later change to one still reaches saved layouts.
+        JsonObject state = RoundTrip(panel);
         Assert.Equal(2, state["rate"]!.GetValue<int>());
         Assert.Null(state["split"]);
-        Assert.Equal(["Idle"], state["hidden"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Empty(state["shown"]!.AsObject());
+    }
+
+    [Fact]
+    public void LayoutsFromBeforeGroupsKeepTheirHiddenRowsAndDefaultTheRest()
+    {
+        var panel = new FrameStatsPanel();
+        panel.RestoreState(new JsonObject { ["hidden"] = new JsonArray("Physics", "editor") });
+
+        Assert.True(panel.IsHidden(FrameStats.Physics));
+        Assert.True(panel.IsHidden(EditorFrameStats.UI));
+        Assert.True(panel.IsHidden(FrameStats.RenderWait));
+        Assert.False(panel.IsHidden(FrameStats.Render));
     }
 
     [Fact]
@@ -369,7 +401,8 @@ public class FrameStatsPanelTests
             ["stackMax"] = "yes",
             ["columnWidth"] = 1000.0,
             ["split"] = 1.5,
-            ["hidden"] = new JsonArray("NoSuchCategory." + Guid.NewGuid(), 7),
+            ["shown"] = new JsonObject { ["Physics"] = "no" },
+            ["expanded"] = new JsonArray(7),
         };
         var panel = new FrameStatsPanel();
         int categoriesBefore = FrameStats.Categories.Count;
@@ -382,8 +415,113 @@ public class FrameStatsPanelTests
         Assert.False(state["stackMax"]!.GetValue<bool>());
         Assert.Equal(32.0, state["columnWidth"]!.GetValue<double>(), 3);
         Assert.Null(state["split"]);
-        Assert.Empty(state["hidden"]!.AsArray());
-        // An unknown name is skipped, not made into an empty category.
+        Assert.Empty(state["shown"]!.AsObject());
+        Assert.Empty(state["expanded"]!.AsArray());
         Assert.Equal(categoriesBefore, FrameStats.Categories.Count);
+    }
+
+    [Fact]
+    public void ASavedChoiceReachesACategoryMadeLater()
+    {
+        string path = "PanelTest.Later." + Guid.NewGuid();
+        var panel = new FrameStatsPanel();
+        int categoriesBefore = FrameStats.Categories.Count;
+
+        panel.RestoreState(new JsonObject { ["shown"] = new JsonObject { [path] = false } });
+        // Restoring does not make the category.
+        Assert.Equal(categoriesBefore, FrameStats.Categories.Count);
+
+        Assert.True(panel.IsHidden(FrameStats.GetCategory(path)));
+    }
+
+    [Fact]
+    public void AGroupHidesEverythingUnderItIncludingLaterSubcategories()
+    {
+        string root = "PanelTest.Group." + Guid.NewGuid();
+        FrameStat group = FrameStats.GetCategory(root);
+        FrameStat child = FrameStats.GetCategory($"{root}/Child");
+        var panel = new FrameStatsPanel();
+
+        panel.ToggleVisibility(group);
+        FrameStat late = FrameStats.GetCategory($"{root}/Late/Deeper");
+
+        Assert.True(panel.IsHidden(group));
+        Assert.True(panel.IsHidden(child));
+        Assert.True(panel.IsHidden(late));
+        // Subcategories keep their own switch, so they come back with the group.
+        panel.ToggleVisibility(group);
+        Assert.False(panel.IsHidden(child));
+        Assert.False(panel.IsHidden(late));
+    }
+
+    [Fact]
+    public void ShowingARowUnderAHiddenGroupShowsOnlyThatRow()
+    {
+        var panel = new FrameStatsPanel();
+        panel.ToggleVisibility(EditorFrameStats.UI);
+
+        Assert.False(panel.IsHidden(EditorFrameStats.UI));
+        Assert.False(panel.IsRowHidden(FrameStats.Editor));
+        // The group's own time and its other subcategories stay off.
+        Assert.True(panel.IsHidden(FrameStats.Editor));
+        foreach (FrameStat sibling in FrameStats.Editor.Children)
+            if (sibling != EditorFrameStats.UI)
+                Assert.True(panel.IsHidden(sibling));
+
+        // The choice survives reopening the panel.
+        var restored = new FrameStatsPanel();
+        restored.RestoreState(RoundTrip(panel));
+        Assert.False(restored.IsHidden(EditorFrameStats.UI));
+        Assert.True(restored.IsHidden(FrameStats.Editor));
+
+        // Further clicks toggle just that row.
+        restored.ToggleVisibility(EditorFrameStats.UI);
+        Assert.True(restored.IsHidden(EditorFrameStats.UI));
+        Assert.False(restored.IsRowHidden(FrameStats.Editor));
+    }
+
+    [Fact]
+    public void ShowingTheOtherRowOfAHiddenGroupShowsOnlyItsOwnTime()
+    {
+        var panel = new FrameStatsPanel();
+        Assert.True(panel.IsOtherHidden(FrameStats.Editor));
+
+        panel.ToggleVisibility(FrameStats.Editor, other: true);
+
+        Assert.False(panel.IsHidden(FrameStats.Editor));
+        foreach (FrameStat child in FrameStats.Editor.Children)
+            Assert.True(panel.IsHidden(child));
+
+        panel.ToggleVisibility(FrameStats.Editor, other: true);
+        Assert.True(panel.IsHidden(FrameStats.Editor));
+        Assert.False(panel.IsRowHidden(FrameStats.Editor));
+    }
+
+    [Fact]
+    public void AGroupTotalAddsUpEverythingUnderItWithinEachFrame()
+    {
+        string root = "PanelTest.Tree." + Guid.NewGuid();
+        FrameStat group = FrameStats.GetCategory(root);
+        FrameStat first = FrameStats.GetCategory($"{root}/First");
+        FrameStat second = FrameStats.GetCategory($"{root}/Sub/Second");
+        History history = Fresh();
+        Frames(1, first, 2);
+        Frames(1, second, 2);
+        float firstMs = first.GetSample(1).Ms;
+        float secondMs = second.GetSample(0).Ms;
+
+        history.Sample(Now, NoneHidden);
+        History.Column column = Assert.IsType<History.Column>(history.Ago(0));
+        int g = IndexOf(group), sub = IndexOf(second.Parent!);
+        Assert.Equal((firstMs + secondMs) / 2, column.TreeAvg(g), 4);
+        Assert.Equal(Math.Max(firstMs, secondMs), column.TreeMax(g), 4);
+        Assert.Equal(1, column.TreeCalls(g));
+        Assert.Equal(secondMs / 2, column.TreeAvg(sub), 4);
+        // A category without subcategories totals only itself.
+        Assert.Equal(column.Avg(IndexOf(first)), column.TreeAvg(IndexOf(first)));
+
+        History.Totals totals = history.Summarise(FrameStats.Categories.Count, 1);
+        Assert.Equal(column.TreeAvg(g), totals.TreeAvgMs[g]);
+        Assert.Equal(column.TreeMax(g), totals.TreeMaxMs[g]);
     }
 }

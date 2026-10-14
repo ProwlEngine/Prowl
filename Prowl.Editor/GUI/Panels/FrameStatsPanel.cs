@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Core.Diagnostics;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -27,7 +28,8 @@ namespace Prowl.Editor.GUI.Panels;
 /// <summary>
 /// Live view of <see cref="FrameStats"/>: a scrolling chart stacked by category over a table of every
 /// category. Single frames go past too fast to read, so frames are gathered into one column per refresh
-/// interval. Click a column to pause on it, and a category to hide it from the chart.
+/// interval. Click a column to pause on it, and a category to hide it from the chart. Categories with subcategories
+/// show as one group that expands into them, with an Other row for the parent's own time.
 /// </summary>
 public class FrameStatsPanel : DockPanel
 {
@@ -53,10 +55,17 @@ public class FrameStatsPanel : DockPanel
     private static readonly float[] ScaleMs = [0f, 8f, 16.67f, 33.33f, 66.67f];
 
     private readonly History _history = new(ColumnCapacity);
-    // Idle starts hidden: with a frame cap it is most of every frame and squashes the rest.
-    private readonly HashSet<FrameStat> _hidden = [FrameStats.Idle];
-    private readonly List<(int Index, float AvgMs)> _rows = [];
+    // Rows switched on or off by the user, by category path; any other row follows its category's HiddenByDefault.
+    // Kept by path, so a saved choice also reaches a category game code makes later.
+    private readonly Dictionary<string, bool> _shown = new(StringComparer.OrdinalIgnoreCase);
+    // Groups whose own time, the Other row under them, is switched off.
+    private readonly HashSet<string> _otherHidden = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<FrameStat> _effectiveHidden = [];
+    private readonly List<Row> _rows = [];
+    // The hovered row: a category, or with _hoveredOther the Other row under it.
     private FrameStat? _hovered;
+    private bool _hoveredOther;
     private long _selectedId = -1;
     private bool _paused;
     private int _rate = 2;
@@ -89,7 +98,13 @@ public class FrameStatsPanel : DockPanel
 
         // Frames from while paused are dropped, so the chart picks up from now when it resumes.
         if (_paused) _history.Skip();
-        else _history.Sample(TimeSpan.FromSeconds(RateSeconds[_rate]), _hidden);
+        else
+        {
+            _effectiveHidden.Clear();
+            foreach (FrameStat category in FrameStats.Categories)
+                if (IsHidden(category)) _effectiveHidden.Add(category);
+            _history.Sample(TimeSpan.FromSeconds(RateSeconds[_rate]), _effectiveHidden);
+        }
         _visibleColumns = Math.Min(_history.Count, (int)MathF.Ceiling(width / _columnW));
         _hoveredAgo = HoveredColumn(paper);
 
@@ -119,9 +134,11 @@ public class FrameStatsPanel : DockPanel
         state["columnWidth"] = (double)_columnW;
         if (_split >= 0) state["split"] = (double)_split;
 
-        var hidden = new JsonArray();
-        foreach (FrameStat c in _hidden) hidden.Add(c.Name);
-        state["hidden"] = hidden;
+        var shown = new JsonObject();
+        foreach ((string path, bool on) in _shown) shown[path] = on;
+        state["shown"] = shown;
+        state["otherHidden"] = ToArray(_otherHidden);
+        state["expanded"] = ToArray(_expanded);
         return true;
     }
 
@@ -133,14 +150,38 @@ public class FrameStatsPanel : DockPanel
         if (TryRead(state["columnWidth"], out double columnW)) _columnW = Math.Clamp((float)columnW, MinColumnW, MaxColumnW);
         if (TryRead(state["split"], out double split) && split > 0 && split < 1) _split = (float)split;
 
-        // Only categories that exist now. One game code makes later stays shown, rather than being made empty here.
-        if (state["hidden"] is JsonArray names)
+        // Paths are kept even for categories that do not exist yet, without making them, so game code that makes
+        // one later still gets the saved choice.
+        if (state["shown"] is JsonObject shown)
         {
-            _hidden.Clear();
-            foreach (JsonNode? node in names)
-                if (TryRead(node, out string? name) && FindCategory(name!) is { } category)
-                    _hidden.Add(category);
+            _shown.Clear();
+            foreach ((string path, JsonNode? node) in shown)
+                if (TryRead(node, out bool on)) _shown[path] = on;
         }
+        else if (state["hidden"] is JsonArray hidden)
+        {
+            // Layouts from before groups list only the hidden rows; every other row takes its default.
+            _shown.Clear();
+            foreach (JsonNode? node in hidden)
+                if (TryRead(node, out string? path)) _shown[path!] = false;
+        }
+        ReadSet(state["otherHidden"], _otherHidden);
+        ReadSet(state["expanded"], _expanded);
+    }
+
+    private static JsonArray ToArray(HashSet<string> paths)
+    {
+        var array = new JsonArray();
+        foreach (string path in paths) array.Add(path);
+        return array;
+    }
+
+    private static void ReadSet(JsonNode? node, HashSet<string> into)
+    {
+        if (node is not JsonArray array) return;
+        into.Clear();
+        foreach (JsonNode? item in array)
+            if (TryRead(item, out string? path)) into.Add(path!);
     }
 
     private static bool TryRead<T>(JsonNode? node, out T? value)
@@ -149,12 +190,65 @@ public class FrameStatsPanel : DockPanel
         return node is JsonValue v && v.TryGetValue(out value);
     }
 
-    private static FrameStat? FindCategory(string name)
+    // Whether the category's own row is switched off, leaving it and everything under it out.
+    private bool RowOff(FrameStat c) => _shown.TryGetValue(c.Path, out bool shown) ? !shown : c.HiddenByDefault;
+
+    /// <summary>Whether the category's row reads as off: switched off itself, or under a group that is.</summary>
+    internal bool IsRowHidden(FrameStat c)
     {
-        foreach (FrameStat c in FrameStats.Categories)
-            if (string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))
-                return c;
-        return null;
+        for (FrameStat? row = c; row != null; row = row.Parent)
+            if (RowOff(row)) return true;
+        return false;
+    }
+
+    /// <summary>Whether the Other row under a group, its own time, reads as off.</summary>
+    internal bool IsOtherHidden(FrameStat group) => IsRowHidden(group) || _otherHidden.Contains(group.Path);
+
+    /// <summary>Whether the category's own time is left out of the chart.</summary>
+    internal bool IsHidden(FrameStat c) => c.Children.Count > 0 ? IsOtherHidden(c) : IsRowHidden(c);
+
+    internal bool IsExpanded(FrameStat group) => _expanded.Contains(group.Path);
+
+    internal void ToggleExpanded(FrameStat group)
+    {
+        if (!_expanded.Remove(group.Path)) _expanded.Add(group.Path);
+        SaveSoon();
+    }
+
+    /// <summary>A click on a row: <paramref name="other"/> for the Other row under a group.</summary>
+    internal void ToggleVisibility(FrameStat c, bool other = false)
+    {
+        if (other)
+        {
+            if (!IsOtherHidden(c)) _otherHidden.Add(c.Path);
+            else
+            {
+                // A group that was off comes on with only its own time showing.
+                if (IsRowHidden(c))
+                {
+                    Reveal(c);
+                    foreach (FrameStat child in c.Children) _shown[child.Path] = false;
+                }
+                _otherHidden.Remove(c.Path);
+            }
+        }
+        else if (IsRowHidden(c)) Reveal(c);
+        else _shown[c.Path] = false;
+        SaveSoon();
+    }
+
+    // Switches a row on. Under a group that was off, it comes on alone: the group's other rows, its own time
+    // included, go off, so what was hidden before stays hidden.
+    private void Reveal(FrameStat c)
+    {
+        if (c.Parent is { } parent && IsRowHidden(parent))
+        {
+            Reveal(parent);
+            _otherHidden.Add(parent.Path);
+            foreach (FrameStat sibling in parent.Children)
+                if (sibling != c) _shown[sibling.Path] = false;
+        }
+        _shown[c.Path] = true;
     }
 
     // The layout is otherwise only written on save, so a change is written a moment after it settles. Not during
@@ -328,20 +422,67 @@ public class FrameStatsPanel : DockPanel
     private void DrawStack(Canvas canvas, IReadOnlyList<FrameStat> categories, History.Column column, float x, float width,
         float chartBottom, float chartH, float scaleMs)
     {
-        float stack = 0;
-        for (int i = 0; i < categories.Count && stack < scaleMs; i++)
+        var bar = new Bar(canvas, column, categories.Count, x, width, chartBottom, chartH, scaleMs);
+        foreach (FrameStat c in categories)
+            if (c.Parent == null) StackCategory(ref bar, c);
+    }
+
+    // One column's bar while it is being stacked.
+    private struct Bar(Canvas canvas, History.Column column, int count, float x, float width, float chartBottom, float chartH, float scaleMs)
+    {
+        public readonly Canvas Canvas = canvas;
+        public readonly History.Column Column = column;
+        public readonly int Count = count;
+        public readonly float X = x, Width = width, ChartBottom = chartBottom, ChartH = chartH, ScaleMs = scaleMs;
+        public float Stack;
+    }
+
+    // A collapsed group is one block of everything shown under it; otherwise its own time, then each subcategory.
+    private void StackCategory(ref Bar bar, FrameStat c)
+    {
+        if (bar.Stack >= bar.ScaleMs || c.Index >= bar.Count || RowOff(c)) return;
+
+        if (c.Children.Count > 0 && !IsExpanded(c))
         {
-            FrameStat c = categories[i];
-            float ms = StackedMs(column, i);
-            if (ms <= 0 || _hidden.Contains(c)) continue;
-
-            float bottom = ToY(stack, chartBottom, chartH, scaleMs), top = ToY(stack + ms, chartBottom, chartH, scaleMs);
-            stack += ms;
-            if (bottom - top < 0.5f) continue;
-
-            int alpha = _hovered == null || _hovered == c ? 230 : 60;
-            canvas.RectFilled(x, top, width, bottom - top, ToColor32(c.Color, alpha));
+            StackBlock(ref bar, ShownMs(bar.Column, bar.Count, c), c.Color, Lit(c, ownTime: false));
+            return;
         }
+
+        if (c.Children.Count == 0 || !_otherHidden.Contains(c.Path))
+            StackBlock(ref bar, StackedMs(bar.Column, c.Index), c.Color, Lit(c, ownTime: true));
+        foreach (FrameStat child in c.Children)
+            StackCategory(ref bar, child);
+    }
+
+    private static void StackBlock(ref Bar bar, float ms, VColor color, bool lit)
+    {
+        if (ms <= 0) return;
+        float bottom = ToY(bar.Stack, bar.ChartBottom, bar.ChartH, bar.ScaleMs);
+        float top = ToY(bar.Stack + ms, bar.ChartBottom, bar.ChartH, bar.ScaleMs);
+        bar.Stack += ms;
+        if (bottom - top < 0.5f) return;
+        bar.Canvas.RectFilled(bar.X, top, bar.Width, bottom - top, ToColor32(color, lit ? 230 : 60));
+    }
+
+    // The category's own time and that of everything under it, leaving out what is switched off.
+    private float ShownMs(History.Column column, int count, FrameStat c)
+    {
+        if (c.Index >= count || RowOff(c)) return 0;
+        float ms = c.Children.Count > 0 && _otherHidden.Contains(c.Path) ? 0 : StackedMs(column, c.Index);
+        foreach (FrameStat child in c.Children)
+            ms += ShownMs(column, count, child);
+        return ms;
+    }
+
+    // Whether a block stands out for the hovered row: the row's own block, or any block in the group it heads. The
+    // Other row lights only its group's own time.
+    private bool Lit(FrameStat block, bool ownTime)
+    {
+        if (_hovered == null) return true;
+        if (_hoveredOther) return ownTime && block == _hovered;
+        for (FrameStat? row = block; row != null; row = row.Parent)
+            if (row == _hovered) return true;
+        return false;
     }
 
     private static float ToY(float ms, float chartBottom, float chartH, float scaleMs)
@@ -355,7 +496,7 @@ public class FrameStatsPanel : DockPanel
             History.Column column = _history.Ago(ago)!;
             float stack = 0;
             for (int i = 0; i < categories.Count; i++)
-                if (!_hidden.Contains(categories[i]))
+                if (!IsHidden(categories[i]))
                     stack += StackedMs(column, i);
             tallest = Math.Max(tallest, stack);
         }
@@ -404,8 +545,7 @@ public class FrameStatsPanel : DockPanel
         History.Totals totals = _history.Summarise(categories.Count, _visibleColumns);
 
         _rows.Clear();
-        for (int i = 0; i < categories.Count; i++) _rows.Add((i, totals.AvgMs[i]));
-        _rows.Sort((a, b) => b.AvgMs.CompareTo(a.AvgMs));
+        AddRows(categories, null, 0, totals);
 
         float fs = EditorTheme.FontSizeSmall;
         using (paper.Row("fs_hdr").Height(HeaderH).Padding(10, 18, 0, 0).Gap(8).Enter())
@@ -424,45 +564,84 @@ public class FrameStatsPanel : DockPanel
         History.Column? shown = ShownColumn;
         Origami.ScrollView(paper, "fs_rows", width, Math.Max(0, height - HeaderH - 1)).Body(() =>
         {
-            foreach ((int i, float avgMs) in _rows)
-                DrawRow(paper, font, categories[i], i, avgMs, totals, shown);
+            foreach (Row row in _rows)
+                DrawRow(paper, font, row, totals, shown);
         });
     }
 
-    private void DrawRow(Paper paper, FontFile font, FrameStat c, int index, float avgMs, History.Totals totals, History.Column? shown)
+    /// <summary>A table row: a category, or with <see cref="Other"/> the Other row for a group's own time.</summary>
+    private readonly record struct Row(FrameStat Category, bool Other, int Depth, float AvgMs);
+
+    // The rows under a group, or the top level for null, slowest first, each expanded group followed by its own.
+    private void AddRows(IReadOnlyList<FrameStat> categories, FrameStat? group, int depth, History.Totals totals)
     {
+        var level = new List<Row>();
+        if (group != null)
+            level.Add(new Row(group, true, depth, totals.AvgMs[group.Index]));
+        foreach (FrameStat c in group?.Children ?? categories)
+        {
+            // Registered since this frame's totals were taken, or met again under its parent.
+            if (c.Index >= categories.Count || (group == null && c.Parent != null)) continue;
+            level.Add(new Row(c, false, depth, c.Children.Count > 0 ? totals.TreeAvgMs[c.Index] : totals.AvgMs[c.Index]));
+        }
+        level.Sort((a, b) => b.AvgMs.CompareTo(a.AvgMs));
+
+        foreach (Row row in level)
+        {
+            _rows.Add(row);
+            if (!row.Other && row.Category.Children.Count > 0 && IsExpanded(row.Category))
+                AddRows(categories, row.Category, depth + 1, totals);
+        }
+    }
+
+    private void DrawRow(Paper paper, FontFile font, Row row, History.Totals totals, History.Column? shown)
+    {
+        FrameStat c = row.Category;
+        bool other = row.Other;
+        // A group row stands for everything under it; its own time alone is the Other row.
+        bool group = !other && c.Children.Count > 0;
+        int i = c.Index;
         FontFile mono = EditorTheme.FontMono ?? font;
         float fs = EditorTheme.FontSizeSmall;
-        bool hidden = _hidden.Contains(c);
+        bool hidden = other ? IsOtherHidden(c) : IsRowHidden(c);
         Color nameInk = hidden ? EditorTheme.InkFaint : EditorTheme.Ink500;
         Color valueInk = hidden ? EditorTheme.InkFaint : EditorTheme.Ink400;
-        float share = totals.AvgFrameMs > 0 ? avgMs / totals.AvgFrameMs * 100f : 0;
-        string id = $"fs_r_{c.Name}";
+        float share = totals.AvgFrameMs > 0 ? row.AvgMs / totals.AvgFrameMs * 100f : 0;
+        string id = other ? $"fs_o_{c.Path}" : $"fs_r_{c.Path}";
+        string label = other ? Loc.Get("frame_stats.group_other") : c.Name;
 
-        using (paper.Row(id).Height(RowH).Padding(10, 18, 0, 0).Gap(8)
-            .BackgroundColor(_hovered == c ? EditorTheme.Hover : Color.Transparent)
-            .OnClick(c, (cat, _) =>
-            {
-                if (!_hidden.Remove(cat)) _hidden.Add(cat);
-                SaveSoon();
-            })
-            .OnHover(c, (cat, _) => _hovered = cat)
-            .OnLeave(_ => { if (_hovered == c) _hovered = null; })
-            .Tooltip(c.Name, CategoryTooltip(c))
+        using (paper.Row(id).Height(RowH).Padding(10 + row.Depth * 20, 18, 0, 0).Gap(8)
+            .BackgroundColor(_hovered == c && _hoveredOther == other ? EditorTheme.Hover : Color.Transparent)
+            .OnClick(c, (cat, _) => ToggleVisibility(cat, other))
+            .OnHover(c, (cat, _) => { _hovered = cat; _hoveredOther = other; })
+            .OnLeave(_ => { if (_hovered == c && _hoveredOther == other) _hovered = null; })
+            .Tooltip(other ? $"{c.Path}/{label}" : c.Path, RowTooltip(c, other, group))
             .Enter())
         {
+            if (group)
+                paper.Box($"{id}_expand").Width(12).Height(RowH)
+                    .Text(IsExpanded(c) ? EditorIcons.ChevronDown : EditorIcons.ChevronRight, font)
+                    .TextColor(nameInk).FontSize(fs).Alignment(TextAlignment.MiddleCenter)
+                    .OnClick(c, (cat, e) =>
+                    {
+                        e.StopPropagation();
+                        ToggleExpanded(cat);
+                    });
             paper.Box($"{id}_sw").Width(10).Height(10).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .Rounded(2).IsNotInteractable()
                 .BackgroundColor(hidden ? Color.Transparent : ToColor(c.Color))
                 .BorderColor(ToColor(c.Color)).BorderWidth(1);
 
             paper.Box($"{id}_n").Height(RowH).Clip().IsNotInteractable()
-                .Text(c.Name, font).TextColor(nameInk).FontSize(fs).Alignment(TextAlignment.MiddleLeft);
+                .Text(label, font)
+                .TextColor(nameInk).FontSize(fs).Alignment(TextAlignment.MiddleLeft);
 
-            ValueCell(paper, mono, $"{id}_now", Ms(shown?.Avg(index) ?? 0), valueInk, fs);
-            ValueCell(paper, mono, $"{id}_a", Ms(avgMs), valueInk, fs);
-            ValueCell(paper, mono, $"{id}_m", Ms(totals.MaxMs[index]), valueInk, fs);
-            ValueCell(paper, mono, $"{id}_c", $"{shown?.Calls(index) ?? 0:0.#}", valueInk, fs);
+            float nowMs = shown == null ? 0 : group ? shown.TreeAvg(i) : shown.Avg(i);
+            float calls = shown == null ? 0 : group ? shown.TreeCalls(i) : shown.Calls(i);
+            ValueCell(paper, mono, $"{id}_now", Ms(nowMs), valueInk, fs);
+            ValueCell(paper, mono, $"{id}_a", Ms(row.AvgMs), valueInk, fs);
+            ValueCell(paper, mono, $"{id}_m", Ms(group ? totals.TreeMaxMs[i] : totals.MaxMs[i]), valueInk, fs);
+            ValueCell(paper, mono, $"{id}_c", $"{calls:0.#}", valueInk, fs);
             ValueCell(paper, mono, $"{id}_s", $"{share:0.0}%", valueInk, fs);
         }
     }
@@ -481,16 +660,31 @@ public class FrameStatsPanel : DockPanel
         [FrameStats.Render] = "frame_stats.cat_render",
         [FrameStats.UI] = "frame_stats.cat_ui",
         [FrameStats.Editor] = "frame_stats.cat_editor",
+        [EditorFrameStats.UI] = "frame_stats.cat_editor_ui",
+        [EditorFrameStats.Gizmos] = "frame_stats.cat_editor_gizmos",
+        [EditorFrameStats.Assets] = "frame_stats.cat_editor_assets",
+        [EditorFrameStats.Scripts] = "frame_stats.cat_editor_scripts",
         [FrameStats.RenderWait] = "frame_stats.cat_render_wait",
         [FrameStats.Idle] = "frame_stats.cat_idle",
         [FrameStats.GC] = "frame_stats.cat_gc",
         [FrameStats.Other] = "frame_stats.cat_other",
     };
 
-    private static string CategoryTooltip(FrameStat category)
-        => CategoryKeys.TryGetValue(category, out string? key)
-            ? $"{Loc.Get(key)}\n\n{Loc.Get("frame_stats.row_tip")}"
-            : Loc.Get("frame_stats.row_tip");
+    // What a group's own time is made of, where it is known. Other groups get the general description.
+    private static readonly Dictionary<FrameStat, string> OtherKeys = new()
+    {
+        [FrameStats.Editor] = "frame_stats.cat_editor_other",
+    };
+
+    private static string RowTooltip(FrameStat category, bool other, bool group)
+    {
+        var parts = new List<string>(3);
+        if (other) parts.Add(Loc.Get(OtherKeys.TryGetValue(category, out string? otherKey) ? otherKey : "frame_stats.group_other_tip"));
+        else if (CategoryKeys.TryGetValue(category, out string? key)) parts.Add(Loc.Get(key));
+        if (group) parts.Add(Loc.Get("frame_stats.group_tip"));
+        parts.Add(Loc.Get("frame_stats.row_tip"));
+        return string.Join("\n\n", parts);
+    }
 
     // Headers and the AVG/MAX choice are shown in capitals. The translations stay in normal case, and the
     // locale's own rules uppercase them, so Turkish gets a dotted capital I.
@@ -540,29 +734,39 @@ public class FrameStatsPanel : DockPanel
             public float[] AvgMs = [];
             public float[] MaxMs = [];
             public float[] AvgCalls = [];
+            // The same for each category together with everything under it, added up within each frame.
+            public float[] TreeAvgMs = [];
+            public float[] TreeMaxMs = [];
+            public float[] TreeAvgCalls = [];
 
             // A category registered after the column was made has nothing in it.
             public float Avg(int category) => category < AvgMs.Length ? AvgMs[category] : 0;
             public float Max(int category) => category < MaxMs.Length ? MaxMs[category] : 0;
             public float Calls(int category) => category < AvgCalls.Length ? AvgCalls[category] : 0;
+            public float TreeAvg(int category) => category < TreeAvgMs.Length ? TreeAvgMs[category] : 0;
+            public float TreeMax(int category) => category < TreeMaxMs.Length ? TreeMaxMs[category] : 0;
+            public float TreeCalls(int category) => category < TreeAvgCalls.Length ? TreeAvgCalls[category] : 0;
         }
 
         /// <summary>
         /// Every category's average and worst frame across the newest columns, weighted by frames. The arrays are
         /// reused, so they hold until the next <see cref="Summarise"/>.
         /// </summary>
-        public readonly record struct Totals(float[] AvgMs, float[] MaxMs, float AvgFrameMs);
+        public readonly record struct Totals(float[] AvgMs, float[] MaxMs, float[] TreeAvgMs, float[] TreeMaxMs, float AvgFrameMs);
 
         private readonly Column?[] _columns;
         private long _committed;
 
         // The column being gathered.
         private float[] _sumMs = [], _maxMs = [], _sumCalls = [];
+        private float[] _sumTreeMs = [], _maxTreeMs = [], _sumTreeCalls = [];
+        // One frame's per-category totals with everything under each, while they are added up.
+        private float[] _frameTreeMs = [], _frameTreeCalls = [];
         private float _sumFrameMs, _peakMs;
         private int _pendingFrames;
         private long _pendingSince = Stopwatch.GetTimestamp();
         private long _framesSeen = FrameStats.FrameCount;
-        private float[] _totalAvg = [], _totalMax = [];
+        private float[] _totalAvg = [], _totalMax = [], _totalTreeAvg = [], _totalTreeMax = [];
 
         public History(int capacity) => _columns = new Column?[capacity];
 
@@ -597,6 +801,11 @@ public class FrameStatsPanel : DockPanel
                 Array.Resize(ref _sumMs, categories.Count);
                 Array.Resize(ref _maxMs, categories.Count);
                 Array.Resize(ref _sumCalls, categories.Count);
+                Array.Resize(ref _sumTreeMs, categories.Count);
+                Array.Resize(ref _maxTreeMs, categories.Count);
+                Array.Resize(ref _sumTreeCalls, categories.Count);
+                Array.Resize(ref _frameTreeMs, categories.Count);
+                Array.Resize(ref _frameTreeCalls, categories.Count);
             }
 
             long count = FrameStats.FrameCount;
@@ -612,7 +821,22 @@ public class FrameStatsPanel : DockPanel
                     _sumMs[i] += s.Ms;
                     _maxMs[i] = Math.Max(_maxMs[i], s.Ms);
                     _sumCalls[i] += s.Calls;
+                    _frameTreeMs[i] = s.Ms;
+                    _frameTreeCalls[i] = s.Calls;
                     if (!hidden.Contains(categories[i])) shownMs += s.Ms;
+                }
+                // A parent comes before everything under it, so walking back finishes each category's total, then
+                // adds it into its parent's before the parent is reached.
+                for (int i = categories.Count - 1; i >= 0; i--)
+                {
+                    _sumTreeMs[i] += _frameTreeMs[i];
+                    _maxTreeMs[i] = Math.Max(_maxTreeMs[i], _frameTreeMs[i]);
+                    _sumTreeCalls[i] += _frameTreeCalls[i];
+                    if (categories[i].Parent is { } parent)
+                    {
+                        _frameTreeMs[parent.Index] += _frameTreeMs[i];
+                        _frameTreeCalls[parent.Index] += _frameTreeCalls[i];
+                    }
                 }
                 _sumFrameMs += FrameStats.GetFrameMs(ago);
                 _peakMs = Math.Max(_peakMs, shownMs);
@@ -645,10 +869,14 @@ public class FrameStatsPanel : DockPanel
             {
                 _totalAvg = new float[categoryCount];
                 _totalMax = new float[categoryCount];
+                _totalTreeAvg = new float[categoryCount];
+                _totalTreeMax = new float[categoryCount];
             }
-            float[] avg = _totalAvg, max = _totalMax;
+            float[] avg = _totalAvg, max = _totalMax, treeAvg = _totalTreeAvg, treeMax = _totalTreeMax;
             Array.Clear(avg);
             Array.Clear(max);
+            Array.Clear(treeAvg);
+            Array.Clear(treeMax);
             int frames = 0;
             float frameMs = 0;
 
@@ -661,12 +889,18 @@ public class FrameStatsPanel : DockPanel
                 {
                     avg[i] += column.Avg(i) * column.Frames;
                     max[i] = Math.Max(max[i], column.Max(i));
+                    treeAvg[i] += column.TreeAvg(i) * column.Frames;
+                    treeMax[i] = Math.Max(treeMax[i], column.TreeMax(i));
                 }
             }
 
-            if (frames == 0) return new Totals(avg, max, 0);
-            for (int i = 0; i < categoryCount; i++) avg[i] /= frames;
-            return new Totals(avg, max, frameMs / frames);
+            if (frames == 0) return new Totals(avg, max, treeAvg, treeMax, 0);
+            for (int i = 0; i < categoryCount; i++)
+            {
+                avg[i] /= frames;
+                treeAvg[i] /= frames;
+            }
+            return new Totals(avg, max, treeAvg, treeMax, frameMs / frames);
         }
 
         private void Commit(int categoryCount)
@@ -680,6 +914,9 @@ public class FrameStatsPanel : DockPanel
                 column.AvgMs = new float[categoryCount];
                 column.MaxMs = new float[categoryCount];
                 column.AvgCalls = new float[categoryCount];
+                column.TreeAvgMs = new float[categoryCount];
+                column.TreeMaxMs = new float[categoryCount];
+                column.TreeAvgCalls = new float[categoryCount];
             }
             column.Frames = _pendingFrames;
             column.AvgFrameMs = _sumFrameMs / n;
@@ -689,6 +926,9 @@ public class FrameStatsPanel : DockPanel
                 column.AvgMs[i] = _sumMs[i] / n;
                 column.MaxMs[i] = _maxMs[i];
                 column.AvgCalls[i] = _sumCalls[i] / n;
+                column.TreeAvgMs[i] = _sumTreeMs[i] / n;
+                column.TreeMaxMs[i] = _maxTreeMs[i];
+                column.TreeAvgCalls[i] = _sumTreeCalls[i] / n;
             }
 
             _committed++;
@@ -700,6 +940,9 @@ public class FrameStatsPanel : DockPanel
             Array.Clear(_sumMs);
             Array.Clear(_maxMs);
             Array.Clear(_sumCalls);
+            Array.Clear(_sumTreeMs);
+            Array.Clear(_maxTreeMs);
+            Array.Clear(_sumTreeCalls);
             _sumFrameMs = _peakMs = 0;
             _pendingFrames = 0;
             _pendingSince = Stopwatch.GetTimestamp();

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Vector;
 
@@ -19,8 +20,34 @@ public readonly record struct FrameStatSummary(float Min, float Max, float Avg, 
 /// </summary>
 public sealed class FrameStat
 {
+    /// <summary>The last part of <see cref="Path"/>, such as "Gizmos".</summary>
     public string Name { get; }
+
+    /// <summary>The full name, parents first and separated by '/', such as "Editor/Gizmos". Unique among categories.</summary>
+    public string Path { get; }
+
     public Color Color { get; }
+
+    /// <summary>
+    /// The category this one is grouped under, or null at the top level. Grouping only: a subcategory's time is
+    /// never counted in its parent's, wherever their scopes open.
+    /// </summary>
+    public FrameStat? Parent { get; }
+
+    /// <summary>The categories grouped under this one, in the order they were made.</summary>
+    public IReadOnlyList<FrameStat> Children => _children;
+
+    /// <summary>
+    /// Whether viewers such as the editor's Frame Stats panel leave it out until asked for: waiting rather than work,
+    /// or work most people are not looking at.
+    /// </summary>
+    public bool HiddenByDefault { get; }
+
+    /// <summary>Where it sits in <see cref="FrameStats.Categories"/>. Always after its parent.</summary>
+    internal int Index;
+
+    // Copy-on-write, under the registry lock, so readers on any thread can enumerate without one.
+    private FrameStat[] _children = [];
 
     private readonly float[] _ms = new float[FrameStats.HistoryLength];
     private readonly int[] _calls = new int[FrameStats.HistoryLength];
@@ -29,12 +56,17 @@ public sealed class FrameStat
     internal long Ticks;
     internal int Calls;
 
-    internal FrameStat(string name, Color color)
+    internal FrameStat(string name, Color color, FrameStat? parent = null, bool hiddenByDefault = false)
     {
         Name = name;
+        Path = parent == null ? name : $"{parent.Path}/{name}";
         Color = color;
+        Parent = parent;
+        HiddenByDefault = hiddenByDefault;
         FrameStats.Register(this);
     }
+
+    internal void AddChild(FrameStat child) => _children = [.. _children, child];
 
     /// <summary>
     /// Starts charging main-thread time to this category until the returned scope is disposed.
@@ -75,5 +107,5 @@ public sealed class FrameStat
         _calls[slot] = Calls;
     }
 
-    public override string ToString() => Name;
+    public override string ToString() => Path;
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Core.Diagnostics;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
@@ -12,6 +13,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
@@ -796,6 +798,7 @@ public class SceneViewPanel : DockPanel
 
     private void DrawSelectionGizmos()
     {
+        using FrameStatScope stats = EditorFrameStats.Gizmos.Scope();
         foreach (object obj in Selection.Selected)
         {
             if (obj is not GameObject go) continue;
@@ -900,6 +903,7 @@ public class SceneViewPanel : DockPanel
 
     private void UpdateTransformGizmo()
     {
+        using FrameStatScope stats = EditorFrameStats.Gizmos.Scope();
         _gizmoActive = false;
         if (_wasGizmoActive && !_handles.IsHot(_handles.GetControlID(TransformControl)))
         {

@@ -105,6 +105,74 @@ public class FrameStatsTests
     }
 
     [Fact]
+    public void APathMakesASubcategoryAndAnyMissingParents()
+    {
+        string root = "Test.Tree." + Guid.NewGuid();
+        FrameStat leaf = FrameStats.GetCategory($"{root}/Middle/Leaf");
+
+        FrameStat middle = Assert.IsType<FrameStat>(leaf.Parent);
+        FrameStat top = Assert.IsType<FrameStat>(middle.Parent);
+        Assert.Null(top.Parent);
+        Assert.Equal("Leaf", leaf.Name);
+        Assert.Equal($"{root}/Middle/Leaf", leaf.Path);
+        Assert.Equal(root, top.Path);
+        Assert.Equal(new[] { leaf }, middle.Children);
+        Assert.Same(top, FrameStats.GetCategory(root.ToUpperInvariant()));
+        Assert.Same(leaf, FrameStats.GetCategory($"{root}/middle/LEAF"));
+        // Parents come first, so a viewer walking the list meets a group before what is in it.
+        Assert.True(top.Index < middle.Index);
+        Assert.True(middle.Index < leaf.Index);
+    }
+
+    [Fact]
+    public void ASubcategoryNeverCountsTowardsItsParent()
+    {
+        string root = "Test.Grouped." + Guid.NewGuid();
+        FrameStat parent = FrameStats.GetCategory(root);
+        FrameStat child = FrameStats.GetCategory($"{root}/Child");
+        FrameStats.Start();
+
+        using (child.Scope()) Spin(5);
+        FrameStats.EndFrame();
+
+        Assert.True(child.GetSample(0).Ms >= 4.9f);
+        Assert.Equal(new FrameStatSample(0, 0), parent.GetSample(0));
+    }
+
+    [Fact]
+    public void AColourIsUsedOnlyWhenTheCategoryIsMade()
+    {
+        string path = "Test.Coloured." + Guid.NewGuid();
+        var red = new Prowl.Vector.Color(1, 0, 0, 1);
+
+        FrameStat made = FrameStats.GetCategory(path, red);
+
+        Assert.Equal(red, made.Color);
+        Assert.Equal(red, FrameStats.GetCategory(path, new Prowl.Vector.Color(0, 0, 1, 1)).Color);
+    }
+
+    [Theory]
+    [InlineData("/Leaf")]
+    [InlineData("Test.Empty/")]
+    [InlineData("Test.Empty// Leaf")]
+    public void APathWithAnEmptyPartIsRefused(string path)
+    {
+        int before = FrameStats.Categories.Count;
+        Assert.Throws<ArgumentException>(() => FrameStats.GetCategory(path));
+        Assert.Equal(before, FrameStats.Categories.Count);
+    }
+
+    [Fact]
+    public void WaitingAndEditorWorkAreHiddenByDefault()
+    {
+        Assert.True(FrameStats.Idle.HiddenByDefault);
+        Assert.True(FrameStats.RenderWait.HiddenByDefault);
+        Assert.True(FrameStats.Editor.HiddenByDefault);
+        Assert.False(FrameStats.Render.HiddenByDefault);
+        Assert.False(FrameStats.GetCategory("Test.Made").HiddenByDefault);
+    }
+
+    [Fact]
     public void RepeatedScopesAddUp()
     {
         FrameStat repeated = FrameStats.GetCategory("Test.Repeated");
