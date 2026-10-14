@@ -114,10 +114,6 @@ public class FrameStatsPanel : DockPanel
 
     private void DrawToolbar(Paper paper, FontFile font)
     {
-        History.Column? shown = ShownColumn;
-        float frameMs = shown?.AvgFrameMs ?? 0;
-        float fps = frameMs > 0 ? 1000f / frameMs : 0;
-
         using (paper.Column("fs_tb_col").Height(ToolbarH).Enter())
         {
             using (paper.Row("fs_tb").Height(ToolbarH - 1).Padding(10, 8, 0, 0).Gap(6).Enter())
@@ -126,11 +122,7 @@ public class FrameStatsPanel : DockPanel
                     Loc.Get(_paused ? "frame_stats.resume_tip" : "frame_stats.pause_tip"), _paused, () => SetPaused(!_paused));
                 EditorGUI.ToolbarIconBtn(paper, "fs_clear", EditorIcons.Trash, Loc.Get("frame_stats.clear_tip"), false, Clear);
 
-                EditorGUI.StatChip(paper, "fs_chip_ms", Loc.Get("frame_stats.frame", new { ms = frameMs.ToString("0.00") }), font,
-                    Loc.Get("frame_stats.frame_tip"));
-                EditorGUI.StatChip(paper, "fs_chip_fps", Loc.Get("frame_stats.fps", new { fps = fps.ToString("0") }), font,
-                    Loc.Get("frame_stats.fps_tip"));
-                if (shown != null)
+                if (ShownColumn is { } shown)
                     EditorGUI.StatChip(paper, "fs_chip_peak", Loc.Get("frame_stats.peak", new { ms = shown.PeakMs.ToString("0.00") }), font,
                         Loc.Get("frame_stats.peak_tip"));
 
