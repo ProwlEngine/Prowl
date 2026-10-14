@@ -585,7 +585,7 @@
   "frame_stats.rate_tip": "How long each column collects frames for. Longer intervals scroll slower and smooth out the chart",
   "frame_stats.mode_avg": "Avg",
   "frame_stats.mode_max": "Max",
-  "frame_stats.mode_tip": "Avg stacks each category's average over the column's frames. Max stacks each category's worst frame, which shows spikes but can stack taller than any real frame",
+  "frame_stats.mode_tip": "AVG stacks each category's average over the column's frames. MAX stacks each category's worst frame, which shows spikes but can stack taller than any real frame",
   "frame_stats.scale_auto": "Auto",
   "frame_stats.scale_tip": "The time the top of the chart stands for. Auto fits the tallest column; a fixed value keeps bars comparable over time (16 ms is the 60 FPS budget)",
   "frame_stats.readout": "{{frames}} frames   avg {{avg}} ms   peak {{peak}} ms",
