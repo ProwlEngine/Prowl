@@ -1576,6 +1576,8 @@ public class EditorAssetBackend : AssetBackend
                 try { File.Delete(cachePath); } catch { }
         }
 
+        RemoveCacheFile(relativePath);
+
         // Delete files. The index/dispose state above has already been cleared, so an
         // unhandled exception here (e.g. the file is locked by an external app) would leave
         // the database thinking the asset is gone while it still exists on disk. Catch and
@@ -1590,11 +1592,61 @@ public class EditorAssetBackend : AssetBackend
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogWarning($"Failed to delete asset file '{relativePath}': {ex.Message}");
+            Debug.LogWarning($"Failed to delete asset file '{relativePath}': {ex.Message}");
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
-        OnAssetsDeleted?.Invoke([relativePath]);
+        OnAssetsDeleted?.Invoke(new[] { relativePath });
+        InvalidateFolderIndex();
+
+        if (AffectsCompilation(relativePath))
+            ScriptAssemblyManager.RequestRecompile();
+    }
+
+    private void RemoveCacheFile(string relativePath)
+    {
+        if (_pathToGuid.TryGetValue(relativePath, out var guid))
+        {
+            // Missing rather than gone, so everything referencing them keeps the GUID and comes back
+            // in place if the file is restored.
+            var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
+            AssetDatabase.MarkMissing(guid);
+            ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
+            InvalidateThumbnailTexture(guid);
+            if (entry != null)
+                RemoveSubAssets(entry, includeThumbnails: true);
+
+            _guidToEntry.TryRemove(guid, out _);
+            _pathToGuid.TryRemove(relativePath, out _);
+            _dependencies.RemoveAsset(guid);
+
+            // Clean main cache file
+            string cachePath = GetCachePath(guid);
+            if (File.Exists(cachePath))
+                try { File.Delete(cachePath); } catch { }
+        }
+    }
+
+    public void DeleteAssetFolder(string relativePath)
+    {
+        string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
+        string prefix = relativePath + "/";
+        var toDelete = GetAllAssetPaths()
+            .Where(p => p.Equals(relativePath, StringComparison.OrdinalIgnoreCase)
+                        || p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var path in toDelete)
+            RemoveCacheFile(path);
+
+        if (Directory.Exists(absolutePath))
+            Directory.Delete(absolutePath, true);
+        string metaPath = MetaFile.GetMetaPath(absolutePath);
+        if (File.Exists(metaPath))
+            File.Delete(metaPath);
+
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        OnAssetsDeleted?.Invoke(new[] { relativePath });
+        OnAssetsDeleted?.Invoke(toDelete.ToArray());
         InvalidateFolderIndex();
 
         if (AffectsCompilation(relativePath))
