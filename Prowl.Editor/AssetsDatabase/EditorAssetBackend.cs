@@ -1627,6 +1627,9 @@ public class EditorAssetBackend : AssetBackend
         }
     }
 
+    /// <summary>
+    /// Delete an folder, it's assets, and its .meta files.
+    /// </summary>
     public void DeleteAssetFolder(string relativePath)
     {
         string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
