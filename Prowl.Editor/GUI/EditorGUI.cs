@@ -412,16 +412,17 @@ public static class EditorGUI
     }
 
     /// <summary>A 26x26 icon button used in panel toolbars. Highlights with accent when active.</summary>
-    public static void ToolbarIconBtn(Paper paper, string id, string glyph, bool active, Action onClick)
+    public static void ToolbarIconBtn(Paper paper, string id, string glyph, bool active, Action onClick, string? tooltip = null)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
-        paper.Box(id).Width(26).Height(26).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        ElementBuilder button = paper.Box(id).Width(26).Height(26).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .BackgroundColor(active ? EditorTheme.Selected : Color.Transparent)
             .Transition(GuiProp.BackgroundColor, 0.15f)
             .Hovered.BackgroundColor(active ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Text(glyph, font).TextColor(active ? EditorTheme.Accent : EditorTheme.Ink300).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(_ => onClick());
+        if (tooltip != null) button.Tooltip(tooltip);
     }
 
     /// <summary>A centered "nothing here" placeholder for empty lists and panels.</summary>
@@ -434,13 +435,15 @@ public static class EditorGUI
     }
 
     /// <summary>A read-only info chip for displaying asset statistics inline.</summary>
-    public static void StatChip(Paper paper, string id, string text, Scribe.FontFile font)
+    public static void StatChip(Paper paper, string id, string text, Scribe.FontFile font, string? tooltip = null)
     {
-        paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(9, 9, 0, 0)
+        ElementBuilder chip = paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(9, 9, 0, 0)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .IsNotInteractable()
             .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter);
+        // Hover is what shows a tooltip, so a chip with one has to stay interactable.
+        if (tooltip != null) chip.Tooltip(tooltip);
+        else chip.IsNotInteractable();
     }
 
     /// <summary>A purple-tinted banner shown when a drag payload can be dropped in the current area.</summary>
