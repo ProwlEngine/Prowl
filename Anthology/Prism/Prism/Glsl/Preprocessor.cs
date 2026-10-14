@@ -36,7 +36,15 @@ public sealed class Preprocessor
                      // ES 100 default version - version-less input is ES until #version says otherwise
     [ThreadStatic] static List<Token>? _inputBuf, _outputBuf;   // pooled main token lists (see Process)
     int _lineOffset;   // added to a token's physical line by #line, so __LINE__ reports the adjusted number
-    int _directiveLine;   // physical line of the directive currently being processed, for diagnostics
+    int _directiveLine;   // location code of the directive currently being processed, for diagnostics
+    int _site;   // location code of the source token whose macro expansion is being read, for diagnostics
+
+    // A location is a segment and a line packed into one int. Every #line and every included file starts a new
+    // segment, and segment 0 is the main source. Segment names are kept by position, so the parser and lowerer
+    // can carry a bare int and the compile entry point resolves it into "file:line" (see GlslParseException).
+    internal const int SegmentStride = 1 << 20;
+    readonly List<string?> _segmentNames = [null];
+    int _segment;   // the segment the source being read belongs to
 
     readonly IncludeCallback? _includes;
     readonly HashSet<string> _included = [];   // include-once: the Name of every file entered so far
@@ -56,8 +64,10 @@ public sealed class Preprocessor
     public static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas) Process(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
         var r = ProcessPooled(source, defines, includes);
-        // The pooled buffer is reused by the next call on this thread, so a public caller gets a copy.
-        return (new List<Token>(r.Tokens), r.Version, r.IsEs, r.Extensions, r.Pragmas);
+        // The pooled buffer is reused by the next call on this thread, so a public caller gets a copy. Public callers
+        // get the line within the file; the segment only matters to diagnostics.
+        var tokens = r.Tokens.Select(t => t with { Line = t.Line % SegmentStride }).ToList();
+        return (tokens, r.Version, r.IsEs, r.Extensions, r.Pragmas);
     }
 
     /// <summary>
@@ -75,7 +85,7 @@ public sealed class Preprocessor
 
     // The internal form returns the pooled token buffer directly; the parser consumes it before the next
     // compile on this thread can reuse it.
-    internal static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas) ProcessPooled(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
+    internal static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas, List<string?> SourceNames) ProcessPooled(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
         // The main input/output token lists are the two biggest front-end allocations (~18K tokens each);
         // pool them per-thread. Both are fully consumed within one compile (input by Run, output by the
@@ -83,18 +93,25 @@ public sealed class Preprocessor
         // use the allocating Tokenize overload and never touch these buffers.
         var output = _outputBuf ??= [];
         var pp = Execute(source, defines, includes, _inputBuf ??= [], output);
-        // glslang compiles ES only for SPIR-V from version 310 on ("#version: ES shaders for SPIR-V
-        // require version 310 or higher"); since a version-less shader defaults to ES 100, this gate
-        // is what rejects version-less input the same way glslang does.
-        if (pp._isEs && pp._version < 310)
-            throw new GlslParseException("#version: ES shaders for SPIR-V require version 310 or higher");
-        // A reserved keyword cannot be used as an identifier (glslang's ReservedSet, checked after
-        // preprocessing so disabled #if blocks and macro bodies are already resolved).
-        foreach (var t in output)
-            if (t.Kind == TokenKind.Identifier && ReservedWords.Contains(t.Text))
-                throw new GlslParseException($"'{t.Text}' : reserved word cannot be used as an identifier", t.Line);
+        try
+        {
+            // glslang compiles ES only for SPIR-V from version 310 on ("#version: ES shaders for SPIR-V
+            // require version 310 or higher"); since a version-less shader defaults to ES 100, this gate
+            // is what rejects version-less input the same way glslang does.
+            if (pp._isEs && pp._version < 310)
+                throw new GlslParseException("#version: ES shaders for SPIR-V require version 310 or higher");
+            // A reserved keyword cannot be used as an identifier (glslang's ReservedSet, checked after
+            // preprocessing so disabled #if blocks and macro bodies are already resolved).
+            foreach (var t in output)
+                if (t.Kind == TokenKind.Identifier && ReservedWords.Contains(t.Text))
+                    throw new GlslParseException($"'{t.Text}' : reserved word cannot be used as an identifier", t.Line);
+        }
+        catch (GlslParseException e) when (!e.Located)
+        {
+            throw e.Resolve(pp._segmentNames);
+        }
         output.Add(new Token(TokenKind.End, "", 0, 0));
-        return (output, pp._version, pp._isEs, pp._extensions, pp._pragmas);
+        return (output, pp._version, pp._isEs, pp._extensions, pp._pragmas, pp._segmentNames);
     }
 
     static Preprocessor Execute(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, List<Token> input, List<Token> output)
@@ -103,10 +120,17 @@ public sealed class Preprocessor
         if (defines is not null)
             foreach (var (name, value) in defines) pp.Define(name, value);
 
-        Lexer.Tokenize(Splice(source), input);
-        output.Clear();
-        pp.Run(input, output);
-        if (pp._cond.Count > 0) throw new GlslParseException("unterminated #if / #ifdef");
+        try
+        {
+            Lexer.Tokenize(Splice(source), input);
+            output.Clear();
+            pp.Run(input, output);
+            if (pp._cond.Count > 0) throw new GlslParseException("unterminated #if / #ifdef");
+        }
+        catch (GlslParseException e) when (!e.Located)
+        {
+            throw e.Resolve(pp._segmentNames);
+        }
         return pp;
     }
 
@@ -119,16 +143,38 @@ public sealed class Preprocessor
         {
             bool lineStart = i == 0 || input[i].Line != input[i - 1].Line;
             if (lineStart && input[i].Kind == TokenKind.Hash) i = Directive(input, i, output);
-            else if (Emitting) { _sawCode = true; i = ExpandOne(input, i, output); }
+            else if (Emitting)
+            {
+                _sawCode = true;
+                var token = input[i];
+                int start = output.Count;
+                _site = Locate(token.Line);
+                i = ExpandOne(input, i, output);
+                Place(output, start, token, Locate(token.Line));
+            }
             else i++;
         }
+    }
+
+    // The location code of a physical line of the source being read.
+    int Locate(int physical) => physical <= 0 ? 0 : _segment * SegmentStride + Math.Clamp(physical + _lineOffset, 1, SegmentStride - 1);
+
+    // Stamps the tokens one source token produced with its location. A token that came through unchanged keeps its
+    // column, so the emitter can keep the source spacing. A macro's output takes the location of the invocation.
+    static void Place(List<Token> output, int start, Token source, int location)
+    {
+        bool direct = output.Count == start + 1 && output[start].Kind == source.Kind && output[start].Text == source.Text
+            && output[start].Line == source.Line && output[start].Column == source.Column;
+        for (int k = start; k < output.Count; k++)
+            output[k] = direct ? output[k] with { Line = location } : output[k] with { Line = location, Macro = true };
     }
 
     // ---- directives ----
 
     int Directive(List<Token> input, int i, List<Token> output)
     {
-        int line = _directiveLine = input[i].Line;
+        int line = input[i].Line;
+        _directiveLine = _site = Locate(line);
         i++;   // past '#'
         var dir = new List<Token>();
         while (input[i].Kind != TokenKind.End && input[i].Line == line) dir.Add(input[i++]);
@@ -173,8 +219,19 @@ public sealed class Preprocessor
     void LineDirective(List<Token> dir)
     {
         if (dir.Count < 2 || !int.TryParse(dir[1].Text, out int n))
-            throw new GlslParseException("#line must be followed by a line number", dir[0].Line);
+            throw new GlslParseException("#line must be followed by a line number", _directiveLine);
         _lineOffset = n - (dir[0].Line + 1);
+        // A file name starts a segment of its own. A bare #line keeps the file it was already in.
+        string? name = dir.Count > 2 && dir[2].Kind == TokenKind.StringConst ? dir[2].Text : _segmentNames[_segment];
+        NewSegment(name);
+    }
+
+    void NewSegment(string? name)
+    {
+        if (_segmentNames.Count >= int.MaxValue / SegmentStride)
+            throw new GlslParseException("too many #line directives and includes", _directiveLine);
+        _segmentNames.Add(name);
+        _segment = _segmentNames.Count - 1;
     }
 
     // `#include "name"` or `#include <name>`. Reached only while the directive is active, so a header inside a
@@ -194,19 +251,23 @@ public sealed class Preprocessor
 
         _included.Add(file.Name);
         _includedFiles.Add(file.Name);
-        var saved = (_currentFile, _file, _lineOffset, _condFloor);
+        var saved = (_currentFile, _file, _lineOffset, _condFloor, _segment);
         (_currentFile, _file, _lineOffset, _condFloor) = (file.Name, _includedFiles.Count, 0, _cond.Count);
+        NewSegment(file.Name);
         _includeDepth++;
         try
         {
-            Run(Lexer.Tokenize(Splice(file.Content)), output);
+            List<Token> tokens;
+            try { tokens = Lexer.Tokenize(Splice(file.Content)); }
+            catch (GlslParseException e) when (!e.Located) { throw e.WithCode(Locate(e.Code)); }
+            Run(tokens, output);
             if (_cond.Count != _condFloor)
                 throw new GlslParseException($"unterminated #if / #ifdef in included file '{Clip(header)}'", line);
         }
         finally
         {
             _includeDepth--;
-            (_currentFile, _file, _lineOffset, _condFloor) = saved;
+            (_currentFile, _file, _lineOffset, _condFloor, _segment) = saved;
             _directiveLine = line;
         }
     }
@@ -246,18 +307,18 @@ public sealed class Preprocessor
 
     void VersionDirective(List<Token> dir)
     {
-        if (_sawCode) throw new GlslParseException("#version must occur first in the shader", dir[0].Line);
+        if (_sawCode) throw new GlslParseException("#version must occur first in the shader", _directiveLine);
         if (dir.Count < 2 || !int.TryParse(dir[1].Text, out int v))
-            throw new GlslParseException("#version must be followed by version number", dir[0].Line);
+            throw new GlslParseException("#version must be followed by version number", _directiveLine);
         if (!SupportedVersions.Contains(v))
-            throw new GlslParseException($"version not supported: {v}", dir[0].Line);
+            throw new GlslParseException($"version not supported: {v}", _directiveLine);
         _version = v;
         _sawVersion = true;
         // GLSL 100 only exists as ES (desktop GLSL never had a version 100); glslang classifies it as
         // ES even without the profile keyword.
         if (v == 100) _isEs = true;
         if (dir.Count > 2 && dir[2].Text is not ("core" or "compatibility" or "es"))
-            throw new GlslParseException($"invalid profile '{dir[2].Text}' in #version directive", dir[0].Line);
+            throw new GlslParseException($"invalid profile '{dir[2].Text}' in #version directive", _directiveLine);
         _isEs = dir.Count > 2 && dir[2].Text == "es";
         bool core = dir.Count > 2 ? dir[2].Text == "core" : _version >= 150;
         if (core) Define("GL_core_profile", "1");
@@ -270,10 +331,10 @@ public sealed class Preprocessor
         string ext = Name(dir, 1);
         // The form is `#extension <name> : <behavior>`; the colon and behavior are mandatory.
         if (dir.Count < 4 || dir[2].Kind != TokenKind.Colon)
-            throw new GlslParseException("malformed #extension (expected '#extension <name> : <behavior>')", dir[0].Line);
+            throw new GlslParseException("malformed #extension (expected '#extension <name> : <behavior>')", _directiveLine);
         string behavior = dir[3].Text;
         if (behavior is not ("require" or "enable" or "warn" or "disable"))
-            throw new GlslParseException($"invalid #extension behavior '{behavior}'", dir[0].Line);
+            throw new GlslParseException($"invalid #extension behavior '{behavior}'", _directiveLine);
         if (behavior == "disable") { _macros.Remove(ext); return; }
         if (ext != "all" && !_extensions.Contains(ext)) _extensions.Add(ext);
         if (ext != "all") Define(ext, "1");
@@ -382,7 +443,7 @@ public sealed class Preprocessor
                 {
                     var (args, next) = CollectArgs(input, i + 1);
                     if (args.Count != macro.Parameters.Count)
-                        throw new GlslParseException($"'{t.Text}' : macro expects {macro.Parameters.Count} argument(s), but got {args.Count}", t.Line);
+                        throw new GlslParseException($"'{t.Text}' : macro expects {macro.Parameters.Count} argument(s), but got {args.Count}", _site);
                     // Arguments are macro-expanded BEFORE substitution, and before this macro is hidden, so an
                     // argument may legally name the macro being expanded (ID(ID(x))) or another macro whose
                     // expansion the body re-uses (TWICE(ADD(a,b))). Operands of ## keep their raw spelling.
@@ -413,11 +474,11 @@ public sealed class Preprocessor
     void Rescan(string macro, List<Token> expanded, List<Token> output)
     {
         if (++_expansionDepth > MaxExpansionDepth)
-            throw new GlslParseException($"macro expansion of '{macro}' is nested too deeply (limit {MaxExpansionDepth})", _directiveLine);
+            throw new GlslParseException($"macro expansion of '{macro}' is nested too deeply (limit {MaxExpansionDepth})", _site);
         try
         {
             if ((_expansionBudget -= expanded.Count) < 0)
-                throw new GlslParseException($"macro expansion of '{macro}' is too large (limit {MaxExpansionTokens} tokens)", _directiveLine);
+                throw new GlslParseException($"macro expansion of '{macro}' is too large (limit {MaxExpansionTokens} tokens)", _site);
             _hidden.Add(macro);
             ExpandTokens(expanded, output);
             _hidden.Remove(macro);
@@ -528,14 +589,14 @@ public sealed class Preprocessor
                 if (j + 1 < tokens.Count && tokens[j + 1].Kind == TokenKind.LParen)
                 {
                     if (j + 3 >= tokens.Count || tokens[j + 3].Kind != TokenKind.RParen)
-                        throw new GlslParseException("malformed 'defined(...)' in #if expression", tokens[j].Line);
+                        throw new GlslParseException("malformed 'defined(...)' in #if expression", Locate(tokens[j].Line));
                     name = tokens[j + 2].Text;   // defined ( NAME )
                     j += 3;
                 }
                 else
                 {
                     if (j + 1 >= tokens.Count)
-                        throw new GlslParseException("'defined' requires an operand in #if expression", tokens[j].Line);
+                        throw new GlslParseException("'defined' requires an operand in #if expression", Locate(tokens[j].Line));
                     name = tokens[j + 1].Text;   // defined NAME
                     j += 1;
                 }
@@ -642,25 +703,56 @@ public sealed class Preprocessor
     static bool Adjacent(Token a, Token b) => a.Line == b.Line && b.Column == a.Column + a.Text.Length;
     static Token Int(long value) => new(TokenKind.IntConst, value.ToString(), 0, 0);
 
-    // Renders the preprocessed tokens as GLSL. Tokens are spaced on one line and a new line starts wherever
-    // the source line changes. The #version and #extension directives are kept up front, since the text
-    // must still declare them; everything else the preprocessor consumed is gone.
+    // Renders the preprocessed tokens as GLSL that keeps the source's layout, like glslang -E: a token on the same
+    // source line keeps the spacing it had, a new line keeps its indentation, and a change of line that is not the
+    // next one, or of file, gets a #line marker. The #version and #extension directives stay up front.
     string Emit(List<Token> tokens)
     {
         var sb = new StringBuilder();
         if (_sawVersion) sb.Append("#version ").Append(_version).Append(_isEs ? " es" : "").Append('\n');
         foreach (var ext in _extensions) sb.Append("#extension ").Append(ext).Append(" : enable\n");
-        int line = 0;
+
+        int segment = -1, line = -1;
+        bool open = false;   // a line of tokens is in progress and has no newline yet
+        Token previous = default;
         foreach (var t in tokens)
         {
             if (t.Kind == TokenKind.End) continue;
-            // Line 0 marks a token the preprocessor made (__FILE__, #if results), which stays on the current line.
-            if (t.Line != 0 && t.Line != line) { sb.Append('\n'); line = t.Line; }
-            else sb.Append(' ');
+            int s = t.Line / SegmentStride, l = t.Line % SegmentStride;
+            if (s == segment && l == line)
+                sb.Append(Gap(previous, t));
+            else
+            {
+                if (open) sb.Append('\n');
+                if (s == segment && l == line + 1)
+                    sb.Append(Indent(t));
+                else
+                {
+                    string name = s < _segmentNames.Count && _segmentNames[s] is { } file ? $" \"{file}\"" : "";
+                    sb.Append("#line ").Append(l).Append(name).Append('\n').Append(Indent(t));
+                    segment = s;
+                }
+            }
             sb.Append(Spelling(t));
+            line = l;
+            previous = t;
+            open = true;
         }
-        return sb.Append('\n').ToString();
+        return (open ? sb.Append('\n') : sb).ToString();
     }
+
+    // The whitespace between two tokens on the same source line: the gap they had in the source. Tokens a macro made
+    // have no source spacing, so they are separated by one space.
+    static string Gap(Token previous, Token t)
+    {
+        if (previous.Macro || t.Macro || previous.Column <= 0 || t.Column <= 0) return " ";
+        int end = previous.Column + (previous.Kind == TokenKind.StringConst ? previous.Text.Length + 2 : previous.Text.Length);
+        if (t.Column < end) return " ";
+        return new string(' ', t.Column - end);
+    }
+
+    // The indentation of a token that starts a line.
+    static string Indent(Token t) => t.Macro || t.Column <= 1 ? "" : new string(' ', t.Column - 1);
 
     static string Spell(IEnumerable<Token> tokens) => string.Join(' ', tokens.Where(t => t.Kind != TokenKind.End).Select(Spelling));
 

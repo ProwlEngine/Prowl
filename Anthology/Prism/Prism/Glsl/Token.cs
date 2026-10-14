@@ -24,8 +24,9 @@ public enum TokenKind
 }
 
 /// <summary>A lexed token. <see cref="Text"/> is the source lexeme (identifier name,
-/// numeric text, or operator like "&amp;&amp;").</summary>
-public readonly record struct Token(TokenKind Kind, string Text, int Line, int Column)
+/// numeric text, or operator like "&amp;&amp;"). <see cref="Macro"/> marks a token produced by a macro
+/// expansion, whose <see cref="Column"/> refers to the macro body rather than the source.</summary>
+public readonly record struct Token(TokenKind Kind, string Text, int Line, int Column, bool Macro = false)
 {
     public bool Is(TokenKind kind) => Kind == kind;
     public bool Is(string op) => Text == op;

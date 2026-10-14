@@ -337,6 +337,7 @@ public sealed class Lowerer
         // shared instruction pool either.
         if (!_ownsPool) InstrPool.PushBypass();
         try { return LowerCore(unit); }
+        catch (GlslParseException e) when (!e.Located) { throw e.Resolve(unit.SourceNames); }
         finally { _lowering = false; if (!_ownsPool) InstrPool.PopBypass(); }
     }
 

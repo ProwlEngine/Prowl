@@ -1,13 +1,48 @@
 namespace Prowl.Prism.Glsl;
 
-// A source-attributed compile error. Line is the 1-based source line (0 = unknown); the message is
-// prefixed with it so callers get "shader.frag:12: ..." style diagnostics.
+// A source-attributed compile error. Line is the 1-based source line (0 = unknown) and File is the name a #line
+// directive or an include gave that line (null for the main source). While the error is raised, the location is a
+// raw code (the preprocessor's segment and line packed into one int); the compile entry points resolve it into
+// Line and File before the error leaves the compiler, so callers only ever see "file:12: ..." or "line 12: ...".
 public sealed class GlslParseException : Exception
 {
     public int Line { get; }
-    public GlslParseException(string message, int line = 0) : base(line > 0 ? $"line {line}: {message}" : message) => Line = line;
-    // Re-attach a line to an error raised deeper down without one (the message is re-prefixed).
-    public GlslParseException WithLine(int line) => Line > 0 || line <= 0 ? this : new GlslParseException(Message, line);
+    public string? File { get; }
+    public string Text { get; }
+    internal int Code { get; }
+    internal bool Located { get; }
+
+    public GlslParseException(string message, int line = 0) : base(message)
+    {
+        Text = message;
+        Code = line;
+    }
+
+    private GlslParseException(string text, int line, string? file) : base(Format(text, line, file))
+    {
+        Text = text;
+        Line = line;
+        File = file;
+        Code = line;
+        Located = true;
+    }
+
+    static string Format(string text, int line, string? file) =>
+        line <= 0 ? text : file is null ? $"line {line}: {text}" : $"{file}:{line}: {text}";
+
+    // Re-attach a line to an error raised deeper down without one.
+    public GlslParseException WithLine(int line) => Code > 0 || line <= 0 ? this : new GlslParseException(Text, line);
+
+    internal GlslParseException WithCode(int code) => Located ? this : new GlslParseException(Text, code);
+
+    internal GlslParseException Resolve(IReadOnlyList<string?> segmentNames)
+    {
+        if (Located) return this;
+        int segment = Code / Preprocessor.SegmentStride;
+        int line = Code % Preprocessor.SegmentStride;
+        string? file = segment < segmentNames.Count ? segmentNames[segment] : null;
+        return new GlslParseException(Text, line, file);
+    }
 }
 
 // Array sizes are IReadOnlyList<Expr?>: one entry per dimension, null for an unsized
@@ -68,7 +103,11 @@ public sealed record ReturnStmt(Expr? Value) : Stmt;
 public sealed record JumpStmt(string Keyword) : Stmt;                   // break, continue, discard
 
 // ---- top-level declarations ----
-public sealed record TranslationUnit(int Version, IReadOnlyList<Decl> Declarations, IReadOnlyList<string>? Extensions = null, IReadOnlyList<string>? Pragmas = null, bool DefaultFloatRelaxed = false, bool IsEs = false, bool? IntPrecisionRelaxed = null);
+public sealed record TranslationUnit(int Version, IReadOnlyList<Decl> Declarations, IReadOnlyList<string>? Extensions = null, IReadOnlyList<string>? Pragmas = null, bool DefaultFloatRelaxed = false, bool IsEs = false, bool? IntPrecisionRelaxed = null)
+{
+    // The file name of each location segment, for resolving the raw locations the lowerer's errors carry.
+    public IReadOnlyList<string?> SourceNames { get; init; } = [];
+}
 public abstract record Decl { public int Line { get; set; } }
 public sealed record Param(Qualifiers Qualifiers, TypeRef Type, string? Name, IReadOnlyList<Expr?> Array);
 public sealed record Field(Qualifiers Qualifiers, TypeRef Type, IReadOnlyList<Declarator> Declarators);

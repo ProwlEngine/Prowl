@@ -55,8 +55,15 @@ public sealed class Parser
 
     public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
-        var (tokens, version, isEs, extensions, pragmas) = Preprocessor.ProcessPooled(source, defines, includes);
-        return new Parser(tokens, version, isEs, extensions, pragmas).ParseTranslationUnit();
+        var (tokens, version, isEs, extensions, pragmas, names) = Preprocessor.ProcessPooled(source, defines, includes);
+        try
+        {
+            return new Parser(tokens, version, isEs, extensions, pragmas).ParseTranslationUnit() with { SourceNames = names };
+        }
+        catch (GlslParseException e) when (!e.Located)
+        {
+            throw e.Resolve(names);
+        }
     }
 
     /// <summary>Parses a constant expression from a token list (used by the preprocessor for #if).</summary>
