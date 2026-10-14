@@ -292,6 +292,21 @@ public class FrameStatsTests
         Assert.Equal(0, allocated);
     }
 
+    private sealed class EmptyGame : Game;
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void ABoundedHeadlessRunRecordsEveryFrameItRan(int frames)
+    {
+        long before = FrameStats.FrameCount;
+
+        new EmptyGame().RunHeadless(new HeadlessRunOptions { MaxFrames = frames, TargetFrameRate = 0 });
+
+        // The last frame ends the run, and is recorded all the same.
+        Assert.Equal(before + frames, FrameStats.FrameCount);
+    }
+
     // ---- Edge cases ----
 
     [Fact]

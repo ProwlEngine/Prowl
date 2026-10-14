@@ -360,13 +360,17 @@ public abstract class Game
                 AssetDatabase.EndFrame();
 
                 frame++;
-                if (options.MaxFrames > 0 && frame >= options.MaxFrames) break;
-                if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
+                bool lastFrame = (options.MaxFrames > 0 && frame >= options.MaxFrames)
+                    || (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds);
 
-                // Throttle to the target tick rate so a server doesn't spin a core at 100%.
-                Application.WaitForNextFrame();
+                // Throttle to the target tick rate so a server doesn't spin a core at 100%. Not after the last
+                // frame, since nothing follows it.
+                if (!lastFrame)
+                    Application.WaitForNextFrame();
 
+                // Before leaving, so a bounded run's final frame is recorded too.
                 FrameStats.EndFrame();
+                if (lastFrame) break;
             }
         }
         finally
