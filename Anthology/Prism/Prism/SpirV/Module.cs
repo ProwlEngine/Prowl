@@ -306,6 +306,186 @@ public sealed class Module
     /// <summary>Appends a function's instruction stream (OpFunction ... OpFunctionEnd).</summary>
     public void AddFunction(IEnumerable<Instruction> body) => _functions.AddRange(body);
 
+    // ---- glslang's feature post-process ----
+
+    /// <summary>
+    /// glslang's Builder::postProcessFeatures for the narrow (8/16-bit) arithmetic capabilities. glslang does
+    /// not add Int8/Int16/Float16 when it declares an 8/16-bit type: a module that only moves narrow values in
+    /// and out of storage needs just the storage capabilities (and only the device features they imply). The
+    /// arithmetic capability is added when a constant of the type exists or an instruction in a function body
+    /// uses it beyond loading, storing, copying or converting it (postProcessType). Pointer types into
+    /// PhysicalStorageBuffer get their storage capability here too, since such memory has no variable.
+    /// </summary>
+    public void PostProcessNarrowTypes(uint version)
+    {
+        var defs = new Dictionary<uint, Instruction>();
+        foreach (var g in _globals) if (g.ResultId != 0) defs[g.ResultId] = g;
+        var typeOf = new Dictionary<uint, uint>();
+        foreach (var g in _globals) if (g.ResultId != 0 && g.TypeId != 0) typeOf[g.ResultId] = g.TypeId;
+        foreach (var f in _functions) if (f.ResultId != 0 && f.TypeId != 0) typeOf[f.ResultId] = f.TypeId;
+
+        // Follows vectors, matrices, arrays and pointers down to the scalar/struct at the bottom.
+        Instruction? Basic(uint type)
+        {
+            while (defs.TryGetValue(type, out var t))
+            {
+                switch (t.Op)
+                {
+                    case Op.TypeVector: case Op.TypeMatrix: case Op.TypeArray: case Op.TypeRuntimeArray: type = t.Operands[0]; break;
+                    case Op.TypePointer: type = t.Operands[1]; break;
+                    default: return t;
+                }
+            }
+            return null;
+        }
+        bool Contains(uint type, Op op, uint width)
+        {
+            if (!defs.TryGetValue(type, out var t)) return false;
+            return t.Op switch
+            {
+                Op.TypeInt or Op.TypeFloat => t.Op == op && t.Operands[0] == width,
+                Op.TypeStruct => t.Operands.Any(m => Contains(m, op, width)),
+                Op.TypeVector or Op.TypeMatrix or Op.TypeArray or Op.TypeRuntimeArray => Contains(t.Operands[0], op, width),
+                _ => false,
+            };
+        }
+        void ArithmeticCap(Op op, uint width)
+        {
+            if (op == Op.TypeInt && width == 8) AddCapability(Capability.Int8);
+            else if (op == Op.TypeInt && width == 16) AddCapability(Capability.Int16);
+            else if (op == Op.TypeFloat && width == 16) AddCapability(Capability.Float16);
+        }
+        void StructCaps(uint type)
+        {
+            if (Contains(type, Op.TypeInt, 8)) AddCapability(Capability.Int8);
+            if (Contains(type, Op.TypeInt, 16)) AddCapability(Capability.Int16);
+            if (Contains(type, Op.TypeFloat, 16)) AddCapability(Capability.Float16);
+        }
+        StorageClass? PointerStorage(uint pointer) =>
+            typeOf.TryGetValue(pointer, out uint pt) && defs.TryGetValue(pt, out var p) && p.Op == Op.TypePointer
+                ? (StorageClass)p.Operands[0] : null;
+
+        foreach (var g in _globals)
+        {
+            switch (g.Op)
+            {
+                // GlslangToSpv's createSpvConstant adds the arithmetic capability for every narrow constant.
+                case Op.Constant or Op.ConstantComposite or Op.SpecConstant or Op.SpecConstantComposite or Op.SpecConstantOp:
+                    if (Basic(g.TypeId) is { Op: Op.TypeInt or Op.TypeFloat } b) ArithmeticCap(b.Op, b.Operands[0]);
+                    break;
+                case Op.TypePointer when (StorageClass)g.Operands[0] == StorageClass.PhysicalStorageBuffer:
+                    if (Contains(g.Operands[1], Op.TypeInt, 8))
+                    {
+                        if (version < (uint)SpirVVersion.V1_5) AddExtension("SPV_KHR_8bit_storage");
+                        AddCapability(Capability.StorageBuffer8BitAccess);
+                    }
+                    if (Contains(g.Operands[1], Op.TypeInt, 16) || Contains(g.Operands[1], Op.TypeFloat, 16))
+                    {
+                        if (version < (uint)SpirVVersion.V1_3) AddExtension("SPV_KHR_16bit_storage");
+                        AddCapability(Capability.StorageBuffer16BitAccess);
+                    }
+                    break;
+            }
+        }
+
+        bool hasStorage16 = _capabilitySet.Contains(Capability.StorageInputOutput16) || _capabilitySet.Contains(Capability.StoragePushConstant16)
+            || _capabilitySet.Contains(Capability.StorageBuffer16BitAccess) || _capabilitySet.Contains(Capability.UniformAndStorageBuffer16BitAccess);
+        bool hasStorage8 = _capabilitySet.Contains(Capability.StoragePushConstant8) || _capabilitySet.Contains(Capability.UniformAndStorageBuffer8BitAccess)
+            || _capabilitySet.Contains(Capability.StorageBuffer8BitAccess);
+
+        void Check(Instruction inst, uint type)
+        {
+            if (!defs.ContainsKey(type)) return;
+            var basic = Basic(type);
+            Op basicOp = basic?.Op ?? Op.Nop;
+            uint width = basicOp is Op.TypeInt or Op.TypeFloat ? basic!.Operands[0] : 0;
+            switch (inst.Op)
+            {
+                case Op.Load or Op.Store:
+                    if (basicOp == Op.TypeStruct) { StructCaps(type); break; }
+                    var storage = PointerStorage(inst.Operands[0]);
+                    bool storageClassExempt = storage is StorageClass.PhysicalStorageBuffer or StorageClass.Uniform
+                        or StorageClass.StorageBuffer or StorageClass.PushConstant;
+                    if (width == 8 && !storageClassExempt) AddCapability(Capability.Int8);
+                    else if (width == 16 && !storageClassExempt && storage is not (StorageClass.Input or StorageClass.Output))
+                        ArithmeticCap(basicOp, 16);
+                    break;
+                case Op.CopyObject:
+                    break;
+                case Op.FConvert or Op.SConvert or Op.UConvert:
+                    if (!hasStorage16)
+                    {
+                        if (Contains(type, Op.TypeFloat, 16)) AddCapability(Capability.Float16);
+                        if (Contains(type, Op.TypeInt, 16)) AddCapability(Capability.Int16);
+                    }
+                    if (!hasStorage8 && Contains(type, Op.TypeInt, 8)) AddCapability(Capability.Int8);
+                    break;
+                case Op.ExtInst:
+                    break;
+                case Op.AccessChain or Op.PtrAccessChain or Op.InBoundsAccessChain:
+                    if (defs[type].Op == Op.TypePointer) break;
+                    if (basicOp == Op.TypeInt && width is 8 or 16) ArithmeticCap(Op.TypeInt, width);
+                    break;
+                default:
+                    if (basicOp is Op.TypeInt or Op.TypeFloat) ArithmeticCap(basicOp, width);
+                    break;
+            }
+        }
+
+        foreach (var inst in _functions)
+        {
+            // OpFunction/OpFunctionParameter sit outside any block; glslang only visits block instructions.
+            if (inst.Op is Op.Function or Op.FunctionParameter or Op.FunctionEnd) continue;
+            if (inst.TypeId != 0) Check(inst, inst.TypeId);
+            int lead = (inst.TypeId != 0 ? 1 : 0) + (inst.ResultId != 0 ? 1 : 0);
+            var words = new uint[lead + inst.Operands.Count];
+            int w = 0;
+            if (inst.TypeId != 0) words[w++] = inst.TypeId;
+            if (inst.ResultId != 0) words[w++] = inst.ResultId;
+            inst.Operands.CopyTo(words, w);
+            Optimizer.SpvGrammar.Classify((int)inst.Op, words, out _, out bool[] isId);
+            for (int i = 0; i < inst.Operands.Count; i++)
+                if (isId[lead + i] && typeOf.TryGetValue(inst.Operands[i], out uint operandType))
+                    Check(inst, operandType);
+        }
+    }
+
+    /// <summary>
+    /// SPIR-V 1.4's SignExtend/ZeroExtend image operands: from 1.4 on glslang marks every texel-producing or
+    /// texel-consuming image instruction on a 32-bit integer image with the image's signedness
+    /// (TGlslangToSpvTraverser's signExtensionMask). Depth-compare forms only ever return float and are left alone.
+    /// </summary>
+    public void PostProcessImageSignExtension()
+    {
+        if (Version < (uint)SpirVVersion.V1_4) return;
+        var defs = new Dictionary<uint, Instruction>();
+        foreach (var g in _globals) if (g.ResultId != 0) defs[g.ResultId] = g;
+        var typeOf = new Dictionary<uint, uint>();
+        foreach (var g in _globals) if (g.ResultId != 0 && g.TypeId != 0) typeOf[g.ResultId] = g.TypeId;
+        foreach (var f in _functions) if (f.ResultId != 0 && f.TypeId != 0) typeOf[f.ResultId] = f.TypeId;
+
+        foreach (var inst in _functions)
+        {
+            int maskIndex = inst.Op switch
+            {
+                Op.ImageSampleImplicitLod or Op.ImageSampleExplicitLod or Op.ImageSampleProjImplicitLod or Op.ImageSampleProjExplicitLod
+                    or Op.ImageFetch or Op.ImageRead or Op.ImageSparseSampleImplicitLod or Op.ImageSparseSampleExplicitLod
+                    or Op.ImageSparseSampleProjImplicitLod or Op.ImageSparseSampleProjExplicitLod or Op.ImageSparseFetch
+                    or Op.ImageSparseRead => 2,
+                Op.ImageGather or Op.ImageSparseGather or Op.ImageWrite => 3,
+                _ => -1,
+            };
+            if (maskIndex < 0 || !typeOf.TryGetValue(inst.Operands[0], out uint imageType) || !defs.TryGetValue(imageType, out var it)) continue;
+            if (it.Op == Op.TypeSampledImage && !defs.TryGetValue(it.Operands[0], out it)) continue;
+            if (it.Op != Op.TypeImage || !defs.TryGetValue(it.Operands[0], out var sampled)) continue;
+            if (sampled.Op != Op.TypeInt || sampled.Operands[0] != 32) continue;
+            uint bit = (uint)(sampled.Operands[1] != 0 ? ImageOperands.SignExtend : ImageOperands.ZeroExtend);
+            // Neither bit takes an operand, so ORing it into an existing mask keeps the operand order intact.
+            if (inst.Operands.Count > maskIndex) inst.Operands[maskIndex] |= bit;
+            else inst.Operands.Add(bit);
+        }
+    }
+
     // ---- serialization ----
 
     [ThreadStatic] static List<uint>? _serializeBuf;

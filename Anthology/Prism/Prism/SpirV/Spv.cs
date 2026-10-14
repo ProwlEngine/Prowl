@@ -116,6 +116,8 @@ public enum Decoration : uint
     SpecId = 1,
     Block = 2,
     BufferBlock = 3,
+    RestrictPointer = 5355,
+    AliasedPointer = 5356,
     Patch = 15,
     Centroid = 16,
     Sample = 17,
@@ -181,6 +183,7 @@ public enum BuiltIn : uint
     VertexIndex = 42,
     InstanceIndex = 43,
     ViewIndex = 4440,
+    DeviceIndex = 4438,
     BaseVertex = 4424,
     BaseInstance = 4425,
     DrawIndex = 4426,
@@ -222,7 +225,7 @@ public enum BuiltIn : uint
     RayGeometryIndexKHR = 5352,
 }
 
-public enum Capability : uint { Shader = 1, Float16 = 9, Float64 = 10, Int64 = 11, Int16 = 22, Int8 = 39, FragmentShadingRateKHR = 4422, Geometry = 2, Tessellation = 3, ClipDistance = 32, CullDistance = 33, ImageGatherExtended = 25, TessellationPointSize = 23, GeometryPointSize = 24, SampleRateShading = 35, InputAttachment = 40, StorageImageExtendedFormats = 49, StorageImageReadWithoutFormat = 55, StorageImageWriteWithoutFormat = 56, SampledCubeArray = 45, ImageCubeArray = 34, SampledRect = 37, Sampled1D = 43, Image1D = 44, SampledBuffer = 46, ImageBuffer = 47, ImageMSArray = 48, ImageQuery = 50, DerivativeControl = 51, InterpolationFunction = 52, MultiViewport = 57, MultiView = 4439, DrawParameters = 4427, MeshShadingEXT = 5283, RayTracingKHR = 4479, RayQueryKHR = 4472, RayTracingNV = 5340,
+public enum Capability : uint { Shader = 1, Float16 = 9, Float64 = 10, Int64 = 11, Int16 = 22, Int8 = 39, FragmentShadingRateKHR = 4422, Geometry = 2, Tessellation = 3, ClipDistance = 32, CullDistance = 33, ImageGatherExtended = 25, TessellationPointSize = 23, GeometryPointSize = 24, SampleRateShading = 35, InputAttachment = 40, StorageImageExtendedFormats = 49, StorageImageReadWithoutFormat = 55, StorageImageWriteWithoutFormat = 56, SampledCubeArray = 45, ImageCubeArray = 34, SampledRect = 37, Sampled1D = 43, Image1D = 44, SampledBuffer = 46, ImageBuffer = 47, ImageMSArray = 48, ImageQuery = 50, DerivativeControl = 51, InterpolationFunction = 52, MultiViewport = 57, MultiView = 4439, DeviceGroup = 4437, DrawParameters = 4427, ShaderLayer = 69, ShaderViewportIndex = 70, ShaderViewportIndexLayerEXT = 5254, MeshShadingEXT = 5283, RayTracingKHR = 4479, RayQueryKHR = 4472, RayTracingNV = 5340,
     GroupNonUniform = 61, GroupNonUniformVote = 62, GroupNonUniformArithmetic = 63, GroupNonUniformBallot = 64,
     GroupNonUniformShuffle = 65, GroupNonUniformShuffleRelative = 66, GroupNonUniformClustered = 67, GroupNonUniformQuad = 68,
     GroupNonUniformRotateKHR = 6026, QuadControlKHR = 5087,
@@ -241,7 +244,8 @@ public enum Capability : uint { Shader = 1, Float16 = 9, Float64 = 10, Int64 = 1
     WorkgroupMemoryExplicitLayoutKHR = 4428, MeshShadingNV = 5266, ImageFootprintNV = 5282, CooperativeMatrixKHR = 6022 }
 
 [Flags]
-public enum ImageOperands : uint { None = 0, Bias = 0x1, Lod = 0x2, Grad = 0x4, ConstOffset = 0x8, Offset = 0x10, ConstOffsets = 0x20, Sample = 0x40, MinLod = 0x80 }
+public enum ImageOperands : uint { None = 0, Bias = 0x1, Lod = 0x2, Grad = 0x4, ConstOffset = 0x8, Offset = 0x10, ConstOffsets = 0x20, Sample = 0x40, MinLod = 0x80,
+    MakeTexelAvailable = 0x100, MakeTexelVisible = 0x200, NonPrivateTexel = 0x400, VolatileTexel = 0x800, SignExtend = 0x1000, ZeroExtend = 0x2000 }
 
 public enum FunctionControl : uint { None = 0 }
 

@@ -1,0 +1,39 @@
+#version 460
+#extension GL_EXT_ray_query : require
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 1, std430) buffer Results {
+    vec4 hits[];
+} results;
+
+void main() {
+    uint width = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+    uint idx = gl_GlobalInvocationID.y * width + gl_GlobalInvocationID.x;
+
+    vec3 origin = vec3(vec2(gl_GlobalInvocationID.xy) * 0.01, 0.0);
+    vec3 direction = vec3(0.0, 0.0, 1.0);
+
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFFu,
+                          origin, 0.001, direction, 1000.0);
+
+    while (rayQueryProceedEXT(rq)) {
+    }
+
+    uint kind = rayQueryGetIntersectionTypeEXT(rq, true);
+    vec4 res;
+    if (kind == gl_RayQueryCommittedIntersectionTriangleEXT) {
+        float t = rayQueryGetIntersectionTEXT(rq, true);
+        int instanceId = rayQueryGetIntersectionInstanceIdEXT(rq, true);
+        int primitive = rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
+        vec2 bary = rayQueryGetIntersectionBarycentricsEXT(rq, true);
+        vec3 objectDir = rayQueryGetIntersectionObjectRayDirectionEXT(rq, true);
+        res = vec4(t, float(instanceId + primitive), bary.x + objectDir.x, bary.y);
+    } else {
+        res = vec4(-1.0);
+    }
+
+    results.hits[idx] = res;
+}

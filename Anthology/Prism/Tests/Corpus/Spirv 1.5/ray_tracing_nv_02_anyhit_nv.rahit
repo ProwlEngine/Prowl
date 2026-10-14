@@ -1,0 +1,10 @@
+#version 460
+#extension GL_NV_ray_tracing : require
+layout(location = 0) rayPayloadInNV vec4 payload;
+hitAttributeNV vec2 attribs;
+void main()
+{
+    payload = vec4(attribs, gl_HitTNV, gl_HitKindNV);
+    if (attribs.x < 0.5) ignoreIntersectionNV();
+    else terminateRayNV();
+}

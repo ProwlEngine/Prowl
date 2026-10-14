@@ -1,0 +1,20 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+hitAttributeEXT vec2 sphereUV;
+
+void main() {
+    vec3 origin = gl_ObjectRayOriginEXT;
+    vec3 direction = gl_ObjectRayDirectionEXT;
+
+    float b = dot(origin, direction);
+    float c = dot(origin, origin) - 1.0;
+    float disc = b * b - c;
+
+    if (disc >= 0.0) {
+        float tHit = -b - sqrt(disc);
+        float clamped = clamp(tHit, gl_RayTminEXT, gl_RayTmaxEXT);
+        sphereUV = vec2(clamped * 0.5 + 0.5, disc);
+        reportIntersectionEXT(clamped, 0u);
+    }
+}

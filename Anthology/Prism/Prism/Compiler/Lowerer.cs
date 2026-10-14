@@ -17,6 +17,14 @@ public sealed class Lowerer
     ShaderStage stage = ShaderStage.Fragment;
     SpirVVersion version = SpirVVersion.V1_0;
 
+    // glslang's Builder::addIncorporatedExtension: an extension that later SPIR-V versions folded into core
+    // is declared only below the version that incorporated it. From that version on the capability alone
+    // is enough, and re-declaring the extension is what the reference compiler never does.
+    void AddIncorporatedExtension(string name, SpirVVersion coreFrom)
+    {
+        if (version < coreFrom) _m.AddExtension(name);
+    }
+
     // Relaxed marks a mediump/lowp value: its id carries a RelaxedPrecision decoration, and the
     // precision propagates to results computed from it (GLSL takes the highest precision of the operands).
     // Layout records the block ruleset an aggregate value was loaded under, so that storing it into a
@@ -95,6 +103,7 @@ public sealed class Lowerer
         ["gl_SampleMaskIn"] = (BuiltIn.SampleMask, new ArrayType(Types.Int, 1), false, null, null),
         ["gl_SampleMask"] = (BuiltIn.SampleMask, new ArrayType(Types.Int, 1), true, null, null),
         ["gl_ViewIndex"] = (BuiltIn.ViewIndex, Types.Int, false, Capability.MultiView, "SPV_KHR_multiview"),
+        ["gl_DeviceIndex"] = (BuiltIn.DeviceIndex, Types.Int, false, Capability.DeviceGroup, "SPV_KHR_device_group"),
         // Draw parameters (core in 460, or GL_ARB_shader_draw_parameters with the ARB-suffixed spellings).
         ["gl_BaseVertex"] = (BuiltIn.BaseVertex, Types.Int, false, Capability.DrawParameters, "SPV_KHR_shader_draw_parameters"),
         ["gl_BaseInstance"] = (BuiltIn.BaseInstance, Types.Int, false, Capability.DrawParameters, "SPV_KHR_shader_draw_parameters"),
@@ -169,6 +178,7 @@ public sealed class Lowerer
     readonly Dictionary<string, (GlslType Type, Func<Global> Build)> _pendingGlobals = [];
     readonly Dictionary<string, BlockMember> _blockMembers = [];   // members of anonymous blocks, addressed by bare name
     readonly HashSet<StructType> _blockStructs = [];   // interface-block structs: their bool members are stored as uint
+    readonly HashSet<StructType> _bufferBlockStructs = [];   // the `buffer` ones (Uniform-class BufferBlocks below 1.3)
     readonly Dictionary<StructType, BlockLayout> _blockLayout = [];   // the ruleset a block struct is laid out under
     // The same GLSL struct nested in a block is a DIFFERENT SPIR-V type from the one used outside it,
     // because it carries the block's Offsets. glslang keys its struct cache by layout; so do we, and a
@@ -200,7 +210,8 @@ public sealed class Lowerer
     readonly Dictionary<string, Value> _valueParams = [];   // `const in` params: the name IS the value, not a pointer
     readonly HashSet<string> _outParams = [];   // write-only params: reading one is not a trivial leaf
     readonly HashSet<string> _varyingNames = [];   // in/out globals: not trivial to read (checked without materializing)
-    bool _noContraction;   // inside a `precise` initializer: its arithmetic must not be fused
+    // Operations glslang's PropagateNoContraction marks (value: skip a 32-bit signed int result).
+    Dictionary<object, bool> _preciseOps = new(ReferenceEqualityComparer.Instance);
     readonly HashSet<string> _preciseVars = [];   // interface variables declared `precise`
     readonly Dictionary<string, (GlslType Type, uint VarId)> _builtinVars = [];
     readonly Dictionary<string, List<UserFunction>> _userFunctions = [];   // by name, allowing overloads
@@ -270,7 +281,7 @@ public sealed class Lowerer
         _m.Reset((uint)version);
 
         _globals.Clear(); _globalDeclNames.Clear(); _pendingGlobals.Clear(); _blockMembers.Clear();
-        _blockStructs.Clear(); _blockLayout.Clear(); _layoutStructIds.Clear(); _layoutArrayIds.Clear();
+        _blockStructs.Clear(); _bufferBlockStructs.Clear(); _blockLayout.Clear(); _layoutStructIds.Clear(); _layoutArrayIds.Clear();
         _pendingBlockBuilds.Clear(); _relaxedIds.Clear(); _valueParams.Clear(); _outParams.Clear();
         _varyingNames.Clear(); _preciseVars.Clear(); _builtinVars.Clear(); _userFunctions.Clear();
         _structs.Clear(); _bufferRefs.Clear(); _bufferRefPtrIds.Clear(); _namedStructs.Clear();
@@ -282,7 +293,7 @@ public sealed class Lowerer
         _rtByLoc.Clear(); _resTypeNamed.Clear(); _bufferRefQuals.Clear(); _bufferRefAlign.Clear();
         _definedBufferRefs.Clear(); _bufferRefStructIds.Clear(); _bufferRefMemberIds.Clear(); _decorated.Clear();
 
-        _defaultFloatMediump = _defaultIntMediump = _isEs = _noContraction = _vmmEnabled = _vmmPragma = false;
+        _defaultFloatMediump = _defaultIntMediump = _isEs = _vmmEnabled = _vmmPragma = false;
         _usesStreams = _invariantPosition = _terminated = _nvMesh = _nvRayTracing = _xfbMode = _pushConstantSeen = false;
         _addressingModel = AddressingModel.Logical;
         _glPerVertex = _glIn = _glOut = _glTessInner = _glTessOuter = _glClipFrag = _glCullFrag = 0;
@@ -307,6 +318,15 @@ public sealed class Lowerer
         return this;
     }
 
+    /// <summary>Drop the references the last compile left behind (AST nodes, symbol tables, the lowered module's
+    /// contents) once its words are serialized, so they are garbage during optimization instead of being
+    /// carried (and promoted) through it. The next Reset re-arms the instance as usual.</summary>
+    public void ReleaseCompileState()
+    {
+        Reset(stage, version, AutoMapLocations);
+        _preciseOps = new(ReferenceEqualityComparer.Instance);
+    }
+
     public Module Lower(TranslationUnit unit)
     {
         // Lowering mutates this instance and its pooled Module, so it cannot be re-entered (a nested compile
@@ -324,6 +344,8 @@ public sealed class Lowerer
     {
         // Rewind this thread's instruction pool so the whole module reuses the previous compile's objects.
         InstrPool.Reset();
+        // glslang's PropagateNoContraction runs over the whole AST before any code is generated.
+        _preciseOps = PreciseAnalysis.Run(unit).Marked;
         // The legacy GL_NV_mesh_shader path uses the NV capability/extension/execution model and a richer
         // per-vertex block (with the PerViewNV members) instead of the EXT ones.
         _nvMesh = stage == ShaderStage.Mesh && (unit.Extensions?.Contains("GL_NV_mesh_shader") ?? false);
@@ -354,7 +376,7 @@ public sealed class Lowerer
         if (physicalBuffers)
         {
             _m.AddCapability(Capability.PhysicalStorageBufferAddresses);
-            _m.AddExtension("SPV_KHR_physical_storage_buffer");
+            AddIncorporatedExtension("SPV_KHR_physical_storage_buffer", SpirVVersion.V1_5);
         }
 
         _m.ImportExtInstSet("GLSL.std.450");
@@ -411,6 +433,11 @@ public sealed class Lowerer
         if (exts.Any(e => e.StartsWith("GL_KHR_shader_subgroup", StringComparison.Ordinal) && e != "GL_KHR_shader_subgroup_rotate")
             || exts.Contains("GL_NV_shader_subgroup_partitioned"))
             exts.Add("GL_KHR_shader_subgroup_basic");
+        // glslang's updateExtensionBehavior implications: the buffer reference add-ons enable the base
+        // extension, as do the cooperative-matrix variants theirs.
+        if (exts.Contains("GL_EXT_buffer_reference2") || exts.Contains("GL_EXT_buffer_reference_uvec2")) exts.Add("GL_EXT_buffer_reference");
+        if (exts.Contains("GL_NV_integer_cooperative_matrix")) exts.Add("GL_NV_cooperative_matrix");
+        if (exts.Contains("GL_NV_cooperative_matrix2")) exts.Add("GL_KHR_cooperative_matrix");
         // GL_EXT_shader_subgroup_extended_types_X implies the matching explicit-arithmetic-types_X.
         foreach (var w in new[] { "float16", "int8", "int16", "int64" })
             if (exts.Contains($"GL_EXT_shader_subgroup_extended_types_{w}")) exts.Add($"GL_EXT_shader_explicit_arithmetic_types_{w}");
@@ -583,6 +610,8 @@ public sealed class Lowerer
         }
         if (stage == ShaderStage.Mesh) EmitMeshModes(unit, mainId);
         EmitStageModes(unit, mainId);
+        _m.PostProcessNarrowTypes((uint)version);
+        _m.PostProcessImageSignExtension();
 
         return _m;
     }
@@ -877,12 +906,15 @@ public sealed class Lowerer
         else if (stage == ShaderStage.TessEvaluation)
         {
             // glslang emits tess-eval modes in a canonical order (primitive, spacing, winding, point
-            // mode) and always emits a winding, defaulting to counter-clockwise.
+            // mode) and always emits a spacing and a winding: TIntermediate::finalCheck defaults them to
+            // equal_spacing and counter-clockwise.
             var items = (inLayout?.Qualifiers.Layout ?? []).Select(i => i.Name).ToList();
             foreach (var name in items)
                 if (name is "triangles" or "quads" or "isolines" && InputPrimitiveMode(name) is ExecutionMode m) _m.AddExecutionMode(mainId, m);
+            string[] spacings = ["equal_spacing", "fractional_even_spacing", "fractional_odd_spacing"];
             foreach (var name in items)
-                if (name is "equal_spacing" or "fractional_even_spacing" or "fractional_odd_spacing") _m.AddExecutionMode(mainId, InputPrimitiveMode(name)!.Value);
+                if (spacings.Contains(name)) _m.AddExecutionMode(mainId, InputPrimitiveMode(name)!.Value);
+            if (!items.Any(spacings.Contains)) _m.AddExecutionMode(mainId, ExecutionMode.SpacingEqual);
             _m.AddExecutionMode(mainId, items.Contains("cw") ? ExecutionMode.VertexOrderCw : ExecutionMode.VertexOrderCcw);
             if (items.Contains("point_mode")) _m.AddExecutionMode(mainId, ExecutionMode.PointMode);
         }
@@ -1009,7 +1041,8 @@ public sealed class Lowerer
                 if (img.Arrayed) sb.Append('A');
                 sb.Append(DimMangle(img.Dim)).Append('1');
                 break;
-            case PureSamplerType: sb.Append("p1"); break;
+            case PureSamplerType ps: sb.Append(ps.Shadow ? "pS1" : "p1"); break;   // glslang: pure, shadow flag, no dim
+            case BufferReferenceType: sb.Append('1'); break;   // glslang has no letter for a reference, only the size
             default: throw new GlslParseException($"cannot mangle parameter type '{t}'");
         }
     }
@@ -1043,7 +1076,11 @@ public sealed class Lowerer
         // glslang's makeFunctions converts the PARAMETER types before the return type, so a type first
         // named by a parameter is created first. A `const in` parameter is the value itself, not a pointer.
         uint[] paramPtrTypes = [.. info.Params.Select(p =>
-            p.ByValue ? SpvType(p.Type) : _m.TypePointer(ParamStorage(p.Type), SpvType(p.Type)))];
+        {
+            // A reference parameter is a full use of the reference type (see DeclareLocal).
+            if (ReferenceIn(p.Type) is string reference) BufferRefDefine(reference);
+            return p.ByValue ? SpvType(p.Type) : _m.TypePointer(ParamStorage(p.Type), SpvType(p.Type));
+        })];
         uint retType = SpvType(info.ReturnType);
         uint fnType = _m.TypeFunction(retType, paramPtrTypes);
         uint[] paramIds = [.. info.Params.Select(_ => _m.AllocId())];
@@ -1056,6 +1093,8 @@ public sealed class Lowerer
 
         // glslang names the parameters in makeFunctions (after the function name), during declaration.
         for (int i = 0; i < info.Params.Count; i++) _m.AddName(paramIds[i], info.Params[i].Name);
+        for (int i = 0; i < info.Params.Count; i++)
+            if (!info.Params[i].ByValue && ReferenceIn(info.Params[i].Type) is not null) _m.Decorate(paramIds[i], Decoration.AliasedPointer);
 
         var header = new List<Instruction> { InstrPool.Rent(Op.Function, retType, info.Id).AddEnum(FunctionControl.None).Add(fnType) };
         for (int i = 0; i < info.Params.Count; i++)
@@ -1359,6 +1398,9 @@ public sealed class Lowerer
     // its own declaration, so anything else throws rather than being silently ignored.
     void ApplyQualifierRedecl(QualifierRedecl redecl)
     {
+        // `layout(buffer_reference) buffer Node;` forward-declares a reference type so a block can point at
+        // itself. The full block declaration registers the type (RegisterBufferReferences); nothing to emit.
+        if (redecl.Qualifiers.Has("buffer") && redecl.Qualifiers.Layout.Any(i => i.Name == "buffer_reference")) return;
         if (!redecl.Qualifiers.Has("invariant"))
             throw new GlslParseException($"re-declaring '{redecl.Name}' with these qualifiers is not supported");
         if (redecl.Name == "gl_Position") _invariantPosition = true;
@@ -1511,12 +1553,15 @@ public sealed class Lowerer
                         throw new GlslParseException("'input_attachment_index' is only valid on a subpass input", decl.Line);
                     if (baseType is ImageType { Dim: Dim.SubpassData } && LayoutInt(quals, "input_attachment_index") is int ai)
                         _m.Decorate(var, Decoration.InputAttachmentIndex, (uint)ai);
+                    // Under the Vulkan memory model coherent/volatile are not decorations (spirv-val bans them)
+                    // but per-access texel operands; see ImageMemOperands.
                     foreach (var (word, decoration) in MemoryQualifiers)
-                        if (quals.Has(word)) _m.Decorate(var, decoration);
+                        if (quals.Has(word) && !(_vmmPragma && decoration is Decoration.Coherent or Decoration.Volatile))
+                            _m.Decorate(var, decoration);
                     // ES samplers carry a precision: mediump/lowp declared, or the lowp default of
                     // sampler2D/samplerCube. A relaxed sampler relaxes its loads and its sampling results.
                     if (SamplerRelaxed(baseType, quals)) Relax(var);
-                    return new Global(type, StorageClass.UniformConstant, var);
+                    return new Global(type, StorageClass.UniformConstant, var, _vmmPragma && baseType is ImageType ? BlockMemQual(quals) : MemQual.None);
                 });
             }
             return;
@@ -2585,9 +2630,13 @@ public sealed class Lowerer
             .ToList();
         var st = new StructType(block.BlockName, fields);
         _blockStructs.Add(st);   // its bool members are stored as uint; see BlockStored
+        if (isBuffer) _bufferBlockStructs.Add(st);
         // SPIR-V 1.3 made the StorageBuffer storage class + Block decoration the native way to declare an
         // SSBO; before that (and at 1.0) it is Uniform storage + BufferBlock.
-        bool nativeStorageBuffer = isBuffer && version >= SpirVVersion.V1_3;
+        // GL_EXT_buffer_reference opts the module into it at any version (glslang setUseStorageBuffer), through
+        // SPV_KHR_storage_buffer_storage_class below 1.3.
+        bool nativeStorageBuffer = isBuffer && (version >= SpirVVersion.V1_3 || _bufferRefs.Count > 0);
+        if (nativeStorageBuffer) AddIncorporatedExtension("SPV_KHR_storage_buffer_storage_class", SpirVVersion.V1_3);
         var storage = isShaderRecord ? StorageClass.ShaderRecordBufferKHR
                     : isShared ? StorageClass.Workgroup
                     : isPushConstant ? StorageClass.PushConstant
@@ -2621,23 +2670,25 @@ public sealed class Lowerer
             {
                 _m.AddCapability(isPushConstant ? Capability.StoragePushConstant16
                     : isBuffer ? Capability.StorageBuffer16BitAccess : Capability.UniformAndStorageBuffer16BitAccess);
-                if (version < SpirVVersion.V1_3) _m.AddExtension("SPV_KHR_16bit_storage");   // core only from 1.3
+                AddIncorporatedExtension("SPV_KHR_16bit_storage", SpirVVersion.V1_3);
             }
             if (st.Fields.Any(f => ContainsWidth(f.Type, 8)))
             {
+                // Keyed by the block's storage class, not by buffer-vs-uniform: below 1.3 an SSBO is a
+                // Uniform-class BufferBlock, which glslang (and spirv-val) cover with the Uniform cap.
                 _m.AddCapability(isPushConstant ? Capability.StoragePushConstant8
-                    : isBuffer ? Capability.StorageBuffer8BitAccess : Capability.UniformAndStorageBuffer8BitAccess);
-                if (version < SpirVVersion.V1_4) _m.AddExtension("SPV_KHR_8bit_storage");   // core only from 1.4
+                    : nativeStorageBuffer ? Capability.StorageBuffer8BitAccess : Capability.UniformAndStorageBuffer8BitAccess);
+                AddIncorporatedExtension("SPV_KHR_8bit_storage", SpirVVersion.V1_5);
             }
             uint structType = _m.TypeStructUnique(memberIds);
             var refMembers = st.Fields.Where(f => f.Type is BufferReferenceType).Select(f => ((BufferReferenceType)f.Type).Name).ToArray();
             // A reference member forward-declares its pointer above; glslang defines the pointee struct
             // and the pointer right after this enclosing struct, its names after this struct's names,
             // and its decorations after this struct's decorations.
-            foreach (var r in refMembers) BufferRefTypes(r);
+            var definedRefs = refMembers.SelectMany(BufferRefTypes).ToList();
             _m.AddName(structType, block.BlockName);
             for (int i = 0; i < st.Fields.Count; i++) _m.AddMemberName(structType, i, st.Fields[i].Name);
-            foreach (var r in refMembers) BufferRefNames(r);
+            foreach (var r in definedRefs) BufferRefNames(r);
             // Per-member memory qualifiers (glslang emits these before the member's Offset).
             var memberQuals = new List<Decoration>();
             if (isBuffer && block.Qualifiers.Has("readonly")) memberQuals.Add(Decoration.NonWritable);
@@ -2654,7 +2705,7 @@ public sealed class Lowerer
                 _m.AddCapability(Capability.WorkgroupMemoryExplicitLayoutKHR);
                 _m.AddExtension("SPV_KHR_workgroup_memory_explicit_layout");
             }
-            foreach (var r in refMembers) BufferRefDecorate(r);
+            foreach (var r in definedRefs) BufferRefDecorate(r);
 
             uint varType = structType;
             if (globalType is ArrayType arr)
@@ -3006,7 +3057,22 @@ public sealed class Lowerer
         if (s.Value is not null && _currentReturnType is ScalarType { Kind: Scalar.Void })
             throw new GlslParseException("void function cannot return a value");
         if (s.Value is null) _code.Add(InstrPool.Rent(Op.Return));
-        else _code.Add(InstrPool.Rent(Op.ReturnValue).Add(LowerCoerced(s.Value, _currentReturnType, "return").Id));
+        else
+        {
+            var value = LowerCoerced(s.Value, _currentReturnType, "return");
+            // A block member (Offset-decorated struct, bools stored as uint) is a different SPIR-V type than
+            // the function's plain return type: glslang copies it through an unnamed Function temporary with
+            // multiTypeStore and returns the reload.
+            if (SpvType(value.Type, value.Layout) != SpvType(_currentReturnType))
+            {
+                uint ptrType = _m.TypePointer(StorageClass.Function, SpvType(_currentReturnType));
+                uint temp = _m.AllocId();
+                _vars.Add(InstrPool.Rent(Op.Variable, ptrType, temp).AddEnum(StorageClass.Function));
+                MultiTypeStore(new Chain(temp, [], _currentReturnType, StorageClass.Function), value);
+                value = Load(_currentReturnType, temp);
+            }
+            _code.Add(InstrPool.Rent(Op.ReturnValue).Add(value.Id));
+        }
         _terminated = true;
         // glslang follows every explicit return with an unreachable "post-return" block (a fresh id).
         // The block is dead and stripped from the output, but the id was consumed.
@@ -3369,13 +3435,8 @@ public sealed class Lowerer
                 continue;
             }
             uint varId = DeclareLocal(d.Name, type, DeclRelaxed(type, decl.Qualifiers));
-            // `precise` forbids fusing/re-associating the arithmetic that produces the value, which
-            // glslang marks by decorating each contributing operation NoContraction.
-            bool wasPrecise = _noContraction;
-            _noContraction = wasPrecise || decl.Qualifiers.Has("precise");
             var init = LowerCoerced(d.Init, type, $"initializing '{d.Name}'");
             MultiTypeStore(new Chain(varId, [], type, StorageClass.Function), init);
-            _noContraction = wasPrecise;
         }
     }
 
@@ -3433,10 +3494,17 @@ public sealed class Lowerer
 
     uint DeclareLocal(string name, GlslType type, bool relaxed = false)
     {
+        // A buffer_reference local (or array of them) is a full type use, not a member's forward reference:
+        // glslang defines the pointee struct with its names and decorations before the variable's own.
+        string? reference = (type is ArrayType { Element: BufferReferenceType ae } ? ae : type as BufferReferenceType)?.Name;
+        if (reference is not null) BufferRefDefine(reference);
         uint ptrType = _m.TypePointer(StorageClass.Function, SpvType(type));
         uint varId = _m.AllocId();
         _vars.Add(InstrPool.Rent(Op.Variable, ptrType, varId).AddEnum(StorageClass.Function));
         _m.AddName(varId, name);   // glslang names user locals; the name is added at declaration order
+        // A Function variable holding PhysicalStorageBuffer pointers must say whether they may alias; glslang
+        // defaults to AliasedPointer.
+        if (reference is not null) _m.Decorate(varId, Decoration.AliasedPointer);
         if (relaxed) Relax(varId);
         _locals[name] = (type, varId);
         return varId;
@@ -3480,6 +3548,7 @@ public sealed class Lowerer
         Call call when Types.IsTypeName(call.Name) => LowerConstructor(call),
         Call { IsArray: true } call when _structs.ContainsKey(call.Name) => LowerArrayConstructor(call),
         Call call when _structs.ContainsKey(call.Name) => LowerStructConstructor(call),
+        Call { IsArray: false } call when _bufferRefs.ContainsKey(call.Name) => LowerReferenceConstructor(call),
         Call call when CallsUserFunction(call) => LowerUserCall(call),
         // A built-in called on constants folds (glslang does it in the AST), so it is not a runtime op.
         Call call when EvalConstBuiltin(call) is { } folded => Materialize(folded),
@@ -3741,9 +3810,9 @@ public sealed class Lowerer
             "textureQueryLevels" => TextureQueryLevels(args),
             "textureSamples" => TextureSamples(args),
             "textureQueryLod" => TextureQueryLod(args),
-            "imageLoad" => ImageLoad(args),
+            "imageLoad" => ImageLoad(args, ImageMem(call.Args[0])),
             "subpassLoad" => SubpassLoad(args),
-            "imageStore" => ImageStore(args),
+            "imageStore" => ImageStore(args, ImageMem(call.Args[0])),
             "imageSize" => ImageSize(args),
             "textureGatherOffset" => TextureGatherOffset(call, args),
             "textureGatherOffsets" => TextureGatherOffsets(args),
@@ -3907,6 +3976,12 @@ public sealed class Lowerer
                     else savedSwizzle[i] = (baseVal, sel);
                 }
             }
+            // A branching ternary leaves its temporary as the argument's l-value (copied in step 2).
+            else if (!p.ByValue && p.IsIn && !p.IsOut && call.Args[i] is Conditional cnd && InferType(cnd).Equals(p.Type))
+            {
+                var v = LowerConditional(cnd, keepTemp: true, out var tc);
+                if (tc is { } c) savedChain[i] = c; else savedRValue[i] = v;
+            }
             // An argument needing an implicit conversion is a conversion node in glslang's AST, so it is
             // fully evaluated here and becomes an r-value; only an exact-typed l-value stays a chain.
             // A `const in` param always takes the r-value. An out/inout argument must match exactly.
@@ -3928,6 +4003,7 @@ public sealed class Lowerer
             uint ptrType = _m.TypePointer(StorageClass.Function, SpvType(p.Type));
             uint temp = _m.AllocId();
             _m.AddName(temp, "param");
+            if (ReferenceIn(p.Type) is not null) _m.Decorate(temp, Decoration.AliasedPointer);
             _vars.Add(InstrPool.Rent(Op.Variable, ptrType, temp).AddEnum(StorageClass.Function));
             // A saved r-value was already converted in step 1; a saved chain may be a block member whose
             // stored form differs from the plain param, so copy it through MultiTypeStore.
@@ -4779,7 +4855,7 @@ public sealed class Lowerer
     {
         var arg = LowerExpr(call.Args[0]);
         _m.AddCapability(Capability.ShaderNonUniform);
-        _m.AddExtension("SPV_EXT_descriptor_indexing");   // incorporated into SPIR-V 1.5; our targets are all below it
+        AddIncorporatedExtension("SPV_EXT_descriptor_indexing", SpirVVersion.V1_5);
         uint id = Emit(Op.CopyObject, SpvType(arg.Type), arg.Id);
         _m.Decorate(id, Decoration.NonUniform);
         _nonUniformIds.Add(id);
@@ -4868,7 +4944,7 @@ public sealed class Lowerer
         if (_vmmEnabled) return;
         _vmmEnabled = true;
         _m.AddCapability(Capability.VulkanMemoryModel);
-        _m.AddExtension("SPV_KHR_vulkan_memory_model");
+        AddIncorporatedExtension("SPV_KHR_vulkan_memory_model", SpirVVersion.V1_5);
         _m.SetMemoryModel(_addressingModel, MemoryModel.Vulkan);
     }
 
@@ -5097,7 +5173,25 @@ public sealed class Lowerer
         return new Value(Emit(Op.AtomicCompareExchange, SpvType(target.Type), target.Pointer, scope, eqSem, unSem, data.Id, compare.Id), target.Type, false);
     }
 
-    Value ImageLoad(Value[] args)   // texel type follows the image's sampled type (vec4 / ivec4 / uvec4)
+    // The coherent/volatile qualifier of the image variable an image-call argument names (Vulkan memory model only).
+    MemQual ImageMem(Expr e) => e switch
+    {
+        Ident id when ResolveLocalVar(id.Name) is null => ResolveGlobal(id.Name)?.Mem ?? MemQual.None,
+        Index ix => ImageMem(ix.Target),
+        _ => MemQual.None,
+    };
+
+    // Under the Vulkan memory model a coherent image access makes its texel available (store) or visible (load)
+    // at queue-family scope and marks it non-private; a volatile one is also VolatileTexel. Null when not needed.
+    (uint Mask, uint Scope)? ImageMemOperands(MemQual mem, bool store)
+    {
+        if (!_vmmPragma || mem is not (MemQual.Coherent or MemQual.Volatile)) return null;
+        uint mask = (uint)(ImageOperands.NonPrivateTexel | (store ? ImageOperands.MakeTexelAvailable : ImageOperands.MakeTexelVisible));
+        if (mem == MemQual.Volatile) mask |= (uint)ImageOperands.VolatileTexel;
+        return (mask, _m.ConstantInt(SpvType(Types.UInt), ScopeQueueFamily));
+    }
+
+    Value ImageLoad(Value[] args, MemQual mem = MemQual.None)   // texel type follows the image's sampled type (vec4 / ivec4 / uvec4)
     {
         var image = (ImageType)args[0].Type;
         // Reading a storage image declared without a format layout qualifier needs this capability.
@@ -5106,9 +5200,18 @@ public sealed class Lowerer
         if (image.Multisampled)   // imageLoad(img, coord, sample): the sample index is a Sample image operand
         {
             _m.AddCapability(Capability.StorageImageMultisample);
-            _code.Add(InstrPool.Rent(Op.ImageRead, SpvType(texel), _m.AllocId())
-                .Add(args[0].Id, args[1].Id).Add((uint)ImageOperands.Sample).Add(args[2].Id));
-            return new Value(_code[^1].ResultId, texel, false);
+            var msRead = InstrPool.Rent(Op.ImageRead, SpvType(texel), _m.AllocId()).Add(args[0].Id, args[1].Id);
+            if (ImageMemOperands(mem, store: false) is (uint msMask, uint msScope))
+                msRead.Add((uint)ImageOperands.Sample | msMask).Add(args[2].Id, msScope);
+            else msRead.Add((uint)ImageOperands.Sample).Add(args[2].Id);
+            _code.Add(msRead);
+            return new Value(msRead.ResultId, texel, false);
+        }
+        if (ImageMemOperands(mem, store: false) is (uint mask, uint scope))
+        {
+            var read = InstrPool.Rent(Op.ImageRead, SpvType(texel), _m.AllocId()).Add(args[0].Id, args[1].Id).Add(mask, scope);
+            _code.Add(read);
+            return new Value(read.ResultId, texel, false);
         }
         return new Value(Emit(Op.ImageRead, SpvType(texel), args[0].Id, args[1].Id), texel, false);
     }
@@ -5128,7 +5231,7 @@ public sealed class Lowerer
         return new Value(Emit(Op.ImageRead, SpvType(result), args[0].Id, coord), result, false);
     }
 
-    Value ImageStore(Value[] args)
+    Value ImageStore(Value[] args, MemQual mem = MemQual.None)
     {
         var image = (ImageType)args[0].Type;
         // Writing a storage image declared without a format layout qualifier needs this capability.
@@ -5136,10 +5239,16 @@ public sealed class Lowerer
         if (image.Multisampled)   // imageStore(img, coord, sample, texel): texel, then the Sample operand
         {
             _m.AddCapability(Capability.StorageImageMultisample);
-            _code.Add(InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[3].Id).Add((uint)ImageOperands.Sample).Add(args[2].Id));
+            var msWrite = InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[3].Id);
+            if (ImageMemOperands(mem, store: true) is (uint msMask, uint msScope))
+                msWrite.Add((uint)ImageOperands.Sample | msMask).Add(args[2].Id, msScope);
+            else msWrite.Add((uint)ImageOperands.Sample).Add(args[2].Id);
+            _code.Add(msWrite);
             return new Value(0, Types.Void, false);
         }
-        _code.Add(InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[2].Id));
+        var write = InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[2].Id);
+        if (ImageMemOperands(mem, store: true) is (uint mask, uint scope)) write.Add(mask, scope);
+        _code.Add(write);
         return new Value(0, Types.Void, false);
     }
 
@@ -5475,11 +5584,7 @@ public sealed class Lowerer
         // A block's chain addresses the STORED type, so a bool member is a uint there. The right-hand
         // side still converts to what was declared, and only then to what the block holds.
         var declared = lhs.Layout is null ? lhs.Type : InferType(assign.Left);
-        // Writing to a `precise` interface variable makes its computation non-fusible (NoContraction).
-        bool wasPrecise = _noContraction;
-        if (RootName(assign.Left) is { } root && _preciseVars.Contains(root)) _noContraction = true;
         var value = LowerCoerced(assign.Right, declared, "assignment");
-        _noContraction = wasPrecise;
         MultiTypeStore(lhs, ToStored(value, lhs.Type));
         return value;
     }
@@ -5544,7 +5649,7 @@ public sealed class Lowerer
             // so this is an ordinary load-modify-store with no shuffling at all.
             if (IsIdentitySwizzle(indices, vecType))
             {
-                var whole = ApplyBinary(bin.Op[..^1], Load(vecType, Collapse(baseChain), baseChain.Layout), rhsVal);
+                var whole = ApplyBinary(bin.Op[..^1], Load(vecType, Collapse(baseChain), baseChain.Layout), rhsVal, bin);
                 Store(Collapse(baseChain), whole.Id);
                 return whole;
             }
@@ -5571,7 +5676,7 @@ public sealed class Lowerer
                 curr = new Value(shuffle.ResultId, swType, false);
             }
 
-            var updated = ApplyBinary(bin.Op[..^1], curr, rhsVal);
+            var updated = ApplyBinary(bin.Op[..^1], curr, rhsVal, bin);
 
             if (indices.Length < vecType.Size)
                 for (int k = 0; k < indices.Length; k++)
@@ -5608,7 +5713,7 @@ public sealed class Lowerer
         // value, so `f += i` converts i to float ahead of the load. (Shifts keep the amount's own type.)
         if (chain.Type is ScalarType && bin.Op is not ("<<=" or ">>=")) rhs = Coerce(rhs, chain.Type);
         var current = Load(chain.Type, Collapse(chain), chain.Layout);
-        var result = ApplyBinary(bin.Op[..^1], current, rhs);
+        var result = ApplyBinary(bin.Op[..^1], current, rhs, bin);
         Store(Collapse(chain), result.Id);
         return result;
     }
@@ -5839,8 +5944,8 @@ public sealed class Lowerer
             && !UsesSpecConstant(b.Right) && EvalConst(b.Right) is { } cv
             && CValType(cv) is ScalarType cs && cs.Kind != target.Kind
             && CanImplicitlyConvert(cs, target) && FoldConversion(cv, target) is { } folded)
-            return ApplyBinary(b.Op, l, Materialize(folded));
-        return ApplyBinary(b.Op, l, LowerExpr(b.Right));
+            return ApplyBinary(b.Op, l, Materialize(folded), b);
+        return ApplyBinary(b.Op, l, LowerExpr(b.Right), b);
     }
 
     // The type an operand takes when promoted against the other, or null when it already has it.
@@ -5876,7 +5981,11 @@ public sealed class Lowerer
             ? result with { Id = Relax(result.Id), Relaxed = true }
             : result;
 
-    Value ApplyBinary(string op, Value l, Value r)
+    // Whether glslang decorates this AST node's operation NoContraction (PreciseAnalysis), given its result.
+    bool NoContraction(object? node, GlslType result) =>
+        node is not null && _preciseOps.TryGetValue(node, out bool skipInt) && !(skipInt && BaseScalar(result) == Scalar.Int);
+
+    Value ApplyBinary(string op, Value l, Value r, Expr? node = null)
     {
         // Logical ops keep bool operands; shifts keep each operand's own type (glslang does not promote
         // the shift amount to the base type); everything else may need promotion to a common type.
@@ -5884,8 +5993,15 @@ public sealed class Lowerer
             (l, r) = Promote(l, r);
         var result = BinaryResult(op, l, r);
         // A `precise` computation must not be re-associated or fused (e.g. into a multiply-add).
-        if (_noContraction && BaseScalar(result.Type) is not Scalar.Bool)
+        if (NoContraction(node, result.Type))
             _m.Decorate(result.Id, Decoration.NoContraction);
+        // nonuniformEXT is a type qualifier, so an operation on a non-uniform operand is non-uniform too
+        // (glslang decorates the result right after NoContraction).
+        if (_nonUniformIds.Contains(l.Id) || _nonUniformIds.Contains(r.Id))
+        {
+            _m.Decorate(result.Id, Decoration.NonUniform);
+            _nonUniformIds.Add(result.Id);
+        }
         // The operation takes its operands' precision. A bool result carries none.
         return RelaxedResult(l, r) && BaseScalar(result.Type) is not Scalar.Bool
             ? result with { Id = Relax(result.Id), Relaxed = true }
@@ -6062,13 +6178,35 @@ public sealed class Lowerer
         {
             "+" or "-" when BaseScalar(v.Type) == Scalar.Bool => throw Wrong(),
             "+" => v,
-            "-" => new Value(Emit(IsFloating(BaseScalar(v.Type)) ? Op.FNegate : Op.SNegate, SpvType(v.Type), v.Id), v.Type, false),
+            "-" when v.Type is MatrixType mt => NegateMatrix(v, mt),
+            "-" => Negate(u, v),
             "!" => v.Type is ScalarType { Kind: Scalar.Bool }
                 ? new Value(Emit(Op.LogicalNot, SpvType(Types.Bool), v.Id), Types.Bool, false) : throw Wrong(),
             "~" => IsIntegral(BaseScalar(v.Type))
                 ? new Value(Emit(Op.Not, SpvType(v.Type), v.Id), v.Type, false) : throw Wrong(),
             _ => throw new GlslParseException($"unary '{u.Op}' is not lowered yet"),
         };
+    }
+
+    Value Negate(Unary u, Value v)
+    {
+        uint id = Emit(IsFloating(BaseScalar(v.Type)) ? Op.FNegate : Op.SNegate, SpvType(v.Type), v.Id);
+        if (NoContraction(u, v.Type)) _m.Decorate(id, Decoration.NoContraction);
+        return new Value(id, v.Type, false);
+    }
+
+    // SPIR-V negates scalars and vectors only: glslang's createUnaryMatrixOperation negates column by column
+    // (extract, negate per column) and rebuilds the matrix.
+    Value NegateMatrix(Value v, MatrixType mt)
+    {
+        var column = new VectorType(mt.Component, mt.Rows);
+        var cols = new uint[mt.Columns];
+        for (int c = 0; c < mt.Columns; c++)
+        {
+            uint part = Emit(Op.CompositeExtract, SpvType(column), v.Id, (uint)c);
+            cols[c] = Emit(Op.FNegate, SpvType(column), part);
+        }
+        return new Value(Emit(Op.CompositeConstruct, SpvType(mt), cols), mt, false);
     }
 
     Value LowerIncDec(Unary u)
@@ -6083,7 +6221,7 @@ public sealed class Lowerer
         if (type is VectorType vt)
             one = Emit(Op.CompositeConstruct, SpvType(new VectorType(oneScalar, vt.Size)), [.. Enumerable.Repeat(one, vt.Size)]);
         uint id = Emit(ArithOp(u.Op == "++" ? "+" : "-", type), SpvType(type), current.Id, one);
-        if (_noContraction) _m.Decorate(id, Decoration.NoContraction);
+        if (NoContraction(u, type)) _m.Decorate(id, Decoration.NoContraction);
         if (current.Relaxed) Relax(id);
         var updated = new Value(id, type, false, current.Relaxed);
         Store(pointer, updated.Id);
@@ -6119,8 +6257,13 @@ public sealed class Lowerer
 
     // GLSL '?:' evaluates only the selected branch, so it lowers to a real selection with an OpPhi,
     // not OpSelect (which would evaluate both arms). The condition is always a scalar bool.
-    Value LowerConditional(Conditional t)
+    Value LowerConditional(Conditional t) => LowerConditional(t, keepTemp: false, out _);
+
+    // keepTemp: when the ternary branches, hand back its Function temporary as an access chain instead of
+    // loading it. glslang's result IS that l-value, so a call argument copies it only in its own step 2.
+    Value LowerConditional(Conditional t, bool keepTemp, out Chain? tempChain)
     {
+        tempChain = null;
         if (InferType(t.Cond) is not ScalarType { Kind: Scalar.Bool })
             throw new GlslParseException($"a ternary condition must be a boolean expression, not '{Types.Name(InferType(t.Cond))}'");
         // A constant condition picks its arm at compile time (glslang folds this in the AST), so a fully
@@ -6137,7 +6280,11 @@ public sealed class Lowerer
         // block reads as a bare name but is an index into the block, not a symbol, so it forces a branch.
         bool ConstOrSymbol(Expr e) =>
             (e is Ident sym && !_blockMembers.ContainsKey(sym.Name)) || EvalConst(e) is not null;
-        if (common is ScalarType or VectorType && ConstOrSymbol(t.Then) && ConstOrSymbol(t.Else))
+        // SPIR-V 1.4 lets OpSelect take any composite and a scalar condition for vectors, so glslang selects
+        // matrices, arrays and structs too and stops smearing the condition (isOpSelectable/handleAsOpSelect).
+        bool selectable = common is ScalarType or VectorType
+            || version >= SpirVVersion.V1_4 && common is MatrixType or ArrayType or StructType;
+        if (selectable && ConstOrSymbol(t.Then) && ConstOrSymbol(t.Else))
         {
             uint condId = LowerExpr(t.Cond).Id;
             // A constant arm folds to the common type (glslang folds it), so `c ? 1 : 2.0` selects between
@@ -6145,7 +6292,8 @@ public sealed class Lowerer
             // OpSelect result of a ternary with RelaxedPrecision, so neither do we.
             uint thenVal = LowerCoerced(t.Then, common, "ternary").Id;
             uint elseVal = LowerCoerced(t.Else, common, "ternary").Id;
-            if (common is VectorType cv) condId = Splat(new Value(condId, Types.Bool, false), new VectorType(Scalar.Bool, cv.Size)).Id;
+            if (common is VectorType cv && version < SpirVVersion.V1_4)
+                condId = Splat(new Value(condId, Types.Bool, false), new VectorType(Scalar.Bool, cv.Size)).Id;
             return new Value(Emit(Op.Select, SpvType(common), condId, thenVal, elseVal), common, false);
         }
 
@@ -6162,16 +6310,17 @@ public sealed class Lowerer
         int branchAt = _code.Count;   // the OpBranchConditional belongs here, once the else block exists
 
         Label(thenB);
-        Store(temp, LowerCoerced(t.Then, common, "ternary").Id);
+        MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), LowerCoerced(t.Then, common, "ternary"));   // glslang multiTypeStore: a block-member arm copies logically
         Branch(merge);
 
         uint elseB = _m.AllocId();
         Label(elseB);
-        Store(temp, LowerCoerced(t.Else, common, "ternary").Id);
+        MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), LowerCoerced(t.Else, common, "ternary"));   // glslang multiTypeStore: a block-member arm copies logically
         Branch(merge);
 
         _code.Insert(branchAt, InstrPool.Rent(Op.BranchConditional).Add(cond.Id, thenB, elseB));
         Label(merge);
+        if (keepTemp) { tempChain = new Chain(temp, [], common, StorageClass.Function); return default; }
         return Load(common, temp);
     }
 
@@ -6347,7 +6496,7 @@ public sealed class Lowerer
     void DeclareRuntimeDescriptorArray()
     {
         _m.AddCapability(Capability.RuntimeDescriptorArray);
-        _m.AddExtension("SPV_EXT_descriptor_indexing");   // incorporated into SPIR-V 1.5; our targets are all below it
+        AddIncorporatedExtension("SPV_EXT_descriptor_indexing", SpirVVersion.V1_5);
     }
 
     // The capability for non-uniformly indexing a descriptor array, keyed by the indexed resource type.
@@ -6355,7 +6504,9 @@ public sealed class Lowerer
     {
         ImageType => Capability.StorageImageArrayNonUniformIndexing,
         SamplerType or TextureType => Capability.SampledImageArrayNonUniformIndexing,
-        StructType => storage == StorageClass.Uniform ? Capability.UniformBufferArrayNonUniformIndexing : Capability.StorageBufferArrayNonUniformIndexing,
+        // Keyed by the GLSL qualifier, as glslang does: below 1.3 an SSBO array is Uniform-class too.
+        StructType st => storage == StorageClass.Uniform && !_bufferBlockStructs.Contains(st)
+            ? Capability.UniformBufferArrayNonUniformIndexing : Capability.StorageBufferArrayNonUniformIndexing,
         _ => Capability.ShaderNonUniform,
     });
 
@@ -6552,7 +6703,11 @@ public sealed class Lowerer
             // through it in PhysicalStorageBuffer storage.
             case Member m when InferType(m.Target) is BufferReferenceType brt:
             {
-                uint ptr = Load(new BufferReferenceType(brt.Name), Collapse(BuildAccess(m.Target))).Id;
+                // A reference read out of another reference (`node.next.v`) is itself a physical load: Aligned.
+                var refChain = BuildAccess(m.Target);
+                uint ptr = refChain.Physical
+                    ? Emit(Op.Load, SpvType(new BufferReferenceType(brt.Name)), Collapse(refChain), 0x2, PhysAligned(refChain.PhysAlign, refChain.PhysOffset))
+                    : Load(new BufferReferenceType(brt.Name), Collapse(refChain)).Id;
                 BufferRefDefine(brt.Name);
                 var rst = _bufferRefs[brt.Name];
                 int ri = IndexOfField(rst, m.Name);
@@ -6870,7 +7025,9 @@ public sealed class Lowerer
     // other stage. gl_PrimitiveIDIn (the geometry input) stays Input via its own dictionary entry.
     bool BuiltinIsOutput(string name, bool defaultOutput) => name switch
     {
-        "gl_Layer" or "gl_ViewportIndex" or "gl_PrimitiveID" => stage == ShaderStage.Geometry,
+        "gl_PrimitiveID" => stage == ShaderStage.Geometry,
+        // GL_ARB_shader_viewport_layer_array lets the pre-rasterization stages write them too.
+        "gl_Layer" or "gl_ViewportIndex" => stage is ShaderStage.Geometry or ShaderStage.Vertex or ShaderStage.TessEvaluation,
         _ => defaultOutput,
     };
 
@@ -6896,6 +7053,14 @@ public sealed class Lowerer
             throw new GlslParseException($"'{name}' : identifiers starting with 'gl_' are reserved");
     }
 
+    // The SPIR-V version that folded a built-in's extension into core (GlslangToSpv's addIncorporatedExtension
+    // calls): multiview, device group and draw parameters joined core in 1.3. The rest are still extensions.
+    static SpirVVersion BuiltinExtensionCoreVersion(string ext) => ext switch
+    {
+        "SPV_KHR_multiview" or "SPV_KHR_device_group" or "SPV_KHR_shader_draw_parameters" => SpirVVersion.V1_3,
+        _ => (SpirVVersion)uint.MaxValue,
+    };
+
     (GlslType Type, uint VarId) BuiltinVar(string name)
     {
         // gl_HitTEXT is a pure alias of gl_RayTmaxEXT (same RayTmaxKHR built-in); glslang emits one variable
@@ -6917,10 +7082,22 @@ public sealed class Lowerer
         // gl_PrimitiveID/gl_PrimitiveIDIn pull in the Geometry capability ONLY in a fragment shader
         // (GlslangToSpv EbvPrimitiveId). Every other stage that exposes them already declares a capability
         // that covers them, and a ray-tracing stage must not gain a spurious Geometry.
-        if (cap is Capability c
+        if (name is "gl_Layer" or "gl_ViewportIndex" && stage is ShaderStage.Vertex or ShaderStage.TessEvaluation)
+        {
+            // Written from a vertex/tessellation stage (GlslangToSpv EbvLayer/EbvViewportIndex): SPIR-V 1.5 split
+            // SPV_EXT_shader_viewport_index_layer's single ShaderViewportIndexLayerEXT capability into the core
+            // ShaderLayer and ShaderViewportIndex. The Geometry/MultiViewport capabilities are not used here.
+            if (version < SpirVVersion.V1_5)
+            {
+                _m.AddExtension("SPV_EXT_shader_viewport_index_layer");
+                _m.AddCapability(Capability.ShaderViewportIndexLayerEXT);
+            }
+            else _m.AddCapability(name == "gl_Layer" ? Capability.ShaderLayer : Capability.ShaderViewportIndex);
+        }
+        else if (cap is Capability c
             && !(c == Capability.Geometry && name is "gl_PrimitiveID" or "gl_PrimitiveIDIn" && stage != ShaderStage.Fragment))
             _m.AddCapability(c);
-        if (ext is not null) _m.AddExtension(ext);
+        if (ext is not null) AddIncorporatedExtension(ext, BuiltinExtensionCoreVersion(ext));
         var storage = output ? StorageClass.Output : StorageClass.Input;
         uint ptr = _m.TypePointer(storage, SpvType(type));
         uint var = _m.GlobalVariable(ptr, storage);
@@ -7051,6 +7228,14 @@ public sealed class Lowerer
             return Materialize(folded);
 
         var type = Resolve(call.Name);
+        // A buffer reference back to its raw address: uvec2 reinterprets it, uint64_t converts it.
+        if (_bufferRefs.Count > 0 && call.Args.Count == 1
+            && type is VectorType { Component: Scalar.UInt, Size: 2 } or ScalarType { Kind: Scalar.UInt64 }
+            && InferType(call.Args[0]) is BufferReferenceType)
+        {
+            var reference = LowerExpr(call.Args[0]);
+            return new Value(Emit(type is ScalarType ? Op.ConvertPtrToU : Op.Bitcast, SpvType(type), reference.Id), type, false);
+        }
         // glslang evaluates AND converts each argument of a multi-argument vector constructor in turn,
         // so convert each right after it is lowered (rather than lowering all then converting all). It also
         // reuses the previous argument's loaded id when this argument and the one before it are the same
@@ -7219,6 +7404,24 @@ public sealed class Lowerer
         }
 
         throw new GlslParseException($"constructor for '{Types.Name(type)}' is not lowered yet");
+    }
+
+    // `Ref(addr)`: a buffer reference built from a raw address. GL_EXT_buffer_reference_uvec2 reinterprets a
+    // uvec2 (OpBitcast); GL_EXT_buffer_reference2 converts a uint64_t (OpConvertUToPtr). A reference of the
+    // same type passes through.
+    Value LowerReferenceConstructor(Call call)
+    {
+        if (call.Args.Count != 1) throw new GlslParseException($"'{call.Name}' : a buffer reference constructor takes one argument");
+        var target = new BufferReferenceType(call.Name);
+        var arg = LowerExpr(call.Args[0]);
+        if (arg.Type is BufferReferenceType r && r.Name == call.Name) return arg;
+        BufferRefDefine(call.Name);
+        return arg.Type switch
+        {
+            VectorType { Component: Scalar.UInt, Size: 2 } => new Value(Emit(Op.Bitcast, SpvType(target), arg.Id), target, false),
+            ScalarType { Kind: Scalar.UInt64 } => new Value(Emit(Op.ConvertUToPtr, SpvType(target), arg.Id), target, false),
+            _ => throw new GlslParseException($"'{call.Name}' : cannot construct a buffer reference from '{Types.Name(arg.Type)}'"),
+        };
     }
 
     Value LowerStructConstructor(Call call)
@@ -7411,11 +7614,11 @@ public sealed class Lowerer
     static Scalar SignedOfWidth(int w) => w switch { 8 => Scalar.Int8, 16 => Scalar.Int16, 64 => Scalar.Int64, _ => Scalar.Int };
     static Scalar UnsignedOfWidth(int w) => w switch { 8 => Scalar.UInt8, 16 => Scalar.UInt16, 64 => Scalar.UInt64, _ => Scalar.UInt };
 
-    uint HalfType() { _m.AddCapability(Capability.Float16); return _m.TypeFloat(16); }
+    uint HalfType() => _m.TypeFloat(16);   // Float16 comes from Module.PostProcessNarrowTypes, as in glslang
     uint DoubleType() { _m.AddCapability(Capability.Float64); return _m.TypeFloat(64); }
     uint Int64Type(bool signed) { _m.AddCapability(Capability.Int64); return _m.TypeInt(64, signed); }
-    uint Int8Type(bool signed) { _m.AddCapability(Capability.Int8); return _m.TypeInt(8, signed); }
-    uint Int16Type(bool signed) { _m.AddCapability(Capability.Int16); return _m.TypeInt(16, signed); }
+    uint Int8Type(bool signed) => _m.TypeInt(8, signed);   // so do Int8 ...
+    uint Int16Type(bool signed) => _m.TypeInt(16, signed);   // ... and Int16
 
     // Every floating-point kind; they share the F* opcodes and differ only in width.
     static bool IsFloating(Scalar s) => s is Scalar.Float or Scalar.Half or Scalar.Double;
@@ -7698,6 +7901,20 @@ public sealed class Lowerer
                 Store(Collapse(target), value.Id, target.Mem);
             return;
         }
+        // SPIR-V 1.4's OpCopyLogical converts between two aggregates that differ only in decorations, so
+        // glslang uses it instead of the member-wise copy - unless exactly one side holds a bool, which a
+        // block stores as uint and no logical copy can bridge. The target chain comes first, then the copy.
+        if (version >= SpirVVersion.V1_4 && target.Type is StructType or ArrayType
+            && (target.Layout is null && ContainsBool(target.Type)) == (source is null && ContainsBool(value.Type)))
+        {
+            uint pointer = Collapse(target);
+            uint copy = Emit(Op.CopyLogical, SpvType(target.Type, target.Layout), value.Id);
+            if (target.Physical)
+                _code.Add(InstrPool.Rent(Op.Store).Add(pointer, copy, 0x2, PhysAligned(target.PhysAlign, target.PhysOffset)));
+            else
+                Store(pointer, copy, target.Mem);
+            return;
+        }
         // A scalar/vector leaf whose SPIR-V types differ across the two universes only does so because
         // one stores a bool as uint; convert to what the target holds, THEN build the target chain
         // (glslang emits the conversion before the store's access chain).
@@ -7721,7 +7938,8 @@ public sealed class Lowerer
         {
             var stored = source is not null ? BlockStored(members[i]) : members[i];
             uint part = Emit(Op.CompositeExtract, SpvType(stored, source), value.Id, (uint)i);
-            MultiTypeStore(at with { Indices = [MemberIndexConst(i)], Type = members[i] },
+            // A block target holds its bools as uint too, so the leaf converts into what it stores.
+            MultiTypeStore(at with { Indices = [MemberIndexConst(i)], Type = target.Layout is not null ? BlockStored(members[i]) : members[i] },
                            new Value(part, stored, false, Layout: source));
         }
     }
@@ -7921,6 +8139,7 @@ public sealed class Lowerer
         Method { Name: "length" } => Types.Int,
         Call c when Types.IsTypeName(c.Name) => c.IsArray ? ArrayCtorType(c, Resolve(c.Name)) : Resolve(c.Name),
         Call c when _structs.TryGetValue(c.Name, out var st) => c.IsArray ? ArrayCtorType(c, st) : st,
+        Call { IsArray: false } c when _bufferRefs.ContainsKey(c.Name) => new BufferReferenceType(c.Name),
         Call c when CallsUserFunction(c) => ResolveOverload(_userFunctions[c.Name], c.Args).ReturnType,
         Call c => InferBuiltinType(c),
         _ => throw new GlslParseException($"cannot infer type of '{e.GetType().Name}' for overload resolution"),
@@ -7962,7 +8181,7 @@ public sealed class Lowerer
         // (which fell back to float, breaking its use as a ternary condition) and for the ballot family,
         // which crosses bool<->uvec4 and yields uint bit counts.
         "subgroupElect" or "subgroupAll" or "subgroupAny" or "subgroupAllEqual"
-            or "subgroupInverseBallot" or "subgroupBallotBitExtract" => Types.Bool,
+            or "subgroupInverseBallot" or "subgroupBallotBitExtract" or "helperInvocationEXT" => Types.Bool,
         "subgroupBallot" or "subgroupPartitionNV" => new VectorType(Scalar.UInt, 4),
         "subgroupBallotBitCount" or "subgroupBallotInclusiveBitCount" or "subgroupBallotExclusiveBitCount"
             or "subgroupBallotFindLSB" or "subgroupBallotFindMSB" => Types.UInt,
@@ -8126,19 +8345,41 @@ public sealed class Lowerer
     // that uses it: the pointee struct+pointer right after the enclosing struct, its names after the
     // enclosing struct's names, and its decorations after the enclosing struct's decorations. So the
     // three phases are separate and driven by BuildBlock; a deref just needs the types to exist.
-    void BufferRefDefine(string name) => BufferRefTypes(name);
-
-    void BufferRefTypes(string name)
+    // Outside a block (a deref, a local) the reference is a full type use, so its names and decorations
+    // follow its types directly.
+    void BufferRefDefine(string name)
     {
-        if (!_definedBufferRefs.Add(name)) return;
+        foreach (var r in BufferRefTypes(name)) { BufferRefNames(r); BufferRefDecorate(r); }
+    }
+
+    // Defines a reference's pointee struct and patches its forward pointer, returning every reference type
+    // this defined, in order. Like glslang's deferredForwardPointers, a member referencing a type not yet
+    // defined (`A { B b; }`, or a self-reference in progress) gets its struct right after this one, before
+    // this pointer is patched.
+    List<string> BufferRefTypes(string name)
+    {
+        var defined = new List<string>();
+        if (!_definedBufferRefs.Add(name)) return defined;
+        defined.Add(name);
         uint ptrId = BufferRefPtr(name);
         var st = _bufferRefs[name];
         uint[] memberIds = [.. st.Fields.Select(f => BufferRefMemberType(f.Type))];
         uint structId = _m.TypeStructUnique(memberIds);
         _bufferRefStructIds[name] = structId;
         _bufferRefMemberIds[name] = memberIds;
+        foreach (var f in st.Fields)
+            if (ReferenceIn(f.Type) is string inner) defined.AddRange(BufferRefTypes(inner));
         _m.TypePointerForward(ptrId, StorageClass.PhysicalStorageBuffer, structId);
+        return defined;
     }
+
+    static string? ReferenceIn(GlslType t) => t switch
+    {
+        BufferReferenceType r => r.Name,
+        ArrayType a => ReferenceIn(a.Element),
+        RuntimeArrayType r => ReferenceIn(r.Element),
+        _ => null,
+    };
 
     // Builds a member type without emitting its array-stride decoration; the stride is deferred to the
     // decorate phase so it lands after the enclosing block's decorations, as glslang orders it.

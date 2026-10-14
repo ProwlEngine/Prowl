@@ -1,0 +1,7 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x = 1) in;
+layout(buffer_reference) buffer Node;
+layout(buffer_reference, std430) buffer Node { float v; Node next; };
+layout(push_constant) uniform P { Node head; } pc;
+void main() { pc.head.next.v = pc.head.v + 1.0; }

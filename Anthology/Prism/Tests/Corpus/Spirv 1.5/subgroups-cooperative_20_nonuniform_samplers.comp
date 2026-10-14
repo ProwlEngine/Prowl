@@ -1,0 +1,11 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : require
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0) uniform sampler2D tex[];
+layout(std430, set = 0, binding = 1) buffer Data { vec4 values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    uint idx = uint(values[i].w);
+    values[i] = texture(tex[nonuniformEXT(idx)], values[i].xy);
+}

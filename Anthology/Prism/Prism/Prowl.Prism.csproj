@@ -9,7 +9,7 @@
     <PackageId>Prowl.Prism</PackageId>
     <Title>Prowl.Prism</Title>
     <Description>A GLSL to SPIR-V compiler for the Prowl engine. Parses GLSL (preprocessor, token stream,
-    full AST), lowers to SPIR-V with a spirv-opt-shaped optimizer pipeline, and targets Vulkan SPIR-V 1.0-1.4.
+    full AST), lowers to SPIR-V with a spirv-opt-shaped optimizer pipeline, and targets Vulkan SPIR-V 1.0-1.5.
     Byte-for-byte matched against glslang's front-end output over a 1200+ shader corpus.</Description>
     <PackageTags>shader;glsl;glsl-to-spirv;spirv;vulkan;compiler;gamedev;game-engine;prowl;dotnet;csharp</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

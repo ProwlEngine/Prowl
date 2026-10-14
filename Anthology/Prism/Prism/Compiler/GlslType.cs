@@ -18,7 +18,7 @@ public sealed record MatrixType(int Columns, int Rows, Scalar Component = Scalar
 public sealed record SamplerType(Dim Dim, bool Arrayed, bool Shadow, Scalar Sampled = Scalar.Float, bool Multisampled = false) : GlslType;   // combined sampled image
 public sealed record TextureType(Dim Dim, bool Arrayed, bool Shadow) : GlslType;   // bare image (separate texture)
 public sealed record ImageType(Dim Dim, bool Arrayed, ImageFormat Format, Scalar Sampled = Scalar.Float, bool Multisampled = false) : GlslType;   // storage image (image2D/uimage2D/iimage2D)
-public sealed record PureSamplerType : GlslType;                                   // bare sampler state
+public sealed record PureSamplerType(bool Shadow = false) : GlslType;                // bare sampler state (sampler / samplerShadow)
 public sealed record AccelStructType : GlslType;                                   // accelerationStructureEXT
 public sealed record RayQueryType : GlslType;                                      // rayQueryEXT (a Function-local)
 // SpecLength is the specialization-constant length expression (a bare spec-const identifier or an arithmetic
@@ -168,6 +168,7 @@ public static class Types
         "textureCube" => new TextureType(Dim.Cube, Arrayed: false, Shadow: false),
         "texture2DArray" => new TextureType(Dim.D2, Arrayed: true, Shadow: false),
         "sampler" => new PureSamplerType(),
+        "samplerShadow" => new PureSamplerType(Shadow: true),
         "accelerationStructureEXT" => new AccelStructType(),
         "accelerationStructureNV" => new AccelStructType(),
         "rayQueryEXT" => new RayQueryType(),

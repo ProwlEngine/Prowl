@@ -39,7 +39,7 @@ public static class TestCorpus
     static readonly Dictionary<string, SpirVVersion> VersionByFolder = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Spirv 1.0"] = SpirVVersion.V1_0, ["Spirv 1.1"] = SpirVVersion.V1_1, ["Spirv 1.2"] = SpirVVersion.V1_2,
-        ["Spirv 1.3"] = SpirVVersion.V1_3, ["Spirv 1.4"] = SpirVVersion.V1_4,
+        ["Spirv 1.3"] = SpirVVersion.V1_3, ["Spirv 1.4"] = SpirVVersion.V1_4, ["Spirv 1.5"] = SpirVVersion.V1_5,
     };
 
     public static IReadOnlyList<Snippet> All { get; }

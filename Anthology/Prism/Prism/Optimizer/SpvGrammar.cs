@@ -74,13 +74,14 @@ internal static class SpvGrammar
     {
         if (Cacheable.Contains(opcode))
         {
-            var (ri, ids) = ClassifyCache.GetOrAdd(((long)opcode << 20) | (uint)operands.Length, _ =>
+            long key = ((long)opcode << 20) | (uint)operands.Length;
+            if (!ClassifyCache.TryGetValue(key, out var hit))   // no capturing lambda on the hot hit path
             {
                 ClassifyCompute(opcode, new uint[operands.Length], out int r, out bool[] b);
-                return (r, b);
-            });
-            resultIndex = ri;
-            isId = ids;
+                hit = ClassifyCache.GetOrAdd(key, (r, b));
+            }
+            resultIndex = hit.Item1;
+            isId = hit.Item2;
             return;
         }
         ClassifyCompute(opcode, operands, out resultIndex, out isId);

@@ -29,6 +29,7 @@ public static class GlslCompiler
             var unit = Parser.Parse(source, defines, includes);
             var module = (_lowerer ??= new Lowerer()).Reset(stage, target, autoMapLocations).Lower(unit);
             var words = module.Serialize();
+            if (optimize) _lowerer.ReleaseCompileState();   // the front-end's state is dead weight while optimizing
             if (optimize) words = Optimizer.SpirVOptimizer.Optimize(words);
             return new Prowl.Prism.SpirVModule(words);
         });

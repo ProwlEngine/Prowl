@@ -20,7 +20,7 @@ namespace Prowl.Prism.Optimizer;
 /// The dominant remaining blocker is NOT missing capability -- it is byte-parity: matching spirv-opt's exact
 /// scratch/throwaway id-allocation and fold ORDER. Nearly every remaining red is functionally correct + valid.
 /// </summary>
-public static class SpirVOptimizer
+public static partial class SpirVOptimizer
 {
     const int OpString = 7, OpExtInst = 12, OpFunction = 54, OpFunctionCall = 57, OpVariable = 59,
         OpLoad = 61, OpStore = 62, OpCopyMemory = 63, OpCopyMemorySized = 64, OpAccessChain = 65,
@@ -42,13 +42,16 @@ public static class SpirVOptimizer
         ("LocalSingleBlockElim", LocalSingleBlockElim), ("LocalSingleStoreElim", LocalSingleStoreElim),
         ("DeadCodeElim", DeadCodeElim), ("SsaRewrite", SsaRewrite), ("DeadCodeElim", DeadCodeElim),
         ("Ccp", Ccp), ("DeadCodeElim", DeadCodeElim), ("LoopUnroll", LoopUnroll), ("DeadBranchElim", DeadBranchElim),
-        ("GlobalCse", GlobalCse),
-        ("Simplification", Simplification),
-        ("RedundantLoadElim", RedundantLoadElim), ("DeadCodeElim", DeadCodeElim), ("GlobalCse", GlobalCse), ("CombineAccessChains", CombineAccessChains),
-        ("Simplification", Simplification),
-        ("DeadCodeElim", DeadCodeElim), ("BlockMerge", BlockMerge),
-        ("ResolveDegenerateSwitchMerge", ResolveDegenerateSwitchMerge),
-        ("DeadCodeElim", DeadCodeElim), ("RecomputeBound", RecomputeBound),
+        ("GlobalCse", GlobalCse), ("CombineAccessChains", CombineAccessChains), ("Simplification", Simplification),
+        ("ScalarReplacement", ScalarReplacement), ("LocalAccessChainConvert", LocalAccessChainConvert),
+        ("LocalSingleBlockElim", LocalSingleBlockElim), ("LocalSingleStoreElim", LocalSingleStoreElim),
+        ("DeadCodeElim", DeadCodeElim), ("SsaRewrite", SsaRewrite), ("DeadCodeElim", DeadCodeElim),
+        ("VectorDce", VectorDce),
+        ("DeadBranchElim", DeadBranchElim), ("Simplification", Simplification), ("IfConversion", IfConversion),
+        ("ReduceLoadSize", ReduceLoadSize),
+        ("DeadCodeElim", DeadCodeElim), ("BlockMerge", BlockMerge), ("GlobalCse", GlobalCse),
+        ("DeadBranchElim", DeadBranchElim), ("BlockMerge", BlockMerge), ("Simplification", Simplification),
+        ("RecomputeBound", RecomputeBound),
     };
 
     // Per-pass time + allocation accumulators for warm profiling (enabled by PRISM_TRACE_TIME); keyed by name.
@@ -142,13 +145,14 @@ public static class SpirVOptimizer
         }
 
         // Every instruction inside a function maps to that function's entry OpLabel.
-        var entryOf = new Dictionary<SpvInstr, SpvInstr>();
+        // (Stamped, with the entry label in Tag.)
+        int hasEntry = SpvInstr.NewStamp();
         SpvInstr? entry = null; bool inFn = false;
         foreach (var ins in m.Instrs)
         {
             if (ins.Opcode == OpFunction) { inFn = true; entry = null; }
             if (ins.Opcode == OpLabel && inFn && entry is null) entry = ins;
-            if (inFn && entry is not null) entryOf[ins] = entry;
+            if (inFn && entry is not null) { ins.Mark = hasEntry; ins.Tag = entry; }
             if (ins.Opcode == OpFunctionEnd) inFn = false;
         }
 
@@ -178,7 +182,8 @@ public static class SpirVOptimizer
             {
                 if (!ValidUse(u, v.Operands[1])) { ok = false; break; }
                 if (u.Opcode is 71 or 72 or 332 or 15) continue;   // module-level uses (decorations, entry point) have no block
-                if (!entryOf.TryGetValue(u, out var e)) { ok = false; break; }
+                if (u.Mark != hasEntry) { ok = false; break; }
+                var e = (SpvInstr)u.Tag!;
                 if (target is null) target = e; else if (target != e) { ok = false; break; }
             }
             if (ok && target is not null) toMove.Add((v, target));
@@ -226,7 +231,7 @@ public static class SpirVOptimizer
         var afterEntry = new Dictionary<SpvInstr, List<SpvInstr>>();
         var movedSet = new HashSet<SpvInstr>();
         foreach (var (v, e) in toMove) { movedSet.Add(v); (afterEntry.TryGetValue(e, out var l) ? l : afterEntry[e] = []).Insert(0, v); }
-        var relocated = new List<SpvInstr>(m.Instrs.Count + newTypes.Count);
+        var relocated = SpvModule.RentInstrList(m.Instrs.Count + newTypes.Count);
         bool typesPlaced = false;
         foreach (var ins in m.Instrs)
         {
@@ -235,33 +240,11 @@ public static class SpirVOptimizer
             relocated.Add(ins);
             if (afterEntry.TryGetValue(ins, out var vs)) relocated.AddRange(vs);
         }
-        m.Instrs = relocated;
+        m.SetInstrs(relocated);
         m.Header[3] = nextId;
     }
 
     // spirv-opt tightens the module's id bound to (highest id in use) + 1 after removing dead instructions.
-    // A degenerate switch (OpSwitch %sel %default with no cases) is unconditional. When its selection merge
-    // block is also an enclosing loop's merge, the two headers name one block as their merge -- invalid. This
-    // arises from glslang's do-while(false) idiom wrapping a loop body once block-merging has coalesced the
-    // two merge blocks. spirv-opt removes the switch entirely; do the same: fold it to OpBranch(default) and
-    // drop the redundant selection merge, leaving the loop merge intact.
-    static void ResolveDegenerateSwitchMerge(SpvModule m)
-    {
-        var loopMerges = new HashSet<uint>();
-        foreach (var ins in m.Instrs) if (ins.Opcode == 246) loopMerges.Add(ins.Operands[0]);
-        if (loopMerges.Count == 0) return;
-        var drop = new HashSet<SpvInstr>();
-        for (int i = 0; i + 1 < m.Instrs.Count; i++)
-        {
-            if (m.Instrs[i].Opcode != 247) continue;                                  // OpSelectionMerge
-            var sw = m.Instrs[i + 1];
-            if (sw.Opcode != 251 || sw.Operands.Length != 2) continue;                // no-case OpSwitch
-            if (!loopMerges.Contains(m.Instrs[i].Operands[0])) continue;
-            sw.Opcode = 249; sw.Operands = [sw.Operands[1]];                          // OpBranch default
-            drop.Add(m.Instrs[i]);
-        }
-        if (drop.Count > 0) m.Instrs.RemoveAll(drop.Contains);
-    }
 
     static void RecomputeBound(SpvModule m)
     {
@@ -298,73 +281,6 @@ public static class SpirVOptimizer
         8 or 317 or       // OpLine, OpNoLine
         330;              // OpModuleProcessed
 
-    // Commons a load with an earlier load of the same pointer in the same block when no store to the same
-    // base variable (nor any call/barrier/atomic/image-write) sits between them: the later load's result is
-    // rewritten to the earlier and the later load removed. Ids are not renumbered. A per-block subset of
-    // spirv-opt's redundancy elimination. NOTE: this over-commons vs spirv-opt's value-number table (which
-    // only commons read-only loads, never opaque/storage-image loads); a strict read-only version regressed
-    // because Private-var loads (spirv-opt's PrivateToLocal territory, not implemented) then went uncommoned.
-    static void RedundantLoadElim(SpvModule m)
-    {
-        var def = m.DefMap();
-        var lastLoad = new Dictionary<uint, uint>();
-        var kill = new HashSet<SpvInstr>();
-
-        uint RootVar(uint id)
-        {
-            for (int guard = 0; guard < 64 && def.TryGetValue(id, out var d); guard++)
-            {
-                if (d.Opcode is OpAccessChain or OpInBoundsAccessChain or OpPtrAccessChain or OpInBoundsPtrAccessChain or OpCopyObject)
-                    id = d.Operands[2];
-                else break;
-            }
-            return id;
-        }
-
-        foreach (var ins in m.Instrs)
-        {
-            switch (ins.Opcode)
-            {
-                case OpLabel:
-                    lastLoad.Clear();
-                    break;
-                case OpLoad when ins.Operands.Length == 3:
-                {
-                    // Loads of an image, sampler, or sampled image get their own value number in spirv-opt and
-                    // must stay in their block, so they are never commoned by any pass.
-                    if (def.TryGetValue(ins.Operands[0], out var lt) && lt.Opcode is 25 or 26 or 27) break;
-                    // Only Function-storage loads are commoned per-block (spirv-opt's LocalSingleBlockLoadStore
-                    // Elim). Read-only loads are commoned cross-block by GlobalCse; writable module-scope vars
-                    // (Output/SSBO/Workgroup) are never commoned by spirv-opt even with no intervening store.
-                    if (!(def.TryGetValue(RootVar(ins.Operands[2]), out var rv) && rv.Opcode == OpVariable && rv.Operands[2] == 7)) break;
-                    uint ptr = ins.Operands[2], res = ins.Operands[1];
-                    if (lastLoad.TryGetValue(ptr, out uint earlier)) { m.ReplaceUses(res, earlier); kill.Add(ins); }
-                    else lastLoad[ptr] = res;
-                    break;
-                }
-                case OpStore:
-                {
-                    uint root = RootVar(ins.Operands[0]);
-                    foreach (var key in lastLoad.Keys.ToList())
-                        if (RootVar(key) == root) lastLoad.Remove(key);
-                    break;
-                }
-                case OpFunctionCall:
-                case OpControlBarrier:
-                case OpMemoryBarrier:
-                case OpCopyMemory:
-                case OpCopyMemorySized:
-                case OpImageWrite:
-                    lastLoad.Clear();
-                    break;
-                default:
-                    if (ins.Opcode is >= 227 and <= 242) lastLoad.Clear();   // OpAtomic* may write memory
-                    break;
-            }
-        }
-
-        if (kill.Count > 0) m.Instrs.RemoveAll(kill.Contains);
-    }
 
     const int OpTypeFloat = 22, OpTypeVector = 23, OpConstant = 43, OpConstantComposite = 44,
         OpConstantNull = 46, OpDecorate = 71, OpCompositeConstruct = 80, OpCompositeExtract = 81,
@@ -380,8 +296,12 @@ public static class SpirVOptimizer
     {
         var def = m.DefMap();
         var bufferBlocks = new HashSet<uint>();
+        var nonWritable = new HashSet<uint>();
         foreach (var ins in m.Instrs)
+        {
             if (ins.Opcode == OpDecorate && ins.Operands.Length >= 2 && ins.Operands[1] == 3) bufferBlocks.Add(ins.Operands[0]);   // Decoration BufferBlock
+            if (ins.Opcode == OpDecorate && ins.Operands.Length >= 2 && ins.Operands[1] == 24) nonWritable.Add(ins.Operands[0]);   // Decoration NonWritable
+        }
 
         uint RootVar(uint id)
         {
@@ -404,15 +324,27 @@ public static class SpirVOptimizer
             // spirv-opt gives a load of an image, sampler, or sampled image its own value number so it never
             // commons -- such loads must stay in the basic block that uses them. Only other read-only loads number.
             if (t is not null && t.Opcode is 25 or 26 or 27) return false;
-            if (sc is 1 or 9) return true;
-            if (sc == 2 && def.TryGetValue(v.Operands[0], out var pt) && pt.Operands.Length >= 3) return !bufferBlocks.Contains(pt.Operands[2]);
-            return false;
+            if (sc is 0 or 1 or 9) return true;
+            if (sc == 2 && def.TryGetValue(v.Operands[0], out var pt) && pt.Operands.Length >= 3 && !bufferBlocks.Contains(pt.Operands[2])) return true;
+            return nonWritable.Contains(v.Operands[1]);   // IsReadOnlyPointerShaders: a NonWritable variable
         }
         // GLSL.std.450 extended instructions are pure combinators, so identical ones common like arithmetic.
         uint glslExt = 0;
         foreach (var ins in m.Instrs) if (ins.Opcode == 11 && ins.Operands.Length >= 1) { glslExt = ins.Operands[0]; break; }   // OpExtInstImport (only GLSL.std.450 is imported)
-        bool PureExtInst(SpvInstr ins) => ins.Opcode == 12 && glslExt != 0 && ins.Operands.Length >= 3 && ins.Operands[2] == glslExt;
-        bool CanValueNumber(SpvInstr ins) => Cseable(ins.Opcode) || ReadOnlyLoad(ins) || PureExtInst(ins);
+        bool PureExtInst(SpvInstr ins) => ins.Opcode == 12 && glslExt != 0 && ins.Operands.Length >= 4 && ins.Operands[2] == glslExt && AdceGlslCombinators.Contains(ins.Operands[3]);
+        // Phis value-number by their (value, label) operands too; identical ones can only share a block.
+        // ValueNumberTable: only combinators (IRContext's shader set) share value numbers -- derivatives,
+        // for instance, are not combinators and always stay distinct.
+        bool CanValueNumber(SpvInstr ins) => (Cseable(ins.Opcode) && AdceCombinators.Contains(ins.Opcode)) || ReadOnlyLoad(ins) || PureExtInst(ins) || ins.Opcode == 245;
+
+        // ValueTableEqual also requires HaveTheSameDecorations: the decoration payloads (target dropped) as sets.
+        var decoSig = new Dictionary<uint, SortedSet<string>>();
+        foreach (var ins in m.Instrs)
+        {
+            if (ins.Opcode is not (OpDecorate or 72 or 332 or 5632) || ins.Operands.Length < 1) continue;
+            var sig = ins.Opcode + ":" + string.Join(",", ins.Operands.Skip(1));
+            (decoSig.TryGetValue(ins.Operands[0], out var set) ? set : decoSig[ins.Operands[0]] = new SortedSet<string>(System.StringComparer.Ordinal)).Add(sig);
+        }
 
         var kill = new HashSet<SpvInstr>();
         int f = 0;
@@ -421,13 +353,17 @@ public static class SpirVOptimizer
             if (m.Instrs[f].Opcode != OpFunction) { f++; continue; }
             int end = f;
             while (end < m.Instrs.Count && m.Instrs[end].Opcode != OpFunctionEnd) end++;
-            CseFunction(m, f, end, kill, CanValueNumber);
+            CseFunction(m, f, end, kill, CanValueNumber, decoSig);
             f = end + 1;
         }
         if (kill.Count > 0) m.Instrs.RemoveAll(kill.Contains);
     }
 
-    static void CseFunction(SpvModule m, int start, int end, HashSet<SpvInstr> kill, System.Func<SpvInstr, bool> canVN)
+    // spvOpcodeIsCommutativeBinaryOperator.
+    static bool IsCommutativeBinary(int op) => op is 401 or 402 or 128 or 129 or 132 or 133 or 148 or 149 or 151 or 152
+        or 197 or 198 or 199 or 162 or 163 or 164 or 165 or 166 or 167 or 170 or 171 or 180 or 181 or 182 or 183;
+
+    static void CseFunction(SpvModule m, int start, int end, HashSet<SpvInstr> kill, System.Func<SpvInstr, bool> canVN, Dictionary<uint, SortedSet<string>> decoSig)
     {
         // Blocks: each OpLabel begins one; the instruction range runs to its terminator.
         var labelOf = new List<uint>();
@@ -465,14 +401,7 @@ public static class SpirVOptimizer
 
         // Function-scoped user map so common-subexpression replacement is O(uses), not a whole-module scan per
         // CSE (value-numbered results are function-local SSA, so no cross-function or decoration uses to touch).
-        var users = new Dictionary<uint, List<SpvInstr>>();
-        for (int i = start; i <= end; i++)
-        {
-            var ins = m.Instrs[i];
-            ins.Classify(out int ri, out bool[] isId);
-            for (int k = 0; k < ins.Operands.Length; k++)
-                if (isId[k] && k != ri) (users.TryGetValue(ins.Operands[k], out var l) ? l : users[ins.Operands[k]] = []).Add(ins);
-        }
+        var users = m.UserMapRange(start, end + 1);
         void Replace(uint from, uint to)
         {
             if (!users.TryGetValue(from, out var us)) return;
@@ -485,10 +414,10 @@ public static class SpirVOptimizer
             us.Clear();
         }
 
-        var table = new Dictionary<string, uint>();
+        var table = new Dictionary<ValueKey, uint>();
         void Dfs(int b)
         {
-            var added = new List<string>();
+            var added = new List<ValueKey>();
             int s = blockStart[b] + 1;
             int e = b + 1 < labelOf.Count ? blockStart[b + 1] : end;
             for (int i = s; i < e; i++)
@@ -497,9 +426,7 @@ public static class SpirVOptimizer
                 if (!canVN(ins)) continue;
                 ins.Classify(out int ri, out _);
                 if (ri < 0) continue;
-                var sb = new System.Text.StringBuilder().Append(ins.Opcode);
-                for (int k = 0; k < ins.Operands.Length; k++) if (k != ri) sb.Append(',').Append(ins.Operands[k]);
-                string key = sb.ToString();
+                var key = new ValueKey(ins, ri, decoSig.GetValueOrDefault(ins.Operands[ri]));
                 if (table.TryGetValue(key, out uint rep)) { Replace(ins.Operands[ri], rep); kill.Add(ins); }
                 else { table[key] = ins.Operands[ri]; added.Add(key); }
             }
@@ -509,6 +436,31 @@ public static class SpirVOptimizer
         Dfs(0);
     }
 
+    // A value-number key: opcode, the operands but the result (commutative pair in normal order) and the
+    // result's decoration set, snapshotted when made -- later rewrites of the instruction do not move it.
+    sealed class ValueKey : IEquatable<ValueKey>
+    {
+        readonly int _opcode, _hash;
+        readonly uint[] _ops;
+        readonly SortedSet<string>? _deco;
+
+        public ValueKey(SpvInstr ins, int ri, SortedSet<string>? deco)
+        {
+            _opcode = ins.Opcode; _deco = deco;
+            var o = ins.Operands;
+            bool swap = IsCommutativeBinary(ins.Opcode) && ri == 1 && o.Length == 4 && o[2] > o[3];
+            _ops = new uint[o.Length - 1];
+            var h = new HashCode(); h.Add(_opcode);
+            for (int k = 0, j = 0; k < o.Length; k++) if (k != ri) { uint w = swap && k >= 2 ? o[5 - k] : o[k]; _ops[j++] = w; h.Add(w); }
+            _hash = h.ToHashCode();
+        }
+
+        public bool Equals(ValueKey? x) => x is not null && x._hash == _hash && x._opcode == _opcode && x._ops.AsSpan().SequenceEqual(_ops)
+            && (x._deco is null ? _deco is null : _deco is not null && x._deco.SetEquals(_deco));
+        public override bool Equals(object? obj) => Equals(obj as ValueKey);
+        public override int GetHashCode() => _hash;
+    }
+
     // spirv-opt's BlockMerge: a block P ending in an unconditional OpBranch to B, where B has exactly one
     // predecessor, absorbs B (P's branch and B's label are dropped, B's instructions append to P). Guards:
     // two merge/continue targets never merge; a loop header only absorbs its (non-merge) test block whose
@@ -516,7 +468,7 @@ public static class SpirVOptimizer
     static void BlockMerge(SpvModule m)
     {
         int f = 0;
-        var newList = new List<SpvInstr>(m.Instrs.Count);
+        var newList = SpvModule.RentInstrList(m.Instrs.Count);
         while (f < m.Instrs.Count)
         {
             if (m.Instrs[f].Opcode != OpFunction) { newList.Add(m.Instrs[f]); f++; continue; }
@@ -526,7 +478,7 @@ public static class SpirVOptimizer
             newList.Add(m.Instrs[end]);   // OpFunctionEnd
             f = end + 1;
         }
-        m.Instrs = newList;
+        m.SetInstrs(newList);
     }
 
     static void MergeFunc(SpvModule m, int start, int end, List<SpvInstr> outList)
@@ -555,54 +507,69 @@ public static class SpirVOptimizer
                 else if (t.Opcode == 247) { mergeTargets.Add(t.Operands[0]); isHeader[b] = true; }                                   // OpSelectionMerge
             }
         void CountPred(uint lbl) { preds[lbl] = preds.GetValueOrDefault(lbl) + 1; }
+        // A switch's case targets (other than its merge): such a block must stay structurally dominated by the
+        // OpSwitch, so it never absorbs a merge/continue target (CanMergeWithSuccessor's switch rule).
+        var caseTargets = new HashSet<uint>();
         for (int b = 0; b < n; b++)
         {
             var term = m.Instrs[BlockEnd(b) - 1];
             if (term.Opcode == 249) CountPred(term.Operands[0]);
             else if (term.Opcode == 250) { CountPred(term.Operands[1]); CountPred(term.Operands[2]); }
-            else if (term.Opcode == 251) { CountPred(term.Operands[1]); for (int k = 3; k < term.Operands.Length; k += 2) CountPred(term.Operands[k]); }
+            else if (term.Opcode == 251)
+            {
+                CountPred(term.Operands[1]); for (int k = 3; k < term.Operands.Length; k += 2) CountPred(term.Operands[k]);
+                uint switchMerge = 0;
+                for (int i = blockStart[b] + 1; i < BlockEnd(b); i++) if (m.Instrs[i].Opcode == 247) switchMerge = m.Instrs[i].Operands[0];
+                for (int k = 1; k < term.Operands.Length; k += 2) if (term.Operands[k] != switchMerge) caseTargets.Add(term.Operands[k]);
+            }
         }
 
+        // BlockMergePass: in layout order, each live block keeps absorbing its successor while
+        // CanMergeWithSuccessor holds for the MERGED block -- it keeps the first block's label (so a merge block
+        // stays a merge block), carries whichever merge instruction it currently holds, and ends with the last
+        // absorbed block's terminator.
         var absorbs = new Dictionary<int, int>();   // P -> B
         var absorbedBy = new Dictionary<int, int>();
+        var tail = new int[n];        // last block of each live chain
+        var chainMerge = new uint[n]; // label named by the chain's merge instruction (0 = none)
         for (int b = 0; b < n; b++)
         {
-            var term = m.Instrs[BlockEnd(b) - 1];
-            if (term.Opcode != 249) continue;                       // must end in unconditional OpBranch
-            if (!idOfBlock.TryGetValue(term.Operands[0], out int sb)) continue;
-            if (preds.GetValueOrDefault(LabelId(sb)) != 1) continue; // successor has exactly one predecessor
-            if (absorbedBy.ContainsKey(sb)) continue;
-            bool predMerge = mergeTargets.Contains(LabelId(b)) || continueTargets.Contains(LabelId(b));
-            bool succMerge = mergeTargets.Contains(LabelId(sb)) || continueTargets.Contains(LabelId(sb));
-            if (predMerge && succMerge) continue;
-            if (predMerge && continueTargets.Contains(LabelId(sb))) continue;
-            if (isHeader[b])
-            {
-                // Header only merges its own merge block, or (loop header) a non-header successor whose
-                // terminator is a branch.
-                uint hdrMerge = 0;
-                for (int i = blockStart[b] + 1; i < BlockEnd(b); i++) { if (m.Instrs[i].Opcode is 246 or 247) { hdrMerge = m.Instrs[i].Operands[0]; break; } }
-                if (LabelId(sb) != hdrMerge)
-                {
-                    if (isHeader[sb]) continue;
-                    var st = m.Instrs[BlockEnd(sb) - 1].Opcode;
-                    if (st is not (249 or 250)) continue;
-                }
-            }
-            absorbs[b] = sb; absorbedBy[sb] = b;
+            tail[b] = b;
+            for (int i = blockStart[b] + 1; i < BlockEnd(b); i++) if (m.Instrs[i].Opcode is 246 or 247) { chainMerge[b] = m.Instrs[i].Operands[0]; break; }
         }
-        // A merge chain may hold at most one structured header (two headers cannot merge into one block).
-        // Cut the link just before a second header would enter the chain.
-        void CutChain(int root)
+        var droppedMerges = new HashSet<uint>();   // headers whose construct vanished by absorbing their merge
+        bool IsMergeTarget(uint l) => mergeTargets.Contains(l) && !droppedMerges.Contains(l);
+        for (int b = 0; b < n; b++)
         {
-            int cur = root; bool sawHeader = isHeader[cur];
-            while (absorbs.TryGetValue(cur, out int sb))
+            if (absorbedBy.ContainsKey(b)) continue;
+            while (true)
             {
-                if (isHeader[sb]) { if (sawHeader) { absorbs.Remove(cur); absorbedBy.Remove(sb); CutChain(sb); return; } sawHeader = true; }
-                cur = sb;
+                var term = m.Instrs[BlockEnd(tail[b]) - 1];
+                if (term.Opcode != 249) break;                          // must end in unconditional OpBranch
+                if (!idOfBlock.TryGetValue(term.Operands[0], out int sb) || sb == b) break;
+                uint succ = LabelId(sb);
+                if (preds.GetValueOrDefault(succ) != 1) break;         // successor has exactly one predecessor
+                if (absorbedBy.ContainsKey(sb)) break;
+                bool predMerge = IsMergeTarget(LabelId(b));
+                bool succMerge = IsMergeTarget(succ);
+                bool succContinue = continueTargets.Contains(succ);
+                if (predMerge && succMerge) break;                     // two merges cannot become one block
+                if (predMerge && succContinue) break;                  // nor a merge and a continue target
+                if (chainMerge[b] != 0 && succ != chainMerge[b])
+                {
+                    // A header only absorbs its own merge block, or a non-header successor ending in a branch.
+                    if (chainMerge[sb] != 0) break;
+                    var st = m.Instrs[BlockEnd(tail[sb]) - 1].Opcode;
+                    if (st is not (249 or 250)) break;
+                }
+                if ((succMerge || succContinue) && caseTargets.Contains(LabelId(b))) break;
+                // Merge: a header absorbing the very block its merge instruction names drops that instruction.
+                absorbs[tail[b]] = sb; absorbedBy[sb] = tail[b];
+                if (chainMerge[b] != 0 && succ == chainMerge[b]) { droppedMerges.Add(succ); chainMerge[b] = 0; }
+                if (chainMerge[sb] != 0) chainMerge[b] = chainMerge[sb];
+                tail[b] = tail[sb];
             }
         }
-        for (int b = 0; b < n; b++) if (!absorbedBy.ContainsKey(b)) CutChain(b);
 
         if (absorbs.Count == 0) { for (int b = 0; b < n; b++) for (int i = blockStart[b]; i < BlockEnd(b); i++) outList.Add(m.Instrs[i]); return; }
 
@@ -648,17 +615,29 @@ public static class SpirVOptimizer
     // shader (which by definition has neither, else spirv-opt would already diverge from us).
     static void DeadBranchElim(SpvModule m)
     {
+        s_dbeUndefs?.Clear();
         if (m.Instrs.Any(i => i.Opcode == 73)) return;   // OpGroupDecorate: KillNamesAndDecorates unsupported
         var reach = new HashSet<uint>(ReachableFunctions(m));
         // Single forward pass over the module: find each function's range locally and process it in place
         // (was an O(functions) whole-module re-scan inside each of DbeFunction/DbeReorder).
         bool modified = false;
+        // One def map for the pass: a function only consults global ids (constants, undefs) and its own locals,
+        // which no other function touches. Undefs a function creates become visible from the next function on,
+        // as when each function rebuilt the map at its start.
+        var def = m.DefMap();
+        s_undefSink = [];
         for (int i = 0; i < m.Instrs.Count; i++)
         {
             if (m.Instrs[i].Opcode != OpFunction) continue;
-            if (reach.Contains(m.Instrs[i].Operands[1])) modified |= DbeFunction(m, i);
+            if (reach.Contains(m.Instrs[i].Operands[1]))
+            {
+                modified |= DbeFunction(m, i, def);
+                foreach (var u in s_undefSink) def[u.ResultId] = u;
+                s_undefSink.Clear();
+            }
             while (i < m.Instrs.Count && m.Instrs[i].Opcode != OpFunctionEnd) i++;
         }
+        s_undefSink = null;
         if (modified)
             for (int i = 0; i < m.Instrs.Count; i++)
             {
@@ -753,26 +732,45 @@ public static class SpirVOptimizer
         firstLabel = fs; while (m.Instrs[firstLabel].Opcode != OpLabel) firstLabel++;
         var blocks = new List<Blk>();
         for (int i = firstLabel; i < fe; i++)
-            if (m.Instrs[i].Opcode == OpLabel) { var b = new Blk { Label = m.Instrs[i].Operands[0] }; int j = i + 1; while (j < fe && m.Instrs[j].Opcode != OpLabel) { b.Insts.Add(m.Instrs[j]); j++; } blocks.Add(b); i = j - 1; }
+            if (m.Instrs[i].Opcode == OpLabel)
+            {
+                int j = i + 1; while (j < fe && m.Instrs[j].Opcode != OpLabel) j++;
+                var b = new Blk { Label = m.Instrs[i].Operands[0], Insts = new List<SpvInstr>(j - i - 1 + 2) };   // room for a couple of edits
+                for (int k = i + 1; k < j; k++) b.Insts.Add(m.Instrs[k]);
+                blocks.Add(b); i = j - 1;
+            }
         return blocks;
     }
 
-    static List<uint> BlockSuccs(Blk b) => b.Term.Opcode switch
-    {
-        249 => [b.Term.Operands[0]],
-        250 => [b.Term.Operands[1], b.Term.Operands[2]],
-        251 => Enumerable.Repeat(b.Term.Operands[1], 1).Concat(Enumerable.Range(0, (b.Term.Operands.Length - 2) / 2).Select(k => b.Term.Operands[3 + k * 2])).ToList(),
-        _ => [],
-    };
+    static Succs BlockSuccs(Blk b) => new(b.Term);
 
-    static bool DbeFunction(SpvModule m, int fs)
+    // A block's successor labels in terminator order (branch target; true, false; switch default then cases),
+    // enumerated straight off the terminator without allocating.
+    readonly struct Succs(SpvInstr term) : IEnumerable<uint>
+    {
+        public int Count => term.Opcode switch { 249 => 1, 250 => 2, 251 => 1 + (term.Operands.Length - 2) / 2, _ => 0 };
+        public uint this[int i] => term.Opcode switch { 249 => term.Operands[0], 250 => term.Operands[1 + i], _ => i == 0 ? term.Operands[1] : term.Operands[1 + 2 * i] };
+        public bool Contains(uint label) { for (int i = 0, n = Count; i < n; i++) if (this[i] == label) return true; return false; }
+        public List<uint> ToList() { var l = new List<uint>(Count); for (int i = 0, n = Count; i < n; i++) l.Add(this[i]); return l; }
+        public Enumerator GetEnumerator() => new(this);
+        IEnumerator<uint> IEnumerable<uint>.GetEnumerator() { for (int i = 0, n = Count; i < n; i++) yield return this[i]; }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => ((IEnumerable<uint>)this).GetEnumerator();
+        public struct Enumerator(Succs s)
+        {
+            int _i = -1;
+            readonly int _n = s.Count;
+            public bool MoveNext() => ++_i < _n;
+            public readonly uint Current => s[_i];
+        }
+    }
+
+    static bool DbeFunction(SpvModule m, int fs, DefTable def)
     {
         int fe = fs; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++;
         if (fs < 0) return false;
         var blocks = ParseBlocks(m, fs, fe, out int firstLabel);
         if (blocks.Count == 0) return false;
         var byLabel = blocks.ToDictionary(b => b.Label);
-        var def = m.DefMap();
 
         uint MergeId(Blk b) => b.Merge?.Operands[0] ?? 0;
         uint ContId(Blk b) => b.Merge is { Opcode: 246 } mg ? mg.Operands[1] : 0;
@@ -821,7 +819,7 @@ public static class SpirVOptimizer
         }
 
         // Structured info: containing loop/switch of each block, and construct merges/continues.
-        var contLoop = new Dictionary<uint, uint>(); var contSwitch = new Dictionary<uint, uint>();
+        var contLoop = new Dictionary<uint, uint>(); var contSwitch = new Dictionary<uint, uint>(); var contConstruct = new Dictionary<uint, uint>();
         var loopMerge = new Dictionary<uint, uint>(); var loopCont = new Dictionary<uint, uint>(); var switchMerge = new Dictionary<uint, uint>();
         {
             var st = new List<(uint Header, bool IsLoop, uint Merge, uint Cont)>();
@@ -830,7 +828,7 @@ public static class SpirVOptimizer
                 while (st.Count > 0 && st[^1].Merge == b.Label) st.RemoveAt(st.Count - 1);
                 uint lh = 0, sh = 0;
                 for (int i = st.Count - 1; i >= 0; i--) { if (st[i].IsLoop && lh == 0) lh = st[i].Header; if (!st[i].IsLoop && sh == 0) sh = st[i].Header; }
-                contLoop[b.Label] = lh; contSwitch[b.Label] = sh;
+                contLoop[b.Label] = lh; contSwitch[b.Label] = sh; contConstruct[b.Label] = st.Count > 0 ? st[^1].Header : 0;
                 if (b.Merge is { } mg) { bool isLoop = mg.Opcode == 246; st.Add((b.Label, isLoop, mg.Operands[0], isLoop ? mg.Operands[1] : 0)); if (isLoop) { loopMerge[b.Label] = mg.Operands[0]; loopCont[b.Label] = mg.Operands[1]; } else switchMerge[b.Label] = mg.Operands[0]; }
             }
         }
@@ -860,12 +858,17 @@ public static class SpirVOptimizer
             return true;
         }
 
+        // spirv-opt's predicate, kept as written there: the switch "has a nested break" when some branch to its
+        // merge (other than the header's) comes from a block that is NOT directly inside the switch construct
+        // or that carries its own merge instruction.
         bool SwitchHasNestedBreak(Blk switchHeader)
         {
             uint mergeId = MergeId(switchHeader);
-            foreach (var bb in blocks) foreach (var ins in bb.Insts)
-                if (ins.Opcode is 249 or 250 or 251 && BlockSuccs(bb).Contains(mergeId) && bb.Label != switchHeader.Label && bb.Merge == null)
-                    return true;
+            foreach (var bb in blocks)
+            {
+                if (bb.Label == switchHeader.Label || !BlockSuccs(bb).Contains(mergeId)) continue;
+                if (!(contConstruct.GetValueOrDefault(bb.Label) == switchHeader.Label && bb.Merge == null)) return true;
+            }
             return false;
         }
 
@@ -980,21 +983,33 @@ public static class SpirVOptimizer
         return modified;
     }
 
+    [ThreadStatic] static List<SpvInstr>? s_rebuild;
     static void RebuildFunction(SpvModule m, int fs, int fe, int firstLabel, List<Blk> blocks)
     {
-        var rebuilt = new List<SpvInstr>();
+        var rebuilt = s_rebuild ??= []; rebuilt.Clear();
         for (int i = fs; i < firstLabel; i++) rebuilt.Add(m.Instrs[i]);
         foreach (var b in blocks) { rebuilt.Add(new SpvInstr(OpLabel, [b.Label])); rebuilt.AddRange(b.Insts); }
-        m.Instrs.RemoveRange(fs, fe - fs);
-        m.Instrs.InsertRange(fs, rebuilt);
+        // Overwrite the old range in place and only shift the tail by the size difference.
+        int old = fe - fs, common = Math.Min(old, rebuilt.Count);
+        for (int i = 0; i < common; i++) m.Instrs[fs + i] = rebuilt[i];
+        if (rebuilt.Count > old) m.Instrs.InsertRange(fs + old, rebuilt.GetRange(old, rebuilt.Count - old));
+        else if (old > rebuilt.Count) m.Instrs.RemoveRange(fs + common, old - common);
+        rebuilt.Clear();
     }
 
+    // MemPass::Type2Undef: a per-pass map (module OpUndefs are never reused), reset per DeadBranchElim run.
+    [ThreadStatic] static Dictionary<uint, uint>? s_dbeUndefs;
+    [ThreadStatic] static List<SpvInstr>? s_undefSink;   // DBE collects the undefs it creates to keep its def map current
     static uint GetDbeUndef(SpvModule m, uint typeId)
     {
-        foreach (var ins in m.Instrs) if (ins.Opcode == 1 && ins.Operands.Length == 2 && ins.Operands[0] == typeId) return ins.Operands[1];
+        s_dbeUndefs ??= [];
+        if (s_dbeUndefs.TryGetValue(typeId, out uint u)) return u;
         uint id = m.Header[3]++;
+        s_dbeUndefs[typeId] = id;
         int ff = m.Instrs.FindIndex(x => x.Opcode == OpFunction);
-        m.Instrs.Insert(ff, new SpvInstr(1, [typeId, id]));
+        var undef = new SpvInstr(1, [typeId, id]);
+        m.Instrs.Insert(ff, undef);
+        s_undefSink?.Add(undef);
         return id;
     }
 
@@ -1031,6 +1046,7 @@ public static class SpirVOptimizer
     // A basic block: its label id and the instructions after the label (structured merge inst + terminator
     // last). Used by the MergeReturn port, which needs real block surgery (split, insert, add phis).
     sealed class Blk { public uint Label; public List<SpvInstr> Insts = []; public SpvInstr Term => Insts[^1];
+        public SpvInstr? LabelInst; public Blk? Containing; public int LiveA, LiveB, Reach;   // scratch for passes that fill them (ADCE)
         public SpvInstr? Merge => Insts.Count >= 2 && Insts[^2].Opcode is 246 or 247 ? Insts[^2] : null; }
 
     // spirv-opt's CCP (conditional constant propagation): a sparse-conditional propagator over the SSA graph and
@@ -1038,9 +1054,21 @@ public static class SpirVOptimizer
     // edges only; foldable instructions with all-constant operands fold to a constant; a branch with a constant
     // condition only makes its taken edge executable. Const-valued results are then replaced by the constant,
     // and the const-condition branches are folded by the following DeadBranchElim. Runs before LoopUnroll.
+    // FeatureManager::HasCapability(Shader): Shader or any declared capability that implies it (Geometry,
+    // Tessellation, ...), per the grammar's implicit-capability chains.
+    static readonly HashSet<uint> ShaderImplyingCaps =
+    [
+        1, 2, 3, 21, 23, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 40, 41, 42, 45, 48, 49, 50, 51, 52, 53, 54,
+        55, 56, 57, 4422, 4427, 4428, 4429, 4430, 4439, 4441, 4442, 4445, 4471, 4472, 4478, 4479, 4495, 5008, 5009, 5010,
+        5013, 5015, 5067, 5249, 5251, 5254, 5255, 5259, 5260, 5265, 5266, 5283, 5288, 5291, 5301, 5302, 5303, 5306, 5307,
+        5308, 5309, 5310, 5311, 5312, 5336, 5340, 5341, 5347, 5350, 5353, 5357, 5363, 5372, 5373, 5378, 5379, 5380, 5381,
+        5383, 5388, 5391, 5409, 5423, 5437, 6032,
+    ];
+    static bool HasShaderCapability(SpvModule m) => m.Instrs.Any(i => i.Opcode == 17 && i.Operands.Length >= 1 && ShaderImplyingCaps.Contains(i.Operands[0]));
+
     static void Ccp(SpvModule m)
     {
-        if (!m.Instrs.Any(i => i.Opcode == 17 && i.Operands.Length >= 1 && i.Operands[0] == 1)) return;
+        if (!HasShaderCapability(m)) return;
         const uint VARYING = uint.MaxValue;
         var folder = new Folder(m);
         foreach (uint fnId in ReachableFunctions(m))
@@ -1060,108 +1088,6 @@ public static class SpirVOptimizer
             if (m.Instrs.Any(x => x.Opcode == OpFunction && x.Operands[1] == fnId))
                 SimplifyFunction(m, fnId, folder);
         folder.Commit();
-    }
-
-    // spirv-opt's VectorDCE (vector_dce.cpp): per-component liveness over vectors. Instructions whose result is
-    // a fully-dead vector become OpUndef; OpCompositeInsert of a dead component is dropped. Faithful port; the
-    // scalarizable set matches spvOpcodeIsScalarizable (note OpBitwiseXor is intentionally excluded).
-    static readonly HashSet<int> Scalarizable = new()
-    {
-        245, 83, 109, 110, 111, 112, 113, 114, 115, 116, 87, 126, 127, 128, 129, 130, 131, 132, 133, 136,
-        140, 141, 149, 150, 151, 152, 153, 142, 194, 195, 196, 197, 199, 200, 164, 165, 166, 167, 168, 169,
-        170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191,
-    };
-
-    // spirv-opt's IsCombinatorInstruction: a pure value producer with no memory/pointer semantics. Unlike
-    // IsPure it EXCLUDES OpLoad and the access-chain/pointer ops (VectorDCE must not rewrite those).
-    static bool IsCombinator(int opcode) => IsPure(opcode) && opcode is not (60 or 61 or 65 or 66 or 67 or 68 or 69 or 70);
-
-    static void VectorDCE(SpvModule m)
-    {
-        var def = m.DefMap();
-        uint nextId = m.Header[3];
-        var type2undef = new Dictionary<uint, uint>();
-        var newUndefs = new List<SpvInstr>();
-        uint Undef(uint typeId) { if (type2undef.TryGetValue(typeId, out var u)) return u; u = nextId++; var ui = new SpvInstr(1, [typeId, u]); newUndefs.Add(ui); def[u] = ui; type2undef[typeId] = u; return u; }
-        uint ResType(SpvInstr ins) => ins.Operands.Length > 0 && def.TryGetValue(ins.Operands[0], out var t) && t.Opcode is >= 19 and <= 39 ? ins.Operands[0] : 0;
-        bool HasVec(SpvInstr ins) { uint t = ResType(ins); return t != 0 && def[t].Opcode == 23; }
-        bool HasScalar(SpvInstr ins) { uint t = ResType(ins); return t != 0 && def[t].Opcode is 20 or 21 or 22; }
-        int VecCount(uint typeId) => def.TryGetValue(typeId, out var t) && t.Opcode == 23 ? (int)t.Operands[2] : 0;
-        // In-operand id list (excludes result type + result id), matching Instruction::ForEachInId.
-        IEnumerable<uint> InIds(SpvInstr ins)
-        {
-            ins.Classify(out int ri, out bool[] isId);
-            for (int i = 0; i < ins.Operands.Length; i++) { if (i == ri) continue; if (i == 0 && ResType(ins) != 0) continue; if (isId[i]) yield return ins.Operands[i]; }
-        }
-        int InStart(SpvInstr ins) { int s = 0; ins.Classify(out int ri, out _); if (ResType(ins) != 0) s++; if (ri >= 0) s++; return s; }
-        uint InOp(SpvInstr ins, int i) => ins.Operands[InStart(ins) + i];
-        int NumIn(SpvInstr ins) => ins.Operands.Length - InStart(ins);
-        const uint AllLive = 0xFFFF;
-
-        var kill = new List<SpvInstr>();
-        for (int fpos = 0; fpos < m.Instrs.Count; fpos++)
-        {
-            if (m.Instrs[fpos].Opcode != OpFunction) continue;
-            int fs = fpos, fe = fpos; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++;
-            var live = new Dictionary<uint, uint>();
-            var work = new List<SpvInstr>();
-            void AddItem(SpvInstr ins, uint mask) { uint rid = ins.ResultId; if (rid == 0) return; if (!live.TryGetValue(rid, out var cur)) { live[rid] = mask; work.Add(ins); } else { uint nw = cur | mask; if (nw != cur) { live[rid] = nw; work.Add(ins); } } }
-            void MarkUses(SpvInstr ins, uint mask) { foreach (uint id in InIds(ins)) if (def.TryGetValue(id, out var op)) { if (HasVec(op)) AddItem(op, mask); else if (HasScalar(op)) AddItem(op, 1); } }
-
-            for (int i = fs; i <= fe; i++) { var ins = m.Instrs[i]; if (!((HasVec(ins) || HasScalar(ins)) && IsCombinator(ins.Opcode) && ins.ResultId != 0)) MarkUses(ins, AllLive); }
-
-            for (int wi = 0; wi < work.Count; wi++)
-            {
-                var ins = work[wi]; uint mask = live[ins.ResultId];
-                switch (ins.Opcode)
-                {
-                    case 81:   // OpCompositeExtract
-                    {
-                        uint cid = InOp(ins, 0); if (!def.TryGetValue(cid, out var op) || !(HasVec(op) || HasScalar(op))) break;
-                        uint nm; if (NumIn(ins) < 2) nm = mask; else { uint idx = InOp(ins, 1); int sz = VecCount(ResType(op)); nm = idx < (uint)sz ? 1u << (int)idx : 0u; }
-                        AddItem(op, nm); break;
-                    }
-                    case 82:   // OpCompositeInsert
-                    {
-                        if (NumIn(ins) > 2) { uint pos = InOp(ins, 2); uint compId = InOp(ins, 1); if (def.TryGetValue(compId, out var cop)) AddItem(cop, mask & ~(1u << (int)pos)); if ((mask & (1u << (int)pos)) != 0 && def.TryGetValue(InOp(ins, 0), out var oop)) AddItem(oop, 1); }
-                        else if (def.TryGetValue(InOp(ins, 0), out var oop2)) AddItem(oop2, mask);
-                        break;
-                    }
-                    case 79:   // OpVectorShuffle
-                    {
-                        var a = def.GetValueOrDefault(InOp(ins, 0)); var b = def.GetValueOrDefault(InOp(ins, 1));
-                        int sa = a != null ? VecCount(ResType(a)) : 0; int sb = b != null ? VecCount(ResType(b)) : 0;
-                        uint ma = 0, mb = 0;
-                        for (int k = 2; k < NumIn(ins); k++) { uint idx = InOp(ins, k); if ((mask & (1u << (k - 2))) != 0) { if (idx < (uint)sa) ma |= 1u << (int)idx; else if (idx - (uint)sa < (uint)sb) mb |= 1u << (int)(idx - (uint)sa); } }
-                        if (a != null) AddItem(a, ma); if (b != null) AddItem(b, mb); break;
-                    }
-                    case 80:   // OpCompositeConstruct
-                    {
-                        int comp = 0;
-                        for (int k = 0; k < NumIn(ins); k++) { if (!def.TryGetValue(InOp(ins, k), out var op)) { comp++; continue; } if (HasScalar(op)) { AddItem(op, (mask & (1u << comp)) != 0 ? 1u : 0u); comp++; } else { int sz = VecCount(ResType(op)); uint om = 0; for (int v = 0; v < sz; v++, comp++) if ((mask & (1u << comp)) != 0) om |= 1u << v; AddItem(op, om); } }
-                        break;
-                    }
-                    default:
-                        MarkUses(ins, Scalarizable.Contains(ins.Opcode) ? mask : AllLive); break;
-                }
-            }
-
-            for (int i = fs; i <= fe; i++)
-            {
-                var ins = m.Instrs[i]; if (!IsCombinator(ins.Opcode) || ins.ResultId == 0) continue;
-                if (!live.TryGetValue(ins.ResultId, out var lc)) continue;
-                if (lc == 0) { m.ReplaceUses(ins.ResultId, Undef(ResType(ins))); kill.Add(ins); continue; }
-                if (ins.Opcode == 82)   // OpCompositeInsert rewrite
-                {
-                    if (NumIn(ins) == 2) { m.ReplaceUses(ins.ResultId, InOp(ins, 0)); kill.Add(ins); }
-                    else { uint pos = InOp(ins, 2); if ((lc & (1u << (int)pos)) == 0) { m.ReplaceUses(ins.ResultId, InOp(ins, 1)); kill.Add(ins); } else if ((lc & ~(1u << (int)pos)) == 0) { int s = InStart(ins); ins.Operands[s + 1] = Undef(ResType(ins)); } }
-                }
-            }
-            fpos = fe;
-        }
-        foreach (var k in kill) m.Instrs.Remove(k);
-        if (newUndefs.Count > 0) { int ff = m.Instrs.FindIndex(x => x.Opcode == OpFunction); m.Instrs.InsertRange(ff < 0 ? m.Instrs.Count : ff, newUndefs); }
-        m.Header[3] = nextId;
     }
 
     // Immediate dominators over the real CFG (Cooper/Harvey/Kennedy), keyed by block label.
@@ -1195,125 +1121,11 @@ public static class SpirVOptimizer
     }
     static bool Dominates(uint a, uint b, Dictionary<uint, uint> idom) { for (uint x = b; ; ) { if (x == a) return true; if (!idom.TryGetValue(x, out var nx) || nx == x) return false; x = nx; } }
 
-    // spirv-opt's IfConversion (if_conversion.cpp): a phi at the merge of a simple if/else diamond, whose two
-    // incoming values already dominate the merge, becomes OpSelect(condition, trueValue, falseValue). Vector
-    // phis splat the scalar branch condition into a bool vector.
-    static void IfConversion(SpvModule m)
-    {
-        uint nextId = m.Header[3];
-        var def = m.DefMap();
-        var newTypes = new List<SpvInstr>();
-        uint boolType = 0;
-        foreach (var ins in m.Instrs) if (ins.Opcode == 20) { boolType = ins.Operands[0]; break; }
-        uint BoolType() { if (boolType == 0) { boolType = nextId++; var t = new SpvInstr(20, [boolType]); newTypes.Add(t); def[boolType] = t; } return boolType; }
-        uint BoolVec(int n)
-        {
-            foreach (var ins in m.Instrs) if (ins.Opcode == OpTypeVector && def.TryGetValue(ins.Operands[1], out var et) && et.Opcode == 20 && ins.Operands[2] == (uint)n) return ins.Operands[0];
-            foreach (var t2 in newTypes) if (t2.Opcode == OpTypeVector && t2.Operands[2] == (uint)n) return t2.Operands[0];
-            uint bt = BoolType(); uint id = nextId++; var t = new SpvInstr(OpTypeVector, [id, bt, (uint)n]); newTypes.Add(t); def[id] = t; return id;
-        }
-
-        foreach (uint fnId in ReachableFunctions(m))
-        {
-            int fs = -1, fe = -1;
-            for (int i = 0; i < m.Instrs.Count; i++) if (m.Instrs[i].Opcode == OpFunction && m.Instrs[i].Operands[1] == fnId) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; break; }
-            if (fs < 0) continue;
-            var blocks = ParseBlocks(m, fs, fe, out int firstLabel);
-            if (blocks.Count == 0) continue;
-            var byLabel = blocks.ToDictionary(b => b.Label);
-            var preds = new Dictionary<uint, List<uint>>(); foreach (var b in blocks) preds[b.Label] = [];
-            foreach (var b in blocks) foreach (var s in BlockSuccs(b)) if (preds.ContainsKey(s)) preds[s].Add(b.Label);
-            var idom = ComputeIdom(blocks);
-            uint CommonDom(uint a, uint b2)
-            {
-                var anc = new HashSet<uint>();
-                for (uint x = a; ; ) { anc.Add(x); if (!idom.TryGetValue(x, out var nx) || nx == x) break; x = nx; }
-                for (uint y = b2; ; ) { if (anc.Contains(y)) return y; if (!idom.TryGetValue(y, out var ny) || ny == y) return 0; y = ny; }
-            }
-            var blockOf = new Dictionary<uint, uint>();
-            foreach (var b in blocks) { blockOf[b.Label] = b.Label; foreach (var ins in b.Insts) if (ins.ResultId != 0) blockOf[ins.ResultId] = b.Label; }
-
-            bool fnChanged = false;
-            var collapsedArms = new HashSet<uint>();
-            foreach (var block in blocks)
-            {
-                if (collapsedArms.Contains(block.Label)) continue;
-                if (!preds.TryGetValue(block.Label, out var pr) || pr.Count != 2) continue;
-                if (Dominates(block.Label, pr[0], idom) || Dominates(block.Label, pr[1], idom)) continue;
-                if (pr[0] == pr[1]) continue;
-                uint common = CommonDom(pr[0], pr[1]);
-                if (common == 0 || !byLabel.TryGetValue(common, out var commonBlk)) continue;
-                var branch = commonBlk.Term;
-                if (branch.Opcode != 250) continue;                                  // OpBranchConditional
-                var merge = commonBlk.Merge;
-                if (merge is not { Opcode: 247 }) continue;                           // OpSelectionMerge
-                if (merge.Operands.Length >= 2 && merge.Operands[1] == 2) continue;   // DontFlatten
-                if (merge.Operands[0] != block.Label) continue;
-
-                uint condition = branch.Operands[0], thenLabel = branch.Operands[1];
-                var toInsert = new List<SpvInstr>();
-                foreach (var phi in block.Insts.Where(i => i.Opcode == 245).ToList())
-                {
-                    uint phiType = phi.Operands[0];
-                    if (def.TryGetValue(phiType, out var pt2) && pt2.Opcode is not (20 or 21 or 22 or 32 or 23)) continue;
-                    bool phiUserInBlock = false;
-                    foreach (var ins in block.Insts) if (ins.Opcode == 245 && ins != phi) for (int k = 2; k < ins.Operands.Length; k += 2) if (ins.Operands[k] == phi.Operands[1]) phiUserInBlock = true;
-                    if (phiUserInBlock) continue;
-                    if (phi.Operands.Length != 6) continue;
-                    uint val0 = phi.Operands[2], lbl0 = phi.Operands[3], val1 = phi.Operands[4];
-                    uint trueVal, falseVal;
-                    if ((thenLabel == block.Label && lbl0 == common) || Dominates(thenLabel, lbl0, idom)) { trueVal = val0; falseVal = val1; }
-                    else { trueVal = val1; falseVal = val0; }
-                    uint trueDefBlk = blockOf.GetValueOrDefault(trueVal), falseDefBlk = blockOf.GetValueOrDefault(falseVal);
-                    if (trueDefBlk != 0 && !Dominates(trueDefBlk, block.Label, idom)) continue;
-                    if (falseDefBlk != 0 && !Dominates(falseDefBlk, block.Label, idom)) continue;
-
-                    if (trueVal == falseVal) { m.ReplaceUses(phi.Operands[1], trueVal); block.Insts.Remove(phi); fnChanged = true; continue; }
-
-                    uint cond = condition;
-                    if (def.TryGetValue(phiType, out var pt) && pt.Opcode == OpTypeVector)
-                    {
-                        int nn = (int)pt.Operands[2];
-                        uint bv = BoolVec(nn); uint splatId = nextId++;
-                        var construct = new SpvInstr(OpCompositeConstruct, [bv, splatId, .. Enumerable.Repeat(condition, nn)]);
-                        toInsert.Add(construct); def[splatId] = construct; blockOf[splatId] = block.Label; cond = splatId;
-                    }
-                    uint selId = nextId++;
-                    var sel = new SpvInstr(169, [phiType, selId, cond, trueVal, falseVal]);
-                    toInsert.Add(sel); def[selId] = sel; blockOf[selId] = block.Label;
-                    m.ReplaceUses(phi.Operands[1], selId);
-                    block.Insts.Remove(phi);
-                    fnChanged = true;
-                }
-                if (toInsert.Count > 0) { int insAt = 0; while (insAt < block.Insts.Count && block.Insts[insAt].Opcode == 245) insAt++; block.Insts.InsertRange(insAt, toInsert); }
-
-                // Collapse the now-trivial selection: if both arms are empty (a lone branch to the merge with
-                // no other predecessor) and no phi remains in the merge, drop the selection and branch straight
-                // to it (spirv-opt reaches the same shape via ADCE killing the dead construct + BlockMerge).
-                uint elseLabel = branch.Operands[2];
-                bool EmptyArm(uint arm) => arm != block.Label && byLabel.TryGetValue(arm, out var ab)
-                    && ab.Insts.Count == 1 && ab.Insts[0].Opcode == 249 && ab.Insts[0].Operands[0] == block.Label
-                    && preds.TryGetValue(arm, out var ap) && ap.Count == 1;
-                if (!block.Insts.Any(i => i.Opcode == 245) && EmptyArm(thenLabel) && EmptyArm(elseLabel))
-                {
-                    commonBlk.Insts.Remove(merge);
-                    commonBlk.Insts[^1] = new SpvInstr(249, [block.Label]);
-                    collapsedArms.Add(thenLabel); collapsedArms.Add(elseLabel);
-                    preds[block.Label] = [common];
-                    fnChanged = true;
-                }
-            }
-            if (collapsedArms.Count > 0) blocks.RemoveAll(b => collapsedArms.Contains(b.Label));
-            if (fnChanged) RebuildFunction(m, fs, fe, firstLabel, blocks);
-        }
-        if (newTypes.Count > 0) { int ff = m.Instrs.FindIndex(x => x.Opcode == OpFunction); m.Instrs.InsertRange(ff < 0 ? m.Instrs.Count : ff, newTypes); }
-        m.Header[3] = nextId;
-    }
-
+    [ThreadStatic] static DefTable? s_simpDefs;
     static void SimplifyFunction(SpvModule m, uint fnId, Folder folder)
     {
         int fs = -1, fe = -1;
-        for (int i = 0; i < m.Instrs.Count; i++) if (m.Instrs[i].Opcode == OpFunction && m.Instrs[i].Operands[1] == fnId) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; break; }
+        { int i = m.FindFunction(fnId); if (i >= 0) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; } }
         var blocks = ParseBlocks(m, fs, fe, out int firstLabel);
         if (blocks.Count == 0) return;
         var byLabel = blocks.ToDictionary(b => b.Label);
@@ -1327,15 +1139,19 @@ public static class SpirVOptimizer
         var users = m.UserMapOverHash(blocks.SelectMany(b => b.Insts));
         void Index(SpvInstr ins) { ins.Classify(out int ri, out bool[] isId); for (int k = 0; k < ins.Operands.Length; k++) if (isId[k] && k != ri) (users.TryGetValue(ins.Operands[k], out var l) ? l : users[ins.Operands[k]] = []).Add(ins); }
         void Deindex(SpvInstr ins) { ins.Classify(out int ri, out bool[] isId); for (int k = 0; k < ins.Operands.Length; k++) if (isId[k] && k != ri && users.TryGetValue(ins.Operands[k], out var l)) l.Remove(ins); }
-        var resultOf = new Dictionary<SpvInstr, uint>(); var defInstr = new Dictionary<uint, SpvInstr>();
-        foreach (var b in blocks) foreach (var ins in b.Insts) { uint r = ins.ResultId; if (r != 0) { resultOf[ins] = r; defInstr[r] = ins; } }
+        // Each instruction's original result id: stamped, in Pos. Defs by id in a pooled table.
+        int hasResult = SpvInstr.NewStamp();
+        var defInstr = s_simpDefs ??= new(); defInstr.Reset(m.Header[3]);
+        void SetResult(SpvInstr ins, uint r) { ins.Mark = hasResult; ins.Pos = (int)r; defInstr[r] = ins; }
+        uint ResultOf(SpvInstr ins) => ins.Mark == hasResult ? (uint)ins.Pos : 0;
+        foreach (var b in blocks) foreach (var ins in b.Insts) { uint r = ins.ResultId; if (r != 0) SetResult(ins, r); }
 
         // Use count for single-use-guarded rules. The instruction being folded is deindexed first, so its own
         // use of an operand is not in the map; the +1 restores the true count for the operand it is querying.
         folder.UseCountFn = id => (users.TryGetValue(id, out var s) ? s.Count : 0) + 1;
 
-        var work = new List<SpvInstr>(); var inWork = new HashSet<SpvInstr>();
-        var processPhis = new HashSet<SpvInstr>(); var seen = new HashSet<SpvInstr>(); var kill = new HashSet<SpvInstr>();
+        var work = new List<SpvInstr>(); var inWork = Pool.InstrSet();
+        var processPhis = Pool.InstrSet(); var seen = Pool.InstrSet(); var kill = Pool.InstrSet();
 
         // Replace all uses of `from` with `to` inside this function, keeping the user map current.
         void ReplaceUses(uint from, uint to)
@@ -1355,7 +1171,7 @@ public static class SpirVOptimizer
         {
             // The instruction's operands changed after folding -> re-index. (Deindex happened before Fold.)
             Index(inst);
-            uint rid = resultOf.GetValueOrDefault(inst);
+            uint rid = ResultOf(inst);
             if (rid != 0 && users.TryGetValue(rid, out var us))
                 foreach (var u in us.ToList())
                     if ((phase2 || processPhis.Contains(u)) && !(u.Opcode is 5 or 71 or 72) && inWork.Add(u)) work.Add(u);
@@ -1363,6 +1179,7 @@ public static class SpirVOptimizer
             inst.Classify(out int ri2, out bool[] isId2);
             for (int k = 0; k < inst.Operands.Length; k++)
                 if (isId2[k] && k != ri2 && ByResult(inst.Operands[k]) is { } d && seen.Add(d)) work.Add(d);
+            if (inst.Opcode == 0) { kill.Add(inst); inWork.Add(inst); return; }   // OpNop (e.g. StoringUndef) -> remove
             if (inst.Opcode == 83)   // OpCopyObject -> propagate + kill
             {
                 if (rid != 0) ReplaceUses(rid, inst.Operands[2]);
@@ -1375,8 +1192,9 @@ public static class SpirVOptimizer
         void InsertPending(SpvInstr anchor)
         {
             var pend = folder.DrainPendingBody();
+            if (folder.PendingAnchor is { } other) { anchor = other; folder.PendingAnchor = null; }
             if (pend.Count == 0) return;
-            foreach (var b in blocks) { int p = b.Insts.IndexOf(anchor); if (p < 0) continue; foreach (var ni in pend) { b.Insts.Insert(p++, ni); uint r = ni.ResultId; if (r != 0) { resultOf[ni] = r; defInstr[r] = ni; } Index(ni); } return; }
+            foreach (var b in blocks) { int p = b.Insts.IndexOf(anchor); if (p < 0) continue; foreach (var ni in pend) { b.Insts.Insert(p++, ni); uint r = ni.ResultId; if (r != 0) SetResult(ni, r); Index(ni); } return; }
         }
 
         // Phase 1: reverse post-order.
@@ -1386,7 +1204,7 @@ public static class SpirVOptimizer
             if (inst.Opcode == 245) processPhis.Add(inst);
             Deindex(inst);
             bool changed = folder.FoldInstruction(inst);
-            if (changed) { InsertPending(inst); OnFolded(inst, phase2: false); } else Index(inst);
+            if (changed) { InsertPending(inst); OnFolded(inst, phase2: false); } else { InsertPending(inst); Index(inst); }   // a rule may rewrite yet report no change
         }
         // Phase 2: work list.
         for (int i = 0; i < work.Count; i++)
@@ -1394,108 +1212,207 @@ public static class SpirVOptimizer
             var inst = work[i]; inWork.Remove(inst); seen.Add(inst);
             Deindex(inst);
             bool changed = folder.FoldInstruction(inst);
-            if (changed) { InsertPending(inst); OnFolded(inst, phase2: true); } else Index(inst);
+            if (changed) { InsertPending(inst); OnFolded(inst, phase2: true); } else { InsertPending(inst); Index(inst); }
         }
-        // Phase 3: remove killed OpCopyObjects (their uses were replaced by their source).
+        // Phase 3: remove killed OpCopyObjects (their uses were replaced by their source) and OpNops.
         if (kill.Count > 0) foreach (var b in blocks) b.Insts.RemoveAll(kill.Contains);
+        Pool.Free(inWork); Pool.Free(processPhis); Pool.Free(seen); Pool.Free(kill);
 
         RebuildFunction(m, fs, fe, firstLabel, blocks);
     }
 
+    // CCPPass over spirv-opt's SSAPropagator, ported step for step: the visit order decides which transient
+    // constants get declared (a loop phi is provisionally constant on its first visit), so the ids depend on it.
+    [ThreadStatic] static DefTable? s_ccpDefs;
     static void CcpFunction(SpvModule m, uint fnId, Folder folder, uint VARYING)
     {
         int fs = -1, fe = -1;
-        for (int i = 0; i < m.Instrs.Count; i++) if (m.Instrs[i].Opcode == OpFunction && m.Instrs[i].Operands[1] == fnId) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; break; }
+        { int i = m.FindFunction(fnId); if (i >= 0) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; } }
         var blocks = ParseBlocks(m, fs, fe, out _);
         if (blocks.Count == 0) return;
         var byLabel = blocks.ToDictionary(b => b.Label);
-        var preds = new Dictionary<uint, List<uint>>(); foreach (var b in blocks) preds[b.Label] = [];
-        foreach (var b in blocks) foreach (var s in BlockSuccs(b)) if (preds.ContainsKey(s)) preds[s].Add(b.Label);
+        // The block's label is an instruction too (BasicBlock::WhileEachInst visits it first).
+        var labelInstr = new Dictionary<uint, SpvInstr>();
+        foreach (var b in blocks) labelInstr[b.Label] = new SpvInstr(OpLabel, [b.Label]);
         var users = m.UserMapOver(blocks.SelectMany(b => b.Insts));
-        var blockOf = new Dictionary<SpvInstr, uint>(); foreach (var b in blocks) foreach (var ins in b.Insts) blockOf[ins] = b.Label;
+        // Def-use users in creation order (DefUseManager orders them by unique id).
+        foreach (var l in users.Values) if (l.Count > 1) l.Sort((x, y) => x.Serial.CompareTo(y.Serial));
+        // Labels are used by branches and phis; route those uses through the label pseudo-instructions.
+        // Each instruction's block label rides in Tag (boxed once per block).
+        foreach (var b in blocks) { object lb = b.Label; labelInstr[b.Label].Tag = lb; foreach (var ins in b.Insts) ins.Tag = lb; }
+        static uint BlockOfI(SpvInstr i) => (uint)i.Tag!;
+        var defOf = s_ccpDefs ??= new(); defOf.Reset(m.Header[3]);   // function-local defs (labels as their pseudo-instructions)
+        foreach (var b in blocks) { defOf[b.Label] = labelInstr[b.Label]; foreach (var ins in b.Insts) if (ins.ResultId != 0) defOf[ins.ResultId] = ins; }
+        var succs = new Dictionary<uint, List<uint>>();
+        foreach (var b in blocks) succs[b.Label] = BlockSuccs(b).ToList();
 
         var values = new Dictionary<uint, uint>();       // result id -> constant id, or VARYING
-        // Seed the lattice from module-scope declarations (ccp_pass Initialize): every constant is its own
-        // value, every other global (types, variables, ext imports) is varying. Without this a phi whose
-        // incoming value is a bare constant is treated as "top" and never folds -- and the constants spirv-opt
-        // transiently materializes while a loop induction is provisionally constant would be missed.
+        // CCPPass::Initialize: every module-scope constant is its own value, every other global -- specialization
+        // constants included (Instruction::IsConstant excludes them) -- is varying.
         foreach (var g in m.Instrs)
         {
             if (g.Opcode == OpFunction) break;
             uint r = g.ResultId;
-            if (r != 0) values[r] = g.Opcode is 41 or 42 or 43 or 44 or 45 or 46 or 48 or 49 or 50 or 51 or 52 ? r : VARYING;
+            if (r != 0) values[r] = g.Opcode is >= 41 and <= 46 ? r : VARYING;
         }
-        var execEdge = new HashSet<(uint, uint)>();
+        // Function parameters are varying.
+        for (int i = fs + 1; i < fe && m.Instrs[i].Opcode == 55; i++) values[m.Instrs[i].Operands[1]] = VARYING;
+
+        const int NotInteresting = 0, Interesting = 1, Varying = 2;
+        // Per-instruction propagator state on the instructions themselves: Pos holds the last visit status
+        // (-1 = never visited), a Mark stamp means "don't simulate again".
+        int dontSim = SpvInstr.NewStamp();
+        foreach (var b in blocks) { labelInstr[b.Label].Pos = -1; foreach (var ins in b.Insts) ins.Pos = -1; }
         var simulated = new HashSet<uint>();
+        var execEdge = new HashSet<(uint, uint)>();
         var blockQ = new Queue<uint>();
         var ssaQ = new Queue<SpvInstr>();
         uint Val(uint id) => values.TryGetValue(id, out uint v) && v != VARYING ? v : id;
-        // Cached once: converting the local function to a delegate at each call site would allocate per
-        // visited instruction, and CCP visits nearly every instruction in the module.
         Func<uint, uint> valFn = Val;
 
-        void AddEdge(uint from, uint to) { if (execEdge.Add((from, to))) blockQ.Enqueue(to); }
-        bool PhiArgExec(SpvInstr phi, int valIdx) => execEdge.Contains((phi.Operands[valIdx + 1], blockOf[phi]));
-
-        // Returns true if the value changed (enqueue users), and sets branch dest edges.
-        bool Visit(SpvInstr ins, uint blk)
+        bool ShouldSimulateAgain(SpvInstr? d) => d is null || d.Mark != dontSim;
+        SpvInstr? DefInstr(uint id) => defOf.TryGetValue(id, out var d) ? d : null;   // null: a global (never retired)
+        void AddControlEdge(uint from, uint to) { if (byLabel.ContainsKey(to) && execEdge.Add((from, to))) blockQ.Enqueue(to); }
+        bool PhiArgExec(SpvInstr phi, int valIdx) => execEdge.Contains((phi.Operands[valIdx + 1], BlockOfI(phi)));
+        void AddSsaEdges(SpvInstr ins)
         {
-            if (ins.Opcode == 245)   // OpPhi
+            uint rid = ins.Opcode == OpLabel ? ins.Operands[0] : ins.ResultId;
+            if (rid == 0 || !users.TryGetValue(rid, out var us)) return;
+            foreach (var u in us)
+                if (u.Tag is uint ub && simulated.Contains(ub) && ShouldSimulateAgain(u)) ssaQ.Enqueue(u);
+        }
+        int MarkVarying(SpvInstr ins) { uint r = ins.Opcode == OpLabel ? ins.Operands[0] : ins.ResultId; values[r] = VARYING; return Varying; }
+        uint Meet(uint rid, uint val2)
+        {
+            if (!values.TryGetValue(rid, out uint val1)) return val2;
+            if (val1 == VARYING) return val1;
+            if (val2 == VARYING) return val2;
+            return val1 != val2 ? VARYING : val2;
+        }
+
+        int VisitPhi(SpvInstr phi)
+        {
+            uint meet = 0;
+            for (int i = 2; i + 1 < phi.Operands.Length; i += 2)
             {
-                uint meet = 0; bool varying = false;
-                for (int i = 2; i + 1 < ins.Operands.Length; i += 2)
-                {
-                    if (!PhiArgExec(ins, i)) continue;
-                    if (!values.TryGetValue(ins.Operands[i], out uint av)) continue;   // not interesting
-                    if (av == VARYING) { varying = true; break; }
-                    if (meet == 0) meet = av; else if (meet != av) { varying = true; break; }
-                }
-                uint nv = varying ? VARYING : meet;
-                if (nv == 0) return false;
-                if (values.TryGetValue(ins.Operands[1], out uint old) && old == nv) return false;
-                values[ins.Operands[1]] = nv; return true;
+                if (!PhiArgExec(phi, i)) continue;
+                if (!values.TryGetValue(phi.Operands[i], out uint av)) continue;   // not interesting
+                if (av == VARYING) return MarkVarying(phi);
+                if (meet == 0) meet = av; else if (av != meet) return MarkVarying(phi);
             }
-            if (ins.Opcode is 249 or 250 or 251)   // branches
+            if (meet == 0) return NotInteresting;
+            values[phi.Operands[1]] = meet;
+            return Interesting;
+        }
+
+        int VisitBranch(SpvInstr ins, out uint dest)
+        {
+            dest = 0;
+            if (ins.Opcode == 249) { dest = ins.Operands[0]; return Interesting; }
+            if (ins.Opcode == 250)
             {
-                if (ins.Opcode == 249) AddEdge(blk, ins.Operands[0]);
-                else if (ins.Opcode == 250)
-                {
-                    uint c = ins.Operands[0];
-                    if (values.TryGetValue(c, out uint cv) && cv != VARYING && folder.AsBool(cv, out bool bv))
-                        AddEdge(blk, bv ? ins.Operands[1] : ins.Operands[2]);
-                    else { AddEdge(blk, ins.Operands[1]); AddEdge(blk, ins.Operands[2]); }
-                }
-                else { AddEdge(blk, ins.Operands[1]); for (int k = 3; k < ins.Operands.Length; k += 2) AddEdge(blk, ins.Operands[k]); }
-                return false;
+                if (!values.TryGetValue(ins.Operands[0], out uint cv) || cv == VARYING) return Varying;
+                if (!folder.AsBool(cv, out bool bv)) bv = false;   // a null constant takes the false target
+                dest = bv ? ins.Operands[1] : ins.Operands[2];
+                return Interesting;
             }
-            uint rid = ins.ResultId;
-            if (rid == 0) return false;
+            // OpSwitch: the case whose literal equals the selector's first word, else the default (literals are
+            // read at stride 2 whatever the selector width, as spirv-opt does).
+            if (!values.TryGetValue(ins.Operands[0], out uint sv) || sv == VARYING) return Varying;
+            folder.SwitchSelectorWord(sv, out uint word);
+            dest = ins.Operands[1];
+            for (int k = 2; k + 1 < ins.Operands.Length; k += 2) if (ins.Operands[k] == word) { dest = ins.Operands[k + 1]; break; }
+            return Interesting;
+        }
+
+        int VisitAssignment(SpvInstr ins)
+        {
+            if (ins.Opcode == OpLabel) return MarkVarying(ins);
+            if (ins.Opcode == 83)   // OpCopyObject
+            {
+                if (!values.TryGetValue(ins.Operands[2], out uint v)) return NotInteresting;
+                if (v == VARYING) return MarkVarying(ins);
+                uint nv = Meet(ins.ResultId, v);
+                values[ins.ResultId] = nv;
+                return nv == VARYING ? Varying : Interesting;
+            }
+            if (!folder.IsFoldable(ins)) return MarkVarying(ins);
             uint folded = folder.FoldToConstant(ins, valFn);
-            uint newVal = folded != 0 ? folded : VARYING;
-            if (values.TryGetValue(rid, out uint o) && o == newVal) return false;
-            if (values.TryGetValue(rid, out uint ov) && ov != VARYING && newVal == VARYING) { values[rid] = VARYING; return true; }
-            values[rid] = newVal; return true;
-        }
-
-        void Simulate(uint blkLabel)
-        {
-            var b = byLabel[blkLabel];
-            foreach (var ins in b.Insts) if (ins.Opcode == 245 && Visit(ins, blkLabel)) Enq(ins.Operands[1]);
-            if (simulated.Add(blkLabel))
+            if (folded != 0)
             {
-                foreach (var ins in b.Insts) if (ins.Opcode != 245) { if (Visit(ins, blkLabel) && ins.ResultId != 0) Enq(ins.ResultId); }
-                if (BlockSuccs(b).Count == 1) AddEdge(blkLabel, BlockSuccs(b)[0]);
+                uint nv = Meet(ins.ResultId, folded);
+                values[ins.ResultId] = nv;
+                return nv == VARYING ? Varying : Interesting;
             }
+            ins.Classify(out int ri, out bool[] isId);
+            int typeIdx = ri - 1;
+            for (int k = 0; k < ins.Operands.Length; k++)
+                if (isId[k] && k != ri && k != typeIdx && values.TryGetValue(ins.Operands[k], out uint v) && v == VARYING) return MarkVarying(ins);
+            for (int k = 0; k < ins.Operands.Length; k++)
+                if (isId[k] && k != ri && k != typeIdx && !values.ContainsKey(ins.Operands[k])) return NotInteresting;
+            return MarkVarying(ins);
         }
-        void Enq(uint id) { if (users.TryGetValue(id, out var us)) foreach (var u in us) ssaQ.Enqueue(u); }
 
-        AddEdge(0, blocks[0].Label);
-        int guard = 0;
-        while ((blockQ.Count > 0 || ssaQ.Count > 0) && ++guard < 2_000_000)
+        int VisitInstruction(SpvInstr ins, out uint dest)
         {
-            if (blockQ.Count > 0) { Simulate(blockQ.Dequeue()); continue; }
-            var instr = ssaQ.Dequeue();
-            if (blockOf.TryGetValue(instr, out uint ib) && (simulated.Contains(ib) || instr.Opcode == 245) && Visit(instr, ib) && instr.ResultId != 0) Enq(instr.ResultId);
+            dest = 0;
+            if (ins.Opcode == 245) return VisitPhi(ins);
+            if (ins.Opcode is 249 or 250 or 251) return VisitBranch(ins, out dest);
+            if (ins.Opcode == OpLabel || ins.ResultId != 0) return VisitAssignment(ins);
+            return Varying;
+        }
+
+        void Simulate(SpvInstr ins)
+        {
+            if (!ShouldSimulateAgain(ins)) return;
+            int st = VisitInstruction(ins, out uint dest);
+            bool changed = ins.Pos != st;
+            if (changed) ins.Pos = st;
+            uint blk = BlockOfI(ins);
+            if (st == Varying)
+            {
+                ins.Mark = dontSim;
+                if (changed) AddSsaEdges(ins);
+                if (ins.Opcode is 249 or 250 or 251 or 253 or 254 or 252 or 255 or 4416 or 4448 or 4449 or 5294)
+                    foreach (uint s in succs[blk]) AddControlEdge(blk, s);
+                return;
+            }
+            if (st == Interesting)
+            {
+                if (changed) AddSsaEdges(ins);
+                if (dest != 0) AddControlEdge(blk, dest);
+            }
+            bool again = false;
+            if (ins.Opcode == 245)
+            {
+                for (int i = 2; i + 1 < ins.Operands.Length && !again; i += 2)
+                    if (!PhiArgExec(ins, i) || ShouldSimulateAgain(DefInstr(ins.Operands[i]))) again = true;
+            }
+            else if (ins.Opcode != OpLabel)
+            {
+                ins.Classify(out int ri, out bool[] isId);
+                for (int k = 0; k < ins.Operands.Length && !again; k++)
+                    if (isId[k] && k != ri && k != ri - 1 && ShouldSimulateAgain(DefInstr(ins.Operands[k]))) again = true;
+            }
+            if (!again) ins.Mark = dontSim;
+        }
+
+        void SimulateBlock(uint label)
+        {
+            var b = byLabel[label];
+            foreach (var ins in b.Insts) if (ins.Opcode == 245) Simulate(ins);
+            if (simulated.Contains(label)) return;
+            Simulate(labelInstr[label]);
+            foreach (var ins in b.Insts) Simulate(ins);
+            simulated.Add(label);
+            if (succs[label].Count == 1) AddControlEdge(label, succs[label][0]);
+        }
+
+        AddControlEdge(0, blocks[0].Label);
+        while (blockQ.Count > 0 || ssaQ.Count > 0)
+        {
+            if (blockQ.Count > 0) { SimulateBlock(blockQ.Dequeue()); continue; }
+            Simulate(ssaQ.Dequeue());
         }
 
         foreach (var (id, cst) in values) if (cst != VARYING && id != cst) MapReplace(users, id, cst);
@@ -1508,14 +1425,14 @@ public static class SpirVOptimizer
     // branches, and the loop structure is removed -- matching spirv-opt's copy/thread/fold/close id order.
     static void LoopUnroll(SpvModule m)
     {
-        if (!m.Instrs.Any(i => i.Opcode == 17 && i.Operands.Length >= 1 && i.Operands[0] == 1)) return;
+        if (!HasShaderCapability(m)) return;
         foreach (uint fn in ReachableFunctions(m)) { int guard = 0; while (UnrollOneLoop(m, fn) && ++guard < 64) { } }
     }
 
     static bool UnrollOneLoop(SpvModule m, uint fnId)
     {
         int fs = -1, fe = -1;
-        for (int i = 0; i < m.Instrs.Count; i++) if (m.Instrs[i].Opcode == OpFunction && m.Instrs[i].Operands[1] == fnId) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; break; }
+        { int i = m.FindFunction(fnId); if (i >= 0) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; } }
         if (fs < 0) return false;
         var blocks = ParseBlocks(m, fs, fe, out int firstLabel);
         var byLabel = blocks.ToDictionary(b => b.Label);
@@ -1567,7 +1484,7 @@ public static class SpirVOptimizer
         static uint PhiVal(SpvInstr phi, uint label) { for (int i = 2; i + 1 < phi.Operands.Length; i += 2) if (phi.Operands[i + 1] == label) return phi.Operands[i]; return 0; }
     }
 
-    static bool ConstInt(Dictionary<uint, SpvInstr> def, uint id, out long v)
+    static bool ConstInt(DefTable def, uint id, out long v)
     {
         v = 0;
         if (!def.TryGetValue(id, out var c) || c.Opcode != OpConstant || c.Operands.Length != 3) return false;
@@ -1643,7 +1560,7 @@ public static class SpirVOptimizer
     // such function is currently in a red shader, so this pass cannot regress a green one.
     static void MergeReturn(SpvModule m)
     {
-        if (!m.Instrs.Any(i => i.Opcode == 17 && i.Operands.Length >= 1 && i.Operands[0] == 1)) return;   // Shader capability
+        if (!HasShaderCapability(m)) return;   // Shader capability
 
         var fnRange = new Dictionary<uint, (int Start, int End)>();
         for (int i = 0; i < m.Instrs.Count; i++)
@@ -1664,10 +1581,8 @@ public static class SpirVOptimizer
     static void ProcessFunctionMergeReturn(SpvModule m, uint fnId)
     {
         int fs = -1, fe = -1;
-        for (int i = 0; i < m.Instrs.Count; i++) if (m.Instrs[i].Opcode == OpFunction && m.Instrs[i].Operands[1] == fnId) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; break; }
+        { int i = m.FindFunction(fnId); if (i >= 0) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; } }
         uint retType = m.Instrs[fs].Operands[0];
-        var def = m.DefMap();
-        bool isVoid = def.TryGetValue(retType, out var rt) && rt.Opcode == OpTypeVoid;
 
         // Parse blocks (skip OpFunction/params, up to OpFunctionEnd).
         int firstLabel = fs; while (m.Instrs[firstLabel].Opcode != OpLabel) firstLabel++;
@@ -1705,6 +1620,8 @@ public static class SpirVOptimizer
             if (!inConstruct && endsFn) return;
         }
 
+        var def = m.DefMap();
+        bool isVoid = def.TryGetValue(retType, out var rt) && rt.Opcode == OpTypeVoid;
         uint nextId = m.Header[3];
         var newGlobals = new List<SpvInstr>();
         var pool = new Dictionary<string, uint>();
@@ -1821,6 +1738,16 @@ public static class SpirVOptimizer
                 (newEdges.TryGetValue(brk, out var se) ? se : newEdges[brk] = []).Add(b.Label);
                 b.Insts[^1] = new SpvInstr(249, [brk]);   // OpBranch
                 returnBlockLabels.Add(b.Label);
+            }
+            else if (b.Term.Opcode == 255)
+            {
+                // ProcessStructuredBlock treats an OpUnreachable block in the structured order (an unreachable
+                // merge) like a return without a value: it now breaks to the enclosing break merge. It is not one
+                // of the original return blocks, so it is never predicated.
+                uint brk = MergeId(stack[^1].Break);
+                UpdatePhis(b.Label, brk);
+                (newEdges.TryGetValue(brk, out var se) ? se : newEdges[brk] = []).Add(b.Label);
+                b.Insts[^1] = new SpvInstr(249, [brk]);
             }
             GenState(stack, b);
         }
@@ -2042,6 +1969,8 @@ public static class SpirVOptimizer
         public int[] VarIdx;                    // entry-block OpVariable indices
         public List<(int Label, int End)> Blocks = [];
         public bool Inlinable;
+        public bool HasAbort;                   // OpKill and the other aborts besides OpUnreachable
+        public bool AbortBlock;                 // some block ends in an abort (OpUnreachable included)
 
         public Callee(SpvInstr[] insts, uint voidType)
         {
@@ -2061,11 +1990,61 @@ public static class SpirVOptimizer
             VarIdx = [.. vars];
             for (int i = entry < 0 ? insts.Length : entry; i < insts.Length; i++)
                 if (insts[i].Opcode == OpLabel) { int e = i; while (e + 1 < insts.Length && insts[e + 1].Opcode != OpLabel) e++; Blocks.Add((i, e)); }
-            int returns = 0; bool kill = false;
-            foreach (var ins in insts) { if (ins.Opcode is OpReturn or OpReturnValue) returns++; else if (ins.Opcode == 252) kill = true; }
-            // Exactly one return, at the end; OpKill blocks it, OpUnreachable does not (spirv-opt inlines those).
-            Inlinable = entry >= 0 && !kill && returns == 1 && insts[^1].Opcode is OpReturn or OpReturnValue;
+            int returns = 0;
+            foreach (var ins in insts) { if (ins.Opcode is OpReturn or OpReturnValue) returns++; else if (ins.Opcode is 252 or 4416 or 4448 or 4449 or 5294) HasAbort = true; }
+            foreach (var (_, e) in Blocks) if (insts[e].Opcode is 252 or 255 or 4416 or 4448 or 4449 or 5294) AbortBlock = true;
+            // Exactly one return, at the end. An abort only matters at a call from a continue construct (CanInline).
+            Inlinable = entry >= 0 && returns == 1 && insts[^1].Opcode is OpReturn or OpReturnValue;
         }
+    }
+
+    // StructuredCFGAnalysis::FindFuncsCalledFromContinue: functions called (directly or transitively) from a
+    // block of some loop's continue construct -- the blocks reachable from the continue target without passing
+    // back through the loop header.
+    static HashSet<uint> FuncsCalledFromContinue(SpvModule m)
+    {
+        var direct = new List<uint>();
+        var callsOf = new Dictionary<uint, List<uint>>();
+        for (int f = 0; f < m.Instrs.Count; f++)
+        {
+            if (m.Instrs[f].Opcode != OpFunction) continue;
+            uint fnId = m.Instrs[f].Operands[1];
+            int fe = f; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++;
+            var blocks = ParseBlocks(m, f, fe, out _);
+            var byLabel = blocks.ToDictionary(b => b.Label);
+            var calls = callsOf[fnId] = [];
+            foreach (var b in blocks) foreach (var ins in b.Insts) if (ins.Opcode == OpFunctionCall) calls.Add(ins.Operands[2]);
+            foreach (var h in blocks)
+            {
+                if (h.Merge is not { Opcode: 246 } lm) continue;   // OpLoopMerge
+                var seen = new HashSet<uint>();
+                var stack = new Stack<uint>(); stack.Push(lm.Operands[1]);
+                while (stack.Count > 0)
+                {
+                    uint l = stack.Pop();
+                    if (l == h.Label || l == lm.Operands[0] || !seen.Add(l) || !byLabel.TryGetValue(l, out var b)) continue;
+                    foreach (var ins in b.Insts) if (ins.Opcode == OpFunctionCall) direct.Add(ins.Operands[2]);
+                    foreach (var sl in BlockSuccs(b)) stack.Push(sl);
+                }
+            }
+            f = fe;
+        }
+        var result = new HashSet<uint>();
+        var q = new Queue<uint>(direct);
+        while (q.Count > 0) { uint fn = q.Dequeue(); if (!result.Add(fn)) continue; if (callsOf.TryGetValue(fn, out var cs)) foreach (var c in cs) q.Enqueue(c); }
+        return result;
+    }
+
+    static List<uint> BlockSuccsOf(List<SpvInstr> body)
+    {
+        var t = body[^1];
+        return t.Opcode switch
+        {
+            249 => [t.Operands[0]],
+            250 => [t.Operands[1], t.Operands[2]],
+            251 => [.. Enumerable.Range(0, (t.Operands.Length - 1) / 2).Select(k => t.Operands[1 + 2 * k])],
+            _ => [],
+        };
     }
 
     static SpvInstr RemapInst(SpvInstr src, Dictionary<uint, uint> map)
@@ -2098,110 +2077,257 @@ public static class SpirVOptimizer
                 i = e;
             }
 
+        var calledFromContinue = FuncsCalledFromContinue(m);
+        // DecorationManager::CloneDecorations: the direct decorations of each id, cloned onto inlined copies and
+        // appended after the module's existing annotations.
+        var decoOf = new Dictionary<uint, List<SpvInstr>>();
+        foreach (var ins in m.Instrs)
+            if (ins.Opcode is OpDecorate or 332 or 5632 && ins.Operands.Length >= 1)
+                (decoOf.TryGetValue(ins.Operands[0], out var dl) ? dl : decoOf[ins.Operands[0]] = []).Add(ins);
+        var newDecos = new List<SpvInstr>();
+        // Function::IsRecursive: a function that can reach itself through calls is never inlined. GLSL input
+        // can't recurse (the frontend rejects it), but Optimize() also takes arbitrary SPIR-V.
+        var callGraph = callees.ToDictionary(kv => kv.Key, kv => kv.Value.Insts.Where(x => x.Opcode == OpFunctionCall).Select(x => x.Operands[2]).ToList());
+        var recursive = new HashSet<uint>();
+        foreach (uint fn in callGraph.Keys)
+        {
+            var seen = new HashSet<uint>(); var stack = new Stack<uint>(callGraph[fn]);
+            while (stack.Count > 0)
+            {
+                uint c = stack.Pop();
+                if (c == fn) { recursive.Add(fn); break; }
+                if (seen.Add(c) && callGraph.TryGetValue(c, out var next)) foreach (uint n in next) stack.Push(n);
+            }
+        }
         uint nextId = m.Header[3];
         var fnPtr = new Dictionary<uint, uint>();
         foreach (var ins in m.Instrs) if (ins.Opcode == OpTypePointer && ins.Operands.Length >= 3 && ins.Operands[1] == 7) fnPtr[ins.Operands[2]] = ins.Operands[0];
         var newGlobals = new List<SpvInstr>();
         uint PtrFor(uint pointee) { if (fnPtr.TryGetValue(pointee, out uint id)) return id; id = nextId++; fnPtr[pointee] = id; newGlobals.Add(new SpvInstr(OpTypePointer, [id, 7, pointee])); return id; }
 
+        // CloneDecorations, done at the moment spirv-opt does it; a clone's own decorations become cloneable too.
+        void CloneDecorations(uint from, uint to)
+        {
+            if (!decoOf.TryGetValue(from, out var ds)) return;
+            foreach (var d in ds.ToArray())
+            {
+                var copy = (uint[])d.Operands.Clone(); copy[0] = to;
+                var nd = new SpvInstr(d.Opcode, copy);
+                newDecos.Add(nd);
+                (decoOf.TryGetValue(to, out var tl) ? tl : decoOf[to] = []).Add(nd);
+            }
+        }
+        static bool IsSameBlockOp(SpvInstr i) => i.Opcode is 86 or 100;   // OpSampledImage, OpImage
+        static bool IsAbort(int op) => op is 252 or 255 or 4416 or 4448 or 4449 or 5294;
+        // In-operand ids (everything but the result type and result id).
+        static void ForEachInId(SpvInstr ins, Func<uint, uint> f)
+        {
+            ins.Classify(out int ri, out bool[] isId);
+            for (int k = 0; k < ins.Operands.Length; k++)
+                if (isId[k] && k != ri && !(ri >= 1 && k == ri - 1)) ins.Operands[k] = f(ins.Operands[k]);
+        }
+
         foreach (uint efn in entryFns)
         {
             int fs = -1, fe = -1;
-            for (int i = 0; i < m.Instrs.Count; i++) if (m.Instrs[i].Opcode == OpFunction && m.Instrs[i].Operands[1] == efn) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; break; }
+            { int i = m.FindFunction(efn); if (i >= 0) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; } }
             if (fs < 0) continue;
             int firstLabel = fs; while (firstLabel < fe && m.Instrs[firstLabel].Opcode != OpLabel) firstLabel++;
             if (firstLabel >= fe) continue;
 
-            var outE = new List<SpvInstr>();
-            var newVars = new List<SpvInstr>();
-            var phiRepoint = new Dictionary<uint, uint>();
-            // The expander itself is O(n), but a runaway call-DAG (deep noise libraries) fully inlines to a
-            // module so large that the downstream O(n^2) passes stall. A normal shader's expansion finishes far
-            // below this bound, so it is byte-identical; only a pathological one stops early (leaving calls
-            // uninlined -> already red). Bound the growing entry-function body, not the whole module.
-            bool CanInline(uint fnId) => fnId != efn && outE.Count < 32000 && callees.TryGetValue(fnId, out var c) && c.Inlinable;
+            bool CanInline(uint fnId) => fnId != efn && !recursive.Contains(fnId) && callees.TryGetValue(fnId, out var c) && c.Inlinable
+                && !(c.HasAbort && calledFromContinue.Contains(fnId));
 
-            // Append, repointing phi predecessors that moved to the tail of an already-completed multi-block
-            // inline. Applied at emission (not globally) so a callee's own phis -- emitted before their inline's
-            // repoint is recorded -- keep the call-block label they legitimately branch from as the callee entry.
-            void Emit(SpvInstr ins)
+            // The function as a list of blocks (label instruction + body).
+            var blocks = new List<(SpvInstr Label, List<SpvInstr> Insts)>();
+            for (int i = firstLabel; i < fe; i++)
             {
-                if (ins.Opcode == 245 && phiRepoint.Count > 0)
-                    for (int k = 3; k < ins.Operands.Length; k += 2) { uint p = ins.Operands[k]; while (phiRepoint.TryGetValue(p, out uint np)) p = np; ins.Operands[k] = p; }
-                outE.Add(ins);
+                if (m.Instrs[i].Opcode != OpLabel) continue;
+                var body = new List<SpvInstr>();
+                int k = i + 1; while (k < fe && m.Instrs[k].Opcode != OpLabel) body.Add(m.Instrs[k++]);
+                blocks.Add((m.Instrs[i], body));
+                i = k - 1;
             }
+            var blockById = new Dictionary<uint, List<SpvInstr>>();
+            foreach (var (l, ins) in blocks) blockById[l.Operands[0]] = ins;
 
-            uint Expand(SpvInstr callInst, uint callerBlockLabel)
+            // InlinePass::GenInlineCode for the call at callBlock[callIdx].
+            List<(SpvInstr Label, List<SpvInstr> Insts)> GenInlineCode((SpvInstr Label, List<SpvInstr> Insts) callBlock, int callIdx, List<SpvInstr> newVars)
             {
+                var callInst = callBlock.Insts[callIdx];
                 var cal = callees[callInst.Operands[2]];
                 var C = cal.Insts;
                 var map = new Dictionary<uint, uint>();
                 for (int p = 0; p < cal.ParamIds.Length; p++) map[cal.ParamIds[p]] = callInst.Operands[3 + p];
-                foreach (int vi in cal.VarIdx) { uint nid = nextId++; map[C[vi].Operands[1]] = nid; newVars.Add(RemapInst(C[vi], map)); }
-                map[cal.EntryLabelId] = callerBlockLabel;
+                // CloneAndMapLocals.
+                foreach (int vi in cal.VarIdx)
+                {
+                    uint nid = nextId++;
+                    CloneDecorations(C[vi].Operands[1], nid);
+                    var v = new SpvInstr(C[vi].Opcode, (uint[])C[vi].Operands.Clone()); v.Operands[1] = nid;
+                    map[C[vi].Operands[1]] = nid;
+                    newVars.Add(v);
+                }
+                uint callBlockId = callBlock.Label.Operands[0];
+                map[cal.EntryLabelId] = callBlockId;
+                var newBlocks = new List<(SpvInstr Label, List<SpvInstr> Insts)>();
+                var blk = (Label: new SpvInstr(OpLabel, [callBlockId]), Insts: new List<SpvInstr>());
+                // MoveInstsBeforeEntryBlock: the caller's instructions before the call, remembering same-block ops.
+                var preCallSB = new Dictionary<uint, SpvInstr>();
+                for (int i = 0; i < callIdx; i++)
+                {
+                    var ins = callBlock.Insts[i];
+                    if (IsSameBlockOp(ins)) preCallSB[ins.ResultId] = ins;
+                    blk.Insts.Add(ins);
+                }
+                bool callerIsLoopHeader = callBlock.Insts.Any(x => x.Opcode == 246);
+                int entryEnd = cal.Blocks[0].End;
+                bool calleeEntryHasMerge = false;
+                for (int i = cal.Blocks[0].Label + 1; i <= entryEnd; i++) if (C[i].Opcode is 246 or 247) calleeEntryHasMerge = true;
+                if (callerIsLoopHeader && calleeEntryHasMerge)
+                {
+                    // AddGuardBlock: the caller's OpLoopMerge cannot share a block with the callee's merge.
+                    uint guard = nextId++;
+                    blk.Insts.Add(new SpvInstr(249, [guard]));
+                    newBlocks.Add(blk);
+                    blk = (new SpvInstr(OpLabel, [guard]), new List<SpvInstr>());
+                    map[cal.EntryLabelId] = guard;
+                }
                 uint retVar = 0;
-                if (cal.RetType != voidType) { uint pt = PtrFor(cal.RetType); retVar = nextId++; newVars.Add(new SpvInstr(OpVariable, [pt, retVar, 7])); }
+                if (cal.RetType != voidType)
+                {
+                    uint pt = PtrFor(cal.RetType);
+                    retVar = nextId++;
+                    newVars.Add(new SpvInstr(OpVariable, [pt, retVar, 7]));
+                    CloneDecorations(callInst.Operands[2], retVar);
+                }
                 for (int i = 0; i <= cal.Term; i++) { uint rid = C[i].ResultId; if (rid != 0 && !map.ContainsKey(rid)) map[rid] = nextId++; }
 
-                uint curLabel = callerBlockLabel;
-                for (int bi = 0; bi < cal.Blocks.Count; bi++)
+                // InlineSingleInstruction: clone, remap the input ids, take the mapped result id and its decorations.
+                void InlineSingle(SpvInstr src)
                 {
-                    var (lbl, end) = cal.Blocks[bi];
-                    bool isLast = end == cal.Term;
-                    if (bi != 0) { uint nl = map[C[lbl].Operands[0]]; Emit(new SpvInstr(OpLabel, [nl])); curLabel = nl; }
-                    int bodyLast = isLast ? cal.Term - 1 : end;
-                    for (int i = lbl + 1; i <= bodyLast; i++)
+                    if (src.Opcode is OpReturn or OpReturnValue) return;
+                    var cp = new SpvInstr(src.Opcode, (uint[])src.Operands.Clone());
+                    ForEachInId(cp, id => map.TryGetValue(id, out uint nv) ? nv : id);
+                    uint rid = src.ResultId;
+                    if (rid != 0) { cp.Classify(out int ri, out _); cp.Operands[ri] = map[rid]; CloneDecorations(rid, map[rid]); }
+                    blk.Insts.Add(cp);
+                }
+                // InlineEntryBlock: the initializer stores, then the entry block's instructions.
+                foreach (int vi in cal.VarIdx)
+                    if (C[vi].Operands.Length >= 4) blk.Insts.Add(new SpvInstr(OpStore, [map[C[vi].Operands[1]], C[vi].Operands[3]]));
+                for (int i = cal.Blocks[0].Label + 1; i <= entryEnd; i++) if (C[i].Opcode != OpVariable) InlineSingle(C[i]);
+                // InlineBasicBlocks.
+                for (int bi2 = 1; bi2 < cal.Blocks.Count; bi2++)
+                {
+                    var (lbl, end) = cal.Blocks[bi2];
+                    newBlocks.Add(blk);
+                    blk = (new SpvInstr(OpLabel, [map[C[lbl].Operands[0]]]), new List<SpvInstr>());
+                    for (int i = lbl + 1; i <= end; i++) InlineSingle(C[i]);
+                }
+                // InlineReturn.
+                var ret = C[cal.Term];
+                if (ret.Opcode == OpReturnValue) blk.Insts.Add(new SpvInstr(OpStore, [retVar, map.GetValueOrDefault(ret.Operands[0], ret.Operands[0])]));
+                if (cal.AbortBlock)
+                {
+                    uint rl = nextId++;
+                    if (ret.Opcode is OpReturn or OpReturnValue) blk.Insts.Add(new SpvInstr(249, [rl]));
+                    newBlocks.Add(blk);
+                    blk = (new SpvInstr(OpLabel, [rl]), new List<SpvInstr>());
+                }
+                if (retVar != 0) blk.Insts.Add(new SpvInstr(OpLoad, [cal.RetType, callInst.Operands[1], retVar]));
+                // MoveCallerInstsAfterFunctionCall: regenerate a pre-call same-block op used after the call.
+                var postCallSB = new Dictionary<uint, uint>();
+                void CloneSameBlockOps(SpvInstr ins)
+                {
+                    ForEachInId(ins, id =>
                     {
-                        var inst = C[i];
-                        if (inst.Opcode == OpVariable) continue;
-                        if (inst.Opcode == OpFunctionCall && CanInline(inst.Operands[2]))
-                        {
-                            uint fin = Expand(RemapInst(inst, map), curLabel);
-                            if (fin != curLabel) { phiRepoint[curLabel] = fin; curLabel = fin; }
-                        }
-                        else Emit(RemapInst(inst, map));
-                    }
-                    if (isLast)
+                        if (postCallSB.TryGetValue(id, out uint mapped)) return mapped;
+                        if (!preCallSB.TryGetValue(id, out var pre)) return id;
+                        var sb = new SpvInstr(pre.Opcode, (uint[])pre.Operands.Clone());
+                        CloneSameBlockOps(sb);
+                        uint nid = nextId++;
+                        CloneDecorations(id, nid);
+                        sb.Classify(out int ri, out _); sb.Operands[ri] = nid;
+                        postCallSB[id] = nid;
+                        blk.Insts.Add(sb);
+                        return nid;
+                    });
+                }
+                for (int i = callIdx + 1; i < callBlock.Insts.Count; i++)
+                {
+                    var ins = callBlock.Insts[i];
+                    CloneSameBlockOps(ins);
+                    if (IsSameBlockOp(ins)) postCallSB[ins.ResultId] = ins.ResultId;
+                    blk.Insts.Add(ins);
+                }
+                newBlocks.Add(blk);
+                if (callerIsLoopHeader && newBlocks.Count > 1)
+                {
+                    // MoveLoopMergeInstToFirstBlock.
+                    var first = newBlocks[0].Insts; var last = newBlocks[^1].Insts;
+                    int mi = last.FindLastIndex(x => x.Opcode == 246);
+                    var mergeCopy = new SpvInstr(246, (uint[])last[mi].Operands.Clone());
+                    first.Insert(first.Count - 1, mergeCopy);
+                    last.RemoveAt(mi);
+                    if (mergeCopy.Operands[1] == newBlocks[0].Label.Operands[0])
                     {
-                        var ret = C[cal.Term];
-                        if (ret.Opcode == OpReturnValue) Emit(new SpvInstr(OpStore, [retVar, map.GetValueOrDefault(ret.Operands[0], ret.Operands[0])]));
-                        if (retVar != 0) Emit(new SpvInstr(OpLoad, [cal.RetType, callInst.Operands[1], retVar]));
-                        return curLabel;
+                        // UpdateSingleBlockLoopContinueTarget: split the back edge into a trivial continue block.
+                        uint nb = nextId++;
+                        var back = newBlocks[^1].Insts;
+                        var br = back[^1]; back.RemoveAt(back.Count - 1);
+                        back.Add(new SpvInstr(249, [nb]));
+                        newBlocks.Add((new SpvInstr(OpLabel, [nb]), new List<SpvInstr> { br }));
+                        mergeCopy.Operands[1] = nb;
                     }
                 }
-                return curLabel;
+                return newBlocks;
             }
 
-            for (int i = firstLabel; i < fe; i++)
+            // InlineExhaustivePass::InlineExhaustive.
+            for (int bi = 0; bi < blocks.Count; bi++)
             {
-                if (m.Instrs[i].Opcode != OpLabel) continue;
-                int end = i; while (end + 1 < fe && m.Instrs[end + 1].Opcode != OpLabel) end++;
-                uint blockLabel = m.Instrs[i].Operands[0];
-                Emit(m.Instrs[i]);
-                uint curLabel = blockLabel;
-                for (int k = i + 1; k <= end; k++)
+                int ii = 0;
+                while (ii < blocks[bi].Insts.Count)
                 {
-                    var inst = m.Instrs[k];
-                    if (inst.Opcode == OpFunctionCall && CanInline(inst.Operands[2]))
+                    var ins = blocks[bi].Insts[ii];
+                    if (ins.Opcode == OpFunctionCall && CanInline(ins.Operands[2]))
                     {
-                        uint fin = Expand(inst, curLabel);
-                        if (fin != curLabel) { phiRepoint[curLabel] = fin; curLabel = fin; }
+                        var prev = ii == 0 ? null : blocks[bi].Insts[ii - 1];
+                        var newVars = new List<SpvInstr>();
+                        var newBlocks = GenInlineCode(blocks[bi], ii, newVars);
+                        if (newBlocks.Count > 1)
+                        {
+                            // UpdateSucceedingPhis: the last new block now branches to the old block's successors.
+                            uint firstId = newBlocks[0].Label.Operands[0], lastId = newBlocks[^1].Label.Operands[0];
+                            foreach (uint succ in BlockSuccsOf(newBlocks[^1].Insts))
+                                if (blockById.TryGetValue(succ, out var sbody))
+                                    foreach (var phi in sbody.TakeWhile(x => x.Opcode == 245))
+                                        for (int k = 2; k < phi.Operands.Length; k++) if (phi.Operands[k] == firstId) phi.Operands[k] = lastId;
+                        }
+                        blocks.RemoveAt(bi);
+                        blocks.InsertRange(bi, newBlocks);
+                        foreach (var nb in newBlocks) blockById[nb.Label.Operands[0]] = nb.Insts;
+                        if (newVars.Count > 0) blocks[0].Insts.InsertRange(0, newVars);
+                        ii = prev is null ? 0 : blocks[bi].Insts.IndexOf(prev) + 1;
                     }
-                    else Emit(inst);
+                    else ii++;
                 }
-                if (curLabel != blockLabel) phiRepoint[blockLabel] = curLabel;
-                i = end;
             }
 
-            // spirv-opt inserts inlined locals at func->begin()->begin() (inline_exhaustive_pass.cpp:54) --
-            // the very front of the entry block, before the caller's pre-existing variables.
-            outE.InsertRange(1, newVars);
-
+            var outE = new List<SpvInstr>();
+            foreach (var (l, ins) in blocks) { outE.Add(l); outE.AddRange(ins); }
             m.Instrs.RemoveRange(firstLabel, fe - firstLabel);
             m.Instrs.InsertRange(firstLabel, outE);
         }
 
         if (newGlobals.Count > 0) { int ff = m.Instrs.FindIndex(x => x.Opcode == OpFunction); m.Instrs.InsertRange(ff, newGlobals); }
+        if (newDecos.Count > 0)
+        {
+            int at = m.Instrs.FindLastIndex(x => x.Opcode is 71 or 72 or 73 or 74 or 75 or 332 or 5632 or 5633) + 1;
+            if (at == 0) at = m.Instrs.FindIndex(x => x.Opcode is >= 19 and <= 39 or >= 41 and <= 52 or OpVariable or OpFunction or 1);
+            m.Instrs.InsertRange(at, newDecos);
+        }
         m.Header[3] = nextId;
     }
 
@@ -2239,7 +2365,7 @@ public static class SpirVOptimizer
         var users = m.UserMap();
         void Index(SpvInstr ins) { ins.Classify(out int ri, out bool[] isId); for (int k = 0; k < ins.Operands.Length; k++) if (isId[k] && k != ri) (users.TryGetValue(ins.Operands[k], out var l) ? l : users[ins.Operands[k]] = []).Add(ins); }
         void Deindex(SpvInstr ins) { ins.Classify(out int ri, out bool[] isId); for (int k = 0; k < ins.Operands.Length; k++) if (isId[k] && k != ri && users.TryGetValue(ins.Operands[k], out var l)) l.Remove(ins); }
-        var scratch = new List<SpvInstr>(m.Instrs.Count + 64);   // ping-pong rebuild buffer, reused across variables
+        var scratch = SpvModule.RentInstrList(m.Instrs.Count + 64);   // ping-pong rebuild buffer, reused across variables
         var scanUsed = new HashSet<int>();   // reused per candidate in the find-scan (was a HashSet per candidate)
         // Function variables are the only candidates, and they sit in a short run at the top of each entry
         // block. Scanning the whole module for them on every replacement was O(variables * module); keep the
@@ -2269,25 +2395,38 @@ public static class SpirVOptimizer
             // NOTE: this must stay one-at-a-time. Replacing a variable can expose a nested member aggregate
             // that the next scan picks up BEFORE later candidates, and that order drives id allocation, so
             // batching independent variables into a single rebuild changes the output.
-            SpvInstr? target = null; uint[]? members = null; bool wholeAccess = false;
+            SpvInstr? target = null; uint[]? members = null; bool allUsed = false;
             var usedIdx = scanUsed;
             int targetIdx = -1;
             for (int ci = 0; ci < candidates.Count; ci++)
             {
                 var v = candidates[ci];
                 var mem = Members(def[v.Operands[0]].Operands[2]);
-                if (mem is null || !users.TryGetValue(v.Operands[1], out var us)) continue;
-                bool ok = true, whole = false; scanUsed.Clear();
+                // A rejection only depends on the variable's own uses, which replacing other variables never
+                // touches, so a rejected candidate is dropped for good (the scan order of the rest is unchanged).
+                if (mem is null || !users.TryGetValue(v.Operands[1], out var us)) { candidates.RemoveAt(ci--); continue; }
+                bool ok = true, whole = false, all = false; scanUsed.Clear();
                 foreach (var u in us)
                 {
-                    if (u.Opcode is OpLoad or OpStore && (u.Opcode == OpLoad ? u.Operands[2] : u.Operands[0]) == v.Operands[1]) { whole = true; }
+                    if (u.Opcode is OpLoad or OpStore && (u.Opcode == OpLoad ? u.Operands[2] : u.Operands[0]) == v.Operands[1])
+                    {
+                        whole = true;
+                        // GetUsedComponents: a whole store uses no component; a whole load uses the components its
+                        // extracts read, or all of them when anything else consumes the loaded value.
+                        if (u.Opcode == OpLoad)
+                        {
+                            if (users.TryGetValue(u.Operands[1], out var lus) && lus.All(x => x.Opcode == OpCompositeExtract && x.Operands.Length >= 4 && x.Operands[2] == u.Operands[1]))
+                                foreach (var x in lus) scanUsed.Add((int)x.Operands[3]);
+                            else if (lus is { Count: > 0 }) all = true;
+                        }
+                    }
                     else if (u.Opcode is OpAccessChain or OpInBoundsAccessChain && u.Operands[2] == v.Operands[1] && u.Operands.Length > 3
                              && def.TryGetValue(u.Operands[3], out var idc) && idc.Opcode == OpConstant) { scanUsed.Add((int)idc.Operands[2]); }
                     else if (u.Opcode is 5 or 71 or 72) { }
                     else { ok = false; break; }
                 }
-                if (!ok || (!whole && scanUsed.Count == 0)) continue;
-                target = v; members = mem; wholeAccess = whole; targetIdx = ci; break;
+                if (!ok || (!whole && scanUsed.Count == 0)) { candidates.RemoveAt(ci--); continue; }
+                target = v; members = mem; allUsed = all; targetIdx = ci; break;
             }
             if (target is null) break;
 
@@ -2298,47 +2437,51 @@ public static class SpirVOptimizer
             uint Undef(uint typeId)
             {
                 if (undefs.TryGetValue(typeId, out uint u)) return u;
-                foreach (var ins in m.Instrs) if (ins.Opcode == OpUndef && ins.Operands[0] == typeId) { undefs[typeId] = ins.Operands[1]; return ins.Operands[1]; }
+                // MemPass::Type2Undef keeps a per-pass map: module OpUndefs are never reused.
                 foreach (var ins in newTypes) if (ins.Opcode == OpUndef && ins.Operands[0] == typeId) { undefs[typeId] = ins.Operands[1]; return ins.Operands[1]; }
                 uint id = nextId++; newTypes.Add(new SpvInstr(OpUndef, [typeId, id])); undefs[typeId] = id; return id;
             }
             for (int i = 0; i < members.Length; i++)
             {
-                if (wholeAccess || usedIdx.Contains(i)) { uint pt = FnPointerTo(members[i]); uint id = nextId++; newVars.Add(new SpvInstr(OpVariable, [pt, id, 7])); repl[i] = id; }
+                if (allUsed || usedIdx.Contains(i)) { uint pt = FnPointerTo(members[i]); uint id = nextId++; newVars.Add(new SpvInstr(OpVariable, [pt, id, 7])); repl[i] = id; }
                 else repl[i] = Undef(members[i]);
             }
 
-            // Rewrite users (rebuild the instruction stream).
-            var kill = new HashSet<SpvInstr>();
-            var expand = new Dictionary<SpvInstr, List<SpvInstr>>();   // instr -> replacement sequence (inserted before it)
-            foreach (var u in users[varId])
+            // Rewrite users (rebuild the instruction stream). A rewritten user is stamped; its replacement
+            // sequence (if any) rides in Tag.
+            var kill = new List<SpvInstr>();
+            int killStamp = SpvInstr.NewStamp();
+            void Expand(SpvInstr u, List<SpvInstr> seq) { u.Tag = seq; }
+            // WhileEachUser: def-use users in creation (unique id) order, which drives the id allocation below.
+            foreach (var u in users[varId].OrderBy(x => x.Serial).ToList())
             {
                 if (u.Opcode == OpLoad && u.Operands[2] == varId)
                 {
                     var seq = new List<SpvInstr>(); var comps = new List<uint>();
                     for (int i = 0; i < members.Length; i++)
                     {
-                        bool isVar = wholeAccess || usedIdx.Contains(i);
-                        if (isVar) { uint ld = nextId++; seq.Add(new SpvInstr(OpLoad, [members[i], ld, repl[i]])); comps.Add(ld); }
+                        bool isVar = allUsed || usedIdx.Contains(i);
+                        // ReplaceWholeLoad inserts each member load before the previous one (where = where.InsertBefore).
+                        if (isVar) { uint ld = nextId++; seq.Insert(0, new SpvInstr(OpLoad, [members[i], ld, repl[i]])); comps.Add(ld); }
                         else comps.Add(repl[i]);
                     }
                     uint comp = nextId++;
                     var cops = new List<uint> { u.Operands[0], comp }; cops.AddRange(comps);
                     seq.Add(new SpvInstr(OpCompositeConstruct, cops.ToArray()));
                     MapReplace(users, u.Operands[1], comp);
-                    expand[u] = seq; kill.Add(u);
+                    Expand(u, seq); u.Mark = killStamp; kill.Add(u);
                 }
                 else if (u.Opcode == OpStore && u.Operands[0] == varId)
                 {
                     var seq = new List<SpvInstr>(); uint srcVal = u.Operands[1];
                     for (int i = 0; i < members.Length; i++)
                     {
-                        if (!(wholeAccess || usedIdx.Contains(i))) continue;
+                        if (!(allUsed || usedIdx.Contains(i))) continue;
                         uint ex = nextId++;
                         seq.Add(new SpvInstr(OpCompositeExtract, [members[i], ex, srcVal, (uint)i]));
                         seq.Add(new SpvInstr(OpStore, [repl[i], ex]));
                     }
-                    expand[u] = seq; kill.Add(u);
+                    Expand(u, seq); u.Mark = killStamp; kill.Add(u);
                 }
                 else if (u.Opcode is OpAccessChain or OpInBoundsAccessChain && u.Operands[2] == varId)
                 {
@@ -2348,11 +2491,11 @@ public static class SpirVOptimizer
                         uint nc = nextId++;
                         var cops = new List<uint> { u.Operands[0], nc, repl[idx] };
                         for (int k = 4; k < u.Operands.Length; k++) cops.Add(u.Operands[k]);
-                        expand[u] = [new SpvInstr(u.Opcode, cops.ToArray())];
+                        Expand(u, [new SpvInstr(u.Opcode, cops.ToArray())]);
                         MapReplace(users, u.Operands[1], nc);
                     }
-                    else { MapReplace(users, u.Operands[1], repl[idx]); }
-                    kill.Add(u);
+                    else { u.Tag = null; MapReplace(users, u.Operands[1], repl[idx]); }
+                    u.Mark = killStamp; kill.Add(u);
                 }
             }
 
@@ -2361,21 +2504,32 @@ public static class SpirVOptimizer
             // are Indexed in this emitted (instruction) order and killed ones Deindexed, so `users` stays exact.
             Deindex(target);
             foreach (var k in kill) Deindex(k);
+            // CreateVariable puts each member var at the front of the variable's block (block->begin().InsertBefore),
+            // so the members land at the top of the entry block in reverse creation order.
+            int tIdx = m.Instrs.IndexOf(target), entry = tIdx;
+            while (entry > 0 && m.Instrs[entry].Opcode != OpFunction) entry--;
+            while (m.Instrs[entry].Opcode != OpLabel) entry++;
+            var entryLabel = m.Instrs[entry];
             scratch.Clear();
             for (int i = 0; i < m.Instrs.Count; i++)
             {
                 var ins = m.Instrs[i];
-                if (ins == target) { foreach (var nv in newVars) { scratch.Add(nv); Index(nv); } continue; }   // replace the aggregate var with its members
-                if (expand.TryGetValue(ins, out var seq)) { foreach (var s in seq) { scratch.Add(s); Index(s); } continue; }
-                if (kill.Contains(ins)) continue;
+                if (ins == entryLabel) { scratch.Add(ins); for (int k = newVars.Count - 1; k >= 0; k--) { scratch.Add(newVars[k]); Index(newVars[k]); } continue; }
+                if (ins == target) continue;
+                if (ins.Mark == killStamp)
+                {
+                    if (ins.Tag is List<SpvInstr> seq) foreach (var s in seq) { scratch.Add(s); Index(s); }
+                    continue;
+                }
                 scratch.Add(ins);
             }
             (m.Instrs, scratch) = (scratch, m.Instrs);   // swap; the old list becomes next iteration's buffer
             candidates.RemoveAt(targetIdx);
-            candidates.InsertRange(targetIdx, newVars);   // members take the aggregate's place in scan order
+            candidates.AddRange(newVars);   // spirv-opt's worklist is a queue: members are tried after every earlier candidate
             progress = true;
         }
 
+        SpvModule.ReturnInstrList(scratch);
         if (newTypes.Count > 0 && firstFunc >= 0)
         {
             firstFunc = m.Instrs.FindIndex(x => x.Opcode == OpFunction);
@@ -2422,7 +2576,7 @@ public static class SpirVOptimizer
             if (ins.Opcode is OpAccessChain or OpInBoundsAccessChain && ins.Operands.Length > 3 && IsTarget(ins.Operands[2])) targetAc[ins.Operands[1]] = ins;
         if (targetAc.Count == 0) return;
 
-        var rebuilt = new List<SpvInstr>(m.Instrs.Count + targetAc.Count * 2);
+        var rebuilt = SpvModule.RentInstrList(m.Instrs.Count + targetAc.Count * 2);
         foreach (var ins in m.Instrs)
         {
             if (ins.Opcode == OpLoad && ins.Operands.Length >= 3 && targetAc.TryGetValue(ins.Operands[2], out var acL))
@@ -2443,7 +2597,7 @@ public static class SpirVOptimizer
             }
             else rebuilt.Add(ins);
         }
-        m.Instrs = rebuilt;
+        m.SetInstrs(rebuilt);
         m.Header[3] = nextId;
     }
 
@@ -2466,19 +2620,23 @@ public static class SpirVOptimizer
     // early, before any id-allocating fold, so the counter matches the oracle). Only whole scalar/vector
     // locals with no access-chain use are handled (spirv-opt relies on ScalarReplacement/LocalAccessChain
     // to remove those first, which are not implemented here).
+    [ThreadStatic] static Dictionary<ulong, uint>? s_ssaCurDef;
+    [ThreadStatic] static Dictionary<uint, uint>? s_ssaLoadRepl;
+    [ThreadStatic] static Dictionary<uint, PhiCand>? s_ssaPhiAll, s_ssaPhis;
+    [ThreadStatic] static Dictionary<uint, List<(uint, int)>>? s_ssaByVal;
     static void SsaRewrite(SpvModule m)
     {
         var def = m.DefMap();
         var users = m.UserMap();
         uint nextId = m.Header[3];
-        var index = new Dictionary<SpvInstr, int>();
-        for (int i = 0; i < m.Instrs.Count; i++) index[m.Instrs[i]] = i;
 
-        var loadRepl = new Dictionary<uint, uint>();     // load result id -> value id (module-wide)
-        var phiCandsAll = new Dictionary<uint, PhiCand>();
+        // Pooled across compiles (cleared here; a cleared Dictionary enumerates in insertion order like a new one).
+        var loadRepl = s_ssaLoadRepl ??= new(); loadRepl.Clear();     // load result id -> value id (module-wide)
+        var phiCandsAll = s_ssaPhiAll ??= new(); phiCandsAll.Clear();
         var phiByBlockLabel = new Dictionary<SpvInstr, List<SpvInstr>>();
         var kill = new HashSet<SpvInstr>();
         var newGlobals = new List<SpvInstr>();
+        var fnUndefs = new Dictionary<uint, uint>();
         int firstFunc = m.Instrs.FindIndex(i => i.Opcode == OpFunction);
 
         int f = 0;
@@ -2487,6 +2645,7 @@ public static class SpirVOptimizer
             if (m.Instrs[f].Opcode != OpFunction) { f++; continue; }
             int end = f;
             while (end < m.Instrs.Count && m.Instrs[end].Opcode != OpFunctionEnd) end++;
+            fnUndefs.Clear();   // CollectTargetVars resets MemPass's type2undefs_ per function
             RewriteFunc(f, end);
             f = end + 1;
         }
@@ -2496,14 +2655,14 @@ public static class SpirVOptimizer
         // independent (no eliminated load is ever a replacement target).
         foreach (var (loadId, val) in loadRepl) MapReplace(users, loadId, Resolve(val));
         if (newGlobals.Count > 0 && firstFunc >= 0) m.Instrs.InsertRange(firstFunc, newGlobals);
-        var rebuilt = new List<SpvInstr>(m.Instrs.Count);
+        var rebuilt = SpvModule.RentInstrList(m.Instrs.Count);
         foreach (var ins in m.Instrs)
         {
             if (kill.Contains(ins)) continue;
             rebuilt.Add(ins);
             if (ins.Opcode == OpLabel && phiByBlockLabel.TryGetValue(ins, out var phis)) rebuilt.AddRange(phis);
         }
-        m.Instrs = rebuilt;
+        m.SetInstrs(rebuilt);
         m.Header[3] = nextId;
 
         // Resolve a value to its final form, chaining trivial-phi copies AND load eliminations -- a load's
@@ -2570,22 +2729,22 @@ public static class SpirVOptimizer
             }
             if (target.Count == 0) return;
 
-            var curDef = new Dictionary<(uint, int), uint>();
+            var curDef = s_ssaCurDef ??= new(); curDef.Clear();   // (var << 32 | block) -> reaching value; pooled
             // Reverse index (reaching value -> the (var,block) slots that hold it) so a trivial phi's collapse
             // touches only the slots that named it instead of scanning the whole curDef map. Entries left stale by
             // a later overwrite are filtered by re-checking curDef at use.
-            var curDefByVal = new Dictionary<uint, List<(uint, int)>>();
+            var curDefByVal = s_ssaByVal ??= new(); curDefByVal.Clear();
             var sealedB = new bool[n];
-            var phiCands = new Dictionary<uint, PhiCand>();
+            var phiCands = s_ssaPhis ??= new(); phiCands.Clear();
             var incomplete = new Queue<PhiCand>();
             var toGen = new List<PhiCand>();
 
-            void Write(uint var, int b, uint val) { curDef[(var, b)] = val; (curDefByVal.TryGetValue(val, out var l) ? l : curDefByVal[val] = []).Add((var, b)); }
+            void Write(uint var, int b, uint val) { curDef[(ulong)var << 32 | (uint)b] = val; (curDefByVal.TryGetValue(val, out var l) ? l : curDefByVal[val] = []).Add((var, b)); }
             uint Undef(uint var) => GetUndef(target[var]);
 
             uint Reaching(uint var, int b)
             {
-                if (curDef.TryGetValue((var, b), out uint hit)) return hit;
+                if (curDef.TryGetValue((ulong)var << 32 | (uint)b, out uint hit)) return hit;
                 uint val = 0;
                 if (preds[b].Count == 1) val = Reaching(var, preds[b][0]);
                 else if (preds[b].Count > 1)
@@ -2634,7 +2793,7 @@ public static class SpirVOptimizer
                     else if (loadRepl.TryGetValue(userId, out var lv) && lv == phi.Id) loadRepl[userId] = same;
                 }
                 if (curDefByVal.TryGetValue(phi.Id, out var slots))
-                    foreach (var key in slots) if (curDef.TryGetValue(key, out var cur) && cur == phi.Id) Write(key.Item1, key.Item2, same);
+                    foreach (var key in slots) if (curDef.TryGetValue((ulong)key.Item1 << 32 | (uint)key.Item2, out var cur) && cur == phi.Id) Write(key.Item1, key.Item2, same);
                 return same;
             }
 
@@ -2698,10 +2857,11 @@ public static class SpirVOptimizer
 
         uint GetUndef(uint typeId)
         {
-            foreach (var ins in m.Instrs) if (ins.Opcode == 1 && ins.Operands.Length == 2 && ins.Operands[0] == typeId) return ins.Operands[1];
-            foreach (var ins in newGlobals) if (ins.Opcode == 1 && ins.Operands[0] == typeId) return ins.Operands[1];
+            // MemPass::Type2Undef: module OpUndefs are never reused; one fresh undef per type per function.
+            if (fnUndefs.TryGetValue(typeId, out uint u)) return u;
             uint id = nextId++;
             newGlobals.Add(new SpvInstr(1, [typeId, id]));   // OpUndef
+            fnUndefs[typeId] = id;
             return id;
         }
     }
@@ -2714,7 +2874,7 @@ public static class SpirVOptimizer
     // m.ReplaceUses does. Keeps ReplaceUses semantics (decorations/names 5/6/71/72/73/74 keep the old id) and
     // moves the rewritten users to `to`'s list so chained replacements resolve. The map must hold every user
     // of `from` when called (built once, mutated only through this helper).
-    static void MapReplace(Dictionary<uint, List<SpvInstr>> users, uint from, uint to)
+    static void MapReplace(UserTable users, uint from, uint to)
     {
         if (!users.TryGetValue(from, out var us)) return;
         if (!users.TryGetValue(to, out var tl)) users[to] = tl = [];
@@ -2731,8 +2891,7 @@ public static class SpirVOptimizer
     static void LocalSingleStoreElim(SpvModule m)
     {
         var users = m.UserMap();
-        var index = new Dictionary<SpvInstr, int>();
-        for (int i = 0; i < m.Instrs.Count; i++) index[m.Instrs[i]] = i;
+        for (int i = 0; i < m.Instrs.Count; i++) m.Instrs[i].Pos = i;   // module position, valid for this pass
         var kill = new HashSet<SpvInstr>();
 
         int f = 0;
@@ -2745,7 +2904,7 @@ public static class SpirVOptimizer
             int n = blockStart.Count;
             if (n == 0) { f = end + 1; continue; }
 
-            int BlockOf(int idx) { for (int b = n - 1; b >= 0; b--) if (blockStart[b] <= idx) return b; return 0; }
+            int BlockOf(int idx) { int k = blockStart.BinarySearch(idx); return k >= 0 ? k : Math.Max(0, ~k - 1); }   // last block starting at or before idx
             bool BlockDom(int a, int b) { while (b > 0 && b != a) b = idom[b]; return b == a; }
 
             int entryEnd = n > 1 ? blockStart[1] : end;
@@ -2755,26 +2914,45 @@ public static class SpirVOptimizer
                 if (v.Opcode != OpVariable) continue;
                 if (v.Operands.Length < 3 || v.Operands[2] != 7) continue;   // Function storage
                 uint varId = v.Operands[1];
-                if (!users.TryGetValue(varId, out var us)) continue;
+                if (!users.TryGetValue(varId, out var direct)) continue;
+                // FindUses: the variable's users, and through OpCopyObject the copies' users too.
+                var us = new List<SpvInstr>();
+                void FindUses(List<SpvInstr> l) { foreach (var u in l) { us.Add(u); if (u.Opcode == OpCopyObject && users.TryGetValue(u.Operands[1], out var cl)) FindUses(cl); } }
+                FindUses(direct);
+
+                // FeedsAStore: a partial store through an access chain (or anything unknown) disqualifies it.
+                bool FeedsAStore(SpvInstr chain)
+                {
+                    if (!users.TryGetValue(chain.Operands[1], out var cus)) return false;
+                    foreach (var u in cus)
+                    {
+                        if (u.Opcode == OpStore) return true;
+                        if (u.Opcode is OpAccessChain or OpInBoundsAccessChain or OpCopyObject) { if (FeedsAStore(u)) return true; }
+                        else if (u.Opcode is OpLoad or 60 or 5 or 71 or 72 or 332) { }   // load, OpImageTexelPointer, name, decorations
+                        else return true;
+                    }
+                    return false;
+                }
 
                 SpvInstr? store = v.Operands.Length > 3 ? v : null;   // an initializer counts as the store
                 bool ok = true;
                 foreach (var u in us)
                 {
-                    if (u.Opcode == OpStore && u.Operands.Length >= 2 && u.Operands[0] == varId) { if (store is null) store = u; else { ok = false; break; } }
-                    else if (u.Opcode is OpLoad or OpCopyObject) { }
-                    else if (u.Opcode is 5 or 71 or 72) { }   // OpName / decorations
-                    else { ok = false; break; }               // access chain or anything else: not handled
+                    if (u.Opcode == OpStore) { if (store is null) store = u; else { ok = false; break; } }
+                    else if (u.Opcode is OpAccessChain or OpInBoundsAccessChain) { if (FeedsAStore(u)) { ok = false; break; } }
+                    else if (u.Opcode is OpLoad or OpCopyObject or 60) { }
+                    else if (u.Opcode is 5 or 71 or 72 or 332) { }   // OpName / decorations
+                    else { ok = false; break; }                       // a call or anything else may write it
                 }
                 if (!ok || store is null) continue;
 
                 uint storedId = store == v ? v.Operands[3] : store.Operands[1];
-                int storeBlock = store == v ? 0 : BlockOf(index[store]);
+                int storeBlock = store == v ? 0 : BlockOf(store.Pos);
                 foreach (var u in us)
                 {
-                    if (u.Opcode != OpLoad) continue;
-                    int loadBlock = BlockOf(index[u]);
-                    bool dominates = storeBlock == loadBlock ? (store == v || index[store] < index[u]) : BlockDom(storeBlock, loadBlock);
+                    if (u.Opcode != OpLoad || kill.Contains(u)) continue;
+                    int loadBlock = BlockOf(u.Pos);
+                    bool dominates = storeBlock == loadBlock ? (store == v || store.Pos < u.Pos) : BlockDom(storeBlock, loadBlock);
                     if (dominates) { MapReplace(users, u.Operands[1], storedId); kill.Add(u); }
                 }
             }
@@ -3006,9 +3184,11 @@ public static class SpirVOptimizer
         return true;
     }
 
+    [ThreadStatic] static IdSet? s_dceUsed, s_dceDefined;
     static void DeadCodeElim(SpvModule m)
     {
         if (!AdceEnabled(m)) return;
+        AdceFunctions(m);
         var def = m.DefMap();
         // Only the WorkgroupSize builtin (gl_WorkGroupSize) is force-kept by spirv-opt's ADCE when otherwise
         // unused (aggressive_dead_code_elim_pass.cpp:711); other builtins (e.g. an unread gl_GlobalInvocationID)
@@ -3016,7 +3196,7 @@ public static class SpirVOptimizer
         // One pass gathers both the WorkgroupSize-decorated ids and every id used by a non-entry, non-decoration
         // instruction (was two separate O(n) scans).
         var builtinDecorated = Pool.UintSet();
-        var usedByNonEntry = Pool.UintSet();
+        var usedByNonEntry = (s_dceUsed ??= new()).Begin(m.Header[3]);
         foreach (var ins in m.Instrs)
         {
             if (ins.Opcode == 71) { if (ins.Operands.Length >= 3 && ins.Operands[1] == 11 && ins.Operands[2] == 25) builtinDecorated.Add(ins.Operands[0]); continue; }   // BuiltIn WorkgroupSize
@@ -3055,19 +3235,6 @@ public static class SpirVOptimizer
                     ins.Operands = kept.ToArray();
                 }
 
-        // Dead-store removal: a store whose destination roots at a Function/Private variable that no load reads.
-        var loadedVars = Pool.UintSet();
-        foreach (var ins in m.Instrs)
-            if (ins.Opcode == OpLoad && ins.Operands.Length >= 3) loadedVars.Add(RootVar(ins.Operands[2]));
-        m.Instrs.RemoveAll(ins =>
-        {
-            if (ins.Opcode != OpStore) return false;
-            uint v = RootVar(ins.Operands[0]);
-            return def.TryGetValue(v, out var d) && d.Opcode == OpVariable
-                && d.Operands.Length >= 3 && d.Operands[2] is OpTypePointerSc or 6   // Function or Private
-                && !loadedVars.Contains(v);
-        });
-
         // Iterative removal of unused, side-effect-free, result-defining instructions. GLSL.std.450 ext-insts
         // are pure math and removable when unused (unlike a NonSemantic/debugPrintf ext-inst).
         uint glslExtId = 0;
@@ -3085,31 +3252,39 @@ public static class SpirVOptimizer
             return true;
         }
         // `def` (built at the top) is still the id->definer map: only result-less OpStores were removed since.
-        var liveSet = Pool.InstrSet();
+        int liveMark = SpvInstr.NewStamp();
         var stack = Pool.InstrStack();
-        foreach (var ins in m.Instrs) if (ins.Opcode is not (71 or 72 or 332) && !Removable(ins) && liveSet.Add(ins)) stack.Push(ins);
+        foreach (var ins in m.Instrs) if (ins.Opcode is not (71 or 72 or 332) && !Removable(ins) && ins.Mark != liveMark) { ins.Mark = liveMark; stack.Push(ins); }
         while (stack.Count > 0)
         {
             var ins = stack.Pop();
             ins.Classify(out int ri, out bool[] isId);
             for (int i = 0; i < ins.Operands.Length; i++)
-                if (isId[i] && i != ri && def.TryGetValue(ins.Operands[i], out var d) && liveSet.Add(d)) stack.Push(d);
+                if (isId[i] && i != ri && def.TryGetValue(ins.Operands[i], out var d) && d.Mark != liveMark) { d.Mark = liveMark; stack.Push(d); }
         }
-        m.Instrs.RemoveAll(ins => Removable(ins) && !liveSet.Contains(ins));
+        m.Instrs.RemoveAll(ins => ins.Mark != liveMark && Removable(ins));
 
         // A decoration whose target id no longer exists is dead; identical decorations are redundant. Both
         // are stripped (spirv-opt removes a decoration along with the instruction it targeted, and never
         // emits duplicates). Liveness is untouched: an instruction that still exists keeps its decorations.
-        var defined = Pool.UintSet();
+        var defined = (s_dceDefined ??= new()).Begin(m.Header[3]);
         foreach (var ins in m.Instrs) { uint r = ins.ResultId; if (r != 0) defined.Add(r); }
-        var seenDecor = new HashSet<string>();
+        var seenDecor = new HashSet<SpvInstr>(SameInstrComparer.Instance);
         m.Instrs.RemoveAll(ins =>
         {
             if (ins.Opcode is not (71 or 72 or 332)) return false;   // OpDecorate / OpMemberDecorate / OpDecorateId
             if (ins.Operands.Length > 0 && !defined.Contains(ins.Operands[0])) return true;
-            return !seenDecor.Add(ins.Opcode + ":" + string.Join(',', ins.Operands));
+            return !seenDecor.Add(ins);
         });
-        Pool.Free(builtinDecorated); Pool.Free(usedByNonEntry); Pool.Free(deadGlobals); Pool.Free(loadedVars); Pool.Free(defined); Pool.Free(liveSet); Pool.Free(stack);
+        Pool.Free(builtinDecorated); Pool.Free(deadGlobals); Pool.Free(stack);
+    }
+
+    // Instructions equal by opcode and operand words.
+    sealed class SameInstrComparer : IEqualityComparer<SpvInstr>
+    {
+        public static readonly SameInstrComparer Instance = new();
+        public bool Equals(SpvInstr? a, SpvInstr? b) => a!.Opcode == b!.Opcode && a.Operands.AsSpan().SequenceEqual(b.Operands);
+        public int GetHashCode(SpvInstr i) { var h = new HashCode(); h.Add(i.Opcode); foreach (uint w in i.Operands) h.Add(w); return h.ToHashCode(); }
     }
 
     // Result-defining opcodes with no side effect, safe to drop when their result is unused. Anything with a

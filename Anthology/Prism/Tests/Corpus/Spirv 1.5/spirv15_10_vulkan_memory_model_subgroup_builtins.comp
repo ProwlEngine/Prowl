@@ -1,0 +1,6 @@
+#version 450
+#pragma use_vulkan_memory_model
+#extension GL_KHR_shader_subgroup_basic : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer B { uint v[]; } b;
+void main() { b.v[gl_LocalInvocationIndex] = gl_SubgroupInvocationID + gl_SubgroupSize; }
