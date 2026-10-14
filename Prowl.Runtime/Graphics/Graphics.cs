@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -217,6 +218,8 @@ public static unsafe class Graphics
 
     internal static void EndFrameAndWait()
     {
+        using FrameStatScope stats = FrameStats.RenderWait.Scope();
+
         int inFlight = XR.IsRunning ? 1 : System.Math.Max(1, MaxFramesInFlight);
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         lock (s_frameLock)
