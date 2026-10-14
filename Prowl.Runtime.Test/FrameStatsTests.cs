@@ -3,7 +3,8 @@
 
 using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
+using System.Runtime.ExceptionServices;
+using System.Threading;
 
 using Prowl.Runtime.Diagnostics;
 
@@ -22,6 +23,21 @@ public class FrameStatsTests
     {
         var sw = Stopwatch.StartNew();
         while (sw.Elapsed.TotalMilliseconds < ms) { }
+    }
+
+    // A thread of its own. Task.Run(...).Wait() is not enough: with the pool busy, as when a test runner runs many
+    // tests at once, Wait runs the task inline on the waiting thread, which is the recorded one.
+    private static void OnOtherThread(Action work)
+    {
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try { work(); }
+            catch (Exception ex) { error = ex; }
+        });
+        thread.Start();
+        thread.Join();
+        if (error != null) ExceptionDispatchInfo.Throw(error);
     }
 
     [Fact]
@@ -87,11 +103,10 @@ public class FrameStatsTests
         FrameStat offThread = FrameStats.GetCategory("Test.OffThread");
 
         FrameStats.Start();
-        // Waited on rather than awaited, so EndFrame runs on the thread Start made the main one.
-        Task.Run(() =>
+        OnOtherThread(() =>
         {
             using (offThread.Scope()) Spin(5);
-        }).Wait();
+        });
         FrameStats.EndFrame();
 
         Assert.Equal(new FrameStatSample(0, 0), offThread.GetSample(0));
@@ -409,7 +424,7 @@ public class FrameStatsTests
         FrameStats.Start();
         using (main.Scope())
         {
-            Task.Run(() => { using (worker.Scope()) Spin(5); }).Wait();
+            OnOtherThread(() => { using (worker.Scope()) Spin(5); });
             Spin(5);
         }
         FrameStats.EndFrame();
@@ -426,7 +441,7 @@ public class FrameStatsTests
 
         FrameStats.Start();
         using (from.Scope()) Spin(5);
-        Task.Run(() => FrameStats.Transfer(from, to, long.MaxValue)).Wait();
+        OnOtherThread(() => FrameStats.Transfer(from, to, long.MaxValue));
         FrameStats.EndFrame();
 
         Assert.Equal(0, to.GetSample(0).Ms);
