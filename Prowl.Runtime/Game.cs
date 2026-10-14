@@ -8,6 +8,7 @@ using Echo.Logging;
 using Prowl.Runtime.Audio;
 
 using Prowl.PaperUI;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
@@ -190,17 +191,20 @@ public abstract class Game
                     Graphics.Submit(preGui);
                 }
 
-                // Sync Paper's logical resolution + DPI to the window each frame.
-                PreparePaperFrame();
-                _paper.BeginFrame(delta, -1f); // negative = keep DisplayFramebufferScale set by PreparePaperFrame
+                using (FrameStats.UI.Scope())
+                {
+                    // Sync Paper's logical resolution + DPI to the window each frame.
+                    PreparePaperFrame();
+                    _paper.BeginFrame(delta, -1f); // negative = keep DisplayFramebufferScale set by PreparePaperFrame
 
-                BeginGui(_paper);
+                    BeginGui(_paper);
 
-                OnGui(currentScene, _paper);
+                    OnGui(currentScene, _paper);
 
-                EndGui(_paper);
+                    EndGui(_paper);
 
-                _paper.EndFrame();
+                    _paper.EndFrame();
+                }
 
                 // After the GUI, since the editor renders its Game View, and with it the eyes, from there.
                 XR.RenderMissedEyes(currentScene);
@@ -329,6 +333,8 @@ public abstract class Game
         var runClock = System.Diagnostics.Stopwatch.StartNew();
         long frame = 0;
 
+        FrameStats.Start();
+
         try
         {
             while (!_headlessQuitRequested)
@@ -359,6 +365,8 @@ public abstract class Game
 
                 // Throttle to the target tick rate so a server doesn't spin a core at 100%.
                 Application.WaitForNextFrame();
+
+                FrameStats.EndFrame();
             }
         }
         finally
