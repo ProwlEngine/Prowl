@@ -122,9 +122,9 @@ public class FrameStatsPanel : DockPanel
         {
             using (paper.Row("fs_tb").Height(ToolbarH - 1).Padding(10, 8, 0, 0).Gap(6).Enter())
             {
-                EditorGUI.ToolbarIconBtn(paper, "fs_pause", _paused ? EditorIcons.Play : EditorIcons.Pause, _paused,
-                    () => SetPaused(!_paused), Loc.Get(_paused ? "frame_stats.resume_tip" : "frame_stats.pause_tip"));
-                EditorGUI.ToolbarIconBtn(paper, "fs_clear", EditorIcons.Trash, false, Clear, Loc.Get("frame_stats.clear_tip"));
+                EditorGUI.ToolbarIconBtn(paper, "fs_pause", _paused ? EditorIcons.Play : EditorIcons.Pause,
+                    Loc.Get(_paused ? "frame_stats.resume_tip" : "frame_stats.pause_tip"), _paused, () => SetPaused(!_paused));
+                EditorGUI.ToolbarIconBtn(paper, "fs_clear", EditorIcons.Trash, Loc.Get("frame_stats.clear_tip"), false, Clear);
 
                 EditorGUI.StatChip(paper, "fs_chip_ms", Loc.Get("frame_stats.frame", new { ms = frameMs.ToString("0.00") }), font,
                     Loc.Get("frame_stats.frame_tip"));
