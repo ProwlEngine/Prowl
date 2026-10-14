@@ -12,9 +12,9 @@ namespace Prowl.Runtime.Diagnostics;
 /// <summary>
 /// Where each frame's main-thread time goes, by category, over the last <see cref="HistoryLength"/> frames.
 /// <code>
-/// using var _ = FrameStats.Physics.Scope();            // built-in category
-/// using (FrameStats.Scope("AI")) UpdateAgents();       // your own, created on first use
-/// float avg = FrameStats.Render.GetStats(60).Avg;      // ms per frame, last 60 frames
+/// using FrameStatScope stats = FrameStats.Physics.Scope();  // built-in category, to the end of the method
+/// using (FrameStats.Scope("AI")) UpdateAgents();             // your own, created on first use
+/// float avg = FrameStats.Render.GetStats(60).Avg;            // ms per frame, last 60 frames
 /// </code>
 /// Nested scopes count only their own time, so a frame's categories add up to its length, with unscoped
 /// time in <see cref="Other"/> and GC pauses in <see cref="GC"/>. Scopes off the main thread record nothing.
