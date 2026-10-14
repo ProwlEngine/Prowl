@@ -296,6 +296,35 @@ public class FrameStatsTests
         Assert.Contains(FrameStats.Render, FrameStats.Categories);
     }
 
+    // Always on in shipped games, so the engine's per-frame use must never make garbage. Timing is left to the
+    // benchmarks; allocation is exact, so it can be checked here.
+    [Fact]
+    public void ScopesTransfersAndFrameEndsAllocateNothing()
+    {
+        FrameStat custom = FrameStats.GetCategory("Test.NoAlloc");
+        FrameStats.GetCategory("Test.NoAllocNamed");
+
+        void Frame()
+        {
+            using (FrameStats.Update.Scope())
+            using (FrameStats.Physics.Scope()) { }
+            using (custom.Scope()) { }
+            using (FrameStats.Scope("Test.NoAllocNamed")) { }
+            using (FrameStats.RenderWait.Scope())
+                FrameStats.Transfer(FrameStats.RenderWait, FrameStats.Idle, 10);
+            FrameStats.EndFrame();
+        }
+
+        FrameStats.Start();
+        for (int i = 0; i < 10; i++) Frame();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++) Frame();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, allocated);
+    }
+
     // ---- Edge cases ----
 
     [Fact]
