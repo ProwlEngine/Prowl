@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -1063,21 +1064,26 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Update()
     {
         if (IsDisposed) return;
+        using FrameStatScope stats = FrameStats.Update.Scope();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
         _dispatcher.RunStart();
 
         // Navigation (crowd steering) advances on the variable update, before component Updates
         // so gameplay code sees fresh agent state. A crowd that blows up must not crash the frame,
         // and does so every frame, so it is reported once.
-        try { _navigation.Update(Time.DeltaTime); }
-        catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
+        using (FrameStats.Navigation.Scope())
+        {
+            try { _navigation.Update(Time.DeltaTime); }
+            catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
+        }
 
         _dispatcher.RunUpdate();
 
         // Animation sits between the two so gameplay code reaching in to override a bone in
         // LateUpdate finds the pose already written. An animator that blows up must not take the
         // frame with it, and the manager reports each one rather than rethrowing.
-        _animation.Update(Time.DeltaTime);
+        using (FrameStats.Animation.Scope())
+            _animation.Update(Time.DeltaTime);
 
         _dispatcher.RunLateUpdate();
 
@@ -1091,6 +1097,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void FixedUpdate()
     {
         if (IsDisposed) return;
+        using FrameStatScope stats = FrameStats.Update.Scope();
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
@@ -1100,9 +1107,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         Physics.TrackCollisions(_dispatcher.CollisionListeners > 0);
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
-        try { Physics.Update(); }
-        // A solver that blows up does so every frame, so report it once rather than per frame.
-        catch (Exception ex) { Debug.LogErrorOnce("Physics.StepThrew", $"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
+        using (FrameStats.Physics.Scope())
+        {
+            try { Physics.Update(); }
+            // A solver that blows up does so every frame, so report it once rather than per frame.
+            catch (Exception ex) { Debug.LogErrorOnce("Physics.StepThrew", $"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
+        }
 
         Flush();
     }
