@@ -90,6 +90,9 @@ public static partial class SpirVOptimizer
             // runs through this pipeline under byte-parity verification).
             throw new GlslParseException($"optimizer: module rejected - structurally valid but semantically inconsistent ({e.GetType().Name}: {e.Message}); input may be corrupt");
         }
+        // SPIR-V ids are 22 bits; the passes allocate fresh ids, so refuse a module that ran past the maximum.
+        if (m.Header[3] > 0x3FFFFF)
+            throw new GlslParseException($"optimizer: the module needs id bound {m.Header[3]}, past the SPIR-V maximum 4194303");
         if (!trace) return m.Serialize();
         long sb0 = GC.GetAllocatedBytesForCurrentThread(); var ssw = System.Diagnostics.Stopwatch.StartNew();
         var outWords = m.Serialize();
@@ -1948,7 +1951,39 @@ public static partial class SpirVOptimizer
         }
 
         var kill = new HashSet<SpvInstr>();
-        foreach (var (fn, r) in ranges) if (!live.Contains(fn)) for (int i = r.Start; i <= r.End; i++) kill.Add(m.Instrs[i]);
+        var deadIds = new HashSet<uint>();
+        foreach (var (fn, r) in ranges) if (!live.Contains(fn))
+        {
+            deadIds.Add(fn);
+            for (int i = r.Start; i <= r.End; i++) kill.Add(m.Instrs[i]);
+        }
+
+        // Debug-info records name the functions they describe. A record naming a removed function is removed, and so is
+        // any record naming one of those, so no debug instruction is left naming a missing id.
+        if (deadIds.Count > 0)
+        {
+            var debugSets = new HashSet<uint>();
+            foreach (var ins in m.Instrs)
+                if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1).StartsWith("NonSemantic.Shader.DebugInfo", StringComparison.Ordinal))
+                    debugSets.Add(ins.Operands[0]);
+            bool changed = debugSets.Count > 0;
+            while (changed)
+            {
+                changed = false;
+                foreach (var ins in m.Instrs)
+                {
+                    if (ins.Opcode != 12 || ins.Operands.Length < 4 || !debugSets.Contains(ins.Operands[2]) || kill.Contains(ins)) continue;
+                    // Every operand after the set and instruction number may name a debug record or a function. (A line or
+                    // flag literal that happens to equal a removed id only drops a debug record, never shader code.)
+                    bool names = false;
+                    for (int k = 4; k < ins.Operands.Length && !names; k++) names = deadIds.Contains(ins.Operands[k]);
+                    if (!names) continue;
+                    kill.Add(ins);
+                    if (ins.Operands[1] != 0) deadIds.Add(ins.Operands[1]);
+                    changed = true;
+                }
+            }
+        }
         if (kill.Count > 0) m.Instrs.RemoveAll(kill.Contains);
     }
 
@@ -2069,14 +2104,23 @@ public static partial class SpirVOptimizer
 
         uint voidType = 0; foreach (var ins in m.Instrs) if (ins.Opcode == OpTypeVoid) { voidType = ins.Operands[0]; break; }
 
+        // glslang places a function's DebugFunctionDefinition inside its OpFunction..OpFunctionEnd range. It describes the
+        // callee itself, so inlining must not copy it: the copy would name a fresh id for a function that never exists.
+        var debugSets = new HashSet<uint>();
+        foreach (var ins in m.Instrs)
+            if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1).StartsWith("NonSemantic.Shader.DebugInfo", StringComparison.Ordinal))
+                debugSets.Add(ins.Operands[0]);
+        static bool IsFunctionDebugRecord(SpvInstr x, HashSet<uint> sets) =>
+            x.Opcode == 12 && x.Operands.Length >= 4 && sets.Contains(x.Operands[2]) && x.Operands[3] == 101;
+
         var callees = new Dictionary<uint, Callee>();
         for (int i = 0; i < m.Instrs.Count; i++)
             if (m.Instrs[i].Opcode == OpFunction)
             {
                 int e = i; while (e < m.Instrs.Count && m.Instrs[e].Opcode != OpFunctionEnd) e++;
-                var slice = new SpvInstr[e - i];
-                for (int k = i; k < e; k++) slice[k - i] = m.Instrs[k];
-                callees[m.Instrs[i].Operands[1]] = new Callee(slice, voidType);
+                var slice = new List<SpvInstr>(e - i);
+                for (int k = i; k < e; k++) if (!IsFunctionDebugRecord(m.Instrs[k], debugSets)) slice.Add(m.Instrs[k]);
+                callees[m.Instrs[i].Operands[1]] = new Callee(slice.ToArray(), voidType);
                 i = e;
             }
 

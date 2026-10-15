@@ -286,6 +286,8 @@ public sealed class Preprocessor
         var (header, isSystem) = HeaderName(dir, line);
         var file = _includes(header, isSystem, _currentFile)
             ?? throw new GlslParseException($"cannot open include file '{Clip(header)}'", line);
+        if (file.Name is null || file.Content is null)
+            throw new GlslParseException($"cannot open include file '{Clip(header)}'", line);
         if (_included.Contains(file.Name)) return;
         if (_includeDepth >= MaxIncludeDepth)
             throw new GlslParseException($"#include nested too deeply (limit {MaxIncludeDepth})", line);
@@ -1045,6 +1047,9 @@ public sealed class Preprocessor
     // __LINE__ can still report the physical line, as glslang does.
     static string Splice(string source, Dictionary<int, List<int>>? joins = null)
     {
+        // A byte-order mark is not part of the shader, and glslang reads CR, LF and CRLF line endings alike.
+        if (source.Length > 0 && source[0] == '\uFEFF') source = source[1..];
+        if (source.IndexOf('\r') >= 0) source = source.Replace("\r\n", "\n").Replace('\r', '\n');
         if (source.IndexOf('\\') < 0) return source;   // nothing to join
         var sb = new System.Text.StringBuilder(source.Length);
         int pending = 0, line = 1, lineStart = 0;

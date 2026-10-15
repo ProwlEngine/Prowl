@@ -48,7 +48,7 @@ public static class GlslCompiler
     /// pragmas, defines, and included files), so a host can lay out a program before compiling it.
     /// </summary>
     public static PreprocessResult Preprocess(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null) =>
-        Preprocessor.Preprocess(source, defines, includes);
+        (_lane ??= new CompileLane()).Run(() => Preprocessor.Preprocess(source, defines, includes));
 }
 
 /// <summary>
@@ -64,14 +64,20 @@ sealed class CompileLane
 
     public CompileLane()
     {
+        // The lane's thread captures only the queue, never this lane: the lane is then held only by its owner
+        // thread's ThreadStatic slot, so once the owner has exited and the lane is collected, the finalizer below
+        // ends the lane's thread too.
+        var queue = _queue;
         _thread = new Thread(() =>
         {
-            foreach (var (work, done) in _queue.GetConsumingEnumerable())
+            foreach (var (work, done) in queue.GetConsumingEnumerable())
                 try { done.SetResult(work()); }
                 catch (Exception e) { done.SetException(e); }
         }, maxStackSize: 64 * 1024 * 1024) { IsBackground = true, Name = "Prism compile" };
         _thread.Start();
     }
+
+    ~CompileLane() => _queue.CompleteAdding();
 
     public T Run<T>(Func<T> work)
     {

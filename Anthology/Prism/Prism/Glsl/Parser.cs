@@ -45,6 +45,8 @@ public sealed class Parser
                                              // ~2,000 die. 8192 covers the corpus and the shared zone
                                              // on the compile lane's 64 MB stack (see GlslCompiler).
     int _depth;
+    int _controlDepth;   // nested if/for/while/do/switch statements being parsed
+    const int MaxControlNesting = 1023;
 
     Parser(List<Token> tokens, int version, bool isEs = false, IReadOnlyList<string>? extensions = null, IReadOnlyList<string>? pragmas = null)
     {
@@ -497,9 +499,13 @@ public sealed class Parser
     {
         int ln = Cur.Line;
         if (++_depth > MaxNestingDepth) { _depth--; throw new GlslParseException($"statement nesting is too deep (limit {MaxNestingDepth})", ln); }
+        // SPIR-V's universal limit is 1023 nested control-flow constructs (spirv-val rejects deeper modules).
+        bool control = Cur.Kind == TokenKind.Identifier && Cur.Text is "if" or "for" or "while" or "do" or "switch";
+        if (control && ++_controlDepth > MaxControlNesting)
+            throw new GlslParseException($"control flow is nested deeper than the SPIR-V limit of {MaxControlNesting}", ln);
         Stmt s;
         try { s = ParseStatementCore(); }
-        finally { _depth--; }
+        finally { _depth--; if (control) _controlDepth--; }
         if (s.Line == 0) s.Line = ln;
         return s;
     }
