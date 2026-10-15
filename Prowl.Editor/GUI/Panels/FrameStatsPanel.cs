@@ -105,10 +105,6 @@ public class FrameStatsPanel : DockPanel
         FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // The panel's own work, here and in the callbacks Paper runs at the end of its frame, is scoped to its own
-        // category. Only Paper's handling of its few elements and the upload of what it draws stay in the editor's UI.
-        using FrameStatScope stats = EditorFrameStats.FrameStatsUI.Scope();
-
         // Frames from while paused are dropped, so the chart picks up from now when it resumes.
         if (_paused) _history.Skip();
         else
@@ -406,11 +402,7 @@ public class FrameStatsPanel : DockPanel
             .OnPostLayout((handle, rect) =>
             {
                 _graphRect = rect;
-                paper.Draw(ref handle, (canvas, r) =>
-                {
-                    using FrameStatScope stats = EditorFrameStats.FrameStatsUI.Scope();
-                    PaintGraph(paper, canvas, r, font);
-                });
+                paper.Draw(ref handle, (canvas, r) => PaintGraph(paper, canvas, r, font));
             });
     }
 
@@ -736,11 +728,7 @@ public class FrameStatsPanel : DockPanel
             {
                 _headerRect = rect;
                 _headerId = handle.Data.ID;
-                paper.Draw(ref handle, (canvas, r) =>
-                {
-                    using FrameStatScope stats = EditorFrameStats.FrameStatsUI.Scope();
-                    PaintHeader(canvas, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, font);
-                });
+                paper.Draw(ref handle, (canvas, r) => PaintHeader(canvas, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, font));
             });
 
         // Only the rows in view are drawn, which the scroll view allows when it snaps rather than eases.
@@ -755,11 +743,7 @@ public class FrameStatsPanel : DockPanel
                 {
                     _rowsRect = rect;
                     _rowsId = handle.Data.ID;
-                    paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        using FrameStatScope stats = EditorFrameStats.FrameStatsUI.Scope();
-                        PaintRows(canvas, r, font, totals);
-                    });
+                    paper.Draw(ref handle, (canvas, r) => PaintRows(canvas, r, font, totals));
                 });
         });
     }
@@ -1069,7 +1053,6 @@ public class FrameStatsPanel : DockPanel
         [EditorFrameStats.Gizmos] = "frame_stats.desc_editor_gizmos",
         [EditorFrameStats.Assets] = "frame_stats.desc_editor_assets",
         [EditorFrameStats.Scripts] = "frame_stats.desc_editor_scripts",
-        [EditorFrameStats.FrameStatsUI] = "frame_stats.desc_editor_frame_stats",
         [FrameStats.RenderWait] = "frame_stats.desc_render_wait",
         [FrameStats.Idle] = "frame_stats.desc_idle",
         [FrameStats.GC] = "frame_stats.desc_gc",
@@ -1094,7 +1077,6 @@ public class FrameStatsPanel : DockPanel
         [EditorFrameStats.Gizmos] = "frame_stats.name_editor_gizmos",
         [EditorFrameStats.Assets] = "frame_stats.name_editor_assets",
         [EditorFrameStats.Scripts] = "frame_stats.name_editor_scripts",
-        [EditorFrameStats.FrameStatsUI] = "frame_stats.name_editor_frame_stats",
         [FrameStats.RenderWait] = "frame_stats.name_render_wait",
         [FrameStats.Idle] = "frame_stats.name_idle",
         [FrameStats.GC] = "frame_stats.name_gc",

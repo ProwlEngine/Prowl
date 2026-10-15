@@ -17,10 +17,4 @@ internal static class EditorFrameStats
     public static readonly FrameStat Gizmos = FrameStats.GetCategory("Editor/Gizmos");
     public static readonly FrameStat Assets = FrameStats.GetCategory("Editor/Assets");
     public static readonly FrameStat Scripts = FrameStats.GetCategory("Editor/Scripts");
-
-    /// <summary>
-    /// The Frame Stats panel's own work, kept apart from <see cref="UI"/> so the profiler skews the editor's
-    /// numbers as little as possible. Paper's layout and upload of its elements still count as UI.
-    /// </summary>
-    public static readonly FrameStat FrameStatsUI = FrameStats.GetCategory("Editor/Frame Stats UI");
 }
