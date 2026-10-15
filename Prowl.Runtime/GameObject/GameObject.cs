@@ -1166,6 +1166,12 @@ public partial class GameObject : EngineObject, ISerializable
             SetParent(null);
     }
 
+    private protected override void OnDisposed()
+    {
+        Scene? scene = Scene;
+        if (scene.IsValid()) scene.MarkObjectDisposed();
+    }
+
     /// <summary>
     /// Sets the enabled state of the GameObject.
     /// </summary>

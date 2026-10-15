@@ -817,6 +817,10 @@ public sealed class Rigidbody3D : Component
         if (Transform.Version == _lastSyncedTransformVersion) return;
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version;
+
+        // Colliders on this GameObject are not watched by the world, so a rescale reaches them from here.
+        foreach (Collider collider in GameObject.GetComponents<Collider>())
+            if (collider.EnabledInHierarchy && collider.AttachedRigidbody == this) collider.RefreshPlacement();
     }
 
     /// <summary>

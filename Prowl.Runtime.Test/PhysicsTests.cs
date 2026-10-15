@@ -234,6 +234,87 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
+    public void StaticCollider_Moved_ShapeFollowsBeforeTheNextStep()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    [Fact]
+    public void StaticCollider_LayerChanged_IsQueriedOnTheNewLayer()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One, layer: 1);
+        StepPhysics(scene);
+
+        wall.LayerIndex = 2;
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(1) }));
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(2) }));
+    }
+
+    [Fact]
+    public void ChildCollider_MovedOnItsBody_ShapeFollows()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject body = CreateGameObject("Body");
+        body.AddComponent<Rigidbody3D>().AffectedByGravity = false;
+        GameObject child = CreateGameObject("Child");
+        child.SetParent(body);
+        child.AddComponent<BoxCollider>();
+        scene.Add(body);
+        StepPhysics(scene);
+
+        child.Transform.LocalPosition = new Float3(5, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+    }
+
+    [Fact]
+    public void Rigidbody_Rescaled_ColliderOnItsObjectRescales()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        StepPhysics(scene);
+        Assert.False(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
+
+        rb.Transform.LocalScale = new Float3(4, 1, 1);
+        StepPhysics(scene);
+
+        Assert.True(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
+    }
+
+    [Fact]
+    public void Rigidbody_Rescaled_ChildColliderRescales()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject body = CreateGameObject("Body");
+        Rigidbody3D rb = body.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        GameObject child = CreateGameObject("Child");
+        child.SetParent(body);
+        child.AddComponent<BoxCollider>();
+        scene.Add(body);
+        StepPhysics(scene);
+        Assert.False(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
+
+        body.Transform.LocalScale = new Float3(4, 1, 1);
+        StepPhysics(scene);
+
+        Assert.True(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
+    }
+
+    [Fact]
     public void Rigidbody_MovePosition_TeleportsBody_AndShapeFollows()
     {
         Scene scene = CreatePhysicsScene();

@@ -331,6 +331,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore]
     private HashSet<GameObject> _allObjSet = new(ReferenceEqualityComparer.Instance);
 
+    // Set when one of this scene's GameObjects is disposed, so Flush only scans when there is something to drop.
+    [SerializeIgnore]
+    private bool _hasDisposedObjects;
+
+    internal void MarkObjectDisposed() => _hasDisposedObjects = true;
+
     // The worlds below only index the scene's own components, which the walk reaches through _allObj.
     [NotHeld]
     private PhysicsWorld _physics = new();
@@ -888,7 +894,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary> Unregisters all dead / disposed GameObjects </summary>
     public void Flush()
     {
-        if (IsDisposed) return;
+        if (IsDisposed || !_hasDisposedObjects) return;
+        _hasDisposedObjects = false;
         List<GameObject> removed = [];
         foreach (GameObject obj in _allObj)
         {

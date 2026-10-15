@@ -181,6 +181,9 @@ public class PhysicsWorld
     // Bodies whose pose changed in the last step, so only they get their Transform written each frame.
     private List<Rigidbody3D> _movedBodies = [];
     private List<Rigidbody3D> _movedScratch = [];
+
+    // Colliders that can move relative to their body: static ones, and ones on a child GameObject.
+    private readonly List<Collider> _watchedColliders = [];
     private uint _captureStamp;
 
     // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
@@ -603,15 +606,49 @@ public class PhysicsWorld
     }
 
     /// <summary>
-    /// Pushes any changed Transforms into their physics bodies (transform -> body). Runs automatically
-    /// before each simulation step when <see cref="AutoSyncTransforms"/> is on. Call it manually to make
-    /// Transform edits visible to queries, which never sync on their own.
+    /// Pushes any changed Transforms into their physics bodies and collider shapes (transform -> body).
+    /// Runs automatically before each simulation step when <see cref="AutoSyncTransforms"/> is on. Call it
+    /// manually to make Transform edits visible to queries, which never sync on their own.
     /// </summary>
     public void SyncTransforms()
     {
         Tasks.MainThreadContext.AssertMainThread();
         foreach (Rigidbody3D body in _syncBodies)
             if (body.IsValid()) body.SyncTransformToBody();
+
+        RefreshColliders();
+    }
+
+    internal void WatchCollider(Collider collider)
+    {
+        if (collider.WatchIndex >= 0) return;
+        collider.WatchIndex = _watchedColliders.Count;
+        _watchedColliders.Add(collider);
+    }
+
+    internal void UnwatchCollider(Collider collider)
+    {
+        int index = collider.WatchIndex;
+        if (index < 0 || index >= _watchedColliders.Count || !ReferenceEquals(_watchedColliders[index], collider)) return;
+
+        int last = _watchedColliders.Count - 1;
+        Collider moved = _watchedColliders[last];
+        _watchedColliders[index] = moved;
+        moved.WatchIndex = index;
+        _watchedColliders.RemoveAt(last);
+        collider.WatchIndex = -1;
+    }
+
+    /// <summary>Rebuilds the shapes of watched colliders whose placement changed.</summary>
+    private void RefreshColliders()
+    {
+        // Backwards, since a rebuild swaps the collider out of its slot and appends it again.
+        for (int i = _watchedColliders.Count - 1; i >= 0; i--)
+        {
+            if (i >= _watchedColliders.Count) continue;
+            Collider collider = _watchedColliders[i];
+            if (collider.IsValid() && collider.EnabledInHierarchy) collider.RefreshPlacement();
+        }
     }
 
     /// <summary>
@@ -785,6 +822,9 @@ public class PhysicsWorld
             body.SyncIndex = -1;
         _syncBodies.Clear();
         _movedBodies.Clear();
+        foreach (Collider collider in _watchedColliders)
+            collider.WatchIndex = -1;
+        _watchedColliders.Clear();
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
@@ -819,8 +859,10 @@ public class PhysicsWorld
         World.PersistentContactManifold = PersistentContactManifold;
         World.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
 
-        // Push any user Transform edits into the bodies before stepping.
+        // Push any user Transform edits into the bodies before stepping. Colliders that moved are
+        // rebuilt either way, since their shapes are physics state rather than a body pose.
         if (AutoSyncTransforms) SyncTransforms();
+        else RefreshColliders();
         RemoveFilteredContacts();
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
