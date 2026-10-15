@@ -102,6 +102,9 @@ public sealed class SceneRendering : IDisposable
         }
     }
 
+    /// <summary>Whether a component is currently joined to this scene's rendering.</summary>
+    internal bool IsMember(IRenderSync? member) => member is not null && _memberSet.Contains(member);
+
     /// <summary>Syncs a static member again next frame, for one a script changed at runtime.</summary>
     public void Refresh(IRenderSync member)
     {
