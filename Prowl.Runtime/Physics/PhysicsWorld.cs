@@ -170,14 +170,8 @@ public class PhysicsWorld
 
     public bool AllowSleep = true;
     public bool UseMultithreading = true;
-    /// <summary>
-    /// Whether Transform edits are pushed into the physics system immediately (before physics queries),
-    /// or only batched right before the FixedUpdate step:
-    /// when true, a query right after moving a Transform sees the new pose; when false, call
-    /// <see cref="SyncTransforms"/> manually (the pre-step sync still happens every FixedUpdate either way).
-    /// This only concerns the transform -> body direction; the body -> transform readback after a step
-    /// is separate and always runs for dynamic/kinematic bodies.
-    /// </summary>
+	
+    /// <summary>Pushes Transform edits into bodies before each step. Turn off to sync manually.</summary>
     public bool AutoSyncTransforms = true;
 
     // Rigidbodies that may need their Transform pushed into the physics world (transform -> body).
@@ -589,9 +583,8 @@ public class PhysicsWorld
 
     /// <summary>
     /// Pushes any changed Transforms into their physics bodies (transform -> body). Runs automatically
-    /// before each simulation step and, when <see cref="AutoSyncTransforms"/> is on, before queries.
-    /// Call it manually to make Transform edits visible to queries when auto-sync is off. Only bodies
-    /// whose Transform actually changed since the last sync are updated, so it is cheap when idle.
+    /// before each simulation step when <see cref="AutoSyncTransforms"/> is on. Call it manually to make
+    /// Transform edits visible to queries, which never sync on their own.
     /// </summary>
     public void SyncTransforms()
     {
@@ -802,9 +795,8 @@ public class PhysicsWorld
         World.PersistentContactManifold = PersistentContactManifold;
         World.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
 
-        // Push any user Transform edits into the bodies before stepping (always - this is the
-        // "sync prior to the physics step" that happens regardless of AutoSyncTransforms).
-        SyncTransforms();
+        // Push any user Transform edits into the bodies before stepping.
+        if (AutoSyncTransforms) SyncTransforms();
         RemoveFilteredContacts();
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
@@ -939,7 +931,6 @@ public class PhysicsWorld
         if (Float3.LengthSquared(direction) <= 0.0f) return false;
 
         _activeFilter = filter;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         return true;
     }
 
@@ -1062,7 +1053,6 @@ public class PhysicsWorld
         hits.Clear();
         if (!ValidateQuery(origin, direction, maxDistance, nameof(ShapeCastAll))) return 0;
 
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
 
         JVector jOrigin = origin.ToJitter();
@@ -1586,7 +1576,6 @@ public class PhysicsWorld
         hits.Clear();
         if (!ValidateQuery(position, nameof(Overlap))) return 0;
 
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
         JVector jPosition = position.ToJitter();
 
         // Create a bounding box for the shape

@@ -135,24 +135,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
     }
 
-    // With AutoSyncTransforms on (default), a Transform edit is pushed into the body so a query made
-    // right after sees the new pose.
-    [Fact]
-    public void MovingRigidbodyTransform_IsSeenByQueries_WhenAutoSyncOn()
-    {
-        Scene scene = CreatePhysicsScene();
-        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
-        StepPhysics(scene);
-        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
-
-        rb.Transform.Position = new Float3(100, 0, 0);
-
-        Assert.False(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "body should no longer be at the origin");
-        Assert.True(scene.Physics.CheckSphere(new Float3(100, 0, 0), 0.4f), "body should be at the new position");
-    }
-
-    // With AutoSyncTransforms off, queries don't auto-sync; the edit is only visible after a manual
-    // SyncTransforms() (or the next FixedUpdate pre-step sync).
+    // With AutoSyncTransforms off, even the pre-step sync is skipped; only manual SyncTransforms applies edits.
     [Fact]
     public void MovingRigidbodyTransform_NeedsManualSync_WhenAutoSyncOff()
     {
@@ -162,7 +145,8 @@ public class PhysicsTests : RuntimeTestBase
         StepPhysics(scene);
 
         rb.Transform.Position = new Float3(100, 0, 0);
-        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "query should still see the old pose (no auto-sync)");
+        StepPhysics(scene);
+        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "pre-step sync is off, old pose should persist");
 
         scene.Physics.SyncTransforms();
         Assert.True(scene.Physics.CheckSphere(new Float3(100, 0, 0), 0.4f), "manual sync should push the new pose");
@@ -1320,6 +1304,7 @@ public class PhysicsTests : RuntimeTestBase
         Tick(scene, 1);
 
         rb.GameObject.LayerIndex = 3;
+        scene.Physics.SyncTransforms();
 
         Assert.True(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(3)));
         Assert.False(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(0)));
