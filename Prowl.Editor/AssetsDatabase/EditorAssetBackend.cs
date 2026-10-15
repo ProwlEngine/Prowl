@@ -1648,11 +1648,18 @@ public class EditorAssetBackend : AssetBackend
             RemoveCacheFile(path);
         }
 
-        if (Directory.Exists(absolutePath))
-            Directory.Delete(absolutePath, true);
-        string metaPath = MetaFile.GetMetaPath(absolutePath);
-        if (File.Exists(metaPath))
-            File.Delete(metaPath);
+        try
+        {
+            if (Directory.Exists(absolutePath))
+                Directory.Delete(absolutePath, true);
+            string metaPath = MetaFile.GetMetaPath(absolutePath);
+            if (File.Exists(metaPath))
+                File.Delete(metaPath);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Failed to delete asset folder '{relativePath}': {ex.Message}");
+        }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetsDeleted?.Invoke(new[] { relativePath });
