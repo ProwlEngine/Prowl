@@ -103,7 +103,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _depth = Program(renderer, "CLOUD_DEPTH", "Depth");
         _march = Program(renderer, "CLOUD_MARCH", "March", two);
         _temporal = Program(renderer, "CLOUD_TEMPORAL", "Temporal", two);
-        _composite = renderer.CreateFullscreenProgram("#include \"Prowl/VolumetricClouds.glsl\"\n", "Prowl/VolumetricCloudsComposite");
+        _composite = renderer.CreateFullscreenProgram(Clouds, "Prowl/VolumetricCloudsComposite");
 
         SamplerDescription clamp = SamplerDescription.Linear with
         {
@@ -116,8 +116,10 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _linearRepeat = Graphics.GetSampler(SamplerDescription.Linear);
     }
 
+    private const string Clouds = "#include \"Prowl/VolumetricClouds.glsl\"\n";
+
     private static FullscreenProgram Program(Renderer renderer, string define, string name, BlendStateDescription? blend = null)
-        => renderer.CreateFullscreenProgram($"#define {define} 1\n#include \"Prowl/VolumetricClouds.glsl\"\n", $"Prowl/VolumetricClouds{name}", source: false, blend);
+        => renderer.CreateFullscreenProgram(Clouds, $"Prowl/VolumetricClouds{name}", source: false, blend, variant: $"#define {define} 1\n");
 
     public override RenderSlot Slot => RenderSlot.Atmosphere;
     public override ViewKinds RunsOn => ViewKinds.Cameras | ViewKinds.ReflectionProbe;

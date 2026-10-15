@@ -1,3 +1,4 @@
+#pragma variant FOG COMPOSITE FROXEL MARCH TEMPORAL
 // Volumetric fog as four fullscreen passes. FOG_FROXEL lights a grid of cells fitted to the view, 8 pixels across and
 // depth slices squared out to the fog's reach, kept as the slices tiled in one texture: each cell's scattered light and
 // extinction from the world's lights and shadows, as a lit program reading each light's HostData as its fog colour and

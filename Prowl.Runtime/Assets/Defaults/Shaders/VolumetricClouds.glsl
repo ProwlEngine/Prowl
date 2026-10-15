@@ -1,3 +1,4 @@
+#pragma variant CLOUD COMPOSITE COVERAGE SUN DEPTH MARCH TEMPORAL
 // Volumetric clouds as fullscreen passes, one per define:
 // CLOUD_COVERAGE   how much cloud there is at each point of the ground plane, over a square around the camera
 // CLOUD_SUN        how much cloud the sunlight crosses to reach four heights through the layer, over the same square

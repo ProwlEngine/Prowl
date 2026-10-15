@@ -39,6 +39,7 @@ public class DesktopBuildPipeline : BuildPipeline
     private static readonly BuildStage PlanBuild = new("desktop-plan");
     private static readonly BuildStage PrepareEmbedded = new("desktop-prepare-embedded");
     private static readonly BuildStage OrganizeOutput = new("desktop-organize-output");
+    private static readonly BuildStage BakeShaders = new("desktop-bake-shaders");
 
     // What remains editor bound: the script compiler, the plugin copier and the settings exporter all
     // need the live Project and BuildSettings, and none of that belongs in a portable BuildRequest.
@@ -210,7 +211,8 @@ public class DesktopBuildPipeline : BuildPipeline
 
         // After publish, which clears the output directory the manifest has to sit in.
         nodes.Add(new StageNode { Stage = BuildStage.WriteManifest, DependsOn = [OrganizeOutput] });
-        nodes.Add(new StageNode { Stage = BuildStage.PackAssets, DependsOn = [BuildStage.WriteManifest] });
+        nodes.Add(new StageNode { Stage = BakeShaders, DependsOn = [BuildStage.WriteManifest] });
+        nodes.Add(new StageNode { Stage = BuildStage.PackAssets, DependsOn = [BakeShaders] });
         nodes.Add(new StageNode { Stage = BuildStage.ExportSettings, DependsOn = [BuildStage.PackAssets] });
         nodes.Add(new StageNode { Stage = BuildStage.Finalize, DependsOn = [BuildStage.ExportSettings], Resources = StageResources.Exclusive });
 
@@ -239,6 +241,7 @@ public class DesktopBuildPipeline : BuildPipeline
         else if (stage == BuildStage.CopyPlugins) yield return Step("copy plugins", CopyPluginsStage);
         else if (stage == OrganizeOutput) yield return Step("organize output", OrganizeOutputStage);
         else if (stage == BuildStage.WriteManifest) yield return Step("write player manifest", WritePlayerManifest);
+        else if (stage == BakeShaders) yield return Step("bake shaders", BakeShadersStage);
         else if (stage == BuildStage.PackAssets) yield return Step("package assets", PackageAssets);
         else if (stage == BuildStage.ExportSettings) yield return Step("export settings", ExportSettingsStage);
         else if (stage == BuildStage.Finalize) yield return Step("finalize", FinalizeBuild);
@@ -639,6 +642,16 @@ public class DesktopBuildPipeline : BuildPipeline
         DesktopPlan plan = context.GetOutput<DesktopPlan>();
         BuildPlayerManifest(context.Request, plan).Save(plan.OutputDirectory);
         context.Log($"Wrote {PlayerManifest.FileName}.");
+        return Task.CompletedTask;
+    }
+
+    private Task BakeShadersStage(IBuildContext context, CancellationToken ct)
+    {
+        DesktopPlan plan = context.GetOutput<DesktopPlan>();
+        CollectedAssets collected = context.GetOutput<CollectedAssets>();
+        context.Log("Compiling the shader variants the build's materials use...");
+        int passes = ShaderBaker.Bake(collected.Collection.AllAssets, Path.Combine(plan.OutputDirectory, Graphics.BakedShadersFile), ct);
+        context.Log($"Baked the variants of {passes} shader passes.");
         return Task.CompletedTask;
     }
 

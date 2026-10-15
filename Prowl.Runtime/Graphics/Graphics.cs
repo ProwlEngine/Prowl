@@ -72,6 +72,7 @@ public static class Graphics
     public static event Action? BeforeSubmit;
 
     /// <summary>The shader compiler, which exists headless too so shaders parse and declare their variants.</summary>
+    /// <summary>The shader compiler. Players have it too, compiling what their build did not bake on demand.</summary>
     public static GlslShaderCompiler Compiler => s_compiler ??= CreateCompiler();
 
     /// <summary>
@@ -84,9 +85,7 @@ public static class Graphics
     private static GlslShaderCompiler CreateCompiler()
     {
         ShaderLibrary.Register(typeof(Renderer).Assembly);
-        // PROWL_SHADER_DEBUG_INFO=1 keeps source lines in the shaders, so GPU profilers map their findings back to the GLSL
-        bool debugInfo = Environment.GetEnvironmentVariable("PROWL_SHADER_DEBUG_INFO") == "1";
-        return new GlslShaderCompiler(new GlslCompilerOptions { ResolveInclude = Resolve, CacheDirectory = ShaderCacheDirectory, DebugInfo = debugInfo });
+        return new GlslShaderCompiler(new GlslCompilerOptions { ResolveInclude = Resolve, CacheDirectory = ShaderCacheDirectory });
     }
 
     private static readonly Dictionary<string, GShader> s_libraryShaders = new(StringComparer.Ordinal);
@@ -110,9 +109,24 @@ public static class Graphics
     private static string? Resolve(string name, string from)
         => BuiltInShaders.Resolve(name) ?? ResolveInclude?.Invoke(name, from);
 
+    static Graphics() => ShaderLibrary.Register(typeof(Renderer).Assembly);
+
+    /// <summary>The file next to a player holding its compiled shader variants, written by the build.</summary>
+    public const string BakedShadersFile = "Shaders.bin";
+
+    private static string BakedShadersPath => System.IO.Path.Combine(AppContext.BaseDirectory, BakedShadersFile);
+
+    private static void LoadBakedShaders()
+    {
+        if (Application.IsEditor || !System.IO.File.Exists(BakedShadersPath)) return;
+        using System.IO.FileStream file = System.IO.File.OpenRead(BakedShadersPath);
+        BakedVariants.Read(file);
+    }
+
     /// <summary>Opens the device on the window's Vulkan surface and starts the renderer.</summary>
     internal static void Initialize(IWindow window, bool vsync)
     {
+        LoadBakedShaders();
         if (window.VkSurface == null)
             throw new InvalidOperationException("The window has no Vulkan surface.");
 

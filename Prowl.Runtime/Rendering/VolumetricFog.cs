@@ -310,10 +310,11 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         private SharedPrograms(Renderer renderer)
         {
             _renderer = renderer;
-            Froxel = renderer.CreateFullscreenProgram("#define FOG_FROXEL 1\n#include \"Prowl/VolumetricFog.glsl\"\n", "Prowl/VolumetricFogFroxel", source: false, lit: true);
-            March = renderer.CreateFullscreenProgram("#define FOG_MARCH 1\n#include \"Prowl/VolumetricFog.glsl\"\n", "Prowl/VolumetricFogMarch", source: false);
-            Temporal = renderer.CreateFullscreenProgram("#define FOG_TEMPORAL 1\n#include \"Prowl/VolumetricFog.glsl\"\n", "Prowl/VolumetricFogTemporal", source: false);
-            Composite = renderer.CreateFullscreenProgram("#include \"Prowl/VolumetricFog.glsl\"\n", "Prowl/VolumetricFogComposite");
+            const string fog = "#include \"Prowl/VolumetricFog.glsl\"\n";
+            Froxel = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogFroxel", source: false, lit: true, variant: "#define FOG_FROXEL 1\n");
+            March = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogMarch", source: false, variant: "#define FOG_MARCH 1\n");
+            Temporal = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogTemporal", source: false, variant: "#define FOG_TEMPORAL 1\n");
+            Composite = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogComposite");
         }
 
         public static SharedPrograms Acquire(Renderer renderer)
