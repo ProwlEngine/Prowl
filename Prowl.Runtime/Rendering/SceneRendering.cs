@@ -52,6 +52,7 @@ public sealed class SceneRendering : IDisposable
     {
         public readonly List<InstanceData> Instances = [];
         public InstanceBatchHandle Handle;
+        public ulong Frame;
     }
 
     private readonly Dictionary<(GpuMesh Mesh, GMaterial Material, RenderableFlags Flags, uint LayerMask), ImmediateBatch> _immediate = [];
@@ -116,6 +117,11 @@ public sealed class SceneRendering : IDisposable
     {
         if (!_immediate.TryGetValue((mesh, material, flags, layerMask), out ImmediateBatch? batch))
             _immediate[(mesh, material, flags, layerMask)] = batch = new ImmediateBatch();
+        if (batch.Frame != Graphics.FrameIndex)
+        {
+            batch.Instances.Clear();
+            batch.Frame = Graphics.FrameIndex;
+        }
         for (int i = 0; i < transforms.Length; i++)
         {
             Color c = i < colors.Length ? colors[i] : Color.White;
@@ -128,7 +134,7 @@ public sealed class SceneRendering : IDisposable
     {
         foreach (((GpuMesh mesh, GMaterial material, RenderableFlags flags, uint layerMask) key, ImmediateBatch batch) in _immediate)
         {
-            if (batch.Instances.Count == 0 || key.mesh.IsDisposed || key.material.IsDisposed)
+            if (batch.Instances.Count == 0 || batch.Frame != Graphics.FrameIndex || key.mesh.IsDisposed || key.material.IsDisposed)
             {
                 if (batch.Handle.IsValid) world.RemoveInstanceBatch(batch.Handle);
                 _immediateGone.Add(key);
