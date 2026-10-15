@@ -131,6 +131,8 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
 {
     public const int MaxVolumes = 16;
 
+    internal const string Fog = "#include \"Prowl/VolumetricFog.glsl\"\n";
+
     internal readonly record struct FogSettings(
         float Density, Float4 Tint, float Scattering, float Extinction, float Dithering, Float4 AmbientColor,
         float AmbientIntensity, float MaxDistance, int Slices, int Downsample, float UpsampleThreshold, bool Temporal,
@@ -310,11 +312,10 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         private SharedPrograms(Renderer renderer)
         {
             _renderer = renderer;
-            const string fog = "#include \"Prowl/VolumetricFog.glsl\"\n";
-            Froxel = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogFroxel", source: false, lit: true, variant: "#define FOG_FROXEL 1\n");
-            March = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogMarch", source: false, variant: "#define FOG_MARCH 1\n");
-            Temporal = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogTemporal", source: false, variant: "#define FOG_TEMPORAL 1\n");
-            Composite = renderer.CreateFullscreenProgram(fog, "Prowl/VolumetricFogComposite");
+            Froxel = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogFroxel", source: false, lit: true, variant: "#define FOG_FROXEL 1\n");
+            March = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogMarch", source: false, variant: "#define FOG_MARCH 1\n");
+            Temporal = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogTemporal", source: false, variant: "#define FOG_TEMPORAL 1\n");
+            Composite = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogComposite");
         }
 
         public static SharedPrograms Acquire(Renderer renderer)

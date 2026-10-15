@@ -116,7 +116,7 @@ internal sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         _linearRepeat = Graphics.GetSampler(SamplerDescription.Linear);
     }
 
-    private const string Clouds = "#include \"Prowl/VolumetricClouds.glsl\"\n";
+    internal const string Clouds = "#include \"Prowl/VolumetricClouds.glsl\"\n";
 
     private static FullscreenProgram Program(Renderer renderer, string define, string name, BlendStateDescription? blend = null)
         => renderer.CreateFullscreenProgram(Clouds, $"Prowl/VolumetricClouds{name}", source: false, blend, variant: $"#define {define} 1\n");
