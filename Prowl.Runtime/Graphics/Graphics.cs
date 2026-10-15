@@ -119,8 +119,16 @@ public static class Graphics
     private static void LoadBakedShaders()
     {
         if (Application.IsEditor || !System.IO.File.Exists(BakedShadersPath)) return;
-        using System.IO.FileStream file = System.IO.File.OpenRead(BakedShadersPath);
-        BakedVariants.Read(file);
+        try
+        {
+            using System.IO.FileStream file = System.IO.File.OpenRead(BakedShadersPath);
+            BakedVariants.Read(file);
+        }
+        catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or ArgumentException)
+        {
+            BakedVariants.Clear();
+            Debug.LogWarning($"{BakedShadersFile} could not be read, so shaders compile as they are first drawn: {e.Message}");
+        }
     }
 
     /// <summary>Opens the device on the window's Vulkan surface and starts the renderer.</summary>
