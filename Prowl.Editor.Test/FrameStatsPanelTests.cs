@@ -201,6 +201,26 @@ public class FrameStatsPanelTests
     }
 
     [Fact]
+    public void TotalsFollowTheColumnsAfterAClear()
+    {
+        FrameStat stat = FrameStats.GetCategory("PanelTest.Recount");
+        History history = Fresh();
+        int i = IndexOf(stat);
+
+        Frames(1, stat, spinMs: 10);
+        history.Sample(Now, NoneHidden);
+        Assert.True(history.Summarise(FrameStats.Categories.Count, 1).AvgMs[i] >= 9.9f);
+
+        // Same number of columns as before the clear, so only the new data can tell the totals apart.
+        history.Clear();
+        Frames(1);
+        history.Sample(Now, NoneHidden);
+
+        Assert.Equal(1, history.Count);
+        Assert.True(history.Summarise(FrameStats.Categories.Count, 1).AvgMs[i] < 1f);
+    }
+
+    [Fact]
     public void TotalsOfNoColumnsAreZero()
     {
         History history = Fresh();
@@ -332,6 +352,7 @@ public class FrameStatsPanelTests
             ["rate"] = 4,
             ["scale"] = 2,
             ["stackMax"] = true,
+            ["hideUnselected"] = true,
             ["columnWidth"] = 12.5,
             ["split"] = 0.25,
             ["shown"] = new JsonObject { ["Physics"] = false, ["render wait"] = true },
@@ -346,6 +367,7 @@ public class FrameStatsPanelTests
         Assert.Equal(4, restored["rate"]!.GetValue<int>());
         Assert.Equal(2, restored["scale"]!.GetValue<int>());
         Assert.True(restored["stackMax"]!.GetValue<bool>());
+        Assert.True(restored["hideUnselected"]!.GetValue<bool>());
         Assert.Equal(12.5, restored["columnWidth"]!.GetValue<double>(), 3);
         Assert.Equal(0.25, restored["split"]!.GetValue<double>(), 3);
         Assert.False(restored["shown"]!["Physics"]!.GetValue<bool>());
@@ -358,6 +380,29 @@ public class FrameStatsPanelTests
         Assert.True(reopened.IsHidden(FrameStats.Physics));
         Assert.False(reopened.IsHidden(FrameStats.RenderWait));
         Assert.True(reopened.IsExpanded(FrameStats.Editor));
+    }
+
+    [Fact]
+    public void HidingUnselectedLeavesOnlySwitchedOnRowsListed()
+    {
+        var panel = new FrameStatsPanel();
+        // Every row is listed until asked otherwise, switched off or not.
+        Assert.True(panel.IsListed(FrameStats.Idle));
+        Assert.True(panel.IsListed(FrameStats.Editor, other: true));
+
+        panel.ToggleVisibility(EditorFrameStats.UI);
+        panel.HideUnselected = true;
+
+        Assert.False(panel.IsListed(FrameStats.Idle));
+        Assert.True(panel.IsListed(FrameStats.Render));
+        // Showing one row under a hidden group brings the group back with only that row on.
+        Assert.True(panel.IsListed(FrameStats.Editor));
+        Assert.True(panel.IsListed(EditorFrameStats.UI));
+        Assert.False(panel.IsListed(EditorFrameStats.Gizmos));
+        Assert.False(panel.IsListed(FrameStats.Editor, other: true));
+
+        panel.HideUnselected = false;
+        Assert.True(panel.IsListed(EditorFrameStats.Gizmos));
     }
 
     [Fact]
