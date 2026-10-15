@@ -608,14 +608,14 @@ public class FrameStatsPanel : DockPanel
         Color valueInk = hidden ? EditorTheme.InkFaint : EditorTheme.Ink400;
         float share = totals.AvgFrameMs > 0 ? row.AvgMs / totals.AvgFrameMs * 100f : 0;
         string id = other ? $"fs_o_{c.Path}" : $"fs_r_{c.Path}";
-        string label = other ? Loc.Get("frame_stats.group_other") : c.Name;
+        string label = other ? Loc.Get("frame_stats.group_other") : DisplayName(c);
 
         using (paper.Row(id).Height(RowH).Padding(10 + row.Depth * 20, 18, 0, 0).Gap(8)
             .BackgroundColor(_hovered == c && _hoveredOther == other ? EditorTheme.Hover : Color.Transparent)
             .OnClick(c, (cat, _) => ToggleVisibility(cat, other))
             .OnHover(c, (cat, _) => { _hovered = cat; _hoveredOther = other; })
             .OnLeave(_ => { if (_hovered == c && _hoveredOther == other) _hovered = null; })
-            .Tooltip(other ? $"{c.Path}/{label}" : c.Path, RowTooltip(c, other, group))
+            .Tooltip(other ? $"{DisplayPath(c)}/{label}" : DisplayPath(c), RowTooltip(c, other, group))
             .Enter())
         {
             if (group)
@@ -647,40 +647,69 @@ public class FrameStatsPanel : DockPanel
     }
 
     // What each built-in category measures. Categories made by game code get only the hint.
-    private static readonly Dictionary<FrameStat, string> CategoryKeys = new()
+    private static readonly Dictionary<FrameStat, string> DescriptionKeys = new()
     {
-        [FrameStats.Input] = "frame_stats.cat_input",
-        [FrameStats.Async] = "frame_stats.cat_async",
-        [FrameStats.Assets] = "frame_stats.cat_assets",
-        [FrameStats.Update] = "frame_stats.cat_update",
-        [FrameStats.Physics] = "frame_stats.cat_physics",
-        [FrameStats.Animation] = "frame_stats.cat_animation",
-        [FrameStats.Navigation] = "frame_stats.cat_navigation",
-        [FrameStats.Audio] = "frame_stats.cat_audio",
-        [FrameStats.Render] = "frame_stats.cat_render",
-        [FrameStats.UI] = "frame_stats.cat_ui",
-        [FrameStats.Editor] = "frame_stats.cat_editor",
-        [EditorFrameStats.UI] = "frame_stats.cat_editor_ui",
-        [EditorFrameStats.Gizmos] = "frame_stats.cat_editor_gizmos",
-        [EditorFrameStats.Assets] = "frame_stats.cat_editor_assets",
-        [EditorFrameStats.Scripts] = "frame_stats.cat_editor_scripts",
-        [FrameStats.RenderWait] = "frame_stats.cat_render_wait",
-        [FrameStats.Idle] = "frame_stats.cat_idle",
-        [FrameStats.GC] = "frame_stats.cat_gc",
-        [FrameStats.Other] = "frame_stats.cat_other",
+        [FrameStats.Input] = "frame_stats.desc_input",
+        [FrameStats.Async] = "frame_stats.desc_async",
+        [FrameStats.Assets] = "frame_stats.desc_assets",
+        [FrameStats.Update] = "frame_stats.desc_update",
+        [FrameStats.Physics] = "frame_stats.desc_physics",
+        [FrameStats.Animation] = "frame_stats.desc_animation",
+        [FrameStats.Navigation] = "frame_stats.desc_navigation",
+        [FrameStats.Audio] = "frame_stats.desc_audio",
+        [FrameStats.Render] = "frame_stats.desc_render",
+        [FrameStats.UI] = "frame_stats.desc_ui",
+        [FrameStats.Editor] = "frame_stats.desc_editor",
+        [EditorFrameStats.UI] = "frame_stats.desc_editor_ui",
+        [EditorFrameStats.Gizmos] = "frame_stats.desc_editor_gizmos",
+        [EditorFrameStats.Assets] = "frame_stats.desc_editor_assets",
+        [EditorFrameStats.Scripts] = "frame_stats.desc_editor_scripts",
+        [FrameStats.RenderWait] = "frame_stats.desc_render_wait",
+        [FrameStats.Idle] = "frame_stats.desc_idle",
+        [FrameStats.GC] = "frame_stats.desc_gc",
+        [FrameStats.Other] = "frame_stats.desc_other",
     };
 
-    // What a group's own time is made of, where it is known. Other groups get the general description.
-    private static readonly Dictionary<FrameStat, string> OtherKeys = new()
+    // Built-in categories' names in the editor's language. Categories made by game code keep the name they were given.
+    private static readonly Dictionary<FrameStat, string> NameKeys = new()
     {
-        [FrameStats.Editor] = "frame_stats.cat_editor_other",
+        [FrameStats.Input] = "frame_stats.name_input",
+        [FrameStats.Async] = "frame_stats.name_async",
+        [FrameStats.Assets] = "frame_stats.name_assets",
+        [FrameStats.Update] = "frame_stats.name_update",
+        [FrameStats.Physics] = "frame_stats.name_physics",
+        [FrameStats.Animation] = "frame_stats.name_animation",
+        [FrameStats.Navigation] = "frame_stats.name_navigation",
+        [FrameStats.Audio] = "frame_stats.name_audio",
+        [FrameStats.Render] = "frame_stats.name_render",
+        [FrameStats.UI] = "frame_stats.name_ui",
+        [FrameStats.Editor] = "frame_stats.name_editor",
+        [EditorFrameStats.UI] = "frame_stats.name_editor_ui",
+        [EditorFrameStats.Gizmos] = "frame_stats.name_editor_gizmos",
+        [EditorFrameStats.Assets] = "frame_stats.name_editor_assets",
+        [EditorFrameStats.Scripts] = "frame_stats.name_editor_scripts",
+        [FrameStats.RenderWait] = "frame_stats.name_render_wait",
+        [FrameStats.Idle] = "frame_stats.name_idle",
+        [FrameStats.GC] = "frame_stats.name_gc",
+        [FrameStats.Other] = "frame_stats.name_other",
+    };
+
+    private static string DisplayName(FrameStat c) => NameKeys.TryGetValue(c, out string? key) ? Loc.Get(key) : c.Name;
+
+    // The category's path with each part in the editor's language, such as "Editor/Gizmos".
+    private static string DisplayPath(FrameStat c) => c.Parent == null ? DisplayName(c) : $"{DisplayPath(c.Parent)}/{DisplayName(c)}";
+
+    // What a group's own time is made of, where it is known. Other groups get the general description.
+    private static readonly Dictionary<FrameStat, string> OtherDescriptionKeys = new()
+    {
+        [FrameStats.Editor] = "frame_stats.desc_editor_other",
     };
 
     private static string RowTooltip(FrameStat category, bool other, bool group)
     {
         var parts = new List<string>(3);
-        if (other) parts.Add(Loc.Get(OtherKeys.TryGetValue(category, out string? otherKey) ? otherKey : "frame_stats.group_other_tip"));
-        else if (CategoryKeys.TryGetValue(category, out string? key)) parts.Add(Loc.Get(key));
+        if (other) parts.Add(Loc.Get(OtherDescriptionKeys.TryGetValue(category, out string? otherKey) ? otherKey : "frame_stats.group_other_tip"));
+        else if (DescriptionKeys.TryGetValue(category, out string? key)) parts.Add(Loc.Get(key));
         if (group) parts.Add(Loc.Get("frame_stats.group_tip"));
         parts.Add(Loc.Get("frame_stats.row_tip"));
         return string.Join("\n\n", parts);
