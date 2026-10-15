@@ -8,6 +8,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.AssetImporting;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
@@ -111,6 +112,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
     public override void Render(Camera camera, in RenderingData data)
     {
+        using FrameStatScope stats = FrameStats.Render.Scope();
+
         ValidateDefaults();
 
         // Probe captures render the scene themselves, so they run before this camera starts

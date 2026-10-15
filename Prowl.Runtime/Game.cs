@@ -8,6 +8,7 @@ using Echo.Logging;
 using Prowl.Runtime.Audio;
 
 using Prowl.PaperUI;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
@@ -39,6 +40,9 @@ public abstract class Game
     public Paper PaperInstance => _paper;
 
     public bool DrawGizmos { get; set; }
+
+    /// <summary>What the GUI frame counts as in <see cref="FrameStats"/>: the game's UI here, the editor's own in the editor.</summary>
+    protected virtual FrameStat GuiFrameStat => FrameStats.UI;
 
     /// <summary>
     /// Added a separate method to initialize the window as it might be needed to restore the latest saved state of the window (size, position, etc.) when the game is launched again.
@@ -190,17 +194,20 @@ public abstract class Game
                     Graphics.Submit(preGui);
                 }
 
-                // Sync Paper's logical resolution + DPI to the window each frame.
-                PreparePaperFrame();
-                _paper.BeginFrame(delta, -1f); // negative = keep DisplayFramebufferScale set by PreparePaperFrame
+                using (GuiFrameStat.Scope())
+                {
+                    // Sync Paper's logical resolution + DPI to the window each frame.
+                    PreparePaperFrame();
+                    _paper.BeginFrame(delta, -1f); // negative = keep DisplayFramebufferScale set by PreparePaperFrame
 
-                BeginGui(_paper);
+                    BeginGui(_paper);
 
-                OnGui(currentScene, _paper);
+                    OnGui(currentScene, _paper);
 
-                EndGui(_paper);
+                    EndGui(_paper);
 
-                _paper.EndFrame();
+                    _paper.EndFrame();
+                }
 
                 // After the GUI, since the editor renders its Game View, and with it the eyes, from there.
                 XR.RenderMissedEyes(currentScene);
@@ -329,6 +336,8 @@ public abstract class Game
         var runClock = System.Diagnostics.Stopwatch.StartNew();
         long frame = 0;
 
+        FrameStats.Start();
+
         try
         {
             while (!_headlessQuitRequested)
@@ -354,11 +363,17 @@ public abstract class Game
                 AssetDatabase.EndFrame();
 
                 frame++;
-                if (options.MaxFrames > 0 && frame >= options.MaxFrames) break;
-                if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
+                bool lastFrame = (options.MaxFrames > 0 && frame >= options.MaxFrames)
+                    || (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds);
 
-                // Throttle to the target tick rate so a server doesn't spin a core at 100%.
-                Application.WaitForNextFrame();
+                // Throttle to the target tick rate so a server doesn't spin a core at 100%. Not after the last
+                // frame, since nothing follows it.
+                if (!lastFrame)
+                    Application.WaitForNextFrame();
+
+                // Before leaving, so a bounded run's final frame is recorded too.
+                FrameStats.EndFrame();
+                if (lastFrame) break;
             }
         }
         finally
