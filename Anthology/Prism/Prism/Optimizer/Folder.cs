@@ -162,6 +162,8 @@ internal sealed class Folder
     uint TypedScalar(uint type, uint word)
     {
         if (Def(type) is { Opcode: OpTypeBool }) return BoolConst(type, word != 0);
+        if (TypeWidth(type) == 64)
+            return Scalar64(type, word, word == 0xFFFFFFFF ? 0xFFFFFFFFu : 0u);
         return ScalarConst(type, word);
     }
 
@@ -320,19 +322,25 @@ internal sealed class Folder
     {
         result = 0;
         if (ops.Count != 2) return false;
-        return FoldBinaryIntegerOpToConstant(inst.Opcode, ops, out result) || FoldBinaryBooleanOpToConstant(inst.Opcode, ops, out result);
+        return FoldBinaryIntegerOpToConstant(inst, ops, out result) || FoldBinaryBooleanOpToConstant(inst.Opcode, ops, out result);
     }
     bool IntConstU(uint id, out uint v) { v = 0; var d = Def(id); if (d is { Opcode: OpConstant } && d.Operands.Length == 3) { v = d.Operands[2]; return true; } if (d is { Opcode: OpConstantNull }) return true; return false; }
-    bool FoldBinaryIntegerOpToConstant(int op, List<uint> ops, out uint result)
+    bool FoldBinaryIntegerOpToConstant(SpvInstr inst, List<uint> ops, out uint result)
     {
         result = 0;
+        int op = inst.Opcode;
         bool c0 = IntConstU(ops[0], out uint v0), c1 = IntConstU(ops[1], out uint v1);
         switch (op)
         {
             case 132: case 134: case 135: case 138: case 139: case 137:   // IMul / UDiv / SDiv / SRem / SMod / UMod : *,/ by 0 -> 0
                 if ((c0 && v0 == 0) || (c1 && v1 == 0)) { result = 0; return true; } break;
-            case 194: case 196:                                            // shifts by >=32 -> 0
-                if (c1 && v1 >= 32) { result = 0; return true; } break;
+            case 194: case 196:                                            // shifts by >= bit-width -> 0
+                {
+                    int width = TypeWidth(inst.Operands[0]);
+                    if (width == 0) width = 32;
+                    if (c1 && v1 >= (uint)width) { result = 0; return true; }
+                    break;
+                }
             case 197:                                                      // BitwiseOr with all-ones -> all-ones
                 if ((c0 && v0 == 0xFFFFFFFF) || (c1 && v1 == 0xFFFFFFFF)) { result = 0xFFFFFFFF; return true; } break;
             case 199:                                                      // BitwiseAnd with 0 -> 0
