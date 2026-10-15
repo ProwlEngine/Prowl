@@ -628,7 +628,8 @@ internal sealed class Folder
         uint type = inst.Operands[0]; var d = Def(ops[0]);
         if (d is { Opcode: OpConstantNull }) return ops[0];
         if (!ScalarWord(ops[0], out uint x)) return 0;
-        return ScalarConst(type, unchecked((uint)(-(int)x)));
+        uint r = unchecked((uint)(-(int)x));
+        return GenerateIntegerConstant(type, r);
     }
 
     // FoldIToF / FoldFToI (32-bit int only). FP-folding-guarded.
@@ -2184,7 +2185,19 @@ internal sealed class Folder
     {
         if (Def(type) is { Opcode: OpTypeBool }) return BoolConst(type, w[0] != 0);
         if (TypeWidth(type) == 64 && w.Count == 2) return Scalar64(type, w[0], w[1]);
-        return w.Count == 1 ? ScalarConst(type, w[0]) : 0;
+        if (w.Count != 1) return 0;
+        // Narrow-integer bitcast: the word holds the full 32-bit pattern but only the low
+        // `width` bits are the value; re-extend per the target's signedness (e.g. U16 0xFFFF
+        // -> I16 -1 is 0xFFFFFFFF, not 0x0000FFFF).
+        if (Def(type) is { Opcode: OpTypeInt } td && td.Operands.Length >= 3
+            && (int)td.Operands[1] is int width && width is > 0 and < 32)
+        {
+            uint masked = w[0] & (width == 32 ? 0xFFFFFFFFu : ((1u << width) - 1));
+            if (td.Operands[2] == 1 && (masked >> (width - 1) & 1) != 0)
+                masked |= ~0u << width;
+            return ScalarConst(type, masked);
+        }
+        return ScalarConst(type, w[0]);
     }
     uint WordsToConstant(List<uint> words, uint type)
     {
