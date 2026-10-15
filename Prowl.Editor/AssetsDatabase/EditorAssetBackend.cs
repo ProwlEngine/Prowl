@@ -1639,8 +1639,14 @@ public class EditorAssetBackend : AssetBackend
             .Where(p => p.Equals(relativePath, StringComparison.OrdinalIgnoreCase)
                         || p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+        var affectsCompilation = false;
         foreach (var path in toDelete)
+        {
+            if (AffectsCompilation(path))
+                affectsCompilation = true;
             RemoveCacheFile(path);
+        }
 
         if (Directory.Exists(absolutePath))
             Directory.Delete(absolutePath, true);
@@ -1653,7 +1659,7 @@ public class EditorAssetBackend : AssetBackend
         OnAssetsDeleted?.Invoke(toDelete.ToArray());
         InvalidateFolderIndex();
 
-        if (AffectsCompilation(relativePath))
+        if (affectsCompilation)
             ScriptAssemblyManager.RequestRecompile();
     }
 
