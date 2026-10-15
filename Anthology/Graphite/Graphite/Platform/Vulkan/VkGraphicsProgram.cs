@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Silk.NET.Vulkan;
@@ -67,6 +68,20 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
     {
         _gd = gd;
         _shader = gd.ShaderCache.Acquire(Key, description.Stages, ResourceLayoutsArray, PushConstants);
+    }
+
+    internal string Describe()
+    {
+        System.Text.StringBuilder text = new();
+        text.Append("  stages: ").AppendJoin(", ", _shader.Modules.Keys).AppendLine();
+        foreach (ResourceLayoutDescription layout in ResourceLayoutsArray)
+        {
+            text.Append($"  set {layout.Set}{(layout.Table ? " (descriptor table, update-after-bind)" : "")}:").AppendLine();
+            foreach (ResourceLayoutElementDescription element in layout.Elements ?? [])
+                text.Append($"    binding {element.BindingIndex} {PropertyID.ToString(element.Name)} {element.Kind} x{Math.Max(element.ArrayCount, 1u)} {element.Stages}").AppendLine();
+        }
+        text.Append($"  push constants: {PushConstants.SizeInBytes} bytes, {PushConstants.Stages}");
+        return text.ToString();
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);

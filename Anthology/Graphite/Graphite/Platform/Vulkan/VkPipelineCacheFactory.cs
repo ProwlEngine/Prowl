@@ -282,7 +282,10 @@ internal static unsafe class VkPipelineCacheFactory
 
         if (gd.PipelineStatistics != null)
             pipelineCI.Flags |= PipelineCreateFlags.PipelineCreateCaptureStatisticsBitKhr;
-        gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline).CheckResult();
+        Result created = gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline);
+
+        if (created != Result.Success || pipeline.Handle == 0)
+            throw new RenderException($"The driver could not create a pipeline ({created}) for program '{program.Name ?? "(unnamed)"}'.\n{program.Describe()}");
         gd.PrintPipelineStatistics(pipeline, program.Name ?? "");
 
         return new VkPipelineCacheEntry(
