@@ -201,6 +201,26 @@ public class FrameStatsPanelTests
     }
 
     [Fact]
+    public void TotalsFollowTheColumnsAfterAClear()
+    {
+        FrameStat stat = FrameStats.GetCategory("PanelTest.Recount");
+        History history = Fresh();
+        int i = IndexOf(stat);
+
+        Frames(1, stat, spinMs: 10);
+        history.Sample(Now, NoneHidden);
+        Assert.True(history.Summarise(FrameStats.Categories.Count, 1).AvgMs[i] >= 9.9f);
+
+        // Same number of columns as before the clear, so only the new data can tell the totals apart.
+        history.Clear();
+        Frames(1);
+        history.Sample(Now, NoneHidden);
+
+        Assert.Equal(1, history.Count);
+        Assert.True(history.Summarise(FrameStats.Categories.Count, 1).AvgMs[i] < 1f);
+    }
+
+    [Fact]
     public void TotalsOfNoColumnsAreZero()
     {
         History history = Fresh();
