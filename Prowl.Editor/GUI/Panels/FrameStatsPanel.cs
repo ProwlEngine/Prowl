@@ -840,8 +840,9 @@ public class FrameStatsPanel : DockPanel
         canvas.BeginSnapshot(_headerSnapshot, x, y);
         float fs = EditorTheme.FontSizeSmall, mid = y + HeaderH / 2;
         HeaderStrings text = HeaderText();
+        // The icon shows the current state: open while switched-off rows are listed, crossed out while they are left out.
         canvas.DrawText(_hideUnselected ? EditorIcons.EyeSlash : EditorIcons.Eye, x + TablePadL + 5, mid,
-            _hideUnselected ? EditorTheme.Accent : EditorTheme.InkDim, fs, font, 0, new Float2(0.5f, 0.5f));
+            EditorTheme.InkDim, fs, font, 0, new Float2(0.5f, 0.5f));
 
         canvas.DrawText(text.Category, x + TablePadL + 10 + TableGap, mid, EditorTheme.InkDim, fs, font, 0, new Float2(0, 0.5f));
         for (int k = 0; k < ValueColumns; k++)
@@ -939,6 +940,7 @@ public class FrameStatsPanel : DockPanel
         public string[] Values = [];
         public TooltipContent[] Tips = [];
         public TooltipContent HideTip = new(), ShowTip = new();
+        // The tooltip says what a click does.
         public TooltipContent Eye(bool hiding) => hiding ? ShowTip : HideTip;
     }
 
