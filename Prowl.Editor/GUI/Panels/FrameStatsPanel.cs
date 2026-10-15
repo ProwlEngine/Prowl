@@ -96,6 +96,10 @@ public class FrameStatsPanel : DockPanel
         FontFile? font = EditorTheme.DefaultFont;
         if (font == null) return;
 
+        // The panel's own work, here and in the callbacks Paper runs at the end of its frame, is scoped to its own
+        // category. Only Paper's handling of its few elements and the upload of what it draws stay in the editor's UI.
+        using FrameStatScope stats = EditorFrameStats.FrameStatsPanel.Scope();
+
         // Frames from while paused are dropped, so the chart picks up from now when it resumes.
         if (_paused) _history.Skip();
         else
@@ -361,7 +365,11 @@ public class FrameStatsPanel : DockPanel
             .OnPostLayout((handle, rect) =>
             {
                 _graphRect = rect;
-                paper.Draw(ref handle, (canvas, r) => PaintGraph(paper, canvas, r, font));
+                paper.Draw(ref handle, (canvas, r) =>
+                {
+                    using FrameStatScope stats = EditorFrameStats.FrameStatsPanel.Scope();
+                    PaintGraph(paper, canvas, r, font);
+                });
             });
     }
 
@@ -664,6 +672,7 @@ public class FrameStatsPanel : DockPanel
         [EditorFrameStats.Gizmos] = "frame_stats.desc_editor_gizmos",
         [EditorFrameStats.Assets] = "frame_stats.desc_editor_assets",
         [EditorFrameStats.Scripts] = "frame_stats.desc_editor_scripts",
+        [EditorFrameStats.FrameStatsPanel] = "frame_stats.desc_editor_frame_stats",
         [FrameStats.RenderWait] = "frame_stats.desc_render_wait",
         [FrameStats.Idle] = "frame_stats.desc_idle",
         [FrameStats.GC] = "frame_stats.desc_gc",
@@ -688,6 +697,7 @@ public class FrameStatsPanel : DockPanel
         [EditorFrameStats.Gizmos] = "frame_stats.name_editor_gizmos",
         [EditorFrameStats.Assets] = "frame_stats.name_editor_assets",
         [EditorFrameStats.Scripts] = "frame_stats.name_editor_scripts",
+        [EditorFrameStats.FrameStatsPanel] = "frame_stats.name_editor_frame_stats",
         [FrameStats.RenderWait] = "frame_stats.name_render_wait",
         [FrameStats.Idle] = "frame_stats.name_idle",
         [FrameStats.GC] = "frame_stats.name_gc",
