@@ -237,6 +237,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     {
         if (_mesh.IsValid()) _mesh.Dispose();
         _mesh = null;
+        base.OnDispose();
     }
 }
 
