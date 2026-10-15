@@ -1632,6 +1632,7 @@ public class EditorAssetBackend : AssetBackend
     /// </summary>
     public void DeleteAssetFolder(string relativePath)
     {
+        relativePath = NormalizePath(relativePath);
         string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
         string prefix = relativePath + "/";
         var toDelete = GetAllAssetPaths()
