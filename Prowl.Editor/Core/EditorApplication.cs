@@ -2093,6 +2093,7 @@ public class EditorApplication : Game
 
         using (FrameStats.Navigation.Scope())
             Navigation.NavMeshBakeService.Instance.Poll();
+    }
 
     public override void BeginRender()
     {
