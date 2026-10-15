@@ -234,6 +234,43 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     [Fact]
+    public void Rigidbody_SleepingTransformEdited_BodyFollowsBeforeTheNextStep()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = DropBoxUntilAsleep(scene);
+
+        rb.Transform.Position = new Float3(5, 3, 0);
+        StepPhysics(scene);
+
+        Assert.Equal(5f, rb.Position.X, 3);
+        Assert.InRange(rb.Position.Y, 2.9f, 3f);
+    }
+
+    [Fact]
+    public void Rigidbody_LayerChanged_IsQueriedOnTheNewLayer()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false, layer: 1);
+        StepPhysics(scene);
+
+        rb.GameObject.LayerIndex = 2;
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(1) }));
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(2) }));
+    }
+
+    [Fact]
+    public void Rigidbody_PhysicsWriteBack_DoesNotQueueASync()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 10, 0));
+        Tick(scene, 5);
+
+        Assert.False(rb.SyncQueued);
+    }
+
+    [Fact]
     public void StaticCollider_Moved_ShapeFollowsBeforeTheNextStep()
     {
         Scene scene = CreatePhysicsScene();

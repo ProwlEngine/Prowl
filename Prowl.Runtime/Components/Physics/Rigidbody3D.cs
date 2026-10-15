@@ -35,7 +35,7 @@ public enum RigidbodyInterpolation
 
 [AddComponentMenu("Physics/Rigidbody")]
 [ComponentIcon("\uf1b2")] // Cube
-public sealed class Rigidbody3D : Component
+public sealed class Rigidbody3D : Component, ITransformChangeListener
 {
     public class RigidBodyUserData
     {
@@ -88,6 +88,11 @@ public sealed class Rigidbody3D : Component
     // Bookkeeping owned by PhysicsWorld: this body's slot in its sync list, and the step that last captured it.
     internal int SyncIndex = -1;
     internal uint CaptureStamp;
+    internal bool SyncQueued;
+    internal PhysicsWorld SyncWorld;
+
+    // Set while the physics write back moves the Transform, so that move is not mistaken for an edit.
+    private bool _writingPose;
 
     // Transform.Version last pushed into the physics body, so SyncTransformToBody only pushes when
     // the user actually edited the Transform (not when the physics readback wrote it).
@@ -556,8 +561,16 @@ public sealed class Rigidbody3D : Component
             rotation = Quaternion.Slerp(_previousRotation, _currentRotation, t);
         }
 
-        Transform.Position = position;
-        Transform.Rotation = rotation;
+        _writingPose = true;
+        try
+        {
+            Transform.Position = position;
+            Transform.Rotation = rotation;
+        }
+        finally
+        {
+            _writingPose = false;
+        }
 
         // Remember the version we just wrote so the transform->body sync doesn't treat this
         // physics-driven change as a user edit and push it straight back.
@@ -803,6 +816,14 @@ public sealed class Rigidbody3D : Component
         rotation = _body.Orientation.ToProwl();
         return true;
     }
+
+    void ITransformChangeListener.TransformChanged()
+    {
+        if (!_writingPose) QueueSync();
+    }
+
+    /// <summary>Asks the physics world to push this body's Transform and layer into it before the next step.</summary>
+    internal void QueueSync() => SyncWorld?.QueueSync(this);
 
     internal void SyncTransformToBody()
     {

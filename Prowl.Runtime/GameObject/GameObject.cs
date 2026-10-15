@@ -61,8 +61,21 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary> The Tag Index of this GameObject </summary>
     public int TagIndex;
 
+    private int _layerIndex;
+
     /// <summary> The Layer Index of this GameObject </summary>
-    public int LayerIndex;
+    public int LayerIndex
+    {
+        get => _layerIndex;
+        set
+        {
+            if (_layerIndex == value) return;
+            _layerIndex = value;
+
+            // A rigidbody carries its layer into the physics world, so it has to pick the change up.
+            if (TryGetComponent(out Rigidbody3D body)) body.QueueSync();
+        }
+    }
 
     /// <summary> The Hide Flags of this GameObject, Used to hide the GameObject from a variety of places like Serializing, Inspector or Hierarchy </summary>
     [HideInInspector] public HideFlags HideFlags = HideFlags.None;

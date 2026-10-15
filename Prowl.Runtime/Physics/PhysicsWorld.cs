@@ -174,9 +174,11 @@ public class PhysicsWorld
     /// <summary>Pushes Transform edits into bodies before each step. Turn off to sync manually.</summary>
     public bool AutoSyncTransforms = true;
 
-    // Rigidbodies that may need their Transform pushed into the physics world (transform -> body).
-    // Dense so the per step walks stay cheap; each body keeps its own slot for swap removal.
+    // Every registered rigidbody. Dense so walks over them stay cheap; each body keeps its own slot for swap removal.
     private readonly List<Rigidbody3D> _syncBodies = [];
+
+    // Bodies whose Transform or layer was edited since the last sync.
+    private readonly List<Rigidbody3D> _pendingSync = [];
 
     // Bodies whose pose changed in the last step, so only they get their Transform written each frame.
     private List<Rigidbody3D> _movedBodies = [];
@@ -424,11 +426,16 @@ public class PhysicsWorld
             body.SyncIndex = _syncBodies.Count;
             _syncBodies.Add(body);
         }
+        body.SyncWorld = this;
+        body.Transform.ChangeListener = body;
         if (body.IsSimulated) HookContacts(body.Native);
     }
 
     internal void UnregisterBody(Rigidbody3D body)
     {
+        if (ReferenceEquals(body.SyncWorld, this)) body.SyncWorld = null;
+        if (body.GameObject.IsValid() && ReferenceEquals(body.Transform.ChangeListener, body)) body.Transform.ChangeListener = null;
+
         int index = body.SyncIndex;
         if (index < 0 || index >= _syncBodies.Count || !ReferenceEquals(_syncBodies[index], body)) return;
 
@@ -613,10 +620,24 @@ public class PhysicsWorld
     public void SyncTransforms()
     {
         Tasks.MainThreadContext.AssertMainThread();
-        foreach (Rigidbody3D body in _syncBodies)
+
+        // Indexed, since a sync may queue further bodies and they are handled in the same pass.
+        for (int i = 0; i < _pendingSync.Count; i++)
+        {
+            Rigidbody3D body = _pendingSync[i];
+            body.SyncQueued = false;
             if (body.IsValid()) body.SyncTransformToBody();
+        }
+        _pendingSync.Clear();
 
         RefreshColliders();
+    }
+
+    internal void QueueSync(Rigidbody3D body)
+    {
+        if (body.SyncQueued) return;
+        body.SyncQueued = true;
+        _pendingSync.Add(body);
     }
 
     internal void WatchCollider(Collider collider)
@@ -819,9 +840,15 @@ public class PhysicsWorld
         // World.Clear removed every body, so the per-body registries hold nothing worth visiting.
         // The components re-register when they recreate their bodies.
         foreach (Rigidbody3D body in _syncBodies)
+        {
             body.SyncIndex = -1;
+            body.SyncWorld = null;
+        }
         _syncBodies.Clear();
         _movedBodies.Clear();
+        foreach (Rigidbody3D body in _pendingSync)
+            body.SyncQueued = false;
+        _pendingSync.Clear();
         foreach (Collider collider in _watchedColliders)
             collider.WatchIndex = -1;
         _watchedColliders.Clear();
