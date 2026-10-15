@@ -2577,7 +2577,9 @@ public sealed partial class Lowerer
                 // turns a constant one into a constant composite, a specialization one into a spec composite).
                 if (l.Type is VectorType lv && r.Type is ScalarType && !IsComparison(b.Op) && b.Op is not ("<<" or ">>")) r = SpecSmear(r, lv);
                 else if (r.Type is VectorType rv && l.Type is ScalarType && !IsComparison(b.Op) && b.Op is not ("<<" or ">>")) l = SpecSmear(l, rv);
-                var common = CommonType(l.Type, r.Type);
+                // A shift's result (and arithmetic-shift flavor) follows the LEFT operand, not the
+                // common type: `intVal << 2u` stays int.
+                var common = b.Op is "<<" or ">>" ? l.Type : CommonType(l.Type, r.Type);
                 var (opcode, type) = SpecBinaryOp(b.Op, common);
                 return TrackSpec(_m.SpecConstantOp(SpvType(type), opcode, l.Id, r.Id), type);
             }
@@ -2647,22 +2649,25 @@ public sealed partial class Lowerer
         // An integer to bool compares against an UNSIGNED zero whatever the source's signedness.
         if (target.Kind == Scalar.Bool && IsIntegral(from))
         {
+            uint targetId = SpvType(target);
             uint zero = Is64Bit(from) ? _m.ConstantInt64(SpvType(Types.UInt64), 0) : _m.ConstantInt(SpvType(Types.UInt), 0);
-            return TrackSpec(_m.SpecConstantOp(SpvType(target), Op.INotEqual, operand.Id, zero), target);
+            return TrackSpec(_m.SpecConstantOp(targetId, Op.INotEqual, operand.Id, zero), target);
         }
         // A bool to integer selects between one and zero of the target's own signedness.
         if (from == Scalar.Bool && IsIntegral(target.Kind))
         {
+            uint targetId = SpvType(target);
             uint zero = Materialize(new CScalar(target.Kind, 0, 0)).Id;
             uint one = Materialize(new CScalar(target.Kind, 1, 1)).Id;
-            return TrackSpec(_m.SpecConstantOp(SpvType(target), Op.Select, operand.Id, one, zero), target);
+            return TrackSpec(_m.SpecConstantOp(targetId, Op.Select, operand.Id, one, zero), target);
         }
         if (IsIntegral(from) && IsIntegral(target.Kind) && Is64Bit(from) == Is64Bit(target.Kind))
         {
+            uint targetId = SpvType(target);
             uint zero = Is64Bit(target.Kind)
                 ? _m.ConstantInt64(SpvType(Types.UInt64), 0)
                 : _m.ConstantInt(SpvType(Types.UInt), 0);
-            return TrackSpec(_m.SpecConstantOp(SpvType(target), Op.IAdd, operand.Id, zero), target);
+            return TrackSpec(_m.SpecConstantOp(targetId, Op.IAdd, operand.Id, zero), target);
         }
         if (ConvertOp(from, target.Kind) is not { } op)
             throw new GlslParseException($"cannot convert a specialization constant from '{Types.ScalarName(from)}' to '{Types.ScalarName(target.Kind)}'");
@@ -2696,11 +2701,28 @@ public sealed partial class Lowerer
         if (type is not ScalarType scalar)
             throw new GlslParseException("a specialization constant (constant_id) must be a scalar", init.Line);
 
+        uint typeId = SpvType(scalar);
+        // A constant-expression default folds to its value: `= 2 + 3` means 5 (glslang folds it too).
+        if (EvalConst(init) is CScalar { Kind: Scalar.Int or Scalar.UInt } folded)
+        {
+            uint foldedId = scalar.Kind switch
+            {
+                Scalar.Bool => _m.SpecConstantBool(typeId, folded.I != 0),
+                Scalar.Float => _m.SpecConstantFloat(typeId, (float)folded.I),
+                Scalar.Double => _m.SpecConstantDouble(typeId, folded.I),
+                Scalar.Half => _m.SpecConstantHalf(typeId, (float)folded.I),
+                Scalar.Int64 or Scalar.UInt64 => _m.SpecConstantInt64(typeId, unchecked((ulong)folded.I)),
+                _ => _m.SpecConstantInt(typeId, unchecked((uint)folded.I)),
+            };
+            _m.Decorate(foldedId, Decoration.SpecId, (uint)specId);
+            _specConstIds.Add(foldedId);
+            return new Value(foldedId, scalar, IsConstant: false);
+        }
+
         var (valueExpr, negate) = init is Unary { Op: "-", Operand: Literal } u ? (u.Operand, true) : (init, false);
         if (valueExpr is not Literal lit)
             throw new GlslParseException("a specialization constant needs a literal default value");
 
-        uint typeId = SpvType(scalar);
         uint SignedBits() => negate ? unchecked((uint)-(int)ParseIntLiteral(lit.Text)) : ParseIntLiteral(lit.Text);
         ulong SignedBits64() => negate ? unchecked((ulong)-(long)ParseInt64Literal(lit.Text)) : ParseInt64Literal(lit.Text);
         uint id = scalar.Kind switch
@@ -4647,7 +4669,7 @@ public sealed partial class Lowerer
         "textureProjOffset", "textureLodOffset", "textureProjLod", "textureProjLodOffset", "textureGrad",
         "textureGradOffset", "textureProjGrad", "textureProjGradOffset", "textureGather", "textureGatherOffset",
         "textureGatherOffsets", "textureSize", "textureQueryLod", "textureQueryLevels", "textureSamples",
-        "imageLoad", "imageStore", "imageSize", "imageAtomicAdd", "imageAtomicExchange", "subpassLoad",
+        "imageLoad", "imageStore", "imageSize", "imageSamples", "imageAtomicAdd", "imageAtomicExchange", "subpassLoad",
         "atomicAdd", "atomicAnd", "atomicOr", "atomicXor", "atomicMin", "atomicMax", "atomicExchange",
         "atomicCompSwap", "atomicLoad", "atomicStore", "barrier", "memoryBarrier", "memoryBarrierBuffer",
         "memoryBarrierShared", "memoryBarrierImage", "groupMemoryBarrier", "EmitVertex", "EndPrimitive",
@@ -4886,6 +4908,7 @@ public sealed partial class Lowerer
             "subpassLoad" => SubpassLoad(args),
             "imageStore" => ImageStore(args, ImageMem(call.Args[0])),
             "imageSize" => ImageSize(args),
+            "imageSamples" => ImageSamples(args),
             "textureGatherOffset" => TextureGatherOffset(call, args),
             "textureGatherOffsets" => TextureGatherOffsets(args),
             // On scalars glslang's dot is a plain multiply (OpDot only takes vectors).
@@ -6686,6 +6709,14 @@ public sealed partial class Lowerer
         var img = (ImageType)args[0].Type;
         var resultType = IntCoordType(img.Dim, img.Arrayed);
         return new Value(Emit(Op.ImageQuerySize, SpvType(resultType), args[0].Id), resultType, false);
+    }
+
+    Value ImageSamples(Value[] args)   // imageSamples(image): multisample count, OpImageQuerySamples
+    {
+        _m.AddCapability(Capability.ImageQuery);
+        if (args[0].Type is not ImageType)
+            throw new GlslParseException($"invalid argument type for 'imageSamples'");
+        return new Value(Emit(Op.ImageQuerySamples, SpvType(Types.Int), args[0].Id), Types.Int, false);
     }
 
     uint TextureSpvType(TextureType t)
@@ -9878,7 +9909,7 @@ public sealed partial class Lowerer
         // These reduce to the component scalar (a double matrix/vector yields a double, not a float).
         "dot" or "length" or "distance" => new ScalarType(BaseScalar(InferType(c.Args[0]))),
         "cross" => InferType(c.Args[0]),
-        "textureSamples" or "textureQueryLevels" => Types.Int,
+        "textureSamples" or "textureQueryLevels" or "imageSamples" => Types.Int,
         "any" or "all" or "sparseTexelsResidentARB" => Types.Bool,
         "isnan" or "isinf" => ReplaceComponent(InferType(c.Args[0]), Scalar.Bool),
         "lessThan" or "lessThanEqual" or "greaterThan" or "greaterThanEqual" or "equal" or "notEqual" => ReplaceComponent(InferType(c.Args[0]), Scalar.Bool),
