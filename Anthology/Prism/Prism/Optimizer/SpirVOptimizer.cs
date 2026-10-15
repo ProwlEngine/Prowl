@@ -328,8 +328,16 @@ public static partial class SpirVOptimizer
             // commons -- such loads must stay in the basic block that uses them. Only other read-only loads number.
             if (t is not null && t.Opcode is 25 or 26 or 27) return false;
             if (sc is 0 or 1 or 9) return true;
-            if (sc == 2 && def.TryGetValue(v.Operands[0], out var pt) && pt.Operands.Length >= 3 && !bufferBlocks.Contains(pt.Operands[2])) return true;
+            if (sc == 2 && def.TryGetValue(v.Operands[0], out var pt) && pt.Operands.Length >= 3 && !bufferBlocks.Contains(UnwrapArray(pt.Operands[2]))) return true;
             return nonWritable.Contains(v.Operands[1]);   // IsReadOnlyPointerShaders: a NonWritable variable
+        }
+        // SPIR-V <=1.2 `buffer B{} bs[2]`: the pointer's pointee is an OpTypeArray/RuntimeArray of the
+        // BufferBlock struct, so unwrap to the element type before testing the decoration.
+        uint UnwrapArray(uint id)
+        {
+            for (int g = 0; g < 64 && def.TryGetValue(id, out var at) && at.Opcode is 28 or 29 && at.Operands.Length >= 2; g++)
+                id = at.Operands[1];
+            return id;
         }
         // GLSL.std.450 extended instructions are pure combinators, so identical ones common like arithmetic.
         uint glslExt = 0;
@@ -535,9 +543,11 @@ public static partial class SpirVOptimizer
         var absorbedBy = new Dictionary<int, int>();
         var tail = new int[n];        // last block of each live chain
         var chainMerge = new uint[n]; // label named by the chain's merge instruction (0 = none)
+        var chainIsMerge = new bool[n]; // chain root is currently some live construct's merge target
         for (int b = 0; b < n; b++)
         {
             tail[b] = b;
+            chainIsMerge[b] = mergeTargets.Contains(LabelId(b));
             for (int i = blockStart[b] + 1; i < BlockEnd(b); i++) if (m.Instrs[i].Opcode is 246 or 247) { chainMerge[b] = m.Instrs[i].Operands[0]; break; }
         }
         var droppedMerges = new HashSet<uint>();   // headers whose construct vanished by absorbing their merge
@@ -553,7 +563,10 @@ public static partial class SpirVOptimizer
                 uint succ = LabelId(sb);
                 if (preds.GetValueOrDefault(succ) != 1) break;         // successor has exactly one predecessor
                 if (absorbedBy.ContainsKey(sb)) break;
-                bool predMerge = IsMergeTarget(LabelId(b));
+                // spirv-opt re-evaluates CanMergeWithSuccessor on the merged block after every absorb
+                // (uses transfer to the surviving label immediately). The merged block keeps the root's
+                // label, so it is a merge target whenever the root was or any absorbed block was.
+                bool predMerge = chainIsMerge[b];
                 bool succMerge = IsMergeTarget(succ);
                 bool succContinue = continueTargets.Contains(succ);
                 if (predMerge && succMerge) break;                     // two merges cannot become one block
@@ -567,9 +580,14 @@ public static partial class SpirVOptimizer
                 }
                 if ((succMerge || succContinue) && caseTargets.Contains(LabelId(b))) break;
                 // Merge: a header absorbing the very block its merge instruction names drops that instruction.
+                // Uses naming absorbed blocks retarget to the root, so the root inherits merge-target
+                // status from the tail and (unless its own merge just died) from the successor.
+                uint ownMerge = chainMerge[b];
+                bool tailMerge = IsMergeTarget(LabelId(tail[b]));
                 absorbs[tail[b]] = sb; absorbedBy[sb] = tail[b];
-                if (chainMerge[b] != 0 && succ == chainMerge[b]) { droppedMerges.Add(succ); chainMerge[b] = 0; }
+                if (ownMerge != 0 && succ == ownMerge) { droppedMerges.Add(succ); chainMerge[b] = 0; }
                 if (chainMerge[sb] != 0) chainMerge[b] = chainMerge[sb];
+                chainIsMerge[b] = chainIsMerge[b] || tailMerge || (succMerge && succ != ownMerge);
                 tail[b] = tail[sb];
             }
         }
@@ -1432,10 +1450,13 @@ public static partial class SpirVOptimizer
     static void LoopUnroll(SpvModule m)
     {
         if (!HasShaderCapability(m)) return;
-        foreach (uint fn in ReachableFunctions(m)) { int guard = 0; while (UnrollOneLoop(m, fn) && ++guard < 64) { } }
+        // Cap total blocks created by unrolling: nested [[unroll]] loops multiply (128 nested trip-2
+        // loops would need 2^128 copies), so stop once the budget is spent and leave the rest rolled.
+        int budget = 32768;
+        foreach (uint fn in ReachableFunctions(m)) { int guard = 0; while (UnrollOneLoop(m, fn, ref budget) && ++guard < 64) { } }
     }
 
-    static bool UnrollOneLoop(SpvModule m, uint fnId)
+    static bool UnrollOneLoop(SpvModule m, uint fnId, ref int budget)
     {
         int fs = -1, fe = -1;
         { int i = m.FindFunction(fnId); if (i >= 0) { fs = i; fe = i; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++; } }
@@ -1445,8 +1466,9 @@ public static partial class SpirVOptimizer
         var def = m.DefMap();
         List<uint> Preds(uint lbl) { var r = new List<uint>(); foreach (var bb in blocks) if (BlockSuccs(bb).Contains(lbl)) r.Add(bb.Label); return r; }
 
-        foreach (var header in blocks)
+        for (int hi = blocks.Count - 1; hi >= 0; hi--)
         {
+            var header = blocks[hi];
             if (header.Merge is not { Opcode: 246 } lm || lm.Operands[2] != 1) continue;   // OpLoopMerge with control == Unroll(1)
             uint mergeId = lm.Operands[0], contId = lm.Operands[1];
             if (Preds(mergeId).Count != 1 || Preds(contId).Count != 1) continue;            // no breaks / no continues
@@ -1456,6 +1478,7 @@ public static partial class SpirVOptimizer
             void Dfs(Blk b) { if (b.Label == mergeId || !loopSet.Add(b.Label)) return; order.Add(b); foreach (var s in BlockSuccs(b)) if (byLabel.TryGetValue(s, out var nb)) Dfs(nb); }
             Dfs(header);
             if (order.Any(b => b.Term.Opcode is OpReturn or OpReturnValue or 252 or 255)) continue;   // no returns/kills
+            if (order.Any(b => b != header && b.Merge is { Opcode: 246 })) continue;   // nested loops: unroll innermost-first
 
             var latch = byLabel[contId];
             if (latch.Term.Opcode != 249 || latch.Term.Operands[0] != header.Label) continue;   // latch is uncond branch to header
@@ -1475,12 +1498,45 @@ public static partial class SpirVOptimizer
             if (ind is null) continue;
             uint preLabel = Preds(header.Label).FirstOrDefault(p => p != contId);
             uint initId = PhiVal(ind, preLabel), latchVal = PhiVal(ind, contId);
-            if (!def.TryGetValue(latchVal, out var stepInst) || stepInst.Opcode != 128) continue;   // i = i + step
-            uint stepId = stepInst.Operands[2] == indId ? stepInst.Operands[3] : stepInst.Operands[2];
-            if (!ConstInt(def, initId, out long init) || !ConstInt(def, boundId, out long bound) || !ConstInt(def, stepId, out long step) || step <= 0) continue;
-            // Trip count for the supported comparisons (SLessThan 177 / ULessThan 176 / SLessThanEqual 179 / ULessThanEqual 178).
-            long trip = cmp.Opcode switch { 176 or 177 => (bound - init + step - 1) / step, 178 or 179 => (bound - init) / step + 1, _ => -1 };
-            if (trip < 1 || trip > 128) continue;
+            if (!def.TryGetValue(latchVal, out var stepInst)) continue;
+            // Induction step must hang off the induction (i = i +/- c); a constant in an IAdd with
+            // anything else (e.g. i = 1 + j) is not a step and unrolling by it miscompiles.
+            // Countdown loops (i -= c, i += -c) count down and use >/>= comparisons.
+            long step;
+            if (stepInst.Opcode == 128)
+            {
+                uint stepId2;
+                if (stepInst.Operands[2] == indId) stepId2 = stepInst.Operands[3];
+                else if (stepInst.Operands[3] == indId) stepId2 = stepInst.Operands[2];
+                else continue;
+                if (!ConstInt(def, stepId2, out step) || step == 0) continue;
+            }
+            else if (stepInst.Opcode == 130 && stepInst.Operands[2] == indId
+                && ConstInt(def, stepInst.Operands[3], out long c) && c != 0) step = -c;
+            else continue;
+            if (!ConstInt(def, initId, out long init) || !ConstInt(def, boundId, out long bound)) continue;
+            // Trip count for <, <= (step > 0) and >, >= (step < 0); mismatched direction never exits.
+            long trip = (cmp.Opcode, step > 0) switch
+            {
+                (176 or 177, true) => (bound - init + step - 1) / step,
+                (178 or 179, true) => (bound - init) / step + 1,
+                (172 or 173, false) => (init - bound - 1) / -step + 1,
+                (174 or 175, false) => (init - bound) / -step + 1,
+                _ => -1
+            };
+            if (trip > 128) continue;
+            if (trip < 1)
+            {
+                // The loop provably never executes: bypass it (reroute the preheader to the merge and
+                // delete the loop) rather than unrolling zero copies.
+                if (BypassDeadLoop(order, loopSet, header, phis, preLabel, mergeId, contId)) return true;
+                continue;
+            }
+            // Budget the copies this unroll would create; nested unrollable loops multiply across
+            // fixpoint iterations, so without this 128 nested trip-2 loops explode to 2^128 blocks.
+            long cost = (trip - 1) * order.Count;
+            if (cost > budget) continue;
+            budget -= (int)cost;
 
             UnrollLoop(m, fs, fe, firstLabel, blocks, order, header, latch, cond, mergeId, (int)trip, ind, phis, preLabel, contId, exitOnFalse ? 1 : 2);
             return true;
@@ -1488,6 +1544,81 @@ public static partial class SpirVOptimizer
         return false;
 
         static uint PhiVal(SpvInstr phi, uint label) { for (int i = 2; i + 1 < phi.Operands.Length; i += 2) if (phi.Operands[i + 1] == label) return phi.Operands[i]; return 0; }
+
+        // A loop with trip count <= 0 never executes: reroute its single preheader straight to the
+        // merge and delete the loop blocks. Sound only when every value flowing out already exists
+        // outside (header phis take preheader values); anything escaping unthreaded declines.
+        bool BypassDeadLoop(List<Blk> order, HashSet<uint> loopSet, Blk header, List<SpvInstr> phis, uint preLabel, uint mergeId, uint contId)
+        {
+            var headerPreds = Preds(header.Label).Where(p => p != contId).ToList();
+            if (headerPreds.Count != 1 || headerPreds[0] != preLabel || preLabel == 0) return false;
+            if (loopSet.Contains(preLabel)) return false;
+            if (!byLabel.TryGetValue(preLabel, out var preBlk) || !byLabel.TryGetValue(mergeId, out var mergeBlk)) return false;
+            var preTerm = preBlk.Insts[^1];
+            if (preTerm.Opcode == 249)
+            {
+                if (preTerm.Operands[0] != header.Label) return false;
+            }
+            else if (preTerm.Opcode == 250)
+            {
+                if (preTerm.Operands[1] != header.Label && preTerm.Operands[2] != header.Label) return false;
+            }
+            else return false;
+            var mergePreds = Preds(mergeId);
+            if (mergePreds.Count != 1 || !loopSet.Contains(mergePreds[0])) return false;
+            var thread = new Dictionary<uint, uint>();
+            foreach (var p in phis)
+            {
+                uint init = PhiVal(p, preLabel);
+                if (init == 0 || init == p.Operands[1]) return false;
+                thread[p.Operands[1]] = init;
+            }
+            foreach (var v in thread.Values) if (v == 0) return false;
+            var deadIds = new HashSet<uint>();
+            var deadInsts = new HashSet<SpvInstr>();
+            foreach (var lb in order)
+            {
+                deadIds.Add(lb.Label);
+                foreach (var ins in lb.Insts) { deadInsts.Add(ins); uint r = ins.ResultId; if (r != 0) deadIds.Add(r); }
+            }
+            foreach (var v in thread.Values) if (deadIds.Contains(v)) return false;
+            // Merge phis: the sole predecessor is dead, so all pairs retarget to the preheader with
+            // threaded values.
+            foreach (var ins in mergeBlk.Insts)
+            {
+                if (ins.Opcode != 245) continue;
+                for (int k = 2; k + 1 < ins.Operands.Length; k += 2)
+                {
+                    uint l = ins.Operands[k + 1];
+                    if (!deadIds.Contains(l)) continue;
+                    uint nv = ins.Operands[k];
+                    if (thread.TryGetValue(nv, out uint tv)) nv = tv;
+                    if (deadIds.Contains(nv)) return false;
+                    ins.Operands[k] = nv; ins.Operands[k + 1] = preLabel;
+                }
+            }
+            // Every other remaining use of a dead id must thread through a header phi.
+            for (int i = fs; i <= fe; i++)
+            {
+                var ins = m.Instrs[i];
+                if (ins.Opcode == OpLabel || deadInsts.Contains(ins) || ins == preTerm) continue;
+                ins.Classify(out int ri, out bool[] isId);
+                for (int k = 0; k < ins.Operands.Length; k++)
+                {
+                    if (k == ri || !isId[k]) continue;
+                    uint id = ins.Operands[k];
+                    if (!deadIds.Contains(id)) continue;
+                    if (!thread.TryGetValue(id, out uint nv) || deadIds.Contains(nv)) return false;
+                    ins.Operands[k] = nv;
+                }
+            }
+            if (preTerm.Opcode == 249) preTerm.Operands[0] = mergeId;
+            else if (preTerm.Operands[1] == header.Label) preTerm.Operands[1] = mergeId;
+            else preTerm.Operands[2] = mergeId;
+            blocks.RemoveAll(b => loopSet.Contains(b.Label));
+            RebuildFunction(m, fs, fe, firstLabel, blocks);
+            return true;
+        }
     }
 
     static bool ConstInt(DefTable def, uint id, out long v)
@@ -1520,9 +1651,12 @@ public static partial class SpirVOptimizer
                 var nb = new Blk { Label = newLabel };
                 foreach (var ins in lb.Insts)
                 {
-                    if (ins.Opcode == 246) continue;                                   // drop OpLoopMerge
+                    // Only the outer header's own construct is dissolved (its OpLoopMerge dropped,
+                    // its phis threaded below). Nested loops/selections keep their structure: their
+                    // merges and phis are copied and remapped like any other instruction.
+                    if (ins.Opcode == 246 && lb == header) continue;                     // drop outer OpLoopMerge
                     uint rid = ins.ResultId;
-                    if (ins.Opcode == 245) { map[rid] = nextId++; continue; }           // clone phi id (dead, becomes a gap) but omit it
+                    if (ins.Opcode == 245 && lb == header) { map[rid] = nextId++; continue; }   // outer phi id (dead, threaded below)
                     var c = new SpvInstr(ins.Opcode, (uint[])ins.Operands.Clone());
                     if (rid != 0) { uint nid = nextId++; map[rid] = nid; c.Classify(out int ri, out _); if (ri >= 0) c.Operands[ri] = nid; }
                     nb.Insts.Add(c);

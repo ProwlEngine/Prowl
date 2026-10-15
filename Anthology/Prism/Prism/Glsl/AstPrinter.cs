@@ -19,8 +19,8 @@ public static class AstPrinter
 
     static string Decl(Decl d) => d switch
     {
-        FunctionDef f => $"{f.ReturnType.Name} {f.Name}({Join(f.Parameters, Param)}) {Stmt(f.Body)}",
-        FunctionProto p => $"{p.ReturnType.Name} {p.Name}({Join(p.Parameters, Param)});",
+        FunctionDef f => $"{Quals(f.Qualifiers)}{f.ReturnType.Name} {f.Name}({Join(f.Parameters, Param)}) {Stmt(f.Body)}",
+        FunctionProto p => $"{Quals(p.Qualifiers)}{p.ReturnType.Name} {p.Name}({Join(p.Parameters, Param)});",
         GlobalVar g => $"{Quals(g.Qualifiers)}{g.Type.Name} {Join(g.Declarators, Declarator)};",
         StructDef s => $"struct {s.Name} {{ {Concat(s.Members, m => Field(m) + " ")}}};",
         InterfaceBlock b =>

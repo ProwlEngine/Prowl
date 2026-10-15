@@ -140,8 +140,8 @@ public sealed class Parser
         if (IsKind(TokenKind.LParen))
         {
             var parameters = ParseParams();
-            if (AcceptKind(TokenKind.Semicolon)) return new FunctionProto(type, name2, parameters);   // prototype
-            return new FunctionDef(type, name2, parameters, ParseBlock());
+            if (AcceptKind(TokenKind.Semicolon)) return new FunctionProto(quals, type, name2, parameters);   // prototype
+            return new FunctionDef(quals, type, name2, parameters, ParseBlock());
         }
 
         var declarators = new List<Declarator> { ParseDeclaratorTail(name2, type, name2Tok.Line) };

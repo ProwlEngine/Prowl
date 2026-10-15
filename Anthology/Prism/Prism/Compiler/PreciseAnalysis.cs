@@ -43,6 +43,7 @@ sealed class PreciseAnalysis
 
     readonly Dictionary<string, (string Field, TypeName Type)[]> _structs = new(StringComparer.Ordinal);
     readonly Dictionary<string, TypeName> _functionReturns = new(StringComparer.Ordinal);
+    readonly HashSet<string> _preciseReturns = new(StringComparer.Ordinal);
     readonly Dictionary<string, Symbol> _globals = new(StringComparer.Ordinal);
     readonly Dictionary<object, string> _chain = new(ReferenceEqualityComparer.Instance);       // object node -> access chain
     readonly Dictionary<object, Symbol> _root = new(ReferenceEqualityComparer.Instance);        // object node -> root symbol
@@ -82,9 +83,11 @@ sealed class PreciseAnalysis
                     break;
                 case FunctionDef f:
                     _functionReturns[f.Name] = new TypeName(f.ReturnType.Name, Depth(f.ReturnType.Array));
+                    if (IsPreciseWord(f.Qualifiers)) _preciseReturns.Add(f.Name);
                     break;
                 case FunctionProto p:
                     _functionReturns.TryAdd(p.Name, new TypeName(p.ReturnType.Name, Depth(p.ReturnType.Array)));
+                    if (IsPreciseWord(p.Qualifiers)) _preciseReturns.Add(p.Name);
                     break;
             }
         }
@@ -131,7 +134,9 @@ sealed class PreciseAnalysis
                     scope[pn] = new Symbol(NewId(pn), new TypeName(p.Type.Name, Depth(p.Type.Array) + p.Array.Count),
                                            IsPreciseWord(p.Qualifiers) && (p.Qualifiers.Has("out") || p.Qualifiers.Has("inout")));
             _scopes.Add(scope);
+            _currentPreciseReturn = _preciseReturns.Contains(f.Name);
             CollectBlockBody(f.Body);
+            _currentPreciseReturn = false;
             _scopes.Clear();
         }
 
@@ -158,7 +163,7 @@ sealed class PreciseAnalysis
                 case GlobalVar g when IsPreciseWord(g.Qualifiers): return true;
                 case InterfaceBlock b when IsPreciseWord(b.Qualifiers) || b.Members.Any(m => IsPreciseWord(m.Qualifiers)): return true;
                 case QualifierRedecl r when IsPreciseWord(r.Qualifiers): return true;
-                case FunctionDef f when f.Parameters.Any(p => IsPreciseWord(p.Qualifiers)) || StmtMentions(f.Body): return true;
+                case FunctionDef f when IsPreciseWord(f.Qualifiers) || f.Parameters.Any(p => IsPreciseWord(p.Qualifiers)) || StmtMentions(f.Body): return true;
             }
         }
         return false;
@@ -194,6 +199,7 @@ sealed class PreciseAnalysis
     }
 
     int _inIndex;
+    bool _currentPreciseReturn;
 
     void AddDefinition(string symbolId, Definition def)
     {
@@ -256,9 +262,15 @@ sealed class PreciseAnalysis
                 Pop();
                 break;
             case ReturnStmt r:
-                // glslang only traverses a return expression of a precise-returning function; Prism has no
-                // precise return types, but chains are still recorded so nothing below lacks one.
+                // A precise-returning function's return value is an initial precise object: seed the
+                // work list with a synthetic definition so the returned expression's operations get marked.
                 if (r.Value is not null) CollectExpr(r.Value);
+                if (_currentPreciseReturn && r.Value is not null)
+                {
+                    var sym = new Symbol(NewId("$ret"), new TypeName("", 0), true);
+                    AddDefinition(sym.Id, new Definition { Node = r, DeclSymbol = sym, Right = r.Value });
+                    Enqueue(sym.Id);
+                }
                 break;
         }
     }
@@ -374,8 +386,8 @@ sealed class PreciseAnalysis
             if (IsPreciseNode(def.Left)) return (true, "");
             assignee = _chain.GetValueOrDefault(def.Left, "");
         }
-        if (assignee.StartsWith(precise, StringComparison.Ordinal)) return (true, "");
-        if (precise.StartsWith(assignee, StringComparison.Ordinal))
+        if (assignee == precise || assignee.StartsWith(precise + Delim, StringComparison.Ordinal)) return (true, "");
+        if (precise.StartsWith(assignee + Delim, StringComparison.Ordinal))
             return (true, precise.Length > assignee.Length ? precise[(assignee.Length + 1)..] : "");
         return (false, "");
     }

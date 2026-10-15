@@ -112,8 +112,8 @@ public sealed record TranslationUnit(int Version, IReadOnlyList<Decl> Declaratio
 public abstract record Decl { public int Line { get; set; } }
 public sealed record Param(Qualifiers Qualifiers, TypeRef Type, string? Name, IReadOnlyList<Expr?> Array);
 public sealed record Field(Qualifiers Qualifiers, TypeRef Type, IReadOnlyList<Declarator> Declarators);
-public sealed record FunctionDef(TypeRef ReturnType, string Name, IReadOnlyList<Param> Parameters, Block Body) : Decl;
-public sealed record FunctionProto(TypeRef ReturnType, string Name, IReadOnlyList<Param> Parameters) : Decl;
+public sealed record FunctionDef(Qualifiers Qualifiers, TypeRef ReturnType, string Name, IReadOnlyList<Param> Parameters, Block Body) : Decl;
+public sealed record FunctionProto(Qualifiers Qualifiers, TypeRef ReturnType, string Name, IReadOnlyList<Param> Parameters) : Decl;
 public sealed record GlobalVar(Qualifiers Qualifiers, TypeRef Type, IReadOnlyList<Declarator> Declarators) : Decl;
 public sealed record StructDef(string Name, IReadOnlyList<Field> Members) : Decl;
 public sealed record InterfaceBlock(Qualifiers Qualifiers, string BlockName, IReadOnlyList<Field> Members, string? InstanceName, IReadOnlyList<Expr?> InstanceArray) : Decl;

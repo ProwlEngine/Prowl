@@ -241,8 +241,16 @@ public static partial class SpirVOptimizer
             if (!def.TryGetValue(RootVar(ins.Operands[2]), out var v) || v.Opcode != OpVariable || v.Operands.Length < 3) return false;
             uint sc = v.Operands[2];
             if (sc is 0 or 1 or 9) return true;
-            if (sc == 2 && def.TryGetValue(v.Operands[0], out var pt) && pt.Operands.Length >= 3 && !bufferBlocks.Contains(pt.Operands[2])) return true;
+            if (sc == 2 && def.TryGetValue(v.Operands[0], out var pt) && pt.Operands.Length >= 3 && !bufferBlocks.Contains(UnwrapArray(pt.Operands[2]))) return true;
             return nonWritable.Contains(v.Operands[1]);
+        }
+        // SPIR-V <=1.2 `buffer B{} bs[2]`: the pointer's pointee is an OpTypeArray/RuntimeArray of the
+        // BufferBlock struct, so unwrap to the element type before testing the decoration.
+        uint UnwrapArray(uint id)
+        {
+            for (int g = 0; g < 64 && def.TryGetValue(id, out var at) && at.Opcode is 28 or 29 && at.Operands.Length >= 2; g++)
+                id = at.Operands[1];
+            return id;
         }
         bool Combinator(SpvInstr ins) => AdceCombinators.Contains(ins.Opcode)
             || ins.Opcode == OpExtInst && glslSet != 0 && ins.Operands.Length >= 4 && ins.Operands[2] == glslSet && AdceGlslCombinators.Contains(ins.Operands[3]);

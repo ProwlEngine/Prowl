@@ -240,6 +240,10 @@ public sealed partial class Lowerer
     readonly HashSet<uint> _specConstIds = [];       // their ids, so an operand can be recognised as specializable
     readonly HashSet<uint> _nonUniformIds = [];      // ids tainted by nonuniformEXT; propagate NonUniform through access chains/loads
     readonly Dictionary<string, (GlslType Type, uint VarId)> _locals = [];
+    // Function parameters of opaque type are UniformConstant pointers (ParamStorage), not Function
+    // locals: indexing one must stay in UniformConstant storage or the access chain is invalid.
+    // Keyed by variable id, so a shadowing local (which gets a fresh id) never collides.
+    readonly HashSet<uint> _uniformConstantParams = [];
     readonly Stack<HashSet<string>> _scopeNames = new();   // names declared directly in each open block, for same-scope redeclaration checks
     readonly Dictionary<(StorageClass Storage, int Index), List<(int Lo, int Hi, int CompLo, int CompHi, string Alias)>> _locationUse = [];   // occupied interface location/component ranges, for overlap checks
     // Opt-in: auto-assign a location to any in/out that omits layout(location=...), mirroring glslang's
@@ -1755,6 +1759,7 @@ public sealed partial class Lowerer
         _scopeNames.Push([]);
         _valueParams.Clear();
         _outParams.Clear();
+        _uniformConstantParams.Clear();
         _vars.Clear();
         _code.Clear();
         // The globals initialize at the top of main, before its body.
@@ -1773,6 +1778,7 @@ public sealed partial class Lowerer
             // A `const in` parameter IS its value, so it binds directly; the rest are pointers to load.
             if (p.ByValue) _valueParams[p.Name] = new Value(d.ParamIds[i], p.Type, false);
             else _locals[p.Name] = (p.Type, d.ParamIds[i]);
+            if (!p.ByValue && IsOpaque(p.Type)) _uniformConstantParams.Add(d.ParamIds[i]);
             if (p.IsOut && !p.IsIn) _outParams.Add(p.Name);
             if (!string.IsNullOrEmpty(p.Name)) _scopeNames.Peek().Add(p.Name);
         }
@@ -8163,7 +8169,8 @@ public sealed partial class Lowerer
                 var (bt, bv) = BuiltinVar(id.Name);
                 return new Chain(bv, [], bt, BuiltinIsOutput(id.Name, b.Output) ? StorageClass.Output : StorageClass.Input);
             case Ident id when ResolveLocalVar(id.Name) is { } local:
-                return new Chain(local.VarId, [], local.Type, StorageClass.Function);
+                return new Chain(local.VarId, [], local.Type,
+                    _uniformConstantParams.Contains(local.VarId) ? StorageClass.UniformConstant : StorageClass.Function);
             case Ident id when ResolveGlobal(id.Name) is { } g:
                 return new Chain(g.VarId, [], g.Type, g.Storage, Layout: BlockRuleset(g.Type), Mem: g.Mem, TypeId: _blockVarTypes.GetValueOrDefault(g.VarId));
             case Ident id when _blockMembers.TryGetValue(id.Name, out var bm):

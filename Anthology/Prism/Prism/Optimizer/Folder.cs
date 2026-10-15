@@ -202,16 +202,31 @@ internal sealed class Folder
         }
 
         // 2) FoldScalars (scalar arithmetic on 32-bit words) then FoldIntegerOpToConstant (partial constants).
+        // Scalar/vector arithmetic runs in 32 bits, so narrow (8/16-bit) results are normalized back to
+        // their width here (wrap + sign/zero-extend); without that U16 0x8000<<1 folds to 0x10000.
         if (IsFoldableByFoldScalar(inst))
         {
-            if (!missing && FoldScalars(inst, ops, map, out uint rv)) return TypedScalar(inst.Operands[0], rv);
+            if (!missing && FoldScalars(inst, ops, map, out uint rv)) return NormalizeFolded(inst.Operands[0], rv);
             if (FoldIntegerOpToConstant(inst, ops, out uint rv2)) return TypedScalar(inst.Operands[0], rv2);
         }
         else if (IsFoldableByFoldVector(inst))
         {
-            if (!missing && FoldVectors(inst, ops, out uint[] words)) { var t = inst.Operands[0]; var vt = Def(t)!; uint elem = vt.Operands[1]; var comps = words.Select(w => TypedScalar(elem, w)).ToArray(); return CompositeConst(t, comps); }
+            if (!missing && FoldVectors(inst, ops, out uint[] words))
+            {
+                var t = inst.Operands[0]; var vt = Def(t)!; uint elem = vt.Operands[1];
+                var comps = new uint[words.Length];
+                for (int i = 0; i < words.Length; i++) { comps[i] = NormalizeFolded(elem, words[i]); if (comps[i] == 0) return 0; }
+                return CompositeConst(t, comps);
+            }
         }
         return 0;
+    }
+
+    uint NormalizeFolded(uint type, uint word)
+    {
+        if (Def(type) is { Opcode: OpTypeBool }) return BoolConst(type, word != 0);
+        if (Def(type) is { Opcode: OpTypeInt }) return GenerateIntegerConstant(type, word);
+        return ScalarConst(type, word);
     }
 
     // fold.cpp IsFoldableOpcode -- the ops FoldScalars/OperateWords handle.
@@ -230,10 +245,11 @@ internal sealed class Folder
     bool IsFoldableByFoldVector(SpvInstr inst) => IsFoldableOpcode(inst.Opcode) && inst.Operands.Length > 0 && Def(inst.Operands[0]) is { Opcode: OpTypeVector } vt && Def(vt.Operands[1]) is { Opcode: OpTypeInt or OpTypeBool };
 
     // FoldScalars: OperateWords on the raw 32-bit words of the operands. Returns false if any operand isn't a
-    // 32-bit scalar/null constant.
+    // 32-bit scalar/null constant. Shifts only fold at 32/64-bit width (spirv-opt leaves narrow shifts alone).
     bool FoldScalars(SpvInstr inst, List<uint> ops, Func<uint, uint> map, out uint result)
     {
         result = 0;
+        if (inst.Opcode is 194 or 195 or 196 && TypeWidth(inst.Operands[0]) is not (32 or 64)) return false;
         var words = new uint[ops.Count];
         for (int i = 0; i < ops.Count; i++) { if (!ScalarWord(ops[i], out words[i])) return false; }
         return OperateWords(inst.Opcode, words, out result);
@@ -243,6 +259,7 @@ internal sealed class Folder
     {
         var vt = Def(inst.Operands[0])!; int dims = (int)vt.Operands[2];
         result = new uint[dims];
+        if (inst.Opcode is 194 or 195 or 196 && TypeWidth(vt.Operands[1]) is not (32 or 64)) return false;
         // each operand must be a vector constant (composite) or null.
         var comps = new uint[ops.Count][];
         for (int i = 0; i < ops.Count; i++)
@@ -334,10 +351,10 @@ internal sealed class Folder
         {
             case 132: case 134: case 135: case 138: case 139: case 137:   // IMul / UDiv / SDiv / SRem / SMod / UMod : *,/ by 0 -> 0
                 if ((c0 && v0 == 0) || (c1 && v1 == 0)) { result = 0; return true; } break;
-            case 194: case 196:                                            // shifts by >= bit-width -> 0
+            case 194: case 196:                                            // shifts by >= bit-width -> 0 (32/64-bit only)
                 {
                     int width = TypeWidth(inst.Operands[0]);
-                    if (width == 0) width = 32;
+                    if (width != 32 && width != 64) break;
                     if (c1 && v1 >= (uint)width) { result = 0; return true; }
                     break;
                 }
