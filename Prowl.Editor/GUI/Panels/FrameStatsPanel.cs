@@ -74,11 +74,11 @@ public class FrameStatsPanel : DockPanel
     private bool _hideUnselected;
     // Changes whenever a row is switched on or off or a group opens or closes, so the chart knows to redraw.
     private int _visibility;
-    // The chart's bars, recorded once and replayed until what they show changes. Text and the hover and selection
-    // highlights change far more often, so they are drawn over the bars each frame.
+    // The chart's bars, recorded once and replayed until what they show changes. The hover and selection highlights
+    // and the readout change far more often, so they are drawn over the bars each frame.
     private readonly CanvasSnapshot _bars = new();
     private BarsKey _barsKey;
-    private (long Version, int Columns, int Visibility, bool StackMax, int Categories) _tallestOf = (-1, 0, 0, false, 0);
+    private (ContentKey Content, bool StackMax) _tallestOf = (ContentKey.None, false);
     private float _tallestMs;
     // Chart height as a share of the space below the toolbar, once the splitter has been dragged; until then a default.
     private float _split = -1;
@@ -440,31 +440,28 @@ public class FrameStatsPanel : DockPanel
         int hoveredAgo = pointerIn ? ColumnAt((float)ptr.X - x, w, colW) : -1;
         int selectedAgo = SelectedAgo;
 
-        // The whole chart is recorded, anchored at its corner so it replays wherever the panel moves. Paused, or between
-        // columns, a frame costs one copy of it.
-        var key = new BarsKey(_history.Version, _visibleColumns, colW, w, h, scaleMs, _stackMax, _visibility,
-            categories.Count, _hovered, _hoveredOther, hoveredAgo, selectedAgo, Loc.CurrentLocale);
-        if (key == _barsKey && canvas.DrawSnapshot(_bars, x, y)) return;
-
-        bool record = WorthRecording;
-        if (record) canvas.BeginSnapshot(_bars, x, y);
-        // Newest at the right edge, older ones leftwards until the chart is full.
-        for (int ago = 0; ago < _visibleColumns; ago++)
-            DrawStack(canvas, categories, _history.Ago(ago)!, x + w - (ago + 1) * colW, barW, bottom, h, scaleMs);
-        PaintGraphOverlay(canvas, font, x, y, w, h, colW, barW, scaleMs, hoveredAgo, selectedAgo);
-        // A capture that cannot replay is drawn again next frame.
-        _barsKey = record && canvas.EndSnapshot() ? key : default;
+        // The bars, target lines and scale are recorded, anchored at the chart's corner so they replay wherever the panel
+        // moves. Paused, or between columns, a frame costs one copy of them.
+        var key = new BarsKey(Content, colW, w, h, scaleMs, _stackMax, _hovered, _hoveredOther, ThemeKey.Current);
+        if (key != _barsKey || !canvas.DrawSnapshot(_bars, x, y))
+        {
+            // While a row is hovered its blocks stand out, and which row that is changes as the pointer moves down the
+            // table. That is drawn without recording, keeping the plain chart's recording to replay when it leaves.
+            bool record = WorthRecording && _hovered == null;
+            if (record) canvas.BeginSnapshot(_bars, x, y);
+            // Newest at the right edge, older ones leftwards until the chart is full.
+            for (int ago = 0; ago < _visibleColumns; ago++)
+                DrawStack(canvas, categories, _history.Ago(ago)!, x + w - (ago + 1) * colW, barW, bottom, h, scaleMs);
+            PaintTargets(canvas, font, x, y, w, h, scaleMs);
+            // A capture that cannot replay is drawn again next frame.
+            if (record) _barsKey = canvas.EndSnapshot() ? key : default;
+        }
+        PaintGraphOverlay(canvas, font, x, y, w, h, colW, barW, hoveredAgo, selectedAgo);
     }
 
-    private void PaintGraphOverlay(Canvas canvas, FontFile font, float x, float y, float w, float h, float colW, float barW,
-        float scaleMs, int hoveredAgo, int selectedAgo)
+    private static void PaintTargets(Canvas canvas, FontFile font, float x, float y, float w, float h, float scaleMs)
     {
         float bottom = y + h;
-        if (selectedAgo >= 0 && selectedAgo < _visibleColumns)
-            canvas.RectFilled(x + w - (selectedAgo + 1) * colW, y, barW, h, EditorTheme.WithAlpha(EditorTheme.Accent, 70));
-        if (hoveredAgo >= 0 && hoveredAgo < _visibleColumns && hoveredAgo != selectedAgo)
-            canvas.RectFilled(x + w - (hoveredAgo + 1) * colW, y, barW, h, Color32.FromArgb(28, 255, 255, 255));
-
         // Most important first, so when the chart is too short for all of them the common targets win. Stroking changes
         // canvas state, which a recording must hand back as it found it.
         canvas.SaveState();
@@ -481,9 +478,17 @@ public class FrameStatsPanel : DockPanel
         }
         canvas.RestoreState();
 
-        float fs = EditorTheme.FontSizeSmall;
         FontFile mono = EditorTheme.FontMono ?? font;
-        canvas.DrawText($"{scaleMs:0.#} ms", x + w - 6, y + 4, EditorTheme.InkDim, fs, mono, 0, new Float2(1, 0));
+        canvas.DrawText($"{scaleMs:0.#} ms", x + w - 6, y + 4, EditorTheme.InkDim, EditorTheme.FontSizeSmall, mono, 0, new Float2(1, 0));
+    }
+
+    private void PaintGraphOverlay(Canvas canvas, FontFile font, float x, float y, float w, float h, float colW, float barW,
+        int hoveredAgo, int selectedAgo)
+    {
+        if (selectedAgo >= 0 && selectedAgo < _visibleColumns)
+            canvas.RectFilled(x + w - (selectedAgo + 1) * colW, y, barW, h, EditorTheme.WithAlpha(EditorTheme.Accent, 70));
+        if (hoveredAgo >= 0 && hoveredAgo < _visibleColumns && hoveredAgo != selectedAgo)
+            canvas.RectFilled(x + w - (hoveredAgo + 1) * colW, y, barW, h, Color32.FromArgb(28, 255, 255, 255));
 
         if ((_history.Ago(selectedAgo) ?? _history.Ago(hoveredAgo)) is { } readout)
             canvas.DrawText(Loc.Get("frame_stats.readout", new
@@ -491,7 +496,7 @@ public class FrameStatsPanel : DockPanel
                 frames = readout.Frames,
                 avg = readout.AvgFrameMs.ToString("0.00"),
                 peak = readout.PeakMs.ToString("0.00"),
-            }), x + 6, y + 4, EditorTheme.Ink500, fs, mono);
+            }), x + 6, y + 4, EditorTheme.Ink500, EditorTheme.FontSizeSmall, EditorTheme.FontMono ?? font);
     }
 
     private void DrawStack(Canvas canvas, IReadOnlyList<FrameStat> categories, History.Column column, float x, float width,
@@ -563,15 +568,31 @@ public class FrameStatsPanel : DockPanel
     private static float ToY(float ms, float chartBottom, float chartH, float scaleMs)
         => chartBottom - Math.Min(ms, scaleMs) / scaleMs * chartH;
 
-    // Everything the recorded bars depend on. Hover is part of it because the hovered row's blocks stand out.
-    private readonly record struct BarsKey(long History, int Columns, float ColumnW, float Width, float Height, float ScaleMs,
-        bool StackMax, int Visibility, int Categories, FrameStat? Hovered, bool HoveredOther, int HoveredAgo, int SelectedAgo,
-        string Locale);
+    // What the chart and table show: the columns held and how many fit, which rows are switched on and opened, and how
+    // many categories there are. Every drawing kept for reuse depends on it.
+    private readonly record struct ContentKey(long History, int Columns, int Visibility, int Categories)
+    {
+        public static readonly ContentKey None = new(-1, 0, 0, 0);
+    }
+
+    private ContentKey Content => new(_history.Version, _visibleColumns, _visibility, FrameStats.Categories.Count);
+
+    // The theme's colours and text size the kept drawings use. They change with the theme or accent, and every frame
+    // while the theme eases from one to the next.
+    private readonly record struct ThemeKey(int Accent, int Ink500, int Ink400, int InkDim, int InkFaint, int BorderSoft, float FontSize)
+    {
+        public static ThemeKey Current => new(EditorTheme.Accent.ToArgb(), EditorTheme.Ink500.ToArgb(), EditorTheme.Ink400.ToArgb(),
+            EditorTheme.InkDim.ToArgb(), EditorTheme.InkFaint.ToArgb(), EditorTheme.BorderSoft.ToArgb(), EditorTheme.FontSizeSmall);
+    }
+
+    // Everything the recorded bars depend on. The hovered row is part of it because its blocks stand out.
+    private readonly record struct BarsKey(ContentKey Content, float ColumnW, float Width, float Height, float ScaleMs,
+        bool StackMax, FrameStat? Hovered, bool HoveredOther, ThemeKey Theme);
 
     // Scanning every column only when a column arrives or what is shown changes, not every frame.
     private float TallestStackMs(IReadOnlyList<FrameStat> categories)
     {
-        var of = (_history.Version, _visibleColumns, _visibility, _stackMax, categories.Count);
+        var of = (Content, _stackMax);
         if (of != _tallestOf)
         {
             _tallestOf = of;
@@ -646,39 +667,41 @@ public class FrameStatsPanel : DockPanel
 
     #region Table
 
-    // The table is one element drawn on the canvas, like the chart: as Paper elements its rows came to a few hundred,
-    // each styled, laid out and drawn every frame. Clicks, hover, scrolling and tooltips work from where the pointer
-    // is, and the drawing is recorded and replayed until something in it changes.
+    // The table is drawn on the canvas, like the chart: as Paper elements its rows came to a few hundred, each styled,
+    // laid out and drawn every frame. It is two elements, the header and the rows, with the rows in a scroll view.
+    // Clicks, hover and tooltips work from where the pointer is, and the rows are recorded and replayed until something
+    // in them changes.
     private const float TablePadL = 10f, TablePadR = 18f, TableGap = 8f;
     private const float BodyTop = HeaderH + 1;
-    private const float ThumbHitW = 10f;
 
-    private enum HitKind { None, Eye, Header, Row, Expand, Thumb }
+    private enum HitKind { None, Eye, Header, Row, Expand }
 
-    /// <summary>What the pointer is over in the table: a header column or a row by index, the eye, or the scroll thumb.</summary>
-    private readonly record struct TableHit(HitKind Kind, int Index = -1);
+    /// <summary>What the pointer is over in the table: a header column or a row by index, or the eye.</summary>
+    private readonly record struct TableHit(HitKind Kind, int Index = -1)
+    {
+        public bool OnRow => Kind is HitKind.Row or HitKind.Expand;
+    }
 
-    // Everything the recorded table depends on.
-    private readonly record struct TableKey(long History, int Columns, int ShownAgo, int NowLabel, int Visibility,
-        bool HideUnselected, TableHit Hit, float Scroll, float Width, float Height, string Locale, int Categories);
+    // Everything the recorded rows depend on.
+    private readonly record struct RowsKey(ContentKey Content, int ShownAgo, bool HideUnselected, float Scroll,
+        float Width, float ViewH, string Locale, ThemeKey Theme);
 
-    private readonly CanvasSnapshot _tableSnapshot = new();
-    private TableKey _tableKey;
-    private Rect _tableRect;
-    private int _tableId;
+    private readonly CanvasSnapshot _rowsSnapshot = new();
+    private RowsKey _rowsKey;
+    private Rect _headerRect, _rowsRect;
+    private int _headerId, _rowsId;
     private TableHit _tableHit;
-    private float _scrollY;
-    private bool _draggingThumb;
-    private float _scrollAtDragStart;
+    // How far the rows are scrolled and how much of them shows, as the scroll view last laid them out.
+    private float _scrollY, _viewH;
     // What the row list was last built from; it is sorted by the totals, so it only changes with them.
-    private (long Version, int Columns, int Visibility, bool HideUnselected, int Categories) _rowsOf = (-1, 0, 0, false, 0);
+    private (ContentKey Content, bool HideUnselected) _rowsOf = (ContentKey.None, false);
 
     private void DrawTable(Paper paper, FontFile font, float width, float height)
     {
         IReadOnlyList<FrameStat> categories = FrameStats.Categories;
         History.Totals totals = _history.Summarise(categories.Count, _visibleColumns);
 
-        var rowsOf = (_history.Version, _visibleColumns, _visibility, _hideUnselected, categories.Count);
+        var rowsOf = (Content, _hideUnselected);
         if (rowsOf != _rowsOf)
         {
             _rowsOf = rowsOf;
@@ -686,70 +709,70 @@ public class FrameStatsPanel : DockPanel
             AddRows(categories, null, 0, totals);
         }
 
-        _scrollY = Math.Clamp(_scrollY, 0, MaxScroll(height));
-        _tableHit = paper.IsElementHovered(_tableId) ? HitAt(paper.PointerPos) : default;
+        _tableHit = HitAt(paper);
         // The hovered row lights its blocks in the chart.
-        bool onRow = _tableHit.Kind is HitKind.Row or HitKind.Expand;
-        _hovered = onRow ? _rows[_tableHit.Index].Category : null;
-        _hoveredOther = onRow && _rows[_tableHit.Index].Other;
+        _hovered = _tableHit.OnRow ? _rows[_tableHit.Index].Category : null;
+        _hoveredOther = _tableHit.OnRow && _rows[_tableHit.Index].Other;
 
-        ElementBuilder table = paper.Box("fs_table").Height(height).Clip()
-            .OnClick(_ => ClickTable(HitAt(paper.PointerPos)))
-            .OnScroll(e =>
-            {
-                e.StopPropagation();
-                _scrollY = Math.Clamp(_scrollY - e.Delta * RowH * 2, 0, MaxScroll(height));
-            })
-            .OnDragStart(_ =>
-            {
-                _draggingThumb = HitAt(paper.PointerPos).Kind == HitKind.Thumb;
-                _scrollAtDragStart = _scrollY;
-            })
-            .OnDragging(e =>
-            {
-                if (!_draggingThumb) return;
-                float view = height - BodyTop, content = _rows.Count * RowH;
-                _scrollY = Math.Clamp(_scrollAtDragStart + (float)e.TotalDelta.Y * content / view, 0, MaxScroll(height));
-            })
-            .OnDragEnd(_ => _draggingThumb = false)
+        paper.Box("fs_hdr").Height(BodyTop)
+            .OnClick(_ => ClickTable(HitAt(paper)))
+            .OnHover(e => ClaimTooltip(e.Source, HitAt(paper)))
             .OnPostLayout((handle, rect) =>
             {
-                _tableRect = rect;
-                _tableId = handle.Data.ID;
+                _headerRect = rect;
+                _headerId = handle.Data.ID;
                 paper.Draw(ref handle, (canvas, r) =>
                 {
                     using FrameStatScope stats = EditorFrameStats.FrameStatsPanel.Scope();
-                    PaintTable(canvas, r, font, totals);
+                    PaintHeader(canvas, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, font);
                 });
             });
-        if (TooltipFor(_tableHit) is { } tip) table.Tooltip(tip);
-    }
 
-    private float MaxScroll(float height) => Math.Max(0, _rows.Count * RowH - (height - BodyTop));
+        // Only the rows in view are drawn, which the scroll view allows when it snaps rather than eases.
+        Origami.ScrollView(paper, "fs_rows", width, Math.Max(0, height - BodyTop)).SmoothScroll(false).WheelStep(RowH * 2).Body(view =>
+        {
+            _scrollY = view.ScrollY;
+            _viewH = view.Height;
+            paper.Box("fs_rows_body").Height(Math.Max(1, _rows.Count * RowH))
+                .OnClick(_ => ClickTable(HitAt(paper)))
+                .OnHover(e => ClaimTooltip(e.Source, HitAt(paper)))
+                .OnPostLayout((handle, rect) =>
+                {
+                    _rowsRect = rect;
+                    _rowsId = handle.Data.ID;
+                    paper.Draw(ref handle, (canvas, r) =>
+                    {
+                        using FrameStatScope stats = EditorFrameStats.FrameStatsPanel.Scope();
+                        PaintRows(canvas, r, font, totals);
+                    });
+                });
+        });
+    }
 
     // The right edge of value column k, counted from the left: Now, Avg, Max, Calls, %.
     private static float ValueRight(float width, int k) => width - TablePadR - (ValueColumns - 1 - k) * (ValueW + TableGap);
 
     private const int ValueColumns = 5;
 
-    private TableHit HitAt(Float2 pointer)
+    private TableHit HitAt(Paper paper)
     {
-        float lx = (float)(pointer.X - _tableRect.Min.X), ly = (float)(pointer.Y - _tableRect.Min.Y);
-        float w = (float)_tableRect.Size.X, h = (float)_tableRect.Size.Y;
-        if (lx < 0 || ly < 0 || lx >= w || ly >= h) return default;
-
-        if (ly < HeaderH)
+        Float2 pointer = paper.PointerPos;
+        if (_headerId != 0 && paper.IsElementHovered(_headerId))
         {
-            if (lx >= TablePadL - 3 && lx < TablePadL + 13) return new TableHit(HitKind.Eye);
+            float hx = (float)(pointer.X - _headerRect.Min.X), w = (float)_headerRect.Size.X;
+            if ((float)(pointer.Y - _headerRect.Min.Y) >= HeaderH) return default;
+            if (hx >= TablePadL - 3 && hx < TablePadL + 13) return new TableHit(HitKind.Eye);
             for (int k = 0; k < ValueColumns; k++)
-                if (lx >= ValueRight(w, k) - ValueW && lx < ValueRight(w, k)) return new TableHit(HitKind.Header, k);
+                if (hx >= ValueRight(w, k) - ValueW && hx < ValueRight(w, k)) return new TableHit(HitKind.Header, k);
             return default;
         }
-        if (ly < BodyTop) return default;
-        if (MaxScroll(h) > 0 && lx >= w - ThumbHitW) return new TableHit(HitKind.Thumb);
+        if (_rowsId == 0 || !paper.IsElementHovered(_rowsId)) return default;
 
-        int row = (int)((ly - BodyTop + _scrollY) / RowH);
-        if (row >= _rows.Count) return default;
+        // The rows run on past the scroll view, which clips them; only those in view are under the pointer.
+        float lx = (float)(pointer.X - _rowsRect.Min.X), ly = (float)(pointer.Y - _rowsRect.Min.Y);
+        if (ly < _scrollY || ly >= _scrollY + _viewH) return default;
+        int row = (int)(ly / RowH);
+        if (row < 0 || row >= _rows.Count) return default;
         Row r = _rows[row];
         float x0 = TablePadL + r.Depth * 20;
         bool group = !r.Other && r.Category.Children.Count > 0;
@@ -766,6 +789,19 @@ public class FrameStatsPanel : DockPanel
         }
     }
 
+    // Each row, header column and the eye claims its tooltip under an ID of its own, so moving from one to the next waits
+    // out the hover delay again, as it would between separate elements.
+    private void ClaimTooltip(ElementHandle source, TableHit hit)
+    {
+        if (TooltipFor(hit) is not { } tip) return;
+        int depth = 0;
+        for (ElementHandle h = source.GetParentHandle(); h.IsValid; h = h.GetParentHandle())
+            depth++;
+        // A row's arrow shares the row's tooltip, so it keeps the row's ID.
+        HitKind kind = hit.Kind == HitKind.Expand ? HitKind.Row : hit.Kind;
+        TooltipSystem.Hover(HashCode.Combine(source.Data.ID, kind, hit.Index), tip, depth);
+    }
+
     private TooltipContent? TooltipFor(TableHit hit)
     {
         switch (hit.Kind)
@@ -779,30 +815,16 @@ public class FrameStatsPanel : DockPanel
         }
     }
 
-    private void PaintTable(Canvas canvas, Rect r, FontFile font, History.Totals totals)
-    {
-        float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
-        int nowLabel = SelectedAgo >= 0 ? 2 : _hoveredAgo >= 0 ? 1 : 0;
-        var key = new TableKey(_history.Version, _visibleColumns, ShownAgo, nowLabel, _visibility, _hideUnselected,
-            _tableHit, _scrollY, w, h, Loc.CurrentLocale, FrameStats.Categories.Count);
-        if (key == _tableKey && canvas.DrawSnapshot(_tableSnapshot, x, y)) return;
-
-        bool record = WorthRecording;
-        if (record) canvas.BeginSnapshot(_tableSnapshot, x, y);
-        PaintRows(canvas, x, y, w, h, font, totals);
-        PaintHeader(canvas, x, y, w, font, nowLabel);
-        // A capture that cannot replay is drawn again next frame.
-        _tableKey = record && canvas.EndSnapshot() ? key : default;
-    }
-
     // Recording copies everything drawn, which only pays off if it is replayed. Running at a new column every frame, the
     // chart and table change every frame and never would be, while paused or between columns they replay until they do.
     private bool WorthRecording => _paused || RateSeconds[_rate] > 0;
 
-    private void PaintHeader(Canvas canvas, float x, float y, float w, FontFile font, int nowLabel)
+    // The header is a handful of words, cheaper to draw than to record.
+    private void PaintHeader(Canvas canvas, float x, float y, float w, FontFile font)
     {
         float fs = EditorTheme.FontSizeSmall, mid = y + HeaderH / 2;
         HeaderStrings text = HeaderText();
+        int nowLabel = SelectedAgo >= 0 ? 2 : _hoveredAgo >= 0 ? 1 : 0;
 
         // The eye sits over the rows' colour swatches, the column it switches.
         if (_tableHit.Kind == HitKind.Eye)
@@ -818,18 +840,26 @@ public class FrameStatsPanel : DockPanel
         canvas.RectFilled(x, y + HeaderH, w, 1, EditorTheme.BorderSoft);
     }
 
-    private void PaintRows(Canvas canvas, float x, float y, float w, float h, FontFile font, History.Totals totals)
+    private void PaintRows(Canvas canvas, Rect r, FontFile font, History.Totals totals)
     {
+        float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X;
+        // The hovered row's highlight goes under the rows, so moving down the table does not record them again.
+        if (_tableHit.OnRow)
+            canvas.RectFilled(x, y + _tableHit.Index * RowH, w, RowH, EditorTheme.Hover);
+
+        // Anchored at the rows' corner, which moves as they scroll, so the scroll is part of the key.
+        var key = new RowsKey(Content, ShownAgo, _hideUnselected, _scrollY, w, _viewH, Loc.CurrentLocale, ThemeKey.Current);
+        if (key == _rowsKey && canvas.DrawSnapshot(_rowsSnapshot, x, y)) return;
+
+        bool record = WorthRecording;
+        if (record) canvas.BeginSnapshot(_rowsSnapshot, x, y);
+
         float fs = EditorTheme.FontSizeSmall;
         FontFile mono = EditorTheme.FontMono ?? font;
         History.Column? shown = ShownColumn;
-        float view = h - BodyTop;
         float nameRight = x + ValueRight(w, 0) - ValueW - TableGap;
 
-        // Rows scroll under the header, so they are clipped to the body. Only those in view are drawn.
-        canvas.SaveState();
-        canvas.IntersectScissor(x, y + BodyTop, w, view);
-        int first = (int)(_scrollY / RowH), last = Math.Min(_rows.Count, (int)MathF.Ceiling((_scrollY + view) / RowH));
+        int first = Math.Max(0, (int)(_scrollY / RowH)), last = Math.Min(_rows.Count, (int)MathF.Ceiling((_scrollY + _viewH) / RowH));
         for (int index = first; index < last; index++)
         {
             Row row = _rows[index];
@@ -842,10 +872,7 @@ public class FrameStatsPanel : DockPanel
             Color32 nameInk = hidden ? EditorTheme.InkFaint : EditorTheme.Ink500;
             Color32 valueInk = hidden ? EditorTheme.InkFaint : EditorTheme.Ink400;
             RowText text = RowTextFor(c, other, group);
-            float top = y + BodyTop + index * RowH - _scrollY, mid = top + RowH / 2;
-
-            if (_tableHit.Index == index && _tableHit.Kind is HitKind.Row or HitKind.Expand)
-                canvas.RectFilled(x, top, w, RowH, EditorTheme.Hover);
+            float top = y + index * RowH, mid = top + RowH / 2;
 
             float cx = x + TablePadL + row.Depth * 20;
             if (group)
@@ -885,17 +912,9 @@ public class FrameStatsPanel : DockPanel
 
             void Value(int k, string value) => canvas.DrawText(value, x + ValueRight(w, k), mid, valueInk, fs, mono, 0, new Float2(1, 0.5f));
         }
-        canvas.RestoreState();
 
-        // A thin scroll thumb when the rows overflow; it can be dragged, and the wheel scrolls anywhere.
-        float content = _rows.Count * RowH;
-        if (content > view && view > 0)
-        {
-            float thumbH = Math.Max(16, view * view / content);
-            float thumbY = y + BodyTop + (view - thumbH) * (_scrollY / (content - view));
-            canvas.RoundedRectFilled(x + w - 6, thumbY, 4, thumbH, 2,
-                _tableHit.Kind == HitKind.Thumb || _draggingThumb ? EditorTheme.InkDim : EditorTheme.InkFaint);
-        }
+        // A capture that cannot replay is drawn again next frame.
+        if (record) _rowsKey = canvas.EndSnapshot() ? key : default;
     }
 
     // The header's words, in capitals, and its tooltips, made again only when the language changes.
