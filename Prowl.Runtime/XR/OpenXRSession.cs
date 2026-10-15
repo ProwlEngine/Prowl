@@ -64,6 +64,8 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     private object _queueLock = new();
     private readonly Swapchain[] _swapchains = new Swapchain[2];
     private readonly Graphite.Texture[][] _swapchainTextures = [[], []];
+    private readonly Graphite.Framebuffer[][] _swapchainTargets = [[], []];
+    private readonly Graphite.TextureView[] _eyeLayerViews = new Graphite.TextureView[2];
     private Graphite.Texture? _eyeTexture;
     private Graphite.Framebuffer? _eyeTarget;
     private Graphite.TextureView? _mirrorSource;
@@ -432,10 +434,15 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         Graphite.ResourceFactory factory = Graphics.Device!.ResourceFactory;
         var description = Graphite.TextureDescription.Texture2D((uint)EyeWidth, (uint)EyeHeight, 1, 1, _format, Graphite.TextureUsage.RenderTarget);
         _swapchainTextures[eye] = new Graphite.Texture[imageCount];
+        _swapchainTargets[eye] = new Graphite.Framebuffer[imageCount];
         for (int i = 0; i < imageCount; i++)
         {
             _swapchainTextures[eye][i] = factory.CreateTexture((ulong)images[i].Image, description, Graphite.TextureState.Attachment);
             _swapchainTextures[eye][i].Name = $"XR {(eye == 0 ? "left" : "right")} eye {i}";
+
+            // The eyes draw into the image through this target, flipped into the layout the compositor reads.
+            _swapchainTargets[eye][i] = factory.CreateFramebuffer(new Graphite.FramebufferDescription(null, _swapchainTextures[eye][i]));
+            _swapchainTargets[eye][i].Name = $"XR {(eye == 0 ? "left" : "right")} eye target {i}";
         }
     }
 
@@ -446,6 +453,11 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         _eyeTexture.Name = "XR eyes";
         _eyeTarget = factory.CreateFramebuffer(new Graphite.FramebufferDescription(null, _eyeTexture) { ViewCount = 2 });
         _eyeTarget.Name = "XR eyes";
+
+        // The eyes copy samples each layer in the swapchain's own format: sampling an sRGB view linearises
+        // and writing an sRGB attachment encodes again, so the compositor's bytes come out identical.
+        for (int eye = 0; eye < 2; eye++)
+            _eyeLayerViews[eye] = factory.CreateTextureView(new Graphite.TextureViewDescription(_eyeTexture, 0, 1, (uint)eye, 1, _format));
 
         // The mirror reads the left display's layer as plain bytes, which hold the colour encoded as the window holds it
         _mirrorSource = factory.CreateTextureView(new Graphite.TextureViewDescription(_eyeTexture, 0, 1, 0, 1, _plainFormat));
@@ -611,7 +623,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         }
 
         if (frame.Submit)
-            Graphics.AddPipeline(new Graphite.GraphDispatch(_eyesPipeline!, [new EyesView(this, frame)]));
+            Graphics.AddPipeline(new Graphite.GraphDispatch(_eyesPipeline!, [new EyesView(this, frame, 0), new EyesView(this, frame, 1)]));
         Graphics.AddFrameCallbacks(() => FrameStarted(frame), succeeded => FrameSubmitted(frame, succeeded));
     }
 
@@ -625,8 +637,8 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         public readonly Fovf[] Fovs = new Fovf[2];
         public readonly uint[] Images = new uint[2];
         public readonly bool[] Waited = new bool[2];
+        public readonly bool[] Copied = new bool[2];
         public bool Begun;
-        public bool Copied;
     }
 
     // Render thread, before the frame's work is recorded.
@@ -685,7 +697,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             }
 
             if (frame.Begun)
-                EndFrame(frame, succeeded && frame.Submit && frame.Copied);
+                EndFrame(frame, succeeded && frame.Submit && frame.Copied[0] && frame.Copied[1]);
 
             foreach (Space space in frame.RetiredSpaces)
                 _xr.DestroySpace(space);
@@ -943,37 +955,54 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         _ => throw new ArgumentException("Only the left and right eyes have XR views.", nameof(eye)),
     };
 
-    // Copies each layer of the eyes into the image its display shows this frame.
-    private sealed class EyesView(OpenXRSession session, SubmittedFrame frame) : Graphite.RenderGraph.IRenderView
+    // Renders each layer of the eyes into the image its display shows this frame, flipped into the
+    // orientation the compositor reads.
+    private sealed class EyesView(OpenXRSession session, SubmittedFrame frame, int eye) : Graphite.RenderGraph.IRenderView
     {
         public OpenXRSession Session => session;
         public SubmittedFrame Frame => frame;
+        public int Eye => eye;
+        public Graphite.Framebuffer? Target => frame.Waited[eye] ? session._swapchainTargets[eye][frame.Images[eye]] : null;
+        public Graphite.TextureView Source => session._eyeLayerViews[eye];
         public uint PixelWidth => (uint)session.EyeWidth;
         public uint PixelHeight => (uint)session.EyeHeight;
         public int ViewId => session._eyesViewId;
-        public string Name => "XR Eyes";
+        public string Name => $"XR {(eye == 0 ? "left" : "right")} eye";
     }
 
     private sealed class EyesPass : Graphite.RenderGraph.IPass
     {
+        private ShaderPass? _shader;
+        private readonly Graphite.PropertySet _properties = new();
+
         public string Name => "XR Eyes";
 
-        public void Setup(Graphite.RenderGraph.RenderContextBuilder builder) { }
+        // The target is the headset's image, written whole and handed back to the runtime.
+        public void Setup(Graphite.RenderGraph.RenderContextBuilder builder)
+            => builder.DeclareViewTarget(new Graphite.RenderGraph.TargetLoadStoreOps(
+                new Graphite.RenderGraph.AttachmentOps(Graphite.RenderGraph.LoadAction.DontCare, Graphite.RenderGraph.StoreAction.Store),
+                Graphite.RenderGraph.AttachmentOps.Discard));
 
         public void Render(Graphite.RenderGraph.RenderContext context, Graphite.CommandBuffer cmd)
         {
             EyesView view = context.ViewAs<EyesView>();
             OpenXRSession session = view.Session;
             SubmittedFrame frame = view.Frame;
-            if (session._disposed || !frame.Waited[0] || !frame.Waited[1]) return;
+            if (session._disposed || !frame.Waited[view.Eye]) return;
 
-            uint width = (uint)session.EyeWidth, height = (uint)session.EyeHeight;
-            for (int eye = 0; eye < 2; eye++)
+            if (_shader == null)
             {
-                Graphite.Texture image = session._swapchainTextures[eye][frame.Images[eye]];
-                cmd.CopyTexture(session._eyeTexture!, 0, 0, 0, 0, (uint)eye, image, 0, 0, 0, 0, 0, width, height, 1, 1);
+                ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/XREyes.shader"));
+                definition.Create(Graphics.Device!, Graphics.Compiler, new Variant(), CompileMode.All);
+                _shader = definition.Passes![0];
             }
-            frame.Copied = true;
+
+            _properties.SetTexture("_MainTex", view.Source, Graphics.GetSampler(Graphite.SamplerDescription.Linear));
+            cmd.SetShader(_shader);
+            cmd.SetVertexSource(Graphite.VertexSource.None);
+            cmd.SetProperties(_properties);
+            cmd.Draw(3);
+            frame.Copied[view.Eye] = true;
         }
     }
 
@@ -1058,6 +1087,11 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             foreach (Graphite.Texture image in _swapchainTextures[eye])
                 Graphics.DeferDispose(image);
             _swapchainTextures[eye] = [];
+            foreach (Graphite.Framebuffer target in _swapchainTargets[eye])
+                Graphics.DeferDispose(target);
+            _swapchainTargets[eye] = [];
+            Graphics.DeferDispose(_eyeLayerViews[eye]);
+            _eyeLayerViews[eye] = null!;
         }
         Graphics.DeferDispose(_mirrorSource);
         Graphics.DeferDispose(_eyeTarget);
