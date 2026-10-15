@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std140, binding=0) uniform U { layout(row_major) mat2x3 m; float f; } u;
+layout(std430, binding=1) buffer B { float o; } b;
+void main(){ b.o = u.m[0][0] + u.f; }

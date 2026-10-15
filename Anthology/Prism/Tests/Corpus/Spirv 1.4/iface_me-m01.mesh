@@ -1,0 +1,14 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+layout(local_size_x=32) in;
+layout(triangles, max_vertices=64, max_primitives=32) out;
+layout(location=0) out vec4 col[];
+layout(location=1) perprimitiveEXT out flat int pid[];
+layout(location=2) out Blk { vec2 uv; } blk[];
+struct TP { uint base; };
+taskPayloadSharedEXT TP tp;
+shared uint cnt;
+void main(){ SetMeshOutputsEXT(64, 32); uint i = gl_LocalInvocationIndex;
+ gl_MeshVerticesEXT[i].gl_Position = vec4(i + tp.base); gl_MeshVerticesEXT[i].gl_PointSize = 1.0; gl_MeshVerticesEXT[i].gl_ClipDistance[0] = 1.0;
+ col[i] = vec4(1); blk[i].uv = vec2(i);
+ gl_PrimitiveTriangleIndicesEXT[i] = uvec3(i, i+1, i+2); gl_MeshPrimitivesEXT[i].gl_PrimitiveID = int(i); gl_MeshPrimitivesEXT[i].gl_Layer = 1; gl_MeshPrimitivesEXT[i].gl_CullPrimitiveEXT = false; gl_MeshPrimitivesEXT[i].gl_ViewportIndex = 0; pid[i] = 3; }

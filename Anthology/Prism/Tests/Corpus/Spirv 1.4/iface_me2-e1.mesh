@@ -1,0 +1,7 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+layout(local_size_x=4) in;
+layout(triangles, max_vertices=4, max_primitives=2) out;
+layout(location=0) perprimitiveEXT out PB { vec4 c; flat int k; } pb[];
+layout(location=2) out VB { vec2 uv; } vb[];
+void main(){ SetMeshOutputsEXT(4, 2); uint i = gl_LocalInvocationIndex; vb[i].uv = vec2(i); if (i < 2u) { pb[i].c = vec4(1); pb[i].k = 2; gl_PrimitiveTriangleIndicesEXT[i] = uvec3(0,1,2); } gl_MeshVerticesEXT[i].gl_Position = vec4(0); }

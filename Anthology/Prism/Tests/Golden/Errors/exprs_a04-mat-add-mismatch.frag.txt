@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:5: '+' :  wrong operand types: no operation '+' exists that takes a left-hand operand of type ' temp highp 2X2 matrix of float' and a right operand of type ' temp highp 3X3 matrix of float' (or there is no acceptable conversion)
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

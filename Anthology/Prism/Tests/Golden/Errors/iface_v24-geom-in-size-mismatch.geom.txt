@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:4: 'triangles' : inconsistent input primitive for array size of v
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking geometry stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

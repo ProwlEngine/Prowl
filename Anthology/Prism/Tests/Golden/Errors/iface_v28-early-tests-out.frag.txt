@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:2: 'early_fragment_tests' : can only apply to 'in' 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

@@ -17,7 +17,7 @@ public sealed class ReuseSafetyTests
     [Fact]
     public void ReusedLowererIsOrderIndependent()
     {
-        var corpus = TestCorpus.Parity.ToList();
+        var corpus = TestCorpus.Parity;
 
         static byte[]? Try(Snippet s)
         {

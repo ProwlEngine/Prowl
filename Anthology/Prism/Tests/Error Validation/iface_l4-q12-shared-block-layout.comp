@@ -1,0 +1,6 @@
+#version 450
+#extension GL_EXT_shared_memory_block : require
+layout(local_size_x=1) in;
+shared SB { vec3 a; float b[2]; } sb;
+shared SC { uvec4 c; } sc;
+void main(){ sb.a = vec3(1); sb.b[1] = sb.a.x; sc.c = uvec4(sb.b[1]); }

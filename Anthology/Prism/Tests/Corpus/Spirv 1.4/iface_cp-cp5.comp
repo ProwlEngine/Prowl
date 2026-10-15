@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { bool f; vec2 v; };
+layout(std140, binding=0) uniform U { S s; } u;
+layout(std430, binding=1) buffer B { S s; S t[2]; } b;
+void main(){ b.s = u.s; b.t[1] = S(true, vec2(1)); S l = b.t[0]; b.s.f = l.f && u.s.f; }

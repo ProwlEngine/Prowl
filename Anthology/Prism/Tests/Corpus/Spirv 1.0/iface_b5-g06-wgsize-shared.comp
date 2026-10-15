@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x_id=0) in;
+shared uint arr[gl_WorkGroupSize.x];
+layout(std430, binding=0) buffer B { uint o[]; } b;
+void main(){ arr[gl_LocalInvocationIndex] = 1u; b.o[0] = arr[0]; }

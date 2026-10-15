@@ -1,0 +1,7 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x=1) in;
+layout(buffer_reference, std430, buffer_reference_align=32) buffer R { float a; float b; vec2 c; };
+layout(push_constant) uniform PC { R r; } pc;
+float f(R r){ return r.b + r.c.y; }
+void main(){ R q = pc.r; q.b = f(q); }

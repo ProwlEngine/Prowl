@@ -1,0 +1,4 @@
+#version 450
+layout(local_size_x=1) in;
+layout(binding=0, rgba8ui) uniform uimage2D img;
+void main(){ imageAtomicAdd(img, ivec2(0), 1u); }

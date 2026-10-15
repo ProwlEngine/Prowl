@@ -1,0 +1,9 @@
+#version 450
+#extension GL_KHR_memory_scope_semantics : require
+#pragma use_vulkan_memory_model
+layout(local_size_x=1) in;
+layout(std430, binding=0) coherent buffer B { uint c; volatile uint d; } b;
+layout(std430, binding=1) buffer C { uint e; } c;
+layout(binding=2, r32ui) uniform coherent uimage2D img;
+shared uint sh;
+void main(){ b.c = b.d + c.e; uint v = imageLoad(img, ivec2(0)).x; imageStore(img, ivec2(1), uvec4(v)); sh = 1u; barrier(); b.d = sh; atomicAdd(b.c, 1u); }

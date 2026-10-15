@@ -3,11 +3,11 @@
   "spirvOptSha16": "CE98DEC7BE9CA655",
   "spirvValSha16": "85FCA62318139B83",
   "toolchain": "glslang 16.0.0 (glslangValidator -V), SPIRV-Tools vulkan-sdk-1.4.363.0 (spirv-opt -O --strip-debug, spirv-val); targets: 1.0 vulkan1.0, 1.3 vulkan1.1, 1.4 vulkan1.1 + spirv1.4, 1.5 vulkan1.2",
-  "unoptimizedGoldens": 1739,
-  "optimizedGoldens": 1731,
+  "unoptimizedGoldens": 2036,
+  "optimizedGoldens": 2025,
   "autoMapGoldens": 5,
   "collidingVerified": 1,
-  "errorCorpusVerified": 414,
+  "errorCorpusVerified": 499,
   "spirvValExceptions": [
     "Spirv 1.0/interface_18_fragcoord_redecl.frag",
     "Spirv 1.0/layout-frontend_11_dependency_length.frag",
@@ -16,7 +16,18 @@
     "Spirv 1.0/stages-exec-modes_01_pixel_center_integer.frag",
     "Spirv 1.0/texture-image_15_texture_size_rect.frag",
     "Spirv 1.0/texture-image_34_sampler_2d_rect.frag",
-    "Spirv 1.0/texture-image_35_sampler_2d_rect_shadow.frag"
+    "Spirv 1.0/texture-image_35_sampler_2d_rect_shadow.frag",
+    "Spirv 1.0/iface_b6-sp04-spec-ops.frag",
+    "Spirv 1.0/iface_br2-s1.comp",
+    "Spirv 1.0/iface_cap-c01-8bit-ssbo.comp",
+    "Spirv 1.0/iface_l2-n08-scalar-ubo-mat.frag",
+    "Spirv 1.0/iface_sg-sg11-amd-ballot.comp",
+    "Spirv 1.0/review_t6-aoa.frag",
+    "Spirv 1.0/review_t6-def2.frag",
+    "Spirv 1.0/review_t6-ub1.comp",
+    "Spirv 1.0/review_t7-lq8.vert",
+    "Spirv 1.0/review_t7-lq9.frag",
+    "Spirv 1.0/robust_ovf-ubo.frag"
   ],
   "optimizedMissing": [
     "Spirv 1.0/interface_18_fragcoord_redecl.frag",
@@ -26,7 +37,10 @@
     "Spirv 1.0/stages-exec-modes_01_pixel_center_integer.frag",
     "Spirv 1.0/texture-image_15_texture_size_rect.frag",
     "Spirv 1.0/texture-image_34_sampler_2d_rect.frag",
-    "Spirv 1.0/texture-image_35_sampler_2d_rect_shadow.frag"
+    "Spirv 1.0/texture-image_35_sampler_2d_rect_shadow.frag",
+    "Spirv 1.0/iface_b6-sp04-spec-ops.frag",
+    "Spirv 1.0/iface_cap-c01-8bit-ssbo.comp",
+    "Spirv 1.0/iface_sg-sg11-amd-ballot.comp"
   ],
   "failures": []
 }

@@ -1,0 +1,10 @@
+<shader>
+ERROR: <shader>:5: 'constructor' : Number of constructor parameters does not match the number of structure fields 
+ERROR: <shader>:5: 'const' : non-matching or non-convertible constant type for const initializer 
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

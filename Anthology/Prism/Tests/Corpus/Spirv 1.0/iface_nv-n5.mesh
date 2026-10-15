@@ -1,0 +1,7 @@
+#version 460
+#extension GL_NV_mesh_shader : require
+#extension GL_NV_mesh_shader : require
+layout(local_size_x=1) in;
+layout(triangles, max_vertices=3, max_primitives=1) out;
+out gl_MeshPerVertexNV { vec4 gl_Position; } gl_MeshVerticesNV[];
+void main(){ gl_MeshVerticesNV[0].gl_Position = vec4(gl_MeshViewCountNV); gl_PrimitiveCountNV = 1; }

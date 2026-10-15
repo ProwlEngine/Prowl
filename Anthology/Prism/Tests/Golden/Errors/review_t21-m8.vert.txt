@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:3: 'dFdx' : no matching overloaded function found 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

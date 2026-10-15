@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:6: 'gl_RayFlagsSkipAABBEXT' : required extension not requested: GL_EXT_ray_flags_primitive_culling
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

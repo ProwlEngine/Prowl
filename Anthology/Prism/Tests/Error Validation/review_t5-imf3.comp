@@ -1,0 +1,4 @@
+#version 310 es
+layout(local_size_x=1) in;
+layout(rgba8, binding=0) uniform highp image2D img;
+void main(){ imageStore(img, ivec2(0), vec4(1)); }

@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+layout(binding=0) buffer B { float a[2]; } b;
+layout(std140) buffer;
+layout(binding=1) buffer C { float a[2]; } c;
+void main(){ b.a[1] = c.a[1]; }

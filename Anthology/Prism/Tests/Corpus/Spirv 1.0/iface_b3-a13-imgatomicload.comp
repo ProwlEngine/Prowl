@@ -1,0 +1,5 @@
+#version 450
+#extension GL_KHR_memory_scope_semantics : require
+layout(local_size_x=1) in;
+layout(binding=1, r32ui) uniform coherent uimage2D img;
+void main(){ uint z = imageAtomicLoad(img, ivec2(0), gl_ScopeDevice, gl_StorageSemanticsImage, gl_SemanticsAcquire); imageAtomicStore(img, ivec2(1), z, gl_ScopeDevice, gl_StorageSemanticsImage, gl_SemanticsRelease);}

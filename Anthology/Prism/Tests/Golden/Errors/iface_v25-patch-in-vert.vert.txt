@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:2: 'patch' : not supported in this stage: vertex
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking vertex stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

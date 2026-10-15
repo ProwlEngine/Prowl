@@ -1,0 +1,7 @@
+#version 450
+layout(local_size_x=8) in;
+struct S { vec3 a; mat2 m; bool b; };
+shared S sh[8];
+shared bool flags[4];
+layout(std430, binding=0) buffer B { S o; } b;
+void main(){ sh[gl_LocalInvocationIndex].b = true; flags[1] = false; barrier(); b.o = sh[3]; }

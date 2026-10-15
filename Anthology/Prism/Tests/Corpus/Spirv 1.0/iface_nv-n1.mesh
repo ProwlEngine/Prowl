@@ -1,0 +1,7 @@
+#version 460
+#extension GL_NV_mesh_shader : require
+layout(local_size_x=32) in;
+layout(triangles, max_vertices=64, max_primitives=32) out;
+layout(location=0) out vec4 col[];
+layout(location=1) perprimitiveNV out vec4 pc[];
+void main(){ uint i = gl_LocalInvocationID.x; gl_MeshVerticesNV[i].gl_Position = vec4(1); col[i] = vec4(0); gl_PrimitiveIndicesNV[i*3] = i; gl_MeshPrimitivesNV[i].gl_PrimitiveID = 1; pc[i] = vec4(0); gl_PrimitiveCountNV = 32; }

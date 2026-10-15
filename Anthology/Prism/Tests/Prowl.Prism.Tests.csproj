@@ -41,6 +41,8 @@
          reference for what the compiler should complain about. -->
     <EmbeddedResource Include="Golden\Errors\**\*.txt" LogicalName="golden/errors/%(RecursiveDir)%(Filename).txt" />
     <EmbeddedResource Include="golden-manifest.json" LogicalName="golden/manifest.json" />
+    <!-- Binary inputs for the optimizer API tests (corrupt modules, a -gVS debug-info module). -->
+    <EmbeddedResource Include="Inputs\*.spv" LogicalName="inputs/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
