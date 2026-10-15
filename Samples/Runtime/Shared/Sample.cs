@@ -912,17 +912,17 @@ public sealed class SampleHud : Component
             canvas.DrawText(label, x + w - 6f, ly - 2f, new Color(1f, 1f, 1f, 0.35f), 10f, font, origin: new Float2(1f, 1f));
         }
 
-        // The area under the curve, fading out toward the bottom.
-        canvas.BeginPath();
-        canvas.MoveTo(x, y + h);
-        for (int i = 0; i < count; i++)
-            canvas.LineTo(X(i), Y(Sample(i)));
-        canvas.LineTo(x + w, y + h);
-        canvas.ClosePath();
-        canvas.SetFillColor(Color.White);
-        canvas.SetLinearBrush(x, y, x, y + h, new Color(Accent.R, Accent.G, Accent.B, 0.45f), new Color(Accent.R, Accent.G, Accent.B, 0f));
-        canvas.FillComplex();
-        canvas.ClearBrush();
+        //// The area under the curve, fading out toward the bottom. (Quill needs a faster FillComplex before we should add this)
+        //canvas.BeginPath();
+        //canvas.MoveTo(x, y + h);
+        //for (int i = 0; i < count; i++)
+        //    canvas.LineTo(X(i), Y(Sample(i)));
+        //canvas.LineTo(x + w, y + h);
+        //canvas.ClosePath();
+        //canvas.SetFillColor(Color.White);
+        //canvas.SetLinearBrush(x, y, x, y + h, new Color(Accent.R, Accent.G, Accent.B, 0.45f), new Color(Accent.R, Accent.G, Accent.B, 0f));
+        //canvas.FillComplex();
+        //canvas.ClearBrush();
 
         // The curve itself.
         canvas.BeginPath();
@@ -931,7 +931,7 @@ public sealed class SampleHud : Component
             canvas.LineTo(X(i), Y(Sample(i)));
         canvas.SetStrokeColor(Accent);
         canvas.SetStrokeWidth(1.5f);
-        canvas.SetStrokeJoint(Prowl.Quill.JointStyle.Round);
+        canvas.SetStrokeJoint(Prowl.Quill.JointStyle.Bevel);
         canvas.Stroke();
 
         // Frames slower than 30 per second get a red marker.
