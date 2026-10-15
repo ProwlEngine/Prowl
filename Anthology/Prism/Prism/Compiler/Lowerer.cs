@@ -7956,7 +7956,7 @@ public sealed partial class Lowerer
         {
             var scalar = new ScalarType(component);
             _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)select[0]);
-            return Relaxed(new Value(Emit(Op.CompositeExtract, SpvType(scalar), src.Id, (uint)select[0]), scalar, false), src);
+            return new Value(Emit(Op.CompositeExtract, SpvType(scalar), src.Id, (uint)select[0]), scalar, false);
         }
         var result = new VectorType(component, select.Length);
         var sh = InstrPool.Rent(Op.VectorShuffle, SpvType(result), _m.AllocId()).Add(src.Id, src.Id);
@@ -9438,7 +9438,7 @@ public sealed partial class Lowerer
             // unsigned component constant, and only then notices the index is constant and extracts with
             // a literal instead - so the constant is created either way, even though nothing reads it.
             _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)indices[0]);
-            return Relaxed(new Value(Emit(Op.CompositeExtract, SpvType(new ScalarType(vec.Component)), src.Id, (uint)indices[0]), new ScalarType(vec.Component), false), src);
+            return new Value(Emit(Op.CompositeExtract, SpvType(new ScalarType(vec.Component)), src.Id, (uint)indices[0]), new ScalarType(vec.Component), false);
         }
 
         var resultType2 = new VectorType(vec.Component, indices.Length);

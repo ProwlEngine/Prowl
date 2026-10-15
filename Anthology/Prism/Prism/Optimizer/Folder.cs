@@ -2620,7 +2620,8 @@ internal sealed class Folder
         Add(OpSMod, (i, o) => IntBinary(i, o, true, (a, b) =>
         {
             if (b == 0) return 0;
-            if (b == ulong.MaxValue) return 0;
+            // No -1 early-out: like spirv-opt, an exact multiple with a negative divisor adjusts
+            // to -1 (e.g. SMod(-32768, -1) folds to -1, matching the reference bit-for-bit).
             long sa = (long)a, sb = (long)b, r = sa % sb;
             if ((sb < 0) != (r < 0)) r += sb;
             return (ulong)r;
