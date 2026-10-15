@@ -121,8 +121,14 @@ internal sealed class SpvModule
 
     /// <summary>Rewrites every id-reference use of <paramref name="from"/> to <paramref name="to"/>. Result
     /// ids (definitions) are left alone, and literal operands are never touched.</summary>
-    public void ReplaceUses(uint from, uint to)
+    public void ReplaceUses(uint from, uint to) => ReplaceUses(new Dictionary<uint, uint> { [from] = to });
+
+    /// <summary>Applies many <see cref="ReplaceUses(uint,uint)"/> rewrites in one pass over the module. Each id is
+    /// replaced by its mapped value once, so the result matches applying the pairs in order whenever no mapped value
+    /// is itself a key.</summary>
+    public void ReplaceUses(IReadOnlyDictionary<uint, uint> map)
     {
+        if (map.Count == 0) return;
         foreach (var ins in Instrs)
         {
             // Decorations and names are metadata bound to a specific id; a value replacement must NOT move them
@@ -130,7 +136,7 @@ internal sealed class SpvModule
             if (ins.Opcode is 5 or 6 or 71 or 72 or 73 or 74) continue;   // OpName/OpMemberName/OpDecorate/OpMemberDecorate/OpGroupDecorate/OpGroupMemberDecorate
             ins.Classify(out int resultIndex, out bool[] isId);
             for (int i = 0; i < ins.Operands.Length; i++)
-                if (isId[i] && i != resultIndex && ins.Operands[i] == from)
+                if (isId[i] && i != resultIndex && map.TryGetValue(ins.Operands[i], out uint to))
                     ins.Operands[i] = to;
         }
     }

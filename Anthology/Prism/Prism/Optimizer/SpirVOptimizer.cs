@@ -575,7 +575,10 @@ public static partial class SpirVOptimizer
 
         // Rewrite phi predecessor labels: an absorbed block's label becomes its merge-chain root's label.
         int Root(int b) { while (absorbedBy.TryGetValue(b, out int p)) b = p; return b; }
-        foreach (var (b, _) in absorbedBy) { uint from = LabelId(b), to = LabelId(Root(b)); if (from != to) m.ReplaceUses(from, to); }
+        // One pass over the module for all of them: every target is a chain root, which is never itself absorbed.
+        var relabel = new Dictionary<uint, uint>();
+        foreach (var (b, _) in absorbedBy) { uint from = LabelId(b), to = LabelId(Root(b)); if (from != to) relabel[from] = to; }
+        m.ReplaceUses(relabel);
 
         // Emit a merge chain as one block: all body instructions in order, then the (relocated) structured
         // merge instruction, then the final terminator (a structured merge must immediately precede it).
@@ -2739,7 +2742,15 @@ public static partial class SpirVOptimizer
             var incomplete = new Queue<PhiCand>();
             var toGen = new List<PhiCand>();
 
-            void Write(uint var, int b, uint val) { curDef[(ulong)var << 32 | (uint)b] = val; (curDefByVal.TryGetValue(val, out var l) ? l : curDefByVal[val] = []).Add((var, b)); }
+            void Write(uint var, int b, uint val)
+            {
+                // A slot already holding val is already listed under it, so rewriting it adds nothing (repeating the
+                // entry would only grow the list, which is what made this pass allocate cubically in loop depth).
+                ulong key = (ulong)var << 32 | (uint)b;
+                if (curDef.TryGetValue(key, out uint prev) && prev == val) return;
+                curDef[key] = val;
+                (curDefByVal.TryGetValue(val, out var l) ? l : curDefByVal[val] = []).Add((var, b));
+            }
             uint Undef(uint var) => GetUndef(target[var]);
 
             uint Reaching(uint var, int b)
@@ -2792,8 +2803,23 @@ public static partial class SpirVOptimizer
                     if (phiCands.TryGetValue(userId, out var up)) { for (int i = 0; i < up.Args.Count; i++) if (up.Args[i] == phi.Id) up.Args[i] = same; }
                     else if (loadRepl.TryGetValue(userId, out var lv) && lv == phi.Id) loadRepl[userId] = same;
                 }
-                if (curDefByVal.TryGetValue(phi.Id, out var slots))
-                    foreach (var key in slots) if (curDef.TryGetValue((ulong)key.Item1 << 32 | (uint)key.Item2, out var cur) && cur == phi.Id) Write(key.Item1, key.Item2, same);
+                // The collapsed phi's slots now hold `same`. Their reverse-index entries move to `same`'s list (the
+                // smaller list merges into the larger one) instead of being re-added one write at a time.
+                if (curDefByVal.Remove(phi.Id, out var slots))
+                {
+                    foreach (var key in slots)
+                    {
+                        ulong k = (ulong)key.Item1 << 32 | (uint)key.Item2;
+                        if (curDef.TryGetValue(k, out uint cur) && cur == phi.Id) curDef[k] = same;
+                    }
+                    if (!curDefByVal.TryGetValue(same, out var into)) curDefByVal[same] = slots;
+                    else
+                    {
+                        if (into.Count < slots.Count) (into, slots) = (slots, into);
+                        into.AddRange(slots);
+                        curDefByVal[same] = into;
+                    }
+                }
                 return same;
             }
 
