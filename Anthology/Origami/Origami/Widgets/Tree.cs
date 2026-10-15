@@ -365,13 +365,14 @@ public sealed class TreeBuilder
                 {
                     // Pass 1: resolve every reachable node's expand state and measure its subtree.
                     // Cheap - no elements are built.
-                    for (int i = 0; i < nodes.Count;)
-                        i = Resolve(i, out _);
+                    ResolveAll();
 
-                    // Pass 2: build only the rows near the viewport.
+                    // Pass 2: build only the rows near the viewport. The content starts padTop below
+                    // the scroll view's top edge, and what shows is clipped by the view's full height
+                    // (padding included), not the padded viewport.
                     float overscan = _rowHeight * 3f;
-                    float top = vp.ScrollY - padTop;
-                    DrawVisible(top - overscan, top + vp.Height + overscan);
+                    float viewTop = vp.ScrollY - padTop;
+                    DrawVisible(viewTop - overscan, viewTop + _height + overscan);
                 }
                 finally
                 {
@@ -408,15 +409,73 @@ public sealed class TreeBuilder
     }
 
     /// <summary>
-    /// Resolve node <paramref name="i"/> and every node shown beneath it. Returns the index after the
-    /// node's subtree; <paramref name="height"/> is the height the subtree currently occupies.
+    /// Resolve every node that can be shown: its expand state, where its subtree ends, and how tall its
+    /// children are. One pass in list order, with an explicit stack of the parents whose children are
+    /// being measured, so a deep tree can't overflow the call stack.
     /// </summary>
-    private int Resolve(int i, out float height)
+    private void ResolveAll()
     {
         var nodes = _nodes!;
-        var node = nodes[i];
-        ref NodeState st = ref _states[i];
+        var parents = new Stack<int>();
 
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            var node = nodes[i];
+
+            // Close the parents this node isn't beneath.
+            while (parents.Count > 0 && node.Depth <= nodes[parents.Peek()].Depth)
+                CloseParent(parents, i);
+
+            ref NodeState st = ref _states[i];
+            ResolveNode(node, ref st);
+
+            int next = i + 1;
+            if (st.IsCollapsed)
+            {
+                // Its children are never shown, so they're skipped, not resolved.
+                while (next < nodes.Count && nodes[next].Depth > node.Depth)
+                    next++;
+            }
+
+            if (st.Expandable && !st.IsCollapsed)
+            {
+                // Its end and height are known once its children have been resolved.
+                parents.Push(i);
+            }
+            else
+            {
+                // A non-expandable node's deeper followers (if any) aren't its children: they count
+                // towards the enclosing parent, and show as its siblings.
+                st.End = next;
+                AddToParent(parents, _rowHeight);
+            }
+
+            i = next;
+        }
+
+        while (parents.Count > 0)
+            CloseParent(parents, nodes.Count);
+    }
+
+    /// <summary>Finish the innermost open parent, whose subtree ends at <paramref name="end"/>.</summary>
+    private void CloseParent(Stack<int> parents, int end)
+    {
+        ref NodeState st = ref _states[parents.Pop()];
+        st.End = end;
+        AddToParent(parents, _rowHeight + st.Anim * st.ChildHeight);
+    }
+
+    /// <summary>Add a resolved node's current height to the parent it shows beneath, if any.</summary>
+    private void AddToParent(Stack<int> parents, float height)
+    {
+        if (parents.Count > 0)
+            _states[parents.Peek()].ChildHeight += height;
+    }
+
+    /// <summary>Resolve a node's own expand state and animation; its subtree is measured by the caller.</summary>
+    private void ResolveNode(TreeNode node, ref NodeState st)
+    {
         st.Expandable = node.HasChildren && !node.IsLeaf;
         // Expand state lives on the tree's own state element, so the node id alone is a unique key.
         if (node.OverrideExpanded.HasValue)
@@ -436,29 +495,6 @@ public sealed class TreeBuilder
         // ends up built this frame.
         st.Anim = st.Expandable ? _paper.AnimateBool(st.Expanded, 0.15f, id: node.Id) : 1f;
         st.ChildHeight = 0f;
-
-        int j = i + 1;
-        if (st.Expandable)
-        {
-            while (j < nodes.Count && nodes[j].Depth > node.Depth)
-            {
-                // A collapsed node's children are never shown, so they're skipped, not resolved.
-                if (st.IsCollapsed)
-                {
-                    j++;
-                    continue;
-                }
-
-                j = Resolve(j, out float childHeight);
-                st.ChildHeight += childHeight;
-            }
-        }
-        // A non-expandable node's deeper followers (if any) are left to the caller, which shows them as
-        // its siblings - the same as when they had no wrapper to sit in.
-
-        st.End = j;
-        height = _rowHeight + (st.Expandable ? st.Anim * st.ChildHeight : 0f);
-        return j;
     }
 
     /// <summary>
