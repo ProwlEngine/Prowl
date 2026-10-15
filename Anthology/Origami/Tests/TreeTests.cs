@@ -162,6 +162,172 @@ public class TreeTests
         Assert.Equal(PadTop + 1000 * scene.RowHeight - scroll, drawn["n1000"], 0.01f);
     }
 
+    [Fact]
+    public void CollapseAnimation_ShrinksThenDropsChildren()
+    {
+        var parent = Node("p0", 0, hasChildren: true, expanded: true);
+        var nodes = new List<TreeNode> { parent };
+        for (int i = 0; i < 3; i++) nodes.Add(Node($"c{i}", 1));
+        nodes.Add(Node("r0", 0));
+
+        using var scene = new TreeScene(nodes);
+        var drawn = scene.Frame();
+        float rowH = scene.RowHeight;
+        Assert.Equal(PadTop + 4 * rowH, drawn["r0"], 0.01f);
+
+        parent.OverrideExpanded = false;
+        drawn = scene.Frame(0.05f);
+
+        // Mid-collapse the children are still built, in the shrinking wrapper.
+        Assert.Contains("c0", drawn.Keys);
+        Assert.InRange(drawn["r0"], PadTop + rowH + 0.5f, PadTop + 4 * rowH - 0.5f);
+
+        drawn = scene.Settle();
+
+        Assert.DoesNotContain("c0", drawn.Keys);
+        Assert.Equal(PadTop + rowH, drawn["r0"], 0.01f);
+    }
+
+    [Fact]
+    public void AnimatingParentAboveView_SpacerTracksItsHeight()
+    {
+        // p0 with 50 children, then 2000 roots; the view sits on the roots, well below p0.
+        var parent = Node("p0", 0, hasChildren: true, expanded: true);
+        var nodes = new List<TreeNode> { parent };
+        for (int i = 0; i < 50; i++) nodes.Add(Node($"c{i}", 1));
+        for (int i = 0; i < 2000; i++) nodes.Add(Node($"r{i}", 0));
+
+        using var scene = new TreeScene(nodes);
+        scene.Frame();
+        float rowH = scene.RowHeight;
+        float scroll = (51 + 1000) * rowH;
+        scene.ScrollTo(scroll);
+
+        parent.OverrideExpanded = false;
+        var drawn = scene.Frame(0.05f); // a third of the 0.15s collapse
+
+        // The animating block is out of view, so it isn't built, but the space it stands in for is
+        // exactly its current (two-thirds open) height: everything below moves up ~17 rows.
+        Assert.DoesNotContain("p0", drawn.Keys);
+        Assert.DoesNotContain("c49", drawn.Keys);
+        float anim = 1f - 0.05f / 0.15f;
+        Assert.Equal(PadTop + (1 + anim * 50 + 1017) * rowH - scroll, drawn["r1017"], 0.5f);
+
+        drawn = scene.Settle();
+
+        // Fully collapsed: the whole 50 rows are gone, so r1050 now sits at the top of the view.
+        Assert.Equal(PadTop + (1 + 1050) * rowH - scroll, drawn["r1050"], 0.01f);
+    }
+
+    [Fact]
+    public void NestedAnimationUnderOpenParent_RowsBelowFollow()
+    {
+        // a (open) > b (collapsed) > g0..g3, then a's other child c, then root r0.
+        var b = Node("b", 1, hasChildren: true, expanded: false);
+        var nodes = new List<TreeNode> { Node("a", 0, hasChildren: true, expanded: true), b };
+        for (int i = 0; i < 4; i++) nodes.Add(Node($"g{i}", 2));
+        nodes.Add(Node("c", 1));
+        nodes.Add(Node("r0", 0));
+
+        using var scene = new TreeScene(nodes);
+        var drawn = scene.Frame();
+        float rowH = scene.RowHeight;
+        Assert.Equal(PadTop + 2 * rowH, drawn["c"], 0.01f);
+
+        b.OverrideExpanded = true;
+        drawn = scene.Frame(0.05f);
+
+        Assert.Contains("g0", drawn.Keys);
+        Assert.InRange(drawn["c"], PadTop + 2 * rowH + 0.5f, PadTop + 6 * rowH - 0.5f);
+        Assert.Equal(drawn["c"] + rowH, drawn["r0"], 0.01f);
+
+        drawn = scene.Settle();
+
+        Assert.Equal(PadTop + 5 * rowH, drawn["g3"], 0.01f);
+        Assert.Equal(PadTop + 6 * rowH, drawn["c"], 0.01f);
+        Assert.Equal(PadTop + 7 * rowH, drawn["r0"], 0.01f);
+    }
+
+    [Fact]
+    public void ListShrinksWhileScrolledToEnd_ScrollClampsBack()
+    {
+        var nodes = Flat(2000);
+        using var scene = new TreeScene(nodes);
+        scene.Frame();
+        scene.ScrollTo(1_000_000f);
+
+        nodes.RemoveRange(10, nodes.Count - 10);
+        var drawn = scene.Settle(10);
+
+        for (int i = 0; i < 10; i++)
+            Assert.Equal(PadTop + i * scene.RowHeight, drawn[$"n{i}"], 0.01f);
+    }
+
+    [Fact]
+    public void ScrollingThrough_EveryRowInViewIsBuiltInPlace()
+    {
+        using var scene = new TreeScene(Flat(300));
+        scene.Frame();
+        float rowH = scene.RowHeight;
+
+        // An odd step so the view lands at many different offsets within a row.
+        for (float scroll = 0f; scroll < 250 * rowH; scroll += 61.7f)
+        {
+            var drawn = scene.ScrollTo(scroll);
+            for (int k = 0; k < 300; k++)
+            {
+                float top = PadTop + k * rowH - scroll;
+                if (top + rowH <= 0f || top >= TreeHeight) continue;
+
+                Assert.True(drawn.ContainsKey($"n{k}"), $"n{k} missing at scroll {scroll}");
+                Assert.Equal(top, drawn[$"n{k}"], 0.01f);
+            }
+        }
+    }
+
+    [Fact]
+    public void CaretClick_OnScrolledRow_ExpandsIt()
+    {
+        var nodes = Flat(2000);
+        nodes[1500] = Node("n1500", 0, hasChildren: true);
+        nodes.InsertRange(1501, new[] { Node("k0", 1), Node("k1", 1), Node("k2", 1) });
+
+        var changes = new List<(string id, bool expanded)>();
+        using var scene = new TreeScene(nodes, t => t.OnExpandChanged((n, v) => changes.Add((n.Id, v))));
+        scene.Frame();
+        float rowH = scene.RowHeight;
+        var drawn = scene.ScrollTo(1500 * rowH);
+        Assert.DoesNotContain("k0", drawn.Keys);
+
+        // The caret sits after the 6px base indent and is 12px wide.
+        float rowTop = drawn["n1500"];
+        int? selected = scene.Click(new Float2(12, rowTop + rowH / 2f));
+        drawn = scene.Settle();
+
+        Assert.Null(selected); // the caret doesn't select the row
+        Assert.Equal(new[] { ("n1500", true) }, changes);
+        Assert.Equal(rowTop + rowH, drawn["k0"], 0.01f);
+        Assert.Equal(rowTop + 3 * rowH, drawn["k2"], 0.01f);
+        Assert.Equal(rowTop + 4 * rowH, drawn["n1501"], 0.01f);
+    }
+
+    [Fact]
+    public void NonExpandableNodes_DeeperFollowersAreSiblingRows()
+    {
+        // Neither x (no children) nor z (a leaf) can expand, so the deeper nodes after them are just
+        // rows in sequence.
+        var leaf = Node("z", 0, hasChildren: true);
+        leaf.IsLeaf = true;
+        var nodes = new List<TreeNode> { Node("x", 0), Node("y", 1), leaf, Node("w", 1), Node("v", 0) };
+
+        using var scene = new TreeScene(nodes);
+        var drawn = scene.Frame();
+
+        string[] order = { "x", "y", "z", "w", "v" };
+        for (int i = 0; i < order.Length; i++)
+            Assert.Equal(PadTop + i * scene.RowHeight, drawn[order[i]], 0.01f);
+    }
+
     private static List<TreeNode> Flat(int count)
     {
         var nodes = new List<TreeNode>(count);
@@ -224,6 +390,14 @@ public class TreeTests
                 .Show();
             _paper.EndFrame();
             return new Dictionary<string, float>(_drawn);
+        }
+
+        /// <summary>Run enough frames for expand animations and smooth scrolling to finish.</summary>
+        public Dictionary<string, float> Settle(int frames = 6)
+        {
+            Dictionary<string, float> drawn = null!;
+            for (int i = 0; i < frames; i++) drawn = Frame();
+            return drawn;
         }
 
         /// <summary>Scroll to <paramref name="y"/> and let the smooth scroll settle.</summary>
