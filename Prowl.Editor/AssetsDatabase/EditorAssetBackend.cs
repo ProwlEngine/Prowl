@@ -1643,7 +1643,7 @@ public class EditorAssetBackend : AssetBackend
         var affectsCompilation = false;
         foreach (var path in toDelete)
         {
-            if (AffectsCompilation(path))
+            if (!affectsCompilation && AffectsCompilation(path))
                 affectsCompilation = true;
             RemoveCacheFile(path);
         }
