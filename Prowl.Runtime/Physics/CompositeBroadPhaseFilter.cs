@@ -57,7 +57,7 @@ public class CompositeBroadPhaseFilter : IBroadPhaseFilter
     /// </summary>
     public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
     {
-        IBroadPhaseFilter[] filters = Volatile.Read(ref _filters);
+        IBroadPhaseFilter[] filters = _filters;
 
         for (int i = 0; i < filters.Length; i++)
             if (!filters[i].Filter(proxyA, proxyB))
