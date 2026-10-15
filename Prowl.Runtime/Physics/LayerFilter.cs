@@ -123,11 +123,14 @@ public class LayerFilter : IBroadPhaseFilter
             b.Tag is not Rigidbody3D.RigidBodyUserData udB)
             return true;
 
-        bool isIgnored = false;
         HashSet<Pair> ignore = Volatile.Read(ref _ignore);
+        if (ignore.Count == 0)
+            return CollisionMatrix.GetLayerCollision(udA.Layer, udB.Layer);
+
+        bool isIgnored = false;
         Rigidbody3D bodyA = udA.Rigidbody;
         Rigidbody3D bodyB = udB.Rigidbody;
-        if (ignore.Count > 0 && TryOrderPair(ref bodyA, ref bodyB))
+        if (TryOrderPair(ref bodyA, ref bodyB))
             isIgnored = ignore.Contains(new Pair(bodyA, bodyB));
 
         return CollisionMatrix.GetLayerCollision(udA.Layer, udB.Layer) && !isIgnored;
