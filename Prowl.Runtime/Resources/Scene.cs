@@ -987,6 +987,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         try { _navigation.Update(Time.DeltaTime); }
         catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
 
+        // Rigidbodies that moved get their Transform written before gameplay code reads it.
+        Physics.WriteTransforms();
+
         _dispatcher.RunUpdate();
 
         // Animation sits between the two so gameplay code reaching in to override a bone in

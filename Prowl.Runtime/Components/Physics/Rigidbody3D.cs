@@ -85,6 +85,10 @@ public sealed class Rigidbody3D : Component
     private Quaternion _previousRotation, _currentRotation;
     private bool _hasPose;
 
+    // Bookkeeping owned by PhysicsWorld: this body's slot in its sync list, and the step that last captured it.
+    internal int SyncIndex = -1;
+    internal uint CaptureStamp;
+
     // Transform.Version last pushed into the physics body, so SyncTransformToBody only pushes when
     // the user actually edited the Transform (not when the physics readback wrote it).
     private uint _lastSyncedTransformVersion;
@@ -508,7 +512,11 @@ public sealed class Rigidbody3D : Component
         if (!shift.Equals(Float3.Zero)) ShiftJointAnchors(shift);
     }
 
-    public override void Update()
+    /// <summary>
+    /// Writes the simulated pose onto the Transform. Called each frame by the physics world, only for
+    /// bodies that moved in the last step.
+    /// </summary>
+    internal void WritePose()
     {
         if (!IsSimulated) return;
 
@@ -558,7 +566,7 @@ public sealed class Rigidbody3D : Component
 
     /// <summary>
     /// Records the pose the step just produced, so the next frames can render between it and the one
-    /// before. Driven by the physics world for every registered body right after the step.
+    /// before. Driven by the physics world for every awake body right after the step.
     /// </summary>
     internal void CapturePose()
     {
@@ -576,6 +584,9 @@ public sealed class Rigidbody3D : Component
             _hasPose = true;
         }
     }
+
+    /// <summary>Whether the last two captured poses match, so interpolation has nothing left to move.</summary>
+    internal bool PoseSettled => !_hasPose || (_previousPosition.Equals(_currentPosition) && _previousRotation == _currentRotation);
 
     /// <summary>
     /// Drops the interpolation history so a teleport snaps instead of being smeared across a frame.

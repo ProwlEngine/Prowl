@@ -175,7 +175,13 @@ public class PhysicsWorld
     public bool AutoSyncTransforms = true;
 
     // Rigidbodies that may need their Transform pushed into the physics world (transform -> body).
-    private readonly HashSet<Rigidbody3D> _syncBodies = [];
+    // Dense so the per step walks stay cheap; each body keeps its own slot for swap removal.
+    private readonly List<Rigidbody3D> _syncBodies = [];
+
+    // Bodies whose pose changed in the last step, so only they get their Transform written each frame.
+    private List<Rigidbody3D> _movedBodies = [];
+    private List<Rigidbody3D> _movedScratch = [];
+    private uint _captureStamp;
 
     // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
     // which GameObject was struck. This maps every shape back to the Collider that created it. The key
@@ -410,11 +416,26 @@ public class PhysicsWorld
 
     internal void RegisterBody(Rigidbody3D body)
     {
-        _syncBodies.Add(body);
+        if (body.SyncIndex < 0)
+        {
+            body.SyncIndex = _syncBodies.Count;
+            _syncBodies.Add(body);
+        }
         if (body.IsSimulated) HookContacts(body.Native);
     }
 
-    internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
+    internal void UnregisterBody(Rigidbody3D body)
+    {
+        int index = body.SyncIndex;
+        if (index < 0 || index >= _syncBodies.Count || !ReferenceEquals(_syncBodies[index], body)) return;
+
+        int last = _syncBodies.Count - 1;
+        Rigidbody3D moved = _syncBodies[last];
+        _syncBodies[index] = moved;
+        moved.SyncIndex = index;
+        _syncBodies.RemoveAt(last);
+        body.SyncIndex = -1;
+    }
 
     // Jitter removes a body's constraints along with it, and a constraint created before its connected
     // body existed fell back to the world. Either way it has to be rebuilt when the body comes back.
@@ -760,7 +781,10 @@ public class PhysicsWorld
 
         // World.Clear removed every body, so the per-body registries hold nothing worth visiting.
         // The components re-register when they recreate their bodies.
+        foreach (Rigidbody3D body in _syncBodies)
+            body.SyncIndex = -1;
         _syncBodies.Clear();
+        _movedBodies.Clear();
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
@@ -801,13 +825,51 @@ public class PhysicsWorld
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
 
-        // Record the pose each body just landed on, so interpolated bodies have two steps to render
-        // between. Driven from here rather than a per-body event to keep it one pass with no delegates.
-        foreach (Rigidbody3D body in _syncBodies)
-            if (body.IsValid()) body.CapturePose();
+        CaptureMovedPoses();
 
         DispatchCollisions();
         InvokeStepEvent(StepFinished, Time.FixedDeltaTime, nameof(StepFinished));
+    }
+
+    /// <summary>
+    /// Records the pose each awake body just landed on, so interpolated bodies have two steps to render
+    /// between. Bodies that fell asleep keep being captured until their history settles on the final pose.
+    /// </summary>
+    private void CaptureMovedPoses()
+    {
+        uint stamp = ++_captureStamp;
+        _movedScratch.Clear();
+
+        foreach (RigidBody native in World.RigidBodies.Active)
+        {
+            if (native.Tag is not Rigidbody3D.RigidBodyUserData data) continue;
+            Rigidbody3D body = data.Rigidbody;
+            if (!body.IsValid()) continue;
+
+            body.CapturePose();
+            body.CaptureStamp = stamp;
+            _movedScratch.Add(body);
+        }
+
+        foreach (Rigidbody3D body in _movedBodies)
+        {
+            if (!body.IsValid() || body.CaptureStamp == stamp || body.PoseSettled) continue;
+            body.CapturePose();
+            body.CaptureStamp = stamp;
+            _movedScratch.Add(body);
+        }
+
+        (_movedBodies, _movedScratch) = (_movedScratch, _movedBodies);
+    }
+
+    /// <summary>
+    /// Writes the simulated pose of every body that moved in the last step onto its Transform. Runs once
+    /// per frame before component Updates, so sleeping bodies cost nothing.
+    /// </summary>
+    internal void WriteTransforms()
+    {
+        foreach (Rigidbody3D body in _movedBodies)
+            if (body.IsValid() && body.EnabledInHierarchy) body.WritePose();
     }
 
     /// <summary>

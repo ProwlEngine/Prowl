@@ -179,6 +179,60 @@ public class PhysicsTests : RuntimeTestBase
             $"Transform.Y should have followed the falling body, was {rb.Transform.Position.Y}");
     }
 
+    private Rigidbody3D DropBoxUntilAsleep(Scene scene)
+    {
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 2, 0));
+        Assert.True(TickUntil(scene, () => !rb.IsActive, 600) >= 0, "the box should fall asleep on the floor");
+        return rb;
+    }
+
+    [Fact]
+    public void Rigidbody_FallingAsleepWhileMoving_TransformLandsOnFinalPose()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        rb.LinearSleepThreshold = 10f;
+        rb.AngularSleepThreshold = 10f;
+        rb.DeactivationTime = 0.1f;
+        rb.AddForce(new Float3(3, 0, 0), ForceMode.VelocityChange);
+        rb.AddTorque(new Float3(0, 2, 0), ForceMode.VelocityChange);
+
+        Assert.True(TickUntil(scene, () => !rb.IsActive, 120) >= 0, "the body should sleep below its raised threshold");
+        Tick(scene, 2);
+
+        Assert.True(Float3.Distance(rb.Transform.Position, rb.Position) < 1e-5f,
+            $"Transform {rb.Transform.Position} should rest on the simulated pose {rb.Position}");
+        Assert.True(Quaternion.Angle(rb.Transform.Rotation, rb.Rotation) < 1e-3f);
+    }
+
+    [Fact]
+    public void Rigidbody_Sleeping_TransformIsNotRewritten()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = DropBoxUntilAsleep(scene);
+        Tick(scene, 2);
+
+        uint version = rb.Transform.Version;
+        Tick(scene, 10);
+
+        Assert.Equal(version, rb.Transform.Version);
+    }
+
+    [Fact]
+    public void Rigidbody_WokenFromSleep_TransformFollowsAgain()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = DropBoxUntilAsleep(scene);
+        float restY = rb.Transform.Position.Y;
+
+        rb.AddForce(new Float3(0, 5, 0), ForceMode.VelocityChange);
+        Tick(scene, 10);
+
+        Assert.True(rb.Transform.Position.Y > restY + 0.2f,
+            $"Transform.Y should rise with the woken body, rest {restY} now {rb.Transform.Position.Y}");
+    }
+
     [Fact]
     public void Rigidbody_MovePosition_TeleportsBody_AndShapeFollows()
     {
