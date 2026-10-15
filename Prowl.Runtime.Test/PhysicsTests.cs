@@ -233,6 +233,30 @@ public class PhysicsTests : RuntimeTestBase
             $"Transform.Y should rise with the woken body, rest {restY} now {rb.Transform.Position.Y}");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Rigidbody_SpinAndInvalidVelocity_AreClampedOnEveryBody(bool multithreaded)
+    {
+        Scene scene = CreatePhysicsScene();
+        scene.Physics.UseMultithreading = multithreaded;
+
+        var bodies = new List<Rigidbody3D>();
+        for (int i = 0; i < 600; i++)
+        {
+            Rigidbody3D rb = AddDynamicBox(scene, new Float3(i % 30 * 3f, 0, i / 30 * 3f), gravity: false);
+            rb.AngularVelocity = new Float3(0, 50f, 0);
+            bodies.Add(rb);
+        }
+        bodies[^1].LinearVelocity = new Float3(float.NaN, 0, 0);
+
+        StepPhysics(scene);
+
+        foreach (Rigidbody3D rb in bodies)
+            Assert.True(Float3.Length(rb.AngularVelocity) <= 7.001f, $"spin {rb.AngularVelocity} should be clamped to 7 rad/s");
+        Assert.Equal(Float3.Zero, bodies[^1].LinearVelocity);
+    }
+
     [Fact]
     public void Rigidbody_SleepingTransformEdited_BodyFollowsBeforeTheNextStep()
     {

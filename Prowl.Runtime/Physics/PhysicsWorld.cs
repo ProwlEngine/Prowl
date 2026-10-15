@@ -791,10 +791,30 @@ public class PhysicsWorld
     private const float MaxLinearVelocity = 1000000f;
     private const float MaxAngularVelocity = 7f;
 
+    // Same batch sizing Jitter uses for its own per body passes.
+    private const int ClampBatchSize = 256;
+
+    private Action<Jitter2.Parallelization.Parallel.Batch> _clampBatch;
+
     private void ClampBodyVelocities()
     {
-        foreach (ref RigidBodyData body in World.RawData.ActiveRigidBodies)
+        int count = World.RawData.ActiveRigidBodies.Length;
+        if (!UseMultithreading)
         {
+            ClampRange(0, count);
+            return;
+        }
+
+        int tasks = Math.Min(count / ClampBatchSize + 1, Jitter2.Parallelization.ThreadPool.Instance.ThreadCount);
+        Jitter2.Parallelization.Parallel.ForBatch(0, count, tasks, _clampBatch ??= batch => ClampRange(batch.Start, batch.End));
+    }
+
+    private void ClampRange(int start, int end)
+    {
+        Span<RigidBodyData> bodies = World.RawData.ActiveRigidBodies;
+        for (int i = start; i < end; i++)
+        {
+            ref RigidBodyData body = ref bodies[i];
             if (body.MotionType != MotionType.Dynamic) continue;
 
             ClampVelocity(ref body.Velocity, MaxLinearVelocity);
