@@ -571,6 +571,8 @@
   "frame_stats.pause_tip": "Pausieren: keine neuen Spalten hinzufuegen, damit das Diagramm stillsteht",
   "frame_stats.resume_tip": "Live-Ansicht fortsetzen",
   "frame_stats.clear_tip": "Diagramm leeren und neu mit dem Sammeln beginnen",
+  "frame_stats.hide_unselected_tip": "Nicht ausgewaehlte ausblenden",
+  "frame_stats.show_unselected_tip": "Alle anzeigen",
   "frame_stats.rate_every_frame": "Jeder Frame",
   "frame_stats.rate_tip": "Wie lange jede Spalte Frames sammelt. Laengere Intervalle scrollen langsamer und glaetten das Diagramm",
   "frame_stats.mode_avg": "Mittel",

@@ -571,6 +571,8 @@
   "frame_stats.pause_tip": "Pausa: smette di aggiungere colonne cosi il grafico resta fermo",
   "frame_stats.resume_tip": "Riprendi la vista dal vivo",
   "frame_stats.clear_tip": "Svuota il grafico e ricomincia a raccogliere",
+  "frame_stats.hide_unselected_tip": "Nascondi non selezionate",
+  "frame_stats.show_unselected_tip": "Mostra tutte",
   "frame_stats.rate_every_frame": "Ogni frame",
   "frame_stats.rate_tip": "Per quanto tempo ogni colonna raccoglie frame. Intervalli piu lunghi scorrono piu lentamente e rendono il grafico piu regolare",
   "frame_stats.mode_avg": "Media",

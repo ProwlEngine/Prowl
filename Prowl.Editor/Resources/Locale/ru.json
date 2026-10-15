@@ -571,6 +571,8 @@
   "frame_stats.pause_tip": "Пауза: перестать добавлять столбцы, чтобы график замер",
   "frame_stats.resume_tip": "Продолжить просмотр в реальном времени",
   "frame_stats.clear_tip": "Очистить график и начать сбор заново",
+  "frame_stats.hide_unselected_tip": "Скрыть невыбранные",
+  "frame_stats.show_unselected_tip": "Показать все",
   "frame_stats.rate_every_frame": "Каждый кадр",
   "frame_stats.rate_tip": "Сколько времени каждый столбец собирает кадры. Чем длиннее интервал, тем медленнее прокрутка и плавнее график",
   "frame_stats.mode_avg": "Сред.",

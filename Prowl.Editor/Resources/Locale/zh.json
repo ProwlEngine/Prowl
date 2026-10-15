@@ -571,6 +571,8 @@
   "frame_stats.pause_tip": "暂停：停止添加列，使图表保持不动",
   "frame_stats.resume_tip": "恢复实时视图",
   "frame_stats.clear_tip": "清空图表并重新开始收集",
+  "frame_stats.hide_unselected_tip": "隐藏未选中项",
+  "frame_stats.show_unselected_tip": "全部显示",
   "frame_stats.rate_every_frame": "每帧",
   "frame_stats.rate_tip": "每列收集帧的时长。间隔越长，滚动越慢，图表越平滑",
   "frame_stats.mode_avg": "平均",

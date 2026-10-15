@@ -70,6 +70,8 @@ public class FrameStatsPanel : DockPanel
     private int _rate = 2;
     private int _scale;
     private bool _stackMax;
+    // Leaves switched-off rows out of the table, rather than greying them.
+    private bool _hideUnselected;
     // Changes whenever a row is switched on or off or a group opens or closes, so the chart knows to redraw.
     private int _visibility;
     // The chart's bars, recorded once and replayed until what they show changes. Text and the hover and selection
@@ -142,6 +144,7 @@ public class FrameStatsPanel : DockPanel
         state["rate"] = _rate;
         state["scale"] = _scale;
         state["stackMax"] = _stackMax;
+        state["hideUnselected"] = _hideUnselected;
         state["columnWidth"] = (double)_columnW;
         if (_split >= 0) state["split"] = (double)_split;
 
@@ -158,6 +161,7 @@ public class FrameStatsPanel : DockPanel
         if (TryRead(state["rate"], out int rate) && rate >= 0 && rate < RateSeconds.Length) _rate = rate;
         if (TryRead(state["scale"], out int scale) && scale >= 0 && scale < ScaleMs.Length) _scale = scale;
         if (TryRead(state["stackMax"], out bool stackMax)) _stackMax = stackMax;
+        if (TryRead(state["hideUnselected"], out bool hideUnselected)) _hideUnselected = hideUnselected;
         if (TryRead(state["columnWidth"], out double columnW)) _columnW = Math.Clamp((float)columnW, MinColumnW, MaxColumnW);
         if (TryRead(state["split"], out double split) && split > 0 && split < 1) _split = (float)split;
 
@@ -218,6 +222,19 @@ public class FrameStatsPanel : DockPanel
 
     /// <summary>Whether the category's own time is left out of the chart.</summary>
     internal bool IsHidden(FrameStat c) => c.Children.Count > 0 ? IsOtherHidden(c) : IsRowHidden(c);
+
+    /// <summary>Whether the table lists this row: always, unless switched-off rows are being left out.</summary>
+    internal bool IsListed(FrameStat c, bool other = false) => !_hideUnselected || !(other ? IsOtherHidden(c) : IsRowHidden(c));
+
+    internal bool HideUnselected
+    {
+        get => _hideUnselected;
+        set
+        {
+            _hideUnselected = value;
+            SaveSoon();
+        }
+    }
 
     internal bool IsExpanded(FrameStat group) => _expanded.Contains(group.Path);
 
@@ -611,14 +628,14 @@ public class FrameStatsPanel : DockPanel
     private const float BodyTop = HeaderH + 1;
     private const float ThumbHitW = 10f;
 
-    private enum HitKind { None, Header, Row, Expand, Thumb }
+    private enum HitKind { None, Eye, Header, Row, Expand, Thumb }
 
-    /// <summary>What the pointer is over in the table: a header column or a row by index, or the scroll thumb.</summary>
+    /// <summary>What the pointer is over in the table: a header column or a row by index, the eye, or the scroll thumb.</summary>
     private readonly record struct TableHit(HitKind Kind, int Index = -1);
 
     // Everything the recorded table depends on.
     private readonly record struct TableKey(long History, int Columns, int ShownAgo, int NowLabel, int Visibility,
-        TableHit Hit, float Scroll, float Width, float Height, string Locale, int Categories);
+        bool HideUnselected, TableHit Hit, float Scroll, float Width, float Height, string Locale, int Categories);
 
     private readonly CanvasSnapshot _tableSnapshot = new();
     private TableKey _tableKey;
@@ -629,14 +646,14 @@ public class FrameStatsPanel : DockPanel
     private bool _draggingThumb;
     private float _scrollAtDragStart;
     // What the row list was last built from; it is sorted by the totals, so it only changes with them.
-    private (long Version, int Columns, int Visibility, int Categories) _rowsOf = (-1, 0, 0, 0);
+    private (long Version, int Columns, int Visibility, bool HideUnselected, int Categories) _rowsOf = (-1, 0, 0, false, 0);
 
     private void DrawTable(Paper paper, FontFile font, float width, float height)
     {
         IReadOnlyList<FrameStat> categories = FrameStats.Categories;
         History.Totals totals = _history.Summarise(categories.Count, _visibleColumns);
 
-        var rowsOf = (_history.Version, _visibleColumns, _visibility, categories.Count);
+        var rowsOf = (_history.Version, _visibleColumns, _visibility, _hideUnselected, categories.Count);
         if (rowsOf != _rowsOf)
         {
             _rowsOf = rowsOf;
@@ -698,6 +715,7 @@ public class FrameStatsPanel : DockPanel
 
         if (ly < HeaderH)
         {
+            if (lx >= TablePadL - 3 && lx < TablePadL + 13) return new TableHit(HitKind.Eye);
             for (int k = 0; k < ValueColumns; k++)
                 if (lx >= ValueRight(w, k) - ValueW && lx < ValueRight(w, k)) return new TableHit(HitKind.Header, k);
             return default;
@@ -717,6 +735,7 @@ public class FrameStatsPanel : DockPanel
     {
         switch (hit.Kind)
         {
+            case HitKind.Eye: HideUnselected = !_hideUnselected; break;
             case HitKind.Expand: ToggleExpanded(_rows[hit.Index].Category); break;
             case HitKind.Row: ToggleVisibility(_rows[hit.Index].Category, _rows[hit.Index].Other); break;
         }
@@ -726,6 +745,7 @@ public class FrameStatsPanel : DockPanel
     {
         switch (hit.Kind)
         {
+            case HitKind.Eye: return HeaderText().Eye(_hideUnselected);
             case HitKind.Header: return HeaderText().Tips[hit.Index];
             case HitKind.Row or HitKind.Expand:
                 Row row = _rows[hit.Index];
@@ -738,7 +758,7 @@ public class FrameStatsPanel : DockPanel
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
         int nowLabel = SelectedAgo >= 0 ? 2 : _hoveredAgo >= 0 ? 1 : 0;
-        var key = new TableKey(_history.Version, _visibleColumns, ShownAgo, nowLabel, _visibility,
+        var key = new TableKey(_history.Version, _visibleColumns, ShownAgo, nowLabel, _visibility, _hideUnselected,
             _tableHit, _scrollY, w, h, Loc.CurrentLocale, FrameStats.Categories.Count);
         if (key == _tableKey && canvas.DrawSnapshot(_tableSnapshot, x, y)) return;
 
@@ -758,6 +778,12 @@ public class FrameStatsPanel : DockPanel
     {
         float fs = EditorTheme.FontSizeSmall, mid = y + HeaderH / 2;
         HeaderStrings text = HeaderText();
+
+        // The eye sits over the rows' colour swatches, the column it switches.
+        if (_tableHit.Kind == HitKind.Eye)
+            canvas.RoundedRectFilled(x + TablePadL - 3, y + 2, 16, HeaderH - 4, EditorTheme.Roundness, EditorTheme.Hover);
+        canvas.DrawText(_hideUnselected ? EditorIcons.EyeSlash : EditorIcons.Eye, x + TablePadL + 5, mid,
+            _hideUnselected ? EditorTheme.Accent : EditorTheme.InkDim, fs, font, 0, new Float2(0.5f, 0.5f));
 
         canvas.DrawText(text.Category, x + TablePadL + 10 + TableGap, mid, EditorTheme.InkDim, fs, font, 0, new Float2(0, 0.5f));
         for (int k = 0; k < ValueColumns; k++)
@@ -855,6 +881,8 @@ public class FrameStatsPanel : DockPanel
         public string[] Now = [];
         public string[] Values = [];
         public TooltipContent[] Tips = [];
+        public TooltipContent HideTip = new(), ShowTip = new();
+        public TooltipContent Eye(bool hiding) => hiding ? ShowTip : HideTip;
     }
 
     private HeaderStrings? _header;
@@ -874,6 +902,8 @@ public class FrameStatsPanel : DockPanel
                 Tip("frame_stats.col_now_tip"), Tip("frame_stats.col_avg_tip"), Tip("frame_stats.col_max_tip"),
                 Tip("frame_stats.col_calls_tip"), Tip("frame_stats.col_share_tip"),
             ],
+            HideTip = Tip("frame_stats.hide_unselected_tip"),
+            ShowTip = Tip("frame_stats.show_unselected_tip"),
         };
     }
 
@@ -884,12 +914,13 @@ public class FrameStatsPanel : DockPanel
     private void AddRows(IReadOnlyList<FrameStat> categories, FrameStat? group, int depth, History.Totals totals)
     {
         var level = new List<Row>();
-        if (group != null)
+        if (group != null && IsListed(group, other: true))
             level.Add(new Row(group, true, depth, totals.AvgMs[group.Index]));
         foreach (FrameStat c in group?.Children ?? categories)
         {
             // Registered since this frame's totals were taken, or met again under its parent.
             if (c.Index >= categories.Count || (group == null && c.Parent != null)) continue;
+            if (!IsListed(c)) continue;
             level.Add(new Row(c, false, depth, c.Children.Count > 0 ? totals.TreeAvgMs[c.Index] : totals.AvgMs[c.Index]));
         }
         level.Sort((a, b) => b.AvgMs.CompareTo(a.AvgMs));

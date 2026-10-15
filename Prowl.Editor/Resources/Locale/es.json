@@ -571,6 +571,8 @@
   "frame_stats.pause_tip": "Pausar: dejar de anadir columnas para que el grafico se quede quieto",
   "frame_stats.resume_tip": "Reanudar la vista en vivo",
   "frame_stats.clear_tip": "Vaciar el grafico y empezar a recoger de nuevo",
+  "frame_stats.hide_unselected_tip": "Ocultar no seleccionadas",
+  "frame_stats.show_unselected_tip": "Mostrar todas",
   "frame_stats.rate_every_frame": "Cada fotograma",
   "frame_stats.rate_tip": "Cuanto tiempo recoge fotogramas cada columna. Los intervalos mas largos se desplazan mas despacio y suavizan el grafico",
   "frame_stats.mode_avg": "Media",

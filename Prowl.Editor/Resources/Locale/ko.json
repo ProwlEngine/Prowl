@@ -571,6 +571,8 @@
   "frame_stats.pause_tip": "일시정지: 열 추가를 멈춰 그래프를 고정합니다",
   "frame_stats.resume_tip": "실시간 보기 재개",
   "frame_stats.clear_tip": "그래프를 지우고 다시 수집을 시작합니다",
+  "frame_stats.hide_unselected_tip": "선택 안 된 항목 숨기기",
+  "frame_stats.show_unselected_tip": "모두 표시",
   "frame_stats.rate_every_frame": "매 프레임",
   "frame_stats.rate_tip": "각 열이 프레임을 모으는 시간. 간격이 길수록 천천히 스크롤되고 그래프가 부드러워집니다",
   "frame_stats.mode_avg": "평균",
