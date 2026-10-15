@@ -622,7 +622,7 @@ public sealed class Preprocessor
     // The _hidden set stops a macro expanding itself, but nothing bounds how much a chain of distinct macros
     // can produce -- a doubling ladder (#define A1 A0 A0 ...) grows exponentially. Cap the total tokens one
     // preprocessor run may materialize so a pathological source fails fast instead of stalling the process.
-    const int MaxExpansionTokens = 4_000_000;
+    const int MaxExpansionTokens = 16_000_000;
     int _expansionBudget = MaxExpansionTokens;
 
     // A ladder of distinct macros (#define M1 (M0+M0); #define M2 (M1+M1); ...) stacks one replacement list per

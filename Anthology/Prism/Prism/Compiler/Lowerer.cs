@@ -2754,6 +2754,7 @@ public sealed partial class Lowerer
         Call c => EvalConstBuiltin(c),
         Member m => EvalConstMember(m),
         Index ix => EvalConstIndex(ix),
+        Method { Name: "length", Args.Count: 0 } meth when meth.Target is Ident { Name: "gl_SampleMask" or "gl_SampleMaskIn" } => RejectSampleMaskLength(meth),
         Method { Name: "length", Args.Count: 0 } meth when InferType(meth.Target) is ArrayType { SpecLength: null } arr => new CScalar(Scalar.Int, arr.Length, arr.Length),
         // A vector's length() is its component count, a matrix's its column count (constants either way).
         Method { Name: "length", Args.Count: 0 } meth when InferType(meth.Target) is VectorType vlen => new CScalar(Scalar.Int, vlen.Size, vlen.Size),
