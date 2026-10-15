@@ -328,6 +328,47 @@ public class TreeTests
             Assert.Equal(PadTop + i * scene.RowHeight, drawn[order[i]], 0.01f);
     }
 
+    [Fact]
+    public void LargePadding_RowsDownToTheBottomEdgeAreBuilt()
+    {
+        // Padding wider than the overscan: the visible window is the full clipped height, not the
+        // padded content viewport.
+        const float padding = 100f;
+        using var scene = new TreeScene(Flat(500), t => t.Padding(padding));
+        scene.Frame();
+        float rowH = scene.RowHeight;
+
+        foreach (float scroll in new[] { 0f, 40 * rowH + 7f })
+        {
+            var drawn = scene.ScrollTo(scroll);
+            for (int k = 0; k < 500; k++)
+            {
+                float top = padding + k * rowH - scroll;
+                if (top + rowH <= 0f || top >= TreeHeight) continue;
+
+                Assert.True(drawn.ContainsKey($"n{k}"), $"n{k} missing at scroll {scroll}");
+                Assert.Equal(top, drawn[$"n{k}"], 0.01f);
+            }
+        }
+    }
+
+    [Fact]
+    public void DeepExpandedChain_DoesNotOverflowTheStack()
+    {
+        // Every node is an open parent of the next, far deeper than the call stack could recurse.
+        const int depth = 200_000;
+        var nodes = new List<TreeNode>(depth);
+        for (int i = 0; i < depth; i++)
+            nodes.Add(Node($"d{i}", i, hasChildren: i < depth - 1, expanded: true));
+
+        using var scene = new TreeScene(nodes);
+        var drawn = scene.Frame();
+
+        Assert.Equal(PadTop, drawn["d0"], 0.01f);
+        Assert.Equal(PadTop + 5 * scene.RowHeight, drawn["d5"], 0.01f);
+        Assert.DoesNotContain($"d{depth - 1}", drawn.Keys);
+    }
+
     private static List<TreeNode> Flat(int count)
     {
         var nodes = new List<TreeNode>(count);
