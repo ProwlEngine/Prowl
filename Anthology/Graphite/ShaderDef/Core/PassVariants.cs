@@ -198,53 +198,68 @@ public sealed class PassVariants
         }
     }
 
-    /// <summary>The variant's description when ready, compiling it under the policy when it is neither ready nor failed.</summary>
+    /// <summary>
+    /// The variant's description when ready, compiling it under the policy when it is neither ready nor failed. Compiles
+    /// run outside the lock. A Sync request waits for a compile already running, an Async one reports it pending, and a
+    /// variant that cannot compile here, BakedOnly or without a compiler, fails this request without being remembered.
+    /// </summary>
     public VariantState Request(int key, CompilePolicy policy, out ShaderDescription description, out Exception? error)
     {
-        description = default;
-        error = null;
-        Exception? raised = null;
-        VariantState state;
-        lock (this)
+        while (true)
         {
-            Refresh();
-            state = Poll(key, ref raised);
-            if (state == VariantState.Pending && _pending[key] == null)
+            description = default;
+            error = null;
+            Exception? raised = null;
+            Task<ShaderDescription>? run = null, wait = null;
+            VariantState state;
+            lock (this)
             {
-                if (policy == CompilePolicy.BakedOnly || Compiler == null)
+                Refresh();
+                state = Poll(key, ref raised);
+                if (state == VariantState.Pending)
                 {
-                    _failures[key] = new InvalidOperationException($"The variant of pass '{_pass.Name}' is not compiled for backend {Backend} and cannot be compiled here.");
-                    raised = _failures[key];
-                    state = VariantState.Failed;
-                }
-                else if (policy == CompilePolicy.Sync)
-                {
-                    try
+                    if (_pending[key] is { } pending)
                     {
-                        Store(key, Compiler.Compile(_pass, _combos[key], Backend));
-                        state = VariantState.Ready;
+                        if (policy == CompilePolicy.Sync)
+                            wait = pending;
                     }
-                    catch (Exception e)
+                    else if (policy == CompilePolicy.BakedOnly || Compiler == null)
                     {
-                        _failures[key] = raised = e;
+                        error = new InvalidOperationException($"The variant of pass '{_pass.Name}' is not compiled for backend {Backend} and cannot be compiled here.");
                         state = VariantState.Failed;
                     }
+                    else
+                    {
+                        IShaderCompiler compiler = Compiler;
+                        Keyword[] combo = _combos[key];
+                        Task<ShaderDescription> task = new(() => compiler.Compile(_pass, combo, Backend));
+                        _pending[key] = task;
+                        if (policy == CompilePolicy.Sync)
+                            run = task;
+                        else
+                            task.Start();
+                    }
                 }
-                else
-                {
-                    IShaderCompiler compiler = Compiler;
-                    Keyword[] combo = _combos[key];
-                    _pending[key] = Task.Run(() => compiler.Compile(_pass, combo, Backend));
-                }
+                if (state == VariantState.Ready)
+                    _variants[key]!.TryGetDescription(Backend, out description);
+                else if (state == VariantState.Failed)
+                    error ??= _failures[key];
             }
-            if (state == VariantState.Ready)
-                _variants[key]!.TryGetDescription(Backend, out description);
-            else if (state == VariantState.Failed)
-                error = _failures[key];
+            if (raised != null)
+                CompileFailed?.Invoke(_combos[key], raised);
+
+            run?.RunSynchronously();
+            wait ??= run;
+            if (wait == null)
+                return state;
+            try
+            {
+                wait.Wait();
+            }
+            catch (AggregateException)
+            {
+            }
         }
-        if (raised != null)
-            CompileFailed?.Invoke(_combos[key], raised);
-        return state;
     }
 
     /// <summary>The variant's description, compiled now when it is not ready. Throws when it failed.</summary>
@@ -258,6 +273,8 @@ public sealed class PassVariants
     /// <summary>The variant compiled as a compute program, now when it is not compiled yet. Throws when it failed.</summary>
     public ComputeDescription RequireCompute(int key = 0)
     {
+        IShaderCompiler compiler;
+        int revision;
         lock (this)
         {
             Refresh();
@@ -265,20 +282,30 @@ public sealed class PassVariants
                 return compiled;
             if (_failures[key] is { } failure)
                 throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' failed to compile: {failure.Message}", failure);
-            if (Compiler == null)
-                throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' is not compiled and cannot be compiled here.");
-            try
-            {
-                ComputeDescription description = Compiler.CompileCompute(_pass, _combos[key], Backend);
-                _compute[key] = description;
-                return description;
-            }
-            catch (Exception e)
-            {
-                _failures[key] = e;
-                throw;
-            }
+            compiler = Compiler ?? throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' is not compiled and cannot be compiled here.");
+            revision = _revision;
         }
+
+        ComputeDescription description;
+        try
+        {
+            description = compiler.CompileCompute(_pass, _combos[key], Backend);
+        }
+        catch (Exception e)
+        {
+            lock (this)
+            {
+                if (revision == _revision)
+                    _failures[key] = e;
+            }
+            throw;
+        }
+        lock (this)
+        {
+            if (revision == _revision)
+                _compute[key] = description;
+        }
+        return description;
     }
 
     /// <summary>Waits for every variant compiling on a worker.</summary>
@@ -334,12 +361,20 @@ public sealed class PassVariants
         return VariantState.Failed;
     }
 
+    // A new variant every time, so a baked one seeded in is never changed and seeds again as it shipped
     private void Store(int key, ShaderDescription description)
     {
+        List<(GraphicsBackend, ShaderDescription)> compiled = new();
         if (_variants[key] is { } existing)
-            existing.Store(Backend, description);
-        else
-            _variants[key] = new Variant(_combos[key], [(Backend, description)]);
+        {
+            foreach ((GraphicsBackend backend, ShaderDescription other) in existing.Compiled)
+            {
+                if (backend != Backend)
+                    compiled.Add((backend, other));
+            }
+        }
+        compiled.Add((Backend, description));
+        _variants[key] = new Variant(_combos[key], [.. compiled]);
     }
 
     // A changed source or compiler session drops what was compiled from the old one

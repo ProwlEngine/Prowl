@@ -55,7 +55,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
                 continue;
             (keys ??= new()).Add(key);
             Forget(entry);
-            entry.Built?.Dispose();
+            Discard(entry.Built);
             Family family = FamilyOf(entry);
             if (--_families[family] > 0)
                 continue;
@@ -63,12 +63,12 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             if (_defaults.Remove(family, out Entry? fallback))
             {
                 Forget(fallback);
-                fallback.Built?.Dispose();
+                Discard(fallback.Built);
             }
             if (_declared.Remove(family, out Entry? declared) && declared != null)
             {
                 Forget(declared);
-                declared.Built?.Dispose();
+                Discard(declared.Built);
             }
         }
         if (keys == null)
@@ -157,7 +157,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             catch (AggregateException)
             {
             }
-            entry.Built?.Dispose();
+            Discard(entry.Built);
         }
         foreach (PassVariants pass in variants)
             pass.WaitPending();
@@ -319,10 +319,21 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
     private void Retire(GraphicsProgram program)
     {
+        lock (_userBuffers)
+            _userBuffers.Remove(program);
         if (retire != null)
             retire(program);
         else
             program.Dispose();
+    }
+
+    private void Discard(GraphicsProgram? program)
+    {
+        if (program == null)
+            return;
+        lock (_userBuffers)
+            _userBuffers.Remove(program);
+        program.Dispose();
     }
 
     private Task<ShaderDescription> RewriteNow(DrawProgram program, ShaderDescription compiled, IReadOnlyList<string> passGlobals)
