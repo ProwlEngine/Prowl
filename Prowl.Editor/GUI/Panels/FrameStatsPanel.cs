@@ -490,14 +490,29 @@ public class FrameStatsPanel : DockPanel
         if (hoveredAgo >= 0 && hoveredAgo < _visibleColumns && hoveredAgo != selectedAgo)
             canvas.RectFilled(x + w - (hoveredAgo + 1) * colW, y, barW, h, Color32.FromArgb(28, 255, 255, 255));
 
-        if ((_history.Ago(selectedAgo) ?? _history.Ago(hoveredAgo)) is { } readout)
-            canvas.DrawText(Loc.Get("frame_stats.readout", new
-            {
-                frames = readout.Frames,
-                avg = readout.AvgFrameMs.ToString("0.00"),
-                peak = readout.PeakMs.ToString("0.00"),
-            }), x + 6, y + 4, EditorTheme.Ink500, EditorTheme.FontSizeSmall, EditorTheme.FontMono ?? font);
+        int readoutAgo = _history.Ago(selectedAgo) != null ? selectedAgo : hoveredAgo;
+        if (_history.Ago(readoutAgo) is not { } readout) return;
+
+        // Paused with a column selected, the same words would otherwise be laid out again every frame.
+        var key = new ReadoutKey(_history.Version, readoutAgo, Loc.CurrentLocale, ThemeKey.Current);
+        if (key == _readoutKey && canvas.DrawSnapshot(_readout, x, y)) return;
+
+        canvas.BeginSnapshot(_readout, x, y);
+        canvas.DrawText(Loc.Get("frame_stats.readout", new
+        {
+            frames = readout.Frames,
+            avg = readout.AvgFrameMs.ToString("0.00"),
+            peak = readout.PeakMs.ToString("0.00"),
+        }), x + 6, y + 4, EditorTheme.Ink500, EditorTheme.FontSizeSmall, EditorTheme.FontMono ?? font);
+        // A capture that cannot replay is drawn again next frame.
+        _readoutKey = canvas.EndSnapshot() ? key : default;
     }
+
+    // The column the readout describes, by how far back it is in the columns held at that version.
+    private readonly record struct ReadoutKey(long History, int Ago, string Locale, ThemeKey Theme);
+
+    private readonly CanvasSnapshot _readout = new();
+    private ReadoutKey _readoutKey;
 
     private void DrawStack(Canvas canvas, IReadOnlyList<FrameStat> categories, History.Column column, float x, float width,
         float chartBottom, float chartH, float scaleMs)
@@ -819,16 +834,28 @@ public class FrameStatsPanel : DockPanel
     // chart and table change every frame and never would be, while paused or between columns they replay until they do.
     private bool WorthRecording => _paused || RateSeconds[_rate] > 0;
 
-    // The header is a handful of words, cheaper to draw than to record.
+    // Everything the recorded header depends on.
+    private readonly record struct HeaderKey(int NowLabel, bool HideUnselected, float Width, string Locale, ThemeKey Theme);
+
+    private readonly CanvasSnapshot _headerSnapshot = new();
+    private HeaderKey _headerKey;
+
+    // Only a handful of words, but laying text out costs more than replaying it, so the header is recorded too.
     private void PaintHeader(Canvas canvas, float x, float y, float w, FontFile font)
     {
-        float fs = EditorTheme.FontSizeSmall, mid = y + HeaderH / 2;
-        HeaderStrings text = HeaderText();
         int nowLabel = SelectedAgo >= 0 ? 2 : _hoveredAgo >= 0 ? 1 : 0;
 
-        // The eye sits over the rows' colour swatches, the column it switches.
+        // The eye sits over the rows' colour swatches, the column it switches. Its highlight goes under the
+        // recording, so hovering it does not record the header again.
         if (_tableHit.Kind == HitKind.Eye)
             canvas.RoundedRectFilled(x + TablePadL - 3, y + 2, 16, HeaderH - 4, EditorTheme.Roundness, EditorTheme.Hover);
+
+        var key = new HeaderKey(nowLabel, _hideUnselected, w, Loc.CurrentLocale, ThemeKey.Current);
+        if (key == _headerKey && canvas.DrawSnapshot(_headerSnapshot, x, y)) return;
+
+        canvas.BeginSnapshot(_headerSnapshot, x, y);
+        float fs = EditorTheme.FontSizeSmall, mid = y + HeaderH / 2;
+        HeaderStrings text = HeaderText();
         canvas.DrawText(_hideUnselected ? EditorIcons.EyeSlash : EditorIcons.Eye, x + TablePadL + 5, mid,
             _hideUnselected ? EditorTheme.Accent : EditorTheme.InkDim, fs, font, 0, new Float2(0.5f, 0.5f));
 
@@ -838,6 +865,8 @@ public class FrameStatsPanel : DockPanel
                 new Float2(1, 0.5f));
 
         canvas.RectFilled(x, y + HeaderH, w, 1, EditorTheme.BorderSoft);
+        // A capture that cannot replay is drawn again next frame.
+        _headerKey = canvas.EndSnapshot() ? key : default;
     }
 
     private void PaintRows(Canvas canvas, Rect r, FontFile font, History.Totals totals)
