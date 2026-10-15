@@ -8,7 +8,7 @@
 #include "Graphite/ViewData.glsl"
 
 // flags: 1 every instance draws object, 2 subMesh holds the material slot itself
-struct Graphite_DrawRecord { uint chunk; uint object; uint flags; uint subMesh; };
+struct Graphite_DrawRecord { uint chunk; uint object; uint flags; uint subMesh; uint firstInstance; };
 
 struct Graphite_Transform { vec4 row0; vec4 row1; vec4 row2; vec4 translationLow; };
 

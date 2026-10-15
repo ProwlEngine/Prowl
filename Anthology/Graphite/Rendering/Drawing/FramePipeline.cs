@@ -1080,11 +1080,13 @@ internal sealed class CameraFrame : IDisposable
             for (int i = 0; i < list.CommandCount; i++)
             {
                 IndirectDrawIndexedArguments command = list.Commands[i];
-                if ((list.Records[i].Flags & DrawRecord.SharedObject) == 0)
-                    command.FirstInstance += (uint)instanceBase;
+                DrawRecord record = list.Records[i];
+                command.FirstInstance += (uint)commandBase;
+                if ((record.Flags & DrawRecord.SharedObject) == 0)
+                    record.FirstInstance += (uint)instanceBase;
                 _commands[commandBase + i] = command;
+                _records[commandBase + i] = record;
             }
-            Array.Copy(list.Records, 0, _records, commandBase, list.CommandCount);
             Array.Copy(list.Instances, 0, _instances, instanceBase, list.InstanceCount);
             commandBase += list.CommandCount;
             instanceBase += list.InstanceCount;

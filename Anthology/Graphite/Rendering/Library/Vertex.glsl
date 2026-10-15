@@ -24,7 +24,7 @@ Graphite_DrawRecord Graphite_Draw() { return graphite_Draw; }
 Graphite_Transform Graphite_ObjectTransform() { return graphite_Transforms[graphite_Object]; }
 
 // The instance a provider's instanced or indirect draw is drawing, 0 to its count
-uint Graphite_InstanceIndex() { return uint(gl_InstanceIndex); }
+uint Graphite_InstanceIndex() { return uint(gl_InstanceIndex - gl_BaseInstance); }
 
 bool Graphite_HasStream(uint stream) { return (graphite_Chunk.streamsPresent & (1u << stream)) != 0u; }
 
@@ -95,9 +95,10 @@ vec4 Graphite_PreviousObjectToClip(vec3 p)
 
 void Graphite_BeginVertex()
 {
-    graphite_Draw = graphite_DrawRecords[graphite_Push.drawRecordBase + uint(gl_DrawID)];
+    // A draw's command carries its record's index as its first instance, as gl_DrawID has no Metal equivalent
+    graphite_Draw = graphite_DrawRecords[uint(gl_BaseInstance)];
     graphite_Chunk = graphite_Chunks[graphite_Draw.chunk];
-    graphite_Object = (graphite_Draw.flags & 1u) != 0u ? graphite_Draw.object : graphite_Instances[graphite_Push.instanceBase + uint(gl_InstanceIndex)];
+    graphite_Object = (graphite_Draw.flags & 1u) != 0u ? graphite_Draw.object : graphite_Instances[graphite_Push.instanceBase + graphite_Draw.firstInstance + uint(gl_InstanceIndex - gl_BaseInstance)];
     uint currentPositions = graphite_Objects[graphite_Object].currentPositions;
     if (currentPositions != 0u)
         graphite_Chunk.streamOffsets[0] = currentPositions - 1u;

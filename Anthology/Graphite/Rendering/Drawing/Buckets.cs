@@ -189,6 +189,8 @@ internal struct DrawRecord
     public uint Object;
     public uint Flags;
     public uint SubMesh;
+
+    public uint FirstInstance;
 }
 
 /// <summary>One multi draw indirect call: consecutive commands sharing program, page, topology and winding.</summary>
@@ -520,8 +522,8 @@ internal sealed class DrawList
             Array.Resize(ref Commands, Commands.Length * 2);
             Array.Resize(ref Records, Records.Length * 2);
         }
-        Commands[CommandCount] = command;
-        Records[CommandCount] = record;
+        Commands[CommandCount] = command with { FirstInstance = (uint)CommandCount };
+        Records[CommandCount] = record with { FirstInstance = command.FirstInstance };
         CommandCount++;
     }
 
