@@ -584,12 +584,14 @@ public class FrameStatsPanel : DockPanel
 
     private ContentKey Content => new(_history.Version, _visibleColumns, _visibility, FrameStats.Categories.Count);
 
-    // The theme's colours and text size the kept drawings use. They change with the theme or accent, and every frame
-    // while the theme eases from one to the next.
-    private readonly record struct ThemeKey(int Accent, int Ink500, int Ink400, int InkDim, int InkFaint, int BorderSoft, float FontSize)
+    // The theme's colours, text size and row height the kept drawings use. They change with the theme, the accent or
+    // the layout preferences, and the colours every frame while the theme eases from one to the next.
+    private readonly record struct ThemeKey(int Accent, int Ink500, int Ink400, int InkDim, int InkFaint, int BorderSoft, float FontSize,
+        float RowHeight)
     {
         public static ThemeKey Current => new(EditorTheme.Accent.ToArgb(), EditorTheme.Ink500.ToArgb(), EditorTheme.Ink400.ToArgb(),
-            EditorTheme.InkDim.ToArgb(), EditorTheme.InkFaint.ToArgb(), EditorTheme.BorderSoft.ToArgb(), EditorTheme.FontSizeSmall);
+            EditorTheme.InkDim.ToArgb(), EditorTheme.InkFaint.ToArgb(), EditorTheme.BorderSoft.ToArgb(), EditorTheme.FontSizeSmall,
+            EditorTheme.RowHeight);
     }
 
     // Everything the recorded bars depend on. The hovered row is part of it because its blocks stand out.
