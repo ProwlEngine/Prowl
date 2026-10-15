@@ -458,6 +458,7 @@ internal sealed class Folder
     static float F32(uint w) => BitConverter.UInt32BitsToSingle(w);
     static uint W32(float f) => BitConverter.SingleToUInt32Bits(f);
     static double F64(uint lo, uint hi) => BitConverter.UInt64BitsToDouble(lo | ((ulong)hi << 32));
+    static float F16(uint w) => (float)BitConverter.UInt16BitsToHalf((ushort)(w & 0xFFFF));
 
     // FoldFPBinaryOp(FOLD_FPARITH_OP(op)) for scalar/vector. Only f32/f64 element width. Creates constants.
     uint FpBinary(SpvInstr inst, List<uint> ops, Func<uint, uint, float> f32, Func<double, double, double> f64)
@@ -921,7 +922,7 @@ internal sealed class Folder
 
     uint IntWord(uint id) { ScalarWord(id, out uint w); return w; }
     ulong Int64Of(uint id) { var d = Words64(id); return d is null ? 0UL : d[0] | ((ulong)d[1] << 32); }
-    double FloatOf(uint id, int w) { if (w == 32) { ScalarWord(id, out uint x); return F32(x); } var d = Words64(id); return d is null ? 0 : F64(d[0], d[1]); }
+    double FloatOf(uint id, int w) { if (w == 16) { ScalarWord(id, out uint x); return F16(x); } if (w == 32) { ScalarWord(id, out uint x); return F32(x); } var d = Words64(id); return d is null ? 0 : F64(d[0], d[1]); }
     static bool NegZeroLess(double a, double b) { if (a == 0.0 && b == 0.0 && double.IsNegative(a) && !double.IsNegative(b)) return true; return a < b; }
 
     // FoldMin/FoldMax scalar rule: returns whichever operand id is smaller/larger (no new constant for scalars).
@@ -938,7 +939,11 @@ internal sealed class Folder
         }
         if (d.Opcode == OpTypeFloat)
         {
-            int w = TypeWidth(elem); double va = FloatOf(aId, w), vb = FloatOf(bId, w);
+            int w = TypeWidth(elem);
+            // spirv-opt does not fold 16-bit min/max/clamp (leaves the ExtInst); folding here
+            // would diverge from the reference and, with the old FloatOf, miscompiled.
+            if (w != 32 && w != 64) return 0;
+            double va = FloatOf(aId, w), vb = FloatOf(bId, w);
             return (max ? NegZeroLess(vb, va) : NegZeroLess(va, vb)) ? aId : bId;
         }
         return 0;
@@ -1146,6 +1151,7 @@ internal sealed class Folder
         }
         if (Def(type) is not { Opcode: OpTypeFloat }) return FKind.Unknown;
         int width = TypeWidth(type);
+        if (width == 16) { if (!ScalarWord(id, out uint x)) return FKind.Unknown; float f = F16(x); return f == 0f ? FKind.Zero : f == 1f ? FKind.One : FKind.Unknown; }
         if (width == 32) { if (!ScalarWord(id, out uint x)) return FKind.Unknown; float f = F32(x); return f == 0f ? FKind.Zero : f == 1f ? FKind.One : FKind.Unknown; }
         if (width == 64) { var w = Words64(id); if (w is null) return FKind.Unknown; double v = F64(w[0], w[1]); return v == 0.0 ? FKind.Zero : v == 1.0 ? FKind.One : FKind.Unknown; }
         return FKind.Unknown;
