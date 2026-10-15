@@ -465,10 +465,20 @@ public class FrameStatsPanel : DockPanel
         if (hoveredAgo >= 0 && hoveredAgo < _visibleColumns && hoveredAgo != selectedAgo)
             canvas.RectFilled(x + w - (hoveredAgo + 1) * colW, y, barW, h, Color32.FromArgb(28, 255, 255, 255));
 
-        // Stroking changes canvas state, which a recording must hand back as it found it.
+        // Most important first, so when the chart is too short for all of them the common targets win. Stroking changes
+        // canvas state, which a recording must hand back as it found it.
         canvas.SaveState();
-        TargetLine(canvas, font, x, w, ToY(1000f / 60f, bottom, h, scaleMs), y, "60 fps", Color32.FromArgb(60, 80, 200, 100));
-        TargetLine(canvas, font, x, w, ToY(1000f / 30f, bottom, h, scaleMs), y, "30 fps", Color32.FromArgb(60, 220, 180, 50));
+        Span<float> drawnY = stackalloc float[TargetLines.Length];
+        int drawn = 0;
+        foreach ((int fps, Color32 color, string label) in TargetLines)
+        {
+            float lineY = ToY(1000f / fps, bottom, h, scaleMs);
+            bool crowded = false;
+            for (int i = 0; i < drawn && !crowded; i++)
+                crowded = MathF.Abs(drawnY[i] - lineY) < TargetLabelH;
+            if (crowded || !TargetLine(canvas, font, x, w, lineY, y, label, color)) continue;
+            drawnY[drawn++] = lineY;
+        }
         canvas.RestoreState();
 
         float fs = EditorTheme.FontSizeSmall;
@@ -585,10 +595,24 @@ public class FrameStatsPanel : DockPanel
         return tallest;
     }
 
-    private static void TargetLine(Canvas canvas, FontFile font, float x, float w, float lineY, float top, string label, Color32 color)
+    // Frame rate targets marked on the chart, most important first: common monitor refresh rates, and 30 for
+    // the lowest playable rate.
+    private static readonly (int Fps, Color32 Color, string Label)[] TargetLines =
+    [
+        (60, Color32.FromArgb(60, 80, 200, 100), "60 fps"),
+        (30, Color32.FromArgb(60, 220, 180, 50), "30 fps"),
+        (120, Color32.FromArgb(60, 80, 190, 220), "120 fps"),
+        (144, Color32.FromArgb(60, 120, 140, 240), "144 fps"),
+        (240, Color32.FromArgb(60, 190, 120, 230), "240 fps"),
+    ];
+
+    // The height a target line's label takes above it.
+    private const float TargetLabelH = 14f;
+
+    private static bool TargetLine(Canvas canvas, FontFile font, float x, float w, float lineY, float top, string label, Color32 color)
     {
         // Off the chart, or too close to the top to fit its label.
-        if (lineY <= top + 14) return;
+        if (lineY <= top + TargetLabelH) return false;
         canvas.SetStrokeColor(color);
         canvas.SetStrokeWidth(1f);
         canvas.BeginPath();
@@ -596,6 +620,7 @@ public class FrameStatsPanel : DockPanel
         canvas.LineTo(x + w, lineY);
         canvas.Stroke();
         canvas.DrawText(label, x + 6, lineY - 12, color, 9, font);
+        return true;
     }
 
     private static readonly float[] AutoScaleSteps = [1f, 1.5f, 2f, 3f, 4f, 5f, 6f, 8f, 10f];
