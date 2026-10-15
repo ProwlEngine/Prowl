@@ -5003,11 +5003,12 @@ public sealed partial class Lowerer
     ];
 
     // An ES sampler's precision: mediump/lowp when declared, else the lowp default of a float sampler2D or
-    // samplerCube (other sampler types have no ES default). Non-ES samplers are always highp.
+    // samplerCube (other sampler types have no ES default). An explicit highp opts out of the default.
+    // Non-ES samplers are always highp.
     bool SamplerRelaxed(GlslType baseType, Qualifiers quals) =>
         baseType is SamplerType or PureSamplerType or TextureType or ImageType
             && (IsRelaxed(quals)
-                || (_isEs && baseType is SamplerType { Sampled: Scalar.Float, Arrayed: false, Shadow: false, Multisampled: false, Dim: Dim.D2 or Dim.Cube }));
+                || (!quals.Has("highp") && _isEs && baseType is SamplerType { Sampled: Scalar.Float, Arrayed: false, Shadow: false, Multisampled: false, Dim: Dim.D2 or Dim.Cube }));
 
     // GLSL passes arguments by copy-in/copy-out: each parameter is a Function pointer, so the
     // caller stores the argument into a temp, passes the temp, and copies back for out/inout.
@@ -7955,13 +7956,13 @@ public sealed partial class Lowerer
         {
             var scalar = new ScalarType(component);
             _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)select[0]);
-            return new Value(Emit(Op.CompositeExtract, SpvType(scalar), src.Id, (uint)select[0]), scalar, false);
+            return Relaxed(new Value(Emit(Op.CompositeExtract, SpvType(scalar), src.Id, (uint)select[0]), scalar, false), src);
         }
         var result = new VectorType(component, select.Length);
         var sh = InstrPool.Rent(Op.VectorShuffle, SpvType(result), _m.AllocId()).Add(src.Id, src.Id);
         foreach (int i in select) sh.Add((uint)i);
         _code.Add(sh);
-        return new Value(sh.ResultId, result, false);
+        return Relaxed(new Value(sh.ResultId, result, false), src);
     }
 
     // Emits the single collapsed OpAccessChain (or just returns the base when there are no indices).
@@ -9419,11 +9420,12 @@ public sealed partial class Lowerer
             // then the result converts back to the declared component.
             var resultType = new VectorType(cvt.Component, indices.Length);
             uint resultTypeId = SpvType(resultType);
-            uint srcId = Load(chain.Type, Collapse(Swizzled(chain)), chain.Layout).Id;
+            var loadedV = Load(chain.Type, Collapse(Swizzled(chain)), chain.Layout);
+            uint srcId = loadedV.Id;
             var sh = InstrPool.Rent(Op.VectorShuffle, resultTypeId, _m.AllocId()).Add(srcId, srcId);
             foreach (int i in indices) sh.Add((uint)i);
             _code.Add(sh);
-            return FromStored(new Value(sh.ResultId, resultType, false), new VectorType(ivt.Component, indices.Length));
+            return FromStored(Relaxed(new Value(sh.ResultId, resultType, loadedV.IsConstant), loadedV), new VectorType(ivt.Component, indices.Length));
         }
 
         var src = LowerExpr(m.Target);
@@ -9436,14 +9438,14 @@ public sealed partial class Lowerer
             // unsigned component constant, and only then notices the index is constant and extracts with
             // a literal instead - so the constant is created either way, even though nothing reads it.
             _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)indices[0]);
-            return new Value(Emit(Op.CompositeExtract, SpvType(new ScalarType(vec.Component)), src.Id, (uint)indices[0]), new ScalarType(vec.Component), false);
+            return Relaxed(new Value(Emit(Op.CompositeExtract, SpvType(new ScalarType(vec.Component)), src.Id, (uint)indices[0]), new ScalarType(vec.Component), false), src);
         }
 
         var resultType2 = new VectorType(vec.Component, indices.Length);
         var shuffle = InstrPool.Rent(Op.VectorShuffle, SpvType(resultType2), _m.AllocId()).Add(src.Id, src.Id);
         foreach (int i in indices) shuffle.Add((uint)i);
         _code.Add(shuffle);
-        return new Value(shuffle.ResultId, resultType2, false);
+        return Relaxed(new Value(shuffle.ResultId, resultType2, false), src);
     }
 
     // glslang's smearScalar always emits a runtime OpCompositeConstruct (never a folded constant),
