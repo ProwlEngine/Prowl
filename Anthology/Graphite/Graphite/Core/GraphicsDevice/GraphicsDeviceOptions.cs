@@ -30,6 +30,12 @@ public struct GraphicsDeviceOptions
     public bool GraphiteValidation = true;
 
     /// <summary>
+    /// Driver pipeline cache contents from an earlier <see cref="GraphicsDevice.GetPipelineCacheData"/>, so pipelines
+    /// built in an earlier run build fast. The driver ignores data from another device or driver version.
+    /// </summary>
+    public byte[]? PipelineCacheData;
+
+    /// <summary>
     /// Options for a device with no main Swapchain.
     /// </summary>
     /// <param name="vulkanValidationLayers">Enable the Vulkan driver validation layers if installed.</param>

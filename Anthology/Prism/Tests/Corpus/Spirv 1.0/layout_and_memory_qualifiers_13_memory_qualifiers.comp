@@ -1,0 +1,7 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) coherent buffer B1 { float a; float b[]; };
+layout(std430,set=0,binding=1) restrict readonly buffer B2 { float c; };
+layout(std430,set=0,binding=2) volatile buffer B3 { float d; };
+layout(std430,set=0,binding=3) buffer B4 { coherent float e; restrict float f; readonly float g; writeonly float h; };
+void main() { a = c + d + e + f + g; h = 1.0; b[0] = a; }

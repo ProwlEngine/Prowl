@@ -243,7 +243,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
     private static ComputeProgram CreateBasicComputeProgram(GraphicsDevice device)
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(device.BackendType, "BasicComputeTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(device.BackendType, "BasicComputeTest.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription
@@ -270,7 +270,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     private static GraphicsProgram CreateSinkProgram(GraphicsDevice device)
     {
         const uint stride = 52;
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(device.BackendType, "VertexLayoutTestShader.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(device.BackendType, "VertexLayoutTestShader.glsl");
         ShaderDescription description = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,

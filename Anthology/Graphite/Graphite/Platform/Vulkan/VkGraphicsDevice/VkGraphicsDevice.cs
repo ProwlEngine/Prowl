@@ -35,7 +35,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         if (surfaceSource != null)
             surface = surfaceSource.GetSurface(Instance);
 
-        CreatePhysicalDevice();
+        CreatePhysicalDevice(vkOptions.PickPhysicalDevice);
         CreateLogicalDevice(surface, vkOptions);
 
         MemoryManager = new VkDeviceMemoryManager(
@@ -52,7 +52,14 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             depthClipDisable: _physicalDeviceFeatures.DepthClamp,
             independentBlend: _physicalDeviceFeatures.IndependentBlend,
             commandBufferDebugMarkers: _debugUtilsEnabled,
-            shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
+            shaderFloat64: _physicalDeviceFeatures.ShaderFloat64,
+            multiDrawIndirect: _physicalDeviceFeatures.MultiDrawIndirect,
+            drawIndirectCount: _enabledVulkan12Features.DrawIndirectCount,
+            descriptorIndexing: _enabledVulkan12Features.RuntimeDescriptorArray,
+            multiview: _enabledVulkan11Features.Multiview,
+            shaderOutputLayer: _enabledVulkan12Features.ShaderOutputLayer,
+            shaderOutputViewportIndex: _enabledVulkan12Features.ShaderOutputViewportIndex,
+            samplerFilterMinmax: _enabledVulkan12Features.SamplerFilterMinmax);
 
         ResourceFactory = new VkResourceFactory(this);
 
@@ -64,13 +71,16 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             _mainSwapchain = new VkSwapchain(this, ref desc, surface);
         }
 
-        PipelineCacheCreateInfo pcCI = new()
+        fixed (byte* initialData = options.PipelineCacheData)
         {
-            SType = StructureType.PipelineCacheCreateInfo,
-            InitialDataSize = 0,
-            PInitialData = null,
-        };
-        Vk.CreatePipelineCache(Device, in pcCI, null, out DriverPipelineCache).CheckResult();
+            PipelineCacheCreateInfo pcCI = new()
+            {
+                SType = StructureType.PipelineCacheCreateInfo,
+                InitialDataSize = (nuint)(options.PipelineCacheData?.Length ?? 0),
+                PInitialData = initialData,
+            };
+            Vk.CreatePipelineCache(Device, in pcCI, null, out DriverPipelineCache).CheckResult();
+        }
 
         _vulkanInfo = new BackendInfoVulkan(this);
 

@@ -77,7 +77,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
 
     private GraphicsProgram CreateIntVertexAttribsProgram()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "UIntVertexAttribs.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "UIntVertexAttribs.glsl");
 
         ShaderDescription desc = new(stages)
         {

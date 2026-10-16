@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:2: 'std430 requires the buffer storage qualifier' : required extension not requested: GL_EXT_scalar_block_layout
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

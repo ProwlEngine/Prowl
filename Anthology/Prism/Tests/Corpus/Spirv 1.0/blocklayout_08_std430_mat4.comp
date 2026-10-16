@@ -1,0 +1,12 @@
+#version 460
+
+layout(local_size_x = 1) in;
+
+layout(set = 0, binding = 0, std430) buffer Block {
+    mat4 m;
+    vec4 v;
+} buf;
+
+void main() {
+    buf.v = buf.m * buf.v;
+}

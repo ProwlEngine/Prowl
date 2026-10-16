@@ -81,7 +81,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexElementDescription("POSITION", VertexElementFormat.Float2),
             new VertexElementDescription("COLOR", VertexElementFormat.UShort4));
 
-        DrawColoredPoints("UIntVertexAttribs.slang", layout, vertices, norm, vertices.Length,
+        DrawColoredPoints("UIntVertexAttribs.glsl", layout, vertices, norm, vertices.Length,
             i => new Color(vertices[i].R / (float)norm, vertices[i].G / (float)norm, vertices[i].B / (float)norm, 1),
             i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
 
@@ -104,7 +104,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexElementDescription("POSITION", VertexElementFormat.Float2),
             new VertexElementDescription("COLOR", VertexElementFormat.UShort4_Norm));
 
-        DrawColoredPoints("FloatColorVertexAttribs.slang", layout, vertices, 1, vertices.Length,
+        DrawColoredPoints("FloatColorVertexAttribs.glsl", layout, vertices, 1, vertices.Length,
             i => new Color(vertices[i].R / (float)ushort.MaxValue, vertices[i].G / (float)ushort.MaxValue, vertices[i].B / (float)ushort.MaxValue, 1),
             i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
 
@@ -127,7 +127,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexElementDescription("POSITION", VertexElementFormat.Float2),
             new VertexElementDescription("COLOR", VertexElementFormat.Half4));
 
-        DrawColoredPoints("FloatColorVertexAttribs.slang", layout, vertices, norm, vertices.Length,
+        DrawColoredPoints("FloatColorVertexAttribs.glsl", layout, vertices, norm, vertices.Length,
             i => new Color((float)vertices[i].R / norm, (float)vertices[i].G / norm, (float)vertices[i].B / norm, 1),
             i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
     }
@@ -214,7 +214,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             size, size, 1, 1, PixelFormat.R32_Float, TextureUsage.DepthStencil | TextureUsage.Sampled));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depthTarget));
 
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenWriteDepth.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenWriteDepth.glsl");
         ShaderDescription desc = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -352,7 +352,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
     private GraphicsProgram CreateColoredQuadProgram(BlendStateDescription blend)
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.glsl");
         ShaderDescription desc = new(stages)
         {
             BlendState = blend,
@@ -504,7 +504,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
     private GraphicsProgram CreateSampleTexture2DProgram()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenTriSampleTexture2D.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenTriSampleTexture2D.glsl");
         ShaderDescription desc = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -528,7 +528,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
     private GraphicsProgram CreateVertexLayoutSinkProgram()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.glsl");
         ShaderDescription desc = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,

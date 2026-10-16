@@ -58,17 +58,17 @@
 
 ### Shaders
 
-Shaders live in `Shaders/` as Slang (`.slang`) and are compiled to SPIR-V at runtime by
-`TestShaderLoader`. There are no checked-in `.spv` files. Each `.slang` collapses a
-vertex+fragment (or compute) pair into one module; Slang entry-point names are not preserved on
-Vulkan, so every stage is created with the entry point `"main"`.
+Shaders live in `Shaders/` as GLSL (`.glsl`) and are compiled to SPIR-V at runtime by
+`TestShaderLoader` through the ShaderDef GLSL compiler. There are no checked-in `.spv` files. Each
+`.glsl` holds `Vertex` and `Fragment` sections (or one `Compute` section), and every stage's entry
+point is `"main"`.
 
 ### Migration status
 
 The old Veldrid-era suites (`PipelineTests`, `ResourceSetTests`, `VertexLayoutTests`, and the SDL
 based `SwapchainTests`) have been removed. Their coverage was folded into the feature-organized
 suites above: pipeline/program creation is exercised everywhere a program is built, vertex layouts
-by `RenderTests`, and resource binding by `PropertySetBindingTests`. All shaders are now Slang.
+by `RenderTests`, and resource binding by `PropertySetBindingTests`. All shaders are GLSL.
 
 ## GPU backends
 

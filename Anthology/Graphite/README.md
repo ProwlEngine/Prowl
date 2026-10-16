@@ -189,8 +189,8 @@ dotnet run --project Samples/HelloTriangle
 
 Tests live under [`Tests/`](Tests) and are split into CPU tests (pure value-type tests, run in
 parallel) and GPU tests (which share one device per backend and run serialized). GPU shaders are
-authored in Slang (`.slang`) under `Tests/Shaders` and compiled to SPIR-V for Vulkan at runtime;
-there are no checked-in compiled shaders.
+authored in GLSL (`.glsl`) under `Tests/Graphite/Shaders` and compiled to SPIR-V for Vulkan at runtime
+by the ShaderDef GLSL compiler. There are no checked-in compiled shaders.
 See [`Tests/README.md`](Tests/README.md) for the current suite layout and the in-progress
 migration of older suites onto the `GraphicsProgram` / `PropertySet` / `ExecutionTask` API.
 

@@ -1,0 +1,15 @@
+#version 460 core
+
+layout(local_size_x=1) in;
+
+layout(std430, binding=0) buffer Data
+{
+    vec4 header;
+    float values[];
+};
+
+void main()
+{
+    header = vec4(1.0, 2.0, 3.0, 4.0);
+    values[gl_GlobalInvocationID.x] = header.x + float(gl_GlobalInvocationID.x);
+}

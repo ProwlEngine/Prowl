@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: 'x' : variables with qualifier 'const' must be initialized 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

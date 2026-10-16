@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: '#version' : must occur first in shader 
+ERROR: <shader>:4: '#version' : bad profile name; use es, core, or compatibility 
+ERROR: <shader>:4: '#version' : bad tokens following profile -- expected newline 
+ERROR: 3 compilation errors.  No code generated.
+
+

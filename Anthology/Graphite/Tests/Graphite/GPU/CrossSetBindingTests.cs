@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// The layouts below are hand-written to match CrossSetBinding.slang, mirroring the other binding
+// The layouts below are hand-written to match CrossSetBinding.glsl, mirroring the other binding
 // suites. The compiler's reflected layouts cannot be used here: they carry the right sets and
 // binding indices but no UniformFields, so scalar uniforms have nothing to bind by name.
 //
@@ -17,7 +17,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
     private ComputeProgram CreateProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "CrossSetBinding.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "CrossSetBinding.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

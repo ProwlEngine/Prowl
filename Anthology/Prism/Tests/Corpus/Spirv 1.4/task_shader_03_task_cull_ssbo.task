@@ -1,0 +1,39 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0) readonly buffer Visibility
+{
+    uint visible[];
+} vis;
+
+struct Payload
+{
+    uint indices[64];
+    uint count;
+};
+taskPayloadSharedEXT Payload payload;
+
+shared uint sCount;
+
+void main()
+{
+    if (gl_LocalInvocationIndex == 0u)
+        sCount = 0u;
+    barrier();
+
+    uint id = gl_GlobalInvocationID.x;
+    if (vis.visible[id] != 0u)
+    {
+        uint slot = atomicAdd(sCount, 1u);
+        payload.indices[slot] = id;
+    }
+    barrier();
+
+    if (gl_LocalInvocationIndex == 0u)
+    {
+        payload.count = sCount;
+        EmitMeshTasksEXT(sCount, 1u, 1u);
+    }
+}

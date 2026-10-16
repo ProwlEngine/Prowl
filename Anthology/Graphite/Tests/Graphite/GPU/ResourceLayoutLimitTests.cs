@@ -42,7 +42,7 @@ public abstract class ResourceLayoutLimitTests<T> : GraphicsDeviceTestBase<T> wh
 
     private GraphicsProgram CreateProgramWithElements(int elementCount)
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.glsl");
 
         ResourceLayoutElementDescription[] elements = new ResourceLayoutElementDescription[elementCount];
         for (int i = 0; i < elementCount; i++)

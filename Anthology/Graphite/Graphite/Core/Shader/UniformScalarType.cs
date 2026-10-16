@@ -36,4 +36,18 @@ public enum UniformScalarType : byte
     Float4x4,
     /// <summary>4x4 double matrix (column-major).</summary>
     Double4x4,
+
+    /// <summary>1 uint, also used for bool.</summary>
+    UInt1,
+    /// <summary>2 uints.</summary>
+    UInt2,
+    /// <summary>3 uints.</summary>
+    UInt3,
+    /// <summary>4 uints.</summary>
+    UInt4,
+
+    /// <summary>2x2 float matrix (column-major), columns at the block's matrix stride.</summary>
+    Float2x2,
+    /// <summary>3x3 float matrix (column-major), columns at the block's matrix stride.</summary>
+    Float3x3,
 }

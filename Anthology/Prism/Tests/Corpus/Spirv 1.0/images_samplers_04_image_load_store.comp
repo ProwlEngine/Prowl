@@ -1,0 +1,16 @@
+#version 460 core
+
+// imageLoad, imageStore, imageSize on an rgba32f image
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(rgba32f, binding = 0) uniform image2D img;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(img);
+
+    if (coord.x < size.x && coord.y < size.y) {
+        vec4 texel = imageLoad(img, coord);
+        imageStore(img, coord, texel * 2.0);
+    }
+}

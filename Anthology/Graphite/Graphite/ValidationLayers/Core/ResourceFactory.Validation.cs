@@ -11,7 +11,7 @@ public abstract partial class ResourceFactory
         {
             throw new RenderException("Width, Height, and Depth must be non-zero.");
         }
-        if ((description.Format == PixelFormat.D24_UNorm_S8_UInt || description.Format == PixelFormat.D32_Float_S8_UInt)
+        if ((description.Format is PixelFormat.D24_UNorm_S8_UInt or PixelFormat.D32_Float_S8_UInt or PixelFormat.D32_Float or PixelFormat.D16_UNorm)
             && (description.Usage & TextureUsage.DepthStencil) == 0)
         {
             throw new RenderException("The givel PixelFormat can only be used in a Texture with DepthStencil usage.");
@@ -254,7 +254,16 @@ public abstract partial class ResourceFactory
             {
                 ref UniformBlockField fa = ref fields[a];
                 uint expected = NaturalSize(fa.Type);
-                if (fa.Size != expected)
+                bool padded = fa.Type is UniformScalarType.Float2x2 or UniformScalarType.Float3x3;
+                uint elementSize = fa.ArrayLength > 0 ? fa.ArrayStride : fa.Size;
+                bool sized = padded ? elementSize >= expected : elementSize == expected || (fa.ArrayLength > 0 && elementSize > expected);
+                if (fa.ArrayLength > 0 && fa.Size != fa.ArrayLength * fa.ArrayStride)
+                {
+                    throw new RenderException(
+                        $"UniformBlockField '{PropertyID.ToString(fa.Name)}' on '{PropertyID.ToString(element.Name)}' has Size={fa.Size} but its {fa.ArrayLength} elements at stride {fa.ArrayStride} need Size={fa.ArrayLength * fa.ArrayStride}.");
+                }
+
+                if (!sized)
                 {
                     throw new RenderException(
                         $"UniformBlockField '{PropertyID.ToString(fa.Name)}' on '{PropertyID.ToString(element.Name)}' has Size={fa.Size} but Type {fa.Type} requires Size={expected}.");
@@ -296,6 +305,12 @@ public abstract partial class ResourceFactory
         UniformScalarType.Double4 => 32,
         UniformScalarType.Float4x4 => 64,
         UniformScalarType.Double4x4 => 128,
+        UniformScalarType.UInt1 => 4,
+        UniformScalarType.UInt2 => 8,
+        UniformScalarType.UInt3 => 12,
+        UniformScalarType.UInt4 => 16,
+        UniformScalarType.Float2x2 => 16,
+        UniformScalarType.Float3x3 => 36,
         _ => 0,
     };
 }

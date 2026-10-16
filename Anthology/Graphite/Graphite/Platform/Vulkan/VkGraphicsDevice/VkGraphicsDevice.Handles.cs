@@ -25,8 +25,12 @@ internal unsafe partial class VkGraphicsDevice
     internal PipelineCache DriverPipelineCache;
 
     private readonly object _graphicsQueueLock = new();
+
+    internal object GraphicsQueueLock => _graphicsQueueLock;
     private PhysicalDeviceProperties _physicalDeviceProperties;
     private PhysicalDeviceFeatures _physicalDeviceFeatures;
+    private PhysicalDeviceVulkan11Features _enabledVulkan11Features;
+    private PhysicalDeviceVulkan12Features _enabledVulkan12Features;
     private string _deviceName;
     private string _vendorName;
     private GraphicsApiVersion _apiVersion;
@@ -46,6 +50,26 @@ internal unsafe partial class VkGraphicsDevice
     public override Swapchain MainSwapchain => _mainSwapchain;
 
     public override GraphicsDeviceFeatures Features { get; }
+
+    // The cache can grow between the size query and the copy when another thread builds a pipeline, so retry.
+    public override byte[] GetPipelineCacheData()
+    {
+        while (true)
+        {
+            nuint size = 0;
+            Vk.GetPipelineCacheData(Device, DriverPipelineCache, ref size, null).CheckResult();
+            byte[] data = new byte[size];
+            Result result;
+            fixed (byte* destination = data)
+                result = Vk.GetPipelineCacheData(Device, DriverPipelineCache, ref size, destination);
+
+            if (result == Result.Incomplete)
+                continue;
+
+            result.CheckResult();
+            return size == (nuint)data.Length ? data : data[..(int)size];
+        }
+    }
 
     public override bool GetVulkanInfo(out BackendInfoVulkan info)
     {

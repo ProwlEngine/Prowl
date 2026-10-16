@@ -104,6 +104,9 @@ internal unsafe partial class VkGraphicsDevice
             case VkSampler sampler:
                 SetDebugUtilsName(ObjectType.Sampler, sampler.DeviceSampler.Handle, name);
                 break;
+            case VkDescriptorTable table:
+                SetDebugUtilsName(ObjectType.DescriptorSet, table.Set.Handle, name);
+                break;
             case VkGraphicsProgram shaderProgram:
                 foreach (ShaderModule module in shaderProgram.Modules.Values)
                 {
@@ -124,6 +127,46 @@ internal unsafe partial class VkGraphicsDevice
                 break;
             default:
                 break;
+        }
+    }
+
+    /// <summary>Prints what the driver reports about each stage of a pipeline, such as its register count.</summary>
+    internal void PrintPipelineStatistics(Pipeline pipeline, string name)
+    {
+        if (PipelineStatistics == null)
+            return;
+        PipelineInfoKHR info = new(sType: StructureType.PipelineInfoKhr, pipeline: pipeline);
+        uint executables = 0;
+        PipelineStatistics.GetPipelineExecutableProperties(Device, &info, &executables, null);
+        PipelineExecutablePropertiesKHR* properties = stackalloc PipelineExecutablePropertiesKHR[(int)executables];
+        for (uint i = 0; i < executables; i++)
+            properties[i] = new PipelineExecutablePropertiesKHR(sType: StructureType.PipelineExecutablePropertiesKhr);
+        PipelineStatistics.GetPipelineExecutableProperties(Device, &info, &executables, properties);
+
+        for (uint i = 0; i < executables; i++)
+        {
+            PipelineExecutableInfoKHR executable = new(sType: StructureType.PipelineExecutableInfoKhr, pipeline: pipeline, executableIndex: i);
+            uint count = 0;
+            PipelineStatistics.GetPipelineExecutableStatistic(Device, &executable, &count, null);
+            PipelineExecutableStatisticKHR* statistics = stackalloc PipelineExecutableStatisticKHR[(int)count];
+            for (uint s = 0; s < count; s++)
+                statistics[s] = new PipelineExecutableStatisticKHR(sType: StructureType.PipelineExecutableStatisticKhr);
+            PipelineStatistics.GetPipelineExecutableStatistic(Device, &executable, &count, statistics);
+
+            System.Text.StringBuilder line = new($"[Graphite stats] {name} {Util.GetString(properties[i].Name)}:");
+            for (uint s = 0; s < count; s++)
+            {
+                PipelineExecutableStatisticKHR stat = statistics[s];
+                string value = stat.Format switch
+                {
+                    PipelineExecutableStatisticFormatKHR.Bool32Khr => stat.Value.B32.ToString(),
+                    PipelineExecutableStatisticFormatKHR.Int64Khr => stat.Value.I64.ToString(),
+                    PipelineExecutableStatisticFormatKHR.Uint64Khr => stat.Value.U64.ToString(),
+                    _ => stat.Value.F64.ToString("0.##"),
+                };
+                line.Append($" {Util.GetString(stat.Name)}={value};");
+            }
+            Console.WriteLine(line.ToString());
         }
     }
 

@@ -59,6 +59,10 @@ public interface IPassCommandSink
 
     void SetProperties(ReadOnlySpan<PropertyState> properties);
 
+    void SetPushConstants(uint offset, ReadOnlySpan<byte> data);
+
+    void SetDescriptorTable(uint set, ReadOnlySpan<ResourceLayoutElementDescription> layout, ReadOnlySpan<DescriptorTableEntryState> entries);
+
     void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance);
 
     void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance);
@@ -67,9 +71,15 @@ public interface IPassCommandSink
 
     void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride);
 
+    void DrawIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride);
+
+    void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride);
+
     void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ);
 
     void DispatchIndirect(in ResourceVersion buffer, uint offset);
+
+    void ComputeBarrier();
 
     void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data);
 

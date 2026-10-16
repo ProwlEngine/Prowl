@@ -17,6 +17,10 @@ internal unsafe partial class VkCommandBuffer
 
     private VkGraphicsProgram _currentShaderProgram;
     private VkComputeProgram _currentComputeProgram;
+    private ShaderProgram? _pushedGraphics;
+    private ShaderProgram? _pushedCompute;
+    private uint _pushedGraphicsVersion;
+    private uint _pushedComputeVersion;
     private VkPipelineCacheEntry _currentResolvedPipeline;
     private bool _hasResolvedPipeline;
     private PrimitiveTopology _resolvedTopology;
@@ -54,6 +58,8 @@ internal unsafe partial class VkCommandBuffer
         _temporaryStorageImages.Clear();
         _currentShaderProgram = null;
         _currentComputeProgram = null;
+        _pushedGraphics = null;
+        _pushedCompute = null;
         _currentResolvedPipeline = default;
         _hasResolvedPipeline = false;
         _resolvedTopology = default;

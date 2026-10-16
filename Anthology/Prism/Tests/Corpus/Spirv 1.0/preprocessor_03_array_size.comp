@@ -1,0 +1,15 @@
+#version 460
+
+#define N 4
+#define M (N + 2)
+
+layout(local_size_x = 8) in;
+layout(std430, binding = 0) buffer Out { float data[]; };
+
+void main() {
+    float tmp[M];
+    for (int i = 0; i < M; ++i) {
+        tmp[i] = float(i);
+    }
+    data[gl_GlobalInvocationID.x] = tmp[N];
+}

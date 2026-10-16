@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:2: 'location' : SPIR-V requires location for user input/output 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking vertex stage: Missing entry point: Each stage requires one entry point
+

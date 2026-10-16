@@ -1,0 +1,14 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; };
+#define V 3
+#if V == 1
+#define R 1.0
+#elif V == 2
+#define R 2.0
+#elif V == 3
+#define R 3.0
+#else
+#define R 4.0
+#endif
+void main(){ o = R; }

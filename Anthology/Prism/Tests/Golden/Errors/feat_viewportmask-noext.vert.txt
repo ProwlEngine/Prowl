@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:3: 'gl_ViewportMask' : required extension not requested: GL_NV_viewport_array2
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

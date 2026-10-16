@@ -5,7 +5,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="Shader.slang" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="Shader.glsl" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
     <ItemGroup>

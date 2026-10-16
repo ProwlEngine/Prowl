@@ -1,0 +1,26 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(shaderRecordEXT) buffer ShaderRecord {
+    vec4 tint;
+    float scale;
+} record;
+
+layout(location = 0) rayPayloadEXT vec4 payload;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 1, rgba32f) uniform image2D outImage;
+
+void main() {
+    ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    vec2 uv = vec2(pixel) / vec2(gl_LaunchSizeEXT.xy);
+
+    vec3 origin = vec3(uv, 0.0);
+    vec3 direction = vec3(0.0, 0.0, 1.0);
+
+    payload = vec4(0.0);
+    traceRayEXT(topLevelAS, gl_RayFlagsNoneEXT, 0xFFu, 0u, 0u, 0u,
+                origin, 0.0, direction, 1000.0, 0);
+
+    imageStore(outImage, pixel, payload * record.tint * record.scale);
+}

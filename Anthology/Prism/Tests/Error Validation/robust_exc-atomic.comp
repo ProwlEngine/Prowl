@@ -1,0 +1,6 @@
+#version 450
+#pragma use_vulkan_memory_model
+#extension GL_KHR_memory_scope_semantics : require
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { uint v[]; };
+void main(){ int s = int(v[1]); atomicAdd(v[0], 1u, gl_ScopeDevice, s, gl_SemanticsAcquireRelease); }

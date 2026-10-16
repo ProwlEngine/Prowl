@@ -1,0 +1,33 @@
+#version 460 core
+
+// Resolve pass: unpacks the packed uint color buffer, applies gamma
+// correction, and writes the final image via imageStore.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 1, std430) readonly buffer ColorBufferSSBO {
+    uint colorPacked[];
+} colorBuffer;
+
+layout(rgba8, set = 0, binding = 0) uniform writeonly image2D outputImage;
+
+layout(push_constant) uniform ResolvePushConstants {
+    uint screenWidth;
+    uint screenHeight;
+} pc;
+
+void main() {
+    uint pixelX = gl_GlobalInvocationID.x;
+    uint pixelY = gl_GlobalInvocationID.y;
+
+    if (pixelX >= pc.screenWidth || pixelY >= pc.screenHeight) {
+        return;
+    }
+
+    uint pixelIndex = pixelY * pc.screenWidth + pixelX;
+    vec4 color = unpackUnorm4x8(colorBuffer.colorPacked[pixelIndex]);
+
+    vec3 gammaCorrected = pow(color.rgb, vec3(1.0 / 2.2));
+
+    imageStore(outputImage, ivec2(pixelX, pixelY), vec4(gammaCorrected, color.a));
+}

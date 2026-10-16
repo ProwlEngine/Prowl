@@ -14,7 +14,8 @@ internal sealed partial class ProfilerView
     private static string PassType(DeepPass pass)
     {
         bool dispatch = pass.Commands.Any(c => c is DispatchCommand or DispatchIndirectCommand);
-        bool draw = pass.Commands.Any(c => c is DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand);
+        bool draw = pass.Commands.Any(c => c is DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
+            or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand);
         if (dispatch && draw) return "Compute + Raster";
         if (dispatch) return "Compute";
         SetFramebufferCommand? fb = pass.Commands.OfType<SetFramebufferCommand>().FirstOrDefault();
@@ -277,8 +278,10 @@ internal sealed partial class ProfilerView
             BindVertexBuffersCommand c => string.Join(" / ", c.Changed.Select(b => $"slot {b.Slot} / {Res(b.Buffer)} / stride {b.Stride}")),
             BindIndexBufferCommand c => $"{Res(c.Buffer)} / {c.Format} / {c.IndexCount} indices",
             SetPropertiesCommand c => $"{c.Changed.Length} changed, {c.Removed.Length} removed",
+            SetPushConstantsCommand c => $"{Style.Bytes(c.Data.Length)} @ {c.Offset}",
+            SetDescriptorTableCommand c => c.Layout.Length == 0 ? $"set {c.Set} / unbound" : $"set {c.Set} / {c.Entries.Length} slots written",
             DrawCommand c => $"verts {c.VertexCount} / inst {c.InstanceCount} / first {c.FirstVertex}",
-            DrawIndexedCommand c => $"first index {c.FirstIndex} / inst {c.InstanceCount} / vertex offset {c.VertexOffset}",
+            DrawIndexedCommand c => $"indices {c.IndexCount} / first index {c.FirstIndex} / inst {c.InstanceCount} / vertex offset {c.VertexOffset}",
             DispatchCommand c => $"{c.GroupCountX} x {c.GroupCountY} x {c.GroupCountZ}",
             PushMarkerCommand c => c.Name,
             UpdateBufferCommand c => $"{Res(c.After)} @ {c.Offset} / {Style.Bytes(c.Data.Length)}",

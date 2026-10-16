@@ -21,6 +21,11 @@ public abstract class Framebuffer : GraphicsResource
     /// <summary>Height.</summary>
     public virtual uint Height { get; }
 
+    /// <summary>
+    /// Layers drawn at once through multiview, 0 or 1 for none.
+    /// </summary>
+    public uint ViewCount { get; }
+
 
     internal virtual Swapchain? OwningSwapchain => null;
 
@@ -29,8 +34,10 @@ public abstract class Framebuffer : GraphicsResource
 
     internal Framebuffer(
         FramebufferAttachment? depthTarget,
-        IReadOnlyList<FramebufferAttachment> colorTargets)
+        IReadOnlyList<FramebufferAttachment> colorTargets,
+        uint viewCount = 0)
     {
+        ViewCount = viewCount;
         DepthTarget = depthTarget;
         FramebufferAttachment[] colorCopy = new FramebufferAttachment[colorTargets.Count];
         for (int i = 0; i < colorCopy.Length; i++)

@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:6: '' :  syntax error, unexpected FLOATCONSTANT, expecting COMMA or SEMICOLON
+ERROR: 1 compilation errors.  No code generated.
+
+

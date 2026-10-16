@@ -1,0 +1,18 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1) in;
+layout(points, max_vertices = 2, max_primitives = 2) out;
+
+void main()
+{
+    SetMeshOutputsEXT(2u, 2u);
+
+    gl_MeshVerticesEXT[0].gl_Position = vec4(-0.5, 0.0, 0.0, 1.0);
+    gl_MeshVerticesEXT[0].gl_PointSize = 4.0;
+    gl_MeshVerticesEXT[1].gl_Position = vec4( 0.5, 0.0, 0.0, 1.0);
+    gl_MeshVerticesEXT[1].gl_PointSize = 8.0;
+
+    gl_PrimitivePointIndicesEXT[0] = 0u;
+    gl_PrimitivePointIndicesEXT[1] = 1u;
+}

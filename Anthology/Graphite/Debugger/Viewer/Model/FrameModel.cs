@@ -127,7 +127,8 @@ internal sealed class FrameModel
                     boundMesh = MeshName(index.Resource(bind.Changed[0].Buffer.Resource)?.Name ?? "");
                     break;
 
-                case DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand or DispatchCommand or DispatchIndirectCommand:
+                case DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
+                    or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand or DispatchCommand or DispatchIndirectCommand:
                     ProfileNode owner = markers.Count > 0 ? markers.Peek() : program ?? passNode;
                     bool dispatch = command is DispatchCommand or DispatchIndirectCommand;
                     int sub = owner.Children.Count(c => c.Kind == NodeKind.Draw);

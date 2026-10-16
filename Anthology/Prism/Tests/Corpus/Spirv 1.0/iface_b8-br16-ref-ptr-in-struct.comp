@@ -1,0 +1,7 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x=1) in;
+layout(buffer_reference, std430) buffer R { int x; };
+struct H { R r; int k; };
+layout(std430, binding=0) buffer B { H h[2]; } b;
+void main(){ b.h[1].r.x = b.h[0].k; H loc = b.h[0]; loc.r.x = 5; }

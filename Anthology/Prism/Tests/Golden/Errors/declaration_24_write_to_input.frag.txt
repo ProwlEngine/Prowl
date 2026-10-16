@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:7: 'assign' :  l-value required "inColor" (can't modify shader input)
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

@@ -1,0 +1,13 @@
+#version 460 core
+
+// image atomics on an r32ui image
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(r32ui, binding = 0) uniform uimage2D img;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    imageAtomicAdd(img, coord, 1u);
+    imageAtomicExchange(img, coord, 42u);
+}

@@ -16,16 +16,16 @@ public class PassTests
                 Name "Forward"
                 Tags { "LightMode" = "ForwardBase" }
                 Cull Back
-                SLANGPROGRAM
+                GLSLPROGRAM
                 float4 vsMain() : SV_Position { return 0; }
-                ENDSLANG
+                ENDGLSL
             }
             """);
 
         Assert.Equal("Forward", pass.Name);
         Assert.NotNull(pass.Tags);
         Assert.Equal(FaceCullMode.Back, pass.State.Raster.CullMode);
-        Assert.Equal("float4 vsMain() : SV_Position { return 0; }", pass.InlineSlang);
+        Assert.Equal("float4 vsMain() : SV_Position { return 0; }", pass.Source);
     }
 
 
@@ -37,7 +37,7 @@ public class PassTests
             Pass
             {
                 Culll Back
-                SLANGPROGRAM void main() {} ENDSLANG
+                GLSLPROGRAM void main() {} ENDGLSL
             }
             """));
 
@@ -47,7 +47,7 @@ public class PassTests
 
 
     [Fact]
-    public void MissingSlangProgram_ThrowsDomainMessage()
+    public void MissingProgram_ThrowsDomainMessage()
     {
         ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""
             Pass
@@ -56,6 +56,6 @@ public class PassTests
             }
             """));
 
-        Assert.Contains("SLANGPROGRAM", ex.Message);
+        Assert.Contains("GLSLPROGRAM", ex.Message);
     }
 }

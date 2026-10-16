@@ -25,9 +25,9 @@ public class DefaultPropertiesTests : IDisposable
 
             Pass
             {
-                SLANGPROGRAM
+                GLSLPROGRAM
                 float4 vsMain() : SV_Position { return 0; }
-                ENDSLANG
+                ENDGLSL
             }
         }
         """;

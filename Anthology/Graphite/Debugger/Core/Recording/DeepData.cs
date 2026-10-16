@@ -39,7 +39,8 @@ public sealed record RecordedProgram(
     EquatableArray<VertexLayoutDescription> VertexLayouts,
     uint ThreadGroupX,
     uint ThreadGroupY,
-    uint ThreadGroupZ)
+    uint ThreadGroupZ,
+    PushConstantRange PushConstants)
 {
     /// <summary>Compares layouts element by element.</summary>
     public bool Equals(RecordedProgram? other)
@@ -55,11 +56,12 @@ public sealed record RecordedProgram(
             && ProgramEquality.Equal(VertexLayouts, other.VertexLayouts)
             && ThreadGroupX == other.ThreadGroupX
             && ThreadGroupY == other.ThreadGroupY
-            && ThreadGroupZ == other.ThreadGroupZ;
+            && ThreadGroupZ == other.ThreadGroupZ
+            && PushConstants == other.PushConstants;
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Key, Name, IsCompute, Stages, ProgramEquality.Hash(Layouts), ProgramEquality.Hash(VertexLayouts), HashCode.Combine(ThreadGroupX, ThreadGroupY, ThreadGroupZ));
+        => HashCode.Combine(Key, Name, IsCompute, Stages, ProgramEquality.Hash(Layouts), ProgramEquality.Hash(VertexLayouts), HashCode.Combine(ThreadGroupX, ThreadGroupY, ThreadGroupZ, PushConstants));
 }
 
 /// <summary>Content keyed by hash.</summary>

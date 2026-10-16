@@ -18,11 +18,22 @@ public abstract partial class CommandBuffer : CommandBufferBase
     private protected ComputeProgram? _computeProgram;
 
     private protected IVertexSource? _currentVertexSource;
-    private protected uint _currentIndexCount;
+
+    /// <summary>
+    /// Bytes of push constants a command buffer holds, the size every Vulkan device supports.
+    /// </summary>
+    public const int PushConstantCapacity = 128;
+
+    private protected readonly byte[] _pushConstants = new byte[PushConstantCapacity];
+    private protected uint _pushConstantVersion;
+
+    private protected DescriptorTable?[] _descriptorTables = [];
 
 
     /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
+
+    private readonly UniformShadows _uniformShadows = new();
 
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
@@ -37,6 +48,8 @@ public abstract partial class CommandBuffer : CommandBufferBase
     internal System.Collections.Generic.List<PropertyID> ChangedPropertyKeys => _changedPropertyKeys;
 
     internal bool AllPropertiesChanged => _allPropertiesChanged;
+
+    internal UniformShadows UniformShadows => _uniformShadows;
 
     internal void ConsumePropertyChanges()
     {
@@ -56,7 +69,12 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _computeProgram = null;
         _framebufferOutputs = null;
         _currentVertexSource = null;
+        System.Array.Clear(_pushConstants);
+        _pushConstantVersion++;
+        System.Array.Clear(_descriptorTables);
+        System.Array.Clear(_reportedTables);
         _activeProperties.Clear();
+        _uniformShadows.Reset();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
         _lastAppliedDefaults = null;

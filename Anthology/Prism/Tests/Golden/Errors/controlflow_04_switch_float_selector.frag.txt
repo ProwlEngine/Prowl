@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:7: 'switch' : condition must be a scalar integer expression 
+ERROR: <shader>:14: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

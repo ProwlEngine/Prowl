@@ -1,0 +1,4 @@
+// glslang rejects this shader (fragcoord in compute); our compiler must reject it too.
+#version 460
+layout(local_size_x=1) in;
+void main(){ gl_FragCoord; }

@@ -38,6 +38,17 @@ public struct GraphTextureDesc
     /// <summary>Explicit depth-stencil format, null for the device default. Needs EnableDepth.</summary>
     public PixelFormat? DepthFormat;
 
+    /// <summary>
+    /// Array layers, drawn together through multiview: 2 for both eyes of a stereo view, 6 for a cube capture. 0 or 1 for one layer.
+    /// </summary>
+    public uint ArrayLayers;
+
+    /// <summary>
+    /// Samples per pixel of every attachment, for MSAA, one by default. Resolve into a single sample texture with
+    /// <see cref="CommandBuffer.ResolveTexture"/>.
+    /// </summary>
+    public TextureSampleCount SampleCount;
+
     private static PixelFormat[] DefaultFormats(PixelFormat[] formats)
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 

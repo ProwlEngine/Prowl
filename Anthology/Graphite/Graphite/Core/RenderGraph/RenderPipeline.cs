@@ -95,25 +95,47 @@ public class RenderPipeline : IDisposable
                 }
 
                 var passInfo = new PassInfo(node.Pass.Name, index, context.ViewIndex, node.PublicAccesses);
-
-                profiler?.BeginPass(passInfo);
-                capture?.BeginPass(index);
-                context.SetCurrentPass(passInfo, node.Accesses, node.Pass.Name);
-                context.TransitionForAccesses(node.Accesses);
-                CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
-                context.BindDeclaredTarget(passCommands, node.Accesses);
-                long recordStart = Stopwatch.GetTimestamp();
-                node.Pass.Render(context, passCommands);
-                PassStats stats = passCommands.Stats;
-                context.EndCommandBuffer(passCommands);
-                context.AdoptPassStates(passCommands);
-                stats = stats with { CpuMilliseconds = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds };
-                context.MarkAttachmentWrites(node.Accesses);
-                context.SetCurrentPass(null);
-                capture?.EndPass(index, passCommands);
-                index++;
-
-                profiler?.EndPass(passInfo, stats);
+                CommandBuffer? passCommands = null;
+                bool begun = false, submitted = false, ended = false;
+                try
+                {
+                    profiler?.BeginPass(passInfo);
+                    begun = true;
+                    capture?.BeginPass(index);
+                    context.SetCurrentPass(passInfo, node.Accesses, node.Pass.Name);
+                    context.TransitionForAccesses(node.Accesses);
+                    passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
+                    passCommands.PushDebugGroup(node.Pass.Name);
+                    context.BindDeclaredTarget(passCommands, node.Accesses);
+                    long recordStart = Stopwatch.GetTimestamp();
+                    node.Pass.Render(context, passCommands);
+                    passCommands.PopDebugGroup();
+                    PassStats stats = passCommands.Stats;
+                    submitted = true;
+                    context.EndCommandBuffer(passCommands);
+                    context.AdoptPassStates(passCommands);
+                    stats = stats with { CpuMilliseconds = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds };
+                    context.MarkAttachmentWrites(node.Accesses);
+                    context.SetCurrentPass(null);
+                    capture?.EndPass(index, passCommands);
+                    index++;
+                    ended = true;
+                    profiler?.EndPass(passInfo, stats);
+                }
+                catch
+                {
+                    // What the pass recorded is submitted and every texture goes back to resting, so the execution stays valid
+                    if (passCommands != null && !submitted)
+                    {
+                        context.EndCommandBuffer(passCommands);
+                        context.AdoptPassStates(passCommands);
+                    }
+                    context.SetCurrentPass(null);
+                    if (begun && !ended)
+                        profiler?.EndPass(passInfo, passCommands?.Stats ?? default);
+                    context.RestoreRestingStates("View");
+                    throw;
+                }
             }
 
             context.RestoreRestingStates("View");

@@ -85,6 +85,9 @@ public struct UniformValue
 /// One property of the resolved property table. Resources are reported by version and range.
 /// Textures report the view's mip and layer range, and the view format when a view is bound.
 /// </summary>
+/// <summary>One written slot of a descriptor table: the slot index and what it holds.</summary>
+public readonly record struct DescriptorTableEntryState(uint Index, PropertyState State);
+
 public readonly record struct PropertyState(
     PropertyID Name,
     PropertyKind Kind,

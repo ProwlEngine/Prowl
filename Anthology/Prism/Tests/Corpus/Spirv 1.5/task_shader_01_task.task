@@ -1,0 +1,19 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 32) in;
+
+struct Payload
+{
+    uint baseId;
+    vec3 center;
+};
+taskPayloadSharedEXT Payload payload;
+
+void main()
+{
+    payload.baseId = gl_WorkGroupID.x * 32u + gl_LocalInvocationID.x;
+    payload.center = vec3(float(gl_WorkGroupID.x), 0.0, 0.0);
+
+    EmitMeshTasksEXT(8u, 1u, 1u);
+}

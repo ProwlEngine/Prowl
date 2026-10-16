@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:5: 'gl_PositionPerViewNV' : missing perviewNV qualifier to redeclared block member 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking mesh stage: Missing entry point: Each stage requires one entry point

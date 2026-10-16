@@ -1,0 +1,9 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; };
+#if 0x10 == 16 && 010 == 8
+#define R 1.0
+#else
+#define R 2.0
+#endif
+void main(){ o = R; }

@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: '' : continue statement only allowed in loops 
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

@@ -48,7 +48,7 @@ public class PassBenchmarks : GraphiteBenchmark
 
     protected override IEnumerable<IPass> CreatePasses()
     {
-        GraphicsProgram program = LoadProgram("Fullscreen.slang");
+        GraphicsProgram program = LoadProgram("Fullscreen.glsl");
         RenderResourceID shared = "Shared";
         RenderResourceID[] ids = Enumerable.Range(0, Passes).Select(i => RenderResourceID.Intern("Pass" + i)).ToArray();
         Framebuffer? framebuffer = Topology == PassTopology.Undeclared ? CreateFramebuffer() : null;

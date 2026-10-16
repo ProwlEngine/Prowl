@@ -4,28 +4,20 @@ namespace Prowl.Graphite;
 
 internal sealed class SetBindingMetadata
 {
-    /// <summary>UBO element indices sorted by binding; needed for Vulkan dynamic offsets.</summary>
-    public readonly int[] SortedUboElementIndices;
-
     /// <summary>True if texture shares name in set; optimizes sampler lookup.</summary>
     public readonly bool[] HasSameNamedTexture;
 
-    /// <summary>Packed byte size of each element's loose uniform block, 0 if it declares none.</summary>
-    public readonly uint[] UniformBlockSizes;
-
-    /// <summary>Every property name the set reads: element names plus loose uniform field names.</summary>
+    /// <summary>Every resource name the set reads.</summary>
     public readonly System.Collections.Generic.HashSet<PropertyID> Names;
 
     /// <summary>True if any element is a read-write texture, which can need a per-dispatch layout move.</summary>
     public readonly bool HasStorageTexture;
 
     private SetBindingMetadata(
-        int[] sortedUboElementIndices, bool[] hasSameNamedTexture, uint[] uniformBlockSizes,
+        bool[] hasSameNamedTexture,
         System.Collections.Generic.HashSet<PropertyID> names, bool hasStorageTexture)
     {
-        SortedUboElementIndices = sortedUboElementIndices;
         HasSameNamedTexture = hasSameNamedTexture;
-        UniformBlockSizes = uniformBlockSizes;
         Names = names;
         HasStorageTexture = hasStorageTexture;
     }
@@ -50,23 +42,6 @@ internal sealed class SetBindingMetadata
         {
             ResourceLayoutElementDescription[] elements = layouts[s].Elements ?? System.Array.Empty<ResourceLayoutElementDescription>();
 
-            int uboCount = 0;
-            for (int i = 0; i < elements.Length; i++)
-            {
-                if (elements[i].Kind == ResourceKind.UniformBuffer)
-                    uboCount++;
-            }
-
-            int[] sortedUbo = new int[uboCount];
-            int w = 0;
-            for (int i = 0; i < elements.Length; i++)
-            {
-                if (elements[i].Kind == ResourceKind.UniformBuffer)
-                    sortedUbo[w++] = i;
-            }
-
-            Array.Sort(sortedUbo, (a, b) => elements[a].BindingIndex.CompareTo(elements[b].BindingIndex));
-
             bool[] hasSameNamedTexture = new bool[elements.Length];
             for (int i = 0; i < elements.Length; i++)
             {
@@ -82,16 +57,6 @@ internal sealed class SetBindingMetadata
                 }
             }
 
-            uint[] blockSizes = new uint[elements.Length];
-            for (int i = 0; i < elements.Length; i++)
-            {
-                UniformBlockField[] fields = elements[i].UniformFields;
-                if (elements[i].Kind != ResourceKind.UniformBuffer || fields == null || fields.Length == 0)
-                    continue;
-
-                blockSizes[i] = UniformBlockSize(fields);
-            }
-
             System.Collections.Generic.HashSet<PropertyID> names = new();
             bool hasStorageTexture = false;
             foreach (ResourceLayoutElementDescription element in elements)
@@ -99,24 +64,11 @@ internal sealed class SetBindingMetadata
                 names.Add(element.Name);
                 if (element.Kind == ResourceKind.TextureReadWrite)
                     hasStorageTexture = true;
-                if (element.UniformFields != null)
-                {
-                    foreach (UniformBlockField field in element.UniformFields)
-                        names.Add(field.Name);
-                }
             }
 
-            result[s] = new SetBindingMetadata(sortedUbo, hasSameNamedTexture, blockSizes, names, hasStorageTexture);
+            result[s] = new SetBindingMetadata(hasSameNamedTexture, names, hasStorageTexture);
         }
 
         return result;
-    }
-
-    private static uint UniformBlockSize(UniformBlockField[] fields)
-    {
-        uint size = 0;
-        foreach (UniformBlockField field in fields)
-            size = System.Math.Max(size, field.Offset + field.Size);
-        return size == 0 ? 16 : size;
     }
 }

@@ -1,0 +1,32 @@
+#version 460
+#extension GL_EXT_ray_query : require
+
+layout(binding = 0) uniform accelerationStructureEXT tlas;
+layout(binding = 1, rgba32f) uniform image2D img;
+
+void main()
+{
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, tlas, gl_RayFlagsNoneEXT, 0xFFu, vec3(0.0), 0.001, vec3(0.0, 0.0, 1.0), 1000.0);
+
+    while (rayQueryProceedEXT(rq))
+    {
+        if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionTriangleEXT)
+            rayQueryConfirmIntersectionEXT(rq);
+    }
+
+    vec4 color = vec4(0.0);
+    if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
+    {
+        float t = rayQueryGetIntersectionTEXT(rq, true);
+        int instId = rayQueryGetIntersectionInstanceIdEXT(rq, true);
+        int prim = rayQueryGetIntersectionPrimitiveIndexEXT(rq, true);
+        vec2 bary = rayQueryGetIntersectionBarycentricsEXT(rq, true);
+        mat4x3 o2w = rayQueryGetIntersectionObjectToWorldEXT(rq, true);
+        vec3 dir = rayQueryGetIntersectionObjectRayDirectionEXT(rq, true);
+        vec3 origin = o2w * vec4(dir * t, 1.0);
+        color = vec4(origin + bary.xyx, float(instId + prim));
+    }
+
+    imageStore(img, ivec2(gl_GlobalInvocationID.xy), color);
+}

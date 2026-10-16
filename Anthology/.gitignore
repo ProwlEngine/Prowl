@@ -411,7 +411,7 @@ Wulferis_Local/
 Slang/Native/lib
 
 # Recast test meshes. The *.obj rule above targets C/C++ object files, but these are Wavefront
-# .obj geometry the vendored Detour/Crowd tests load, so they have to survive it — without them
+# .obj geometry the vendored Detour/Crowd tests load, so they have to survive it - without them
 # every test deriving from AbstractDetourTest/AbstractCrowdTest fails in its constructor.
 !Recast/Tests/resources/*.obj
 
@@ -440,5 +440,5 @@ Aperture/local/
 # The Scribe layout comparison harness: a console app, a headless browser page and the
 # screenshots they produce. None of it ships with the library.
 Scribe/local/
-
 Paper/local/
+Wulferis_Local/Prism/

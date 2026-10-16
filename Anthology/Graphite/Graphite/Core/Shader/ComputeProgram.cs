@@ -10,7 +10,7 @@ public abstract class ComputeProgram : ShaderProgram
     private readonly uint _threadGroupSizeZ;
 
     internal ComputeProgram(in ComputeDescription description)
-        : base(description.ResourceLayouts)
+        : base(description.ResourceLayouts, description.PushConstants)
     {
         _stageDescription = description.Stage;
         Key = ProgramKey.Compute([description.Stage]);

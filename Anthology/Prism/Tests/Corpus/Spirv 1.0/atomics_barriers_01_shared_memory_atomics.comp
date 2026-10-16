@@ -1,0 +1,22 @@
+#version 460 core
+
+// shared memory atomics
+layout(local_size_x = 64) in;
+
+shared uint counters[64];
+
+void main() {
+    uint idx = gl_LocalInvocationID.x;
+
+    counters[idx] = 0u;
+    barrier();
+
+    atomicAdd(counters[idx], 1u);
+    atomicMin(counters[idx], 5u);
+    atomicMax(counters[idx], 10u);
+    atomicAnd(counters[idx], 0xFFu);
+    atomicOr(counters[idx], 0x01u);
+    atomicXor(counters[idx], 0x0Fu);
+    atomicExchange(counters[idx], 42u);
+    atomicCompSwap(counters[idx], 42u, 99u);
+}

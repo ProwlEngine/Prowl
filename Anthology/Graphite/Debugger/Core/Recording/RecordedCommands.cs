@@ -55,17 +55,31 @@ public sealed record BindIndexBufferCommand(TraceVersion Buffer, IndexFormat For
 /// <summary>Properties that changed since the previous table in the pass, and the names that left it.</summary>
 public sealed record SetPropertiesCommand(EquatableArray<RecordedProperty> Changed, EquatableArray<string> Removed) : RecordedCommand;
 
+public sealed record SetPushConstantsCommand(uint Offset, BlobRef Data) : RecordedCommand;
+
+/// <summary>One written slot of a recorded descriptor table.</summary>
+public sealed record RecordedTableEntry(uint Index, RecordedProperty Property);
+
+/// <summary>A descriptor table bound at a set index with its written slots, or unbound when the layout is empty.</summary>
+public sealed record SetDescriptorTableCommand(uint Set, EquatableArray<ResourceLayoutElementDescription> Layout, EquatableArray<RecordedTableEntry> Entries) : RecordedCommand;
+
 public sealed record DrawCommand(uint VertexCount, uint InstanceCount, uint FirstVertex, uint FirstInstance) : RecordedCommand;
 
-public sealed record DrawIndexedCommand(uint InstanceCount, uint FirstIndex, int VertexOffset, uint FirstInstance) : RecordedCommand;
+public sealed record DrawIndexedCommand(uint IndexCount, uint InstanceCount, uint FirstIndex, int VertexOffset, uint FirstInstance) : RecordedCommand;
 
 public sealed record DrawIndirectCommand(TraceVersion Buffer, uint Offset, uint DrawCount, uint Stride) : RecordedCommand;
 
 public sealed record DrawIndexedIndirectCommand(TraceVersion Buffer, uint Offset, uint DrawCount, uint Stride) : RecordedCommand;
 
+public sealed record DrawIndirectCountCommand(TraceVersion Buffer, uint Offset, TraceVersion CountBuffer, uint CountOffset, uint MaxDrawCount, uint Stride) : RecordedCommand;
+
+public sealed record DrawIndexedIndirectCountCommand(TraceVersion Buffer, uint Offset, TraceVersion CountBuffer, uint CountOffset, uint MaxDrawCount, uint Stride) : RecordedCommand;
+
 public sealed record DispatchCommand(uint GroupCountX, uint GroupCountY, uint GroupCountZ) : RecordedCommand;
 
 public sealed record DispatchIndirectCommand(TraceVersion Buffer, uint Offset) : RecordedCommand;
+
+public sealed record ComputeBarrierCommand : RecordedCommand;
 
 public sealed record UpdateBufferCommand(TraceVersion After, uint Offset, BlobRef Data) : RecordedCommand;
 

@@ -1,0 +1,23 @@
+#version 460 core
+#extension GL_EXT_scalar_block_layout : require
+
+layout(local_size_x = 64) in;
+
+struct Particle
+{
+    vec3 velocity;
+    float mass;
+};
+
+layout(scalar, set = 0, binding = 0) buffer Data
+{
+    Particle particles[];
+};
+
+void main()
+{
+    uint idx = gl_GlobalInvocationID.x;
+
+    vec3 force = vec3(0.0, -9.81, 0.0);
+    particles[idx].velocity += force / particles[idx].mass;
+}

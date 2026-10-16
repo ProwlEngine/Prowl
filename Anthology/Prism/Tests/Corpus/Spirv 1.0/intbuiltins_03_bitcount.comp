@@ -1,0 +1,21 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    int si;
+    uint ui;
+    ivec4 sv;
+    uvec4 uv;
+    int rS;
+    int rU;
+    ivec4 rSV;
+    ivec4 rUV;
+};
+
+void main() {
+    rS = bitCount(si);
+    rU = bitCount(ui);
+    rSV = bitCount(sv);
+    rUV = bitCount(uv);
+}

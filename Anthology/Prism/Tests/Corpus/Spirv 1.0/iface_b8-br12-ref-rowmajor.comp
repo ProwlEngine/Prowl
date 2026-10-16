@@ -1,0 +1,6 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x=1) in;
+layout(buffer_reference, std430) buffer R { mat2x3 rm; layout(row_major) mat3x2 q; };
+layout(push_constant) uniform PC { R r; } pc;
+void main(){ pc.r.rm[1] = pc.r.q[0].xyx; }

@@ -4,44 +4,72 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// A variant space declared in a ShaderDef document.
+/// Who picks the value of a variant axis.
+/// </summary>
+public enum VariantScope : byte
+{
+    /// <summary>
+    /// Set per material.
+    /// </summary>
+    Material,
+
+    /// <summary>
+    /// Set by the renderer, a world or a view, never by a material.
+    /// </summary>
+    Global,
+}
+
+
+/// <summary>
+/// A variant axis declared by a shader.
 /// </summary>
 public readonly struct VariantSpace
 {
     /// <summary>
-    /// Variant symbol name in source.
+    /// Toggle values, off first so key 0 has every toggle off.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ToggleValues = ["false", "true"];
+
+    /// <summary>
+    /// Axis name in source.
     /// </summary>
     public string Name { get; }
 
     /// <summary>
-    /// Declared type of the variant symbol.
-    /// </summary>
-    public string DeclType { get; }
-
-    /// <summary>
-    /// Possible values for this axis. Bare runtime keywords, e.g. an enum case like "Realtime" or "true"/"false" for bool.
+    /// Possible values, the first being the default.
     /// </summary>
     public IReadOnlyList<string> Values { get; }
 
     /// <summary>
-    /// True if enum-backed. Enum values need the enum type prefix when emitted, e.g. "Lighting.Realtime".
+    /// True for an on or off axis with <see cref="ToggleValues"/>.
     /// </summary>
-    public bool IsEnum { get; }
+    public bool IsToggle { get; }
 
     /// <summary>
-    /// Module declaring DeclType, or null for builtins like bool. Must be imported to reference the type.
+    /// Who picks the value.
     /// </summary>
-    public string? TypeModule { get; }
+    public VariantScope Scope { get; }
 
     /// <summary>
-    /// Makes a VariantSpace.
+    /// Makes an axis with named values.
     /// </summary>
-    public VariantSpace(string name, string declType, IReadOnlyList<string> values, bool isEnum = false, string? typeModule = null)
+    public VariantSpace(string name, IReadOnlyList<string> values, VariantScope scope = VariantScope.Material)
     {
         Name = name;
-        DeclType = declType;
         Values = values;
-        IsEnum = isEnum;
-        TypeModule = typeModule;
+        Scope = scope;
     }
+
+    private VariantSpace(string name, VariantScope scope, bool isToggle)
+    {
+        Name = name;
+        Values = ToggleValues;
+        Scope = scope;
+        IsToggle = isToggle;
+    }
+
+    /// <summary>
+    /// Makes an on or off axis.
+    /// </summary>
+    public static VariantSpace Toggle(string name, VariantScope scope = VariantScope.Material) => new(name, scope, true);
 }

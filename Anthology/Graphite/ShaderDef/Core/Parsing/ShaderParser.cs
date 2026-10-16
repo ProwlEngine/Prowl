@@ -1,0 +1,716 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+using Prowl.Crumb;
+using Prowl.Vector;
+
+
+namespace Prowl.Graphite.ShaderDef;
+
+
+/// <summary>
+/// Parses shaderdef markdown files into the core data types.
+/// </summary>
+public static class ShaderParser
+{
+    // ==================== ShaderDefinition ====================
+
+    // Parses a property block: Properties { ... }
+    static ShaderProperty[] ParsePropertiesBlock(ref Tokenizer<ShaderToken> t)
+    {
+        ParserUtility.ExpectKeyword(ref t, "Properties");
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+
+        List<ShaderProperty> properties = new();
+        HashSet<string> names = new();
+
+        while (t.Peek().Kind == ShaderToken.Identifier)
+        {
+            Token<ShaderToken> nameToken = t.Peek();
+            ShaderProperty property = ParseProperty(ref t);
+
+            if (!names.Add(property.Name))
+                throw Exceptions.Duplicate("property", property.Name, nameToken);
+
+            properties.Add(property);
+        }
+
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+        return properties.ToArray();
+    }
+
+
+    // The main parser for a shader markup language inspired by ShaderLab.
+    // Contains a property block, a surface block or pass blocks or both, and a fallback.
+    static ShaderDefinition ParseShader(ref Tokenizer<ShaderToken> t)
+    {
+        ParserUtility.ExpectKeyword(ref t, "Shader");
+        string name = ParserUtility.QuotedString(ref t);
+
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ParseException("Shader must contain non-empty name", t.Line, t.Column);
+
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+
+        ShaderProperty[] properties = [];
+        if (ParserUtility.PeekKeyword(ref t, "Properties"))
+            properties = ParsePropertiesBlock(ref t);
+
+        List<ShaderPass> passes = new();
+        HashSet<string> passNames = new();
+        if (ParserUtility.PeekKeyword(ref t, "Surface"))
+        {
+            Token<ShaderToken> surfaceToken = t.Next();
+            string model = ParserUtility.QuotedString(ref t);
+            ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+            string code = t.Peek().Kind == ShaderToken.GlslProgram ? ParserUtility.Program(ref t) : "";
+            ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+            passes.AddRange(SurfacePasses(model, code, surfaceToken));
+            foreach (ShaderPass pass in passes)
+                passNames.Add(pass.Name);
+            if (name != ShaderLibrary.Prefix + model)
+                properties = WithStandardProperties(model, properties, surfaceToken);
+        }
+
+        while (ParserUtility.PeekKeyword(ref t, "Pass"))
+        {
+            Token<ShaderToken> passToken = t.Peek();
+            ShaderPass pass = ParsePass(ref t);
+
+            // Pass names are optional, so only named passes are checked for collisions.
+            if (pass.Name.Length > 0 && !passNames.Add(pass.Name))
+                throw Exceptions.Duplicate("pass name", pass.Name, passToken);
+
+            passes.Add(pass);
+        }
+
+        if (passes.Count == 0)
+            throw Exceptions.NoPasses(t.Peek());
+
+        foreach (ShaderPass pass in passes)
+            pass.SourceName = name;
+
+        string fallback = "";
+        if (ParserUtility.PeekKeyword(ref t, "Fallback"))
+        {
+            t.Next();
+            fallback = ParserUtility.QuotedString(ref t);
+        }
+
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+
+        Token<ShaderToken> trailing = t.Peek();
+        if (trailing.Kind != ShaderToken.EndOfFile)
+            throw Exceptions.TrailingContent(ParserUtility.Text(ref t, trailing), trailing);
+
+        return new ShaderDefinition
+        {
+            Name = name,
+            Properties = properties,
+            Passes = passes.ToArray(),
+            Fallback = fallback,
+        };
+    }
+
+
+    // ==================== Surface ====================
+
+    // The standard passes of Graphite/Lit or Graphite/Unlit, each running the block's code, which defines
+    // void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit
+    static ShaderPass[] SurfacePasses(string model, string code, Token<ShaderToken> at)
+    {
+        string defines = model switch
+        {
+            "Lit" => "",
+            "Unlit" => "#define GRAPHITE_STANDARD_UNLIT\n",
+            _ => throw new ParseException($"Surface model must be \"Lit\" or \"Unlit\", found \"{model}\"", at.Line, at.Column),
+        };
+        if (code.Length > 0)
+            defines += "#define GRAPHITE_SURFACE_FUNCTION\n";
+
+        ShaderPass Pass(string name, string pass, string variants) => new()
+        {
+            Name = name,
+            Tags = new() { ["LightMode"] = name },
+            State = new PassState(),
+            Source = $"Shared\n{{\n#define {pass}\n{defines}{variants}}}\n"
+                + "Vertex\n{\n#include \"Graphite/Standard/Standard.glsl\"\nvoid main() { Graphite_StandardVertex(); }\n}\n"
+                + $"Fragment\n{{\n#include \"Graphite/Standard/Standard.glsl\"\n{code}\nvoid main() {{ Graphite_StandardFragment(); }}\n}}\n",
+            SourceLine = at.Line,
+        };
+
+        string litVariants = model == "Lit"
+            ? "#pragma variant _NORMALMAP\n#pragma variant _SURFACEMAP\n#pragma variant _OCCLUSIONMAP\n#pragma variant _EMISSION\n#pragma variant _PARALLAXMAP\n#pragma variant _TRANSLUCENCY\n#pragma variant _ANISOTROPIC\n"
+            : "";
+        return [Pass("Forward", "GRAPHITE_STANDARD_FORWARD", litVariants), Pass("Prepass", "GRAPHITE_STANDARD_DEPTH", ""), Pass("ShadowCaster", "GRAPHITE_STANDARD_DEPTH", "")];
+    }
+
+
+    // The standard shader's properties, then the shader's own, which replace any of the same name
+    static ShaderProperty[] WithStandardProperties(string model, ShaderProperty[] own, Token<ShaderToken> at)
+    {
+        string? source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{model}.shader")
+            ?? throw new ParseException($"Surface \"{model}\" needs Graphite's shader library registered", at.Line, at.Column);
+        List<ShaderProperty> properties = new(Parse(source).Properties ?? []);
+        foreach (ShaderProperty property in own)
+        {
+            int index = properties.FindIndex(p => p.Name == property.Name);
+            if (index >= 0)
+                properties[index] = property;
+            else
+                properties.Add(property);
+        }
+        return properties.ToArray();
+    }
+
+
+    /// <summary>
+    /// Parses a full .shaderdef file.
+    /// </summary>
+    public static ShaderDefinition Parse(string source)
+    {
+        Tokenizer<ShaderToken> tokenizer = ShaderTokenizer.Create(source);
+        return ParseShader(ref tokenizer);
+    }
+
+
+    // ==================== ShaderPass ====================
+
+    static string ParsePassName(ref Tokenizer<ShaderToken> t)
+    {
+        ParserUtility.ExpectKeyword(ref t, "Name");
+        return ParserUtility.QuotedString(ref t);
+    }
+
+
+    static Dictionary<string, string> ParsePassTags(ref Tokenizer<ShaderToken> t)
+    {
+        ParserUtility.ExpectKeyword(ref t, "Tags");
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+
+        Dictionary<string, string> tags = new();
+
+        while (t.Peek().Kind == ShaderToken.String)
+        {
+            Token<ShaderToken> keyToken = t.Peek();
+            string key = ParserUtility.QuotedString(ref t);
+
+            if (tags.ContainsKey(key))
+                throw Exceptions.Duplicate("tag key", key, keyToken);
+
+            ParserUtility.Expect(ref t, ShaderToken.Equals);
+            string value = ParserUtility.QuotedString(ref t);
+            tags[key] = value;
+        }
+
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+        return tags;
+    }
+
+
+    /// <summary>
+    /// Parses a pass block.
+    /// </summary>
+    public static ShaderPass ParsePass(string source)
+    {
+        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
+        return ParsePass(ref t);
+    }
+
+
+    internal static ShaderPass ParsePass(ref Tokenizer<ShaderToken> t)
+    {
+        ParserUtility.ExpectKeyword(ref t, "Pass");
+
+        // Optional pass index.
+        if (t.Peek().Kind is ShaderToken.Number or ShaderToken.Minus)
+            ParserUtility.Integer(ref t);
+
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+
+        string name = "";
+        if (ParserUtility.PeekKeyword(ref t, "Name"))
+            name = ParsePassName(ref t);
+
+        Dictionary<string, string>? tags = null;
+        if (ParserUtility.PeekKeyword(ref t, "Tags"))
+            tags = ParsePassTags(ref t);
+
+        PassState state = ParsePassState(ref t);
+
+        // State parsing stops at the first identifier it doesn't recognize. A program block is a
+        // block token, not an identifier, so a leftover identifier here is a misspelled command.
+        Token<ShaderToken> afterState = t.Peek();
+        if (afterState.Kind == ShaderToken.Identifier)
+            throw Exceptions.UnknownCommand(ParserUtility.Text(ref t, afterState), afterState);
+
+        string source = ParserUtility.Program(ref t, out int sourceLine);
+
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+
+        return new ShaderPass
+        {
+            Name = name,
+            Tags = tags,
+            State = state,
+            Source = source,
+            SourceLine = sourceLine
+        };
+    }
+
+
+    // ==================== PassState ====================
+
+    static readonly Dictionary<string, bool> OnStateMap = new()
+    {
+        { "On", true },
+        { "Off", false }
+    };
+
+
+    static readonly Dictionary<string, FaceCullMode> FaceCullModeMap = new()
+    {
+        { "Back", FaceCullMode.Back },
+        { "Front", FaceCullMode.Front },
+        { "Off", FaceCullMode.None }
+    };
+
+
+    static ColorWriteMask ParseMask(ref Tokenizer<ShaderToken> t, Token<ShaderToken> maskToken)
+    {
+        ColorWriteMask result = 0;
+
+        foreach (char c in t.Slice(maskToken))
+        {
+            result |= c switch
+            {
+                'R' => ColorWriteMask.Red,
+                'G' => ColorWriteMask.Green,
+                'B' => ColorWriteMask.Blue,
+                'A' => ColorWriteMask.Alpha,
+                _ => throw new ParseException($"Invalid channel {c}. Expected any of [R, G, B, A]", maskToken.Line, maskToken.Column)
+            };
+        }
+
+        return result;
+    }
+
+
+    // Consumes and parses a single stencil command if the identifier names one.
+    // Returns false (without consuming) for any unrecognized identifier, e.g. the closing brace.
+    static bool TryParseStencilCommand(ref Tokenizer<ShaderToken> t, string name, out PassState state)
+    {
+        switch (name)
+        {
+            case "Ref":
+                t.Next();
+                state = new() { Set = PassStateFields.StencilReference, DepthStencil = new() { StencilReference = (uint)ParserUtility.Integer(ref t) } };
+                return true;
+
+            case "ReadMask":
+                t.Next();
+                state = new() { Set = PassStateFields.StencilReadMask, DepthStencil = new() { StencilReadMask = (byte)(uint)ParserUtility.Integer(ref t) } };
+                return true;
+
+            case "WriteMask":
+                t.Next();
+                state = new() { Set = PassStateFields.StencilWriteMask, DepthStencil = new() { StencilWriteMask = (byte)(uint)ParserUtility.Integer(ref t) } };
+                return true;
+
+            case "Comp":
+                t.Next();
+                ComparisonKind comp = ParserUtility.Keywords<ComparisonKind>(ref t);
+                state = StencilFaces(PassStateFields.StencilFrontComparison | PassStateFields.StencilBackComparison, new() { Comparison = comp }, new() { Comparison = comp });
+                return true;
+            case "CompBack":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilBackComparison, back: new() { Comparison = ParserUtility.Keywords<ComparisonKind>(ref t) });
+                return true;
+            case "CompFront":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilFrontComparison, front: new() { Comparison = ParserUtility.Keywords<ComparisonKind>(ref t) });
+                return true;
+
+            case "Pass":
+                t.Next();
+                StencilOperation pass = ParserUtility.Keywords<StencilOperation>(ref t);
+                state = StencilFaces(PassStateFields.StencilFrontPass | PassStateFields.StencilBackPass, new() { Pass = pass }, new() { Pass = pass });
+                return true;
+            case "PassBack":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilBackPass, back: new() { Pass = ParserUtility.Keywords<StencilOperation>(ref t) });
+                return true;
+            case "PassFront":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilFrontPass, front: new() { Pass = ParserUtility.Keywords<StencilOperation>(ref t) });
+                return true;
+
+            case "Fail":
+                t.Next();
+                StencilOperation fail = ParserUtility.Keywords<StencilOperation>(ref t);
+                state = StencilFaces(PassStateFields.StencilFrontFail | PassStateFields.StencilBackFail, new() { Fail = fail }, new() { Fail = fail });
+                return true;
+            case "FailBack":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilBackFail, back: new() { Fail = ParserUtility.Keywords<StencilOperation>(ref t) });
+                return true;
+            case "FailFront":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilFrontFail, front: new() { Fail = ParserUtility.Keywords<StencilOperation>(ref t) });
+                return true;
+
+            case "ZFail":
+                t.Next();
+                StencilOperation zfail = ParserUtility.Keywords<StencilOperation>(ref t);
+                state = StencilFaces(PassStateFields.StencilFrontDepthFail | PassStateFields.StencilBackDepthFail, new() { DepthFail = zfail }, new() { DepthFail = zfail });
+                return true;
+            case "ZFailBack":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilBackDepthFail, back: new() { DepthFail = ParserUtility.Keywords<StencilOperation>(ref t) });
+                return true;
+            case "ZFailFront":
+                t.Next();
+                state = StencilFaces(PassStateFields.StencilFrontDepthFail, front: new() { DepthFail = ParserUtility.Keywords<StencilOperation>(ref t) });
+                return true;
+
+            default:
+                state = default!;
+                return false;
+        }
+    }
+
+
+    static PassState StencilFaces(PassStateFields set, StencilBehaviorDescription front = default, StencilBehaviorDescription back = default)
+        => new() { Set = set, DepthStencil = new() { StencilFront = front, StencilBack = back } };
+
+
+    static PassState ParseStencil(ref Tokenizer<ShaderToken> t)
+    {
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
+
+        List<PassState> states = new();
+
+        while (t.Peek().Kind == ShaderToken.Identifier)
+        {
+            string name = t.Slice(t.Peek()).ToString();
+            if (!TryParseStencilCommand(ref t, name, out PassState state))
+                break;
+            states.Add(state);
+        }
+
+        // The loop only stops on an identifier when it names no stencil command; a stencil block
+        // otherwise ends at its closing brace, so a leftover identifier is a misspelled command.
+        Token<ShaderToken> after = t.Peek();
+        if (after.Kind == ShaderToken.Identifier)
+            throw Exceptions.UnknownCommand(ParserUtility.Text(ref t, after), after);
+
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+        states.Add(new() { Set = PassStateFields.StencilTest, DepthStencil = new() { StencilTestEnabled = true } });
+        return FromSeveral(states);
+    }
+
+
+    // Consumes and parses a single render-state command if the identifier names one.
+    // Returns false (without consuming) for any unrecognized identifier, which terminates the
+    // command loop, e.g. on reaching the GLSLPROGRAM block.
+    static bool TryParseRenderCommand(ref Tokenizer<ShaderToken> t, string name, out PassState state)
+    {
+        switch (name)
+        {
+            case "AlphaToMask":
+                t.Next();
+                state = new() { Set = PassStateFields.AlphaToCoverage, AlphaToCoverage = ParserUtility.Keywords(ref t, OnStateMap) };
+                return true;
+
+            case "BlendOp":
+                t.Next();
+                BlendFunction blendop = ParserUtility.Keywords<BlendFunction>(ref t);
+                state = new() { Set = PassStateFields.ColorFunction | PassStateFields.AlphaFunction, Blend = new() { ColorFunction = blendop, AlphaFunction = blendop } };
+                return true;
+
+            case "Cull":
+                t.Next();
+                state = new() { Set = PassStateFields.CullMode, Raster = new() { CullMode = ParserUtility.Keywords(ref t, FaceCullModeMap) } };
+                return true;
+
+            case "ZClip":
+                t.Next();
+                state = new() { Set = PassStateFields.DepthClip, Raster = new() { DepthClipEnabled = ParserUtility.Keywords(ref t, OnStateMap) } };
+                return true;
+
+            case "ZTest":
+                t.Next();
+                if (ParserUtility.PeekKeyword(ref t, "Disabled"))
+                {
+                    t.Next();
+                    state = new() { Set = PassStateFields.DepthTest, DepthStencil = new() { DepthTestEnabled = false } };
+                }
+                else
+                {
+                    state = new()
+                    {
+                        Set = PassStateFields.DepthTest | PassStateFields.DepthComparison,
+                        DepthStencil = new() { DepthTestEnabled = true, DepthComparison = ParserUtility.Keywords<ComparisonKind>(ref t) }
+                    };
+                }
+                return true;
+
+            case "ZWrite":
+                t.Next();
+                state = new() { Set = PassStateFields.DepthWrite, DepthStencil = new() { DepthWriteEnabled = ParserUtility.Keywords(ref t, OnStateMap) } };
+                return true;
+
+            case "ColorMask":
+                t.Next();
+                Token<ShaderToken> mask = ParserUtility.Expect(ref t, ShaderToken.Identifier);
+                state = new() { Set = PassStateFields.ColorWriteMask, Blend = new() { ColorWriteMask = ParseMask(ref t, mask) } };
+                return true;
+
+            case "Offset":
+                t.Next();
+                float factor = ParserUtility.Float(ref t);
+                float units = ParserUtility.Float(ref t);
+                state = new()
+                {
+                    Set = PassStateFields.DepthBias | PassStateFields.DepthBiasSlope | PassStateFields.DepthBiasConstant,
+                    Raster = new() { DepthBiasEnabled = true, DepthBiasSlopeFactor = factor, DepthBiasConstantFactor = units }
+                };
+                return true;
+
+            case "Blend":
+                t.Next();
+                BlendFactor src = ParserUtility.Keywords<BlendFactor>(ref t);
+                BlendFactor dst = ParserUtility.Keywords<BlendFactor>(ref t);
+                state = new()
+                {
+                    Set = PassStateFields.BlendEnabled | PassStateFields.SourceColorFactor | PassStateFields.SourceAlphaFactor
+                        | PassStateFields.DestinationColorFactor | PassStateFields.DestinationAlphaFactor,
+                    Blend = new()
+                    {
+                        BlendEnabled = true,
+                        SourceColorFactor = src,
+                        SourceAlphaFactor = src,
+                        DestinationColorFactor = dst,
+                        DestinationAlphaFactor = dst
+                    }
+                };
+                return true;
+
+            case "BlendRGB":
+                t.Next();
+                BlendFactor srcRgb = ParserUtility.Keywords<BlendFactor>(ref t);
+                BlendFactor dstRgb = ParserUtility.Keywords<BlendFactor>(ref t);
+                state = new()
+                {
+                    Set = PassStateFields.BlendEnabled | PassStateFields.SourceColorFactor | PassStateFields.DestinationColorFactor,
+                    Blend = new() { BlendEnabled = true, SourceColorFactor = srcRgb, DestinationColorFactor = dstRgb }
+                };
+                return true;
+
+            case "BlendAlpha":
+                t.Next();
+                BlendFactor srcA = ParserUtility.Keywords<BlendFactor>(ref t);
+                BlendFactor dstA = ParserUtility.Keywords<BlendFactor>(ref t);
+                state = new()
+                {
+                    Set = PassStateFields.BlendEnabled | PassStateFields.SourceAlphaFactor | PassStateFields.DestinationAlphaFactor,
+                    Blend = new() { BlendEnabled = true, SourceAlphaFactor = srcA, DestinationAlphaFactor = dstA }
+                };
+                return true;
+
+            case "Stencil":
+                t.Next();
+                state = ParseStencil(ref t);
+                return true;
+
+            default:
+                state = default!;
+                return false;
+        }
+    }
+
+
+    static PassState FromSeveral(List<PassState> others)
+    {
+        if (others.Count == 0)
+            return new();
+
+        PassState value = others[0];
+
+        for (int i = 1; i < others.Count; i++)
+            value = value.Apply(others[i]);
+
+        return value;
+    }
+
+
+    /// <summary>
+    /// Parses pass state: unordered blend, depth, stencil, raster commands.
+    /// </summary>
+    public static PassState ParsePassState(string source)
+    {
+        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
+        return ParsePassState(ref t);
+    }
+
+
+    internal static PassState ParsePassState(ref Tokenizer<ShaderToken> t)
+    {
+        List<PassState> states = [];
+
+        while (t.Peek().Kind == ShaderToken.Identifier)
+        {
+            string name = t.Slice(t.Peek()).ToString();
+            if (!TryParseRenderCommand(ref t, name, out PassState state))
+                break;
+            states.Add(state);
+        }
+
+        return FromSeveral(states);
+    }
+
+
+    // ==================== ShaderProperty ====================
+
+    // Rejects a value whose leading token can't begin the property's type, so a mismatch reports
+    // the expected shape rather than a generic "expected number/(" from the underlying parser.
+    static void ValidateValueShape(ref Tokenizer<ShaderToken> t, ShaderPropertyType type)
+    {
+        Token<ShaderToken> value = t.Peek();
+
+        (bool ok, string expected) = type switch
+        {
+            ShaderPropertyType.Float or
+            ShaderPropertyType.Integer =>
+                (value.Kind is ShaderToken.Number or ShaderToken.Minus, "a scalar number"),
+
+            ShaderPropertyType.Color or
+            ShaderPropertyType.Vector =>
+                (value.Kind == ShaderToken.OpenParen, "a 4-component vector like (x, y, z, w)"),
+
+            ShaderPropertyType.Vector2 =>
+                (value.Kind == ShaderToken.OpenParen, "a 2-component vector like (x, y)"),
+
+            ShaderPropertyType.Vector3 =>
+                (value.Kind == ShaderToken.OpenParen, "a 3-component vector like (x, y, z)"),
+
+            ShaderPropertyType.Matrix =>
+                (value.Kind == ShaderToken.OpenParen, "a 4x4 matrix like ((..)(..)(..)(..))"),
+
+            _ => (value.Kind == ShaderToken.String, "a texture name like \"name\" {}")
+        };
+
+        if (!ok)
+            throw Exceptions.PropertyValue(type.ToString(), expected, ParserUtility.Found(ref t, value), value);
+    }
+
+
+    static object PropertyValue(ref Tokenizer<ShaderToken> t, ShaderPropertyType type)
+    {
+        ValidateValueShape(ref t, type);
+
+        return type switch
+        {
+            ShaderPropertyType.Float => ParserUtility.Float(ref t),
+            ShaderPropertyType.Integer => (float)ParserUtility.Integer(ref t),
+            ShaderPropertyType.Color or
+            ShaderPropertyType.Vector => ParserUtility.Vector(ref t),
+            ShaderPropertyType.Vector2 => ParserUtility.Vector(ref t, 2),
+            ShaderPropertyType.Vector3 => ParserUtility.Vector(ref t, 3),
+            ShaderPropertyType.Matrix => ParserUtility.Matrix(ref t),
+            ShaderPropertyType.Texture2D or
+            ShaderPropertyType.Texture2DArray or
+            ShaderPropertyType.Texture3D or
+            ShaderPropertyType.TextureCubemap or
+            ShaderPropertyType.TextureCubemapArray => ParserUtility.Texture(ref t),
+
+            _ => throw new NotSupportedException($"Unsupported type {type}")
+        };
+    }
+
+
+    // Parses [Attribute] [Attribute(args)] after a property, keeping each as source text without the brackets.
+    static string[] Attributes(ref Tokenizer<ShaderToken> t)
+    {
+        List<string> attributes = new();
+        while (t.TryConsume(ShaderToken.OpenBracket))
+        {
+            Token<ShaderToken> nameToken = ParserUtility.Expect(ref t, ShaderToken.Identifier, "attribute name");
+            StringBuilder text = new(t.Slice(nameToken).ToString());
+            if (t.TryConsume(ShaderToken.OpenParen))
+            {
+                text.Append('(');
+                bool first = true;
+                while (!t.TryConsume(ShaderToken.CloseParen))
+                {
+                    if (!first)
+                        ParserUtility.Expect(ref t, ShaderToken.Comma);
+                    text.Append(first ? "" : ", ");
+                    if (t.TryConsume(ShaderToken.Minus))
+                        text.Append('-');
+                    Token<ShaderToken> argument = t.Peek();
+                    if (argument.Kind is not (ShaderToken.Number or ShaderToken.Identifier or ShaderToken.String))
+                        throw new ParseException($"Expected an attribute argument, found {ParserUtility.Found(ref t, argument)}", argument.Line, argument.Column);
+                    t.Next();
+                    text.Append(t.Slice(argument));
+                    first = false;
+                }
+                text.Append(')');
+            }
+            ParserUtility.Expect(ref t, ShaderToken.CloseBracket);
+            attributes.Add(text.ToString());
+        }
+
+        return attributes.ToArray();
+    }
+
+
+    /// <summary>
+    /// Parses one property: Name("Display Name", Type) = Value [Attribute]
+    /// </summary>
+    public static ShaderProperty ParseProperty(string source)
+    {
+        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
+        return ParseProperty(ref t);
+    }
+
+
+    internal static ShaderProperty ParseProperty(ref Tokenizer<ShaderToken> t)
+    {
+        Token<ShaderToken> nameToken = ParserUtility.Expect(ref t, ShaderToken.Identifier, "property name");
+        string name = t.Slice(nameToken).ToString();
+
+        ParserUtility.Expect(ref t, ShaderToken.OpenParen);
+        string display = ParserUtility.QuotedString(ref t);
+        ParserUtility.Expect(ref t, ShaderToken.Comma);
+        ShaderPropertyType type = ParserUtility.Keywords<ShaderPropertyType>(ref t);
+        ParserUtility.Expect(ref t, ShaderToken.CloseParen);
+
+        object? value = null;
+        if (t.TryConsume(ShaderToken.Equals))
+            value = PropertyValue(ref t, type);
+
+        return new ShaderProperty
+        {
+            Name = name,
+            DisplayName = display,
+            PropertyType = type,
+
+            Value = value switch
+            {
+                float f => new Float4(f, 0, 0, 0),
+                Float4 v => v,
+                _ => Float4.Zero
+            },
+
+            MatrixValue = value is Float4x4 m ? m : Float4x4.Zero,
+
+            TextureValue = value as string ?? "",
+
+            HasDefault = value != null,
+
+            Attributes = Attributes(ref t),
+        };
+    }
+}

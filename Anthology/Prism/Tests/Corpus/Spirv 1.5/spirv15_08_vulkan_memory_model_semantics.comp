@@ -1,0 +1,5 @@
+#version 450
+#extension GL_KHR_memory_scope_semantics : require
+layout(local_size_x = 1) in;
+layout(std430, set = 0, binding = 0) buffer B { uint c; } b;
+void main() { atomicStore(b.c, 1u, gl_ScopeQueueFamily, gl_StorageSemanticsBuffer, gl_SemanticsRelease | gl_SemanticsMakeAvailable); }

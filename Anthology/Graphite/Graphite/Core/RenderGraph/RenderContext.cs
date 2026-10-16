@@ -24,6 +24,10 @@ public sealed class RenderContext
 
     private PassInfo? _currentPass;
     private ResourceAccess[]? _currentAccesses;
+
+    // The current pass's declared ids and texture outputs, so checking one is constant time however many it declares
+    private readonly HashSet<RenderResourceID> _declared = new();
+    private readonly HashSet<RenderResourceID> _textureOutputs = new();
     private string? _currentScopeName;
     private BufferAccess _pendingBufferSrc;
     private BufferAccess _pendingBufferDst;
@@ -70,6 +74,14 @@ public sealed class RenderContext
         _currentPass = pass;
         _currentAccesses = accesses;
         _currentScopeName = scopeName;
+        _declared.Clear();
+        _textureOutputs.Clear();
+        foreach (ResourceAccess access in accesses ?? [])
+        {
+            _declared.Add(access.Id);
+            if (access.IsTexture && access.IsOutput)
+                _textureOutputs.Add(access.Id);
+        }
     }
 
     internal void TransitionForAccesses(ResourceAccess[] accesses)
@@ -83,7 +95,7 @@ public sealed class RenderContext
             ResourceAccess access = accesses[i];
             if (access.IsTexture)
             {
-                if (!access.IsOutput && HasTextureOutput(accesses, access.Id))
+                if (!access.IsOutput && (ReferenceEquals(accesses, _currentAccesses) ? _textureOutputs.Contains(access.Id) : HasTextureOutput(accesses, access.Id)))
                     continue;
 
                 RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
@@ -220,14 +232,8 @@ public sealed class RenderContext
 
     private void CheckDeclared(RenderResourceID id)
     {
-        if (_currentAccesses == null)
+        if (_currentAccesses == null || _declared.Contains(id))
             return;
-
-        foreach (ResourceAccess access in _currentAccesses)
-        {
-            if (access.Id == id)
-                return;
-        }
 
         throw new InvalidOperationException(
             $"Pass '{_currentScopeName}' uses resource '{RenderResourceID.ToString(id)}' without declaring it in Setup.");
@@ -483,6 +489,13 @@ public sealed class RenderContext
         if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
             throw new InvalidOperationException($"Buffer handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
 
+        if (resource is GraphImportedBufferResource imported)
+        {
+            if (framesAgo != 0)
+                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Imported buffer '{RenderResourceID.ToString(handle.Id)}' has no history.");
+            return imported.Buffer;
+        }
+
         if (resource is not GraphBufferResource bufferResource)
             throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a buffer. Resolve it with GetRenderTexture.");
 
@@ -558,14 +571,14 @@ public sealed class RenderContext
         (int width, int height) = desc.Resolve(_view.PixelWidth, _view.PixelHeight);
         PixelFormat[] colors = desc.ColorFormats ?? Array.Empty<PixelFormat>();
         if (desc.EnableDepth && desc.DepthFormat is PixelFormat depthFormat)
-            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, TextureSampleCount.Count1, resource.Storage);
+            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, desc.SampleCount, resource.Storage) { ArrayLayers = desc.ArrayLayers };
 
         return new RenderTextureDescription(
             (uint)width,
             (uint)height,
             colors,
             desc.EnableDepth,
-            TextureSampleCount.Count1,
-            resource.Storage);
+            desc.SampleCount,
+            resource.Storage) { ArrayLayers = desc.ArrayLayers };
     }
 }

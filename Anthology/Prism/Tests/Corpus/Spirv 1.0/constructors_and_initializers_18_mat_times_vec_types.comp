@@ -1,0 +1,4 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; vec4 v; mat4 m; };
+void main(){ vec4 r = m * v; vec4 c = v * m; mat4 p = m * m; o = r.x + c.y + p[0][0]; }

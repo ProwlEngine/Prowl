@@ -169,13 +169,19 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             case SetPropertiesCommand properties:
                 ApplyProperties(cmd, properties);
                 break;
+            case SetDescriptorTableCommand table:
+                cmd.SetDescriptorTable(table.Set, BuildTable(table));
+                break;
+            case SetPushConstantsCommand push:
+                cmd.SetPushConstants(scope.Blob(push.Data), push.Offset);
+                break;
             case DrawCommand draw:
                 BindSource(cmd);
                 cmd.Draw(draw.VertexCount, draw.InstanceCount, draw.FirstVertex, draw.FirstInstance);
                 break;
             case DrawIndexedCommand draw:
                 BindSource(cmd);
-                cmd.DrawIndexed(draw.InstanceCount, draw.FirstIndex, draw.VertexOffset, draw.FirstInstance);
+                cmd.DrawIndexed(draw.IndexCount, draw.InstanceCount, draw.FirstIndex, draw.VertexOffset, draw.FirstInstance);
                 break;
             case DrawIndirectCommand draw:
                 BindSource(cmd);
@@ -185,11 +191,22 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 BindSource(cmd);
                 cmd.DrawIndexedIndirect(scope.Buffer(draw.Buffer.Resource), draw.Offset, draw.DrawCount, draw.Stride);
                 break;
+            case DrawIndirectCountCommand draw:
+                BindSource(cmd);
+                cmd.DrawIndirectCount(scope.Buffer(draw.Buffer.Resource), draw.Offset, scope.Buffer(draw.CountBuffer.Resource), draw.CountOffset, draw.MaxDrawCount, draw.Stride);
+                break;
+            case DrawIndexedIndirectCountCommand draw:
+                BindSource(cmd);
+                cmd.DrawIndexedIndirectCount(scope.Buffer(draw.Buffer.Resource), draw.Offset, scope.Buffer(draw.CountBuffer.Resource), draw.CountOffset, draw.MaxDrawCount, draw.Stride);
+                break;
             case DispatchCommand dispatch:
                 cmd.Dispatch(dispatch.GroupCountX, dispatch.GroupCountY, dispatch.GroupCountZ);
                 break;
             case DispatchIndirectCommand dispatch:
                 cmd.DispatchIndirect(scope.Buffer(dispatch.Buffer.Resource), dispatch.Offset);
+                break;
+            case ComputeBarrierCommand:
+                cmd.ComputeBarrier();
                 break;
             case UpdateBufferCommand update:
                 fixed (byte* source = scope.Blob(update.Data))
@@ -305,6 +322,40 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
         }
     }
 
+    private DescriptorTable? BuildTable(SetDescriptorTableCommand command)
+    {
+        if (command.Layout.Length == 0)
+            return null;
+
+        DescriptorTable table = scope.Own(scope.Factory.CreateDescriptorTable(
+            new ResourceLayoutDescription(command.Set, command.Layout.ToArray()) { Table = true }));
+
+        foreach (RecordedTableEntry entry in command.Entries)
+        {
+            RecordedProperty property = entry.Property;
+            PropertyID name = PropertyID.Intern(property.Name);
+            switch (property.Kind)
+            {
+                case PropertyKind.Buffer:
+                    table.SetBuffer(name, entry.Index, BufferRange(property));
+                    break;
+                case PropertyKind.Texture:
+                    Texture texture = scope.Texture(property.Resource.Resource);
+                    Sampler? sampler = scope.Sampler(property.Sampler);
+                    if (NeedsView(texture, property))
+                        table.SetTexture(name, entry.Index, scope.View(texture, property.Range, property.ViewFormat), sampler);
+                    else
+                        table.SetTexture(name, entry.Index, texture, sampler);
+                    break;
+                case PropertyKind.Sampler:
+                    table.SetSampler(name, entry.Index, scope.Sampler(property.Sampler)!);
+                    break;
+            }
+        }
+
+        return table;
+    }
+
     private DeviceBufferRange BufferRange(RecordedProperty property)
     {
         DeviceBuffer buffer = scope.Buffer(property.Resource.Resource);
@@ -326,6 +377,7 @@ internal static class ReplayEvents
 {
     public static bool IsEvent(RecordedCommand command)
         => command is DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
+            or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand
             or DispatchCommand or DispatchIndirectCommand
             or ClearColorTargetCommand or ClearDepthStencilCommand
             or UpdateBufferCommand or UpdateTextureCommand

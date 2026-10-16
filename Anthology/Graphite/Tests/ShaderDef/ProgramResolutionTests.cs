@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 
 using Prowl.Graphite.ShaderDef.Compiler;
 
@@ -16,20 +15,17 @@ public class ProgramResolutionTests : IDisposable
             Pass
             {
                 Cull Back
-                SLANGPROGRAM
-                struct VertexOutput { float4 Position : SV_Position; }
-
-                [shader("vertex")]
-                VertexOutput vertex(uint id : SV_VertexID)
+                GLSLPROGRAM
+                Vertex
                 {
-                    VertexOutput output;
-                    output.Position = float4(id, 0, 0, 1);
-                    return output;
+                    void main() { gl_Position = vec4(gl_VertexIndex, 0, 0, 1); }
                 }
-
-                [shader("fragment")]
-                float4 fragment(VertexOutput input) : SV_Target { return 1; }
-                ENDSLANG
+                Fragment
+                {
+                    out vec4 color;
+                    void main() { color = vec4(1); }
+                }
+                ENDGLSL
             }
         }
         """;
@@ -49,15 +45,8 @@ public class ProgramResolutionTests : IDisposable
         ShaderDefinition definition = Parse.Shader(Source);
         _pass = definition.Passes![0];
 
-        ShaderDescription description = Prowl.Graphite.ShaderDef.Compiler.Tests.SlangThread.Run(() =>
-        {
-            SlangShaderCompiler compiler = new();
-            compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
-            compiler.BeginSession([new DirectoryInfo(AppContext.BaseDirectory)]);
-            ShaderDescription result = compiler.Compile(_pass, [], GraphicsBackend.Vulkan);
-            compiler.EndSession();
-            return result;
-        });
+        using GlslShaderCompiler compiler = new();
+        ShaderDescription description = compiler.Compile(_pass, [], GraphicsBackend.Vulkan);
 
         Variant variant = new([], [(GraphicsBackend.Vulkan, description)]);
         definition.Create(_device, new ShaderSnapshot { Passes = [new PassSnapshot { Axes = [], Variants = [variant] }] });

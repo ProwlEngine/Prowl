@@ -26,12 +26,12 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdDraw(_cb, vertexCount, instanceCount, vertexStart, instanceStart);
     }
 
-    private protected override void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
         BindVertexBuffersFromSource();
         BindIndexBufferFromSource();
-        _gd.Vk.CmdDrawIndexed(_cb, _currentIndexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+        _gd.Vk.CmdDrawIndexed(_cb, indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
     private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
@@ -51,11 +51,38 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdDrawIndexedIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
     }
 
+    private protected override void DrawIndirectCountCore(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        PreDrawCommand();
+        BindVertexBuffersFromSource();
+        _gd.Vk.CmdDrawIndirectCount(_cb, ResolveIndirectBuffer(indirectBuffer).DeviceBuffer, offset, ResolveIndirectBuffer(countBuffer).DeviceBuffer, countOffset, maxDrawCount, stride);
+    }
+
+    private protected override void DrawIndexedIndirectCountCore(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        PreDrawCommand();
+        BindVertexBuffersFromSource();
+        BindIndexBufferFromSource();
+        _gd.Vk.CmdDrawIndexedIndirectCount(_cb, ResolveIndirectBuffer(indirectBuffer).DeviceBuffer, offset, ResolveIndirectBuffer(countBuffer).DeviceBuffer, countOffset, maxDrawCount, stride);
+    }
+
     private protected override void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
         PreDispatchCommand();
         _gd.Vk.CmdDispatch(_cb, groupCountX, groupCountY, groupCountZ);
         EndTemporaryStorage();
+    }
+
+    private protected override void ComputeBarrierCore()
+    {
+        EnsureNoRenderPass();
+        MemoryBarrier barrier = new()
+        {
+            SType = StructureType.MemoryBarrier,
+            SrcAccessMask = AccessFlags.ShaderWriteBit,
+            DstAccessMask = AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit,
+        };
+        _gd.Vk.CmdPipelineBarrier(_cb, PipelineStageFlags.ComputeShaderBit, PipelineStageFlags.ComputeShaderBit, 0, 1, in barrier, 0, null, 0, null);
     }
 
     private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
@@ -102,6 +129,8 @@ internal unsafe partial class VkCommandBuffer
 
         if (needBind)
             _descriptorBinder.EmitBind(_currentShaderProgram.PipelineLayout, PipelineBindPoint.Graphics);
+
+        PushConstants(_currentShaderProgram, _currentShaderProgram.PipelineLayout, ref _pushedGraphics, ref _pushedGraphicsVersion);
     }
 
     private void PreDispatchCommand()
@@ -116,6 +145,22 @@ internal unsafe partial class VkCommandBuffer
 
         if (needBind)
             _descriptorBinder.EmitBind(_currentComputeProgram.PipelineLayout, PipelineBindPoint.Compute);
+
+        PushConstants(_currentComputeProgram, _currentComputeProgram.PipelineLayout, ref _pushedCompute, ref _pushedComputeVersion);
+    }
+
+    // Pushes the whole block when the program or the data changed since the last push for this bind point.
+    private void PushConstants(ShaderProgram program, PipelineLayout layout, ref ShaderProgram? pushed, ref uint pushedVersion)
+    {
+        PushConstantRange range = program.PushConstants;
+        if (range.SizeInBytes == 0 || (ReferenceEquals(pushed, program) && pushedVersion == _pushConstantVersion))
+            return;
+
+        fixed (byte* data = _pushConstants)
+            _gd.Vk.CmdPushConstants(_cb, layout, VkFormats.ToVkShaderStages(range.Stages), 0, range.SizeInBytes, data);
+
+        pushed = program;
+        pushedVersion = _pushConstantVersion;
     }
 
     private void ResolveAndBindGraphicsPipeline()
@@ -183,7 +228,6 @@ internal unsafe partial class VkCommandBuffer
     private void BindIndexBufferFromSource()
     {
         bool has = _currentVertexSource!.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount);
-        _currentIndexCount = indexCount;
         DrawIndexed_CheckIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
 

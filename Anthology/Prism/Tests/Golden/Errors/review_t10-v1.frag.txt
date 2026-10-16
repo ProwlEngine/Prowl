@@ -1,0 +1,10 @@
+<shader>
+ERROR: #version: versions 300, 310, and 320 require specifying the 'es' profile
+ERROR: <shader>:2: 'float' : type requires declaration of default precision qualifier 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

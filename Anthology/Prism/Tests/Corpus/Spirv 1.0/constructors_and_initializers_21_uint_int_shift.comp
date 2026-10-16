@@ -1,0 +1,4 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; vec4 v; mat4 m; };
+void main(){ int i = k << 2; uint u = uint(k) >> 1u; int j = k << 1u; o = float(i) + float(u) + float(j); }

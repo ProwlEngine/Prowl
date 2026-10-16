@@ -1,0 +1,11 @@
+<shader>
+ERROR: <shader>:4: 'shared block' : shared block requires at least SPIR-V 1.4 
+ERROR: <shader>:4: 'shared block' : shared block requires at least SPIR-V 1.4 
+ERROR: <shader>:4: 'shared block' : shared block requires at least SPIR-V 1.4 
+ERROR: <shader>:4: 'shared block' : shared block requires at least SPIR-V 1.4 
+ERROR: 4 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

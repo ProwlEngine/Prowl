@@ -76,10 +76,15 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
     public void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
         => Log.Add($"DrawIndexed:{indexCount}:{instanceCount}:{firstIndex}:{vertexOffset}:{firstInstance}");
 
+    public void SetPushConstants(uint offset, ReadOnlySpan<byte> data) => Log.Add($"Push:{offset}:{data.Length}");
+    public void SetDescriptorTable(uint set, ReadOnlySpan<ResourceLayoutElementDescription> layout, ReadOnlySpan<DescriptorTableEntryState> entries) => Log.Add($"Table:{set}:{entries.Length}");
     public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride) => Log.Add("DrawIndirect");
     public void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride) => Log.Add("DrawIndexedIndirect");
+    public void DrawIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride) => Log.Add("DrawIndirectCount");
+    public void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride) => Log.Add("DrawIndexedIndirectCount");
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ) => Log.Add($"Dispatch:{groupCountX}:{groupCountY}:{groupCountZ}");
     public void DispatchIndirect(in ResourceVersion buffer, uint offset) => Log.Add("DispatchIndirect");
+    public void ComputeBarrier() => Log.Add("ComputeBarrier");
 
     public void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
     {
@@ -155,7 +160,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             new VertexElementDescription("POSITION", VertexElementFormat.Float2),
             new VertexElementDescription("COLOR", VertexElementFormat.Float4));
 
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FloatColorVertexAttribs.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FloatColorVertexAttribs.glsl");
         return RF.CreateGraphicsProgram(new ShaderDescription(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -185,7 +190,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
 
     private ComputeProgram CreateFillProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription
@@ -291,7 +296,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     }
 
     [SkippableFact]
-    public void SetMutatedAfterSetProperties_ReportsNewValueAtNextDraw()
+    public void SetMutatedThenReapplied_ReportsNewValueAtNextDraw()
     {
         (Framebuffer fb, _) = CreateTarget();
         GraphicsProgram program = CreatePointProgram();
@@ -307,12 +312,33 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
             cl.SetProperties(props);
             cl.Draw(1);
             props.SetInt("ColorNormalizationFactor", 9);
+            cl.SetProperties(props);
             cl.Draw(1);
         });
 
         Assert.Equal(2, sink.Tables.Count);
         PropertyState last = Assert.Single(sink.Tables[1], p => p.Name == (PropertyID)"ColorNormalizationFactor");
         Assert.Equal(9, last.Uniform.Read<int>());
+    }
+
+    [SkippableFact]
+    public void ComputeBarriers_AreReportedBetweenTheirDispatches()
+    {
+        ComputeProgram compute = CreateFillProgram();
+        DeviceBuffer storage = RF.CreateBuffer(new BufferDescription(64, BufferUsage.StructuredBufferReadWrite));
+        PropertySet props = new();
+        props.SetBuffer("OutputVertices", storage);
+
+        SinkRecorder sink = Record(cl =>
+        {
+            cl.SetComputeShader(compute);
+            cl.SetProperties(props);
+            cl.Dispatch(1, 1, 1);
+            cl.ComputeBarrier();
+            cl.Dispatch(1, 1, 1);
+        });
+
+        Assert.Equal(["Dispatch:1:1:1", "ComputeBarrier", "Dispatch:1:1:1"], sink.Log.Where(e => e.StartsWith("Dispatch") || e == "ComputeBarrier"));
     }
 
     [SkippableFact]

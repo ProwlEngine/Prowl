@@ -4,6 +4,7 @@
         <Project Path="Tests/Debugger/Prowl.Graphite.Debugger.Tests.csproj" />
         <Project Path="Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
         <Project Path="Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
+        <Project Path="Tests/Rendering/Prowl.Graphite.Rendering.Tests.csproj" />
     </Folder>
     <Folder Name="/Graphite/">
         <Project Path="Graphite/Prowl.Graphite.csproj" />
@@ -11,6 +12,9 @@
     <Folder Name="/Debugger/">
         <Project Path="Debugger/Core/Prowl.Graphite.Debugger.csproj" />
         <Project Path="Debugger/Viewer/Prowl.Graphite.Debugger.Viewer.csproj" />
+    </Folder>
+    <Folder Name="/Rendering/">
+        <Project Path="Rendering/Prowl.Graphite.Rendering.csproj" />
     </Folder>
     <Folder Name="/ShaderDef/">
         <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
@@ -39,7 +43,6 @@
         <Project Path="Samples/Shared/Shared.csproj" />
     </Folder>
     <Folder Name="/Tools/">
-        <Project Path="Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
         <Project Path="Tools/GraphiteBench/GraphiteBench.csproj" />
     </Folder>
 </Solution>

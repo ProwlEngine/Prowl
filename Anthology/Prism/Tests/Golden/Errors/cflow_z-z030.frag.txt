@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:3: 'v' : undeclared identifier 
+ERROR: <shader>:3: 'xyzw' : vector swizzle selection out of range 
+ERROR: <shader>:3: 'v' : redefinition 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 4 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

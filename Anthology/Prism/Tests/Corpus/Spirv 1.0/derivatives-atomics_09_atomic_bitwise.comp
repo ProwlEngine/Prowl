@@ -1,0 +1,14 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    uint bits;
+};
+
+void main() {
+    uint mask = 1u << (gl_LocalInvocationID.x & 31u);
+    atomicAnd(bits, ~mask);
+    atomicOr(bits, mask);
+    atomicXor(bits, mask);
+}

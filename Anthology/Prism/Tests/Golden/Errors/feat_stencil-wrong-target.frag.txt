@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: 'layout qualifier' : can only apply depth layout to gl_FragStencilRefARB 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point

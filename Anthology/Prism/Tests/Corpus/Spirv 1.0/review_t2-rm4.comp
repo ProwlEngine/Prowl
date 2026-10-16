@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { mat3x2 a; float x; };
+layout(std430, row_major, binding=1) buffer B { S s; float o; } b;
+void main(){ b.o = b.s.a[0][0] + b.s.x; }

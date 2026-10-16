@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { float f; } b;
+void main(){
+    b.f = minInvocationsAMD(b.f);
+}

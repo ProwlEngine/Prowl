@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:10: 'q77' : there is no such layout identifier for this stage taking an assigned value 
+ERROR: <shader>:10: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

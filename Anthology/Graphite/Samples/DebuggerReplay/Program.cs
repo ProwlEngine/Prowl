@@ -108,13 +108,8 @@ public static class Program
 
     private static ShaderStageDescription[] CompileShader()
     {
-        string directory = AppContext.BaseDirectory;
-        SlangShaderCompiler compiler = new();
-        compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
-        compiler.BeginSession([new DirectoryInfo(directory)], path => File.ReadAllBytes(Path.IsPathRooted(path) ? path : Path.Combine(directory, path)));
-        ShaderPass shader = new() { State = new PassState(), InlineSlang = File.ReadAllText(Path.Combine(directory, "Shader.slang")) };
-        ShaderDescription description = compiler.Compile(shader, [], GraphicsBackend.Vulkan);
-        compiler.EndSession();
-        return description.Stages;
+        using GlslShaderCompiler compiler = new();
+        ShaderPass shader = new() { State = new PassState(), Source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shader.glsl")), SourceName = "Shader.glsl" };
+        return compiler.Compile(shader, [], GraphicsBackend.Vulkan).Stages;
     }
 }

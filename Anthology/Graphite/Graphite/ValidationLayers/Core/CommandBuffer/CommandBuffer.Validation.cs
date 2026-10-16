@@ -109,6 +109,18 @@ public abstract partial class CommandBuffer
         }
     }
 
+    private void DrawIndirect_CheckDrawCount(uint drawCount)
+    {
+        if (!Device.ValidationEnabled)
+            return;
+
+        if (drawCount > 1 && !_features.MultiDrawIndirect)
+        {
+            throw new RenderException(
+                $"{nameof(drawCount)} is {drawCount}, but the device does not support GraphicsDeviceFeatures.MultiDrawIndirect, so it must be 0 or 1.");
+        }
+    }
+
     private void DrawIndirect_CheckStride(uint stride, int argumentSize)
     {
         if (!Device.ValidationEnabled)

@@ -1,0 +1,6 @@
+#version 450
+#extension GL_EXT_nonuniform_qualifier : require
+layout(local_size_x = 1) in;
+layout(std430, set = 0, binding = 0) buffer B { float v[]; } bufs[];
+layout(std430, set = 0, binding = 1) buffer O { float o; };
+void main() { uint i = gl_GlobalInvocationID.x; float x = bufs[nonuniformEXT(i)].v[0] * 2.0; o = x + 1.0; o = bufs[nonuniformEXT(i)].v[1] + 3.0; }

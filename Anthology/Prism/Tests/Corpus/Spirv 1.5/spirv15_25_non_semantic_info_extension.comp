@@ -1,0 +1,4 @@
+#version 450
+#extension GL_EXT_debug_printf : require
+layout(local_size_x = 1) in;
+void main() { debugPrintfEXT("x=%d", int(gl_GlobalInvocationID.x)); }

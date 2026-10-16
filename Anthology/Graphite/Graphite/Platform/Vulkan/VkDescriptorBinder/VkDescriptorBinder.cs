@@ -34,6 +34,9 @@ internal unsafe sealed partial class VkDescriptorBinder
         public int BoundDynOffsetCount;
         public bool Bound;
 
+        public VkDescriptorTable? Table;
+        public ResourceLayoutElementDescription[]? TableLayout;
+
         public PropertyEntry[] Entries = new PropertyEntry[16];
         public uint[] EntryVersions = new uint[16];
         public int EntryCount;
@@ -76,7 +79,8 @@ internal unsafe sealed partial class VkDescriptorBinder
     private SetBindState[] _setBindStates = Array.Empty<SetBindState>();
     private ShaderProgram _bindCacheProgram;
     private SetBindState? _trackState;
-    private byte[] _uboScratch = Array.Empty<byte>();
+    private UniformBindingPlan _plan;
+    private UniformShadows _shadows;
 
     // Set count and first-changed-set index from the most recent Prepare() call that returned true;
     // EmitBind() reads them back so callers don't have to re-derive them from the program.
@@ -119,6 +123,9 @@ internal unsafe sealed partial class VkDescriptorBinder
         DescriptorResourceCounts[] perSetCounts = descProgram.PerSetCounts;
 
         EnsureBindCacheFor(program, (int)setCount);
+        _plan = program.BindingPlan;
+        _shadows = _cbOwner.UniformShadows;
+        _shadows.UsePlan(_plan);
         ulong executionId = _cbOwner.ExecutionId;
         int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
@@ -128,7 +135,11 @@ internal unsafe sealed partial class VkDescriptorBinder
             SetBindingMetadata meta = metadata[setIdx];
             SetBindState state = _setBindStates[setIdx];
 
-            if (!CanReuseSet(state, meta, graphStates))
+            if (resourceLayouts[setIdx].Table)
+            {
+                UseTable(state, setIdx, resourceLayouts[setIdx]);
+            }
+            else if (!CanReuseSet(state, meta, graphStates, setIdx))
             {
                 state.EntryCount = 0;
                 _trackState = state;
@@ -136,7 +147,7 @@ internal unsafe sealed partial class VkDescriptorBinder
                 _trackState = null;
                 PrepareResolvedTextures(elements, isGraphics);
                 SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
-                GatherDynOffsets(meta, state);
+                GatherDynOffsets(setIdx, state);
                 state.GraphStates = _cbOwner.GraphStates;
             }
 
@@ -154,13 +165,46 @@ internal unsafe sealed partial class VkDescriptorBinder
         return true;
     }
 
-    private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, GraphTextureStates? graphStates)
+    // A table set binds the table's own descriptor set, nothing is resolved from properties.
+    private void UseTable(SetBindState state, int setIdx, in ResourceLayoutDescription layout)
+    {
+        if (_cbOwner.DescriptorTableAt(setIdx) is not VkDescriptorTable table)
+            throw new RenderException($"The program declares set {setIdx} as a descriptor table, but no table is bound there. Call SetDescriptorTable.");
+
+        if (!ReferenceEquals(state.Table, table) || !ReferenceEquals(state.TableLayout, layout.Elements))
+        {
+            if (!Util.ArrayEqualsEquatable(table.Layout.Elements, layout.Elements))
+                throw new RenderException($"The descriptor table bound at set {setIdx} was created from a different layout than the program declares.");
+
+            state.Table = table;
+            state.TableLayout = layout.Elements;
+        }
+
+        state.Set = table.Set;
+        state.DynOffsetCount = 0;
+        state.IdentityLen = -1;
+        state.EntryCount = 0;
+    }
+
+    private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, GraphTextureStates? graphStates, int setIdx)
         => state.IdentityLen >= 0
+            && !AnyBlockDirty(setIdx)
             && !_cbOwner.AllPropertiesChanged
             && !meta.HasStorageTexture
             && ReferenceEquals(state.GraphStates, graphStates)
             && !meta.ReadsAny(_cbOwner.ChangedPropertyKeys)
             && state.EntriesUnchanged();
+
+    private bool AnyBlockDirty(int setIdx)
+    {
+        int[] blocks = _plan.SetBlocks[setIdx];
+        for (int i = 0; i < blocks.Length; i++)
+        {
+            if (_shadows[blocks[i]].Dirty)
+                return true;
+        }
+        return false;
+    }
 
     private static bool SetDiffersFromBound(SetBindState state)
     {
@@ -297,9 +341,9 @@ internal unsafe sealed partial class VkDescriptorBinder
         return n;
     }
 
-    private void GatherDynOffsets(SetBindingMetadata meta, SetBindState state)
+    private void GatherDynOffsets(int setIdx, SetBindState state)
     {
-        int[] order = meta.SortedUboElementIndices;
+        int[] order = _plan.DynamicOffsetOrder[setIdx];
         if (state.DynOffsets.Length < order.Length)
             state.DynOffsets = new uint[order.Length];
 

@@ -1,0 +1,6 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+#extension GL_EXT_fragment_shading_rate : require
+layout(local_size_x=1) in;
+layout(triangles, max_vertices=3, max_primitives=1) out;
+void main(){ SetMeshOutputsEXT(3, 1); gl_MeshPrimitivesEXT[0].gl_PrimitiveShadingRateEXT = 0; gl_MeshPrimitivesEXT[0].gl_CullPrimitiveEXT = true; gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0,1,2); }

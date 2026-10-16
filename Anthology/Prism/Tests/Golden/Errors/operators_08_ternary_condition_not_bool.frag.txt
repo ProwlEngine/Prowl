@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:6: '' : boolean expression expected 
+ERROR: <shader>:6: '=' :  cannot convert from ' temp 3-component vector of float' to ' temp highp float'
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

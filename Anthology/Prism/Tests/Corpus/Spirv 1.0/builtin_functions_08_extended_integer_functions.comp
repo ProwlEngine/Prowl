@@ -1,0 +1,37 @@
+#version 460 core
+
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+layout(std430, binding=0) buffer ResultBuffer {
+    uint results[8];
+};
+
+void main() {
+    uint ux = 4000000000u;
+    uint uy = 1000000000u;
+
+    uint carry;
+    uint r_sum = uaddCarry(ux, uy, carry);
+
+    uint borrow;
+    uint r_diff = usubBorrow(uy, ux, borrow);
+
+    uint u_msb;
+    uint u_lsb;
+    umulExtended(ux, uy, u_msb, u_lsb);
+
+    int ix = 2000000000;
+    int iy = 2000000000;
+    int i_msb;
+    int i_lsb;
+    imulExtended(ix, iy, i_msb, i_lsb);
+
+    results[0] = r_sum;
+    results[1] = carry;
+    results[2] = r_diff;
+    results[3] = borrow;
+    results[4] = u_msb;
+    results[5] = u_lsb;
+    results[6] = uint(i_msb);
+    results[7] = uint(i_lsb);
+}

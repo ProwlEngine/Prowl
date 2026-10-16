@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: 'location' : overlapping use of location 0
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking vertex stage: Missing entry point: Each stage requires one entry point
+

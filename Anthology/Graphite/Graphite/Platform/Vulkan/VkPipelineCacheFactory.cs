@@ -22,7 +22,7 @@ internal static unsafe class VkPipelineCacheFactory
         PipelineColorBlendStateCreateInfo blendStateCI = new() { SType = StructureType.PipelineColorBlendStateCreateInfo };
         BlendStateDescription programBlendState = program.BlendState;
         int declaredCount = programBlendState.AttachmentStates.Length;
-        int attachmentsCount = Math.Max(declaredCount, outputDesc.ColorFormats.Length);
+        int attachmentsCount = outputDesc.ColorFormats.Length;
         PipelineColorBlendAttachmentState* attachmentsPtr
             = stackalloc PipelineColorBlendAttachmentState[attachmentsCount];
         for (int i = 0; i < attachmentsCount; i++)
@@ -171,11 +171,24 @@ internal static unsafe class VkPipelineCacheFactory
 
         byte* entryPointBuffer = stackalloc byte[entryPointBytes];
         int entryPointOffset = 0;
+
+        SpecializationConstant[] constants = program.SpecializationsArray;
+        SpecializationMapEntry* entries = stackalloc SpecializationMapEntry[constants.Length];
+        uint* values = stackalloc uint[constants.Length];
+        for (int i = 0; i < constants.Length; i++)
+        {
+            entries[i] = new SpecializationMapEntry(constants[i].Id, (uint)(i * sizeof(uint)), sizeof(uint));
+            values[i] = constants[i].Value;
+        }
+        SpecializationInfo specialization = new((uint)constants.Length, entries, (nuint)(constants.Length * sizeof(uint)), values);
+
         foreach (KeyValuePair<ShaderStages, ShaderModule> kvp in program.Modules)
         {
             PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
             stageCI.Module = kvp.Value;
             stageCI.Stage = VkFormats.ToVkShaderStages(kvp.Key);
+            if (constants.Length > 0)
+                stageCI.PSpecializationInfo = &specialization;
 
             string entryPoint = program.GetEntryPoint(kvp.Key);
             byte* entryPointPtr = entryPointBuffer + entryPointOffset;
@@ -257,6 +270,18 @@ internal static unsafe class VkPipelineCacheFactory
         dependencies[0] = VkBarriers.ExternalToPass(gd);
         dependencies[1] = VkBarriers.PassToExternal(gd);
 
+        uint viewMask = VkFramebuffer.ViewMask(outputDesc.ViewCount);
+        RenderPassMultiviewCreateInfo multiview = new()
+        {
+            SType = StructureType.RenderPassMultiviewCreateInfo,
+            SubpassCount = 1,
+            PViewMasks = &viewMask,
+            CorrelationMaskCount = 1,
+            PCorrelationMasks = &viewMask,
+        };
+        if (viewMask != 0)
+            renderPassCI.PNext = &multiview;
+
         renderPassCI.AttachmentCount = attachmentCount;
         renderPassCI.PAttachments = attachments;
         renderPassCI.SubpassCount = 1;
@@ -268,7 +293,13 @@ internal static unsafe class VkPipelineCacheFactory
 
         pipelineCI.RenderPass = renderPass;
 
-        gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline).CheckResult();
+        if (gd.PipelineStatistics != null)
+            pipelineCI.Flags |= PipelineCreateFlags.PipelineCreateCaptureStatisticsBitKhr;
+        Result created = gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline);
+
+        if (created != Result.Success || pipeline.Handle == 0)
+            throw new RenderException($"The driver could not create a pipeline ({created}) for program '{program.Name ?? "(unnamed)"}'.\n{program.Describe()}");
+        gd.PrintPipelineStatistics(pipeline, program.Name ?? "");
 
         return new VkPipelineCacheEntry(
             pipeline,

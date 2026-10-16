@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:1: '#version' : bad profile name; use es, core, or compatibility 
+ERROR: <shader>:1: '#version' : bad tokens following profile -- expected newline 
+ERROR: <shader>:1: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

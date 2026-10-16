@@ -84,6 +84,13 @@ internal unsafe partial class VkGraphicsDevice
         return true;
     }
 
+    public override bool SupportsBlit(PixelFormat format, bool depthFormat)
+    {
+        Vk.GetPhysicalDeviceFormatProperties(PhysicalDevice, VkFormats.ToVkPixelFormat(format, depthFormat), out FormatProperties properties);
+        FormatFeatureFlags both = FormatFeatureFlags.BlitSrcBit | FormatFeatureFlags.BlitDstBit;
+        return (properties.OptimalTilingFeatures & both) == both;
+    }
+
     internal Filter GetFormatFilter(Format format)
     {
         if (!_filters.TryGetValue(format, out Filter filter))

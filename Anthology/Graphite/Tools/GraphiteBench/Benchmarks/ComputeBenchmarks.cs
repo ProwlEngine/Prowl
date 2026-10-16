@@ -44,7 +44,7 @@ public class ComputeBenchmarks : GraphiteBenchmark
 
     protected override IEnumerable<IPass> CreatePasses()
     {
-        ComputeProgram program = Own(BenchShaderLoader.CreateCompute(Device, "BufferChain.slang", 64));
+        ComputeProgram program = Own(BenchShaderLoader.CreateCompute(Device, "BufferChain.glsl"));
         DeviceBuffer a = CreateBuffer();
         DeviceBuffer b = CreateBuffer();
         uint groups = Elements / 64;

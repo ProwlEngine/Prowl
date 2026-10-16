@@ -20,7 +20,8 @@ public sealed class RenderTexture : GraphicsResource
 
     private readonly bool _owned = true;
 
-    internal RenderTexture(Framebuffer framebuffer)
+    /// <summary>Wraps an existing framebuffer, so a graph can import it. The caller keeps owning the framebuffer.</summary>
+    public RenderTexture(Framebuffer framebuffer)
     {
         _owned = false;
         Framebuffer = framebuffer;
@@ -34,9 +35,9 @@ public sealed class RenderTexture : GraphicsResource
         }
 
         DepthTexture = framebuffer.DepthTarget?.Target;
-        Desc = DepthTexture != null
+        Desc = (DepthTexture != null
             ? new RenderTextureDescription(framebuffer.Width, framebuffer.Height, formats, DepthTexture.Format, DepthTexture.SampleCount)
-            : new RenderTextureDescription(framebuffer.Width, framebuffer.Height, formats, false);
+            : new RenderTextureDescription(framebuffer.Width, framebuffer.Height, formats, false)) with { ArrayLayers = framebuffer.ViewCount };
     }
 
     internal RenderTexture(GraphicsDevice device, in RenderTextureDescription desc)
@@ -52,11 +53,12 @@ public sealed class RenderTexture : GraphicsResource
         if (desc.Storage)
             colorUsage |= TextureUsage.Storage;
 
+        uint layers = Math.Max(1, desc.ArrayLayers);
         ColorTextures = new Texture[desc.ColorFormats.Length];
         for (int i = 0; i < ColorTextures.Length; i++)
         {
             ColorTextures[i] = factory.CreateTexture(TextureDescription.Texture2D(
-                desc.Width, desc.Height, 1, 1,
+                desc.Width, desc.Height, 1, layers,
                 desc.ColorFormats[i],
                 colorUsage,
                 desc.SampleCount));
@@ -65,13 +67,13 @@ public sealed class RenderTexture : GraphicsResource
         if (desc.Depth)
         {
             DepthTexture = factory.CreateTexture(TextureDescription.Texture2D(
-                desc.Width, desc.Height, 1, 1,
+                desc.Width, desc.Height, 1, layers,
                 desc.DepthFormat ?? ResolveDepthFormat(device),
                 TextureUsage.DepthStencil | TextureUsage.Sampled,
                 desc.SampleCount));
         }
 
-        Framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures));
+        Framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures) { ViewCount = layers > 1 ? layers : 0 });
     }
 
     /// <summary>Depth-stencil format render textures use: D24_UNorm_S8_UInt, or D32_Float_S8_UInt when the device lacks it.</summary>

@@ -281,6 +281,33 @@ public abstract class CommandBufferBase : GraphicsResource
         uint width, uint height, uint depth,
         uint layerCount);
 
+    /// <summary>
+    /// Scales rectangles of one texture's first mip and layer into rectangles of another's in one command, each destination
+    /// texel taking its nearest source texel, so depths are never blended. The textures must differ, be of formats
+    /// <see cref="GraphicsDevice.SupportsBlit"/> allows, and be in transfer source and destination states.
+    /// </summary>
+    public void BlitTexture(Texture source, Texture destination, ReadOnlySpan<TextureBlit> regions)
+    {
+        ValidationHelpers.CopyTextureCheckNotNull(Device, source, destination);
+        if (ReferenceEquals(source, destination))
+            throw new ArgumentException("A blit needs two textures, not two regions of one.", nameof(destination));
+        if (regions.IsEmpty)
+            return;
+        foreach (TextureBlit region in regions)
+        {
+            if (region.SourceX + region.SourceWidth > source.Width || region.SourceY + region.SourceHeight > source.Height)
+                throw new ArgumentOutOfRangeException(nameof(regions), $"A blit region reads past the {source.Width}x{source.Height} source.");
+            if (region.DestinationX + region.DestinationWidth > destination.Width || region.DestinationY + region.DestinationHeight > destination.Height)
+                throw new ArgumentOutOfRangeException(nameof(regions), $"A blit region writes past the {destination.Width}x{destination.Height} destination.");
+        }
+        TrackTexture(source);
+        TrackTexture(destination);
+        BlitTextureCore(source, destination, regions);
+        destination.MarkContentChanged();
+    }
+
+    private protected abstract void BlitTextureCore(Texture source, Texture destination, ReadOnlySpan<TextureBlit> regions);
+
     /// <summary>Copies a texture region into a buffer as tightly packed rows.</summary>
     public void CopyTextureToBuffer(Texture source, DeviceBuffer destination, uint destinationOffset, in TextureRegion region)
     {

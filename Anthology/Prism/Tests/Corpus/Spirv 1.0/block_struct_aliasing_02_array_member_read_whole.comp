@@ -1,0 +1,45 @@
+#version 460 core
+
+// Fixed-size ARRAY members of a block, indexed (the common pattern) and copied whole for the struct
+// case. A struct-array element copies member by member between the block and plain universes; scalar
+// and vector array members are read by index, each element loading the stored type.
+
+layout(local_size_x = 8) in;
+
+struct Tap
+{
+    vec4 offset;
+    float weight;
+};
+
+layout(std140, set = 0, binding = 0) uniform Kernel
+{
+    vec4 taps[4];
+    float weights[4];
+    Tap entries[4];
+} kernelData;
+
+layout(std430, set = 0, binding = 1) buffer OutBuffer
+{
+    vec4 results[];
+};
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+
+    // Indexed reads of vector and scalar array members.
+    vec4 sum = vec4(0.0);
+    for (int k = 0; k < 4; k++)
+        sum += kernelData.taps[k] * kernelData.weights[k];
+
+    // Whole-struct copy out of a block array element: a member-by-member copy across the two universes.
+    Tap first = kernelData.entries[0];
+    sum += first.offset * first.weight;
+
+    // Indexed struct-array member reads.
+    for (int k = 0; k < 4; k++)
+        sum += kernelData.entries[k].offset * kernelData.entries[k].weight;
+
+    results[i] = sum;
+}

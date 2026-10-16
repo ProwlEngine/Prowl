@@ -42,7 +42,7 @@ public class ShaderSwitchBenchmarks : GraphiteBenchmark
 
     protected override IEnumerable<IPass> CreatePasses()
     {
-        GraphicsProgram[] programs = BenchShaderLoader.CreateVariants(Device, "Variants.slang", Programs);
+        GraphicsProgram[] programs = BenchShaderLoader.CreateVariants(Device, "Variants.glsl", Programs);
         foreach (GraphicsProgram program in programs)
             Own(program);
 

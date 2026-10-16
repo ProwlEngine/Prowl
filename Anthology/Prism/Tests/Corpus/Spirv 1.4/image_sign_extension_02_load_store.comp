@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x = 1) in;
+layout(set = 0, binding = 0, r32ui) uniform uimage2D img;
+layout(set = 0, binding = 1, r32i) uniform iimage2D iimg;
+void main() { uvec4 v = imageLoad(img, ivec2(0)); imageStore(img, ivec2(1), v + 1u); ivec4 w = imageLoad(iimg, ivec2(0)); imageStore(iimg, ivec2(1), w); }

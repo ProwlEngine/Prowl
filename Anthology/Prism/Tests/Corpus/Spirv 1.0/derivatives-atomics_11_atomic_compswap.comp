@@ -1,0 +1,15 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    uint lockWord;
+};
+
+void main() {
+    uint desired = gl_GlobalInvocationID.x + 1u;
+    uint old = atomicCompSwap(lockWord, 0u, desired);
+    if (old == 0u) {
+        atomicCompSwap(lockWord, desired, 0u);
+    }
+}

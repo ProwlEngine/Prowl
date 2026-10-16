@@ -1,0 +1,3 @@
+<shader>
+ERROR: <shader>:3: '' :  syntax error, unexpected IDENTIFIER, expecting SEMICOLON
+ERROR: 1 compilation errors.  No code generated.

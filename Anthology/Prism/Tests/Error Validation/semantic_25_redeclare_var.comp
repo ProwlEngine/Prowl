@@ -1,0 +1,9 @@
+#version 450
+
+layout(local_size_x = 1) in;
+
+void main() {
+    int x = 1;
+    int x = 2;
+    x += 1;
+}

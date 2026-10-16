@@ -52,7 +52,7 @@ internal unsafe partial class VkTextureView : TextureView
                         : ImageViewType.Type1DArray;
                     break;
                 case TextureType.Texture2D:
-                    imageViewCI.ViewType = description.ArrayLayers == 1
+                    imageViewCI.ViewType = description.ArrayLayers == 1 && !description.Arrayed
                         ? ImageViewType.Type2D
                         : ImageViewType.Type2DArray;
                     break;

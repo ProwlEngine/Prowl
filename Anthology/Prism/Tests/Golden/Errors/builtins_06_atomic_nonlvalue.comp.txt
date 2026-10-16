@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:3: 'assign' :  l-value required (can't modify a const)
+ERROR: <shader>:3: 'out' : Non-L-value cannot be passed for 'out' or 'inout' parameters. 
+ERROR: <shader>:3: 'atomicAdd' : required extension not requested: GL_EXT_shader_atomic_float
+ERROR: <shader>:3: 'atomicAdd' : Only l-values corresponding to shader block storage or shared variables can be used with atomic memory functions. 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 5 compilation errors.  No code generated.
+
+

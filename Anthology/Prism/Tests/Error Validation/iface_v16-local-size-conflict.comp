@@ -1,0 +1,4 @@
+#version 450
+layout(local_size_x=2) in;
+layout(local_size_x=4) in;
+void main(){}

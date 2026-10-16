@@ -15,6 +15,8 @@ public abstract partial class CommandBuffer
     private readonly HashSet<ResourceId> _referencedIds = new();
     private AttachmentUse[] _attachmentScratch = new AttachmentUse[8];
     private VertexBindingUse[] _vertexScratch = new VertexBindingUse[8];
+    private readonly List<DescriptorTableEntryState> _tableScratch = new();
+    private (DescriptorTable? Table, uint Version)[] _reportedTables = [];
 
     internal bool CaptureActive => Execution != null && (Profilers.CommandStream != null || Profilers.Capture != null);
 
@@ -101,7 +103,31 @@ public abstract partial class CommandBuffer
                 _stateScratch.Add(CreateState(kv.Key, entry, resource));
         }
 
+        if (sink != null)
+            AddUniformStates();
+
         sink?.SetProperties(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_stateScratch));
+    }
+
+    private void AddUniformStates()
+    {
+        UniformBindingPlan? plan = _uniformShadows.Plan;
+        if (plan == null)
+            return;
+
+        for (int b = 0; b < plan.BlockCount; b++)
+        {
+            ShadowBlock block = _uniformShadows[b];
+            ReadOnlySpan<byte> bytes = block.Cache != null ? block.Cache.Bytes : block.Data;
+            foreach (UniformBlockField field in plan.Layouts[b].Fields)
+            {
+                UniformValue value = default;
+                Span<byte> payload = System.Runtime.InteropServices.MemoryMarshal.CreateSpan(
+                    ref System.Runtime.CompilerServices.Unsafe.As<UniformValue, byte>(ref value), UniformValue.Size);
+                bytes.Slice((int)field.Offset, (int)Math.Min(field.Size, UniformValue.Size)).CopyTo(payload);
+                _stateScratch.Add(new PropertyState(field.Name, PropertyKind.Uniform, field.Type, value, default, default, null, null));
+            }
+        }
     }
 
     private static PropertyState CreateState(PropertyID name, PropertyEntry entry, ResourceVersion resource)
@@ -116,9 +142,7 @@ public abstract partial class CommandBuffer
             case PropertyEntryKind.Buffer:
                 DeviceBufferRange range = entry.Buffer ?? default;
                 return new PropertyState(
-                    name,
-                    entry.BackedBlock ? PropertyKind.UniformBuffer : PropertyKind.Buffer,
-                    default, default, resource, ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
+                    name, PropertyKind.Buffer, default, default, resource, ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
 
             case PropertyEntryKind.Texture:
                 TextureView? view = entry.TextureView;
@@ -139,8 +163,68 @@ public abstract partial class CommandBuffer
 
     private void ReportGraphicsState()
     {
-        if (CaptureActive)
-            ReportPropertyStates();
+        if (!CaptureActive)
+            return;
+
+        ReportPropertyStates();
+        ReportDescriptorTables();
+    }
+
+    // Reports a table only when the one bound at a set index, or its contents, changed since the last report.
+    private void ReportDescriptorTables()
+    {
+        int count = Math.Max(_descriptorTables.Length, _reportedTables.Length);
+        if (_reportedTables.Length < count)
+            Array.Resize(ref _reportedTables, count);
+
+        for (int set = 0; set < count; set++)
+        {
+            DescriptorTable? table = DescriptorTableAt(set);
+            (DescriptorTable? Table, uint Version) reported = _reportedTables[set];
+            if (ReferenceEquals(reported.Table, table) && (table == null || reported.Version == table.Version))
+                continue;
+
+            _reportedTables[set] = (table, table?.Version ?? 0);
+            _tableScratch.Clear();
+            if (table != null)
+            {
+                for (int element = 0; element < table.ElementCount; element++)
+                {
+                    ResourceLayoutElementDescription description = table.Layout.Elements[element];
+                    ReadOnlySpan<DescriptorTableEntry> entries = table.EntriesOf(element);
+                    for (int index = 0; index < entries.Length; index++)
+                    {
+                        if (!entries[index].IsEmpty)
+                            _tableScratch.Add(new DescriptorTableEntryState((uint)index, TableEntryState(description, entries[index])));
+                    }
+                }
+            }
+
+            PassSink?.SetDescriptorTable((uint)set, table?.Layout.Elements ?? [], System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_tableScratch));
+        }
+    }
+
+    private PropertyState TableEntryState(in ResourceLayoutElementDescription description, in DescriptorTableEntry entry)
+    {
+        if (entry.Buffer is { } range)
+        {
+            TrackBuffer(range.Buffer);
+            return new PropertyState(description.Name, PropertyKind.Buffer, default, default, range.Buffer.CurrentVersion,
+                ResourceRange.Bytes(range.Offset, range.SizeInBytes), null, null);
+        }
+
+        if ((entry.View?.Target ?? entry.Texture) is { } texture)
+        {
+            TrackTexture(texture);
+            TextureView? view = entry.View;
+            ResourceRange textureRange = view != null
+                ? ResourceRange.Subresources(view.BaseMipLevel, view.MipLevels, view.BaseArrayLayer, view.ArrayLayers)
+                : ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
+            return new PropertyState(description.Name, PropertyKind.Texture, default, default, texture.CurrentVersion,
+                textureRange, view?.Format, entry.Sampler?.Description);
+        }
+
+        return new PropertyState(description.Name, PropertyKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);
     }
 
     /// <summary>Called by the backend with the vertex bindings it resolved for a draw, including cache hits.</summary>

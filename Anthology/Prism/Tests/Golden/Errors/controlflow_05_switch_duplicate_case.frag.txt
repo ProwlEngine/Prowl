@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:11: 'case' : duplicated value 
+ERROR: <shader>:11: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

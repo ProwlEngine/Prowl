@@ -60,8 +60,113 @@ file sealed class BackbufferPass : IPass
     }
 }
 
+file sealed class OrderPass(string name, List<(string Pass, uint Width, ulong Execution)> log) : IPass
+{
+    public string Name => name;
+
+    public void Setup(RenderContextBuilder builder) { }
+
+    public void Render(RenderContext context, CommandBuffer cmd) => log.Add((name, context.View.PixelWidth, context.Task.Id));
+}
+
+file sealed class ClearImportedPass(RenderTexture target, Color color) : IPass
+{
+    private static readonly RenderResourceID s_id = RenderResourceID.Intern("Shared");
+
+    public string Name => "ClearShared";
+
+    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(s_id, target);
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+        => cmd.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(color), AttachmentOps.Loaded));
+}
+
+// Reads the texture an earlier pipeline wrote without declaring it, relying on it resting in its sampled layout.
+file sealed class CopyImportedPass(RenderTexture source, Texture destination) : IPass
+{
+    public string Name => "CopyShared";
+
+    public void Setup(RenderContextBuilder builder) { }
+
+    public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyTexture(source.ColorTextures[0], destination);
+}
+
+file sealed class ThrowingPass(RenderTexture target) : IPass
+{
+    private static readonly RenderResourceID s_id = RenderResourceID.Intern("Thrown");
+
+    public bool Throw = true;
+
+    public string Name => "Throwing";
+
+    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(s_id, target);
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        cmd.SetFramebuffer(target.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(1f, 0f, 0f, 1f)), AttachmentOps.Loaded));
+        if (Throw)
+            throw new InvalidOperationException("thrown");
+    }
+}
+
 public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
+    [Fact]
+    public void Dispatch_APassThatThrows_CompletesItsExecution_SoLaterOnesRun()
+    {
+        RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(4, 4, [PixelFormat.R32_G32_B32_A32_Float], false));
+        ThrowingPass pass = new(target);
+        using RenderPipeline pipeline = new([pass]);
+        IRenderView[] view = [new DispatchView(4, 4)];
+
+        // More failures than there are executions in flight would hang without completing each one
+        for (int i = 0; i < 8; i++)
+            Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph([new GraphDispatch(pipeline, view)]));
+
+        pass.Throw = false;
+        GD.DispatchGraph([new GraphDispatch(pipeline, view)]);
+        GD.WaitForIdle();
+        Texture copy = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
+        GD.Record(cmd => cmd.CopyTexture(target.ColorTextures[0], copy)).Wait();
+        Assert.Equal(new Color(1f, 0f, 0f, 1f), ReadTexture<Color>(copy)[2, 2], ColorFuzzyComparer.Instance);
+    }
+
+    [Fact]
+    public void Dispatch_SeveralPipelines_RunInOrderInOneExecution()
+    {
+        List<(string Pass, uint Width, ulong Execution)> log = new();
+        using RenderPipeline world = new([new OrderPass("World", log)]);
+        using RenderPipeline camera = new([new OrderPass("Camera", log)]);
+
+        ExecutionTask task = GD.DispatchGraph(
+        [
+            new GraphDispatch(world, new IRenderView[] { new DispatchView(16, 16) }),
+            new GraphDispatch(camera, new IRenderView[] { new DispatchView(64, 64), new DispatchView(32, 32) }),
+        ]);
+        GD.WaitForIdle();
+
+        Assert.Equal([("World", 16u, task.Id), ("Camera", 64u, task.Id), ("Camera", 32u, task.Id)], log);
+        Assert.Equal(task.Id + 1, GD.DispatchGraph(world, new IRenderView[] { new DispatchView(8, 8) }).Id);
+        GD.WaitForIdle();
+    }
+
+    [Fact]
+    public void Dispatch_SeveralPipelines_ALaterOneReadsWhatAnEarlierOneWrote()
+    {
+        RenderTexture shared = RF.CreateRenderTexture(new RenderTextureDescription(4, 4, [PixelFormat.R32_G32_B32_A32_Float], false));
+        Texture copy = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
+        using RenderPipeline writer = new([new ClearImportedPass(shared, new Color(0f, 1f, 0f, 1f))]);
+        using RenderPipeline reader = new([new CopyImportedPass(shared, copy)]);
+        IRenderView[] view = [new DispatchView(4, 4)];
+
+        GD.DispatchGraph([new GraphDispatch(writer, view), new GraphDispatch(reader, view)]);
+        GD.WaitForIdle();
+
+        TexelData<Color> map = ReadTexture<Color>(copy);
+        Assert.Equal(new Color(0f, 1f, 0f, 1f), map[2, 2], ColorFuzzyComparer.Instance);
+    }
+
+
     [Fact]
     public void Dispatch_RunsEachPassOncePerView()
     {

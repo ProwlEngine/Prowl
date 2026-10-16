@@ -1,0 +1,47 @@
+#version 460 core
+
+// An array OF structs inside a block: the element copies between universes, and passing one to a
+// function has to copy it into the parameter's plain-universe temp.
+
+layout(local_size_x = 8) in;
+
+struct Light
+{
+    vec4 position;
+    vec4 color;
+    float range;
+    float intensity;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer Lights
+{
+    Light lights[];
+};
+
+layout(std430, set = 0, binding = 1) buffer Result
+{
+    vec4 outColor[];
+};
+
+vec3 shade(Light l, vec3 p)
+{
+    vec3 d = l.position.xyz - p;
+    float att = clamp(1.0 - length(d) / l.range, 0.0, 1.0);
+    return l.color.rgb * (att * l.intensity);
+}
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    vec3 p = vec3(float(i), 0.0, 0.0);
+
+    vec3 acc = vec3(0.0);
+    for (int k = 0; k < 4; k++)
+    {
+        Light copy = lights[k];
+        acc += shade(copy, p);
+        acc += shade(lights[k], p);
+    }
+
+    outColor[i] = vec4(acc, 1.0);
+}

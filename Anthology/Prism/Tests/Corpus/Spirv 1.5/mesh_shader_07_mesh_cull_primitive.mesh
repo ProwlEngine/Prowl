@@ -1,0 +1,22 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 1) in;
+layout(triangles, max_vertices = 4, max_primitives = 2) out;
+
+void main()
+{
+    SetMeshOutputsEXT(4u, 2u);
+
+    for (uint i = 0u; i < 4u; i++)
+    {
+        vec2 p = vec2(float(i & 1u), float(i >> 1u)) * 2.0 - 1.0;
+        gl_MeshVerticesEXT[i].gl_Position = vec4(p, 0.0, 1.0);
+    }
+
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+    gl_PrimitiveTriangleIndicesEXT[1] = uvec3(1, 3, 2);
+
+    gl_MeshPrimitivesEXT[0].gl_CullPrimitiveEXT = false;
+    gl_MeshPrimitivesEXT[1].gl_CullPrimitiveEXT = true;
+}

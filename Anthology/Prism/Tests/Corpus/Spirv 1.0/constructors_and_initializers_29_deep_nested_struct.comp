@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; };
+struct A{ float x; }; struct B2{ A a; vec2 v; }; struct C{ B2 b; float t; };
+void main(){ C c = { { {1.0}, {2.0,3.0} }, 4.0 }; o = c.b.a.x + c.b.v.y + c.t; }

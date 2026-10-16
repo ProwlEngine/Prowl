@@ -61,8 +61,8 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
 
     private IEnumerable<IPass> CreateTexturePasses()
     {
-        GraphicsProgram flat = LoadProgram("Flat.slang");
-        GraphicsProgram fullscreen = LoadProgram("Fullscreen.slang");
+        GraphicsProgram flat = LoadProgram("Flat.glsl");
+        GraphicsProgram fullscreen = LoadProgram("Fullscreen.glsl");
         RenderResourceID[] ids = Enumerable.Range(0, Resources).Select(i => RenderResourceID.Intern("Resource" + i)).ToArray();
         RenderResourceID final = "Final";
         GraphResourceScenario kind = Kind;
@@ -111,7 +111,7 @@ public class GraphResourceBenchmarks : GraphiteBenchmark
 
     private IEnumerable<IPass> CreateBufferPasses()
     {
-        ComputeProgram program = Own(BenchShaderLoader.CreateCompute(Device, "BufferChain.slang", 64));
+        ComputeProgram program = Own(BenchShaderLoader.CreateCompute(Device, "BufferChain.glsl"));
         DeviceBuffer source = Own(Device.ResourceFactory.CreateBuffer(new BufferDescription(BufferElements * sizeof(float), BufferUsage.StructuredBufferReadWrite)));
         RenderResourceID[] ids = Enumerable.Range(0, Resources).Select(i => RenderResourceID.Intern("Buffer" + i)).ToArray();
         RenderResourceID final = "FinalBuffer";

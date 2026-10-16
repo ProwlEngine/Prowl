@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:5: 'highp' : overloaded functions must have the same parameter precision qualifiers for argument 1
+ERROR: <shader>:5: 'highp' : overloaded functions must have the same parameter precision qualifiers for argument 2
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

@@ -70,10 +70,16 @@ internal unsafe partial class VkGraphicsDevice
         List<IntPtr> tempStrings = [];
         try
         {
+            HashSet<string> enabled = [];
+            for (int i = 0; i < instanceExtensionCount; i++)
+                enabled.Add(Util.GetString((byte*)instanceExtensions[i]));
+
             foreach (string requiredExt in requestedInstanceExtensions)
             {
                 if (!availableInstanceExtensions.Contains(requiredExt))
                     throw new RenderException($"The required instance extension was not available: {requiredExt}");
+                if (!enabled.Add(requiredExt))
+                    continue;
 
                 IntPtr utf8Str = Marshal.StringToCoTaskMemUTF8(requiredExt);
                 instanceExtensions[instanceExtensionCount++] = utf8Str;
@@ -82,7 +88,8 @@ internal unsafe partial class VkGraphicsDevice
 
             if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
             {
-                instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8;
+                if (enabled.Add(CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+                    instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8;
                 _debugUtilsEnabled = true;
             }
 
@@ -119,7 +126,7 @@ internal unsafe partial class VkGraphicsDevice
         }
     }
 
-    private void CreatePhysicalDevice()
+    private void CreatePhysicalDevice(Func<IntPtr, IntPtr>? pick)
     {
         uint deviceCount = 0;
         Vk.EnumeratePhysicalDevices(Instance, ref deviceCount, null);
@@ -156,6 +163,14 @@ internal unsafe partial class VkGraphicsDevice
             }
         }
 
+        if (pick != null)
+        {
+            IntPtr picked = pick(Instance.Handle);
+            if (Array.FindIndex(physicalDevices, d => d.Handle == picked) < 0)
+                throw new RenderException("VulkanDeviceOptions.PickPhysicalDevice returned a handle that is not a physical device of this instance.");
+            PhysicalDevice = new PhysicalDevice(picked);
+        }
+
         Vk.GetPhysicalDeviceProperties(PhysicalDevice, out _physicalDeviceProperties);
         fixed (byte* utf8NamePtr = _physicalDeviceProperties.DeviceName)
         {
@@ -179,6 +194,9 @@ internal unsafe partial class VkGraphicsDevice
             GeometryShader = supported.GeometryShader,
             TessellationShader = supported.TessellationShader,
             DrawIndirectFirstInstance = supported.DrawIndirectFirstInstance,
+            MultiDrawIndirect = supported.MultiDrawIndirect,
+            ShaderSampledImageArrayDynamicIndexing = supported.ShaderSampledImageArrayDynamicIndexing,
+            ShaderStorageBufferArrayDynamicIndexing = supported.ShaderStorageBufferArrayDynamicIndexing,
             SamplerAnisotropy = supported.SamplerAnisotropy,
             DepthClamp = supported.DepthClamp,
             DepthBiasClamp = supported.DepthBiasClamp,
@@ -223,6 +241,7 @@ internal unsafe partial class VkGraphicsDevice
         HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
 
         bool hasMaintenance1 = false;
+        bool pipelineStatistics = false;
         IntPtr[] activeExtensions = new IntPtr[props.Length];
         uint activeExtensionCount = 0;
 
@@ -244,6 +263,11 @@ internal unsafe partial class VkGraphicsDevice
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
                     hasMaintenance1 = true;
+                }
+                else if (extensionName == "VK_KHR_pipeline_executable_properties" && Environment.GetEnvironmentVariable("GRAPHITE_SHADER_STATS") == "1")
+                {
+                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
+                    pipelineStatistics = true;
                 }
                 else if (extensionName == "VK_EXT_memory_budget")
                 {
@@ -275,20 +299,57 @@ internal unsafe partial class VkGraphicsDevice
                 $"The following Vulkan device extensions were not available: {missingList}");
         }
 
-        PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features);
-        PhysicalDeviceFeatures2 supportedFeatures = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: &vulkan12Features);
+        PhysicalDeviceVulkan11Features supported11 = new(sType: StructureType.PhysicalDeviceVulkan11Features);
+        PhysicalDeviceVulkan12Features supported12 = new(sType: StructureType.PhysicalDeviceVulkan12Features, pNext: &supported11);
+        PhysicalDeviceFeatures2 supportedFeatures = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: &supported12);
         Vk.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures);
-        if (!vulkan12Features.TimelineSemaphore)
+        if (!supported12.TimelineSemaphore)
             throw new RenderException($"The Vulkan device '{_deviceName}' does not support timeline semaphores.");
 
-        vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features, timelineSemaphore: true);
-        PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true);
+        // Bindless texture tables need every one of these, so descriptor indexing is all or nothing.
+        bool descriptorIndexing = supported12.RuntimeDescriptorArray
+            && supported12.DescriptorBindingPartiallyBound
+            && supported12.DescriptorBindingVariableDescriptorCount
+            && supported12.DescriptorBindingSampledImageUpdateAfterBind
+            && supported12.DescriptorBindingStorageImageUpdateAfterBind
+            && supported12.DescriptorBindingStorageBufferUpdateAfterBind
+            && supported12.DescriptorBindingUpdateUnusedWhilePending
+            && supported12.ShaderSampledImageArrayNonUniformIndexing;
+
+        PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features)
+        {
+            TimelineSemaphore = true,
+            DrawIndirectCount = supported12.DrawIndirectCount,
+            SamplerFilterMinmax = supported12.SamplerFilterMinmax,
+            ShaderOutputViewportIndex = supported12.ShaderOutputViewportIndex,
+            ShaderOutputLayer = supported12.ShaderOutputLayer,
+            RuntimeDescriptorArray = descriptorIndexing,
+            DescriptorBindingPartiallyBound = descriptorIndexing,
+            DescriptorBindingVariableDescriptorCount = descriptorIndexing,
+            DescriptorBindingSampledImageUpdateAfterBind = descriptorIndexing,
+            DescriptorBindingStorageImageUpdateAfterBind = descriptorIndexing,
+            DescriptorBindingStorageBufferUpdateAfterBind = descriptorIndexing,
+            DescriptorBindingUpdateUnusedWhilePending = descriptorIndexing,
+            ShaderSampledImageArrayNonUniformIndexing = descriptorIndexing,
+            ShaderStorageBufferArrayNonUniformIndexing = descriptorIndexing && supported12.ShaderStorageBufferArrayNonUniformIndexing,
+        };
+        PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true)
+        {
+            Multiview = supported11.Multiview,
+        };
+
+        PhysicalDevicePipelineExecutablePropertiesFeaturesKHR statisticsFeatures = new(sType: StructureType.PhysicalDevicePipelineExecutablePropertiesFeaturesKhr) { PipelineExecutableInfo = true };
+        if (pipelineStatistics)
+            vulkan12Features.PNext = &statisticsFeatures;
 
         DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan11Features);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
 
         deviceCreateInfo.PEnabledFeatures = &deviceFeatures;
+
+        _enabledVulkan11Features = vulkan11Features with { PNext = null };
+        _enabledVulkan12Features = vulkan12Features with { PNext = null };
 
         IntPtr* layerNames = stackalloc IntPtr[1];
         uint layerNameCount = 0;
@@ -313,6 +374,8 @@ internal unsafe partial class VkGraphicsDevice
 
         Vk.TryGetInstanceExtension(Instance, out KhrSurface);
         Vk.TryGetDeviceExtension(Instance, Device, out KhrSwapchain);
+        if (pipelineStatistics && Vk.TryGetDeviceExtension(Instance, Device, out KhrPipelineExecutableProperties statistics))
+            PipelineStatistics = statistics;
 
         PhysicalDeviceVulkan12Properties driverProps = new(sType: StructureType.PhysicalDeviceVulkan12Properties);
         PhysicalDeviceProperties2 deviceProps = new(sType: StructureType.PhysicalDeviceProperties2, pNext: &driverProps);

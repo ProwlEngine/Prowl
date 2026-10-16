@@ -94,9 +94,15 @@ internal unsafe partial class VkCommandBuffer
         _gd.Counters.RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }
 
+    // A staging buffer is read by the host once the work completes, which needs the host stage in the dependency
     private void EmitPostCopyBufferBarrier(DeviceBuffer destination)
     {
         VkBarriers.BufferScope(_gd, VkBarriers.ReadersOf(destination.Usage), out PipelineStageFlags dstStage, out AccessFlags dstAccess);
+        if ((destination.Usage & BufferUsage.Staging) != 0)
+        {
+            dstStage |= PipelineStageFlags.HostBit;
+            dstAccess |= AccessFlags.HostReadBit;
+        }
         MemoryBarrier barrier = new()
         {
             SType = StructureType.MemoryBarrier,
@@ -169,6 +175,43 @@ internal unsafe partial class VkCommandBuffer
         VkBarriers.Transition(_gd, _cb, dst, ImageLayout.TransferDstOptimal, dstLayout, dstMipLevel, 1, dstBaseArrayLayer, layerCount);
     }
 
+    private protected override void BlitTextureCore(Texture source, Texture destination, ReadOnlySpan<TextureBlit> regions)
+    {
+        EnsureNoRenderPass();
+        VkTexture src = Util.AssertSubtype<Texture, VkTexture>(source);
+        VkTexture dst = Util.AssertSubtype<Texture, VkTexture>(destination);
+        ImageLayout srcLayout = VkBarriers.CurrentLayout(this, src);
+        ImageLayout dstLayout = VkBarriers.CurrentLayout(this, dst);
+        ImageAspectFlags srcAspect = CopyAspectMask(src), dstAspect = CopyAspectMask(dst);
+
+        ImageBlit[] blits = System.Buffers.ArrayPool<ImageBlit>.Shared.Rent(regions.Length);
+        for (int i = 0; i < regions.Length; i++)
+        {
+            TextureBlit r = regions[i];
+            ImageBlit blit = new()
+            {
+                SrcSubresource = new ImageSubresourceLayers { AspectMask = srcAspect, LayerCount = 1 },
+                DstSubresource = new ImageSubresourceLayers { AspectMask = dstAspect, LayerCount = 1 },
+            };
+            blit.SrcOffsets.Element0 = new Offset3D { X = (int)r.SourceX, Y = (int)r.SourceY };
+            blit.SrcOffsets.Element1 = new Offset3D { X = (int)(r.SourceX + r.SourceWidth), Y = (int)(r.SourceY + r.SourceHeight), Z = 1 };
+            blit.DstOffsets.Element0 = new Offset3D { X = (int)r.DestinationX, Y = (int)r.DestinationY };
+            blit.DstOffsets.Element1 = new Offset3D { X = (int)(r.DestinationX + r.DestinationWidth), Y = (int)(r.DestinationY + r.DestinationHeight), Z = 1 };
+            blits[i] = blit;
+        }
+
+        VkBarriers.Transition(_gd, _cb, src, srcLayout, ImageLayout.TransferSrcOptimal, 0, 1, 0, 1);
+        VkBarriers.Transition(_gd, _cb, dst, dstLayout, ImageLayout.TransferDstOptimal, 0, 1, 0, 1);
+        fixed (ImageBlit* first = blits)
+        {
+            _gd.Vk.CmdBlitImage(_cb, src.OptimalDeviceImage, ImageLayout.TransferSrcOptimal, dst.OptimalDeviceImage, ImageLayout.TransferDstOptimal,
+                (uint)regions.Length, first, Filter.Nearest);
+        }
+        VkBarriers.Transition(_gd, _cb, src, ImageLayout.TransferSrcOptimal, srcLayout, 0, 1, 0, 1);
+        VkBarriers.Transition(_gd, _cb, dst, ImageLayout.TransferDstOptimal, dstLayout, 0, 1, 0, 1);
+        System.Buffers.ArrayPool<ImageBlit>.Shared.Return(blits);
+    }
+
     private protected override void CopyTextureToBufferCore(
         Texture source,
         DeviceBuffer destination,
@@ -200,6 +243,7 @@ internal unsafe partial class VkCommandBuffer
         _gd.Vk.CmdCopyImageToBuffer(_cb, src.OptimalDeviceImage, ImageLayout.TransferSrcOptimal, dst.DeviceBuffer, 1, in copy);
         VkBarriers.Transition(_gd, _cb, src, ImageLayout.TransferSrcOptimal, layout, region.MipLevel, 1, region.ArrayLayer, 1);
         _gd.Counters.RecordBufferOp(BufferOpBin.Copy, FormatHelpers.GetRegionSize(region.Width, region.Height, region.Depth, source.Format));
+        EmitPostCopyBufferBarrier(destination);
     }
 
     private static ImageAspectFlags CopyAspectMask(VkTexture texture)

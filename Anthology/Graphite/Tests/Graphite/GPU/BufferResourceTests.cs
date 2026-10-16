@@ -166,7 +166,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
 
         DeviceBuffer readback = RF.CreateBuffer(new BufferDescription(count * sizeof(float), BufferUsage.Staging));
 
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

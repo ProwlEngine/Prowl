@@ -43,7 +43,7 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
     {
         Skip.IfNot(GD.BackendType == GraphicsBackend.Vulkan);
 
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.glsl");
         ShaderDescription description = new(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,

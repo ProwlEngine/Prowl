@@ -1,0 +1,17 @@
+#version 460
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) buffer Data
+{
+    float16_t values[];
+};
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    float16_t v = values[i];
+    values[i] = v * float16_t(2.0) + float16_t(1.0);
+}

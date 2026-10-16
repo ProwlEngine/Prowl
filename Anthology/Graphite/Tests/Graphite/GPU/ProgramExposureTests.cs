@@ -41,7 +41,7 @@ public abstract class ProgramExposureTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void GraphicsProgram_RebuildsOnSecondDeviceFromExposedData()
     {
-        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.glsl");
         GraphicsProgram original = RF.CreateGraphicsProgram(new ShaderDescription(stages)
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
@@ -81,7 +81,7 @@ public abstract class ProgramExposureTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void ComputeProgram_RebuildsOnSecondDeviceFromExposedData()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.glsl");
         ComputeProgram original = RF.CreateComputeProgram(new ComputeDescription(
             stage, StorageLayouts("OutputVertices", ShaderStages.Compute), 16, 16, 1));
 

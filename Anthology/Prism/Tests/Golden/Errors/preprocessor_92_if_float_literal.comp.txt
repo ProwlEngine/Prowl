@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:5: 'preprocessor evaluation' : bad expression 
+ERROR: <shader>:5: '#if' : unexpected tokens following directive 
+ERROR: <shader>:5: '' : missing #endif 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

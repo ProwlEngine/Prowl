@@ -43,6 +43,11 @@ public readonly record struct RenderTextureDescription
     public bool Storage { get; }
 
     /// <summary>
+    /// Array layers of every attachment, drawn together through multiview. 0 or 1 for a single layer.
+    /// </summary>
+    public uint ArrayLayers { get; init; }
+
+    /// <summary>
     /// New desc.
     /// </summary>
     /// <param name="width">Width in texels.</param>
@@ -122,9 +127,10 @@ public readonly record struct RenderTextureDescription
         && DepthFormat == other.DepthFormat
         && SampleCount == other.SampleCount
         && Storage == other.Storage
+        && Math.Max(1, ArrayLayers) == Math.Max(1, other.ArrayLayers)
         && ColorFormats.AsSpan().SequenceEqual(other.ColorFormats);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Width, Height, Depth, DepthFormat, SampleCount, Storage, ColorFormats.ArrayHash());
+        => HashCode.Combine(Width, Height, Depth, DepthFormat, SampleCount, Storage, Math.Max(1, ArrayLayers), ColorFormats.ArrayHash());
 }

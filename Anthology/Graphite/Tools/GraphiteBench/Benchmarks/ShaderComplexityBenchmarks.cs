@@ -54,11 +54,11 @@ public class ShaderComplexityBenchmarks : GraphiteBenchmark
     {
         (string file, int iterations) = Shader switch
         {
-            ShaderKind.Alu => ("Alu.slang", 64),
-            ShaderKind.Texture => ("TextureHeavy.slang", 32),
-            ShaderKind.Branch => ("Branch.slang", 64),
-            ShaderKind.Vertex => ("VertexHeavy.slang", 64),
-            _ => ("Flat.slang", 0),
+            ShaderKind.Alu => ("Alu.glsl", 64),
+            ShaderKind.Texture => ("TextureHeavy.glsl", 32),
+            ShaderKind.Branch => ("Branch.glsl", 64),
+            ShaderKind.Vertex => ("VertexHeavy.glsl", 64),
+            _ => ("Flat.glsl", 0),
         };
 
         GraphicsProgram program = LoadProgram(file);

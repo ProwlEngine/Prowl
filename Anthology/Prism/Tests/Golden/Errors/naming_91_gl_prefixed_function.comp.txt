@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:6: 'gl_helper' : identifiers starting with "gl_" are reserved 
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:6: 'layout-id value' : scalar integer expression required 
+ERROR: <shader>:6: 'local_size_x' : must be at least 1 
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

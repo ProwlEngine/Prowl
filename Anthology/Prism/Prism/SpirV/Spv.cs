@@ -1,0 +1,296 @@
+namespace Prowl.Prism.SpirV;
+
+// SPIR-V enumerants. Values are taken verbatim from the Khronos SPIR-V headers
+// (SPIRV-Headers, spirv.hpp11 and GLSL.std.450.h); this is not a place to guess.
+// Enums are extended as the backend grows to cover more of the corpus.
+
+public static class Spv
+{
+    public const uint MagicNumber = 0x07230203;
+    public const uint Version_1_0 = 0x00010000;   // target SPIR-V 1.0, matching the reference corpus
+}
+
+/// <summary>The SPIR-V version to target. The value is the module header's version word directly
+/// (byte layout 0.major.minor.0), so a module's header word is just <c>(uint)version</c>.</summary>
+public enum SpirVVersion : uint
+{
+    V1_0 = 0x00010000,
+    V1_1 = 0x00010100,
+    V1_2 = 0x00010200,
+    V1_3 = 0x00010300,
+    V1_4 = 0x00010400,
+    V1_5 = 0x00010500,   // Vulkan 1.2's SPIR-V version
+}
+
+public enum SourceLanguage : uint { Unknown = 0, ESSL = 1, GLSL = 2 }
+
+public enum ExecutionModel : uint
+{
+    Vertex = 0,
+    TessellationControl = 1,
+    TessellationEvaluation = 2,
+    Geometry = 3,
+    Fragment = 4,
+    GLCompute = 5,
+    TaskEXT = 5364,
+    MeshEXT = 5365,
+    MeshNV = 5268,
+    TaskNV = 5267,
+    RayGenerationKHR = 5313,
+    IntersectionKHR = 5314,
+    AnyHitKHR = 5315,
+    ClosestHitKHR = 5316,
+    MissKHR = 5317,
+    CallableKHR = 5318,
+}
+
+public enum AddressingModel : uint { Logical = 0, PhysicalStorageBuffer64 = 5348 }
+
+public enum MemoryModel : uint { Simple = 0, GLSL450 = 1, Vulkan = 3 }
+
+public enum ExecutionMode : uint
+{
+    Invocations = 0,
+    Xfb = 11,
+    PixelCenterInteger = 6,
+    PointMode = 10,
+    PostDepthCoverage = 4446,
+    StencilRefReplacingEXT = 5027,
+    EarlyAndLateFragmentTestsAMD = 5017,
+    DerivativeGroupQuadsNV = 5289,
+    DerivativeGroupLinearNV = 5290,
+    PixelInterlockOrderedEXT = 5366,
+    SampleInterlockOrderedEXT = 5368,
+    SpacingEqual = 1,
+    SpacingFractionalEven = 2,
+    SpacingFractionalOdd = 3,
+    VertexOrderCw = 4,
+    VertexOrderCcw = 5,
+    OriginUpperLeft = 7,
+    EarlyFragmentTests = 9,
+    DepthReplacing = 12,
+    DepthGreater = 14,
+    DepthLess = 15,
+    DepthUnchanged = 16,
+    StencilRefUnchangedFrontAMD = 5079,
+    StencilRefGreaterFrontAMD = 5080,
+    StencilRefLessFrontAMD = 5081,
+    StencilRefUnchangedBackAMD = 5082,
+    StencilRefGreaterBackAMD = 5083,
+    StencilRefLessBackAMD = 5084,
+    LocalSize = 17,
+    InputPoints = 19,
+    InputLines = 20,
+    InputLinesAdjacency = 21,
+    Triangles = 22,
+    InputTrianglesAdjacency = 23,
+    Quads = 24,
+    Isolines = 25,
+    OutputVertices = 26,
+    OutputPoints = 27,
+    OutputLineStrip = 28,
+    OutputTriangleStrip = 29,
+    OutputLinesEXT = 5269,
+    OutputPrimitivesEXT = 5270,
+    OutputTrianglesEXT = 5298,
+}
+
+public enum StorageClass : uint
+{
+    UniformConstant = 0,
+    Input = 1,
+    Uniform = 2,
+    Output = 3,
+    Workgroup = 4,
+    Private = 6,
+    Function = 7,
+    PushConstant = 9,
+    Image = 11,
+    StorageBuffer = 12,
+    PhysicalStorageBuffer = 5349,
+    TaskPayloadWorkgroupEXT = 5402,
+    CallableDataKHR = 5328,
+    IncomingCallableDataKHR = 5329,
+    RayPayloadKHR = 5338,
+    HitAttributeKHR = 5339,
+    IncomingRayPayloadKHR = 5342,
+    ShaderRecordBufferKHR = 5343,
+}
+
+public enum Decoration : uint
+{
+    RelaxedPrecision = 0,
+    SpecId = 1,
+    Block = 2,
+    BufferBlock = 3,
+    RestrictPointer = 5355,
+    AliasedPointer = 5356,
+    Patch = 15,
+    Centroid = 16,
+    Sample = 17,
+    Invariant = 18,
+    Restrict = 19,
+    Volatile = 21,
+    Coherent = 23,
+    RowMajor = 4,
+    ColMajor = 5,
+    ArrayStride = 6,
+    MatrixStride = 7,
+    BuiltIn = 11,
+    NoPerspective = 13,
+    Flat = 14,
+    Location = 30,
+    Stream = 29,
+    Component = 31,
+    Index = 32,
+    Offset = 35,
+    XfbBuffer = 36,
+    XfbStride = 37,
+    Binding = 33,
+    DescriptorSet = 34,
+    NonWritable = 24,
+    NonReadable = 25,
+    NoContraction = 42,
+    InputAttachmentIndex = 43,
+    PerPrimitiveEXT = 5271,
+    PerVertexKHR = 5285,
+    PassthroughNV = 5250,
+    PerViewNV = 5272,
+    PerTaskNV = 5273,
+    ViewportRelativeNV = 5252,
+    SecondaryViewportRelativeNV = 5256,
+    NonUniform = 5300,
+}
+
+public enum BuiltIn : uint
+{
+    Position = 0,
+    PointSize = 1,
+    ClipDistance = 3,
+    CullDistance = 4,
+    PrimitiveId = 7,
+    InvocationId = 8,
+    Layer = 9,
+    ViewportIndex = 10,
+    TessLevelOuter = 11,
+    TessLevelInner = 12,
+    TessCoord = 13,
+    PatchVertices = 14,
+    FragCoord = 15,
+    PointCoord = 16,
+    FrontFacing = 17,
+    SampleId = 18,
+    SamplePosition = 19,
+    SampleMask = 20,
+    FragDepth = 22,
+    HelperInvocation = 23,
+    NumWorkgroups = 24,
+    WorkgroupSize = 25,
+    WorkgroupId = 26,
+    LocalInvocationId = 27,
+    GlobalInvocationId = 28,
+    LocalInvocationIndex = 29,
+    VertexIndex = 42,
+    InstanceIndex = 43,
+    ViewIndex = 4440,
+    DeviceIndex = 4438,
+    BaseVertex = 4424,
+    BaseInstance = 4425,
+    DrawIndex = 4426,
+    PrimitiveShadingRateKHR = 4432,
+    ShadingRateKHR = 4444,
+    SubgroupSize = 36,
+    NumSubgroups = 38,
+    SubgroupId = 40,
+    SubgroupLocalInvocationId = 41,
+    SubgroupEqMask = 4416,
+    SubgroupGeMask = 4417,
+    SubgroupGtMask = 4418,
+    SubgroupLeMask = 4419,
+    SubgroupLtMask = 4420,
+    FragStencilRefEXT = 5014,
+    BaryCoordKHR = 5286,
+    BaryCoordNoPerspKHR = 5287,
+    FragSizeEXT = 5292,
+    InstanceId = 6,
+    CullMaskKHR = 6021,
+    HitTriangleVertexPositionsKHR = 5335,
+    ViewportMaskNV = 5253,
+    SecondaryPositionNV = 5257,
+    SecondaryViewportMaskNV = 5258,
+    ViewportMaskPerViewNV = 5262,
+    TaskCountNV = 5274,
+    LayerPerViewNV = 5279,
+    MeshViewCountNV = 5280,
+    MeshViewIndicesNV = 5281,
+    FragInvocationCountEXT = 5293,
+    PrimitivePointIndicesEXT = 5294,
+    PrimitiveLineIndicesEXT = 5295,
+    PrimitiveTriangleIndicesEXT = 5296,
+    PositionPerViewNV = 5261,
+    PrimitiveCountNV = 5275,
+    PrimitiveIndicesNV = 5276,
+    ClipDistancePerViewNV = 5277,
+    CullDistancePerViewNV = 5278,
+    CullPrimitiveEXT = 5299,
+    LaunchIdKHR = 5319,
+    LaunchSizeKHR = 5320,
+    WorldRayOriginKHR = 5321,
+    WorldRayDirectionKHR = 5322,
+    ObjectRayOriginKHR = 5323,
+    ObjectRayDirectionKHR = 5324,
+    RayTminKHR = 5325,
+    RayTmaxKHR = 5326,
+    InstanceCustomIndexKHR = 5327,
+    ObjectToWorldKHR = 5330,
+    WorldToObjectKHR = 5331,
+    HitKindKHR = 5333,
+    IncomingRayFlagsKHR = 5351,
+    RayGeometryIndexKHR = 5352,
+}
+
+public enum Capability : uint { Shader = 1, Float16 = 9, Float64 = 10, Int64 = 11, Int16 = 22, Int8 = 39, FragmentShadingRateKHR = 4422, Geometry = 2, Tessellation = 3, ClipDistance = 32, CullDistance = 33, ImageGatherExtended = 25, TessellationPointSize = 23, GeometryPointSize = 24, SampleRateShading = 35, InputAttachment = 40, StorageImageExtendedFormats = 49, StorageImageReadWithoutFormat = 55, StorageImageWriteWithoutFormat = 56, SampledCubeArray = 45, ImageCubeArray = 34, SampledRect = 37, Sampled1D = 43, Image1D = 44, SampledBuffer = 46, ImageBuffer = 47, ImageMSArray = 48, ImageQuery = 50, DerivativeControl = 51, InterpolationFunction = 52, MultiViewport = 57, MultiView = 4439, DeviceGroup = 4437, DrawParameters = 4427, ShaderLayer = 69, ShaderViewportIndex = 70, ShaderViewportIndexLayerEXT = 5254, MeshShadingEXT = 5283, RayTracingKHR = 4479, RayQueryKHR = 4472, RayTracingNV = 5340,
+    GroupNonUniform = 61, GroupNonUniformVote = 62, GroupNonUniformArithmetic = 63, GroupNonUniformBallot = 64,
+    GroupNonUniformShuffle = 65, GroupNonUniformShuffleRelative = 66, GroupNonUniformClustered = 67, GroupNonUniformQuad = 68,
+    GroupNonUniformRotateKHR = 6026, QuadControlKHR = 5087,
+    RayQueryPositionFetchKHR = 5391, RayTracingPositionFetchKHR = 5336, RayCullMaskKHR = 6020,
+    ImageRect = 36, Int64ImageEXT = 5016, ShaderClockKHR = 5055, Groups = 18,
+    InputAttachmentArrayDynamicIndexing = 5303, UniformTexelBufferArrayDynamicIndexing = 5304, StorageTexelBufferArrayDynamicIndexing = 5305,
+    InputAttachmentArrayNonUniformIndexing = 5310, UniformTexelBufferArrayNonUniformIndexing = 5311, StorageTexelBufferArrayNonUniformIndexing = 5312,
+    FragmentDensityEXT = 5291, ShaderViewportMaskNV = 5255, ShaderStereoViewNV = 5259, PerViewAttributesNV = 5260,
+    Int64Atomics = 12,
+    AtomicFloat32MinMaxEXT = 5612, AtomicFloat64MinMaxEXT = 5613, AtomicFloat16MinMaxEXT = 5616,
+    AtomicFloat32AddEXT = 6033, AtomicFloat64AddEXT = 6034, AtomicFloat16AddEXT = 6095,
+    ComputeDerivativeGroupQuadsNV = 5288, ComputeDerivativeGroupLinearNV = 5350, StorageImageMultisample = 27,
+    DemoteToHelperInvocation = 5379, MinLod = 42, SubgroupBallotKHR = 4423, SubgroupVoteKHR = 4431,
+    GroupNonUniformPartitionedNV = 5297, SparseResidency = 41,
+    FragmentShaderSampleInterlockEXT = 5363, FragmentShaderPixelInterlockEXT = 5378, GeometryStreams = 54, StencilExportEXT = 5013, SampleMaskPostDepthCoverage = 4447, FragmentBarycentricKHR = 5284,
+    StorageBuffer16BitAccess = 4433, UniformAndStorageBuffer16BitAccess = 4434, StoragePushConstant16 = 4435, StorageInputOutput16 = 4436,
+    StorageBuffer8BitAccess = 4448, UniformAndStorageBuffer8BitAccess = 4449, StoragePushConstant8 = 4450, PhysicalStorageBufferAddresses = 5347,
+    VulkanMemoryModel = 5345, VulkanMemoryModelDeviceScope = 5346, GeometryShaderPassthroughNV = 5251, TransformFeedback = 53,
+    ShaderNonUniform = 5301, RuntimeDescriptorArray = 5302, UniformBufferArrayNonUniformIndexing = 5306,
+    SampledImageArrayNonUniformIndexing = 5307, StorageBufferArrayNonUniformIndexing = 5308, StorageImageArrayNonUniformIndexing = 5309,
+    WorkgroupMemoryExplicitLayoutKHR = 4428, MeshShadingNV = 5266, ImageFootprintNV = 5282, CooperativeMatrixKHR = 6022 }
+
+[Flags]
+public enum ImageOperands : uint { None = 0, Bias = 0x1, Lod = 0x2, Grad = 0x4, ConstOffset = 0x8, Offset = 0x10, ConstOffsets = 0x20, Sample = 0x40, MinLod = 0x80,
+    MakeTexelAvailable = 0x100, MakeTexelVisible = 0x200, NonPrivateTexel = 0x400, VolatileTexel = 0x800, SignExtend = 0x1000, ZeroExtend = 0x2000 }
+
+public enum FunctionControl : uint { None = 0 }
+
+public enum Dim : uint { D1 = 0, D2 = 1, D3 = 2, Cube = 3, Rect = 4, Buffer = 5, SubpassData = 6 }
+
+public enum ImageFormat : uint
+{
+    Unknown = 0,
+    Rgba32f = 1, Rgba16f = 2, R32f = 3, Rgba8 = 4, Rgba8Snorm = 5,
+    Rg32f = 6, Rg16f = 7, R11fG11fB10f = 8, R16f = 9,
+    Rgba16 = 10, Rgb10A2 = 11, Rg16 = 12, Rg8 = 13, R16 = 14, R8 = 15,
+    Rgba16Snorm = 16, Rg16Snorm = 17, Rg8Snorm = 18, R16Snorm = 19, R8Snorm = 20,
+    Rgba32i = 21, Rgba16i = 22, Rgba8i = 23, R32i = 24,
+    Rg32i = 25, Rg16i = 26, Rg8i = 27, R16i = 28, R8i = 29,
+    Rgba32ui = 30, Rgba16ui = 31, Rgba8ui = 32, R32ui = 33,
+    Rgb10a2ui = 34, Rg32ui = 35, Rg16ui = 36, Rg8ui = 37, R16ui = 38, R8ui = 39,
+    R64ui = 40, R64i = 41,
+}
+

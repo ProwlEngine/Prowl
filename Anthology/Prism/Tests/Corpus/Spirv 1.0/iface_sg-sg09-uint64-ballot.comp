@@ -1,0 +1,6 @@
+#version 450
+#extension GL_ARB_shader_ballot : require
+#extension GL_ARB_gpu_shader_int64 : require
+layout(local_size_x=32) in;
+layout(std430, binding=0) buffer B { uint64_t m; float f; } b;
+void main(){ b.m = ballotARB(true) & gl_SubGroupEqMaskARB; b.f = readFirstInvocationARB(b.f) + readInvocationARB(b.f, 1u) + float(gl_SubGroupSizeARB + gl_SubGroupInvocationARB); }

@@ -76,7 +76,8 @@ public sealed partial class DeepRecording
                 graphics.VertexLayouts.ToEquatableArray(),
                 0,
                 0,
-                0),
+                0,
+                program.PushConstants),
             ComputeProgram compute => new RecordedProgram(
                 key,
                 program.Name,
@@ -89,7 +90,8 @@ public sealed partial class DeepRecording
                 EquatableArray<VertexLayoutDescription>.Empty,
                 compute.ThreadGroupSizeX,
                 compute.ThreadGroupSizeY,
-                compute.ThreadGroupSizeZ),
+                compute.ThreadGroupSizeZ,
+                program.PushConstants),
             _ => throw new NotSupportedException($"Unknown program type {program.GetType().Name}."),
         };
 
@@ -186,11 +188,23 @@ public sealed partial class DeepRecording
                 pass.Commands.Add(new SetPropertiesCommand(changed.ToEquatableArray(), removed.ToEquatableArray()));
         }
 
+        public void SetDescriptorTable(uint set, ReadOnlySpan<ResourceLayoutElementDescription> layout, ReadOnlySpan<DescriptorTableEntryState> entries)
+        {
+            List<RecordedTableEntry> recorded = new(entries.Length);
+            foreach (DescriptorTableEntryState entry in entries)
+                recorded.Add(new RecordedTableEntry(entry.Index, owner.Property(entry.State)));
+
+            pass.Commands.Add(new SetDescriptorTableCommand(set, layout.ToArray().ToEquatableArray(), recorded.ToEquatableArray()));
+        }
+
+        public void SetPushConstants(uint offset, ReadOnlySpan<byte> data)
+            => pass.Commands.Add(new SetPushConstantsCommand(offset, owner._store.Put(data)));
+
         public void Draw(uint vertexCount, uint instanceCount, uint firstVertex, uint firstInstance)
             => pass.Commands.Add(new DrawCommand(vertexCount, instanceCount, firstVertex, firstInstance));
 
         public void DrawIndexed(uint indexCount, uint instanceCount, uint firstIndex, int vertexOffset, uint firstInstance)
-            => pass.Commands.Add(new DrawIndexedCommand(instanceCount, firstIndex, vertexOffset, firstInstance));
+            => pass.Commands.Add(new DrawIndexedCommand(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance));
 
         public void DrawIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
             => pass.Commands.Add(new DrawIndirectCommand(owner.Trace(buffer), offset, drawCount, stride));
@@ -198,11 +212,19 @@ public sealed partial class DeepRecording
         public void DrawIndexedIndirect(in ResourceVersion buffer, uint offset, uint drawCount, uint stride)
             => pass.Commands.Add(new DrawIndexedIndirectCommand(owner.Trace(buffer), offset, drawCount, stride));
 
+        public void DrawIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+            => pass.Commands.Add(new DrawIndirectCountCommand(owner.Trace(buffer), offset, owner.Trace(countBuffer), countOffset, maxDrawCount, stride));
+
+        public void DrawIndexedIndirectCount(in ResourceVersion buffer, uint offset, in ResourceVersion countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+            => pass.Commands.Add(new DrawIndexedIndirectCountCommand(owner.Trace(buffer), offset, owner.Trace(countBuffer), countOffset, maxDrawCount, stride));
+
         public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
             => pass.Commands.Add(new DispatchCommand(groupCountX, groupCountY, groupCountZ));
 
         public void DispatchIndirect(in ResourceVersion buffer, uint offset)
             => pass.Commands.Add(new DispatchIndirectCommand(owner.Trace(buffer), offset));
+
+        public void ComputeBarrier() => pass.Commands.Add(new ComputeBarrierCommand());
 
         public void UpdateBuffer(in ResourceVersion after, uint offset, ReadOnlySpan<byte> data)
         {

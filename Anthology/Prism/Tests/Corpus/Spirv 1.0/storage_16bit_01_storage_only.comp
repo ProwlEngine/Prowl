@@ -1,0 +1,6 @@
+#version 450
+#extension GL_EXT_shader_16bit_storage : require
+layout(local_size_x = 1) in;
+layout(std430, set = 0, binding = 0) buffer B { float16_t a[]; } b;
+layout(std430, set = 0, binding = 1) buffer O { float o[]; };
+void main() { o[gl_GlobalInvocationID.x] = float(b.a[gl_GlobalInvocationID.x]); }

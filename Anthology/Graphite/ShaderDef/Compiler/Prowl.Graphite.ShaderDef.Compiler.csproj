@@ -10,15 +10,19 @@
 
     <PropertyGroup>
         <PackageId>Prowl.Graphite.ShaderDef.Compiler</PackageId>
-        <Description>The Slang-based shader parser and compiler for Prowl.Graphite.ShaderDef.</Description>
-        <PackageTags>graphics api DirectX Vulkan Metal direct-x slang compiler shader</PackageTags>
+        <Description>The GLSL shader compiler for Prowl.Graphite.ShaderDef, built on Prism.</Description>
+        <PackageTags>graphics api Vulkan glsl spirv compiler shader</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\..\Slang\Slang\Prowl.Slang.csproj" />
-        <ProjectReference Include="..\..\..\Crumb\Crumb\Prowl.Crumb.csproj" />
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
         <ProjectReference Include="..\Core\Prowl.Graphite.ShaderDef.csproj" />
+        <ProjectReference Include="..\..\..\Prism\Prism\Prowl.Prism.csproj" />
+    </ItemGroup>
+
+
+    <ItemGroup>
+        <EmbeddedResource Include="Library\**\*.glsl" LogicalName="Graphite/%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
 
     <ItemGroup>

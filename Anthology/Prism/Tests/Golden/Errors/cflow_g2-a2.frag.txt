@@ -1,0 +1,10 @@
+<shader>
+ERROR: <shader>:4: 'in' : overloaded functions must have the same parameter storage qualifiers for argument 1
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: No function definition (body) found: 
+    f(f1;
+
+SPIR-V is not generated for failed compile or link

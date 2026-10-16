@@ -50,7 +50,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
         }
 
         (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
-            = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray);
+            = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray, PushConstants);
 
         ComputePipelineCreateInfo pipelineCI = new() { SType = StructureType.ComputePipelineCreateInfo };
         pipelineCI.Layout = PipelineLayout;
@@ -63,7 +63,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
         stageCI.PName = entryPointPtr;
         pipelineCI.Stage = stageCI;
 
-        _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();
+        _gd.Vk.CreateComputePipelines(_gd.Device, _gd.DriverPipelineCache, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();
         DevicePipeline = pipeline;
         PipelineId = gd.NextPipelineId();
 

@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:2: '#extension' : extension not supported: GL_EXT_clip_cull_distance
+ERROR: <shader>:2: '#extension' : extra tokens -- expected newline 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking vertex stage: Missing entry point: Each stage requires one entry point

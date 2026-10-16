@@ -97,7 +97,9 @@ public sealed class PassState : IEquatable<PassState>
         if (Has(Set, PassStateFields.AlphaToCoverage))
             baseState.AlphaToCoverageEnabled = AlphaToCoverage;
 
-        baseState.AttachmentStates = [attachment];
+        BlendAttachmentDescription[] attachments = baseState.AttachmentStates.Length > 0 ? (BlendAttachmentDescription[])baseState.AttachmentStates.Clone() : new BlendAttachmentDescription[1];
+        attachments[0] = attachment;
+        baseState.AttachmentStates = attachments;
         return baseState;
     }
 

@@ -126,6 +126,9 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <returns>Max sample count a texture of that format can use.</returns>
     public abstract TextureSampleCount GetSampleCountLimit(PixelFormat format, bool depthFormat);
 
+    /// <summary>Whether textures of a format can be both the source and the destination of <see cref="CommandBufferBase.BlitTexture"/>.</summary>
+    public abstract bool SupportsBlit(PixelFormat format, bool depthFormat);
+
     /// <summary>
     /// Maps a Dynamic or Staging buffer and returns its bytes. Call Unmap when done.
     /// </summary>
@@ -240,6 +243,13 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     /// <param name="info">Vulkan backend info if successful.</param>
     /// <returns>True if this is a Vulkan device and it worked.</returns>
+    /// <summary>
+    /// Contents of the driver pipeline cache, to save and pass back through <see cref="GraphicsDeviceOptions.PipelineCacheData"/>
+    /// on the next run.
+    /// </summary>
+    /// <returns>Opaque cache bytes, empty when the backend keeps none.</returns>
+    public virtual byte[] GetPipelineCacheData() => [];
+
     public virtual bool GetVulkanInfo([NotNullWhen(true)] out BackendInfoVulkan? info)
     {
         info = null;

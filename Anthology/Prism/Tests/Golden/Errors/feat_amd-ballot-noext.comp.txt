@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:5: 'minInvocationsAMD' : required extension not requested: GL_AMD_shader_ballot
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:2: 'UndefinedFn' : no matching overloaded function found 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

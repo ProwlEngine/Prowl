@@ -1,0 +1,7 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_scalar_block_layout : require
+layout(local_size_x=1) in;
+layout(buffer_reference, scalar) buffer V { vec3 v[]; };
+layout(push_constant) uniform PC { V p; } pc;
+void main(){ pc.p.v[2] = pc.p.v[1]; }

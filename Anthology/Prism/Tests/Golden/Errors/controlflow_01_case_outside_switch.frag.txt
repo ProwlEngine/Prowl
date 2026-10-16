@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'case' : cannot appear outside switch statement 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

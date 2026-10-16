@@ -31,6 +31,11 @@ public abstract partial class GraphicsDevice
     public ulong LastCompletedExecutionId => Volatile.Read(ref _lastCompletedExecutionId);
 
     /// <summary>
+    /// The latest execution id handed out, including one whose recording failed after it began and still submitted work.
+    /// </summary>
+    public ulong LastBegunExecutionId => Volatile.Read(ref _executionIdCounter);
+
+    /// <summary>
     /// Max in-flight executions. Past this, BeginExecution blocks till the oldest finishes.
     /// </summary>
     public uint MaxExecutingTasks => _maxExecutingTasks;

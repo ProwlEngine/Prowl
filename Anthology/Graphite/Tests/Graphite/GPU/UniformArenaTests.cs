@@ -91,7 +91,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
 
     private ComputeProgram CreateTwoBlockProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "MultiParameterBlockBindingTest.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "MultiParameterBlockBindingTest.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

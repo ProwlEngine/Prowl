@@ -1,0 +1,40 @@
+#version 460 core
+
+// Specialization constants as array sizes (a local array and a shared array), as loop bounds, and mixed
+// into runtime index arithmetic. The array lengths become OpSpecConstantOp chains.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(constant_id = 0) const uint GROUP_SIZE = 64u;
+layout(constant_id = 1) const int TAPS = 4;
+layout(constant_id = 2) const int UNUSED_BY_BODY = 9;
+
+layout(std430, set = 0, binding = 0) readonly buffer In
+{
+    float samples[];
+};
+
+layout(std430, set = 0, binding = 1) buffer Out
+{
+    float results[];
+};
+
+shared float scratch[GROUP_SIZE];
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+
+    float kernel[TAPS];
+    for (int k = 0; k < TAPS; k++)
+        kernel[k] = 1.0 / float(TAPS) * float(k + 1);
+
+    float total = 0.0;
+    for (int k = 0; k < TAPS; k++)
+        total += samples[i * uint(TAPS) + uint(k)] * kernel[k];
+
+    scratch[gl_LocalInvocationID.x] = total;
+    barrier();
+
+    results[i] = scratch[gl_LocalInvocationID.x];
+}

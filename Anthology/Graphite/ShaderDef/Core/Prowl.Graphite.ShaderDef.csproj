@@ -17,6 +17,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\..\Vector\Vector\Vector.csproj" />
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\..\Crumb\Crumb\Prowl.Crumb.csproj" />
     </ItemGroup>
 
     <ItemGroup>

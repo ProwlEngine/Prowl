@@ -1,0 +1,8 @@
+#version 460
+#extension GL_NV_ray_tracing : require
+layout(binding = 0) uniform accelerationStructureNV tlas;
+layout(location = 0) rayPayloadNV vec4 payload;
+void main()
+{
+    traceNV(tlas, gl_RayFlagsOpaqueNV, 0xFF, 0, 0, 0, vec3(0.0), 0.001, vec3(0.0, 0.0, 1.0), 1000.0, 0);
+}

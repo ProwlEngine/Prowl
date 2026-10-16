@@ -1,0 +1,11 @@
+#version 460
+
+layout(local_size_x = 1) in;
+
+layout(set = 0, binding = 0, std430) buffer Block {
+    vec2 arr[4];
+} buf;
+
+void main() {
+    buf.arr[0] = buf.arr[1] + buf.arr[2] + buf.arr[3];
+}

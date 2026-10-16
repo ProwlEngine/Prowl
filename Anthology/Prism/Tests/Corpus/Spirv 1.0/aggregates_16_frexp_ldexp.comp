@@ -1,0 +1,16 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    float inVal;
+    float outData[];
+} b;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    int e;
+    float m = frexp(b.inVal, e);
+    float r = ldexp(m, e + 1);
+    b.outData[idx] = r;
+}

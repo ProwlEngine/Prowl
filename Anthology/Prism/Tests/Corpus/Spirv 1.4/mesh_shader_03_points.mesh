@@ -1,0 +1,15 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+layout(local_size_x = 1) in;
+layout(points, max_vertices = 4, max_primitives = 4) out;
+layout(location = 0) out vec3 vColor[];
+void main()
+{
+    SetMeshOutputsEXT(4u, 4u);
+    for (uint k = 0u; k < 4u; k++)
+    {
+        gl_MeshVerticesEXT[k].gl_Position = vec4(float(k), 0.0, 0.0, 1.0);
+        vColor[k] = vec3(1.0, 0.0, 0.0);
+        gl_PrimitivePointIndicesEXT[k] = k;
+    }
+}

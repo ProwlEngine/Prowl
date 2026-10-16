@@ -1,0 +1,21 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(binding = 0) uniform U {
+    vec3 a;
+    vec3 b;
+};
+
+layout(binding = 1) buffer B {
+    vec4 result[];
+};
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    float len = length(a);
+    float dist = distance(a, b);
+    float d = dot(a, b);
+    vec3 n = normalize(a + b);
+    result[i] = vec4(n, len + dist + d);
+}

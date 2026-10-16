@@ -1,0 +1,20 @@
+// One layer of a view as shaders read it, matching ViewBlock.
+#pragma once
+
+struct Graphite_ViewData
+{
+    mat4 view;                      // rotation only, the camera translation is applied by the camera relative positions
+    mat4 projection;
+    mat4 viewProjection;
+    mat4 inverseViewProjection;
+    mat4 previousViewProjection;    // relative to the previous camera position
+    vec4 cameraHigh;
+    vec4 cameraLow;
+    vec4 previousCameraHigh;
+    vec4 previousCameraLow;
+    vec4 screen;                    // width, height, 1 / width, 1 / height
+    vec4 jitter;                    // this frame's jitter in xy, the previous frame's in zw
+    vec4 time;                      // time, delta time, frame index, the part of time the first lost
+    vec4 depth;                     // near plane, logical far distance
+    vec4 treeOffset;                // this layer's camera minus the first layer's, which the view's trees are built around
+};

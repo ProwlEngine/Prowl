@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:5: '[' :  array must be redeclared with a size before being indexed with a variable
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

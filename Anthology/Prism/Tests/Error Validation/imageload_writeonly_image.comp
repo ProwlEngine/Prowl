@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(set=0,binding=0, rgba32f) uniform writeonly image2D img;
+layout(std430,set=0,binding=1) buffer B { vec4 o; };
+void main() { o = imageLoad(img, ivec2(0)); }

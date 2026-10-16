@@ -65,6 +65,41 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             mipHeight = Math.Max(1, mipHeight / 2);
         }
     }
+
+    [Fact]
+    public void D32FloatDepth_ClearsAndReadsBackExactly()
+    {
+        Texture color = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
+        Texture depth = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.D32_Float, TextureUsage.DepthStencil));
+        Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depth, color));
+
+        GD.RunTestGraph((context, cl) =>
+        {
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Clear(0.123456789f)));
+            cl.SetFullViewport();
+        });
+        GD.WaitForIdle();
+
+        byte[] bytes = ReadTextureBytes(depth, TextureRegion.Whole(depth, 0, 0), 4 * 4 * 4);
+        Assert.Equal(0.123456789f, BitConverter.ToSingle(bytes, 5 * 4));
+    }
+
+    [Fact]
+    public void D16Depth_ClearsAndReadsBackToTheNearestStep()
+    {
+        Texture depth = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.D16_UNorm, TextureUsage.DepthStencil | TextureUsage.Sampled));
+        Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depth));
+
+        GD.RunTestGraph((context, cl) =>
+        {
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Clear(0.25f)));
+            cl.SetFullViewport();
+        });
+        GD.WaitForIdle();
+
+        byte[] bytes = ReadTextureBytes(depth, TextureRegion.Whole(depth, 0, 0), 4 * 4 * 2);
+        Assert.Equal((ushort)Math.Round(0.25 * 65535), BitConverter.ToUInt16(bytes, 5 * 2));
+    }
 }
 
 #if TEST_VULKAN

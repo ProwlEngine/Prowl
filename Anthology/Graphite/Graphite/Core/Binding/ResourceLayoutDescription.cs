@@ -23,6 +23,13 @@ public struct ResourceLayoutDescription
     public ResourceLayoutElementDescription[] Elements;
 
     /// <summary>
+    /// The set is bound through a <see cref="DescriptorTable"/> instead of a PropertySet. Its bindings are partially
+    /// bound and update after bind, they may be arrays, and they may not be uniform buffers. Needs
+    /// <see cref="GraphicsDeviceFeatures.DescriptorIndexing"/>.
+    /// </summary>
+    public bool Table;
+
+    /// <summary>
     /// New ResourceLayoutDescription with set index 0.
     /// </summary>
     /// <param name="elements">Per-element layout descriptions.</param>

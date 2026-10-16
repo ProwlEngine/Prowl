@@ -19,6 +19,9 @@ internal class VkResourceFactory : ResourceFactory
         return new VkFramebuffer(_gd, description);
     }
 
+    protected override DescriptorTable CreateDescriptorTableCore(in ResourceLayoutDescription layout)
+        => new VkDescriptorTable(_gd, layout);
+
     protected override Sampler CreateSamplerCore(in SamplerDescription description)
     {
         return new VkSampler(_gd, description);
@@ -50,6 +53,9 @@ internal class VkResourceFactory : ResourceFactory
             description.SampleCount,
             new Image(nativeTexture));
     }
+
+    public override Texture CreateTexture(ulong nativeTexture, in TextureDescription description, TextureState restingState)
+        => new VkTexture(_gd, description, new Image(nativeTexture), restingState);
 
     protected override TextureView CreateTextureViewCore(in TextureViewDescription description)
     {

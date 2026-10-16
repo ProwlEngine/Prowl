@@ -21,7 +21,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
 
     private ComputeProgram CreateProbeProgram()
     {
-        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "OrphanProbe.slang");
+        ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "OrphanProbe.glsl");
         ResourceLayoutDescription[] layouts =
         [
             new ResourceLayoutDescription

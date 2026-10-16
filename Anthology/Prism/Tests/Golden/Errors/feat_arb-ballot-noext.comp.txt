@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:5: 'gl_SubGroupSizeARB' : required extension not requested: GL_ARB_shader_ballot
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
