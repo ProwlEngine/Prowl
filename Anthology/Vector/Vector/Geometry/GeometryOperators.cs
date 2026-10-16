@@ -28,8 +28,8 @@ public enum ExtrudeMode
     AverageNormal,
 
     /// <summary>
-    /// Each face gets its own copy of vertices - no sharing.
-    /// Each vertex moves along that face's normal.
+    /// Each face gets its own copy of vertices and moves along its own normal. Faces joined by hidden
+    /// edges count as one face and move together.
     /// </summary>
     PerFace
 }
@@ -48,10 +48,22 @@ public enum InsetMode
     Shared,
 
     /// <summary>
-    /// Each face gets its own copy of vertices - no sharing.
-    /// Each face shrinks independently towards its own center.
+    /// Each face gets its own copy of vertices and shrinks on its own. Faces joined by hidden edges count as
+    /// one face and shrink together.
     /// </summary>
     PerFace
+}
+
+/// <summary>
+/// How the thickness of an inset is measured.
+/// </summary>
+public enum InsetMeasure
+{
+    /// <summary>The part of the way each corner moves towards its face centre, from 0 to 1.</summary>
+    Fraction,
+
+    /// <summary>How far inside the old outline the new one runs, so every border is equally thick.</summary>
+    Distance
 }
 
 /// <summary>
@@ -511,172 +523,60 @@ public static class GeometryOperators
     /// <param name="mesh">The mesh to calculate normals for.</param>
     public static void RecalculateNormals(GeometryData mesh)
     {
-        // Ensure normal attribute exists
         if (!mesh.HasVertexAttribute("normal"))
-        {
             mesh.AddVertexAttribute("normal", GeometryData.AttributeBaseType.Float, 3);
-        }
 
-        // Initialize all normals to zero
-        foreach (var v in mesh.Vertices)
-        {
-            v.Attributes["normal"] = new GeometryData.FloatAttributeValue(0, 0, 0);
-        }
-
-        // Accumulate face normals
+        var sums = new Dictionary<GeometryData.Vertex, Float3>(mesh.Vertices.Count);
         foreach (var face in mesh.Faces)
         {
-            var verts = face.NeighborVertices();
-            if (verts.Count < 3) continue;
-
-            // Calculate face normal using first three vertices
-            Float3 v0 = verts[0].Point;
-            Float3 v1 = verts[1].Point;
-            Float3 v2 = verts[2].Point;
-
-            Float3 edge1 = v1 - v0;
-            Float3 edge2 = v2 - v0;
-            Float3 faceNormal = Float3.Normalize(Float3.Cross(edge1, edge2));
-
-            // Add to all vertices of this face
-            foreach (var vert in verts)
-            {
-                var normal = vert.Attributes["normal"] as GeometryData.FloatAttributeValue;
-                if (normal != null)
-                {
-                    Float3 current = normal.AsVector3();
-                    current += faceNormal;
-                    normal.FromVector3(current);
-                }
-            }
+            Float3 normal = face.Normal();
+            if (Float3.LengthSquared(normal) < 0.5f) continue;
+            foreach (var v in face.NeighborVerticesEnumerable())
+                sums[v] = (sums.TryGetValue(v, out var sum) ? sum : Float3.Zero) + normal;
         }
 
-        // Normalize all vertex normals
         foreach (var v in mesh.Vertices)
         {
-            var normal = v.Attributes["normal"] as GeometryData.FloatAttributeValue;
-            if (normal != null)
-            {
-                Float3 n = normal.AsVector3();
-                if (Float3.LengthSquared(n) > 0)
-                {
-                    normal.FromVector3(Float3.Normalize(n));
-                }
-            }
+            Float3 n = sums.TryGetValue(v, out var sum) && Float3.LengthSquared(sum) > 0f ? Float3.Normalize(sum) : Float3.Zero;
+            v.Attributes["normal"] = new GeometryData.FloatAttributeValue(n.X, n.Y, n.Z);
         }
     }
 
     /// <summary>
-    /// Triangulates all faces in the mesh by converting n-gons (faces with more than 3 vertices) into triangles.
-    /// Uses fan triangulation from the first vertex of each face.
-    /// All loop attributes (including UVs) are preserved on the resulting triangles.
-    /// Faces that are already triangles are left unchanged.
-    /// Modifies the mesh in-place.
+    /// Splits every face with more than three corners into triangles, by ear clipping in the face's plane so
+    /// concave faces come out right. Each triangle keeps the face attributes and the loop attributes of its corners.
     /// </summary>
     /// <param name="mesh">The mesh to triangulate.</param>
     public static void Triangulate(GeometryData mesh)
     {
-        // Collect faces that need triangulation
-        var facesToTriangulate = new List<GeometryData.Face>();
-
-        foreach (var face in mesh.Faces)
+        foreach (var face in mesh.Faces.Where(f => f.VertCount > 3).ToList())
         {
-            if (face.VertCount > 3)
-            {
-                facesToTriangulate.Add(face);
-            }
-        }
+            var snapshot = FaceSnapshot.Capture(mesh, face);
+            var verts = snapshot.Vertices;
+            Float3 normal = face.Normal();
+            var frame = new PlaneFrame(Float3.LengthSquared(normal) > 0.5f ? normal : Float3.UnitY, verts[0].Point);
+            List<int> triangles = Polygon2D.Triangulate(verts.Select(v => frame.To2D(v.Point)).ToList());
+            if (triangles.Count < 3) continue;
 
-        // Process each face that needs triangulation
-        foreach (var face in facesToTriangulate)
-        {
-            var verts = face.NeighborVertices();
-            if (verts.Count < 3) continue;
-
-            // Store loop attributes for each vertex in the face
-            var loopAttributes = new Dictionary<string, GeometryData.AttributeValue>[verts.Count];
-            for (int i = 0; i < verts.Count; i++)
-            {
-                var loop = face.GetLoop(verts[i]);
-                loopAttributes[i] = new Dictionary<string, GeometryData.AttributeValue>();
-                if (loop != null)
-                {
-                    foreach (var kvp in loop.Attributes)
-                    {
-                        loopAttributes[i][kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                    }
-                }
-            }
-
-            // Store face attributes
-            var faceAttributes = new Dictionary<string, GeometryData.AttributeValue>();
-            foreach (var kvp in face.Attributes)
-            {
-                faceAttributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-            }
-
-            // Create triangles using fan triangulation from first vertex
-            var triangles = new List<(GeometryData.Vertex, GeometryData.Vertex, GeometryData.Vertex, int, int, int)>();
-            for (int i = 1; i < verts.Count - 1; i++)
-            {
-                triangles.Add((verts[0], verts[i], verts[i + 1], 0, i, i + 1));
-            }
-
-            // Remove the original face
             mesh.RemoveFace(face);
-
-            // Add triangular faces
-            foreach (var (v0, v1, v2, idx0, idx1, idx2) in triangles)
+            for (int t = 0; t + 2 < triangles.Count; t += 3)
             {
-                var newFace = mesh.AddFace(v0, v1, v2);
-                if (newFace != null)
-                {
-                    // Copy face attributes
-                    foreach (var kvp in faceAttributes)
-                    {
-                        newFace.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                    }
-
-                    // Copy loop attributes
-                    var loop = newFace.Loop;
-                    if (loop != null)
-                    {
-                        // First vertex (v0)
-                        foreach (var kvp in loopAttributes[idx0])
-                        {
-                            loop.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                        }
-                        loop = loop.Next;
-
-                        // Second vertex (v1)
-                        if (loop != null)
-                        {
-                            foreach (var kvp in loopAttributes[idx1])
-                            {
-                                loop.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                            }
-                            loop = loop.Next;
-                        }
-
-                        // Third vertex (v2)
-                        if (loop != null)
-                        {
-                            foreach (var kvp in loopAttributes[idx2])
-                            {
-                                loop.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                            }
-                        }
-                    }
-                }
+                var triangle = mesh.AddFace(verts[triangles[t]], verts[triangles[t + 1]], verts[triangles[t + 2]]);
+                if (triangle == null) continue;
+                snapshot.ApplyFaceAttributes(triangle);
+                FaceSnapshot.ApplyLoops(triangle, snapshot.LoopOf);
             }
         }
     }
 
     #endregion
 
+    #region Face Operators
+
     /// <summary>
     /// Extrude a collection of faces outward (or inward) along their normals.
-    /// Creates new geometry by duplicating the faces and connecting them with wall faces.
+    /// Creates new geometry by duplicating the faces and connecting them with wall faces. Faces joined to a
+    /// selected face by hidden edges are extruded with it, since they are one face.
     /// </summary>
     /// <param name="mesh">The mesh containing the faces.</param>
     /// <param name="facesToExtrude">The faces to extrude.</param>
@@ -691,16 +591,55 @@ public static class GeometryOperators
     }
 
     /// <summary>
-    /// Inset a collection of faces by shrinking them towards their centers.
-    /// Creates new smaller faces and connects them with wall faces to the original edges.
+    /// Inset a collection of faces, shrinking each inside its own outline and joining it to the old outline
+    /// with wall faces. Faces joined by hidden edges are inset as one face.
     /// </summary>
     /// <param name="mesh">The mesh containing the faces.</param>
     /// <param name="facesToInset">The faces to inset.</param>
-    /// <param name="thickness">The inset amount (0 = no change, 1 = full inset to face center).</param>
-    /// <param name="mode">The inset mode (Shared or PerFace).</param>
-    public static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, float thickness, InsetMode mode = InsetMode.Shared)
+    /// <param name="thickness">How far to inset, as <paramref name="measure"/> says.</param>
+    /// <param name="mode">Whether the faces are inset together as one region, or each on its own.</param>
+    /// <param name="measure">Whether the thickness is a fraction of the way to the face centre, or a distance.</param>
+    public static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, float thickness, InsetMode mode = InsetMode.Shared, InsetMeasure measure = InsetMeasure.Fraction)
     {
-        InsetOp.InsetFaces(mesh, facesToInset, thickness, mode);
+        InsetOp.InsetFaces(mesh, facesToInset, thickness, mode, measure);
+    }
+
+    /// <summary>
+    /// Bevel edges between two faces, replacing each with a strip of faces. Any number of edges can meet at a
+    /// corner, which is capped. Face, loop and edge attributes carry over to the new faces, with loop
+    /// attributes such as texture coordinates sampled across the face they came from. Edges between faces in
+    /// one plane are skipped. Throws <see cref="InvalidOperationException"/> when the width reaches other
+    /// geometry or the surface is not manifold.
+    /// </summary>
+    /// <param name="mesh">The mesh containing the edges.</param>
+    /// <param name="edges">The edges to bevel, each with a face on both sides.</param>
+    /// <param name="width">How far from the edge the bevel reaches along each face.</param>
+    /// <param name="segments">How many strips an edge becomes. One is a flat chamfer, more make a rounded edge.</param>
+    /// <param name="profile">The shape of the rounding. 0 is flat, 0.5 a circle, higher is squarer.</param>
+    /// <returns>How many strip faces were added.</returns>
+    public static int BevelEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, float width, int segments = 1, float profile = 0.5f)
+    {
+        return BevelOp.Edges(mesh, edges.ToList(), new BevelOp.Options { Width = width, Segments = segments, Profile = profile });
+    }
+
+    /// <summary>
+    /// Bevel one or more vertices by replacing each with a small face. A new vertex is placed on every edge
+    /// around a beveled vertex and they are joined by the face. Neighbouring vertices can be beveled together,
+    /// and vertices on an open border are cut too. Face, loop and edge attributes carry over to the new faces.
+    /// Throws <see cref="InvalidOperationException"/> when the offset reaches past an edge or the surface is not manifold.
+    /// </summary>
+    /// <param name="mesh">The mesh containing the vertices.</param>
+    /// <param name="verticesToBevel">The vertices to bevel.</param>
+    /// <param name="offset">How far along each edge to place the new vertices.</param>
+    /// <param name="relative">When true the offset is a fraction of each edge's length, from 0 to 1 exclusive. When false it is a distance.</param>
+    /// <returns>How many vertices were beveled.</returns>
+    public static int BevelVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> verticesToBevel, float offset = 0.3f, bool relative = true)
+    {
+        if (relative && (offset <= 0.0f || offset >= 1.0f))
+            throw new ArgumentException("Offset must be between 0.0 and 1.0 when it is relative", nameof(offset));
+
+        var targets = verticesToBevel.Where(v => mesh.Vertices.Contains(v) && v.NeighborFaces().Count > 0).Distinct().ToList();
+        return targets.Count == 0 ? 0 : BevelOp.Vertices(mesh, targets, offset, relative);
     }
 
     /// <summary>
@@ -730,19 +669,6 @@ public static class GeometryOperators
     }
 
     /// <summary>
-    /// Bevel one or more vertices by replacing each with a small face.
-    /// Creates new vertices along edges connected to each beveled vertex and connects them with a bevel face.
-    /// Vertices are beveled in the order they are passed in.
-    /// </summary>
-    /// <param name="mesh">The mesh containing the vertices.</param>
-    /// <param name="verticesToBevel">The vertices to bevel, in order.</param>
-    /// <param name="offset">Distance along edges from the vertex to place new vertices (0.0 to 1.0, where 0.5 is midpoint).</param>
-    public static void BevelVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> verticesToBevel, float offset = 0.3f)
-    {
-        BevelVertexOp.BevelVertices(mesh, verticesToBevel, offset);
-    }
-
-    /// <summary>
     /// Reduce the triangle count by collapsing vertices onto their neighbours, cheapest first by quadric
     /// error. No vertex is ever created or moved, so every vertex and loop attribute keeps an authored
     /// value. Seams (loops at one vertex with different attributes), borders and region outlines are
@@ -756,4 +682,220 @@ public static class GeometryOperators
         return SimplifyOp.Simplify(mesh, options);
     }
 
+    #endregion
+
+    #region Modelling Operators
+
+    // These keep a mesh the way a SketchUp style modeller wants it: faces stay flat, every plane's faces are
+    // rebuilt from its edges after an edit, and faces joined by hidden edges act as one face. A face bent out
+    // of flat by an edit is folded into triangles joined by hidden edges.
+
+    /// <summary>
+    /// Draws lines into the mesh. Any closed loop they make on a plane becomes a face, and lines across an
+    /// existing face split it.
+    /// </summary>
+    /// <param name="mesh">The mesh to draw into.</param>
+    /// <param name="segments">The lines, as pairs of end points.</param>
+    /// <param name="planeNormal">The plane the lines were drawn on, when it is known.</param>
+    /// <param name="viewDirection">Where the viewer looks, so a new face in empty space faces them.</param>
+    /// <param name="material">The material for faces made in empty space.</param>
+    public static void DrawSegments(GeometryData mesh, IReadOnlyList<(Float3 A, Float3 B)> segments, Float3? planeNormal, Float3 viewDirection, int material)
+    {
+        DrawSegmentsOp.DrawSegments(mesh, segments, planeNormal, viewDirection, material);
+    }
+
+    /// <summary>Joins vertices that share a face with new edges, in the order they run around it. Returns how many edges were drawn.</summary>
+    public static int ConnectVertices(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, int material, Float3 viewDirection)
+    {
+        return DrawSegmentsOp.ConnectVertices(mesh, vertices, material, viewDirection);
+    }
+
+    /// <summary>
+    /// Cuts faces where they pass through each other, adding the edges of the crossing. With a selection only
+    /// those faces are cut against the rest. Returns how many crossing lines were added.
+    /// </summary>
+    public static int IntersectFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face>? only = null)
+    {
+        return IntersectFacesOp.IntersectFaces(mesh, only);
+    }
+
+    /// <summary>
+    /// Pushes or pulls a flat region along its normal. Walls are added around it, walls that line up with
+    /// faces beside them merge into them, and faces that end up overlapping facing opposite ways cancel, so
+    /// pushing through a solid cuts a hole. A region standing on its own keeps its base, making a solid.
+    /// </summary>
+    /// <param name="mesh">The mesh containing the region.</param>
+    /// <param name="region">Faces in one plane, usually a whole face with the faces joined to it by hidden edges.</param>
+    /// <param name="distance">How far to move it along its normal.</param>
+    /// <param name="keepBase">Leave the region where it was too, so the result is a new solid on top of it.</param>
+    public static void PushPull(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> region, float distance, bool keepBase = false)
+    {
+        PushPullOp.PushPull(mesh, region, distance, keepBase);
+    }
+
+    /// <summary>Moves vertices, then folds faces bent out of flat and rebuilds the planes they touch.</summary>
+    public static void MoveVertices(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, Float3 delta)
+    {
+        MoveVerticesOp.MoveVertices(mesh, vertices, delta);
+    }
+
+    /// <summary>Moves vertices by any transform, then folds and rebuilds like <see cref="MoveVertices"/>.</summary>
+    public static void TransformVertices(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, Func<Float3, Float3> transform)
+    {
+        MoveVerticesOp.TransformVertices(mesh, vertices, transform);
+    }
+
+    /// <summary>Scales vertices about a pivot, per axis of a rotated frame, then folds and rebuilds like <see cref="MoveVertices"/>.</summary>
+    public static void ScaleVertices(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, Float3 pivot, Float3 factors, Quaternion frame)
+    {
+        MoveVerticesOp.Scale(mesh, vertices, pivot, factors, frame);
+    }
+
+    /// <summary>Joins vertices into one at a point. Faces that collapse away with them are removed.</summary>
+    public static void MergeVertices(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex> vertices, Float3 target)
+    {
+        MoveVerticesOp.MergeAt(mesh, vertices, target);
+    }
+
+    /// <summary>Collapses each connected group of edges to a single point at its centre. Returns how many vertices were joined.</summary>
+    public static int CollapseEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    {
+        return MoveVerticesOp.CollapseEdges(mesh, edges);
+    }
+
+    /// <summary>
+    /// Joins vertices within a distance of each other onto their average and rebuilds the flat faces around
+    /// them. Unlike <see cref="WeldVertices"/> clusters chain, so a row of close vertices becomes one. With no
+    /// scope every vertex is considered. Returns how many vertices were joined.
+    /// </summary>
+    public static int MergeByDistance(GeometryData mesh, IReadOnlyCollection<GeometryData.Vertex>? scope, float distance)
+    {
+        return MoveVerticesOp.WeldByDistance(mesh, scope, distance);
+    }
+
+    /// <summary>
+    /// Copies faces and loose edges through a transform. Copies that land on existing faces merge into them
+    /// like drawn geometry. Returns the new vertices.
+    /// </summary>
+    /// <param name="mesh">The mesh to copy within.</param>
+    /// <param name="faces">The faces to copy, with any faces joined to them by hidden edges.</param>
+    /// <param name="edges">Loose edges to copy.</param>
+    /// <param name="transform">Where each point of the copy goes.</param>
+    /// <param name="flip">Reverse the copies, for transforms that mirror.</param>
+    public static List<GeometryData.Vertex> CopyFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, Func<Float3, Float3> transform, bool flip = false)
+    {
+        return CopyOp.Copy(mesh, faces, edges, transform, flip);
+    }
+
+    /// <summary>A mirrored copy of faces and edges across a plane, wound to face the same way as the originals. Returns the new vertices.</summary>
+    public static List<GeometryData.Vertex> Mirror(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, Plane plane)
+    {
+        return CopyOp.Mirror(mesh, faces, edges, plane);
+    }
+
+    /// <summary>Copies faces and edges several times, each copy by the transform for its step, starting at 1.</summary>
+    public static void Array(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, int copies, Func<Float3, int, Float3> transform)
+    {
+        CopyOp.Array(mesh, faces, edges, copies, transform);
+    }
+
+    /// <summary>Deletes faces, with the rest of any face they are joined to by hidden edges. Their edges stay.</summary>
+    public static void DeleteFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
+    {
+        DeleteOp.DeleteFaces(mesh, faces);
+    }
+
+    /// <summary>
+    /// Deletes edges. An edge between two faces lying flat together merges them, any other edge takes the
+    /// faces it bounds with it. Lines left running straight through a vertex are joined back up.
+    /// </summary>
+    public static void DeleteEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges)
+    {
+        DeleteOp.DeleteEdges(mesh, edges);
+    }
+
+    /// <summary>Deletes vertices with their faces. One sitting in the middle of a straight line just joins the line back up.</summary>
+    public static void DeleteVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices)
+    {
+        DeleteOp.DeleteVertices(mesh, vertices);
+    }
+
+    /// <summary>Adds evenly spaced vertices along edges, splitting every face that uses them. Returns the new vertices.</summary>
+    public static List<GeometryData.Vertex> SubdivideEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, int cuts)
+    {
+        return SubdivideEdgesOp.SubdivideEdges(mesh, edges, cuts);
+    }
+
+    /// <summary>Pushes edges out into a strip of new quads, joining each edge to a copy moved by the offset. Returns the copies of the vertices.</summary>
+    public static List<GeometryData.Vertex> ExtrudeEdges(GeometryData mesh, IReadOnlyCollection<GeometryData.Edge> edges, Float3 offset, int material)
+    {
+        return ExtrudeEdgesOp.ExtrudeEdges(mesh, edges, offset, material);
+    }
+
+    /// <summary>Closes a loop of edges with a face. A bent loop becomes triangles joined by hidden edges. Returns how many faces were made.</summary>
+    public static int FillLoop(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, int material)
+    {
+        return FillLoopOp.FillLoop(mesh, edges, material);
+    }
+
+    /// <summary>Splits faces into triangles joined by hidden edges, so each piece can be bent on its own while it still reads as one face.</summary>
+    public static void FoldFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
+    {
+        FoldOp.TriangulateFaces(mesh, faces);
+    }
+
+    /// <summary>Reverses the way faces point. Faces joined by hidden edges flip together.</summary>
+    public static void FlipFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
+    {
+        OrientOp.FlipFaces(mesh, faces);
+    }
+
+    /// <summary>
+    /// Turns faces round where neighbours disagree about which way is out, so each surface is consistent, and
+    /// makes closed shells face outwards. Returns how many faces were flipped.
+    /// </summary>
+    public static int OrientFaces(GeometryData mesh)
+    {
+        return OrientOp.OrientFaces(mesh);
+    }
+
+    /// <summary>Marks the edges along a run of points as soft, the way a drawn circle is one smooth curve.</summary>
+    public static void SoftenPolyline(GeometryData mesh, IReadOnlyList<Float3> points, bool closed)
+    {
+        SoftenOp.SoftenPolyline(mesh, points, closed);
+    }
+
+    /// <summary>Makes edges soft where their two faces meet at less than an angle in degrees, and hard where they do not. Returns how many changed.</summary>
+    public static int SoftenByAngle(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, float degrees)
+    {
+        return SoftenOp.SoftenByAngle(mesh, edges, degrees);
+    }
+
+    /// <summary>Sets whether edges are soft.</summary>
+    public static void SetSoft(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, bool soft)
+    {
+        SoftenOp.SetSoft(mesh, edges, soft);
+    }
+
+    /// <summary>Gives faces a material and drops any texture mapping they had, so the material's own projection applies.</summary>
+    public static void Paint(GeometryData mesh, IEnumerable<GeometryData.Face> faces, int material)
+    {
+        foreach (var face in faces)
+        {
+            face.Material = material;
+            face.Mapping = null;
+        }
+        mesh.MarkChanged();
+    }
+
+    /// <summary>
+    /// Sweeps a flat region along a path of edges, like SketchUp's Follow Me. Corners are mitred so the walls
+    /// stay flat, and the ends are capped unless the path loops. Returns how many faces were made.
+    /// </summary>
+    public static int FollowMe(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> profile, IReadOnlyCollection<GeometryData.Edge> path)
+    {
+        return FollowMeOp.FollowMe(mesh, profile, path);
+    }
+
+    #endregion
 }

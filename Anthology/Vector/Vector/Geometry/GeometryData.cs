@@ -15,7 +15,7 @@ namespace Prowl.Vector.Geometry;
 /// arbitrary edits easy while remaining efficient. Supports vertices, edges, loops (face corners),
 /// and faces with arbitrary polygon counts and custom attributes on all topological elements.
 /// </summary>
-public class GeometryData
+public partial class GeometryData
 {
     // Topological entities
     public List<Vertex> Vertices { get; } = new List<Vertex>();
@@ -34,7 +34,7 @@ public class GeometryData
     /// <summary>
     /// A vertex corresponds to a position in space. Many primitives (edges, faces) can share a vertex.
     /// </summary>
-    public class Vertex
+    public partial class Vertex
     {
         public int Id; // User-defined ID
         public Float3 Point; // Position in space
@@ -87,7 +87,7 @@ public class GeometryData
     /// <summary>
     /// An edge links two vertices together and may be part of one or more faces.
     /// </summary>
-    public class Edge
+    public partial class Edge
     {
         public int Id;
         public Dictionary<string, AttributeValue> Attributes = new Dictionary<string, AttributeValue>();
@@ -183,7 +183,7 @@ public class GeometryData
     /// <summary>
     /// A face is a polygon with any number of vertices, represented as a loop of edges.
     /// </summary>
-    public class Face
+    public partial class Face
     {
         public int Id;
         public Dictionary<string, AttributeValue> Attributes = new Dictionary<string, AttributeValue>();
@@ -300,6 +300,7 @@ public class GeometryData
     {
         EnsureVertexAttributes(vert);
         Vertices.Add(vert);
+        Version++;
         return vert;
     }
 
@@ -319,6 +320,7 @@ public class GeometryData
         edge = new Edge(vert1, vert2);
         EnsureEdgeAttributes(edge);
         Edges.Add(edge);
+        Version++;
 
         // Insert in vert1's edge list
         if (vert1.Edge == null)
@@ -415,7 +417,10 @@ public class GeometryData
             }
         }
 
+        // The face starts at the first vertex given, so its corners come back in the same order
+        f.Loop = f.Loop!.Next;
         f.VertCount = fVerts.Length;
+        Version++;
         return f;
     }
 
@@ -447,6 +452,7 @@ public class GeometryData
         while (v.Edge != null)
             RemoveEdge(v.Edge);
         Vertices.Remove(v);
+        Version++;
     }
 
     /// <summary>
@@ -468,6 +474,7 @@ public class GeometryData
         if (e.Next2 != null) e.Next2.SetPrev(e.Vert2, e.Prev2);
 
         Edges.Remove(e);
+        Version++;
     }
 
     private void RemoveLoop(Loop l)
@@ -512,6 +519,7 @@ public class GeometryData
             } while (nextL != f.Loop && nextL != null);
         }
         Faces.Remove(f);
+        Version++;
     }
 
     #endregion

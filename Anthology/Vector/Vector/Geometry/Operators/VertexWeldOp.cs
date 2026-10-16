@@ -9,450 +9,162 @@ namespace Prowl.Vector.Geometry.Operators;
 
 internal static class VertexWeldOp
 {
-    internal static int WeldVertices(GeometryData mesh, float threshold = 0.0001f)
-    {
-        if (threshold <= 0)
-            return 0;
-
-        var verticesToRemove = new HashSet<GeometryData.Vertex>();
-        var vertexMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-        int weldedCount = 0;
-
-        // Build a list of all vertices for spatial searching
-        var allVertices = mesh.Vertices.ToList();
-
-        // For each vertex, find nearby vertices and merge them
-        for (int i = 0; i < allVertices.Count; i++)
-        {
-            var v1 = allVertices[i];
-
-            // Skip if already marked for removal
-            if (verticesToRemove.Contains(v1))
-                continue;
-
-            // Find all vertices within threshold distance
-            var cluster = new List<GeometryData.Vertex> { v1 };
-
-            for (int j = i + 1; j < allVertices.Count; j++)
-            {
-                var v2 = allVertices[j];
-
-                // Skip if already marked for removal
-                if (verticesToRemove.Contains(v2))
-                    continue;
-
-                float distance = Float3.Distance(v1.Point, v2.Point);
-                if (distance <= threshold)
-                {
-                    cluster.Add(v2);
-                }
-            }
-
-            // If we found vertices to weld
-            if (cluster.Count > 1)
-            {
-                // Calculate average position
-                Float3 avgPosition = Float3.Zero;
-                foreach (var v in cluster)
-                {
-                    avgPosition += v.Point;
-                }
-                avgPosition /= cluster.Count;
-
-                // Update the first vertex to the average position
-                v1.Point = avgPosition;
-
-                // Average all attributes
-                foreach (var attr in mesh.VertexAttributes)
-                {
-                    if (attr.Type.BaseType == GeometryData.AttributeBaseType.Float)
-                    {
-                        var floatAttrs = new List<GeometryData.FloatAttributeValue>();
-                        foreach (var v in cluster)
-                        {
-                            if (v.Attributes.ContainsKey(attr.Name) &&
-                                v.Attributes[attr.Name] is GeometryData.FloatAttributeValue fval)
-                            {
-                                floatAttrs.Add(fval);
-                            }
-                        }
-
-                        if (floatAttrs.Count > 0)
-                        {
-                            int n = floatAttrs[0].Data.Length;
-                            var avgData = new float[n];
-                            for (int k = 0; k < n; k++)
-                            {
-                                float sum = 0;
-                                foreach (var fval in floatAttrs)
-                                {
-                                    if (k < fval.Data.Length)
-                                        sum += fval.Data[k];
-                                }
-                                avgData[k] = sum / floatAttrs.Count;
-                            }
-                            v1.Attributes[attr.Name] = new GeometryData.FloatAttributeValue { Data = avgData };
-                        }
-                    }
-                    else if (attr.Type.BaseType == GeometryData.AttributeBaseType.Int)
-                    {
-                        var intAttrs = new List<GeometryData.IntAttributeValue>();
-                        foreach (var v in cluster)
-                        {
-                            if (v.Attributes.ContainsKey(attr.Name) &&
-                                v.Attributes[attr.Name] is GeometryData.IntAttributeValue ival)
-                            {
-                                intAttrs.Add(ival);
-                            }
-                        }
-
-                        if (intAttrs.Count > 0)
-                        {
-                            int n = intAttrs[0].Data.Length;
-                            var avgData = new int[n];
-                            for (int k = 0; k < n; k++)
-                            {
-                                float sum = 0;
-                                foreach (var ival in intAttrs)
-                                {
-                                    if (k < ival.Data.Length)
-                                        sum += ival.Data[k];
-                                }
-                                avgData[k] = (int)Math.Round(sum / intAttrs.Count);
-                            }
-                            v1.Attributes[attr.Name] = new GeometryData.IntAttributeValue { Data = avgData };
-                        }
-                    }
-                }
-
-                // Map all other vertices in cluster to v1
-                for (int j = 1; j < cluster.Count; j++)
-                {
-                    vertexMapping[cluster[j]] = v1;
-                    verticesToRemove.Add(cluster[j]);
-                    weldedCount++;
-                }
-            }
-        }
-
-        if (weldedCount == 0)
-            return 0;
-
-        // Now we need to update all faces to use the welded vertices
-        // Collect all face data before modification
-        var faceData = new List<(List<GeometryData.Vertex> verts,
-            Dictionary<string, GeometryData.AttributeValue> faceAttrs,
-            List<Dictionary<string, GeometryData.AttributeValue>> loopAttrs)>();
-
-        foreach (var face in mesh.Faces)
-        {
-            var verts = face.NeighborVertices();
-
-            // Check if any vertices need to be remapped
-            bool needsUpdate = false;
-            foreach (var v in verts)
-            {
-                if (vertexMapping.ContainsKey(v))
-                {
-                    needsUpdate = true;
-                    break;
-                }
-            }
-
-            if (!needsUpdate)
-                continue;
-
-            // Store face attributes
-            var faceAttrs = new Dictionary<string, GeometryData.AttributeValue>();
-            foreach (var attr in mesh.FaceAttributes)
-            {
-                if (face.Attributes.ContainsKey(attr.Name))
-                    faceAttrs[attr.Name] = GeometryData.AttributeValue.Copy(face.Attributes[attr.Name]);
-            }
-
-            // Store loop attributes
-            var loopAttrs = new List<Dictionary<string, GeometryData.AttributeValue>>();
-            if (face.Loop != null)
-            {
-                var it = face.Loop;
-                do
-                {
-                    var attrs = new Dictionary<string, GeometryData.AttributeValue>();
-                    foreach (var attr in mesh.LoopAttributes)
-                    {
-                        if (it.Attributes.ContainsKey(attr.Name))
-                            attrs[attr.Name] = GeometryData.AttributeValue.Copy(it.Attributes[attr.Name]);
-                    }
-                    loopAttrs.Add(attrs);
-                    it = it.Next;
-                } while (it != face.Loop);
-            }
-
-            faceData.Add((verts, faceAttrs, loopAttrs));
-        }
-
-        // Remove all faces that need updating
-        var facesToRemove = new HashSet<GeometryData.Face>();
-        foreach (var face in mesh.Faces)
-        {
-            var verts = face.NeighborVertices();
-            foreach (var v in verts)
-            {
-                if (vertexMapping.ContainsKey(v))
-                {
-                    facesToRemove.Add(face);
-                    break;
-                }
-            }
-        }
-
-        foreach (var face in facesToRemove)
-        {
-            mesh.RemoveFace(face);
-        }
-
-        // Recreate faces with welded vertices
-        foreach (var (verts, faceAttrs, loopAttrs) in faceData)
-        {
-            // Remap vertices
-            var newVerts = new List<GeometryData.Vertex>();
-            for (int i = 0; i < verts.Count; i++)
-            {
-                var v = verts[i];
-                var mappedV = vertexMapping.ContainsKey(v) ? vertexMapping[v] : v;
-
-                // Skip duplicate consecutive vertices (can happen after welding)
-                if (newVerts.Count == 0 || newVerts[newVerts.Count - 1] != mappedV)
-                {
-                    newVerts.Add(mappedV);
-                }
-            }
-
-            // Check for first/last duplicate
-            if (newVerts.Count > 1 && newVerts[0] == newVerts[newVerts.Count - 1])
-            {
-                newVerts.RemoveAt(newVerts.Count - 1);
-            }
-
-            // Only create face if it has at least 3 unique vertices
-            if (newVerts.Count >= 3)
-            {
-                var newFace = mesh.AddFace(newVerts.ToArray());
-                if (newFace != null)
-                {
-                    // Restore face attributes
-                    foreach (var kvp in faceAttrs)
-                    {
-                        newFace.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                    }
-
-                    // Restore loop attributes (may need adjustment if vertices were removed)
-                    if (newFace.Loop != null && loopAttrs.Count > 0)
-                    {
-                        var it = newFace.Loop;
-                        int loopIdx = 0;
-                        do
-                        {
-                            // Try to find matching loop attribute from original
-                            if (loopIdx < loopAttrs.Count)
-                            {
-                                foreach (var kvp in loopAttrs[loopIdx])
-                                {
-                                    it.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                                }
-                            }
-                            it = it.Next;
-                            loopIdx++;
-                        } while (it != newFace.Loop);
-                    }
-                }
-            }
-        }
-
-        // Remove welded vertices
-        foreach (var v in verticesToRemove)
-        {
-            if (mesh.Vertices.Contains(v))
-                mesh.RemoveVertex(v);
-        }
-
-        return weldedCount;
-    }
+    internal static int WeldVertices(GeometryData mesh, float threshold = 0.0001f) =>
+        Weld(mesh, mesh.Vertices.ToList(), threshold);
 
     internal static int WeldVerticesAtPositions(GeometryData mesh, IEnumerable<Float3> targetPositions, float threshold)
     {
-        if (threshold <= 0)
-            return 0;
+        if (threshold <= 0) return 0;
 
-        var allVertices = mesh.Vertices.ToList();
-        var verticesToWeld = new HashSet<GeometryData.Vertex>();
+        var targets = targetPositions.ToList();
+        var candidates = mesh.Vertices.Where(v => targets.Any(t => Float3.Distance(v.Point, t) <= threshold)).ToList();
+        return Weld(mesh, candidates, threshold);
+    }
 
-        // Find all vertices near target positions
-        foreach (var targetPos in targetPositions)
+    private readonly record struct Cell(int X, int Y, int Z);
+
+    private static Cell CellOf(Float3 p, float size) =>
+        new((int)MathF.Floor(p.X / size), (int)MathF.Floor(p.Y / size), (int)MathF.Floor(p.Z / size));
+
+    /// <summary>
+    /// Merges vertices within a distance of each other into one at their average position, averaging their
+    /// attributes. Faces are rebuilt on the merged vertices keeping their attributes, with the loop attributes
+    /// following the corners that survive. Edges keep their attributes and loose edges are kept.
+    /// </summary>
+    private static int Weld(GeometryData mesh, List<GeometryData.Vertex> candidates, float threshold)
+    {
+        if (threshold <= 0 || candidates.Count < 2) return 0;
+
+        var grid = new Dictionary<Cell, List<int>>();
+        for (int i = 0; i < candidates.Count; i++)
         {
-            foreach (var v in allVertices)
-            {
-                if (Float3.Distance(v.Point, targetPos) <= threshold)
-                {
-                    verticesToWeld.Add(v);
-                }
-            }
+            var cell = CellOf(candidates[i].Point, threshold);
+            if (!grid.TryGetValue(cell, out var list)) grid[cell] = list = new List<int>();
+            list.Add(i);
         }
 
-        if (verticesToWeld.Count == 0)
-            return 0;
+        var removed = new HashSet<GeometryData.Vertex>();
+        var mapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
 
-        // Create a temporary mesh with only the vertices to weld
-        // and use the main WeldVertices method
-        var originalCount = mesh.Vertices.Count;
-
-        // We need to weld within the subset, so we'll do a targeted approach
-        var vertexMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-        var verticesToRemove = new HashSet<GeometryData.Vertex>();
-        var vertexList = verticesToWeld.ToList();
-        int weldedCount = 0;
-
-        for (int i = 0; i < vertexList.Count; i++)
+        for (int i = 0; i < candidates.Count; i++)
         {
-            var v1 = vertexList[i];
-            if (verticesToRemove.Contains(v1))
-                continue;
+            var v1 = candidates[i];
+            if (removed.Contains(v1)) continue;
 
-            var cluster = new List<GeometryData.Vertex> { v1 };
-
-            for (int j = i + 1; j < vertexList.Count; j++)
-            {
-                var v2 = vertexList[j];
-                if (verticesToRemove.Contains(v2))
-                    continue;
-
-                if (Float3.Distance(v1.Point, v2.Point) <= threshold)
-                {
-                    cluster.Add(v2);
-                }
-            }
-
-            if (cluster.Count > 1)
-            {
-                // Average position
-                Float3 avgPos = Float3.Zero;
-                foreach (var v in cluster)
-                    avgPos += v.Point;
-                avgPos /= cluster.Count;
-                v1.Point = avgPos;
-
-                // Map others to v1
-                for (int j = 1; j < cluster.Count; j++)
-                {
-                    vertexMapping[cluster[j]] = v1;
-                    verticesToRemove.Add(cluster[j]);
-                    weldedCount++;
-                }
-            }
-        }
-
-        if (weldedCount == 0)
-            return 0;
-
-        // Update faces (same logic as WeldVertices)
-        var faceData = new List<(List<GeometryData.Vertex> verts,
-            Dictionary<string, GeometryData.AttributeValue> faceAttrs,
-            List<Dictionary<string, GeometryData.AttributeValue>> loopAttrs)>();
-
-        foreach (var face in mesh.Faces)
-        {
-            var verts = face.NeighborVertices();
-            bool needsUpdate = verts.Any(v => vertexMapping.ContainsKey(v));
-
-            if (!needsUpdate)
-                continue;
-
-            var faceAttrs = new Dictionary<string, GeometryData.AttributeValue>();
-            foreach (var attr in mesh.FaceAttributes)
-            {
-                if (face.Attributes.ContainsKey(attr.Name))
-                    faceAttrs[attr.Name] = GeometryData.AttributeValue.Copy(face.Attributes[attr.Name]);
-            }
-
-            var loopAttrs = new List<Dictionary<string, GeometryData.AttributeValue>>();
-            if (face.Loop != null)
-            {
-                var it = face.Loop;
-                do
-                {
-                    var attrs = new Dictionary<string, GeometryData.AttributeValue>();
-                    foreach (var attr in mesh.LoopAttributes)
+            var members = new List<int> { i };
+            var home = CellOf(v1.Point, threshold);
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dz = -1; dz <= 1; dz++)
                     {
-                        if (it.Attributes.ContainsKey(attr.Name))
-                            attrs[attr.Name] = GeometryData.AttributeValue.Copy(it.Attributes[attr.Name]);
-                    }
-                    loopAttrs.Add(attrs);
-                    it = it.Next;
-                } while (it != face.Loop);
-            }
-
-            faceData.Add((verts, faceAttrs, loopAttrs));
-        }
-
-        var facesToRemove = new HashSet<GeometryData.Face>();
-        foreach (var face in mesh.Faces)
-        {
-            var verts = face.NeighborVertices();
-            if (verts.Any(v => vertexMapping.ContainsKey(v)))
-                facesToRemove.Add(face);
-        }
-
-        foreach (var face in facesToRemove)
-            mesh.RemoveFace(face);
-
-        foreach (var (verts, faceAttrs, loopAttrs) in faceData)
-        {
-            var newVerts = new List<GeometryData.Vertex>();
-            for (int i = 0; i < verts.Count; i++)
-            {
-                var v = verts[i];
-                var mappedV = vertexMapping.ContainsKey(v) ? vertexMapping[v] : v;
-
-                if (newVerts.Count == 0 || newVerts[newVerts.Count - 1] != mappedV)
-                    newVerts.Add(mappedV);
-            }
-
-            if (newVerts.Count > 1 && newVerts[0] == newVerts[newVerts.Count - 1])
-                newVerts.RemoveAt(newVerts.Count - 1);
-
-            if (newVerts.Count >= 3)
-            {
-                var newFace = mesh.AddFace(newVerts.ToArray());
-                if (newFace != null)
-                {
-                    foreach (var kvp in faceAttrs)
-                        newFace.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-
-                    if (newFace.Loop != null && loopAttrs.Count > 0)
-                    {
-                        var it = newFace.Loop;
-                        int loopIdx = 0;
-                        do
+                        if (!grid.TryGetValue(new Cell(home.X + dx, home.Y + dy, home.Z + dz), out var nearby)) continue;
+                        foreach (int j in nearby)
                         {
-                            if (loopIdx < loopAttrs.Count)
-                            {
-                                foreach (var kvp in loopAttrs[loopIdx])
-                                    it.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                            }
-                            it = it.Next;
-                            loopIdx++;
-                        } while (it != newFace.Loop);
+                            var v2 = candidates[j];
+                            if (j <= i || removed.Contains(v2) || Float3.Distance(v1.Point, v2.Point) > threshold) continue;
+                            members.Add(j);
+                        }
                     }
-                }
+            if (members.Count < 2) continue;
+
+            // Neighbouring cells are visited in a fixed order, so keep the cluster in mesh order
+            members.Sort();
+            var cluster = members.Select(m => candidates[m]).ToList();
+
+            Float3 average = Float3.Zero;
+            foreach (var v in cluster) average += v.Point;
+            v1.Point = average / cluster.Count;
+            AverageAttributes(mesh, cluster, v1);
+
+            for (int j = 1; j < cluster.Count; j++)
+            {
+                mapping[cluster[j]] = v1;
+                removed.Add(cluster[j]);
             }
         }
 
-        foreach (var v in verticesToRemove)
+        if (mapping.Count == 0) return 0;
+
+        GeometryData.Vertex Map(GeometryData.Vertex v) => mapping.TryGetValue(v, out var kept) ? kept : v;
+
+        // Everything that touches a merged vertex is rebuilt on the vertex that is kept
+        var affectedFaces = mesh.Faces.Where(f => f.NeighborVerticesEnumerable().Any(mapping.ContainsKey)).ToList();
+        var snapshots = affectedFaces.Select(f => FaceSnapshot.Capture(mesh, f)).ToList();
+        var edgeRecords = mesh.Edges
+            .Where(e => mapping.ContainsKey(e.Vert1) || mapping.ContainsKey(e.Vert2))
+            .Select(e => (A: Map(e.Vert1), B: Map(e.Vert2), Attributes: AttributeTransfer.Copy(e.Attributes), Loose: e.Loop == null))
+            .ToList();
+
+        foreach (var face in affectedFaces) mesh.RemoveFace(face);
+
+        foreach (FaceSnapshot snapshot in snapshots)
         {
-            if (mesh.Vertices.Contains(v))
-                mesh.RemoveVertex(v);
+            var verts = new List<GeometryData.Vertex>();
+            var loops = new List<Dictionary<string, GeometryData.AttributeValue>>();
+            for (int i = 0; i < snapshot.Vertices.Count; i++)
+            {
+                var mapped = Map(snapshot.Vertices[i]);
+                if (verts.Count > 0 && verts[verts.Count - 1] == mapped) continue;
+                verts.Add(mapped);
+                loops.Add(snapshot.Loops[i]);
+            }
+            if (verts.Count > 1 && verts[0] == verts[verts.Count - 1])
+            {
+                verts.RemoveAt(verts.Count - 1);
+                loops.RemoveAt(loops.Count - 1);
+            }
+            if (verts.Count < 3 || verts.Distinct().Count() != verts.Count) continue;
+
+            var face = mesh.AddFace(verts.ToArray());
+            if (face == null) continue;
+
+            snapshot.ApplyFaceAttributes(face);
+            var byVertex = new Dictionary<GeometryData.Vertex, Dictionary<string, GeometryData.AttributeValue>>();
+            for (int i = 0; i < verts.Count; i++) byVertex[verts[i]] = loops[i];
+            FaceSnapshot.ApplyLoops(face, v => byVertex[v]);
         }
 
-        return weldedCount;
+        var restored = new HashSet<GeometryData.Edge>();
+        foreach (var record in edgeRecords)
+        {
+            if (record.A == record.B) continue;
+            var edge = mesh.FindEdge(record.A, record.B);
+            if (edge == null)
+            {
+                if (!record.Loose) continue;
+                edge = mesh.AddEdge(record.A, record.B);
+            }
+            if (restored.Add(edge)) AttributeTransfer.Apply(record.Attributes, edge.Attributes);
+        }
+
+        foreach (var v in removed)
+            if (mesh.Vertices.Contains(v)) mesh.RemoveVertex(v);
+
+        return mapping.Count;
+    }
+
+    private static void AverageAttributes(GeometryData mesh, List<GeometryData.Vertex> cluster, GeometryData.Vertex target)
+    {
+        foreach (var attribute in mesh.VertexAttributes)
+        {
+            if (attribute.Type.BaseType == GeometryData.AttributeBaseType.Float)
+            {
+                var values = cluster.Select(v => v.Attributes.TryGetValue(attribute.Name, out var a) ? a as GeometryData.FloatAttributeValue : null).Where(a => a != null).ToList();
+                if (values.Count == 0) continue;
+                var data = new float[values[0]!.Data.Length];
+                for (int k = 0; k < data.Length; k++)
+                    data[k] = values.Sum(a => k < a!.Data.Length ? a.Data[k] : 0f) / values.Count;
+                target.Attributes[attribute.Name] = new GeometryData.FloatAttributeValue { Data = data };
+            }
+            else if (attribute.Type.BaseType == GeometryData.AttributeBaseType.Int)
+            {
+                var values = cluster.Select(v => v.Attributes.TryGetValue(attribute.Name, out var a) ? a as GeometryData.IntAttributeValue : null).Where(a => a != null).ToList();
+                if (values.Count == 0) continue;
+                var data = new int[values[0]!.Data.Length];
+                for (int k = 0; k < data.Length; k++)
+                    data[k] = (int)MathF.Round(values.Sum(a => k < a!.Data.Length ? (float)a.Data[k] : 0f) / values.Count);
+                target.Attributes[attribute.Name] = new GeometryData.IntAttributeValue { Data = data };
+            }
+        }
     }
 }

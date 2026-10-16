@@ -1,48 +1,47 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Vector.Geometry.Operators;
 
 internal static class MergeOp
 {
+    /// <summary>
+    /// Copies everything in another mesh into this one: vertices, edges and faces with all their attributes.
+    /// Attributes the other mesh has that this one lacks are added here first.
+    /// </summary>
     internal static void Merge(GeometryData mesh, GeometryData other)
     {
-        var newVerts = new GeometryData.Vertex[other.Vertices.Count];
-        int i = 0;
+        foreach (var a in other.VertexAttributes) mesh.AddVertexAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (var a in other.EdgeAttributes) mesh.AddEdgeAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (var a in other.LoopAttributes) mesh.AddLoopAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (var a in other.FaceAttributes) mesh.AddFaceAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
 
-        // Copy all vertices and their attributes
+        var map = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>(other.Vertices.Count);
         foreach (var v in other.Vertices)
         {
-            newVerts[i] = mesh.AddVertex(v.Point);
-            GeometryOperators.AttributeLerp(mesh, newVerts[i], v, v, 1); // Copy all attributes
-            v.Id = i;
-            ++i;
+            var copy = mesh.AddVertex(v.Point);
+            AttributeTransfer.Apply(v.Attributes, copy.Attributes);
+            map[v] = copy;
         }
 
-        // Copy all edges
         foreach (var e in other.Edges)
         {
-            mesh.AddEdge(newVerts[e.Vert1.Id], newVerts[e.Vert2.Id]);
+            var copy = mesh.AddEdge(map[e.Vert1], map[e.Vert2]);
+            AttributeTransfer.Apply(e.Attributes, copy.Attributes);
         }
 
-        // Copy all faces
         foreach (var f in other.Faces)
         {
-            var neighbors = f.NeighborVertices();
-            var newNeighbors = new GeometryData.Vertex[neighbors.Count];
-            int j = 0;
-            foreach (var v in neighbors)
-            {
-                newNeighbors[j] = newVerts[v.Id];
-                ++j;
-            }
-            mesh.AddFace(newNeighbors);
+            FaceSnapshot snapshot = FaceSnapshot.Capture(other, f);
+            var copy = mesh.AddFace(snapshot.Vertices.ConvertAll(v => map[v]).ToArray());
+            if (copy == null) continue;
+
+            snapshot.ApplyFaceAttributes(copy);
+            var original = snapshot.Vertices.ToDictionary(v => map[v]);
+            FaceSnapshot.ApplyLoops(copy, v => snapshot.LoopOf(original[v]));
         }
     }
 }

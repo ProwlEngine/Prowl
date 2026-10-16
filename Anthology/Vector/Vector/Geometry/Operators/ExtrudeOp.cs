@@ -8,270 +8,112 @@ namespace Prowl.Vector.Geometry.Operators;
 
 internal static class ExtrudeOp
 {
+    /// <summary>
+    /// Pushes faces out along their normals and joins them to what they were part of with walls. Faces joined
+    /// by hidden edges are one face and move together. In per face mode every face moves on its own, otherwise
+    /// the selection moves as one region. Faces and walls carry the attributes of the face they came from, and
+    /// edges and vertices left inside the region that nothing uses any more are removed.
+    /// </summary>
     internal static void ExtrudeFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToExtrude, float distance, ExtrudeMode mode = ExtrudeMode.AlongNormals)
     {
-        var facesToExtrudeList = facesToExtrude.ToList();
-        if (facesToExtrudeList.Count == 0) return;
+        var faces = facesToExtrude.Where(mesh.Faces.Contains).SelectMany(f => f.LogicalFace()).Distinct().ToList();
+        if (faces.Count == 0) return;
 
-        // Calculate face normals for all faces
-        var faceNormals = new Dictionary<GeometryData.Face, Float3>();
-        foreach (var face in facesToExtrudeList)
-        {
-            var verts = face.NeighborVertices();
-            if (verts.Count >= 3)
-            {
-                Float3 v0 = verts[0].Point;
-                Float3 v1 = verts[1].Point;
-                Float3 v2 = verts[2].Point;
-                faceNormals[face] = Float3.Normalize(Float3.Cross(v1 - v0, v2 - v0));
-            }
-            else
-            {
-                faceNormals[face] = Float3.Zero;
-            }
-        }
-
-        // Calculate average normal for AverageNormal mode
-        Float3 averageNormal = Float3.Zero;
-        if (mode == ExtrudeMode.AverageNormal)
-        {
-            foreach (var normal in faceNormals.Values)
-            {
-                averageNormal += normal;
-            }
-            if (facesToExtrudeList.Count > 0)
-            {
-                averageNormal = Float3.Normalize(averageNormal);
-            }
-        }
-
-        // For AlongNormals mode, calculate averaged vertex normals
-        var vertexNormals = new Dictionary<GeometryData.Vertex, Float3>();
-        if (mode == ExtrudeMode.AlongNormals)
-        {
-            // For each vertex, average the normals of all selected faces using it
-            foreach (var face in facesToExtrudeList)
-            {
-                var verts = face.NeighborVertices();
-                var faceNormal = faceNormals[face];
-
-                foreach (var vert in verts)
-                {
-                    if (!vertexNormals.ContainsKey(vert))
-                    {
-                        vertexNormals[vert] = Float3.Zero;
-                    }
-                    vertexNormals[vert] += faceNormal;
-                }
-            }
-
-            // Normalize the accumulated normals
-            foreach (var vert in vertexNormals.Keys.ToList())
-            {
-                vertexNormals[vert] = Float3.Normalize(vertexNormals[vert]);
-            }
-        }
-
-        // Track which vertices we've created for the extruded surface
-        // For PerFace mode, we'll have separate mappings per face
-        var vertexMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-
-        // Track all edges that are part of the extruded faces
-        var edgeUsageCount = new Dictionary<(GeometryData.Vertex, GeometryData.Vertex), int>();
-
-        // First pass: count edge usage to identify boundary edges (only for shared vertex modes)
         if (mode != ExtrudeMode.PerFace)
         {
-            foreach (var face in facesToExtrudeList)
-            {
-                var verts = face.NeighborVertices();
-                for (int i = 0; i < verts.Count; i++)
-                {
-                    var v1 = verts[i];
-                    var v2 = verts[(i + 1) % verts.Count];
-
-                    // Create a canonical edge key (smaller vertex first for consistency)
-                    var edgeKey = GeometryOperators.GetCanonicalEdge(v1, v2);
-
-                    if (!edgeUsageCount.ContainsKey(edgeKey))
-                        edgeUsageCount[edgeKey] = 0;
-                    edgeUsageCount[edgeKey]++;
-                }
-            }
+            ExtrudeRegion(mesh, faces, distance, mode);
+            return;
         }
 
-        // Store face data for recreation
-        var faceData = new List<(
-            GeometryData.Face originalFace,
-            List<GeometryData.Vertex> verts,
-            Dictionary<string, GeometryData.AttributeValue> faceAttrs,
-            List<Dictionary<string, GeometryData.AttributeValue>> loopAttrs,
-            Dictionary<GeometryData.Vertex, GeometryData.Vertex> perFaceMapping)>();
-
-        foreach (var face in facesToExtrudeList)
+        var done = new HashSet<GeometryData.Face>();
+        foreach (var face in faces)
         {
-            var verts = face.NeighborVertices();
-            var perFaceMapping = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-
-            // Create extruded vertices based on mode
-            foreach (var vert in verts)
-            {
-                GeometryData.Vertex newVert;
-
-                if (mode == ExtrudeMode.PerFace)
-                {
-                    // PerFace: Always create new vertices for this face
-                    Float3 normal = faceNormals[face];
-                    Float3 newPos = vert.Point + normal * distance;
-                    newVert = mesh.AddVertex(newPos);
-                    GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0f);
-                    perFaceMapping[vert] = newVert;
-                }
-                else if (!vertexMapping.ContainsKey(vert))
-                {
-                    // AlongNormals or AverageNormal: Create shared vertices
-                    Float3 normal;
-                    if (mode == ExtrudeMode.AlongNormals)
-                    {
-                        normal = vertexNormals[vert];
-                    }
-                    else // AverageNormal
-                    {
-                        normal = averageNormal;
-                    }
-
-                    Float3 newPos = vert.Point + normal * distance;
-                    newVert = mesh.AddVertex(newPos);
-                    GeometryOperators.AttributeLerp(mesh, newVert, vert, vert, 1.0f);
-                    vertexMapping[vert] = newVert;
-                }
-            }
-
-            // Store face attributes
-            var faceAttrs = new Dictionary<string, GeometryData.AttributeValue>();
-            foreach (var attr in mesh.FaceAttributes)
-            {
-                if (face.Attributes.ContainsKey(attr.Name))
-                    faceAttrs[attr.Name] = GeometryData.AttributeValue.Copy(face.Attributes[attr.Name]);
-            }
-
-            // Store loop attributes
-            var loopAttrs = new List<Dictionary<string, GeometryData.AttributeValue>>();
-            if (face.Loop != null)
-            {
-                var it = face.Loop;
-                do
-                {
-                    var attrs = new Dictionary<string, GeometryData.AttributeValue>();
-                    foreach (var attr in mesh.LoopAttributes)
-                    {
-                        if (it.Attributes.ContainsKey(attr.Name))
-                            attrs[attr.Name] = GeometryData.AttributeValue.Copy(it.Attributes[attr.Name]);
-                    }
-                    loopAttrs.Add(attrs);
-                    it = it.Next;
-                } while (it != face.Loop);
-            }
-
-            faceData.Add((face, verts, faceAttrs, loopAttrs, perFaceMapping));
+            if (done.Contains(face)) continue;
+            List<GeometryData.Face> group = face.LogicalFace();
+            done.UnionWith(group);
+            ExtrudeRegion(mesh, group, distance, ExtrudeMode.AverageNormal);
         }
+    }
 
-        // Remove original faces
-        foreach (var face in facesToExtrudeList)
+    private static void ExtrudeRegion(GeometryData mesh, List<GeometryData.Face> faces, float distance, ExtrudeMode mode)
+    {
+        var snapshots = faces.Select(f => FaceSnapshot.Capture(mesh, f)).ToList();
+        var normals = faces.Select(f => f.Normal()).ToList();
+        var oldEdges = faces.SelectMany(f => f.NeighborEdges()).Distinct().ToList();
+        var edgeAttributes = oldEdges.ToDictionary(e => GeometryOperators.GetCanonicalEdge(e.Vert1, e.Vert2), e => AttributeTransfer.Copy(e.Attributes));
+        var oldVertices = snapshots.SelectMany(s => s.Vertices).Distinct().ToList();
+
+        Float3 averageNormal = Float3.Zero;
+        foreach (var normal in normals) averageNormal += normal;
+        averageNormal = Float3.LengthSquared(averageNormal) > 1e-12f ? Float3.Normalize(averageNormal) : normals[0];
+
+        var vertexNormals = new Dictionary<GeometryData.Vertex, Float3>();
+        for (int i = 0; i < faces.Count; i++)
+            foreach (var v in snapshots[i].Vertices)
+                vertexNormals[v] = (vertexNormals.TryGetValue(v, out var sum) ? sum : Float3.Zero) + normals[i];
+
+        var usage = new Dictionary<(GeometryData.Vertex, GeometryData.Vertex), int>();
+        foreach (var snapshot in snapshots)
         {
-            mesh.RemoveFace(face);
+            var verts = snapshot.Vertices;
+            for (int k = 0; k < verts.Count; k++)
+            {
+                var key = GeometryOperators.GetCanonicalEdge(verts[k], verts[(k + 1) % verts.Count]);
+                usage[key] = usage.TryGetValue(key, out int count) ? count + 1 : 1;
+            }
         }
 
-        // Create extruded top faces
-        for (int faceIdx = 0; faceIdx < faceData.Count; faceIdx++)
+        var moved = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
+        foreach (var v in oldVertices)
         {
-            var (originalFace, verts, faceAttrs, loopAttrs, perFaceMapping) = faceData[faceIdx];
-
-            // Map to new vertices based on mode
-            GeometryData.Vertex[] newVerts;
-            if (mode == ExtrudeMode.PerFace)
-            {
-                newVerts = verts.Select(v => perFaceMapping[v]).ToArray();
-            }
-            else
-            {
-                newVerts = verts.Select(v => vertexMapping[v]).ToArray();
-            }
-
-            var newFace = mesh.AddFace(newVerts);
-            if (newFace != null)
-            {
-                // Restore face attributes
-                foreach (var kvp in faceAttrs)
-                {
-                    newFace.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                }
-
-                // Restore loop attributes
-                if (newFace.Loop != null && loopAttrs.Count > 0)
-                {
-                    var it = newFace.Loop;
-                    int idx = 0;
-
-                    do
-                    {
-                        if (idx < loopAttrs.Count)
-                        {
-                            foreach (var kvp in loopAttrs[idx])
-                            {
-                                it.Attributes[kvp.Key] = GeometryData.AttributeValue.Copy(kvp.Value);
-                            }
-                        }
-                        it = it.Next;
-                        idx++;
-                    } while (it != newFace.Loop);
-                }
-            }
+            Float3 direction = averageNormal;
+            if (mode == ExtrudeMode.AlongNormals && Float3.LengthSquared(vertexNormals[v]) > 1e-12f) direction = Float3.Normalize(vertexNormals[v]);
+            var made = mesh.AddVertex(v.Point + direction * distance);
+            GeometryOperators.AttributeLerp(mesh, made, v, v, 1f);
+            moved[v] = made;
         }
 
-        // Create wall faces for boundary edges
-        if (mode == ExtrudeMode.PerFace)
+        foreach (var face in faces) mesh.RemoveFace(face);
+
+        foreach (FaceSnapshot snapshot in snapshots)
         {
-            // PerFace: Each face creates its own walls
-            foreach (var (originalFace, verts, _, _, perFaceMapping) in faceData)
-            {
-                for (int i = 0; i < verts.Count; i++)
-                {
-                    var v1 = verts[i];
-                    var v2 = verts[(i + 1) % verts.Count];
+            var top = mesh.AddFace(snapshot.Vertices.Select(v => moved[v]).ToArray());
+            if (top == null) continue;
 
-                    var extV1 = perFaceMapping[v1];
-                    var extV2 = perFaceMapping[v2];
-
-                    // Create quad wall face
-                    mesh.AddFace(v1, v2, extV2, extV1);
-                }
-            }
+            var origin = snapshot.Vertices.ToDictionary(v => moved[v]);
+            snapshot.ApplyFaceAttributes(top);
+            FaceSnapshot.ApplyLoops(top, v => snapshot.LoopOf(origin[v]));
         }
-        else
+
+        // The moved outline keeps what the old one carried, hidden joins between the pieces included
+        foreach (var pair in edgeAttributes)
+            if (mesh.FindEdge(moved[pair.Key.Item1], moved[pair.Key.Item2]) is { } copy)
+                AttributeTransfer.Apply(pair.Value, copy.Attributes);
+
+        foreach (FaceSnapshot snapshot in snapshots)
         {
-            // AlongNormals or AverageNormal: Only create walls for boundary edges
-            foreach (var (originalFace, verts, _, _, _) in faceData)
+            var verts = snapshot.Vertices;
+            for (int k = 0; k < verts.Count; k++)
             {
-                for (int i = 0; i < verts.Count; i++)
-                {
-                    var v1 = verts[i];
-                    var v2 = verts[(i + 1) % verts.Count];
+                var v1 = verts[k];
+                var v2 = verts[(k + 1) % verts.Count];
+                if (usage[GeometryOperators.GetCanonicalEdge(v1, v2)] != 1) continue;
 
-                    // Create canonical edge key
-                    var edgeKey = GeometryOperators.GetCanonicalEdge(v1, v2);
+                var e1 = moved[v1];
+                var e2 = moved[v2];
+                var wall = mesh.AddFace(v1, v2, e2, e1);
+                if (wall == null) continue;
 
-                    // Only create a wall if this edge was on the boundary (used by only one face)
-                    if (edgeUsageCount[edgeKey] == 1)
-                    {
-                        var extV1 = vertexMapping[v1];
-                        var extV2 = vertexMapping[v2];
-
-                        // Create quad wall face
-                        mesh.AddFace(v1, v2, extV2, extV1);
-                    }
-                }
+                // A wall stands across the face it grew from, so the face's texture mapping does not fit it
+                snapshot.ApplyFaceAttributes(wall);
+                wall.Mapping = null;
+                FaceSnapshot.ApplyLoops(wall, v => snapshot.LoopOf(v == e1 ? v1 : v == e2 ? v2 : v));
             }
         }
+
+        foreach (var edge in oldEdges)
+            if (edge.Loop == null && mesh.Edges.Contains(edge)) mesh.RemoveEdge(edge);
+        foreach (var vertex in oldVertices)
+            if (vertex.Edge == null && mesh.Vertices.Contains(vertex)) mesh.RemoveVertex(vertex);
     }
 }

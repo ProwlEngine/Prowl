@@ -10,10 +10,13 @@ namespace Prowl.Vector.Geometry;
 /// <summary>Tests and measurements on polygons laid out in two dimensions.</summary>
 public static class Polygon2D
 {
+    /// <summary>The z of the cross product of two vectors in the plane, positive when b turns counter clockwise from a.</summary>
     public static float Cross(Float2 a, Float2 b) => a.X * b.Y - a.Y * b.X;
 
+    /// <summary>The cross product of a and b taken from o, positive when o, a, b turn counter clockwise.</summary>
     public static float Cross(Float2 o, Float2 a, Float2 b) => Cross(a - o, b - o);
 
+    /// <summary>The area of a polygon, positive when it runs counter clockwise.</summary>
     public static float SignedArea(IReadOnlyList<Float2> poly)
     {
         float area = 0f;
@@ -22,6 +25,7 @@ public static class Polygon2D
         return area * 0.5f;
     }
 
+    /// <summary>The average of the corners.</summary>
     public static Float2 Centroid(IReadOnlyList<Float2> poly)
     {
         Float2 sum = Float2.Zero;
@@ -42,6 +46,7 @@ public static class Polygon2D
         return inside;
     }
 
+    /// <summary>The distance from a point to a segment, with how far along the segment the nearest point is, from 0 to 1.</summary>
     public static float DistanceToSegment(Float2 p, Float2 a, Float2 b, out float t)
     {
         Float2 ab = b - a;
