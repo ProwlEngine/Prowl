@@ -101,6 +101,13 @@ full past of that library.
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/dimmerly">
+                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
+                    <br />
+                    <sub><b>Dimmer</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/JothamR">
                     <img src="https://avatars.githubusercontent.com/u/5410231?v=4" width="100;" alt="JothamR"/>
                     <br />
@@ -119,13 +126,6 @@ full past of that library.
                     <img src="https://avatars.githubusercontent.com/u/25212675?v=4" width="100;" alt="MiniMe453"/>
                     <br />
                     <sub><b>MiniMe453</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/dimmerly">
-                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
-                    <br />
-                    <sub><b>Dimmer</b></sub>
                 </a>
             </td>
             <td align="center">
