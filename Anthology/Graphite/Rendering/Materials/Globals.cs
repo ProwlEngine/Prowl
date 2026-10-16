@@ -123,7 +123,7 @@ public sealed class GlobalProperties
     {
         MaterialPropertyType type = _registry.TryGet(name, out GlobalProperty property) && property.Type >= MaterialPropertyType.Texture2D
             ? property.Type
-            : MaterialPropertyType.Texture2D;
+            : Material.TextureTypeOf(texture);
         Set(name, MaterialValue.FromTexture(type, texture, sampler, MaterialValue.IdentityScaleOffset));
     }
 
