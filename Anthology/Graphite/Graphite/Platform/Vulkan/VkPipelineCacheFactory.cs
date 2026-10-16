@@ -171,11 +171,24 @@ internal static unsafe class VkPipelineCacheFactory
 
         byte* entryPointBuffer = stackalloc byte[entryPointBytes];
         int entryPointOffset = 0;
+
+        SpecializationConstant[] constants = program.SpecializationsArray;
+        SpecializationMapEntry* entries = stackalloc SpecializationMapEntry[constants.Length];
+        uint* values = stackalloc uint[constants.Length];
+        for (int i = 0; i < constants.Length; i++)
+        {
+            entries[i] = new SpecializationMapEntry(constants[i].Id, (uint)(i * sizeof(uint)), sizeof(uint));
+            values[i] = constants[i].Value;
+        }
+        SpecializationInfo specialization = new((uint)constants.Length, entries, (nuint)(constants.Length * sizeof(uint)), values);
+
         foreach (KeyValuePair<ShaderStages, ShaderModule> kvp in program.Modules)
         {
             PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
             stageCI.Module = kvp.Value;
             stageCI.Stage = VkFormats.ToVkShaderStages(kvp.Key);
+            if (constants.Length > 0)
+                stageCI.PSpecializationInfo = &specialization;
 
             string entryPoint = program.GetEntryPoint(kvp.Key);
             byte* entryPointPtr = entryPointBuffer + entryPointOffset;

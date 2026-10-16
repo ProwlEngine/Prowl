@@ -3123,8 +3123,8 @@ public sealed class LightingTests : IDisposable
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: true, prepass: false)));
         Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: false)));
         Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true)));
-        Assert.True(ProgramCache.StoresGBuffer(lit));
-        Assert.False(ProgramCache.StoresGBuffer(unlit));
+        Assert.True(MaterialLayout.StoresGBuffer(lit));
+        Assert.False(MaterialLayout.StoresGBuffer(unlit));
 
         // An opaque forward pass that never writes it does not load, and says why
         Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(n, roughness, metallic);", ""))));

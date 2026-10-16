@@ -85,7 +85,7 @@ public sealed class GlslProgram
 public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 {
     private readonly GlslCompilerOptions _options;
-    private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, string[] Globals)> _pragmas = new();
+    private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, ShaderGlobal[] Globals)> _pragmas = new();
     private int _sessionVersion;
     private bool _disposed;
 
@@ -119,7 +119,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 
 
     /// <inheritdoc/>
-    public IReadOnlyList<string> GetGlobals(ShaderPass pass) => Pragmas(pass).Globals;
+    public IReadOnlyList<ShaderGlobal> GetGlobals(ShaderPass pass) => Pragmas(pass).Globals;
 
 
     /// <inheritdoc/>
@@ -192,10 +192,29 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
             stages.Add(new GlslStageSource(stage, preprocessed));
         }
 
+        if (pass.Material is { } material)
+            ApplyMaterial(file, material, Pragmas(pass).Globals, stages);
+
         // The preprocessor drops pragmas it does not know, so the default set is read from the pass's own source
         System.Text.RegularExpressions.Match resourceSet = s_resourceSet.Match(pass.Source ?? "");
-        uint? defaultSet = resourceSet.Success ? uint.Parse(resourceSet.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : null;
+        uint? defaultSet = resourceSet.Success ? uint.Parse(resourceSet.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : pass.Material?.ResourceSet;
         return (stages, new GlslProgramLayout(stages, defaultSet));
+    }
+
+
+    private static void ApplyMaterial(string file, MaterialAbi material, IReadOnlyList<ShaderGlobal> globals, List<GlslStageSource> stages)
+    {
+        bool fragmentReads = false;
+        for (int i = 0; i < stages.Count; i++)
+        {
+            string text = stages[i].ApplyMaterial(material, globals, out bool reads);
+            fragmentReads |= reads && stages[i].Stage == GlslStage.Fragment;
+            stages[i] = new GlslStageSource(stages[i].Stage, text);
+        }
+
+        GlslStageSource? vertex = stages.Find(s => s.Stage == GlslStage.Vertex);
+        if (fragmentReads && vertex != null && !vertex.Declarations.Exists(d => d.Declarators.Exists(m => m.Name == material.Slot.Name)))
+            throw new ShaderCompileException($"{file}: error: the fragment stage reads material properties but the vertex stage does not write '{material.Slot.Name}'");
     }
 
 
@@ -257,13 +276,13 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     private VariantSpace[] Axes(ShaderPass pass) => Pragmas(pass).Axes;
 
 
-    private (VariantSpace[] Axes, string[] Globals) Pragmas(ShaderPass pass)
+    private (VariantSpace[] Axes, ShaderGlobal[] Globals) Pragmas(ShaderPass pass)
     {
         string file = FileName(pass);
         return _pragmas.GetOrAdd((file, pass.Source), _ =>
         {
             List<VariantSpace> axes = [];
-            List<string> globals = [];
+            List<ShaderGlobal> globals = [];
             HashSet<string> visited = new(StringComparer.Ordinal);
             foreach (GlslSection section in GlslSection.Split(pass.Source, file, pass.SourceLine))
                 GlslPragmas.Collect(section.Body, file, axes, globals, visited, (name, from) => Resolve(name, from));
@@ -492,6 +511,9 @@ internal sealed class GlslSection
 /// </summary>
 internal static class GlslPragmas
 {
+    /// <summary>The GLSL types a global pragma can declare.</summary>
+    public static readonly string[] GlobalTypes = ["float", "int", "vec2", "vec3", "vec4", "mat4", "sampler2D", "sampler2DArray", "sampler3D", "samplerCube", "samplerCubeArray"];
+
     /// <summary>True for the variant and global pragmas, which only Graphite reads and which are removed before compiling.</summary>
     public static bool IsGraphitePragma(string directive)
     {
@@ -534,7 +556,7 @@ internal static class GlslPragmas
     /// Collects every variant and global pragma of a source and of everything it includes, whether or not the include
     /// is active.
     /// </summary>
-    public static void Collect(string source, string file, List<VariantSpace> axes, List<string> globals, HashSet<string> visited, Func<string, string, string?> resolve)
+    public static void Collect(string source, string file, List<VariantSpace> axes, List<ShaderGlobal> globals, HashSet<string> visited, Func<string, string, string?> resolve)
     {
         foreach (string line in StripComments(source).Split('\n'))
         {
@@ -557,14 +579,19 @@ internal static class GlslPragmas
 
             if (parts.Length >= 2 && parts[0] == "pragma" && parts[1] == "global")
             {
-                if (parts.Length == 2)
-                    throw new ShaderCompileException($"{file}: error: '#pragma global' needs one or more names");
-                foreach (string name in parts[2..])
+                if (parts.Length < 4)
+                    throw new ShaderCompileException($"{file}: error: '#pragma global' needs a type and one or more names, like '#pragma global float _Wetness'");
+                if (!GlobalTypes.Contains(parts[2]))
+                    throw new ShaderCompileException($"{file}: error: '{parts[2]}' in '{trimmed}' is not a global type, use one of {string.Join(" ", GlobalTypes)}");
+                foreach (string name in parts[3..])
                 {
                     if (!IsIdentifier(name))
                         throw new ShaderCompileException($"{file}: error: '{name}' in '{trimmed}' is not a valid name");
-                    if (!globals.Contains(name))
-                        globals.Add(name);
+                    int declared = globals.FindIndex(g => g.Name == name);
+                    if (declared < 0)
+                        globals.Add(new ShaderGlobal(name, parts[2]));
+                    else if (globals[declared].Type != parts[2])
+                        throw new ShaderCompileException($"{file}: error: global '{name}' is declared as both {globals[declared].Type} and {parts[2]}");
                 }
                 continue;
             }

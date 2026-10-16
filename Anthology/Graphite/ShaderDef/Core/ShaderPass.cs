@@ -5,6 +5,53 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.ShaderDef;
 
 
+/// <summary>A global a pass reads, named by a global pragma with its GLSL type.</summary>
+public readonly record struct ShaderGlobal(string Name, string Type);
+
+
+/// <summary>
+/// How a material pass reads its properties and the renderer's globals, given by the renderer. The compiler puts it in
+/// place of the pass's loose uniforms: a property becomes its read of the material record, a global its reader macro
+/// <c>Graphite_Global_TYPE(offset)</c> over an offset the renderer sets as specialization constant, and any other loose
+/// uniform an error where it is used. Stages reading neither get none of it.
+/// </summary>
+public sealed class MaterialAbi
+{
+    public MaterialAbi(IReadOnlyList<(string Name, string Text)> declarations, (string Name, string FragmentDeclaration) slot, IReadOnlyDictionary<string, (string Type, string Read, string With)> properties, uint resourceSet)
+    {
+        Declarations = declarations;
+        Slot = slot;
+        Properties = properties;
+        ResourceSet = resourceSet;
+        System.Text.StringBuilder text = new();
+        text.Append(resourceSet).Append('\n');
+        foreach ((string name, string declaration) in declarations)
+            text.Append(name).Append('\n').Append(declaration).Append('\n');
+        text.Append(slot.Name).Append('\n').Append(slot.FragmentDeclaration).Append('\n');
+        List<string> names = [.. properties.Keys];
+        names.Sort(StringComparer.Ordinal);
+        foreach (string name in names)
+            text.Append(name).Append(' ').Append(properties[name].Type).Append(' ').Append(properties[name].Read).Append('\n').Append(properties[name].With);
+        Signature = text.ToString();
+    }
+
+    /// <summary>Declarations and macros a stage reading a property or global starts with, each skipped when the stage declares its name.</summary>
+    public IReadOnlyList<(string Name, string Text)> Declarations { get; }
+
+    /// <summary>The varying carrying the material slot: vertex stages write it themselves, fragment stages reading properties get its declaration.</summary>
+    public (string Name, string FragmentDeclaration) Slot { get; }
+
+    /// <summary>Each property's GLSL type, the expression reading it, and GLSL defined along with it, like a texture's parts.</summary>
+    public IReadOnlyDictionary<string, (string Type, string Read, string With)> Properties { get; }
+
+    /// <summary>The set the pass's own resources go to when they name none.</summary>
+    public uint ResourceSet { get; }
+
+    /// <summary>Everything the ABI writes, as text, so compiled variants can tell ABIs apart.</summary>
+    public string Signature { get; }
+}
+
+
 /// <summary>
 /// Render state, id metadata, source shaders, plus the variant set once its ShaderDefinition is created for a device.
 /// </summary>
@@ -39,6 +86,15 @@ public sealed class ShaderPass : IDisposable
     /// Line of the document the first line of <see cref="Source"/> is on.
     /// </summary>
     public int SourceLine = 1;
+
+    /// <summary>
+    /// How the pass reads material properties and globals, set by the renderer for passes it draws materials with. Null
+    /// leaves loose uniforms in one uniform block.
+    /// </summary>
+    public MaterialAbi? Material;
+
+    /// <summary>The source with the material ABI, what compiled variants are made from.</summary>
+    public string Fingerprint => Material is { } material ? Source + "\n" + material.Signature : Source;
 
 
     /// <summary>

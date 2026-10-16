@@ -51,6 +51,7 @@ public sealed class PassVariants
     private readonly int[] _strides;
     private readonly Dictionary<int, Slot> _slots = new();
     private string _source;
+    private MaterialAbi? _material;
     private int _session;
     private int _revision;
 
@@ -77,6 +78,7 @@ public sealed class PassVariants
         }
         _count = (int)stride;
         _source = pass.Source;
+        _material = pass.Material;
         _session = compiler?.SessionVersion ?? 0;
         SeedBaked();
     }
@@ -88,9 +90,9 @@ public sealed class PassVariants
     public IReadOnlyList<VariantSpace> Axes => _axes;
 
     /// <summary>The globals the pass reads, from the compiler or the baked pass.</summary>
-    public IReadOnlyList<string> Globals => Compiler?.GetGlobals(_pass) ?? BakedVariants.Find(_pass)?.Globals ?? [];
+    public IReadOnlyList<ShaderGlobal> Globals => Compiler?.GetGlobals(_pass) ?? BakedVariants.Find(_pass)?.Globals ?? [];
 
-    /// <summary>Moves whenever the pass source or compiler session changed and every variant was dropped.</summary>
+    /// <summary>Moves whenever the pass source, material ABI or compiler session changed and every variant was dropped.</summary>
     public int Revision
     {
         get
@@ -412,13 +414,14 @@ public sealed class PassVariants
         return slot;
     }
 
-    // A changed source or compiler session drops what was compiled from the old one
+    // A changed source, material ABI or compiler session drops what was compiled from the old one
     private void Refresh()
     {
         int session = Compiler?.SessionVersion ?? 0;
-        if (string.Equals(_source, _pass.Source, StringComparison.Ordinal) && session == _session)
+        if (string.Equals(_source, _pass.Source, StringComparison.Ordinal) && _material == _pass.Material && session == _session)
             return;
         _source = _pass.Source;
+        _material = _pass.Material;
         _session = session;
         _slots.Clear();
         _revision++;

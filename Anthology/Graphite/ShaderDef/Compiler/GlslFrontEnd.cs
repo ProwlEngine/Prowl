@@ -651,6 +651,95 @@ internal sealed class GlslStageSource
     }
 
 
+    /// <summary>
+    /// Puts the material ABI in place of the stage's loose uniforms, before the program is laid out. Properties and the
+    /// pass's globals become macros over the ABI's reads, other loose uniforms an error where they are used, and a stage
+    /// reading a property or global starts with the ABI's declarations it does not make itself.
+    /// </summary>
+    public string ApplyMaterial(MaterialAbi abi, IReadOnlyList<ShaderGlobal> globals, out bool readsProperties)
+    {
+        readsProperties = false;
+        HashSet<string> globalNames = new(StringComparer.Ordinal);
+        foreach (ShaderGlobal global in globals)
+            globalNames.Add(global.Name);
+
+        List<(int At, int Remove, string Insert)> edits = [];
+        StringBuilder macros = new();
+        foreach (GlslDeclaration d in Declarations)
+        {
+            if (d.Kind != DeclKind.Variable || !d.Has("uniform") || d.LayoutItems.Count > 0)
+                continue;
+
+            foreach (GlslMember member in d.Declarators)
+            {
+                if (abi.Properties.TryGetValue(member.Name, out (string Type, string Read, string With) property))
+                {
+                    if (member.TypeName != property.Type || member.ArrayDims.Length > 0)
+                        throw Error(Tokens[d.First].Start, $"'{member.Name}' is a {property.Type} in Properties but a {member.TypeText}{member.ArrayText} here");
+                    macros.Append("#define ").Append(member.Name).Append(' ').Append(property.Read).Append('\n').Append(property.With);
+                    readsProperties = true;
+                }
+                else if (!globalNames.Contains(member.Name))
+                {
+                    macros.Append("#define ").Append(member.Name).Append(' ').Append(member.Name).Append("_is_neither_a_property_nor_a_global\n");
+                }
+            }
+            edits.Add(Replace(d, ""));
+        }
+
+        bool readsGlobals = false;
+        for (int k = 0; k < Tokens.Count && !readsGlobals && globalNames.Count > 0; k++)
+            readsGlobals = Tokens[k].Kind == TokenKind.Identifier && globalNames.Contains(Str(k));
+
+        if (Declarations.Count > 0 && (readsProperties || readsGlobals || macros.Length > 0))
+        {
+            HashSet<string> declared = new(Structs.Keys, StringComparer.Ordinal);
+            foreach (GlslDeclaration d in Declarations)
+            {
+                if (d.BlockName != null)
+                    declared.Add(d.BlockName);
+                foreach (GlslMember member in d.Declarators)
+                    declared.Add(member.Name);
+            }
+
+            StringBuilder block = new();
+            if (readsProperties || readsGlobals)
+            {
+                foreach ((string name, string text) in abi.Declarations)
+                {
+                    if (!declared.Contains(name))
+                        block.Append(text).Append('\n');
+                }
+                if (readsProperties && Stage == GlslStage.Fragment && !declared.Contains(abi.Slot.Name))
+                    block.Append(abi.Slot.FragmentDeclaration).Append('\n');
+            }
+            if (readsGlobals)
+            {
+                for (int i = 0; i < globals.Count; i++)
+                {
+                    string constant = "graphite_Global_" + globals[i].Name;
+                    block.Append("layout(constant_id = ").Append(i).Append(") const uint ").Append(constant).Append(" = 0u;\n");
+                    block.Append("#define ").Append(globals[i].Name).Append(" Graphite_Global_").Append(globals[i].Type).Append('(').Append(constant).Append(")\n");
+                }
+            }
+            block.Append(macros);
+
+            int at = Tokens[Declarations[0].First].Start;
+            (string file, int line) = Locate(at);
+            edits.Add((at, 0, block.Append("#line ").Append(line).Append(" \"").Append(file).Append("\"\n").ToString()));
+        }
+
+        edits.Sort((a, b) => b.At.CompareTo(a.At));
+        StringBuilder sb = new(Text);
+        foreach ((int at, int remove, string insert) in edits)
+        {
+            sb.Remove(at, remove);
+            sb.Insert(at, insert);
+        }
+        return sb.ToString();
+    }
+
+
     private void CheckUniformTypes(GlslProgramLayout layout, GlslDeclaration at)
     {
         foreach (GlslMember uniform in layout.Uniforms)

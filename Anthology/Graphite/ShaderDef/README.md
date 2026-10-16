@@ -96,7 +96,7 @@ Three methods (`ToBlendState`, `ToDepthStencilState`, `ToRasterizerState`) colla
 
 See [IShaderCompiler](../docs/api/shaderdef.md#ishadercompiler) for the interface members.
 
-`GlslShaderCompiler` is thread safe, one instance can serve every shader. It keeps a native shaderc compiler per thread. `GlslCompilerOptions` sets the host include resolver, optimization, debug info and global defines. `CompileProgram` returns a `GlslProgram` with the description, the compute thread group size and the warnings. `Invalidate` bumps `SessionVersion` after included files change.
+`GlslShaderCompiler` is thread safe, one instance can serve every shader. It compiles with Prism, Prowl's managed GLSL compiler. `GlslCompilerOptions` sets the host include resolver, optimization, the SPIR-V cache directory and global defines. `CompileProgram` returns a `GlslProgram` with the description, the compute thread group size and the warnings. `Invalidate` bumps `SessionVersion` after included files change.
 
 ### Variant Axes
 
@@ -105,15 +105,17 @@ Axes come from pragmas in the program or anything it includes, found by scanning
 - `#pragma variant NAME` is a toggle with values `false`/`true`. `NAME` is defined when on.
 - `#pragma variant NAME A B C` is an enum. `NAME_A` (and so on) is defined for the chosen value.
 - `#pragma variant global ...` gives the axis `VariantScope.Global`, set by the renderer or a view, never by a material.
+- `#pragma global TYPE NAME...` declares globals a material pass reads, like `#pragma global float _Wetness`. Their order is their specialization constant ids.
 
 ### Building a Variant
 
 For a given `(pass, combo)`:
 
 1. The program block is split into its `Shared`, `Vertex`, `Fragment` or `Compute` sections. Each stage is the shared section plus its own, behind `#version 460` and `#line` markers that point back at the `.shader` document.
-2. Each stage is preprocessed by shaderc with the variant defines and `GRAPHITE_VERTEX`, `GRAPHITE_FRAGMENT` or `GRAPHITE_COMPUTE`. Includes resolve through a callback: `Graphite/...` from the compiler's embedded library, anything else through the host. `#pragma once` is handled in the callback.
-3. The front end (`GlslFrontEnd`) scans the top level declarations of every stage and lays out the program: loose uniforms of all stages go into one std140 block named `$Global` with one layout, descriptor bindings are assigned by name across stages, varyings get locations by name, vertex inputs and fragment outputs get locations in declaration order. Explicit layout qualifiers win. `gl_VertexID` and `gl_InstanceID` map to their Vulkan forms.
-4. Each rewritten stage compiles to SPIR-V 1.5 for Vulkan 1.2.
+2. Each stage is preprocessed with the variant defines and `GRAPHITE_VERTEX`, `GRAPHITE_FRAGMENT` or `GRAPHITE_COMPUTE`. Includes resolve through a callback: `Graphite/...` from the compiler's embedded library, anything else through the host. `#pragma once` is handled in the callback.
+3. A pass with a `MaterialAbi`, set by the renderer on the passes of its material shaders, has its loose uniforms replaced: each property becomes a macro reading the material record, a texture property also gets `NAME_Texture`, `NAME_Sampler` and `NAME_ST`, each global a macro reading its offset from a specialization constant, and any other loose uniform an error where it is read. A stage reading any of them starts with the ABI's declarations it lacks. Resources without a set go to the ABI's user set. A material texture is a constructed `sampler2D`, so a function taking one takes `NAME_Texture` and `NAME_Sampler` instead.
+4. The front end (`GlslFrontEnd`) scans the top level declarations of every stage and lays out the program: loose uniforms of all stages go into one std140 block named `$Global` with one layout, descriptor bindings are assigned by name across stages, varyings get locations by name, vertex inputs and fragment outputs get locations in declaration order. Explicit layout qualifiers win. `gl_VertexID` and `gl_InstanceID` map to their Vulkan forms.
+5. Each rewritten stage compiles to SPIR-V 1.5 for Vulkan 1.2.
 
 Errors are `ShaderCompileException`s whose message lists every diagnostic as `file:line: error: text`, with document lines for the pass and the include's own lines for includes.
 

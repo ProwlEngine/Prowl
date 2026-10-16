@@ -237,14 +237,14 @@ public class GlslCompilerTests
     [Fact]
     public void Globals_ComeFromPragmas_IncludingIncludedFiles_AndAreRemovedBeforeCompiling()
     {
-        Dictionary<string, string> files = new() { ["Wind.glsl"] = "#pragma global _Wind _Gust\n" };
+        Dictionary<string, string> files = new() { ["Wind.glsl"] = "#pragma global vec4 _Wind _Gust\n" };
         using GlslShaderCompiler compiler = Glsl.Compiler(files);
         ShaderPass pass = Glsl.Pass("""
             Shared
             {
-                #pragma global _Noise
+                #pragma global float _Noise
                 #include "Wind.glsl"
-                #pragma global _Wind
+                #pragma global vec4 _Wind
             }
             Compute
             {
@@ -253,7 +253,7 @@ public class GlslCompilerTests
             }
             """);
 
-        Assert.Equal(["_Noise", "_Wind", "_Gust"], compiler.GetGlobals(pass));
+        Assert.Equal([new ShaderGlobal("_Noise", "float"), new ShaderGlobal("_Wind", "vec4"), new ShaderGlobal("_Gust", "vec4")], compiler.GetGlobals(pass));
         compiler.CompileProgram(pass, []);
     }
 

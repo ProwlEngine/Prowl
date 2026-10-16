@@ -244,7 +244,7 @@ void Graphite_StandardFragment()
     {
         mat3 TBN = mat3(T, B, N);
         vec3 viewDirTS = normalize(transpose(TBN) * viewDir);
-        uv = ParallaxOcclusionMapping(_ParallaxMap, uv, viewDirTS, _Parallax, _ParallaxSteps);
+        uv = ParallaxOcclusionMapping(_ParallaxMap_Texture, _ParallaxMap_Sampler, uv, viewDirTS, _Parallax, _ParallaxSteps);
     }
 #endif
 #else

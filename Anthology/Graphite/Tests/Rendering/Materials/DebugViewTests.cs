@@ -17,7 +17,13 @@ public sealed class DebugViewTests : IDisposable
 
     public void Dispose() => _compiler.Dispose();
 
-    private static ShaderDefinition Load(string name) => ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader")!);
+    // Made into a renderer shader, so its passes compile with the material ABI
+    private ShaderDefinition Load(string name)
+    {
+        ShaderDefinition definition = ShaderParser.Parse(ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{name}.shader")!);
+        _ = new Shader(definition, _compiler);
+        return definition;
+    }
 
     private static ShaderPass Forward(ShaderDefinition shader)
         => shader.Passes!.First(p => p.Tags != null && p.Tags.TryGetValue("LightMode", out string? mode) && mode == "Forward");

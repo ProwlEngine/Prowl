@@ -165,7 +165,9 @@ public sealed class LibraryTests : IDisposable
         ResourceLayoutDescription frameLayout = GraphiteBindings.FrameTable(16, 4);
         ResourceLayoutDescription viewLayout = GraphiteBindings.ViewTable(4);
         ShaderPass pass = definition.Passes![programs[call.Program].PassIndex];
-        ShaderDescription description = MaterialRewrite.Rewrite(shader.Name, _compiler.Compile(pass, [], _device.BackendType), shader.Schema, _compiler.GetGlobals(pass), globals, frameLayout, viewLayout);
+        ShaderDescription description = _compiler.Compile(pass, [], _device.BackendType);
+        description.Specializations = MaterialLayout.GlobalOffsets(_compiler.GetGlobals(pass), globals);
+        description.ResourceLayouts = MaterialLayout.Layouts(shader.Name, description.ResourceLayouts, frameLayout, viewLayout);
         description.BlendState = BlendStateDescription.SingleOverrideBlend;
         description.DepthStencilState = DepthStencilStateDescription.Disabled;
         description.RasterizerState = RasterizerStateDescription.CullNone;

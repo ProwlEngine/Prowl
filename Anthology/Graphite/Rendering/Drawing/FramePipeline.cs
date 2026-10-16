@@ -12,10 +12,10 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>
-/// Draw programs built from each pass's shared compiled variants: the material rewrite and the pipeline state of the
-/// draw put on top. A variant not ready yet, or failed, draws with the pass's default variant, every axis at its first
-/// value, else with the matching pass of the shader's declared fallback. Compiles follow the policy, blocking in deterministic mode. Only compiles and rewrites run on
-/// workers, programs are created on the render thread. Failures are reported once.
+/// Draw programs built from each pass's shared compiled variants: the global offsets, the renderer's layouts and the
+/// pipeline state of the draw put on top. A variant not ready yet, or failed, draws with the pass's default variant, every axis at its first
+/// value, else with the matching pass of the shader's declared fallback. Compiles follow the policy, blocking in deterministic mode. Only compiles run on workers,
+/// programs are created on the render thread. Failures are reported once.
 /// </summary>
 internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compiler, GlobalRegistry globals, DrawPrograms programs, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async, Action<IDisposable>? retire = null) : IDisposable
 {
@@ -26,7 +26,6 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         public required PassVariants Variants;
         public required int Key;
         public required int Revision;
-        public Task<ShaderDescription>? Rewriting;
         public GraphicsProgram? Built;
         public bool Failed;
     }
@@ -152,13 +151,6 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         foreach (Entry entry in Every())
         {
             variants.Add(entry.Variants);
-            try
-            {
-                entry.Rewriting?.Wait();
-            }
-            catch (AggregateException)
-            {
-            }
             Discard(entry.Built);
         }
         foreach (PassVariants pass in variants)
@@ -251,15 +243,14 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         return null;
     }
 
-    // The shared variant once compiled, then the material rewrite on a worker. A variant that declared new globals waits
-    // until the next extraction has grown the regions to hold them.
+    // The shared variant once compiled, its globals declared and its layouts made the renderer's. A variant that declared
+    // new globals waits until the next extraction has grown the regions to hold them.
     private void Complete(Entry entry)
     {
         int revision = entry.Variants.Revision;
         if (revision != entry.Revision)
         {
             entry.Revision = revision;
-            entry.Rewriting = null;
             if (entry.Built != null)
             {
                 Retire(entry.Built);
@@ -274,28 +265,23 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         }
         if (entry.Built != null || entry.Failed)
             return;
-        DrawProgram program = entry.Program;
-        if (entry.Rewriting == null)
+        VariantState state = entry.Variants.Request(entry.Key, _policy, out ShaderDescription compiled, out Exception? error);
+        if (state == VariantState.Pending)
+            return;
+        if (state == VariantState.Failed)
         {
-            VariantState state = entry.Variants.Request(entry.Key, _policy, out ShaderDescription compiled, out Exception? error);
-            if (state == VariantState.Pending)
-                return;
-            if (state == VariantState.Failed)
-            {
-                Fail(entry, error!);
-                return;
-            }
-            IReadOnlyList<string> passGlobals = entry.Variants.Globals;
-            entry.Rewriting = _policy == CompilePolicy.Async ? Task.Run(() => Rewrite(program, compiled, passGlobals)) : RewriteNow(program, compiled, passGlobals);
+            Fail(entry, error!);
+            return;
         }
 
-        if (!entry.Rewriting.IsCompleted || globals.NeedsGrowth)
-            return;
-        Task<ShaderDescription> rewritten = entry.Rewriting;
-        entry.Rewriting = null;
+        DrawProgram program = entry.Program;
         try
         {
-            entry.Built = Build(program, rewritten.GetAwaiter().GetResult(), entry.Mirrored);
+            compiled.Specializations = MaterialLayout.GlobalOffsets(entry.Variants.Globals, globals);
+            if (globals.NeedsGrowth)
+                return;
+            compiled.ResourceLayouts = MaterialLayout.Layouts(program.Shader.Name, compiled.ResourceLayouts ?? [], FrameLayout, ViewLayout);
+            entry.Built = Build(program, compiled, entry.Mirrored);
             Interlocked.Decrement(ref _compiling);
         }
         catch (Exception e)
@@ -338,18 +324,6 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         program.Dispose();
     }
 
-    private Task<ShaderDescription> RewriteNow(DrawProgram program, ShaderDescription compiled, IReadOnlyList<string> passGlobals)
-    {
-        try
-        {
-            return Task.FromResult(Rewrite(program, compiled, passGlobals));
-        }
-        catch (Exception e)
-        {
-            return Task.FromException<ShaderDescription>(e);
-        }
-    }
-
     private static int ValueIndex(VariantSpace axis, string? value)
     {
         for (int v = 0; v < axis.Values.Count; v++)
@@ -358,12 +332,6 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
                 return v;
         }
         return 0;
-    }
-
-    // Worker thread: the material rewrite, nothing that touches the device.
-    private ShaderDescription Rewrite(DrawProgram program, ShaderDescription compiled, IReadOnlyList<string> passGlobals)
-    {
-        return MaterialRewrite.Rewrite(program.Shader.Name, compiled, program.Shader.Schema, passGlobals, globals, FrameLayout, ViewLayout);
     }
 
     // Colour takes the pass's blend. Every opaque forward pass writes the G-buffer, so it always matches the surface that
@@ -390,27 +358,13 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         return forward && !prepass && !blended && color.ColorWriteMask != ColorWriteMask.None;
     }
 
-    internal static bool StoresGBuffer(in ShaderDescription description)
-    {
-        foreach (ShaderStageDescription stage in description.Stages)
-        {
-            if (stage.Stage != ShaderStages.Fragment)
-                continue;
-            SpirvModule module = new(stage.ShaderBytes);
-            uint normal = module.FindVariableAtLocation(SpirvModule.Output, 1);
-            uint material = module.FindVariableAtLocation(SpirvModule.Output, 2);
-            return normal != 0 && material != 0 && module.Stores(normal) && module.Stores(material);
-        }
-        return false;
-    }
-
     private GraphicsProgram Build(DrawProgram program, ShaderDescription description, bool mirrored)
     {
         ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
         bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name);
         bool prepass = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name);
-        if (WritesGBufferTargets(state, forward, prepass) && !StoresGBuffer(description))
+        if (WritesGBufferTargets(state, forward, prepass) && !MaterialLayout.StoresGBuffer(description))
             throw new GBufferMissingException("An opaque Forward pass must write the G-buffer: include Graphite/Passes.glsl and call Graphite_WriteGBuffer.");
         description.BlendState = SceneBlend(state, forward, prepass);
         description.DepthStencilState = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);

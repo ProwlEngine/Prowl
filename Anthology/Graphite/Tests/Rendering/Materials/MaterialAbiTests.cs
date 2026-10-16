@@ -37,10 +37,10 @@ file sealed class DrawPass(Action<CommandBuffer> draw) : IPass
     public void Render(RenderContext context, CommandBuffer cmd) => draw(cmd);
 }
 
-public sealed class MaterialRewriteTests : IDisposable
+public sealed class MaterialAbiTests : IDisposable
 {
     private const string Source = """
-        Shader "Test/Rewrite"
+        Shader "Test/Abi"
         {
             Properties
             {
@@ -68,21 +68,21 @@ public sealed class MaterialRewriteTests : IDisposable
                 }
                 Fragment
                 {
-                    #pragma global _Wind
+                    #pragma global float _Wind
                     uniform float _Scale;
                     uniform vec4 _Color;
-                    uniform float _Wind;
                     uniform sampler2D _MainTex;
+                    uniform vec4 _MainTex_ST;
                     layout(location = 0) out vec4 outColor;
 
-                    vec4 Fetch(sampler2D tex, vec2 uv)
+                    vec4 Fetch(texture2D tex, sampler smp, vec2 uv)
                     {
-                        return texture(tex, uv) * float(textureSize(tex, 0).x);
+                        return texture(sampler2D(tex, smp), uv) * float(textureSize(sampler2D(tex, smp), 0).x);
                     }
 
                     void main()
                     {
-                        outColor = Fetch(_MainTex, vec2(0.5)) * _Color * _Scale + vec4(_Wind);
+                        outColor = Fetch(_MainTex_Texture, _MainTex_Sampler, vec2(0.5)) * texture(_MainTex, vec2(0.5)).a * _MainTex_ST.x * _Color * _Scale + vec4(_Wind);
                     }
                 }
                 ENDGLSL
@@ -114,7 +114,7 @@ public sealed class MaterialRewriteTests : IDisposable
     private readonly MaterialSystem _materials;
     private readonly List<IDisposable> _owned = new();
 
-    public MaterialRewriteTests()
+    public MaterialAbiTests()
     {
         _registry = new GlobalRegistry(_device, _resources);
         _materials = new MaterialSystem(_device, _resources);
@@ -137,13 +137,15 @@ public sealed class MaterialRewriteTests : IDisposable
         return resource;
     }
 
-    private ShaderDescription Rewrite(string source, out Shader shader)
+    private ShaderDescription Build(string source, out Shader shader)
     {
         ShaderDefinition definition = ShaderParser.Parse(source);
         shader = new Shader(definition, _compiler);
         ShaderPass pass = definition.Passes![0];
         ShaderDescription compiled = _compiler.Compile(pass, [], _device.BackendType);
-        return MaterialRewrite.Rewrite(shader.Name, compiled, shader.Schema, _compiler.GetGlobals(pass), _registry, s_frameTable, s_viewTable);
+        compiled.Specializations = MaterialLayout.GlobalOffsets(_compiler.GetGlobals(pass), _registry);
+        compiled.ResourceLayouts = MaterialLayout.Layouts(shader.Name, compiled.ResourceLayouts, s_frameTable, s_viewTable);
+        return compiled;
     }
 
     private Texture Solid(float r, float g, float b)
@@ -157,7 +159,7 @@ public sealed class MaterialRewriteTests : IDisposable
     [Fact]
     public void MaterialPasses_ReadTheirRecordsGlobalsAndBindlessTextures_PerDraw()
     {
-        ShaderDescription description = Rewrite(Source, out Shader shader);
+        ShaderDescription description = Build(Source, out Shader shader);
         description.BlendState = BlendStateDescription.SingleOverrideBlend;
         description.DepthStencilState = DepthStencilStateDescription.Disabled;
         description.RasterizerState = RasterizerStateDescription.CullNone;
@@ -232,18 +234,20 @@ public sealed class MaterialRewriteTests : IDisposable
     }
 
     [Fact]
-    public void LooseUniforms_ThatAreNeitherPropertiesNorGlobals_FailToLoad()
+    public void LooseUniforms_ThatAreNeitherPropertiesNorGlobals_FailWhereTheyAreRead()
     {
-        string source = Source.Replace("#pragma global _Wind", "");
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
-        Assert.Contains("_Wind", error.Message);
+        string source = Source.Replace("#pragma global float _Wind", "uniform float _Wind;");
+        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
+        Assert.Contains("_Wind_is_neither_a_property_nor_a_global", error.Message);
+
+        Build(source.Replace(" + vec4(_Wind)", ""), out _);
     }
 
     [Fact]
-    public void PropertiesDeclaredWithAnotherType_FailToLoad()
+    public void PropertiesDeclaredWithAnotherType_FailToCompile()
     {
         string source = Source.Replace("uniform float _Scale;", "uniform vec2 _Scale;").Replace("* _Scale", "* _Scale.x");
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
+        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
         Assert.Contains("_Scale", error.Message);
     }
 
@@ -251,9 +255,9 @@ public sealed class MaterialRewriteTests : IDisposable
     public void ArraysOfResources_FailToLoad()
     {
         string source = Source
-            .Replace("uniform sampler2D _MainTex;", "uniform sampler2D _MainTex;\n                    uniform sampler2D _Layers[2];")
-            .Replace("* _Scale + vec4(_Wind)", "* _Scale + vec4(_Wind) + texture(_Layers[1], vec2(0.5))");
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
+            .Replace("uniform sampler2D _MainTex;", "uniform sampler2D _MainTex;\n                    layout(set = 3, binding = 0) uniform texture2D _Layers[2];")
+            .Replace("* _Scale + vec4(_Wind)", "* _Scale + vec4(_Wind) + texture(sampler2D(_Layers[1], _MainTex_Sampler), vec2(0.5))");
+        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Build(source, out _));
         Assert.Contains("_Layers", error.Message);
     }
 
@@ -261,18 +265,18 @@ public sealed class MaterialRewriteTests : IDisposable
     public void GlobalsDeclaredWithAnotherTypeThanTheRegistryHas_FailToLoad()
     {
         _registry.Renderer.SetFloat4("_Wind", Float4.Zero);
-        Assert.Throws<ShaderLoadException>(() => Rewrite(Source, out _));
+        Assert.Throws<ShaderLoadException>(() => Build(Source, out _));
     }
 
     [Fact]
-    public void VertexStages_ReadingMaterialsWithoutWritingTheSlot_FailToLoad()
+    public void VertexStages_ReadingMaterialsWithoutWritingTheSlot_FailToCompile()
     {
         string source = Source
             .Replace("layout(location = 31) flat out uint graphite_MaterialSlot;", "uniform float _Scale;")
             .Replace("graphite_MaterialSlot = push.slot;", "float s = _Scale + float(push.slot);")
             .Replace("gl_Position = vec4(x, y, 0.0, 1.0);", "gl_Position = vec4(x, y, 0.0, s);");
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
-        Assert.Contains("material slot", error.Message);
+        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
+        Assert.Contains("graphite_MaterialSlot", error.Message);
     }
 
     [Fact]
@@ -281,14 +285,14 @@ public sealed class MaterialRewriteTests : IDisposable
         string source = Source
             .Replace("layout(location = 31) flat out uint graphite_MaterialSlot;", "")
             .Replace("graphite_MaterialSlot = push.slot;", "float unused = float(push.slot);");
-        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => Rewrite(source, out _));
-        Assert.Contains("material slot", error.Message);
+        ShaderCompileException error = Assert.Throws<ShaderCompileException>(() => Build(source, out _));
+        Assert.Contains("graphite_MaterialSlot", error.Message);
     }
 
     [Fact]
-    public void RewrittenPasses_UseTheRendererSets()
+    public void MaterialPasses_UseTheRendererSets()
     {
-        ShaderDescription description = Rewrite(Source, out _);
+        ShaderDescription description = Build(Source, out _);
 
         Assert.Equal(new uint[] { 0, 1, 2 }, Array.ConvertAll(description.ResourceLayouts, l => l.Set));
         ResourceLayoutElementDescription materials = Assert.Single(description.ResourceLayouts[2].Elements);

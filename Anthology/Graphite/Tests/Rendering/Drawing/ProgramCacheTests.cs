@@ -27,7 +27,7 @@ internal sealed class GatedCompiler(GlslShaderCompiler inner) : IShaderCompiler
 
     public IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass) => inner.GetAxes(pass);
 
-    public IReadOnlyList<string> GetGlobals(ShaderPass pass) => inner.GetGlobals(pass);
+    public IReadOnlyList<ShaderGlobal> GetGlobals(ShaderPass pass) => inner.GetGlobals(pass);
 
     public ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend)
     {

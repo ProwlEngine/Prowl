@@ -381,6 +381,9 @@ public sealed class Shader
         Name = definition.Name ?? "";
         Schema = new MaterialSchema(definition.Properties ?? []);
         ShaderPass[] passes = definition.Passes ?? [];
+        MaterialAbi abi = MaterialLayout.Abi(Schema);
+        foreach (ShaderPass pass in passes)
+            pass.Material = abi;
         _readsSceneColor = new bool[passes.Length];
         for (int i = 0; i < passes.Length; i++)
             _readsSceneColor[i] = ShaderDefinition.PassHasTag(passes[i], SceneColorTag, "Read");

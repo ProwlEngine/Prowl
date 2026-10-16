@@ -140,13 +140,13 @@ float ApplySpecularAA(float roughness, vec3 worldNormal)
 //  Linear ray march + secant-method binary refinement.
 //
 //  Usage:
-//    vec2 pomUV = ParallaxOcclusionMapping(heightTex, uv, viewDirTS, heightScale, steps);
+//    vec2 pomUV = ParallaxOcclusionMapping(_HeightMap_Texture, _HeightMap_Sampler, uv, viewDirTS, heightScale, steps);
 //
 //  viewDirTS must be in tangent space (use transpose(TBN) * viewDir).
 //  Height is sampled from the G channel of the height texture.
 // =============================================================
 
-vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, float heightScale, int linearSteps)
+vec2 ParallaxOcclusionMapping(texture2D heightTex, sampler heightSampler, vec2 uv, vec3 viewDirTS, float heightScale, int linearSteps)
 {
     // Slope damping: reduce parallax at grazing angles
     float slopeDamp = 1.0 - clamp(dot(viewDirTS, vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
@@ -170,7 +170,7 @@ vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, floa
 
     for (int i = 0; i < linearSteps; i++)
     {
-        fCurrSampledHeight = textureGrad(heightTex, uv + vCurrOffset, dx, dy).g;
+        fCurrSampledHeight = textureGrad(sampler2D(heightTex, heightSampler), uv + vCurrOffset, dx, dy).g;
 
         if (fCurrSampledHeight > fCurrRayHeight)
             break;
@@ -197,7 +197,7 @@ vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, floa
         float intersectionHeight = (pt0 * delta1 - pt1 * delta0) / secantDenom;
         vCurrOffset = (1.0 - intersectionHeight) * finalStepSize * float(linearSteps);
 
-        fCurrSampledHeight = textureGrad(heightTex, uv + vCurrOffset, dx, dy).g;
+        fCurrSampledHeight = textureGrad(sampler2D(heightTex, heightSampler), uv + vCurrOffset, dx, dy).g;
 
         float delta = intersectionHeight - fCurrSampledHeight;
         if (delta < 0.0)

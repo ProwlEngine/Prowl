@@ -3,6 +3,11 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
+/// A value for a specialization constant of the program's stages, fixed when its pipelines are built.
+/// </summary>
+public readonly record struct SpecializationConstant(uint Id, uint Value);
+
+/// <summary>
 /// Full graphics program: shader stages plus its pipeline state.
 /// </summary>
 public struct ShaderDescription
@@ -41,6 +46,11 @@ public struct ShaderDescription
     /// Push constant block of the program, none by default.
     /// </summary>
     public PushConstantRange PushConstants;
+
+    /// <summary>
+    /// Specialization constant values, given to every stage. Ids a stage does not declare are ignored.
+    /// </summary>
+    public SpecializationConstant[]? Specializations;
 
     /// <summary>
     /// New ShaderDescription, default state.

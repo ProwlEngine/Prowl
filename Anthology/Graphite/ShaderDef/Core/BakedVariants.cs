@@ -10,14 +10,14 @@ namespace Prowl.Graphite.ShaderDef;
 
 /// <summary>
 /// Compiled variants shipped with a build, for players without a compiler. A pass is found by its source name and a hash
-/// of its source, so a pass made anywhere from the same source gets them, and an edited source gets none.
+/// of its source and material ABI, so a pass made anywhere from the same source gets them, and an edited one gets none.
 /// </summary>
 public static class BakedVariants
 {
     public sealed class Pass
     {
         public required VariantSpace[] Axes;
-        public required string[] Globals;
+        public required ShaderGlobal[] Globals;
         public List<Variant> Variants = new();
 
         /// <summary>Compute variants by backend and variant key.</summary>
@@ -25,7 +25,7 @@ public static class BakedVariants
     }
 
     private const uint Magic = 0x56424750; // PGBV
-    private const int Version = 1;
+    private const int Version = 2;
 
     private static readonly ConcurrentDictionary<(string Name, ulong Hash), Pass> s_passes = new();
 
@@ -33,7 +33,7 @@ public static class BakedVariants
 
     public static void Add(string sourceName, string source, Pass pass) => s_passes[(sourceName, Hash(source))] = pass;
 
-    public static Pass? Find(ShaderPass pass) => s_passes.TryGetValue((pass.SourceName, Hash(pass.Source)), out Pass? baked) ? baked : null;
+    public static Pass? Find(ShaderPass pass) => s_passes.TryGetValue((pass.SourceName, Hash(pass.Fingerprint)), out Pass? baked) ? baked : null;
 
     public static void Clear() => s_passes.Clear();
 
@@ -58,7 +58,7 @@ public static class BakedVariants
                 baked.Variants.Add(variant);
         }
         if (baked.Variants.Count > 0)
-            Add(variants.Pass.SourceName, variants.Pass.Source, baked);
+            Add(variants.Pass.SourceName, variants.Pass.Fingerprint, baked);
     }
 
     public static void Write(Stream stream)
@@ -83,8 +83,11 @@ public static class BakedVariants
                     writer.Write(value);
             }
             writer.Write(pass.Globals.Length);
-            foreach (string global in pass.Globals)
-                writer.Write(global);
+            foreach (ShaderGlobal global in pass.Globals)
+            {
+                writer.Write(global.Type);
+                writer.Write(global.Name);
+            }
             writer.Write(pass.Variants.Count);
             foreach (Variant variant in pass.Variants)
             {
@@ -141,9 +144,12 @@ public static class BakedVariants
                     values[v] = reader.ReadString();
                 axes[a] = toggle ? VariantSpace.Toggle(axis, scope) : new VariantSpace(axis, values, scope);
             }
-            string[] globals = new string[reader.ReadInt32()];
+            ShaderGlobal[] globals = new ShaderGlobal[reader.ReadInt32()];
             for (int g = 0; g < globals.Length; g++)
-                globals[g] = reader.ReadString();
+            {
+                string type = reader.ReadString();
+                globals[g] = new ShaderGlobal(reader.ReadString(), type);
+            }
             Pass pass = new() { Axes = axes, Globals = globals };
             int variants = reader.ReadInt32();
             for (int v = 0; v < variants; v++)
