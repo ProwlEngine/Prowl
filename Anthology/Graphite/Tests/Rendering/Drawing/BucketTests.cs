@@ -337,10 +337,11 @@ public sealed class BucketTests : IDisposable
         Frame(Forward);
         int ids = _programs.Count;
 
-        // Switching back and forth keeps both variants' ids, no more, and passes without the axis keep one id
+        // Switching back and forth keeps both variants' ids, no more, and passes without the axis keep one id. The Debug
+        // pass draws through its Forward pass's id.
         int reading = 0;
         for (int p = 0; p < _lit.Definition.Passes!.Length; p++)
-            reading += _lit.PassHasAxis(p, "_NORMALMAP") ? 1 : 0;
+            reading += _lit.PassHasAxis(p, "_NORMALMAP") && p != _lit.PassIndex(PassType.Debug) ? 1 : 0;
         for (int i = 0; i < 4; i++)
         {
             material.SetKeyword("_NORMALMAP", i % 2 == 0 ? "true" : "false");

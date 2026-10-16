@@ -80,7 +80,7 @@ public sealed class GlslProgram
 
 
 /// <summary>
-/// Compiles GLSLPROGRAM passes to SPIR-V through shaderc. Thread safe, one instance can serve every shader.
+/// Compiles GLSLPROGRAM passes to SPIR-V through Prism. Thread safe, one instance can serve every shader.
 /// </summary>
 public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 {

@@ -111,7 +111,7 @@ public sealed class StandardShaderTests : IDisposable
     {
         Shader rim = new(ShaderParser.Parse(RimSource), _compiler);
         ShaderDefinition definition = rim.Definition;
-        Assert.Equal(["Forward", "Prepass", "ShadowCaster"], definition.Passes!.Select(p => p.Name));
+        Assert.Equal(["Forward", "Prepass", "ShadowCaster", "Debug"], definition.Passes!.Select(p => p.Name));
         string[] names = [.. definition.Properties!.Select(p => p.Name)];
         Assert.Contains("_MainTex", names);
         Assert.Contains("_RimColor", names);
@@ -120,6 +120,18 @@ public sealed class StandardShaderTests : IDisposable
 
         foreach (ShaderPass pass in definition.Passes!)
             _compiler.CompileProgram(pass, [new Keyword("_SURFACE", surface), new Keyword("_NORMALMAP", VariantSpace.ToggleValues[1])]);
+    }
+
+    [Fact]
+    public void AnUnknownSurfaceModel_FailsToLoad()
+    {
+        ShaderLoadException error = Assert.Throws<ShaderLoadException>(() => new Shader(ShaderParser.Parse("""
+            Shader "Tests/Unknown"
+            {
+                Surface "Toon" { }
+            }
+            """), _compiler));
+        Assert.Contains("Toon", error.Message);
     }
 
     [Fact]

@@ -22,6 +22,9 @@ public readonly record struct PassType(string Name)
     public static readonly PassType ShadowCaster = new("ShadowCaster");
     public static readonly PassType ObjectId = new("ObjectId");
 
+    /// <summary>A surface's debug view, drawn in place of its Forward pass while the view sets <see cref="Shader.DebugAxis"/>. See Graphite/Debug.glsl.</summary>
+    public static readonly PassType Debug = new("Debug");
+
     /// <summary>A world's sky, a fullscreen triangle drawn after the opaque surfaces where nothing was drawn. See Graphite/Sky.glsl.</summary>
     public static readonly PassType Sky = new("Sky");
 
@@ -369,6 +372,9 @@ public sealed class Shader
     /// <summary>The pass tag of a pass reading the view's opaque colour, "SceneColor" = "Read". See Graphite/SceneColor.glsl.</summary>
     public const string SceneColorTag = "SceneColor";
 
+    /// <summary>The global axis a view sets to show a debug view, which its draws take from their shaders' Debug passes.</summary>
+    public const string DebugAxis = "GRAPHITE_DEBUG";
+
     private readonly bool[] _readsSceneColor;
     private readonly HashSet<string>[] _passAxes;
 
@@ -424,41 +430,38 @@ public sealed class Shader
         KeywordBindings = BindKeywords();
     }
 
+    private static readonly System.Text.RegularExpressions.Regex s_surfaceMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
+
     /// <summary>
-    /// Expands a Surface block into the standard passes of Graphite/Standard/Lit or Unlit, each running the block's code,
-    /// which defines void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit, and puts the
-    /// standard shader's properties before the shader's own, which replace any of the same name.
+    /// Expands a Surface block into the passes of its model, the library shader Graphite/Standard/{Model}.shader: each
+    /// "#pragma surface" line of the model's passes becomes the block's code, which defines
+    /// void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit, with
+    /// GRAPHITE_SURFACE_FUNCTION defined. The model's properties come before the shader's own, which replace any of the
+    /// same name.
     /// </summary>
     private static void ExpandSurface(ShaderDefinition definition)
     {
         if (definition.Surface is not { } surface)
             return;
         string name = definition.Name ?? "";
-        string defines = surface.Model switch
-        {
-            "Lit" => "",
-            "Unlit" => "#define GRAPHITE_STANDARD_UNLIT\n",
-            _ => throw new ShaderLoadException($"{name}:{surface.Line}: Surface model must be \"Lit\" or \"Unlit\", found \"{surface.Model}\"."),
-        };
-        if (surface.Code.Length > 0)
-            defines += "#define GRAPHITE_SURFACE_FUNCTION\n";
+        string path = $"{ShaderLibrary.Prefix}Standard/{surface.Model}.shader";
+        InternalShaders.Register();
+        string source = ShaderLibrary.Get(path)
+            ?? throw new ShaderLoadException($"{name}:{surface.Line}: there is no surface model \"{surface.Model}\", a model is a shader at {path}.");
+        ShaderDefinition model = ShaderParser.Parse(source);
 
-        ShaderPass Pass(string pass, string define, string variants) => new()
+        string code = surface.Code.Length > 0 ? "#define GRAPHITE_SURFACE_FUNCTION\n" + surface.Code : "";
+        ShaderPass[] standard = model.Passes ?? [];
+        bool spliced = false;
+        foreach (ShaderPass pass in standard)
         {
-            Name = pass,
-            Tags = new() { [PassType.Tag] = pass },
-            State = new PassState(),
-            Source = $"Shared\n{{\n#define {define}\n{defines}{variants}}}\n"
-                + "Vertex\n{\n#include \"Graphite/Standard/Standard.glsl\"\nvoid main() { Graphite_StandardVertex(); }\n}\n"
-                + $"Fragment\n{{\n#include \"Graphite/Standard/Standard.glsl\"\n{surface.Code}\nvoid main() {{ Graphite_StandardFragment(); }}\n}}\n",
-            SourceName = name,
-            SourceLine = surface.Line,
-        };
+            spliced |= s_surfaceMarker.IsMatch(pass.Source);
+            pass.Source = s_surfaceMarker.Replace(pass.Source, _ => code);
+            pass.SourceName = name;
+        }
+        if (code.Length > 0 && !spliced)
+            throw new ShaderLoadException($"{name}:{surface.Line}: the surface model {path} has no \"#pragma surface\" line for the Surface block's code.");
 
-        string litVariants = surface.Model == "Lit"
-            ? "#pragma variant _NORMALMAP\n#pragma variant _SURFACEMAP\n#pragma variant _OCCLUSIONMAP\n#pragma variant _EMISSION\n#pragma variant _PARALLAXMAP\n#pragma variant _TRANSLUCENCY\n#pragma variant _ANISOTROPIC\n"
-            : "";
-        ShaderPass[] standard = [Pass("Forward", "GRAPHITE_STANDARD_FORWARD", litVariants), Pass("Prepass", "GRAPHITE_STANDARD_DEPTH", ""), Pass("ShadowCaster", "GRAPHITE_STANDARD_DEPTH", "")];
         foreach (ShaderPass own in definition.Passes ?? [])
         {
             if (Array.Exists(standard, p => p.Name == own.Name))
@@ -466,21 +469,16 @@ public sealed class Shader
         }
         definition.Passes = [.. standard, .. definition.Passes ?? []];
 
-        if (name != ShaderLibrary.Prefix + surface.Model)
+        List<ShaderProperty> properties = new(model.Properties ?? []);
+        foreach (ShaderProperty property in definition.Properties ?? [])
         {
-            InternalShaders.Register();
-            string source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{surface.Model}.shader")!;
-            List<ShaderProperty> properties = new(ShaderParser.Parse(source).Properties ?? []);
-            foreach (ShaderProperty property in definition.Properties ?? [])
-            {
-                int index = properties.FindIndex(p => p.Name == property.Name);
-                if (index >= 0)
-                    properties[index] = property;
-                else
-                    properties.Add(property);
-            }
-            definition.Properties = [.. properties];
+            int index = properties.FindIndex(p => p.Name == property.Name);
+            if (index >= 0)
+                properties[index] = property;
+            else
+                properties.Add(property);
         }
+        definition.Properties = [.. properties];
         definition.Surface = null;
     }
 

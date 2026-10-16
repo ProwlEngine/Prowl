@@ -1,10 +1,10 @@
-// Debug views: a forward pass hands its surface to Graphite_DebugView, which returns what the view's GRAPHITE_DEBUG
-// value shows in place of the lit colour, and calls Graphite_DebugInputs before lighting so the LIGHTING view shades a
-// white surface. A view picks the value through ViewDesc.Keywords, OFF draws as usual and compiles both hooks away.
+// Debug views: a surface's Debug pass, drawn in place of its Forward pass while the view sets GRAPHITE_DEBUG, hands its
+// surface to Graphite_DebugView, which returns what the value shows in place of the lit colour, and calls
+// Graphite_DebugInputs before lighting so the LIGHTING view shades a white surface. The Debug pass declares the axis
+// itself, "#pragma variant global GRAPHITE_DEBUG" with the values below, so no other pass compiles a variant per view.
 // World positions are camera relative, normals in world space.
+//   UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
 #pragma once
-
-#pragma variant global GRAPHITE_DEBUG OFF UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
 
 #include "Graphite/Lighting.glsl"
 

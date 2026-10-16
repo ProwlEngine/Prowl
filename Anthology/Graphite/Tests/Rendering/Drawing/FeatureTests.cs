@@ -444,6 +444,35 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 0.5f, 1), pixels, Centre);
     }
 
+    [Theory]
+    [InlineData(null, 0f, 0.5f, 1f)]
+    [InlineData("ALBEDO", 0f, 0.5f, 1f)]
+    [InlineData("NORMALS", 0.5f, 0.5f, 0.5f)]
+    public void DebugViews_DrawSurfacesThroughTheirDebugPass_WithTheSurfaceFunction(string? mode, float r, float g, float b)
+    {
+        Shader shader = _renderer.LoadShader(ShaderParser.Parse("""
+            Shader "Tests/DebugBlue"
+            {
+                Surface "Unlit"
+                {
+                    GLSLPROGRAM
+                    void Surface(inout Graphite_SurfaceData s) { s.BaseColor = vec3(0.0, s.BaseColor.g * 0.5, 1.0); }
+                    ENDGLSL
+                }
+            }
+            """));
+        Material material = _renderer.CreateMaterial(shader);
+        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+        material.SetColor("_MainColor", new Float4(0, 1, 0, 1));
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.5) }, [material]);
+
+        ViewDesc view = View();
+        if (mode != null)
+            view.Keywords = [new Keyword(Shader.DebugAxis, mode)];
+        Float4[] pixels = Frame(view);
+        AssertAll(new Float3(r, g, b), pixels, Centre);
+    }
+
     [Fact]
     public void OverlayViews_DrawOverTheViewsBefore_LeavingTheRestShowing()
     {

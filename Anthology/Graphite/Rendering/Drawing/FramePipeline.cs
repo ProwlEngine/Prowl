@@ -33,7 +33,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     private readonly record struct Family(Shader Shader, int PassIndex, PassState? StateOverride, bool Mirrored);
 
     private readonly CompilePolicy _policy = compiler == null ? CompilePolicy.BakedOnly : deterministic ? CompilePolicy.Sync : policy;
-    private readonly Dictionary<(ushort Program, bool Mirrored, ulong Globals), Entry> _entries = new();
+    private readonly Dictionary<(ushort Program, bool Mirrored, bool Debug, ulong Globals), Entry> _entries = new();
     private readonly Dictionary<Family, int> _families = new();
     private readonly Dictionary<Family, Entry> _defaults = new();
     private readonly Dictionary<Family, Entry?> _declared = new();
@@ -47,8 +47,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     /// <summary>Drops every variant of a freed draw program id, before the id is reused for another program.</summary>
     public void Drop(ushort id)
     {
-        List<(ushort, bool, ulong)>? keys = null;
-        foreach (((ushort Program, bool Mirrored, ulong Globals) key, Entry entry) in _entries)
+        List<(ushort, bool, bool, ulong)>? keys = null;
+        foreach (((ushort Program, bool Mirrored, bool Debug, ulong Globals) key, Entry entry) in _entries)
         {
             if (key.Program != id)
                 continue;
@@ -72,7 +72,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         }
         if (keys == null)
             return;
-        foreach ((ushort, bool, ulong) key in keys)
+        foreach ((ushort, bool, bool, ulong) key in keys)
             _entries.Remove(key);
     }
 
@@ -124,6 +124,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     private Entry Wanted(ushort id, bool mirrored, IReadOnlyDictionary<string, string> keywords)
     {
         DrawProgram program = programs[id];
+        bool debug = DebugProgram(ref program, keywords);
         IReadOnlyList<VariantSpace> axes = program.Shader.GlobalAxes;
         ulong key = 0, stride = 1;
         Span<int> globalValues = stackalloc int[axes.Count];
@@ -136,13 +137,26 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             stride *= (ulong)axes[i].Values.Count;
         }
 
-        if (!_entries.TryGetValue((id, mirrored, key), out Entry? entry))
+        if (!_entries.TryGetValue((id, mirrored, debug, key), out Entry? entry))
         {
             entry = Create(program, mirrored, globalValues);
-            _entries[(id, mirrored, key)] = entry;
+            _entries[(id, mirrored, debug, key)] = entry;
         }
         Complete(entry);
         return entry;
+    }
+
+    // A Forward pass draws through its shader's Debug pass while the view sets the debug axis
+    private static bool DebugProgram(ref DrawProgram program, IReadOnlyDictionary<string, string> keywords)
+    {
+        if (!keywords.ContainsKey(Shader.DebugAxis))
+            return false;
+        Shader shader = program.Shader;
+        int debug = shader.PassIndex(PassType.Debug);
+        if (debug < 0 || !ShaderDefinition.PassHasTag(shader.Definition.Passes![program.PassIndex], PassType.Tag, PassType.Forward.Name))
+            return false;
+        program = program with { PassIndex = debug, Variant = shader.PassVariant(debug, program.Keywords) };
+        return true;
     }
 
     public void Dispose()
@@ -363,7 +377,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     {
         ShaderPass pass = program.Shader.Definition.Passes![program.PassIndex];
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
-        bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name);
+        bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name) || ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Debug.Name);
         bool prepass = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name);
         ShaderDescription compiled = description;
         description.BlendState = SceneBlend(state, forward, prepass, location => MaterialLayout.Stores(compiled, location));
