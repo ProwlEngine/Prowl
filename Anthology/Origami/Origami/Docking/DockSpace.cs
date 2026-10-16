@@ -112,7 +112,10 @@ public class DockSpace
 
         // 2. Floating windows (z-ordered)
         for (int i = 0; i < FloatingWindows.Count; i++)
+        {
+            KeepHeaderReachable(FloatingWindows[i], m);
             DrawFloatingWindow(paper, FloatingWindows[i], i, theme, m, icons, font);
+        }
 
         // 3. While dragging: move source floating window, compute hover, draw indicators
         if (_isDragging && _draggedPanel != null)
@@ -549,6 +552,20 @@ public class DockSpace
             ResizeHandle(paper, $"fw_tr_{index}", fw, w - cs, 0, cs, cs, true, false, false, true);
             ResizeHandle(paper, $"fw_tl_{index}", fw, 0, 0, cs, cs, false, false, true, true);
         }
+    }
+
+    private const float MinVisibleHeaderWidth = 60f;
+
+    // Keeps the tab bar inside the dock space so a window can always be grabbed again.
+    private void KeepHeaderReachable(FloatingWindow fw, OrigamiMetrics m)
+    {
+        float minX = (float)_dockSpaceBounds.Min.X, minY = (float)_dockSpaceBounds.Min.Y;
+        float maxX = (float)_dockSpaceBounds.Max.X, maxY = (float)_dockSpaceBounds.Max.Y;
+        float visible = Math.Min(MinVisibleHeaderWidth, fw.Size.X);
+
+        float x = Math.Clamp(fw.Position.X, minX - fw.Size.X + visible, Math.Max(minX, maxX - visible));
+        float y = Math.Clamp(fw.Position.Y, minY, Math.Max(minY, maxY - m.TabBarHeight));
+        fw.Position = new Float2(x, y);
     }
 
     private void ResizeHandle(Paper paper, string id, FloatingWindow fw,
