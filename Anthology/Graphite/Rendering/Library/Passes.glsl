@@ -1,15 +1,15 @@
-// Outputs of the built in pass types. The forward opaque pass writes the thin G-buffer next to its colour: the world
-// normal, octahedral in a signed two channel target, roughness and metallic, and screen motion. Screen space effects
-// and TAA read it.
+// Outputs of the built in pass types. The forward opaque pass writes the thin G-buffer next to its colour: screen
+// motion, the world normal, octahedral in a signed two channel target, and roughness and metallic. A view has only the
+// targets its features read, so writes to the others go nowhere.
 #pragma once
 
 #include "Graphite/Core.glsl"
 #include "Graphite/Octahedral.glsl"
 
 #ifdef GRAPHITE_FRAGMENT
-layout(location = 1) out vec2 graphite_GBufferNormal;
-layout(location = 2) out vec2 graphite_GBufferMaterial;
-layout(location = 3) out vec2 graphite_GBufferMotion;
+layout(location = 1) out vec2 graphite_GBufferMotion;
+layout(location = 2) out vec2 graphite_GBufferNormal;
+layout(location = 3) out vec2 graphite_GBufferMaterial;
 layout(location = 28) in vec4 graphite_MotionCurrent;
 layout(location = 29) in vec4 graphite_MotionPrevious;
 #endif

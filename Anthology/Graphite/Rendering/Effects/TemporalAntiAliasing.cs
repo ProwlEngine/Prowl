@@ -13,6 +13,8 @@ namespace Prowl.Graphite.Rendering;
 /// </summary>
 public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
 {
+    public override SceneTargets SceneReads => SceneTargets.Motion;
+
     private readonly EffectResources _resources;
     private readonly FullscreenProgram _resolve, _sharpen;
     private bool _disposed;

@@ -274,13 +274,13 @@ internal static class MaterialLayout
         return [.. layouts];
     }
 
-    /// <summary>Whether the fragment stage stores to its outputs at locations 1 and 2, the G-buffer's normal and material.</summary>
-    public static bool StoresGBuffer(in ShaderDescription description)
+    /// <summary>Whether the fragment stage stores to its output at a location, like a G-buffer target.</summary>
+    public static bool Stores(in ShaderDescription description, uint location)
     {
         foreach (ShaderStageDescription stage in description.Stages)
         {
             if (stage.Stage == ShaderStages.Fragment)
-                return Stores(stage.ShaderBytes, 1) && Stores(stage.ShaderBytes, 2);
+                return Stores(stage.ShaderBytes, location);
         }
         return false;
     }

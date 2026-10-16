@@ -610,6 +610,7 @@ public sealed class FeatureTests : IDisposable
         private readonly PropertySet _properties = new();
 
         public override RenderSlot Slot => RenderSlot.AfterOpaques;
+        public override SceneTargets SceneReads => SceneTargets.Motion;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
@@ -1152,6 +1153,30 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
+    public void TheScene_HasOnlyTheTargetsItsFeaturesRead()
+    {
+        AddQuad(new Float3(1, 1, 1));
+        int Targets() => _renderer.Frame.Camera(1)!.Chain.Scene.Texture!.ColorTextures.Length;
+        Frame(View());
+        Assert.Equal(1, Targets());
+
+        using TemporalAntiAliasing taa = new(_renderer);
+        _world.Features.Add(taa);
+        Frame(View());
+        Assert.Equal(2, Targets());
+
+        using ScreenSpaceReflections ssr = new(_renderer);
+        _world.Features.Add(ssr);
+        Frame(View());
+        Assert.Equal(4, Targets());
+
+        _world.Features.Remove(ssr);
+        _world.Features.Remove(taa);
+        AssertAll(new Float3(1, 1, 1), Frame(View()));
+        Assert.Equal(1, Targets());
+    }
+
+    [Fact]
     public void Jitter_CyclesThroughHaltonPhases_OnlyWhileAFeatureAsks()
     {
         AddQuad(new Float3(1, 1, 1));
@@ -1253,6 +1278,62 @@ public sealed class FeatureTests : IDisposable
         Float4[] pixels = Frame(view);
         Assert.Equal((8u, 4u), (probe.Width, probe.Height));
         AssertAll(new Float3(0.5f, 0.25f, 1), pixels, i => i / Size < Size / 2);
+    }
+
+    // Writes the output colour from the render resolution one, keeping what it was given to check
+    private sealed class Upscaler(FullscreenProgram program) : RenderFeature
+    {
+        public (uint, uint) Input, Output;
+
+        public override RenderSlot Slot => RenderSlot.Upscale;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.WriteOutputColor();
+            (Input, Output) = ((view.Width, view.Height), (view.OutputWidth, view.OutputHeight));
+        }
+
+        public override void Render(FeatureContext context) => context.Fullscreen(program);
+    }
+
+    // Records the size of the colour it writes and the view it was given
+    private sealed class SizeProbe(FullscreenProgram program) : RenderFeature
+    {
+        public (uint, uint) View, Written;
+        public bool Upscaled;
+
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.WriteColor();
+            (View, Upscaled) = ((view.Width, view.Height), view.Upscaled);
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            Written = (context.Color!.Width, context.Color.Height);
+            context.Fullscreen(program);
+        }
+    }
+
+    [Fact]
+    public void AnUpscaler_WritesTheOutputResolution_WhichLaterFeaturesRunAt()
+    {
+        AddQuad(new Float3(0.5f, 0.25f, 1));
+        FullscreenProgram copy = Program("void main() { outColor = Graphite_SampleSource(vUV); }");
+        Upscaler upscaler = new(copy);
+        SizeProbe after = new(copy);
+        _world.Features.Add(upscaler);
+        _world.Features.Add(after);
+        ViewDesc view = View();
+        view.RenderScale = 0.5f;
+
+        AssertAll(new Float3(0.5f, 0.25f, 1), Frame(view));
+        Assert.Equal(((8u, 8u), ((uint)Size, (uint)Size)), (upscaler.Input, upscaler.Output));
+        Assert.Equal(((uint)Size, (uint)Size), after.View);
+        Assert.True(after.Upscaled);
+        Assert.Equal(((uint)Size, (uint)Size), after.Written);
     }
 
     [Fact]

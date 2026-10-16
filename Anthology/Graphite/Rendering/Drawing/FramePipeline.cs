@@ -295,7 +295,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         entry.Failed = true;
         Interlocked.Decrement(ref _compiling);
         DrawProgram program = entry.Program;
-        report(new RendererError(e is GBufferMissingException ? "shader.gbuffer.missing" : "shader.compile", $"{program.Shader.Name}: {e.Message}", RendererErrorSeverity.Error, program.Shader) { Key = $"program.{program.Shader.Name}.{program.PassIndex}.{entry.Key}" });
+        report(new RendererError("shader.compile", $"{program.Shader.Name}: {e.Message}", RendererErrorSeverity.Error, program.Shader) { Key = $"program.{program.Shader.Name}.{program.PassIndex}.{entry.Key}" });
     }
 
     // An entry that never finished no longer counts as compiling
@@ -334,9 +334,10 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         return 0;
     }
 
-    // Colour takes the pass's blend. Every opaque forward pass writes the G-buffer, so it always matches the surface that
-    // won the depth test; transparent, blended and other passes leave it. The prepass writes no colour at all.
-    internal static BlendStateDescription SceneBlend(PassState state, bool forward, bool prepass)
+    // Colour takes the pass's blend. An opaque forward pass writes the G-buffer targets its fragment stage stores, so they
+    // match the surface that won the depth test; ones it does not store keep their clear, and transparent, blended and
+    // other passes leave them. The prepass writes no colour at all. Views with fewer targets ignore the extra states.
+    internal static BlendStateDescription SceneBlend(PassState state, bool forward, bool prepass, Func<uint, bool> stores)
     {
         BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
         bool gbuffer = WritesGBufferTargets(state, forward, prepass);
@@ -346,11 +347,11 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
             color.ColorWriteMask = ColorWriteMask.None;
 
         BlendStateDescription blend = state.ToBlendState(BlendStateDescription.SingleOverrideBlend);
-        blend.AttachmentStates = [color, gbuffer ? target : masked, gbuffer ? target : masked, gbuffer ? target : masked];
+        blend.AttachmentStates = [color, gbuffer && stores(1) ? target : masked, gbuffer && stores(2) ? target : masked, gbuffer && stores(3) ? target : masked];
         return blend;
     }
 
-    /// <summary>Whether a pass draws opaque surfaces, so it must write the G-buffer.</summary>
+    /// <summary>Whether a pass draws opaque surfaces, so it writes the G-buffer targets it stores.</summary>
     internal static bool WritesGBufferTargets(PassState state, bool forward, bool prepass)
     {
         BlendAttachmentDescription color = state.ToBlendState(BlendStateDescription.SingleOverrideBlend).AttachmentStates[0];
@@ -364,9 +365,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         PassState state = program.StateOverride is { } over ? over.Apply(pass.State) : pass.State;
         bool forward = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Forward.Name);
         bool prepass = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.Prepass.Name);
-        if (WritesGBufferTargets(state, forward, prepass) && !MaterialLayout.StoresGBuffer(description))
-            throw new GBufferMissingException("An opaque Forward pass must write the G-buffer: include Graphite/Passes.glsl and call Graphite_WriteGBuffer.");
-        description.BlendState = SceneBlend(state, forward, prepass);
+        ShaderDescription compiled = description;
+        description.BlendState = SceneBlend(state, forward, prepass, location => MaterialLayout.Stores(compiled, location));
         description.DepthStencilState = state.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyGreaterEqual);
         RasterizerStateDescription raster = state.ToRasterizerState(RasterizerStateDescription.Default);
         if (mirrored)
@@ -404,9 +404,6 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         return built;
     }
 }
-
-/// <summary>An opaque forward pass whose fragment stage never writes the G-buffer.</summary>
-internal sealed class GBufferMissingException(string message) : Exception(message);
 
 /// <summary>
 /// A device local buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
@@ -801,6 +798,18 @@ internal sealed class CameraFrame : IDisposable
     {
         (_worldFeatures, _viewFeatures) = (world, view);
         FeatureSelection.Select(Selected, world, view, Info);
+    }
+
+    /// <summary>The scene targets the selected features read.</summary>
+    public SceneTargets SceneReads
+    {
+        get
+        {
+            SceneTargets targets = SceneTargets.None;
+            foreach (RenderFeature feature in Selected)
+                targets |= feature.SceneReadsSnapshot;
+            return targets;
+        }
     }
 
     /// <summary>
@@ -1610,12 +1619,12 @@ internal sealed partial class FramePipeline : IDisposable
         }
         uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
         uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
-        if (!view.External && camera.Chain.Ensure(width, height, view.LayerCount))
-            camera.Rebuild = true;
         camera.Info = new FeatureView(view, width, height, camera.Chain.SceneColor != null);
         if (!view.External)
         {
             camera.SelectFeatures(world.World.FeatureSnapshot, features);
+            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight))
+                camera.Rebuild = true;
             camera.ApplyFeatures();
         }
         if (view.External)
@@ -1634,6 +1643,8 @@ internal sealed partial class FramePipeline : IDisposable
         {
             camera.Info = new FeatureView(view, width, height, true);
             camera.SelectFeatures(world.World.FeatureSnapshot, features);
+            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight))
+                camera.Rebuild = true;
             camera.ApplyFeatures();
         }
         camera.View.Target = view.Target;

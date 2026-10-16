@@ -22,7 +22,7 @@ internal static unsafe class VkPipelineCacheFactory
         PipelineColorBlendStateCreateInfo blendStateCI = new() { SType = StructureType.PipelineColorBlendStateCreateInfo };
         BlendStateDescription programBlendState = program.BlendState;
         int declaredCount = programBlendState.AttachmentStates.Length;
-        int attachmentsCount = Math.Max(declaredCount, outputDesc.ColorFormats.Length);
+        int attachmentsCount = outputDesc.ColorFormats.Length;
         PipelineColorBlendAttachmentState* attachmentsPtr
             = stackalloc PipelineColorBlendAttachmentState[attachmentsCount];
         for (int i = 0; i < attachmentsCount; i++)

@@ -3110,7 +3110,7 @@ public sealed class LightingTests : IDisposable
     }
 
     [Fact]
-    public void OpaqueForwardPasses_WriteTheGBuffer_AndMustStoreIt()
+    public void OpaqueForwardPasses_WriteTheGBufferTargetsTheyStore()
     {
         ShaderPass pass = ShaderParser.Parse(Source).Passes![0];
         ShaderDescription lit = _compiler.Compile(pass, [], _device.BackendType);
@@ -3119,22 +3119,23 @@ public sealed class LightingTests : IDisposable
         PassState blended = ShaderParser.ParsePassState("Blend SourceAlpha InverseSourceAlpha");
 
         static ColorWriteMask[] Masks(BlendStateDescription blend) => blend.AttachmentStates.Select(a => a.ColorWriteMask).ToArray();
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false)));
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: true, prepass: false)));
-        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: false)));
-        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true)));
-        Assert.True(MaterialLayout.StoresGBuffer(lit));
-        Assert.False(MaterialLayout.StoresGBuffer(unlit));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.All], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false, _ => true)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: true, prepass: false, location => location == 1)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(blended, forward: true, prepass: false, _ => true)));
+        Assert.Equal([ColorWriteMask.All, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: false, _ => true)));
+        Assert.Equal([ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None, ColorWriteMask.None], Masks(ProgramCache.SceneBlend(opaque, forward: false, prepass: true, _ => true)));
+        Assert.True(MaterialLayout.Stores(lit, 1) && MaterialLayout.Stores(lit, 2) && MaterialLayout.Stores(lit, 3));
+        Assert.False(MaterialLayout.Stores(unlit, 1) || MaterialLayout.Stores(unlit, 2) || MaterialLayout.Stores(unlit, 3));
 
-        // An opaque forward pass that never writes it does not load, and says why
+        // An opaque forward pass that never writes it draws, leaving the targets at their clear
         Material material = _renderer.CreateMaterial(_renderer.LoadShader(ShaderParser.Parse(Source.Replace("Graphite_WriteGBuffer(n, roughness, metallic);", ""))));
         AddQuad(material);
         ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer };
         view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection, Position = _origin };
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { view } });
-        Assert.Equal("shader.gbuffer.missing", Assert.Single(_errors).Code);
-        _errors.Clear();
+        _device.WaitForIdle();
+        Assert.Empty(_errors);
     }
 
     // A quad whose normal leans with position, (0.2x, 0.2y, -1) before normalizing, with UVs running 0 to 1 across it

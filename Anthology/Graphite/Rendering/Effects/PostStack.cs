@@ -575,6 +575,8 @@ public sealed class Gtao : ScreenLightingFeature, IDisposable
 /// </summary>
 public sealed class ScreenSpaceReflections : PostEffect
 {
+    public override SceneTargets SceneReads => SceneTargets.Motion | SceneTargets.Normals | SceneTargets.Material;
+
     private const int MaxMip = 5;
     private readonly FullscreenProgram _rayCast, _blur, _resolve, _temporal, _reproject, _combine, _copy;
     private readonly PropertySet _properties = new();
@@ -773,6 +775,8 @@ public sealed class ScreenSpaceReflections : PostEffect
 /// </summary>
 public sealed class MotionBlur : PostEffect
 {
+    public override SceneTargets SceneReads => SceneTargets.Motion;
+
     private readonly FullscreenProgram _program;
     private readonly PropertySet _properties = new();
     private (float Intensity, int Samples, float MaxRadius) _settings;

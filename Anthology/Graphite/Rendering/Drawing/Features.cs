@@ -83,7 +83,12 @@ public readonly struct FeatureView
         Height = height;
         RenderScale = desc.RenderScale;
         Position = desc.Layers[0].Position;
+        OutputWidth = desc.Target is { } target ? Math.Max(1u, (uint)MathF.Round(target.Width * desc.Viewport.Z)) : width;
+        OutputHeight = desc.Target is { } output ? Math.Max(1u, (uint)MathF.Round(output.Height * desc.Viewport.W)) : height;
     }
+
+    /// <summary>The view as features after an upscale see it, its colour at the output resolution.</summary>
+    internal FeatureView AtOutput() => this with { Width = OutputWidth, Height = OutputHeight, RenderScale = 1, Upscaled = true };
 
     public RenderWorld World { get; }
     public ViewKind Kind { get; }
@@ -92,10 +97,20 @@ public readonly struct FeatureView
     /// <summary>1 for mono, 2 for stereo, 6 for a cube capture. Textures of layered views are arrays drawn through multiview.</summary>
     public int LayerCount { get; }
 
-    /// <summary>Render resolution: the target's size within the viewport times the render scale.</summary>
-    public uint Width { get; }
-    public uint Height { get; }
-    public float RenderScale { get; }
+    /// <summary>
+    /// The resolution the colour is at: the render resolution, the target's size within the viewport times the render
+    /// scale, until an upscaler wrote the output resolution.
+    /// </summary>
+    public uint Width { get; private init; }
+    public uint Height { get; private init; }
+    public float RenderScale { get; private init; }
+
+    /// <summary>The target's size within the viewport, what an upscaler writes and the present draws to.</summary>
+    public uint OutputWidth { get; }
+    public uint OutputHeight { get; }
+
+    /// <summary>Whether an earlier feature upscaled the colour to the output resolution, which Width and Height then are.</summary>
+    public bool Upscaled { get; private init; }
 
     /// <summary>The first layer's camera position.</summary>
     public Double3 Position { get; }
@@ -103,8 +118,11 @@ public readonly struct FeatureView
     /// <summary>Whether the view keeps an opaque colour copy, made once one of its transparent passes read it.</summary>
     internal bool SceneColor { get; }
 
-    /// <summary>A texture sized as a part of the view's render resolution, an array on layered views.</summary>
-    public GraphTextureDesc Texture(PixelFormat format, float scale = 1) => GraphTextureDesc.ViewSized(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
+    /// <summary>A texture sized as a part of the colour's resolution, <see cref="Width"/> by <see cref="Height"/>, an array on layered views.</summary>
+    public GraphTextureDesc Texture(PixelFormat format, float scale = 1)
+        => Upscaled
+            ? Texture(Math.Max(1, (int)(Width * scale)), Math.Max(1, (int)(Height * scale)), format)
+            : GraphTextureDesc.ViewSized(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
 
     /// <summary>A texture of a fixed size, an array on layered views.</summary>
     public GraphTextureDesc Texture(int width, int height, PixelFormat format) => GraphTextureDesc.Sized(width, height, false, format) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
@@ -162,9 +180,21 @@ public sealed class FeatureSet : IEnumerable<RenderFeature>
 /// and Enabled are read at SubmitFrame along with <see cref="Extract"/> on the host thread, everything else runs on the
 /// render thread. Of features sharing an <see cref="ExclusiveGroup"/> the view's wins over the world's, which wins over
 /// the built in one, so a feature replaces a built in one by taking its group: Prepass, Opaque, Sky, SceneColor or
-/// Transparent. A feature that throws in Setup is reported and left out of that view; one that throws while recording
-/// fails the frame.
+/// Transparent. A feature that throws fails the frame.
 /// </summary>
+/// <summary>
+/// Scene targets past colour and depth that a feature reads. A view allocates the ones its features read: motion as the
+/// second target, then normals and material together, each also bringing the ones before it.
+/// </summary>
+[Flags]
+public enum SceneTargets
+{
+    None = 0,
+    Motion = 1,
+    Normals = 2,
+    Material = 4,
+}
+
 public abstract class RenderFeature
 {
     private int _version;
@@ -187,6 +217,9 @@ public abstract class RenderFeature
 
     /// <summary>The texture LOD bias the view's samplers take while it jitters for this feature.</summary>
     public virtual float JitterMipBias => 0;
+
+    /// <summary>The scene targets past colour and depth the feature reads, so its views have them.</summary>
+    public virtual SceneTargets SceneReads => SceneTargets.None;
 
     /// <summary>Copies settings the render thread reads. Host thread, at SubmitFrame.</summary>
     public virtual void Extract() { }
@@ -215,6 +248,7 @@ public abstract class RenderFeature
     internal string? GroupSnapshot;
     internal int JitterPhasesSnapshot;
     internal float JitterMipBiasSnapshot;
+    internal SceneTargets SceneReadsSnapshot;
 
     // Host thread, at SubmitFrame
     internal void TakeSnapshot()
@@ -226,6 +260,7 @@ public abstract class RenderFeature
         GroupSnapshot = ExclusiveGroup;
         JitterPhasesSnapshot = Math.Max(JitterPhases, 0);
         JitterMipBiasSnapshot = JitterMipBias;
+        SceneReadsSnapshot = SceneReads;
         if (this is ScreenLightingFeature lighting)
             (lighting.ScaleSnapshot, lighting.IrradianceSnapshot) = (Math.Clamp(lighting.Scale, 0.0625f, 1f), lighting.WritesIrradiance);
     }
@@ -442,10 +477,20 @@ internal sealed class ChainTexture(string name) : IDisposable
 /// </summary>
 internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisposable> retired) : IDisposable
 {
-    public static readonly PixelFormat[] SceneFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm, PixelFormat.R16_G16_Float];
+    /// <summary>The scene's colour, motion, normal and material formats, a view taking as many as its targets need.</summary>
+    public static readonly PixelFormat[] SceneFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm];
+
+    public static int SceneTargetCount(SceneTargets targets)
+        => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 4 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
 
     public readonly ChainTexture Scene = new($"Graphite.Scene {viewId}");
     public readonly ChainTexture[] Colors = [new($"Graphite.ColorA {viewId}"), new($"Graphite.ColorB {viewId}")];
+
+    /// <summary>The colours at the output resolution, ping ponging after an upscaler wrote the first.</summary>
+    public readonly ChainTexture[] OutputColors = [new($"Graphite.OutputA {viewId}"), new($"Graphite.OutputB {viewId}")];
+
+    /// <summary>Whether a feature upscaled the colour, so later ones write the output colours.</summary>
+    public bool Upscaled;
 
     /// <summary>The screen lighting the forward pass reads: visibility, and indirect irradiance with its confidence.</summary>
     public readonly ChainTexture ScreenVisibility = new($"Graphite.ScreenVisibility {viewId}");
@@ -467,7 +512,7 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
     public bool SceneColorUsed;
     private TextureView? _sceneColorView;
 
-    private uint _width, _height, _layers;
+    private uint _width, _height, _layers, _outputWidth, _outputHeight;
 
     /// <summary>Makes the scene colour for the view's size. Returns whether it did.</summary>
     public bool EnsureSceneColor()
@@ -500,10 +545,13 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
         Scene.Reset();
         Colors[0].Reset();
         Colors[1].Reset();
+        OutputColors[0].Reset();
+        OutputColors[1].Reset();
         ScreenVisibility.Reset();
         ScreenIrradiance.Reset();
         Current = Scene;
         DisplayEncoded = false;
+        Upscaled = false;
         Published.Clear();
     }
 
@@ -518,12 +566,13 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
             ScreenIrradiance.Release(Retired);
     }
 
-    /// <summary>Sizes the textures for a view. Returns whether any was recreated.</summary>
-    public bool Ensure(uint width, uint height, int layers)
+    /// <summary>Sizes the textures for a view, the scene with the targets its features read. Returns whether any was recreated.</summary>
+    public bool Ensure(uint width, uint height, int layers, SceneTargets targets, uint outputWidth, uint outputHeight)
     {
-        (_width, _height, _layers) = (width, height, layers > 1 ? (uint)layers : 0);
-        bool changed = Scene.Ensure(device, new RenderTextureDescription(width, height, SceneFormats, PixelFormat.D32_Float) { ArrayLayers = _layers }, Retired);
-        foreach (ChainTexture color in Colors)
+        (_width, _height, _layers, _outputWidth, _outputHeight) = (width, height, layers > 1 ? (uint)layers : 0, outputWidth, outputHeight);
+        PixelFormat[] formats = SceneFormats[..SceneTargetCount(targets)];
+        bool changed = Scene.Ensure(device, new RenderTextureDescription(width, height, formats, PixelFormat.D32_Float) { ArrayLayers = _layers }, Retired);
+        foreach (ChainTexture color in (ChainTexture[])[.. Colors, .. OutputColors])
         {
             if (color.Texture != null)
                 changed |= EnsureColor(color);
@@ -534,12 +583,25 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
     }
 
     public bool EnsureColor(ChainTexture color)
-        => color.Ensure(device, new RenderTextureDescription(_width, _height, PixelFormat.R16_G16_B16_A16_Float, false) { ArrayLayers = _layers }, Retired);
+    {
+        bool output = Array.IndexOf(OutputColors, color) >= 0;
+        return color.Ensure(device, new RenderTextureDescription(output ? _outputWidth : _width, output ? _outputHeight : _height, PixelFormat.R16_G16_B16_A16_Float, false) { ArrayLayers = _layers }, Retired);
+    }
+
+    /// <summary>The colour after the current one, at the output resolution once upscaled, made the first time.</summary>
+    public ChainTexture NextColor()
+    {
+        ChainTexture[] pair = Upscaled ? OutputColors : Colors;
+        ChainTexture next = Current == pair[0] ? pair[1] : pair[0];
+        if (next.Texture == null)
+            EnsureColor(next);
+        return next;
+    }
 
     /// <summary>Lets the colours go after a graph that wrote none of them.</summary>
     public void ReleaseUnwritten()
     {
-        foreach (ChainTexture color in Colors)
+        foreach (ChainTexture color in (ChainTexture[])[.. Colors, .. OutputColors])
         {
             if (!color.Written)
                 color.Release(Retired);
@@ -552,6 +614,8 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
         Scene.Release(Retired);
         Colors[0].Release(Retired);
         Colors[1].Release(Retired);
+        OutputColors[0].Release(Retired);
+        OutputColors[1].Release(Retired);
         ScreenVisibility.Release(Retired);
         ScreenIrradiance.Release(Retired);
         ReleaseSceneColor();
@@ -564,6 +628,8 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
         Scene.Dispose();
         Colors[0].Dispose();
         Colors[1].Dispose();
+        OutputColors[0].Dispose();
+        OutputColors[1].Dispose();
         ScreenVisibility.Dispose();
         ScreenIrradiance.Dispose();
     }
@@ -640,9 +706,21 @@ public sealed class FeatureBuilder
     {
         ReadColor();
         FeatureChain chain = _pass.Chain;
-        ChainTexture next = chain.Current == chain.Colors[0] ? chain.Colors[1] : chain.Colors[0];
-        if (next.Texture == null)
-            chain.EnsureColor(next);
+        ChainTexture next = chain.NextColor();
+        Write(next);
+        chain.Current = next;
+    }
+
+    /// <summary>
+    /// Writes a new colour at the view's output resolution from the current one, as an upscaler does. Later features see
+    /// the view at the output resolution, and the present draws it as it is.
+    /// </summary>
+    public void WriteOutputColor()
+    {
+        ReadColor();
+        FeatureChain chain = _pass.Chain;
+        chain.Upscaled = true;
+        ChainTexture next = chain.NextColor();
         Write(next);
         chain.Current = next;
     }
@@ -767,14 +845,16 @@ public sealed class FeatureContext
     /// <summary>The scene's depth target, when the feature reads the scene.</summary>
     public Texture? Depth => Scene?.DepthTexture;
 
-    /// <summary>The scene's octahedral world normals, when the feature reads the scene.</summary>
-    public Texture? Normals => Scene?.ColorTextures[1];
+    /// <summary>How far each opaque surface moved across the screen since last frame, in uv, when the feature reads the scene and declares it in SceneReads.</summary>
+    public Texture? Motion => SceneTarget(1);
 
-    /// <summary>The scene's roughness and metallic, when the feature reads the scene.</summary>
-    public Texture? Material => Scene?.ColorTextures[2];
+    /// <summary>The scene's octahedral world normals, when the feature reads the scene and declares them in SceneReads.</summary>
+    public Texture? Normals => SceneTarget(2);
 
-    /// <summary>How far each opaque surface moved across the screen since last frame, in uv, when the feature reads the scene.</summary>
-    public Texture? Motion => Scene?.ColorTextures[3];
+    /// <summary>The scene's roughness and metallic, when the feature reads the scene and declares them in SceneReads.</summary>
+    public Texture? Material => SceneTarget(3);
+
+    private Texture? SceneTarget(int index) => Scene is { } scene && index < scene.ColorTextures.Length ? scene.ColorTextures[index] : null;
 
     /// <summary>The colour the feature reads, when it reads or writes colour.</summary>
     public Texture? Color => _pass.Input is { } input ? Graph.GetRenderTexture(input).ColorTextures[0] : null;
@@ -872,9 +952,8 @@ public sealed class FeatureContext
             Command.SetFullViewport();
             if (scene)
             {
-                Command.ClearColorTarget(1, new Color(0, 0, 0, 0));
-                Command.ClearColorTarget(2, new Color(0, 0, 0, 0));
-                Command.ClearColorTarget(3, new Color(0, 0, 0, 0));
+                for (uint target = 1; target < framebuffer.ColorTargets.Count; target++)
+                    Command.ClearColorTarget(target, new Color(0, 0, 0, 0));
             }
             return;
         }
@@ -991,6 +1070,9 @@ internal sealed class FeaturePass : IPass
     /// <summary>The feature's version its declarations were made at.</summary>
     public int BuiltVersion = -1;
 
+    /// <summary>The view as the feature saw it at Setup, at the output resolution after an upscale.</summary>
+    public FeatureView View;
+
     public readonly List<DrawList> Lists = new();
     public bool Draws;
     public TextureHandle? Input;
@@ -1011,14 +1093,15 @@ internal sealed class FeaturePass : IPass
         Draws = false;
         Lists.Clear();
         BuiltVersion = Feature.Version;
-        Feature.Setup(new FeatureBuilder(this, builder), Camera.Info);
+        View = Chain.Upscaled ? Camera.Info.AtOutput() : Camera.Info;
+        Feature.Setup(new FeatureBuilder(this, builder), View);
     }
 
     public void Render(RenderContext context, CommandBuffer cmd)
     {
         _context.Graph = context;
         _context.Command = cmd;
-        _context.View = Camera.Info;
+        _context.View = View;
         Feature.Render(_context);
         if (Feature is ScreenLightingFeature)
         {
