@@ -661,6 +661,78 @@ public class BuildSystemProjectTests : EditorTestHarness
         }
     }
 
+    /// <summary>
+    /// A NativeAOT build compiles the game scripts into the executable, so nothing is loaded from a dll and
+    /// the scene still finds its components and asset references through reflection on the compiled types.
+    /// </summary>
+    [Fact]
+    public void NativeAotBuild_RunsGameCodeAndResolvesAssets()
+    {
+        string pngPath = AssetAbsolutePath("AotTexture.png");
+        TestImages.WriteSolidPng(pngPath, TexSize, TexR, TexG, TexB, TexA);
+        Guid texGuid = Assets.ImportFile("AotTexture.png");
+
+        File.WriteAllText(AssetAbsolutePath("AotComponent.cs"), """
+            using System.Collections.Generic;
+            using Prowl.Runtime;
+            using Prowl.Runtime.Resources;
+
+            public class AotComponent : Component
+            {
+                public Texture2D? MyTexture;
+                public List<int> Numbers = new();
+                public Dictionary<string, float> Named = new();
+
+                public override void Start()
+                {
+                    System.Console.WriteLine($"PROWL_AOT|tex={MyTexture.IsValid()}|width={(MyTexture.IsValid() ? MyTexture.Width : 0)}|numbers={string.Join(",", Numbers)}|named={(Named.TryGetValue("a", out float a) ? a : -1)}");
+                }
+            }
+            """);
+
+        ScriptCompiler.CompileResult compile = ScriptCompiler.CompileAll(Project);
+        Assert.True(compile.Success, $"Script compile failed:\n{compile.Errors}\n{compile.Output}");
+
+        var gameAsm = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
+        Type compType = gameAsm.GetType("AotComponent")!;
+
+        var scene = new Scene();
+        var go = new GameObject("Aot");
+        Component comp = go.AddComponent(compType);
+        compType.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
+        compType.GetField("Numbers")!.SetValue(comp, new List<int> { 1, 2, 3 });
+        compType.GetField("Named")!.SetValue(comp, new Dictionary<string, float> { ["a"] = 2.5f });
+        scene.Add(go);
+        Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
+
+        BuildSettings build = EditorRegistries.GetSettings<BuildSettings>();
+        build.Scenes.Clear();
+        build.Scenes.Add(new SceneBuildEntry { Path = "Main.scene", SceneGuid = sceneGuid, Enabled = true });
+        build.PackagingMode = AssetPackagingMode.LooseFiles;
+
+        DesktopBuildProfile profile = Profile();
+        bool wasAot = profile.PublishAot;
+        profile.PublishAot = true;
+
+        string buildOut = Path.Combine(Path.GetTempPath(), "ProwlNativeAot", Guid.NewGuid().ToString("N"));
+        build.OutputDirectory = buildOut;
+
+        try
+        {
+            BuildResult result = new DesktopBuildPipeline().BuildAsync(Project.RootPath, build, buildOut).GetAwaiter().GetResult();
+            Assert.True(result.Success, $"Build failed: {result.Errors}");
+            Assert.False(File.Exists(Path.Combine(result.OutputPath, "Prowl.Runtime.dll")), "A NativeAOT build shipped managed assemblies.");
+
+            string stdout = RunPlayerHeadless(result.OutputPath, frames: 5);
+            Assert.Contains($"PROWL_AOT|tex=True|width={TexSize}|numbers=1,2,3|named=2.5", stdout);
+        }
+        finally
+        {
+            profile.PublishAot = wasAot;
+            try { if (Directory.Exists(buildOut)) Directory.Delete(buildOut, true); } catch { }
+        }
+    }
+
     // ---------------------------------------------------------------- AssetVariantWiringTests
 
     /// <summary>Applies to everything and records what it was asked to do.</summary>

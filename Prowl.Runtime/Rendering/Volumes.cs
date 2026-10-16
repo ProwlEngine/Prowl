@@ -168,7 +168,7 @@ public abstract class VolumeComponent
 
         var fields = new List<FieldInfo>();
         foreach (Type declaring in chain)
-            foreach (FieldInfo field in declaring.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly).OrderBy(f => f.MetadataToken))
+            foreach (FieldInfo field in declaring.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly).OrderBy(f => f.HasMetadataToken() ? f.MetadataToken : 0))
                 if (typeof(VolumeParameter).IsAssignableFrom(field.FieldType) && !field.IsDefined(typeof(SerializeIgnoreAttribute)))
                     fields.Add(field);
         return [.. fields];

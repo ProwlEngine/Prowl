@@ -100,9 +100,6 @@ internal sealed class AntiAliasingFeatures : IDisposable
 
     public void Dispose()
     {
-        Graphics.DeferDispose(_fxaa);
-        Graphics.DeferDispose(_smaa);
-        Graphics.DeferDispose(_taa);
         _fxaa = null;
         _smaa = null;
         _taa = null;

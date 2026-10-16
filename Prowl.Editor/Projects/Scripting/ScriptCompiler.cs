@@ -187,7 +187,7 @@ public static class ScriptCompiler
 
     /// <summary>
     /// Game-side user assemblies (not editor-only, included for the target platform) in dependency
-    /// order. These are copied next to the player and loaded at startup.
+    /// order. The player is compiled against these and loads them at startup.
     /// </summary>
     public static List<BuildAssembly> GetBuildAssemblies(Project project, string targetPlatform)
     {

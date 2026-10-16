@@ -220,6 +220,10 @@ public static class Window
         options.ShouldSwapAutomatically = false;
         options.API = new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(1, 3));
         InitializeVulkanLoader();
+
+        // Silk finds platforms by reflection, which NativeAOT cannot do, so name them up front.
+        Silk.NET.Windowing.Glfw.GlfwWindowing.RegisterPlatform();
+        Silk.NET.Input.Glfw.GlfwInput.RegisterPlatform();
         InternalWindow = Silk.NET.Windowing.Window.Create(options);
         HookEvents();
     }
