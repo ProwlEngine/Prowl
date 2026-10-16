@@ -216,6 +216,8 @@ public enum BuiltIn : uint
     CullMaskKHR = 6021,
     HitTriangleVertexPositionsKHR = 5335,
     ViewportMaskNV = 5253,
+    SecondaryPositionNV = 5257,
+    SecondaryViewportMaskNV = 5258,
     ViewportMaskPerViewNV = 5262,
     TaskCountNV = 5274,
     LayerPerViewNV = 5279,

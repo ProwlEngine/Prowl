@@ -90,6 +90,8 @@ public abstract record Stmt { public int Line { get; set; } }
 public sealed record Block(IReadOnlyList<Stmt> Statements) : Stmt;
 public sealed record VarDeclStmt(Qualifiers Qualifiers, TypeRef Type, IReadOnlyList<Declarator> Declarators) : Stmt;
 public sealed record ExprStmt(Expr Expression) : Stmt;
+/// <summary>A `precision qualifier type;` statement in a function body: sets the type's default for the rest of its block.</summary>
+public sealed record PrecisionStmt(string Qualifier, string Type) : Stmt;
 public sealed record IfStmt(Expr Cond, Stmt Then, Stmt? Else, uint SelControl = 0) : Stmt;
 // LoopParams holds the operands of the SPIR-V 1.4 loop controls (MinIterations..PartialCount) set in LoopControl.
 public sealed record ForStmt(Stmt? Init, Expr? Cond, Expr? Update, Stmt Body, uint LoopControl = 0, uint DepLength = 0, IReadOnlyList<uint>? LoopParams = null) : Stmt;

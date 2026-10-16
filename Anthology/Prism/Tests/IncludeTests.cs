@@ -233,7 +233,7 @@ public sealed class IncludeTests
     [Fact]
     public void PreprocessReportsTheStateItFound()
     {
-        const string src = "#version 450\n#extension GL_EXT_demo : enable\n#pragma optimize(off)\n"
+        const string src = "#version 450\n#extension GL_EXT_scalar_block_layout : enable\n#extension GL_EXT_demo : enable\n#pragma optimize(off)\n"
             + "#define SCALE 2\n#define ADD(a, b) ((a) + (b))\n#define DROP 1\n#undef DROP\n"
             + "layout(location = 0) out vec4 outColor;\nvoid main() { outColor = vec4(ADD(SCALE, 3)); }\n";
 
@@ -241,7 +241,7 @@ public sealed class IncludeTests
 
         Assert.Equal(450, result.Version);
         Assert.False(result.IsEs);
-        Assert.Equal(["GL_EXT_demo"], result.Extensions);
+        Assert.Equal(["GL_EXT_scalar_block_layout"], result.Extensions);
         Assert.Equal(["optimize"], result.Pragmas);
         Assert.Contains(result.Defines, d => d.Name == "SCALE" && d.Parameters is null && d.Body == "2");
         Assert.Contains(result.Defines, d => d.Name == "ADD" && d.Parameters is not null && d.Parameters.SequenceEqual(["a", "b"]));

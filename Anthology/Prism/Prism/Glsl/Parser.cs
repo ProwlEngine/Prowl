@@ -1,3 +1,5 @@
+using Prowl.Prism.Compiler;
+
 namespace Prowl.Prism.Glsl;
 
 /// <summary>
@@ -106,13 +108,26 @@ public sealed class Parser
     bool TryPrecisionStatement(ref bool defaultFloatRelaxed, ref bool? intRelaxed)
     {
         if (!IsText("precision")) return false;
+        var p = ParsePrecisionStatement();
+        if (p.Type == "float") defaultFloatRelaxed = p.Qualifier is "mediump" or "lowp";
+        if (p.Type == "int") intRelaxed = p.Qualifier is "mediump" or "lowp";
+        return true;
+    }
+
+    PrecisionStmt ParsePrecisionStatement()
+    {
         Advance();
         string qualifier = Expect(TokenKind.Identifier, "precision qualifier").Text;
-        string type = Expect(TokenKind.Identifier, "type").Text;
+        var typeTok = Expect(TokenKind.Identifier, "type");
+        string type = typeTok.Text;
+        if (type == "atomic_uint")
+            throw new GlslParseException("'atomic counter types' : not allowed when using GLSL for Vulkan", typeTok.Line);
+        var resolved = Types.Resolve(type)
+            ?? throw new GlslParseException("'' :  syntax error, unexpected IDENTIFIER", typeTok.Line);
+        if (resolved is not (ScalarType { Kind: Scalar.Float or Scalar.Int } or SamplerType or TextureType or ImageType or PureSamplerType))
+            throw new GlslParseException($"'{type}' : cannot apply precision statement to this type; use 'float', 'int' or a sampler type", typeTok.Line);
         Expect(TokenKind.Semicolon);
-        if (type == "float") defaultFloatRelaxed = qualifier is "mediump" or "lowp";
-        if (type is "int" or "uint") intRelaxed = qualifier is "mediump" or "lowp";
-        return true;
+        return new PrecisionStmt(qualifier, type);
     }
 
     Decl ParseExternalDeclaration()
@@ -525,6 +540,7 @@ public sealed class Parser
             switch (Cur.Text)
             {
                 case "if": return ParseIf();
+                case "precision": return ParsePrecisionStatement();
                 case "for": return ParseFor();
                 case "while": return ParseWhile();
                 case "do": return ParseDoWhile();

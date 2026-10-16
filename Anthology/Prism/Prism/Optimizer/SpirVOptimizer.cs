@@ -46,7 +46,7 @@ public static partial class SpirVOptimizer
         ("ScalarReplacement", ScalarReplacement), ("LocalAccessChainConvert", LocalAccessChainConvert),
         ("LocalSingleBlockElim", LocalSingleBlockElim), ("LocalSingleStoreElim", LocalSingleStoreElim),
         ("DeadCodeElim", DeadCodeElim), ("SsaRewrite", SsaRewrite), ("DeadCodeElim", DeadCodeElim),
-        ("VectorDce", VectorDce),
+        ("VectorDce", VectorDce), ("DeadInsertElim", DeadInsertElim),
         ("DeadBranchElim", DeadBranchElim), ("Simplification", Simplification), ("IfConversion", IfConversion),
         ("CopyPropagateArrays", CopyPropagateArrays), ("ReduceLoadSize", ReduceLoadSize),
         ("DeadCodeElim", DeadCodeElim), ("BlockMerge", BlockMerge), ("GlobalCse", GlobalCse),

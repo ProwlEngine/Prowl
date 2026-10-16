@@ -118,6 +118,10 @@ public sealed partial class Lowerer
         ["gl_ShadingRateEXT"] = (BuiltIn.ShadingRateKHR, Types.Int, false, Capability.FragmentShadingRateKHR, "SPV_KHR_fragment_shading_rate"),
         // Implicitly sized: the largest constant index used decides its length (see BuiltinType).
         ["gl_ViewportMask"] = (BuiltIn.ViewportMaskNV, new RuntimeArrayType(Types.Int), true, Capability.ShaderViewportMaskNV, "SPV_NV_viewport_array2"),
+        ["gl_SecondaryPositionNV"] = (BuiltIn.SecondaryPositionNV, Vec4, true, Capability.ShaderStereoViewNV, "SPV_NV_stereo_view_rendering"),
+        ["gl_SecondaryViewportMaskNV"] = (BuiltIn.SecondaryViewportMaskNV, new RuntimeArrayType(Types.Int), true, Capability.ShaderStereoViewNV, "SPV_NV_stereo_view_rendering"),
+        ["gl_PositionPerViewNV"] = (BuiltIn.PositionPerViewNV, new RuntimeArrayType(Vec4), true, Capability.PerViewAttributesNV, "SPV_NVX_multiview_per_view_attributes"),
+        ["gl_ViewportMaskPerViewNV"] = (BuiltIn.ViewportMaskPerViewNV, new RuntimeArrayType(Types.Int), true, Capability.PerViewAttributesNV, "SPV_NVX_multiview_per_view_attributes"),
         // GL_NV_mesh_shader scalars and arrays outside the per-vertex/per-primitive blocks.
         ["gl_TaskCountNV"] = (BuiltIn.TaskCountNV, Types.UInt, true, null, null),
         ["gl_MeshViewCountNV"] = (BuiltIn.MeshViewCountNV, Types.UInt, false, null, null),
@@ -529,30 +533,18 @@ public sealed partial class Lowerer
         _m.AddName(mainId, "main");
 
         // glslang keeps requested extensions in a std::set, so OpSourceExtension is emitted in sorted
-        // (ordinal) order. The GL_KHR_shader_subgroup_{vote,ballot,arithmetic,shuffle,...} extensions imply
-        // the base one, which glslang records too; the standalone GL_KHR_shader_subgroup_rotate does not.
+        // (ordinal) order. The preprocessor has already added the extensions each one implies.
         var exts = new HashSet<string>(unit.Extensions ?? []);
         // glslang gates some extensions on the target SPIR-V version, rejecting the #extension itself
         // ("'GL_EXT_ray_tracing' : not supported for current targeted SPIR-V version") before any
         // lowering: EXT ray tracing and mesh shading need SPIR-V 1.4's interface/storage-class rules
-        // (oracle-verified at vulkan1.0). The NV paths predate them and are legal down to 1.0, so they
-        // are not gated. Emitting the extension at a lower version would produce a module spirv-val
+        // (oracle-verified at vulkan1.0), as does NV ray tracing motion blur; the NV cooperative matrix 2
+        // extensions need SPIR-V 1.6, above any target Prism has. Emitting the extension at a lower version would produce a module spirv-val
         // (and every driver) rejects.
-        if (version < SpirVVersion.V1_4)
-            foreach (var ext in exts)
-                if (ext is "GL_EXT_ray_tracing" or "GL_EXT_mesh_shader")
-                    throw new GlslParseException($"'{ext}' : not supported for current targeted SPIR-V version");
-        if (exts.Any(e => e.StartsWith("GL_KHR_shader_subgroup", StringComparison.Ordinal) && e != "GL_KHR_shader_subgroup_rotate")
-            || exts.Contains("GL_NV_shader_subgroup_partitioned"))
-            exts.Add("GL_KHR_shader_subgroup_basic");
-        // glslang's updateExtensionBehavior implications: the buffer reference add-ons enable the base
-        // extension, as do the cooperative-matrix variants theirs.
-        if (exts.Contains("GL_EXT_buffer_reference2") || exts.Contains("GL_EXT_buffer_reference_uvec2")) exts.Add("GL_EXT_buffer_reference");
-        if (exts.Contains("GL_NV_integer_cooperative_matrix")) exts.Add("GL_NV_cooperative_matrix");
-        if (exts.Contains("GL_NV_cooperative_matrix2")) exts.Add("GL_KHR_cooperative_matrix");
-        // GL_EXT_shader_subgroup_extended_types_X implies the matching explicit-arithmetic-types_X.
-        foreach (var w in new[] { "float16", "int8", "int16", "int64" })
-            if (exts.Contains($"GL_EXT_shader_subgroup_extended_types_{w}")) exts.Add($"GL_EXT_shader_explicit_arithmetic_types_{w}");
+        foreach (var ext in exts)
+            if (ext is "GL_NV_cooperative_matrix2" or "GL_NV_cooperative_matrix_decode_vector"
+                || (version < SpirVVersion.V1_4 && ext is "GL_EXT_ray_tracing" or "GL_EXT_mesh_shader" or "GL_NV_ray_tracing_motion_blur"))
+                throw new GlslParseException($"'{ext}' : not supported for current targeted SPIR-V version");
         foreach (var ext in exts.OrderBy(e => e, StringComparer.Ordinal)) _m.AddSourceExtension(ext);
         _requestedExts = exts;
         _glslVersion = unit.Version;
@@ -1664,6 +1656,11 @@ public sealed partial class Lowerer
         "gl_PointSize" => BuiltIn.PointSize,
         "gl_ClipDistance" => BuiltIn.ClipDistance,
         "gl_CullDistance" => BuiltIn.CullDistance,
+        "gl_ViewportMask" => BuiltIn.ViewportMaskNV,
+        "gl_SecondaryPositionNV" => BuiltIn.SecondaryPositionNV,
+        "gl_SecondaryViewportMaskNV" => BuiltIn.SecondaryViewportMaskNV,
+        "gl_PositionPerViewNV" => BuiltIn.PositionPerViewNV,
+        "gl_ViewportMaskPerViewNV" => BuiltIn.ViewportMaskPerViewNV,
         _ => throw new GlslParseException($"'{name}' is not a gl_PerVertex member"),
     };
 
@@ -4265,6 +4262,10 @@ public sealed partial class Lowerer
         {
             case Block b: InScope(() => LowerStatements(b.Statements)); break;
             case VarDeclStmt decl: LowerLocalDecl(decl); break;
+            case PrecisionStmt p:
+                if (p.Type == "float") _defaultFloatMediump = p.Qualifier is "mediump" or "lowp";
+                if (p.Type == "int") _defaultIntMediump = p.Qualifier is "mediump" or "lowp";
+                break;
             case ExprStmt e: LowerDiscardedExpr(e.Expression); break;
             case IfStmt s: _cfDepth++; try { LowerIf(s); } finally { _cfDepth--; } break;
             case ForStmt s: _cfDepth++; try { LowerFor(s); } finally { _cfDepth--; } break;
@@ -4414,8 +4415,10 @@ public sealed partial class Lowerer
         var savedPendingPrivates = new Dictionary<string, GlslType>(_pendingPrivates);
         var savedConstants = new Dictionary<string, Value>(_constants);
         var savedConstValues = new Dictionary<string, CVal>(_constValues);
+        var savedPrecision = (_defaultFloatMediump, _defaultIntMediump);
         _scopeNames.Push([]);
         body();
+        (_defaultFloatMediump, _defaultIntMediump) = savedPrecision;
         var declaredHere = _scopeNames.Pop();
         // A local declared in an OUTER scope but first materialized inside this one (e.g. `vec3 c;` at
         // function scope, assigned inside an if-branch) must keep its materialization - it is the same
@@ -8666,6 +8669,7 @@ public sealed partial class Lowerer
                     : GlPerVertexArray(ref _glOut, storage, _outVertexCount, "gl_out");
                 if (pvm == "gl_PointSize") NeedPointSizeCap();
                 NeedClipCullCap(pvm);
+                NeedNVMemberCap(pvm);
                 return new Chain(variable,
                     [BuiltinArrayIndex(vtx, arr.Name, input ? _inVertexCount : _outVertexCount), MemberIndexConst(pvi)], pvs.Fields[pvi].Type, storage, Prec: _isEs ? 2 : 3);
             }
@@ -8683,13 +8687,13 @@ public sealed partial class Lowerer
             {
                 var (ni, nt) = NVMeshMember(MeshVerticesNVMembers(), nm, "gl_MeshVerticesNV");
                 NeedClipCullCap(nm);
-                NeedNVMeshMemberCap(nm);
+                NeedNVMemberCap(nm);
                 return new Chain(GlMeshVerticesNV(), [BuiltinArrayIndex(nvtx, "gl_MeshVerticesNV", _meshMaxVertices), MemberIndexConst(ni)], nt, StorageClass.Output);
             }
             case Member { Target: Index { Target: Ident { Name: "gl_MeshPrimitivesNV" }, Idx: var nprim }, Name: var npm }:
             {
                 var (pi, pt) = NVMeshMember(MeshPrimitivesNVMembers(), npm, "gl_MeshPrimitivesNV");
-                NeedNVMeshMemberCap(npm);
+                NeedNVMemberCap(npm);
                 return new Chain(GlMeshPrimitivesNV(), [BuiltinArrayIndex(nprim, "gl_MeshPrimitivesNV", _meshMaxPrimitives), MemberIndexConst(pi)], pt, StorageClass.Output);
             }
             case Index { Target: Ident { Name: "gl_PrimitiveIndicesNV" }, Idx: var pidx }:
@@ -8948,13 +8952,27 @@ public sealed partial class Lowerer
         return (i, members[i].Type);
     }
 
-    // Using a mesh block member that maps to an extension built-in pulls in that extension (glslang declareUseOfStructMember).
-    void NeedNVMeshMemberCap(string member)
+    // The GLSL extension that declares an NV multi-view output built-in.
+    static string? NVViewExtension(string name) => name switch
+    {
+        "gl_ViewportMask" => "GL_NV_viewport_array2",
+        "gl_SecondaryPositionNV" or "gl_SecondaryViewportMaskNV" => "GL_NV_stereo_view_rendering",
+        "gl_PositionPerViewNV" or "gl_ViewportMaskPerViewNV" => "GL_NVX_multiview_per_view_attributes",
+        _ => null,
+    };
+
+    // Using a block member that maps to an extension built-in pulls in that extension (glslang declareUseOfStructMember).
+    void NeedNVMemberCap(string member)
     {
         if (member == "gl_ViewportMask")
         {
             _m.AddExtension("SPV_NV_viewport_array2");
             _m.AddCapability(Capability.ShaderViewportMaskNV);
+        }
+        else if (member is "gl_SecondaryPositionNV" or "gl_SecondaryViewportMaskNV")
+        {
+            _m.AddExtension("SPV_NV_stereo_view_rendering");
+            _m.AddCapability(Capability.ShaderStereoViewNV);
         }
         else if (member is "gl_PositionPerViewNV" or "gl_ViewportMaskPerViewNV")
         {
@@ -9172,43 +9190,45 @@ public sealed partial class Lowerer
     }
 
     // The gl_PerVertex block struct that a gl_in[]/gl_out[] array element resolves to: a redeclaration's
-    // exact member list when present, else the default four members. Each is a fresh (unique) struct so
+    // exact member list when present, else the default members. Each is a fresh (unique) struct so
     // gl_in and gl_out stay distinct even with the same shape.
     uint PerVertexBlockType(string blockName = "gl_PerVertex", List<(string Name, GlslType Type)>? members = null, bool input = false)
     {
-        if (members is { } m)
+        var m = members ?? DefaultPerVertexMembers(input);
+        uint sr = _m.TypeStructUnique([.. m.Select(x => SpvType(x.Type))]);
+        _m.AddName(sr, blockName);
+        for (int i = 0; i < m.Count; i++)
         {
-            uint sr = _m.TypeStructUnique([.. m.Select(x => SpvType(x.Type))]);
-            _m.AddName(sr, blockName);
-            for (int i = 0; i < m.Count; i++)
-            {
-                _m.AddMemberName(sr, i, m[i].Name);
-                _m.MemberDecorate(sr, i, Decoration.BuiltIn, (uint)PerVertexBuiltIn(m[i].Name));
-                if (m[i].Name == "gl_ClipDistance") _m.AddCapability(Capability.ClipDistance);
-                if (m[i].Name == "gl_CullDistance") _m.AddCapability(Capability.CullDistance);
-            }
-            _m.Decorate(sr, Decoration.Block);
-            return sr;
+            _m.AddMemberName(sr, i, m[i].Name);
+            _m.MemberDecorate(sr, i, Decoration.BuiltIn, (uint)PerVertexBuiltIn(m[i].Name));
+            // A redeclaration declares its clip/cull use; the default block only does so where they are selected.
+            if (members is not null && m[i].Name == "gl_ClipDistance") _m.AddCapability(Capability.ClipDistance);
+            if (members is not null && m[i].Name == "gl_CullDistance") _m.AddCapability(Capability.CullDistance);
         }
-        // glslang builds the member types in member order: the vec4 (gl_Position) before the float[1]
-        // clip/cull arrays, so create Vec4 first to match its id allocation.
-        uint fl = _m.TypeFloat(32);
-        uint vec4 = SpvType(Vec4);
-        uint clip = SpvType(ClipCullArray("gl_ClipDistance", input));
-        uint cull = SpvType(ClipCullArray("gl_CullDistance", input));
-        uint s = _m.TypeStructUnique(vec4, fl, clip, cull);
-        // glslang names the per-vertex block and its members, just like the output gl_PerVertex.
-        _m.AddName(s, blockName);
-        _m.AddMemberName(s, 0, "gl_Position");
-        _m.AddMemberName(s, 1, "gl_PointSize");
-        _m.AddMemberName(s, 2, "gl_ClipDistance");
-        _m.AddMemberName(s, 3, "gl_CullDistance");
-        _m.MemberDecorate(s, 0, Decoration.BuiltIn, (uint)BuiltIn.Position);
-        _m.MemberDecorate(s, 1, Decoration.BuiltIn, (uint)BuiltIn.PointSize);
-        _m.MemberDecorate(s, 2, Decoration.BuiltIn, (uint)BuiltIn.ClipDistance);
-        _m.MemberDecorate(s, 3, Decoration.BuiltIn, (uint)BuiltIn.CullDistance);
-        _m.Decorate(s, Decoration.Block);
-        return s;
+        _m.Decorate(sr, Decoration.Block);
+        return sr;
+    }
+
+    // The default gl_in[]/gl_out[] element members: the core four, then the NV multi-view members whose
+    // extension is enabled (glslang filterMember). Only a tessellation control shader's gl_out carries the masks.
+    List<(string Name, GlslType Type)> DefaultPerVertexMembers(bool input)
+    {
+        List<(string Name, GlslType Type)> m = [("gl_Position", Vec4), ("gl_PointSize", Types.Float),
+            ("gl_ClipDistance", ClipCullArray("gl_ClipDistance", input)), ("gl_CullDistance", ClipCullArray("gl_CullDistance", input))];
+        bool masks = !input && stage == ShaderStage.TessControl;
+        if (masks && _requestedExts.Contains("GL_NV_viewport_array2"))
+            m.Add(("gl_ViewportMask", ImplicitMemberArray("gl_ViewportMask", input, Types.Int)));
+        if (_requestedExts.Contains("GL_NV_stereo_view_rendering"))
+        {
+            m.Add(("gl_SecondaryPositionNV", Vec4));
+            if (masks) m.Add(("gl_SecondaryViewportMaskNV", ImplicitMemberArray("gl_SecondaryViewportMaskNV", input, Types.Int)));
+        }
+        if (_requestedExts.Contains("GL_NVX_multiview_per_view_attributes"))
+        {
+            m.Add(("gl_PositionPerViewNV", ImplicitMemberArray("gl_PositionPerViewNV", input, Vec4)));
+            if (masks) m.Add(("gl_ViewportMaskPerViewNV", ImplicitMemberArray("gl_ViewportMaskPerViewNV", input, Types.Int)));
+        }
+        return m;
     }
 
     // The (name, type) members of a gl_PerVertex redeclaration, in declared order.
@@ -9226,7 +9246,9 @@ public sealed partial class Lowerer
     readonly Dictionary<(string Member, bool Input), int> _clipCullSizes = [];
     readonly List<Stmt> _allBodies = [];
 
-    ArrayType ClipCullArray(string member, bool input)
+    ArrayType ClipCullArray(string member, bool input) => ImplicitMemberArray(member, input, Types.Float);
+
+    ArrayType ImplicitMemberArray(string member, bool input, GlslType element)
     {
         if (!_clipCullSizes.TryGetValue((member, input), out int n))
         {
@@ -9235,7 +9257,7 @@ public sealed partial class Lowerer
                 if (MaxConstIndexWhere(body, t => IsClipCullSite(t, member, input)) is int m && m > max) max = m;
             _clipCullSizes[(member, input)] = n = Math.Max(1, max + 1);
         }
-        return new ArrayType(Types.Float, n);
+        return new ArrayType(element, n);
     }
 
     bool IsClipCullSite(Expr target, string member, bool input) => target switch
@@ -9248,9 +9270,7 @@ public sealed partial class Lowerer
 
     // The gl_PerVertex element of gl_in[]/gl_out[] for type inference: as redeclared, else the default block.
     StructType PerVertexStructOf(bool input) =>
-        (input ? _perVertexIn : _perVertexOut) is { } redecl ? new StructType("gl_PerVertex", redecl)
-        : new StructType("gl_PerVertex", [("gl_Position", Vec4), ("gl_PointSize", Types.Float),
-            ("gl_ClipDistance", ClipCullArray("gl_ClipDistance", input)), ("gl_CullDistance", ClipCullArray("gl_CullDistance", input))]);
+        new("gl_PerVertex", (input ? _perVertexIn : _perVertexOut) ?? DefaultPerVertexMembers(input));
 
     // gl_TessLevelOuter/Inner are written by the tessellation control shader (Output) and read by
     // the tessellation evaluation shader (Input). Using Output storage in a TES is invalid SPIR-V
@@ -9409,13 +9429,13 @@ public sealed partial class Lowerer
         if (stage is not (ShaderStage.Compute or ShaderStage.Mesh or ShaderStage.Task)
             && name is "gl_WorkGroupID" or "gl_NumWorkGroups" or "gl_LocalInvocationID" or "gl_GlobalInvocationID" or "gl_LocalInvocationIndex")
             throw new GlslParseException($"'{name}' is only available in a compute, task, or mesh shader");
-        if (name == "gl_ViewportMask")
+        if (NVViewExtension(name) is { } viewExt)
         {
-            // In a tessellation control shader it is a gl_out[] member, not a variable of its own.
+            // In a tessellation control shader these are gl_out[] members, not variables of their own.
             if (stage is not (ShaderStage.Vertex or ShaderStage.TessEvaluation or ShaderStage.Geometry))
                 throw new GlslParseException($"'{name}' : undeclared identifier");
-            if (!_requestedExts.Contains("GL_NV_viewport_array2"))
-                throw new GlslParseException($"'{name}' : required extension not requested: GL_NV_viewport_array2");
+            if (!_requestedExts.Contains(viewExt))
+                throw new GlslParseException($"'{name}' : required extension not requested: {viewExt}");
         }
         if (!RayTracingBuiltinInStage(name, stage))
             throw new GlslParseException($"'{name}' : undeclared identifier");

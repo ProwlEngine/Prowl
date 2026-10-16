@@ -31,6 +31,7 @@ public sealed class Preprocessor
     readonly List<CondFrame> _cond = [];
     readonly HashSet<string> _hidden = [];   // macros currently expanding (recursion guard)
     readonly List<string> _extensions = [];   // #extension directives, in source order
+    readonly List<string> _impliedExtensions = [];   // extensions an #extension turns on as well (glslang updateExtensionBehavior)
     readonly List<string> _pragmas = [];       // #pragma names, in source order
     int _version = 100;   // glslang's default profile with no #version is ES 100 - which cannot compile
                       // to SPIR-V (see the version gate at the end of Process)
@@ -119,7 +120,7 @@ public sealed class Preprocessor
             throw e.Resolve(pp._segmentNames);
         }
         output.Add(new Token(TokenKind.End, "", 0, 0));
-        return (output, pp._version, pp._isEs, pp._extensions, pp._pragmas, pp._segmentNames, pp._invariantAllFrom);
+        return (output, pp._version, pp._isEs, [.. pp._extensions, .. pp._impliedExtensions.Except(pp._extensions)], pp._pragmas, pp._segmentNames, pp._invariantAllFrom);
     }
 
     static Preprocessor Execute(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, List<Token> input, List<Token> output, ShaderStage? stage)
@@ -381,10 +382,137 @@ public sealed class Preprocessor
         string behavior = dir[3].Text;
         if (behavior is not ("require" or "enable" or "warn" or "disable"))
             throw new GlslParseException($"invalid #extension behavior '{behavior}'", _directiveLine);
+        if (ext == "GL_ARB_bindless_texture")
+            throw new GlslParseException("'GL_ARB_bindless_texture' : not allowed when using generating SPIR-V codes", _directiveLine);
+        if (ext == "all")
+        {
+            if (behavior is "require" or "enable")
+                throw new GlslParseException("'#extension' : extension 'all' cannot have 'require' or 'enable' behavior", _directiveLine);
+            return;
+        }
+        // An extension glslang does not know is an error when required and otherwise ignored.
+        if (!SupportedExtensions.Contains(ext))
+        {
+            if (behavior == "require") throw new GlslParseException($"'#extension' : extension not supported: {ext}", _directiveLine);
+            return;
+        }
         // glslang defines no macro for an #extension: the supported extensions' macros come from the preamble.
         if (behavior == "disable") return;
-        if (ext != "all" && !_extensions.Contains(ext)) _extensions.Add(ext);
+        if (!_extensions.Contains(ext)) _extensions.Add(ext);
+        AddImpliedExtensions(ext);
     }
+
+    void AddImpliedExtensions(string ext)
+    {
+        foreach (var implied in ImpliedExtensions(ext))
+            if (!_impliedExtensions.Contains(implied))
+            {
+                _impliedExtensions.Add(implied);
+                AddImpliedExtensions(implied);
+            }
+    }
+
+    static string[] ImpliedExtensions(string ext) => ext switch
+    {
+        "GL_ANDROID_extension_pack_es31a" =>
+        [
+            "GL_KHR_blend_equation_advanced", "GL_OES_sample_variables", "GL_OES_shader_image_atomic", "GL_OES_shader_multisample_interpolation",
+            "GL_OES_texture_storage_multisample_2d_array", "GL_EXT_geometry_shader", "GL_EXT_gpu_shader5", "GL_EXT_primitive_bounding_box",
+            "GL_EXT_shader_io_blocks", "GL_EXT_tessellation_shader", "GL_EXT_texture_buffer", "GL_EXT_texture_cube_map_array",
+        ],
+        "GL_EXT_geometry_shader" or "GL_EXT_tessellation_shader" => ["GL_EXT_shader_io_blocks"],
+        "GL_OES_geometry_shader" or "GL_OES_tessellation_shader" => ["GL_OES_shader_io_blocks"],
+        "GL_GOOGLE_include_directive" or "GL_ARB_shading_language_include" => ["GL_GOOGLE_cpp_style_line_directive"],
+        "GL_KHR_shader_subgroup_vote" or "GL_KHR_shader_subgroup_arithmetic" or "GL_KHR_shader_subgroup_ballot" or "GL_KHR_shader_subgroup_shuffle"
+            or "GL_KHR_shader_subgroup_shuffle_relative" or "GL_KHR_shader_subgroup_clustered" or "GL_KHR_shader_subgroup_quad"
+            or "GL_NV_shader_subgroup_partitioned" => ["GL_KHR_shader_subgroup_basic"],
+        "GL_EXT_buffer_reference2" or "GL_EXT_buffer_reference_uvec2" => ["GL_EXT_buffer_reference"],
+        "GL_NV_integer_cooperative_matrix" => ["GL_NV_cooperative_matrix"],
+        "GL_NV_cooperative_matrix2" => ["GL_KHR_cooperative_matrix"],
+        "GL_EXT_shader_subgroup_extended_types_int8" => ["GL_EXT_shader_explicit_arithmetic_types_int8"],
+        "GL_EXT_shader_subgroup_extended_types_int16" => ["GL_EXT_shader_explicit_arithmetic_types_int16"],
+        "GL_EXT_shader_subgroup_extended_types_int64" => ["GL_EXT_shader_explicit_arithmetic_types_int64"],
+        "GL_EXT_shader_subgroup_extended_types_float16" => ["GL_EXT_shader_explicit_arithmetic_types_float16"],
+        _ => [],
+    };
+
+    // Every extension glslang's initializeExtensionBehavior registers.
+    static readonly HashSet<string> SupportedExtensions =
+    [
+        "GL_OES_texture_3D", "GL_OES_standard_derivatives", "GL_EXT_frag_depth", "GL_OES_EGL_image_external",
+        "GL_OES_EGL_image_external_essl3", "GL_EXT_YUV_target", "GL_EXT_shader_texture_lod", "GL_EXT_shadow_samplers",
+        "GL_ARB_texture_rectangle", "GL_3DL_array_objects", "GL_ARB_shading_language_420pack", "GL_ARB_texture_gather",
+        "GL_ARB_gpu_shader5", "GL_ARB_separate_shader_objects", "GL_ARB_compute_shader", "GL_ARB_tessellation_shader",
+        "GL_ARB_enhanced_layouts", "GL_ARB_texture_cube_map_array", "GL_ARB_texture_multisample",
+        "GL_ARB_shader_texture_lod", "GL_ARB_explicit_attrib_location", "GL_ARB_explicit_uniform_location",
+        "GL_ARB_shader_image_load_store", "GL_ARB_shader_atomic_counters", "GL_ARB_shader_atomic_counter_ops",
+        "GL_ARB_shader_draw_parameters", "GL_ARB_shader_group_vote", "GL_ARB_derivative_control",
+        "GL_ARB_shader_texture_image_samples", "GL_ARB_viewport_array", "GL_ARB_gpu_shader_int64",
+        "GL_ARB_gpu_shader_fp64", "GL_ARB_shader_ballot", "GL_ARB_sparse_texture2", "GL_ARB_sparse_texture_clamp",
+        "GL_ARB_shader_stencil_export", "GL_ARB_cull_distance", "GL_ARB_post_depth_coverage",
+        "GL_ARB_shader_viewport_layer_array", "GL_ARB_fragment_shader_interlock", "GL_ARB_shader_clock",
+        "GL_ARB_uniform_buffer_object", "GL_ARB_sample_shading", "GL_ARB_shader_bit_encoding",
+        "GL_ARB_shader_image_size", "GL_ARB_shader_storage_buffer_object", "GL_ARB_shading_language_packing",
+        "GL_ARB_texture_query_lod", "GL_ARB_vertex_attrib_64bit", "GL_NV_gpu_shader5", "GL_ARB_draw_instanced",
+        "GL_ARB_bindless_texture", "GL_ARB_fragment_coord_conventions", "GL_ARB_conservative_depth",
+        "GL_KHR_shader_subgroup_basic", "GL_KHR_shader_subgroup_vote", "GL_KHR_shader_subgroup_arithmetic",
+        "GL_KHR_shader_subgroup_ballot", "GL_KHR_shader_subgroup_shuffle", "GL_KHR_shader_subgroup_shuffle_relative",
+        "GL_KHR_shader_subgroup_rotate", "GL_KHR_shader_subgroup_clustered", "GL_KHR_shader_subgroup_quad",
+        "GL_KHR_memory_scope_semantics", "GL_EXT_shader_atomic_int64", "GL_EXT_shader_non_constant_global_initializers",
+        "GL_EXT_shader_image_load_formatted", "GL_EXT_post_depth_coverage", "GL_EXT_control_flow_attributes",
+        "GL_EXT_nonuniform_qualifier", "GL_EXT_samplerless_texture_functions", "GL_EXT_scalar_block_layout",
+        "GL_EXT_fragment_invocation_density", "GL_EXT_buffer_reference", "GL_EXT_buffer_reference2",
+        "GL_EXT_buffer_reference_uvec2", "GL_EXT_demote_to_helper_invocation", "GL_EXT_debug_printf",
+        "GL_EXT_shader_16bit_storage", "GL_EXT_shader_8bit_storage", "GL_EXT_subgroup_uniform_control_flow",
+        "GL_EXT_maximal_reconvergence", "GL_EXT_fragment_shader_barycentric", "GL_EXT_expect_assume",
+        "GL_EXT_control_flow_attributes2", "GL_EXT_spec_constant_composites", "GL_EXT_abort",
+        "GL_KHR_cooperative_matrix", "GL_NV_cooperative_vector", "GL_GOOGLE_cpp_style_line_directive",
+        "GL_GOOGLE_include_directive", "GL_ARB_shading_language_include", "GL_AMD_shader_ballot",
+        "GL_AMD_shader_trinary_minmax", "GL_AMD_shader_explicit_vertex_parameter", "GL_AMD_gcn_shader",
+        "GL_AMD_gpu_shader_half_float", "GL_AMD_texture_gather_bias_lod", "GL_AMD_gpu_shader_int16",
+        "GL_AMD_shader_image_load_store_lod", "GL_AMD_shader_fragment_mask", "GL_AMD_gpu_shader_half_float_fetch",
+        "GL_AMD_shader_early_and_late_fragment_tests", "GL_INTEL_shader_integer_functions2",
+        "GL_NV_sample_mask_override_coverage", "GL_NV_geometry_shader_passthrough", "GL_NV_viewport_array2",
+        "GL_NV_stereo_view_rendering", "GL_NVX_multiview_per_view_attributes", "GL_NV_shader_atomic_int64",
+        "GL_NV_conservative_raster_underestimation", "GL_NV_shader_noperspective_interpolation",
+        "GL_NV_shader_subgroup_partitioned", "GL_NV_shading_rate_image", "GL_NV_ray_tracing",
+        "GL_NV_ray_tracing_motion_blur", "GL_NV_fragment_shader_barycentric", "GL_KHR_compute_shader_derivatives",
+        "GL_NV_compute_shader_derivatives", "GL_NV_shader_texture_footprint", "GL_NV_mesh_shader",
+        "GL_NV_cooperative_matrix", "GL_NV_shader_sm_builtins", "GL_NV_integer_cooperative_matrix",
+        "GL_NV_shader_invocation_reorder", "GL_NV_displacement_micromap", "GL_NV_shader_atomic_fp16_vector",
+        "GL_NV_cooperative_matrix2", "GL_NV_cooperative_matrix_decode_vector", "GL_NV_cluster_acceleration_structure",
+        "GL_NV_linear_swept_spheres", "GL_NV_desktop_lowp_mediump", "GL_NV_push_constant_bank",
+        "GL_NV_explicit_typecast", "GL_ARM_shader_core_builtins", "GL_ARM_tensors", "GL_ARM_tensors_bfloat16",
+        "GL_ARM_tensors_float_e5m2", "GL_ARM_tensors_float_e4m3", "GL_QCOM_image_processing",
+        "GL_QCOM_image_processing2", "GL_QCOM_tile_shading", "GL_QCOM_cooperative_matrix_conversion",
+        "GL_ANDROID_extension_pack_es31a", "GL_KHR_blend_equation_advanced", "GL_OES_sample_variables",
+        "GL_OES_shader_image_atomic", "GL_OES_shader_multisample_interpolation",
+        "GL_OES_texture_storage_multisample_2d_array", "GL_EXT_geometry_shader", "GL_EXT_geometry_point_size",
+        "GL_EXT_gpu_shader5", "GL_EXT_primitive_bounding_box", "GL_EXT_shader_io_blocks", "GL_EXT_tessellation_shader",
+        "GL_EXT_tessellation_point_size", "GL_EXT_texture_buffer", "GL_EXT_texture_cube_map_array",
+        "GL_EXT_null_initializer", "GL_EXT_descriptor_heap", "GL_EXT_structured_descriptor_heap",
+        "GL_OES_geometry_shader", "GL_OES_geometry_point_size", "GL_OES_gpu_shader5", "GL_OES_primitive_bounding_box",
+        "GL_OES_shader_io_blocks", "GL_OES_tessellation_shader", "GL_OES_tessellation_point_size",
+        "GL_OES_texture_buffer", "GL_OES_texture_cube_map_array", "GL_EXT_shader_integer_mix", "GL_EXT_device_group",
+        "GL_EXT_multiview", "GL_EXT_shader_realtime_clock", "GL_EXT_ray_tracing", "GL_EXT_ray_query",
+        "GL_EXT_ray_flags_primitive_culling", "GL_EXT_ray_cull_mask", "GL_EXT_blend_func_extended",
+        "GL_EXT_shader_implicit_conversions", "GL_EXT_fragment_shading_rate", "GL_EXT_shader_image_int64",
+        "GL_EXT_terminate_invocation", "GL_EXT_shared_memory_block", "GL_EXT_spirv_intrinsics", "GL_EXT_mesh_shader",
+        "GL_EXT_opacity_micromap", "GL_EXT_opacity_micromap_ray_query_mode", "GL_EXT_shader_quad_control",
+        "GL_EXT_ray_tracing_position_fetch", "GL_EXT_shader_tile_image", "GL_EXT_texture_shadow_lod",
+        "GL_EXT_draw_instanced", "GL_EXT_texture_array", "GL_EXT_texture_offset_non_const",
+        "GL_EXT_nontemporal_keyword", "GL_EXT_bfloat16", "GL_EXT_float_e4m3", "GL_EXT_float_e5m2",
+        "GL_EXT_uniform_buffer_unsized_array", "GL_EXT_shader_64bit_indexing", "GL_EXT_conservative_depth",
+        "GL_EXT_long_vector", "GL_EXT_float_e2m1", "GL_EXT_float_e3m2", "GL_EXT_float_e2m3", "GL_EXT_float_ue8m0",
+        "GL_EXT_float_mxint8", "GL_OVR_multiview", "GL_OVR_multiview2", "GL_EXT_shader_explicit_arithmetic_types",
+        "GL_EXT_shader_explicit_arithmetic_types_int8", "GL_EXT_shader_explicit_arithmetic_types_int16",
+        "GL_EXT_shader_explicit_arithmetic_types_int32", "GL_EXT_shader_explicit_arithmetic_types_int64",
+        "GL_EXT_shader_explicit_arithmetic_types_float16", "GL_EXT_shader_explicit_arithmetic_types_float32",
+        "GL_EXT_shader_explicit_arithmetic_types_float64", "GL_EXT_shader_subgroup_extended_types_int8",
+        "GL_EXT_shader_subgroup_extended_types_int16", "GL_EXT_shader_subgroup_extended_types_int64",
+        "GL_EXT_shader_subgroup_extended_types_float16", "GL_EXT_shader_atomic_float", "GL_EXT_shader_atomic_float2",
+        "GL_EXT_integer_dot_product", "GL_EXT_shader_invocation_reorder",
+    ];
 
     void PushIf(Func<bool> condition)
     {
