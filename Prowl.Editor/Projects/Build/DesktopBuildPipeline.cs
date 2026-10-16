@@ -361,7 +361,6 @@ public class DesktopBuildPipeline : BuildPipeline
         var profile = (DesktopBuildProfile)request.Profile!;
 
         string targetPlatform = profile.Target.AssemblyPlatform ?? BuildPlatforms.Windows;
-        List<ScriptCompiler.BuildAssembly> assemblies = ScriptCompiler.GetBuildAssemblies(_project, targetPlatform);
 
         string outputDirectory = CreateBuildDirectory(request);
         context.Log($"Building into {outputDirectory}");
@@ -389,6 +388,13 @@ public class DesktopBuildPipeline : BuildPipeline
         if (Directory.Exists(buildTempDir))
             try { Directory.Delete(buildTempDir, true); } catch { }
         Directory.CreateDirectory(buildTempDir);
+
+        context.Log("Compiling game scripts for the player...");
+        ScriptCompiler.PlayerCompileResult scripts = ScriptCompiler.CompileForPlayer(
+            _project, targetPlatform, PlayerDefines(_settings, this), Path.Combine(buildTempDir, "Scripts"));
+        if (!scripts.Result.Success)
+            throw new InvalidOperationException($"Script compilation for the player failed:{Environment.NewLine}{scripts.Result.Errors}");
+        List<ScriptCompiler.BuildAssembly> assemblies = scripts.Assemblies;
 
         string contentDir = Path.Combine(outputDirectory, "Content");
 
@@ -855,7 +861,7 @@ public class DesktopBuildPipeline : BuildPipeline
             ["Nullable"] = "annotations",
             ["AssemblyName"] = project.Name,
             // Deliberately no PROWL_EDITOR: this is the shipped game, not the editor.
-            ["DefineConstants"] = $"PROWL;{ScriptCompiler.GetVersionDefine()};{FinalizeDefineString(settings, this)}",
+            ["DefineConstants"] = string.Join(';', PlayerDefines(settings, this)),
             ["IncludeNativeLibrariesForSelfExtract"] = "true",
         };
 

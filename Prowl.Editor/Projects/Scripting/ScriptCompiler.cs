@@ -78,6 +78,45 @@ public static class ScriptCompiler
         if (compileUnits.Count == 0)
             return RestorePackagesOnly(project, units);
 
+        Directory.CreateDirectory(project.ScriptAssemblyPath);
+        return CompileUnits(project, compileUnits, RoslynScriptBackend.EditorParseOptions, "", unit => unit.OutputDllPath);
+    }
+
+    /// <summary>The result of compiling the game assemblies a player ships.</summary>
+    public readonly record struct PlayerCompileResult(CompileResult Result, List<BuildAssembly> Assemblies);
+
+    /// <summary>
+    /// Compiles the game assemblies a player for <paramref name="targetPlatform"/> ships, with the player's
+    /// <paramref name="defines"/> instead of the editor's, into <paramref name="outputDir"/>. The editor's own
+    /// assemblies are left alone.
+    /// </summary>
+    public static PlayerCompileResult CompileForPlayer(Project project, string targetPlatform, IReadOnlyCollection<string> defines, string outputDir)
+    {
+        (List<CompilationUnit>? units, string? error) = BuildPlan(project, defines);
+        if (error != null)
+            return new(new CompileResult { Success = false, Errors = error }, []);
+
+        var shipped = units
+            .Where(u => !u.IsEditorOnly && u.Scripts.Count > 0)
+            .Where(u => u.Source == null || u.Source.Definition.IncludedFor(targetPlatform))
+            .ToList();
+        if (shipped.Count == 0)
+            return new(new CompileResult { Success = true, Output = "No scripts to compile." }, []);
+
+        Directory.CreateDirectory(outputDir);
+        CompileResult result = CompileUnits(project, shipped, RoslynScriptBackend.ParseOptions(defines),
+            "::player:" + string.Join(';', defines.Order(StringComparer.Ordinal)), unit => Path.Combine(outputDir, $"{unit.Name}.dll"));
+
+        List<BuildAssembly> assemblies = result.Success
+            ? [.. shipped.Select(u => new BuildAssembly(u.Name, Path.Combine(outputDir, $"{u.Name}.dll")))]
+            : [];
+        return new(result, assemblies);
+    }
+
+    // Compiles units in dependency order, so each can reference the ones before it.
+    private static CompileResult CompileUnits(Project project, List<CompilationUnit> compileUnits,
+        Microsoft.CodeAnalysis.CSharp.CSharpParseOptions parseOptions, string stateSuffix, Func<CompilationUnit, string> outputPath)
+    {
         // Resolve NuGet references once (restores only when Directory.Build.props changed).
         Dictionary<string, List<string>> nugetRefs = NuGetReferenceResolver.Resolve(project, compileUnits);
 
@@ -87,14 +126,11 @@ public static class ScriptCompiler
         var peerRefs = new Dictionary<string, Microsoft.CodeAnalysis.MetadataReference>(StringComparer.OrdinalIgnoreCase);
         bool anyRecompiled = false;
 
-        Directory.CreateDirectory(project.ScriptAssemblyPath);
-
-        // Compile in dependency order so each unit can reference the ones before it.
         foreach (CompilationUnit? unit in compileUnits)
         {
-            string stateKey = $"{project.RootPath}::{unit.Name}";
+            string stateKey = $"{project.RootPath}::{unit.Name}{stateSuffix}";
             RoslynScriptBackend.CompileOutcome outcome = RoslynScriptBackend.Compile(stateKey, unit, peerRefs,
-                nugetRefs.TryGetValue(unit.Name, out List<string>? pkgs) ? pkgs : Array.Empty<string>());
+                nugetRefs.TryGetValue(unit.Name, out List<string>? pkgs) ? pkgs : Array.Empty<string>(), parseOptions);
 
             foreach (Microsoft.CodeAnalysis.Diagnostic d in outcome.Diagnostics)
             {
@@ -123,11 +159,11 @@ public static class ScriptCompiler
                 return new CompileResult { Success = false, Output = output.ToString(), Errors = errors.ToString(), Diagnostics = diagnostics };
             }
 
-            // Write the DLL where the player build and the assembly loader expect it. Skip the write
-            // when the unit was unchanged, unless the file went missing.
-            if (outcome.Recompiled || !File.Exists(unit.OutputDllPath))
+            // Skip the write when the unit was unchanged, unless the file went missing.
+            string dllPath = outputPath(unit);
+            if (outcome.Recompiled || !File.Exists(dllPath))
             {
-                File.WriteAllBytes(unit.OutputDllPath, outcome.Image);
+                File.WriteAllBytes(dllPath, outcome.Image);
                 anyRecompiled = true;
             }
 
@@ -185,28 +221,14 @@ public static class ScriptCompiler
     /// <summary>A user assembly destined for a player build.</summary>
     public readonly record struct BuildAssembly(string Name, string DllPath);
 
-    /// <summary>
-    /// Game-side user assemblies (not editor-only, included for the target platform) in dependency
-    /// order. The player is compiled against these and loads them at startup.
-    /// </summary>
-    public static List<BuildAssembly> GetBuildAssemblies(Project project, string targetPlatform)
-    {
-        (List<CompilationUnit>? units, string _) = BuildPlan(project);
-        var result = new List<BuildAssembly>();
-        foreach (CompilationUnit unit in units)
-        {
-            if (unit.IsEditorOnly || unit.Scripts.Count == 0) continue;
-            if (unit.Source != null && !unit.Source.Definition.IncludedFor(targetPlatform)) continue;
-            result.Add(new BuildAssembly(unit.Name, unit.OutputDllPath));
-        }
-        return result;
-    }
+    /// <summary>The defines editor compiles see. A player build uses its own set, without PROWL_EDITOR.</summary>
+    public static string[] EditorDefines => ["PROWL", "PROWL_EDITOR", GetVersionDefine()];
 
     // ================================================================
     //  Build plan
     // ================================================================
 
-    private static (List<CompilationUnit> units, string? error) BuildPlan(Project project)
+    private static (List<CompilationUnit> units, string? error) BuildPlan(Project project, IReadOnlyCollection<string>? defines = null)
     {
         List<AsmDefFile> asmdefs = AssemblyDefinitionDatabase.LoadAll(project);
 
@@ -222,8 +244,7 @@ public static class ScriptCompiler
         if (clashing.Count > 0)
             return ([], $"Assembly definition name(s) reserved for the default assemblies: {string.Join(", ", clashing)}");
 
-        string defaultDefines = $"PROWL;PROWL_EDITOR;{GetVersionDefine()}";
-        var activeDefines = new HashSet<string>(defaultDefines.Split(';'), StringComparer.OrdinalIgnoreCase);
+        var activeDefines = new HashSet<string>(defines ?? EditorDefines, StringComparer.OrdinalIgnoreCase);
 
         var units = new List<CompilationUnit>();
         var byName = new Dictionary<string, CompilationUnit>(StringComparer.OrdinalIgnoreCase);
@@ -417,7 +438,7 @@ public static class ScriptCompiler
         sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
         sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");
         sb.AppendLine($"    <AssemblyName>{Xml(unit.Name)}</AssemblyName>");
-        sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{GetVersionDefine()}</DefineConstants>");
+        sb.AppendLine($"    <DefineConstants>{string.Join(';', EditorDefines)}</DefineConstants>");
         sb.AppendLine("  </PropertyGroup>");
 
         sb.AppendLine("  <ItemGroup>");

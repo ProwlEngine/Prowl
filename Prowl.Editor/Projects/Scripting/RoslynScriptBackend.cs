@@ -60,8 +60,10 @@ internal static class RoslynScriptBackend
     private static readonly Dictionary<string, UnitState> s_states = [];
     private static readonly object s_lock = new();
 
-    private static readonly CSharpParseOptions s_parseOptions = new CSharpParseOptions(LanguageVersion.Latest)
-        .WithPreprocessorSymbols("PROWL", "PROWL_EDITOR", ScriptCompiler.GetVersionDefine());
+    internal static readonly CSharpParseOptions EditorParseOptions = ParseOptions(ScriptCompiler.EditorDefines);
+
+    internal static CSharpParseOptions ParseOptions(IEnumerable<string> defines)
+        => new CSharpParseOptions(LanguageVersion.Latest).WithPreprocessorSymbols(defines);
 
     /// <summary>Drops all cached compilation state (call when a project closes).</summary>
     public static void Reset()
@@ -78,8 +80,10 @@ internal static class RoslynScriptBackend
         string stateKey,
         CompilationUnit unit,
         IReadOnlyDictionary<string, MetadataReference> peerRefs,
-        IReadOnlyList<string> nugetDllPaths)
+        IReadOnlyList<string> nugetDllPaths,
+        CSharpParseOptions? parseOptions = null)
     {
+        parseOptions ??= EditorParseOptions;
         lock (s_lock)
         {
             // 1. Read + hash every source file.
@@ -124,7 +128,7 @@ internal static class RoslynScriptBackend
                 else
                 {
                     var text = SourceText.From(fileBytes[file], fileBytes[file].Length, Encoding.UTF8);
-                    newTrees[file] = (hash, CSharpSyntaxTree.ParseText(text, s_parseOptions, path: file));
+                    newTrees[file] = (hash, CSharpSyntaxTree.ParseText(text, parseOptions, path: file));
                 }
             }
 
