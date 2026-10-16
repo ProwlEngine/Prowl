@@ -153,6 +153,8 @@ public struct ViewDesc
     /// <summary>What the view draws into. A swapchain framebuffer presents after the frame.</summary>
     public Framebuffer Target;
     public uint CullingMask;
+
+    /// <summary>Its alpha is ignored, views clear opaque.</summary>
     public Float4 ClearColor;
 
     /// <summary>Whether the world's sky draws behind what the view sees.</summary>
@@ -684,11 +686,22 @@ public sealed class Renderer : IDisposable
         _removedWorlds.Clear();
     }
 
-    /// <summary>Waits until the render thread has finished the CPU side of the last submitted frame. Host thread.</summary>
+    /// <summary>
+    /// Waits until the render thread has finished the CPU side of the last submitted frame, then hands readbacks and
+    /// probe bakes the GPU has finished to their callbacks. Host thread.
+    /// </summary>
     public void WaitForRenderThread()
     {
         _frameDone.Wait();
-        _frameDone.Release();
+        try
+        {
+            RaiseBakes();
+            RaiseReadbacks();
+        }
+        finally
+        {
+            _frameDone.Release();
+        }
         RaiseErrors();
     }
 
