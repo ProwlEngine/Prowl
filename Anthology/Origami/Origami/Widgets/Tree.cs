@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
@@ -331,7 +332,6 @@ public sealed class TreeBuilder
         var font = _theme.Font;
         var ink = _theme.Ink;
         var metrics = _theme.Metrics;
-        float rounding = metrics.Rounding;
 
         // Resolve row height from the theme so it follows RowHeight changes (caller can still override).
         if (_rowHeight <= 0)
@@ -344,9 +344,10 @@ public sealed class TreeBuilder
 
         // Full-width rows (no side inset) with a small top gap so the first row's selection doesn't
         // butt up against the tab bar / container edge above it.
+        float padTop = MathF.Max(6f, _padding);
         Origami.ScrollView(_paper, $"{_id}_scroll", _width, _height)
-            .Padding(0f, 0f, MathF.Max(6f, _padding), _padding)
-            .Body(() =>
+            .Padding(0f, 0f, padTop, _padding)
+            .Body(vp =>
             {
                 if (nodes.Count == 0 && !string.IsNullOrEmpty(_emptyMessage) && font != null)
                 {
@@ -358,83 +359,258 @@ public sealed class TreeBuilder
                     return;
                 }
 
-                // We walk the flat list in depth-first order. Expandable parents get an
-                // animated wrapper around their children that lerps height 0..Auto.
-                // A stack tracks open wrappers so we close them when depth decreases.
-
-                // Stack of (parentDepth, IDisposable wrapper scope)
-                var wrapperStack = new Stack<(int depth, IDisposable scope)>();
-
-                for (int i = 0; i < nodes.Count; i++)
+                _stateHandle = stateHandle;
+                _states = ArrayPool<NodeState>.Shared.Rent(nodes.Count);
+                try
                 {
-                    var node = nodes[i];
+                    // Pass 1: resolve every reachable node's expand state and measure its subtree.
+                    // Cheap - no elements are built.
+                    ResolveAll();
 
-                    // Close any wrappers for parents we've moved past
-                    while (wrapperStack.Count > 0 && node.Depth <= wrapperStack.Peek().depth)
-                    {
-                        var (_, scope) = wrapperStack.Pop();
-                        scope.Dispose();
-                    }
-
-                    bool isExpandable = node.HasChildren && !node.IsLeaf;
-                    // Expand state lives on the tree's own state element, so the node id alone is a unique key.
-                    bool isExpanded;
-                    if (node.OverrideExpanded.HasValue)
-                    {
-                        isExpanded = isExpandable && node.OverrideExpanded.Value;
-                        _paper.SetElementStorage(stateHandle, node.Id, node.OverrideExpanded.Value);
-                    }
-                    else
-                    {
-                        isExpanded = isExpandable && _paper.GetElementStorage(
-                            stateHandle, node.Id, node.DefaultExpanded);
-                    }
-
-                    if (_expandStateSink != null)
-                        _expandStateSink[node.Id] = isExpanded;
-
-                    bool isSelected = _isSelected?.Invoke(node) ?? false;
-                    bool isPinged = _isPinged?.Invoke(node) ?? false;
-
-                    DrawNode(font, ink, metrics, rounding, stateHandle, nodes,
-                        node, i, isSelected, isExpanded, isExpandable, isPinged);
-
-                    // If this node is expandable, open an animated wrapper for its children
-                    if (isExpandable)
-                    {
-                        float anim = _paper.AnimateBool(isExpanded, 0.15f, id: node.Id);
-
-                        if (!isExpanded && anim <= float.Epsilon)
-                        {
-                            // Fully collapsed and animation done - skip all children
-                            int parentDepth = node.Depth;
-                            while (i + 1 < nodes.Count && nodes[i + 1].Depth > parentDepth)
-                                i++;
-                        }
-                        else
-                        {
-                            // Animating or expanded - wrap children in a height-lerped container
-                            var wrapper = _paper.Column(node.Id, 1)
-                                .Width(UnitValue.Stretch())
-                                .Height(UnitValue.Lerp(0, UnitValue.Auto, anim));
-
-                            // Only clip during animation (not at rest) since Clip isn't cheap
-                            bool animating = anim > float.Epsilon && anim < 1f - float.Epsilon;
-                            if (animating)
-                                wrapper.Clip();
-
-                            wrapperStack.Push((node.Depth, wrapper.Enter()));
-                        }
-                    }
+                    // Pass 2: build only the rows near the viewport. The content starts padTop below
+                    // the scroll view's top edge, and what shows is clipped by the view's full height
+                    // (padding included), not the padded viewport.
+                    float overscan = _rowHeight * 3f;
+                    float viewTop = vp.ScrollY - padTop;
+                    DrawVisible(viewTop - overscan, viewTop + _height + overscan);
                 }
-
-                // Close any remaining open wrappers
-                while (wrapperStack.Count > 0)
+                finally
                 {
-                    var (_, scope) = wrapperStack.Pop();
-                    scope.Dispose();
+                    ArrayPool<NodeState>.Shared.Return(_states);
+                    _states = null!;
                 }
             });
+    }
+
+    // ── Virtualization ────────────────────────────────────────────────
+
+    // Valid only while Show() is building the scroll content.
+    private ElementHandle _stateHandle;
+    private NodeState[] _states = null!;
+
+    /// <summary>Per-node state resolved in the first pass of <see cref="Show"/>.</summary>
+    private struct NodeState
+    {
+        public bool Expandable;
+        public bool Expanded;
+        /// <summary>Expand animation progress, 0 (collapsed) to 1 (open). 1 for non-expandable nodes.</summary>
+        public float Anim;
+        /// <summary>Index one past this node's subtree in the flat list.</summary>
+        public int End;
+        /// <summary>Height of the node's children when fully open (nested animations applied).</summary>
+        public float ChildHeight;
+
+        /// <summary>Collapsed with the animation finished: the children aren't shown at all.</summary>
+        public readonly bool IsCollapsed => Expandable && !Expanded && Anim <= float.Epsilon;
+        /// <summary>No children, or expanded with the animation finished: the children are ordinary rows.</summary>
+        public readonly bool IsOpen => !Expandable || (Expanded && Anim >= 1f);
+        /// <summary>Mid expand/collapse: the children are shown in a wrapper that animates their height.</summary>
+        public readonly bool IsAnimating => !IsCollapsed && !IsOpen;
+    }
+
+    /// <summary>
+    /// Resolve every node that can be shown: its expand state, where its subtree ends, and how tall its
+    /// children are. One pass in list order, with an explicit stack of the parents whose children are
+    /// being measured, so a deep tree can't overflow the call stack.
+    /// </summary>
+    private void ResolveAll()
+    {
+        var nodes = _nodes!;
+        var parents = new Stack<int>();
+
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            var node = nodes[i];
+
+            // Close the parents this node isn't beneath.
+            while (parents.Count > 0 && node.Depth <= nodes[parents.Peek()].Depth)
+                CloseParent(parents, i);
+
+            ref NodeState st = ref _states[i];
+            ResolveNode(node, ref st);
+
+            int next = i + 1;
+            if (st.IsCollapsed)
+            {
+                // Its children are never shown, so they're skipped, not resolved.
+                while (next < nodes.Count && nodes[next].Depth > node.Depth)
+                    next++;
+            }
+
+            if (st.Expandable && !st.IsCollapsed)
+            {
+                // Its end and height are known once its children have been resolved.
+                parents.Push(i);
+            }
+            else
+            {
+                // A non-expandable node's deeper followers (if any) aren't its children: they count
+                // towards the enclosing parent, and show as its siblings.
+                st.End = next;
+                AddToParent(parents, _rowHeight);
+            }
+
+            i = next;
+        }
+
+        while (parents.Count > 0)
+            CloseParent(parents, nodes.Count);
+    }
+
+    /// <summary>Finish the innermost open parent, whose subtree ends at <paramref name="end"/>.</summary>
+    private void CloseParent(Stack<int> parents, int end)
+    {
+        ref NodeState st = ref _states[parents.Pop()];
+        st.End = end;
+        AddToParent(parents, _rowHeight + st.Anim * st.ChildHeight);
+    }
+
+    /// <summary>Add a resolved node's current height to the parent it shows beneath, if any.</summary>
+    private void AddToParent(Stack<int> parents, float height)
+    {
+        if (parents.Count > 0)
+            _states[parents.Peek()].ChildHeight += height;
+    }
+
+    /// <summary>Resolve a node's own expand state and animation; its subtree is measured by the caller.</summary>
+    private void ResolveNode(TreeNode node, ref NodeState st)
+    {
+        st.Expandable = node.HasChildren && !node.IsLeaf;
+        // Expand state lives on the tree's own state element, so the node id alone is a unique key.
+        if (node.OverrideExpanded.HasValue)
+        {
+            st.Expanded = st.Expandable && node.OverrideExpanded.Value;
+            _paper.SetElementStorage(_stateHandle, node.Id, node.OverrideExpanded.Value);
+        }
+        else
+        {
+            st.Expanded = st.Expandable && _paper.GetElementStorage(_stateHandle, node.Id, node.DefaultExpanded);
+        }
+
+        if (_expandStateSink != null)
+            _expandStateSink[node.Id] = st.Expanded;
+
+        // Animated here, at the scroll content's scope, so the key is the same whether or not the row
+        // ends up built this frame.
+        st.Anim = st.Expandable ? _paper.AnimateBool(st.Expanded, 0.15f, id: node.Id) : 1f;
+        st.ChildHeight = 0f;
+    }
+
+    /// <summary>
+    /// Walk the top-level items, building those that intersect [<paramref name="viewTop"/>,
+    /// <paramref name="viewBottom"/>) and standing in for each run of the rest with a spacer, so the
+    /// content height - and the scrollbar - match a fully built tree. An item is a single row, except an
+    /// animating parent, which is built together with its children as one block.
+    /// </summary>
+    private void DrawVisible(float viewTop, float viewBottom)
+    {
+        var nodes = _nodes!;
+        float y = 0f, gap = 0f;
+        int spacerCount = 0;
+
+        for (int i = 0; i < nodes.Count;)
+        {
+            ref NodeState st = ref _states[i];
+
+            // An open parent's children follow as items of their own; a collapsed or animating parent's
+            // item covers its whole subtree.
+            int next = st.IsOpen ? i + 1 : st.End;
+            int builtEnd = st.IsAnimating ? st.End : i + 1;
+            float height = _rowHeight + (st.IsAnimating ? st.Anim * st.ChildHeight : 0f);
+
+            // A row being renamed is built even out of view: its text field (and the typed text, kept
+            // in the row's storage) would otherwise be dropped the frame it scrolls away.
+            bool inView = y + height > viewTop && y < viewBottom;
+            if (inView || ContainsRenamingRow(i, builtEnd))
+            {
+                AddSpacer(ref gap, ref spacerCount);
+                if (st.IsAnimating)
+                    DrawAnimating(i, st.End);
+                else
+                    DrawRow(i);
+            }
+            else
+            {
+                gap += height;
+            }
+
+            y += height;
+            i = next;
+        }
+
+        // If nothing was built (e.g. a stale scroll offset after the list shrank), this is the full
+        // height as one spacer, so the scroll view can clamp back.
+        AddSpacer(ref gap, ref spacerCount);
+    }
+
+    /// <summary>Stand in for the rows skipped since the last one built, if any.</summary>
+    private void AddSpacer(ref float gap, ref int spacerCount)
+    {
+        if (gap <= 0f) return;
+        _paper.Box($"{_id}_gap", spacerCount++).Width(UnitValue.Stretch()).Height(gap).IsNotInteractable();
+        gap = 0f;
+    }
+
+    /// <summary>Whether any row in [<paramref name="start"/>, <paramref name="end"/>) shows the rename field.</summary>
+    private bool ContainsRenamingRow(int start, int end)
+    {
+        if (_onRenamed == null) return false;
+        for (int i = start; i < end; i++)
+            if (_nodes![i].IsRenaming) return true;
+        return false;
+    }
+
+    private void DrawRow(int i)
+    {
+        var node = _nodes![i];
+        ref NodeState st = ref _states[i];
+        bool isSelected = _isSelected?.Invoke(node) ?? false;
+        bool isPinged = _isPinged?.Invoke(node) ?? false;
+        DrawNode(_theme.Font, _theme.Ink, _theme.Metrics, _theme.Metrics.Rounding, _stateHandle, _nodes,
+            node, i, isSelected, st.Expanded, st.Expandable, isPinged);
+    }
+
+    /// <summary>
+    /// Build the rows in [<paramref name="start"/>, <paramref name="end"/>) in full, with each expandable
+    /// parent's children inside a wrapper whose height lerps 0..Auto with its expand animation.
+    /// </summary>
+    private void DrawAnimating(int start, int end)
+    {
+        // Open wrappers by parent depth, closed as the depth climbs back out.
+        var wrappers = new Stack<(int depth, IDisposable scope)>();
+
+        for (int i = start; i < end; i++)
+        {
+            var node = _nodes![i];
+
+            while (wrappers.Count > 0 && node.Depth <= wrappers.Peek().depth)
+                wrappers.Pop().scope.Dispose();
+
+            DrawRow(i);
+
+            ref NodeState st = ref _states[i];
+            if (!st.Expandable) continue;
+
+            if (st.IsCollapsed)
+            {
+                i = st.End - 1; // skip its children
+                continue;
+            }
+
+            var wrapper = _paper.Column(node.Id, 1)
+                .Width(UnitValue.Stretch())
+                .Height(UnitValue.Lerp(0, UnitValue.Auto, st.Anim));
+
+            // Only clip during animation (not at rest) since Clip isn't cheap
+            if (st.IsAnimating)
+                wrapper.Clip();
+
+            wrappers.Push((node.Depth, wrapper.Enter()));
+        }
+
+        while (wrappers.Count > 0)
+            wrappers.Pop().scope.Dispose();
     }
 
     private void DrawNode(Prowl.Scribe.FontFile? font, OrigamiRamp ink, OrigamiMetrics metrics,

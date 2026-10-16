@@ -7,6 +7,7 @@ jobs:
     contrib-readme-job:
         runs-on: ubuntu-latest
         name: A job to automate contrib in readme
+        if: ${{ !github.event.repository.fork }}
         permissions:
           contents: write
           pull-requests: write
