@@ -244,8 +244,8 @@ public class ConsolePanel : DockPanel
                 using (paper.Row("con_search_wrap").Width(130).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Width(130).Height(24).Show();
 
-                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, false, () => { lock (s_messagesLock) _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
-                ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, false,
+                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, Loc.Get("console.clear"), false, () => { lock (s_messagesLock) _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
+                ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, Loc.Get("console.options"), false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
             paper.Box("con_tb_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();

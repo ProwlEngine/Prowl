@@ -239,6 +239,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/dimmerly">
+                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
+                    <br />
+                    <sub><b>Dimmer</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/Acissathar">
                     <img src="https://avatars.githubusercontent.com/u/10227954?v=4" width="100;" alt="Acissathar"/>
                     <br />
@@ -259,13 +266,6 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <img src="https://avatars.githubusercontent.com/u/87308197?v=4" width="100;" alt="EJTP"/>
                     <br />
                     <sub><b>EJTP</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/dimmerly">
-                    <img src="https://avatars.githubusercontent.com/u/223179705?v=4" width="100;" alt="dimmerly"/>
-                    <br />
-                    <sub><b>Dimmer</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -347,6 +347,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                     <img src="https://avatars.githubusercontent.com/u/13090415?v=4" width="100;" alt="JaggerJo"/>
                     <br />
                     <sub><b>Josua Jäger</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/paulbartrum">
+                    <img src="https://avatars.githubusercontent.com/u/1572571?v=4" width="100;" alt="paulbartrum"/>
+                    <br />
+                    <sub><b>paulbartrum</b></sub>
                 </a>
             </td>
             <td align="center">

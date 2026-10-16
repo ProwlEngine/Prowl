@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -19,6 +20,12 @@ namespace Prowl.Runtime;
 /// Every GL mutation flows through a CommandBuffer to the executor on the render
 /// thread there are no direct GL calls outside this assembly.
 /// </summary>
+// Script hot reload must not migrate these statics. The render thread keeps running while a reload is in
+// progress, and a reload reads every writable static, then writes the values back once the migration is done.
+// Writing back the render-queue sleep flag and the frame counters rolls them back to that earlier snapshot,
+// which left the render thread asleep with work queued and the main thread waiting forever in
+// EndFrameAndWait. Nothing here references user types, so there is nothing for a reload to migrate.
+[Prowl.Ember.ReloadIgnore]
 public static unsafe class Graphics
 {
     // Defaulted to conservative real-world minimums so CPU-side validation (e.g. texture size
@@ -211,6 +218,8 @@ public static unsafe class Graphics
 
     internal static void EndFrameAndWait()
     {
+        using FrameStatScope stats = FrameStats.RenderWait.Scope();
+
         int inFlight = XR.IsRunning ? 1 : System.Math.Max(1, MaxFramesInFlight);
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         lock (s_frameLock)

@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Editor.Core.Diagnostics;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
@@ -22,6 +23,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -40,7 +42,12 @@ public class EditorApplication : Game
     public static OrigamiUI.PropertyGridConfig PropertyGridConfig { get; private set; } = null!;
 
     private DockSpace _dockSpace = null!;
+    private bool _sceneGizmosDrawn;
     private PanelMaximizer _panelMaximizer = null!;
+
+    /// <summary>Maximizes docked panels over the rest of the layout, and brings the layout back.</summary>
+    internal PanelMaximizer Maximizer => _panelMaximizer;
+
     private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
@@ -65,6 +72,7 @@ public class EditorApplication : Game
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
     private TimeData? _savedEditorTime;
+    private bool _maximizedForPlay; // play mode maximized the Game view, so stopping restores the layout
 
 
     /// <summary> Initializes the editor window with the given title, width and height, restoring saved position and maximization state from EditorSettings. </summary>
@@ -352,6 +360,9 @@ public class EditorApplication : Game
         return new Prowl.Scribe.FontFile(stream);
     }
 
+    // The whole Paper frame is the editor's interface. The game's own UI, drawn inside the Game view, still counts as UI.
+    protected override FrameStat GuiFrameStat => EditorFrameStats.UI;
+
     /// <summary> Sets the Paper resolution and framebuffer scale, accounting for content scale and user scale. </summary>
     protected override void PreparePaperFrame()
     {
@@ -390,10 +401,13 @@ public class EditorApplication : Game
     /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
+        (Input.Current as GameViewInputHandler)?.UpdateSuppressedKeys();
+
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
-        Undo.FlushFrame();
+        using (FrameStats.Editor.Scope())
+            Undo.FlushFrame();
 
         // Escape always releases the cursor in editor.
         if (Input.GetKeyDown(KeyCode.Escape) && (Input.CursorLockState != CursorLockMode.None || !Input.CursorVisible))
@@ -419,11 +433,13 @@ public class EditorApplication : Game
             }
             else if (ShortcutManager.IsPressed("Global/Undo"))
             {
-                Undo.PerformUndo();
+                using (FrameStats.Editor.Scope())
+                    Undo.PerformUndo();
             }
             else if (ShortcutManager.IsPressed("Global/Redo"))
             {
-                Undo.PerformRedo();
+                using (FrameStats.Editor.Scope())
+                    Undo.PerformRedo();
             }
         }
 
@@ -453,7 +469,8 @@ public class EditorApplication : Game
         paper.Canvas.SetAntiAlias(EditorTheme.AntiAliasing);
 
         // Save system update (Ctrl+S + auto-save) - after theme push so toasts get icons
-        SaveManager.Update((float)Time.UnscaledDeltaTime);
+        using (FrameStats.Editor.Scope())
+            SaveManager.Update((float)Time.UnscaledDeltaTime);
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -464,6 +481,7 @@ public class EditorApplication : Game
             GUI.EditorGuide.ArmAutoStart(); // let the tour play once for this freshly-opened project
             if (Project.Current != null)
             {
+                using FrameStatScope projectStats = FrameStats.Editor.Scope();
                 Window.InternalWindow.Title = $"Prowl Editor - {Project.Current.Name}";
 
                 // Project settings load first, since some decide how assets import
@@ -496,15 +514,20 @@ public class EditorApplication : Game
         // rather than trusting whatever it happened to catch.
         bool focused = Window.IsFocused;
         if (focused && !_wasFocused)
+        {
+            using FrameStatScope assetStats = EditorFrameStats.Assets.Scope();
             EditorAssetBackend.Instance?.Refresh();
+        }
         bool cliActive = CliServer.IsActive;
         if (focused != _wasFocused || cliActive != _wasCliActive)
             ApplyFramePacing();
         _wasFocused = focused;
         _wasCliActive = cliActive;
 
-        ExternalAssetDrop.ProcessPending();
-        CliServer.Update();
+        using (EditorFrameStats.Assets.Scope())
+            ExternalAssetDrop.ProcessPending();
+        using (FrameStats.Editor.Scope())
+            CliServer.Update();
 
         if (_quitRequested)
         {
@@ -516,6 +539,7 @@ public class EditorApplication : Game
         bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || cliActive || ExternalAssetDrop.ForceProcessActive;
         if (canProcessAssets)
         {
+            using FrameStatScope assetStats = EditorFrameStats.Assets.Scope();
             EditorAssetBackend.Instance?.ProcessFileChanges();
 
             // Lazy thumbnail generation one per frame
@@ -526,12 +550,16 @@ public class EditorApplication : Game
         // outstanding: the project's first scene load is waiting on that compile, and reimport gating
         // (or an unfocused window) must not be able to strand the editor with no scene open.
         if (canProcessAssets || ScriptAssemblyManager.AwaitingStartupCompile)
+        {
+            using FrameStatScope scriptStats = EditorFrameStats.Scripts.Scope();
             ScriptAssemblyManager.Update();
+        }
 
         // The project's scene opens only once its scripts have been built, so it is never deserialized
         // against types that do not exist yet.
         if (_sceneLoadPending && !ScriptAssemblyManager.AwaitingStartupCompile)
         {
+            using FrameStatScope sceneStats = FrameStats.Editor.Scope();
             _sceneLoadPending = false;
             EditorSceneManager.EnsureSceneLoaded();
         }
@@ -572,6 +600,7 @@ public class EditorApplication : Game
         _nebula ??= new GUI.NebulaBackground(paper);
         GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
+        HandlePlayModeShortcuts();
         DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -609,6 +638,12 @@ public class EditorApplication : Game
         }
     }
 
+    private void HandlePlayModeShortcuts()
+    {
+        if (ShortcutManager.TryConsume("Game/TogglePlay")) RequestTogglePlayMode();
+        else if (ShortcutManager.TryConsume("Game/TogglePause")) TogglePause();
+    }
+
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
     private void DrawPlayPill(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
     {
@@ -621,17 +656,23 @@ public class EditorApplication : Game
         {
             // Ghost buttons tint their icon by variant: green Play when stopped, red Stop while playing,
             // amber Pause when paused; step stays neutral.
-            ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
-                .OnClick(RequestTogglePlayMode)
+            ButtonBuilder play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.Stop_I : EditorIcons.Play_I)
+                .OnClick(() => { paper.ClearFocus(); RequestTogglePlayMode(); })
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPlaying ? "game.stop" : "game.play"), "Game/TogglePlay"))
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
 
-            ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I, TogglePause).Style(ButtonStyle.Ghost);
+            ButtonBuilder pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I,
+                () => { paper.ClearFocus(); TogglePause(); })
+                .Tooltip(ShortcutManager.GetTooltip(Loc.Get(Application.IsPaused ? "game.resume" : "game.pause"), "Game/TogglePause"))
+                .Style(ButtonStyle.Ghost);
             if (Application.IsPaused) pause.Warning();
             pause.Show();
 
-            Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I, StepOneFrame)
+            Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I,
+                () => { paper.ClearFocus(); StepOneFrame(); })
+                .Tooltip(Loc.Get("game.step"))
                 .Style(ButtonStyle.Ghost).Show();
         }
     }
@@ -1587,7 +1628,7 @@ public class EditorApplication : Game
         _dockSpace.Root = root;
     }
 
-    private void SaveDockLayout()
+    internal void SaveDockLayout()
     {
         if (Project.Current == null) return;
         try
@@ -1760,7 +1801,6 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
-
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         SerializationContext playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
@@ -1805,6 +1845,8 @@ public class EditorApplication : Game
 
         // Focus the Game View tab
         FocusPanel(typeof(GameViewPanel));
+        if (FindOpenPanel(typeof(GameViewPanel)) is GameViewPanel { MaximizeOnPlay: true } gameView)
+            _maximizedForPlay = _panelMaximizer.Maximize(gameView);
 
         // The editor's vsync and frame limit are its preference, not the game's, so play starts
         // unpaced and whatever the game's own code sets from here is what it runs at.
@@ -1866,6 +1908,7 @@ public class EditorApplication : Game
         // Pop play-mode input handler
         if (Input.Current is GameViewInputHandler)
             Input.PopHandler();
+        GameViewInputHandler.ClearSuppressedKeys();
 
         // Restore editor time
         if (_savedEditorTime != null)
@@ -1874,6 +1917,11 @@ public class EditorApplication : Game
             Runtime.Time.TimeStack.Push(_savedEditorTime);
             _savedEditorTime = null;
         }
+
+        // Only a maximize play mode made. One the user made before play is theirs to keep.
+        if (_maximizedForPlay && _panelMaximizer.MaximizedPanel is GameViewPanel)
+            _panelMaximizer.Restore();
+        _maximizedForPlay = false;
 
         // Restore the previously active tab
         RestoreActiveTab();
@@ -2029,6 +2077,8 @@ public class EditorApplication : Game
 
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
+        using FrameStatScope stats = FrameStats.Editor.Scope();
+
         Tasks.EditorTask.Poll();
         PreviewWidget.ReleaseUndrawn();
 
@@ -2041,7 +2091,20 @@ public class EditorApplication : Game
 
         Application.IsGameplayExecuting = false;
 
-        Navigation.NavMeshBakeService.Instance.Poll();
+        using (FrameStats.Navigation.Scope())
+            Navigation.NavMeshBakeService.Instance.Poll();
+    }
+
+    public override void BeginRender()
+    {
+        _sceneGizmosDrawn = false;
+    }
+
+    /// <summary>Queues component gizmos once per rendered frame, on demand from a visible Scene view.</summary>
+    internal void DrawSceneGizmos(Runtime.Resources.Scene scene)
+    {
+        if (_sceneGizmosDrawn || !scene.IsValid()) return;
+        _sceneGizmosDrawn = true;
 
         // Editor gizmos are a scene-view concept, and the scene view edits UI in world space, so queue
         // them with the world-space canvas override active - otherwise the canvas wireframe would be
@@ -2050,9 +2113,9 @@ public class EditorApplication : Game
         GameCanvas.EditorWorldSpaceOverride = true;
         try
         {
-            // Always allow gizmos in editor (even when not playing)
-            if (scene != null)
-                scene.DrawGizmos();
+            using FrameStatScope gizmoStats = EditorFrameStats.Gizmos.Scope();
+            // Visible Scene views keep their gizmos while playing as well as while editing.
+            scene.DrawGizmos();
 
             if (Selection.Count > 0)
             {

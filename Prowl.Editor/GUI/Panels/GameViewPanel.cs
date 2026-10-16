@@ -11,6 +11,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -37,6 +38,10 @@ public class GameViewPanel : DockPanel
     internal RenderTexture? RenderTarget => _rt;
     private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private bool _showStats;
+
+    /// <summary> Whether play mode fills the dock area with this view. Saved with the layout, and read at the next play. </summary>
+    internal bool MaximizeOnPlay { get; private set; }
+
     private RenderStats.Frame _gameStats; // snapshot from last game render (persists when paused)
     private Rect _displayAbsRect; // game-view rect in paper coords, cached for routing UI input next frame
 
@@ -70,14 +75,37 @@ public class GameViewPanel : DockPanel
 
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
+            // Hover-scoped like the other panels' shortcuts.
+            if (paper.IsParentHovered && ShortcutManager.TryConsume("Game/ToggleMaximize"))
+                EditorApplication.Instance?.Maximizer.RequestToggle(this);
+
             DrawGameView(paper, font, width, height);
         }
+    }
+
+    public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
+    {
+        if (!MaximizeOnPlay) return false;
+        state["maximizeOnPlay"] = true;
+        return true;
+    }
+
+    public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
+        => MaximizeOnPlay = state["maximizeOnPlay"]?.GetValue<bool>() == true;
+
+    // The layout is otherwise only written on save, so the choice is written straight away. Not during play, where
+    // the other panels' state is the play session's and must not be kept.
+    private void ToggleMaximizeOnPlay()
+    {
+        MaximizeOnPlay = !MaximizeOnPlay;
+        if (!Application.IsPlaying)
+            EditorApplication.Instance?.SaveDockLayout();
     }
 
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        EditorGUI.HeaderIconButton(paper, "gv_hdr_settings", EditorIcons.Gear, () =>
+        EditorGUI.HeaderIconButton(paper, "gv_hdr_settings", EditorIcons.Gear, Loc.Get("game.settings"), () =>
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
                 b.Header(Loc.Get("panel.game"));
@@ -90,6 +118,7 @@ public class GameViewPanel : DockPanel
                     }
                 }, EditorIcons.Expand);
                 b.Toggle(Loc.Get("game.show_stats"), () => _showStats = !_showStats, () => _showStats);
+                b.Toggle(Loc.Get("game.maximize_on_play"), ToggleMaximizeOnPlay, () => MaximizeOnPlay);
             }));
     }
 
@@ -257,9 +286,14 @@ public class GameViewPanel : DockPanel
                 try
                 {
                     PaperInputBridge.Pump(_gamePaper!, pointerInRT, hovered && pointerInside);
-                    _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
-                    scene.OnGui(_gamePaper);
-                    _gamePaper.EndFrame();
+
+                    // Counted as UI, the same as in a build, not as the editor drawing it.
+                    using (FrameStats.UI.Scope())
+                    {
+                        _gamePaper!.BeginFrame(Time.UnscaledDeltaTime, -1f);
+                        scene.OnGui(_gamePaper);
+                        _gamePaper.EndFrame();
+                    }
                 }
                 finally
                 {

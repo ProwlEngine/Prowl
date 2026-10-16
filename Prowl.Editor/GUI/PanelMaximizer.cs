@@ -41,6 +41,9 @@ internal sealed class PanelMaximizer
     private DockPanel? _toggle;
     private DockNode? _toggleLeaf;
 
+    // A toggle asked for by RequestToggle, applied before the next draw.
+    private DockPanel? _requested;
+
     public PanelMaximizer(DockSpace dock) => _dock = dock;
 
     /// <summary>The panel currently filling the dock area, or null.</summary>
@@ -61,6 +64,7 @@ internal sealed class PanelMaximizer
     /// </summary>
     public void Draw(Paper paper, float x, float y, float w, float h)
     {
+        ApplyRequest();
         ApplyDoubleClick(paper);
         Sync();
 
@@ -86,11 +90,21 @@ internal sealed class PanelMaximizer
     }
 
     /// <summary>
+    /// Maximize <paramref name="panel"/>, or bring the layout back if it already is, before the dock next draws.
+    /// For a panel asking from its own OnGUI, which runs while the dock is still walking the tree this swaps.
+    /// </summary>
+    public void RequestToggle(DockPanel panel) => _requested = panel;
+
+    /// <summary>
     /// Fill the dock area with <paramref name="panel"/>. Only panels docked in the main layout can be
     /// maximized; returns false for anything else (a floating window's panel, or one not open at all).
     /// </summary>
     public bool Maximize(DockPanel panel)
     {
+        // Checked before anything changes, so a panel that can't be maximized leaves the current maximize alone.
+        // Against LayoutRoot, as while another panel is maximized a docked one is in the layout set aside.
+        if (FindLeaf(LayoutRoot, panel) == null) return false;
+
         Restore();
         DockNode? host = FindLeaf(_dock.Root, panel);
         if (host == null) return false;
@@ -162,6 +176,14 @@ internal sealed class PanelMaximizer
         if (_view == null) return;
         bool intact = _dock.Root == _view && _view.Tabs is { Count: 1 } tabs && tabs[0] == _panel;
         if (!intact) Restore();
+    }
+
+    private void ApplyRequest()
+    {
+        if (_requested is not { } panel) return;
+        _requested = null;
+        if (_panel == panel) Restore();
+        else Maximize(panel);
     }
 
     // A double-click registers on the second press, but that click's release still has to reach the tab

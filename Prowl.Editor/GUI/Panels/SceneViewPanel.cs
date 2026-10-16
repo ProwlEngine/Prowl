@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Core.Diagnostics;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
@@ -12,6 +13,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
@@ -36,6 +38,8 @@ public class SceneViewPanel : DockPanel
     private readonly HandleContext _handles = new();
     private readonly SceneToolContext _toolContext;
     private EditorCamera? _editorCamera;
+    /// <summary>Includes restored settings before the camera is created on the first draw.</summary>
+    internal bool ShowGizmos => _editorCamera?.ShowGizmos ?? _pendingGizmos ?? true;
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
     private bool _gizmoHasMoved;
@@ -110,7 +114,7 @@ public class SceneViewPanel : DockPanel
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        EditorGUI.HeaderIconButton(paper, "sv_hdr_settings", EditorIcons.Gear, () =>
+        EditorGUI.HeaderIconButton(paper, "sv_hdr_settings", EditorIcons.Gear, Loc.Get("scene.settings"), () =>
             Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
                 b.Header(Loc.Get("panel.scene"));
@@ -229,7 +233,7 @@ public class SceneViewPanel : DockPanel
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
         paper.Box("sv_move_btn")
-            .Tooltip(Loc.Get("scene.tool_move"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_move"), "Scene/ToolTranslate"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
@@ -239,7 +243,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
 
         paper.Box("sv_rotate_btn")
-            .Tooltip(Loc.Get("scene.tool_rotate"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_rotate"), "Scene/ToolRotate"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
@@ -249,7 +253,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
 
         paper.Box("sv_scale_btn")
-            .Tooltip(Loc.Get("scene.tool_scale"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_scale"), "Scene/ToolScale"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
@@ -259,7 +263,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
 
         paper.Box("sv_universal_btn")
-            .Tooltip(Loc.Get("scene.tool_universal"))
+            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_universal"), "Scene/ToolUniversal"))
             .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
             .Cursor(PaperCursor.Pointer)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
@@ -358,7 +362,7 @@ public class SceneViewPanel : DockPanel
             }
 
             // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
-            DrawSelectionGizmos();
+            DrawSceneGizmos(EditorApplication.Instance, scene);
             _editorCamera.Render(scene);
         }
         catch (Exception ex)
@@ -794,8 +798,17 @@ public class SceneViewPanel : DockPanel
         return ray.Origin + ray.Direction * 10f;
     }
 
+    /// <summary>Called only by views that are drawing; disabled gizmos do not consume the frame's shared pass.</summary>
+    internal void DrawSceneGizmos(EditorApplication? editor, Scene scene)
+    {
+        if (!ShowGizmos) return;
+        editor?.DrawSceneGizmos(scene);
+        DrawSelectionGizmos();
+    }
+
     private void DrawSelectionGizmos()
     {
+        using FrameStatScope stats = EditorFrameStats.Gizmos.Scope();
         foreach (object obj in Selection.Selected)
         {
             if (obj is not GameObject go) continue;
@@ -900,6 +913,7 @@ public class SceneViewPanel : DockPanel
 
     private void UpdateTransformGizmo()
     {
+        using FrameStatScope stats = EditorFrameStats.Gizmos.Scope();
         _gizmoActive = false;
         if (_wasGizmoActive && !_handles.IsHot(_handles.GetControlID(TransformControl)))
         {
