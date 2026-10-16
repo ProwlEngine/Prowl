@@ -176,6 +176,7 @@ public class Camera : Component
 
     [SerializeIgnore, NonSerialized, NotHeld] private int _viewId;
     [SerializeIgnore, NonSerialized, NotHeld] private int _stereoViewId;
+    [SerializeIgnore, NonSerialized, NotHeld] private bool _cut;
     [SerializeIgnore, NonSerialized, NotHeld] private readonly FeatureSet _features = new();
     [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderFeature> _activeFeatures = [];
     [SerializeIgnore, NonSerialized, NotHeld] private VolumeStack? _volumes;
@@ -308,6 +309,12 @@ public class Camera : Component
     /// </summary>
     public void Render(in CameraRenderOptions options = default) => Graphics.CameraPipeline.Render(this, options);
 
+    /// <summary>
+    /// Tells the next frame the camera jumped, like a teleport or a scene switch, so motion and every effect's history
+    /// start over instead of smearing the old view into the new one.
+    /// </summary>
+    public void Cut() => _cut = true;
+
     internal void RenderForward(in CameraRenderOptions options)
     {
         if (Graphics.Renderer == null || !GameObject.IsValid() || !GameObject.Scene.IsValid()) return;
@@ -328,6 +335,7 @@ public class Camera : Component
                 stereo.Features = BuildFeatures(options.Features);
                 stereo.Keywords = options.Keywords;
                 Graphics.AddView(stereo);
+                _cut = false;
             }
             if (framebuffer != null) XR.MirrorEyes(this, framebuffer);
             return;
@@ -346,6 +354,7 @@ public class Camera : Component
             view.CullingMask |= Debug.GizmoLayerMask;
         }
         Graphics.AddView(view);
+        _cut = false;
     }
 
     /// <summary>
@@ -371,6 +380,7 @@ public class Camera : Component
             Viewport = ClampViewport(ViewportRect),
             RenderScale = Maths.Clamp(RenderScale, 0.1f, 2.0f),
             Order = Depth,
+            Cut = _cut,
         };
         view.Layers[0] = new ViewLayer
         {
