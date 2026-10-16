@@ -918,11 +918,13 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
         {
             case ForceMode.Force:
                 body.Torque += jTorque;
+                body.SetActivationState(true);
                 break;
 
             case ForceMode.Acceleration:
                 // Cancelling the inertia means asking for a torque of I*alpha, both in world space.
                 body.Torque += JVector.Transform(jTorque, WorldInertia);
+                body.SetActivationState(true);
                 break;
 
             case ForceMode.Impulse:
