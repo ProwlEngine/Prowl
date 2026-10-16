@@ -866,7 +866,7 @@ public sealed class FeatureContext
         bool scene = _pass.Output == _pass.Chain.Scene;
         if (_pass.Clears)
         {
-            Float4 clear = _pass.Camera.Desc.Overlay ? default : _pass.Camera.Desc.ClearColor;
+            Float4 clear = _pass.Camera.Desc.Overlay ? default : _pass.Camera.Desc.ClearColor with { W = 1 };
             AttachmentOps depth = scene ? AttachmentOps.Clear(0f) : AttachmentOps.Loaded;
             Command.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), depth));
             Command.SetFullViewport();
@@ -1081,7 +1081,7 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
     {
         Framebuffer target = context.GetRenderTexture(_target).Framebuffer;
         Float4 rect = camera.Desc.Viewport;
-        Float4 clear = camera.Desc.ClearColor;
+        Float4 clear = camera.Desc.ClearColor with { W = 1 };
         Color clearColor = new(clear.X, clear.Y, clear.Z, clear.W);
         bool whole = rect == new Float4(0, 0, 1, 1), overlay = camera.Desc.Overlay;
         if (overlay && _source == null)

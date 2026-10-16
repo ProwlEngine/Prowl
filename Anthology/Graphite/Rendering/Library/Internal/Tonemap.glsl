@@ -135,7 +135,8 @@ vec3 LinearToGamma(vec3 lin)
 
 void main()
 {
-    vec3 color = LinearToGamma(clamp(Tonemap(Graphite_SampleSource(vUV).rgb), 0.0, 1.0));
+    vec4 source = Graphite_SampleSource(vUV);
+    vec3 color = LinearToGamma(clamp(Tonemap(source.rgb), 0.0, 1.0));
 
     float t = (1.0 - _Contrast) / 2.0;
     mat4 contrast = mat4(_Contrast, 0, 0, 0, 0, _Contrast, 0, 0, 0, 0, _Contrast, 0, t, t, t, 1);
@@ -146,5 +147,5 @@ void main()
         vec4(vec3(luminance.y * oneMinusSat) + vec3(0, _Saturation, 0), 0),
         vec4(vec3(luminance.z * oneMinusSat) + vec3(0, 0, _Saturation), 0),
         vec4(0, 0, 0, 1));
-    outColor = vec4((contrast * saturation * vec4(color, 1.0)).rgb, 1.0);
+    outColor = vec4((contrast * saturation * vec4(color, source.a)).rgb, source.a);
 }
