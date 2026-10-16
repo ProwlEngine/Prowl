@@ -159,6 +159,9 @@
   "console.log_success": "LogSuccess",
   "console.show_time": "Show Time",
   "console.multi_line": "Multi Line",
+  "console.copy": "Copy",
+  "console.copy_message": "Copy Message",
+  "console.copy_with_stack": "Copy With Stack Trace",
 
   "inspector.nothing_selected": "Nothing Selected",
   "inspector.nothing_selected_hint": "Select an asset or object to inspect it.",

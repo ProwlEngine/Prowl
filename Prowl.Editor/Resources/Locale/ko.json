@@ -90,6 +90,9 @@
   "console.log_success": "성공 로그",
   "console.show_time": "시간 표시",
   "console.multi_line": "여러 줄",
+  "console.copy": "복사",
+  "console.copy_message": "메시지 복사",
+  "console.copy_with_stack": "스택 트레이스와 함께 복사",
 
   "launcher.search": "프로젝트 검색",
   "launcher.open_project": "프로젝트 열기",

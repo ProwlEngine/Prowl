@@ -90,6 +90,9 @@
   "console.log_success": "成功ログ",
   "console.show_time": "時刻を表示",
   "console.multi_line": "複数行",
+  "console.copy": "コピー",
+  "console.copy_message": "メッセージをコピー",
+  "console.copy_with_stack": "スタックトレース付きでコピー",
 
   "launcher.search": "プロジェクトを検索",
   "launcher.open_project": "プロジェクトを開く",

@@ -90,6 +90,9 @@
   "console.log_success": "成功日志",
   "console.show_time": "显示时间",
   "console.multi_line": "多行",
+  "console.copy": "复制",
+  "console.copy_message": "复制消息",
+  "console.copy_with_stack": "复制消息及堆栈跟踪",
 
   "launcher.search": "搜索项目",
   "launcher.open_project": "打开项目",

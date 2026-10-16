@@ -244,6 +244,10 @@ public class ConsolePanel : DockPanel
                 using (paper.Row("con_search_wrap").Width(130).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Width(130).Height(24).Show();
 
+                bool hasSelection = SelectedEntry() != null;
+                LevelChip(paper, font, "con_copy", EditorIcons.Copy_I, EditorTheme.InkDim, Loc.Get("console.copy"), null, false, !hasSelection,
+                    () => { if (SelectedEntry() is { } entry) paper.SetClipboard(CopyText(entry, withStack: true)); });
+
                 ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, false, () => { lock (s_messagesLock) _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
                 ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
@@ -320,12 +324,17 @@ public class ConsolePanel : DockPanel
             }
 
             paper.Box("con_content").Width(width - 12).Height(count * rowH).Clip()
-                .OnClick(0, (_, e) =>
+                .OnClick(0, (_, e) => SelectRow((int)((float)e.RelativePosition.Y / rowH)))
+                .OnRightClick(0, (_, e) =>
                 {
-                    int row = (int)((float)e.RelativePosition.Y / rowH);
-                    if (row < 0 || row >= _filteredIndices.Count) return;
-                    _selectedFilteredIndex = row;
-                    Selection.Select(new ConsoleLogSelection(_messages[_filteredIndices[row]]));
+                    if (!SelectRow((int)((float)e.RelativePosition.Y / rowH))) return;
+                    LogEntry entry = SelectedEntry()!.Value;
+                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
+                    {
+                        menu.Item(Loc.Get("console.copy_message"), () => paper.SetClipboard(CopyText(entry, withStack: false)), icon: EditorIcons.Copy);
+                        if (entry.StackTrace is { StackFrames.Length: > 0 })
+                            menu.Item(Loc.Get("console.copy_with_stack"), () => paper.SetClipboard(CopyText(entry, withStack: true)), icon: EditorIcons.Copy);
+                    });
                 })
                 .OnPostLayout((handle, contentRect) =>
                 {
@@ -337,6 +346,30 @@ public class ConsolePanel : DockPanel
                     paper.Draw(ref handle, (canvas, r) => DrawRows(paper, canvas, r, font, rowH, first, last));
                 });
         });
+    }
+
+    private bool SelectRow(int row)
+    {
+        if (row < 0 || row >= _filteredIndices.Count) return false;
+        _selectedFilteredIndex = row;
+        Selection.Select(new ConsoleLogSelection(_messages[_filteredIndices[row]]));
+        return true;
+    }
+
+    private LogEntry? SelectedEntry()
+    {
+        if (_selectedFilteredIndex < 0 || _selectedFilteredIndex >= _filteredIndices.Count) return null;
+        int index = _filteredIndices[_selectedFilteredIndex];
+        return index >= 0 && index < _messages.Count ? _messages[index] : null;
+    }
+
+    internal static string CopyText(LogEntry entry, bool withStack)
+    {
+        if (!withStack || entry.StackTrace is not { StackFrames.Length: > 0 } trace) return entry.FullMessage;
+        var text = new System.Text.StringBuilder(entry.FullMessage);
+        foreach (DebugStackFrame frame in trace.StackFrames)
+            text.Append('\n').Append(frame);
+        return text.ToString();
     }
 
     private void DrawRows(Paper paper, Canvas canvas, Rect r, FontFile font, float rowH, int first, int last)

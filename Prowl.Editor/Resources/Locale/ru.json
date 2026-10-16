@@ -90,6 +90,9 @@
   "console.log_success": "Успех",
   "console.show_time": "Показать время",
   "console.multi_line": "Многострочный",
+  "console.copy": "Копировать",
+  "console.copy_message": "Копировать сообщение",
+  "console.copy_with_stack": "Копировать со стеком вызовов",
 
   "launcher.search": "Поиск проектов",
   "launcher.open_project": "Открыть проект",

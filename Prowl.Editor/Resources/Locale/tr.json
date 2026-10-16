@@ -90,6 +90,9 @@
   "console.log_success": "LogBasari",
   "console.show_time": "Zamani Goster",
   "console.multi_line": "Cok Satirli",
+  "console.copy": "Kopyala",
+  "console.copy_message": "Mesaji kopyala",
+  "console.copy_with_stack": "Yigin iziyle kopyala",
 
   "launcher.search": "Proje ara",
   "launcher.open_project": "Proje ac",

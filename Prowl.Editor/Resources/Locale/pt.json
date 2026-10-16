@@ -90,6 +90,9 @@
   "console.log_success": "LogSucesso",
   "console.show_time": "Mostrar hora",
   "console.multi_line": "Varias linhas",
+  "console.copy": "Copiar",
+  "console.copy_message": "Copiar mensagem",
+  "console.copy_with_stack": "Copiar com stack trace",
 
   "launcher.search": "Buscar projetos",
   "launcher.open_project": "Abrir projeto",
