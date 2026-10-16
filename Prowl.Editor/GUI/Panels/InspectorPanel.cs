@@ -243,16 +243,9 @@ public class InspectorPanel : DockPanel
             object? active = Selection.ActiveObject;
             if (active == null || IsFolderSelection(active))
                 active = _lastInspectable;
-
-            if (Selection.Count == 0 && _lastInspectable == null)
-            {
-                DrawEmpty(paper, font, width);
-                return;
-            }
-
             if (active == null)
             {
-                DrawEmpty(paper, font, width);
+                DrawEmpty(paper, font);
                 return;
             }
 
@@ -278,6 +271,12 @@ public class InspectorPanel : DockPanel
                 var gos = Selection.GetSelected<GameObject>().ToList();
                 if (gos.Count > 1)
                     GameObjectInspector.DrawMulti(paper, font, gos);
+                else if (gameObject.IsDestroyQueued || gameObject.IsDisposed)
+                {
+                    // Hide game objects that have been deleted.
+                    _lastInspectable = null;
+                    DrawEmpty(paper, font);
+                }
                 else
                     GameObjectInspector.Draw(paper, font, gameObject);
             }
@@ -369,7 +368,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawEmpty(Paper paper, Scribe.FontFile font, float width)
+    private void DrawEmpty(Paper paper, Scribe.FontFile font)
     {
         paper.Box("insp_empty").Height(80)
             .Text(Loc.Get("inspector.nothing_selected"), font)
