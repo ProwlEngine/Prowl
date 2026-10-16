@@ -377,6 +377,7 @@ public sealed class Shader
 
     public Shader(ShaderDefinition definition, IShaderCompiler? compiler)
     {
+        ExpandSurface(definition);
         Definition = definition;
         Name = definition.Name ?? "";
         Schema = new MaterialSchema(definition.Properties ?? []);
@@ -421,6 +422,66 @@ public sealed class Shader
         GlobalAxes = global;
         RenderQueue = queue;
         KeywordBindings = BindKeywords();
+    }
+
+    /// <summary>
+    /// Expands a Surface block into the standard passes of Graphite/Standard/Lit or Unlit, each running the block's code,
+    /// which defines void Surface(inout Graphite_SurfaceData s) over the standard surface before it is lit, and puts the
+    /// standard shader's properties before the shader's own, which replace any of the same name.
+    /// </summary>
+    private static void ExpandSurface(ShaderDefinition definition)
+    {
+        if (definition.Surface is not { } surface)
+            return;
+        string name = definition.Name ?? "";
+        string defines = surface.Model switch
+        {
+            "Lit" => "",
+            "Unlit" => "#define GRAPHITE_STANDARD_UNLIT\n",
+            _ => throw new ShaderLoadException($"{name}:{surface.Line}: Surface model must be \"Lit\" or \"Unlit\", found \"{surface.Model}\"."),
+        };
+        if (surface.Code.Length > 0)
+            defines += "#define GRAPHITE_SURFACE_FUNCTION\n";
+
+        ShaderPass Pass(string pass, string define, string variants) => new()
+        {
+            Name = pass,
+            Tags = new() { [PassType.Tag] = pass },
+            State = new PassState(),
+            Source = $"Shared\n{{\n#define {define}\n{defines}{variants}}}\n"
+                + "Vertex\n{\n#include \"Graphite/Standard/Standard.glsl\"\nvoid main() { Graphite_StandardVertex(); }\n}\n"
+                + $"Fragment\n{{\n#include \"Graphite/Standard/Standard.glsl\"\n{surface.Code}\nvoid main() {{ Graphite_StandardFragment(); }}\n}}\n",
+            SourceName = name,
+            SourceLine = surface.Line,
+        };
+
+        string litVariants = surface.Model == "Lit"
+            ? "#pragma variant _NORMALMAP\n#pragma variant _SURFACEMAP\n#pragma variant _OCCLUSIONMAP\n#pragma variant _EMISSION\n#pragma variant _PARALLAXMAP\n#pragma variant _TRANSLUCENCY\n#pragma variant _ANISOTROPIC\n"
+            : "";
+        ShaderPass[] standard = [Pass("Forward", "GRAPHITE_STANDARD_FORWARD", litVariants), Pass("Prepass", "GRAPHITE_STANDARD_DEPTH", ""), Pass("ShadowCaster", "GRAPHITE_STANDARD_DEPTH", "")];
+        foreach (ShaderPass own in definition.Passes ?? [])
+        {
+            if (Array.Exists(standard, p => p.Name == own.Name))
+                throw new ShaderLoadException($"{name}: the pass name {own.Name} is taken by the Surface block's passes.");
+        }
+        definition.Passes = [.. standard, .. definition.Passes ?? []];
+
+        if (name != ShaderLibrary.Prefix + surface.Model)
+        {
+            InternalShaders.Register();
+            string source = ShaderLibrary.Get($"{ShaderLibrary.Prefix}Standard/{surface.Model}.shader")!;
+            List<ShaderProperty> properties = new(ShaderParser.Parse(source).Properties ?? []);
+            foreach (ShaderProperty property in definition.Properties ?? [])
+            {
+                int index = properties.FindIndex(p => p.Name == property.Name);
+                if (index >= 0)
+                    properties[index] = property;
+                else
+                    properties.Add(property);
+            }
+            definition.Properties = [.. properties];
+        }
+        definition.Surface = null;
     }
 
     /// <summary>

@@ -186,6 +186,12 @@ public struct ViewDesc
     /// <summary>Render resolution against the viewport's size in the target, presented scaled to fit.</summary>
     public float RenderScale;
 
+    /// <summary>
+    /// The camera jumped, like a teleport or a scene switch: this frame has no previous one, so motion is none and every
+    /// feature's history starts over.
+    /// </summary>
+    public bool Cut;
+
     /// <summary>Features of this view alone, over the world's.</summary>
     public FeatureSet? Features;
 
@@ -686,6 +692,18 @@ public sealed class Renderer : IDisposable
         _removedWorlds.Clear();
     }
 
+    private EffectResources? _effects;
+
+    /// <summary>The stock effects' programs and samplers, made the first time an effect asks and freed with the renderer.</summary>
+    internal EffectResources Effects
+    {
+        get
+        {
+            lock (this)
+                return _effects ??= new EffectResources(this);
+        }
+    }
+
     /// <summary>
     /// Waits until the render thread has finished the CPU side of the last submitted frame, then hands readbacks and
     /// probe bakes the GPU has finished to their callbacks. Host thread.
@@ -729,6 +747,7 @@ public sealed class Renderer : IDisposable
         foreach ((_, DeviceBuffer buffer) in _retiring)
             buffer.Dispose();
         _frame.Dispose();
+        _effects?.Dispose();
         _globals.Dispose();
         _materials.Dispose();
         _geometry.Dispose();

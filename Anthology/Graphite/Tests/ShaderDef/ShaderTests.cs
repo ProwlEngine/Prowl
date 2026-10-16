@@ -44,6 +44,28 @@ public class ShaderTests
 
 
     [Fact]
+    public void SurfaceBlocks_ParseAsData_WithoutAnyRendererLibrary()
+    {
+        ShaderDefinition shader = ShaderParser.Parse("""
+            Shader "Example/Rim"
+            {
+                Properties { _RimColor("Rim", Color) = (1, 1, 1, 1) }
+                Surface "Lit"
+                {
+                    GLSLPROGRAM
+                    void Surface(inout Graphite_SurfaceData s) { }
+                    ENDGLSL
+                }
+            }
+            """);
+
+        Assert.Equal("Lit", shader.Surface!.Model);
+        Assert.Contains("void Surface", shader.Surface.Code);
+        Assert.Empty(shader.Passes!);
+        Assert.Single(shader.Properties!);
+    }
+
+    [Fact]
     public void ParsesNamePropertiesPassesAndFallback()
     {
         ShaderDefinition shader = Parse.Shader(FullShader);

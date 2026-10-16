@@ -1160,12 +1160,12 @@ public sealed class FeatureTests : IDisposable
         Frame(View());
         Assert.Equal(1, Targets());
 
-        using TemporalAntiAliasing taa = new(_renderer);
+        TemporalAntiAliasing taa = new(_renderer);
         _world.Features.Add(taa);
         Frame(View());
         Assert.Equal(2, Targets());
 
-        using ScreenSpaceReflections ssr = new(_renderer);
+        ScreenSpaceReflections ssr = new(_renderer);
         _world.Features.Add(ssr);
         Frame(View());
         Assert.Equal(4, Targets());
@@ -1183,7 +1183,7 @@ public sealed class FeatureTests : IDisposable
         Frame(View());
         Assert.Equal(default, _renderer.Frame.Camera(1)!.Jitter);
 
-        using TemporalAntiAliasing taa = new(_renderer) { JitterSpread = 4 };
+        TemporalAntiAliasing taa = new(_renderer) { JitterSpread = 4 };
         _world.Features.Add(taa);
         List<Float2> jitters = new();
         for (int frame = 0; frame < 5; frame++)
@@ -1203,7 +1203,7 @@ public sealed class FeatureTests : IDisposable
     {
         // A white plane from a quarter into the middle column onwards: pixel 8 spans 0 to 0.5, three quarters covered
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(4.125, 0, 10)) }, [Unlit(new Float3(1, 1, 1))]);
-        using TemporalAntiAliasing taa = new(_renderer) { Sharpness = 0, JitterSpread = 8 };
+        TemporalAntiAliasing taa = new(_renderer) { Sharpness = 0, JitterSpread = 8 };
         _world.Features.Add(taa);
         Float4[] pixels = [];
         for (int frame = 0; frame < 120; frame++)
@@ -1220,7 +1220,7 @@ public sealed class FeatureTests : IDisposable
     {
         RenderableHandle square = AddMoving(new Double3(0, 0, 10), motionVectors: true);
         _world.SetTransform(square, Double4x4.CreateTranslation(new Double3(-2, 0, 10)) * Double4x4.CreateScale(0.25));
-        using TemporalAntiAliasing taa = new(_renderer) { Sharpness = 0 };
+        TemporalAntiAliasing taa = new(_renderer) { Sharpness = 0 };
         _world.Features.Add(taa);
         for (int frame = 0; frame < 30; frame++)
             Frame(View());
@@ -1315,6 +1315,43 @@ public sealed class FeatureTests : IDisposable
             Written = (context.Color!.Width, context.Color.Height);
             context.Fullscreen(program);
         }
+    }
+
+    // Keeps a history of the colour, noting each frame whether it had one and a previous frame
+    private sealed class Remembers(FullscreenProgram program) : RenderFeature
+    {
+        private TextureHandle _history;
+        public readonly List<(bool History, bool Previous)> Seen = new();
+
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+
+        public override void Setup(FeatureBuilder builder, in FeatureView view)
+        {
+            builder.ReadColor();
+            _history = builder.History("Kept", view.Texture(PixelFormat.R16_G16_B16_A16_Float));
+        }
+
+        public override void Render(FeatureContext context)
+        {
+            Seen.Add((context.History(_history) != null, context.HasPreviousFrame));
+            context.Fullscreen(program, context.Get(_history));
+        }
+    }
+
+    [Fact]
+    public void ACut_StartsMotionAndHistoryOver()
+    {
+        AddQuad(new Float3(1, 1, 1));
+        Remembers remembers = new(Program("void main() { outColor = Graphite_SampleSource(vUV); }"));
+        _world.Features.Add(remembers);
+        Frame(View());
+        Frame(View());
+        ViewDesc cut = View();
+        cut.Cut = true;
+        Frame(cut);
+        Frame(View());
+
+        Assert.Equal([(false, false), (true, true), (false, false), (true, true)], remembers.Seen);
     }
 
     [Fact]

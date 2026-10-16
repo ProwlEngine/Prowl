@@ -11,13 +11,12 @@ namespace Prowl.Graphite.Rendering;
 /// neighbourhood's colour spread, then sharpened. Layered views keep a history per layer. In the AntiAliasing group with
 /// FXAA and SMAA.
 /// </summary>
-public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
+public sealed class TemporalAntiAliasing : RenderFeature
 {
     public override SceneTargets SceneReads => SceneTargets.Motion;
 
     private readonly EffectResources _resources;
     private readonly FullscreenProgram _resolve, _sharpen;
-    private bool _disposed;
     private readonly PropertySet _properties = new(), _sharpening = new();
     private Settings _settings;
 
@@ -31,7 +30,7 @@ public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
 
     public TemporalAntiAliasing(Renderer renderer)
     {
-        _resources = EffectResources.Acquire(renderer);
+        _resources = renderer.Effects;
         _resolve = _resources.Program("Taa");
         _sharpen = _resources.Program("Taa", "#define TAA_SHARPEN 1\n");
     }
@@ -91,13 +90,5 @@ public sealed class TemporalAntiAliasing : RenderFeature, IDisposable
         _sharpening.SetFloat2("_Resolution", resolution);
         _sharpening.SetFloat("_Sharpness", _settings.Sharpness);
         context.Fullscreen(_sharpen, _sharpening);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-        _disposed = true;
-        _resources.Release();
     }
 }

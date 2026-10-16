@@ -6,7 +6,7 @@ namespace Prowl.Graphite.Rendering;
 
 /// <summary>One layer of a view as shaders read it through Graphite_View(), 464 bytes, matching Graphite_ViewData in Core.glsl.</summary>
 [StructLayout(LayoutKind.Sequential)]
-internal struct ViewBlock
+public struct ViewBlock
 {
     public Float4x4 View;
     public Float4x4 Projection;

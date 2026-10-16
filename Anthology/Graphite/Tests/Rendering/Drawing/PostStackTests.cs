@@ -178,9 +178,8 @@ public sealed class PostStackTests : IDisposable
         _device.Dispose();
     }
 
-    private T Effect<T>(T effect) where T : RenderFeature, IDisposable
+    private T Effect<T>(T effect) where T : RenderFeature
     {
-        _owned.Add(effect);
         _world.Features.Add(effect);
         return effect;
     }
@@ -571,8 +570,6 @@ public sealed class PostStackTests : IDisposable
     {
         Renderer r = _renderer;
         List<RenderFeature> effects = [new Vignette(r), new FilmGrain(r), new Fxaa(r), new ColorLookup(r), new ColorGrading(r), new EdgeDetection(r), new Sharpen(r), new ChromaticAberration(r), new Pixelation(r)];
-        foreach (RenderFeature effect in effects)
-            _owned.Add((IDisposable)effect);
         string[] order = [.. effects.OrderBy(e => e.Order).Select(e => e.GetType().Name)];
         Assert.Equal(["Pixelation", "ChromaticAberration", "Sharpen", "EdgeDetection", "ColorGrading", "ColorLookup", "Fxaa", "FilmGrain", "Vignette"], order);
     }

@@ -8,47 +8,16 @@ namespace Prowl.Graphite.Rendering;
 
 /// <summary>
 /// The fullscreen programs and samplers of the stock effects, built from the library's Graphite/Internal files and
-/// shared by every effect of a renderer, so a new effect instance compiles nothing already built. Effects acquire
-/// them and release them when disposed; the last release frees them.
+/// shared by every effect of a renderer, so a new effect instance compiles nothing already built. The renderer owns
+/// them and frees them when it is disposed.
 /// </summary>
-internal sealed class EffectResources
+internal sealed class EffectResources : IDisposable
 {
-    private static readonly Dictionary<Renderer, EffectResources> s_shared = new();
-
     private readonly Renderer _renderer;
     private readonly Dictionary<string, FullscreenProgram> _programs = new(StringComparer.Ordinal);
-    private int _users;
 
-    /// <summary>The renderer's shared resources, made on first use. Pair with <see cref="Release"/>.</summary>
-    public static EffectResources Acquire(Renderer renderer)
+    public void Dispose()
     {
-        lock (s_shared)
-        {
-            if (!s_shared.TryGetValue(renderer, out EffectResources? resources))
-            {
-                resources = new EffectResources(renderer);
-                s_shared[renderer] = resources;
-            }
-            resources._users++;
-            return resources;
-        }
-    }
-
-    /// <summary>The shared resources of a renderer if any effect holds them, for tests.</summary>
-    internal static EffectResources? Peek(Renderer renderer)
-    {
-        lock (s_shared)
-            return s_shared.GetValueOrDefault(renderer);
-    }
-
-    public void Release()
-    {
-        lock (s_shared)
-        {
-            if (--_users > 0)
-                return;
-            s_shared.Remove(_renderer);
-        }
         foreach (FullscreenProgram program in _programs.Values)
             program.Dispose();
         _programs.Clear();
@@ -60,7 +29,7 @@ internal sealed class EffectResources
     /// <summary>How many programs were built, for tests.</summary>
     internal int ProgramCount => _programs.Count;
 
-    private EffectResources(Renderer renderer)
+    public EffectResources(Renderer renderer)
     {
         _renderer = renderer;
         SamplerDescription clamp = SamplerDescription.Linear with
@@ -97,13 +66,11 @@ internal sealed class EffectResources
 
 /// <summary>
 /// A stock effect: a port of one of Prowl's image effects, its programs built from the library's Graphite/Internal files
-/// and its settings copied at Extract. Effects of one renderer share their programs.
+/// and its settings copied at Extract. Effects of one renderer share their programs, which the renderer owns.
 /// </summary>
-public abstract class PostEffect(Renderer renderer) : RenderFeature, IDisposable
+public abstract class PostEffect(Renderer renderer) : RenderFeature
 {
-    private bool _disposed;
-
-    private protected EffectResources Resources { get; } = EffectResources.Acquire(renderer);
+    private protected EffectResources Resources { get; } = renderer.Effects;
 
     protected Sampler LinearClamp => Resources.LinearClamp;
     protected Sampler PointClamp => Resources.PointClamp;
@@ -112,14 +79,6 @@ public abstract class PostEffect(Renderer renderer) : RenderFeature, IDisposable
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
     protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null)
         => Resources.Program(file, defines, source, blend);
-
-    public virtual void Dispose()
-    {
-        if (_disposed)
-            return;
-        _disposed = true;
-        Resources.Release();
-    }
 
     protected static PixelFormat Hdr => PixelFormat.R16_G16_B16_A16_Float;
 }
@@ -426,14 +385,13 @@ public sealed class Bloom : PostEffect
 /// indirect light only, read by every renderable drawn after. Normals are rebuilt from depth and history follows depth
 /// and the camera, as the prepass leaves neither normals nor motion.
 /// </summary>
-public sealed class Gtao : ScreenLightingFeature, IDisposable
+public sealed class Gtao : ScreenLightingFeature
 {
     private readonly EffectResources _resources;
     private readonly FullscreenProgram _depth, _ao, _temporal, _blur, _copy;
     private readonly PropertySet _properties = new();
     private Settings _settings;
     private (bool Temporal, bool Blur) _declared = (true, true);
-    private bool _disposed;
 
     private readonly record struct Settings(int Slices, int DirectionSamples, float Radius, float Intensity, float BlurRadius, bool Temporal, float TemporalResponse);
 
@@ -445,7 +403,7 @@ public sealed class Gtao : ScreenLightingFeature, IDisposable
 
     public Gtao(Renderer renderer)
     {
-        _resources = EffectResources.Acquire(renderer);
+        _resources = renderer.Effects;
         _depth = _resources.Program("Gtao", "#define GTAO_DEPTH 1\n", source: false);
         _ao = _resources.Program("Gtao", "#define GTAO_AO 1\n", source: false);
         _temporal = _resources.Program("Gtao", "#define GTAO_TEMPORAL 1\n", source: false);
@@ -557,14 +515,6 @@ public sealed class Gtao : ScreenLightingFeature, IDisposable
         }
         _properties.SetTexture("_MainTex", result.ColorTextures[0], _resources.LinearClamp);
         context.Fullscreen(_copy, visibility, _properties);
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-        _disposed = true;
-        _resources.Release();
     }
 }
 

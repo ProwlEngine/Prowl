@@ -837,7 +837,8 @@ public sealed class FeatureContext
 
     internal FeatureChain Chain => _pass.Chain;
 
-    internal RenderContext Graph { get; set; } = null!;
+    /// <summary>The underlying graph, for resources the feature declared through <see cref="FeatureBuilder.Graph"/>.</summary>
+    public RenderContext Graph { get; internal set; } = null!;
 
     public CommandBuffer Command { get; internal set; } = null!;
     public FeatureView View { get; internal set; }
@@ -865,7 +866,7 @@ public sealed class FeatureContext
     public RenderTexture Get(TextureHandle texture) => Graph.GetRenderTexture(texture);
 
     /// <summary>The view's first layer as shaders read it this frame, jittered when the view jitters.</summary>
-    internal ViewBlock Block => _pass.Camera.Blocks[0];
+    public ViewBlock Block => _pass.Camera.Blocks[0];
 
     /// <summary>Whether the view drew last frame, so motion and history from then mean something.</summary>
     public bool HasPreviousFrame => _pass.Camera.HadPrevious;
@@ -893,7 +894,7 @@ public sealed class FeatureContext
     }
 
     /// <summary>The view's layers as shaders read them this frame, jittered when the view jitters.</summary>
-    internal ReadOnlySpan<ViewBlock> Blocks => _pass.Camera.Blocks.AsSpan(0, View.LayerCount);
+    public ReadOnlySpan<ViewBlock> Blocks => _pass.Camera.Blocks.AsSpan(0, View.LayerCount);
 
     /// <summary>A history texture as it was some frames ago, or null before it holds one.</summary>
     public RenderTexture? History(TextureHandle texture, int framesAgo = 1)

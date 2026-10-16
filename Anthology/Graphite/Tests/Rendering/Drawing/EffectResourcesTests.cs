@@ -26,31 +26,12 @@ public sealed class EffectResourcesTests : IDisposable
     [Fact]
     public void SecondInstance_ReusesPrograms()
     {
-        var first = new Bloom(_renderer);
-        int built = EffectResources.Peek(_renderer)!.ProgramCount;
-        var second = new Bloom(_renderer);
-        var taa = new TemporalAntiAliasing(_renderer);
-        var taa2 = new TemporalAntiAliasing(_renderer);
+        _ = new Bloom(_renderer);
+        int built = _renderer.Effects.ProgramCount;
+        _ = new Bloom(_renderer);
+        _ = new TemporalAntiAliasing(_renderer);
+        _ = new TemporalAntiAliasing(_renderer);
 
-        Assert.Equal(built + 2, EffectResources.Peek(_renderer)!.ProgramCount);
-
-        first.Dispose();
-        second.Dispose();
-        taa.Dispose();
-        Assert.NotNull(EffectResources.Peek(_renderer));
-        taa2.Dispose();
-        Assert.Null(EffectResources.Peek(_renderer));
-    }
-
-    [Fact]
-    public void DisposeTwice_ReleasesOnce()
-    {
-        var keep = new Vignette(_renderer);
-        var other = new Vignette(_renderer);
-        other.Dispose();
-        other.Dispose();
-        Assert.NotNull(EffectResources.Peek(_renderer));
-        keep.Dispose();
-        Assert.Null(EffectResources.Peek(_renderer));
+        Assert.Equal(built + 2, _renderer.Effects.ProgramCount);
     }
 }

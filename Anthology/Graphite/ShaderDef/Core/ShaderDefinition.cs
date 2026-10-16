@@ -7,6 +7,10 @@ using Prowl.Vector;
 namespace Prowl.Graphite.ShaderDef;
 
 
+/// <summary>A Surface block: the shading model it names, its code and the document line it starts on.</summary>
+public sealed record ShaderSurface(string Model, string Code, int Line);
+
+
 /// <summary>
 /// Parsed shaderdef shader, plus runtime binding to a device/compiler once Create is called.
 /// </summary>
@@ -31,6 +35,12 @@ public sealed class ShaderDefinition
     /// Render passes in the shader.
     /// </summary>
     public ShaderPass[]? Passes;
+
+    /// <summary>
+    /// The shader's Surface block, a shading model and the code run over its surface, which the renderer that loads the
+    /// shader expands into passes and properties. Null without one, or once expanded.
+    /// </summary>
+    public ShaderSurface? Surface;
 
 
     private bool _created;

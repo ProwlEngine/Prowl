@@ -1610,6 +1610,11 @@ internal sealed partial class FramePipeline : IDisposable
             camera.LayerCount = view.LayerCount;
             camera.HasPrevious = false;
         }
+        if (view.Cut)
+        {
+            camera.HasPrevious = false;
+            camera.Rebuild = true;
+        }
         camera.World = world;
         camera.ResolveKeywords();
         if (camera.HostBuffers != world.World.Globals.BufferList)
