@@ -24,8 +24,6 @@ public sealed class SerialTestCollection { }
 public sealed class ApiContractTests
 {
     const string Frag = "#version 450\nlayout(location=0) in float f;\nlayout(location=0) out float o;\n";
-    const string HostCrashSkip =
-        "Terminates the test host while the bug exists (uncatchable StackOverflowException / endless loop). Remove Skip after the fix.";
 
     static uint[] Words(byte[] bytes)
     {
@@ -59,13 +57,25 @@ public sealed class ApiContractTests
         Assert.Equal("Prism compile", thread);
     }
 
+    [Fact]
+    public void ParseRunsOnTheCompileLane()
+    {
+        // The recursive-descent parser overflows a 1 MB thread on deep expressions unless it runs on the lane.
+        string src = "#version 450\nlayout(location=0) out float o;\nvoid main(){ o = " + new string('(', 3000) + "1.0" + new string(')', 3000) + "; }\n";
+        Exception? error = null;
+        var t = new Thread(() => { try { Parser.Parse(src); } catch (Exception e) { error = e; } }, 1024 * 1024);
+        t.Start(); t.Join();
+        Assert.True(error is null, error?.ToString());
+    }
+
     // ---- #6: SpirVOptimizer.Optimize must not recurse on the caller's stack ----
 
-    [Fact(Skip = HostCrashSkip)]
-    public void OptimizeOfDeeplyNestedLoopsIsNotFatalOnAnOrdinaryThread()
+    [Fact]
+    public void OptimizeOfDeepControlFlowIsNotFatalOnAnOrdinaryThread()
     {
-        string src = Frag + "void main(){ float x = 0.0; " + string.Concat(Enumerable.Repeat("while (x < f) { ", 2000))
-                   + "x += 1.0; " + new string('}', 2000) + " o = x; }\n";
+        // Nesting is capped at SPIR-V's 1023 limit, so depth comes from a long chain of branches instead: the
+        // recursive CFG walks overflow a 1.5 MB stack on it unless Optimize moves to the compile lane.
+        string src = Frag + "void main(){ float x = 0.0; " + string.Concat(Enumerable.Repeat("if (x < f) x += 1.0; ", 8000)) + " o = x; }\n";
         uint[] words = GlslCompiler.Compile(src, ShaderStage.Fragment).Words.ToArray();
         Exception? error = null;
         var t = new Thread(() => { try { SpirVOptimizer.Optimize(words); } catch (Exception e) { error = e; } }, 1536 * 1024);
@@ -75,7 +85,7 @@ public sealed class ApiContractTests
 
     // ---- #7: corrupt modules must be a GlslParseException, never a stack overflow or a hang ----
 
-    [Theory(Skip = HostCrashSkip)]
+    [Theory]
     [InlineData("corrupt_selfref_access_chain.spv")]      // AdceFunction.AddStores recursion
     [InlineData("corrupt_bound_one.spv")]                 // valid module with id bound forced to 1
     [InlineData("corrupt_bound_max_feedsastore.spv")]     // LocalSingleStoreElim.FeedsAStore recursion

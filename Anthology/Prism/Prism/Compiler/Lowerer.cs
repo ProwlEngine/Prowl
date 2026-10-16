@@ -42,13 +42,13 @@ public sealed partial class Lowerer
     // Var resolves the owning block's variable, materializing the block on the first member reference.
     // TrivialSymbol mirrors glslang isTrivialLeaf on the BLOCK: only a uniform/push_constant block is a
     // symbol it counts as trivial to read; a buffer block and an in/out block are not.
-    readonly record struct BlockMember(Func<uint> Var, int Index, GlslType Type, StorageClass Storage, BlockLayout? Layout = null, bool TrivialSymbol = false, MemQual Mem = MemQual.None);
+    readonly record struct BlockMember(Func<uint> Var, int Index, GlslType Type, StorageClass Storage, BlockLayout? Layout = null, bool TrivialSymbol = false, MemQual Mem = MemQual.None, int Prec = 0);
     // Id is assigned when the function is emitted (glslang allocates the function id after its
     // parameter type/ids), so it is mutable rather than a positional record field.
-    sealed record UserFunction(GlslType ReturnType, IReadOnlyList<FnParam> Params) { public uint Id; }
+    sealed record UserFunction(GlslType ReturnType, IReadOnlyList<FnParam> Params, bool ReturnRelaxed = false) { public uint Id; }
     // ByValue marks a `const in` parameter: nothing can write it, so glslang passes the r-value straight
     // through rather than a Function pointer to a copy.
-    sealed record FnParam(string Name, GlslType Type, bool IsIn, bool IsOut, bool ByValue = false);
+    sealed record FnParam(string Name, GlslType Type, bool IsIn, bool IsOut, bool ByValue = false, bool Relaxed = false);
 
     // A compile-time-folded constant value: a scalar (F holds a float, I holds an int/uint/bool) or
     // an aggregate (vector components, matrix columns, array elements, or struct fields).
@@ -116,7 +116,19 @@ public sealed partial class Lowerer
         ["gl_BaseInstanceARB"] = (BuiltIn.BaseInstance, Types.Int, false, Capability.DrawParameters, "SPV_KHR_shader_draw_parameters"),
         ["gl_DrawIDARB"] = (BuiltIn.DrawIndex, Types.Int, false, Capability.DrawParameters, "SPV_KHR_shader_draw_parameters"),
         ["gl_ShadingRateEXT"] = (BuiltIn.ShadingRateKHR, Types.Int, false, Capability.FragmentShadingRateKHR, "SPV_KHR_fragment_shading_rate"),
+        // Implicitly sized: the largest constant index used decides its length (see BuiltinType).
+        ["gl_ViewportMask"] = (BuiltIn.ViewportMaskNV, new RuntimeArrayType(Types.Int), true, Capability.ShaderViewportMaskNV, "SPV_NV_viewport_array2"),
+        // GL_NV_mesh_shader scalars and arrays outside the per-vertex/per-primitive blocks.
+        ["gl_TaskCountNV"] = (BuiltIn.TaskCountNV, Types.UInt, true, null, null),
+        ["gl_MeshViewCountNV"] = (BuiltIn.MeshViewCountNV, Types.UInt, false, null, null),
+        ["gl_MeshViewIndicesNV"] = (BuiltIn.MeshViewIndicesNV, new ArrayType(Types.UInt, 4), false, null, null),
+        ["gl_FragSizeEXT"] = (BuiltIn.FragSizeEXT, new VectorType(Scalar.Int, 2), false, Capability.FragmentDensityEXT, "SPV_EXT_fragment_invocation_density"),
+        ["gl_FragInvocationCountEXT"] = (BuiltIn.FragInvocationCountEXT, Types.Int, false, Capability.FragmentDensityEXT, "SPV_EXT_fragment_invocation_density"),
         ["gl_BaryCoordEXT"] = (BuiltIn.BaryCoordKHR, Vec3, false, Capability.FragmentBarycentricKHR, "SPV_KHR_fragment_shader_barycentric"),
+        ["gl_BaryCoordNoPerspEXT"] = (BuiltIn.BaryCoordNoPerspKHR, Vec3, false, Capability.FragmentBarycentricKHR, "SPV_KHR_fragment_shader_barycentric"),
+        // The NV builtins share the KHR BuiltIn and capability values but come from the NV extension.
+        ["gl_BaryCoordNV"] = (BuiltIn.BaryCoordKHR, Vec3, false, Capability.FragmentBarycentricKHR, "SPV_NV_fragment_shader_barycentric"),
+        ["gl_BaryCoordNoPerspNV"] = (BuiltIn.BaryCoordNoPerspKHR, Vec3, false, Capability.FragmentBarycentricKHR, "SPV_NV_fragment_shader_barycentric"),
         ["gl_PrimitiveShadingRateEXT"] = (BuiltIn.PrimitiveShadingRateKHR, Types.Int, true, Capability.FragmentShadingRateKHR, "SPV_KHR_fragment_shading_rate"),
         ["gl_SubgroupSize"] = (BuiltIn.SubgroupSize, Types.UInt, false, Capability.GroupNonUniform, null),
         ["gl_SubgroupInvocationID"] = (BuiltIn.SubgroupLocalInvocationId, Types.UInt, false, Capability.GroupNonUniform, null),
@@ -127,6 +139,14 @@ public sealed partial class Lowerer
         ["gl_SubgroupGtMask"] = (BuiltIn.SubgroupGtMask, new VectorType(Scalar.UInt, 4), false, Capability.GroupNonUniformBallot, null),
         ["gl_SubgroupLeMask"] = (BuiltIn.SubgroupLeMask, new VectorType(Scalar.UInt, 4), false, Capability.GroupNonUniformBallot, null),
         ["gl_SubgroupLtMask"] = (BuiltIn.SubgroupLtMask, new VectorType(Scalar.UInt, 4), false, Capability.GroupNonUniformBallot, null),
+        // GL_ARB_shader_ballot: the masks are uint64 in GLSL but the SPIR-V built-ins are uvec4 (see ForcedBuiltinStorage).
+        ["gl_SubGroupSizeARB"] = (BuiltIn.SubgroupSize, Types.UInt, false, Capability.SubgroupBallotKHR, "SPV_KHR_shader_ballot"),
+        ["gl_SubGroupInvocationARB"] = (BuiltIn.SubgroupLocalInvocationId, Types.UInt, false, Capability.SubgroupBallotKHR, "SPV_KHR_shader_ballot"),
+        ["gl_SubGroupEqMaskARB"] = (BuiltIn.SubgroupEqMask, Types.UInt64, false, Capability.SubgroupBallotKHR, "SPV_KHR_shader_ballot"),
+        ["gl_SubGroupGeMaskARB"] = (BuiltIn.SubgroupGeMask, Types.UInt64, false, Capability.SubgroupBallotKHR, "SPV_KHR_shader_ballot"),
+        ["gl_SubGroupGtMaskARB"] = (BuiltIn.SubgroupGtMask, Types.UInt64, false, Capability.SubgroupBallotKHR, "SPV_KHR_shader_ballot"),
+        ["gl_SubGroupLeMaskARB"] = (BuiltIn.SubgroupLeMask, Types.UInt64, false, Capability.SubgroupBallotKHR, "SPV_KHR_shader_ballot"),
+        ["gl_SubGroupLtMaskARB"] = (BuiltIn.SubgroupLtMask, Types.UInt64, false, Capability.SubgroupBallotKHR, "SPV_KHR_shader_ballot"),
         // GL_EXT_ray_tracing builtins (all Input; the RayTracingKHR capability from the stage covers them).
         ["gl_LaunchIDEXT"] = (BuiltIn.LaunchIdKHR, UVec3, false, null, null),
         ["gl_LaunchSizeEXT"] = (BuiltIn.LaunchSizeKHR, UVec3, false, null, null),
@@ -143,6 +163,12 @@ public sealed partial class Lowerer
         ["gl_IncomingRayFlagsEXT"] = (BuiltIn.IncomingRayFlagsKHR, Types.UInt, false, null, null),
         ["gl_ObjectToWorldEXT"] = (BuiltIn.ObjectToWorldKHR, new MatrixType(4, 3), false, null, null),
         ["gl_WorldToObjectEXT"] = (BuiltIn.WorldToObjectKHR, new MatrixType(4, 3), false, null, null),
+        // The 3x4 forms read the same built-ins and transpose on load (see ForcedBuiltinStorage).
+        ["gl_ObjectToWorld3x4EXT"] = (BuiltIn.ObjectToWorldKHR, new MatrixType(3, 4), false, null, null),
+        ["gl_WorldToObject3x4EXT"] = (BuiltIn.WorldToObjectKHR, new MatrixType(3, 4), false, null, null),
+        ["gl_InstanceID"] = (BuiltIn.InstanceId, Types.Int, false, null, null),
+        ["gl_CullMaskEXT"] = (BuiltIn.CullMaskKHR, Types.UInt, false, null, null),
+        ["gl_HitTriangleVertexPositionsEXT"] = (BuiltIn.HitTriangleVertexPositionsKHR, new ArrayType(Vec3, 3), false, null, null),
         // GL_NV_ray_tracing builtins map to the same SPIR-V BuiltIn decorations as the EXT ones.
         ["gl_LaunchIDNV"] = (BuiltIn.LaunchIdKHR, UVec3, false, null, null),
         ["gl_LaunchSizeNV"] = (BuiltIn.LaunchSizeKHR, UVec3, false, null, null),
@@ -201,16 +227,60 @@ public sealed partial class Lowerer
 
     // Under a mediump/lowp default float precision, a user float symbol (and the values read from it) is
     // relaxed. Builtins keep their own precision, so this is only for declared user variables.
-    bool RelaxByDefault(GlslType type) => BaseScalar(type) switch
+    bool RelaxByDefault(GlslType type) => PrecisionScalar(type) switch
     {
         Scalar.Float => _defaultFloatMediump,
         Scalar.Int or Scalar.UInt => _defaultIntMediump,
         _ => false,
     };
 
+    // The scalar kind a type's precision qualifier applies to: scalars, vectors, matrices and arrays of them.
+    // A struct has no precision of its own (its members carry theirs).
+    static Scalar? PrecisionScalar(GlslType type) => type switch
+    {
+        ScalarType s => s.Kind,
+        VectorType v => v.Component,
+        MatrixType m => m.Component,
+        ArrayType a => PrecisionScalar(a.Element),
+        RuntimeArrayType r => PrecisionScalar(r.Element),
+        _ => null,
+    };
+
     // Whether a declared variable is relaxed: explicit mediump/lowp, or the type's mediump default unless
     // the declaration explicitly overrides with highp.
     bool DeclRelaxed(GlslType type, Qualifiers q) => IsRelaxed(q) || (!q.Has("highp") && RelaxByDefault(type));
+
+    // Struct and block members carry their own precision (explicit, else the default where the struct or block
+    // is declared); glslang puts it on the struct type as a member decoration. Plain structs are keyed by name,
+    // blocks by their struct instance (an in and an out block may share a name).
+    readonly Dictionary<string, bool[]> _structMemberRelaxed = [];
+    readonly Dictionary<StructType, bool[]> _blockMemberRelaxed = new(ReferenceEqualityComparer.Instance);
+
+    bool[]? MemberFlags(StructType st) =>
+        _blockMemberRelaxed.TryGetValue(st, out var b) ? b : _structMemberRelaxed.GetValueOrDefault(st.Name);
+
+    bool[] FieldFlags(IEnumerable<Field> fields) =>
+        [.. fields.SelectMany(f => f.Declarators.Select(d => DeclRelaxed(ApplyArrayDims(ResolveTypeRef(f.Type), d.Array), f.Qualifiers)))];
+
+    int MemberPrec(StructType st, int index, int inherited) =>
+        MemberFlags(st) is { } flags && index < flags.Length ? (flags[index] ? 1 : 2) : inherited;
+
+    bool ChainRelaxed(Chain c) => c.Prec == 1 || (c.Prec == 0 && _relaxedIds.Contains(c.Base));
+
+    // A value read through a chain takes the addressed member's (or variable's) precision.
+    Value WithChainPrecision(Value v, Chain c) =>
+        !v.Relaxed && ChainRelaxed(c) && CarriesPrecision(v.Type) ? v with { Id = Relax(v.Id), Relaxed = true }
+        : c.Prec == 0 ? NoneLoad(v, c.Base, c.PrecIndices) : c.Prec == 3 ? NoneValue(v) : v;
+
+    Access AccessOf(Chain c) => new(Collapse(c), c.Type, c.Storage, c.Layout, c.Physical, c.Mem, c.PhysAlign, c.PhysOffset, c.Base, MemberIndexOfChain(c), c.TypeId);
+
+    // Selects the default precisions in effect at a declaration. ES fragment shaders default int/uint to
+    // mediump (glslang ParseHelper); a `precision <q> int` overrides.
+    void UseDefaultPrecision(Decl decl)
+    {
+        _defaultFloatMediump = decl.FloatRelaxed;
+        _defaultIntMediump = decl.IntRelaxed ?? (_isEs && stage == ShaderStage.Fragment);
+    }
     readonly Dictionary<string, Value> _valueParams = [];   // `const in` params: the name IS the value, not a pointer
     readonly HashSet<string> _outParams = [];   // write-only params: reading one is not a trivial leaf
     readonly HashSet<string> _varyingNames = [];   // in/out globals: not trivial to read (checked without materializing)
@@ -282,8 +352,12 @@ public sealed partial class Lowerer
     uint _wgSizeConst;   // the gl_WorkGroupSize constant, built on first use (or at the end if unused)
     uint _glClipFrag, _glCullFrag;   // standalone gl_ClipDistance/gl_CullDistance input arrays in a fragment shader
     ExecutionMode? _depthCondition;   // conservative-depth mode from a `layout(depth_*) out float gl_FragDepth;` redeclaration
+    bool _layerViewportRelative;   // `layout(viewport_relative) out int gl_Layer;` (GL_NV_viewport_array2)
+    int? _layerSecondaryViewOffset;   // `layout(secondary_view_offset = N) out int gl_Layer;` (GL_NV_stereo_view_rendering)
+    ExecutionMode? _stencilCondition;   // AMD stencil mode from a `layout(stencil_ref_*_amd) out int gl_FragStencilRefARB;` redeclaration
     uint _currentBlock;   // label of the basic block currently being emitted (for OpPhi predecessors)
     GlslType _currentReturnType = Types.Void;   // return type of the function being lowered
+    bool _currentReturnRelaxed;                  // its return precision is relaxed
     bool _terminated;   // whether the current basic block already has a terminator
 
     // Rewinds a reused lowerer for the next compile: every collection is cleared (keeping capacity, so the
@@ -301,7 +375,7 @@ public sealed partial class Lowerer
         _blockStructs.Clear(); _bufferBlockStructs.Clear(); _blockLayout.Clear(); _layoutStructIds.Clear(); _layoutArrayIds.Clear(); _typeParts.Clear(); _blockVarTypes.Clear(); _arrayStrides.Clear(); _memberAlignBits.Clear(); _physAligned.Clear(); _bufferRefLayout.Clear(); _bufferRefRowMajor.Clear(); _bufferRefDefer.Clear();
         _pendingBlockBuilds.Clear(); _relaxedIds.Clear(); _valueParams.Clear(); _outParams.Clear();
         _varyingNames.Clear(); _preciseVars.Clear(); _builtinVars.Clear(); _userFunctions.Clear();
-        _structs.Clear(); _bufferRefs.Clear(); _bufferRefPtrIds.Clear(); _namedStructs.Clear();
+        _structs.Clear(); _structMemberRelaxed.Clear(); _blockMemberRelaxed.Clear(); _nonePrecision.Clear(); _noneVars.Clear(); _freshVars.Clear(); _bufferRefs.Clear(); _bufferRefPtrIds.Clear(); _namedStructs.Clear();
         _indexableTemps.Clear(); _blockStructIds.Clear(); _plainStructIds.Clear(); _constants.Clear();
         _constValues.Clear(); _pendingSpecConstants.Clear(); _specDefaults.Clear(); _pendingSpecExprs.Clear(); _specConstNames.Clear();
         _specConstIds.Clear(); _nonUniformIds.Clear(); _locals.Clear(); _scopeNames.Clear();
@@ -314,9 +388,11 @@ public sealed partial class Lowerer
         _usesStreams = _invariantPosition = _terminated = _nvMesh = _nvRayTracing = _xfbMode = _pushConstantSeen = false;
         _addressingModel = AddressingModel.Logical;
         _glPerVertex = _glIn = _glOut = _glTessInner = _glTessOuter = _glClipFrag = _glCullFrag = 0;
-        _glMeshVertices = _glMeshIndices = _glMeshPrimitives = _glMeshVerticesNV = _glPrimIndicesNV = _glPrimCountNV = 0;
+        _glMeshVertices = _glMeshIndices = _glMeshPrimitives = _glMeshVerticesNV = _glMeshPrimitivesNV = _glPrimIndicesNV = _glPrimCountNV = 0;
         _currentBlock = _wgSizeConst = 0;
-        _depthCondition = null;
+        _depthCondition = _stencilCondition = null;
+        _layerViewportRelative = false;
+        _layerSecondaryViewOffset = null;
         _currentReturnType = Types.Void;
         _inVertexCount = 32; _outVertexCount = 0;
         _meshMaxVertices = _meshMaxPrimitives = 0;
@@ -331,7 +407,7 @@ public sealed partial class Lowerer
         _writeOnlyVars.Clear();
         _writeOnlyMembers.Clear();
         _memberIndexOf.Clear();
-        _perVertexOut = _perVertexIn = _meshVerticesRedecl = null;
+        _perVertexOut = _perVertexIn = _meshVerticesRedecl = _meshVerticesNVRedecl = _meshPrimitivesNVRedecl = null;
         _localSize = [];
         return this;
     }
@@ -367,7 +443,7 @@ public sealed partial class Lowerer
         _preciseOps = PreciseAnalysis.Run(unit).Marked;
         // The legacy GL_NV_mesh_shader path uses the NV capability/extension/execution model and a richer
         // per-vertex block (with the PerViewNV members) instead of the EXT ones.
-        _nvMesh = stage == ShaderStage.Mesh && (unit.Extensions?.Contains("GL_NV_mesh_shader") ?? false);
+        _nvMesh = stage is ShaderStage.Mesh or ShaderStage.Task && !(unit.Extensions?.Contains("GL_EXT_mesh_shader") ?? false);
         _extensions.Clear();
         _extensions.UnionWith(unit.Extensions ?? []);
         // The legacy GL_NV_ray_tracing path shares KHR execution models, storage classes and builtins, but uses
@@ -385,6 +461,20 @@ public sealed partial class Lowerer
         });
         if (stage is ShaderStage.Mesh or ShaderStage.Task) _m.AddExtension(_nvMesh ? "SPV_NV_mesh_shader" : "SPV_EXT_mesh_shader");
         if (IsRayTracing(stage)) _m.AddExtension(_nvRayTracing ? "SPV_NV_ray_tracing" : "SPV_KHR_ray_tracing");
+        // glslang enables these for every hit/miss/intersection stage that requests the extension, used or not.
+        if (IsRayTracing(stage) && stage is not (ShaderStage.RayGen or ShaderStage.Callable))
+        {
+            if (unit.Extensions?.Contains("GL_EXT_ray_cull_mask") == true)
+            {
+                _m.AddCapability(Capability.RayCullMaskKHR);
+                _m.AddExtension("SPV_KHR_ray_cull_mask");
+            }
+            if (unit.Extensions?.Contains("GL_EXT_ray_tracing_position_fetch") == true)
+            {
+                _m.AddCapability(Capability.RayTracingPositionFetchKHR);
+                _m.AddExtension("SPV_KHR_ray_tracing_position_fetch");
+            }
+        }
 
         // Match glslang's module setup and id-allocation order exactly (SpvBuilder::makeEntryPoint):
         // the GLSL.std.450 import is always id 1 (even when unused), then void(2), main's void() type(3),
@@ -402,13 +492,12 @@ public sealed partial class Lowerer
         }
 
         _m.ImportExtInstSet("GLSL.std.450");
-        _defaultFloatMediump = unit.DefaultFloatRelaxed;   // `precision mediump/lowp float` relaxes user float values
         _isEs = unit.IsEs;
+        // ESSL's gl_PerVertex holds only gl_Position and gl_PointSize.
+        if (_isEs) { _perVertexOut = [("gl_Position", Vec4), ("gl_PointSize", Types.Float)]; _perVertexIn = [.. _perVertexOut]; }
         InitConversionRules(unit);
         _computeDerivatives = stage == ShaderStage.Compute && (InLayout(unit, "derivative_group_quadsNV") || InLayout(unit, "derivative_group_linearNV")
             || InLayout(unit, "derivative_group_quadsKHR") || InLayout(unit, "derivative_group_linearKHR"));
-        // ES fragment shaders default int/uint to mediump (glslang ParseHelper); a `precision <q> int` overrides.
-        _defaultIntMediump = unit.IntPrecisionRelaxed ?? (_isEs && stage == ShaderStage.Fragment);
         _addressingModel = physicalBuffers ? AddressingModel.PhysicalStorageBuffer64 : AddressingModel.Logical;
         // #pragma use_vulkan_memory_model opts the whole module into the Vulkan memory model up front.
         _vmmPragma = unit.Pragmas?.Contains("use_vulkan_memory_model") ?? false;
@@ -496,6 +585,7 @@ public sealed partial class Lowerer
                 if (_structs.ContainsKey(s.Name))
                     throw new GlslParseException($"'{s.Name}' : struct redefinition");
                 var fields = s.Members.SelectMany(f => f.Declarators.Select(d => (d.Name, Type: ApplyArrayDims(ResolveTypeRef(f.Type), d.Array)))).ToList();
+                _structMemberRelaxed[s.Name] = FieldFlags(s.Members);
                 // glslang reports a duplicate member at the DUPLICATE's line, not the struct's.
                 var seen = new HashSet<string>();
                 foreach (var f in s.Members)
@@ -612,6 +702,8 @@ public sealed partial class Lowerer
                 _m.AddExecutionMode(mainId, ExecutionMode.StencilRefReplacingEXT);
             if (_depthCondition is ExecutionMode dc)
                 _m.AddExecutionMode(mainId, dc);
+            if (_stencilCondition is ExecutionMode sc)
+                _m.AddExecutionMode(mainId, sc);
             if (InLayout(unit, "pixel_interlock_ordered"))
             {
                 _m.AddCapability(Capability.FragmentShaderPixelInterlockEXT);
@@ -1583,12 +1675,18 @@ public sealed partial class Lowerer
         foreach (var p in f.Parameters)
             if (p.Array.Any(d => d is null) || p.Type.Array?.Any(d => d is null) == true)
                 throw new GlslParseException("'' : array size required", f.Line);
-        var pars = f.Parameters.Select(p => new FnParam(
-            p.Name ?? "",
-            ApplyArrayDims(ResolveTypeRef(p.Type), p.Array),
-            IsIn: !p.Qualifiers.Has("out") || p.Qualifiers.Has("inout"),
-            IsOut: p.Qualifiers.Has("out") || p.Qualifiers.Has("inout"),
-            ByValue: p.Qualifiers.Has("const"))).ToList();
+        UseDefaultPrecision(f);
+        var pars = f.Parameters.Select(p =>
+        {
+            var type = ApplyArrayDims(ResolveTypeRef(p.Type), p.Array);
+            return new FnParam(
+                p.Name ?? "",
+                type,
+                IsIn: !p.Qualifiers.Has("out") || p.Qualifiers.Has("inout"),
+                IsOut: p.Qualifiers.Has("out") || p.Qualifiers.Has("inout"),
+                ByValue: p.Qualifiers.Has("const"),
+                Relaxed: IsOpaque(type) ? SamplerRelaxed(type, p.Qualifiers) : DeclRelaxed(type, p.Qualifiers));
+        }).ToList();
         // Overloading a built-in name is legal GLSL, but a signature the built-in itself has is a
         // redefinition (glslang: its parameters' precision qualifiers cannot match the built-in's). Where the
         // built-in's prototypes are modeled that is checked exactly; otherwise ES (which forbids overloading
@@ -1597,7 +1695,8 @@ public sealed partial class Lowerer
                 ? protos.Any(proto => proto.Params.Zip(pars).All(t => t.First.Equals(t.Second.Type)))
                 : _isEs && BuiltinFunctionNames.Contains(f.Name) && !pars.Any(p => ContainsUserStruct(p.Type)))
             throw new GlslParseException($"'{f.Name}' : cannot redefine or overload a built-in function");
-        var info = new UserFunction(ResolveTypeRef(f.ReturnType), pars);   // id assigned when emitted
+        var returnType = ResolveTypeRef(f.ReturnType);
+        var info = new UserFunction(returnType, pars, DeclRelaxed(returnType, f.Qualifiers));   // id assigned when emitted
         if (!_userFunctions.TryGetValue(f.Name, out var list)) _userFunctions[f.Name] = list = [];
         list.Add(info);
         return info;
@@ -1653,7 +1752,8 @@ public sealed partial class Lowerer
                 sb.Append('1');
                 break;
             case PureSamplerType ps: sb.Append(ps.Shadow ? "pS1" : "p1"); break;   // glslang: pure, shadow flag, no dim
-            case BufferReferenceType: sb.Append('1'); break;   // glslang has no letter for a reference, only the size
+            case BufferReferenceType: sb.Append('1'); break;
+            case RayQueryType: sb.Append("rq1"); break;   // glslang has no letter for a reference, only the size
             default: throw new GlslParseException($"cannot mangle parameter type '{t}'");
         }
     }
@@ -1701,6 +1801,9 @@ public sealed partial class Lowerer
             _m.AddName(info.Id, MangleFunction(f.Name, info.Params));
         }
         uint entryLabel = preLabel ?? _m.AllocId();
+        if (info.ReturnRelaxed) Relax(info.Id);
+        for (int i = 0; i < info.Params.Count; i++)
+            if (info.Params[i].Relaxed) Relax(paramIds[i]);
 
         // glslang names the parameters in makeFunctions (after the function name), during declaration.
         for (int i = 0; i < info.Params.Count; i++) _m.AddName(paramIds[i], info.Params[i].Name);
@@ -1718,12 +1821,10 @@ public sealed partial class Lowerer
     // a store at the top of the entry point, in source order, and does so BEFORE translating any
     // function body (makeGlobalInitializers). Even an unused global's initializer runs.
     // The module-scope declarators whose initializer runs at the top of main, in source order.
-    static IEnumerable<(string Name, Expr Init)> InitializedGlobals(TranslationUnit unit) =>
+    static IEnumerable<(GlobalVar Decl, string Name, Expr Init)> InitializedGlobals(TranslationUnit unit) =>
         unit.Declarations.OfType<GlobalVar>()
             .Where(g => !IsConstOrInterface(g.Qualifiers))
-            .SelectMany(g => g.Declarators)
-            .Where(d => d.Init is not null)
-            .Select(d => (d.Name, d.Init!));
+            .SelectMany(g => g.Declarators.Where(d => d.Init is not null).Select(d => (g, d.Name, d.Init!)));
 
     static IEnumerable<Expr> GlobalInitializers(TranslationUnit unit) =>
         InitializedGlobals(unit).Select(d => d.Init);
@@ -1732,9 +1833,15 @@ public sealed partial class Lowerer
     {
         _code.Clear();
         _vars.Clear();
-        foreach (var (name, init) in InitializedGlobals(unit))
+        foreach (var (decl, name, init) in InitializedGlobals(unit))
             if (GlobalType(name) is { } type)
-                MultiTypeStore(BuildAccess(new Ident(name)), LowerCoerced(init, type, $"initializing '{name}'"));
+            {
+                UseDefaultPrecision(decl);
+                var target = BuildAccess(new Ident(name));
+                var value = LowerCoerced(init, type, $"initializing '{name}'");
+                AssignPrecision(target, value);
+                MultiTypeStore(target, value);
+            }
         // An initializer that calls a function leaves its copy temps behind, and they belong to main.
         _globalInitCode = [.. _code];
         _globalInitVars = [.. _vars];
@@ -1767,16 +1874,18 @@ public sealed partial class Lowerer
         _loops.Clear();
         _terminated = false;
         _currentReturnType = d.Info.ReturnType;
+        _currentReturnRelaxed = d.Info.ReturnRelaxed;
         _currentBlock = d.EntryLabel;
         _cfDepth = 0;
         _inMain = d.Def.Name == "main";
+        UseDefaultPrecision(d.Def);
         _mainReturned = false;
 
         for (int i = 0; i < d.Info.Params.Count; i++)
         {
             var p = d.Info.Params[i];
             // A `const in` parameter IS its value, so it binds directly; the rest are pointers to load.
-            if (p.ByValue) _valueParams[p.Name] = new Value(d.ParamIds[i], p.Type, false);
+            if (p.ByValue) _valueParams[p.Name] = new Value(d.ParamIds[i], p.Type, false, p.Relaxed);
             else _locals[p.Name] = (p.Type, d.ParamIds[i]);
             if (!p.ByValue && IsOpaque(p.Type)) _uniformConstantParams.Add(d.ParamIds[i]);
             if (p.IsOut && !p.IsIn) _outParams.Add(p.Name);
@@ -2266,14 +2375,15 @@ public sealed partial class Lowerer
                     if (MaxConstIndexInUnit(d.Name, out _) is int gmx) t = SizedArray(gra.Element, gmx + 1);
                 }
                 string name = d.Name;
+                // Like a local, a mediump/lowp (or mediump-by-default) global is RelaxedPrecision.
+                bool relaxed = DeclRelaxed(t, quals);
                 _pendingGlobals[name] = (t, () =>
                 {
                     uint pointer = _m.TypePointer(StorageClass.Private, SpvType(t));
                     // Any initializer is a store at the top of main, not an OpVariable initializer.
                     uint variable = _m.GlobalVariable(pointer, StorageClass.Private);
                     _m.AddName(variable, name);
-                    // Like a local, a mediump/lowp (or mediump-by-default) global is RelaxedPrecision.
-                    if (DeclRelaxed(t, quals)) Relax(variable);
+                    if (relaxed) Relax(variable);
                     return new Global(t, StorageClass.Private, variable);
                 });
             }
@@ -2282,6 +2392,17 @@ public sealed partial class Lowerer
 
         foreach (var d in decl.Declarators)
         {
+            if (d.Name != "gl_FragDepth" && DepthConditionOf(decl.Qualifiers) is not null)
+                throw new GlslParseException("'layout qualifier' : can only apply depth layout to gl_FragDepth", decl.Line);
+            if (StencilConditionOf(decl.Qualifiers) is not null)
+            {
+                if (d.Name != "gl_FragStencilRefARB")
+                    throw new GlslParseException("'layout qualifier' : can only apply depth layout to gl_FragStencilRefARB", decl.Line);
+                if (_isEs || _glslVersion < 420)
+                    throw new GlslParseException("'stencil layout qualifier' : not supported for this version or the enabled extensions", decl.Line);
+                if (_stencilCondition is ExecutionMode prev && prev != StencilConditionOf(decl.Qualifiers))
+                    throw new GlslParseException("'redeclaration' : all redeclarations must use the same stencil layout on gl_FragStencilRefARB", decl.Line);
+            }
             // A gl_-prefixed name is a reserved built-in; `out float gl_FragDepth;` (optionally with a
             // conservative-depth layout) and similar redeclarations are handled by the built-in access
             // paths, so we only honor any execution-mode qualifier here rather than emit a user variable.
@@ -2291,13 +2412,15 @@ public sealed partial class Lowerer
                 if (d.Name is "gl_ClipDistance" or "gl_CullDistance" && ApplyArrayDims(ResolveTypeRef(decl.Type), d.Array) is ArrayType { Length: > 0 } sized)
                     _clipCullSizes[(d.Name, storage == StorageClass.Input)] = sized.Length;
                 _depthCondition = DepthConditionOf(decl.Qualifiers) ?? _depthCondition;
+                _stencilCondition = StencilConditionOf(decl.Qualifiers) ?? _stencilCondition;
+                if (d.Name == "gl_Layer") RedeclareLayer(decl.Qualifiers, decl.Line);
                 continue;
             }
             _varyingNames.Add(d.Name);
             // Geometry/tessellation/mesh per-vertex I/O is declared unsized ("[]"); size it to the
             // stage's vertex count. A mesh perprimitiveEXT output is per primitive, so it sizes to
             // max_primitives instead.
-            var type = ApplyArrayDims(ResolveTypeRef(decl.Type), d.Array);
+            var type = ApplyArrayDims(ResolveTypeRef(decl.Type), decl.Qualifiers.Has("perviewNV") ? MeshViewDims(d.Array, 1, d.Line) : d.Array);
             // A per-vertex/per-patch interface is declared unsized ("[]"); its outer dimension is the
             // vertex index, so it sizes to the stage's vertex count and does NOT consume extra locations.
             // glslang (isArrayedIo) strips that outer dimension whether it is implicit or explicitly sized.
@@ -2308,12 +2431,17 @@ public sealed partial class Lowerer
                 && !decl.Qualifiers.Has("patch")   // a patch input is per-patch, so it is not arrayed
                 && stage is ShaderStage.Geometry or ShaderStage.TessControl or ShaderStage.TessEvaluation)
                 throw new GlslParseException($"per-vertex input '{d.Name}' must be declared as an array in this stage");
+            // A fragment shader's per-vertex input holds the primitive's three vertices.
+            bool fragmentPerVertex = stage == ShaderStage.Fragment && perVertexArray;
             if (type is RuntimeArrayType rv)
             {
-                int count = decl.Qualifiers.Has("perprimitiveEXT") ? _meshMaxPrimitives
+                int count = decl.Qualifiers.Has("perprimitiveEXT") || decl.Qualifiers.Has("perprimitiveNV") ? _meshMaxPrimitives
+                          : fragmentPerVertex ? 3
                           : storage == StorageClass.Input ? _inVertexCount : _outVertexCount;
                 type = new ArrayType(rv.Element, count);
             }
+            else if (fragmentPerVertex && ((ArrayType)type).Length > 3)
+                throw new GlslParseException($"'{d.Name}' : cannot be greater than 3 for pervertexEXT", decl.Line);
             // An integer fragment input cannot be interpolated and must be declared 'flat' (VUID-04744);
             // omitting it is invalid GLSL, so throw rather than emit an invalid module.
             if (stage == ShaderStage.Fragment && storage == StorageClass.Input && !decl.Qualifiers.Has("flat")
@@ -2338,6 +2466,7 @@ public sealed partial class Lowerer
             var outLayout = _outLayouts.GetValueOrDefault(decl, DefaultOutLayout);
             string name = d.Name;
             if (quals.Has("precise")) _preciseVars.Add(name);
+            bool relaxedByDefault = !IsRelaxed(quals) && !quals.Has("highp") && RelaxByDefault(type);
             _pendingGlobals[name] = (type, () =>
             {
                 uint ptr = _m.TypePointer(storageValue, SpvType(type));
@@ -2346,7 +2475,7 @@ public sealed partial class Lowerer
                 NeedStorageInputOutput16(type);
                 // glslang emits interpolation/qualifier decorations before Location, but Invariant after it.
                 ApplyVariableQualifiers(var, quals);
-                if (!IsRelaxed(quals) && !quals.Has("highp") && RelaxByDefault(type)) Relax(var);
+                if (relaxedByDefault) Relax(var);
                 // glslang emits Component and Index before Location.
                 if (LayoutInt(quals, "component") is int comp) _m.Decorate(var, Decoration.Component, (uint)comp);
                 if (LayoutInt(quals, "index") is int idx) _m.Decorate(var, Decoration.Index, (uint)idx);
@@ -2359,6 +2488,13 @@ public sealed partial class Lowerer
                     if (_xfbMode && LayoutInt(quals, "xfb_offset") is int xfbOffset) _m.Decorate(var, Decoration.Offset, (uint)xfbOffset);
                     DecorateOutput(var, outLayout);
                 }
+                // glslang decorates the NV form first; both share the PerVertexKHR/FragmentBarycentricKHR values.
+                if (quals.Has("pervertexNV"))
+                {
+                    _m.Decorate(var, Decoration.PerVertexKHR);
+                    _m.AddCapability(Capability.FragmentBarycentricKHR);
+                    _m.AddExtension("SPV_NV_fragment_shader_barycentric");
+                }
                 if (quals.Has("pervertexEXT"))
                 {
                     _m.AddCapability(Capability.FragmentBarycentricKHR);
@@ -2370,6 +2506,21 @@ public sealed partial class Lowerer
                 return new Global(type, storageValue, var);
             });
         }
+    }
+
+    // A perviewNV mesh output has a view dimension (the second for a variable, the first for a block member)
+    // that must be gl_MaxMeshViewCountNV or implicitly sized to it (glslang checkAndResizeMeshViewDim).
+    IReadOnlyList<Expr?> MeshViewDims(IReadOnlyList<Expr?> dims, int viewDim, int line)
+    {
+        if (stage != ShaderStage.Mesh)
+            throw new GlslParseException("'perviewNV' : not supported in this stage", line);
+        if (dims.Count <= viewDim)
+            throw new GlslParseException("'perviewNV' : requires a view array dimension", line);
+        var sized = dims.ToList();
+        if (sized[viewDim] is null) sized[viewDim] = new Literal(TokenKind.IntConst, MeshViewCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        else if (EvalConst(sized[viewDim]!) is not CScalar { I: MeshViewCount })
+            throw new GlslParseException("'[]' : mesh view output array size must be gl_MaxMeshViewCountNV or implicitly sized", line);
+        return sized;
     }
 
     // An Input/Output variable holding a 16-bit type needs 16-bit I/O storage (GlslangToSpv createSpvVariable).
@@ -2403,6 +2554,7 @@ public sealed partial class Lowerer
             if (stage == ShaderStage.Fragment) AddFragmentPerPrimitiveCapability();
             _m.Decorate(var, Decoration.PerPrimitiveEXT);
         }
+        if (q.Has("perviewNV")) _m.Decorate(var, Decoration.PerViewNV);
         if (q.Has("flat")) _m.Decorate(var, Decoration.Flat);
         if (q.Has("noperspective")) _m.Decorate(var, Decoration.NoPerspective);
         if (q.Has("centroid")) _m.Decorate(var, Decoration.Centroid);
@@ -3479,6 +3631,13 @@ public sealed partial class Lowerer
     void EmitBlock(InterfaceBlock block)
     {
         RejectVoidMembers(block.Members);
+        if (_isEs && _glslVersion < 320 && !_extensions.Contains("GL_EXT_shader_io_blocks") && !_extensions.Contains("GL_OES_shader_io_blocks"))
+        {
+            if (stage == ShaderStage.Fragment && block.Qualifiers.Has("in"))
+                throw new GlslParseException("'fragment input block' : not supported for this version or the enabled extensions", block.Line);
+            if (stage == ShaderStage.Vertex && block.Qualifiers.Has("out"))
+                throw new GlslParseException("'vertex output block' : not supported for this version or the enabled extensions", block.Line);
+        }
         bool isBuffer = block.Qualifiers.Has("buffer");
         bool isPushConstant = block.Qualifiers.Layout.Any(i => i.Name == "push_constant");
         if (isPushConstant && (LayoutInt(block.Qualifiers, "binding") is not null || LayoutInt(block.Qualifiers, "set") is not null))
@@ -3504,6 +3663,12 @@ public sealed partial class Lowerer
             _meshVerticesRedecl = PerVertexMembers(block);
             return;
         }
+        if (_nvMesh && stage == ShaderStage.Mesh && block.Qualifiers.Has("out") && block.BlockName is "gl_MeshPerVertexNV" or "gl_MeshPerPrimitiveNV")
+        {
+            if (block.BlockName == "gl_MeshPerVertexNV") _meshVerticesNVRedecl = NVMeshRedeclaredMembers(block, "gl_MeshVerticesNV");
+            else _meshPrimitivesNVRedecl = NVMeshRedeclaredMembers(block, "gl_MeshPrimitivesNV");
+            return;
+        }
         if (block.BlockName == "gl_PerVertex")
         {
             if (block.Qualifiers.Layout.Any(i => i.Name == "passthrough")) EmitPassthroughPerVertex(block);
@@ -3522,14 +3687,26 @@ public sealed partial class Lowerer
             return;
         }
 
+        // A GL_NV_mesh_shader `taskNV` block carries the task-to-mesh payload: an Input (mesh) or Output (task)
+        // block laid out like a buffer (std430 unless told otherwise), every member PerTaskNV, with no location.
+        bool isTaskNV = block.Qualifiers.Has("taskNV");
+        if (isTaskNV)
+        {
+            if (stage == ShaderStage.Mesh && block.Qualifiers.Has("out"))
+                throw new GlslParseException("'taskNV' : can only use on input blocks in mesh shader", block.Line);
+            if (stage is not (ShaderStage.Mesh or ShaderStage.Task) || (stage == ShaderStage.Task && !block.Qualifiers.Has("out")))
+                throw new GlslParseException("'taskNV' : not supported in this stage", block.Line);
+            if (LayoutInt(block.Qualifiers, "location") is not null)
+                throw new GlslParseException("'location' : cannot apply to taskNV in/out blocks", block.Line);
+        }
         // in/out interface blocks (vertex->fragment data, etc.) are a Block-decorated struct in
         // Input/Output storage with a Location on the variable and no memory (std140) layout.
-        if (block.Qualifiers.Has("in") || block.Qualifiers.Has("out"))
+        else if (block.Qualifiers.Has("in") || block.Qualifiers.Has("out"))
         {
             EmitInterfaceBlock(block, block.Qualifiers.Has("out") ? StorageClass.Output : StorageClass.Input);
             return;
         }
-        if (!block.Qualifiers.Has("uniform") && !isBuffer && !isShared) return;
+        if (!block.Qualifiers.Has("uniform") && !isBuffer && !isShared && !isTaskNV) return;
 
         var fields = block.Members
             .SelectMany(f => f.Declarators.Select(d => (d.Name, ApplyArrayDims(ResolveTypeRef(f.Type), d.Array))))
@@ -3584,6 +3761,8 @@ public sealed partial class Lowerer
             .SelectMany(f => f.Declarators.Select(_ => MemoryDecorationsOf(f.Qualifiers)))
             .ToList();
         var st = new StructType(block.BlockName, fields);
+        var memberRelaxed = FieldFlags(block.Members);
+        _blockMemberRelaxed[st] = memberRelaxed;
         _blockStructs.Add(st);   // its bool members are stored as uint; see BlockStored
         if (isBuffer) _bufferBlockStructs.Add(st);
         // SPIR-V 1.3 made the StorageBuffer storage class + Block decoration the native way to declare an
@@ -3593,6 +3772,7 @@ public sealed partial class Lowerer
         bool nativeStorageBuffer = isBuffer && (version >= SpirVVersion.V1_3 || _bufferRefs.Count > 0);
         if (nativeStorageBuffer) AddIncorporatedExtension("SPV_KHR_storage_buffer_storage_class", SpirVVersion.V1_3);
         var storage = isShaderRecord ? StorageClass.ShaderRecordBufferKHR
+                    : isTaskNV ? (block.Qualifiers.Has("out") ? StorageClass.Output : StorageClass.Input)
                     : isShared ? StorageClass.Workgroup
                     : isPushConstant ? StorageClass.PushConstant
                     : nativeStorageBuffer ? StorageClass.StorageBuffer
@@ -3600,7 +3780,7 @@ public sealed partial class Lowerer
         // An explicit packing wins; a push-constant/shader-record block defaults to std430 regardless of the
         // global uniform default; anything else takes its storage's default (`layout(std140) buffer;`).
         var layout = BlockRulesetOf(block.Qualifiers)
-            ?? (isPushConstant || isShaderRecord ? BlockLayout.Std430
+            ?? (isPushConstant || isShaderRecord || isTaskNV ? BlockLayout.Std430
                 : defaultPacking ?? (isBuffer || isShared ? BlockLayout.Std430 : BlockLayout.Std140));
         _blockLayout[st] = layout;
         var blockMem = _vmmPragma ? BlockMemQual(block.Qualifiers) : MemQual.None;
@@ -3668,7 +3848,10 @@ public sealed partial class Lowerer
             foreach (var (word, decoration) in MemoryQualifiers)
                 if (block.Qualifiers.Has(word) && !(_vmmPragma && decoration is Decoration.Coherent or Decoration.Volatile))
                     memberQuals.Add(decoration);
+            if (isTaskNV) memberQuals.Add(Decoration.PerTaskNV);
             DecorateLayout(st, structType, memberIds, layout, memberQuals, explicitOffsets, rowMajor, aligns, memberMemory, offsetTypes: offsetTypes);
+            for (int i = 0; i < memberRelaxed.Length; i++)
+                if (memberRelaxed[i]) _m.MemberDecorate(structType, i, Decoration.RelaxedPrecision);
             _m.Decorate(structType, isBuffer && !nativeStorageBuffer && !isShaderRecord ? Decoration.BufferBlock : Decoration.Block);
             if (isShared)
             {
@@ -3708,7 +3891,8 @@ public sealed partial class Lowerer
             uint var = _m.GlobalVariable(ptr, storage);
             _blockVarTypes[var] = varType;
             _m.AddName(var, block.InstanceName ?? "");
-            if (!isPushConstant && !isShared && !isShaderRecord)   // push-constant/shared/shader-record blocks are not descriptor-bound
+            if (isTaskNV) _interface.Add(var);
+            if (!isPushConstant && !isShared && !isShaderRecord && !isTaskNV)   // push-constant/shared/shader-record/task blocks are not descriptor-bound
             {
                 if (LayoutInt(block.Qualifiers, "binding") is null)
                     throw new GlslParseException($"'binding' : uniform/buffer blocks require layout(binding=X)", block.Line);
@@ -3718,8 +3902,8 @@ public sealed partial class Lowerer
             // glslang applies the block's memory qualifiers (readonly/writeonly/coherent/volatile/restrict) to
             // the buffer variable itself, not just its members (GlslangToSpv TranslateMemoryDecoration).
             if (block.Qualifiers.Has("readonly")) { _m.Decorate(var, Decoration.NonWritable); _readOnlyVars.Add(var); }
-            // Uniform and push-constant storage is read-only; a store to either is invalid SPIR-V.
-            if (!isBuffer && !isShared) _readOnlyVars.Add(var);
+            // Uniform, push-constant and input storage is read-only; a store to any of them is invalid SPIR-V.
+            if (!isBuffer && !isShared && !(isTaskNV && storage == StorageClass.Output)) _readOnlyVars.Add(var);
             // A single member may also be readonly while the block as a whole is writable.
             for (int mi = 0; mi < memberMemory.Count; mi++)
                 if (memberMemory[mi].Contains(Decoration.NonWritable)) _readOnlyMembers.Add((var, mi));
@@ -3766,7 +3950,7 @@ public sealed partial class Lowerer
             if (_blockMembers.ContainsKey(st.Fields[i].Name) || GlobalExists(st.Fields[i].Name))
                 throw new GlslParseException($"'{st.Fields[i].Name}' from anonymous block collides with an existing global");
             mem = _blockMemberMem.GetValueOrDefault((st, i), blockMem);
-            _blockMembers[st.Fields[i].Name] = new BlockMember(var, i, st.Fields[i].Type, storage, BlockRuleset(st), trivialSymbol, mem);
+            _blockMembers[st.Fields[i].Name] = new BlockMember(var, i, st.Fields[i].Type, storage, BlockRuleset(st), trivialSymbol, mem, MemberPrec(st, i, 0));
         }
     }
 
@@ -3806,6 +3990,8 @@ public sealed partial class Lowerer
             .SelectMany(f => f.Declarators.Select(d => (Field: f, d.Name, Type: ApplyArrayDims(ResolveTypeRef(f.Type), d.Array))))
             .ToList();
         var st = new StructType(block.BlockName, members.Select(m => (m.Name, m.Type)).ToList());
+        var memberRelaxed = FieldFlags(block.Members);
+        _blockMemberRelaxed[st] = memberRelaxed;
 
         // An integer fragment input cannot be interpolated: reject it whether or not the block is used.
         foreach (var m in members)
@@ -3859,7 +4045,7 @@ public sealed partial class Lowerer
                 // SPIR-V takes one interpolation and one auxiliary-storage decoration per member.
                 var mq = members[i].Field.Qualifiers;
                 bool Has(string w) => mq.Has(w) || block.Qualifiers.Has(w);
-                if (IsRelaxed(mq)) _m.MemberDecorate(structType, i, Decoration.RelaxedPrecision);
+                if (memberRelaxed[i]) _m.MemberDecorate(structType, i, Decoration.RelaxedPrecision);
                 if (!mq.Has("smooth"))
                 {
                     if (Has("noperspective")) _m.MemberDecorate(structType, i, Decoration.NoPerspective);
@@ -3873,6 +4059,7 @@ public sealed partial class Lowerer
                     if (stage == ShaderStage.Fragment) AddFragmentPerPrimitiveCapability();
                     _m.MemberDecorate(structType, i, Decoration.PerPrimitiveEXT);
                 }
+                if (Has("perviewNV")) _m.MemberDecorate(structType, i, Decoration.PerViewNV);
                 if (Has("invariant")) _m.MemberDecorate(structType, i, Decoration.Invariant);
                 if (!memberLocationInvalid && memberLocations[i] is int mloc) _m.MemberDecorate(structType, i, Decoration.Location, (uint)mloc);
                 if (memberComponents[i] is int mcomp) _m.MemberDecorate(structType, i, Decoration.Component, (uint)mcomp);
@@ -3921,16 +4108,29 @@ public sealed partial class Lowerer
         // A member or swizzle of a constant folds to a constant (glslang folds it in the AST), so e.g.
         // `gl_WorkGroupSize.x` is a literal rather than an extract from the composite.
         if (EvalConst(m) is { } folded) return Materialize(folded);
-        if (IsPerVertexPosition(m)) { var a = ResolveAccess(m); return Load(a.Type, a.Pointer, a.Layout); }
+        if (IsPerVertexPosition(m)) { var pc = BuildAccess(m); var a = AccessOf(pc); return WithChainPrecision(Load(a.Type, a.Pointer, a.Layout), pc); }
         // A run of member/single-component-swizzle accesses over an r-value (e.g. `P(...).a.x`) is ONE
         // OpCompositeExtract with a flat index path, not an access chain.
-        if (RValueChain(m) is (Expr baseE, var idxs)) return RValueExtract(baseE, idxs, InferType(m));
+        if (RValueChain(m) is (Expr baseE, var idxs))
+        {
+            var extracted = RValueExtract(baseE, idxs, InferType(m));
+            return RValueMemberRelaxed(m) && CarriesPrecision(extracted.Type) ? extracted with { Id = Relax(extracted.Id), Relaxed = true } : extracted;
+        }
         if (InferType(m.Target) is StructType or BufferReferenceType)
         {
-            var a = ResolveAccess(m);
-            return FromStored(LoadFrom(a), InferType(m));   // a block's bool member loads as uint
+            var c = BuildAccess(m);
+            return FromStored(WithChainPrecision(LoadFrom(AccessOf(c)), c), InferType(m));   // a block's bool member loads as uint
         }
         return LowerSwizzle(m);
+    }
+
+    // The precision of the struct member a run of r-value member accesses ends in (a trailing component
+    // selection keeps its member's precision).
+    bool RValueMemberRelaxed(Member m)
+    {
+        if (IsSwizzleName(m.Name) && m.Name.Length == 1 && m.Target is Member inner && InferType(inner.Target) is StructType)
+            return RValueMemberRelaxed(inner);
+        return InferType(m.Target) is StructType st && MemberFlags(st) is { } flags && IndexOfField(st, m.Name) is int i && i < flags.Length && flags[i];
     }
 
     // Collects a run of struct-member / single-component-swizzle accesses over a non-addressable (r-value)
@@ -3974,6 +4174,12 @@ public sealed partial class Lowerer
     // Reading/writing gl_PointSize pulls in the stage's point-size capability.
     void NeedPointSizeCap()
     {
+        if (_isEs && stage is ShaderStage.Geometry or ShaderStage.TessControl or ShaderStage.TessEvaluation)
+        {
+            string kind = stage == ShaderStage.Geometry ? "geometry" : "tessellation";
+            if (!_extensions.Contains($"GL_EXT_{kind}_point_size") && !_extensions.Contains($"GL_OES_{kind}_point_size"))
+                throw new GlslParseException($"'gl_PointSize' : required extension not requested: Possible extensions include: GL_EXT_{kind}_point_size GL_OES_{kind}_point_size");
+        }
         if (stage == ShaderStage.Geometry) _m.AddCapability(Capability.GeometryPointSize);
         else if (stage is ShaderStage.TessControl or ShaderStage.TessEvaluation) _m.AddCapability(Capability.TessellationPointSize);
     }
@@ -4030,6 +4236,7 @@ public sealed partial class Lowerer
     void AtDecl(Decl decl, Action body)
     {
         if (decl.Line > 0) _lowerLine = decl.Line;
+        UseDefaultPrecision(decl);
         try { body(); }
         catch (GlslParseException ex) { throw ex.WithLine(_lowerLine); }
     }
@@ -4109,14 +4316,21 @@ public sealed partial class Lowerer
         else
         {
             var value = LowerCoerced(s.Value, _currentReturnType, "return");
-            // A block member (Offset-decorated struct, bools stored as uint) is a different SPIR-V type than
-            // the function's plain return type: glslang copies it through an unnamed Function temporary with
-            // multiTypeStore and returns the reload.
-            if (ExactType(value.Type, value.Layout, value.TypeId) != SpvType(_currentReturnType))
+            // TIntermBranch::updatePrecision: a returned value with no precision takes the function's.
+            if (CarriesPrecision(value.Type) && IsNone(value))
+            {
+                if (_currentReturnRelaxed) { PropagateRelaxed(value); value = value with { Relaxed = true }; }
+                else PropagateHigh(value);
+            }
+            // A block member (Offset-decorated struct, bools stored as uint) is a different SPIR-V type than the
+            // function's plain return type, and a value of another precision differs too: glslang copies either
+            // through an unnamed Function temporary of the function's precision and returns the reload.
+            if (ExactType(value.Type, value.Layout, value.TypeId) != SpvType(_currentReturnType) || value.Relaxed != _currentReturnRelaxed)
             {
                 uint ptrType = _m.TypePointer(StorageClass.Function, SpvType(_currentReturnType));
                 uint temp = _m.AllocId();
                 _vars.Add(InstrPool.Rent(Op.Variable, ptrType, temp).AddEnum(StorageClass.Function));
+                if (_currentReturnRelaxed) Relax(temp);
                 MultiTypeStore(new Chain(temp, [], _currentReturnType, StorageClass.Function), value);
                 value = Load(_currentReturnType, temp);
             }
@@ -4312,7 +4526,7 @@ public sealed partial class Lowerer
 
     static bool IsLValuePath(Expr e) => e switch
     {
-        Ident => true,
+        Ident id => !IsForcedBuiltin(id.Name),   // a forced built-in is only read as a converted value
         Member m => IsLValuePath(m.Target),
         Index ix => IsLValuePath(ix.Target),
         _ => false,
@@ -4438,10 +4652,10 @@ public sealed partial class Lowerer
         // declarations before its first use allocate (probed), and an unreferenced one emits nothing at
         // all (no variable, type, capability or extension). Deferral rides the same machinery as plain
         // uninitialized locals (ResolveLocalVar), with a Private-storage declaration on materialization.
-        if (baseType is RayQueryType)
+        if (ContainsRayQuery(baseType))
         {
             foreach (var d in decl.Declarators)
-                _pendingPrivates[d.Name] = baseType;
+                _pendingPrivates[d.Name] = ApplyArrayDims(baseType, d.Array);
             return;
         }
         // Opaque types (samplers/images) are handles bound through the descriptor set; they cannot be
@@ -4502,7 +4716,9 @@ public sealed partial class Lowerer
             var init = LowerCoerced(d.Init, type, $"initializing '{d.Name}'");
             _locals[d.Name] = (type, varId);
             _pendingLocals.Remove(d.Name);
-            MultiTypeStore(new Chain(varId, [], type, StorageClass.Function), init);
+            var target = new Chain(varId, [], type, StorageClass.Function);
+            AssignPrecision(target, init);
+            MultiTypeStore(target, init);
         }
     }
 
@@ -4808,6 +5024,7 @@ public sealed partial class Lowerer
         }
         // SetMeshOutputsEXT/EmitMeshTasksEXT take 32-bit UNSIGNED counts; lowering an int literal as int
         // produces operands spirv-val rejects, so coerce each argument to uint up front.
+        if (call.Name == "writePackedPrimitiveIndices4x8NV") return WritePackedPrimitiveIndices(call);
         if (call.Name is "SetMeshOutputsEXT" or "EmitMeshTasksEXT")
         {
             var counts = call.Args.Select(a => LowerCoerced(a, Types.UInt, call.Name)).ToArray();
@@ -4822,6 +5039,7 @@ public sealed partial class Lowerer
         if (OutParamBuiltins.Contains(call.Name)) return LowerOutParamBuiltin(call);
         if (call.Name.StartsWith("sparse", StringComparison.Ordinal)) return LowerSparse(call);
         if (InterpolateBuiltins.Contains(call.Name)) return LowerInterpolate(call);   // interpolant is an lvalue
+        if (IsAmdBallotFunction(call.Name)) return LowerAmdBallot(call);
         if (call.Name is "anyInvocationARB" or "allInvocationsARB" or "allInvocationsEqualARB"
             or "ballotARB" or "readInvocationARB" or "readFirstInvocationARB") return LowerArbInvocation(call);
         // glslang gates the subgroup OPERATIONS on SPIR-V 1.3 ("'subgroup op' : requires SPIR-V 1.3")
@@ -4839,6 +5057,7 @@ public sealed partial class Lowerer
         if (call.Name == "coopMatMulAdd") return CoopMatMulAdd(call);
         if (call.Name == "textureFootprintNV") return TextureFootprint(call);
         if (call.Name == "nonuniformEXT") return NonUniform(call);
+        if (call.Name is "clockARB" or "clock2x32ARB" or "clockRealtimeEXT" or "clockRealtime2x32EXT") return ReadClock(call);
         if (call.Name == "debugPrintfEXT") return DebugPrintf(call);
         if (call.Name == "controlBarrier" && call.Args.Count == 4) return ControlBarrierExplicit(call);
         if (call.Name == "memoryBarrier" && call.Args.Count == 3) return MemoryBarrierExplicit(call);
@@ -5018,7 +5237,7 @@ public sealed partial class Lowerer
         int n = fn.Params.Count;
         // An out/inout argument must also accept the parameter's value back (findFunction400).
         for (int i = 0; i < n; i++)
-            if (fn.Params[i].IsOut && !IsOpaque(fn.Params[i].Type)
+            if (fn.Params[i].IsOut && !PassedByPointer(fn.Params[i].Type)
                 && InferType(call.Args[i]) is var at && !ArgFits(fn.Params[i], at, exact: false))
                 throw new GlslParseException($"'{Clip(call.Name)}' : no matching overloaded function found");
 
@@ -5036,9 +5255,10 @@ public sealed partial class Lowerer
         var tempArgs = new uint[n];
         bool outConversions = false;
         for (int i = 0; i < n; i++)
-            if (fn.Params[i].IsOut && !IsOpaque(fn.Params[i].Type) && !InferType(call.Args[i]).Equals(fn.Params[i].Type))
+            if (fn.Params[i].IsOut && !PassedByPointer(fn.Params[i].Type) && !InferType(call.Args[i]).Equals(fn.Params[i].Type))
                 outConversions = true;
-        uint tempReturn = outConversions && fn.ReturnType is not ScalarType { Kind: Scalar.Void } ? FunctionTemp("tempReturn", fn.ReturnType) : 0;
+        uint tempReturn = outConversions && fn.ReturnType is not ScalarType { Kind: Scalar.Void } ? TempReturnGlobal(fn.ReturnType) : 0;
+        if (tempReturn != 0 && fn.ReturnRelaxed) Relax(tempReturn);
 
         var opaquePtr = new uint?[n];
         var savedChain = new Chain?[n];
@@ -5051,7 +5271,7 @@ public sealed partial class Lowerer
             // Opaque types (samplers/images/textures) cannot be copied into a Function-storage local;
             // they are passed by their UniformConstant pointer directly. The pointee types must match
             // exactly, so a mismatch throws rather than emitting a call with the wrong argument type.
-            if (IsOpaque(p.Type))
+            if (PassedByPointer(p.Type))
             {
                 var opaque = ResolveAccess(call.Args[i]);
                 if (!opaque.Type.Equals(p.Type))
@@ -5064,6 +5284,7 @@ public sealed partial class Lowerer
             else if (p.IsOut && !InferType(call.Args[i]).Equals(p.Type))
             {
                 tempArgs[i] = FunctionTemp("tempArg", p.Type);
+                if (p.Relaxed) Relax(tempArgs[i]);
                 savedChain[i] = new Chain(tempArgs[i], [], p.Type, StorageClass.Function);
             }
             // A dynamic index into a const array is a chain over the constant. Nothing is copied while
@@ -5125,6 +5346,8 @@ public sealed partial class Lowerer
             uint temp = _m.AllocId();
             _m.AddName(temp, "param");
             if (ReferencesIn(p.Type).Any()) _m.Decorate(temp, Decoration.AliasedPointer);
+            // The copy temp has the parameter's precision, but glslang loads it back without one.
+            if (p.Relaxed) _m.Decorate(temp, Decoration.RelaxedPrecision);
             _vars.Add(InstrPool.Rent(Op.Variable, ptrType, temp).AddEnum(StorageClass.Function));
             // A saved r-value was already converted in step 1; a saved chain may be a block member whose
             // stored form differs from the plain param, so copy it through MultiTypeStore.
@@ -5142,8 +5365,7 @@ public sealed partial class Lowerer
 
         // Step 3: the call.
         uint result = Emit(Op.FunctionCall, SpvType(fn.ReturnType), [fn.Id, .. argPtrs]);
-
-        if (tempReturn != 0) Store(tempReturn, result);
+        if (fn.ReturnRelaxed) Relax(result);
 
         // Step 4: copy out/inout results back into their saved l-values.
         // glslang's multiTypeStore: a block member target (laid-out struct, bools stored as uint) is copied
@@ -5156,6 +5378,9 @@ public sealed partial class Lowerer
             RejectReadOnlyWrite(target);
             MultiTypeStore(target, ToStored(copy, target.Type));
         }
+
+        // `tempReturn = call` completes after the call's own copy-back, before the converting assignments.
+        if (tempReturn != 0) Store(tempReturn, result);
 
         // The converting assignments `arg = tempArg`, in argument order.
         for (int i = 0; i < n; i++)
@@ -5170,7 +5395,15 @@ public sealed partial class Lowerer
             else MultiTypeStore(lhs, ToStored(value, lhs.Type));
         }
 
-        return tempReturn != 0 ? Load(fn.ReturnType, tempReturn) : new Value(result, fn.ReturnType, false);
+        return tempReturn != 0 ? Load(fn.ReturnType, tempReturn) : new Value(result, fn.ReturnType, false, fn.ReturnRelaxed);
+    }
+
+    // glslang's "tempReturn" is not made temporary like "tempArg", so it is a module-scope Private variable.
+    uint TempReturnGlobal(GlslType type)
+    {
+        uint id = _m.GlobalVariable(_m.TypePointer(StorageClass.Private, SpvType(type)), StorageClass.Private);
+        _m.AddName(id, "tempReturn");
+        return id;
     }
 
     // A named Function-storage temporary of glslang's own making ("tempArg", "tempReturn", ...).
@@ -5361,7 +5594,14 @@ public sealed partial class Lowerer
 
     // A function parameter of opaque type is a UniformConstant pointer (passed by reference to the
     // descriptor); everything else is a Function-storage copy-in/copy-out local.
-    static StorageClass ParamStorage(GlslType t) => IsOpaque(t) ? StorageClass.UniformConstant : StorageClass.Function;
+    static StorageClass ParamStorage(GlslType t) =>
+        IsOpaque(t) ? StorageClass.UniformConstant : ContainsRayQuery(t) ? StorageClass.Private : StorageClass.Function;
+
+    // A rayQueryEXT object (or array of them) lives in Private storage, even when declared in a function.
+    static bool ContainsRayQuery(GlslType t) => t is RayQueryType || t is ArrayType { Element: var e } && ContainsRayQuery(e);
+
+    // Opaque handles and ray queries are passed to a function by their own pointer, never through a copy.
+    static bool PassedByPointer(GlslType t) => IsOpaque(t) || ContainsRayQuery(t);
 
     Value SampleExplicit(Value[] args, ImageOperands mask, Value[] extra)
     {
@@ -5666,6 +5906,7 @@ public sealed partial class Lowerer
 
     Value RayQueryCall(Call call)
     {
+        if (call.Name == "rayQueryGetIntersectionTriangleVertexPositionsEXT") return RayQueryTriangleVertexPositions(call);
         if (!RayQueryOps.TryGetValue(call.Name, out var spec))
             throw new GlslParseException($"'{call.Name}' is not a supported ray-query function");
         if (call.Args.Count != 1 + spec.Args.Length)
@@ -5680,13 +5921,35 @@ public sealed partial class Lowerer
         return new Value(Emit(spec.Op, SpvType(spec.Ret), [.. ops]), spec.Ret, false);
     }
 
-    // The ray-query `bool committed` selector, lowered as the 32-bit int the SPIR-V ops require. glslang still
-    // materializes the bool literal, then converts it (const-folded to an int constant, or OpSelect otherwise).
+    static readonly ArrayType TriangleVertexPositions = new(Vec3, 3);
+
+    // GL_EXT_ray_tracing_position_fetch: the hit triangle's three vertex positions, stored straight into the out array.
+    Value RayQueryTriangleVertexPositions(Call call)
+    {
+        if (!_requestedExts.Contains("GL_EXT_ray_tracing_position_fetch"))
+            throw new GlslParseException($"'{call.Name}' : required extension not requested: GL_EXT_ray_tracing_position_fetch");
+        if (call.Args.Count != 3)
+            throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        uint rq = ResolveAccess(call.Args[0]).Pointer;
+        uint committed = CommittedInt(call.Args[1]);
+        var outArg = ResolveAccess(call.Args[2]);
+        if (!outArg.Type.Equals(TriangleVertexPositions))
+            throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        _m.AddExtension("SPV_KHR_ray_tracing_position_fetch");
+        _m.AddCapability(Capability.RayQueryPositionFetchKHR);
+        uint positions = Emit(Op.RayQueryGetIntersectionTriangleVertexPositionsKHR, SpvType(TriangleVertexPositions), rq, committed);
+        Store(outArg.Pointer, positions);
+        return new Value(0, Types.Void, false);
+    }
+
+    // The ray-query `bool committed` selector, which must be a compile-time constant, lowered as the 32-bit int
+    // the SPIR-V ops require. glslang still materializes the bool literal before its folded int constant.
     uint CommittedInt(Expr e)
     {
-        var b = LowerExpr(e);
-        if (EvalConst(e) is CScalar cs) return Materialize(new CScalar(Scalar.Int, 0, cs.I != 0 ? 1 : 0)).Id;
-        return Emit(Op.Select, SpvType(Types.Int), b.Id, Materialize(new CScalar(Scalar.Int, 0, 1)).Id, Materialize(new CScalar(Scalar.Int, 0, 0)).Id);
+        if (EvalConst(e) is not CScalar cs)
+            throw new GlslParseException("'committed' : argument must be compile-time constant");
+        LowerExpr(e);
+        return Materialize(new CScalar(Scalar.Int, 0, cs.I != 0 ? 1 : 0)).Id;
     }
 
     // The ray payload / callable-data variable that a traceRayEXT/executeCallableEXT location index names.
@@ -5904,20 +6167,101 @@ public sealed partial class Lowerer
             case "readInvocationARB":
                 _m.AddCapability(Capability.SubgroupBallotKHR);
                 _m.AddExtension("SPV_KHR_shader_ballot");
-                return new Value(Emit(Op.SubgroupReadInvocationKHR, SpvType(a[0].Type), a[0].Id, a[1].Id), a[0].Type, false);
+                return PerComponent(a[0], x => Emit(Op.SubgroupReadInvocationKHR, SpvType(new ScalarType(BaseScalar(a[0].Type))), x, a[1].Id));
             case "readFirstInvocationARB":
                 _m.AddCapability(Capability.SubgroupBallotKHR);
                 _m.AddExtension("SPV_KHR_shader_ballot");
-                return new Value(Emit(Op.SubgroupFirstInvocationKHR, SpvType(a[0].Type), a[0].Id), a[0].Type, false);
+                return PerComponent(a[0], x => Emit(Op.SubgroupFirstInvocationKHR, SpvType(new ScalarType(BaseScalar(a[0].Type))), x));
             default:   // ballotARB -> uint64 assembled from ballot.xy
                 _m.AddCapability(Capability.SubgroupBallotKHR);
                 _m.AddExtension("SPV_KHR_shader_ballot");
+                uint uint64Type = SpvType(Types.UInt64);   // the call's own type is made before the ballot
                 uint ballot = Emit(Op.SubgroupBallotKHR, SpvType(new VectorType(Scalar.UInt, 4)), a[0].Id);
                 uint x = Emit(Op.CompositeExtract, SpvType(Types.UInt), ballot, 0);
                 uint y = Emit(Op.CompositeExtract, SpvType(Types.UInt), ballot, 1);
                 uint uvec2 = Emit(Op.CompositeConstruct, SpvType(new VectorType(Scalar.UInt, 2)), x, y);
-                return new Value(Emit(Op.Bitcast, SpvType(Types.UInt64), uvec2), Types.UInt64, false);
+                return new Value(Emit(Op.Bitcast, uint64Type, uvec2), Types.UInt64, false);
         }
+    }
+
+    // glslang applies the invocation operations to a vector one component at a time, then rebuilds the vector.
+    Value PerComponent(Value v, Func<uint, uint> scalarOp)
+    {
+        if (v.Type is not VectorType vt) return new Value(scalarOp(v.Id), v.Type, false);
+        uint scalarType = SpvType(new ScalarType(vt.Component));
+        var parts = new uint[vt.Size];
+        for (int c = 0; c < vt.Size; c++) parts[c] = scalarOp(Emit(Op.CompositeExtract, scalarType, v.Id, (uint)c));
+        return new Value(Emit(Op.CompositeConstruct, SpvType(v.Type), parts), v.Type, false);
+    }
+
+    static bool IsAmdBallotFunction(string name) => name is "swizzleInvocationsAMD" or "swizzleInvocationsMaskedAMD"
+        or "writeInvocationAMD" or "mbcntAMD"
+        || ((name.StartsWith("minInvocations", StringComparison.Ordinal) || name.StartsWith("maxInvocations", StringComparison.Ordinal)
+            || name.StartsWith("addInvocations", StringComparison.Ordinal)) && name.EndsWith("AMD", StringComparison.Ordinal));
+
+    // GL_AMD_shader_ballot: the min/max/add invocation reductions and scans are OpGroup* (their NonUniform
+    // forms the AMD opcodes), the rest are SPV_AMD_shader_ballot extended instructions.
+    Value LowerAmdBallot(Call call)
+    {
+        if (_isEs || _glslVersion < 450)
+            throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        if (!_requestedExts.Contains("GL_AMD_shader_ballot"))
+            throw new GlslParseException($"'{call.Name}' : required extension not requested: GL_AMD_shader_ballot");
+        var a = call.Args.Select(LowerExpr).ToArray();
+        GlslType Arg(int i) => i < a.Length ? a[i].Type : Types.Void;
+        bool Is(int i, Scalar component, int size) => Arg(i).Equals(size == 1 ? new ScalarType(component) : new VectorType(component, size));
+        Scalar scalar = BaseScalar(Arg(0));
+        bool vectorish = Arg(0) is ScalarType or VectorType;
+
+        if (call.Name == "mbcntAMD")
+        {
+            if (a.Length != 1 || !Arg(0).Equals(Types.UInt64))
+                throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+            uint set = _m.ImportExtInstSet("SPV_AMD_shader_ballot");
+            return new Value(Emit(Op.ExtInst, SpvType(Types.UInt), set, 4u, a[0].Id), Types.UInt, false);
+        }
+        if (call.Name is "swizzleInvocationsAMD" or "swizzleInvocationsMaskedAMD" or "writeInvocationAMD")
+        {
+            bool ok = vectorish && scalar is Scalar.Float or Scalar.Int or Scalar.UInt && call.Name switch
+            {
+                "swizzleInvocationsAMD" => a.Length == 2 && Is(1, Scalar.UInt, 4),
+                "swizzleInvocationsMaskedAMD" => a.Length == 2 && Is(1, Scalar.UInt, 3),
+                _ => a.Length == 3 && Arg(1).Equals(Arg(0)) && Is(2, Scalar.UInt, 1),
+            };
+            if (!ok) throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+            uint set = _m.ImportExtInstSet("SPV_AMD_shader_ballot");
+            uint inst = call.Name switch { "swizzleInvocationsAMD" => 1u, "swizzleInvocationsMaskedAMD" => 2u, _ => 3u };
+            return new Value(Emit(Op.ExtInst, SpvType(a[0].Type), [set, inst, .. a.Select(v => v.Id)]), a[0].Type, false);
+        }
+
+        if (a.Length != 1 || !vectorish || scalar is Scalar.Bool or Scalar.Int8 or Scalar.UInt8)
+            throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        string kind = call.Name[..3];
+        string rest = call.Name["minInvocations".Length..^"AMD".Length];
+        bool nonUniform = rest.EndsWith("NonUniform", StringComparison.Ordinal);
+        if (nonUniform) rest = rest[..^"NonUniform".Length];
+        uint groupOperation = rest switch
+        {
+            "" => 0u,                // Reduce
+            "InclusiveScan" => 1u,
+            "ExclusiveScan" => 2u,
+            _ => throw new GlslParseException($"call to unknown function '{call.Name}'"),
+        };
+        bool isFloat = IsFloating(scalar), isUnsigned = IsUnsigned(scalar);
+        Op op = (kind, nonUniform) switch
+        {
+            ("min", false) => isFloat ? Op.GroupFMin : isUnsigned ? Op.GroupUMin : Op.GroupSMin,
+            ("max", false) => isFloat ? Op.GroupFMax : isUnsigned ? Op.GroupUMax : Op.GroupSMax,
+            ("add", false) => isFloat ? Op.GroupFAdd : Op.GroupIAdd,
+            ("min", true) => isFloat ? Op.GroupFMinNonUniformAMD : isUnsigned ? Op.GroupUMinNonUniformAMD : Op.GroupSMinNonUniformAMD,
+            ("max", true) => isFloat ? Op.GroupFMaxNonUniformAMD : isUnsigned ? Op.GroupUMaxNonUniformAMD : Op.GroupSMaxNonUniformAMD,
+            _ => isFloat ? Op.GroupFAddNonUniformAMD : Op.GroupIAddNonUniformAMD,
+        };
+        _m.AddCapability(Capability.Groups);
+        if (nonUniform) _m.AddExtension("SPV_AMD_shader_ballot");
+        uint scope = _m.ConstantInt(SpvType(Types.UInt), ScopeSubgroup);
+        uint scalarType = SpvType(new ScalarType(scalar));
+        return PerComponent(a[0], x => Emit(op, scalarType, scope, groupOperation, x));
     }
 
     // GL_ARB_sparse_texture2: the sparse* family returns an int residency code and writes the texel to
@@ -6090,6 +6434,25 @@ public sealed partial class Lowerer
     }
 
     uint ScopeConst() => _m.ConstantInt(SpvType(Types.UInt), ScopeSubgroup);
+
+    // GL_ARB_shader_clock reads the subgroup clock, GL_EXT_shader_realtime_clock the device clock; the 2x32
+    // forms return the 64-bit counter as a uvec2. Both are desktop 450+ built-ins.
+    Value ReadClock(Call call)
+    {
+        if (_isEs || _glslVersion < 450 || call.Args.Count != 0)
+            throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        bool realtime = call.Name.StartsWith("clockRealtime", StringComparison.Ordinal);
+        string ext = realtime ? "GL_EXT_shader_realtime_clock" : "GL_ARB_shader_clock";
+        if (!_requestedExts.Contains(ext))
+            throw new GlslParseException($"'{call.Name}' : required extension not requested: {ext}");
+        GlslType type = call.Name.EndsWith("2x32ARB", StringComparison.Ordinal) || call.Name.EndsWith("2x32EXT", StringComparison.Ordinal)
+            ? new VectorType(Scalar.UInt, 2) : Types.UInt64;
+        uint typeId = SpvType(type);
+        uint scope = _m.ConstantInt(SpvType(Types.UInt), realtime ? ScopeDevice : ScopeSubgroup);
+        _m.AddExtension("SPV_KHR_shader_clock");
+        _m.AddCapability(Capability.ShaderClockKHR);
+        return new Value(Emit(Op.ReadClockKHR, typeId, scope), type, false);
+    }
 
     // subgroupBarrier(): a control + memory barrier at subgroup scope over all memory.
     Value SubgroupControlBarrier()
@@ -6537,7 +6900,7 @@ public sealed partial class Lowerer
         var coord = LowerExpr(call.Args[1]);
         // glslang evaluates every argument before building the texel pointer, so the data operands'
         // constants come first (the scope/semantics constants then often just reuse them).
-        int dataArgs = call.Name == "imageAtomicCompSwap" ? 2 : 1, msArg = img.Multisampled ? 1 : 0;
+        int dataArgs = call.Name switch { "imageAtomicCompSwap" => 2, "imageAtomicLoad" => 0, _ => 1 }, msArg = img.Multisampled ? 1 : 0;
         var operands = call.Args.Skip(2).Select((a, i) => i >= msArg && i - msArg < dataArgs
             ? LowerArgAs(a, new ScalarType(img.Sampled), $"argument {i + 3} of '{call.Name}'") : LowerExpr(a)).ToArray();
         int next = 0;
@@ -6788,6 +7151,39 @@ public sealed partial class Lowerer
         return null;
     }
 
+    // gl_Layer may only be redeclared to make it viewport-relative or give it a secondary view offset.
+    void RedeclareLayer(Qualifiers q, int line)
+    {
+        bool relative = q.Layout.Any(i => i.Name == "viewport_relative");
+        int? offset = LayoutInt(q, "secondary_view_offset");
+        if (relative && !_requestedExts.Contains("GL_NV_viewport_array2"))
+            throw new GlslParseException("'view port array2' : required extension not requested: GL_NV_viewport_array2", line);
+        if (offset is not null && !_requestedExts.Contains("GL_NV_stereo_view_rendering"))
+            throw new GlslParseException("'stereo view rendering' : required extension not requested: GL_NV_stereo_view_rendering", line);
+        if ((relative || offset is not null) && stage is not (ShaderStage.Vertex or ShaderStage.TessControl or ShaderStage.TessEvaluation or ShaderStage.Geometry))
+            throw new GlslParseException($"'{(relative ? "viewport_relative" : "secondary_view_offset")}' : there is no such layout identifier for this stage", line);
+        if (!relative && offset is null)
+            throw new GlslParseException("'redeclaration' : redeclaration only allowed for viewport_relative or secondary_view_offset layout gl_Layer", line);
+        _layerViewportRelative = relative;
+        _layerSecondaryViewOffset = offset;
+    }
+
+    // The AMD stencil mode from a `layout(stencil_ref_*_amd) out int gl_FragStencilRefARB;` redeclaration.
+    static ExecutionMode? StencilConditionOf(Qualifiers q)
+    {
+        foreach (var item in q.Layout)
+            switch (item.Name)
+            {
+                case "stencil_ref_unchanged_front_amd": return ExecutionMode.StencilRefUnchangedFrontAMD;
+                case "stencil_ref_greater_front_amd": return ExecutionMode.StencilRefGreaterFrontAMD;
+                case "stencil_ref_less_front_amd": return ExecutionMode.StencilRefLessFrontAMD;
+                case "stencil_ref_unchanged_back_amd": return ExecutionMode.StencilRefUnchangedBackAMD;
+                case "stencil_ref_greater_back_amd": return ExecutionMode.StencilRefGreaterBackAMD;
+                case "stencil_ref_less_back_amd": return ExecutionMode.StencilRefLessBackAMD;
+            }
+        return null;
+    }
+
     // The layout(...) storage-image format qualifiers, spelled as in the GLSL spec.
     static readonly Dictionary<string, ImageFormat> ImageFormats = new()
     {
@@ -6893,7 +7289,9 @@ public sealed partial class Lowerer
                 LowerSwizzleAssign(sw, swTarget, storedRhs);
                 return rhs;
             }
-            return LowerSwizzleAssign(sw, swTarget, LowerCoerced(assign.Right, InferType(sw), "assignment"));
+            var swValue = LowerCoerced(assign.Right, InferType(sw), "assignment");
+            AssignPrecision(swTarget with { Type = InferType(sw) }, swValue);
+            return LowerSwizzleAssign(sw, swTarget, swValue);
         }
         // glslang builds the target's access chain (creating its index constants), evaluates the
         // right-hand side, and only then emits the OpAccessChain and OpStore.
@@ -6906,6 +7304,7 @@ public sealed partial class Lowerer
         // side still converts to what was declared, and only then to what the block holds.
         var declared = lhs.Layout is null ? lhs.Type : InferType(assign.Left);
         var value = LowerCoerced(assign.Right, declared, "assignment");
+        AssignPrecision(lhs, value);
         MultiTypeStore(lhs, ToStored(value, lhs.Type));
         return value;
     }
@@ -7324,15 +7723,116 @@ public sealed partial class Lowerer
 
     // GLSL gives an operation the highest precision of its operands, so the result is relaxed only when
     // every operand that carries a precision is relaxed (a literal/constant carries none and adapts).
-    static bool RelaxedResult(params Value[] operands) =>
-        operands.Any(v => v.Relaxed) && operands.All(v => v.Relaxed || v.IsConstant);
+    // glslang propagates operation precision only to 32-bit float, int and uint results.
+    static bool CarriesPrecision(GlslType type) => PrecisionScalar(type) is Scalar.Float or Scalar.Int or Scalar.UInt;
 
-    // Propagates operand precision to a computed result: when the operands are relaxed the result id is
-    // decorated RelaxedPrecision (a bool result carries no precision). Mirrors ApplyBinary's relaxing.
-    Value Relaxed(Value result, params Value[] operands) =>
-        RelaxedResult(operands) && BaseScalar(result.Type) is not Scalar.Bool
-            ? result with { Id = Relax(result.Id), Relaxed = true }
-            : result;
+    // glslang's three precisions as Prism tracks them: relaxed (mediump/lowp), high, and none. A value has
+    // none when nothing gave it a precision: a constant, a type without precision (bool, double, a struct...),
+    // a built-in declared without one, or an operation over only such values. A none value takes the
+    // precision of the operation or assignment that consumes it (TIntermTyped::propagatePrecision), so it is
+    // registered with the ids to decorate should that precision turn out relaxed, and its own none operands.
+    readonly Dictionary<uint, (uint[] Decorate, uint[] Children, uint Var)> _nonePrecision = [];
+
+    bool IsNone(Value v) => !v.Relaxed && (v.IsConstant || !CarriesPrecision(v.Type) || _nonePrecision.ContainsKey(v.Id));
+    bool IsHigh(Value v) => !v.Relaxed && !IsNone(v);
+
+    // An operation's precision is the highest of its operands' (none below relaxed below high).
+    bool RelaxedResult(params Value[] operands) => operands.Any(v => v.Relaxed) && !operands.Any(IsHigh);
+
+    // Gives a computed result its precision. With maxRule (TIntermBinary/TIntermAggregate::updatePrecision) it
+    // is its operands' highest, pushed back down into any operand that had none; without it the result starts
+    // with none (a single-argument or struct constructor). decorate lists the ids glslang decorates for it.
+    Value Precisioned(Value result, uint[] decorate, Value[] operands, bool maxRule)
+    {
+        if (result.IsConstant || !CarriesPrecision(result.Type)) return result;
+        if (maxRule && RelaxedResult(operands))
+        {
+            foreach (var o in operands) if (IsNone(o)) PropagateRelaxed(o);
+            foreach (uint id in decorate) Relax(id);
+            return result with { Relaxed = true };
+        }
+        if (maxRule && operands.Any(IsHigh))
+        {
+            foreach (var o in operands) if (IsNone(o)) PropagateHigh(o);
+            return result;
+        }
+        return NoneNode(result, decorate, operands);
+    }
+
+    Value NoneNode(Value result, uint[] decorate, IEnumerable<Value> children, uint var = 0)
+    {
+        if (!_nonePrecision.ContainsKey(result.Id))
+            _nonePrecision[result.Id] = (decorate, [.. children.Where(c => !c.IsConstant && c.Id != result.Id).Select(c => c.Id)], var);
+        return result;
+    }
+
+    void PropagateRelaxed(Value v) { if (!v.Relaxed) PropagateRelaxedId(v.Id); }
+    void PropagateRelaxedId(uint id)
+    {
+        if (!_nonePrecision.Remove(id, out var node)) return;
+        foreach (uint d in node.Decorate) Relax(d);
+        // The variable a built-in's first access created takes that access's precision; later reads keep their own.
+        if (node.Var != 0) _m.Decorate(node.Var, Decoration.RelaxedPrecision);
+        foreach (uint c in node.Children) PropagateRelaxedId(c);
+    }
+    void PropagateHigh(Value v) { if (!v.Relaxed) PropagateHighId(v.Id); }
+    void PropagateHighId(uint id)
+    {
+        if (!_nonePrecision.Remove(id, out var node)) return;
+        foreach (uint c in node.Children) PropagateHighId(c);
+    }
+
+    // Propagates operand precision to a computed result (see Precisioned).
+    Value Relaxed(Value result, params Value[] operands) => Precisioned(result, [result.Id], operands, maxRule: true);
+
+    // Built-in variables declared without a precision (all of them outside ES, except the ones the built-in
+    // declarations mark highp or mediump). The first access to one is what decorates the variable.
+    readonly HashSet<uint> _noneVars = [], _freshVars = [];
+
+    uint NoPrecisionVariable(uint var)
+    {
+        if (!_isEs) { _noneVars.Add(var); _freshVars.Add(var); }
+        return var;
+    }
+
+    static readonly HashSet<string> DesktopHighpBuiltins =
+    [
+        "gl_NumWorkGroups", "gl_WorkGroupID", "gl_LocalInvocationID", "gl_GlobalInvocationID", "gl_LocalInvocationIndex",
+        "gl_DeviceIndex", "gl_ViewIndex", "gl_ViewID_OVR", "gl_PrimitiveShadingRateEXT",
+        "gl_SubgroupEqMask", "gl_SubgroupGeMask", "gl_SubgroupGtMask", "gl_SubgroupLeMask", "gl_SubgroupLtMask",
+        "gl_NumSubgroups", "gl_SubgroupID", "gl_WarpsPerSMNV", "gl_SMCountNV", "gl_WarpIDNV", "gl_SMIDNV",
+        "gl_CoreIDARM", "gl_CoreCountARM", "gl_CoreMaxIDARM", "gl_WarpIDARM", "gl_WarpMaxIDARM",
+        "gl_TileOffsetQCOM", "gl_TileDimensionQCOM", "gl_TileApronSizeQCOM",
+    ];
+
+    // A read of a none-precision built-in: the load decorates if a consumer gives it relaxed precision.
+    Value NoneLoad(Value loaded, uint var, uint[]? indices = null)
+    {
+        if (loaded.Relaxed || !_noneVars.Contains(var)) return loaded;
+        NoneNode(loaded, [loaded.Id], [], _freshVars.Remove(var) ? var : 0);
+        if (indices is not null && _nonePrecision.TryGetValue(loaded.Id, out var node))
+            _nonePrecision[loaded.Id] = node with { Children = [.. node.Children, .. indices] };
+        return loaded;
+    }
+
+    Value NoneValue(Value loaded)
+    {
+        if (!loaded.Relaxed) NoneNode(loaded, [loaded.Id], [], 0);
+        return loaded;
+    }
+
+    // An assignment's precision is the higher of its sides', pushed into whichever had none.
+    void AssignPrecision(Chain target, Value value)
+    {
+        bool fresh = _freshVars.Remove(target.Base);
+        if (!CarriesPrecision(target.Type)) return;
+        if (ChainRelaxed(target)) { if (IsNone(value)) PropagateRelaxed(value); return; }
+        if (target.Prec == 3) return;
+        if (target.Prec != 0 || !_noneVars.Contains(target.Base)) { if (IsNone(value)) PropagateHigh(value); return; }
+        if (!value.Relaxed) return;
+        if (fresh) _m.Decorate(target.Base, Decoration.RelaxedPrecision);
+        foreach (uint index in target.PrecIndices ?? []) PropagateRelaxedId(index);
+    }
 
     // Whether glslang decorates this AST node's operation NoContraction (PreciseAnalysis), given its result.
     bool NoContraction(object? node, GlslType result) =>
@@ -7355,10 +7855,14 @@ public sealed partial class Lowerer
             _m.Decorate(result.Id, Decoration.NonUniform);
             _nonUniformIds.Add(result.Id);
         }
-        // The operation takes its operands' precision. A bool result carries none.
-        return RelaxedResult(l, r) && BaseScalar(result.Type) is not Scalar.Bool
-            ? result with { Id = Relax(result.Id), Relaxed = true }
-            : result;
+        // The operation takes its operands' precision; a shift takes only the shifted operand's.
+        if (op is "<<" or ">>")
+        {
+            if (result.IsConstant || !CarriesPrecision(result.Type)) return result;
+            if (l.Relaxed) return result with { Id = Relax(result.Id), Relaxed = true };
+            return IsNone(l) ? NoneNode(result, [result.Id], [l, r]) : result;
+        }
+        return Relaxed(result, l, r);
     }
 
     Value BinaryResult(string op, Value l, Value r)
@@ -7724,11 +8228,11 @@ public sealed partial class Lowerer
             // A constant arm folds to the common type (glslang folds it), so `c ? 1 : 2.0` selects between
             // two float constants rather than converting the int at runtime. glslang does not decorate the
             // OpSelect result of a ternary with RelaxedPrecision, so neither do we.
-            uint thenVal = LowerCoerced(t.Then, common, "ternary").Id;
-            uint elseVal = LowerCoerced(t.Else, common, "ternary").Id;
+            var thenVal = LowerCoerced(t.Then, common, "ternary");
+            var elseVal = LowerCoerced(t.Else, common, "ternary");
             if (common is VectorType cv && version < SpirVVersion.V1_4)
                 condId = Splat(new Value(condId, Types.Bool, false), new VectorType(Scalar.Bool, cv.Size)).Id;
-            return new Value(Emit(Op.Select, SpvType(common), condId, thenVal, elseVal), common, false);
+            return SelectionPrecision(new Value(Emit(Op.Select, SpvType(common), condId, thenVal.Id, elseVal.Id), common, false), thenVal, elseVal, 0);
         }
 
         // Otherwise only one side may be evaluated, so glslang emits control flow around a Function-local
@@ -7744,18 +8248,33 @@ public sealed partial class Lowerer
         int branchAt = _code.Count;   // the OpBranchConditional belongs here, once the else block exists
 
         Label(thenB);
-        MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), LowerCoerced(t.Then, common, "ternary"));   // glslang multiTypeStore: a block-member arm copies logically
+        var thenArm = LowerCoerced(t.Then, common, "ternary");
+        MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), thenArm);   // glslang multiTypeStore: a block-member arm copies logically
         Branch(merge);
 
         uint elseB = _m.AllocId();
         Label(elseB);
-        MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), LowerCoerced(t.Else, common, "ternary"));   // glslang multiTypeStore: a block-member arm copies logically
+        var elseArm = LowerCoerced(t.Else, common, "ternary");
+        MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), elseArm);   // glslang multiTypeStore: a block-member arm copies logically
         Branch(merge);
 
         _code.Insert(branchAt, InstrPool.Rent(Op.BranchConditional).Add(cond.Id, thenB, elseB));
         Label(merge);
+        bool armsRelaxed = RelaxedResult(thenArm, elseArm) && CarriesPrecision(common);
+        if (armsRelaxed) Relax(temp);
         if (keepTemp) { tempChain = new Chain(temp, [], common, StorageClass.Function); return default; }
-        return Load(common, temp);
+        var loaded = Load(common, temp);
+        return armsRelaxed ? loaded : SelectionPrecision(loaded, thenArm, elseArm, temp);
+    }
+
+    // A selection's precision: the higher of its arms', never pushed into them by the selection itself. An
+    // OpSelect is never decorated; the branching form decorates its temporary and the reload.
+    Value SelectionPrecision(Value result, Value thenArm, Value elseArm, uint temp)
+    {
+        if (!CarriesPrecision(result.Type)) return result;
+        if (RelaxedResult(thenArm, elseArm)) return result with { Relaxed = true };
+        if (IsHigh(thenArm) || IsHigh(elseArm)) return result;
+        return NoneNode(result, temp == 0 ? [] : [result.Id], [thenArm, elseArm], temp);
     }
 
     // The common type two values are promoted to under GLSL's implicit conversions.
@@ -7786,8 +8305,8 @@ public sealed partial class Lowerer
         CheckConstIndexBounds(ix);
         if (EvalConst(ix) is { } c) return Materialize(c);
         if (!IsLValuePath(ix.Target)) return LowerRValueIndex(ix);
-        var a = ResolveAccess(ix);
-        return FromStored(LoadFrom(a), InferType(ix));
+        var chain = BuildAccess(ix);
+        return FromStored(WithChainPrecision(LoadFrom(AccessOf(chain)), chain), InferType(ix));
     }
 
     // Indexing a value that has no storage (`mat2(v)[1]`, `f()[i]`, `float[3](...)[i]`), the way glslang's
@@ -7815,7 +8334,8 @@ public sealed partial class Lowerer
         var index = LowerExpr(ix.Idx);
         if (targetType is VectorType)
             return new Value(Emit(Op.VectorExtractDynamic, SpvType(element), baseV.Id, index.Id), element, false);
-        uint temp = IndexableTemp(baseV.Id, _m.TypePointer(StorageClass.Function, SpvType(targetType)));
+        uint temp = IndexableTemp(baseV.Id, _m.TypePointer(StorageClass.Function, SpvType(targetType)),
+            baseV.IsConstant || _specConstIds.Contains(baseV.Id));
         return Load(element, Collapse(new Chain(temp, [index.Id], element, StorageClass.Function)));
     }
 
@@ -7892,7 +8412,11 @@ public sealed partial class Lowerer
     // struct's two SPIR-V types the pointee resolves to.
     // TypeId is the exact SPIR-V type of the pointee when it is a laid-out aggregate (0 = derive it from
     // Type and Layout); see ExactType.
-    readonly record struct Chain(uint Base, uint[] Indices, GlslType Type, StorageClass Storage, int DeferredComp = -1, int[]? Swizzle = null, BlockLayout? Layout = null, bool Physical = false, MemQual Mem = MemQual.None, int PhysAlign = 0, int PhysOffset = 0, uint TypeId = 0);
+    // Prec: the addressed member's own precision once the chain selects a struct or block member (1 relaxed,
+    // 2 not, 3 none without reaching the variable); 0 until then, meaning the base variable's.
+    // PrecIndices: the dynamic index values a precision pushed into this chain's addressed value reaches (the
+    // indices of levels that themselves carry a precision, so not those under a block or struct).
+    readonly record struct Chain(uint Base, uint[] Indices, GlslType Type, StorageClass Storage, int DeferredComp = -1, int[]? Swizzle = null, BlockLayout? Layout = null, bool Physical = false, MemQual Mem = MemQual.None, int PhysAlign = 0, int PhysOffset = 0, uint TypeId = 0, int Prec = 0, uint[]? PrecIndices = null);
 
     // You cannot access-chain into an OpConstantComposite, so a dynamic index into a const array copies
     // it into a Function-local "indexable" temp. glslang does that where the chain is LOADED, not where
@@ -7905,11 +8429,12 @@ public sealed partial class Lowerer
 
     // The Function-local copy of a const array, for dynamic indexing. SPIR-V 1.4 uses an OpVariable
     // initializer and marks it NonWritable; before that glslang stores the constant separately.
-    uint IndexableTemp(uint constId, uint ptrType)
+    // From SPIR-V 1.4 a constant initializes the temp directly (NonWritable, a lookup table); any other value is stored.
+    uint IndexableTemp(uint constId, uint ptrType, bool constant = true)
     {
         uint temp = _m.AllocId();
         _m.AddName(temp, "indexable");
-        if (version >= SpirVVersion.V1_4)
+        if (version >= SpirVVersion.V1_4 && constant)
         {
             _m.Decorate(temp, Decoration.NonWritable);
             _vars.Add(InstrPool.Rent(Op.Variable, ptrType, temp).AddEnum(StorageClass.Function).Add(constId));
@@ -7924,10 +8449,8 @@ public sealed partial class Lowerer
 
     Value LoadChain(Chain c)
     {
-        var loaded = Load(c.Type, Collapse(c.Swizzle is null ? c : Swizzled(c)), c.Layout, c.Mem, c.TypeId);
-        // A value read from a relaxed symbol is itself relaxed (the access chain stays undecorated).
-        if (!loaded.Relaxed && _relaxedIds.Contains(c.Base) && BaseScalar(c.Type) is not Scalar.Bool)
-            loaded = loaded with { Id = Relax(loaded.Id), Relaxed = true };
+        // A value read from a relaxed symbol or member is itself relaxed (the access chain stays undecorated).
+        var loaded = WithChainPrecision(Load(c.Type, Collapse(c.Swizzle is null ? c : Swizzled(c)), c.Layout, c.Mem, c.TypeId), c);
         return c.Swizzle is null ? loaded : Shuffle(loaded, c.Swizzle);
     }
 
@@ -7988,7 +8511,7 @@ public sealed partial class Lowerer
         return result;
     }
 
-    Access ResolveAccess(Expr e) { var c = BuildAccess(e); return new Access(Collapse(c), c.Type, c.Storage, c.Layout, c.Physical, c.Mem, c.PhysAlign, c.PhysOffset, c.Base, MemberIndexOfChain(c), c.TypeId); }
+    Access ResolveAccess(Expr e) => AccessOf(BuildAccess(e));
 
     readonly Dictionary<uint, uint> _physAligned = [];   // a PhysicalStorageBuffer access chain -> its Aligned value
 
@@ -8144,7 +8667,7 @@ public sealed partial class Lowerer
                 if (pvm == "gl_PointSize") NeedPointSizeCap();
                 NeedClipCullCap(pvm);
                 return new Chain(variable,
-                    [BuiltinArrayIndex(vtx, arr.Name, input ? _inVertexCount : _outVertexCount), MemberIndexConst(pvi)], pvs.Fields[pvi].Type, storage);
+                    [BuiltinArrayIndex(vtx, arr.Name, input ? _inVertexCount : _outVertexCount), MemberIndexConst(pvi)], pvs.Fields[pvi].Type, storage, Prec: _isEs ? 2 : 3);
             }
             // gl_MeshVerticesEXT[v].<member> writes a per-output-vertex value (gl_Position, gl_PointSize, ...).
             case Member { Target: Index { Target: Ident { Name: "gl_MeshVerticesEXT" }, Idx: var mvtx }, Name: var mm }
@@ -8156,10 +8679,19 @@ public sealed partial class Lowerer
                     when MeshPrimitiveMember(pm) is (int pmi, GlslType pmt):
                 return new Chain(GlMeshPrimitives(), [BuiltinArrayIndex(mprim, "gl_MeshPrimitivesEXT", _meshMaxPrimitives), MemberIndexConst(pmi)], pmt, StorageClass.Output);
             // GL_NV_mesh_shader: gl_MeshVerticesNV[v].<member>, gl_PrimitiveIndicesNV[i], gl_PrimitiveCountNV.
-            case Member { Target: Index { Target: Ident { Name: "gl_MeshVerticesNV" }, Idx: var nvtx }, Name: var nm }
-                    when MeshVertexMember(nm) is (int ni, GlslType nt):
+            case Member { Target: Index { Target: Ident { Name: "gl_MeshVerticesNV" }, Idx: var nvtx }, Name: var nm }:
+            {
+                var (ni, nt) = NVMeshMember(MeshVerticesNVMembers(), nm, "gl_MeshVerticesNV");
                 NeedClipCullCap(nm);
+                NeedNVMeshMemberCap(nm);
                 return new Chain(GlMeshVerticesNV(), [BuiltinArrayIndex(nvtx, "gl_MeshVerticesNV", _meshMaxVertices), MemberIndexConst(ni)], nt, StorageClass.Output);
+            }
+            case Member { Target: Index { Target: Ident { Name: "gl_MeshPrimitivesNV" }, Idx: var nprim }, Name: var npm }:
+            {
+                var (pi, pt) = NVMeshMember(MeshPrimitivesNVMembers(), npm, "gl_MeshPrimitivesNV");
+                NeedNVMeshMemberCap(npm);
+                return new Chain(GlMeshPrimitivesNV(), [BuiltinArrayIndex(nprim, "gl_MeshPrimitivesNV", _meshMaxPrimitives), MemberIndexConst(pi)], pt, StorageClass.Output);
+            }
             case Index { Target: Ident { Name: "gl_PrimitiveIndicesNV" }, Idx: var pidx }:
                 return new Chain(GlPrimitiveIndicesNV(), [BuiltinArrayIndex(pidx, "gl_PrimitiveIndicesNV", null)], Types.UInt, StorageClass.Output);
             case Ident { Name: "gl_PrimitiveCountNV" }:
@@ -8185,6 +8717,8 @@ public sealed partial class Lowerer
                 var (mi, mt) = PerVertexOutMember("gl_PointSize");
                 return new Chain(pv, [MemberIndexConst(mi)], mt, StorageClass.Output);
             }
+            case Ident { Name: "gl_ClipDistance" or "gl_CullDistance" } esClip when _isEs:
+                throw new GlslParseException($"'{esClip.Name}' : undeclared identifier");
             case Ident { Name: "gl_ClipDistance" }:
                 _m.AddCapability(Capability.ClipDistance);
                 // In a fragment shader gl_ClipDistance is a read-only Input array, not a gl_PerVertex
@@ -8202,14 +8736,15 @@ public sealed partial class Lowerer
                 return new Chain(bv, [], bt, BuiltinIsOutput(id.Name, b.Output) ? StorageClass.Output : StorageClass.Input);
             case Ident id when ResolveLocalVar(id.Name) is { } local:
                 return new Chain(local.VarId, [], local.Type,
-                    _uniformConstantParams.Contains(local.VarId) ? StorageClass.UniformConstant : StorageClass.Function);
+                    _uniformConstantParams.Contains(local.VarId) ? StorageClass.UniformConstant
+                    : ContainsRayQuery(local.Type) ? StorageClass.Private : StorageClass.Function);
             case Ident id when ResolveGlobal(id.Name) is { } g:
                 return new Chain(g.VarId, [], g.Type, g.Storage, Layout: BlockRuleset(g.Type), Mem: g.Mem, TypeId: _blockVarTypes.GetValueOrDefault(g.VarId));
             case Ident id when _blockMembers.TryGetValue(id.Name, out var bm):
             {
                 uint bmVar = bm.Var();
                 return new Chain(bmVar, [MemberIndexConst(bm.Index)], BlockStored(bm.Type), bm.Storage, Layout: bm.Layout, Mem: bm.Mem,
-                    TypeId: PartType(_blockVarTypes.GetValueOrDefault(bmVar), bm.Index));
+                    TypeId: PartType(_blockVarTypes.GetValueOrDefault(bmVar), bm.Index), Prec: bm.Prec);
             }
             // A dynamic index into a const array: glslang copies the constant into a Function-local
             // "indexable" temp (you cannot access-chain into an OpConstantComposite) and indexes that.
@@ -8243,7 +8778,10 @@ public sealed partial class Lowerer
                     VectorType vt => new ScalarType(vt.Component),            // vector[i] / matrix[i][j] selects a component
                     _ => throw new GlslParseException($"cannot index into '{Types.Name(baseC.Type)}'"),
                 };
-                uint idx = LowerExpr(ix.Idx).Id;
+                var idxValue = LowerExpr(ix.Idx);
+                uint idx = idxValue.Id;
+                uint[]? precIndices = CarriesPrecision(baseC.Type) && IsNone(idxValue) && !idxValue.IsConstant ? [.. baseC.PrecIndices ?? [], idx]
+                    : CarriesPrecision(baseC.Type) ? baseC.PrecIndices : null;
                 if (_nonUniformIds.Contains(idx)) AddNonUniformIndexCap(element, baseC.Storage);
                 else if (EvalConst(ix.Idx) is null) AddDynamicIndexCap(element);
                 // Through a buffer_reference, any index into an array contributes its ArrayStride to the
@@ -8251,7 +8789,7 @@ public sealed partial class Lowerer
                 int idxBits = baseC.Physical && _arrayStrides.TryGetValue(baseC.TypeId, out int arrayStride) ? arrayStride
                             : baseC.Physical && baseC.Type is VectorType iv ? ScalarSize(iv.Component) : 0;
                 return new Chain(baseC.Base, [.. baseC.Indices, idx], element, baseC.Storage, Layout: baseC.Layout, Physical: baseC.Physical, Mem: baseC.Mem, PhysAlign: baseC.PhysAlign, PhysOffset: baseC.PhysOffset | idxBits,
-                    TypeId: IsAggregate(baseC.Type) ? PartType(baseC.TypeId, 0) : 0);
+                    TypeId: IsAggregate(baseC.Type) ? PartType(baseC.TypeId, 0) : 0, Prec: baseC.Prec, PrecIndices: precIndices);
             }
             // `ref.field` dereferences a buffer_reference: load the 64-bit pointer, then access-chain
             // through it in PhysicalStorageBuffer storage.
@@ -8283,7 +8821,7 @@ public sealed partial class Lowerer
                 int memOff = baseC.Physical ? baseC.PhysOffset | MemberAlignBits(baseC.TypeId, index) : 0;
                 return new Chain(baseC.Base, [.. baseC.Indices, MemberIndexConst(index)],
                     baseC.Layout is not null ? BlockStored(fieldType) : fieldType, baseC.Storage, Layout: baseC.Layout, Physical: baseC.Physical, Mem: memberMem, PhysAlign: baseC.PhysAlign, PhysOffset: memOff,
-                    TypeId: PartType(baseC.TypeId, index));
+                    TypeId: PartType(baseC.TypeId, index), Prec: MemberPrec(st, index, baseC.Prec) is 0 && _noneVars.Contains(baseC.Base) ? 3 : MemberPrec(st, index, baseC.Prec), PrecIndices: null);
             }
             default:
                 // An identifier nothing can resolve is undeclared (glslang: "'o' : undeclared identifier"),
@@ -8370,12 +8908,154 @@ public sealed partial class Lowerer
 
     uint _glMeshVerticesNV, _glPrimIndicesNV, _glPrimCountNV;
 
+    uint _glMeshPrimitivesNV;
+    List<(string Name, GlslType Type)>? _meshVerticesNVRedecl, _meshPrimitivesNVRedecl;
+
+    // The gl_MeshPerVertexNV members, as redeclared or glslang's full block. The per-view arrays' view
+    // dimension is gl_MaxMeshViewCountNV; unsized inner dimensions take their implicit size.
+    List<(string Name, GlslType Type)> MeshVerticesNVMembers() => _meshVerticesNVRedecl ??
+    [
+        ("gl_Position", Vec4), ("gl_PointSize", Types.Float),
+        ("gl_ClipDistance", ClipCullArray("gl_ClipDistance", input: false)),
+        ("gl_CullDistance", ClipCullArray("gl_CullDistance", input: false)),
+        ("gl_PositionPerViewNV", new ArrayType(Vec4, MeshViewCount)),
+        ("gl_ClipDistancePerViewNV", new ArrayType(new ArrayType(Types.Float, NVMeshImplicitInner("gl_MeshVerticesNV", "gl_ClipDistancePerViewNV")), MeshViewCount)),
+        ("gl_CullDistancePerViewNV", new ArrayType(new ArrayType(Types.Float, NVMeshImplicitInner("gl_MeshVerticesNV", "gl_CullDistancePerViewNV")), MeshViewCount)),
+    ];
+
+    List<(string Name, GlslType Type)> MeshPrimitivesNVMembers() => _meshPrimitivesNVRedecl ??
+    [
+        ("gl_PrimitiveID", Types.Int), ("gl_Layer", Types.Int), ("gl_ViewportIndex", Types.Int),
+        ("gl_ViewportMask", new ArrayType(Types.Int, NVMeshImplicitSize("gl_MeshPrimitivesNV", "gl_ViewportMask"))),
+        ("gl_LayerPerViewNV", new ArrayType(Types.Int, MeshViewCount)),
+        ("gl_ViewportMaskPerViewNV", new ArrayType(new ArrayType(Types.Int, NVMeshImplicitInner("gl_MeshPrimitivesNV", "gl_ViewportMaskPerViewNV")), MeshViewCount)),
+    ];
+
+    const int MeshViewCount = 4;   // gl_MaxMeshViewCountNV
+
+    // An unsized array member of a mesh block takes one past the largest constant index used on it (1 if none).
+    int NVMeshImplicitSize(string array, string member) =>
+        Math.Max(1, (MaxConstIndexInUnit(t => t is Member { Target: Index { Target: Ident { Name: var a } } } m && a == array && m.Name == member, out _) ?? 0) + 1);
+
+    // The inner (per-view element) dimension of a per-view member: the index applied after the view index.
+    int NVMeshImplicitInner(string array, string member) =>
+        Math.Max(1, (MaxConstIndexInUnit(t => t is Index { Target: Member { Target: Index { Target: Ident { Name: var a } } } m } && a == array && m.Name == member, out _) ?? 0) + 1);
+
+    static (int Index, GlslType Type) NVMeshMember(List<(string Name, GlslType Type)> members, string name, string array)
+    {
+        int i = members.FindIndex(x => x.Name == name);
+        if (i < 0) throw new GlslParseException($"'{name}' : no such field in structure '{array}'");
+        return (i, members[i].Type);
+    }
+
+    // Using a mesh block member that maps to an extension built-in pulls in that extension (glslang declareUseOfStructMember).
+    void NeedNVMeshMemberCap(string member)
+    {
+        if (member == "gl_ViewportMask")
+        {
+            _m.AddExtension("SPV_NV_viewport_array2");
+            _m.AddCapability(Capability.ShaderViewportMaskNV);
+        }
+        else if (member is "gl_PositionPerViewNV" or "gl_ViewportMaskPerViewNV")
+        {
+            _m.AddExtension("SPV_NVX_multiview_per_view_attributes");
+            _m.AddCapability(Capability.PerViewAttributesNV);
+        }
+    }
+
+    static BuiltIn NVMeshMemberBuiltIn(string name) => name switch
+    {
+        "gl_Position" => BuiltIn.Position,
+        "gl_PointSize" => BuiltIn.PointSize,
+        "gl_ClipDistance" => BuiltIn.ClipDistance,
+        "gl_CullDistance" => BuiltIn.CullDistance,
+        "gl_PositionPerViewNV" => BuiltIn.PositionPerViewNV,
+        "gl_ClipDistancePerViewNV" => BuiltIn.ClipDistancePerViewNV,
+        "gl_CullDistancePerViewNV" => BuiltIn.CullDistancePerViewNV,
+        "gl_PrimitiveID" => BuiltIn.PrimitiveId,
+        "gl_Layer" => BuiltIn.Layer,
+        "gl_ViewportIndex" => BuiltIn.ViewportIndex,
+        "gl_ViewportMask" => BuiltIn.ViewportMaskNV,
+        "gl_LayerPerViewNV" => BuiltIn.LayerPerViewNV,
+        _ => BuiltIn.ViewportMaskPerViewNV,
+    };
+
+    // A gl_MeshPerVertexNV / gl_MeshPerPrimitiveNV block: every member a BuiltIn, the per-view ones also
+    // PerViewNV, and every member of the per-primitive block PerPrimitiveNV.
+    uint NVMeshBlockType(string blockName, List<(string Name, GlslType Type)> members, bool perPrimitive)
+    {
+        uint s = _m.TypeStructUnique([.. members.Select(x => SpvType(x.Type))]);
+        _m.AddName(s, blockName);
+        for (int i = 0; i < members.Count; i++)
+        {
+            _m.AddMemberName(s, i, members[i].Name);
+            _m.MemberDecorate(s, i, Decoration.BuiltIn, (uint)NVMeshMemberBuiltIn(members[i].Name));
+            if (perPrimitive) _m.MemberDecorate(s, i, Decoration.PerPrimitiveEXT);
+            if (members[i].Name.EndsWith("PerViewNV", StringComparison.Ordinal)) _m.MemberDecorate(s, i, Decoration.PerViewNV);
+        }
+        _m.Decorate(s, Decoration.Block);
+        return s;
+    }
+
+    // A redeclared gl_MeshPerVertexNV/gl_MeshPerPrimitiveNV keeps only the members it lists. A per-view member's
+    // view dimension is gl_MaxMeshViewCountNV; any other unsized dimension takes its implicit size.
+    List<(string Name, GlslType Type)> NVMeshRedeclaredMembers(InterfaceBlock block, string array)
+    {
+        var full = array == "gl_MeshVerticesNV" ? MeshVerticesNVMembers() : MeshPrimitivesNVMembers();
+        var members = new List<(string Name, GlslType Type)>();
+        foreach (var f in block.Members)
+            foreach (var d in f.Declarators)
+            {
+                int i = full.FindIndex(x => x.Name == d.Name);
+                if (i < 0) throw new GlslParseException($"'{d.Name}' : no such field in structure '{block.BlockName}'", d.Line);
+                bool perView = d.Name.EndsWith("PerViewNV", StringComparison.Ordinal);
+                if (perView != f.Qualifiers.Has("perviewNV"))
+                    throw new GlslParseException(perView
+                        ? $"'{d.Name}' : missing perviewNV qualifier to redeclared block member"
+                        : $"'{d.Name}' : cannot add perviewNV qualifier to redeclared block member", d.Line);
+                var declared = ApplyArrayDims(ResolveTypeRef(f.Type), d.Array);
+                members.Add((d.Name, SizeNVMeshMember(declared, full[i].Type, perView, d.Line)));
+            }
+        return members;
+    }
+
+    // Fills a redeclared member's unsized dimensions from the full block's sizes; a sized view dimension must be the maximum.
+    static GlslType SizeNVMeshMember(GlslType declared, GlslType full, bool viewDim, int line)
+    {
+        if (declared is RuntimeArrayType r && full is ArrayType fa)
+            return new ArrayType(SizeNVMeshMember(r.Element, fa.Element, false, line), fa.Length);
+        if (declared is ArrayType a && full is ArrayType fb)
+        {
+            if (viewDim && a.Length != MeshViewCount)
+                throw new GlslParseException("'[]' : mesh view output array size must be gl_MaxMeshViewCountNV or implicitly sized", line);
+            return new ArrayType(SizeNVMeshMember(a.Element, fb.Element, false, line), a.Length);
+        }
+        if (!declared.Equals(full) && declared is not (ArrayType or RuntimeArrayType))
+            throw new GlslParseException("cannot redeclare block member with a different type", line);
+        return declared;
+    }
+
+    // gl_MeshPrimitivesNV: Output array[max_primitives] of gl_MeshPerPrimitiveNV.
+    uint GlMeshPrimitivesNV()
+    {
+        if (_glMeshPrimitivesNV == 0)
+        {
+            uint block = NVMeshBlockType("gl_MeshPerPrimitiveNV", MeshPrimitivesNVMembers(), perPrimitive: true);
+            uint arr = _m.TypeArray(block, _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)_meshMaxPrimitives));
+            uint ptr = _m.TypePointer(StorageClass.Output, arr);
+            _glMeshPrimitivesNV = _m.GlobalVariable(ptr, StorageClass.Output);
+            _m.AddName(_glMeshPrimitivesNV, "gl_MeshPrimitivesNV");
+            _interface.Add(_glMeshPrimitivesNV);
+        }
+        return _glMeshPrimitivesNV;
+    }
+
     // GL_NV_mesh_shader gl_MeshVerticesNV: Output array[max_vertices] of gl_MeshPerVertexNV.
     uint GlMeshVerticesNV()
     {
         if (_glMeshVerticesNV == 0)
         {
-            uint block = MeshPerVertexNVType();
+            uint block = NVMeshBlockType("gl_MeshPerVertexNV", MeshVerticesNVMembers(), perPrimitive: false);
             uint arr = _m.TypeArray(block, _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)_meshMaxVertices));
             uint ptr = _m.TypePointer(StorageClass.Output, arr);
             _glMeshVerticesNV = _m.GlobalVariable(ptr, StorageClass.Output);
@@ -8383,6 +9063,17 @@ public sealed partial class Lowerer
             _interface.Add(_glMeshVerticesNV);
         }
         return _glMeshVerticesNV;
+    }
+
+    // writePackedPrimitiveIndices4x8NV(uint indexOffset, uint packedIndices): four 8-bit indices in one write.
+    Value WritePackedPrimitiveIndices(Call call)
+    {
+        if (stage != ShaderStage.Mesh || call.Args.Count != 2)
+            throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        if (!_requestedExts.Contains("GL_NV_mesh_shader"))
+            throw new GlslParseException($"'{call.Name}' : required extension not requested: GL_NV_mesh_shader");
+        var args = call.Args.Select(a => LowerCoerced(a, Types.UInt, call.Name)).ToArray();
+        return VoidOp(Op.WritePackedPrimitiveIndices4x8NV, args[0].Id, args[1].Id);
     }
 
     // gl_PrimitiveIndicesNV: a flat Output uint array of max_primitives * <vertices per primitive>.
@@ -8413,40 +9104,6 @@ public sealed partial class Lowerer
             _interface.Add(_glPrimCountNV);
         }
         return _glPrimCountNV;
-    }
-
-    // The gl_MeshPerVertexNV block: gl_Position/PointSize/Clip/CullDistance plus the PerViewNV variants,
-    // the per-view arrays sized to the fixed gl_MaxMeshViewCountNV (4).
-    uint MeshPerVertexNVType()
-    {
-        uint f = _m.TypeFloat(32);
-        uint vec4 = SpvType(Vec4);
-        uint u = _m.TypeInt(32, signed: false);
-        uint arr1 = _m.TypeArray(f, _m.ConstantInt(u, 1));
-        uint c4 = _m.ConstantInt(u, 4);
-        uint vec4x4 = _m.TypeArray(vec4, c4);
-        uint arr1x4 = _m.TypeArray(arr1, c4);
-        uint s = _m.TypeStructUnique(vec4, f, arr1, arr1, vec4x4, arr1x4, arr1x4);
-        _m.AddName(s, "gl_MeshPerVertexNV");
-        _m.AddMemberName(s, 0, "gl_Position");
-        _m.AddMemberName(s, 1, "gl_PointSize");
-        _m.AddMemberName(s, 2, "gl_ClipDistance");
-        _m.AddMemberName(s, 3, "gl_CullDistance");
-        _m.AddMemberName(s, 4, "gl_PositionPerViewNV");
-        _m.AddMemberName(s, 5, "gl_ClipDistancePerViewNV");
-        _m.AddMemberName(s, 6, "gl_CullDistancePerViewNV");
-        _m.MemberDecorate(s, 0, Decoration.BuiltIn, (uint)BuiltIn.Position);
-        _m.MemberDecorate(s, 1, Decoration.BuiltIn, (uint)BuiltIn.PointSize);
-        _m.MemberDecorate(s, 2, Decoration.BuiltIn, (uint)BuiltIn.ClipDistance);
-        _m.MemberDecorate(s, 3, Decoration.BuiltIn, (uint)BuiltIn.CullDistance);
-        _m.MemberDecorate(s, 4, Decoration.PerViewNV);
-        _m.MemberDecorate(s, 4, Decoration.BuiltIn, (uint)BuiltIn.PositionPerViewNV);
-        _m.MemberDecorate(s, 5, Decoration.PerViewNV);
-        _m.MemberDecorate(s, 5, Decoration.BuiltIn, (uint)BuiltIn.ClipDistancePerViewNV);
-        _m.MemberDecorate(s, 6, Decoration.PerViewNV);
-        _m.MemberDecorate(s, 6, Decoration.BuiltIn, (uint)BuiltIn.CullDistancePerViewNV);
-        _m.Decorate(s, Decoration.Block);
-        return s;
     }
 
     // The per-primitive index output: uvec3[max_primitives] for triangles, uvec2 for lines, uint for
@@ -8506,7 +9163,7 @@ public sealed partial class Lowerer
             var redecl = name == "gl_in" ? _perVertexIn : _perVertexOut;
             uint arr = _m.TypeArray(PerVertexBlockType("gl_PerVertex", redecl, name == "gl_in"), _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)count));
             uint ptr = _m.TypePointer(storage, arr);
-            cache = _m.GlobalVariable(ptr, storage);
+            cache = NoPrecisionVariable(_m.GlobalVariable(ptr, storage));
             _m.AddName(cache, name);
             if (storage == StorageClass.Output) DecorateOutput(cache, DefaultOutLayout);
             _interface.Add(cache);
@@ -8605,7 +9262,7 @@ public sealed partial class Lowerer
         if (cache == 0)
         {
             uint ptr = _m.TypePointer(storage, SpvType(type));
-            cache = _m.GlobalVariable(ptr, storage);
+            cache = NoPrecisionVariable(_m.GlobalVariable(ptr, storage));
             _m.AddName(cache, kind == BuiltIn.TessLevelInner ? "gl_TessLevelInner" : "gl_TessLevelOuter");
             _m.Decorate(cache, Decoration.Patch);
             _m.Decorate(cache, Decoration.BuiltIn, (uint)kind);
@@ -8644,6 +9301,17 @@ public sealed partial class Lowerer
     // gl_Layer, gl_ViewportIndex and gl_PrimitiveID are outputs when a geometry shader produces them
     // (routing a primitive to a layer/viewport, or overriding the primitive id) and inputs in every
     // other stage. gl_PrimitiveIDIn (the geometry input) stays Input via its own dictionary entry.
+    // A built-in's type; an implicitly sized one takes its length from the largest constant index used on it.
+    GlslType BuiltinType(string name)
+    {
+        var type = Builtins[name].Type;
+        if (type is not RuntimeArrayType implicitArray) return type;
+        int? max = MaxConstIndexInUnit(name, out bool dynamic);
+        if (dynamic)
+            throw new GlslParseException($"'[' : array must be redeclared with a size before being indexed with a variable");
+        return new ArrayType(implicitArray.Element, (max ?? 0) + 1);
+    }
+
     bool BuiltinIsOutput(string name, bool defaultOutput) => name switch
     {
         "gl_PrimitiveID" => stage == ShaderStage.Geometry,
@@ -8654,6 +9322,48 @@ public sealed partial class Lowerer
 
     // gl_SubgroupSize and gl_SubgroupInvocationID are mediump (RelaxedPrecision); the others are not.
     static readonly HashSet<string> RelaxedBuiltins = ["gl_SubgroupSize", "gl_SubgroupInvocationID"];
+
+    // Built-ins whose SPIR-V variable has a different type than the GLSL one; a load converts (glslang getForcedType).
+    static bool IsForcedBuiltin(string name) => ForcedBuiltinStorage(name) is not null;
+
+    static GlslType? ForcedBuiltinStorage(string name) => name switch
+    {
+        "gl_SubGroupEqMaskARB" or "gl_SubGroupGeMaskARB" or "gl_SubGroupGtMaskARB" or "gl_SubGroupLeMaskARB"
+            or "gl_SubGroupLtMaskARB" => new VectorType(Scalar.UInt, 4),
+        "gl_ObjectToWorld3x4EXT" or "gl_WorldToObject3x4EXT" => new MatrixType(4, 3),
+        _ => null,
+    };
+
+    // Stages (beyond the ray tracing extension gate) whose glslang built-in set declares each ray tracing variable.
+    static bool RayTracingBuiltinInStage(string name, ShaderStage s) => name switch
+    {
+        "gl_InstanceID" or "gl_ObjectToWorld3x4EXT" or "gl_WorldToObject3x4EXT"
+            => s is ShaderStage.Intersection or ShaderStage.AnyHit or ShaderStage.ClosestHit,
+        "gl_CullMaskEXT" => s is ShaderStage.Intersection or ShaderStage.AnyHit or ShaderStage.ClosestHit or ShaderStage.Miss,
+        "gl_HitTriangleVertexPositionsEXT" => s is ShaderStage.AnyHit or ShaderStage.ClosestHit,
+        _ => true,
+    };
+
+    // The subgroup built-ins are declared volatile in the ray tracing stages, except any-hit.
+    static readonly HashSet<string> RayTracingVolatileBuiltins = ["gl_SubgroupSize", "gl_SubgroupInvocationID",
+        "gl_SubgroupEqMask", "gl_SubgroupGeMask", "gl_SubgroupGtMask", "gl_SubgroupLeMask", "gl_SubgroupLtMask",
+        "gl_SubGroupSizeARB", "gl_SubGroupInvocationARB", "gl_SubGroupEqMaskARB", "gl_SubGroupGeMaskARB",
+        "gl_SubGroupGtMaskARB", "gl_SubGroupLeMaskARB", "gl_SubGroupLtMaskARB"];
+
+    // A forced 64-bit mask is read as the uvec4 built-in, whose low two words bitcast to the uint64; a 3x4
+    // ray tracing matrix is the transpose of the 4x3 built-in.
+    Value LoadForcedBuiltin(GlslType type, uint var)
+    {
+        if (type is MatrixType)
+            return new Value(Emit(Op.Transpose, SpvType(type), Load(new MatrixType(4, 3), var).Id), type, false);
+        var uvec4 = new VectorType(Scalar.UInt, 4);
+        uint loaded = Load(uvec4, var).Id;
+        uint uintType = SpvType(Types.UInt);
+        uint lo = Emit(Op.CompositeExtract, uintType, loaded, 0);
+        uint hi = Emit(Op.CompositeExtract, uintType, loaded, 1);
+        uint pair = Emit(Op.CompositeConstruct, SpvType(new VectorType(Scalar.UInt, 2)), lo, hi);
+        return new Value(Emit(Op.Bitcast, SpvType(type), pair), type, false);
+    }
 
     // gl_-prefixed names a user may legitimately redeclare (built-ins). Anything else with a gl_ prefix is
     // a reserved-identifier error. Covers the Builtins table, the gl_PerVertex members, and the aggregates
@@ -8689,7 +9399,8 @@ public sealed partial class Lowerer
         if (name == "gl_HitTEXT") name = "gl_RayTmaxEXT";
         if (name == "gl_HitTNV") name = "gl_RayTmaxNV";
         if (_builtinVars.TryGetValue(name, out var existing)) return existing;
-        if (stage != ShaderStage.Fragment && name is "gl_FragCoord" or "gl_FragDepth" or "gl_FrontFacing" or "gl_PointCoord" or "gl_SampleID" or "gl_SampleMaskIn" or "gl_HelperInvocation")
+        if (stage != ShaderStage.Fragment && name is "gl_FragCoord" or "gl_FragDepth" or "gl_FrontFacing" or "gl_PointCoord" or "gl_SampleID" or "gl_SampleMaskIn" or "gl_HelperInvocation"
+                or "gl_FragSizeEXT" or "gl_FragInvocationCountEXT" or "gl_BaryCoordEXT" or "gl_BaryCoordNoPerspEXT" or "gl_BaryCoordNV" or "gl_BaryCoordNoPerspNV")
             throw new GlslParseException($"'{name}' is only available in a fragment shader");
         if (stage != ShaderStage.Vertex && name is "gl_VertexIndex" or "gl_InstanceIndex")
             throw new GlslParseException($"'{name}' is only available in a vertex shader");
@@ -8698,7 +9409,36 @@ public sealed partial class Lowerer
         if (stage is not (ShaderStage.Compute or ShaderStage.Mesh or ShaderStage.Task)
             && name is "gl_WorkGroupID" or "gl_NumWorkGroups" or "gl_LocalInvocationID" or "gl_GlobalInvocationID" or "gl_LocalInvocationIndex")
             throw new GlslParseException($"'{name}' is only available in a compute, task, or mesh shader");
-        var (kind, type, defaultOutput, cap, ext) = Builtins[name];
+        if (name == "gl_ViewportMask")
+        {
+            // In a tessellation control shader it is a gl_out[] member, not a variable of its own.
+            if (stage is not (ShaderStage.Vertex or ShaderStage.TessEvaluation or ShaderStage.Geometry))
+                throw new GlslParseException($"'{name}' : undeclared identifier");
+            if (!_requestedExts.Contains("GL_NV_viewport_array2"))
+                throw new GlslParseException($"'{name}' : required extension not requested: GL_NV_viewport_array2");
+        }
+        if (!RayTracingBuiltinInStage(name, stage))
+            throw new GlslParseException($"'{name}' : undeclared identifier");
+        if (name == "gl_CullMaskEXT" && !_requestedExts.Contains("GL_EXT_ray_cull_mask"))
+            throw new GlslParseException($"'{name}' : required extension not requested: GL_EXT_ray_cull_mask");
+        if (name == "gl_HitTriangleVertexPositionsEXT" && !_requestedExts.Contains("GL_EXT_ray_tracing_position_fetch"))
+            throw new GlslParseException($"'{name}' : required extension not requested: GL_EXT_ray_tracing_position_fetch");
+        if (name is "gl_TaskCountNV" or "gl_MeshViewCountNV" or "gl_MeshViewIndicesNV")
+        {
+            if (name == "gl_TaskCountNV" ? stage != ShaderStage.Task : stage is not (ShaderStage.Mesh or ShaderStage.Task))
+                throw new GlslParseException($"'{name}' : undeclared identifier");
+            if (!_requestedExts.Contains("GL_NV_mesh_shader"))
+                throw new GlslParseException($"'{name}' : required extension not requested: GL_NV_mesh_shader");
+        }
+        if (name.StartsWith("gl_SubGroup", StringComparison.Ordinal))
+        {
+            if (_isEs || _glslVersion < 450)
+                throw new GlslParseException($"'{name}' : undeclared identifier");
+            if (!_requestedExts.Contains("GL_ARB_shader_ballot"))
+                throw new GlslParseException($"'{name}' : required extension not requested: GL_ARB_shader_ballot");
+        }
+        var (kind, _, defaultOutput, cap, ext) = Builtins[name];
+        var type = BuiltinType(name);
         bool output = BuiltinIsOutput(name, defaultOutput);
         // gl_PrimitiveID/gl_PrimitiveIDIn pull in the Geometry capability ONLY in a fragment shader
         // (GlslangToSpv EbvPrimitiveId). Every other stage that exposes them already declares a capability
@@ -8720,15 +9460,42 @@ public sealed partial class Lowerer
             _m.AddCapability(c);
         if (ext is not null) AddIncorporatedExtension(ext, BuiltinExtensionCoreVersion(ext));
         var storage = output ? StorageClass.Output : StorageClass.Input;
-        uint ptr = _m.TypePointer(storage, SpvType(type));
+        // glslang getForcedType makes the declared SPIR-V type and then the GLSL one, before the pointer.
+        var forced = ForcedBuiltinStorage(name);
+        uint storedType = SpvType(forced ?? type);
+        if (forced is not null) SpvType(type);
+        uint ptr = _m.TypePointer(storage, storedType);
         uint var = _m.GlobalVariable(ptr, storage);
+        if (!RelaxedBuiltins.Contains(name) && !DesktopHighpBuiltins.Contains(name) && !(name == "gl_ViewIndex" && stage != ShaderStage.Task))
+            NoPrecisionVariable(var);
         _m.AddName(var, name);   // glslang names built-in variables with their gl_ source name
         // A few subgroup built-ins are mediump per the KHR spec, so they and their loads are Relaxed.
         if (RelaxedBuiltins.Contains(name)) Relax(var);
         // An integer input to a fragment shader cannot be interpolated and must be Flat (VUID-04744).
-        if (!output && stage == ShaderStage.Fragment && BaseScalar(type) is Scalar.Int or Scalar.UInt)
+        if (!output && stage == ShaderStage.Fragment && BaseScalar(type) is Scalar.Int or Scalar.UInt or Scalar.Int64 or Scalar.UInt64)
             _m.Decorate(var, Decoration.Flat);
         _m.Decorate(var, Decoration.BuiltIn, (uint)kind);
+        if (stage is ShaderStage.RayGen or ShaderStage.Intersection or ShaderStage.ClosestHit or ShaderStage.Miss or ShaderStage.Callable
+            && RayTracingVolatileBuiltins.Contains(name) && !_vmmPragma)
+        {
+            _m.Decorate(var, Decoration.Volatile);
+            _m.Decorate(var, Decoration.Coherent);
+        }
+        if (kind == BuiltIn.Layer)
+        {
+            if (_layerViewportRelative)
+            {
+                _m.Decorate(var, Decoration.ViewportRelativeNV);
+                _m.AddCapability(Capability.ShaderViewportMaskNV);
+                _m.AddExtension("SPV_NV_viewport_array2");
+            }
+            if (_layerSecondaryViewOffset is int offset)
+            {
+                _m.Decorate(var, Decoration.SecondaryViewportRelativeNV, unchecked((uint)offset));
+                _m.AddCapability(Capability.ShaderStereoViewNV);
+                _m.AddExtension("SPV_NV_stereo_view_rendering");
+            }
+        }
         if (output) DecorateOutput(var, DefaultOutLayout);
         // In an intersection shader reportIntersectionEXT can update the ray's tMax, so gl_RayTmaxEXT is mutable
         // and glslang marks the RayTmaxKHR built-in Volatile + Coherent (the older NV path does not).
@@ -8817,11 +9584,12 @@ public sealed partial class Lowerer
         if (ResolveGlobal(id.Name) is { } g) return Load(g.Type, g.VarId, null, IsOpaque(g.Type) ? MemQual.None : g.Mem);
         if (_blockMembers.TryGetValue(id.Name, out var member))
         {
-            var a = ResolveAccess(id);
+            var chain = BuildAccess(id);
+            var a = AccessOf(chain);
             RejectWriteOnlyRead(a.Root, a.MemberIdx);
-            return FromStored(Load(a.Type, a.Pointer, a.Layout), member.Type);
+            return FromStored(WithChainPrecision(Load(a.Type, a.Pointer, a.Layout), chain), member.Type);
         }
-        if (Builtins.ContainsKey(id.Name)) { var (t, v) = BuiltinVar(id.Name); return Load(t, v); }
+        if (Builtins.ContainsKey(id.Name)) { var (t, v) = BuiltinVar(id.Name); return IsForcedBuiltin(id.Name) ? LoadForcedBuiltin(t, v) : NoneLoad(Load(t, v), v); }
         // gl_Position and the other gl_PerVertex members are readable, through their access chain.
         if (PerVertexType(id.Name) is not null) { var a = ResolveAccess(id); return Load(a.Type, a.Pointer); }
         throw new GlslParseException($"unresolved identifier '{id.Name}'");
@@ -8864,6 +9632,7 @@ public sealed partial class Lowerer
             return Materialize(folded);
 
         var type = Resolve(call.Name);
+        if (type is AccelStructType) return AccelerationStructureFromAddress(call);
         // A buffer reference back to its raw address: uvec2 reinterprets it, uint64_t converts it.
         if (_bufferRefs.Count > 0 && call.Args.Count == 1
             && type is VectorType { Component: Scalar.UInt, Size: 2 } or ScalarType { Kind: Scalar.UInt64 }
@@ -8884,11 +9653,25 @@ public sealed partial class Lowerer
                 ? args[i - 1]
                 : comp is { } c ? LowerConstituent(call.Args[i], c) : LowerExpr(call.Args[i]);
 
+        int mark = _code.Count;
         var built = LowerConstructorBody(type, args, call);
-        // Under a mediump default a constructor of that type takes its operands' (relaxed) precision.
-        return RelaxByDefault(built.Type) && !built.IsConstant && !built.Relaxed && RelaxedResult(args)
-            ? built with { Id = Relax(built.Id), Relaxed = true } : built;
+        if (built.IsConstant || args.Any(a => a.Id == built.Id)) return built;
+        bool conversion = args.Length == 1 && PrecisionScalar(args[0].Type) != PrecisionScalar(type) && SameShape(args[0].Type, type);
+        if (conversion) return built;
+        var parts = new List<uint>();
+        for (int i = mark; i < _code.Count; i++)
+            if (_code[i].Op is Op.CompositeExtract or Op.CompositeConstruct or Op.VectorShuffle) parts.Add(_code[i].ResultId);
+        if (!parts.Contains(built.Id)) parts.Add(built.Id);
+        return Precisioned(built, [.. parts], args, maxRule: args.Length > 1 && type is VectorType or MatrixType);
     }
+
+    static bool SameShape(GlslType a, GlslType b) => (a, b) switch
+    {
+        (ScalarType, ScalarType) => true,
+        (VectorType va, VectorType vb) => va.Size == vb.Size,
+        (MatrixType ma, MatrixType mb) => ma.Columns == mb.Columns && ma.Rows == mb.Rows,
+        _ => false,
+    };
 
     Value LowerConstructorBody(GlslType type, Value[] args, Call call)
     {
@@ -8918,7 +9701,7 @@ public sealed partial class Lowerer
             {
                 a = ConvertWhole(a, scalar.Kind);
                 uint[] first = a.Type is MatrixType ? [0u, 0u] : [0u];
-                return Relaxed(new Value(Emit(Op.CompositeExtract, SpvType(scalar), [a.Id, .. first]), scalar, false), a);
+                return new Value(Emit(Op.CompositeExtract, SpvType(scalar), [a.Id, .. first]), scalar, false);
             }
             return ConvertScalar(scalar.Kind, a);
         }
@@ -8965,8 +9748,6 @@ public sealed partial class Lowerer
                 uint[] smear = [.. Enumerable.Repeat(args[0].Id, vec.Size)];
                 if (args[0].IsConstant) return new Value(_m.ConstantComposite(typeId, smear), type, true);
                 if (_specConstIds.Contains(args[0].Id)) return TrackSpec(_m.SpecConstantComposite(typeId, smear), type);
-                // A scalar-smear constructor takes the target type's (default) precision, not the operand's,
-                // so it is not relaxed here; the mediump-default case is handled by LowerConstructor.
                 return new Value(Emit(Op.CompositeConstruct, typeId, smear), type, false);
             }
 
@@ -8988,22 +9769,14 @@ public sealed partial class Lowerer
                 if (flat.Count >= vec.Size) break;
                 if (a.Type is VectorType av)
                     for (uint c = 0; c < av.Size && flat.Count < vec.Size; c++)
-                    {
-                        uint ex = Emit(Op.CompositeExtract, scalarType, a.Id, c);
-                        if (a.Relaxed) Relax(ex);   // a mediump component's extract is itself mediump
-                        flat.Add(ex);
-                    }
+                        flat.Add(Emit(Op.CompositeExtract, scalarType, a.Id, c));
                 else if (a.Type is MatrixType am)   // a matrix contributes its components column-major
                     for (int k = 0; k < am.Columns * am.Rows && flat.Count < vec.Size; k++)
-                    {
-                        uint ex = Emit(Op.CompositeExtract, scalarType, a.Id, (uint)(k / am.Rows), (uint)(k % am.Rows));
-                        if (a.Relaxed) Relax(ex);
-                        flat.Add(ex);
-                    }
+                        flat.Add(Emit(Op.CompositeExtract, scalarType, a.Id, (uint)(k / am.Rows), (uint)(k % am.Rows)));
                 else
                     flat.Add(a.Id);
             }
-            return Relaxed(new Value(Emit(Op.CompositeConstruct, typeId, [.. flat]), type, false), args);
+            return new Value(Emit(Op.CompositeConstruct, typeId, [.. flat]), type, false);
         }
 
         if (type is MatrixType mat)
@@ -9083,6 +9856,20 @@ public sealed partial class Lowerer
         throw new GlslParseException($"constructor for '{Types.Name(type)}' is not lowered yet");
     }
 
+    // accelerationStructureEXT(uint64_t) / accelerationStructureEXT(uvec2): an acceleration structure from its device address.
+    Value AccelerationStructureFromAddress(Call call)
+    {
+        var argType = call.Args.Count == 1 ? InferType(call.Args[0]) : null;
+        bool fromUint64 = argType is ScalarType { Kind: Scalar.UInt64 };
+        if (!fromUint64 && argType is not VectorType { Component: Scalar.UInt, Size: 2 })
+            throw new GlslParseException($"'{call.Name}' : cannot construct with these arguments");
+        if (!_requestedExts.Contains("GL_EXT_ray_query") && !_requestedExts.Contains("GL_EXT_ray_tracing"))
+            throw new GlslParseException($"'{(fromUint64 ? "uint64_t conversion to acclerationStructureEXT" : "uvec2 conversion to accelerationStructureEXT")}' : required extension not requested: GL_EXT_ray_query GL_EXT_ray_tracing");
+        var address = LowerExpr(call.Args[0]);
+        var type = new AccelStructType();
+        return new Value(Emit(Op.ConvertUToAccelerationStructureKHR, SpvType(type), address.Id), type, false);
+    }
+
     // `Ref(addr)`: a buffer reference built from a raw address. GL_EXT_buffer_reference_uvec2 reinterprets a
     // uvec2 (OpBitcast); GL_EXT_buffer_reference2 converts a uint64_t (OpConvertUToPtr). A reference of the
     // same type passes through.
@@ -9145,9 +9932,9 @@ public sealed partial class Lowerer
         uint typeId = SpvType(type);
         uint[] components = [.. args.Select(a => a.Id)];
 
-        return args.All(a => a.IsConstant)
-            ? new Value(_m.ConstantComposite(typeId, components), type, true)
-            : new Value(Emit(Op.CompositeConstruct, typeId, components), type, false);
+        if (args.All(a => a.IsConstant)) return new Value(_m.ConstantComposite(typeId, components), type, true);
+        var built = new Value(Emit(Op.CompositeConstruct, typeId, components), type, false);
+        return Precisioned(built, [built.Id], args, maxRule: args.Length > 1);
     }
 
     // Converts a value to a target aggregate-element type (scalar or vector component conversion).
@@ -9342,7 +10129,7 @@ public sealed partial class Lowerer
     bool IsAddressable(Expr e) => e switch
     {
         Ident id => LocalExists(id.Name) || GlobalExists(id.Name) || _blockMembers.ContainsKey(id.Name)
-                    || Builtins.ContainsKey(id.Name)
+                    || (Builtins.ContainsKey(id.Name) && !IsForcedBuiltin(id.Name))
                     || id.Name is "gl_Position" or "gl_PointSize" or "gl_ClipDistance" or "gl_CullDistance"
                               or "gl_TessLevelOuter" or "gl_TessLevelInner" or "gl_in" or "gl_out",
         Index ix => IsAddressable(ix.Target),
@@ -9917,9 +10704,9 @@ public sealed partial class Lowerer
         "lessThan" or "lessThanEqual" or "greaterThan" or "greaterThanEqual" or "equal" or "notEqual" => ReplaceComponent(InferType(c.Args[0]), Scalar.Bool),
         "determinant" => new ScalarType(BaseScalar(InferType(c.Args[0]))),
         "packInt2x32" => Types.Int64,
-        "packUint2x32" => Types.UInt64,
+        "packUint2x32" or "clockARB" or "clockRealtimeEXT" => Types.UInt64,
         "unpackInt2x32" => new VectorType(Scalar.Int, 2),
-        "unpackUint2x32" => new VectorType(Scalar.UInt, 2),
+        "unpackUint2x32" or "clock2x32ARB" or "clockRealtime2x32EXT" => new VectorType(Scalar.UInt, 2),
         "packDouble2x32" => Types.Double,
         "unpackDouble2x32" => new VectorType(Scalar.UInt, 2),
         "floatBitsToInt" => ReplaceComponent(InferType(c.Args[0]), Scalar.Int),
@@ -9937,6 +10724,9 @@ public sealed partial class Lowerer
         "subgroupElect" or "subgroupAll" or "subgroupAny" or "subgroupAllEqual"
             or "subgroupInverseBallot" or "subgroupBallotBitExtract" or "helperInvocationEXT" => Types.Bool,
         "subgroupBallot" or "subgroupPartitionNV" => new VectorType(Scalar.UInt, 4),
+        "mbcntAMD" => Types.UInt,
+        _ when RayQueryOps.TryGetValue(c.Name, out var rqo) => rqo.Ret ?? Types.Void,
+        "rayQueryGetIntersectionTriangleVertexPositionsEXT" or "rayQueryInitializeEXT" => Types.Void,
         "subgroupBallotBitCount" or "subgroupBallotInclusiveBitCount" or "subgroupBallotExclusiveBitCount"
             or "subgroupBallotFindLSB" or "subgroupBallotFindMSB" => Types.UInt,
         _ => c.Args.Count > 0 ? InferType(c.Args[0]) : Types.Float,
@@ -10015,12 +10805,14 @@ public sealed partial class Lowerer
         if (_pendingPrivates.TryGetValue(name, out var pp)) return pp;
         if (GlobalType(name) is { } gt) return gt;
         if (_blockMembers.TryGetValue(name, out var bm)) return bm.Type;
-        if (Builtins.TryGetValue(name, out var b)) return b.Type;
+        if (Builtins.ContainsKey(name)) return BuiltinType(name);
         if (name is "gl_ClipDistance" or "gl_CullDistance")
             return stage == ShaderStage.Fragment ? ClipCullArray(name, input: true) : PerVertexOutMember(name).Type;
         if (PerVertexType(name) is { } pv) return pv;
         if (name == "gl_in") return new ArrayType(PerVertexStructOf(input: true), _inVertexCount);
         if (name == "gl_out") return new ArrayType(PerVertexStructOf(input: false), _outVertexCount);
+        if (name == "gl_MeshVerticesNV") return new ArrayType(new StructType("gl_MeshPerVertexNV", MeshVerticesNVMembers()), _meshMaxVertices);
+        if (name == "gl_MeshPrimitivesNV") return new ArrayType(new StructType("gl_MeshPerPrimitiveNV", MeshPrimitivesNVMembers()), _meshMaxPrimitives);
         // glslang: "'zz' : undeclared identifier" - an identifier nothing can resolve is undeclared,
         // not an overload-resolution failure.
         throw new GlslParseException($"unresolved identifier '{Clip(name)}'");
@@ -10057,6 +10849,9 @@ public sealed partial class Lowerer
         {
             _m.AddName(id, st.Name);
             for (int i = 0; i < st.Fields.Count; i++) _m.AddMemberName(id, i, st.Fields[i].Name);
+            if (_structMemberRelaxed.TryGetValue(st.Name, out var flags))
+                for (int i = 0; i < flags.Length && i < st.Fields.Count; i++)
+                    if (flags[i]) _m.MemberDecorate(id, i, Decoration.RelaxedPrecision);
         }
         return id;
     }
@@ -10256,7 +11051,7 @@ public sealed partial class Lowerer
         ShaderStage.TessControl => ExecutionModel.TessellationControl,
         ShaderStage.TessEvaluation => ExecutionModel.TessellationEvaluation,
         ShaderStage.Mesh => _nvMesh ? ExecutionModel.MeshNV : ExecutionModel.MeshEXT,
-        ShaderStage.Task => ExecutionModel.TaskEXT,
+        ShaderStage.Task => _nvMesh ? ExecutionModel.TaskNV : ExecutionModel.TaskEXT,
         ShaderStage.RayGen => ExecutionModel.RayGenerationKHR,
         ShaderStage.Intersection => ExecutionModel.IntersectionKHR,
         ShaderStage.AnyHit => ExecutionModel.AnyHitKHR,

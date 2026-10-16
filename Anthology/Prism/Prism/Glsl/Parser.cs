@@ -61,7 +61,10 @@ public sealed class Parser
         Parse(source, defines, includes, null);
 
     /// <summary>Parses for a known stage, which selects the stage macro glslang predefines (GL_FRAGMENT_SHADER, ...).</summary>
-    public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, Prowl.Prism.Compiler.ShaderStage? stage)
+    public static TranslationUnit Parse(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, Prowl.Prism.Compiler.ShaderStage? stage) =>
+        Prowl.Prism.Compiler.CompileLane.OnLane(() => ParseOnLane(source, defines, includes, stage));
+
+    static TranslationUnit ParseOnLane(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, Prowl.Prism.Compiler.ShaderStage? stage)
     {
         var (tokens, version, isEs, extensions, pragmas, names, invariantAllFrom) = Preprocessor.ProcessPooled(source, defines, includes, stage);
         try
@@ -84,15 +87,17 @@ public sealed class Parser
         while (!IsKind(TokenKind.End))
         {
             if (TryPrecisionStatement(ref defaultFloatRelaxed, ref intRelaxed)) continue;
-            int ln = Cur.Line;
+            int ln = Cur.Line, first = decls.Count;
             var d = ParseExternalDeclaration();
             if (d.Line == 0) d.Line = ln;
             // A struct defined inline with declarators yields its StructDef ahead of the variable.
             foreach (var p in _pendingDecls) { if (p.Line == 0) p.Line = ln; decls.Add(p); }
             _pendingDecls.Clear();
             decls.Add(d);
+            for (int i = first; i < decls.Count; i++)
+                (decls[i].FloatRelaxed, decls[i].IntRelaxed) = (defaultFloatRelaxed, intRelaxed);
         }
-        return new TranslationUnit(_version, decls, _extensions, _pragmas, defaultFloatRelaxed, _isEs, intRelaxed);
+        return new TranslationUnit(_version, decls, _extensions, _pragmas, _isEs);
     }
 
     // `precision <qualifier> <type>;` sets a type's default precision. It has no required semantics on a
@@ -252,7 +257,7 @@ public sealed class Parser
         while (true)
         {
             if (IsText("layout")) ParseLayout(layout);
-            else if (IsKind(TokenKind.Identifier) && QualifierWords.Contains(Cur.Text)) words.Add(Advance().Text);
+            else if (IsKind(TokenKind.Identifier) && IsQualifierWord(Cur.Text)) words.Add(Advance().Text);
             else break;
         }
         return words.Count == 0 && layout.Count == 0 ? Qualifiers.None : new Qualifiers(words, layout);
@@ -558,7 +563,7 @@ public sealed class Parser
     bool IsDeclarationStart()
     {
         if (!IsKind(TokenKind.Identifier)) return false;
-        if (QualifierWords.Contains(Cur.Text)) return true;
+        if (IsQualifierWord(Cur.Text)) return true;
         if (Cur.Text == "struct") return true;   // an inline struct definition declaring variables
         // A cooperative-matrix type begins with `coopmat<`.
         if (Cur.Text == "coopmat" && Peek() is { Kind: TokenKind.Operator, Text: "<" }) return true;
@@ -836,6 +841,15 @@ public sealed class Parser
     static bool IsAssignOp(string op) =>
         op is "=" or "+=" or "-=" or "*=" or "/=" or "%=" or "<<=" or ">>=" or "&=" or "|=" or "^=";
 
+    // Qualifier keywords glslang's scanner only recognizes under a version or an enabled extension;
+    // otherwise they lex as plain identifiers.
+    bool IsQualifierWord(string word) => QualifierWords.Contains(word) || word switch
+    {
+        "pervertexNV" => (!_isEs && _version >= 450) || _extensions.Contains("GL_NV_fragment_shader_barycentric"),
+        "perprimitiveNV" or "perviewNV" or "taskNV" => _extensions.Contains("GL_NV_mesh_shader"),
+        _ => false,
+    };
+
     static bool IsPrefixOp(string op) => op is "+" or "-" or "!" or "~" or "++" or "--";
 
     // GLSL keywords that may never be used as a user identifier: qualifiers, flow keywords, literals,
@@ -897,10 +911,13 @@ public sealed class Parser
         "input_quads", "input_quads_adjacency", "input_isolines",
         "max_vertices", "max_primitives", "vertices", "invocations",
         "passthrough", "derivative_group_linearNV", "derivative_group_quadsNV",
+        "viewport_relative", "secondary_view_offset",
         // fragment / depth / stencil / ordering
         "origin_upper_left", "pixel_center_integer",
         "early_fragment_tests", "post_depth_coverage", "early_and_late_fragment_tests_amd",
         "depth_any", "depth_greater", "depth_less", "depth_unchanged",
+        "stencil_ref_unchanged_front_amd", "stencil_ref_greater_front_amd", "stencil_ref_less_front_amd",
+        "stencil_ref_unchanged_back_amd", "stencil_ref_greater_back_amd", "stencil_ref_less_back_amd",
         "pixel_interlock_ordered", "pixel_interlock_unordered", "sample_interlock_ordered",
         "sample_interlock_unordered", "pixel_interlock_aggregate", "sample_interlock_aggregate",
         // row/column_major

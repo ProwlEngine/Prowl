@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:5: 'taskNV' : can only use on input blocks in mesh shader 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking mesh stage: Missing entry point: Each stage requires one entry point

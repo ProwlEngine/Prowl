@@ -257,6 +257,8 @@ public static class Types
         BufferReferenceType b => b.Name,
         CoopMatType => "coopmat",
         SamplerType or TextureType or ImageType or PureSamplerType => "an opaque type",
+        AccelStructType => "accelerationStructureEXT",
+        RayQueryType => "rayQueryEXT",
         _ => "a value",
     };
 

@@ -19,12 +19,11 @@ public static class GlslCompiler
     // Reused across compiles on the compile lane (thread-static), so the front-end reaches ~zero steady-
     // state allocation. Concurrent compiles on different threads each get their own lane and pools.
     [ThreadStatic] static Lowerer? _lowerer;
-    [ThreadStatic] static CompileLane? _lane;
 
     public static Prowl.Prism.SpirVModule Compile(string source, ShaderStage stage,
         SpirVVersion target = SpirVVersion.V1_0, IReadOnlyDictionary<string, string>? defines = null, bool optimize = false,
         bool autoMapLocations = false, IncludeCallback? includes = null) =>
-        (_lane ??= new CompileLane()).Run(() =>
+        CompileLane.OnLane(() =>
         {
             var unit = Parser.Parse(source, defines, includes, stage);
             var module = (_lowerer ??= new Lowerer()).Reset(stage, target, autoMapLocations).Lower(unit);
@@ -48,7 +47,7 @@ public static class GlslCompiler
     /// pragmas, defines, and included files), so a host can lay out a program before compiling it.
     /// </summary>
     public static PreprocessResult Preprocess(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null) =>
-        (_lane ??= new CompileLane()).Run(() => Preprocessor.Preprocess(source, defines, includes));
+        CompileLane.OnLane(() => Preprocessor.Preprocess(source, defines, includes));
 }
 
 /// <summary>
@@ -59,6 +58,12 @@ public static class GlslCompiler
 /// </summary>
 sealed class CompileLane
 {
+    [ThreadStatic] static CompileLane? _owned;
+    [ThreadStatic] static bool _isLaneThread;
+
+    /// <summary>Runs work on the calling thread's lane, or inline when already on a lane (no self-deadlock).</summary>
+    public static T OnLane<T>(Func<T> work) => _isLaneThread ? work() : (_owned ??= new CompileLane()).Run(work);
+
     readonly Thread _thread;
     readonly BlockingCollection<(Func<object> Work, TaskCompletionSource<object?> Done)> _queue = new();
 
@@ -70,6 +75,7 @@ sealed class CompileLane
         var queue = _queue;
         _thread = new Thread(() =>
         {
+            _isLaneThread = true;
             foreach (var (work, done) in queue.GetConsumingEnumerable())
                 try { done.SetResult(work()); }
                 catch (Exception e) { done.SetException(e); }

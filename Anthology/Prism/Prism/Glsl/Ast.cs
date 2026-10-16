@@ -104,12 +104,18 @@ public sealed record ReturnStmt(Expr? Value) : Stmt;
 public sealed record JumpStmt(string Keyword) : Stmt;                   // break, continue, discard
 
 // ---- top-level declarations ----
-public sealed record TranslationUnit(int Version, IReadOnlyList<Decl> Declarations, IReadOnlyList<string>? Extensions = null, IReadOnlyList<string>? Pragmas = null, bool DefaultFloatRelaxed = false, bool IsEs = false, bool? IntPrecisionRelaxed = null)
+public sealed record TranslationUnit(int Version, IReadOnlyList<Decl> Declarations, IReadOnlyList<string>? Extensions = null, IReadOnlyList<string>? Pragmas = null, bool IsEs = false)
 {
     // The file name of each location segment, for resolving the raw locations the lowerer's errors carry.
     public IReadOnlyList<string?> SourceNames { get; init; } = [];
 }
-public abstract record Decl { public int Line { get; set; } }
+public abstract record Decl
+{
+    public int Line { get; set; }
+    // The default precisions in effect where the declaration appears (`precision mediump float;` applies to what follows).
+    public bool FloatRelaxed { get; set; }
+    public bool? IntRelaxed { get; set; }
+}
 public sealed record Param(Qualifiers Qualifiers, TypeRef Type, string? Name, IReadOnlyList<Expr?> Array);
 public sealed record Field(Qualifiers Qualifiers, TypeRef Type, IReadOnlyList<Declarator> Declarators);
 public sealed record FunctionDef(Qualifiers Qualifiers, TypeRef ReturnType, string Name, IReadOnlyList<Param> Parameters, Block Body) : Decl;

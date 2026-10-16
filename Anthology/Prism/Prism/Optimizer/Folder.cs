@@ -640,13 +640,26 @@ internal sealed class Folder
         return FNegateScalar(type, ops[0]);
     }
     uint FNegateScalar(uint type, uint id) { int w = TypeWidth(type); if (w == 32) { if (!ScalarWord(id, out uint x)) return 0; return ScalarConst(type, x ^ 0x80000000u); } if (w == 64) { var d = Words64(id); if (d is null) return 0; return Scalar64(type, d[0], d[1] ^ 0x80000000u); } return 0; }
+    // FoldUnaryOp(NegateIntConst): any width, the operand read sign-extended; vectors component-wise.
     uint SNegate(SpvInstr inst, List<uint> ops)
     {
-        uint type = inst.Operands[0]; var d = Def(ops[0]);
-        if (d is { Opcode: OpConstantNull }) return ops[0];
-        if (!ScalarWord(ops[0], out uint x)) return 0;
-        uint r = unchecked((uint)(-(int)x));
-        return GenerateIntegerConstant(type, r);
+        uint type = inst.Operands[0]; var td = Def(type)!;
+        if (td.Opcode == OpTypeVector)
+        {
+            int n = (int)td.Operands[2]; var c = Comps(ops[0], n); if (c is null) return 0;
+            var res = new uint[n];
+            for (int i = 0; i < n; i++) { uint r = SNegateScalar(td.Operands[1], c[i]); if (r == 0) return 0; res[i] = r; }
+            return CompositeConst(type, res);
+        }
+        return SNegateScalar(type, ops[0]);
+    }
+    uint SNegateScalar(uint type, uint id)
+    {
+        var d = Def(id);
+        if (d is { Opcode: OpConstantNull }) return id;
+        if (d is not { Opcode: OpConstant }) return 0;
+        long v = TypeWidth(TypeOf(id)) <= 32 ? (int)d.Operands[2] : (long)(d.Operands[2] | ((ulong)d.Operands[3] << 32));
+        return GenerateIntegerConstant(type, unchecked((ulong)-v));
     }
 
     // FoldIToF / FoldFToI (32-bit int only). FP-folding-guarded.
@@ -993,28 +1006,52 @@ internal sealed class Folder
         if (!IsConst(a) || !IsConst(b)) return 0;
         return FoldExtBinaryPer(inst, a, b, (e, x, y) => MinScalar(e, x, y, max));
     }
+    // The clamps fold through FoldFPBinaryOp(FoldMax/FoldMin), whose vector intermediate is an unmaterialized
+    // constant: only the final result becomes an instruction, so the intermediate stays component-wise here.
+    uint[]? Parts(SpvInstr inst, uint id)
+    {
+        var td = Def(inst.Operands[0])!;
+        return td.Opcode == OpTypeVector ? Comps(id, (int)td.Operands[2]) : [id];
+    }
+    uint[]? MinMaxParts(SpvInstr inst, uint[]? a, uint[]? b, bool max)
+    {
+        if (a is null || b is null) return null;
+        var td = Def(inst.Operands[0])!;
+        uint elem = td.Opcode == OpTypeVector ? td.Operands[1] : inst.Operands[0];
+        var r = new uint[a.Length];
+        for (int i = 0; i < a.Length; i++) { r[i] = MinScalar(elem, a[i], b[i], max); if (r[i] == 0) return null; }
+        return r;
+    }
+    uint FromParts(SpvInstr inst, uint[] parts) =>
+        Def(inst.Operands[0])!.Opcode == OpTypeVector ? CompositeConst(inst.Operands[0], parts) : parts[0];
+    // Whether a folded intermediate is the same constant as an operand (the constant manager's pointer identity):
+    // a null vector constant is never equal to a composite built from components.
+    bool SameConstant(SpvInstr inst, uint[] parts, uint id) =>
+        Def(inst.Operands[0])!.Opcode == OpTypeVector
+            ? Def(id) is { Opcode: OpConstantComposite } d && d.Operands[2..].AsSpan().SequenceEqual(parts)
+            : parts[0] == id;
     uint FoldClamp1(SpvInstr inst, List<uint> ops)
     {
         if (!FpAllowed(inst)) return 0;
         uint x = ExtArg(ops, 0), mn = ExtArg(ops, 1), mx = ExtArg(ops, 2);
         if (!IsConst(x) || !IsConst(mn) || !IsConst(mx)) return 0;
-        uint temp = FoldExtBinaryPer(inst, x, mn, (e, p, q) => MinScalar(e, p, q, true));
-        if (temp == 0) return 0;
-        return FoldExtBinaryPer(inst, temp, mx, (e, p, q) => MinScalar(e, p, q, false));
+        var temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mn), max: true);
+        var result = MinMaxParts(inst, temp, Parts(inst, mx), max: false);
+        return result is null ? 0 : FromParts(inst, result);
     }
     uint FoldClamp2(SpvInstr inst, List<uint> ops)   // x <= min_val -> min_val
     {
         uint x = ExtArg(ops, 0), mn = ExtArg(ops, 1);
         if (!IsConst(x) || !IsConst(mn)) return 0;
-        uint temp = FoldExtBinaryPer(inst, x, mn, (e, p, q) => MinScalar(e, p, q, true));
-        return temp == mn ? mn : 0;
+        var temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mn), max: true);
+        return temp is not null && SameConstant(inst, temp, mn) ? mn : 0;
     }
     uint FoldClamp3(SpvInstr inst, List<uint> ops)   // x >= max_val -> max_val
     {
         uint x = ExtArg(ops, 0), mx = ExtArg(ops, 2);
         if (!IsConst(x) || !IsConst(mx)) return 0;
-        uint temp = FoldExtBinaryPer(inst, x, mx, (e, p, q) => MinScalar(e, p, q, false));
-        return temp == mx ? mx : 0;
+        var temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mx), max: false);
+        return temp is not null && SameConstant(inst, temp, mx) ? mx : 0;
     }
     uint FoldFpUnaryPer(SpvInstr inst, uint aId, Func<uint, uint, uint> scalar)
     {

@@ -1,0 +1,7 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_ARB_shader_ballot : require
+#extension GL_ARB_gpu_shader_int64 : require
+layout(std430, binding=0) buffer B { uint s; uint i; uint64_t a; } b;
+void main(){ b.s = gl_SubgroupSize; b.i = gl_SubgroupInvocationID; b.a = gl_SubGroupEqMaskARB; }

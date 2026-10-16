@@ -1,0 +1,6 @@
+#version 460
+#extension GL_NV_mesh_shader : require
+layout(local_size_x=1) in;
+layout(points, max_vertices=1, max_primitives=1) out;
+perviewNV layout(location=0) out vec4 pv[];
+void main(){ pv[0] = vec4(0); gl_PrimitiveCountNV = 1u; }
