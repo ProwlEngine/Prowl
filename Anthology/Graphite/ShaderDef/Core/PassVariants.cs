@@ -31,20 +31,25 @@ public enum VariantState
 /// <summary>
 /// A pass's compiled variants for one backend, shared by everything drawing with the pass. Baked variants are seeded in,
 /// the rest compile on request under a policy, and failures stay until the pass source or compiler session changes,
-/// which drops every variant. Thread safe.
+/// which drops every variant. Only variants seeded or requested are held. Thread safe.
 /// </summary>
 public sealed class PassVariants
 {
+    private sealed class Slot
+    {
+        public Variant? Variant;
+        public Task<ShaderDescription>? Pending;
+        public Exception? Failure;
+        public ComputeDescription? Compute;
+    }
+
     private readonly ShaderPass _pass;
     private readonly VariantSpace[] _axes;
-    private readonly Keyword[][] _combos;
+    private readonly int _count;
     private readonly Dictionary<string, int> _axisByName = new();
     private readonly Dictionary<string, int>[] _valueIndices;
     private readonly int[] _strides;
-    private readonly Variant?[] _variants;
-    private readonly Task<ShaderDescription>?[] _pending;
-    private readonly Exception?[] _failures;
-    private readonly ComputeDescription?[] _compute;
+    private readonly Dictionary<int, Slot> _slots = new();
     private string _source;
     private int _session;
     private int _revision;
@@ -55,24 +60,22 @@ public sealed class PassVariants
         _axes = axes;
         Compiler = compiler;
         Backend = backend;
-        _combos = VariantCombos.Generate(axes);
-        _variants = new Variant?[_combos.Length];
-        _pending = new Task<ShaderDescription>?[_combos.Length];
-        _failures = new Exception?[_combos.Length];
-        _compute = new ComputeDescription?[_combos.Length];
         _valueIndices = new Dictionary<string, int>[axes.Length];
         _strides = new int[axes.Length];
-        int stride = 1;
+        long stride = 1;
         for (int i = axes.Length - 1; i >= 0; i--)
         {
             _axisByName[axes[i].Name] = i;
-            _strides[i] = stride;
+            _strides[i] = (int)stride;
             stride *= axes[i].Values.Count;
+            if (stride > int.MaxValue)
+                throw new InvalidOperationException($"Pass '{pass.SourceName}' has over {int.MaxValue} variants, too many to key.");
             Dictionary<string, int> values = new();
             for (int v = 0; v < axes[i].Values.Count; v++)
                 values[axes[i].Values[v]] = v;
             _valueIndices[i] = values;
         }
+        _count = (int)stride;
         _source = pass.Source;
         _session = compiler?.SessionVersion ?? 0;
         SeedBaked();
@@ -99,12 +102,23 @@ public sealed class PassVariants
             }
         }
     }
-    public int Count => _combos.Length;
+
+    /// <summary>Every combination of the axes, held or not.</summary>
+    public int Count => _count;
 
     /// <summary>Raised once per variant failure, outside the lock.</summary>
     public event Action<Keyword[], Exception>? CompileFailed;
 
-    public Keyword[] Combo(int key) => _combos[key];
+    /// <summary>The keywords of a key, every axis in slot order.</summary>
+    public Keyword[] Combo(int key)
+    {
+        if ((uint)key >= (uint)_count)
+            throw new ArgumentOutOfRangeException(nameof(key));
+        Keyword[] combo = new Keyword[_axes.Length];
+        for (int i = 0; i < _axes.Length; i++)
+            combo[i] = new Keyword(_axes[i].Name, _axes[i].Values[key / _strides[i] % _axes[i].Values.Count]);
+        return combo;
+    }
 
     /// <summary>The key of keywords, unlisted axes at their first value and unknown names skipped. False on an unknown value of a known axis.</summary>
     public bool TryGetKey(ReadOnlySpan<Keyword> keywords, out int key)
@@ -132,7 +146,7 @@ public sealed class PassVariants
             foreach (Variant variant in known)
             {
                 if (TryGetFullKey(variant.Keywords, out int key))
-                    _variants[key] = variant;
+                    At(key).Variant = variant;
             }
         }
     }
@@ -141,7 +155,7 @@ public sealed class PassVariants
     public Variant? Available(int key)
     {
         lock (this)
-            return _variants[key];
+            return Find(key)?.Variant;
     }
 
     /// <summary>The compute variant if it is compiled, without compiling it.</summary>
@@ -150,7 +164,7 @@ public sealed class PassVariants
         lock (this)
         {
             Refresh();
-            return _compute[key];
+            return Find(key)?.Compute;
         }
     }
 
@@ -160,7 +174,7 @@ public sealed class PassVariants
         lock (this)
         {
             Refresh();
-            return _variants[key] is { } variant && variant.IsCompiledFor(Backend) ? variant : null;
+            return Find(key)?.Variant is { } variant && variant.IsCompiledFor(Backend) ? variant : null;
         }
     }
 
@@ -171,9 +185,9 @@ public sealed class PassVariants
             lock (this)
             {
                 int count = 0;
-                foreach (Variant? variant in _variants)
+                foreach (Slot slot in _slots.Values)
                 {
-                    if (variant != null && variant.IsCompiledFor(Backend))
+                    if (slot.Variant != null && slot.Variant.IsCompiledFor(Backend))
                         count++;
                 }
                 return count;
@@ -188,9 +202,9 @@ public sealed class PassVariants
             lock (this)
             {
                 int count = 0;
-                foreach (Variant? variant in _variants)
+                foreach (Slot slot in _slots.Values)
                 {
-                    if (variant != null)
+                    if (slot.Variant != null)
                         count++;
                 }
                 return count;
@@ -215,10 +229,11 @@ public sealed class PassVariants
             lock (this)
             {
                 Refresh();
-                state = Poll(key, ref raised);
+                Slot slot = At(key);
+                state = Poll(key, slot, ref raised);
                 if (state == VariantState.Pending)
                 {
-                    if (_pending[key] is { } pending)
+                    if (slot.Pending is { } pending)
                     {
                         if (policy == CompilePolicy.Sync)
                             wait = pending;
@@ -231,9 +246,9 @@ public sealed class PassVariants
                     else
                     {
                         IShaderCompiler compiler = Compiler;
-                        Keyword[] combo = _combos[key];
+                        Keyword[] combo = Combo(key);
                         Task<ShaderDescription> task = new(() => compiler.Compile(_pass, combo, Backend));
-                        _pending[key] = task;
+                        slot.Pending = task;
                         if (policy == CompilePolicy.Sync)
                             run = task;
                         else
@@ -241,12 +256,12 @@ public sealed class PassVariants
                     }
                 }
                 if (state == VariantState.Ready)
-                    _variants[key]!.TryGetDescription(Backend, out description);
+                    slot.Variant!.TryGetDescription(Backend, out description);
                 else if (state == VariantState.Failed)
-                    error ??= _failures[key];
+                    error ??= slot.Failure;
             }
             if (raised != null)
-                CompileFailed?.Invoke(_combos[key], raised);
+                CompileFailed?.Invoke(Combo(key), raised);
 
             run?.RunSynchronously();
             wait ??= run;
@@ -278,9 +293,10 @@ public sealed class PassVariants
         lock (this)
         {
             Refresh();
-            if (_compute[key] is { } compiled)
+            Slot slot = At(key);
+            if (slot.Compute is { } compiled)
                 return compiled;
-            if (_failures[key] is { } failure)
+            if (slot.Failure is { } failure)
                 throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' failed to compile: {failure.Message}", failure);
             compiler = Compiler ?? throw new InvalidOperationException($"The compute variant of pass '{_pass.SourceName}' is not compiled and cannot be compiled here.");
             revision = _revision;
@@ -289,21 +305,21 @@ public sealed class PassVariants
         ComputeDescription description;
         try
         {
-            description = compiler.CompileCompute(_pass, _combos[key], Backend);
+            description = compiler.CompileCompute(_pass, Combo(key), Backend);
         }
         catch (Exception e)
         {
             lock (this)
             {
                 if (revision == _revision)
-                    _failures[key] = e;
+                    At(key).Failure = e;
             }
             throw;
         }
         lock (this)
         {
             if (revision == _revision)
-                _compute[key] = description;
+                At(key).Compute = description;
         }
         return description;
     }
@@ -311,14 +327,20 @@ public sealed class PassVariants
     /// <summary>Waits for every variant compiling on a worker.</summary>
     public void WaitPending()
     {
-        Task?[] pending;
+        List<Task> pending = new();
         lock (this)
-            pending = (Task?[])_pending.Clone();
-        foreach (Task? task in pending)
+        {
+            foreach (Slot slot in _slots.Values)
+            {
+                if (slot.Pending != null)
+                    pending.Add(slot.Pending);
+            }
+        }
+        foreach (Task task in pending)
         {
             try
             {
-                task?.Wait();
+                task.Wait();
             }
             catch (AggregateException)
             {
@@ -331,41 +353,41 @@ public sealed class PassVariants
         lock (this)
         {
             List<Variant> present = new();
-            foreach (Variant? variant in _variants)
+            foreach (Slot slot in _slots.Values)
             {
-                if (variant != null)
-                    present.Add(variant);
+                if (slot.Variant != null)
+                    present.Add(slot.Variant);
             }
             return new PassSnapshot { Axes = _axes, Variants = present.ToArray() };
         }
     }
 
     // A worker's finished compile is taken in, an unfinished one leaves the variant pending
-    private VariantState Poll(int key, ref Exception? raised)
+    private VariantState Poll(int key, Slot slot, ref Exception? raised)
     {
-        if (_variants[key] is { } variant && variant.IsCompiledFor(Backend))
+        if (slot.Variant is { } variant && variant.IsCompiledFor(Backend))
             return VariantState.Ready;
-        if (_failures[key] != null)
+        if (slot.Failure != null)
             return VariantState.Failed;
-        if (_pending[key] is not { } task)
+        if (slot.Pending is not { } task)
             return VariantState.Pending;
         if (!task.IsCompleted)
             return VariantState.Pending;
-        _pending[key] = null;
+        slot.Pending = null;
         if (task.IsCompletedSuccessfully)
         {
-            Store(key, task.Result);
+            Store(key, slot, task.Result);
             return VariantState.Ready;
         }
-        _failures[key] = raised = task.Exception?.InnerException ?? task.Exception;
+        slot.Failure = raised = task.Exception?.InnerException ?? task.Exception;
         return VariantState.Failed;
     }
 
     // A new variant every time, so a baked one seeded in is never changed and seeds again as it shipped
-    private void Store(int key, ShaderDescription description)
+    private void Store(int key, Slot slot, ShaderDescription description)
     {
         List<(GraphicsBackend, ShaderDescription)> compiled = new();
-        if (_variants[key] is { } existing)
+        if (slot.Variant is { } existing)
         {
             foreach ((GraphicsBackend backend, ShaderDescription other) in existing.Compiled)
             {
@@ -374,7 +396,20 @@ public sealed class PassVariants
             }
         }
         compiled.Add((Backend, description));
-        _variants[key] = new Variant(_combos[key], [.. compiled]);
+        slot.Variant = new Variant(Combo(key), [.. compiled]);
+    }
+
+    private Slot? Find(int key) => _slots.GetValueOrDefault(key);
+
+    private Slot At(int key)
+    {
+        if (!_slots.TryGetValue(key, out Slot? slot))
+        {
+            if ((uint)key >= (uint)_count)
+                throw new ArgumentOutOfRangeException(nameof(key));
+            _slots[key] = slot = new Slot();
+        }
+        return slot;
     }
 
     // A changed source or compiler session drops what was compiled from the old one
@@ -385,10 +420,7 @@ public sealed class PassVariants
             return;
         _source = _pass.Source;
         _session = session;
-        Array.Clear(_variants);
-        Array.Clear(_pending);
-        Array.Clear(_failures);
-        Array.Clear(_compute);
+        _slots.Clear();
         _revision++;
         SeedBaked();
     }
@@ -400,12 +432,12 @@ public sealed class PassVariants
         foreach (Variant variant in baked.Variants)
         {
             if (TryGetFullKey(variant.Keywords, out int key))
-                _variants[key] = variant;
+                At(key).Variant = variant;
         }
         foreach (((GraphicsBackend backend, int key), ComputeDescription description) in baked.Compute)
         {
-            if (backend == Backend && (uint)key < (uint)_compute.Length)
-                _compute[key] = description;
+            if (backend == Backend && (uint)key < (uint)_count)
+                At(key).Compute = description;
         }
     }
 

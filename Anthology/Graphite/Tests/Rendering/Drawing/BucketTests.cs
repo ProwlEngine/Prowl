@@ -337,14 +337,18 @@ public sealed class BucketTests : IDisposable
         Frame(Forward);
         int ids = _programs.Count;
 
-        // Switching back and forth keeps both variants' ids, no more
+        // Switching back and forth keeps both variants' ids, no more, and passes without the axis keep one id
+        int reading = 0;
+        for (int p = 0; p < _lit.Definition.Passes!.Length; p++)
+            reading += _lit.PassHasAxis(p, "_NORMALMAP") ? 1 : 0;
         for (int i = 0; i < 4; i++)
         {
             material.SetKeyword("_NORMALMAP", i % 2 == 0 ? "true" : "false");
             _programs.Sweep();
             Frame(Forward);
         }
-        Assert.Equal(ids * 2, _programs.Count);
+        Assert.True(reading < ids);
+        Assert.Equal(ids + reading, _programs.Count);
 
         for (int i = 0; i < 3; i++)
             _programs.Sweep();

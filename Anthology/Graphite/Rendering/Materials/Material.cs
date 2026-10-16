@@ -61,23 +61,13 @@ public sealed class Material : IDisposable
     {
         IReadOnlyList<VariantSpace> axes = _shader.MaterialAxes;
         Keyword[] keywords = new Keyword[axes.Count];
-        ulong variant = 0;
-        ulong stride = 1;
         for (int i = 0; i < axes.Count; i++)
         {
             string value = GetKeyword(axes[i].Name);
-            int index = 0;
-            for (int v = 0; v < axes[i].Values.Count; v++)
-            {
-                if (axes[i].Values[v] == value)
-                    index = v;
-            }
-            keywords[i] = new Keyword(axes[i].Name, axes[i].Values[index]);
-            variant += (ulong)index * stride;
-            stride *= (ulong)axes[i].Values.Count;
+            keywords[i] = new Keyword(axes[i].Name, HasValue(axes[i], value) ? value : axes[i].Values[0]);
         }
 
-        return new MaterialDraw(_shader, RenderQueue, StateOverride, CastShadows, variant, keywords, Surface?.Type);
+        return new MaterialDraw(_shader, RenderQueue, StateOverride, CastShadows, keywords, Surface?.Type);
     }
 
     /// <summary>Swapping keeps every value whose name the new shader still has, and keeps the others for later.</summary>
@@ -693,8 +683,8 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
     }
 }
 
-/// <summary>A material's draw deciding state, snapshotted at extraction: shader, queue, state, shadows and its material variant.</summary>
-internal sealed record MaterialDraw(Shader Shader, int RenderQueue, PassState? StateOverride, bool CastShadows, ulong Variant, Keyword[] Keywords, SurfaceType? Surface = null)
+/// <summary>A material's draw deciding state, snapshotted at extraction: shader, queue, state, shadows and its material keywords.</summary>
+internal sealed record MaterialDraw(Shader Shader, int RenderQueue, PassState? StateOverride, bool CastShadows, Keyword[] Keywords, SurfaceType? Surface = null)
 {
     /// <summary>The surface decides when there is one, else queues from 2500 up are transparent.</summary>
     public bool Transparent => Surface is { } surface ? surface == SurfaceType.Transparent : RenderQueue >= Shader.TransparentQueue;

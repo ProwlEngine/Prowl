@@ -131,6 +131,8 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         for (int i = 0; i < axes.Count; i++)
         {
             globalValues[i] = ValueIndex(axes[i], keywords.GetValueOrDefault(axes[i].Name));
+            if (!program.Shader.PassHasAxis(program.PassIndex, axes[i].Name))
+                continue;
             key += (ulong)globalValues[i] * stride;
             stride *= (ulong)axes[i].Values.Count;
         }

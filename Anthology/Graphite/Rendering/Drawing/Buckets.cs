@@ -282,7 +282,7 @@ internal sealed class DrawPrograms
         int passIndex = draw.Shader.PassIndex(pass);
         DrawProgram program;
         if (passIndex >= 0)
-            program = new(draw.Shader, passIndex, draw.Variant, draw.StateOverride, draw.Keywords);
+            program = new(draw.Shader, passIndex, draw.Shader.PassVariant(passIndex, draw.Keywords), draw.StateOverride, draw.Keywords);
         else if (pass == PassType.ShadowCaster && DepthCasterPass(draw) is int depthPass)
             program = new(DepthCaster!, depthPass, 0, null, []);
         else

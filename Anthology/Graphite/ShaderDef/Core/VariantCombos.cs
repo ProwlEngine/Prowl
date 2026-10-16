@@ -12,7 +12,7 @@ public static class VariantCombos
     {
         int total = 1;
         for (int i = 0; i < axes.Count; i++)
-            total *= axes[i].Values.Count;
+            total = checked(total * axes[i].Values.Count);
 
         Keyword[][] result = new Keyword[total][];
         int[] indices = new int[axes.Count];

@@ -220,13 +220,13 @@ public sealed class StandardShaderTests : IDisposable
         Material material = _system.Create(_lit);
         List<Material> changed = new();
         _system.Extract(changed);
-        ulong before = material.Draw.Variant;
+        string before = string.Join(" ", material.Draw.Keywords.Select(k => k.Value));
 
         changed.Clear();
         material.SetFloat("_TranslucencyStrength", 0.5f);
         _system.Extract(changed);
         Assert.Contains(material, changed);
-        Assert.NotEqual(before, material.Draw.Variant);
+        Assert.NotEqual(before, string.Join(" ", material.Draw.Keywords.Select(k => k.Value)));
 
         changed.Clear();
         material.SetFloat("_Roughness", 0.25f);

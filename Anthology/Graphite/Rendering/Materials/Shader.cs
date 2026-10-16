@@ -370,6 +370,7 @@ public sealed class Shader
     public const string SceneColorTag = "SceneColor";
 
     private readonly bool[] _readsSceneColor;
+    private readonly HashSet<string>[] _passAxes;
 
     /// <summary>The shader drawing in this one's place while its variants compile or after they failed, from its Fallback declaration.</summary>
     public Shader? Fallback { get; set; }
@@ -388,10 +389,14 @@ public sealed class Shader
         List<VariantSpace> material = new();
         List<VariantSpace> global = new();
         int queue = DefaultRenderQueue;
-        foreach (ShaderPass pass in definition.Passes ?? [])
+        _passAxes = new HashSet<string>[passes.Length];
+        for (int p = 0; p < passes.Length; p++)
         {
+            ShaderPass pass = passes[p];
+            _passAxes[p] = new HashSet<string>(StringComparer.Ordinal);
             foreach (VariantSpace axis in pass.AxesWith(compiler))
             {
+                _passAxes[p].Add(axis.Name);
                 if (axes.TryGetValue(axis.Name, out VariantSpace existing))
                 {
                     if (existing.Scope != axis.Scope)
@@ -453,6 +458,28 @@ public sealed class Shader
     public IReadOnlyList<VariantSpace> MaterialAxes { get; }
 
     public IReadOnlyList<VariantSpace> GlobalAxes { get; }
+
+    /// <summary>Whether a pass declares an axis, so its selection can tell that pass's programs apart.</summary>
+    internal bool PassHasAxis(int passIndex, string axis) => _passAxes[passIndex].Contains(axis);
+
+    /// <summary>The material variant as one pass sees it, axes the pass does not declare left out. Keywords in material axis order.</summary>
+    internal ulong PassVariant(int passIndex, Keyword[] keywords)
+    {
+        ulong variant = 0, stride = 1;
+        for (int i = 0; i < MaterialAxes.Count; i++)
+        {
+            VariantSpace axis = MaterialAxes[i];
+            if (!_passAxes[passIndex].Contains(axis.Name))
+                continue;
+            for (int v = 0; v < axis.Values.Count; v++)
+            {
+                if (axis.Values[v] == keywords[i].Value)
+                    variant += (ulong)v * stride;
+            }
+            stride *= (ulong)axis.Values.Count;
+        }
+        return variant;
+    }
 
     /// <summary>Default render queue of the shader's materials, from a RenderQueue pass tag.</summary>
     public int RenderQueue { get; }
