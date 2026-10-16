@@ -986,7 +986,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (IsDisposed) return;
         using MainThreadContext.SessionScope session = MainThreadContext.EnterSession();
-        _dispatcher.RunStart();
+
+        // Paused play mode freezes every component, [ExecuteAlways] included, until a step or resume.
+        bool ticking = !Application.IsPlaying || Application.ShouldRunGameplay;
+        if (ticking) _dispatcher.RunStart();
 
         // Navigation (crowd steering) advances on the variable update, before component Updates
         // so gameplay code sees fresh agent state. A crowd that blows up must not crash the frame,
@@ -997,14 +1000,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Rigidbodies that moved get their Transform written before gameplay code reads it.
         Physics.WriteTransforms();
 
-        _dispatcher.RunUpdate();
+        if (ticking) _dispatcher.RunUpdate();
 
         // Animation sits between the two so gameplay code reaching in to override a bone in
         // LateUpdate finds the pose already written. An animator that blows up must not take the
         // frame with it, and the manager reports each one rather than rethrowing.
         _animation.Update(Time.DeltaTime);
 
-        _dispatcher.RunLateUpdate();
+        if (ticking) _dispatcher.RunLateUpdate();
 
         Flush();
     }
