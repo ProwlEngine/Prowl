@@ -42,9 +42,9 @@ public sealed class WindZone : Component
     private static readonly List<WindZone> s_active = [];
 
     private static readonly string[] s_sphereUniforms =
-        ["_WindZoneSphere[0]", "_WindZoneSphere[1]", "_WindZoneSphere[2]", "_WindZoneSphere[3]"];
+        ["_WindZoneSphere0", "_WindZoneSphere1", "_WindZoneSphere2", "_WindZoneSphere3"];
     private static readonly string[] s_paramUniforms =
-        ["_WindZoneParams[0]", "_WindZoneParams[1]", "_WindZoneParams[2]", "_WindZoneParams[3]"];
+        ["_WindZoneParams0", "_WindZoneParams1", "_WindZoneParams2", "_WindZoneParams3"];
 
     /// <summary>Every enabled zone in the scene.</summary>
     public static IReadOnlyList<WindZone> Active => s_active;

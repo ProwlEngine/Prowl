@@ -425,12 +425,13 @@ public sealed partial class VehicleShowcaseGame
             var lamp = new GameObject("Headlight");
             Part(parent, lamp, position);
             lamp.Transform.LocalEulerAngles = new Float3(8f, 0f, 0f);
-            SpotLight spot = lamp.AddComponent<SpotLight>();
+            Light spot = lamp.AddComponent<Light>();
+            spot.Type = LightType.Spot;
             spot.Color = new Color(1f, 0.93f, 0.8f, 1f);
             spot.Intensity = 40f;
             spot.Range = 35f;
-            spot.SpotAngle = 50f;
-            spot.InnerSpotAngle = 25f;
+            spot.OuterAngle = 50f;
+            spot.InnerAngle = 25f;
             lamps.Add(spot);
         }
         return lamps;

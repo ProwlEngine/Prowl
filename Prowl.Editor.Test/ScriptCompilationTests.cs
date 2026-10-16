@@ -80,6 +80,54 @@ public class ScriptCompilationTests : EditorTestHarness
         finally { TryDeleteDir(outDir); }
     }
 
+    // A player is the shipped game, so its scripts see the player's defines and never PROWL_EDITOR.
+    [Fact]
+    public void PlayerCompile_UsesPlayerDefines_NotTheEditors()
+    {
+        WriteScript("DefineProbe.cs", """
+            public static class DefineProbe
+            {
+            #if PROWL_EDITOR
+                public const bool Editor = true;
+            #else
+                public const bool Editor = false;
+            #endif
+            #if MY_GAME_FLAG
+                public const bool Flag = true;
+            #else
+                public const bool Flag = false;
+            #endif
+            }
+            """);
+
+        string outDir = Path.Combine(Project.RootPath, "Temp", "PlayerScripts");
+        ScriptCompiler.PlayerCompileResult result = ScriptCompiler.CompileForPlayer(
+            Project, BuildPlatforms.Windows, ["PROWL", "MY_GAME_FLAG"], outDir);
+        Assert.True(result.Result.Success, $"Compile failed:\n{result.Result.Errors}");
+
+        ScriptCompiler.BuildAssembly game = Assert.Single(result.Assemblies);
+        Assert.StartsWith(outDir, game.DllPath);
+
+        Type probe = Assembly.Load(File.ReadAllBytes(game.DllPath)).GetType("DefineProbe")!;
+        Assert.False((bool)probe.GetField("Editor")!.GetValue(null)!);
+        Assert.True((bool)probe.GetField("Flag")!.GetValue(null)!);
+    }
+
+    // An asmdef that only exists for the editor through a define constraint is left out of players.
+    [Fact]
+    public void PlayerCompile_SkipsAsmdefsConstrainedToTheEditor()
+    {
+        WriteAssemblyDefinition("EditorDebug", new AssemblyDefinition { Name = "EditorDebug", DefineConstraints = ["PROWL_EDITOR"] });
+        WriteScript(Path.Combine("EditorDebug", "DebugThing.cs"), "public class DebugThing { }");
+        WriteScript("GameThing.cs", "public class GameThing { }");
+
+        ScriptCompiler.PlayerCompileResult result = ScriptCompiler.CompileForPlayer(
+            Project, BuildPlatforms.Windows, ["PROWL"], Path.Combine(Project.RootPath, "Temp", "PlayerScripts"));
+        Assert.True(result.Result.Success, $"Compile failed:\n{result.Result.Errors}");
+
+        Assert.Equal([$"{Project.Name}.Game"], result.Assemblies.Select(a => a.Name));
+    }
+
     // Recompiling after an edit reflects the new source (the source-change half of hot-reload).
     [Fact]
     public void Recompile_ReflectsSourceChanges()

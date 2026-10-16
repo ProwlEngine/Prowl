@@ -35,7 +35,7 @@ public enum RigidbodyInterpolation
 
 [AddComponentMenu("Physics/Rigidbody")]
 [ComponentIcon("\uf1b2")] // Cube
-public sealed class Rigidbody3D : Component
+public sealed class Rigidbody3D : Component, ITransformChangeListener
 {
     public class RigidBodyUserData
     {
@@ -84,6 +84,15 @@ public sealed class Rigidbody3D : Component
     private Float3 _previousPosition, _currentPosition;
     private Quaternion _previousRotation, _currentRotation;
     private bool _hasPose;
+
+    // Bookkeeping owned by PhysicsWorld: this body's slot in its sync list, and the step that last captured it.
+    internal int SyncIndex = -1;
+    internal uint CaptureStamp;
+    internal bool SyncQueued;
+    internal PhysicsWorld SyncWorld;
+
+    // Set while the physics write back moves the Transform, so that move is not mistaken for an edit.
+    private bool _writingPose;
 
     // Transform.Version last pushed into the physics body, so SyncTransformToBody only pushes when
     // the user actually edited the Transform (not when the physics readback wrote it).
@@ -307,7 +316,7 @@ public sealed class Rigidbody3D : Component
 
     /// <summary>
     /// Gets or sets the linear damping of this Rigidbody3D.
-    /// Higher values slow down linear movement faster. Range: 0 to 1.
+    /// The fraction of linear velocity removed every 1/60 s, whatever the fixed timestep. Range: 0 to 1.
     /// </summary>
     public float LinearDamping
     {
@@ -319,13 +328,13 @@ public sealed class Rigidbody3D : Component
                 throw new ArgumentOutOfRangeException(nameof(value), "Linear damping must be between 0 and 1.");
 
             linearDamping = value;
-            if (IsSimulated) _body.Damping = (linearDamping, _body.Damping.angular);
+            if (IsSimulated) ApplyDamping(_body);
         }
     }
 
     /// <summary>
     /// Gets or sets the angular damping of this Rigidbody3D.
-    /// Higher values slow down rotation faster. Range: 0 to 1.
+    /// The fraction of angular velocity removed every 1/60 s, whatever the fixed timestep. Range: 0 to 1.
     /// </summary>
     public float AngularDamping
     {
@@ -337,7 +346,7 @@ public sealed class Rigidbody3D : Component
                 throw new ArgumentOutOfRangeException(nameof(value), "Angular damping must be between 0 and 1.");
 
             angularDamping = value;
-            if (IsSimulated) _body.Damping = (_body.Damping.linear, angularDamping);
+            if (IsSimulated) ApplyDamping(_body);
         }
     }
 
@@ -508,7 +517,11 @@ public sealed class Rigidbody3D : Component
         if (!shift.Equals(Float3.Zero)) ShiftJointAnchors(shift);
     }
 
-    public override void Update()
+    /// <summary>
+    /// Writes the simulated pose onto the Transform. Called each frame by the physics world, only for
+    /// bodies that moved in the last step.
+    /// </summary>
+    internal void WritePose()
     {
         if (!IsSimulated) return;
 
@@ -548,8 +561,16 @@ public sealed class Rigidbody3D : Component
             rotation = Quaternion.Slerp(_previousRotation, _currentRotation, t);
         }
 
-        Transform.Position = position;
-        Transform.Rotation = rotation;
+        _writingPose = true;
+        try
+        {
+            Transform.Position = position;
+            Transform.Rotation = rotation;
+        }
+        finally
+        {
+            _writingPose = false;
+        }
 
         // Remember the version we just wrote so the transform->body sync doesn't treat this
         // physics-driven change as a user edit and push it straight back.
@@ -558,7 +579,7 @@ public sealed class Rigidbody3D : Component
 
     /// <summary>
     /// Records the pose the step just produced, so the next frames can render between it and the one
-    /// before. Driven by the physics world for every registered body right after the step.
+    /// before. Driven by the physics world for every awake body right after the step.
     /// </summary>
     internal void CapturePose()
     {
@@ -576,6 +597,9 @@ public sealed class Rigidbody3D : Component
             _hasPose = true;
         }
     }
+
+    /// <summary>Whether the last two captured poses match, so interpolation has nothing left to move.</summary>
+    internal bool PoseSettled => !_hasPose || (_previousPosition.Equals(_currentPosition) && _previousRotation == _currentRotation);
 
     /// <summary>
     /// Drops the interpolation history so a teleport snaps instead of being smeared across a frame.
@@ -636,13 +660,20 @@ public sealed class Rigidbody3D : Component
             if (collider.IsValid() && collider.EnabledInHierarchy) collider.Reattach();
     }
 
+    /// <summary>Converts the per 1/60 s damping into the per step factor Jitter applies.</summary>
+    internal void ApplyDamping(RigidBody rb)
+    {
+        float steps = Time.FixedDeltaTime * 60.0f;
+        rb.Damping = (1.0f - MathF.Pow(1.0f - linearDamping, steps), 1.0f - MathF.Pow(1.0f - angularDamping, steps));
+    }
+
     internal void UpdateProperties(RigidBody rb)
     {
         ClampSettings();
         rb.MotionType = motionType;
         rb.AllowedMotion = MotionAxes.All & ~(MotionAxes)constraints;
         rb.EnableSpeculativeContacts = isSpeculative;
-        rb.Damping = (linearDamping, angularDamping);
+        ApplyDamping(rb);
         rb.Friction = friction;
         rb.AffectedByGravity = useGravity;
         rb.Restitution = restitution;
@@ -772,7 +803,7 @@ public sealed class Rigidbody3D : Component
     /// <summary>
     /// Pushes the Transform into the physics body, but only if the Transform changed since the last
     /// sync (a genuine user edit) - so it never clobbers the simulated pose. Called by the physics
-    /// world before each step and, when AutoSyncTransforms is on, before queries.
+    /// world before each step when AutoSyncTransforms is on, and by SyncTransforms.
     /// </summary>
     /// <summary>
     /// The pose a joint made now should be built against. That is the simulated pose, since the Transform is
@@ -793,6 +824,14 @@ public sealed class Rigidbody3D : Component
         return true;
     }
 
+    void ITransformChangeListener.TransformChanged()
+    {
+        if (!_writingPose) QueueSync();
+    }
+
+    /// <summary>Asks the physics world to push this body's Transform and layer into it before the next step.</summary>
+    internal void QueueSync() => SyncWorld?.QueueSync(this);
+
     internal void SyncTransformToBody()
     {
         if (!IsSimulated) return;
@@ -806,6 +845,10 @@ public sealed class Rigidbody3D : Component
         if (Transform.Version == _lastSyncedTransformVersion) return;
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version;
+
+        // Colliders on this GameObject are not watched by the world, so a rescale reaches them from here.
+        foreach (Collider collider in GameObject.GetComponents<Collider>())
+            if (collider.EnabledInHierarchy && collider.AttachedRigidbody == this) collider.RefreshPlacement();
     }
 
     /// <summary>
@@ -882,11 +925,13 @@ public sealed class Rigidbody3D : Component
         {
             case ForceMode.Force:
                 body.Torque += jTorque;
+                body.SetActivationState(true);
                 break;
 
             case ForceMode.Acceleration:
                 // Cancelling the inertia means asking for a torque of I*alpha, both in world space.
                 body.Torque += JVector.Transform(jTorque, WorldInertia);
+                body.SetActivationState(true);
                 break;
 
             case ForceMode.Impulse:

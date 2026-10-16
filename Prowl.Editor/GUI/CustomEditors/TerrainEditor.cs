@@ -525,6 +525,12 @@ public class TerrainEditor : CustomEditor
         EditorGUI.Row(paper, $"{id}_treedist", "Tree View Distance", () =>
             Origami.Slider(paper, $"{id}_treedist_v", terrain.TreeDistance,
                 v => { terrain.TreeDistance = MathF.Max(1f, v); }, 50f, 2000f).Format("F0").Show());
+
+        EditorGUI.SectionHeader(paper, $"{id}_shh", "Shadows");
+        EditorGUI.Row(paper, $"{id}_cast", "Shadow Casting", () =>
+            Origami.EnumDropdown(paper, $"{id}_cast_v", terrain.ShadowCasting, v => terrain.ShadowCasting = v).Show());
+        EditorGUI.Row(paper, $"{id}_recv", "Receive Shadows", () =>
+            Origami.Checkbox(paper, $"{id}_recv_v", terrain.ReceiveShadows, v => terrain.ReceiveShadows = v).Show());
     }
 
     /// <summary>Size / Strength / Falloff sliders (design .tr-brushrow).</summary>

@@ -124,14 +124,15 @@ public sealed partial class VehicleShowcaseGame : StationGame
         CreateVehicleMaterials();
 
         var sun = new GameObject("Sun");
-        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        Light light = sun.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.ShadowDistance = 90f;
         light.Intensity = 0.6f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
 
         MainCamera.FarClipPlane = 1200f;
-        SampleScene.Fog.Density = 0.005f;
+        SampleScene.Environment.Fog.Density = 0.005f;
         _chase = CameraObject.AddComponent<ChaseCamera>();
         _chase.FollowHeading = true;
 
@@ -141,7 +142,7 @@ public sealed partial class VehicleShowcaseGame : StationGame
         BuildVehicles();
 
         var marks = new GameObject("Skidmarks");
-        marks.AddComponent<MeshRenderer>().Material = Lit(new Color(0.02f, 0.02f, 0.02f, 0.6f), 0f, 0.9f, DefaultShader.StandardTransparent);
+        marks.AddComponent<MeshRenderer>().Material = Lit(new Color(0.02f, 0.02f, 0.02f, 0.6f), 0f, 0.9f, SurfaceType.Transparent);
         _skidmarks = marks.AddComponent<Skidmarks>();
         foreach (Vehicle vehicle in _vehicles) _skidmarks.Track(vehicle.Body, vehicle.Wheels);
         Add(marks);

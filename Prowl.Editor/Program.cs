@@ -51,6 +51,9 @@ public static class Program
 
         (["--output", "-output", "-o"], (args) => BuildOutputPath = args[0], 1,
             "Specifies the build output path when the editor builds a project"),
+
+        (["--xr", "-xr"], (args) => Runtime.XR.InitializeOnStartup = true, 0,
+            "Makes the graphics device for a connected headset, so XR can start in play mode"),
     ];
 
 

@@ -79,7 +79,7 @@ public static class SDFGenerator
         short[] packed = new short[distances.Length];
         Parallel.For(0, distances.Length, i => packed[i] = (short)MathF.Round(Math.Clamp(distances[i] * scale, -short.MaxValue, short.MaxValue)));
 
-        var volume = new Texture3D((uint)resolution.X, (uint)resolution.Y, (uint)resolution.Z, false, TextureImageFormat.Short);
+        var volume = new Texture3D((uint)resolution.X, (uint)resolution.Y, (uint)resolution.Z, TextureFormat.R16SNorm);
         volume.SetData<short>(packed);
 
         Debug.Log($"SDF '{mesh.Name}': {resolution.X}x{resolution.Y}x{resolution.Z}, {surface.TriangleCount:N0} tris in {compute} ms, {sw.ElapsedMilliseconds} ms with the upload");

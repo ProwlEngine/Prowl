@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 
-using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
@@ -207,7 +205,7 @@ public class EditorCamera
         _camera.NearClipPlane = 0.01f;
         _camera.FarClipPlane = 1000f;
         _perspectiveFarClip = _camera.FarClipPlane;
-        _camera.ClearFlags = CameraClearFlags.Skybox;
+        _camera.Background = CameraBackground.Skybox;
 
         UpdateTransform();
     }
@@ -224,14 +222,15 @@ public class EditorCamera
             if (_renderTarget.IsValid()) _renderTarget.Dispose();
             _renderTarget = new RenderTexture(
                 (int)width, (int)height, true,
-                [TextureImageFormat.Color4b]);
+                [TextureFormat.RGBA8]);
         }
     }
 
-    /// <summary>
-    /// Whether to copy image effects from the scene's main camera onto the editor camera.
-    /// </summary>
-    public bool UseSceneEffects { get; set; } = true;
+    /// <summary>Draws the volumes at the scene camera, under the base profile and anti aliasing of the scene's main camera.</summary>
+    public bool PostProcessing { get; set; } = true;
+
+    /// <summary>What the scene view shows in place of the lit scene. Post processing is off while it shows anything else.</summary>
+    public DebugViewMode DebugView { get; set; } = DebugViewMode.Lit;
 
     /// <summary>
     /// Render the scene from this camera's perspective.
@@ -240,11 +239,8 @@ public class EditorCamera
     {
         if (_renderTarget == null) return;
 
-        // Copy image effects from the scene's main camera (if enabled)
-        if (UseSceneEffects)
-            CopySceneEffects(scene);
-        else
-            _camera.Effects.Clear();
+        MirrorSceneCamera(scene);
+        if (DebugView != DebugViewMode.Lit) _camera.PostProcessing = false;
 
         // Update camera pixel dimensions
         _camera.UpdateRenderData(_renderTarget);
@@ -254,139 +250,46 @@ public class EditorCamera
         if (!wasInScene)
             scene.Add(_cameraObject);
 
-        // Build rendering data
-        var renderData = new RenderingData
+        _camera.Render(new CameraRenderOptions
         {
+            FallbackTarget = _renderTarget,
             DisplayGizmos = ShowGizmos,
-            DisplayGrid = ShowGrid,
-            IsSceneView = true,
-            SkipUI = !drawUI,
-            FallbackTarget = _renderTarget
-        };
-
-        // Render
-        RenderPipeline pipeline = _camera.Pipeline.IsValid() ? _camera.Pipeline : DefaultRenderPipeline.Default;
-        pipeline.Render(_camera, renderData);
+            Kind = Prowl.Graphite.Rendering.ViewKind.SceneView,
+            Features = ShowGrid ? GridFeature.List : null,
+            Keywords = DebugViews.Keywords(DebugView),
+        });
 
         // Remove from scene if we added it
         if (!wasInScene)
             scene.Remove(_cameraObject);
     }
 
-    // Cached cloned effects for the editor camera. Persistent across frames so
-    // temporal effects (TAA, motion blur) keep their history buffers intact.
-    private readonly List<ImageEffect> _clonedEffects = [];
-    private Camera? _lastSceneCamera;
-
-    /// <summary>
-    /// Drop references to scene-derived objects: the cached scene <see cref="Camera"/> and the
-    /// cloned <see cref="ImageEffect"/> instances (which can be user-script types). These persist
-    /// across frames, so they must be released before a script hot-reload unloads the ALC.
-    /// </summary>
+    /// <summary>Drops the scene camera's profile and the blended components, which can be user script types, before a script reload.</summary>
     public void ReleaseSceneReferences()
     {
-        DisposeClonedEffects();
-        _camera.Effects.Clear();
-        _lastSceneCamera = null;
+        _camera.Profile = null;
+        _camera.ReleaseVolumes();
     }
 
-    /// <summary>
-    /// Sync image effects from the scene's main camera. Clones effect instances on first
-    /// use or when the effect list changes, then uses DeserializeInto each frame to copy
-    /// settings without destroying internal state (TAA history, etc.).
-    /// </summary>
-    private void CopySceneEffects(Scene scene)
+    // The scene view resolves volumes itself; only the main camera's base profile, volume layers and anti aliasing are borrowed
+    private void MirrorSceneCamera(Scene scene)
     {
+        _camera.PostProcessing = PostProcessing;
         Camera? sceneCamera = FindSceneCamera(scene);
-        if (sceneCamera == null || sceneCamera == _camera)
+        if (sceneCamera.IsNotValid() || sceneCamera == _camera)
         {
-            _camera.Effects.Clear();
-            DisposeClonedEffects();
-            _lastSceneCamera = null;
+            _camera.Profile = null;
+            _camera.VolumeMask = LayerMask.Everything;
+            _camera.AntiAliasing = AntiAliasingMode.None;
             return;
         }
 
-        // Build a filtered list of non-null effects from the scene camera so null
-        // entries don't cause index misalignment between the source and clone lists.
-        var sourceEffects = new List<ImageEffect>();
-        foreach (ImageEffect effect in sceneCamera.Effects)
-        {
-            if (effect != null)
-                sourceEffects.Add(effect);
-        }
-
-        // Check if the effect list structure changed (different types, count, or camera)
-        bool needsReclone = sceneCamera != _lastSceneCamera
-            || sourceEffects.Count != _clonedEffects.Count;
-
-        if (!needsReclone)
-        {
-            for (int i = 0; i < sourceEffects.Count; i++)
-            {
-                if (sourceEffects[i].GetType() != _clonedEffects[i].GetType())
-                {
-                    needsReclone = true;
-                    break;
-                }
-            }
-        }
-
-        if (needsReclone)
-        {
-            // Dispose old clones first so persistent GPU resources (TAA history,
-            // adaptation buffers, etc.) are freed before creating new instances.
-            DisposeClonedEffects();
-
-            foreach (ImageEffect effect in sourceEffects)
-            {
-                try
-                {
-                    EchoObject echo = Echo.Serializer.Serialize(effect);
-                    var clone = Echo.Serializer.Deserialize(echo, effect.GetType()) as ImageEffect;
-                    if (clone != null)
-                        _clonedEffects.Add(clone);
-                }
-                catch
-                {
-                    // Fallback: create a blank instance
-                    if (Activator.CreateInstance(effect.GetType()) is ImageEffect blank)
-                        _clonedEffects.Add(blank);
-                }
-            }
-            _lastSceneCamera = sceneCamera;
-        }
-        else
-        {
-            // Sync settings into existing clones (preserves internal state like TAA history)
-            for (int i = 0; i < sourceEffects.Count; i++)
-            {
-                try
-                {
-                    EchoObject echo = Echo.Serializer.Serialize(sourceEffects[i]);
-                    Echo.Serializer.DeserializeInto(echo, _clonedEffects[i]);
-                }
-                catch { }
-            }
-        }
-
-        // Apply cloned effects to editor camera
-        _camera.Effects.Clear();
-        _camera.Effects.AddRange(_clonedEffects);
-        _camera.HDR = sceneCamera.HDR;
-    }
-
-    /// <summary>
-    /// Dispose all cloned effects so persistent GPU resources (history buffers, adaptation
-    /// RTs, etc.) are properly freed.
-    /// </summary>
-    private void DisposeClonedEffects()
-    {
-        foreach (ImageEffect effect in _clonedEffects)
-        {
-            try { effect.OnDisable(); }
-            catch { }
-        }
-        _clonedEffects.Clear();
+        _camera.Profile = sceneCamera.Profile;
+        _camera.VolumeMask = sceneCamera.VolumeMask;
+        _camera.AntiAliasing = sceneCamera.AntiAliasing;
+        _camera.Fxaa = sceneCamera.Fxaa;
+        _camera.Smaa = sceneCamera.Smaa;
+        _camera.Taa = sceneCamera.Taa;
     }
 
     private static Camera? FindSceneCamera(Scene scene)
@@ -769,10 +672,10 @@ public class EditorCamera
         _cameraObject.Transform.LocalEulerAngles = new Float3(_pitch, _yaw, 0);
     }
 
-    /// <summary> Releases all cloned image effects and disposes the render target. </summary>
+    /// <summary> Releases the camera's effect features and disposes the render target. </summary>
     public void Dispose()
     {
-        DisposeClonedEffects();
+        ReleaseSceneReferences();
         if (_renderTarget.IsValid()) _renderTarget.Dispose();
         _renderTarget = null;
     }

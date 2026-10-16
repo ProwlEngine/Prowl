@@ -12,7 +12,7 @@ namespace VRShowcase;
 /// <summary>The gadget table, the sky tower with its zip line, and a console of buttons.</summary>
 public sealed partial class VRShowcaseGame
 {
-    private DirectionalLight _sunLight = null!;
+    private Light _sunLight = null!;
     private float _ambientStrength;
 
     private void BuildSkyPark()
@@ -145,10 +145,11 @@ public sealed partial class VRShowcaseGame
         lamp.SetParent(torch.GameObject);
         lamp.Transform.LocalPosition = new Float3(0f, 0f, 0.17f);
         lamp.Transform.LocalRotation = Quaternion.Identity;
-        SpotLight light = lamp.AddComponent<SpotLight>();
+        Light light = lamp.AddComponent<Light>();
+        light.Type = LightType.Spot;
         light.Range = 30f;
-        light.SpotAngle = 40f;
-        light.InnerSpotAngle = 25f;
+        light.OuterAngle = 40f;
+        light.InnerAngle = 25f;
         light.Intensity = 6f;
         light.Color = new Color(1f, 0.95f, 0.85f, 1f);
         light.Enabled = false;
@@ -318,8 +319,8 @@ public sealed partial class VRShowcaseGame
         _sunLight.Color = Lerp(new Color(1f, 0.45f, 0.2f, 1f), Color.White, Saturate(elevation / 30f));
         Scene? scene = _sunLight.GameObject.Scene;
         if (scene.IsNotValid()) return;
-        if (_ambientStrength <= 0f) _ambientStrength = scene.Ambient.Strength;
-        scene.Ambient.Strength = _ambientStrength * (0.06f + 0.94f * day);
+        if (_ambientStrength <= 0f) _ambientStrength = scene.Environment.Ambient.Intensity;
+        scene.Environment.Ambient.Intensity = _ambientStrength * (0.06f + 0.94f * day);
     }
 
     /// <summary>

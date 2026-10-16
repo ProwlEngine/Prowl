@@ -700,31 +700,40 @@ public sealed class TerrainData : Asset, ISerializable
 
     #region GPU Textures
 
+    // Data textures hold row z of their grid in texture row z, so shaders address them as (x, z) with no flip.
+    // A texture of the same size and format is written in place, so materials keep the texture they hold.
+    private static Texture2D DataTexture(Texture2D? existing, int size, TextureFormat format, bool filtered)
+    {
+        if (existing.IsValid() && existing.Width == size && existing.Height == size && existing.Format == format)
+            return existing;
+        if (existing.IsValid()) existing.Dispose();
+
+        var texture = new Texture2D((uint)size, (uint)size, format) { Filter = filtered ? FilterMode.Bilinear : FilterMode.Point };
+        texture.SetWrap(WrapMode.Clamp);
+        return texture;
+    }
 
     // Reusable buffer for converting short heights to float for GPU upload
     [NonSerialized] private float[]? _heightmapFloatBuffer;
 
+    /// <summary>Heights as an R32 float texture, read with exact texel fetches by the terrain shaders.</summary>
     public Texture2D? GetHeightmapTexture()
     {
         EnsureLoaded();
         if (Heights == null) return null;
-        if (_heightmapDirty || _heightmapTexture == null)
+        if (_heightmapDirty || _heightmapTexture.IsNotValid())
         {
-            int count = HeightmapResolution * HeightmapResolution;
+            int res = HeightmapResolution;
+            int count = res * res;
 
-            // Convert short[] to float[] for GPU
             if (_heightmapFloatBuffer == null || _heightmapFloatBuffer.Length != count)
                 _heightmapFloatBuffer = new float[count];
             float scale = 1f / kMaxHeight;
             for (int i = 0; i < count; i++)
                 _heightmapFloatBuffer[i] = Heights[i] * scale;
 
-            if (_heightmapTexture.IsValid()) _heightmapTexture.Dispose();
-            _heightmapTexture = new Texture2D((uint)HeightmapResolution, (uint)HeightmapResolution, false, TextureImageFormat.Float);
-            _heightmapTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            Graphics.SetWrapS(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
-            unsafe { fixed (float* ptr = _heightmapFloatBuffer) _heightmapTexture.SetDataPtr(ptr, 0, 0, (uint)HeightmapResolution, (uint)HeightmapResolution); }
+            _heightmapTexture = DataTexture(_heightmapTexture, res, TextureFormat.R32Float, false);
+            _heightmapTexture.SetData(new Memory<float>(_heightmapFloatBuffer), 0, 0, (uint)res, (uint)res);
             _heightmapDirty = false;
         }
         return _heightmapTexture;
@@ -745,32 +754,34 @@ public sealed class TerrainData : Asset, ISerializable
 
         if (_splatmapDirty || _splatmapTextures == null || _splatmapTextures.Count != texCount)
         {
-            // Dispose old textures
-            if (_splatmapTextures != null)
-                foreach (Texture2D t in _splatmapTextures) if (t.IsValid()) t.Dispose();
+            _splatmapTextures ??= new List<Texture2D>(texCount);
+            while (_splatmapTextures.Count > texCount)
+            {
+                Texture2D extra = _splatmapTextures[^1];
+                if (extra.IsValid()) extra.Dispose();
+                _splatmapTextures.RemoveAt(_splatmapTextures.Count - 1);
+            }
 
-            _splatmapTextures = new List<Texture2D>(texCount);
-            float[] buffer = new float[pixelCount * 4];
+            // Half floats, which every device filters, unlike 32 bit float textures
+            Half[] buffer = new Half[pixelCount * 4];
 
             for (int ti = 0; ti < texCount; ti++)
             {
                 int baseChannel = ti * 4;
                 int channels = Math.Min(4, lc - baseChannel);
 
-                // Pack channels into RGBA buffer
                 Array.Clear(buffer);
                 for (int p = 0; p < pixelCount; p++)
                 {
                     for (int c = 0; c < channels; c++)
-                        buffer[p * 4 + c] = Splats[p * lc + baseChannel + c];
+                        buffer[p * 4 + c] = (Half)Splats[p * lc + baseChannel + c];
                 }
 
-                var tex = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float4);
-                tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-                Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-                Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
-                unsafe { fixed (float* ptr = buffer) tex.SetDataPtr(ptr, 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution); }
-                _splatmapTextures.Add(tex);
+                Texture2D? existing = ti < _splatmapTextures.Count ? _splatmapTextures[ti] : null;
+                Texture2D tex = DataTexture(existing, SplatmapResolution, TextureFormat.RGBA16Float, true);
+                tex.SetData(new Memory<Half>(buffer), 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution);
+                if (ti < _splatmapTextures.Count) _splatmapTextures[ti] = tex;
+                else _splatmapTextures.Add(tex);
             }
 
             _splatmapDirty = false;
@@ -798,8 +809,13 @@ public sealed class TerrainData : Asset, ISerializable
         if (_detailTextures != null && _detailTexturesVersion == _detailsVersion && _detailTextures.Count == texCount)
             return _detailTextures;
 
-        if (_detailTextures != null)
-            foreach (Texture2D t in _detailTextures) if (t.IsValid()) t.Dispose();
+        _detailTextures ??= new List<Texture2D>(texCount);
+        while (_detailTextures.Count > texCount)
+        {
+            Texture2D extra = _detailTextures[^1];
+            if (extra.IsValid()) extra.Dispose();
+            _detailTextures.RemoveAt(_detailTextures.Count - 1);
+        }
 
         int res = DetailResolution;
         int pixelCount = res * res;
@@ -809,7 +825,6 @@ public sealed class TerrainData : Asset, ISerializable
         if (_detailBounds == null || _detailBounds.Length != layerCount)
             _detailBounds = new Float4[layerCount];
 
-        _detailTextures = new List<Texture2D>(texCount);
         for (int ti = 0; ti < texCount; ti++)
         {
             Array.Clear(_detailBuffer);
@@ -851,12 +866,11 @@ public sealed class TerrainData : Asset, ISerializable
                         minX * cellUV, minZ * cellUV, (maxX + 1) * cellUV, (maxZ + 1) * cellUV);
             }
 
-            var tex = new Texture2D((uint)res, (uint)res, false, TextureImageFormat.Color4b);
-            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
-            unsafe { fixed (byte* ptr = _detailBuffer) tex.SetDataPtr(ptr, 0, 0, (uint)res, (uint)res); }
-            _detailTextures.Add(tex);
+            Texture2D? existing = ti < _detailTextures.Count ? _detailTextures[ti] : null;
+            Texture2D tex = DataTexture(existing, res, TextureFormat.RGBA8, true);
+            tex.SetData(_detailBuffer, 0, 0, (uint)res, (uint)res);
+            if (ti < _detailTextures.Count) _detailTextures[ti] = tex;
+            else _detailTextures.Add(tex);
         }
 
         _detailTexturesVersion = _detailsVersion;
@@ -887,30 +901,27 @@ public sealed class TerrainData : Asset, ISerializable
         return true;
     }
 
+    [NonSerialized] private byte[]? _holesBuffer;
+
     /// <summary>
     /// Get the holes map as an R8 GPU texture. 0 = hole, 255 = solid.
     /// Returns null if no holes have been painted.
     /// </summary>
-    [NonSerialized] private float[]? _holesFloatBuffer;
-
     public Texture2D? GetHolesTexture()
     {
         EnsureLoaded();
         if (Holes == null) return null;
-        if (_holesDirty || _holesTexture == null)
+        if (_holesDirty || _holesTexture.IsNotValid())
         {
-            int count = SplatmapResolution * SplatmapResolution;
-            if (_holesFloatBuffer == null || _holesFloatBuffer.Length != count)
-                _holesFloatBuffer = new float[count];
+            int res = SplatmapResolution;
+            int count = res * res;
+            if (_holesBuffer == null || _holesBuffer.Length != count)
+                _holesBuffer = new byte[count];
             for (int i = 0; i < count; i++)
-                _holesFloatBuffer[i] = Holes[i] > 0 ? 1f : 0f;
+                _holesBuffer[i] = Holes[i] > 0 ? (byte)255 : (byte)0;
 
-            if (_holesTexture.IsValid()) _holesTexture.Dispose();
-            _holesTexture = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float);
-            _holesTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-            Graphics.SetWrapS(_holesTexture.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(_holesTexture.Handle, TextureWrap.ClampToEdge);
-            unsafe { fixed (float* ptr = _holesFloatBuffer) _holesTexture.SetDataPtr(ptr, 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution); }
+            _holesTexture = DataTexture(_holesTexture, res, TextureFormat.R8, false);
+            _holesTexture.SetData(_holesBuffer, 0, 0, (uint)res, (uint)res);
             _holesDirty = false;
         }
         return _holesTexture;

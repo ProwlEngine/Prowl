@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -12,9 +12,12 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
+using Material = Prowl.Runtime.Resources.Material;
+using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -287,9 +290,20 @@ public static class Debug
         s_gizmoBuilder.Clear();
     }
 
-    public static (Mesh? wire, Mesh? solid) GetGizmoDrawData()
+    /// <summary>The layer gizmos draw on. Views showing gizmos include it, cameras never draw it otherwise.</summary>
+    public const uint GizmoLayerMask = 1u << 31;
+
+    private static readonly Dictionary<RenderWorld, ulong> s_gizmosSubmitted = [];
+
+    /// <summary>Draws this frame's gizmos into a world, once a frame, on the gizmo layer.</summary>
+    internal static void SubmitGizmos(RenderWorld world)
     {
-        return s_gizmoBuilder.UpdateMesh();
+        if (s_gizmosSubmitted.TryGetValue(world, out ulong frame) && frame == Graphics.FrameIndex) return;
+        s_gizmosSubmitted[world] = Graphics.FrameIndex;
+        if (s_gizmosSubmitted.Count > 64)
+            foreach (RenderWorld stale in s_gizmosSubmitted.Where(pair => pair.Value != Graphics.FrameIndex).Select(pair => pair.Key).ToList())
+                s_gizmosSubmitted.Remove(stale);
+        s_gizmoBuilder.Submit(world);
     }
 
     public static List<GizmoBuilder.IconDrawCall> GetGizmoIcons()
@@ -532,8 +546,6 @@ public class GizmoBuilder
 
     private MeshData _wireData = new();
     private MeshData _solidData = new();
-    private Mesh? _wire;
-    private Mesh? _solid;
 
     public struct IconDrawCall
     {
@@ -1019,49 +1031,82 @@ public class GizmoBuilder
 
     public void DrawIcon(Texture2D icon, Float3 center, float scale, Color color) => _icons.Add(new IconDrawCall { Texture = icon, Center = center, Scale = scale, Color = color });
 
-    public (Mesh? wire, Mesh? solid) UpdateMesh()
+    private static Material? s_lineMaterial;
+    private static Prowl.Graphite.Rendering.Material? s_hiddenLines;
+    private static readonly Dictionary<(Texture2D, Color), (Material Visible, Prowl.Graphite.Rendering.Material Hidden)> s_iconMaterials = [];
+    private static Mesh? s_iconQuad;
+
+    // The occluded draw of a gizmo material: the same values with GIZMO_OCCLUDED on, drawn where geometry is nearer
+    private static Prowl.Graphite.Rendering.Material Occluded(Prowl.Graphite.Rendering.Material visible)
     {
-        bool hasWire = _wireData.Vertices.Count > 0;
-        if (hasWire)
-            _wire = Refresh(_wire, Topology.Lines, in _wireData, false);
-
-        bool hasSolid = _solidData.Vertices.Count > 0;
-        if (hasSolid)
-            _solid = Refresh(_solid, Topology.Triangles, in _solidData, true);
-
-        return (
-            hasWire ? _wire : null,
-            hasSolid ? _solid : null
-            );
+        Prowl.Graphite.Rendering.Material hidden = Graphics.Renderer!.CreateMaterial(visible.Shader);
+        hidden.Parent = visible;
+        hidden.SetInt("_Occluded", 1);
+        var state = new Prowl.Graphite.ShaderDef.PassState { Set = Prowl.Graphite.ShaderDef.PassStateFields.DepthComparison };
+        state.DepthStencil.DepthComparison = Graphite.ComparisonKind.Less;
+        hidden.StateOverride = state;
+        return hidden;
     }
 
-    // Gizmos are redrawn every frame but rarely change, so the mesh is only rebuilt and uploaded again when they do.
-    private static Mesh Refresh(Mesh? mesh, Topology topology, in MeshData data, bool withUV)
+    /// <summary>Draws the lines, triangles and icons gathered this frame into a world as transient draws.</summary>
+    internal void Submit(RenderWorld world)
     {
-        if (mesh.IsNotValid())
+        if (s_lineMaterial.IsNotValid()) s_lineMaterial = new Material(Shader.LoadDefault(DefaultShader.Gizmos));
+        if (s_lineMaterial.GpuMaterial is not { } lines) return;
+        if (s_hiddenLines == null || s_hiddenLines.IsDisposed || s_hiddenLines.Parent != lines) s_hiddenLines = Occluded(lines);
+        Prowl.Graphite.Rendering.Material hiddenLines = s_hiddenLines;
+
+        foreach (Prowl.Graphite.Rendering.Material material in (ReadOnlySpan<Prowl.Graphite.Rendering.Material>)[hiddenLines, lines])
         {
-            mesh = new()
+            if (_wireData.Vertices.Count > 0)
+                world.DrawTransient(Transient(in _wireData, Graphite.PrimitiveTopology.LineList, material));
+            if (_solidData.Vertices.Count > 0)
+                world.DrawTransient(Transient(in _solidData, Graphite.PrimitiveTopology.TriangleList, material));
+        }
+
+        if (_icons.Count == 0) return;
+        if (s_iconQuad.IsNotValid())
+        {
+            s_iconQuad = new Mesh
             {
-                MeshTopology = topology,
-                IndexFormat = IndexFormat.UInt32,
+                Vertices = [new(-0.5f, -0.5f, 0), new(0.5f, -0.5f, 0), new(0.5f, 0.5f, 0), new(-0.5f, 0.5f, 0)],
             };
+            s_iconQuad.UV = [new(0, 1), new(1, 1), new(1, 0), new(0, 0)];
+            s_iconQuad.Indices = [0, 1, 2, 0, 2, 3];
         }
-        else if (Same(data.Vertices, mesh.Vertices) && Same(data.Colors, mesh.Colors32)
-            && Same(data.Indices, mesh.Indices) && (!withUV || Same(data.Uvs, mesh.UV)))
-        {
-            return mesh;
-        }
+        s_iconQuad.Upload();
+        if (s_iconQuad.GpuMesh is not { } quad) return;
 
-        mesh.Vertices = CollectionsMarshal.AsSpan(data.Vertices).ToArray();
-        mesh.Colors32 = CollectionsMarshal.AsSpan(data.Colors).ToArray();
-        if (withUV)
-            mesh.UV = CollectionsMarshal.AsSpan(data.Uvs).ToArray();
-        mesh.Indices = MemoryMarshal.Cast<int, uint>(CollectionsMarshal.AsSpan(data.Indices)).ToArray();
-        return mesh;
+        foreach (IconDrawCall icon in _icons)
+        {
+            if (icon.Texture.IsNotValid()) continue;
+            if (!s_iconMaterials.TryGetValue((icon.Texture, icon.Color), out var materials) || materials.Visible.IsNotValid() || materials.Hidden.IsDisposed)
+            {
+                Material created = new(Shader.LoadDefault(DefaultShader.GizmoIcon));
+                created.SetTexture("_MainTex", icon.Texture);
+                created.SetColor("_Color", icon.Color);
+                if (created.GpuMaterial is not { } gpu) continue;
+                materials = (created, Occluded(gpu));
+                s_iconMaterials[(icon.Texture, icon.Color)] = materials;
+            }
+            if (materials.Visible.GpuMaterial is not { } visible) continue;
+            Prowl.Graphite.Rendering.Material hidden = materials.Hidden;
+            Double4x4 transform = Double4x4.CreateTranslation(new Double3(icon.Center.X, icon.Center.Y, icon.Center.Z)) * Double4x4.CreateScale(new Double3(icon.Scale, icon.Scale, icon.Scale));
+            world.DrawTransient(new TransientDraw { Mesh = quad, Material = hidden, Transform = transform, LayerMask = Debug.GizmoLayerMask, Flags = RenderableFlags.None });
+            world.DrawTransient(new TransientDraw { Mesh = quad, Material = visible, Transform = transform, LayerMask = Debug.GizmoLayerMask, Flags = RenderableFlags.None });
+        }
     }
 
-    private static bool Same<TList, TArray>(List<TList> list, TArray[] array) where TList : unmanaged where TArray : unmanaged
-        => MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(list)).SequenceEqual(MemoryMarshal.AsBytes(array.AsSpan()));
+    private static TransientDraw Transient(in MeshData data, Graphite.PrimitiveTopology topology, Prowl.Graphite.Rendering.Material material) => new()
+    {
+        Positions = CollectionsMarshal.AsSpan(data.Vertices).ToArray(),
+        Colors = MemoryMarshal.Cast<Color32, uint>(CollectionsMarshal.AsSpan(data.Colors)).ToArray(),
+        Indices = MemoryMarshal.Cast<int, uint>(CollectionsMarshal.AsSpan(data.Indices)).ToArray(),
+        Topology = topology,
+        Material = material,
+        LayerMask = Debug.GizmoLayerMask,
+        Flags = RenderableFlags.None,
+    };
 
     public List<IconDrawCall> GetIcons()
     {

@@ -38,9 +38,8 @@ public static class EditorWallpaper
         try
         {
             using Aperture.Image image = Aperture.Image.Load(path, new DecodeOptions { TargetPixelFormat = PixelFormat.Rgba8 });
-            var texture = new Texture2D((uint)image.Width, (uint)image.Height, false, TextureImageFormat.Color4b);
+            var texture = new Texture2D((uint)image.Width, (uint)image.Height);
             texture.SetData<byte>(image.RootFrame.Pixels.ToArray());
-            texture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _texture = texture;
         }
         catch (Exception ex)

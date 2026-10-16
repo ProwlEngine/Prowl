@@ -4,73 +4,56 @@
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
-/// Per-frame rendering counters captured by the pipeline and the low-level <see cref="Graphics"/>
-/// draw calls. The pipeline calls <see cref="BeginFrame"/> before its first draw and
-/// <see cref="EndFrame"/> after the last one; the editor reads the snapshot exposed in
-/// <see cref="Last"/>. Counters are global because both <see cref="Graphics"/> and the active
-/// pipeline write to the same accumulator; multi-camera renders are summed into one frame.
+/// What the renderer drew last frame and how long frames take, for stats overlays and performance captures. Call
+/// <see cref="EndFrame"/> once a frame; <see cref="Last"/> holds the counts of the last frame the renderer recorded.
 /// </summary>
 public static class RenderStats
 {
     public struct Frame
     {
-        // ── Geometry (color pass) ────────────────────────────
-        public int DrawCalls;
-        public int InstancedDrawCalls;
-        public long Triangles;
-        public long Vertices;
-        public int Batches;
-
-        // ── Culling ──────────────────────────────────────────
-        public int RenderablesCollected;
-        public int RenderablesCulled;
-        public int RenderablesDrawn;
-
-        // ── Shadows ──────────────────────────────────────────
-        public int ShadowDrawCalls;
-        public int ShadowInstancedDrawCalls;
-        public long ShadowTriangles;
-        public long ShadowVertices;
-        public int ShadowBatches;
-        public int ShadowPasses;
-        public int ShadowRenderablesCollected;
-        public int ShadowRenderablesCulled;
-        public int ShadowRenderablesDrawn;
-
-        // ── Lighting ─────────────────────────────────────────
-        public int Lights;
-        public int DirectionalLights;
-        public int PointLights;
-        public int SpotLights;
-        public int ShadowCasters;
-
-        // ── Image Effects / Post-Processing ──────────────────
-        public int ImageEffects;
-        public int ImageEffectPasses;
-
-        // ── Cameras ──────────────────────────────────────────
-        public int Cameras;
-
-        // ── Timing (ms) ──────────────────────────────────────
-        // CPU wall-clock on the encoding thread how long the pipeline spent
-        // building the pass's CommandBuffers, not actual GPU execution time.
         public float FrameTimeMs;
-        public float ColorPassMs;
-        public float ShadowPassMs;
-        public float PostFxMs;
+
+        /// <summary>Views drawn, cameras and editor views alike.</summary>
+        public int Views;
+
+        /// <summary>Indirect draw calls, and the mesh pieces drawn by them, for camera views.</summary>
+        public int DrawCalls;
+        public int DrawCommands;
+
+        /// <summary>The same for shadow views.</summary>
+        public int ShadowDrawCalls;
+        public int ShadowDrawCommands;
+
+        /// <summary>Local light shadows given tiles, grown and shrunk.</summary>
+        public int ShadowsAdded;
+        public int ShadowsGrown;
+        public int ShadowsShrunk;
+
+        /// <summary>Shader variants still compiling in the background.</summary>
+        public int ShaderCompiles;
+
+        /// <summary>Main thread time spent pushing scene changes into the render worlds.</summary>
+        public float SyncMs;
+
+        /// <summary>Renderers, lights and probes synced, and static ones left alone while playing.</summary>
+        public int Synced;
+        public int Parked;
     }
 
-    private static Frame s_current;
-    private static Frame s_last;
-    private static bool s_inShadowPass;
-    private static long s_sectionStart;
+    private static Frame s_sync;
 
-    // Frame time history for graphs
+    internal static void AddSceneSync(double milliseconds, int synced, int parked)
+    {
+        s_sync.SyncMs += (float)milliseconds;
+        s_sync.Synced += synced;
+        s_sync.Parked += parked;
+    }
+
     private static readonly float[] s_frameTimeHistory = new float[120];
     private static int s_frameTimeIndex;
 
-    /// <summary>Snapshot of the most recently completed frame. Safe for UI to read.</summary>
-    public static Frame Last => s_last;
+    /// <summary>The most recent frame's counts. Safe for UI to read.</summary>
+    public static Frame Last { get; private set; }
 
     /// <summary>Ring buffer of recent frame times (ms) for plotting. Length = 120.</summary>
     public static float[] FrameTimeHistory => s_frameTimeHistory;
@@ -78,120 +61,33 @@ public static class RenderStats
     /// <summary>Current write index in the history ring buffer.</summary>
     public static int FrameTimeIndex => s_frameTimeIndex;
 
-    /// <summary>Reset all counters. Called by the pipeline at the start of a frame.</summary>
-    public static void BeginFrame()
-    {
-        s_current = default;
-        s_inShadowPass = false;
-    }
-
-    /// <summary>Promote the in-progress counters to <see cref="Last"/>. Called by the pipeline at the end of a frame.</summary>
+    /// <summary>Takes the renderer's counts of its last frame and this frame's time.</summary>
     public static void EndFrame()
     {
-        s_current.FrameTimeMs = (float)Time.UnscaledDeltaTime * 1000f;
-        s_last = s_current;
-
-        s_frameTimeHistory[s_frameTimeIndex] = s_last.FrameTimeMs;
-        s_frameTimeIndex = (s_frameTimeIndex + 1) % s_frameTimeHistory.Length;
-    }
-
-    // Per-section CPU stopwatch on the encoding thread. Post-fx accumulates
-    // across both BeginPostFx / EndPostFx cycles (AfterOpaques + PostProcess).
-
-    /// <summary>Mark the start of a shadow pass so following draw calls count toward shadows.</summary>
-    public static void BeginShadowPass()
-    {
-        s_inShadowPass = true;
-        s_current.ShadowPasses++;
-        s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
-    }
-
-    public static void EndShadowPass()
-    {
-        s_current.ShadowPassMs += ElapsedMs();
-        s_inShadowPass = false;
-    }
-
-    public static void BeginColorPass() => s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
-    public static void EndColorPass() => s_current.ColorPassMs += ElapsedMs();
-
-    public static void BeginPostFx() => s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
-    public static void EndPostFx() => s_current.PostFxMs += ElapsedMs();
-
-    private static float ElapsedMs()
-    {
-        long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        return (float)((now - s_sectionStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
-    }
-
-    public static void AddCamera() => s_current.Cameras++;
-
-    public static void AddBatch() => s_current.Batches++;
-
-    public static void AddRenderables(int collected, int culled, int drawn)
-    {
-        if (s_inShadowPass)
+        Frame frame = new()
         {
-            s_current.ShadowRenderablesCollected += collected;
-            s_current.ShadowRenderablesCulled += culled;
-            s_current.ShadowRenderablesDrawn += drawn;
-        }
-        else
-        {
-            s_current.RenderablesCollected += collected;
-            s_current.RenderablesCulled += culled;
-            s_current.RenderablesDrawn += drawn;
-        }
-    }
-
-    public static void AddLightCounts(int total, int directional, int point, int spot, int shadowCasters)
-    {
-        s_current.Lights += total;
-        s_current.DirectionalLights += directional;
-        s_current.PointLights += point;
-        s_current.SpotLights += spot;
-        s_current.ShadowCasters += shadowCasters;
-    }
-
-    /// <summary>Record an image effect execution.</summary>
-    public static void AddImageEffect(int passes = 1)
-    {
-        s_current.ImageEffects++;
-        s_current.ImageEffectPasses += passes;
-    }
-
-    /// <summary>
-    /// Record a draw call. Called from <see cref="Graphics"/>. <paramref name="indexCount"/> is
-    /// the number of indices and <paramref name="topology"/> determines the triangle count.
-    /// </summary>
-    public static void RecordDraw(Topology topology, uint indexCount, uint instances = 1)
-    {
-        long primCount = topology switch
-        {
-            Topology.Triangles => indexCount / 3,
-            Topology.TriangleStrip => indexCount >= 2 ? indexCount - 2 : 0,
-            Topology.TriangleFan => indexCount >= 2 ? indexCount - 2 : 0,
-            _ => 0
+            FrameTimeMs = (float)Time.UnscaledDeltaTime * 1000f,
+            SyncMs = s_sync.SyncMs,
+            Synced = s_sync.Synced,
+            Parked = s_sync.Parked,
         };
-
-        long tris = primCount * instances;
-        long verts = (long)indexCount * instances;
-
-        if (s_inShadowPass)
+        s_sync = default;
+        if (Graphics.Renderer is { } renderer)
         {
-            s_current.ShadowDrawCalls++;
-            if (instances > 1) s_current.ShadowInstancedDrawCalls++;
-            s_current.ShadowTriangles += tris;
-            s_current.ShadowVertices += verts;
+            Graphite.Rendering.FrameStats stats = renderer.LastFrameStats;
+            frame.Views = stats.Views;
+            frame.DrawCalls = stats.DrawCalls;
+            frame.DrawCommands = stats.DrawCommands;
+            frame.ShadowDrawCalls = stats.ShadowDrawCalls;
+            frame.ShadowDrawCommands = stats.ShadowDrawCommands;
+            frame.ShadowsAdded = stats.ShadowsAdded;
+            frame.ShadowsGrown = stats.ShadowsGrown;
+            frame.ShadowsShrunk = stats.ShadowsShrunk;
+            frame.ShaderCompiles = renderer.ShaderCompilesPending;
         }
-        else
-        {
-            s_current.DrawCalls++;
-            if (instances > 1) s_current.InstancedDrawCalls++;
-        }
+        Last = frame;
 
-        // Always count total geometry
-        s_current.Triangles += tris;
-        s_current.Vertices += verts;
+        s_frameTimeHistory[s_frameTimeIndex] = frame.FrameTimeMs;
+        s_frameTimeIndex = (s_frameTimeIndex + 1) % s_frameTimeHistory.Length;
     }
 }

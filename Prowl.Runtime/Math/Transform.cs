@@ -36,7 +36,7 @@ public class Transform : ISerializationCallbackReceiver
             if (!_localPosition.Equals(newPosition))
             {
                 _localPosition = MakeSafe(newPosition);
-                _version++;
+                Changed();
             }
         }
     }
@@ -50,7 +50,7 @@ public class Transform : ISerializationCallbackReceiver
             if (!_localPosition.Equals(value))
             {
                 _localPosition = MakeSafe(value);
-                _version++;
+                Changed();
             }
         }
     }
@@ -95,7 +95,7 @@ public class Transform : ISerializationCallbackReceiver
             if (_localRotation != value)
             {
                 _localRotation = MakeSafe(value);
-                _version++;
+                Changed();
             }
         }
     }
@@ -116,7 +116,7 @@ public class Transform : ISerializationCallbackReceiver
         {
             AssertOwner();
             _localRotation = MakeSafe(Quaternion.FromEuler(value));
-            _version++;
+            Changed();
         }
     }
     #endregion
@@ -132,7 +132,7 @@ public class Transform : ISerializationCallbackReceiver
             if (!_localScale.Equals(value))
             {
                 _localScale = MakeSafe(value);
-                _version++;
+                Changed();
             }
         }
     }
@@ -239,7 +239,7 @@ public class Transform : ISerializationCallbackReceiver
     public uint Version
     {
         get => _version;
-        set { AssertOwner(); _version = value; }
+        set { AssertOwner(); _version = value; ChangeListener?.TransformChanged(); }
     }
 
     public Transform Root => Parent == null ? this : Parent.Root;
@@ -255,6 +255,15 @@ public class Transform : ISerializationCallbackReceiver
 
     [SerializeIgnore]
     uint _version = 1;
+
+    // Told whenever Version changes, so the physics world can sync just the bodies that were edited.
+    [SerializeIgnore] internal ITransformChangeListener ChangeListener;
+
+    private void Changed()
+    {
+        _version++;
+        ChangeListener?.TransformChanged();
+    }
 
     // Lazy world-matrix cache. _cachedLocalVersion starts at 0 (Version starts at 1) so the first
     // access always rebuilds. _worldVersion increments on every rebuild so children can detect an
@@ -282,7 +291,7 @@ public class Transform : ISerializationCallbackReceiver
     // The cache and the version it is keyed on are not saved, so a read into an existing Transform writes the
     // local position, rotation and scale straight past whatever would have invalidated it.
     void ISerializationCallbackReceiver.OnBeforeSerialize() { }
-    void ISerializationCallbackReceiver.OnAfterDeserialize() => _version++;
+    void ISerializationCallbackReceiver.OnAfterDeserialize() => Changed();
 
     public void SetLocalTransform(Float3 position, Quaternion rotation, Float3 scale)
     {
@@ -290,7 +299,7 @@ public class Transform : ISerializationCallbackReceiver
         _localPosition = position;
         _localRotation = rotation;
         _localScale = scale;
-        _version++;
+        Changed();
     }
 
     /// <summary>
@@ -300,7 +309,7 @@ public class Transform : ISerializationCallbackReceiver
     public void MarkChanged()
     {
         AssertOwner();
-        _version++;
+        Changed();
     }
 
     private float MakeSafe(float v) => float.IsNaN(v) ? 0 : v;
@@ -426,7 +435,7 @@ public class Transform : ISerializationCallbackReceiver
             localAxis = Float3.Normalize(localAxis);
             Quaternion q = Quaternion.AxisAngle(localAxis, rad);
             _localRotation = Quaternion.NormalizeSafe(_localRotation * q);
-            _version++;
+            Changed();
         }
     }
 
@@ -540,7 +549,7 @@ public class Transform : ISerializationCallbackReceiver
             _localPosition = MakeSafe(position);
             _localRotation = MakeSafe(Quaternion.NormalizeSafe(rotation));
         }
-        _version++;
+        Changed();
     }
 
     /// <summary>Local-space counterpart to <see cref="SetPositionAndRotation"/>.</summary>
@@ -549,7 +558,7 @@ public class Transform : ISerializationCallbackReceiver
         AssertOwner();
         _localPosition = MakeSafe(localPosition);
         _localRotation = MakeSafe(Quaternion.NormalizeSafe(localRotation));
-        _version++;
+        Changed();
     }
 
     /// <summary>
@@ -575,7 +584,7 @@ public class Transform : ISerializationCallbackReceiver
             _localRotation = MakeSafe(Quaternion.NormalizeSafe(rotation));
             _localScale = MakeSafe(scale);
         }
-        _version++;
+        Changed();
     }
 
     #endregion
@@ -645,7 +654,7 @@ public class Transform : ISerializationCallbackReceiver
         if (index == current) return;
         siblings.RemoveAt(current);
         siblings.Insert(index, GameObject);
-        _version++;
+        Changed();
     }
 
     /// <summary>Move this transform to the first position in its parent's child list.</summary>
@@ -701,4 +710,9 @@ public class Transform : ISerializationCallbackReceiver
     public AABB InverseTransformAABB(AABB worldBounds) => worldBounds.TransformBy(WorldToLocalMatrix);
 
     #endregion
+}
+
+internal interface ITransformChangeListener
+{
+    void TransformChanged();
 }

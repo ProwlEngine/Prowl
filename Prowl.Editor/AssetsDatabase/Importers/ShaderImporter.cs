@@ -2,24 +2,23 @@ using System.IO;
 
 using Prowl.Editor.Projects;
 using Prowl.Runtime;
-using Prowl.Runtime.AssetImporting;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
 
-/// <summary> Imports .shader files into runtime Shader assets, parsing GLSL source and resolving #include directives. </summary>
+/// <summary> Imports .shader files into runtime Shader assets, with their project includes inlined. </summary>
 [ImporterFor(".shader")]
 public class ShaderImporter : AssetImporter
 {
-    public override int Version => 1;
+    public override int Version => 2;
 
-    /// <summary> Parses the shader source file, resolves #include directives from the file directory, Assets root, and built-in engine defaults, then sets the resulting Shader as the main asset. </summary>
     public override bool Import(ImportContext ctx)
     {
-        string source = File.ReadAllText(ctx.AbsolutePath);
         string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
+        string source = Shader.ExpandIncludes(File.ReadAllText(ctx.AbsolutePath), path => ResolveInclude(dir, path));
 
-        if (!ShaderParser.ParseShader(ctx.AbsolutePath, source, path => ResolveInclude(dir, path), out Shader? shader) || shader == null)
+        Shader shader = Shader.FromSource(source, ctx.AbsolutePath);
+        if (shader.Error != null)
         {
             Debug.LogError($"Failed to parse shader: {ctx.AbsolutePath}");
             return false;
@@ -32,9 +31,12 @@ public class ShaderImporter : AssetImporter
 
     /// <summary>
     /// Finds an included file: beside the shader first, then from the project's Assets root, then among the built-in
-    /// engine includes (ProwlCG.glsl, PBR.glsl, Lighting.glsl and so on).
+    /// engine includes.
     /// </summary>
     internal static string? ResolveInclude(string dir, string includePath)
+        => Find(dir, includePath) ?? (Path.HasExtension(includePath) ? null : Find(dir, includePath + ".glsl"));
+
+    private static string? Find(string dir, string includePath)
     {
         string fullPath = Path.Combine(dir, includePath);
         if (File.Exists(fullPath))
@@ -51,7 +53,7 @@ public class ShaderImporter : AssetImporter
         string fileName = Path.GetFileName(includePath);
         try
         {
-            return Runtime.Resources.EmbeddedResources.ReadAllText($"Assets/Defaults/{fileName}");
+            return EmbeddedResources.ReadAllText($"Assets/Defaults/Shaders/{fileName}");
         }
         catch
         {
@@ -64,16 +66,16 @@ public class ShaderImporter : AssetImporter
 [ImporterFor(".compute")]
 public class ComputeShaderImporter : AssetImporter
 {
-    public override int Version => 1;
+    public override int Version => 2;
 
     public override bool Import(ImportContext ctx)
     {
         string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
-        string source = ShaderParser.ExpandIncludes(ctx.AbsolutePath, File.ReadAllText(ctx.AbsolutePath), path => ShaderImporter.ResolveInclude(dir, path));
+        string source = Shader.ExpandIncludes(File.ReadAllText(ctx.AbsolutePath), path => ShaderImporter.ResolveInclude(dir, path));
 
         try
         {
-            ctx.SetMainAsset(Runtime.Resources.ComputeShader.FromSource(ctx.FileName, source));
+            ctx.SetMainAsset(ComputeShader.FromSource(ctx.FileName, source));
             return true;
         }
         catch (System.ArgumentException ex)

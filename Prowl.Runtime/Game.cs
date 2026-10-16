@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -54,15 +54,6 @@ public abstract class Game
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, vsync: false);
     } 
 
-    // --graphics-target OpenGL or OpenGLES picks the context for this run, overriding what the game set
-    private static void ReadGraphicsTargetArgument()
-    {
-        string[] args = Environment.GetCommandLineArgs();
-        int at = Array.IndexOf(args, "--graphics-target");
-        if (at >= 0 && at + 1 < args.Length && Enum.TryParse(args[at + 1], true, out GraphicsTarget target))
-            Graphics.Target = target;
-    }
-
     public void Run(string title, int width, int height)
     {
         // Invariant culture ensures consistent float parsing (dot decimal separator)
@@ -79,7 +70,6 @@ public abstract class Game
         // Installed on this thread, which is the one the loop runs on, so an await in game code resumes
         // where the scene actually lives. The editor restarts the session when play starts and stops.
         Tasks.MainThreadContext.Install();
-        ReadGraphicsTargetArgument();
         InitializeWindow(title, width, height);
 
         Window.Load += () =>
@@ -110,6 +100,7 @@ public abstract class Game
 
             _paperRenderer = new PaperRenderer();
             _paperRenderer.Initialize(fbSize.X, fbSize.Y);
+            _paperRenderer.Target = null;
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
             // Apply the hovered element's requested cursor to the OS window.
@@ -168,31 +159,11 @@ public abstract class Game
             {
                 Scene? currentScene = Scene.Current;
 
-                // === Start Graphics ===
-
-                {
-                    using CommandBuffer frameStart = Graphics.GetCommandBuffer("Frame Start");
-                    frameStart.SetRenderTarget(null);
-                    frameStart.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                    frameStart.SetRasterState(new RasterizerState());
-                    frameStart.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
-                    Graphics.Submit(frameStart);
-                }
-
-                // === End of Start Graphics ===
-
                 BeginRender();
 
                 OnRender(currentScene);
 
                 EndRender();
-
-                {
-                    using CommandBuffer preGui = Graphics.GetCommandBuffer("Pre-GUI");
-                    preGui.SetRenderTarget(null);
-                    preGui.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                    Graphics.Submit(preGui);
-                }
 
                 using (GuiFrameStat.Scope())
                 {
@@ -213,22 +184,10 @@ public abstract class Game
                 XR.RenderMissedEyes(currentScene);
                 XR.EndFrame();
 
-                // Give presentation hosts a point after all scene and Paper commands have been
-                // submitted but before the backbuffer is swapped. Development screenshot capture
-                // uses this hook to read the actual rendered client on the render thread.
+                // A point after every view and the GUI joined the frame, before it is submitted.
                 AfterGui(currentScene);
 
-                // === End Graphics ===
-
                 RenderTexture.UpdatePool();
-                // Dispose any GPU resources that were replaced mid-frame (e.g.
-                // grown instance buffers). This only ENQUEUES delete CBs; the render
-                // thread is still draining this frame's queue. Because the deletes are
-                // submitted after every draw that referenced the old handle, submit
-                // order guarantees they execute last on the render thread.
-                Graphics.FlushDeferredDisposes();
-
-                // === End of End Graphics ===
 
                 Debug.ClearGizmos();
 

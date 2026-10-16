@@ -138,10 +138,12 @@ public class AssetSourceTests : RuntimeTestBase
         Write(folder, "Shaders/Common.glsl", "#define TINT_VALUE 0.5");
         Write(folder, "Shaders/Tint.shader", """
             Shader "Test/Tint"
-
-            Pass "Forward"
             {
-                GLSLPROGRAM
+                Pass
+                {
+                    Name "Forward"
+                    Tags { "LightMode" = "Forward" }
+                    GLSLPROGRAM
                     Vertex
                     {
                         #include "Common"
@@ -149,10 +151,11 @@ public class AssetSourceTests : RuntimeTestBase
                     }
                     Fragment
                     {
-                        out vec4 color;
+                        layout(location = 0) out vec4 color;
                         void main() { color = vec4(1.0); }
                     }
-                ENDGLSL
+                    ENDGLSL
+                }
             }
             """);
         MountFolder(folder);
@@ -160,7 +163,8 @@ public class AssetSourceTests : RuntimeTestBase
         Shader shader = AssetDatabase.FindResource<Shader>("Shaders/Tint")!;
 
         Assert.NotNull(shader);
-        Assert.Contains("#define TINT_VALUE 0.5", shader.GetPass(0).VertexSource);
+        Assert.Null(shader.Error);
+        Assert.Contains("#define TINT_VALUE 0.5", shader.Source);
     }
 
     [Fact]

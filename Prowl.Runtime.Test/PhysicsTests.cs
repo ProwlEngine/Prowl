@@ -135,24 +135,7 @@ public class PhysicsTests : RuntimeTestBase
         Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
     }
 
-    // With AutoSyncTransforms on (default), a Transform edit is pushed into the body so a query made
-    // right after sees the new pose.
-    [Fact]
-    public void MovingRigidbodyTransform_IsSeenByQueries_WhenAutoSyncOn()
-    {
-        Scene scene = CreatePhysicsScene();
-        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
-        StepPhysics(scene);
-        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
-
-        rb.Transform.Position = new Float3(100, 0, 0);
-
-        Assert.False(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "body should no longer be at the origin");
-        Assert.True(scene.Physics.CheckSphere(new Float3(100, 0, 0), 0.4f), "body should be at the new position");
-    }
-
-    // With AutoSyncTransforms off, queries don't auto-sync; the edit is only visible after a manual
-    // SyncTransforms() (or the next FixedUpdate pre-step sync).
+    // With AutoSyncTransforms off, even the pre-step sync is skipped; only manual SyncTransforms applies edits.
     [Fact]
     public void MovingRigidbodyTransform_NeedsManualSync_WhenAutoSyncOff()
     {
@@ -162,7 +145,8 @@ public class PhysicsTests : RuntimeTestBase
         StepPhysics(scene);
 
         rb.Transform.Position = new Float3(100, 0, 0);
-        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "query should still see the old pose (no auto-sync)");
+        StepPhysics(scene);
+        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "pre-step sync is off, old pose should persist");
 
         scene.Physics.SyncTransforms();
         Assert.True(scene.Physics.CheckSphere(new Float3(100, 0, 0), 0.4f), "manual sync should push the new pose");
@@ -193,6 +177,178 @@ public class PhysicsTests : RuntimeTestBase
 
         Assert.True(rb.Transform.Position.Y < 10.0,
             $"Transform.Y should have followed the falling body, was {rb.Transform.Position.Y}");
+    }
+
+    private Rigidbody3D DropBoxUntilAsleep(Scene scene)
+    {
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 2, 0));
+        Assert.True(TickUntil(scene, () => !rb.IsActive, 600) >= 0, "the box should fall asleep on the floor");
+        return rb;
+    }
+
+    [Fact]
+    public void Rigidbody_FallingAsleepWhileMoving_TransformLandsOnFinalPose()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        rb.LinearSleepThreshold = 10f;
+        rb.AngularSleepThreshold = 10f;
+        rb.DeactivationTime = 0.1f;
+        rb.AddForce(new Float3(3, 0, 0), ForceMode.VelocityChange);
+        rb.AddTorque(new Float3(0, 2, 0), ForceMode.VelocityChange);
+
+        Assert.True(TickUntil(scene, () => !rb.IsActive, 120) >= 0, "the body should sleep below its raised threshold");
+        Tick(scene, 2);
+
+        Assert.True(Float3.Distance(rb.Transform.Position, rb.Position) < 1e-5f,
+            $"Transform {rb.Transform.Position} should rest on the simulated pose {rb.Position}");
+        Assert.True(Quaternion.Angle(rb.Transform.Rotation, rb.Rotation) < 1e-3f);
+    }
+
+    [Fact]
+    public void Rigidbody_Sleeping_TransformIsNotRewritten()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = DropBoxUntilAsleep(scene);
+        Tick(scene, 2);
+
+        uint version = rb.Transform.Version;
+        Tick(scene, 10);
+
+        Assert.Equal(version, rb.Transform.Version);
+    }
+
+    [Fact]
+    public void Rigidbody_WokenFromSleep_TransformFollowsAgain()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = DropBoxUntilAsleep(scene);
+        float restY = rb.Transform.Position.Y;
+
+        rb.AddForce(new Float3(0, 5, 0), ForceMode.VelocityChange);
+        Tick(scene, 10);
+
+        Assert.True(rb.Transform.Position.Y > restY + 0.2f,
+            $"Transform.Y should rise with the woken body, rest {restY} now {rb.Transform.Position.Y}");
+    }
+
+    [Fact]
+    public void Rigidbody_SleepingTransformEdited_BodyFollowsBeforeTheNextStep()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = DropBoxUntilAsleep(scene);
+
+        rb.Transform.Position = new Float3(5, 3, 0);
+        StepPhysics(scene);
+
+        Assert.Equal(5f, rb.Position.X, 3);
+        Assert.InRange(rb.Position.Y, 2.9f, 3f);
+    }
+
+    [Fact]
+    public void Rigidbody_LayerChanged_IsQueriedOnTheNewLayer()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false, layer: 1);
+        StepPhysics(scene);
+
+        rb.GameObject.LayerIndex = 2;
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(1) }));
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(2) }));
+    }
+
+    [Fact]
+    public void Rigidbody_PhysicsWriteBack_DoesNotQueueASync()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, new Float3(0, 10, 0));
+        Tick(scene, 5);
+
+        Assert.False(rb.SyncQueued);
+    }
+
+    [Fact]
+    public void StaticCollider_Moved_ShapeFollowsBeforeTheNextStep()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One);
+        StepPhysics(scene);
+
+        wall.Transform.Position = new Float3(10, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.4f));
+    }
+
+    [Fact]
+    public void StaticCollider_LayerChanged_IsQueriedOnTheNewLayer()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject wall = AddStaticBox(scene, Float3.Zero, Float3.One, layer: 1);
+        StepPhysics(scene);
+
+        wall.LayerIndex = 2;
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(1) }));
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.4f, new QueryFilter { LayerMask = OnlyLayer(2) }));
+    }
+
+    [Fact]
+    public void ChildCollider_MovedOnItsBody_ShapeFollows()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject body = CreateGameObject("Body");
+        body.AddComponent<Rigidbody3D>().AffectedByGravity = false;
+        GameObject child = CreateGameObject("Child");
+        child.SetParent(body);
+        child.AddComponent<BoxCollider>();
+        scene.Add(body);
+        StepPhysics(scene);
+
+        child.Transform.LocalPosition = new Float3(5, 0, 0);
+        StepPhysics(scene);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.4f));
+        Assert.True(scene.Physics.CheckSphere(new Float3(5, 0, 0), 0.4f));
+    }
+
+    [Fact]
+    public void Rigidbody_Rescaled_ColliderOnItsObjectRescales()
+    {
+        Scene scene = CreatePhysicsScene();
+        Rigidbody3D rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        StepPhysics(scene);
+        Assert.False(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
+
+        rb.Transform.LocalScale = new Float3(4, 1, 1);
+        StepPhysics(scene);
+
+        Assert.True(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
+    }
+
+    [Fact]
+    public void Rigidbody_Rescaled_ChildColliderRescales()
+    {
+        Scene scene = CreatePhysicsScene();
+        GameObject body = CreateGameObject("Body");
+        Rigidbody3D rb = body.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        GameObject child = CreateGameObject("Child");
+        child.SetParent(body);
+        child.AddComponent<BoxCollider>();
+        scene.Add(body);
+        StepPhysics(scene);
+        Assert.False(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
+
+        body.Transform.LocalScale = new Float3(4, 1, 1);
+        StepPhysics(scene);
+
+        Assert.True(scene.Physics.CheckSphere(new Float3(1.5f, 0, 0), 0.1f));
     }
 
     [Fact]
@@ -1320,6 +1476,7 @@ public class PhysicsTests : RuntimeTestBase
         Tick(scene, 1);
 
         rb.GameObject.LayerIndex = 3;
+        scene.Physics.SyncTransforms();
 
         Assert.True(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(3)));
         Assert.False(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(0)));

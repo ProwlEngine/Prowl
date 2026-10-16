@@ -4,10 +4,18 @@
 using System;
 using System.Collections.Generic;
 
+
 using Prowl.Echo;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using GProbeMode = Prowl.Graphite.Rendering.ReflectionProbeMode;
+using GProbeRefresh = Prowl.Graphite.Rendering.ReflectionProbeRefresh;
+using GProbeSlicing = Prowl.Graphite.Rendering.ReflectionProbeTimeSlicing;
+using ReflectionProbeMode = Prowl.Runtime.ReflectionProbeMode;
+using ReflectionProbeTimeSlicing = Prowl.Runtime.ReflectionProbeTimeSlicing;
 
 namespace Prowl.Runtime;
 
@@ -50,7 +58,7 @@ public enum ReflectionProbeTimeSlicing
 [ExecuteAlways]
 [AddComponentMenu("Rendering/Reflection Probe")]
 [ComponentIcon("")] // Dot circle
-public class ReflectionProbe : Component
+public class ReflectionProbe : Component, IRenderSync
 {
     public ReflectionProbeMode Mode = ReflectionProbeMode.Baked;
 
@@ -79,6 +87,8 @@ public class ReflectionProbe : Component
     public bool BoxProjection = true;
 
     [Header("Capture")]
+    /// <summary>Edge length of a realtime capture's cube, a power of two.</summary>
+    public int Resolution = 128;
     public float NearClip = 0.1f;
     public float FarClip = 1000f;
     public LayerMask CullingMask = LayerMask.Everything;
@@ -92,56 +102,117 @@ public class ReflectionProbe : Component
 
     internal BakedCubemap? Baked => _baked;
 
-    /// <summary>Set by <see cref="RenderProbe"/>, cleared when the capture starts.</summary>
-    internal bool CaptureRequested { get; set; }
+    [NonSerialized, NotHeld] private ReflectionProbeHandle _handle;
+    [NonSerialized, NotHeld] private RenderWorld? _world;
+    [NonSerialized, NotHeld] private Graphite.Texture? _bakedCube;
+    [NonSerialized, NotHeld] private BakedCubemap? _bakedShown;
+    [NonSerialized, NotHeld] private bool _captureRequested;
+    [NonSerialized, NotHeld] private bool _bakeRequested;
+    [NonSerialized, NotHeld] private ReflectionProbeDesc _last;
 
-    /// <summary>Set by <see cref="Bake"/>, cleared when the bake is taken.</summary>
-    internal bool BakeRequested { get; set; }
+    /// <summary>Asks a realtime probe to capture again. It happens before a later frame renders.</summary>
+    public void RenderProbe() => _captureRequested = true;
 
-    /// <summary>Bumped when the baked capture changes, so the probe system uploads it again.</summary>
-    internal int BakedVersion { get; private set; }
-
-    private ReflectionProbeSystem? _system;
-
-    public override void OnEnable() => JoinScene(GameObject.Scene);
-
-    public override void OnDisable() => LeaveScene(GameObject.Scene);
-
-    internal override void JoinScene(Scene? scene)
-    {
-        _system = scene.IsValid() ? scene!.ReflectionProbes : null;
-        _system?.Register(this);
-        if (IsRealtime) CaptureRequested = true;
-    }
-
-    internal override void LeaveScene(Scene? scene)
-    {
-        _system?.Unregister(this);
-        _system = null;
-    }
-
-    /// <summary>Asks a realtime probe to capture again. It happens before the next frame renders.</summary>
-    public void RenderProbe() => CaptureRequested = true;
-
-    /// <summary>Captures the probe before the next frame renders and keeps the result with the scene.</summary>
+    /// <summary>Captures the probe in a coming frame and keeps the result with the scene.</summary>
     [Button("Bake")]
-    public void Bake() => BakeRequested = true;
+    public void Bake() => _bakeRequested = true;
 
-    internal void SetBaked(BakedCubemap? baked)
-    {
-        _baked = baked;
-        BakedVersion++;
-    }
+    internal void SetBaked(BakedCubemap? baked) => _baked = baked;
 
     [Button("Clear Baked")]
     public void ClearBaked() => SetBaked(null);
+
+    bool IRenderSync.Sync(RenderWorld world)
+    {
+        if (_world != null && _world != world) Remove();
+
+        if (_bakedShown != _baked)
+        {
+            Graphics.DeferDispose(_bakedCube);
+            _bakedCube = null;
+            _bakedShown = _baked;
+            if (_baked != null && Graphics.Renderer != null && _baked.Faces.Length > 0)
+            {
+                try { _bakedCube = Graphics.Renderer.CreateReflectionCubemap(new BakedReflectionProbe { Size = _baked.Size, Mips = _baked.Mips, Faces = _baked.Faces }); }
+                catch (Exception e) { Debug.LogError($"Reflection probe '{Name}' could not show its bake: {e.Message}"); }
+            }
+        }
+
+        Float3 position = CapturePosition;
+        ReflectionProbeDesc desc = new()
+        {
+            Position = new Double3(position.X, position.Y, position.Z),
+            Rotation = Transform.Rotation,
+            BoxSize = BoxSize,
+            BlendDistance = MathF.Max(BlendDistance, 0f),
+            BoxProjection = BoxProjection,
+            Importance = Importance,
+            Intensity = Intensity,
+            Mode = Mode == ReflectionProbeMode.Realtime ? GProbeMode.Realtime : GProbeMode.Baked,
+            Refresh = RefreshMode == ReflectionProbeRefreshMode.EveryFrame ? GProbeRefresh.EveryFrame : GProbeRefresh.Once,
+            TimeSlicing = TimeSlicing == ReflectionProbeTimeSlicing.IndividualFaces ? GProbeSlicing.IndividualFaces : GProbeSlicing.AllFacesAtOnce,
+            NearClip = NearClip,
+            FarClip = FarClip,
+            CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask,
+            Resolution = (uint)Math.Clamp((int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)Math.Max(Resolution, 16)), 16, 2048),
+            Cubemap = _bakedCube,
+        };
+
+        if (!_handle.IsValid || !world.IsAlive(_handle))
+        {
+            _handle = world.AddReflectionProbe(desc);
+            _world = world;
+            _last = desc;
+        }
+        else if (!Same(desc, _last))
+        {
+            world.SetReflectionProbe(_handle, desc);
+            _last = desc;
+        }
+
+        if (_captureRequested)
+        {
+            _captureRequested = false;
+            if (Mode == ReflectionProbeMode.Realtime) world.RenderReflectionProbe(_handle);
+        }
+        if (_bakeRequested)
+        {
+            _bakeRequested = false;
+            world.BakeReflectionProbe(_handle, baked => SetBaked(new BakedCubemap { Size = baked.Size, Mips = baked.Mips, Faces = baked.Faces }));
+        }
+        return false;
+    }
+
+    private static bool Same(in ReflectionProbeDesc a, in ReflectionProbeDesc b)
+        => a.Position.Equals(b.Position) && a.Rotation == b.Rotation && a.BoxSize == b.BoxSize && a.BlendDistance == b.BlendDistance
+        && a.BoxProjection == b.BoxProjection && a.Importance == b.Importance && a.Intensity == b.Intensity && a.Mode == b.Mode
+        && a.Refresh == b.Refresh && a.TimeSlicing == b.TimeSlicing && a.NearClip == b.NearClip && a.FarClip == b.FarClip
+        && a.CullingMask == b.CullingMask && a.Resolution == b.Resolution && a.Cubemap == b.Cubemap;
+
+    void IRenderSync.Detach(RenderWorld world) => Remove();
+
+    private void Remove()
+    {
+        if (_world != null && _handle.IsValid && _world.IsAlive(_handle))
+            _world.RemoveReflectionProbe(_handle);
+        _handle = default;
+        _world = null;
+    }
+
+    protected override void OnDispose()
+    {
+        Graphics.DeferDispose(_bakedCube);
+        _bakedCube = null;
+        _bakedShown = null;
+        base.OnDispose();
+    }
 
     /// <summary>The world position captures are taken from, the middle of the box.</summary>
     public Float3 CapturePosition => Transform.TransformPoint(BoxOffset);
 
     public override void DrawGizmos()
     {
-        var icon = Texture2D.LoadDefault(DefaultTexture.IconLight);
+        Texture2D icon = Texture2D.LoadDefault(DefaultTexture.IconLight);
         if (icon != null) Debug.DrawIcon(icon, CapturePosition, 0.5f, new Color(0.6f, 0.8f, 1f, 1f));
     }
 

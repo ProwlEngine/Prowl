@@ -12,18 +12,20 @@ using Prowl.Vector;
 using Prowl.Vector.Geometry;
 using Prowl.Runtime.UI;
 
+using RenderWorld = Prowl.Graphite.Rendering.RenderWorld;
+
 namespace Prowl.Runtime;
 
 /// <summary>
 /// Coordinates a UI hierarchy: owns layout, scale, and the destination surface.
 /// Does not render anything itself - visible elements are <see cref="UIBehaviour"/>s
-/// that produce <see cref="UIRenderItem"/>s into <see cref="Tree"/>, which the
-/// pipeline then draws via <see cref="UIRenderTree.CollectFor"/>.
+/// that produce <see cref="UIRenderItem"/>s into <see cref="Tree"/>, which
+/// <see cref="UIRendering"/> draws into the scene's render world.
 /// </summary>
 [AddComponentMenu("UI/Game Canvas")]
 [ExecuteAlways]
 [ComponentIcon("")] // Image
-public class GameCanvas : Component
+public class GameCanvas : Component, IRenderSync
 {
     // ============================================================
     // REMOVED:
@@ -178,8 +180,12 @@ public class GameCanvas : Component
         if (!_rebake.Contains(ui)) _rebake.Add(ui);
     }
 
+    /// <summary>Bumps whenever any element's baked geometry or the item list changes, so drawn copies know to refresh.</summary>
+    internal int GeometryVersion { get; private set; }
+
     private void RebakeInPlace()
     {
+        GeometryVersion++;
         foreach (UIBehaviour ui in _rebake)
         {
             if (ui.IsNotValid() || !ui.EnabledInHierarchy) continue;
@@ -258,6 +264,14 @@ public class GameCanvas : Component
 
     internal override void JoinScene(Scene? scene) => RegisterIn(scene);
 
+    bool IRenderSync.Sync(RenderWorld world)
+    {
+        UIRendering.Join(this, world);
+        return false;
+    }
+
+    void IRenderSync.Detach(RenderWorld world) => UIRendering.Leave(this, world);
+
     // Update() is intentionally not overridden. ScaleFactor must be computed against the
     // active render-target size, which is only known inside RebuildIfDirty (where the
     // pipeline has pushed GameCanvas.ScreenSizeOverride). Computing it here would use the
@@ -294,8 +308,9 @@ public class GameCanvas : Component
             _isDirty = true;
         }
 
-        Float2 currentSize = ResolveScreenSize();
+        // A world space layout does not depend on the surface size
         bool currentWorldSpace = UseWorldSpace;
+        Float2 currentSize = currentWorldSpace ? _lastBuildSize : ResolveScreenSize();
         if (!_lastBuildSize.Equals(currentSize) || _lastBuildWorldSpace != currentWorldSpace)
         {
             _isDirty = true;
@@ -319,6 +334,7 @@ public class GameCanvas : Component
         // resolved by LayoutUtility, which recurses through the whole subtree on its own, so a fitter
         // writes a value the pass has already accounted for and its own rect is computed right after.
         _isDirty = false;
+        GeometryVersion++;
 
         LayoutUtility.InvalidateCache();
         Tree.Clear();
@@ -477,7 +493,7 @@ public class GameCanvas : Component
             else
             {
                 if (ui.CachedMesh.IsNotValid()) ui.CachedMesh = new Mesh();
-                builder.Bake(ui.CachedMesh);
+                builder.Bake(ui.CachedMesh, upload: false);
             }
         }
         finally { UIMeshBuilder.Return(builder); }

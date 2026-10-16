@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -32,18 +33,13 @@ public class ShaderCatalogTests : EditorTestHarness
     // ---------------------------------------------------------------- built-ins
 
     [Fact]
-    public void Catalog_ContainsTheStandardFamilyUnderItsDeclaredPaths()
+    public void Catalog_ContainsGraphitesStandardShaders()
     {
         var paths = Assets.GetShaderCatalog().Select(e => e.MenuPath).ToList();
 
-        Assert.Contains("Default/Standard", paths);
-        Assert.Contains("Default/Standard Double Sided", paths);
-        Assert.Contains("Default/Cutout/Standard", paths);
-        Assert.Contains("Default/Transparent/Standard", paths);
-        Assert.Contains("Default/Anisotropic/Standard", paths);
-        Assert.Contains("Default/Anisotropic/Cutout/Standard Double Sided", paths);
-        Assert.Contains("Default/Unlit", paths);
-        Assert.Contains("Default/Cutout/Unlit Double Sided", paths);
+        Assert.Contains("Graphite/Lit", paths);
+        Assert.Contains("Graphite/Unlit", paths);
+        Assert.DoesNotContain(paths, p => p.StartsWith("Default/Standard", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -67,10 +63,10 @@ public class ShaderCatalogTests : EditorTestHarness
     [Fact]
     public void Catalog_HandsBackTheGuidThatResolvesToThatShader()
     {
-        EditorAssetBackend.ShaderMenuEntry standard = Assets.GetShaderCatalog().Single(e => e.MenuPath == "Default/Standard");
+        EditorAssetBackend.ShaderMenuEntry standard = Assets.GetShaderCatalog().Single(e => e.MenuPath == "Graphite/Lit");
 
         Assert.True(standard.IsBuiltIn);
-        Assert.Equal(BuiltInAssets.GuidFor(DefaultShader.Standard), standard.Guid);
+        Assert.Equal(BuiltInAssets.GuidFor(DefaultShader.Lit), standard.Guid);
     }
 
     // The picker's trigger label calls this every frame, including before the popup has ever been
@@ -78,8 +74,8 @@ public class ShaderCatalogTests : EditorTestHarness
     [Fact]
     public void MenuPath_ResolvesBuiltInsWithoutListingTheCatalogFirst()
     {
-        Assert.Equal("Default/Transparent/Standard",
-            Assets.GetShaderMenuPath(BuiltInAssets.GuidFor(DefaultShader.StandardTransparent), "None"));
+        Assert.Equal("Graphite/Unlit",
+            Assets.GetShaderMenuPath(BuiltInAssets.GuidFor(DefaultShader.Unlit), "None"));
     }
 
     [Fact]
@@ -146,6 +142,17 @@ public class ShaderCatalogTests : EditorTestHarness
         Guid guid = Assets.ImportFile("Nameless.shader");
 
         Assert.Equal("Nameless", Assets.GetShaderMenuPath(guid, "None"));
+    }
+
+    [Fact]
+    public void NewShaderTemplate_ParsesAndEveryPassCompiles()
+    {
+        string relative = AssetCreateMenu.CreateShader("")!;
+        ShaderDefinition definition = ShaderParser.Parse(File.ReadAllText(AssetAbsolutePath(relative)));
+
+        Assert.NotEmpty(definition.Passes!);
+        foreach (ShaderPass pass in definition.Passes!)
+            Graphics.Compiler.CompileProgram(pass, [new Keyword("_SURFACE", "OPAQUE")]);
     }
 
     [Fact]

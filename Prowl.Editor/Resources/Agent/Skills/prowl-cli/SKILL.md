@@ -41,7 +41,7 @@ Scene, component, field, material, prefab and graph edits are one undo step each
 
 ## Scenes and objects
 
-- `scene --action new` makes a scene with a Main Camera (HDR on, no effects), a Directional Light, and Floor, Cube and Cube (1), none of which have colliders. Delete what you do not need.
+- `scene --action new` makes a scene with a Main Camera (no post processing profile), a Directional Light, and Floor, Cube and Cube (1), none of which have colliders. Delete what you do not need.
 - `go create --name Gun --parent /Player --position '[0,1,0]' --components Rigidbody3D,BoxCollider`. Quote JSON arrays, unquoted brackets are a shell glob.
 - `go create --prefab Models/Gun.fbx --parent /Player/Hand` instantiates a prefab or model
 - `go rename|delete|duplicate|active|transform|parent --target <ref> ...`. Rotation is euler degrees. Positions are local unless `--world`. `go active --target /X --active false` deactivates.

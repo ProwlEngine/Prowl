@@ -10,7 +10,7 @@ using Prowl.Echo;
 
 namespace Prowl.Editor.Migration.Releases;
 
-internal sealed class Release_1_0_Preview5 : MigrationRelease
+internal sealed partial class Release_1_0_Preview5 : MigrationRelease
 {
     public override string Name => "1.0-preview.5";
 
@@ -20,6 +20,11 @@ internal sealed class Release_1_0_Preview5 : MigrationRelease
         new("Fragment include renamed to ProwlCG", ctx => ctx.RewriteText(s => s_fragmentInclude.Replace(s, "#include \"ProwlCG\""), ".shader", ".glsl")),
         new("Directional lights shine along Forward", ctx => ctx.RewriteEchoAssets(TurnDirectionalLights)),
         new("Joint motors and limits measured along their own body", ctx => ctx.RewriteEchoAssets(FlipJointDirections)),
+        .. GraphiteMaterialSteps,
+        .. GraphiteTextureSteps,
+        .. GraphiteVolumeSteps,
+        .. GraphiteEnvironmentSteps,
+        .. GraphiteLightAndCameraSteps,
     ];
 
     // Joint motors, hinge angles and slider distances used to be measured from the connected body's side, so a

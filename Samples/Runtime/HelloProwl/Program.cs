@@ -41,15 +41,16 @@ public sealed class HelloProwlGame : Game
 
         // A light, angled down like an afternoon sun.
         var sun = new GameObject("Sun");
-        sun.AddComponent<DirectionalLight>();
+        sun.AddComponent<Light>().Type = LightType.Directional;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         scene.Add(sun);
 
         // The camera the game renders through. The "Main Camera" tag marks it as the one to use.
         var cameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         Camera camera = cameraObject.AddComponent<Camera>();
-        camera.HDR = true;
-        camera.Effects = [new TonemapperEffect(), new FXAAEffect()];
+        camera.Profile = new VolumeProfile();
+        camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
+        camera.AntiAliasing = AntiAliasingMode.FXAA;
         cameraObject.Transform.Position = new Float3(0f, 3f, -8f);
         cameraObject.Transform.LookAt(new Float3(0f, 1f, 0f));
         scene.Add(cameraObject);
@@ -81,7 +82,7 @@ public sealed class HelloProwlGame : Game
 
     public static Material MakeMaterial(Color color)
     {
-        var material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
         material.SetColor("_MainColor", color);
         return material;
     }

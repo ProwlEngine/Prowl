@@ -1,51 +1,36 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 using Prowl.Echo;
-using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Shaders;
+using Prowl.Graphite.Rendering;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
+
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using GShader = Prowl.Graphite.Rendering.Shader;
+using GTexture = Prowl.Graphite.Texture;
 
 namespace Prowl.Runtime.Resources;
 
+/// <summary>
+/// A shader with values for its properties and keywords. It keeps its values itself, so it saves, loads and works
+/// headless, and mirrors them into a Graphite material once a renderer draws with it.
+/// </summary>
 [CreateAssetMenu("Material", Extension = ".mat", Order = 1)]
 public sealed class Material : Asset, ISerializationCallbackReceiver
 {
-    private static Shader s_defaultShader;
+    /// <summary>Returns a new material of the Lit shader.</summary>
+    public static Material DefaultMaterial => new(Shader.LoadDefault(DefaultShader.Lit));
 
-    /// <summary>
-    /// Returns a new instance of a default Standalone Material
-    /// </summary>
-    public static Material DefaultMaterial
-    {
-        get
-        {
-            if (s_defaultShader == null)
-                s_defaultShader = Shader.LoadDefault(DefaultShader.Standard);
-            var mat = new Material();
-            mat.SetColor("_MainColor", Color.White);
-            return mat;
-        } 
-    }
-
-    /// <summary>
-    /// Load a default embedded material returns a fresh clone every call so callers
-    /// can freely mutate (SetTexture, SetFloat, ...) without stepping on each other.
-    /// The underlying template is cached in <see cref="BuiltInAssets"/> so the .mat file
-    /// is only deserialized once, but the returned instance is always yours to own.
-    /// </summary>
+    /// <summary>A fresh copy of a built in material, so callers can change it without touching anyone else's.</summary>
     public static Material LoadDefault(DefaultMaterial material)
         => new(BuiltInAssets.Load<Material>(BuiltInAssets.GuidFor(material)));
 
-    /// <summary>
-    /// Raw deserialize of a default embedded material invoked by <see cref="BuiltInAssets"/>
-    /// on first cache miss. Public callers should use <see cref="LoadDefault"/>.
-    /// </summary>
+    /// <summary>Raw read of a built in material, called by <see cref="BuiltInAssets"/> on its first use.</summary>
     internal static Material ParseDefault(DefaultMaterial material)
     {
         string fileName = material switch
@@ -57,341 +42,545 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
             _ => throw new ArgumentException($"Unknown default material: {material}")
         };
 
-        string resourcePath = $"Assets/Defaults/{fileName}";
-        using Stream stream = EmbeddedResources.GetStream(resourcePath);
+        using Stream stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
         using var reader = new StreamReader(stream);
-        string text = reader.ReadToEnd();
-        var echo = EchoObject.ReadFromString(text);
-        return Serializer.Deserialize<Material>(echo);
+        return Serializer.Deserialize<Material>(EchoObject.ReadFromString(reader.ReadToEnd()));
     }
 
     [SerializeField]
     private Shader? _shader;
 
-    /// <summary>The material's shader. One that was never set, or is missing or failed to load, is the built-in Standard shader.</summary>
+    [SerializeField]
+    private Material? _parent;
+
+    /// <summary>
+    /// The material's shader. Never set, it is the parent's, or Lit without a parent. Missing or failed to load, it is
+    /// the Invalid shader, so the problem shows.
+    /// </summary>
     public Shader? Shader
     {
         get
         {
             EnsureLoaded();
-            return _shader is { State: not (AssetState.Missing or AssetState.Failed) } shader ? shader : Shader.LoadDefault(DefaultShader.Standard);
+            if (_shader.IsNotValid())
+                return _parent.IsValid() ? _parent.Shader : Shader.LoadDefault(DefaultShader.Lit);
+            return _shader.State is AssetState.Missing or AssetState.Failed ? Shader.LoadDefault(DefaultShader.Invalid) : _shader;
         }
         set { EnsureLoaded(); SetShader(value); }
     }
 
-    [SerializeField]
-    public PropertyState _properties;
-
-    /// <summary>Names of properties the user has explicitly set (vs auto-filled
-    /// shader defaults). When the shader's defaults change, only NON-overridden
-    /// entries get refreshed user customizations are preserved. Without this,
-    /// stale defaults stick around forever.</summary>
-    [SerializeField]
-    public HashSet<string> _overrides = [];
-
-    [SerializeIgnore]
-    internal Dictionary<string, bool> _localKeywords;
-
-    // Order free hash of the enabled keywords, kept up to date as they change so finding a shader variant is one lookup
-    [SerializeIgnore]
-    private ulong _keywordHash;
-
-    [SerializeIgnore]
-    private bool _keywordHashValid;
-
-    /// <summary>Hash of the enabled keywords, the key a shader pass caches this material's variant under.</summary>
-    internal ulong KeywordHash
+    /// <summary>
+    /// The material this one is a variant of: every value, keyword and surface setting it does not set itself comes from
+    /// the parent, and follows the parent's changes.
+    /// </summary>
+    public Material? Parent
     {
-        get
+        get { EnsureLoaded(); return _parent; }
+        set
         {
-            if (!_keywordHashValid)
-            {
-                ulong sum = 0;
-                foreach (KeyValuePair<string, bool> kv in _localKeywords)
-                    if (kv.Value) sum += KeywordBits(kv.Key);
-                _keywordHash = sum;
-                _keywordHashValid = true;
-            }
-            return _keywordHash;
+            EnsureLoaded();
+            for (Material? m = value; m.IsValid(); m = m._parent)
+                if (m == this) throw new InvalidOperationException("A material cannot be a variant of itself.");
+            _parent = value;
+            if (_gpu != null) _gpu.Parent = value.IsValid() ? value.GpuMaterial : null;
+            SyncShader();
         }
     }
 
-    private static ulong KeywordBits(string keyword) =>
-        PropertyState.Mix((uint)keyword.GetHashCode() * 0x9E3779B97F4A7C15UL + (ulong)keyword.Length + 1);
+    [SerializeField]
+    public MaterialProperties _properties;
 
-    // Material batching optimization: materials with identical state (uniforms) are batched together
-    // to minimize GPU state changes. The hash represents the current uniform values.
-    [SerializeIgnore]
-    private ulong _stateHash;
+    /// <summary>Names of the properties set on this material. The others read the shader's defaults.</summary>
+    [SerializeField]
+    public HashSet<string> _overrides = [];
 
-    // Dirty flag tracks when material properties have changed, triggering hash recalculation
-    [SerializeIgnore]
-    private bool _isDirty = true;
+    /// <summary>The value of each keyword axis this material sets.</summary>
+    [SerializeField]
+    private Dictionary<string, string> _keywords = [];
 
+    [SerializeField]
+    private int _renderQueue = -1;
+
+    [SerializeField]
+    private bool _castShadows = true;
 
     public Material() : base("New Material")
     {
         _properties = new();
-        _localKeywords = [];
     }
 
-    public Material(Shader shader, PropertyState? properties = null, Dictionary<string, bool>? keywords = null) : base("New Material")
+    public Material(Shader shader, MaterialProperties? properties = null, Dictionary<string, bool>? keywords = null) : base("New Material")
     {
         ArgumentNullException.ThrowIfNull(shader);
-
-        _properties = new();
-        _localKeywords = keywords ?? [];
-
-        Shader = shader;
+        _properties = properties != null ? new MaterialProperties(properties) : new();
         if (properties != null)
-            _properties.ApplyOverride(properties);
+            foreach (string name in _properties.EnumerateNames()) _overrides.Add(name);
+        _shader = shader;
+        if (keywords != null)
+            foreach (KeyValuePair<string, bool> keyword in keywords) _keywords[keyword.Key] = keyword.Value ? VariantSpace.ToggleValues[1] : VariantSpace.ToggleValues[0];
     }
 
-    /// <summary>
-    /// Copy constructor deep-clone every property value + a fresh keyword dict. The
-    /// <see cref="Shader"/> reference is shared (shaders are immutable after parse).
-    /// Use this when you need a mutable material seeded from <see cref="LoadDefault"/>
-    /// or any other shared material so your mutations don't leak to other callers.
-    /// </summary>
+    /// <summary>A copy of another material that shares its shader and textures.</summary>
     public Material(Material source) : base(source.IsValid() ? source.Name : "New Material")
     {
         ArgumentNullException.ThrowIfNull(source);
         source.EnsureLoaded();
 
         _shader = source._shader;
-        _properties = new PropertyState(source._properties);
-        _localKeywords = new Dictionary<string, bool>(source._localKeywords ?? []);
+        _parent = source._parent;
+        _surface = source._surface;
+        _properties = new MaterialProperties(source._properties);
+        _overrides = new HashSet<string>(source._overrides);
+        _keywords = new Dictionary<string, string>(source._keywords);
+        _renderQueue = source._renderQueue;
+        _castShadows = source._castShadows;
     }
 
-    /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
+    /// <summary>Returns a copy of this material (see <see cref="Material(Material)"/>).</summary>
     public Material Clone() { EnsureLoaded(); return new Material(this); }
 
-    // Keywords the renderer sets from the mesh it is drawing. Batches are already split by mesh, so these stay out of
-    // the state hash, and the renderer switching them for every draw does not make the hash rebuild.
-    private static readonly HashSet<string> s_drawKeywords =
-    [
-        "HAS_NORMALS", "HAS_TANGENTS", "HAS_UV", "HAS_UV2", "HAS_COLORS",
-        "HAS_BONEINDICES", "HAS_BONEWEIGHTS", "SKINNED", "BLENDSHAPES", "GPU_INSTANCING",
-    ];
-
-    public void SetKeyword(string keyword, bool value)
+    internal void SetShader(Shader? shader)
     {
-        EnsureLoaded();
-        if (_localKeywords.TryGetValue(keyword, out bool current) && current == value) return;
-        _localKeywords[keyword] = value;
-        if (_keywordHashValid)
-        {
-            if (value) _keywordHash += KeywordBits(keyword);
-            else if (current) _keywordHash -= KeywordBits(keyword);
-        }
-        if (!s_drawKeywords.Contains(keyword)) MarkDirty();
+        if (shader == _shader) return;
+        _shader = shader;
+        SyncShader();
     }
 
-    // Every public Set marks the property as user-overridden so subsequent shader
-    // default-refreshes won't stomp the user's value.
-    public void SetColor(string name, Color value)        { EnsureLoaded(); _overrides.Add(name); _properties.SetColor(name, value); MarkDirty(); }
-    public void SetVector(string name, Float2 value)      { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float3 value)      { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float4 value)      { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetFloat(string name, float value)        { EnsureLoaded(); _overrides.Add(name); _properties.SetFloat(name, value); MarkDirty(); }
-    public void SetInt(string name, int value)            { EnsureLoaded(); _overrides.Add(name); _properties.SetInt(name, value); MarkDirty(); }
-    public void SetMatrix(string name, Float4x4 value)    { EnsureLoaded(); _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
-    public void SetTexture(string name, Texture2D value)  { EnsureLoaded(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture3D(string name, Texture3D value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+    #region Values
 
-    /// <summary>Binds a compute buffer to the storage block of that name. Buffers live only at runtime and are not saved.</summary>
-    public void SetBuffer(string name, ComputeBuffer value) { EnsureLoaded(); _properties.SetBuffer(name, value); MarkDirty(); }
-    public void SetTextureCube(string name, Cubemap value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
+    public void SetColor(string name, Color value) { EnsureLoaded(); _overrides.Add(name); _properties.SetColor(name, value); Push(name); }
+    public void SetVector(string name, Float2 value) { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); Push(name); }
+    public void SetVector(string name, Float3 value) { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); Push(name); }
+    public void SetVector(string name, Float4 value) { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); Push(name); }
+    public void SetFloat(string name, float value) { EnsureLoaded(); _overrides.Add(name); _properties.SetFloat(name, value); Push(name); }
+    public void SetInt(string name, int value) { EnsureLoaded(); _overrides.Add(name); _properties.SetInt(name, value); Push(name); }
+    public void SetMatrix(string name, Float4x4 value) { EnsureLoaded(); _overrides.Add(name); _properties.SetMatrix(name, value); Push(name); }
+    public void SetTexture(string name, Texture2D? value) { EnsureLoaded(); _overrides.Add(name); _properties.SetTexture(name, value); Push(name); }
+    public void SetTexture3D(string name, Texture3D? value) { EnsureLoaded(); _overrides.Add(name); _properties.SetTexture3D(name, value); Push(name); }
+    public void SetTextureCube(string name, Cubemap? value) { EnsureLoaded(); _overrides.Add(name); _properties.SetTextureCube(name, value); Push(name); }
 
-    /// <summary>Forget the user override for <paramref name="name"/> next sync
-    /// will refill it from the shader's current default. Useful for an inspector
-    /// "revert to default" button.</summary>
-    /// <remarks>
-    /// Removes from BOTH the override set AND the backing <c>_properties</c> dict.
-    /// If we only cleared <c>_overrides</c>, <c>ApplyMaterialUniforms</c> would still
-    /// see the stale value in <c>_properties</c> and upload it anyway the defaults
-    /// fill-in path only runs for keys not already in the property dict. This was a
-    /// silent "revert does nothing" bug before.
-    /// </remarks>
+    /// <summary>The material's colour, or the shader's default when it sets none.</summary>
+    public Color GetColor(string name)
+    {
+        EnsureLoaded();
+        if (_properties.HasColor(name)) return _properties.GetColor(name);
+        if (_parent.IsValid()) return _parent.GetColor(name);
+        return Default(name) is { } property ? ToColor(property.Default.Vector) : Color.White;
+    }
+
+    public float GetFloat(string name)
+    {
+        EnsureLoaded();
+        if (_properties.HasFloat(name)) return _properties.GetFloat(name);
+        if (_properties.HasInt(name)) return _properties.GetInt(name);
+        if (_parent.IsValid()) return _parent.GetFloat(name);
+        return Default(name)?.Default.Float ?? 0;
+    }
+
+    public int GetInt(string name)
+    {
+        EnsureLoaded();
+        if (_properties.HasInt(name)) return _properties.GetInt(name);
+        if (_properties.HasFloat(name)) return (int)_properties.GetFloat(name);
+        if (_parent.IsValid()) return _parent.GetInt(name);
+        return Default(name)?.Default.Int ?? 0;
+    }
+
+    public Float4 GetVector(string name)
+    {
+        EnsureLoaded();
+        if (_properties.HasVector4(name)) return _properties.GetVector4(name);
+        if (_properties.HasVector3(name)) { Float3 v = _properties.GetVector3(name); return new Float4(v.X, v.Y, v.Z, 0); }
+        if (_properties.HasVector2(name)) { Float2 v = _properties.GetVector2(name); return new Float4(v.X, v.Y, 0, 0); }
+        if (_parent.IsValid()) return _parent.GetVector(name);
+        return Default(name)?.Default.Vector ?? Float4.Zero;
+    }
+
+    public Float4x4 GetMatrix(string name)
+    {
+        EnsureLoaded();
+        if (_properties.HasMatrix(name)) return _properties.GetMatrix(name);
+        return _parent.IsValid() ? _parent.GetMatrix(name) : Default(name)?.Default.Matrix ?? Float4x4.Identity;
+    }
+
+    public Texture2D? GetTexture(string name) { EnsureLoaded(); return _overrides.Contains(name) || _parent.IsNotValid() ? _properties.GetTexture(name) : _parent.GetTexture(name); }
+    public Texture3D? GetTexture3D(string name) { EnsureLoaded(); return _overrides.Contains(name) || _parent.IsNotValid() ? _properties.GetTexture3D(name) : _parent.GetTexture3D(name); }
+    public Cubemap? GetTextureCube(string name) { EnsureLoaded(); return _overrides.Contains(name) || _parent.IsNotValid() ? _properties.GetTextureCube(name) : _parent.GetTextureCube(name); }
+
+    /// <summary>Whether the shader declares a property of that name.</summary>
+    public bool HasProperty(string name) { EnsureLoaded(); return Default(name) != null; }
+
+    private MaterialProperty? Default(string name)
+    {
+        Shader? shader = Shader;
+        return shader.IsValid() ? shader.FindProperty(name) : null;
+    }
+
+    private static Color ToColor(Float4 v) => new(v.X, v.Y, v.Z, v.W);
+
+    /// <summary>Forgets the value set for <paramref name="name"/>, so it reads the shader's default again.</summary>
     public void RevertProperty(string name)
     {
         EnsureLoaded();
         _overrides.Remove(name);
-        _properties?.RemoveProperty(name);
-        MarkDirty();
+        _properties.Remove(name);
+        _gpu?.ClearOverride(name);
+        _boundTextures.Remove(name);
     }
 
-    /// <summary>True if the user has explicitly set this property (vs holding the
-    /// shader's default value). Inspector uses this to highlight overridden fields.</summary>
+    /// <summary>True if this material sets the property rather than reading the shader's default.</summary>
     public bool IsOverridden(string name) { EnsureLoaded(); return _overrides.Contains(name); }
 
-    #region Global Properties
-
-    public static void SetGlobalColor(string name, Color value) => PropertyState.SetGlobalColor(name, value);
-    public static void SetGlobalVector(string name, Float2 value) => PropertyState.SetGlobalVector(name, value);
-    public static void SetGlobalVector(string name, Float3 value) => PropertyState.SetGlobalVector(name, value);
-    public static void SetGlobalVector(string name, Float4 value) => PropertyState.SetGlobalVector(name, value);
-    public static void SetGlobalFloat(string name, float value) => PropertyState.SetGlobalFloat(name, value);
-    public static void SetGlobalInt(string name, int value) => PropertyState.SetGlobalInt(name, value);
-    public static void SetGlobalMatrix(string name, Float4x4 value) => PropertyState.SetGlobalMatrix(name, value);
-    public static void SetGlobalTexture(string name, Texture2D value) => PropertyState.SetGlobalTexture(name, value);
-    public static void SetGlobalTexture3D(string name, Texture3D value) => PropertyState.SetGlobalTexture3D(name, value);
+    /// <summary>Kept for callers from before defaults were read live from the shader. Does nothing.</summary>
+    public void SyncShaderDefaults() { }
 
     #endregion
 
-    private void UpdatePropertyState(ShaderProperty property)
-    {
-        switch (property.PropertyType)
-        {
-            case ShaderPropertyType.Texture2D:
-                _properties.SetTexture(property.Name, property.Texture2DValue);
-                break;
+    #region Keywords
 
-            case ShaderPropertyType.Texture3D:
-                _properties.SetTexture3D(property.Name, property.Texture3DValue);
-                break;
+    /// <summary>Turns a toggle keyword on or off.</summary>
+    public void SetKeyword(string keyword, bool value) => SetKeyword(keyword, value ? VariantSpace.ToggleValues[1] : VariantSpace.ToggleValues[0]);
 
-            case ShaderPropertyType.Float:
-                _properties.SetFloat(property.Name, (float)property);
-                break;
-
-            case ShaderPropertyType.Int:
-                _properties.SetInt(property.Name, (int)property);
-                break;
-
-            case ShaderPropertyType.Vector2:
-                _properties.SetVector(property.Name, (Float2)property);
-                break;
-
-            case ShaderPropertyType.Vector3:
-                _properties.SetVector(property.Name, (Float3)property);
-                break;
-
-            case ShaderPropertyType.Vector4:
-                _properties.SetVector(property.Name, (Float4)property);
-                break;
-
-            case ShaderPropertyType.Color:
-                _properties.SetColor(property.Name, (Color)property);
-                break;
-
-            case ShaderPropertyType.Matrix:
-                _properties.SetMatrix(property.Name, (Float4x4)property);
-                break;
-        }
-    }
-
-
-    internal void SetShader(Shader? shader)
-    {
-        ArgumentNullException.ThrowIfNull(shader);
-
-        if (shader == _shader)
-            return;
-
-        _shader = shader;
-        // Intentionally do NOT pre-fill _properties with shader defaults defaults
-        // are read live from the shader at access time (see DrawShaderProperty
-        // fallback + ApplyMaterialUniformsWithDefaults). Pre-filling would mark
-        // every default as an "override" once the material is serialized.
-        _isDirty = true;
-    }
-
-    /// <summary>
-    /// Gets a hash of everything that decides how this material draws: its shader, enabled keywords and
-    /// uniform values. The renderer batches materials with equal hashes, so two materials only share a
-    /// hash when either one could draw the other's objects. Properties and keywords are cached until dirty.
-    /// </summary>
-    public ulong GetStateHash()
+    /// <summary>Sets the value of a keyword axis, such as <c>_SURFACE</c> to <c>CUTOUT</c>.</summary>
+    public void SetKeyword(string axis, string value)
     {
         EnsureLoaded();
-        if (_isDirty)
-        {
-            _stateHash = HashKeywords(_properties.ComputeHash());
-            _isDirty = false;
-        }
-
-        // The shader is resolved live since a missing or failed shader falls back without dirtying.
-        ulong hash = _stateHash ^ (ulong)Shader.InstanceID;
-        return hash * 1099511628211UL;
-    }
-
-    private ulong HashKeywords(ulong hash)
-    {
-        ulong sum = 0;
-        foreach (KeyValuePair<string, bool> kv in _localKeywords)
-            if (kv.Value && !s_drawKeywords.Contains(kv.Key))
-                sum += PropertyState.Mix((ulong)(uint)kv.Key.GetHashCode());
-        return (hash ^ PropertyState.Mix(sum)) * 1099511628211UL;
+        if (_keywords.TryGetValue(axis, out string? current) && current == value) return;
+        _keywords[axis] = value;
+        _gpu?.SetKeyword(axis, value);
     }
 
     /// <summary>
-    /// Marks the material as dirty, forcing a hash recalculation on next GetStateHash() call.
-    /// Called automatically when any material property is modified.
+    /// The value a keyword axis draws with: set here or on a parent, else what the surface and properties drive, else the
+    /// axis default. Headless, only what is set here or on a parent.
     /// </summary>
-    private void MarkDirty()
+    public string GetKeyword(string axis)
     {
-        _isDirty = true;
+        EnsureLoaded();
+        if (_keywords.TryGetValue(axis, out string? value)) return value;
+        if (GpuMaterial is { } gpu) return gpu.GetKeyword(axis);
+        return _parent.IsValid() ? _parent.GetKeyword(axis) : "";
     }
+
+    /// <summary>Whether this material sets the axis itself.</summary>
+    public bool IsKeywordOverridden(string axis) { EnsureLoaded(); return _keywords.ContainsKey(axis); }
+
+    /// <summary>Forgets the keyword set for an axis, so it follows the surface, properties or parent again.</summary>
+    public void RevertKeyword(string axis)
+    {
+        EnsureLoaded();
+        if (_keywords.Remove(axis)) _gpu?.ClearOverride(axis);
+    }
+
+    /// <summary>Whether a toggle keyword is on.</summary>
+    public bool IsKeywordEnabled(string keyword) => GetKeyword(keyword) == VariantSpace.ToggleValues[1];
+
+    /// <summary>The keyword axes this material sets.</summary>
+    public IReadOnlyDictionary<string, string> Keywords { get { EnsureLoaded(); return _keywords; } }
+
+    #endregion
+
+    [SerializeField]
+    private SurfaceData? _surface;
+
+    /// <summary>
+    /// How the surface draws: opaque, cut out or transparent, its blend and culling. Shaders of the standard family follow
+    /// it through their _SURFACE axis, and any shader takes its render state and queue. Null inherits the parent's, and
+    /// with none the shader's own passes decide.
+    /// </summary>
+    public SurfaceSettings? Surface
+    {
+        get
+        {
+            EnsureLoaded();
+            if (_surface is { } local) return local.Settings;
+            return _parent.IsValid() ? _parent.Surface : null;
+        }
+        set
+        {
+            EnsureLoaded();
+            _surface = value is { } settings ? new SurfaceData(settings) : null;
+            if (_gpu != null) _gpu.Surface = _surface?.Settings.ToGraphite();
+        }
+    }
+
+    /// <summary>Whether this material sets its surface itself rather than taking the parent's or the shader's.</summary>
+    public bool IsSurfaceOverridden { get { EnsureLoaded(); return _surface != null; } }
+
+    /// <summary>The queue the material draws in. Negative takes the surface's, the parent's, or else the shader's.</summary>
+    public int RenderQueue
+    {
+        get
+        {
+            EnsureLoaded();
+            if (_renderQueue >= 0) return _renderQueue;
+            if (_surface is { } local) return local.Settings.RenderQueue;
+            if (_parent.IsValid()) return _parent.RenderQueue;
+            Shader? shader = Shader;
+            return shader.IsValid() ? shader.RenderQueue : GShader.DefaultRenderQueue;
+        }
+        set { EnsureLoaded(); _renderQueue = value; if (_gpu != null) _gpu.RenderQueue = value; }
+    }
+
+    /// <summary>Whether this material sets its queue itself.</summary>
+    public bool IsRenderQueueOverridden { get { EnsureLoaded(); return _renderQueue >= 0; } }
+
+    /// <summary>Whether objects drawn with the material cast shadows.</summary>
+    public bool CastShadows
+    {
+        get { EnsureLoaded(); return _castShadows; }
+        set { EnsureLoaded(); _castShadows = value; if (_gpu != null) _gpu.CastShadows = value; }
+    }
+
+    #region Global Properties
+
+    public static void SetGlobalColor(string name, Color value) => Graphics.Renderer?.Globals.SetColor(name, new Float4(value.R, value.G, value.B, value.A));
+    public static void SetGlobalVector(string name, Float2 value) => Graphics.Renderer?.Globals.SetFloat2(name, value);
+    public static void SetGlobalVector(string name, Float3 value) => Graphics.Renderer?.Globals.SetFloat3(name, value);
+    public static void SetGlobalVector(string name, Float4 value) => Graphics.Renderer?.Globals.SetFloat4(name, value);
+    public static void SetGlobalFloat(string name, float value) => Graphics.Renderer?.Globals.SetFloat(name, value);
+    public static void SetGlobalInt(string name, int value) => Graphics.Renderer?.Globals.SetInt(name, value);
+    public static void SetGlobalMatrix(string name, Float4x4 value) => Graphics.Renderer?.Globals.SetMatrix(name, value);
+    public static void SetGlobalTexture(string name, Texture2D value) => Graphics.Renderer?.Globals.SetTexture(name, value.GpuTexture, value.Sampler);
+    public static void SetGlobalTexture3D(string name, Texture3D value) => Graphics.Renderer?.Globals.SetTexture(name, value.GpuTexture, value.Sampler);
+
+    #endregion
+
+    #region Graphite
+
+    private static readonly List<WeakReference<Material>> s_live = [];
+
+    [NonSerialized, NotHeld, SerializeIgnore, NotContent]
+    private GMaterial? _gpu;
+
+    // The Graphite texture and sampler last given for each texture property, so a texture that changed is given again
+    [NonSerialized, NotHeld, SerializeIgnore, NotContent]
+    private Dictionary<string, (GTexture? Texture, Graphite.SamplerDescription Sampler)> _boundTextures = [];
+
+    /// <summary>
+    /// The Graphite material, made with every value on first use. Null when headless or when neither the shader nor the
+    /// Invalid shader parsed.
+    /// </summary>
+    public GMaterial? GpuMaterial
+    {
+        get
+        {
+            EnsureLoaded();
+            if (_gpu != null || Graphics.Renderer == null) return _gpu;
+            GShader? shader = ResolveShader();
+            if (shader == null) return null;
+            _gpu = Graphics.Renderer.CreateMaterial(shader);
+            _boundTextures = [];
+            if (_parent.IsValid()) _gpu.Parent = _parent.GpuMaterial;
+            PushAll();
+            lock (s_live) s_live.Add(new WeakReference<Material>(this));
+            return _gpu;
+        }
+    }
+
+    // A shader not loaded yet starts loading, and the Invalid shader stands in until SyncShader sees it ready
+    private GShader? ResolveShader()
+    {
+        Shader? shader = Shader;
+        if (shader.IsValid() && shader.GpuIfLoaded is { } gpu) return gpu;
+        if (shader.IsValid() && shader.State == AssetState.Unloaded) _ = shader.LoadAsync();
+        Shader invalid = Shader.GetDefault(DefaultShader.Invalid);
+        return invalid.IsValid() ? invalid.GpuShader : null;
+    }
+
+    private void SyncShader()
+    {
+        if (_gpu == null) return;
+        GShader? shader = ResolveShader();
+        if (shader == null || shader == _gpu.Shader) return;
+        _gpu.Shader = shader;
+        _boundTextures.Clear();
+        PushAll();
+    }
+
+    private void PushAll()
+    {
+        if (_gpu == null) return;
+        foreach ((Graphite.PropertyID name, _) in new List<(Graphite.PropertyID, MaterialValue)>(_gpu.LocalValues))
+            if (!_overrides.Contains(Graphite.PropertyID.ToString(name) ?? "")) _gpu.ClearOverride(name);
+        foreach (string name in _properties.EnumerateNames()) Push(name);
+        foreach (KeyValuePair<string, string> keyword in _keywords) _gpu.SetKeyword(keyword.Key, keyword.Value);
+        _gpu.RenderQueue = _renderQueue;
+        _gpu.CastShadows = _castShadows;
+        _gpu.Surface = _surface?.Settings.ToGraphite();
+    }
+
+    // Gives one value to the Graphite material, when the shader has the property
+    private void Push(string name)
+    {
+        if (_gpu == null || _gpu.Shader.FindProperty(name) < 0) return;
+        MaterialProperties p = _properties;
+        if (p._colors.TryGetValue(name, out Color color)) _gpu.SetColor(name, new Float4(color.R, color.G, color.B, color.A));
+        else if (p._floats.TryGetValue(name, out float f)) PushNumber(name, f);
+        else if (p._ints.TryGetValue(name, out int i)) PushNumber(name, i);
+        else if (p._vectors2.TryGetValue(name, out Float2 v2)) _gpu.SetFloat2(name, v2);
+        else if (p._vectors3.TryGetValue(name, out Float3 v3)) _gpu.SetFloat3(name, v3);
+        else if (p._vectors4.TryGetValue(name, out Float4 v4)) PushVector(name, v4);
+        else if (p._matrices.TryGetValue(name, out Float4x4 m)) _gpu.SetMatrix(name, m);
+        else if (p._textures.TryGetValue(name, out Texture2D? t2)) PushTexture(name, t2);
+        else if (p._textures3D.TryGetValue(name, out Texture3D? t3)) PushTexture(name, t3);
+        else if (p._texturesCube.TryGetValue(name, out Cubemap? tc)) PushTexture(name, tc);
+    }
+
+    // Older materials store ints and floats under either kind, so the value follows the shader's type
+    private void PushNumber(string name, float value)
+    {
+        MaterialPropertyType type = _gpu!.Shader.Properties[_gpu.Shader.FindProperty(name)].Type;
+        if (type == MaterialPropertyType.Int) _gpu.SetInt(name, (int)value);
+        else _gpu.SetFloat(name, value);
+    }
+
+    private void PushVector(string name, Float4 value)
+    {
+        MaterialPropertyType type = _gpu!.Shader.Properties[_gpu.Shader.FindProperty(name)].Type;
+        if (type == MaterialPropertyType.Color) _gpu.SetColor(name, value);
+        else _gpu.SetFloat4(name, value);
+    }
+
+    private void PushTexture(string name, Texture? texture)
+    {
+        if (_gpu!.Shader.FindProperty(name) < 0) return;
+        if (texture.IsValid() && BuiltInAssets.IsPlaceholderTexture(texture.AssetID)) texture = null;
+        GTexture? gpu = texture.IsValid() ? texture.GpuIfLoaded : null;
+        Graphite.SamplerDescription sampler = texture.IsValid() ? texture.SamplerUnchecked : Graphite.SamplerDescription.Linear;
+        _gpu!.SetTexture(name, gpu, sampler);
+        _boundTextures[name] = (gpu, sampler);
+    }
+
+    private static readonly List<(string Name, Texture Texture)> s_stale = [];
+
+    // Gives again every texture whose Graphite texture or sampler changed, such as one that finished loading
+    private void SyncTextures()
+    {
+        foreach (KeyValuePair<string, (GTexture? Texture, Graphite.SamplerDescription Sampler)> bound in _boundTextures)
+        {
+            Texture? texture = _properties.GetTexture(bound.Key);
+            if (texture.IsNotValid()) texture = _properties.GetTexture3D(bound.Key);
+            if (texture.IsNotValid()) texture = _properties.GetTextureCube(bound.Key);
+            if (texture.IsNotValid()) continue;
+            if (texture.State == AssetState.Unloaded && bound.Value.Texture == null)
+                _ = texture.LoadAsync();
+            GTexture? gpu = texture.GpuIfLoaded;
+            if (gpu != bound.Value.Texture || (gpu != null && !texture.SamplerUnchecked.Equals(bound.Value.Sampler)))
+                s_stale.Add((bound.Key, texture));
+        }
+        foreach ((string name, Texture texture) in s_stale) PushTexture(name, texture);
+        s_stale.Clear();
+    }
+
+    /// <summary>Brings every live Graphite material up to date with its shader and textures. Main thread, once a frame.</summary>
+    internal static void SyncAll()
+    {
+        lock (s_live)
+        {
+            for (int i = s_live.Count - 1; i >= 0; i--)
+            {
+                if (!s_live[i].TryGetTarget(out Material? material) || material._gpu == null)
+                {
+                    s_live.RemoveAt(i);
+                    continue;
+                }
+                if (!material.IsLoaded) continue;
+                material.SyncShader();
+                material.SyncTextures();
+            }
+        }
+    }
+
+    #endregion
 
     public void OnBeforeSerialize() { }
 
     public void OnAfterDeserialize()
     {
-        // Migration: materials saved before the override-tracking model don't have
-        // _overrides populated, but their _properties dictionary holds values the
-        // user actually set. Treat every existing entry as an override so saved
-        // values are preserved when the override-aware code paths take over.
-        // A reimport reads into this same instance, so the cached batch hash is stale.
-        MarkDirty();
-
-        if (_overrides == null) _overrides = [];
-        if (_overrides.Count == 0 && _properties != null)
-        {
-            foreach (string name in _properties.EnumerateNames())
-                _overrides.Add(name);
-        }
-        // No SyncShaderDefaults defaults are read live from the shader at access
-        // time (see PropertyState.ApplyMaterialUniformsWithDefaults + the inspector's
-        // DrawShaderProperty fallback). Materials only ever store overrides.
+        _overrides ??= [];
+        _keywords ??= [];
+        _properties ??= new();
+        if (_overrides.Count == 0)
+            foreach (string name in _properties.EnumerateNames()) _overrides.Add(name);
+        if (_shader.IsValid() && Shader.Legacy.TryGetValue(_shader.AssetID, out var legacy))
+            AdoptLegacy(legacy.Shader, legacy.Surface, legacy.Anisotropic);
     }
 
     /// <summary>
-    /// Refresh non-overridden properties from the shader's CURRENT defaults. Adds
-    /// missing entries AND overwrites existing entries that aren't user-overridden,
-    /// so changes to a property's default in the shader propagate immediately
-    /// without dropping user customizations. Cheap enough to call every frame from
-    /// the material inspector.
+    /// Moves a material of a shader from before Graphite onto Lit or Unlit with the same look: the surface the old file
+    /// stood for, no placeholder textures, metallic at zero where no surface map gave it, emission on where an emission
+    /// map was set.
     /// </summary>
-    public void SyncShaderDefaults()
+    internal void AdoptLegacy(DefaultShader shader, SurfaceSettings surface, bool anisotropic)
     {
-        EnsureLoaded();
-        Shader? shader = Shader;
-        if (shader == null) return;
+        _shader = Shader.GetDefault(shader);
+        _surface ??= new SurfaceData(surface);
 
-        foreach (ShaderProperty prop in shader.Properties)
+        bool RealTexture(string slot) => _properties.GetTexture(slot) is { } texture && texture.IsValid() && !BuiltInAssets.IsPlaceholderTexture(texture.AssetID);
+        bool hadSurfaceMap = RealTexture("_SurfaceTex");
+        bool hadEmissionMap = RealTexture("_EmissionTex");
+        foreach (string slot in s_legacySlots)
         {
-            // User-set values are sacred leave them alone.
-            if (_overrides.Contains(prop.Name)) continue;
-            UpdatePropertyState(prop);
+            if (_properties.GetTexture(slot) is { } texture && texture.IsValid() && BuiltInAssets.IsPlaceholderTexture(texture.AssetID))
+                Forget(slot);
         }
-        MarkDirty();
+        if (shader != DefaultShader.Lit) return;
+
+        if (!hadSurfaceMap) Forget("_Metallic");
+        if (hadEmissionMap)
+        {
+            _properties.SetInt("_Emission", 1);
+            _overrides.Add("_Emission");
+        }
+        if (!anisotropic) Forget("_Anisotropy");
+        else if (!_overrides.Contains("_Anisotropy"))
+        {
+            _properties.SetFloat("_Anisotropy", 0.5f);
+            _overrides.Add("_Anisotropy");
+        }
     }
 
-    private bool HasProperty(string name, ShaderPropertyType type)
+    private static readonly string[] s_legacySlots = ["_MainTex", "_NormalTex", "_SurfaceTex", "_OcclusionTex", "_EmissionTex", "_ParallaxMap", "_TranslucencyMap", "_AnisoDirectionMap"];
+
+    private void Forget(string name)
     {
-        return type switch
-        {
-            ShaderPropertyType.Float => _properties.HasFloat(name),
-            ShaderPropertyType.Int => _properties.HasInt(name),
-            ShaderPropertyType.Vector2 => _properties.HasVector2(name),
-            ShaderPropertyType.Vector3 => _properties.HasVector3(name),
-            ShaderPropertyType.Vector4 => _properties.HasVector4(name),
-            ShaderPropertyType.Color => _properties.HasColor(name),
-            ShaderPropertyType.Matrix => _properties.HasMatrix(name),
-            ShaderPropertyType.Texture2D => _properties.HasTexture(name),
-            ShaderPropertyType.Texture3D => _properties.HasTexture3D(name),
-            _ => false,
-        };
+        _properties.Remove(name);
+        _overrides.Remove(name);
+    }
+
+    // The Graphite material outlives reloads, so renderers drawing with it see the new values
+    protected override void TakeContent(Asset staging)
+    {
+        base.TakeContent(staging);
+        if (_gpu == null) return;
+        _boundTextures.Clear();
+        SyncShader();
+        PushAll();
+    }
+
+    protected override void OnUnload()
+    {
+        if (!IsDisposed) return;
+        Graphics.DeferDispose(_gpu);
+        _gpu = null;
+    }
+
+    // Echo friendly copy of the surface settings
+    private struct SurfaceData
+    {
+        public SurfaceType Type;
+        public SurfaceBlend Blend;
+        public SurfaceCull Cull;
+
+        public SurfaceData(SurfaceSettings settings) { Type = settings.Type; Blend = settings.Blend; Cull = settings.Cull; }
+
+        public readonly SurfaceSettings Settings => new(Type, Blend, Cull);
+    }
+
+    // A runtime material nothing references still frees its Graphite material. Database materials are never collected.
+    ~Material()
+    {
+        if (!Registered) Dispose();
     }
 }

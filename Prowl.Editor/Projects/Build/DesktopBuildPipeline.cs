@@ -39,6 +39,7 @@ public class DesktopBuildPipeline : BuildPipeline
     private static readonly BuildStage PlanBuild = new("desktop-plan");
     private static readonly BuildStage PrepareEmbedded = new("desktop-prepare-embedded");
     private static readonly BuildStage OrganizeOutput = new("desktop-organize-output");
+    private static readonly BuildStage BakeShaders = new("desktop-bake-shaders");
 
     // What remains editor bound: the script compiler, the plugin copier and the settings exporter all
     // need the live Project and BuildSettings, and none of that belongs in a portable BuildRequest.
@@ -73,7 +74,6 @@ public class DesktopBuildPipeline : BuildPipeline
 
     private sealed record CollectedAssets(AssetCollector.CollectionResult Collection);
     private sealed record EmbeddedAssetPaths(List<string> Paths);
-    private sealed record CopiedAssemblies(List<string> FileNames);
     private sealed record PackagedAssets(int Count);
 
     /// <summary> Builds the project for the configured desktop target, running all stages from validation through finalization, and returns the build result including output path, errors, and duration. </summary>
@@ -201,16 +201,16 @@ public class DesktopBuildPipeline : BuildPipeline
 
         nodes.Add(new StageNode { Stage = BuildStage.GeneratePlayer, DependsOn = [beforeGenerate], Resources = StageResources.Exclusive });
         nodes.Add(new StageNode { Stage = BuildStage.CompilePlayer, DependsOn = [BuildStage.GeneratePlayer], Resources = StageResources.Exclusive });
-        nodes.Add(new StageNode { Stage = BuildStage.CopyRuntime, DependsOn = [BuildStage.CompilePlayer] });
 
         // Plugins write into runtimes/ and OrganizeOutput then sweeps the output root, so these three
         // stay a chain. Overlapping them would change which files Organize sees.
-        nodes.Add(new StageNode { Stage = BuildStage.CopyPlugins, DependsOn = [BuildStage.CopyRuntime] });
+        nodes.Add(new StageNode { Stage = BuildStage.CopyPlugins, DependsOn = [BuildStage.CompilePlayer] });
         nodes.Add(new StageNode { Stage = OrganizeOutput, DependsOn = [BuildStage.CopyPlugins], Resources = StageResources.Exclusive });
 
         // After publish, which clears the output directory the manifest has to sit in.
         nodes.Add(new StageNode { Stage = BuildStage.WriteManifest, DependsOn = [OrganizeOutput] });
-        nodes.Add(new StageNode { Stage = BuildStage.PackAssets, DependsOn = [BuildStage.WriteManifest] });
+        nodes.Add(new StageNode { Stage = BakeShaders, DependsOn = [BuildStage.WriteManifest] });
+        nodes.Add(new StageNode { Stage = BuildStage.PackAssets, DependsOn = [BakeShaders] });
         nodes.Add(new StageNode { Stage = BuildStage.ExportSettings, DependsOn = [BuildStage.PackAssets] });
         nodes.Add(new StageNode { Stage = BuildStage.Finalize, DependsOn = [BuildStage.ExportSettings], Resources = StageResources.Exclusive });
 
@@ -235,10 +235,10 @@ public class DesktopBuildPipeline : BuildPipeline
         else if (stage == PrepareEmbedded) yield return Step("prepare embedded assets", PrepareEmbeddedAssets);
         else if (stage == BuildStage.GeneratePlayer) yield return Step("generate player", GeneratePlayer);
         else if (stage == BuildStage.CompilePlayer) yield return Step("publish player", PublishPlayer);
-        else if (stage == BuildStage.CopyRuntime) yield return Step("copy game assemblies", CopyGameAssemblies);
         else if (stage == BuildStage.CopyPlugins) yield return Step("copy plugins", CopyPluginsStage);
         else if (stage == OrganizeOutput) yield return Step("organize output", OrganizeOutputStage);
         else if (stage == BuildStage.WriteManifest) yield return Step("write player manifest", WritePlayerManifest);
+        else if (stage == BakeShaders) yield return Step("bake shaders", BakeShadersStage);
         else if (stage == BuildStage.PackAssets) yield return Step("package assets", PackageAssets);
         else if (stage == BuildStage.ExportSettings) yield return Step("export settings", ExportSettingsStage);
         else if (stage == BuildStage.Finalize) yield return Step("finalize", FinalizeBuild);
@@ -294,6 +294,11 @@ public class DesktopBuildPipeline : BuildPipeline
 
         VerifyPluginArchitectures(target);
 
+        if (profile.PublishAot && !TargetsHostOS(target))
+            throw new InvalidOperationException(
+                $"Native AOT compiles with the host's native toolchain, so it cannot build '{target.DisplayName}' from this OS. " +
+                "Build on the target OS, or turn Native AOT off.");
+
         if (!IsUsableOutputRoot(request.OutputDirectory, ResolveOutputDirectory(request), request.ProjectRoot))
             throw new InvalidOperationException(
                 $"Build output directory '{request.OutputDirectory}' is not a usable place to build into. " +
@@ -328,6 +333,13 @@ public class DesktopBuildPipeline : BuildPipeline
                 "Set each plugin's CPU to match, or to AnyCPU.");
     }
 
+    private static bool TargetsHostOS(PlatformTarget target) => (target.AssemblyPlatform ?? BuildPlatforms.Windows) switch
+    {
+        BuildPlatforms.Linux => OperatingSystem.IsLinux(),
+        BuildPlatforms.MacOS => OperatingSystem.IsMacOS(),
+        _ => OperatingSystem.IsWindows(),
+    };
+
     /// <summary>The architecture part of a runtime identifier, which is everything after the last dash.</summary>
     private static string ArchitectureOf(string runtimeIdentifier)
     {
@@ -349,7 +361,6 @@ public class DesktopBuildPipeline : BuildPipeline
         var profile = (DesktopBuildProfile)request.Profile!;
 
         string targetPlatform = profile.Target.AssemblyPlatform ?? BuildPlatforms.Windows;
-        List<ScriptCompiler.BuildAssembly> assemblies = ScriptCompiler.GetBuildAssemblies(_project, targetPlatform);
 
         string outputDirectory = CreateBuildDirectory(request);
         context.Log($"Building into {outputDirectory}");
@@ -377,6 +388,13 @@ public class DesktopBuildPipeline : BuildPipeline
         if (Directory.Exists(buildTempDir))
             try { Directory.Delete(buildTempDir, true); } catch { }
         Directory.CreateDirectory(buildTempDir);
+
+        context.Log("Compiling game scripts for the player...");
+        ScriptCompiler.PlayerCompileResult scripts = ScriptCompiler.CompileForPlayer(
+            _project, targetPlatform, PlayerDefines(_settings, this), Path.Combine(buildTempDir, "Scripts"));
+        if (!scripts.Result.Success)
+            throw new InvalidOperationException($"Script compilation for the player failed:{Environment.NewLine}{scripts.Result.Errors}");
+        List<ScriptCompiler.BuildAssembly> assemblies = scripts.Assemblies;
 
         string contentDir = Path.Combine(outputDirectory, "Content");
 
@@ -545,7 +563,7 @@ public class DesktopBuildPipeline : BuildPipeline
         List<string>? embedded = context.TryGetOutput<EmbeddedAssetPaths>(out EmbeddedAssetPaths? e) ? e?.Paths : null;
 
         GeneratePlayerSource(plan.BuildTempDir);
-        GeneratePlayerCsproj(_project, _settings, plan.Profile, plan.BuildTempDir, embedded);
+        GeneratePlayerCsproj(_project, _settings, plan.Profile, plan.BuildTempDir, plan.Assemblies, embedded);
 
         context.Log("Generated player source and project.");
         return Task.CompletedTask;
@@ -563,7 +581,7 @@ public class DesktopBuildPipeline : BuildPipeline
         args.Append($" -c {context.Request.Configuration}");
         args.Append($" -r {plan.Profile.RuntimeIdentifier}");
         args.Append($" -o \"{plan.OutputDirectory}\"");
-        args.Append($" --self-contained {plan.Profile.SelfContained.ToString().ToLowerInvariant()}");
+        args.Append($" --self-contained {(plan.Profile.SelfContained || plan.Profile.PublishAot).ToString().ToLowerInvariant()}");
 
         // Diagnostics land in the report with their code, file and line, so a caller can group and
         // navigate them instead of re-reading the log.
@@ -587,38 +605,6 @@ public class DesktopBuildPipeline : BuildPipeline
         }
     }
 
-    private Task CopyGameAssemblies(IBuildContext context, CancellationToken ct)
-    {
-        DesktopPlan plan = context.GetOutput<DesktopPlan>();
-        var copied = new List<string>();
-
-        foreach (ScriptCompiler.BuildAssembly asm in plan.Assemblies)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            if (!File.Exists(asm.DllPath))
-            {
-                Runtime.Debug.LogWarning($"[Build] Expected user assembly missing: {asm.DllPath}");
-                continue;
-            }
-
-            File.Copy(asm.DllPath, Path.Combine(plan.OutputDirectory, Path.GetFileName(asm.DllPath)), true);
-            copied.Add(Path.GetFileName(asm.DllPath));
-
-            string pdb = Path.ChangeExtension(asm.DllPath, ".pdb");
-            if (File.Exists(pdb))
-            {
-                File.Copy(pdb, Path.Combine(plan.OutputDirectory, Path.GetFileName(pdb)), true);
-                copied.Add(Path.GetFileName(pdb));
-            }
-
-            context.Log($"Copied game assembly: {Path.GetFileName(asm.DllPath)}");
-        }
-
-        context.SetOutput(new CopiedAssemblies(copied));
-        return Task.CompletedTask;
-    }
-
     private Task CopyPluginsStage(IBuildContext context, CancellationToken ct)
     {
         DesktopPlan plan = context.GetOutput<DesktopPlan>();
@@ -629,8 +615,7 @@ public class DesktopBuildPipeline : BuildPipeline
     private Task OrganizeOutputStage(IBuildContext context, CancellationToken ct)
     {
         DesktopPlan plan = context.GetOutput<DesktopPlan>();
-        CopiedAssemblies copied = context.GetOutput<CopiedAssemblies>();
-        OrganizePublishOutput(plan.OutputDirectory, context.Request.ProjectName, copied.FileNames);
+        OrganizePublishOutput(plan.OutputDirectory, context.Request.ProjectName, plan.Assemblies.Select(a => a.Name));
         return Task.CompletedTask;
     }
 
@@ -639,6 +624,16 @@ public class DesktopBuildPipeline : BuildPipeline
         DesktopPlan plan = context.GetOutput<DesktopPlan>();
         BuildPlayerManifest(context.Request, plan).Save(plan.OutputDirectory);
         context.Log($"Wrote {PlayerManifest.FileName}.");
+        return Task.CompletedTask;
+    }
+
+    private Task BakeShadersStage(IBuildContext context, CancellationToken ct)
+    {
+        DesktopPlan plan = context.GetOutput<DesktopPlan>();
+        CollectedAssets collected = context.GetOutput<CollectedAssets>();
+        context.Log("Compiling the shader variants the build's materials use...");
+        int passes = ShaderBaker.Bake(collected.Collection.AllAssets, Path.Combine(plan.OutputDirectory, Graphics.BakedShadersFile), ct);
+        context.Log($"Baked the variants of {passes} shader passes.");
         return Task.CompletedTask;
     }
 
@@ -854,7 +849,7 @@ public class DesktopBuildPipeline : BuildPipeline
     /// an ampersand no longer produces an invalid project file.
     /// </remarks>
     private void GeneratePlayerCsproj(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile,
-        string outputDir, List<string>? embeddedAssetPaths = null)
+        string outputDir, List<ScriptCompiler.BuildAssembly> gameAssemblies, List<string>? embeddedAssetPaths = null)
     {
         string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
 
@@ -866,7 +861,7 @@ public class DesktopBuildPipeline : BuildPipeline
             ["Nullable"] = "annotations",
             ["AssemblyName"] = project.Name,
             // Deliberately no PROWL_EDITOR: this is the shipped game, not the editor.
-            ["DefineConstants"] = $"PROWL;{ScriptCompiler.GetVersionDefine()};{FinalizeDefineString(settings, this)}",
+            ["DefineConstants"] = string.Join(';', PlayerDefines(settings, this)),
             ["IncludeNativeLibrariesForSelfExtract"] = "true",
         };
 
@@ -883,18 +878,35 @@ public class DesktopBuildPipeline : BuildPipeline
             trimmerRoots.Add("Prowl.Runtime");
         }
 
+        // The game is compiled into the player rather than loaded from a file, which Native AOT and some
+        // platforms cannot do at all.
+        var references = new List<AssemblyRef>
+        {
+            new("Prowl.Runtime", Path.Combine(engineDir, "Prowl.Runtime.dll")),
+            new(PlayerAssembly, Path.Combine(engineDir, PlayerAssembly + ".dll")),
+        };
+        references.AddRange(gameAssemblies.Select(a => new AssemblyRef(a.Name, a.DllPath)));
+
+        // Everything the engine reaches through reflection (serialized types, components, volume settings)
+        // is rooted whole.
+        if (desktopProfile.PublishAot)
+        {
+            properties["PublishAot"] = "true";
+            properties["SelfContained"] = "true";
+            properties["IlcTrimMetadata"] = "false";
+            properties.Remove("IncludeNativeLibrariesForSelfExtract");
+            trimmerRoots.AddRange(["Prowl.Runtime", "Echo", PlayerAssembly]);
+            trimmerRoots.AddRange(gameAssemblies.Select(a => a.Name));
+        }
+
         var spec = new MSBuildProjectSpec
         {
             TargetFramework = "net10.0",
             RuntimeIdentifiers = desktopProfile.Target.RuntimeIdentifiers,
             Properties = properties,
-            References =
-            [
-                new AssemblyRef("Prowl.Runtime", Path.Combine(engineDir, "Prowl.Runtime.dll")),
-                new AssemblyRef(PlayerAssembly, Path.Combine(engineDir, PlayerAssembly + ".dll")),
-            ],
+            References = references,
             Packages = [.. GetRuntimePackageReferences().Select(p => new PackageRef(p.Name, p.Version))],
-            TrimmerRootAssemblies = trimmerRoots,
+            TrimmerRootAssemblies = [.. trimmerRoots.Distinct()],
 
             // Only the generated entry program: user scripts are separate, precompiled assemblies.
             Compile = ["Program.cs"],
@@ -1143,7 +1155,10 @@ public class DesktopBuildPipeline : BuildPipeline
             $"{PlayerAssembly}.pdb",
         };
         foreach (string name in userAssemblies)
-            keepInRoot.Add(name);
+        {
+            keepInRoot.Add(name + ".dll");
+            keepInRoot.Add(name + ".pdb");
+        }
 
         foreach (string file in Directory.GetFiles(outputDir, "*.dll"))
         {

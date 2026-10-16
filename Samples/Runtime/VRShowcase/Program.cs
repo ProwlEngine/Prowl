@@ -60,6 +60,7 @@ internal class Program
 {
     static void Main(string[] args)
     {
+        XR.InitializeOnStartup = true;
         new VRShowcaseGame().Run("VR Showcase", 1600, 900);
     }
 }
@@ -108,7 +109,8 @@ public sealed partial class VRShowcaseGame : StationGame
         _accent = Lit(Orange, 0f, 0.45f);
 
         var sun = new GameObject("Sun");
-        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        Light light = sun.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.ShadowDistance = 40f;
         light.Intensity = 0.6f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
@@ -157,15 +159,14 @@ public sealed partial class VRShowcaseGame : StationGame
         head.SetParent(origin);
         head.Transform.LocalPosition = new Float3(0f, 1.65f, 0f);
         Camera camera = head.AddComponent<Camera>();
-        camera.HDR = true;
         camera.NearClipPlane = 0.05f;
         camera.FarClipPlane = 300f;
-        camera.Effects =
-        [
-            new BloomEffect { Intensity = 0.4f, Threshold = 1.0f },
-            new TonemapperEffect(),
-            new FXAAEffect(),
-        ];
+        camera.Profile = new VolumeProfile();
+        Bloom bloom = camera.Profile.Add<Bloom>();
+        bloom.Intensity.Set(0.4f);
+        bloom.Threshold.Set(1.0f);
+        camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
+        camera.AntiAliasing = AntiAliasingMode.FXAA;
         head.AddComponent<TrackedPoseDriver>().Node = XRNode.Head;
         head.AddComponent<AudioListener>();
 

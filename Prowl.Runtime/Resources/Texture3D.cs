@@ -20,7 +20,7 @@ public sealed class Texture3D : Texture, ISerializable
         {
             if (_white == null || !_white.IsValid())
             {
-                _white = new Texture3D(1, 1, 1, false, TextureImageFormat.Color4b);
+                _white = new Texture3D(1, 1, 1);
                 byte[] data = [255, 255, 255, 255]; // RGBA white
                 _white.SetData(new Memory<byte>(data));
             }
@@ -38,9 +38,9 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     internal static Texture3D ParseDefault(DefaultTexture3D texture)
     {
-        (string fileName, uint size, TextureImageFormat format) = texture switch
+        (string fileName, uint size, TextureFormat format) = texture switch
         {
-            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, TextureImageFormat.UnsignedShort2),
+            DefaultTexture3D.CloudNoise => ("cloud_noise_3d.bin", 64u, TextureFormat.RG16),
             _ => throw new ArgumentException($"Unknown default 3D texture: {texture}")
         };
 
@@ -48,158 +48,110 @@ public sealed class Texture3D : Texture, ISerializable
         using var bytes = new MemoryStream();
         stream.CopyTo(bytes);
 
-        var result = new Texture3D(size, size, size, false, format) { Name = texture.ToString() };
+        var result = new Texture3D(size, size, size, format, mipmaps: true) { Name = texture.ToString(), Filter = FilterMode.Trilinear };
         result.SetData(new Memory<byte>(bytes.ToArray()));
         result.GenerateMipmaps();
-        result.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
-        result.SetWrapModes(TextureWrap.Repeat, TextureWrap.Repeat, TextureWrap.Repeat);
         return result;
     }
 
     /// <summary>The width of this <see cref="Texture3D"/>.</summary>
-    public uint Width { get { EnsureLoaded(); return _width; } private set => _width = value; }
+    public uint Width { get { EnsureLoaded(); return _width; } }
 
     /// <summary>The height of this <see cref="Texture3D"/>.</summary>
-    public uint Height { get { EnsureLoaded(); return _height; } private set => _height = value; }
+    public uint Height { get { EnsureLoaded(); return _height; } }
 
     /// <summary>The depth of this <see cref="Texture3D"/>.</summary>
-    public uint Depth { get { EnsureLoaded(); return _depth; } private set => _depth = value; }
+    public uint Depth { get { EnsureLoaded(); return _depth; } }
 
-    public Texture3D() : base(TextureType.Texture3D, TextureImageFormat.Color4b) { }
+    public Texture3D() : base(TextureFormat.RGBA8, false, WrapMode.Repeat) { }
 
-    /// <summary>
-    /// Creates a <see cref="Texture3D"/> with the desired parameters but no image data.
-    /// </summary>
-    /// <param name="width">The width of the <see cref="Texture3D"/>.</param>
-    /// <param name="height">The height of the <see cref="Texture3D"/>.</param>
-    /// <param name="depth">The depth of the <see cref="Texture3D"/>.</param>
-    /// <param name="generateMipmaps">Whether to generate mipmaps for this <see cref="Texture3D"/>.</param>
-    /// <param name="imageFormat">The image format for this <see cref="Texture3D"/>.</param>
-    public Texture3D(uint width, uint height, uint depth, bool generateMipmaps = false, TextureImageFormat imageFormat = TextureImageFormat.Color4b)
-        : base(TextureType.Texture3D, imageFormat)
+    /// <summary>Creates a <see cref="Texture3D"/> with no image data, with a full mip chain to fill when mipmaps is set.</summary>
+    public Texture3D(uint width, uint height, uint depth, TextureFormat format = TextureFormat.RGBA8, bool mipmaps = false, bool srgb = false)
+        : base(format, srgb, WrapMode.Repeat)
     {
-        RecreateImage(width, height, depth); //This also binds the texture
-
-        if (generateMipmaps)
-            GenerateMipmaps();
-
-        Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
-        MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
-        MagFilter = DefaultMagFilter;
+        Resize(width, height, depth, mipmaps ? FullChain(width, height, depth) : 1);
     }
 
-    /// <summary>
-    /// Sets the data of a box region of the <see cref="Texture3D"/>.
-    /// </summary>
-    /// <param name="ptr">The pointer from which the pixel data will be read.</param>
-    /// <param name="boxX">The X coordinate of the first voxel to write.</param>
-    /// <param name="boxY">The Y coordinate of the first voxel to write.</param>
-    /// <param name="boxZ">The Z coordinate of the first voxel to write.</param>
-    /// <param name="boxWidth">The width of the box of voxels to write.</param>
-    /// <param name="boxHeight">The height of the box of voxels to write.</param>
-    /// <param name="boxDepth">The depth of the box of voxels to write.</param>
+    private void Resize(uint width, uint height, uint depth, uint mips)
+    {
+        ValidateTextureSize(width, height, depth);
+        _width = width;
+        _height = height;
+        _depth = depth;
+        Allocate(mips);
+    }
+
+    private protected override Graphite.TextureDescription Describe(uint mips)
+        => Graphite.TextureDescription.Texture3D(_width, _height, _depth, mips, GpuFormat, Usage);
+
+    private protected override uint FullMipCount => FullChain(_width, _height, _depth);
+
+    /// <summary>Sets a box of the <see cref="Texture3D"/> from a pointer.</summary>
     public unsafe void SetDataPtr(void* ptr, int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth)
     {
         EnsureLoaded();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
-
-        Graphics.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
+        Upload(new ReadOnlySpan<byte>(ptr, (int)(boxWidth * boxHeight * boxDepth * GetBytesPerPixel(Format))), (uint)boxX, (uint)boxY, (uint)boxZ, boxWidth, boxHeight, boxDepth);
     }
 
-    /// <summary>
-    /// Sets the data of a box region of the <see cref="Texture3D"/>.
-    /// </summary>
-    /// <typeparam name="T">A struct with the same format as this <see cref="Texture3D"/>'s voxels.</typeparam>
-    /// <param name="data">A <see cref="Memory{T}"/> containing the new voxel data.</param>
-    /// <param name="boxX">The X coordinate of the first voxel to write.</param>
-    /// <param name="boxY">The Y coordinate of the first voxel to write.</param>
-    /// <param name="boxZ">The Z coordinate of the first voxel to write.</param>
-    /// <param name="boxWidth">The width of the box of voxels to write.</param>
-    /// <param name="boxHeight">The height of the box of voxels to write.</param>
-    /// <param name="boxDepth">The depth of the box of voxels to write.</param>
-    public unsafe void SetData<T>(Memory<T> data, int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth) where T : unmanaged
+    /// <summary>Sets a box of the <see cref="Texture3D"/>.</summary>
+    public void SetData<T>(Memory<T> data, int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth) where T : unmanaged
     {
         EnsureLoaded();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
-        ValidateByteCapacity(data.Length * sizeof(T), (long)boxWidth * boxHeight * boxDepth * GetBytesPerPixel(ImageFormat), nameof(data));
-
-        fixed (void* ptr = data.Span)
-            Graphics.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
+        ReadOnlySpan<byte> bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes<T>(data.Span);
+        long required = (long)boxWidth * boxHeight * boxDepth * GetBytesPerPixel(Format);
+        ValidateByteCapacity(bytes.Length, required, nameof(data));
+        Upload(bytes[..(int)required], (uint)boxX, (uint)boxY, (uint)boxZ, boxWidth, boxHeight, boxDepth);
     }
 
-    /// <summary>
-    /// Sets the data of the entire <see cref="Texture3D"/>.
-    /// </summary>
-    /// <typeparam name="T">A struct with the same format as this <see cref="Texture3D"/>'s voxels.</typeparam>
-    /// <param name="data">A <see cref="Memory{T}"/> containing the new voxel data.</param>
+    /// <summary>Sets the entire <see cref="Texture3D"/>.</summary>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
         EnsureLoaded();
         SetData(data, 0, 0, 0, Width, Height, Depth);
     }
 
-    /// <summary>
-    /// Gets the data of the entire <see cref="Texture3D"/>.
-    /// </summary>
-    /// <param name="ptr">The pointer to which the voxel data will be written.</param>
+    /// <summary>Reads the entire <see cref="Texture3D"/> back. Waits for the GPU.</summary>
     public unsafe void GetDataPtr(void* ptr)
     {
         EnsureLoaded();
-        Graphics.GetTexImage(Handle, 0, ptr);
+        byte[] data = Download();
+        data.AsSpan().CopyTo(new Span<byte>(ptr, data.Length));
     }
 
-    /// <summary>
-    /// Gets the data of the entire <see cref="Texture3D"/>.
-    /// </summary>
-    /// <typeparam name="T">A struct with the same format as this <see cref="Texture3D"/>'s voxels.</typeparam>
-    /// <param name="data">A <see cref="Memory{T}"/> in which to write the voxel data.</param>
-    public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
+    /// <summary>Reads the entire <see cref="Texture3D"/> back. Waits for the GPU, zeroes headless.</summary>
+    public void GetData<T>(Memory<T> data) where T : unmanaged
     {
         EnsureLoaded();
-        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
-
-        fixed (void* ptr = data.Span)
-            Graphics.GetTexImage(Handle, 0, ptr);
+        Span<byte> target = System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.Span);
+        ValidateByteCapacity(target.Length, GetSize(), nameof(data));
+        byte[] read = Download();
+        read.AsSpan(0, Math.Min(read.Length, target.Length)).CopyTo(target);
     }
 
-    /// <summary>Bytes needed to hold this texture's full image, and so the size of a readback buffer.</summary>
+    /// <summary>Bytes needed to hold this texture's full image.</summary>
     public int GetSize()
     {
         EnsureLoaded();
-        return (int)Width * (int)Height * (int)Depth * GetBytesPerPixel(ImageFormat);
+        return (int)Width * (int)Height * (int)Depth * GetBytesPerPixel(Format);
     }
 
-    /// <summary>
-    /// Sets the texture coordinate wrapping modes for when a texture is sampled outside the [0, 1] range.
-    /// </summary>
-    /// <param name="sWrapMode">The wrap mode for the S (or texture-X) coordinate.</param>
-    /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
-    /// <param name="rWrapMode">The wrap mode for the R (or texture-Z) coordinate.</param>
-    public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode, TextureWrap rWrapMode)
+    /// <summary>Reads one mip level back. Waits for the GPU, zeroes headless.</summary>
+    public byte[] GetMipData(uint mip)
     {
         EnsureLoaded();
-        Graphics.SetWrapS(Handle, sWrapMode);
-        Graphics.SetWrapT(Handle, tWrapMode);
-        Graphics.SetWrapR(Handle, rWrapMode);
+        byte[] data = new byte[MipSize(_width, mip) * MipSize(_height, mip) * MipSize(_depth, mip) * GetBytesPerPixel(Format)];
+        byte[] read = Download(mip);
+        read.AsSpan(0, Math.Min(read.Length, data.Length)).CopyTo(data);
+        return data;
     }
 
-    /// <summary>
-    /// Recreates this <see cref="Texture3D"/>'s image with a new size,
-    /// resizing the <see cref="Texture3D"/> but losing the image data.
-    /// </summary>
-    /// <param name="width">The new width for the <see cref="Texture3D"/>.</param>
-    /// <param name="height">The new height for the <see cref="Texture3D"/>.</param>
-    /// <param name="depth">The new depth for the <see cref="Texture3D"/>.</param>
-    public unsafe void RecreateImage(uint width, uint height, uint depth)
+    /// <summary>Recreates this <see cref="Texture3D"/>'s image with a new size, losing the image data.</summary>
+    public void RecreateImage(uint width, uint height, uint depth)
     {
         EnsureLoaded();
-        ValidateTextureSize(width, height, depth);
-
-        Width = width;
-        Height = height;
-        Depth = depth;
-
-        Graphics.TexImage3D(Handle, 0, Width, Height, Depth, (void*)0);
+        Resize(width, height, depth, MipCount > 1 ? FullChain(width, height, depth) : 1);
     }
 
     private void ValidateTextureSize(uint width, uint height, uint depth)
@@ -223,7 +175,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         if (providedBytes < requiredBytes)
             throw new ArgumentException(
-                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
+                $"Buffer holds {providedBytes} bytes but {Format} needs {requiredBytes} for this region.", paramName);
     }
 
     private void ValidateBoxOperation(int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth)
@@ -251,7 +203,7 @@ public sealed class Texture3D : Texture, ISerializable
     }
 
     protected internal override long EstimateBytes()
-        => (long)(_width * _height * _depth * (ulong)GetBytesPerPixel(ImageFormatUnchecked) * (IsMipmappedUnchecked ? 8.0 / 7.0 : 1.0));
+        => (long)(_width * _height * _depth * (ulong)GetBytesPerPixel(FormatUnchecked) * (MipCountUnchecked > 1 ? 8.0 / 7.0 : 1.0));
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
@@ -259,40 +211,43 @@ public sealed class Texture3D : Texture, ISerializable
         compoundTag.Add("Width", new(Width));
         compoundTag.Add("Height", new(Height));
         compoundTag.Add("Depth", new(Depth));
-        compoundTag.Add("IsMipMapped", new(IsMipmapped));
-        compoundTag.Add("ImageFormat", new((int)ImageFormat));
-        compoundTag.Add("MinFilter", new((int)MinFilter));
-        compoundTag.Add("MagFilter", new((int)MagFilter));
-        compoundTag.Add("Wrap", new((int)WrapMode));
-        Memory<byte> memory = new byte[GetSize()];
-        GetData(memory);
-        compoundTag.Add("Data", new(memory.ToArray()));
+        compoundTag.Add("Format", new((int)Format));
+        compoundTag.Add("Srgb", new(Srgb));
+        compoundTag.Add("Filter", new((int)Filter));
+        compoundTag.Add("WrapU", new((int)WrapU));
+        compoundTag.Add("WrapV", new((int)WrapV));
+        compoundTag.Add("WrapW", new((int)WrapW));
+        compoundTag.Add("Anisotropy", new(Anisotropy));
+        compoundTag.Add("BorderColor", new((int)BorderColor));
+        EchoObject mips = EchoObject.NewList();
+        for (uint mip = 0; mip < MipCount; mip++)
+            mips.ListAdd(new(GetMipData(mip)));
+        compoundTag.Add("Mips", mips);
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        Width = value["Width"].UIntValue;
-        Height = value["Height"].UIntValue;
-        Depth = value["Depth"].UIntValue;
-        bool isMipMapped = value["IsMipMapped"].BoolValue;
-        TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
-        var MinFilter = (TextureMin)value["MinFilter"].IntValue;
-        var MagFilter = (TextureMag)value["MagFilter"].IntValue;
-        var Wrap = (TextureWrap)value["Wrap"].IntValue;
+        uint width = value["Width"].UIntValue;
+        uint height = value["Height"].UIntValue;
+        uint depth = value["Depth"].UIntValue;
+        EchoObject mips = value["Mips"];
 
-        Type[] param = [typeof(uint), typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat)];
-        object[] values = [Width, Height, Depth, false, imageFormat];
-        typeof(Texture3D).GetConstructor(param).Invoke(this, values);
-
+        SetFormat((TextureFormat)value["Format"].IntValue, value.Get("Srgb")?.BoolValue ?? false);
+        Resize(width, height, depth, (uint)Math.Max(1, mips.Count));
         DeserializeHeader(value);
 
-        Memory<byte> memory = value["Data"].ByteArrayValue;
-        SetData(memory);
+        int bpp = GetBytesPerPixel(Format);
+        for (uint mip = 0; mip < MipCount && mip < mips.Count; mip++)
+        {
+            uint w = MipSize(width, mip), h = MipSize(height, mip), d = MipSize(depth, mip);
+            byte[] data = mips[(int)mip].ByteArrayValue;
+            ValidateByteCapacity(data.Length, (long)w * h * d * bpp, nameof(value));
+            Upload(data.AsSpan(0, (int)(w * h * d * bpp)), 0, 0, 0, w, h, d, mip);
+        }
+        if (value.Get("GenerateMipmaps")?.BoolValue == true) GenerateMipmaps();
 
-        if (isMipMapped)
-            GenerateMipmaps();
-
-        SetTextureFilters(MinFilter, MagFilter);
-        SetWrapModes(Wrap, Wrap, Wrap);
+        SetSampling((FilterMode)(value.Get("Filter")?.IntValue ?? (int)FilterMode.Bilinear),
+            (WrapMode)(value.Get("WrapU")?.IntValue ?? 0), (WrapMode)(value.Get("WrapV")?.IntValue ?? 0), (WrapMode)(value.Get("WrapW")?.IntValue ?? 0),
+            value.Get("Anisotropy")?.UIntValue ?? 0, (TextureBorderColor)(value.Get("BorderColor")?.IntValue ?? 0));
     }
 }

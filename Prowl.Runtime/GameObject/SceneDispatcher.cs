@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -55,7 +55,7 @@ internal enum SceneCallbacks
 
 /// <summary>
 /// The scene's single dispatch point for component callbacks: the per-frame loops (Start, Update, LateUpdate,
-/// FixedUpdate, OnRenderCollect, DrawGizmos, OnGui) and the sparse physics events (collision and trigger).
+/// FixedUpdate, DrawGizmos, OnGui) and the sparse physics events (collision and trigger).
 /// Both used to be separate types doing the same job at different granularities, and the physics half paid a
 /// type lookup per component per event, which is the wrong cost to carry on a contact callback.
 /// </summary>
@@ -85,7 +85,6 @@ internal sealed class SceneDispatcher
         if (Overrides(type, nameof(Component.Update))) callbacks |= SceneCallbacks.Update;
         if (Overrides(type, nameof(Component.LateUpdate))) callbacks |= SceneCallbacks.LateUpdate;
         if (Overrides(type, nameof(Component.FixedUpdate))) callbacks |= SceneCallbacks.FixedUpdate;
-        if (Overrides(type, nameof(Component.OnRenderCollect))) callbacks |= SceneCallbacks.RenderCollect;
         if (Overrides(type, nameof(Component.DrawGizmos))) callbacks |= SceneCallbacks.DrawGizmos;
         if (Overrides(type, nameof(Component.OnGui))) callbacks |= SceneCallbacks.OnGui;
 
@@ -136,7 +135,6 @@ internal sealed class SceneDispatcher
     private readonly Channel _update = new(SceneCallbacks.Update);
     private readonly Channel _lateUpdate = new(SceneCallbacks.LateUpdate);
     private readonly Channel _fixedUpdate = new(SceneCallbacks.FixedUpdate);
-    private readonly Channel _renderCollect = new(SceneCallbacks.RenderCollect);
     private readonly Channel _drawGizmos = new(SceneCallbacks.DrawGizmos);
     private readonly Channel _onGui = new(SceneCallbacks.OnGui);
 
@@ -218,7 +216,7 @@ internal sealed class SceneDispatcher
         CollisionListeners = 0;
 
         _start.Clear(); _update.Clear(); _lateUpdate.Clear(); _fixedUpdate.Clear();
-        _renderCollect.Clear(); _drawGizmos.Clear(); _onGui.Clear();
+        _drawGizmos.Clear(); _onGui.Clear();
     }
 
     private void MarkDirty(SceneCallbacks callbacks)
@@ -227,7 +225,6 @@ internal sealed class SceneDispatcher
         if ((callbacks & SceneCallbacks.Update) != 0) _update.Dirty = true;
         if ((callbacks & SceneCallbacks.LateUpdate) != 0) _lateUpdate.Dirty = true;
         if ((callbacks & SceneCallbacks.FixedUpdate) != 0) _fixedUpdate.Dirty = true;
-        if ((callbacks & SceneCallbacks.RenderCollect) != 0) _renderCollect.Dirty = true;
         if ((callbacks & SceneCallbacks.DrawGizmos) != 0) _drawGizmos.Dirty = true;
         if ((callbacks & SceneCallbacks.OnGui) != 0) _onGui.Dirty = true;
     }
@@ -372,19 +369,6 @@ internal sealed class SceneDispatcher
     }
 
     // ---- rendering, gizmo and GUI callbacks (run in edit mode too, so not gameplay gated) ------------
-
-    public void RunRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
-    {
-        int count = _renderCollect.Snapshot(this, out Component[] items);
-        for (int i = 0; i < count; i++)
-        {
-            Component c = items[i];
-            if (c.IsDisposed || !c.EnabledInHierarchy) continue;
-
-            try { c.OnRenderCollect(camera, renderables, lights); }
-            catch (Exception ex) { Report(c, nameof(Component.OnRenderCollect), ex); }
-        }
-    }
 
     public void RunDrawGizmos()
     {

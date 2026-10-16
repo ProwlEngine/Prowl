@@ -159,15 +159,17 @@ public class ProjectMigrationTests : IDisposable
     {
         var sun = new Prowl.Runtime.GameObject("Sun");
         sun.Transform.LocalEulerAngles = new Prowl.Vector.Float3(-50f, 30f, 0f);
-        sun.AddComponent<Prowl.Runtime.DirectionalLight>();
+        sun.AddComponent<Light>().Type = LightType.Directional;
         var lamp = new Prowl.Runtime.GameObject("Lamp");
         lamp.Transform.LocalEulerAngles = new Prowl.Vector.Float3(-50f, 30f, 0f);
-        lamp.AddComponent<Prowl.Runtime.SpotLight>();
+        lamp.AddComponent<Light>().Type = LightType.Spot;
         lamp.SetParent(sun);
         Prowl.Vector.Float3 oldForward = sun.Transform.Forward, oldUp = sun.Transform.Up;
         Prowl.Vector.Quaternion lampRotation = lamp.Transform.LocalRotation;
 
-        string prefab = WriteAsset("Sun.prefab", Serializer.Serialize(sun).WriteToString(), "PrefabImporter");
+        EchoObject saved = Serializer.Serialize(sun);
+        LightMigrationTests.MakeLegacy(saved);
+        string prefab = WriteAsset("Sun.prefab", saved.WriteToString(), "PrefabImporter");
         WriteProwlFile("1.0-preview.5", appliedSteps: 2);
 
         ProjectMigration.Migrate(Project.Open(_root));
@@ -176,6 +178,8 @@ public class ProjectMigrationTests : IDisposable
         Assert.True(Prowl.Vector.Float3.Distance(-oldForward, migrated.Transform.Forward) < 1e-4f);
         Assert.True(Prowl.Vector.Float3.Distance(oldUp, migrated.Transform.Up) < 1e-4f);
         Assert.Equal(lampRotation, migrated.Children[0].Transform.LocalRotation);
+        Assert.Equal(LightType.Directional, migrated.GetComponent<Light>()!.Type);
+        Assert.Equal(LightType.Spot, migrated.Children[0].GetComponent<Light>()!.Type);
     }
 
     [Fact]

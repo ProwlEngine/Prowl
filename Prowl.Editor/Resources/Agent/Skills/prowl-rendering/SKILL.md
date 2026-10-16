@@ -31,18 +31,22 @@ The built in `Standard` shader uses these property names. `material <ref>` lists
 
 ## Cameras
 
-- A newly added Camera component has `HDR` off, `FarClipPlane` 100 and `FieldOfView` 60. The default scene's Main Camera has HDR on and no effects.
-- `BloomEffect.Threshold` defaults to 1.2, so mostly emissive and very bright surfaces bloom. Lower it to make lit surfaces glow too. `TonemapperEffect.Type` defaults to `AgX`, a soft filmic curve that desaturates bright colours. `TonemapperType.ACES` keeps colours punchier.
+- A newly added Camera component has `FarClipPlane` 100, `FieldOfView` 60, no `Profile` and `AntiAliasing` `None`. The default scene's Main Camera is the same.
 - `Camera.Main` is the enabled camera with the highest `Depth` that draws to the screen.
-- Post processing is a list of `ImageEffect` objects on the camera, not components. They live in `Prowl.Runtime.Rendering`: `TonemapperEffect`, `BloomEffect`, `FXAAEffect`, `TAAEffect`, `SMAAEffect`, `GTAOEffect`, `ScreenSpaceReflectionEffect`, `MotionBlurEffect`, `BokehDepthOfFieldEffect`, `AutoExposureEffect`, `VolumetricFogEffect`. Turn on `HDR` when using bloom or tonemapping.
+- Anti aliasing is a camera field, not an effect: `camera.AntiAliasing = AntiAliasingMode.FXAA` (also `SMAA`, `TAA`), tuned through `camera.Fxaa`, `camera.Smaa` and `camera.Taa`.
+- Post processing comes from volume profiles. A `VolumeProfile` holds volume components from `Prowl.Runtime.Rendering`: `Tonemapping`, `Bloom`, `AutoExposure`, `AmbientOcclusion`, `ScreenSpaceReflections`, `MotionBlur`, `DepthOfField`, `GodRays`, `Vignette`, `ChromaticAberration`, `FilmGrain`, `ColorGrading`, `ColorLookup`, `Sharpen`, `EdgeDetection`, `Pixelation`, `VolumetricFog`. The camera's own `Profile` applies under every `Volume` component in the scene. A `Volume` is global by default, or set `IsGlobal = false` and a `Size` to apply it only inside a box.
+- Each setting is a `VolumeParameter` and only counts once overridden. Use `.Set(value)` to set and override it in one go, or `Add<T>(overrideAll: true)`.
+- `Bloom` is off until `Intensity` is above 0. `Threshold` defaults to 1.2, so mostly emissive and very bright surfaces bloom. Lower it to make lit surfaces glow too. `Tonemapping` is off while `Mode` is `TonemappingMode.None`. `AgX` is a soft filmic curve that desaturates bright colours, `ACES` keeps colours punchier.
 
 ```csharp
-// prowl eval: HDR, bloom and tonemapping on the main camera
+// prowl eval: bloom, tonemapping and FXAA on the main camera
 using Prowl.Runtime.Rendering;
 var camera = Scene.Current.FindObjectsOfType<Camera>()[0]!;
-camera.HDR = true;
-camera.Effects = [new BloomEffect(), new TonemapperEffect { Type = TonemapperType.ACES }, new FXAAEffect()];
-return camera.Effects.Count;
+camera.Profile = new VolumeProfile { Name = "Main Camera Profile" };
+camera.Profile.Add<Bloom>().Intensity.Set(1f);
+camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.ACES);
+camera.AntiAliasing = AntiAliasingMode.FXAA;
+return camera.Profile.Components.Count;
 ```
 
 Eval changes do not mark the scene dirty, so `scene --action save` afterwards.
@@ -63,7 +67,7 @@ public sealed class ViewmodelSetup : Component
         World.CullingMask.RemoveLayer(weapon);
 
         Viewmodel.Depth = World.Depth + 1;
-        Viewmodel.ClearFlags = CameraClearFlags.Depth;
+        Viewmodel.Background = CameraBackground.None;
         Viewmodel.CullingMask = LayerMask.FromMask(1u << weapon);
         Viewmodel.NearClipPlane = 0.01f;
     }
@@ -74,11 +78,12 @@ The viewmodel camera is a child of the world camera, and the arms and gun object
 
 ## Environment
 
-`Scene.Current.Fog`, `Ambient` and `Skybox` are struct fields. Set them directly, for example `Scene.Current.Fog.Mode = Scene.FogParams.FogMode.Off`. Copying one into a local and changing the local does nothing. Fog is on by default (exponential squared, density 0.01).
+`Scene.Current.Environment` holds the sky, ambient light and fog. `SkyMaterial` is a Material whose shader has a Sky pass, usually from `SceneEnvironment.CreateSkyMaterial(BuiltInSky.Procedural)` (also Gradient, Cubemap, Panorama, SixSided), null shows `SkyColor`. `Ambient` (Mode Uniform, Hemisphere or Sky, Intensity, colours) and `Fog` (Mode Off, Linear, Exponential, ExponentialSquared, Color, Density, Start, End, UseSky) are struct fields: set them directly, for example `Scene.Current.Environment.Fog.Mode = FogMode.Off` (FogMode and AmbientMode are in Prowl.Graphite.Rendering). Copying one into a local and changing the local does nothing. Fog is on by default (exponential squared, density 0.01).
 
 ## Lights and lightmaps
 
-- `DirectionalLight`, `PointLight`, `SpotLight`. The brightest directional light is the sun.
+- One `Light` component, its `Type` one of `LightType.Directional`, `Point`, `Spot`, `Rect`, `Disk`, `Tube`. It shines along Forward. Spot angles are half angles (`InnerAngle`, `OuterAngle`), rects use `Width` and `Height`, disks `Width` as the diameter, tubes `Length` and `SourceRadius`. `Cookie` (2D for a spot, cubemap for a point) and `IesProfile` work on points and spots. Directional, point and spot lights cast shadows (`CastShadows`, `ShadowResolution`, `ShadowFilter`, directional `Cascades` and `ShadowDistance`). The brightest directional light is the sun.
+- Renderers take `ShadowCasting` (`Off`, `On`, `ShadowsOnly`) and `ReceiveShadows`.
 - Only objects with `IsStatic` set get lightmaps. The bake runs from the Environment panel and only progresses while that panel is open.
 
 ## Particles
@@ -107,4 +112,4 @@ public sealed class MuzzleFlash : Component
 }
 ```
 
-Look up `Material`, `Shader`, `Camera`, `ImageEffect` and `ParticleSystemComponent` with `api --type`.
+Look up `Material`, `Shader`, `Camera`, `VolumeProfile` and `ParticleSystemComponent` with `api --type`.

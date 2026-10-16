@@ -106,27 +106,28 @@ public sealed class ParticleShowcaseGame : StationGame
     private void CreateEnvironment()
     {
         GameObject light = new("Moon Light");
-        DirectionalLight directional = light.AddComponent<DirectionalLight>();
+        Light directional = light.AddComponent<Light>();
+        directional.Type = LightType.Directional;
         directional.Color = new Color(0.65f, 0.72f, 1f, 1f);
         directional.Intensity = 0.35f;
         light.Transform.LocalEulerAngles = new Float3(50f, 210f, 0f);
         _roots.Add(light);
 
-        MainCamera.ClearFlags = CameraClearFlags.SolidColor;
-        MainCamera.ClearColor = new Color(0.02f, 0.025f, 0.045f, 1f);
-        MainCamera.Effects =
-        [
-            new BloomEffect { Intensity = 0.6f, Threshold = 1.0f },
-            new FXAAEffect(),
-            new TonemapperEffect(),
-        ];
+        MainCamera.Background = CameraBackground.Color;
+        MainCamera.BackgroundColor = new Color(0.02f, 0.025f, 0.045f, 1f);
+        MainCamera.Profile = new VolumeProfile();
+        Bloom bloom = MainCamera.Profile.Add<Bloom>();
+        bloom.Intensity.Set(0.6f);
+        bloom.Threshold.Set(1.0f);
+        MainCamera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
+        MainCamera.AntiAliasing = AntiAliasingMode.FXAA;
 
         // One long floor under every station, with a collider for the world collision stations.
         float length = StationSpacing * 10f + 20f;
         GameObject floor = new("Floor");
         MeshRenderer renderer = floor.AddComponent<MeshRenderer>();
         renderer.Mesh = Mesh.CreateCube(new Float3(length, 1f, 40f));
-        renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Lit));
         renderer.Material.SetColor("_MainColor", new Color(0.035f, 0.037f, 0.045f, 1f));
         floor.AddComponent<BoxCollider>().Size = new Float3(length, 1f, 40f);
         floor.Transform.Position = new Float3(StationSpacing * 4.5f, -0.5f, 0f);
@@ -196,7 +197,7 @@ public sealed class ParticleShowcaseGame : StationGame
         var logs = new GameObject("Logs");
         MeshRenderer logRenderer = logs.AddComponent<MeshRenderer>();
         logRenderer.Mesh = Mesh.CreateCube(new Float3(1.6f, 0.25f, 0.3f));
-        logRenderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        logRenderer.Material = new Material(Shader.LoadDefault(DefaultShader.Lit));
         logRenderer.Material.SetColor("_MainColor", new Color(0.25f, 0.14f, 0.08f, 1f));
         logs.Transform.Position = c + new Float3(0f, 0.12f, 0f);
         logs.Transform.LocalEulerAngles = new Float3(0f, 35f, 0f);
@@ -360,7 +361,7 @@ public sealed class ParticleShowcaseGame : StationGame
         var wheel = new GameObject("Grinder Wheel");
         MeshRenderer wheelRenderer = wheel.AddComponent<MeshRenderer>();
         wheelRenderer.Mesh = Mesh.CreateCylinder(0.6f, 0.15f, 24);
-        wheelRenderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        wheelRenderer.Material = new Material(Shader.LoadDefault(DefaultShader.Lit));
         wheelRenderer.Material.SetColor("_MainColor", new Color(0.4f, 0.4f, 0.45f, 1f));
         wheel.Transform.Position = c + new Float3(-3f, 2f, 0f);
         wheel.Transform.LocalEulerAngles = new Float3(90f, 0f, 0f);

@@ -33,7 +33,10 @@ public readonly struct Collision
     /// <summary>Contact normal in world space, pointing from the other side toward this one. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
     public readonly Float3 Normal;
 
-    /// <summary>Total normal impulse the solver applied across the contact in the last step. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
+    /// <summary>
+    /// Total normal impulse the solver applied across the contact in the last substep, which lasts
+    /// <see cref="Time.FixedDeltaTime"/> divided by <see cref="PhysicsWorld.Substep"/>. Zero on <see cref="Component.OnCollisionEnd"/>.
+    /// </summary>
     public readonly float ImpulseMagnitude;
 
     /// <summary>The Transform of whatever was hit, or null when nothing identifiable was involved.</summary>

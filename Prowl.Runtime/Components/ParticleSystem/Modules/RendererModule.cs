@@ -3,10 +3,20 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
-using Prowl.Runtime.Rendering;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using BufferDescription = Prowl.Graphite.BufferDescription;
+using BufferUsage = Prowl.Graphite.BufferUsage;
+using CommandBuffer = Prowl.Graphite.CommandBuffer;
+using DeviceBuffer = Prowl.Graphite.DeviceBuffer;
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using Material = Prowl.Runtime.Resources.Material;
+using Mesh = Prowl.Runtime.Resources.Mesh;
 
 namespace Prowl.Runtime.ParticleSystem.Modules;
 
@@ -56,10 +66,9 @@ public enum ParticleBlendMode
 }
 
 /// <summary>
-/// How particles are drawn. The shading options (blend, lighting, soft particles, camera fade) are read
-/// by the built in particle shader. Any other material still gets correctly oriented particle instances,
-/// since billboarding is baked into each instance's matrix. Trails are sent as packed segment data that
-/// only the particle shader decodes, so a custom trail material has to decode it the same way.
+/// How particles are drawn. Particles and trail segments are instances whose records the particle shader reads from a
+/// buffer and turns to face each view, so a custom material has to read them the same way (see Particle.shader).
+/// The shading options (blend, lighting, camera fade) are read by the built in particle shader.
 /// Switching this module off hides the particles but not their trails.
 /// </summary>
 [Serializable]
@@ -126,51 +135,34 @@ public class RendererModule : ParticleSystemModule
     private bool UsesAlignment => RenderMode is ParticleRenderMode.Billboard or ParticleRenderMode.Mesh;
 
     private static Material? s_defaultMaterial;
+    private static Mesh? s_quad;
 
-    // Each system draws with its own quads, so systems never take turns refilling one instance buffer.
-    private Mesh? _particleQuad;
-    private Mesh? _trailQuad;
-
-    private readonly ParticleRenderable _particles = new();
-    private readonly ParticleRenderable _trails = new();
-    private InstanceData[] _trailData = Array.Empty<InstanceData>();
-    private AABB _trailBounds;
-    private bool _hasTrailBounds;
-    private long _trailFrame = -1;
-
-    private float[] _sortKeys = Array.Empty<float>();
-    private int[] _sortIndices = Array.Empty<int>();
-    private Float3[] _worldPositions = Array.Empty<Float3>();
+    [NonSerialized] private ParticleRenderProvider? _provider;
+    [NonSerialized] private RenderWorld? _world;
+    [NonSerialized] private float[] _ageKeys = [];
+    [NonSerialized] private int[] _ageOrder = [];
+    [NonSerialized] private AABB _trailBounds;
+    [NonSerialized] private bool _hasTrailBounds;
 
     public RendererModule() => Enabled = true;
 
-    /// <summary>A unit quad facing +Z, with normals for lit shading.</summary>
-    private static Mesh CreateQuad(string name)
+    /// <summary>A unit quad facing +Z with normals for lit shading, the top of the texture at its top.</summary>
+    private static Mesh Quad
     {
-        var quad = new Mesh
+        get
         {
-            Name = name,
-            Vertices = [new(-0.5f, -0.5f, 0f), new(0.5f, -0.5f, 0f), new(0.5f, 0.5f, 0f), new(-0.5f, 0.5f, 0f)],
-        };
-        quad.UV = [new(0f, 0f), new(1f, 0f), new(1f, 1f), new(0f, 1f)];
-        quad.Normals = [Float3.UnitZ, Float3.UnitZ, Float3.UnitZ, Float3.UnitZ];
-        quad.Indices = [0, 1, 2, 0, 2, 3];
-        quad.RecalculateBounds();
-        return quad;
-    }
-
-    private Mesh ParticleQuad => _particleQuad.IsValid() ? _particleQuad : _particleQuad = CreateQuad("Particle Quad");
-    private Mesh TrailQuad => _trailQuad.IsValid() ? _trailQuad : _trailQuad = CreateQuad("Particle Trail Quad");
-
-    /// <summary>
-    /// Frees this system's quads once the frame's commands have run. They are made again the next time it draws.
-    /// </summary>
-    internal void ReleaseMeshes()
-    {
-        if (_particleQuad.IsValid()) Graphics.DeferDispose(_particleQuad);
-        if (_trailQuad.IsValid()) Graphics.DeferDispose(_trailQuad);
-        _particleQuad = null;
-        _trailQuad = null;
+            if (s_quad.IsValid()) return s_quad;
+            s_quad = new Mesh
+            {
+                Name = "Particle Quad",
+                Vertices = [new(-0.5f, -0.5f, 0f), new(0.5f, -0.5f, 0f), new(0.5f, 0.5f, 0f), new(-0.5f, 0.5f, 0f)],
+            };
+            s_quad.UV = [new(0f, 1f), new(1f, 1f), new(1f, 0f), new(0f, 0f)];
+            s_quad.Normals = [Float3.UnitZ, Float3.UnitZ, Float3.UnitZ, Float3.UnitZ];
+            s_quad.Indices = [0, 1, 2, 0, 2, 3];
+            s_quad.RecalculateBounds();
+            return s_quad;
+        }
     }
 
     private Material? ResolveMaterial(Material? preferred)
@@ -182,341 +174,584 @@ public class RendererModule : ParticleSystemModule
         return s_defaultMaterial;
     }
 
-    /// <summary>
-    /// Builds this camera's draw data. Returns true when any of it is in view. Particles draw while this
-    /// module is enabled, trails draw whenever they exist.
-    /// </summary>
-    internal bool Collect(ParticleSystemComponent system, Camera camera, List<IRenderable> renderables)
+    private static GMaterial? GpuMaterial(Material? material)
     {
-        TrailModule trails = system.Trails;
-        Float4x4 view = camera.ViewMatrix;
-        Float4x4 projection = camera.ProjectionMatrix;
-        Frustum frustum = ViewFrustum(projection * view);
-        Float3 cameraPosition = camera.Transform.Position;
-        Float3 cameraForward = camera.Transform.Forward;
-        bool visible = false;
+        if (material.IsNotValid()) return null;
+        if (!material.IsLoaded)
+        {
+            if (material.State == AssetState.Unloaded) _ = material.LoadAsync();
+            return null;
+        }
+        return material.GpuMaterial;
+    }
+
+    /// <summary>
+    /// Builds this frame's draws: the particle records while this module is enabled, the trail segments whenever they
+    /// exist. Main thread, before the frame is submitted.
+    /// </summary>
+    internal void Sync(ParticleSystemComponent system, RenderWorld world)
+    {
+        if (_world != world)
+            Detach();
+        if (_provider == null)
+        {
+            _provider = new ParticleRenderProvider(system, ParticleBuffers.Acquire(world));
+            world.Providers.Add(_provider);
+            _world = world;
+        }
+
+        ParticleRenderProvider provider = _provider;
+        provider.Begin();
+        uint layer = Rendering.RenderableState.LayerBit(system.GameObject.LayerIndex);
+        uint objectId = (uint)system.InstanceID;
 
         if (Enabled && system.ParticleCount > 0 && system.HasBounds)
         {
-            AABB bounds = PadForMinimumSize(system.WorldBounds, projection, cameraPosition);
-            if (frustum.Intersects(bounds))
+            Mesh mesh = IsMesh && Mesh.IsValid() && Mesh.IsLoaded ? Mesh : Quad;
+            if (IsMesh && Mesh.IsValid() && Mesh.State == AssetState.Unloaded) _ = Mesh.LoadAsync();
+            mesh.Upload();
+            GpuMesh? gpuMesh = mesh.GpuMesh;
+            GMaterial? material = GpuMaterial(ResolveMaterial(null));
+            if (gpuMesh != null && material != null)
             {
-                visible = true;
-                Material? material = ResolveMaterial(null);
-                if (material != null)
+                AABB bounds = system.WorldBounds;
+                Double3 origin = bounds.Center;
+                int header = provider.NextRecord;
+                WriteHeader(provider, 0, system.TextureSheet.ShaderParams);
+                int count = WriteParticles(system, provider, (Float3)origin);
+                bool sorted = SortMode == ParticleSortMode.ByDistance && BlendMode != ParticleBlendMode.Additive;
+                provider.AddBatch(new ParticleBatch
                 {
-                    Mesh mesh = IsMesh && Mesh.IsValid() ? Mesh : ParticleQuad;
-                    int count = BuildParticles(system, view, projection, cameraPosition, cameraForward);
-                    ConfigureProperties(_particles.Properties, system, 0, system.TextureSheet.ShaderParams);
-                    _particles.Set(mesh, material, count, bounds, system.GameObject.LayerIndex, SortOffset(bounds, cameraPosition, cameraForward, 0f));
-                    renderables.Add(_particles);
-                }
+                    Mesh = gpuMesh,
+                    SubMeshes = mesh.SubMeshCount,
+                    Material = material,
+                    Origin = origin,
+                    Center = bounds.Center,
+                    Radius = Float3.Length(bounds.Extents),
+                    MinSize = IsMesh ? 0f : MinParticleSize,
+                    Header = header,
+                    Count = count,
+                    Sorted = sorted,
+                    SortFudge = SortingFudge,
+                    LayerMask = layer,
+                    ObjectId = objectId,
+                });
             }
         }
 
+        TrailModule trails = system.Trails;
+        _hasTrailBounds = false;
         if (trails.Enabled || trails.HasOrphans)
         {
-            // Trail geometry is camera independent, the shader turns it to face each camera.
-            if (_trailFrame != Time.FrameCount)
+            GMaterial? material = GpuMaterial(ResolveMaterial(TrailMaterial));
+            Mesh quad = Quad;
+            quad.Upload();
+            GpuMesh? gpuMesh = quad.GpuMesh;
+            if (material != null && gpuMesh != null)
             {
-                _trailFrame = Time.FrameCount;
-                _hasTrailBounds = false;
-                _trails.Count = trails.BuildSegments(system, ref _trailData, ref _trailBounds, ref _hasTrailBounds);
-            }
-
-            if (_trails.Count > 0 && _hasTrailBounds && frustum.Intersects(_trailBounds))
-            {
-                visible = true;
-                Material? material = ResolveMaterial(TrailMaterial);
-                if (material != null)
+                Double3 origin = system.Transform.Position;
+                int header = provider.NextRecord;
+                WriteHeader(provider, 1, new Float4(1f, 1f, 1f, 0f));
+                int count = trails.BuildSegments(system, (Float3)origin, provider, ref _trailBounds, ref _hasTrailBounds);
+                if (count > 0 && _hasTrailBounds)
                 {
-                    ConfigureProperties(_trails.Properties, system, 1, new Float4(1f, 1f, 1f, 0f));
-                    _trails.Data = _trailData;
-                    // Trails sort a hair behind their particles so the pair keeps a stable order.
-                    _trails.Set(TrailQuad, material, _trails.Count, _trailBounds, system.GameObject.LayerIndex, SortOffset(_trailBounds, cameraPosition, cameraForward, 0.01f));
-                    renderables.Add(_trails);
+                    // Trails sort a hair behind their particles so the pair keeps a stable order
+                    provider.AddBatch(new ParticleBatch
+                    {
+                        Mesh = gpuMesh,
+                        SubMeshes = 1,
+                        Material = material,
+                        Origin = origin,
+                        Center = _trailBounds.Center,
+                        Radius = Float3.Length(_trailBounds.Extents),
+                        Header = header,
+                        Count = count,
+                        SortFudge = SortingFudge + 0.01f,
+                        LayerMask = layer,
+                        ObjectId = objectId,
+                    });
+                }
+                else
+                {
+                    provider.Truncate(header);
                 }
             }
         }
 
-        return visible;
+        provider.Commit();
     }
 
-    // Every system collects for the same view in turn, so its frustum is built once rather than per system.
-    private static Float4x4 s_frustumViewProjection;
-    private static Frustum s_frustum;
-
-    private static Frustum ViewFrustum(Float4x4 viewProjection)
+    /// <summary>Takes this system's draws out of the world it was drawing into.</summary>
+    internal void Detach()
     {
-        if (s_frustum.Planes == null || !viewProjection.Equals(s_frustumViewProjection))
+        if (_provider != null && _world != null)
         {
-            s_frustum = Frustum.FromMatrix(viewProjection);
-            s_frustumViewProjection = viewProjection;
+            _world.Providers.Remove(_provider);
+            _provider.Release();
         }
-        return s_frustum;
+        _provider = null;
+        _world = null;
     }
 
-    /// <summary>
-    /// The sorting fudge as an offset along the view, clamped so the sort point never passes the camera,
-    /// where it would count as far away and flip the order the fudge asked for.
-    /// </summary>
-    private Float3 SortOffset(AABB bounds, Float3 cameraPosition, Float3 cameraForward, float extra)
+    /// <summary>Whether any view drawn this frame sees the particles or trails, judged on the CPU.</summary>
+    internal bool SeenThisFrame(ParticleSystemComponent system, RenderWorld world)
     {
-        float depth = Float3.Dot(bounds.Center - cameraPosition, cameraForward);
-        float bias = SortingFudge + extra;
-        if (depth > 0.01f)
-            bias = MathF.Max(bias, 0.01f - depth);
-        return cameraForward * bias;
+        if (system.HasBounds && ParticleBuffers.AnyViewSees(world, system.WorldBounds, IsMesh ? 0f : MinParticleSize))
+            return true;
+        return _hasTrailBounds && ParticleBuffers.AnyViewSees(world, _trailBounds, 0f);
     }
 
-    /// <summary>Grows the bounds by how far Min Particle Size can enlarge a particle on screen.</summary>
-    private AABB PadForMinimumSize(AABB bounds, Float4x4 projection, Float3 cameraPosition)
+    // Header: mode, render mode, alignment / sheet / blend, lit, fade / min size, max size, length scale, velocity scale / pivot
+    private void WriteHeader(ParticleRenderProvider provider, int mode, Float4 sheet)
     {
-        if (MinParticleSize <= 0f || IsMesh) return bounds;
-
-        float farthest = Float3.Distance(cameraPosition, bounds.Center) + Float3.Length(bounds.Extents);
-        float pad = MinParticleSize * ScreenHeight(projection, farthest) * 0.75f;
-        return new AABB(bounds.Min - new Float3(pad), bounds.Max + new Float3(pad));
+        Span<Float4> rows = provider.Append(1);
+        rows[0] = new Float4(mode, (float)RenderMode, (float)Alignment, 0f);
+        rows[1] = sheet;
+        bool fade = CameraFadeEnd > CameraFadeStart;
+        rows[2] = new Float4((float)BlendMode, Lit ? 1f : 0f, fade ? CameraFadeStart : 0f, fade ? CameraFadeEnd : 0f);
+        rows[3] = new Float4(MinParticleSize, MathF.Max(MinParticleSize, MaxParticleSize), LengthScale, VelocityScale);
+        rows[4] = new Float4(Pivot, 0f);
+        rows[5] = Float4.Zero;
     }
 
-    /// <summary>World height the screen covers <paramref name="depth"/> in front of the camera.</summary>
-    private static float ScreenHeight(in Float4x4 projection, float depth)
-    {
-        bool orthographic = projection.c3.W > 0.5f;
-        return 2f / MathF.Max(MathF.Abs(projection.c1.Y), 1e-6f) * (orthographic ? 1f : MathF.Max(depth, 1e-4f));
-    }
-
-    // The same keys every time, so the values are set in place and an unchanged system keeps its draw snapshot.
-    private void ConfigureProperties(PropertyState properties, ParticleSystemComponent system, int mode, Float4 sheet)
-    {
-        properties.SetInt("_ObjectID", system.InstanceID);
-        properties.SetInt("_ParticleMode", mode);
-        properties.SetVector("_ParticleSheet", sheet);
-        properties.SetInt("_ParticleBlend", (int)BlendMode);
-        properties.SetInt("_ParticleLit", Lit ? 1 : 0);
-        properties.SetFloat("_ParticleSoft", MathF.Max(0f, SoftParticleDistance));
-        properties.SetVector("_ParticleFade", new Float2(CameraFadeStart, CameraFadeEnd));
-    }
-
-    private int BuildParticles(ParticleSystemComponent system, Float4x4 view, Float4x4 projection, Float3 cameraPosition, Float3 cameraForward)
+    private int WriteParticles(ParticleSystemComponent system, ParticleRenderProvider provider, Float3 origin)
     {
         ReadOnlySpan<Particle> particles = system.Particles;
         int count = particles.Length;
-        EnsureCapacity(count);
+        Span<Float4> rows = provider.Append(count);
 
+        // Age orders are the same for every view, so they are baked into the record order here
+        bool byAge = BlendMode != ParticleBlendMode.Additive && SortMode is ParticleSortMode.OldestInFront or ParticleSortMode.YoungestInFront;
+        if (_ageOrder.Length < count)
+        {
+            _ageOrder = new int[Math.Max(count, _ageOrder.Length * 2)];
+            _ageKeys = new float[_ageOrder.Length];
+        }
         for (int i = 0; i < count; i++)
         {
-            _worldPositions[i] = system.SimPointToWorld(particles[i].Position);
-            _sortIndices[i] = i;
-            _sortKeys[i] = SortMode switch
-            {
-                ParticleSortMode.ByDistance => -Float3.LengthSquared(_worldPositions[i] - cameraPosition),
-                ParticleSortMode.OldestInFront => particles[i].Age,
-                ParticleSortMode.YoungestInFront => -particles[i].Age,
-                _ => 0f
-            };
+            _ageOrder[i] = i;
+            _ageKeys[i] = SortMode == ParticleSortMode.OldestInFront ? particles[i].Age : -particles[i].Age;
         }
-        // Additive particles look the same in any order.
-        if (SortMode != ParticleSortMode.None && BlendMode != ParticleBlendMode.Additive)
-            Array.Sort(_sortKeys, _sortIndices, 0, count);
+        if (byAge)
+            Array.Sort(_ageKeys, _ageOrder, 0, count);
 
-        // The view matrix rows are the camera's screen axes.
-        Float3 cameraRight = new(view.c0.X, view.c1.X, view.c2.X);
-        Float3 cameraUp = new(view.c0.Y, view.c1.Y, view.c2.Y);
-        Float3 towardCamera = -cameraForward;
-        bool clampSize = !IsMesh && (MinParticleSize > 0f || MaxParticleSize < 1f);
         Quaternion emitterRotation = system.Transform.Rotation;
         float sizeScale = system.SizeScale;
-
-        InstanceData[] data = _particles.Data;
         for (int n = 0; n < count; n++)
         {
-            int i = _sortIndices[n];
-            ref readonly Particle p = ref particles[i];
-            Float3 position = _worldPositions[i];
+            ref readonly Particle p = ref particles[_ageOrder[n]];
+            Float3 position = system.SimPointToWorld(p.Position) - origin;
+            Float3 velocity = system.SimVectorToWorld(p.TotalVelocity);
             Float3 size = p.Size * sizeScale;
+            Quaternion rotation = Quaternion.FromEuler(p.Rotation);
+            if (Alignment == ParticleRenderAlignment.Local)
+                rotation = emitterRotation * rotation;
 
-            if (clampSize)
+            if (IsMesh)
             {
-                float screenHeight = ScreenHeight(projection, Float3.Dot(position - cameraPosition, cameraForward));
-                float largest = MathF.Max(MathF.Abs(size.X), MathF.Abs(size.Y));
-                if (largest > 0f)
-                {
-                    float clamped = Maths.Clamp(largest, MinParticleSize * screenHeight, MathF.Max(MinParticleSize, MaxParticleSize) * screenHeight);
-                    size *= clamped / largest;
-                }
+                if (Alignment == ParticleRenderAlignment.Velocity && Float3.LengthSquared(velocity) > 1e-10f)
+                    rotation = Quaternion.LookRotation(Float3.Normalize(velocity), Float3.UnitY) * rotation;
+            }
+            else
+            {
+                if (FlipU > 0f && p.Random(0x161) < FlipU) size.X = -size.X;
+                if (FlipV > 0f && p.Random(0x162) < FlipV) size.Y = -size.Y;
             }
 
-            Float4x4 matrix = IsMesh
-                ? MeshMatrix(system, in p, position, size, emitterRotation, cameraForward, cameraUp)
-                : BillboardMatrix(system, in p, position, size, emitterRotation, cameraPosition, cameraRight, cameraUp, towardCamera);
-
-            data[n] = new InstanceData(matrix, p.Color, new Float4(p.UVFrame, p.NormalizedAge, p.CustomData.X, p.CustomData.Y));
+            int row = n * ParticleRenderProvider.RecordRows;
+            rows[row] = new Float4(position, size.X);
+            rows[row + 1] = new Float4(velocity, size.Y);
+            rows[row + 2] = new Float4(rotation.X, rotation.Y, rotation.Z, rotation.W);
+            rows[row + 3] = new Float4(p.Color.R, p.Color.G, p.Color.B, p.Color.A);
+            rows[row + 4] = new Float4(p.UVFrame, p.NormalizedAge, p.CustomData.X, p.CustomData.Y);
+            rows[row + 5] = new Float4(size.Z, p.Rotation.Z * Maths.Deg2Rad, 0f, 0f);
         }
         return count;
     }
+}
 
-    private Float4x4 BillboardMatrix(ParticleSystemComponent system, in Particle p, Float3 position, Float3 size, Quaternion emitterRotation,
-        Float3 cameraPosition, Float3 cameraRight, Float3 cameraUp, Float3 towardCamera)
+/// <summary>One instanced draw of a system: its records in the world's buffer and what it is drawn with.</summary>
+internal struct ParticleBatch
+{
+    public GpuMesh Mesh;
+    public int SubMeshes;
+    public GMaterial Material;
+    public Double3 Origin;
+    public Double3 Center;
+    public float Radius;
+    public float MinSize;
+
+    /// <summary>The header record, relative to the system's first record. The instances follow it.</summary>
+    public int Header;
+    public int Count;
+
+    /// <summary>Drawn back to front for each view.</summary>
+    public bool Sorted;
+    public float SortFudge;
+    public uint LayerMask;
+    public uint ObjectId;
+}
+
+/// <summary>
+/// Draws one particle system into every view. The host writes the frame's records in Sync, Extract hands them to the
+/// render thread, Cull adds the instanced draws per view with their back to front order, and Compute uploads the
+/// records and orders into the world's buffers before any view draws.
+/// </summary>
+internal sealed class ParticleRenderProvider(ParticleSystemComponent system, ParticleBuffers buffers) : RenderProvider
+{
+    /// <summary>Float4 rows in one record: a header, a particle or a trail segment.</summary>
+    public const int RecordRows = 6;
+
+    private sealed class Frame
     {
-        float angle = p.Rotation.Z * Maths.Deg2Rad;
-        float cos = MathF.Cos(angle), sin = MathF.Sin(angle);
-        Float3 right, up, normal;
-        float width = size.X, height = size.Y;
-
-        switch (RenderMode)
-        {
-            case ParticleRenderMode.StretchedBillboard:
-            {
-                Float3 velocity = system.SimVectorToWorld(p.TotalVelocity);
-                float speed = Float3.Length(velocity);
-                Float3 facing = Float3.NormalizeSafe(cameraPosition - position, towardCamera);
-                Float3 side = Float3.Cross(facing, velocity);
-                float sideLength = Float3.Length(side);
-                if (speed < 1e-5f || sideLength < 1e-6f)
-                    break;
-
-                up = velocity / speed;
-                right = side / sideLength;
-                normal = facing;
-                height = height * LengthScale + speed * VelocityScale;
-                return Compose(position, right, up, normal, width, height, size, p);
-            }
-            case ParticleRenderMode.HorizontalBillboard:
-                normal = Float3.UnitY;
-                right = new Float3(cos, 0f, -sin);
-                up = new Float3(sin, 0f, cos);
-                return Compose(position, right, up, normal, width, height, size, p);
-            case ParticleRenderMode.VerticalBillboard:
-            {
-                Float3 flat = new(cameraPosition.X - position.X, 0f, cameraPosition.Z - position.Z);
-                normal = Float3.NormalizeSafe(flat, Float3.NormalizeSafe(new Float3(towardCamera.X, 0f, towardCamera.Z), Float3.UnitZ));
-                Float3 flatRight = Float3.NormalizeSafe(new Float3(cameraRight.X, 0f, cameraRight.Z), Float3.Cross(Float3.UnitY, normal));
-                right = flatRight * cos + Float3.UnitY * sin;
-                up = Float3.UnitY * cos - flatRight * sin;
-                return Compose(position, right, up, normal, width, height, size, p);
-            }
-        }
-
-        switch (Alignment)
-        {
-            case ParticleRenderAlignment.World:
-            case ParticleRenderAlignment.Local:
-            {
-                Quaternion q = Quaternion.FromEuler(p.Rotation);
-                if (Alignment == ParticleRenderAlignment.Local)
-                    q = emitterRotation * q;
-                return Compose(position, q * Float3.UnitX, q * Float3.UnitY, q * Float3.UnitZ, width, height, size, p);
-            }
-            case ParticleRenderAlignment.Facing:
-                normal = Float3.NormalizeSafe(cameraPosition - position, towardCamera);
-                break;
-            case ParticleRenderAlignment.Velocity:
-                normal = Float3.NormalizeSafe(system.SimVectorToWorld(p.TotalVelocity), towardCamera);
-                break;
-            default:
-                normal = towardCamera;
-                break;
-        }
-
-        // Keep the camera's screen axes, bent onto the chosen plane, so textures stay upright.
-        Float3 baseRight = Float3.NormalizeSafe(cameraRight - normal * Float3.Dot(cameraRight, normal), Float3.Cross(cameraUp, normal));
-        Float3 baseUp = Float3.NormalizeSafe(Float3.Cross(normal, baseRight), cameraUp);
-        if (Float3.Dot(baseUp, cameraUp) < 0f) baseUp = -baseUp;
-        right = baseRight * cos + baseUp * sin;
-        up = baseUp * cos - baseRight * sin;
-        return Compose(position, right, up, normal, width, height, size, p);
-    }
-
-    private Float4x4 Compose(Float3 position, Float3 right, Float3 up, Float3 normal, float width, float height, Float3 size, in Particle p)
-    {
-        if (FlipU > 0f && p.Random(0x161) < FlipU) width = -width;
-        if (FlipV > 0f && p.Random(0x162) < FlipV) height = -height;
-
-        Float3 center = position + right * (Pivot.X * width) + up * (Pivot.Y * height) + normal * (Pivot.Z * size.Z);
-        return new Float4x4(
-            new Float4(right * width, 0f),
-            new Float4(up * height, 0f),
-            new Float4(normal, 0f),
-            new Float4(center, 1f));
-    }
-
-    private Float4x4 MeshMatrix(ParticleSystemComponent system, in Particle p, Float3 position, Float3 size, Quaternion emitterRotation,
-        Float3 cameraForward, Float3 cameraUp)
-    {
-        Quaternion q = Quaternion.FromEuler(p.Rotation);
-        switch (Alignment)
-        {
-            case ParticleRenderAlignment.Local:
-                q = emitterRotation * q;
-                break;
-            case ParticleRenderAlignment.Velocity:
-            {
-                Float3 velocity = system.SimVectorToWorld(p.TotalVelocity);
-                if (Float3.LengthSquared(velocity) > 1e-10f)
-                    q = Quaternion.LookRotation(Float3.Normalize(velocity), Float3.UnitY) * q;
-                break;
-            }
-            case ParticleRenderAlignment.View:
-            case ParticleRenderAlignment.Facing:
-                q = Quaternion.LookRotation(cameraForward, cameraUp) * q;
-                break;
-        }
-
-        Float3 offset = q * (Pivot * size);
-        return Float4x4.CreateTRS(position + offset, q, size);
-    }
-
-    private void EnsureCapacity(int count)
-    {
-        if (_sortKeys.Length >= count) return;
-        int size = Math.Max(count, _sortKeys.Length * 2);
-        _sortKeys = new float[size];
-        _sortIndices = new int[size];
-        _worldPositions = new Float3[size];
-        _particles.Data = new InstanceData[size];
-    }
-
-    /// <summary>A reused renderable over a pooled instance array. Only the first <see cref="Count"/> entries draw.</summary>
-    private sealed class ParticleRenderable : IRenderable
-    {
-        public InstanceData[] Data = Array.Empty<InstanceData>();
+        public Float4[] Rows = [];
         public int Count;
-        public readonly PropertyState Properties = new();
+        public readonly List<ParticleBatch> Batches = [];
+        public int First;
+        public ulong Index = ulong.MaxValue;
+    }
 
-        private Mesh _mesh = null!;
-        private Material _material = null!;
-        private AABB _bounds;
-        private int _layer;
-        private Float3 _sortOffset;
+    // The host fills one frame while the render thread reads the other, swapped at Extract
+    private Frame _host = new();
+    private Frame _render = new();
 
-        public void Set(Mesh mesh, Material material, int count, AABB bounds, int layer, Float3 sortOffset)
+    private DeviceBuffer? _records;
+    private DeviceBuffer? _order;
+    private uint[] _orderData = [];
+    private int _orderUsed;
+    private readonly List<(int Offset, int Start, int Count)> _orderUploads = [];
+    private float[] _sortKeys = [];
+
+    public override ViewKinds RunsOn => ViewKinds.Cameras | ViewKinds.ObjectId;
+
+    /// <summary>The next record to be written this frame.</summary>
+    public int NextRecord => _host.Count / RecordRows;
+
+    public void Begin()
+    {
+        _host.Batches.Clear();
+        _host.Count = 0;
+    }
+
+    /// <summary>Room for records at the end of this frame's rows.</summary>
+    public Span<Float4> Append(int records)
+    {
+        int needed = _host.Count + records * RecordRows;
+        if (_host.Rows.Length < needed)
+            Array.Resize(ref _host.Rows, Math.Max(needed, _host.Rows.Length * 2));
+        Span<Float4> span = _host.Rows.AsSpan(_host.Count, records * RecordRows);
+        _host.Count = needed;
+        return span;
+    }
+
+    /// <summary>Drops the records written from <paramref name="record"/> on.</summary>
+    public void Truncate(int record) => _host.Count = Math.Min(_host.Count, record * RecordRows);
+
+    public void AddBatch(in ParticleBatch batch) => _host.Batches.Add(batch);
+
+    /// <summary>Places this frame's records in the world's buffer. Main thread, before submit.</summary>
+    public void Commit()
+    {
+        _host.First = _host.Count > 0 ? buffers.Reserve(_host.Count / RecordRows) : 0;
+        _host.Index = Graphics.FrameIndex;
+    }
+
+    public void Release() => buffers.Release();
+
+    public override void Extract()
+    {
+        (_host, _render) = (_render, _host);
+        _records = buffers.Records;
+        _order = buffers.Order;
+        _orderUsed = 0;
+        _orderUploads.Clear();
+        buffers.BeginRenderFrame();
+
+        if (_render.Index != Graphics.FrameIndex)
         {
-            _mesh = mesh;
-            _material = material;
-            Count = count;
-            _bounds = bounds;
-            _layer = layer;
-            _sortOffset = sortOffset;
+            _render.Batches.Clear();
+            _render.Count = 0;
+            return;
+        }
+        system.CheckVisibility(buffers.World);
+    }
+
+    public override void Cull(in ProviderView view, DrawItemSink sink)
+    {
+        if (_render.Batches.Count == 0) return;
+
+        ParticleBuffers.ViewInfo info = buffers.Find(view.View.ViewId);
+        foreach (ParticleBatch batch in _render.Batches)
+        {
+            float radius = batch.Radius;
+            if (batch.MinSize > 0f && info.Found)
+            {
+                float farthest = (float)Double3.Length(batch.Center - view.Camera) + radius;
+                radius += batch.MinSize * ParticleBuffers.ScreenHeight(info.YScale, info.Orthographic, farthest) * 0.75f;
+            }
+            if (!view.Sees(batch.Center, radius)) continue;
+
+            int orderBase = batch.Sorted && batch.Count > 1 ? Sort(batch, view.Camera) : -1;
+            DrawItem item = new()
+            {
+                Transform = Double4x4.CreateTranslation(batch.Origin),
+                Custom1 = new Float4(_render.First + batch.Header, orderBase + 1, 0f, 0f),
+                LayerMask = batch.LayerMask,
+                ObjectId = batch.ObjectId,
+                Flags = RenderableFlags.ReceiveShadows,
+                SortDepth = SortDepth(batch, view.Camera, info),
+            };
+            for (int s = 0; s < batch.SubMeshes; s++)
+                sink.AddInstanced(batch.Mesh, s, batch.Material, item, (uint)batch.Count);
+        }
+    }
+
+    /// <summary>The distance to the system's center, moved along the view by the sorting fudge but never past the camera.</summary>
+    private static float SortDepth(in ParticleBatch batch, Double3 camera, in ParticleBuffers.ViewInfo info)
+    {
+        Float3 toCenter = (Float3)(batch.Center - camera);
+        if (!info.Found || batch.SortFudge == 0f)
+            return Float3.Length(toCenter);
+        float depth = Float3.Dot(toCenter, info.Forward);
+        float bias = batch.SortFudge;
+        if (depth > 0.01f)
+            bias = MathF.Max(bias, 0.01f - depth);
+        return Float3.Length(toCenter + info.Forward * bias);
+    }
+
+    // Farthest first for this view. Returns the order's place in the order buffer, or -1 when it has no room this frame.
+    private int Sort(in ParticleBatch batch, Double3 camera)
+    {
+        int count = batch.Count;
+        int offset = buffers.AllocateOrder(count);
+        if (offset < 0) return -1;
+
+        if (_sortKeys.Length < count)
+            _sortKeys = new float[Math.Max(count, _sortKeys.Length * 2)];
+        if (_orderData.Length < _orderUsed + count)
+            Array.Resize(ref _orderData, Math.Max(_orderUsed + count, _orderData.Length * 2));
+
+        Float3 eye = (Float3)(camera - batch.Origin);
+        Span<uint> order = _orderData.AsSpan(_orderUsed, count);
+        Float4[] rows = _render.Rows;
+        int first = (batch.Header + 1) * RecordRows;
+        for (int i = 0; i < count; i++)
+        {
+            Float4 r = rows[first + i * RecordRows];
+            Float3 d = new Float3(r.X, r.Y, r.Z) - eye;
+            _sortKeys[i] = -Float3.Dot(d, d);
+            order[i] = (uint)i;
+        }
+        _sortKeys.AsSpan(0, count).Sort(order);
+
+        _orderUploads.Add((offset, _orderUsed, count));
+        _orderUsed += count;
+        return offset;
+    }
+
+    public override void ComputeBuffers(List<DeviceBuffer> list)
+    {
+        if (_render.Count > 0 && _records != null)
+            list.Add(_records);
+        if (_orderUploads.Count > 0 && _order != null)
+            list.Add(_order);
+    }
+
+    public override void Compute(CommandBuffer command)
+    {
+        if (_render.Count > 0 && _records != null)
+            command.UpdateBuffer<Float4>(_records, (uint)(_render.First * RecordRows * 16), _render.Rows.AsSpan(0, _render.Count));
+        if (_order == null) return;
+        foreach ((int offset, int start, int count) in _orderUploads)
+            command.UpdateBuffer<uint>(_order, (uint)(offset * 4), _orderData.AsSpan(start, count));
+    }
+}
+
+/// <summary>
+/// The buffers a world's particle draws read, set as world globals: every system's records, and the per view orders of
+/// sorted systems. Systems reserve their records in Sync, growing the buffer before the frame is submitted, and the
+/// render thread hands out order space while it culls. Orders that do not fit draw unsorted for a frame and grow the
+/// buffer for the next.
+/// </summary>
+internal sealed class ParticleBuffers
+{
+    private const string RecordsName = "ProwlParticleRecords";
+    private const string OrderName = "ProwlParticleOrder";
+    private const int RecordBytes = ParticleRenderProvider.RecordRows * 16;
+
+    private static readonly ConditionalWeakTable<RenderWorld, ParticleBuffers> s_worlds = new();
+
+    private readonly RenderWorld _world;
+    private int _users;
+    private int _recordCapacity;
+    private int _orderCapacity;
+    private ulong _frame = ulong.MaxValue;
+    private int _recordsUsed;
+    private int _orderNeeded;
+    private ulong _renderFrame = ulong.MaxValue;
+    private int _renderOrderCapacity;
+    private int _orderUsed;
+    private readonly List<ViewInfo> _views = [];
+
+    private ParticleBuffers(RenderWorld world) => _world = world;
+
+    public RenderWorld World => _world;
+
+    public DeviceBuffer? Records { get; private set; }
+    public DeviceBuffer? Order { get; private set; }
+
+    /// <summary>What sorting and culling need from one view of this frame.</summary>
+    public readonly record struct ViewInfo(int ViewId, Float3 Forward, float YScale, bool Orthographic, bool Found);
+
+    public static ParticleBuffers Acquire(RenderWorld world)
+    {
+        ParticleBuffers buffers = s_worlds.GetValue(world, w => new ParticleBuffers(w));
+        buffers._users++;
+        return buffers;
+    }
+
+    /// <summary>Frees the buffers once no system in the world uses them.</summary>
+    public void Release()
+    {
+        if (--_users > 0) return;
+        _world.Globals.SetBuffer(RecordsName, null);
+        _world.Globals.SetBuffer(OrderName, null);
+        Graphics.DeferDispose(Records);
+        Graphics.DeferDispose(Order);
+        Records = null;
+        Order = null;
+        _recordCapacity = 0;
+        _orderCapacity = 0;
+        s_worlds.Remove(_world);
+    }
+
+    /// <summary>Records for one system this frame. Returns the first. Main thread, before submit.</summary>
+    public int Reserve(int records)
+    {
+        if (_frame != Graphics.FrameIndex)
+        {
+            _frame = Graphics.FrameIndex;
+            _recordsUsed = 0;
+            int needed = Math.Max(Volatile.Read(ref _orderNeeded), 256);
+            if (Order == null || needed > _orderCapacity)
+            {
+                _orderCapacity = Grow(_orderCapacity, needed, 256);
+                Order = Replace(Order, OrderName, (uint)_orderCapacity * 4);
+            }
         }
 
-        public Material GetMaterial() => _material;
-        public int GetLayer() => _layer;
-        public Float3 GetPosition() => _bounds.Center + _sortOffset;
-        public int GetInstanceCount(InstanceData[] instanceData) => Count;
-
-        public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData)
+        int first = _recordsUsed;
+        _recordsUsed += records;
+        if (Records == null || _recordsUsed > _recordCapacity)
         {
-            properties = Properties;
-            mesh = _mesh;
-            model = Float4x4.Identity;
-            instanceData = Data;
+            _recordCapacity = Grow(_recordCapacity, _recordsUsed, 64);
+            Records = Replace(Records, RecordsName, (uint)(_recordCapacity * RecordBytes));
         }
+        return first;
+    }
 
-        public void GetCullingData(out bool isRenderable, out AABB bounds)
+    private static int Grow(int capacity, int needed, int minimum)
+    {
+        int size = Math.Max(capacity, minimum);
+        while (size < needed)
+            size *= 2;
+        return size;
+    }
+
+    private DeviceBuffer Replace(DeviceBuffer? old, string name, uint bytes)
+    {
+        DeviceBuffer buffer = Graphics.Device!.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.StructuredBufferReadWrite));
+        buffer.Name = name;
+        _world.Globals.SetBuffer(name, buffer);
+        Graphics.DeferDispose(old);
+        return buffer;
+    }
+
+    /// <summary>Starts the render side of a frame once, from the first provider's Extract. Host thread, render thread idle.</summary>
+    public void BeginRenderFrame()
+    {
+        if (_renderFrame == Graphics.FrameIndex) return;
+        _renderFrame = Graphics.FrameIndex;
+        _renderOrderCapacity = Order != null ? _orderCapacity : 0;
+        _orderUsed = 0;
+
+        _views.Clear();
+        foreach (ViewDesc view in Graphics.FrameViews)
         {
-            isRenderable = Count > 0 && _mesh != null && _material != null;
-            bounds = _bounds;
+            if (view.World != _world) continue;
+            ViewLayer layer = view.Layers[0];
+            Float4x4 v = layer.View;
+            _views.Add(new ViewInfo(view.ViewId, new Float3(v.c0.Z, v.c1.Z, v.c2.Z), layer.Projection.c1.Y, layer.Projection.c3.W > 0.5f, true));
         }
+    }
+
+    public ViewInfo Find(int viewId)
+    {
+        foreach (ViewInfo info in _views)
+            if (info.ViewId == viewId)
+                return info;
+        return default;
+    }
+
+    /// <summary>Room for one view's order. Render thread, while culling.</summary>
+    public int AllocateOrder(int count)
+    {
+        if (_orderUsed + count > _renderOrderCapacity)
+        {
+            Volatile.Write(ref _orderNeeded, Math.Max(Volatile.Read(ref _orderNeeded), _orderUsed + count));
+            return -1;
+        }
+        int offset = _orderUsed;
+        _orderUsed += count;
+        return offset;
+    }
+
+    /// <summary>World height the screen covers at a distance in front of the camera.</summary>
+    public static float ScreenHeight(float yScale, bool orthographic, float depth)
+        => 2f / MathF.Max(MathF.Abs(yScale), 1e-6f) * (orthographic ? 1f : MathF.Max(depth, 1e-4f));
+
+    /// <summary>
+    /// Whether a camera view of the world added this frame sees a box, grown by how far a minimum screen size can
+    /// enlarge a particle. Host thread, once the views are added.
+    /// </summary>
+    public static bool AnyViewSees(RenderWorld world, AABB box, float minSize)
+    {
+        foreach (ViewDesc view in Graphics.FrameViews)
+        {
+            if (view.World != world || view.Kind is not (ViewKind.Game or ViewKind.SceneView or ViewKind.Preview or ViewKind.RenderTexture)) continue;
+            for (int l = 0; l < Math.Max((int)view.LayerCount, 1); l++)
+            {
+                ViewLayer layer = view.Layers[l];
+                Float3 min = box.Min - (Float3)layer.Position;
+                Float3 max = box.Max - (Float3)layer.Position;
+                if (minSize > 0f)
+                {
+                    float farthest = Float3.Length((min + max) * 0.5f) + Float3.Length((max - min) * 0.5f);
+                    float pad = minSize * ScreenHeight(layer.Projection.c1.Y, layer.Projection.c3.W > 0.5f, farthest) * 0.75f;
+                    min -= new Float3(pad);
+                    max += new Float3(pad);
+                }
+                if (Inside(layer.Projection * layer.View, min, max))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // The box against the clip planes of a reversed Z projection: the sides, near (z below w) and far (z above 0)
+    private static bool Inside(Float4x4 m, Float3 min, Float3 max)
+    {
+        Float4 r0 = new(m.c0.X, m.c1.X, m.c2.X, m.c3.X);
+        Float4 r1 = new(m.c0.Y, m.c1.Y, m.c2.Y, m.c3.Y);
+        Float4 r2 = new(m.c0.Z, m.c1.Z, m.c2.Z, m.c3.Z);
+        Float4 r3 = new(m.c0.W, m.c1.W, m.c2.W, m.c3.W);
+        return !(Outside(r3 + r0, min, max) || Outside(r3 - r0, min, max) || Outside(r3 + r1, min, max)
+            || Outside(r3 - r1, min, max) || Outside(r3 - r2, min, max) || Outside(r2, min, max));
+    }
+
+    private static bool Outside(Float4 plane, Float3 min, Float3 max)
+    {
+        Float3 p = new(plane.X >= 0f ? max.X : min.X, plane.Y >= 0f ? max.Y : min.Y, plane.Z >= 0f ? max.Z : min.Z);
+        return plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z + plane.W < 0f;
     }
 }

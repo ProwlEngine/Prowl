@@ -268,7 +268,7 @@ public sealed class TriggerVolume : Component
             case TriggerShape.Cone:
                 float coneHeight = HeightScale(scale);
                 Float3 up = orientation * Float3.UnitY;
-                Debug.DrawWireCone(worldCenter - up * (coneHeight * 0.5f), up * coneHeight, RadialScale(scale), color, 16);
+                Debug.DrawWireCone(worldCenter - up * (coneHeight * 0.25f), up * coneHeight, RadialScale(scale), color, 16);
                 break;
 
             default:

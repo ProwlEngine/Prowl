@@ -2,17 +2,13 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
-using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Resources;
-using Prowl.Vector;
 
 namespace Prowl.Runtime.UI;
 
 /// <summary>
 /// Per-<see cref="GameCanvas"/> store of <see cref="UIRenderItem"/>s. The canvas writes
-/// into the tree from <c>RebuildIfDirty</c>; the pipeline reads from it via
-/// <see cref="CollectFor"/>. Items are pooled inside the tree so the steady-state
-/// allocation rate is zero.
+/// into the tree from <c>RebuildIfDirty</c>; <see cref="UIRendering"/> reads from it each frame.
+/// Items are pooled inside the tree so the steady-state allocation rate is zero.
 /// </summary>
 internal sealed class UIRenderTree
 {
@@ -22,7 +18,7 @@ internal sealed class UIRenderTree
     // -------- Free list: reusable UIRenderItem instances ----
     private readonly Stack<UIRenderItem> _freeItems = new(32);
 
-    /// <summary>Read-only access for the pipeline / canvas. Safe to enumerate.</summary>
+    /// <summary>Read-only access for the renderer / canvas. Safe to enumerate.</summary>
     public IReadOnlyList<UIRenderItem> Items => _items;
     public int Count => _items.Count;
 
@@ -49,7 +45,6 @@ internal sealed class UIRenderTree
             // Drop external refs so disabled items don't keep meshes/materials alive.
             it.Owner = null!; it.Canvas = null!;
             it.Mesh = null!;  it.Material = null!;
-            it.Props.Clear();
             it.HasClip = false; it.ClipSource = null;
             _freeItems.Push(it);
         }
@@ -70,35 +65,6 @@ internal sealed class UIRenderTree
     {
         for (int i = 0; i < _items.Count; i++)
             _items[i].RefreshModelIfDirty();
-    }
-
-    // ============================================================
-    // Static scene query - the pipeline's entry point
-    // ============================================================
-
-    /// <summary>
-    /// Asks every enabled <see cref="GameCanvas"/> in <paramref name="scene"/> to
-    /// <c>RebuildIfDirty</c>, and appends every item whose surface matches
-    /// <paramref name="surface"/> to <paramref name="dst"/>.
-    /// </summary>
-    public static void CollectFor(Scene scene, UISurface surface, List<IRenderable> dst)
-    {
-        if (scene is null) return;
-
-        List<GameCanvas> canvases = scene.Canvases;
-        for (int c = 0; c < canvases.Count; c++)
-        {
-            GameCanvas gc = canvases[c];
-            if (!gc.EnabledInHierarchy) continue;
-            if (ToSurface(gc.RenderMode) != surface) continue;
-
-            gc.RebuildIfDirty();         // no-op if clean
-            gc.Tree.RefreshTransforms(); // matrix fast-path
-
-            List<UIRenderItem> items = gc.Tree._items;
-            for (int i = 0; i < items.Count; i++)
-                dst.Add(items[i]);
-        }
     }
 
     /// <summary>

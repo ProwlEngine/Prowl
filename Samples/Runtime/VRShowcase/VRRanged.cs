@@ -314,7 +314,7 @@ public sealed class Gun : Component
     private bool _wasPulled;
     private bool _wasReleasing;
     private float _cooldown;
-    private PointLight _flash = null!;
+    private Light _flash = null!;
     private float _flashTime;
     private LineRenderer _tracer = null!;
     private float _tracerTime;
@@ -331,7 +331,8 @@ public sealed class Gun : Component
 
         var flash = new GameObject("Muzzle Flash");
         flash.SetParent(GameObject);
-        _flash = flash.AddComponent<PointLight>();
+        _flash = flash.AddComponent<Light>();
+        _flash.Type = LightType.Point;
         _flash.Color = new Color(1f, 0.7f, 0.35f, 1f);
         _flash.Range = 4f;
         _flash.Intensity = 0f;
@@ -513,7 +514,7 @@ public sealed class Gun : Component
 
     private static Material SampleMaterial(Color color)
     {
-        var material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
         material.SetColor("_MainColor", color);
         material.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.White));
         material.SetFloat("_Metallic", 0.9f);

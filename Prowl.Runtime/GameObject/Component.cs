@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -419,14 +419,6 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     public virtual void LateUpdate() { }
 
     /// <summary>
-    /// Called every frame per camera to collect render data.
-    /// Always called regardless of play mode.
-    /// Components add their renderables/lights to the provided lists.
-    /// Camera is provided for LOD and distance-based decisions.
-    /// </summary>
-    public virtual void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights) { }
-
-    /// <summary>
     /// Called for rendering and handling GUI gizmos.
     /// </summary>
     public virtual void DrawGizmos() { }
@@ -516,7 +508,10 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
         {
             Scene? scene = GameObject.Scene;
             if (scene.IsValid())
+            {
                 scene.Dispatcher.Register(this);
+                if (this is Rendering.IRenderSync render) scene.Rendering.Add(render);
+            }
         }
         if (!ShouldExecuteGameplay) return;
         _gameplayEnabled = true;
@@ -527,11 +522,16 @@ public abstract class Component : EngineObject, ISerializationCallbackReceiver
     /// <summary>OnDisable only runs to pair with a gameplay OnEnable.</summary>
     internal void InternalOnDisable()
     {
-        if (GameObject.IsValid())
+        // Reference check rather than validity: this also runs while the GameObject is being disposed,
+        // when it already reads as invalid but its scene link is still intact. Leaving must always work.
+        if (GameObject is not null)
         {
             Scene? scene = GameObject.Scene;
             if (scene.IsValid())
+            {
                 scene.Dispatcher.Unregister(this);
+                if (this is Rendering.IRenderSync render) scene.Rendering.Remove(render);
+            }
         }
         if (!_gameplayEnabled) return;
         _gameplayEnabled = false;

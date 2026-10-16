@@ -75,10 +75,14 @@ public struct XRView
 /// <summary>
 /// Headset rendering and tracking through OpenXR.
 /// <para>
-/// While running, every perspective <see cref="Camera"/> with no target texture and a <see cref="Camera.StereoTargetEye"/>
-/// renders once per eye into the headset, using its transform as the head. Put a <see cref="TrackedPoseDriver"/> on the
-/// camera so the head moves it, under a parent that places the play area in the world. The headset paces the frame
-/// loop while it shows frames, so VSync and <see cref="Application.TargetFrameRate"/> are set aside meanwhile.
+/// While running, the first perspective <see cref="Camera"/> with no target texture and a <see cref="Camera.StereoTargetEye"/>
+/// draws both eyes into the headset in one stereo view, using its transform as the head, and the window or Game View
+/// shows one eye. Put a <see cref="TrackedPoseDriver"/> on the camera so the head moves it, under a parent that places
+/// the play area in the world. The headset paces the frame loop while it shows frames, so VSync and
+/// <see cref="Application.TargetFrameRate"/> are set aside meanwhile.
+/// </para>
+/// <para>
+/// The graphics device has to be made for the headset, so set <see cref="InitializeOnStartup"/> before the window opens.
 /// </para>
 /// </summary>
 public static class XR
@@ -90,6 +94,25 @@ public static class XR
     private static XRTrackingOrigin s_origin;
     private static long s_reconnectAt;
     private const long ReconnectMilliseconds = 2000;
+
+    // The runtime connection made with the device, used by the first Start, and what the device was made with.
+    private static OpenXRSession? s_prepared;
+    private static bool s_deviceReady;
+    private static string[] s_instanceExtensions = [];
+    private static string[] s_deviceExtensions = [];
+    private static bool s_eyesOnly;
+    private static bool s_hooked;
+    private static string? s_unavailable;
+
+    /// <summary>
+    /// Makes the graphics device for the headset when the window opens, which XR needs before <see cref="Start"/> can
+    /// work: it connects to the OpenXR runtime, which may start it, and uses the GPU and Vulkan extensions it asks for.
+    /// Set it before the game runs. Off, XR costs nothing.
+    /// </summary>
+    public static bool InitializeOnStartup { get; set; }
+
+    /// <summary>Whether the graphics device was made for the headset, so <see cref="Start"/> can connect.</summary>
+    public static bool IsDeviceReady => s_deviceReady;
 
     /// <summary>
     /// Scale applied to the headset's recommended eye resolution when <see cref="Start"/> is called. Below 1 trades
@@ -159,7 +182,8 @@ public static class XR
 
     /// <summary>
     /// Connects to the headset through the active OpenXR runtime. Returns false, and logs why, when there is no
-    /// runtime, no headset, or the runtime cannot render with OpenGL.
+    /// runtime, no headset, the runtime cannot render with Vulkan, or the device was not made for XR (see
+    /// <see cref="InitializeOnStartup"/>).
     /// </summary>
     public static bool Start(XRTrackingOrigin origin = XRTrackingOrigin.Floor)
     {
@@ -167,6 +191,13 @@ public static class XR
         if (Graphics.IsHeadless)
         {
             Debug.LogWarning("XR needs a window and graphics device, so it cannot start headless.");
+            return false;
+        }
+        if (!s_deviceReady)
+        {
+            Debug.LogError(s_unavailable != null
+                ? $"XR could not start: the graphics device could not be made for a headset when the application started: {s_unavailable}"
+                : "XR could not start: the graphics device was not made for a headset. Set XR.InitializeOnStartup before the game runs, or start the editor with --xr, with the headset connected.");
             return false;
         }
 
@@ -181,20 +212,33 @@ public static class XR
     {
         s_wanted = false;
         Disconnect();
+        s_prepared?.Dispose();
+        s_prepared = null;
     }
 
     private static bool Connect(XRTrackingOrigin origin, bool quiet)
     {
+        OpenXRSession? session = null;
         try
         {
-            Session = OpenXRSession.Create(origin, RenderScale);
+            session = s_prepared ?? OpenXRSession.Prepare();
+            s_prepared = null;
+            session.Start(origin, RenderScale, s_instanceExtensions, s_deviceExtensions);
         }
         catch (Exception e)
         {
+            session?.Dispose();
             if (!quiet) Debug.LogError($"XR could not start: {e.Message}");
             return false;
         }
 
+        Session = session;
+        if (!s_hooked)
+        {
+            // Ends the frame even when the frame loop threw before it did, since a waited frame left open stalls the runtime
+            Graphics.BeforeSubmit += EndFrame;
+            s_hooked = true;
+        }
         Started?.Invoke();
         return true;
     }
@@ -206,6 +250,7 @@ public static class XR
         OpenXRSession session = Session;
         Session = null;
         session.Dispose();
+        Graphics.VSync = Application.VSync;
         Debug.Log("XR stopped.");
         Stopped?.Invoke();
     }
@@ -269,7 +314,12 @@ public static class XR
             Debug.LogWarning("Lost the headset. XR will reconnect when it is back.");
             Disconnect();
             s_reconnectAt = Environment.TickCount64 + ReconnectMilliseconds;
+            return;
         }
+
+        // The window presenting with vsync would hold back the frames the headset paces
+        bool vsync = Application.VSync && !Session.IsPacingFrames;
+        if (Graphics.VSync != vsync) Graphics.VSync = vsync;
     }
 
     /// <summary>Hands the frame's eyes to the headset. Runs after everything for the frame has been drawn.</summary>
@@ -277,47 +327,116 @@ public static class XR
 
     /// <summary>
     /// Draws the headset's eyes from the scene's cameras when nothing else drew them this frame, as when the editor's
-    /// Game View is hidden, so the headset never goes dark while the game runs. Only the eyes are drawn.
+    /// Game View is hidden, so the headset never goes dark while the game runs.
     /// </summary>
     internal static void RenderMissedEyes(Scene? scene)
     {
         if (Session is not { ShouldRender: true } session || session.AnyEyeRendered || scene.IsNotValid()) return;
 
-        var data = new RenderingData { EyesOnly = true };
-        foreach (Camera camera in scene.GatherActiveCameras())
+        s_eyesOnly = true;
+        try
         {
-            if (!ShouldRenderStereo(camera, data)) continue;
-            RenderPipeline pipeline = camera.Pipeline.IsValid() ? camera.Pipeline : DefaultRenderPipeline.Default;
-            try { pipeline.Render(camera, data); }
-            catch (Exception e) { Debug.LogError($"Drawing camera '{camera.GameObject.Name}' into the headset failed: {e.Message}"); }
+            foreach (Camera camera in scene.GatherActiveCameras())
+            {
+                if (!ShouldRenderStereo(camera)) continue;
+                try { camera.Render(); }
+                catch (Exception e) { Debug.LogError($"Drawing camera '{camera.GameObject.Name}' into the headset failed: {e.Message}"); }
+                if (session.AnyEyeRendered) break;
+            }
+        }
+        finally
+        {
+            s_eyesOnly = false;
         }
     }
 
     /// <summary>Whether <paramref name="camera"/> already drew its eyes into the headset this frame.</summary>
     public static bool HasRenderedStereo(Camera camera) => Session?.HasRenderedStereo(camera) ?? false;
 
-    internal static RenderTexture EyeTexture(StereoEye eye) => RunningSession.EyeTexture(eye);
-
-    private static OpenXRSession RunningSession => Session ?? throw new InvalidOperationException("XR is not running.");
-
-    /// <summary>Whether this render of <paramref name="camera"/> goes to the headset, one render per eye.</summary>
-    public static bool ShouldRenderStereo(Camera camera, in RenderingData data)
+    /// <summary>
+    /// Whether <paramref name="camera"/> renders to the headset while XR runs: the frame wants drawing, the camera is a
+    /// perspective one drawing to the screen with eyes to draw, and no other camera drew the eyes this frame.
+    /// </summary>
+    public static bool ShouldRenderStereo(Camera camera)
         => Session != null
         && Session.ShouldRender
         && camera.StereoTargetEye != StereoTargetEyeMask.None
         && camera.Target.IsNotValid()
         && !camera.IsOrthographic
-        && !data.IsSceneView;
-
-    /// <summary>
-    /// The texture an eye renders into this frame. Rendering into it is what submits that eye. The first camera
-    /// to render in a frame provides the depth the headset reprojects late frames with, along with its clip
-    /// planes, and <paramref name="writesDepth"/> is true only for that camera.
-    /// </summary>
-    public static RenderTexture GetEyeTexture(StereoEye eye, Camera camera, out bool writesDepth) => RunningSession.GetEyeTexture(eye, camera, out writesDepth);
+        && Session.CanDrawEyes(camera);
 
     /// <summary>The eye's pose relative to the head and its frustum, for this frame.</summary>
-    public static XRView GetEyeView(StereoEye eye) => RunningSession.GetEyeView(eye);
+    public static XRView GetEyeView(StereoEye eye) => Session?.GetEyeView(eye) ?? default;
+
+    /// <summary>
+    /// The two layer target the headset's eyes draw into this frame, the left display's image in layer 0. Drawing
+    /// <paramref name="camera"/> into it, through <see cref="Camera.BuildView"/>, is what sends the frame to the
+    /// headset with the camera's pose. One camera draws the eyes per frame.
+    /// </summary>
+    public static Graphite.Framebuffer GetEyeTarget(Camera camera)
+    {
+        OpenXRSession session = Session ?? throw new InvalidOperationException("XR is not running.");
+        session.ClaimEyes(camera, out Graphite.Framebuffer target);
+        return target;
+    }
+
+    /// <summary>The texture behind <see cref="GetEyeTarget"/>, two layers, the left display's image first.</summary>
+    public static Graphite.Texture GetEyeTexture(Camera camera) => GetEyeTarget(camera).ColorTargets[0].Target;
+
+    /// <summary>The eye a layer of <paramref name="camera"/>'s stereo view draws, which is the same eye in both for a camera drawing one.</summary>
+    public static StereoEye EyeDrawnInLayer(Camera camera, int layer) => OpenXRSession.EyeDrawnInLayer(camera, layer);
+
+    /// <summary>Claims the eyes for <paramref name="camera"/>, true the first time this frame, when its stereo view has to be added.</summary>
+    internal static bool ClaimEyes(Camera camera, out Graphite.Framebuffer target) => Session!.ClaimEyes(camera, out target);
+
+    /// <summary>Shows the eye <paramref name="camera"/> drew in <paramref name="target"/>, where it would have drawn without XR.</summary>
+    internal static void MirrorEyes(Camera camera, Graphite.Framebuffer target)
+    {
+        if (s_eyesOnly || Session is not { } session || !session.HasRenderedStereo(camera)) return;
+        session.Mirror(target);
+    }
+
+    /// <summary>A mono view drawing over <paramref name="target"/> after a mirror, which leaves the mirror out when it covers it all.</summary>
+    internal static void CoverMirror(Graphite.Framebuffer target, Float4 viewport)
+    {
+        if (Session == null || viewport.X > 0f || viewport.Y > 0f || viewport.Z < 1f || viewport.W < 1f) return;
+        Session.CoverMirror(target);
+    }
+
+    /// <summary>
+    /// The Vulkan instance and device extensions and the GPU the device needs for the headset when
+    /// <see cref="InitializeOnStartup"/> is set, none otherwise. Connects to the runtime to ask. Called as the device is made.
+    /// </summary>
+    internal static Graphite.VulkanDeviceOptions VulkanOptions()
+    {
+        if (!InitializeOnStartup) return new([], []);
+
+        OpenXRSession prepared;
+        try
+        {
+            prepared = OpenXRSession.Prepare();
+        }
+        catch (Exception e)
+        {
+            s_unavailable = e.Message;
+            Debug.LogWarning($"XR is unavailable until the application restarts: {e.Message}");
+            return new([], []);
+        }
+
+        s_prepared = prepared;
+        s_instanceExtensions = prepared.VulkanInstanceExtensions;
+        s_deviceExtensions = prepared.VulkanDeviceExtensions;
+        s_deviceReady = true;
+        return new(prepared.VulkanInstanceExtensions, prepared.VulkanDeviceExtensions) { PickPhysicalDevice = prepared.PickPhysicalDevice };
+    }
+}
+
+/// <summary>A headset eye.</summary>
+public enum StereoEye
+{
+    Mono,
+    Left,
+    Right,
 }
 
 /// <summary>Moves the transform to follow a tracked device, relative to its parent, which stands for the play area.</summary>

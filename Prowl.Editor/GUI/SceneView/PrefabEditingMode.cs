@@ -167,13 +167,13 @@ public static class PrefabEditingMode
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         Camera cam = camGo.AddComponent<Camera>();
         cam.Depth = -1;
-        cam.HDR = true;
         editScene.Add(camGo);
 
         var lightGo = new GameObject("PrefabEdit Light");
         lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        DirectionalLight light = lightGo.AddComponent<DirectionalLight>();
+        Light light = lightGo.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.Intensity = 1f;
         editScene.Add(lightGo);
 

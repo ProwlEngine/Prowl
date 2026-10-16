@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -21,12 +21,14 @@ using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering.Shaders;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
 using Prowl.Editor.Build;
+using Shader = Prowl.Runtime.Resources.Shader;
+using Material = Prowl.Runtime.Resources.Material;
 
 namespace Prowl.Editor;
 
@@ -928,12 +930,12 @@ public static class CliEditorCommands
             if (shader.Length > 0)
                 newShader = CliRefs.ResolveAsset(shader) is Shader s ? s : throw new CliException($"'{shader}' is not a shader.");
             Shader? effective = newShader.IsValid() ? newShader : material.Shader;
-            Dictionary<string, ShaderProperty> properties = effective.IsValid() ? effective.Properties.ToDictionary(p => p.Name) : [];
+            Dictionary<string, MaterialProperty> properties = effective.IsValid() ? effective.Properties.ToDictionary(p => p.Name.Text()) : [];
 
             var writes = new List<Action>();
             foreach ((string? name, string? json) in changes)
             {
-                if (!properties.TryGetValue(name, out ShaderProperty? property))
+                if (!properties.TryGetValue(name, out MaterialProperty property))
                     throw new CliException($"The shader has no property '{name}'. It has: {string.Join(", ", properties.Keys)}.");
                 writes.Add(MaterialWrite(material, property, json));
             }
@@ -952,49 +954,52 @@ public static class CliEditorCommands
             properties = material.Shader.IsValid()
                 ? material.Shader.Properties.Select(p => new
                 {
-                    name = p.Name,
+                    name = p.Name.Text(),
                     display = p.DisplayName,
-                    type = p.PropertyType.ToString(),
-                    overridden = material.IsOverridden(p.Name),
+                    type = p.Type.ToString(),
+                    overridden = material.IsOverridden(p.Name.Text()),
                     value = MaterialValue(material, p),
                 }).ToList()
                 : null,
         };
     }
 
-    private static Action MaterialWrite(Material material, ShaderProperty property, string json)
+    private static Action MaterialWrite(Material material, MaterialProperty property, string json)
     {
-        string name = property.Name;
+        string name = property.Name.Text();
         object? Convert(Type type) => CliRefs.ConvertJson(json, type) ?? throw new CliException($"'{name}' can not be set to {json}.");
-        return property.PropertyType switch
+        return property.Type switch
         {
-            ShaderPropertyType.Float => () => material.SetFloat(name, (float)Convert(typeof(float))!),
-            ShaderPropertyType.Int => () => material.SetInt(name, (int)Convert(typeof(int))!),
-            ShaderPropertyType.Vector2 => () => material.SetVector(name, (Float2)Convert(typeof(Float2))!),
-            ShaderPropertyType.Vector3 => () => material.SetVector(name, (Float3)Convert(typeof(Float3))!),
-            ShaderPropertyType.Vector4 => () => material.SetVector(name, (Float4)Convert(typeof(Float4))!),
-            ShaderPropertyType.Color => () => material.SetColor(name, (Color)Convert(typeof(Color))!),
-            ShaderPropertyType.Texture2D => () => material.SetTexture(name, (Texture2D)Convert(typeof(Texture2D))!),
-            ShaderPropertyType.Texture3D => () => material.SetTexture3D(name, (Texture3D)Convert(typeof(Texture3D))!),
-            _ => throw new CliException($"'{name}' is a {property.PropertyType}, which the CLI can not set yet."),
+            MaterialPropertyType.Float => () => material.SetFloat(name, (float)Convert(typeof(float))!),
+            MaterialPropertyType.Int => () => material.SetInt(name, (int)Convert(typeof(int))!),
+            MaterialPropertyType.Float2 => () => material.SetVector(name, (Float2)Convert(typeof(Float2))!),
+            MaterialPropertyType.Float3 => () => material.SetVector(name, (Float3)Convert(typeof(Float3))!),
+            MaterialPropertyType.Float4 => () => material.SetVector(name, (Float4)Convert(typeof(Float4))!),
+            MaterialPropertyType.Color => () => material.SetColor(name, (Color)Convert(typeof(Color))!),
+            MaterialPropertyType.Texture2D => () => material.SetTexture(name, (Texture2D)Convert(typeof(Texture2D))!),
+            MaterialPropertyType.Texture3D => () => material.SetTexture3D(name, (Texture3D)Convert(typeof(Texture3D))!),
+            MaterialPropertyType.TextureCube => () => material.SetTextureCube(name, (Cubemap)Convert(typeof(Cubemap))!),
+            _ => throw new CliException($"'{name}' is a {property.Type}, which the CLI can not set yet."),
         };
     }
 
-    private static JsonNode? MaterialValue(Material material, ShaderProperty property)
+    private static JsonNode? MaterialValue(Material material, MaterialProperty property)
     {
-        PropertyState state = material._properties;
-        string name = property.Name;
+        MaterialProperties state = material._properties;
+        string name = property.Name.Text();
         bool set = material.IsOverridden(name);
-        object? value = property.PropertyType switch
+        Float4 fallback = property.Default.Vector;
+        object? value = property.Type switch
         {
-            ShaderPropertyType.Float => set ? state.GetFloat(name) : property.Value.X,
-            ShaderPropertyType.Int => set ? state.GetInt(name) : (int)property.Value.X,
-            ShaderPropertyType.Vector2 => set ? state.GetVector2(name) : null,
-            ShaderPropertyType.Vector3 => set ? state.GetVector3(name) : null,
-            ShaderPropertyType.Vector4 => set ? state.GetVector4(name) : property.Value,
-            ShaderPropertyType.Color => set ? state.GetColor(name) : property.Value,
-            ShaderPropertyType.Texture2D => set ? state.GetTexture(name) : property.Texture2DValue,
-            ShaderPropertyType.Texture3D => set ? state.GetTexture3D(name) : property.Texture3DValue,
+            MaterialPropertyType.Float => set ? state.GetFloat(name) : fallback.X,
+            MaterialPropertyType.Int => set ? state.GetInt(name) : property.Default.Int,
+            MaterialPropertyType.Float2 => set ? state.GetVector2(name) : new Float2(fallback.X, fallback.Y),
+            MaterialPropertyType.Float3 => set ? state.GetVector3(name) : new Float3(fallback.X, fallback.Y, fallback.Z),
+            MaterialPropertyType.Float4 => set ? state.GetVector4(name) : fallback,
+            MaterialPropertyType.Color => set ? state.GetColor(name) : fallback,
+            MaterialPropertyType.Texture2D => set ? state.GetTexture(name) : null,
+            MaterialPropertyType.Texture3D => set ? state.GetTexture3D(name) : null,
+            MaterialPropertyType.TextureCube => set ? state.GetTextureCube(name) : null,
             _ => null,
         };
         return value switch

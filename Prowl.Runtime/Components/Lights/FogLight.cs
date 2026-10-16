@@ -7,9 +7,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Add to a GameObject with a Light to make it contribute to volumetric fog.
-/// Without this component, the light renders normally but does not produce visible scattering
-/// in the volumetric fog effect.
+/// Tunes how a Light scatters in volumetric fog. Lights without one scatter at their own colour and intensity.
 /// </summary>
 [AddComponentMenu("Rendering/Fog Light")]
 [RequireComponent(typeof(Light))]
@@ -36,4 +34,10 @@ public sealed class FogLight : Component
     /// &lt;0 = more back-scatter.
     /// </summary>
     [SerializeField] public float ScatteringBias = 0.0f;
+
+    public override void OnAddedToScene()
+    {
+        Light? light = GetComponent<Light>();
+        if (light.IsValid()) light.Fog = this;
+    }
 }

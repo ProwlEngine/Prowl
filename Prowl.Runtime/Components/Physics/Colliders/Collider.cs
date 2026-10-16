@@ -61,6 +61,10 @@ public abstract class Collider : Component
     /// </summary>
     private PhysicsWorld _registeredWorld;
 
+    // The world polling this collider for placement changes, and its slot in that world's list.
+    private PhysicsWorld _watchingWorld;
+    internal int WatchIndex = -1;
+
     /// <summary>
     /// Transform version tracking for static colliders.
     /// Used to detect when the transform has moved and shapes need updating.
@@ -188,6 +192,8 @@ public abstract class Collider : Component
                 _registeredWorld.UnregisterShapeOwner(shape);
         }
 
+        _watchingWorld?.UnwatchCollider(this);
+        _watchingWorld = null;
         _registeredWorld = null;
         _attachedBody = null;
         _attachedRigidbody3D = null;
@@ -227,6 +233,16 @@ public abstract class Collider : Component
                 _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
                 _registeredWorld?.RegisterShapeOwner(shape, this);
             }
+        }
+
+        // A collider on its rigidbody's own GameObject cannot move relative to it, so that rigidbody
+        // refreshes it on a rescale. Every other collider is checked by the physics world before each step.
+        bool onOwnBody = _attachedRigidbody3D.IsValid() && _attachedRigidbody3D.GameObject == GameObject;
+        Scene? owner = GameObject.IsValid() ? GameObject.Scene : null;
+        if (!onOwnBody && owner.IsValid() && owner.Physics != null)
+        {
+            _watchingWorld = owner.Physics;
+            _watchingWorld.WatchCollider(this);
         }
 
         // Mass and inertia are derived from every shape on the body, so the rigidbody owns that step.
@@ -372,7 +388,11 @@ public abstract class Collider : Component
         Detach();
     }
 
-    public override void Update()
+    /// <summary>
+    /// Rebuilds the shapes when the collider's placement relative to its body, the body's scale, or a
+    /// static collider's layer changed since they were built.
+    /// </summary>
+    internal void RefreshPlacement()
     {
         if (_attachedBody == null) return;
 
@@ -383,7 +403,7 @@ public abstract class Collider : Component
 
         // Writing LocalScale bumps the transform's version, so the walk above already covers every
         // rescale it passes over. It stops at the body, so the body's own rescale is the one case left,
-        // and comparing that one value beats recomputing the whole chain's scale every frame.
+        // and comparing that one value beats recomputing the whole chain's scale on every check.
         bool bodyScaleChanged = _attachedRigidbody3D.IsValid() &&
             !_attachedRigidbody3D.Transform.LocalScale.Equals(_lastBodyScale);
 

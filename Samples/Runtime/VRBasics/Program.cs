@@ -24,6 +24,7 @@ internal class Program
 {
     static void Main(string[] args)
     {
+        XR.InitializeOnStartup = true;
         new VRBasicsGame().Run("VR Basics", 1280, 720);
     }
 }
@@ -35,7 +36,9 @@ public sealed class VRBasicsGame : Game
         var scene = new Scene();
 
         var sun = new GameObject("Sun");
-        sun.AddComponent<DirectionalLight>().Intensity = 0.6f;
+        Light sunLight = sun.AddComponent<Light>();
+        sunLight.Type = LightType.Directional;
+        sunLight.Intensity = 0.6f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         scene.Add(sun);
 
@@ -76,8 +79,8 @@ public sealed class VRBasicsGame : Game
         head.Transform.LocalPosition = new Float3(0f, 1.65f, 0f);
         Camera camera = head.AddComponent<Camera>();
         camera.NearClipPlane = 0.05f;
-        camera.HDR = true;
-        camera.Effects = [new TonemapperEffect()];
+        camera.Profile = new VolumeProfile();
+        camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
         head.AddComponent<TrackedPoseDriver>().Node = XRNode.Head;
 
         foreach (XRHand side in new[] { XRHand.Left, XRHand.Right })
@@ -96,7 +99,7 @@ public sealed class VRBasicsGame : Game
 
     public static Material Lit(Color color)
     {
-        var material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        var material = new Material(Shader.LoadDefault(DefaultShader.Lit));
         material.SetColor("_MainColor", color);
         return material;
     }

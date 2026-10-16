@@ -40,7 +40,10 @@ public static class PlayerEntryPoint
         if (IsHeadless(args))
             game.RunHeadless(ParseHeadless(args));
         else
+        {
+            PlayerSettingsLoader.ApplyBeforeWindow(System.IO.Path.Combine(AppContext.BaseDirectory, "Content", "Settings"));
             game.Run(manifest.ProductName, manifest.WindowWidth, manifest.WindowHeight);
+        }
 
         return 0;
     }

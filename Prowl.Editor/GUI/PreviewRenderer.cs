@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
@@ -41,11 +41,11 @@ public class PreviewRenderer : IDisposable
     /// <summary>Clear to transparent instead of the skybox, so only the subject has alpha.</summary>
     public bool TransparentBackground
     {
-        get => _camera.ClearFlags == CameraClearFlags.SolidColor;
+        get => _camera.Background == CameraBackground.Color;
         set
         {
-            _camera.ClearFlags = value ? CameraClearFlags.SolidColor : CameraClearFlags.Skybox;
-            _camera.ClearColor = new Color(0f, 0f, 0f, 0f);
+            _camera.Background = value ? CameraBackground.Color : CameraBackground.Skybox;
+            _camera.BackgroundColor = new Color(0f, 0f, 0f, 0f);
         }
     }
 
@@ -78,7 +78,7 @@ public class PreviewRenderer : IDisposable
         _camera.FieldOfView = 35f;
         _camera.NearClipPlane = 0.01f;
         _camera.FarClipPlane = 100f;
-        _camera.ClearFlags = CameraClearFlags.Skybox;
+        _camera.Background = CameraBackground.Skybox;
         _camera.StereoTargetEye = StereoTargetEyeMask.None;
         _scene.Add(_cameraGo);
 
@@ -86,7 +86,8 @@ public class PreviewRenderer : IDisposable
         _lightGo = new GameObject("PreviewLight");
         _lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         _lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
-        DirectionalLight light = _lightGo.AddComponent<DirectionalLight>();
+        Light light = _lightGo.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.Intensity = 1f;
         light.CastShadows = false;
         _scene.Add(_lightGo);
@@ -107,7 +108,7 @@ public class PreviewRenderer : IDisposable
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
         MeshRenderer renderer = _subjectGo.AddComponent<MeshRenderer>();
         renderer.Mesh = mesh;
-        renderer.Material = material.IsValid() ? material : new Material(Shader.LoadDefault(DefaultShader.Standard));
+        renderer.Material = material.IsValid() ? material : new Material(Shader.LoadDefault(DefaultShader.Lit));
 
         NormalizeSubjectToUnitCube(_subjectGo);
 
@@ -231,7 +232,7 @@ public class PreviewRenderer : IDisposable
         renderer.Mesh = Mesh.CreateSphere(0.5f, 32, 32);
 
         if (material.Shader == null || !material.Shader.IsValid())
-            material.Shader = Shader.LoadDefault(DefaultShader.Standard);
+            material.Shader = Shader.LoadDefault(DefaultShader.Lit);
         renderer.Material = material;
 
         _scene.Add(_subjectGo);
@@ -248,8 +249,12 @@ public class PreviewRenderer : IDisposable
 
         _camera.UpdateRenderData(_rt);
 
-        RenderPipeline pipeline = _camera.Pipeline.IsValid() ? _camera.Pipeline : DefaultRenderPipeline.Default;
-        pipeline.Render(_camera, new RenderingData { DisplayGrid = ShowGrid, FallbackTarget = _rt });
+        _camera.Render(new CameraRenderOptions
+        {
+            FallbackTarget = _rt,
+            Kind = Prowl.Graphite.Rendering.ViewKind.Preview,
+            Features = ShowGrid ? GridFeature.List : null,
+        });
     }
 
     /// <summary>Resize the preview render target.</summary>
@@ -309,7 +314,6 @@ public class PreviewRenderer : IDisposable
                 float rw = (float)r.Size.X;
                 float rh = (float)r.Size.Y;
 
-                // Flip Y OpenGL RT has Y=0 at bottom
                 canvas.SetBrushTexture(_rt.MainTexture);
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
@@ -404,7 +408,7 @@ public class PreviewRenderer : IDisposable
     private void EnsureRT()
     {
         if (_rt.IsValid()) _rt.Dispose();
-        _rt = new RenderTexture(Width, Height, true, [TextureImageFormat.Color4b]);
+        _rt = new RenderTexture(Width, Height, true, [TextureFormat.RGBA8]);
     }
 
     /// <summary>

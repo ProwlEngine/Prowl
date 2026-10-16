@@ -274,6 +274,10 @@ public class CharacterController : Component
     /// </summary>
     public CollisionFlags Move(Float3 motion)
     {
+        // Platforms moved through their Transform this frame are only seen once synced.
+        PhysicsWorld physics = GameObject.Scene.Physics;
+        if (physics.AutoSyncTransforms) physics.SyncTransforms();
+
         _hits.Clear();
         _flags = CollisionFlags.None;
         _filter = BuildFilter();

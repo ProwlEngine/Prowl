@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -20,18 +20,18 @@ public sealed class RenderTexture : Asset, ISerializable
     public const int DefaultWidth = 1920;
     public const int DefaultHeight = 1080;
 
-    // ─── Description (what the asset file stores) ───
     private int _width;
     private int _height;
     private bool _hasDepthAttachment;
-    private TextureImageFormat[] _textureFormats;
+    private TextureFormat[] _textureFormats;
+    private bool _srgb;
 
-    // ─── GPU resources (allocated lazily from the description) ───
-    private GraphicsFrameBuffer? _frameBuffer;
+    [NotHeld] private Graphite.Framebuffer? _frameBuffer;
     private Texture2D[]? _internalTextures;
     private Texture2D? _internalDepth;
 
-    public GraphicsFrameBuffer frameBuffer { get { EnsureCreated(); return _frameBuffer!; } }
+    /// <summary>The Graphite framebuffer views draw into, null when headless.</summary>
+    public Graphite.Framebuffer? Framebuffer { get { EnsureCreated(); return _frameBuffer; } }
     public Texture2D MainTexture { get { EnsureCreated(); return _internalTextures![0]; } }
     public Texture2D[] InternalTextures { get { EnsureCreated(); return _internalTextures!; } }
     public Texture2D? InternalDepth { get { EnsureCreated(); return _internalDepth; } }
@@ -39,41 +39,43 @@ public sealed class RenderTexture : Asset, ISerializable
     public int Width { get { EnsureLoaded(); return _width; } }
     public int Height { get { EnsureLoaded(); return _height; } }
     public bool HasDepthAttachment { get { EnsureLoaded(); return _hasDepthAttachment; } }
-    public TextureImageFormat[] TextureFormats { get { EnsureLoaded(); return _textureFormats; } }
+    public TextureFormat[] TextureFormats { get { EnsureLoaded(); return _textureFormats; } }
+
+    /// <summary>Whether RGBA8 colour targets are sRGB, so they encode what is drawn and decode it when sampled.</summary>
+    public bool Srgb { get { EnsureLoaded(); return _srgb; } }
 
     public RenderTexture() : base("RenderTexture")
     {
         _width = DefaultWidth;
         _height = DefaultHeight;
         _hasDepthAttachment = true;
-        _textureFormats = [TextureImageFormat.Color4b];
+        _textureFormats = [TextureFormat.RGBA8];
     }
 
-    public RenderTexture(int width, int height, bool hasDepthAttachment, TextureImageFormat[] formats) : base("RenderTexture")
+    public RenderTexture(int width, int height, bool hasDepthAttachment, TextureFormat[] formats, bool srgb = false) : base("RenderTexture")
     {
         ArgumentNullException.ThrowIfNull(formats);
         _textureFormats = [];
-        Configure(width, height, hasDepthAttachment, formats);
+        Configure(width, height, hasDepthAttachment, formats, srgb);
     }
 
     /// <summary>
     /// Change what this target describes, releasing anything already allocated. The new resources are
     /// created on next use, so this is safe to call from an inspector or off the render thread.
     /// </summary>
-    public void Configure(int width, int height, bool hasDepthAttachment, TextureImageFormat[] formats)
+    public void Configure(int width, int height, bool hasDepthAttachment, TextureFormat[] formats, bool srgb = false)
     {
         EnsureLoaded();
         ArgumentNullException.ThrowIfNull(formats);
 
-        if (formats.Length < 0 || formats.Length > Graphics.MaxFramebufferColorAttachments)
-            throw new ArgumentException(
-                $"A render texture supports 0-{Graphics.MaxFramebufferColorAttachments} color attachments, got {formats.Length}.",
-                nameof(formats));
+        if (formats.Length > 8)
+            throw new ArgumentException($"A render texture supports 0-8 color attachments, got {formats.Length}.", nameof(formats));
 
         _width = Math.Max(1, width);
         _height = Math.Max(1, height);
         _hasDepthAttachment = hasDepthAttachment;
-        _textureFormats = (TextureImageFormat[])formats.Clone();
+        _textureFormats = (TextureFormat[])formats.Clone();
+        _srgb = srgb;
 
         ReleaseResources();
     }
@@ -81,8 +83,8 @@ public sealed class RenderTexture : Asset, ISerializable
     protected internal override long EstimateBytes()
     {
         if (_internalTextures == null) return 0;
-        long bytesPerPixel = _hasDepthAttachment ? Texture.GetBytesPerPixel(TextureImageFormat.Depth24f) : 0;
-        foreach (TextureImageFormat format in _textureFormats)
+        long bytesPerPixel = _hasDepthAttachment ? Texture.GetBytesPerPixel(TextureFormat.Depth32Float) : 0;
+        foreach (TextureFormat format in _textureFormats)
             bytesPerPixel += Texture.GetBytesPerPixel(format);
         return (long)_width * _height * bytesPerPixel;
     }
@@ -109,26 +111,24 @@ public sealed class RenderTexture : Asset, ISerializable
     private void EnsureCreated()
     {
         EnsureLoaded();
-        if (_frameBuffer != null) return;
+        if (_internalTextures != null) return;
 
         int numTextures = _textureFormats.Length;
-        var attachments = new GraphicsFrameBuffer.Attachment[numTextures + (_hasDepthAttachment ? 1 : 0)];
         _internalTextures = new Texture2D[numTextures];
+        var colors = new Graphite.Texture[numTextures];
         for (int i = 0; i < numTextures; i++)
         {
-            _internalTextures[i] = new Texture2D((uint)_width, (uint)_height, false, _textureFormats[i], _enableRandomWrite);
-            _internalTextures[i].SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            _internalTextures[i].SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
-            attachments[i] = new GraphicsFrameBuffer.Attachment { Texture = _internalTextures[i].Handle, IsDepth = false };
+            _internalTextures[i] = new Texture2D((uint)_width, (uint)_height, _textureFormats[i], srgb: _srgb, randomWrite: _enableRandomWrite) { Name = Name };
+            _internalTextures[i].SetWrap(WrapMode.Clamp);
+            colors[i] = _internalTextures[i].GpuTexture!;
         }
 
         if (_hasDepthAttachment)
-        {
-            _internalDepth = new Texture2D((uint)_width, (uint)_height, false, TextureImageFormat.Depth24f);
-            attachments[numTextures] = new GraphicsFrameBuffer.Attachment { Texture = _internalDepth.Handle, IsDepth = true };
-        }
+            _internalDepth = new Texture2D((uint)_width, (uint)_height, TextureFormat.Depth32Float) { Name = Name };
 
-        _frameBuffer = Graphics.CreateFramebuffer(attachments, (uint)_width, (uint)_height);
+        if (Graphics.Device == null) return;
+        _frameBuffer = Graphics.Device.ResourceFactory.CreateFramebuffer(new Graphite.FramebufferDescription(_internalDepth.IsValid() ? _internalDepth.GpuTexture : null, colors));
+        _frameBuffer.Name = Name;
     }
 
     private void ReleaseResources()
@@ -141,7 +141,7 @@ public sealed class RenderTexture : Asset, ISerializable
         if (_internalDepth.IsValid()) _internalDepth.Dispose();
         _internalDepth = null;
 
-        _frameBuffer?.Dispose();
+        Graphics.DeferDispose(_frameBuffer);
         _frameBuffer = null;
     }
 
@@ -157,44 +157,36 @@ public sealed class RenderTexture : Asset, ISerializable
         SerializeHeader(compoundTag);
         compoundTag.Add("Width", new(_width));
         compoundTag.Add("Height", new(_height));
-        compoundTag.Add("HasDepthAttachment", new((byte)(_hasDepthAttachment ? 1 : 0)));
-        EchoObject textureFormatsTag = EchoObject.NewList();
-        foreach (TextureImageFormat format in _textureFormats)
-            textureFormatsTag.ListAdd(new((byte)format));
-        compoundTag.Add("TextureFormats", textureFormatsTag);
-        compoundTag.Add("EnableRandomWrite", new((byte)(_enableRandomWrite ? 1 : 0)));
+        compoundTag.Add("HasDepthAttachment", new(_hasDepthAttachment));
+        EchoObject formats = EchoObject.NewList();
+        foreach (TextureFormat format in _textureFormats)
+            formats.ListAdd(new((int)format));
+        compoundTag.Add("ColorFormats", formats);
+        compoundTag.Add("Srgb", new(_srgb));
+        compoundTag.Add("EnableRandomWrite", new(_enableRandomWrite));
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        int width = value.Get("Width")?.IntValue ?? DefaultWidth;
-        int height = value.Get("Height")?.IntValue ?? DefaultHeight;
-        bool hasDepth = (value.Get("HasDepthAttachment")?.ByteValue ?? 1) == 1;
+        EchoObject? formatsTag = value.Get("ColorFormats");
+        var formats = new TextureFormat[formatsTag?.Count ?? 0];
+        for (int i = 0; i < formats.Length; i++)
+            formats[i] = (TextureFormat)formatsTag![i].IntValue;
 
-        // NumTextures used to be written alongside the list; the list is the only source now, but an
-        // older file's count still bounds it so a truncated list can't read past the end.
-        EchoObject? formatsTag = value.Get("TextureFormats");
-        int count = formatsTag?.Count ?? 0;
-        if (value.TryGet("NumTextures", out EchoObject? numTag))
-            count = Math.Min(count, numTag.IntValue);
-
-        var formats = new TextureImageFormat[count];
-        for (int i = 0; i < count; i++)
-            formats[i] = (TextureImageFormat)formatsTag![i].ByteValue;
-
-        Configure(width, height, hasDepth, formats);
-        _enableRandomWrite = (value.Get("EnableRandomWrite")?.ByteValue ?? 0) == 1;
+        Configure(value.Get("Width")?.IntValue ?? DefaultWidth, value.Get("Height")?.IntValue ?? DefaultHeight,
+            value.Get("HasDepthAttachment")?.BoolValue ?? true, formats, value.Get("Srgb")?.BoolValue ?? false);
+        _enableRandomWrite = value.Get("EnableRandomWrite")?.BoolValue ?? false;
         DeserializeHeader(value);
     }
 
     #region Pool
 
-    private struct RenderTextureKey(int width, int height, bool hasDepth, TextureImageFormat[] format) : IEquatable<RenderTextureKey>
+    private struct RenderTextureKey(int width, int height, bool hasDepth, TextureFormat[] format) : IEquatable<RenderTextureKey>
     {
         public int Width = width;
         public int Height = height;
         public bool HasDepth = hasDepth;
-        public TextureImageFormat[] Format = format;
+        public TextureFormat[] Format = format;
 
         public override bool Equals(object? obj) => obj is RenderTextureKey key && Equals(key);
 
@@ -213,7 +205,7 @@ public sealed class RenderTexture : Asset, ISerializable
             hash = hash * 23 + Width.GetHashCode();
             hash = hash * 23 + Height.GetHashCode();
             hash = hash * 23 + HasDepth.GetHashCode();
-            foreach (TextureImageFormat format in Format)
+            foreach (TextureFormat format in Format)
                 hash = hash * 23 + ((int)format).GetHashCode();
             return hash;
         }
@@ -226,7 +218,7 @@ public sealed class RenderTexture : Asset, ISerializable
     private const int MaxUnusedFrames = 10;
     private const int MaxActiveFrames = 3; // Warn if held longer than 3 frames
 
-    public static RenderTexture GetTemporaryRT(int width, int height, bool hasDepth, TextureImageFormat[] format)
+    public static RenderTexture GetTemporaryRT(int width, int height, bool hasDepth, TextureFormat[] format)
     {
         // Same clamp the texture applies to itself, so release finds it under the key it was rented with.
         width = Math.Max(1, width);

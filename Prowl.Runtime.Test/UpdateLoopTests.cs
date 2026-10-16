@@ -241,4 +241,52 @@ public class UpdateLoopTests : RuntimeTestBase
 
         Assert.Equal(5, comp.UpdateCount);
     }
+
+    [Fact]
+    public void Paused_NoGameplayCallbacksRun()
+    {
+        (Scene scene, CounterComponent comp) = MakeRunningCounter();
+        GameObject go = CreateGameObject();
+        ExecuteAlwaysCounter always = go.AddComponent<ExecuteAlwaysCounter>();
+        scene.Add(go);
+        Application.IsPaused = true;
+
+        Update(scene, 3);
+
+        Assert.Equal(0, comp.StartCount);
+        Assert.Equal(0, comp.UpdateCount);
+        Assert.Equal(0, comp.LateUpdateCount);
+        Assert.Equal(0, always.UpdateCount);
+    }
+
+    [Fact]
+    public void Paused_StepRunsOneFrame()
+    {
+        (Scene scene, CounterComponent comp) = MakeRunningCounter();
+        Application.IsPaused = true;
+        Update(scene);
+
+        Application.StepRequested = true;
+        Update(scene);
+        Application.StepRequested = false;
+        Update(scene);
+
+        Assert.Equal(1, comp.StartCount);
+        Assert.Equal(1, comp.UpdateCount);
+        Assert.Equal(1, comp.LateUpdateCount);
+    }
+
+    [Fact]
+    public void Unpaused_UpdatesResume()
+    {
+        (Scene scene, CounterComponent comp) = MakeRunningCounter();
+        Application.IsPaused = true;
+        Update(scene, 2);
+
+        Application.IsPaused = false;
+        Update(scene, 2);
+
+        Assert.Equal(1, comp.StartCount);
+        Assert.Equal(2, comp.UpdateCount);
+    }
 }

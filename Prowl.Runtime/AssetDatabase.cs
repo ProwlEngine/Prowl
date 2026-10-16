@@ -942,7 +942,7 @@ public sealed class AssetWalker
     private static readonly ReloadCache<Type, Plan> s_plans = new(BuildPlan);
     private static readonly ReloadCache<Type, bool> s_canHold = new();
     private static readonly string[] s_skippedAssemblies =
-        ["System", "Microsoft", "Silk.NET", "Jitter2", "Prowl.Motion", "Prowl.Vector", "Prowl.Recast", "Prowl.Paper", "Prowl.Scribe", "Prowl.Echo", "Prowl.Quill", "Prowl.Ember"];
+        ["System", "Microsoft", "Silk.NET", "Jitter2", "Prowl.Motion", "Prowl.Vector", "Prowl.Recast", "Prowl.Paper", "Prowl.Scribe", "Prowl.Echo", "Prowl.Quill", "Prowl.Ember", "Prowl.Graphite"];
 
     private const int ExpandsPerClockCheck = 256;
 
@@ -1125,7 +1125,7 @@ public sealed class AssetWalker
     {
         Assembly engine = typeof(Asset).Assembly;
         if (assembly.IsDynamic) return [];
-        if (assembly != engine && !assembly.GetReferencedAssemblies().Any(reference => reference.Name == engine.GetName().Name)) return [];
+        if (assembly != engine && !MayReference(assembly, engine)) return [];
 
         Type?[] types;
         try { types = assembly.GetTypes(); }
@@ -1140,6 +1140,13 @@ public sealed class AssetWalker
                     fields.Add(field);
         }
         return [.. fields];
+    }
+
+    // NativeAOT keeps no reference list, so there every assembly is scanned.
+    private static bool MayReference(Assembly assembly, Assembly engine)
+    {
+        try { return assembly.GetReferencedAssemblies().Any(reference => reference.Name == engine.GetName().Name); }
+        catch (PlatformNotSupportedException) { return true; }
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070:DynamicallyAccessedMembers",
@@ -1169,7 +1176,7 @@ public sealed class AssetWalker
     private static Func<object, object?> Getter(FieldInfo field)
     {
         Type owner = field.DeclaringType!;
-        if (owner.Assembly.IsCollectible || field.FieldType.Assembly.IsCollectible)
+        if (!RuntimeFeature.IsDynamicCodeCompiled || owner.Assembly.IsCollectible || field.FieldType.Assembly.IsCollectible)
             return field.GetValue;
 
         ParameterExpression target = Expression.Parameter(typeof(object));

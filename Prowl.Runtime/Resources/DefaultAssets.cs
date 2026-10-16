@@ -8,36 +8,24 @@ namespace Prowl.Runtime.Resources;
 /// </summary>
 public enum DefaultShader
 {
-    // Standard PBR family. One shader per alpha mode and cull mode combination, the way the
-    // legacy fixed-function sets were split, so render state stays static per shader.
-    Standard,
-    StandardDoubleSided,
-    StandardCutout,
-    StandardCutoutDoubleSided,
-    StandardTransparent,
-    StandardTransparentDoubleSided,
-    // Anisotropic specular (brushed metal, hair), same split.
-    StandardAnisotropic,
-    StandardAnisotropicDoubleSided,
-    StandardAnisotropicCutout,
-    StandardAnisotropicCutoutDoubleSided,
-    StandardAnisotropicTransparent,
-    StandardAnisotropicTransparentDoubleSided,
+    /// <summary>Graphite's standard physically based surface, its surface type and inputs set per material.</summary>
+    Lit,
 
-    // Unlit family, same split.
+    /// <summary>Graphite's standard unlit surface.</summary>
     Unlit,
-    UnlitDoubleSided,
-    UnlitCutout,
-    UnlitCutoutDoubleSided,
-    UnlitTransparent,
-    UnlitTransparentDoubleSided,
+
+    /// <summary>Graphite's skies, for scene sky materials.</summary>
+    ProceduralSky,
+    GradientSky,
+    CubemapSky,
+    PanoramaSky,
+    SixSidedSky,
 
     Sprite,
     Line,
     Invalid,
-    UI,
     Gizmos,
-    Blit,
+    GizmoIcon,
     Particle,
     Terrain,
     Grass,
@@ -45,26 +33,6 @@ public enum DefaultShader
     DefaultUI,
     DefaultText,
     DefaultTextMesh,
-
-    ProceduralSkybox,
-    GradientSkybox,
-    CubemapSkybox,
-    Tonemapper,
-    SSR,
-    FXAA,
-    SMAA,
-    Bloom,
-    BokehDoF,
-    GTAO,
-    Grid,
-    CinematicEffects,
-    VolumetricFog,
-    TAA,
-    MotionBlur,
-    GizmoIcon,
-    AutoExposure,
-    PrefilterCubemap,
-    VolumetricClouds
 }
 
 /// <summary>
@@ -137,23 +105,4 @@ public enum DefaultTexture3D
 public enum DefaultFont
 {
     Default, // Geist-Regular
-}
-
-/// <summary>
-/// Default shader include files (GLSL)
-/// </summary>
-public enum DefaultShaderInclude
-{
-    ProwlCG,
-    PBR,
-    Random,
-    ShaderVariables,
-    Shadow,
-    VertexAttributes,
-    Lighting,
-    LightTree,
-    StandardCore,
-    FastNoiseLite,
-    SimplexNoise4D,
-    Clouds
 }

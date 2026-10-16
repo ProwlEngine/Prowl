@@ -94,7 +94,7 @@ public static class Application
             // Silk.NET's own window property is only read by the automatic Run loop, which Prowl
             // does not use. The swap interval is the whole setting, and the render thread applies
             // it because it is the thread holding the context.
-            Graphics.SetSwapInterval(value ? 1 : 0);
+            Graphics.VSync = value;
         }
     }
 

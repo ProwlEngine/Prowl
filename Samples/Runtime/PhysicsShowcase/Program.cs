@@ -79,7 +79,8 @@ public sealed class PhysicsShowcaseGame : StationGame
         _stone = Lit(new Color(0.09f, 0.09f, 0.1f, 1f), 0f, 0.85f);
 
         var sun = new GameObject("Sun");
-        DirectionalLight light = sun.AddComponent<DirectionalLight>();
+        Light light = sun.AddComponent<Light>();
+        light.Type = LightType.Directional;
         light.ShadowDistance = 70f;
         light.Intensity = 0.6f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);

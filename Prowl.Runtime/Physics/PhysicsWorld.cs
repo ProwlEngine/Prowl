@@ -170,18 +170,25 @@ public class PhysicsWorld
 
     public bool AllowSleep = true;
     public bool UseMultithreading = true;
-    /// <summary>
-    /// Whether Transform edits are pushed into the physics system immediately (before physics queries),
-    /// or only batched right before the FixedUpdate step:
-    /// when true, a query right after moving a Transform sees the new pose; when false, call
-    /// <see cref="SyncTransforms"/> manually (the pre-step sync still happens every FixedUpdate either way).
-    /// This only concerns the transform -> body direction; the body -> transform readback after a step
-    /// is separate and always runs for dynamic/kinematic bodies.
-    /// </summary>
+	
+    /// <summary>Pushes Transform edits into bodies before each step. Turn off to sync manually.</summary>
     public bool AutoSyncTransforms = true;
 
-    // Rigidbodies that may need their Transform pushed into the physics world (transform -> body).
-    private readonly HashSet<Rigidbody3D> _syncBodies = [];
+    // Every registered rigidbody. Dense so walks over them stay cheap; each body keeps its own slot for swap removal.
+    private readonly List<Rigidbody3D> _syncBodies = [];
+
+    private float _dampingDeltaTime;
+
+    // Bodies whose Transform or layer was edited since the last sync.
+    private readonly List<Rigidbody3D> _pendingSync = [];
+
+    // Bodies whose pose changed in the last step, so only they get their Transform written each frame.
+    private List<Rigidbody3D> _movedBodies = [];
+    private List<Rigidbody3D> _movedScratch = [];
+
+    // Colliders that can move relative to their body: static ones, and ones on a child GameObject.
+    private readonly List<Collider> _watchedColliders = [];
+    private uint _captureStamp;
 
     // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
     // which GameObject was struck. This maps every shape back to the Collider that created it. The key
@@ -416,11 +423,31 @@ public class PhysicsWorld
 
     internal void RegisterBody(Rigidbody3D body)
     {
-        _syncBodies.Add(body);
+        if (body.SyncIndex < 0)
+        {
+            body.SyncIndex = _syncBodies.Count;
+            _syncBodies.Add(body);
+        }
+        body.SyncWorld = this;
+        body.Transform.ChangeListener = body;
         if (body.IsSimulated) HookContacts(body.Native);
     }
 
-    internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
+    internal void UnregisterBody(Rigidbody3D body)
+    {
+        if (ReferenceEquals(body.SyncWorld, this)) body.SyncWorld = null;
+        if (body.GameObject.IsValid() && ReferenceEquals(body.Transform.ChangeListener, body)) body.Transform.ChangeListener = null;
+
+        int index = body.SyncIndex;
+        if (index < 0 || index >= _syncBodies.Count || !ReferenceEquals(_syncBodies[index], body)) return;
+
+        int last = _syncBodies.Count - 1;
+        Rigidbody3D moved = _syncBodies[last];
+        _syncBodies[index] = moved;
+        moved.SyncIndex = index;
+        _syncBodies.RemoveAt(last);
+        body.SyncIndex = -1;
+    }
 
     // Jitter removes a body's constraints along with it, and a constraint created before its connected
     // body existed fell back to the world. Either way it has to be rebuilt when the body comes back.
@@ -588,16 +615,63 @@ public class PhysicsWorld
     }
 
     /// <summary>
-    /// Pushes any changed Transforms into their physics bodies (transform -> body). Runs automatically
-    /// before each simulation step and, when <see cref="AutoSyncTransforms"/> is on, before queries.
-    /// Call it manually to make Transform edits visible to queries when auto-sync is off. Only bodies
-    /// whose Transform actually changed since the last sync are updated, so it is cheap when idle.
+    /// Pushes any changed Transforms into their physics bodies and collider shapes (transform -> body).
+    /// Runs automatically before each simulation step when <see cref="AutoSyncTransforms"/> is on. Call it
+    /// manually to make Transform edits visible to queries, which never sync on their own.
     /// </summary>
     public void SyncTransforms()
     {
         Tasks.MainThreadContext.AssertMainThread();
-        foreach (Rigidbody3D body in _syncBodies)
+
+        // Indexed, since a sync may queue further bodies and they are handled in the same pass.
+        for (int i = 0; i < _pendingSync.Count; i++)
+        {
+            Rigidbody3D body = _pendingSync[i];
+            body.SyncQueued = false;
             if (body.IsValid()) body.SyncTransformToBody();
+        }
+        _pendingSync.Clear();
+
+        RefreshColliders();
+    }
+
+    internal void QueueSync(Rigidbody3D body)
+    {
+        if (body.SyncQueued) return;
+        body.SyncQueued = true;
+        _pendingSync.Add(body);
+    }
+
+    internal void WatchCollider(Collider collider)
+    {
+        if (collider.WatchIndex >= 0) return;
+        collider.WatchIndex = _watchedColliders.Count;
+        _watchedColliders.Add(collider);
+    }
+
+    internal void UnwatchCollider(Collider collider)
+    {
+        int index = collider.WatchIndex;
+        if (index < 0 || index >= _watchedColliders.Count || !ReferenceEquals(_watchedColliders[index], collider)) return;
+
+        int last = _watchedColliders.Count - 1;
+        Collider moved = _watchedColliders[last];
+        _watchedColliders[index] = moved;
+        moved.WatchIndex = index;
+        _watchedColliders.RemoveAt(last);
+        collider.WatchIndex = -1;
+    }
+
+    /// <summary>Rebuilds the shapes of watched colliders whose placement changed.</summary>
+    private void RefreshColliders()
+    {
+        // Backwards, since a rebuild swaps the collider out of its slot and appends it again.
+        for (int i = _watchedColliders.Count - 1; i >= 0; i--)
+        {
+            if (i >= _watchedColliders.Count) continue;
+            Collider collider = _watchedColliders[i];
+            if (collider.IsValid() && collider.EnabledInHierarchy) collider.RefreshPlacement();
+        }
     }
 
     /// <summary>
@@ -709,8 +783,56 @@ public class PhysicsWorld
     }
 
     private void OnPreStep(TimeStep timeStep) => InvokeStepEvent(PreStep, timeStep.StepDt, nameof(PreStep));
-    private void OnPreSubStep(TimeStep timeStep) => InvokeStepEvent(PreSubStep, timeStep.SubstepDt, nameof(PreSubStep));
+    private void OnPreSubStep(TimeStep timeStep)
+    {
+        InvokeStepEvent(PreSubStep, timeStep.SubstepDt, nameof(PreSubStep));
+        ClampBodyVelocities();
+    }
     private void OnPostStep(TimeStep timeStep) => InvokeStepEvent(PostStep, timeStep.StepDt, nameof(PostStep));
+
+    private const float MaxLinearVelocity = 1000000f;
+    private const float MaxAngularVelocity = 1000000f;
+
+    // Same batch sizing Jitter uses for its own per body passes.
+    private const int ClampBatchSize = 256;
+
+    private Action<Jitter2.Parallelization.Parallel.Batch> _clampBatch;
+
+    private void ClampBodyVelocities()
+    {
+        int count = World.RawData.ActiveRigidBodies.Length;
+        if (!UseMultithreading)
+        {
+            ClampRange(0, count);
+            return;
+        }
+
+        int tasks = Math.Min(count / ClampBatchSize + 1, Jitter2.Parallelization.ThreadPool.Instance.ThreadCount);
+        Jitter2.Parallelization.Parallel.ForBatch(0, count, tasks, _clampBatch ??= batch => ClampRange(batch.Start, batch.End));
+    }
+
+    private void ClampRange(int start, int end)
+    {
+        Span<RigidBodyData> bodies = World.RawData.ActiveRigidBodies;
+        for (int i = start; i < end; i++)
+        {
+            ref RigidBodyData body = ref bodies[i];
+            if (body.MotionType != MotionType.Dynamic) continue;
+
+            ClampVelocity(ref body.Velocity, MaxLinearVelocity);
+            ClampVelocity(ref body.AngularVelocity, MaxAngularVelocity);
+            ClampVelocity(ref body.DeltaVelocity, MaxLinearVelocity);
+            ClampVelocity(ref body.DeltaAngularVelocity, MaxAngularVelocity);
+        }
+    }
+
+
+    private static void ClampVelocity(ref JVector velocity, float max)
+    {
+        float squared = velocity.LengthSquared();
+        if (!float.IsFinite(squared)) velocity = JVector.Zero;
+        else if (squared > max * max) velocity = velocity * (max / MathF.Sqrt(squared));
+    }
 
     // Step callbacks fire inside Jitter's World.Step. A throwing subscriber (e.g. a wheel raycasting
     // against a disposed body) must not unwind through the solver and crash. Isolate each subscriber
@@ -739,7 +861,19 @@ public class PhysicsWorld
 
         // World.Clear removed every body, so the per-body registries hold nothing worth visiting.
         // The components re-register when they recreate their bodies.
+        foreach (Rigidbody3D body in _syncBodies)
+        {
+            body.SyncIndex = -1;
+            body.SyncWorld = null;
+        }
         _syncBodies.Clear();
+        _movedBodies.Clear();
+        foreach (Rigidbody3D body in _pendingSync)
+            body.SyncQueued = false;
+        _pendingSync.Clear();
+        foreach (Collider collider in _watchedColliders)
+            collider.WatchIndex = -1;
+        _watchedColliders.Clear();
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
@@ -765,6 +899,13 @@ public class PhysicsWorld
 
         World.Gravity = Gravity.ToJitter();
 
+        if (_dampingDeltaTime != Time.FixedDeltaTime)
+        {
+            _dampingDeltaTime = Time.FixedDeltaTime;
+            foreach (Rigidbody3D body in _syncBodies)
+                if (body.IsValid() && body.IsSimulated) body.ApplyDamping(body.Native);
+        }
+
         World.SolveMode = EnhancedDeterminism ? SolveMode.Deterministic : SolveMode.Regular;
         World.ThreadModel = ThreadModel == PhysicsThreadModel.Persistent
             ? World.ThreadModelType.Persistent
@@ -774,20 +915,59 @@ public class PhysicsWorld
         World.PersistentContactManifold = PersistentContactManifold;
         World.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
 
-        // Push any user Transform edits into the bodies before stepping (always - this is the
-        // "sync prior to the physics step" that happens regardless of AutoSyncTransforms).
-        SyncTransforms();
+        // Push any user Transform edits into the bodies before stepping. Colliders that moved are
+        // rebuilt either way, since their shapes are physics state rather than a body pose.
+        if (AutoSyncTransforms) SyncTransforms();
+        else RefreshColliders();
         RemoveFilteredContacts();
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
 
-        // Record the pose each body just landed on, so interpolated bodies have two steps to render
-        // between. Driven from here rather than a per-body event to keep it one pass with no delegates.
-        foreach (Rigidbody3D body in _syncBodies)
-            if (body.IsValid()) body.CapturePose();
+        CaptureMovedPoses();
 
         DispatchCollisions();
         InvokeStepEvent(StepFinished, Time.FixedDeltaTime, nameof(StepFinished));
+    }
+
+    /// <summary>
+    /// Records the pose each awake body just landed on, so interpolated bodies have two steps to render
+    /// between. Bodies that fell asleep keep being captured until their history settles on the final pose.
+    /// </summary>
+    private void CaptureMovedPoses()
+    {
+        uint stamp = ++_captureStamp;
+        _movedScratch.Clear();
+
+        foreach (RigidBody native in World.RigidBodies.Active)
+        {
+            if (native.Tag is not Rigidbody3D.RigidBodyUserData data) continue;
+            Rigidbody3D body = data.Rigidbody;
+            if (!body.IsValid()) continue;
+
+            body.CapturePose();
+            body.CaptureStamp = stamp;
+            _movedScratch.Add(body);
+        }
+
+        foreach (Rigidbody3D body in _movedBodies)
+        {
+            if (!body.IsValid() || body.CaptureStamp == stamp || body.PoseSettled) continue;
+            body.CapturePose();
+            body.CaptureStamp = stamp;
+            _movedScratch.Add(body);
+        }
+
+        (_movedBodies, _movedScratch) = (_movedScratch, _movedBodies);
+    }
+
+    /// <summary>
+    /// Writes the simulated pose of every body that moved in the last step onto its Transform. Runs once
+    /// per frame before component Updates, so sleeping bodies cost nothing.
+    /// </summary>
+    internal void WriteTransforms()
+    {
+        foreach (Rigidbody3D body in _movedBodies)
+            if (body.IsValid() && body.EnabledInHierarchy) body.WritePose();
     }
 
     /// <summary>
@@ -899,7 +1079,7 @@ public class PhysicsWorld
 
     /// <summary>
     /// Shared prologue for the ray queries: validates the inputs, normalizes the direction, publishes
-    /// the filter for the shared callbacks and syncs pending Transform edits into the bodies.
+    /// the filter for the shared callbacks.
     /// </summary>
     private bool BeginRayQuery(ref Float3 origin, ref Float3 direction, float maxDistance, in QueryFilter filter, string query)
     {
@@ -911,7 +1091,6 @@ public class PhysicsWorld
         if (Float3.LengthSquared(direction) <= 0.0f) return false;
 
         _activeFilter = filter;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         return true;
     }
 
@@ -1034,7 +1213,6 @@ public class PhysicsWorld
         hits.Clear();
         if (!ValidateQuery(origin, direction, maxDistance, nameof(ShapeCastAll))) return 0;
 
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
 
         JVector jOrigin = origin.ToJitter();
@@ -1558,7 +1736,6 @@ public class PhysicsWorld
         hits.Clear();
         if (!ValidateQuery(position, nameof(Overlap))) return 0;
 
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
         JVector jPosition = position.ToJitter();
 
         // Create a bounding box for the shape

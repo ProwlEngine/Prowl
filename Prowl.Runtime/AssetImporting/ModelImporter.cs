@@ -265,14 +265,15 @@ public interface IModelTextureResolver
     /// </summary>
     /// <returns>The texture, or null if it can't/shouldn't be resolved - the caller falls back to the
     /// material slot's built-in default texture (Grid/Normal/Surface/Emission).</returns>
-    Texture2D? ResolveExternal(string sourcePath);
+    /// <param name="srgb">Whether materials sample it as colour, so the GPU decodes it; normal, surface and occlusion maps are data.</param>
+    Texture2D? ResolveExternal(string sourcePath, bool srgb);
 
     /// <summary>
     /// Resolve a texture embedded directly in the model file (GLB bufferView, FBX Video::Clip
     /// content, data: URI - no file of its own).
     /// </summary>
     /// <returns>The texture, or null if it can't/shouldn't be resolved.</returns>
-    Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType);
+    Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType, bool srgb);
 }
 
 /// <summary>
@@ -285,11 +286,11 @@ public sealed class DefaultModelTextureResolver : IModelTextureResolver
 {
     public static readonly DefaultModelTextureResolver Instance = new();
 
-    public Texture2D? ResolveExternal(string sourcePath)
+    public Texture2D? ResolveExternal(string sourcePath, bool srgb)
     {
         try
         {
-            var tex = Texture2D.LoadFromFile(sourcePath, generateMipmaps: true);
+            var tex = Texture2D.FromFile(sourcePath, mipmaps: true, srgb: srgb);
             if (string.IsNullOrEmpty(tex.Name))
                 tex.Name = Path.GetFileNameWithoutExtension(sourcePath);
             return tex;
@@ -301,12 +302,12 @@ public sealed class DefaultModelTextureResolver : IModelTextureResolver
         }
     }
 
-    public Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
+    public Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType, bool srgb)
     {
         try
         {
             using var ms = new MemoryStream(encodedBytes);
-            var tex = Texture2D.LoadFromStream(ms, generateMipmaps: true);
+            var tex = Texture2D.FromStream(ms, mipmaps: true, srgb: srgb);
             tex.Name = string.IsNullOrEmpty(name) ? "EmbeddedTexture" : name;
             return tex;
         }

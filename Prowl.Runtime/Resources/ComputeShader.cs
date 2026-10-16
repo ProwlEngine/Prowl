@@ -8,7 +8,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Prowl.Echo;
-using Prowl.Runtime.Rendering;
+using Prowl.Graphite;
+using Prowl.Graphite.RenderGraph;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
@@ -26,29 +28,31 @@ public struct ComputeKernel
 /// GLSL that runs on the GPU outside of drawing. A <c>.compute</c> file declares its entry points with
 /// <c>#pragma kernel Name X Y Z</c>, the thread group size (Y and Z default to 1), and each one is a plain
 /// <c>void Name()</c> function reading <c>gl_GlobalInvocationID</c> and friends. Storage blocks and images need no
-/// binding layout, the engine assigns them and binds by name.
+/// binding layout, Graphite assigns them and binds by name.
 /// <para/>
 /// Values set with <see cref="SetFloat"/> and the like apply to every kernel, buffers and textures are set per kernel.
-/// Needs compute support, see <see cref="IsSupported"/>.
+/// A dispatch runs at once, ahead of anything submitted later, so a buffer read afterwards sees its results. For work
+/// inside the frame, write a Graphite RenderFeature or RenderProvider instead.
 /// </summary>
 public sealed class ComputeShader : Asset
 {
     [SerializeField] private string _source = "";
     [SerializeField] private ComputeKernel[] _kernels = [];
 
-    [SerializeIgnore] private GraphicsProgram?[] _programs = [];
+    [SerializeIgnore] private ComputeProgram?[] _programs = [];
     [SerializeIgnore] private bool[] _failed = [];
-    [SerializeIgnore] private PropertyState[] _kernelProperties = [];
-    [SerializeIgnore] private PropertyState _shared = new();
+    [SerializeIgnore] private PropertySet[] _kernelProperties = [];
+    [SerializeIgnore] private Dictionary<string, Action<PropertySet>> _shared = [];
+    [SerializeIgnore] private Dictionary<string, ComputeBuffer>[] _kernelBuffers = [];
 
     private static readonly Regex s_kernelPragma = new(@"^[ \t]*#pragma[ \t]+kernel[ \t]+(\w+)(?:[ \t]+(\d+))?(?:[ \t]+(\d+))?(?:[ \t]+(\d+))?[ \t]*\r?$", RegexOptions.Multiline);
 
     internal ComputeShader() : base("New Compute Shader") { }
 
-    /// <summary>Whether this device and graphics target can run compute shaders at all.</summary>
-    public static bool IsSupported => Graphics.Capabilities.Has(GraphicsFeature.ComputeShaders);
+    /// <summary>Whether compute can run, which needs a device.</summary>
+    public static bool IsSupported => Graphics.Device != null;
 
-    /// <summary>Builds a compute shader from GLSL, with its includes already expanded.</summary>
+    /// <summary>Makes a compute shader from source declaring its kernels with <c>#pragma kernel</c>.</summary>
     public static ComputeShader FromSource(string name, string source)
     {
         var shader = new ComputeShader { Name = name };
@@ -79,18 +83,22 @@ public sealed class ComputeShader : Asset
 
     private void ResetKernels()
     {
-        foreach (GraphicsProgram? program in _programs)
-            program?.Dispose();
-        _programs = new GraphicsProgram?[_kernels.Length];
+        foreach (ComputeProgram? program in _programs)
+            Graphics.DeferDispose(program);
+        _programs = new ComputeProgram?[_kernels.Length];
         _failed = new bool[_kernels.Length];
-        _kernelProperties = new PropertyState[_kernels.Length];
+        _kernelProperties = new PropertySet[_kernels.Length];
+        _kernelBuffers = new Dictionary<string, ComputeBuffer>[_kernels.Length];
         for (int i = 0; i < _kernels.Length; i++)
-            _kernelProperties[i] = new PropertyState();
+        {
+            _kernelProperties[i] = new PropertySet();
+            _kernelBuffers[i] = [];
+        }
     }
 
     // ---------------------------------------------------------------- kernels
 
-    /// <summary>The kernel's index, for the per kernel setters and <see cref="Dispatch"/>.</summary>
+    /// <summary>The index of the kernel named <paramref name="name"/>. Throws when there is none.</summary>
     public int FindKernel(string name)
     {
         int index = IndexOf(name);
@@ -124,29 +132,29 @@ public sealed class ComputeShader : Asset
         return _kernels[kernel];
     }
 
-    /// <summary>The kernel's GLSL without the version line: its group size, the shared source and a main that calls it.</summary>
+    /// <summary>The kernel as one compute program: its thread group size, the shared source and a main calling it.</summary>
     internal string KernelSource(int kernel)
     {
         ComputeKernel k = Kernel(kernel);
         var sb = new StringBuilder();
+        sb.Append("Compute\n{\n");
         sb.Append($"#define KERNEL_{k.Name} 1\n");
         sb.Append($"layout(local_size_x = {k.X}, local_size_y = {k.Y}, local_size_z = {k.Z}) in;\n");
         sb.Append(_source);
-        sb.Append($"\nvoid main() {{ {k.Name}(); }}\n");
+        sb.Append($"\nvoid main() {{ {k.Name}(); }}\n}}\n");
         return sb.ToString();
     }
 
-    /// <summary>The kernel's program, compiled the first time it is asked for. Null when compute is unavailable or it failed to compile.</summary>
-    internal GraphicsProgram? ProgramFor(int kernel)
+    private ComputeProgram? ProgramFor(int kernel)
     {
         Kernel(kernel);
-        if (!Graphics.Capabilities.Require(GraphicsFeature.ComputeShaders, $"Compute shader '{Name}'")) return null;
-        if (_failed[kernel]) return null;
-        if (_programs[kernel] is { IsDisposed: false } program) return program;
-
+        if (Graphics.Device == null || _failed[kernel]) return null;
+        if (_programs[kernel] != null) return _programs[kernel];
         try
         {
-            _programs[kernel] = new GraphicsProgram(Graphics.ShaderPrelude + KernelSource(kernel));
+            ShaderPass pass = new() { State = new PassState(), Source = KernelSource(kernel), SourceName = $"{Name}/{_kernels[kernel].Name}" };
+            _programs[kernel] = Graphics.Device.ResourceFactory.CreateComputeProgram(pass.Variants(Graphics.Compiler, Graphics.Device.BackendType).RequireCompute());
+            _programs[kernel]!.Name = pass.SourceName;
         }
         catch (Exception ex)
         {
@@ -156,58 +164,65 @@ public sealed class ComputeShader : Asset
         return _programs[kernel];
     }
 
-    internal PropertyState SharedProperties { get { EnsureLoaded(); return _shared; } }
-
-    internal PropertyState KernelProperties(int kernel)
-    {
-        Kernel(kernel);
-        return _kernelProperties[kernel];
-    }
-
     // ---------------------------------------------------------------- parameters
 
-    public void SetFloat(string name, float value) => SharedProperties.SetFloat(name, value);
-    public void SetInt(string name, int value) => SharedProperties.SetInt(name, value);
-    public void SetBool(string name, bool value) => SharedProperties.SetInt(name, value ? 1 : 0);
-    public void SetVector(string name, Float2 value) => SharedProperties.SetVector(name, value);
-    public void SetVector(string name, Float3 value) => SharedProperties.SetVector(name, value);
-    public void SetVector(string name, Float4 value) => SharedProperties.SetVector(name, value);
-    public void SetMatrix(string name, Float4x4 value) => SharedProperties.SetMatrix(name, value);
-    public void SetMatrixArray(string name, Float4x4[] values) => SharedProperties.SetMatrices(name, values);
-
-    /// <summary>Binds a buffer to the kernel's storage or uniform block of that name.</summary>
-    public void SetBuffer(int kernel, string name, ComputeBuffer buffer) => KernelProperties(kernel).SetBuffer(name, buffer);
-
-    /// <summary>Binds a texture to the kernel's sampler or image of that name. An image reads and writes the texture directly.</summary>
-    public void SetTexture(int kernel, string name, Texture2D texture)
+    private void Shared(string name, Action<PropertySet> set)
     {
-        // The render thread only binds a texture whose GPU side exists, and a fresh one makes it on first use
-        _ = texture.Handle;
-        KernelProperties(kernel).SetTexture(name, texture);
+        EnsureLoaded();
+        _shared[name] = set;
+    }
+
+    public void SetFloat(string name, float value) => Shared(name, p => p.SetFloat(name, value));
+    public void SetInt(string name, int value) => Shared(name, p => p.SetInt(name, value));
+    public void SetBool(string name, bool value) => Shared(name, p => p.SetInt(name, value ? 1 : 0));
+    public void SetVector(string name, Float2 value) => Shared(name, p => p.SetFloat2(name, value));
+    public void SetVector(string name, Float3 value) => Shared(name, p => p.SetFloat3(name, value));
+    public void SetVector(string name, Float4 value) => Shared(name, p => p.SetFloat4(name, value));
+    public void SetMatrix(string name, Float4x4 value) => Shared(name, p => p.SetMatrix(name, value));
+
+    /// <summary>Binds a buffer to the storage block of that name for one kernel.</summary>
+    public void SetBuffer(int kernel, string name, ComputeBuffer buffer)
+    {
+        Kernel(kernel);
+        _kernelBuffers[kernel][name] = buffer;
+        if (buffer.Buffer != null) _kernelProperties[kernel].SetBuffer(name, buffer.Buffer);
+    }
+
+    /// <summary>Binds a texture, sampled or as an image, for one kernel.</summary>
+    public void SetTexture(int kernel, string name, Texture texture)
+    {
+        Kernel(kernel);
+        if (texture.GpuTexture is { } gpu)
+            _kernelProperties[kernel].SetTexture(name, gpu, Graphics.GetSampler(texture.Sampler));
     }
 
     public void SetTexture(int kernel, string name, RenderTexture texture) => SetTexture(kernel, name, texture.MainTexture);
 
-    public void SetTexture(int kernel, string name, Texture3D texture)
-    {
-        _ = texture.Handle;
-        KernelProperties(kernel).SetTexture3D(name, texture);
-    }
-
-    /// <summary>Runs the kernel over the given number of thread groups, in order with the rendering submitted around it.</summary>
+    /// <summary>Runs <paramref name="kernel"/> over a grid of thread groups, before anything submitted after it.</summary>
     public void Dispatch(int kernel, int threadGroupsX, int threadGroupsY, int threadGroupsZ)
-    {
-        using CommandBuffer cmd = Graphics.GetCommandBuffer($"Dispatch {Name}");
-        cmd.DispatchCompute(this, kernel, threadGroupsX, threadGroupsY, threadGroupsZ);
-        Graphics.Submit(cmd);
-    }
+        => Run(kernel, cmd => cmd.Dispatch((uint)Math.Max(threadGroupsX, 1), (uint)Math.Max(threadGroupsY, 1), (uint)Math.Max(threadGroupsZ, 1)));
 
-    /// <summary>Runs the kernel with its thread group counts read from three uints in <paramref name="arguments"/>.</summary>
+    /// <summary>Runs <paramref name="kernel"/> with its group counts read from <paramref name="arguments"/> at an offset.</summary>
     public void DispatchIndirect(int kernel, ComputeBuffer arguments, uint argumentsOffset = 0)
     {
-        using CommandBuffer cmd = Graphics.GetCommandBuffer($"Dispatch {Name}");
-        cmd.DispatchCompute(this, kernel, arguments, argumentsOffset);
-        Graphics.Submit(cmd);
+        if (arguments.Buffer is not { } buffer) return;
+        Run(kernel, cmd => cmd.DispatchIndirect(buffer, argumentsOffset));
+    }
+
+    private void Run(int kernel, Action<CommandBuffer> dispatch)
+    {
+        ComputeProgram? program = ProgramFor(kernel);
+        if (program == null || Graphics.Device == null) return;
+
+        PropertySet properties = _kernelProperties[kernel];
+        foreach (Action<PropertySet> set in _shared.Values) set(properties);
+        List<DeviceBuffer> buffers = [];
+        foreach (ComputeBuffer buffer in _kernelBuffers[kernel].Values)
+            if (buffer.Buffer != null) buffers.Add(buffer.Buffer);
+
+        // The renderer's thread records frames on the same device, so it finishes its frame first
+        Graphics.Renderer?.WaitForRenderThread();
+        ComputeRun.Execute(program, properties, buffers, dispatch);
     }
 
     // ---------------------------------------------------------------- asset
@@ -220,24 +235,58 @@ public sealed class ComputeShader : Asset
 
     protected override void OnUnload()
     {
-        foreach (GraphicsProgram? program in _programs)
-            program?.Dispose();
-        _programs = new GraphicsProgram?[_kernels.Length];
+        foreach (ComputeProgram? program in _programs)
+            Graphics.DeferDispose(program);
+        _programs = new ComputeProgram?[_kernels.Length];
     }
 }
 
-/// <summary>
-/// A GPU buffer of <see cref="Count"/> elements of <see cref="Stride"/> bytes, read and written by compute kernels and
-/// shaders as a storage block. Fill it with <see cref="SetData{T}(ReadOnlySpan{T}, int)"/> and read it back with
-/// <see cref="GetData{T}(Span{T}, int)"/>, which waits for the GPU.
-/// </summary>
+/// <summary>One compute dispatch as a graph execution of its own, its buffers declared so it waits on writes before it.</summary>
+internal static class ComputeRun
+{
+    private static readonly RenderPipeline s_pipeline = new([new Pass()]) { Name = "Compute" };
+    private static readonly int s_viewId = Graphics.NewViewId();
+
+    private sealed class View : IRenderView
+    {
+        public required ComputeProgram Program;
+        public required PropertySet Properties;
+        public required Action<CommandBuffer> Dispatch;
+        public uint PixelWidth => 1;
+        public uint PixelHeight => 1;
+        public int ViewId => s_viewId;
+    }
+
+    private sealed class Pass : IPass
+    {
+        public string Name => "Compute";
+
+        public void Setup(RenderContextBuilder builder) => builder.DeclareOutputBuffer("ComputeKeepAlive", GraphBufferDesc.Structured(4, 4));
+
+        public void Render(RenderContext context, CommandBuffer cmd)
+        {
+            View view = context.ViewAs<View>();
+            cmd.SetComputeShader(view.Program);
+            cmd.SetProperties(view.Properties);
+            view.Dispatch(cmd);
+        }
+    }
+
+    public static void Execute(ComputeProgram program, PropertySet properties, List<DeviceBuffer> buffers, Action<CommandBuffer> dispatch)
+    {
+        ExecutionTask task = Graphics.Device!.DispatchGraph(s_pipeline, new[] { new View { Program = program, Properties = properties, Dispatch = dispatch } });
+        _ = task;
+    }
+}
+
+/// <summary>A storage buffer of fixed sized elements for compute kernels, over a Graphite buffer.</summary>
 public sealed class ComputeBuffer : IDisposable
 {
     public int Count { get; }
     public int Stride { get; }
 
-    /// <summary>Null where the graphics target has no storage buffers, every call then does nothing.</summary>
-    internal GraphicsBuffer? Buffer { get; }
+    /// <summary>The Graphite buffer, null headless.</summary>
+    public DeviceBuffer? Buffer { get; }
 
     public bool IsDisposed { get; private set; }
 
@@ -247,39 +296,29 @@ public sealed class ComputeBuffer : IDisposable
         if (stride <= 0 || stride % 4 != 0) throw new ArgumentException($"Stride must be a positive multiple of 4, {stride} is not.", nameof(stride));
         Count = count;
         Stride = stride;
-
-        if (Graphics.Capabilities.Require(GraphicsFeature.StorageBuffers, "ComputeBuffer"))
-            Buffer = new GraphicsBuffer(BufferType.StructuredBuffer, new byte[(long)count * stride], dynamic: true);
+        if (Graphics.Device != null)
+            Buffer = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription((uint)((long)count * stride), BufferUsage.StructuredBufferReadWrite | BufferUsage.IndirectBuffer));
     }
 
     public void SetData<T>(T[] data) where T : unmanaged => SetData((ReadOnlySpan<T>)data);
 
-    /// <summary>Uploads <paramref name="data"/> starting at element <paramref name="bufferStartIndex"/>.</summary>
     public void SetData<T>(ReadOnlySpan<T> data, int bufferStartIndex = 0) where T : unmanaged
     {
         long offset = CheckRange(MemoryMarshal.AsBytes(data).Length, bufferStartIndex);
         if (Buffer == null || data.Length == 0) return;
-
-        using CommandBuffer cmd = Graphics.GetCommandBuffer("ComputeBuffer.SetData");
-        cmd.UpdateBuffer(Buffer, data, (uint)offset);
-        Graphics.Submit(cmd);
+        Graphics.Device!.UpdateBuffer(Buffer, (uint)offset, data);
     }
 
     public void GetData<T>(T[] destination) where T : unmanaged => GetData((Span<T>)destination);
 
-    /// <summary>Reads elements back from <paramref name="bufferStartIndex"/> on, once everything submitted before has run.</summary>
-    public unsafe void GetData<T>(Span<T> destination, int bufferStartIndex = 0) where T : unmanaged
+    /// <summary>Reads elements back, waiting for every dispatch before it. Zeroes headless.</summary>
+    public void GetData<T>(Span<T> destination, int bufferStartIndex = 0) where T : unmanaged
     {
-        int bytes = MemoryMarshal.AsBytes(destination).Length;
-        long offset = CheckRange(bytes, bufferStartIndex);
-        if (Buffer == null || bytes == 0) return;
-
-        GraphicsBuffer buffer = Buffer;
-        fixed (T* target = destination)
-        {
-            nint address = (nint)target;
-            Graphics.SubmitRenderThreadCallbackAndWait(() => buffer.Read((uint)offset, (uint)bytes, (void*)address));
-        }
+        Span<byte> target = MemoryMarshal.AsBytes(destination);
+        long offset = CheckRange(target.Length, bufferStartIndex);
+        if (Buffer == null || target.Length == 0) return;
+        byte[] data = Graphics.ReadBuffer(Buffer, (uint)offset, (uint)target.Length);
+        data.AsSpan(0, Math.Min(data.Length, target.Length)).CopyTo(target);
     }
 
     private long CheckRange(int byteCount, int startIndex)
@@ -295,6 +334,6 @@ public sealed class ComputeBuffer : IDisposable
     {
         if (IsDisposed) return;
         IsDisposed = true;
-        Buffer?.Dispose();
+        Graphics.DeferDispose(Buffer);
     }
 }

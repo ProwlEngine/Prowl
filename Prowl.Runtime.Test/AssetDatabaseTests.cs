@@ -336,12 +336,12 @@ public class AssetDatabaseTests : RuntimeTestBase
     }
 
     [Fact]
-    public void AMaterialWhoseShaderIsMissing_DrawsWithTheStandardShader()
+    public void AMaterialWhoseShaderIsMissing_DrawsWithTheInvalidShader()
     {
         var material = new Material();
         material.Shader = AssetDatabase.Get<Shader>(Guid.NewGuid());
 
-        Assert.Same(Shader.LoadDefault(DefaultShader.Standard), material.Shader);
+        Assert.Same(Shader.LoadDefault(DefaultShader.Invalid), material.Shader);
     }
 
     [Fact]

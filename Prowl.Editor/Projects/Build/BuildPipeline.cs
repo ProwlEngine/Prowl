@@ -375,6 +375,10 @@ public abstract class BuildPipeline
     /// </summary>
     public virtual bool CanRunOnHost(BuildSettings settings) => true;
 
+    /// <summary>Every define a player's code compiles with, the game scripts included. Never PROWL_EDITOR.</summary>
+    internal static string[] PlayerDefines(BuildSettings settings, BuildPipeline pipeline)
+        => ["PROWL", ScriptCompiler.GetVersionDefine(), .. FinalizeDefineString(settings, pipeline).Split(';', StringSplitOptions.RemoveEmptyEntries)];
+
     internal static string FinalizeDefineString(BuildSettings settings, BuildPipeline pipeline)
     {
         PlatformBuildProfile profile = settings.GetOrCreateProfile(pipeline.GetType());

@@ -3,6 +3,7 @@
 
 using System;
 using System.Linq;
+using System.Numerics;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
@@ -15,13 +16,18 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using static Prowl.Graphite.Rendering.PropertyIDText;
 
 using static Prowl.Editor.GUI.EditorGUI;
 
 using Color = System.Drawing.Color;
-using VColor = Prowl.Vector.Color;
+using Material = Prowl.Runtime.Resources.Material;
+using MaterialProperty = Prowl.Graphite.Rendering.MaterialProperty;
+using Shader = Prowl.Runtime.Resources.Shader;
 namespace Prowl.Editor.GUI.Panels;
 
 public class EnvironmentPanel : DockPanel
@@ -43,9 +49,6 @@ public class EnvironmentPanel : DockPanel
         ("ambient",  "env.tab_ambient",  EditorIcons.Lightbulb),
         ("lightmap", "env.tab_lightmap", EditorIcons.TableCellsLarge),
     ];
-
-    private static VColor ToColor(Float4 f) => new((float)f.X, (float)f.Y, (float)f.Z, (float)f.W);
-    private static Float4 ToF4(VColor c) => new(c.R, c.G, c.B, c.A);
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -78,83 +81,113 @@ public class EnvironmentPanel : DockPanel
                         case "fog":      DrawFogSection(paper, "env_fog", font, scene); break;
                         case "ambient":  DrawAmbientSection(paper, "env_amb", font, scene); break;
                         case "lightmap": DrawLightmappingSection(paper, "env_lm", font, scene); break;
-                        default:         DrawSkyboxSection(paper, "env_sky", font, scene); break;
+                        default:         DrawSkySection(paper, "env_sky", font, scene); break;
                     }
                 }
             });
         }
     }
 
-    private void DrawSkyboxSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private static readonly (BuiltInSky Sky, string Label)[] s_newSkies =
+    [
+        (BuiltInSky.Procedural, "env.sky_procedural"),
+        (BuiltInSky.Gradient, "env.sky_gradient"),
+        (BuiltInSky.Cubemap, "env.sky_cubemap"),
+        (BuiltInSky.Panorama, "env.sky_panorama"),
+    ];
+
+    private void DrawSkySection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
-        EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.skybox"), first: true);
+        SceneEnvironment env = scene.Environment;
 
-        Scene.SkyboxParams sky = scene.Skybox;
-        void Dirty() { scene.Skybox = sky; EditorSceneManager.MarkDirty(); }
+        EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.sky"), first: true);
 
-        EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
-            Origami.EnumDropdown(paper, $"{id}_mode_v", sky.Mode, v => { sky.Mode = v; Dirty(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_mat", Loc.Get("env.sky_material"), () =>
+            PropertyGridUtils.DrawField(paper, $"{id}_mat_v", "", typeof(Material), env.SkyMaterial,
+                v => { env.SkyMaterial = v as Material; EditorSceneManager.MarkDirty(); }, 0));
 
-        switch (sky.Mode)
+        EditorGUI.SettingsRow(paper, $"{id}_new", Loc.Get("env.new_sky"), () =>
         {
-            case Scene.SkyboxMode.SolidColor:
-                EditorGUI.SettingsRow(paper, $"{id}_solid", Loc.Get("env.color"), () =>
-                    Origami.ColorField(paper, $"{id}_solid_v", sky.SolidColor, v => { sky.SolidColor = v; Dirty(); }).Show());
-                break;
+            using (paper.Row($"{id}_new_row").Height(28).Gap(6).Enter())
+                foreach ((BuiltInSky sky, string label) in s_newSkies)
+                    SmallButton(paper, $"{id}_new_{sky}", Loc.Get(label), () =>
+                    {
+                        env.SkyMaterial = SceneEnvironment.CreateSkyMaterial(sky);
+                        EditorSceneManager.MarkDirty();
+                    });
+        });
 
-            case Scene.SkyboxMode.Gradient:
-                EditorGUI.SettingsRow(paper, $"{id}_top", Loc.Get("env.top_color"), () =>
-                    Origami.ColorField(paper, $"{id}_top_v", sky.GradientTop, v => { sky.GradientTop = v; Dirty(); }).Show());
-                EditorGUI.SettingsRow(paper, $"{id}_bot", Loc.Get("env.bottom_color"), () =>
-                    Origami.ColorField(paper, $"{id}_bot_v", sky.GradientBottom, v => { sky.GradientBottom = v; Dirty(); }).Show());
-                EditorGUI.SettingsRow(paper, $"{id}_exp", Loc.Get("env.exponent"), () =>
-                    Origami.Slider(paper, $"{id}_exp_v", sky.GradientExponent, v => { sky.GradientExponent = v; Dirty(); }, 0.1f, 5f).Show());
-                break;
+        EditorGUI.SettingsRow(paper, $"{id}_bg", Loc.Get("env.background_color"), () =>
+            Origami.ColorField(paper, $"{id}_bg_v", env.SkyColor, v => { env.SkyColor = v; EditorSceneManager.MarkDirty(); }).Show());
 
-            case Scene.SkyboxMode.Material:
-                EditorGUI.SettingsRow(paper, $"{id}_mat", Loc.Get("env.material"), () =>
-                    PropertyGridUtils.DrawField(paper, $"{id}_mat_v", "", typeof(Material), sky.CustomMaterial,
-                        v => { sky.CustomMaterial = v as Material; Dirty(); }, 0));
-                break;
-
-            case Scene.SkyboxMode.Procedural:
-                paper.Box($"{id}_hint").Height(20).Margin(Origami.Current.Metrics.PaddingLarge, 0, 0, 0)
-                    .Text(Loc.Get("env.sun_auto"), font)
-                    .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                break;
+        Material? material = env.SkyMaterial;
+        if (material.IsNotValid())
+        {
+            Hint(paper, $"{id}_none", font, Loc.Get("env.no_sky_hint"));
         }
+        else if (material.AssetID != Guid.Empty)
+        {
+            Hint(paper, $"{id}_asset", font, Loc.Get("env.sky_asset_hint"));
+            EditorGUI.SettingsRow(paper, $"{id}_embed", "", () =>
+                SmallButton(paper, $"{id}_embed_b", Loc.Get("env.make_embedded"), () =>
+                {
+                    env.SkyMaterial = material.Clone();
+                    EditorSceneManager.MarkDirty();
+                }));
+        }
+        else
+        {
+            EditorGUI.SectionHeader(paper, $"{id}_h_props", Loc.Get("env.sky_properties"));
+            Shader? shader = material.Shader;
+            if (shader.IsValid())
+            {
+                foreach (MaterialProperty prop in shader.Properties)
+                    MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name.Text()}", material, prop, EditorSceneManager.MarkDirty);
+                if (shader.Name == "Graphite/Sky/Procedural")
+                    Hint(paper, $"{id}_sun", font, Loc.Get("env.sun_auto"));
+            }
+        }
+
+        EditorGUI.SectionHeader(paper, $"{id}_h_cap", Loc.Get("env.sky_capture"));
+        SceneEnvironment.SkyCaptureSettings capture = env.SkyCapture;
+        void Capture() { env.SkyCapture = capture; EditorSceneManager.MarkDirty(); }
+        EditorGUI.SettingsRow(paper, $"{id}_cap_mode", Loc.Get("env.mode"), () =>
+            Origami.EnumDropdown(paper, $"{id}_cap_mode_v", capture.Mode, v => { capture.Mode = v; Capture(); }).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_cap_res", Loc.Get("env.capture_resolution"), () =>
+            Origami.IntSlider(paper, $"{id}_cap_res_v", capture.Resolution, v => { capture.Resolution = (int)BitOperations.RoundUpToPowerOf2((uint)Math.Clamp(v, 16, 2048)); Capture(); }, 16, 2048).Show());
+        if (capture.Mode == SkyCaptureMode.OnChange)
+            EditorGUI.SettingsRow(paper, $"{id}_cap_int", Loc.Get("env.capture_interval"), () =>
+                Origami.IntSlider(paper, $"{id}_cap_int_v", capture.Interval, v => { capture.Interval = v; Capture(); }, 1, 30).Show());
     }
 
     private void DrawFogSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.fog"), first: true);
 
-        Scene.FogParams fog = scene.Fog;
-        void Dirty() { scene.Fog = fog; EditorSceneManager.MarkDirty(); }
+        SceneEnvironment.FogSettings fog = scene.Environment.Fog;
+        void Dirty() { scene.Environment.Fog = fog; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
             Origami.EnumDropdown(paper, $"{id}_mode_v", fog.Mode, v => { fog.Mode = v; Dirty(); }).Show());
 
-        if (fog.Mode != Scene.FogParams.FogMode.Off)
+        if (fog.Mode == FogMode.Off) return;
+
+        EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.fog_use_sky"), fog.UseSky, v => { fog.UseSky = v; Dirty(); });
+        if (!fog.UseSky)
+            EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
+                Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Dirty(); }).Show());
+
+        if (fog.Mode == FogMode.Linear)
         {
-            EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.fog_use_sky"), fog.UseSky, v => { fog.UseSky = v; Dirty(); });
-
-            if (!fog.UseSky)
-                EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
-                    Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Dirty(); }).Show());
-
-            if (fog.Mode == Scene.FogParams.FogMode.Linear)
-            {
-                EditorGUI.SettingsRow(paper, $"{id}_start", Loc.Get("env.start_distance"), () =>
-                    Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start, v => { fog.Start = v; Dirty(); }).Show());
-                EditorGUI.SettingsRow(paper, $"{id}_end", Loc.Get("env.end_distance"), () =>
-                    Origami.NumericField<float>(paper, $"{id}_end_v", fog.End, v => { fog.End = v; Dirty(); }).Show());
-            }
-            else
-            {
-                EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
-                    Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.1f).Format("F4").Show());
-            }
+            EditorGUI.SettingsRow(paper, $"{id}_start", Loc.Get("env.start_distance"), () =>
+                Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start, v => { fog.Start = v; Dirty(); }).Show());
+            EditorGUI.SettingsRow(paper, $"{id}_end", Loc.Get("env.end_distance"), () =>
+                Origami.NumericField<float>(paper, $"{id}_end_v", fog.End, v => { fog.End = v; Dirty(); }).Show());
+        }
+        else
+        {
+            EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
+                Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.1f).Format("F4").Show());
         }
     }
 
@@ -162,27 +195,45 @@ public class EnvironmentPanel : DockPanel
     {
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.ambient_lighting"), first: true);
 
-        Scene.AmbientLightParams ambient = scene.Ambient;
-        void Dirty() { scene.Ambient = ambient; EditorSceneManager.MarkDirty(); }
+        SceneEnvironment.AmbientSettings ambient = scene.Environment.Ambient;
+        void Dirty() { scene.Environment.Ambient = ambient; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
             Origami.EnumDropdown(paper, $"{id}_mode_v", ambient.Mode, v => { ambient.Mode = v; Dirty(); }).Show());
 
-        EditorGUI.SettingsRow(paper, $"{id}_str", Loc.Get("env.strength"), () =>
-            Origami.Slider(paper, $"{id}_str_v", ambient.Strength, v => { ambient.Strength = v; Dirty(); }, 0f, 5f).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_int", Loc.Get("env.intensity"), () =>
+            Origami.Slider(paper, $"{id}_int_v", ambient.Intensity, v => { ambient.Intensity = v; Dirty(); }, 0f, 5f).Show());
 
-        if (ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform)
+        switch (ambient.Mode)
         {
-            EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
-                Origami.ColorField(paper, $"{id}_color_v", ToColor(ambient.Color), v => { ambient.Color = ToF4(v); Dirty(); }).Show());
+            case AmbientMode.Uniform:
+                EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
+                    Origami.ColorField(paper, $"{id}_color_v", ambient.Color, v => { ambient.Color = v; Dirty(); }).Show());
+                break;
+            case AmbientMode.Hemisphere:
+                EditorGUI.SettingsRow(paper, $"{id}_sky", Loc.Get("env.sky_color"), () =>
+                    Origami.ColorField(paper, $"{id}_sky_v", ambient.SkyColor, v => { ambient.SkyColor = v; Dirty(); }).Show());
+                EditorGUI.SettingsRow(paper, $"{id}_gnd", Loc.Get("env.ground_color"), () =>
+                    Origami.ColorField(paper, $"{id}_gnd_v", ambient.GroundColor, v => { ambient.GroundColor = v; Dirty(); }).Show());
+                break;
+            default:
+                Hint(paper, $"{id}_hint", font, Loc.Get("env.sky_ambient_hint"));
+                break;
         }
-        else
-        {
-            EditorGUI.SettingsRow(paper, $"{id}_sky", Loc.Get("env.sky_color"), () =>
-                Origami.ColorField(paper, $"{id}_sky_v", ToColor(ambient.SkyColor), v => { ambient.SkyColor = ToF4(v); Dirty(); }).Show());
-            EditorGUI.SettingsRow(paper, $"{id}_gnd", Loc.Get("env.ground_color"), () =>
-                Origami.ColorField(paper, $"{id}_gnd_v", ToColor(ambient.GroundColor), v => { ambient.GroundColor = ToF4(v); Dirty(); }).Show());
-        }
+    }
+
+    private static void Hint(Paper paper, string id, Scribe.FontFile font, string text)
+        => paper.Box(id).Height(20).Margin(Origami.Current.Metrics.PaddingLarge, 0, 0, 0)
+            .Text(text, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+
+    private static void SmallButton(Paper paper, string id, string label, Action onClick)
+    {
+        Scribe.FontFile? font = EditorTheme.DefaultFont;
+        paper.Box(id).Width(UnitValue.Auto).Height(26).Rounded(Origami.Current.Metrics.Rounding).Padding(10, 10, 0, 0)
+            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
+            .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
     }
 
     private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, Scene scene)

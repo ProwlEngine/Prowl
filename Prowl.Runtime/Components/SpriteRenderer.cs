@@ -2,11 +2,16 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using GMaterial = Prowl.Graphite.Rendering.Material;
+using GTexture = Prowl.Graphite.Texture;
+using Material = Prowl.Runtime.Resources.Material;
+using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -17,7 +22,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Sprite Renderer")]
 [ComponentIcon("")] // Image
-public class SpriteRenderer : Component, IMaterialRenderer, IColorTint
+public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderSync
 {
     int IMaterialRenderer.MaterialSlotCount => 1;
     Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
@@ -41,9 +46,14 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint
     /// <summary>Higher values render in front of lower ones (applied as a small Z bias for the transparent queue).</summary>
     public int SortingOrder;
 
+    public ShadowCasting ShadowCasting = ShadowCasting.Off;
+
     [System.NonSerialized] private Mesh? _mesh;
-    [System.NonSerialized] private PropertyState? _props;
-    [System.NonSerialized] private MeshRenderable? _renderable;
+    [System.NonSerialized, NotHeld] private readonly RenderableState _renderable = new();
+    [System.NonSerialized, NotHeld] private readonly OwnedMaterial _material = new();
+    [System.NonSerialized, NotHeld] private readonly GMaterial[] _gpuMaterials = new GMaterial[1];
+    [System.NonSerialized] private uint _worldVersion, _transformVersion;
+    [System.NonSerialized] private int _sortingOrder;
 
     // Snapshot of the inputs the baked mesh was built from, so we only rebuild when something changes.
     [System.NonSerialized] private Sprite? _bakedSprite;
@@ -57,43 +67,70 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint
     public static Material DefaultSpriteMaterial =>
         s_defaultMaterial.IsValid() ? s_defaultMaterial : (s_defaultMaterial = new Material(Shader.LoadDefault(DefaultShader.Sprite)));
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
+    public RenderableHandle Renderable => _renderable.Handle;
+
+    bool IRenderSync.Sync(RenderWorld world)
     {
         Sprite? sprite = Sprite;
-        if (sprite == null) return;
-
-        Texture2D? tex = sprite.Texture;
-        if (tex == null || tex.Width == 0 || tex.Height == 0) return;
-        if (sprite.Rect.Width <= 0 || sprite.Rect.Height <= 0) return;
-
-        EnsureMesh(sprite);
-        if (_mesh == null) return;
-
-        Material assignedMat = Material;
-        Material mat = assignedMat.IsValid() ? assignedMat : DefaultSpriteMaterial;
-
-        _props ??= new PropertyState();
-        _props.Clear();
-        _props.SetTexture("_MainTex", tex);
-
-        // Bind any secondary maps (e.g. "_NormalMap", "_MaskMap") so custom sprite materials can sample them.
-        if (sprite.SecondaryTextures.Count > 0)
+        Texture2D? tex = sprite.IsValid() ? sprite.Texture : null;
+        if (sprite.IsNotValid() || tex.IsNotValid() || tex.Width == 0 || tex.Height == 0 || sprite.Rect.Width <= 0 || sprite.Rect.Height <= 0)
         {
-            foreach (string key in sprite.SecondaryTextures.Keys)
-            {
-                Texture2D? secondary = sprite.SecondaryTextures[key];
-                if (secondary != null)
-                    _props.SetTexture(key, secondary);
-            }
+            Detach(world);
+            return false;
         }
 
-        Float4x4 world = Transform.LocalToWorldMatrix;
-        if (SortingOrder != 0)
-            world *= Float4x4.CreateTranslation(new Float3(0, 0, SortingOrder * SortBias));
+        EnsureMesh(sprite);
+        Mesh? mesh = _mesh;
+        if (mesh.IsNotValid())
+        {
+            Detach(world);
+            return false;
+        }
 
-        _renderable ??= new MeshRenderable(_mesh, mat, world, GameObject.LayerIndex, _props);
-        _renderable.Set(_mesh, mat, world, GameObject.LayerIndex, _props);
-        renderables.Add(_renderable);
+        Material assigned = Material;
+        Material material = assigned.IsValid() ? assigned : DefaultSpriteMaterial;
+        GMaterial? gpu = _material.Of(material.IsLoaded ? material.GpuMaterial : null);
+        if (gpu == null)
+        {
+            if (material.State == AssetState.Unloaded) _ = material.LoadAsync();
+            _renderable.Detach(world);
+            return false;
+        }
+        _material.SetTexture("_MainTex", tex);
+        foreach (KeyValuePair<string, Texture2D> secondary in sprite.SecondaryTextures)
+            if (secondary.Value.IsValid()) _material.SetTexture(secondary.Key, secondary.Value);
+        _gpuMaterials[0] = gpu;
+
+        Float4x4 matrix = Transform.LocalToWorldMatrix;
+        if (SortingOrder != 0)
+            matrix *= Float4x4.CreateTranslation(new Float3(0, 0, SortingOrder * SortBias));
+        if (_worldVersion != Transform.WorldVersion || _sortingOrder != SortingOrder)
+        {
+            _worldVersion = Transform.WorldVersion;
+            _sortingOrder = SortingOrder;
+            _transformVersion++;
+        }
+
+        _renderable.Sync(world, new RenderableState.Desc
+        {
+            Mesh = mesh.GpuIfLoaded,
+            Materials = _gpuMaterials,
+            Transform = (Double4x4)matrix,
+            TransformVersion = _transformVersion,
+            Flags = RenderableState.FlagsFor(GameObject, false, false) | ShadowCasting.ToFlags(),
+            LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
+            ObjectId = (uint)InstanceID,
+        });
+        return false;
+    }
+
+    void IRenderSync.Detach(RenderWorld world) => Detach(world);
+
+    private void Detach(RenderWorld world)
+    {
+        _renderable.Detach(world);
+        _material.Release();
     }
 
     private void EnsureMesh(Sprite sprite)
@@ -147,7 +184,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint
     }
 
     private bool NeedsRebuild(Sprite sprite) =>
-        _mesh == null ||
+        _mesh.IsNotValid() ||
         !ReferenceEquals(_bakedSprite, sprite) || _bakedContent != sprite.ContentVersion ||
         _bakedFlipX != FlipX || _bakedFlipY != FlipY ||
         !_bakedColor.Equals(Color);
@@ -163,7 +200,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint
     public override void DrawGizmosSelected()
     {
         Sprite? sprite = Sprite;
-        if (sprite == null) return;
+        if (sprite.IsNotValid()) return;
 
         float ppu = sprite.PixelsPerUnit > 0 ? sprite.PixelsPerUnit : 100f;
         float w = sprite.Rect.Width / ppu, h = sprite.Rect.Height / ppu;
@@ -200,5 +237,87 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint
     {
         if (_mesh.IsValid()) _mesh.Dispose();
         _mesh = null;
+        base.OnDispose();
+    }
+}
+
+/// <summary>
+/// A renderer's own child of a material: it draws with everything the material sets plus the few values only this
+/// renderer gives, such as a sprite's texture.
+/// </summary>
+internal sealed class OwnedMaterial
+{
+    private GMaterial? _parent;
+    private GMaterial? _child;
+    private readonly Dictionary<string, (GTexture? Texture, Prowl.Graphite.SamplerDescription Sampler)> _textures = [];
+    private readonly Dictionary<string, Float4> _values = [];
+
+    /// <summary>The child of <paramref name="parent"/>, made again when the parent changes. Null without a parent.</summary>
+    public GMaterial? Of(GMaterial? parent)
+    {
+        if (parent == null)
+        {
+            Release();
+            return null;
+        }
+        if (_child == null || _child.IsDisposed || _parent != parent)
+        {
+            Release();
+            _child = parent.CreateChild();
+            _parent = parent;
+        }
+        if (_child.Shader != parent.Shader)
+        {
+            _child.Shader = parent.Shader;
+            _textures.Clear();
+            _values.Clear();
+        }
+        if (_child.CastShadows != parent.CastShadows) _child.CastShadows = parent.CastShadows;
+        return _child;
+    }
+
+    /// <summary>Gives the child a texture when its shader has the property and the texture or its sampler changed.</summary>
+    public void SetTexture(string name, Texture2D? texture)
+    {
+        if (_child == null) return;
+        GTexture? gpu = texture.IsValid() ? texture.GpuIfLoaded : null;
+        if (texture.IsValid() && gpu == null && texture.State == AssetState.Unloaded) _ = texture.LoadAsync();
+        Prowl.Graphite.SamplerDescription sampler = texture.IsValid() ? texture.SamplerUnchecked : Prowl.Graphite.SamplerDescription.Linear;
+        if (_textures.TryGetValue(name, out var bound) && bound.Texture == gpu && bound.Sampler.Equals(sampler)) return;
+        _textures[name] = (gpu, sampler);
+        if (_child.Shader.FindProperty(name) >= 0) _child.SetTexture(name, gpu, sampler);
+    }
+
+    /// <summary>Gives the child a colour when its shader has the property and the colour changed.</summary>
+    public void SetColor(string name, Color color)
+    {
+        Float4 value = new(color.R, color.G, color.B, color.A);
+        if (Unchanged(name, value)) return;
+        _child!.SetColor(name, value);
+    }
+
+    /// <summary>Gives the child a two component value when its shader has the property and the value changed.</summary>
+    public void SetVector(string name, Float2 value)
+    {
+        if (Unchanged(name, new Float4(value.X, value.Y, 0, 0))) return;
+        _child!.SetFloat2(name, value);
+    }
+
+    private bool Unchanged(string name, Float4 value)
+    {
+        if (_child == null) return true;
+        if (_values.TryGetValue(name, out Float4 bound) && bound == value) return true;
+        _values[name] = value;
+        return _child.Shader.FindProperty(name) < 0;
+    }
+
+    /// <summary>Frees the child once the frames using it finish.</summary>
+    public void Release()
+    {
+        Graphics.DeferDispose(_child);
+        _child = null;
+        _parent = null;
+        _textures.Clear();
+        _values.Clear();
     }
 }

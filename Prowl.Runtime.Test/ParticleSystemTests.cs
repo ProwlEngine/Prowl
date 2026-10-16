@@ -46,6 +46,17 @@ public class ParticleSystemTests : RuntimeTestBase
         Time.CurrentTime.DeltaTime = Frame;
     }
 
+    /// <summary>The trail segment records the system writes this frame, <see cref="ParticleRenderProvider.RecordRows"/> rows each.</summary>
+    private static Float4[] BuildTrailRecords(ParticleSystemComponent system, out int segments)
+    {
+        var provider = new ParticleRenderProvider(system, null!);
+        AABB bounds = default;
+        bool hasBounds = false;
+        segments = system.Trails.BuildSegments(system, Float3.Zero, provider, ref bounds, ref hasBounds);
+        provider.Truncate(0);
+        return provider.Append(segments).ToArray();
+    }
+
     /// <summary>Like <see cref="Run"/> but advancing the frame counter, for anything that tracks frames.</summary>
     private void RunFrames(Scene scene, int frames, Action? beforeEach = null)
     {
@@ -631,10 +642,7 @@ public class ParticleSystemTests : RuntimeTestBase
         system.Emit(1);
 
         Run(scene, 0.4f);
-        InstanceData[] buffer = Array.Empty<InstanceData>();
-        AABB bounds = default;
-        bool hasBounds = false;
-        int segments = system.Trails.BuildSegments(system, ref buffer, ref bounds, ref hasBounds);
+        Float4[] buffer = BuildTrailRecords(system, out int segments);
         Assert.True(segments > 5, $"segments {segments}");
 
         Run(scene, 0.2f);
@@ -644,24 +652,6 @@ public class ParticleSystemTests : RuntimeTestBase
 
         Run(scene, 0.6f);
         Assert.False(system.Trails.HasOrphans);
-    }
-
-    [Fact]
-    public void LightsRespectTheCap()
-    {
-        Scene scene = CreateScene(enable: true);
-        ParticleSystemComponent system = CreateSystem(scene, s =>
-        {
-            s.Light.Enabled = true;
-            s.Light.MaxLights = 3;
-        });
-        system.Emit(10);
-
-        var lights = new List<IRenderableLight>();
-        system.Light.Collect(system, lights);
-
-        Assert.Equal(3, lights.Count);
-        Assert.Equal(3, new HashSet<int> { lights[0].GetLightID(), lights[1].GetLightID(), lights[2].GetLightID() }.Count);
     }
 
     [Fact]
@@ -1063,15 +1053,12 @@ public class ParticleSystemTests : RuntimeTestBase
         Assert.Equal(5, system.ParticleCount);
         Assert.Equal(5, child.ParticleCount);
 
-        InstanceData[] buffer = Array.Empty<InstanceData>();
-        AABB bounds = default;
-        bool hasBounds = false;
-        int segments = system.Trails.BuildSegments(system, ref buffer, ref bounds, ref hasBounds);
+        Float4[] buffer = BuildTrailRecords(system, out int segments);
         Assert.True(segments >= 5 * 5, $"segments {segments}");
         for (int k = 0; k < segments; k++)
         {
             // Every segment belongs to a live particle's column: x stays on one of the odd columns.
-            float x = buffer[k].ModelRow0.X;
+            float x = buffer[k * ParticleRenderProvider.RecordRows].X;
             Assert.True(MathF.Abs(x - MathF.Round(x)) < 1e-3f && (int)MathF.Round(x) % 2 == 1, $"segment at x {x}");
         }
     }
@@ -1092,14 +1079,11 @@ public class ParticleSystemTests : RuntimeTestBase
 
         Run(scene, 1f);
 
-        InstanceData[] buffer = Array.Empty<InstanceData>();
-        AABB bounds = default;
-        bool hasBounds = false;
-        int segments = system.Trails.BuildSegments(system, ref buffer, ref bounds, ref hasBounds);
+        Float4[] buffer = BuildTrailRecords(system, out int segments);
 
         // Segments are written head first, so the last one ends at the tail.
         Assert.True(segments > 5);
-        Assert.True(buffer[segments - 1].ModelRow0.W < 0.01f, $"tail width {buffer[segments - 1].ModelRow0.W}");
+        Assert.True(buffer[(segments - 1) * ParticleRenderProvider.RecordRows].W < 0.01f, $"tail width {buffer[(segments - 1) * ParticleRenderProvider.RecordRows].W}");
     }
 
     [Fact]

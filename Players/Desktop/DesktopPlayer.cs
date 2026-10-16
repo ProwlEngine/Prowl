@@ -54,13 +54,11 @@ public sealed class DesktopPlayer : Game, IDisposable
 
     private void LoadGameAssemblies()
     {
+        // The game is compiled into the player, so each one is found by name.
         foreach (string name in _manifest.AssemblyLoadOrder)
         {
-            string path = Path.Combine(Application.DataPath, name + ".dll");
-            if (File.Exists(path))
-                Assembly.LoadFrom(path);
-            else
-                Debug.LogWarning($"[Player] Game assembly not found: {path}");
+            try { Assembly.Load(new AssemblyName(name)); }
+            catch (Exception e) { Debug.LogWarning($"[Player] Game assembly {name} is not in this build: {e.Message}"); }
         }
     }
 

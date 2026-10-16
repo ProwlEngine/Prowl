@@ -101,7 +101,7 @@ internal static class AssetLoader
             Debug.LogError($"{asset.GetType().Name} '{asset.Name}' was loaded from inside another load. Loading never waits on other assets.");
             return;
         }
-        if (Graphics.IsRenderThread)
+        if (Thread.CurrentThread.Name == "Graphite Render")
         {
             Debug.LogErrorOnce($"RenderThreadLoad.{asset.AssetID}", $"{asset.GetType().Name} '{asset.Name}' was loaded from the render thread, which only binds what is already loaded.");
             Request(asset, high: true);

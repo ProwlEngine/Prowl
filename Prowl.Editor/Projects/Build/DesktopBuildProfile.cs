@@ -34,6 +34,8 @@ public class DesktopBuildProfile : PlatformBuildProfile
     public bool SelfContained = false;
     /// <summary> Whether to trim unused code from the published output. </summary>
     public bool PublishTrimmed = false;
+    /// <summary> Whether to compile the game ahead of time into one native executable. Needs the platform's native toolchain and builds for the host OS only. </summary>
+    public bool PublishAot = false;
     /// <summary> Default width of the application window in pixels. </summary>
     public int WindowWidth = 1280;
     /// <summary> Default height of the application window in pixels. </summary>
@@ -87,6 +89,7 @@ public class DesktopBuildProfile : PlatformBuildProfile
         Platform = BuildTarget.Windows;
         SelfContained = false;
         PublishTrimmed = false;
+        PublishAot = false;
         WindowWidth = 1280;
         WindowHeight = 720;
     }
@@ -119,6 +122,9 @@ public sealed class DesktopBuildProfileDrawer : IBuildProfileDrawer
 
         EditorGUI.SettingsToggle(paper, "bld_trimmed", "Publish Trimmed", desktop.PublishTrimmed,
             v => { desktop.PublishTrimmed = v; EditorRegistries.SaveSettings(); }, separator: false);
+
+        EditorGUI.SettingsToggle(paper, "bld_aot", "Native AOT", desktop.PublishAot,
+            v => { desktop.PublishAot = v; EditorRegistries.SaveSettings(); }, separator: false);
 
         EditorGUI.SectionHeader(paper, "bld_window_h", "Window");
 

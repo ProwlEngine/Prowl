@@ -200,14 +200,11 @@ public class GameViewPanel : DockPanel
             List<Camera> cameras = scene.GatherActiveCameras();
             cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
 
-            RenderStats.BeginFrame();
             foreach (Camera cam in cameras)
             {
                 try
                 {
-                    RenderPipeline? camPipeline = cam.Pipeline;
-                    RenderPipeline pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
-                    pipeline.Render(cam, new RenderingData { FallbackTarget = _rt });
+                    cam.Render(new CameraRenderOptions { FallbackTarget = _rt, Kind = Prowl.Graphite.Rendering.ViewKind.Game });
                 }
                 catch (Exception ex)
                 {
@@ -271,14 +268,7 @@ public class GameViewPanel : DockPanel
             {
                 EnsureGamePaper(rtW, rtH);
                 _gamePaperRenderer!.UpdateProjection(rtW, rtH);
-                _gamePaperRenderer.Target = _rt.frameBuffer;
-
-                {
-                    using CommandBuffer bind = Graphics.GetCommandBuffer("GameViewPanel.GUI Bind");
-                    bind.SetRenderTarget(_rt.frameBuffer);
-                    bind.SetViewport(0, 0, (uint)rtW, (uint)rtH);
-                    Graphics.Submit(bind);
-                }
+                _gamePaperRenderer.Target = _rt;
 
                 // The game's UI is gameplay, so it reads input the way the scene update does, simulated input included.
                 bool wasGameplay = Application.IsGameplayExecuting;
@@ -298,13 +288,6 @@ public class GameViewPanel : DockPanel
                 finally
                 {
                     Application.IsGameplayExecuting = wasGameplay;
-                }
-
-                {
-                    using CommandBuffer unbind = Graphics.GetCommandBuffer("GameViewPanel.GUI Unbind");
-                    unbind.SetRenderTarget(null);
-                    unbind.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                    Graphics.Submit(unbind);
                 }
             }
 
@@ -444,54 +427,23 @@ public class GameViewPanel : DockPanel
 
             // General info
             if (_rt != null)
-                Row(paper, font, "gv_r", $"{_rt.Width}x{_rt.Height}", $"{s.Cameras} cam", fs, rowH);
+                Row(paper, font, "gv_r", $"{_rt.Width}x{_rt.Height}", $"{s.Views} views", fs, rowH);
 
-            // Target (color pass)
-            int cullPct = s.RenderablesCollected > 0 ? (int)(s.RenderablesCulled * 100f / s.RenderablesCollected) : 0;
-            long colorTris = s.Triangles - s.ShadowTriangles;
-            long colorVerts = s.Vertices - s.ShadowVertices;
+            Section(paper, font, "gv_ht", Loc.Get("gameview.sec_target"), "", fs);
+            Row(paper, font, "gv_tdc", Loc.Get("gameview.draws"), $"{s.DrawCalls} ({s.DrawCommands} meshes)", fs, rowH,
+                "Indirect draw calls issued for the views this frame, and the mesh pieces drawn by them. Renderables sharing a shader and mesh page draw in one call.");
+            Row(paper, font, "gv_twa", Loc.Get("gameview.waited"), FormatMs((float)Graphics.LastFrameWaitMs), fs, rowH,
+                "Time the main thread spent blocked at end of frame waiting for the render thread. " +
+                "High values mean rendering is the bottleneck; near zero means the main thread takes longer than rendering.");
+            if (s.ShaderCompiles > 0)
+                Row(paper, font, "gv_tsc", "Compiling", $"{s.ShaderCompiles} shaders", fs, rowH,
+                    "Shader variants compiling in the background. What needs them draws once they are ready.");
 
-            Section(paper, font, "gv_ht", Loc.Get("gameview.sec_target"), FormatMainThread(s.ColorPassMs), fs);
-            Row(paper, font, "gv_tdc", Loc.Get("gameview.draws"), $"{s.DrawCalls} ({s.InstancedDrawCalls} inst)", fs, rowH,
-                "Individual GPU draw commands issued this frame. Each draw sends geometry to the GPU. Instanced draws render multiple copies in a single call.");
-            Row(paper, font, "gv_tba", Loc.Get("gameview.batches"), s.Batches.ToString(), fs, rowH,
-                "Groups of draw calls sharing the same material and render state. Fewer batches means less CPU overhead from state changes between draws.");
-            Row(paper, font, "gv_ttr", Loc.Get("gameview.tris_verts"), $"{FormatCount(colorTris)} / {FormatCount(colorVerts)}", fs, rowH,
-                "Total triangles and vertices submitted to the GPU for the color pass. High counts impact GPU fill rate and vertex processing.");
-            Row(paper, font, "gv_tcu", Loc.Get("gameview.culled"), $"{s.RenderablesCulled}/{s.RenderablesCollected} ({cullPct}%)", fs, rowH,
-                "Objects removed by frustum culling before rendering. Higher percentage means more objects are outside the camera view and skipped.");
-            Row(paper, font, "gv_tlt", Loc.Get("gameview.lights"), $"D:{s.DirectionalLights} P:{s.PointLights} S:{s.SpotLights}", fs, rowH,
-                "Active lights this frame. D = Directional (sun), P = Point (omni), S = Spot. Each light adds a lighting pass over affected geometry.");
-            Row(paper, font, "gv_twa", Loc.Get("gameview.waited"), FormatMs(Graphics.LastFrameWaitMs), fs, rowH,
-                "Time the main thread spent blocked at end of frame waiting for the render thread to finish executing this frame's command buffers. " +
-                "High values mean the render thread is the bottleneck (GPU work or CB execution dominates the frame). " +
-                "Near-zero values mean the main thread (update + encoding) takes longer than rendering, so the render thread was already idle when we asked.");
-
-            // Shadows
-            if (s.ShadowPasses > 0 || s.ShadowCasters > 0)
+            if (s.ShadowDrawCalls > 0)
             {
-                int shCullPct = s.ShadowRenderablesCollected > 0
-                    ? (int)(s.ShadowRenderablesCulled * 100f / s.ShadowRenderablesCollected) : 0;
-
-                Section(paper, font, "gv_hs", Loc.Get("gameview.sec_shadows"), FormatMainThread(s.ShadowPassMs), fs);
-                Row(paper, font, "gv_sdc", Loc.Get("gameview.draws"), $"{s.ShadowDrawCalls} ({s.ShadowInstancedDrawCalls} inst)", fs, rowH,
-                    "Draw calls for shadow map rendering. Each shadow-casting light renders the scene from its perspective to build depth maps.");
-                Row(paper, font, "gv_spa", Loc.Get("gameview.passes"), s.ShadowPasses.ToString(), fs, rowH,
-                    "Number of shadow map renders. Directional lights use cascaded shadow maps (multiple passes per light). Point lights use 6 passes (cube map).");
-                Row(paper, font, "gv_str", Loc.Get("gameview.tris_verts"), $"{FormatCount(s.ShadowTriangles)} / {FormatCount(s.ShadowVertices)}", fs, rowH,
-                    "Geometry rendered into shadow maps. This is additional to the color pass geometry and can be a major cost with many shadow casters.");
-                Row(paper, font, "gv_scu", Loc.Get("gameview.culled"), $"{s.ShadowRenderablesCulled}/{s.ShadowRenderablesCollected} ({shCullPct}%)", fs, rowH,
-                    "Objects culled from shadow map rendering. Each shadow pass has its own frustum so culling rates differ from the camera.");
-                Row(paper, font, "gv_sca", Loc.Get("gameview.casters"), s.ShadowCasters.ToString(), fs, rowH,
-                    "Lights with shadow mapping enabled. Each shadow caster adds one or more shadow passes to the frame.");
-            }
-
-            // Post FX (only when active)
-            if (s.ImageEffects > 0)
-            {
-                Section(paper, font, "gv_hf", Loc.Get("gameview.sec_postfx"), FormatMainThread(s.PostFxMs), fs);
-                Row(paper, font, "gv_fx", $"{s.ImageEffects} effects", $"{s.ImageEffectPasses} passes", fs, rowH,
-                    "Post-processing effects applied after rendering (bloom, tone mapping, SSAO, etc). Each effect may use multiple full-screen passes.");
+                Section(paper, font, "gv_hs", Loc.Get("gameview.sec_shadows"), "", fs);
+                Row(paper, font, "gv_sdc", Loc.Get("gameview.draws"), $"{s.ShadowDrawCalls} ({s.ShadowDrawCommands} meshes)", fs, rowH,
+                    "Draw calls rendering shadow maps. Each shadowed light draws the casters it sees into its part of the shadow atlas.");
             }
         }
     }
@@ -587,17 +539,11 @@ public class GameViewPanel : DockPanel
 
     // Fixed-width "XX.XXms" so changing values don't reflow the row.
     private static string FormatMs(float ms) => $"{ms,5:0.00}ms";
-    private static string FormatMainThread(float ms) => $"{Loc.Get("gameview.main_thread")} {ms,5:0.00}ms";
 
     private static Color FpsColor(float fps) =>
         fps >= 55 ? EditorTheme.Green400 :
         fps >= 28 ? EditorTheme.Amber400 :
         EditorTheme.Red400;
-
-    private static string FormatCount(long n) =>
-        n >= 1_000_000 ? $"{n / 1_000_000.0:F1}M" :
-        n >= 1_000 ? $"{n / 1_000.0:F1}K" :
-        n.ToString();
 
     private void EnsureGamePaper(int w, int h)
     {
@@ -617,7 +563,7 @@ public class GameViewPanel : DockPanel
     {
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
         if (_rt.IsValid()) _rt.Dispose();
-        _rt = new RenderTexture(w, h, true, [TextureImageFormat.Color4b]);
+        _rt = new RenderTexture(w, h, true, [TextureFormat.RGBA8]);
     }
 
     private void InvalidateRT()

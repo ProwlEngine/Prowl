@@ -82,6 +82,8 @@ public class TextMeshComponentEditor : CustomEditor
 
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Runtime.Resources.Material), text.Material,
             v => text.Material = v as Runtime.Resources.Material, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_shadows", "Shadow Casting", typeof(ShadowCasting), text.ShadowCasting,
+            v => text.ShadowCasting = (ShadowCasting)v!, 0);
     }
 
 }

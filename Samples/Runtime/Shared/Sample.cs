@@ -14,6 +14,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 
+using Prowl.Graphite;
 using Prowl.PaperUI;
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
@@ -34,6 +35,7 @@ namespace Prowl.Samples;
 
 public abstract class StationGame : Game
 {
+
     public sealed record Station(string Name, string Description, Float3 Center, Float3 View, float LookHeight);
 
     protected Scene SampleScene = null!;
@@ -58,15 +60,23 @@ public abstract class StationGame : Game
     private bool _captureNow;
     private readonly Stopwatch _frameClock = new();
     private readonly List<double> _frameTimes = [];
+    private readonly List<double> _waitTimes = [];
+    private StreamWriter? _profile;
+    private PassProfiler? _passes;
     private RenderStats.Frame _captureStats;
-    private double _colorPassMs, _shadowPassMs, _postFxMs;
     private StreamWriter? _performance;
 
     private static readonly KeyCode[] StationKeys =
     [
         KeyCode.Number1, KeyCode.Number2, KeyCode.Number3, KeyCode.Number4, KeyCode.Number5,
         KeyCode.Number6, KeyCode.Number7, KeyCode.Number8, KeyCode.Number9, KeyCode.Number0,
+        KeyCode.Minus, KeyCode.Equal,
     ];
+
+    private static readonly string[] StationKeyNames = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
+
+    /// <summary>The key that jumps to a station, empty past the last one.</summary>
+    public static string StationKey(int index) => index < StationKeyNames.Length ? StationKeyNames[index] : "";
 
     public override void Initialize()
     {
@@ -80,14 +90,13 @@ public abstract class StationGame : Game
 
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
         MainCamera = CameraObject.AddComponent<Camera>();
-        MainCamera.HDR = true;
         MainCamera.FarClipPlane = 500f;
-        MainCamera.Effects =
-        [
-            new BloomEffect { Intensity = 0.4f, Threshold = 1.0f },
-            new TonemapperEffect(),
-            new FXAAEffect(),
-        ];
+        MainCamera.Profile = new VolumeProfile();
+        Bloom bloom = MainCamera.Profile.Add<Bloom>();
+        bloom.Intensity.Set(0.4f);
+        bloom.Threshold.Set(1.0f);
+        MainCamera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
+        MainCamera.AntiAliasing = AntiAliasingMode.FXAA;
         CameraObject.AddComponent<FlyCamera>();
         CameraObject.AddComponent<PhysicsGrabber>().Game = this;
         SampleScene.Add(CameraObject);
@@ -120,6 +129,9 @@ public abstract class StationGame : Game
     /// <summary>Draws controls that apply to the whole sample into a panel under the station's own. Leave empty for no panel.</summary>
     public virtual void DrawSceneControls(Paper paper, FontFile font) { }
 
+    /// <summary>Anything the sample draws over the view outside the panels, placed by the sample itself.</summary>
+    public virtual void DrawOverlay(Paper paper, FontFile font) { }
+
     public bool HasControls => _hasControls ??= Overrides(nameof(DrawControls));
 
     /// <summary>Whether the current station has controls to show. Override to hide the panel for stations without any.</summary>
@@ -139,7 +151,13 @@ public abstract class StationGame : Game
     {
         get
         {
-            string range = Stations.Count >= 10 ? "1 to 9, 0" : $"1 to {Stations.Count}";
+            string range = Stations.Count switch
+            {
+                >= 12 => "1 to 9, 0, -, =",
+                11 => "1 to 9, 0, -",
+                10 => "1 to 9, 0",
+                _ => $"1 to {Stations.Count}",
+            };
             string keys = Stations.Count > 1 ? $"{range}  stations    {MoveKeys}" : MoveKeys;
             return string.IsNullOrEmpty(ExtraKeys) ? keys : keys + "    " + ExtraKeys;
         }
@@ -188,7 +206,6 @@ public abstract class StationGame : Game
             }
     }
 
-    public override void BeginRender() => RenderStats.BeginFrame();
     public override void EndRender() => RenderStats.EndFrame();
 
     public override void AfterGui(Scene? scene)
@@ -213,16 +230,31 @@ public abstract class StationGame : Game
         if (at + 2 < args.Length && int.TryParse(args[at + 2], out int frames))
             _captureFrames = frames;
 
+        // Warnings and errors land in the capture's log, so a capture that looks wrong says why
+        Prowl.Runtime.Debug.OnLog += (message, _, severity) =>
+        {
+            if (severity >= LogSeverity.Warning) Console.WriteLine($"{severity}: {message}");
+        };
+
         Time.LockedDeltaTime = 1f / 60f;
         Application.VSync = false;
         Application.TargetFrameRate = 0;
 
+        // With --profile each station also writes where its frames went: the main thread, waiting on the render thread,
+        // and every render pass's CPU and GPU time
+        if (Array.IndexOf(args, "--profile") >= 0 && Graphics.Device is { } device)
+        {
+            _passes = new PassProfiler();
+            device.GlobalProfilers.Add(() => _passes);
+            _profile = new StreamWriter(Path.Combine(_captureFolder, "profile.csv"));
+            _profile.WriteLine("station,part,cpu ms,gpu ms");
+        }
+
         _performance = new StreamWriter(Path.Combine(_captureFolder, "performance.csv"));
-        _performance.WriteLine("station,frames,mean ms,median ms,p95 ms,max ms,fps,draw calls,instanced draw calls,batches,triangles," +
-            "renderables drawn,shadow draw calls,shadow passes,shadow triangles,lights,image effects,color pass cpu ms,shadow pass cpu ms,post cpu ms");
+        _performance.WriteLine("station,frames,mean ms,median ms,p95 ms,max ms,fps,views,draw calls,draw commands,shadow draw calls,shadow draw commands");
     }
 
-    // Each station settles for the capture frame count, is saved, then has a run of frames timed by the wall clock
+    // Each station settles for the capture frame count after its shaders compile, is saved, then has a run of frames timed by the wall clock
     private void AdvanceCapture()
     {
         if (_captureFolder == null || Stations.Count == 0) return;
@@ -230,21 +262,28 @@ public abstract class StationGame : Game
         double elapsed = _frameClock.Elapsed.TotalMilliseconds;
         _frameClock.Restart();
 
+        // Frames while a shader variant compiles do not count and time all but stands still, so nothing is missing from
+        // a station's image and it catches animation at the same moment every run
+        if (_captureCounter < _captureFrames && Graphics.Renderer is { ShaderCompilesPending: > 0 })
+        {
+            Time.LockedDeltaTime = 1e-6f;
+            return;
+        }
+        Time.LockedDeltaTime = 1f / 60f;
+
         _captureCounter++;
         if (_captureCounter == _captureFrames)
         {
             _captureNow = true;
             _frameTimes.Clear();
-            _colorPassMs = _shadowPassMs = _postFxMs = 0;
+            _waitTimes.Clear();
+            _passes?.Reset();
             return;
         }
         if (_captureCounter <= _captureFrames + 1) return;
 
         _frameTimes.Add(elapsed);
-        RenderStats.Frame frame = RenderStats.Last;
-        _colorPassMs += frame.ColorPassMs;
-        _shadowPassMs += frame.ShadowPassMs;
-        _postFxMs += frame.PostFxMs;
+        _waitTimes.Add(Graphics.LastFrameWaitMs);
         if (_frameTimes.Count < PerformanceFrames) return;
 
         WritePerformance();
@@ -254,6 +293,7 @@ public abstract class StationGame : Game
         else
         {
             _performance!.Dispose();
+            _profile?.Dispose();
             Quit();
         }
     }
@@ -268,20 +308,64 @@ public abstract class StationGame : Game
         _performance!.WriteLine(string.Join(",",
             $"\"{CurrentStation + 1:00} {Stations[CurrentStation].Name}\"", sorted.Length, Number(mean), Number(sorted[sorted.Length / 2]),
             Number(sorted[(int)(sorted.Length * 0.95)]), Number(sorted[^1]), Number(1000.0 / mean),
-            s.DrawCalls, s.InstancedDrawCalls, s.Batches, s.Triangles, s.RenderablesDrawn,
-            s.ShadowDrawCalls, s.ShadowPasses, s.ShadowTriangles, s.Lights, s.ImageEffects,
-            Number(_colorPassMs / sorted.Length), Number(_shadowPassMs / sorted.Length), Number(_postFxMs / sorted.Length)));
+            s.Views, s.DrawCalls, s.DrawCommands, s.ShadowDrawCalls, s.ShadowDrawCommands));
         _performance.Flush();
+
+        if (_profile == null || _passes == null) return;
+        string name = $"\"{CurrentStation + 1:00} {Stations[CurrentStation].Name}\"";
+        double wait = _waitTimes.Average();
+        _profile.WriteLine($"{name},frame,{Number(mean)},");
+        _profile.WriteLine($"{name},main thread,{Number(mean - wait)},");
+        _profile.WriteLine($"{name},waiting on render thread,{Number(wait)},");
+        foreach ((string pass, double cpu, double gpu) in _passes.Averages(sorted.Length))
+            _profile.WriteLine($"{name},\"{pass}\",{Number(cpu)},{Number(gpu)}");
+        _profile.Flush();
+    }
+
+    // Sums each render pass's CPU and GPU time across the frames it is reset for. Render thread.
+    private sealed class PassProfiler : IGraphProfiler, IGpuStatsProfiler
+    {
+        private readonly Dictionary<string, (double Cpu, double Gpu)> _totals = [];
+
+        public void Reset()
+        {
+            lock (_totals) _totals.Clear();
+        }
+
+        public List<(string Pass, double Cpu, double Gpu)> Averages(int frames)
+        {
+            lock (_totals)
+                return [.. _totals.Select(t => (t.Key, t.Value.Cpu / frames, t.Value.Gpu / frames)).OrderByDescending(t => t.Item2 + t.Item3)];
+        }
+
+        private void Add(string pass, double cpu, double gpu)
+        {
+            lock (_totals)
+            {
+                _totals.TryGetValue(pass, out (double Cpu, double Gpu) total);
+                _totals[pass] = (total.Cpu + cpu, total.Gpu + gpu);
+            }
+        }
+
+        public void BeginExecution(ulong executionId, string graphName) { }
+        public void EndExecution() { }
+        public void BeginView(in ViewInfo view) { }
+        public void EndView(in ViewInfo view) { }
+        public void BeginPass(in PassInfo pass) { }
+        public void EndPass(in PassInfo pass, in PassStats stats) => Add(pass.Name, stats.CpuMilliseconds, 0);
+        public void SkipPass(string name, int viewIndex, PassSkipReason reason) { }
+        public void RecordExecutionTime(in CommandBufferInfo commandBuffer, double milliseconds) => Add(commandBuffer.Pass?.Name ?? commandBuffer.Name, 0, milliseconds);
+        public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
     }
 
     /// <summary>Writes the window's current contents to a PNG file.</summary>
     public static void SaveScreenshot(string file)
     {
-        Texture2D shot = Graphics.Screenshot();
+        if (Graphics.WindowTarget is not { } window) return;
+        Texture2D shot = window.MainTexture;
         int width = (int)shot.Width, height = (int)shot.Height;
         var pixels = new Color32[width * height];
         shot.GetData(new Memory<Color32>(pixels));
-        shot.Dispose();
 
         // PNG rows are top first and each starts with a filter byte, the texture is bottom first.
         byte[] raw = new byte[height * (width * 3 + 1)];
@@ -697,6 +781,8 @@ public sealed class SampleHud : Component
                     Game.DrawControls(paper, font);
         }
 
+        Game.DrawOverlay(paper, font);
+
         // A sample that is one world to walk around has nowhere else to go.
         if (Game.Stations.Count > 1) StationBar(paper, font, index);
     }
@@ -712,7 +798,7 @@ public sealed class SampleHud : Component
             if (!Game.CompactHud)
             {
                 paper.Box("title").Height(30)
-                    .Text(Game.Stations.Count > 1 ? $"{(index + 1) % 10}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
+                    .Text(Game.Stations.Count > 1 ? $"{StationGame.StationKey(index)}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("description").Height(UnitValue.Auto)
@@ -753,7 +839,7 @@ public sealed class SampleHud : Component
                     .Width(UnitValue.Stretch()).Height(34)
                     .BackgroundColor(current ? Accent : Panel).Rounded(8)
                     .Hovered.BackgroundColor(current ? Accent : ControlHover).End()
-                    .Text($"{(i + 1) % 10}  {Game.Stations[i].Name}", font).FontSize(14)
+                    .Text($"{StationGame.StationKey(i)}  {Game.Stations[i].Name}", font).FontSize(14)
                     .TextColor(current ? new Color(0.05f, 0.05f, 0.08f, 1f) : Bright)
                     .Alignment(TextAlignment.MiddleCenter)
                     .TextTruncate()
@@ -826,17 +912,17 @@ public sealed class SampleHud : Component
             canvas.DrawText(label, x + w - 6f, ly - 2f, new Color(1f, 1f, 1f, 0.35f), 10f, font, origin: new Float2(1f, 1f));
         }
 
-        // The area under the curve, fading out toward the bottom.
-        canvas.BeginPath();
-        canvas.MoveTo(x, y + h);
-        for (int i = 0; i < count; i++)
-            canvas.LineTo(X(i), Y(Sample(i)));
-        canvas.LineTo(x + w, y + h);
-        canvas.ClosePath();
-        canvas.SetFillColor(Color.White);
-        canvas.SetLinearBrush(x, y, x, y + h, new Color(Accent.R, Accent.G, Accent.B, 0.45f), new Color(Accent.R, Accent.G, Accent.B, 0f));
-        canvas.FillComplex();
-        canvas.ClearBrush();
+        //// The area under the curve, fading out toward the bottom. (Quill needs a faster FillComplex before we should add this)
+        //canvas.BeginPath();
+        //canvas.MoveTo(x, y + h);
+        //for (int i = 0; i < count; i++)
+        //    canvas.LineTo(X(i), Y(Sample(i)));
+        //canvas.LineTo(x + w, y + h);
+        //canvas.ClosePath();
+        //canvas.SetFillColor(Color.White);
+        //canvas.SetLinearBrush(x, y, x, y + h, new Color(Accent.R, Accent.G, Accent.B, 0.45f), new Color(Accent.R, Accent.G, Accent.B, 0f));
+        //canvas.FillComplex();
+        //canvas.ClearBrush();
 
         // The curve itself.
         canvas.BeginPath();
@@ -845,7 +931,7 @@ public sealed class SampleHud : Component
             canvas.LineTo(X(i), Y(Sample(i)));
         canvas.SetStrokeColor(Accent);
         canvas.SetStrokeWidth(1.5f);
-        canvas.SetStrokeJoint(Prowl.Quill.JointStyle.Round);
+        canvas.SetStrokeJoint(Prowl.Quill.JointStyle.Bevel);
         canvas.Stroke();
 
         // Frames slower than 30 per second get a red marker.
@@ -882,20 +968,19 @@ public static class Sample
     /// A Standard material. Roughness and metallic come from the surface texture's green and blue
     /// channels times these factors, so a white surface texture makes the factors the final values.
     /// </summary>
-    public static Material Lit(Color color, float metallic = 0f, float roughness = 0.6f, DefaultShader shader = DefaultShader.Standard)
+    public static Material Lit(Color color, float metallic = 0f, float roughness = 0.6f, SurfaceType surface = SurfaceType.Opaque, SurfaceCull cull = SurfaceCull.Back)
     {
-        var material = new Material(Shader.LoadDefault(shader));
+        var material = new Material(Shader.LoadDefault(DefaultShader.Lit)) { Surface = new SurfaceSettings(surface, SurfaceBlend.Alpha, cull) };
         material.SetColor("_MainColor", color);
-        material.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.White));
         material.SetFloat("_Metallic", metallic);
         material.SetFloat("_Roughness", roughness);
         return material;
     }
 
-    /// <summary>Makes a Standard material glow. Intensity above 1 feeds bloom.</summary>
+    /// <summary>Makes a Lit material glow. Intensity above 1 feeds bloom.</summary>
     public static Material Emissive(this Material material, Color color, float intensity)
     {
-        material.SetTexture("_EmissionTex", Texture2D.LoadDefault(DefaultTexture.White));
+        material.SetInt("_Emission", 1);
         material.SetColor("_EmissiveColor", color);
         material.SetFloat("_EmissionIntensity", intensity);
         return material;

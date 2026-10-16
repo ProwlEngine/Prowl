@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -218,61 +218,32 @@ public static class Window
         s_mode = startState == WindowState.Fullscreen ? WindowMode.Fullscreen : WindowMode.Windowed;
         options.VSync = vsync;
         Application.VSync = vsync;
-        // Update / Render are driven manually from MainLoop SwapBuffers happens
-        // on the render thread.
+        // Update and Render are driven by MainLoop, and frames present through Graphite's swapchain.
         options.ShouldSwapAutomatically = false;
-        s_options = options;
-        s_candidates = ContextCandidates();
-        CreateWindow(0);
-    }
+        options.API = new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(1, 3));
+        InitializeVulkanLoader();
 
-    private static WindowOptions s_options;
-    private static GraphicsAPI[] s_candidates = [];
-
-    // Newest first. A driver that cannot make one of these fails the window's creation, and the next is tried.
-    private static GraphicsAPI[] ContextCandidates()
-    {
-        if (Graphics.Target == GraphicsTarget.OpenGLES)
-            return [new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 2))];
-
-        // macOS stops at 4.1 and only hands out a forward compatible core context
-        if (OperatingSystem.IsMacOS())
-            return [new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1))];
-
-        return
-        [
-            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 6)),
-            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 5)),
-            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 3)),
-            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1)),
-        ];
-    }
-
-    private static void CreateWindow(int candidate)
-    {
-        WindowOptions options = s_options;
-        options.API = s_candidates[candidate];
+        // Silk finds platforms by reflection, which NativeAOT cannot do, so name them up front.
+        Silk.NET.Windowing.Glfw.GlfwWindowing.RegisterPlatform();
+        Silk.NET.Input.Glfw.GlfwInput.RegisterPlatform();
         InternalWindow = Silk.NET.Windowing.Window.Create(options);
         HookEvents();
     }
 
-    private static void InitializeWithFallback()
+    private delegate void GlfwInitVulkanLoader(nint vkGetInstanceProcAddr);
+
+    // GLFW on macOS only looks for the Vulkan SDK's loader, so it is handed MoltenVK's entry point before it starts.
+    private static void InitializeVulkanLoader()
     {
-        for (int i = 0; ; i++)
-        {
-            try
-            {
-                InternalWindow.Initialize();
-                return;
-            }
-            catch (Exception ex) when (i < s_candidates.Length - 1)
-            {
-                APIVersion version = s_candidates[i].Version;
-                Debug.LogWarning($"Could not create an OpenGL {version.MajorVersion}.{version.MinorVersion} context, trying an older one: {ex.Message}");
-                InternalWindow.Dispose();
-                CreateWindow(i + 1);
-            }
-        }
+        if (!OperatingSystem.IsMacOS()) return;
+        string path = Path.Join(AppContext.BaseDirectory, "runtimes/osx/native/libMoltenVK.dylib");
+        if (!File.Exists(path)) return;
+        nint moltenVK = NativeLibrary.Load(path);
+        nint getInstanceProcAddr = NativeLibrary.GetExport(moltenVK, "vkGetInstanceProcAddr");
+        Silk.NET.GLFW.Glfw glfw = Silk.NET.GLFW.Glfw.GetApi();
+        nint initVulkanLoader = glfw.Context.GetProcAddress("glfwInitVulkanLoader");
+        if (initVulkanLoader != 0)
+            Marshal.GetDelegateForFunctionPointer<GlfwInitVulkanLoader>(initVulkanLoader)(getInstanceProcAddr);
     }
 
     private static void HookEvents()
@@ -294,18 +265,8 @@ public static class Window
 
     public static void Start()
     {
-        InitializeWithFallback();
-        // Silk.NET's automatic Render path (which would apply options.VSync) doesn't run under our
-        // manual loop, so the swap interval is ours to set. The render thread owns the context from
-        // here on, so it applies this at the first frame end, which is the warmup frame below.
-        Graphics.SetSwapInterval(Application.VSync ? 1 : 0);
-        Graphics.StartRenderThread();
-
-        // Load runs as a warmup frame so SubmitAndWait (shader compiles, FBO checks)
-        // has a live render thread to drain its CBs; otherwise it would deadlock.
-        Graphics.BeginFrame();
+        InternalWindow.Initialize();
         Load?.Invoke();
-        Graphics.EndFrameAndWait();
 
         try { MainLoop(); }
         finally
@@ -328,8 +289,6 @@ public static class Window
             float delta = (float)((now - lastTicks) / (double)freq);
             lastTicks = now;
 
-            Graphics.BeginFrame();
-
             WindowInputHandler?.BeginFrame();
             InternalWindow.DoEvents();
             Update?.Invoke(delta);
@@ -337,9 +296,7 @@ public static class Window
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
 
-            // SwapBuffers runs on the render thread as part of the frame-end
-            // sentinel no context handoff per frame.
-            Graphics.EndFrameAndWait();
+            Graphics.SubmitFrame(delta);
 
             Application.WaitForNextFrame();
 
@@ -375,7 +332,7 @@ public static class Window
     {
         InternalInput = InternalWindow.CreateInput();
         WindowInputHandler = new DefaultInputHandler(InternalInput);
-        Graphics.Initialize(false);
+        Graphics.Initialize(InternalWindow, Application.VSync);
         Input.PushHandler(WindowInputHandler);
         TrySetWindowIcon();
     }
@@ -411,7 +368,11 @@ public static class Window
     }
 
     public static void OnResize(Vector2D<int> size) => Resize?.Invoke(size);
-    public static void OnFramebufferResize(Vector2D<int> size) => FramebufferResize?.Invoke(size);
+    public static void OnFramebufferResize(Vector2D<int> size)
+    {
+        Graphics.Resize(size.X, size.Y);
+        FramebufferResize?.Invoke(size);
+    }
 
     public static void OnClose()
     {

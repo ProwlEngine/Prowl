@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -15,80 +16,92 @@ using Silk.NET.Core.Native;
 using Silk.NET.OpenXR;
 using Silk.NET.OpenXR.Extensions.KHR;
 
-using GLEnum = Silk.NET.OpenGL.GLEnum;
+using VkFormat = Silk.NET.Vulkan.Format;
 using XrApi = Silk.NET.OpenXR.XR;
 
 namespace Prowl.Runtime;
 
 /// <summary>
-/// One OpenXR instance and session rendering through the engine's OpenGL context.
+/// One OpenXR instance and session rendering through Graphite's Vulkan device.
 /// <para>
-/// OpenXR forbids the GL context from being current on another thread during session, swapchain and frame
-/// begin/end calls, and the render thread holds it for its whole life, so those calls run there as render
-/// thread callbacks queued in order with the frame's command buffers. Everything else (events, frame waits,
-/// locating, input) runs on the main thread.
+/// The instance comes first, before the device exists, since the device is made with the Vulkan extensions and on the
+/// GPU the runtime names. The session follows on <see cref="Start"/>. Frame waits, events, locating and input run on
+/// the main thread. Frame begin, the swapchain images and frame end run on Graphite's render thread around the frame's
+/// submission, holding the graphics queue's lock, since the runtime may use that queue in them.
 /// </para>
 /// </summary>
 internal sealed unsafe partial class OpenXRSession : IDisposable
 {
-    private const string OpenGLExtension = "XR_KHR_opengl_enable";
+    private const string VulkanExtension = "XR_KHR_vulkan_enable";
     private const string LocalFloorExtension = "XR_EXT_local_floor";
-    private const string DepthExtension = "XR_KHR_composition_layer_depth";
     private const string HandTrackingExtension = "XR_EXT_hand_tracking";
     private const string EyeGazeExtension = "XR_EXT_eye_gaze_interaction";
-
-    // Projections reach the GPU remapped to GL's clip depth (RenderPipeline.ToGLClipDepth), so the near
-    // and far planes span the whole window depth range.
-    private const float MinWindowDepth = 0f;
-    private const float MaxWindowDepth = 1f;
     private const long InfiniteDuration = long.MaxValue;
+
+    // Swapchain formats in order of preference: the format the eyes render in, and the plain one the mirror reads it as
+    private static readonly (VkFormat Vulkan, Graphite.PixelFormat Format, Graphite.PixelFormat Plain)[] s_formats =
+    [
+        (VkFormat.R8G8B8A8Srgb, Graphite.PixelFormat.R8_G8_B8_A8_UNorm_SRgb, Graphite.PixelFormat.R8_G8_B8_A8_UNorm),
+        (VkFormat.B8G8R8A8Srgb, Graphite.PixelFormat.B8_G8_R8_A8_UNorm_SRgb, Graphite.PixelFormat.B8_G8_R8_A8_UNorm),
+        (VkFormat.R8G8B8A8Unorm, Graphite.PixelFormat.R8_G8_B8_A8_UNorm, Graphite.PixelFormat.R8_G8_B8_A8_UNorm),
+        (VkFormat.B8G8R8A8Unorm, Graphite.PixelFormat.B8_G8_R8_A8_UNorm, Graphite.PixelFormat.B8_G8_R8_A8_UNorm),
+    ];
 
     private readonly XrApi _xr;
     private Instance _instance;
     private ulong _systemId;
+    private KhrVulkanEnable? _vulkan;
     private Session _session;
     private Space _appSpace;
     private Space _viewSpace;
     private ReferenceSpaceType _appSpaceType;
     private Posef _appSpaceOffset = new() { Orientation = new Quaternionf(0, 0, 0, 1) };
     private bool _recenterRequested;
-    private bool _handTrackingExtension, _eyeGazeExtension;
+    private readonly List<Space> _retiredSpaces = [];
+    private bool _localFloorExtension, _handTrackingExtension, _eyeGazeExtension;
     private bool _handTrackingSupported, _eyeGazeSupported;
 
+    private object _queueLock = new();
     private readonly Swapchain[] _swapchains = new Swapchain[2];
-    private readonly uint[][] _swapchainImages = new uint[2][];
-    private readonly Swapchain[] _depthSwapchains = new Swapchain[2];
-    private readonly uint[][] _depthSwapchainImages = new uint[2][];
-    private bool _depthExtension;
-    private bool _submitDepth;
-    private float _nearZ = 0.1f;
-    private float _farZ = 100f;
-    private Camera? _depthCamera;
-    private readonly RenderTexture[] _eyeTextures = new RenderTexture[2];
-    private uint _copyFramebuffer;
+    private readonly Graphite.Texture[][] _swapchainTextures = [[], []];
+    private readonly Graphite.Framebuffer[][] _swapchainTargets = [[], []];
+    private readonly Graphite.TextureView[] _eyeLayerViews = new Graphite.TextureView[2];
+    private Graphite.Texture? _eyeTexture;
+    private Graphite.Framebuffer? _eyeTarget;
+    private Graphite.TextureView? _mirrorSource;
+    private Graphite.RenderGraph.RenderPipeline? _eyesPipeline;
+    private Graphite.RenderGraph.RenderPipeline? _mirrorPipeline;
+    private readonly List<MirrorView> _mirrors = [];
+    private int _eyesViewId, _mirrorViewId;
+    private volatile bool _disposed;
 
     private readonly View[] _appViews = new View[2];
     private readonly View[] _headViews = new View[2];
     private readonly XRView[] _eyeViews = new XRView[2];
-    private readonly bool[] _eyeRendered = new bool[2];
-    private readonly bool[] _eyeDepthWritten = new bool[2];
     private readonly Posef[] _renderedPoses = new Posef[2];
-    private readonly HashSet<Camera> _stereoCameras = [];
+    private readonly Fovf[] _renderedFovs = new Fovf[2];
+    private Camera? _eyesCamera;
     private XRPose _headPose;
 
     private FrameState _frameState;
-    private bool _frameBegun;
+    private bool _frameWaited;
     private bool _shouldRender;
     private SessionState _state = SessionState.Unknown;
     private bool _sessionRunning;
     private volatile bool _pacing;
 
-    public OpenXRInput Input { get; private set; }
+    public OpenXRInput Input { get; private set; } = null!;
     public string RuntimeName { get; private set; } = "";
     public string SystemName { get; private set; } = "";
     public XRTrackingOrigin TrackingOrigin { get; private set; }
     public int EyeWidth { get; private set; }
     public int EyeHeight { get; private set; }
+
+    /// <summary>The Vulkan instance extensions the runtime needs the device made with.</summary>
+    public string[] VulkanInstanceExtensions { get; private set; } = [];
+
+    /// <summary>The Vulkan device extensions the runtime needs the device made with.</summary>
+    public string[] VulkanDeviceExtensions { get; private set; } = [];
 
     /// <summary>Seconds between the frames the headset displays, 0 until the first frame has been waited for and while the session is not running.</summary>
     public float DisplayPeriod => _sessionRunning ? _frameState.PredictedDisplayPeriod / 1e9f : 0f;
@@ -107,15 +120,24 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     private volatile string? _renderThreadFailure;
 
     /// <summary>A frame is open and the runtime wants it drawn.</summary>
-    public bool ShouldRender => _frameBegun && _shouldRender;
+    public bool ShouldRender => _frameWaited && _shouldRender;
+
+    public XRPose HeadPose => _headPose;
+
+    /// <summary>The two layer texture the eyes draw into, the left display's image in layer 0.</summary>
+    public Graphite.Texture? EyeTexture => _eyeTexture;
+
+    /// <summary>Whether any camera drew the eyes this frame.</summary>
+    public bool AnyEyeRendered => _eyesCamera.IsValid();
 
     private OpenXRSession(XrApi xr) => _xr = xr;
 
-    public static OpenXRSession Create(XRTrackingOrigin origin, float renderScale)
+    /// <summary>
+    /// Connects to the active runtime and its headset and asks what the Vulkan device needs, before the device exists.
+    /// <see cref="Start"/> then begins the session on the device.
+    /// </summary>
+    public static OpenXRSession Prepare()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("OpenXR currently needs Windows, since the session is bound to a WGL context.");
-
         XrApi xr;
         try { xr = XrApi.GetApi(); }
         catch (Exception e) { throw new InvalidOperationException($"Could not load the OpenXR loader (openxr_loader). {e.Message}", e); }
@@ -123,7 +145,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         var session = new OpenXRSession(xr);
         try
         {
-            session.Initialize(origin, renderScale);
+            session.CreateInstanceAndSystem();
             return session;
         }
         catch
@@ -133,17 +155,15 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         }
     }
 
-    private void Initialize(XRTrackingOrigin origin, float renderScale)
+    private void CreateInstanceAndSystem()
     {
         List<string> available = GetAvailableExtensions();
-        if (!available.Contains(OpenGLExtension))
-            throw new NotSupportedException("The active OpenXR runtime does not support OpenGL. SteamVR and the Meta PC runtime do, Windows Mixed Reality does not.");
+        if (!available.Contains(VulkanExtension))
+            throw new NotSupportedException("The active OpenXR runtime does not support Vulkan.");
 
-        var extensions = new List<string> { OpenGLExtension };
-        bool localFloor = available.Contains(LocalFloorExtension);
-        if (localFloor) extensions.Add(LocalFloorExtension);
-        _depthExtension = available.Contains(DepthExtension);
-        if (_depthExtension) extensions.Add(DepthExtension);
+        var extensions = new List<string> { VulkanExtension };
+        _localFloorExtension = available.Contains(LocalFloorExtension);
+        if (_localFloorExtension) extensions.Add(LocalFloorExtension);
         _handTrackingExtension = available.Contains(HandTrackingExtension);
         if (_handTrackingExtension) extensions.Add(HandTrackingExtension);
         _eyeGazeExtension = available.Contains(EyeGazeExtension);
@@ -151,25 +171,14 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
 
         CreateInstance(extensions);
         GetSystem();
+
+        if (!_xr.TryGetInstanceExtension<KhrVulkanEnable>(null, _instance, out KhrVulkanEnable? vulkan))
+            throw new NotSupportedException("Could not load the XR_KHR_vulkan_enable functions.");
+        _vulkan = vulkan;
+
         CheckGraphicsRequirements();
-        ChooseEyeSize(renderScale);
-
-        Graphics.SubmitRenderThreadCallbackAndWait(CreateSessionOnRenderThread);
-
-        CreateSpaces(origin, localFloor);
-
-        // Render textures allocate on first use, and the first use of an eye nothing drew would be the copy on
-        // the render thread, which cannot wait on itself. Touching the framebuffer here allocates them up front.
-        for (int i = 0; i < 2; i++)
-        {
-            _eyeTextures[i] = new RenderTexture(EyeWidth, EyeHeight, true, [TextureImageFormat.Color4b]);
-            _ = _eyeTextures[i].frameBuffer;
-        }
-
-        Input = new OpenXRInput(_xr, _instance, _session, _appSpace, _handTrackingSupported, _eyeGazeSupported);
-
-        string extras = (_submitDepth ? ", submitting depth" : "") + (_handTrackingSupported ? ", hand tracking" : "") + (_eyeGazeSupported ? ", eye tracking" : "");
-        Debug.Log($"XR started on {SystemName} through {RuntimeName}, {EyeWidth}x{EyeHeight} per eye, tracking from the {TrackingOrigin.ToString().ToLowerInvariant()}{extras}.");
+        VulkanInstanceExtensions = ReadExtensionList(device: false);
+        VulkanDeviceExtensions = ReadExtensionList(device: true);
     }
 
     private List<string> GetAvailableExtensions()
@@ -253,20 +262,78 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         _eyeGazeSupported = _eyeGazeExtension && eyes.SupportsEyeGazeInteraction != 0;
     }
 
-    // The spec requires this call before xrCreateSession, and the runtime tells us which GL versions it works with.
+    // The spec requires this call before xrCreateSession, and the runtime tells us which Vulkan versions it works with.
     private void CheckGraphicsRequirements()
     {
-        if (!_xr.TryGetInstanceExtension<KhrOpenglEnable>(null, _instance, out KhrOpenglEnable? openGL))
-            throw new NotSupportedException("Could not load the XR_KHR_opengl_enable functions.");
-
-        var requirements = new GraphicsRequirementsOpenGLKHR { Type = StructureType.GraphicsRequirementsOpenglKhr };
-        Check(openGL.GetOpenGlgraphicsRequirements(_instance, _systemId, &requirements), "xrGetOpenGLGraphicsRequirementsKHR");
+        var requirements = new GraphicsRequirementsVulkanKHR { Type = StructureType.GraphicsRequirementsVulkanKhr };
+        Check(_vulkan!.GetVulkanGraphicsRequirements(_instance, _systemId, &requirements), "xrGetVulkanGraphicsRequirementsKHR");
 
         // XR_MAKE_VERSION packs major into the top 16 bits and minor into the next 16.
         ulong min = requirements.MinApiVersionSupported;
         ulong major = min >> 48, minor = (min >> 32) & 0xFFFF;
-        if (major > 4 || (major == 4 && minor > 1))
-            Debug.LogWarning($"The OpenXR runtime asks for OpenGL {major}.{minor}, newer than the 4.1 context Prowl creates. It may refuse the session.");
+        if (major > 1 || (major == 1 && minor > 2))
+            Debug.LogWarning($"The OpenXR runtime asks for Vulkan {major}.{minor}, newer than the 1.2 Graphite creates. It may refuse the session.");
+    }
+
+    private string[] ReadExtensionList(bool device)
+    {
+        string call = device ? "xrGetVulkanDeviceExtensionsKHR" : "xrGetVulkanInstanceExtensionsKHR";
+        uint count = 0;
+        Check(device
+            ? _vulkan!.GetVulkanDeviceExtension(_instance, _systemId, 0, &count, (byte*)null)
+            : _vulkan!.GetVulkanInstanceExtension(_instance, _systemId, 0, &count, (byte*)null), call);
+        if (count == 0) return [];
+
+        byte[] buffer = new byte[count];
+        fixed (byte* text = buffer)
+        {
+            Check(device
+                ? _vulkan.GetVulkanDeviceExtension(_instance, _systemId, count, &count, text)
+                : _vulkan.GetVulkanInstanceExtension(_instance, _systemId, count, &count, text), call);
+            return ReadString(text).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+    }
+
+    /// <summary>The GPU the runtime renders on, given the device's VkInstance. For the device's PickPhysicalDevice.</summary>
+    public nint PickPhysicalDevice(nint vulkanInstance)
+    {
+        VkHandle physicalDevice;
+        Check(_vulkan!.GetVulkanGraphicsDevice(_instance, _systemId, new VkHandle(vulkanInstance), &physicalDevice), "xrGetVulkanGraphicsDeviceKHR");
+        return physicalDevice.Handle;
+    }
+
+    /// <summary>
+    /// Begins the session on the graphics device, which has to have been made with <paramref name="deviceInstanceExtensions"/>
+    /// and <paramref name="deviceExtensions"/> on the GPU this runtime names.
+    /// </summary>
+    public void Start(XRTrackingOrigin origin, float renderScale, string[] deviceInstanceExtensions, string[] deviceExtensions)
+    {
+        Graphite.GraphicsDevice device = Graphics.Device ?? throw new InvalidOperationException("XR needs the graphics device.");
+        if (!device.Features.Multiview)
+            throw new NotSupportedException("The GPU cannot draw both eyes at once (Vulkan multiview).");
+
+        foreach (string extension in VulkanInstanceExtensions)
+            if (Array.IndexOf(deviceInstanceExtensions, extension) < 0)
+                throw new NotSupportedException($"The runtime needs the Vulkan instance extension {extension}, which the graphics device was not made with. Restart the application with the headset connected.");
+        foreach (string extension in VulkanDeviceExtensions)
+            if (Array.IndexOf(deviceExtensions, extension) < 0)
+                throw new NotSupportedException($"The runtime needs the Vulkan device extension {extension}, which the graphics device was not made with. Restart the application with the headset connected.");
+
+        Graphite.BackendInfoVulkan vulkan = device.GetVulkanInfo();
+        if (PickPhysicalDevice(vulkan.Instance) != vulkan.PhysicalDevice)
+            throw new NotSupportedException("The runtime renders on a different GPU than the graphics device was made on. Restart the application with the headset connected.");
+        _queueLock = vulkan.GraphicsQueueLock;
+
+        ChooseEyeSize(renderScale);
+        lock (_queueLock)
+            CreateSessionAndSwapchains(vulkan);
+        CreateEyeTargets(device);
+        CreateSpaces(origin);
+
+        Input = new OpenXRInput(_xr, _instance, _session, _appSpace, _handTrackingSupported, _eyeGazeSupported);
+
+        string extras = (_handTrackingSupported ? ", hand tracking" : "") + (_eyeGazeSupported ? ", eye tracking" : "");
+        Debug.Log($"XR started on {SystemName} through {RuntimeName}, {EyeWidth}x{EyeHeight} per eye, tracking from the {TrackingOrigin.ToString().ToLowerInvariant()}{extras}.");
     }
 
     private void ChooseEyeSize(float renderScale)
@@ -288,17 +355,19 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         EyeHeight = Math.Max(EyeHeight, 1);
     }
 
-    private void CreateSessionOnRenderThread()
-    {
-        var binding = new GraphicsBindingOpenGLWin32KHR
-        {
-            Type = StructureType.GraphicsBindingOpenglWin32Khr,
-            HDC = WglGetCurrentDC(),
-            HGlrc = WglGetCurrentContext(),
-        };
-        if (binding.HGlrc == 0)
-            throw new InvalidOperationException("The render thread has no current WGL context to bind the XR session to.");
+    private Graphite.PixelFormat _format, _plainFormat;
 
+    private void CreateSessionAndSwapchains(Graphite.BackendInfoVulkan vulkan)
+    {
+        var binding = new GraphicsBindingVulkanKHR
+        {
+            Type = StructureType.GraphicsBindingVulkanKhr,
+            Instance = new VkHandle(vulkan.Instance),
+            PhysicalDevice = new VkHandle(vulkan.PhysicalDevice),
+            Device = new VkHandle(vulkan.Device),
+            QueueFamilyIndex = vulkan.GraphicsQueueFamilyIndex,
+            QueueIndex = vulkan.GraphicsQueueIndex,
+        };
         var createInfo = new SessionCreateInfo
         {
             Type = StructureType.SessionCreateInfo,
@@ -315,26 +384,32 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         fixed (long* ptr = formats)
             Check(_xr.EnumerateSwapchainFormats(_session, count, &count, ptr), "xrEnumerateSwapchainFormats");
 
-        long colorFormat = ChooseColorFormat(formats);
+        long vulkanFormat = ChooseColorFormat(formats);
         for (int eye = 0; eye < 2; eye++)
-            (_swapchains[eye], _swapchainImages[eye]) = CreateSwapchain(colorFormat, SwapchainUsageFlags.ColorAttachmentBit);
-
-        // Copying depth is a framebuffer blit, which needs the swapchain in the same format as the eye's depth.
-        long depthFormat = (long)GLEnum.DepthComponent24;
-        _submitDepth = _depthExtension && Array.IndexOf(formats, depthFormat) >= 0;
-        if (_submitDepth)
-            for (int eye = 0; eye < 2; eye++)
-                (_depthSwapchains[eye], _depthSwapchainImages[eye]) = CreateSwapchain(depthFormat, SwapchainUsageFlags.DepthStencilAttachmentBit);
-
-        _copyFramebuffer = Graphics.GL.GenFramebuffer();
+            CreateSwapchain(eye, vulkanFormat);
     }
 
-    private (Swapchain, uint[]) CreateSwapchain(long format, SwapchainUsageFlags usage)
+    // Graphite encodes for display itself when it draws into an sRGB target, so an sRGB swapchain shows the eyes as the
+    // window shows the game. A plain one gets the encoded colour as linear and looks washed out.
+    private long ChooseColorFormat(long[] formats)
+    {
+        foreach ((VkFormat vulkan, Graphite.PixelFormat format, Graphite.PixelFormat plain) in s_formats)
+        {
+            if (Array.IndexOf(formats, (long)vulkan) < 0) continue;
+            if (format == plain) Debug.LogWarning("The OpenXR runtime offers no sRGB swapchain, so the headset image will look washed out.");
+            _format = format;
+            _plainFormat = plain;
+            return (long)vulkan;
+        }
+        throw new NotSupportedException("The OpenXR runtime offers no 8 bit RGBA or BGRA swapchain format.");
+    }
+
+    private void CreateSwapchain(int eye, long format)
     {
         var swapchainInfo = new SwapchainCreateInfo
         {
             Type = StructureType.SwapchainCreateInfo,
-            UsageFlags = usage | SwapchainUsageFlags.TransferDstBit,
+            UsageFlags = SwapchainUsageFlags.ColorAttachmentBit | SwapchainUsageFlags.TransferDstBit,
             Format = format,
             SampleCount = 1,
             Width = (uint)EyeWidth,
@@ -345,37 +420,55 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         };
         Swapchain swapchain;
         Check(_xr.CreateSwapchain(_session, &swapchainInfo, &swapchain), "xrCreateSwapchain");
+        _swapchains[eye] = swapchain;
 
         uint imageCount = 0;
         Check(_xr.EnumerateSwapchainImages(swapchain, 0, &imageCount, (SwapchainImageBaseHeader*)null), "xrEnumerateSwapchainImages");
-        var images = new SwapchainImageOpenGLKHR[imageCount];
+        var images = new SwapchainImageVulkanKHR[imageCount];
         for (int i = 0; i < images.Length; i++)
-            images[i].Type = StructureType.SwapchainImageOpenglKhr;
-        fixed (SwapchainImageOpenGLKHR* ptr = images)
+            images[i].Type = StructureType.SwapchainImageVulkanKhr;
+        fixed (SwapchainImageVulkanKHR* ptr = images)
             Check(_xr.EnumerateSwapchainImages(swapchain, imageCount, &imageCount, (SwapchainImageBaseHeader*)ptr), "xrEnumerateSwapchainImages");
 
-        uint[] handles = new uint[imageCount];
+        // The runtime hands colour images over in the colour attachment layout and wants them back in it.
+        Graphite.ResourceFactory factory = Graphics.Device!.ResourceFactory;
+        var description = Graphite.TextureDescription.Texture2D((uint)EyeWidth, (uint)EyeHeight, 1, 1, _format, Graphite.TextureUsage.RenderTarget);
+        _swapchainTextures[eye] = new Graphite.Texture[imageCount];
+        _swapchainTargets[eye] = new Graphite.Framebuffer[imageCount];
         for (int i = 0; i < imageCount; i++)
-            handles[i] = images[i].Image;
-        return (swapchain, handles);
-    }
-
-    // The engine writes gamma encoded colour into plain RGBA8 targets, and the copy moves those bytes as they
-    // are, so an sRGB swapchain shows them exactly as the window does. A linear one would be encoded twice.
-    private static long ChooseColorFormat(long[] formats)
-    {
-        long srgb = (long)GLEnum.Srgb8Alpha8;
-        long linear = (long)GLEnum.Rgba8;
-        if (Array.IndexOf(formats, srgb) >= 0) return srgb;
-        if (Array.IndexOf(formats, linear) >= 0)
         {
-            Debug.LogWarning("The OpenXR runtime offers no sRGB swapchain, so the headset image will look washed out.");
-            return linear;
+            _swapchainTextures[eye][i] = factory.CreateTexture((ulong)images[i].Image, description, Graphite.TextureState.Attachment);
+            _swapchainTextures[eye][i].Name = $"XR {(eye == 0 ? "left" : "right")} eye {i}";
+
+            // The eyes draw into the image through this target, flipped into the layout the compositor reads.
+            _swapchainTargets[eye][i] = factory.CreateFramebuffer(new Graphite.FramebufferDescription(null, _swapchainTextures[eye][i]));
+            _swapchainTargets[eye][i].Name = $"XR {(eye == 0 ? "left" : "right")} eye target {i}";
         }
-        throw new NotSupportedException("The OpenXR runtime offers no 8 bit RGBA swapchain format.");
     }
 
-    private void CreateSpaces(XRTrackingOrigin origin, bool localFloor)
+    private void CreateEyeTargets(Graphite.GraphicsDevice device)
+    {
+        Graphite.ResourceFactory factory = device.ResourceFactory;
+        _eyeTexture = factory.CreateTexture(Graphite.TextureDescription.Texture2D((uint)EyeWidth, (uint)EyeHeight, 1, 2, _format, Graphite.TextureUsage.RenderTarget | Graphite.TextureUsage.Sampled));
+        _eyeTexture.Name = "XR eyes";
+        _eyeTarget = factory.CreateFramebuffer(new Graphite.FramebufferDescription(null, _eyeTexture) { ViewCount = 2 });
+        _eyeTarget.Name = "XR eyes";
+
+        // The eyes copy samples each layer in the swapchain's own format: sampling an sRGB view linearises
+        // and writing an sRGB attachment encodes again, so the compositor's bytes come out identical.
+        for (int eye = 0; eye < 2; eye++)
+            _eyeLayerViews[eye] = factory.CreateTextureView(new Graphite.TextureViewDescription(_eyeTexture, 0, 1, (uint)eye, 1, _format));
+
+        // The mirror reads the left display's layer as plain bytes, which hold the colour encoded as the window holds it
+        _mirrorSource = factory.CreateTextureView(new Graphite.TextureViewDescription(_eyeTexture, 0, 1, 0, 1, _plainFormat));
+
+        _eyesPipeline = new Graphite.RenderGraph.RenderPipeline([new EyesPass()]) { Name = "XR Eyes" };
+        _mirrorPipeline = new Graphite.RenderGraph.RenderPipeline([new MirrorPass()]) { Name = "XR Mirror" };
+        _eyesViewId = Graphics.NewViewId();
+        _mirrorViewId = Graphics.NewViewId();
+    }
+
+    private void CreateSpaces(XRTrackingOrigin origin)
     {
         List<ReferenceSpaceType> supported = GetReferenceSpaces();
 
@@ -383,7 +476,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         TrackingOrigin = XRTrackingOrigin.Seated;
         if (origin == XRTrackingOrigin.Floor)
         {
-            if (localFloor && supported.Contains(ReferenceSpaceType.LocalFloor)) appType = ReferenceSpaceType.LocalFloor;
+            if (_localFloorExtension && supported.Contains(ReferenceSpaceType.LocalFloor)) appType = ReferenceSpaceType.LocalFloor;
             else if (supported.Contains(ReferenceSpaceType.Stage)) appType = ReferenceSpaceType.Stage;
 
             if (appType != ReferenceSpaceType.Local) TrackingOrigin = XRTrackingOrigin.Floor;
@@ -418,9 +511,11 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         return space;
     }
 
-    // ─────────────────────── Frame loop ───────────────────────
+    // ----------------------------------------------------------------
+    //  Frame loop
+    // ----------------------------------------------------------------
 
-    /// <summary>Handles runtime events, then waits for and begins the next frame and locates the head, eyes and hands for it.</summary>
+    /// <summary>Handles runtime events, then waits for the next frame and locates the head, eyes and hands for it.</summary>
     public void BeginFrame()
     {
         PollEvents();
@@ -437,12 +532,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         Check(_xr.WaitFrame(_session, &waitInfo, &frameState), "xrWaitFrame");
         _frameState = frameState;
 
-        Graphics.SubmitRenderThreadCallback(BeginFrameOnRenderThread);
-        _frameBegun = true;
-        _eyeRendered[0] = _eyeRendered[1] = false;
-        _eyeDepthWritten[0] = _eyeDepthWritten[1] = false;
-        _stereoCameras.Clear();
-        _depthCamera = null;
+        _frameWaited = true;
+        _eyesCamera = null;
+        _mirrors.Clear();
 
         long time = _frameState.PredictedDisplayTime;
         if (_recenterRequested) Recenter(time);
@@ -456,7 +548,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     /// <summary>
     /// Moves tracking space so the head is at its centre, facing along it. Only the turn about the vertical is taken,
     /// so the floor stays level, and floor tracking keeps the floor's height. The old space is destroyed on the render
-    /// thread, after the frames already queued that still use it.
+    /// thread once the frames that still use it have ended.
     /// </summary>
     private void Recenter(long time)
     {
@@ -467,10 +559,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         if ((location.LocationFlags & valid) != valid) return;
 
         _appSpaceOffset = RecenteredOffset(_appSpaceOffset, location.Pose, keepFloor: TrackingOrigin == XRTrackingOrigin.Floor);
-        Space old = _appSpace;
+        _retiredSpaces.Add(_appSpace);
         _appSpace = CreateReferenceSpace(_appSpaceType, _appSpaceOffset);
         Input.SetAppSpace(_appSpace);
-        Graphics.SubmitRenderThreadCallback(() => _xr.DestroySpace(old));
         XR.RaiseRecentered();
     }
 
@@ -508,113 +599,136 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         return false;
     }
 
-    private void BeginFrameOnRenderThread()
-    {
-        try
-        {
-            var beginInfo = new FrameBeginInfo { Type = StructureType.FrameBeginInfo };
-            Check(_xr.BeginFrame(_session, &beginInfo), "xrBeginFrame");
-        }
-        catch (Exception e)
-        {
-            RenderThreadFailure = e.Message;
-        }
-    }
-
-    /// <summary>Queues the copy of the rendered eyes into the headset and the end of the frame, after everything drawn so far.</summary>
+    /// <summary>
+    /// Hands the waited frame to this frame's submission: the copy of the eyes into the headset's images when a camera
+    /// drew them, and the frame's begin and end around the submission on the render thread. Main thread.
+    /// </summary>
     public void EndFrame()
     {
-        if (!_frameBegun) return;
-        _frameBegun = false;
+        if (!_frameWaited) return;
+        _frameWaited = false;
 
-        bool left = _eyeRendered[0], right = _eyeRendered[1];
-        bool submit = _shouldRender && (left || right);
-
-        // A camera drawing a single eye still has to fill both views, so the other one shows the same image, from
-        // the same place. Each view is sent with the pose its image was actually drawn from, so the runtime
-        // reprojects it correctly even when the camera did not follow the head this frame.
-        int leftSource = left ? 0 : 1;
-        int rightSource = right ? 1 : 0;
         var frame = new SubmittedFrame
         {
-            LeftSource = leftSource,
-            RightSource = rightSource,
-            LeftPose = _renderedPoses[leftSource],
-            RightPose = _renderedPoses[rightSource],
-            LeftFov = _appViews[leftSource].Fov,
-            RightFov = _appViews[rightSource].Fov,
-            LeftDepth = _eyeDepthWritten[leftSource],
-            RightDepth = _eyeDepthWritten[rightSource],
+            Submit = _shouldRender && _eyesCamera.IsValid(),
             DisplayTime = _frameState.PredictedDisplayTime,
-            NearZ = _nearZ,
-            FarZ = _farZ,
             Space = _appSpace,
+            RetiredSpaces = _retiredSpaces.ToArray(),
         };
-        Graphics.SubmitRenderThreadCallback(() => EndFrameOnRenderThread(submit, frame));
+        _retiredSpaces.Clear();
+        for (int layer = 0; layer < 2; layer++)
+        {
+            frame.Poses[layer] = _renderedPoses[layer];
+            frame.Fovs[layer] = _renderedFovs[layer];
+        }
+
+        if (frame.Submit)
+            Graphics.AddPipeline(new Graphite.GraphDispatch(_eyesPipeline!, [new EyesView(this, frame, 0), new EyesView(this, frame, 1)]));
+        Graphics.AddFrameCallbacks(() => FrameStarted(frame), succeeded => FrameSubmitted(frame, succeeded));
     }
 
-    private struct SubmittedFrame
+    private sealed class SubmittedFrame
     {
-        public int LeftSource, RightSource;
-        public Posef LeftPose, RightPose;
-        public Fovf LeftFov, RightFov;
-        public bool LeftDepth, RightDepth;
+        public bool Submit;
         public long DisplayTime;
-        public float NearZ, FarZ;
         public Space Space;
+        public Space[] RetiredSpaces = [];
+        public readonly Posef[] Poses = new Posef[2];
+        public readonly Fovf[] Fovs = new Fovf[2];
+        public readonly uint[] Images = new uint[2];
+        public readonly bool[] Waited = new bool[2];
+        public readonly bool[] Copied = new bool[2];
+        public bool Begun;
     }
 
-    private void EndFrameOnRenderThread(bool submit, SubmittedFrame frame)
+    // Render thread, before the frame's work is recorded.
+    private void FrameStarted(SubmittedFrame frame)
     {
-        CompositionLayerProjectionView* projectionViews = stackalloc CompositionLayerProjectionView[2];
-        CompositionLayerDepthInfoKHR* depthInfos = stackalloc CompositionLayerDepthInfoKHR[2];
+        if (_disposed) return;
+        lock (_queueLock)
+        {
+            try
+            {
+                var beginInfo = new FrameBeginInfo { Type = StructureType.FrameBeginInfo };
+                Check(_xr.BeginFrame(_session, &beginInfo), "xrBeginFrame");
+                frame.Begun = true;
+            }
+            catch (Exception e)
+            {
+                RenderThreadFailure = e.Message;
+                return;
+            }
+
+            if (!frame.Submit) return;
+            try
+            {
+                for (int eye = 0; eye < 2; eye++)
+                {
+                    var acquireInfo = new SwapchainImageAcquireInfo { Type = StructureType.SwapchainImageAcquireInfo };
+                    uint index;
+                    Check(_xr.AcquireSwapchainImage(_swapchains[eye], &acquireInfo, &index), "xrAcquireSwapchainImage");
+                    frame.Images[eye] = index;
+
+                    // Only a waited image can be released, so one whose wait failed is left to the runtime.
+                    var waitInfo = new SwapchainImageWaitInfo { Type = StructureType.SwapchainImageWaitInfo, Timeout = InfiniteDuration };
+                    Check(_xr.WaitSwapchainImage(_swapchains[eye], &waitInfo), "xrWaitSwapchainImage");
+                    frame.Waited[eye] = true;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Getting the headset's images failed: {e.Message}");
+                frame.Submit = false;
+            }
+        }
+    }
+
+    // Render thread, once the frame's command buffers, the eye copies among them, are on the queue.
+    private void FrameSubmitted(SubmittedFrame frame, bool succeeded)
+    {
+        if (_disposed) return;
+        lock (_queueLock)
+        {
+            for (int eye = 0; eye < 2; eye++)
+            {
+                if (!frame.Waited[eye]) continue;
+                var releaseInfo = new SwapchainImageReleaseInfo { Type = StructureType.SwapchainImageReleaseInfo };
+                _xr.ReleaseSwapchainImage(_swapchains[eye], &releaseInfo);
+            }
+
+            if (frame.Begun)
+                EndFrame(frame, succeeded && frame.Submit && frame.Copied[0] && frame.Copied[1]);
+
+            foreach (Space space in frame.RetiredSpaces)
+                _xr.DestroySpace(space);
+        }
+    }
+
+    private void EndFrame(SubmittedFrame frame, bool show)
+    {
+        CompositionLayerProjectionView* views = stackalloc CompositionLayerProjectionView[2];
+        for (int eye = 0; eye < 2; eye++)
+        {
+            views[eye] = new CompositionLayerProjectionView
+            {
+                Type = StructureType.CompositionLayerProjectionView,
+                Pose = frame.Poses[eye],
+                Fov = frame.Fovs[eye],
+                SubImage = new SwapchainSubImage
+                {
+                    Swapchain = _swapchains[eye],
+                    ImageRect = new Rect2Di { Offset = new Offset2Di(0, 0), Extent = new Extent2Di(EyeWidth, EyeHeight) },
+                },
+            };
+        }
+
         var layer = new CompositionLayerProjection
         {
             Type = StructureType.CompositionLayerProjection,
             Space = frame.Space,
             ViewCount = 2,
-            Views = projectionViews,
+            Views = views,
         };
-
-        if (submit)
-        {
-            // Every begun frame has to end, so a failed copy still ends it, just with nothing to show.
-            try
-            {
-                for (int eye = 0; eye < 2; eye++)
-                {
-                    bool leftEye = eye == 0;
-                    // Depth goes with an eye only when the depth camera drew that eye, anything else is stale.
-                    bool depth = _submitDepth && (leftEye ? frame.LeftDepth : frame.RightDepth);
-                    CopyEyeToSwapchain(eye, leftEye ? frame.LeftSource : frame.RightSource, depth);
-                    projectionViews[eye] = new CompositionLayerProjectionView
-                    {
-                        Type = StructureType.CompositionLayerProjectionView,
-                        Pose = leftEye ? frame.LeftPose : frame.RightPose,
-                        Fov = leftEye ? frame.LeftFov : frame.RightFov,
-                        SubImage = SubImage(_swapchains[eye]),
-                    };
-
-                    if (!depth) continue;
-                    depthInfos[eye] = new CompositionLayerDepthInfoKHR
-                    {
-                        Type = StructureType.CompositionLayerDepthInfoKhr,
-                        SubImage = SubImage(_depthSwapchains[eye]),
-                        MinDepth = MinWindowDepth,
-                        MaxDepth = MaxWindowDepth,
-                        NearZ = frame.NearZ,
-                        FarZ = frame.FarZ,
-                    };
-                    projectionViews[eye].Next = &depthInfos[eye];
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Copying the eyes to the headset failed: {e.Message}");
-                submit = false;
-            }
-        }
-
         CompositionLayerBaseHeader** layers = stackalloc CompositionLayerBaseHeader*[1];
         layers[0] = (CompositionLayerBaseHeader*)&layer;
         var endInfo = new FrameEndInfo
@@ -622,61 +736,12 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             Type = StructureType.FrameEndInfo,
             DisplayTime = frame.DisplayTime,
             EnvironmentBlendMode = EnvironmentBlendMode.Opaque,
-            LayerCount = submit ? 1u : 0u,
-            Layers = submit ? layers : null,
+            LayerCount = show ? 1u : 0u,
+            Layers = show ? layers : null,
         };
 
         try { Check(_xr.EndFrame(_session, &endInfo), "xrEndFrame"); }
         catch (Exception e) { RenderThreadFailure = e.Message; }
-    }
-
-    private SwapchainSubImage SubImage(Swapchain swapchain) => new()
-    {
-        Swapchain = swapchain,
-        ImageRect = new Rect2Di { Offset = new Offset2Di(0, 0), Extent = new Extent2Di(EyeWidth, EyeHeight) },
-    };
-
-    private void CopyEyeToSwapchain(int eye, int sourceEye, bool depth)
-    {
-        uint source = _eyeTextures[sourceEye].frameBuffer.Handle;
-        CopyToSwapchain(_swapchains[eye], _swapchainImages[eye], source, GLEnum.ColorAttachment0, GLEnum.ColorBufferBit);
-        if (depth)
-            CopyToSwapchain(_depthSwapchains[eye], _depthSwapchainImages[eye], source, GLEnum.DepthAttachment, GLEnum.DepthBufferBit);
-    }
-
-    private void CopyToSwapchain(Swapchain swapchain, uint[] images, uint sourceFramebuffer, GLEnum attachment, GLEnum mask)
-    {
-        var acquireInfo = new SwapchainImageAcquireInfo { Type = StructureType.SwapchainImageAcquireInfo };
-        uint index;
-        Check(_xr.AcquireSwapchainImage(swapchain, &acquireInfo, &index), "xrAcquireSwapchainImage");
-
-        // A waited image has to go back whatever happens, or every later acquire on this swapchain fails. One whose
-        // wait failed cannot be released, since the runtime only takes back images that were waited on.
-        bool waited = false;
-        try
-        {
-            var waitInfo = new SwapchainImageWaitInfo { Type = StructureType.SwapchainImageWaitInfo, Timeout = InfiniteDuration };
-            Check(_xr.WaitSwapchainImage(swapchain, &waitInfo), "xrWaitSwapchainImage");
-            waited = true;
-
-            Silk.NET.OpenGL.GL gl = Graphics.GL;
-            gl.BindFramebuffer(GLEnum.ReadFramebuffer, sourceFramebuffer);
-            gl.BindFramebuffer(GLEnum.DrawFramebuffer, _copyFramebuffer);
-            gl.FramebufferTexture2D(GLEnum.DrawFramebuffer, attachment, GLEnum.Texture2D, images[index], 0);
-            gl.Disable(GLEnum.ScissorTest);
-            gl.BlitFramebuffer(0, 0, EyeWidth, EyeHeight, 0, 0, EyeWidth, EyeHeight, (uint)mask, GLEnum.Nearest);
-            gl.FramebufferTexture2D(GLEnum.DrawFramebuffer, attachment, GLEnum.Texture2D, 0, 0);
-            gl.BindFramebuffer(GLEnum.Framebuffer, 0);
-            Graphics.Executor.ResetFramebufferBindings();
-        }
-        finally
-        {
-            if (waited)
-            {
-                var releaseInfo = new SwapchainImageReleaseInfo { Type = StructureType.SwapchainImageReleaseInfo };
-                _xr.ReleaseSwapchainImage(swapchain, &releaseInfo);
-            }
-        }
     }
 
     private bool LocateViews(long time)
@@ -784,6 +849,8 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             case SessionState.Stopping:
                 _pacing = false;
                 _sessionRunning = false;
+                // Frames already queued still end against the session, so it ends after them.
+                Graphics.Renderer?.WaitForRenderThread();
                 Check(_xr.EndSession(_session), "xrEndSession");
                 break;
             case SessionState.LossPending:
@@ -795,43 +862,47 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         }
     }
 
-    // ─────────────────────── Queries ───────────────────────
+    // ----------------------------------------------------------------
+    //  Eyes
+    // ----------------------------------------------------------------
 
-    public XRPose HeadPose => _headPose;
+    /// <summary>Whether <paramref name="camera"/> may draw the eyes this frame: no other camera has.</summary>
+    public bool CanDrawEyes(Camera camera) => _eyesCamera.IsNotValid() || _eyesCamera == camera;
+
+    /// <summary>Whether <paramref name="camera"/> drew the eyes this frame.</summary>
+    public bool HasRenderedStereo(Camera camera) => _eyesCamera.IsValid() && _eyesCamera == camera;
 
     /// <summary>
-    /// The eye's texture to render into this frame, which is also what marks the eye as drawn. The first camera
-    /// to ask in a frame owns the depth the runtime reprojects with, so a camera layered on top, drawing only its
-    /// own few objects, does not replace the world's depth with its own. <paramref name="writesDepth"/> says
-    /// whether this camera is that one.
+    /// Makes <paramref name="camera"/> the one drawing the eyes this frame, returning the two layer target it draws them
+    /// into. True the first time it asks this frame, false when it already drew them.
     /// </summary>
-    public RenderTexture GetEyeTexture(StereoEye eye, Camera camera, out bool writesDepth)
+    public bool ClaimEyes(Camera camera, out Graphite.Framebuffer target)
     {
-        int index = EyeIndex(eye);
-        if (!_eyeRendered[index]) _renderedPoses[index] = RenderedPose(camera, index);
-        _eyeRendered[index] = true;
-        _stereoCameras.Add(camera);
+        target = _eyeTarget!;
+        if (HasRenderedStereo(camera)) return false;
+        if (!CanDrawEyes(camera)) throw new InvalidOperationException($"Camera '{_eyesCamera!.GameObject.Name}' already draws the headset's eyes this frame.");
 
-        // The clip planes are in world units, the runtime reads depth in tracking space metres.
-        if (_depthCamera.IsNotValid())
+        _eyesCamera = camera;
+        for (int layer = 0; layer < 2; layer++)
         {
-            _depthCamera = camera;
-            float scale = PlayAreaScale(camera.Transform);
-            _nearZ = camera.NearClipPlane / scale;
-            _farZ = camera.FarClipPlane / scale;
+            int eye = EyeIndex(EyeDrawnInLayer(camera, layer));
+            _renderedPoses[layer] = RenderedPose(camera, eye);
+            _renderedFovs[layer] = _appViews[eye].Fov;
         }
-        writesDepth = _depthCamera == camera;
-        if (writesDepth) _eyeDepthWritten[index] = true;
-        return _eyeTextures[index];
+        return true;
     }
 
-    /// <summary>The eye texture <paramref name="camera"/> drew this frame, if it has already drawn into the headset.</summary>
-    public bool HasRenderedStereo(Camera camera) => _stereoCameras.Contains(camera);
-
-    /// <summary>Whether anything was drawn into either eye this frame.</summary>
-    public bool AnyEyeRendered => _eyeRendered[0] || _eyeRendered[1];
-
-    public RenderTexture EyeTexture(StereoEye eye) => _eyeTextures[EyeIndex(eye)];
+    /// <summary>
+    /// The eye a layer of <paramref name="camera"/>'s stereo view is drawn from. A camera drawing a single eye fills both
+    /// layers with it, so both displays show the same image, each sent with the pose it was drawn from.
+    /// </summary>
+    public static StereoEye EyeDrawnInLayer(Camera camera, int layer)
+    {
+        bool left = (camera.StereoTargetEye & StereoTargetEyeMask.Left) != 0;
+        bool right = (camera.StereoTargetEye & StereoTargetEyeMask.Right) != 0;
+        if (layer == 0) return left || !right ? StereoEye.Left : StereoEye.Right;
+        return right || !left ? StereoEye.Right : StereoEye.Left;
+    }
 
     /// <summary>
     /// Where the camera draws the eye from, in tracking space. The camera's parent stands for the play area, so the
@@ -851,11 +922,28 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         return new Posef { Position = ToXr(position), Orientation = ToXr(Quaternion.Normalize(rotation)) };
     }
 
-    private static float PlayAreaScale(Transform head)
+    /// <summary>Shows the left display's image in <paramref name="target"/>, cropped to its aspect so it fills it without stretching.</summary>
+    public void Mirror(Graphite.Framebuffer target)
     {
-        if (head.Parent == null) return 1f;
-        float scale = MathF.Abs(head.Parent.LossyScale.X);
-        return scale > 1e-6f ? scale : 1f;
+        foreach (MirrorView existing in _mirrors)
+            if (existing.Target == target && !existing.Covered) return;
+
+        float targetAspect = target.Width / (float)Math.Max(1u, target.Height);
+        float eyeAspect = EyeWidth / (float)EyeHeight;
+        Float4 crop = targetAspect > eyeAspect
+            ? new Float4(0f, 0.5f - 0.5f * eyeAspect / targetAspect, 1f, eyeAspect / targetAspect)
+            : new Float4(0.5f - 0.5f * targetAspect / eyeAspect, 0f, targetAspect / eyeAspect, 1f);
+
+        var view = new MirrorView(target, _mirrorSource!, crop, _mirrorViewId);
+        _mirrors.Add(view);
+        Graphics.AddPipeline(new Graphite.GraphDispatch(_mirrorPipeline!, [view]));
+    }
+
+    /// <summary>A later view drew over the whole of <paramref name="target"/>, so the mirror under it is left out.</summary>
+    public void CoverMirror(Graphite.Framebuffer target)
+    {
+        foreach (MirrorView mirror in _mirrors)
+            if (mirror.Target == target) mirror.Covered = true;
     }
 
     public XRView GetEyeView(StereoEye eye) => _eyeViews[EyeIndex(eye)];
@@ -867,24 +955,154 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         _ => throw new ArgumentException("Only the left and right eyes have XR views.", nameof(eye)),
     };
 
-    // ─────────────────────── Teardown ───────────────────────
+    // Renders each layer of the eyes into the image its display shows this frame, flipped into the
+    // orientation the compositor reads.
+    private sealed class EyesView(OpenXRSession session, SubmittedFrame frame, int eye) : Graphite.RenderGraph.IRenderView
+    {
+        public OpenXRSession Session => session;
+        public SubmittedFrame Frame => frame;
+        public int Eye => eye;
+        public Graphite.Framebuffer? Target => frame.Waited[eye] ? session._swapchainTargets[eye][frame.Images[eye]] : null;
+        public Graphite.TextureView Source => session._eyeLayerViews[eye];
+        public uint PixelWidth => (uint)session.EyeWidth;
+        public uint PixelHeight => (uint)session.EyeHeight;
+        public int ViewId => session._eyesViewId;
+        public string Name => $"XR {(eye == 0 ? "left" : "right")} eye";
+    }
+
+    private sealed class EyesPass : Graphite.RenderGraph.IPass
+    {
+        private ShaderPass? _shader;
+        private readonly Graphite.PropertySet _properties = new();
+
+        public string Name => "XR Eyes";
+
+        // The target is the headset's image, written whole and handed back to the runtime.
+        public void Setup(Graphite.RenderGraph.RenderContextBuilder builder)
+            => builder.DeclareViewTarget(new Graphite.RenderGraph.TargetLoadStoreOps(
+                new Graphite.RenderGraph.AttachmentOps(Graphite.RenderGraph.LoadAction.DontCare, Graphite.RenderGraph.StoreAction.Store),
+                Graphite.RenderGraph.AttachmentOps.Discard));
+
+        public void Render(Graphite.RenderGraph.RenderContext context, Graphite.CommandBuffer cmd)
+        {
+            EyesView view = context.ViewAs<EyesView>();
+            OpenXRSession session = view.Session;
+            SubmittedFrame frame = view.Frame;
+            if (session._disposed || !frame.Waited[view.Eye]) return;
+
+            if (_shader == null)
+            {
+                ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/XREyes.shader"));
+                definition.Create(Graphics.Device!, Graphics.Compiler, new Variant(), CompileMode.All);
+                _shader = definition.Passes![0];
+            }
+
+            _properties.SetTexture("_MainTex", view.Source, Graphics.GetSampler(Graphite.SamplerDescription.Linear));
+            cmd.SetShader(_shader);
+            cmd.SetVertexSource(Graphite.VertexSource.None);
+            cmd.SetProperties(_properties);
+            cmd.Draw(3);
+            frame.Copied[view.Eye] = true;
+        }
+    }
+
+    private sealed class MirrorView(Graphite.Framebuffer target, Graphite.TextureView source, Float4 crop, int id) : Graphite.RenderGraph.IRenderView
+    {
+        public Graphite.TextureView Source => source;
+        public Float4 Crop => crop;
+        public volatile bool Covered;
+        public uint PixelWidth => target.Width;
+        public uint PixelHeight => target.Height;
+        public int ViewId => id;
+        public string Name => "XR Mirror";
+        public Graphite.Framebuffer? Target => target;
+    }
+
+    private sealed class MirrorPass : Graphite.RenderGraph.IPass
+    {
+        private ShaderPass? _shader;
+        private readonly Graphite.PropertySet _properties = new();
+
+        public string Name => "XR Mirror";
+
+        // Loads what is there, so a mirror a later view covered leaves the target as it was
+        public void Setup(Graphite.RenderGraph.RenderContextBuilder builder)
+            => builder.DeclareViewTarget(new Graphite.RenderGraph.TargetLoadStoreOps(new Graphite.RenderGraph.AttachmentOps(Graphite.RenderGraph.LoadAction.Load, Graphite.RenderGraph.StoreAction.Store), Graphite.RenderGraph.AttachmentOps.Discard));
+
+        public void Render(Graphite.RenderGraph.RenderContext context, Graphite.CommandBuffer cmd)
+        {
+            MirrorView view = context.ViewAs<MirrorView>();
+            if (view.Covered) return;
+
+            if (_shader == null)
+            {
+                ShaderDefinition definition = ShaderParser.Parse(EmbeddedResources.ReadAllText("Assets/Defaults/Shaders/XRMirror.shader"));
+                definition.Create(Graphics.Device!, Graphics.Compiler, new Variant(), CompileMode.All);
+                _shader = definition.Passes![0];
+            }
+
+            _properties.SetTexture("_MainTex", view.Source, Graphics.GetSampler(Graphite.SamplerDescription.Linear));
+            _properties.SetFloat4("_Crop", view.Crop);
+            cmd.SetShader(_shader);
+            cmd.SetVertexSource(Graphite.VertexSource.None);
+            cmd.SetProperties(_properties);
+            cmd.Draw(3);
+        }
+    }
+
+    // ----------------------------------------------------------------
+    //  Teardown
+    // ----------------------------------------------------------------
 
     public void Dispose()
     {
         _pacing = false;
 
+        // Frames already queued end against the session first. A frame not yet submitted sees it gone and does nothing.
+        Graphics.Renderer?.WaitForRenderThread();
+        _disposed = true;
+
         if (_session.Handle != 0)
         {
-            // Swapchains and the session go on the render thread, after anything already queued that uses them.
-            try { Graphics.SubmitRenderThreadCallbackAndWait(DestroySessionOnRenderThread); }
-            catch (Exception e) { Debug.LogError($"Destroying the XR session failed: {e.Message}"); }
+            try
+            {
+                Graphics.Device?.WaitForIdle();
+                lock (_queueLock)
+                {
+                    for (int i = 0; i < 2; i++)
+                        if (_swapchains[i].Handle != 0) _xr.DestroySwapchain(_swapchains[i]);
+                    _xr.DestroySession(_session);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Destroying the XR session failed: {e.Message}");
+            }
+            _session = default;
         }
 
-        for (int i = 0; i < 2; i++)
+        // Views added this frame may still draw into the eyes, so they go once the frames using them are done
+        for (int eye = 0; eye < 2; eye++)
         {
-            if (_eyeTextures[i].IsValid()) _eyeTextures[i].Dispose();
-            _eyeTextures[i] = null;
+            foreach (Graphite.Texture image in _swapchainTextures[eye])
+                Graphics.DeferDispose(image);
+            _swapchainTextures[eye] = [];
+            foreach (Graphite.Framebuffer target in _swapchainTargets[eye])
+                Graphics.DeferDispose(target);
+            _swapchainTargets[eye] = [];
+            Graphics.DeferDispose(_eyeLayerViews[eye]);
+            _eyeLayerViews[eye] = null!;
         }
+        Graphics.DeferDispose(_mirrorSource);
+        Graphics.DeferDispose(_eyeTarget);
+        Graphics.DeferDispose(_eyeTexture);
+        Graphics.DeferDispose(_eyesPipeline);
+        Graphics.DeferDispose(_mirrorPipeline);
+        _mirrorSource = null;
+        _eyeTarget = null;
+        _eyeTexture = null;
+        _eyesPipeline = null;
+        _mirrorPipeline = null;
 
         // Action sets and spaces are children of the instance and session, so they go with them.
         if (_instance.Handle != 0) _xr.DestroyInstance(_instance);
@@ -892,21 +1110,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         _xr.Dispose();
     }
 
-    private void DestroySessionOnRenderThread()
-    {
-        for (int i = 0; i < 2; i++)
-        {
-            if (_swapchains[i].Handle != 0) _xr.DestroySwapchain(_swapchains[i]);
-            if (_depthSwapchains[i].Handle != 0) _xr.DestroySwapchain(_depthSwapchains[i]);
-        }
-        _xr.DestroySession(_session);
-        _session = default;
-
-        if (_copyFramebuffer != 0) Graphics.GL.DeleteFramebuffer(_copyFramebuffer);
-        _copyFramebuffer = 0;
-    }
-
-    // ─────────────────────── Helpers ───────────────────────
+    // ----------------------------------------------------------------
+    //  Helpers
+    // ----------------------------------------------------------------
 
     // OpenXR is right handed with -Z forward, Prowl is left handed with +Z forward, so poses mirror across Z.
     internal static Float3 ToProwl(Vector3f v) => new(v.X, v.Y, -v.Z);
@@ -943,10 +1149,4 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         int length = Encoding.UTF8.GetBytes(value, new Span<byte>(destination, capacity - 1));
         destination[length] = 0;
     }
-
-    [LibraryImport("opengl32.dll", EntryPoint = "wglGetCurrentContext")]
-    private static partial nint WglGetCurrentContext();
-
-    [LibraryImport("opengl32.dll", EntryPoint = "wglGetCurrentDC")]
-    private static partial nint WglGetCurrentDC();
 }

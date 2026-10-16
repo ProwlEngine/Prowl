@@ -571,11 +571,11 @@ public sealed class UIMeshBuilder
     // ---------- Bake / Reset ----------
 
     /// <summary>
-    /// Writes the accumulated buffers into <paramref name="m"/>, recalculates bounds,
-    /// and uploads to the GPU. After Bake the builder is *not* automatically reset -
-    /// the canvas is responsible for calling <see cref="Return"/> which triggers a Reset.
+    /// Writes the accumulated buffers into <paramref name="m"/>, recalculates bounds, and uploads to the GPU unless
+    /// <paramref name="upload"/> is false. After Bake the builder is *not* automatically reset - the canvas is
+    /// responsible for calling <see cref="Return"/> which triggers a Reset.
     /// </summary>
-    internal void Bake(Mesh m)
+    internal void Bake(Mesh m, bool upload = true)
     {
         // A Mesh can't hold zero-length attribute arrays (its setters reject them), so an empty builder
         // must not be baked. Callers should skip empty builders via IsEmpty; guard here as a backstop.
@@ -589,7 +589,7 @@ public sealed class UIMeshBuilder
         m.Colors32 = [.. _colors];
         m.Indices  = [.. _indices];
         m.RecalculateBounds();   // populates `mesh.bounds` (lowercase field)
-        m.Upload();
+        if (upload) m.Upload();
     }
 
     internal void Reset()

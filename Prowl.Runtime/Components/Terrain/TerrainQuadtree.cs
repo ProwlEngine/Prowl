@@ -1,14 +1,17 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Terrain;
 
 /// <summary>
 /// Manages the quadtree LOD system for terrain rendering.
-/// Simple distance-based subdivision with a quality multiplier.
+/// Simple distance-based subdivision with a quality multiplier. Each view keeps its own tree, so its
+/// hysteresis follows that view's camera.
 /// </summary>
 public class TerrainQuadtree
 {
@@ -30,34 +33,40 @@ public class TerrainQuadtree
     /// <param name="cameraPosition">Camera position in terrain-local space.</param>
     /// <param name="lodQuality">Quality multiplier for LOD distance thresholds.
     /// 1.0 = default, higher = more detail (subdivides further from camera), lower = less detail.</param>
-    public void Update(Float3 cameraPosition, float lodQuality = 1f)
+    public void Update(Float3 cameraPosition, float lodQuality = 1f) => Update([cameraPosition], lodQuality);
+
+    /// <summary>
+    /// Updates the quadtree for several cameras at once, each chunk as fine as the nearest camera needs, for views
+    /// such as shadows that draw the terrain for other cameras.
+    /// </summary>
+    public void Update(ReadOnlySpan<Float3> cameraPositions, float lodQuality = 1f)
     {
         VisibleChunks.Clear();
-        UpdateNode(Root, cameraPosition, lodQuality);
+        if (cameraPositions.IsEmpty) return;
+        UpdateNode(Root, cameraPositions, lodQuality);
     }
 
-    private void UpdateNode(TerrainChunk chunk, Float3 cameraPosition, float lodQuality)
+    private void UpdateNode(TerrainChunk chunk, ReadOnlySpan<Float3> cameraPositions, float lodQuality)
     {
-        // Calculate distance from camera to chunk center (XZ plane)
+        // Distance from the nearest camera to the chunk center
         Float3 chunkCenter = chunk.Position + new Float3(chunk.Size * 0.5f, 0, chunk.Size * 0.5f);
-        float distanceToCamera = Float3.Distance(cameraPosition, chunkCenter);
+        float distanceToCamera = float.MaxValue;
+        foreach (Float3 camera in cameraPositions)
+            distanceToCamera = MathF.Min(distanceToCamera, Float3.Distance(camera, chunkCenter));
 
-        // Distance threshold scaled by quality multiplier
         // Higher quality = larger threshold = subdivides at greater distances
         float subdivideThreshold = chunk.Size * 1.5f * lodQuality;
 
         if (distanceToCamera < subdivideThreshold && chunk.LODLevel < MaxLODLevel)
         {
-            // Subdivide and recurse into children
             if (chunk.Children == null)
                 chunk.Subdivide();
 
-            foreach (TerrainChunk child in chunk.Children)
-                UpdateNode(child, cameraPosition, lodQuality);
+            foreach (TerrainChunk child in chunk.Children!)
+                UpdateNode(child, cameraPositions, lodQuality);
         }
         else
         {
-            // Merge children if they exist and camera is far enough
             if (chunk.Children != null)
             {
                 // Hysteresis: merge at a slightly larger distance to prevent thrashing
@@ -65,9 +74,8 @@ public class TerrainQuadtree
                     chunk.Merge();
                 else
                 {
-                    // Still within hysteresis range - keep children
                     foreach (TerrainChunk child in chunk.Children)
-                        UpdateNode(child, cameraPosition, lodQuality);
+                        UpdateNode(child, cameraPositions, lodQuality);
                     return;
                 }
             }

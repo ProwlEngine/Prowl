@@ -59,30 +59,6 @@ public class ComputeShaderTests
     }
 
     [Fact]
-    public void Bindings_AreAddedWhereMissing_TheSameInEveryStage_AndAroundExplicitOnes()
-    {
-        string vertex = """
-            layout(std430) readonly buffer Lights { vec4 lights[]; };
-            layout(std430, binding = 0) buffer Fixed { int fixedValues[]; };
-            """;
-        string fragment = """
-            buffer Lights { vec4 lights[]; };
-            layout(rgba16f) uniform writeonly image2D Output;
-            uniform sampler2D Input;
-            uniform Globals { vec4 g; };
-            """;
-
-        string[] result = GraphicsProgram.AssignBindings(vertex, fragment);
-
-        Assert.Contains("layout(std430, binding = 1) readonly buffer Lights", result[0]);
-        Assert.Contains("layout(std430, binding = 0) buffer Fixed", result[0]);
-        Assert.Contains("layout(std430, binding = 1) buffer Lights", result[1]);
-        Assert.Contains("layout(rgba16f, binding = 0) uniform writeonly image2D Output", result[1]);
-        Assert.Contains("uniform sampler2D Input;", result[1]);
-        Assert.Contains("uniform Globals { vec4 g; };", result[1]);
-    }
-
-    [Fact]
     public void ComputeBuffer_ChecksItsShapeAndRanges()
     {
         Assert.Throws<ArgumentException>(() => new ComputeBuffer(10, 6));

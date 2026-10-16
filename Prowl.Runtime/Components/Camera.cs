@@ -1,90 +1,29 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Graphite.Rendering;
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-public abstract class ImageEffect
+/// <summary>What a camera shows behind the scene.</summary>
+public enum CameraBackground
 {
-    /// <summary>
-    /// When false, the effect is skipped by the render pipeline.
-    /// </summary>
-    public bool Enabled = true;
-
-    /// <summary>
-    /// Defines at which stage of the rendering pipeline this effect should run.
-    /// AfterOpaques: runs after opaque geometry, before transparents (GTAO, SSR).
-    /// PostProcess: runs after all rendering (tonemapping, bloom, FXAA).
-    /// </summary>
-    public virtual RenderStage Stage => RenderStage.PostProcess;
-
-    /// <summary>
-    /// Whether this effect transforms HDR to LDR. Used for tonemapping effects.
-    /// </summary>
-    public virtual bool TransformsToLDR { get; } = false;
-
-    /// <summary>
-    /// Called during rendering with access to render targets.
-    /// </summary>
-    public virtual void OnRenderEffect(RenderContext context) { }
-
-    /// <summary>Called after all rendering is complete for this camera.</summary>
-    public virtual void OnPostRender(Camera camera) { }
-
-    /// <summary>Called before culling for this camera.</summary>
-    public virtual void OnPreCull(Camera camera) { }
-
-    /// <summary>Called before rendering starts for this camera.</summary>
-    public virtual void OnPreRender(Camera camera) { }
-
-    /// <summary>
-    /// Called when the effect transitions from active to inactive (Enabled = false,
-    /// or removed from Camera.Effects). Override to release GPU resources such as
-    /// materials, persistent RenderTextures, or shader-program handles.
-    /// </summary>
-    public virtual void OnDisable() { }
-
-    private readonly object?[] _eyeStates = new object?[3];
-
-    /// <summary>
-    /// State kept apart for each eye the camera renders, so temporal history from one eye never feeds the other.
-    /// A mono camera only ever uses one.
-    /// </summary>
-    protected T GetEyeState<T>(Camera camera) where T : class, new()
-        => (T)(_eyeStates[(int)camera.ActiveEye] ??= new T());
-
-    /// <summary>Hands every eye state created so far to <paramref name="release"/>, then forgets them.</summary>
-    protected void ReleaseEyeStates<T>(Action<T> release) where T : class
-    {
-        for (int i = 0; i < _eyeStates.Length; i++)
-        {
-            if (_eyeStates[i] is T state) release(state);
-            _eyeStates[i] = null;
-        }
-    }
-}
-
-public enum CameraClearFlags
-{
-    Nothing,
-    SolidColor,
-    Depth,
     Skybox,
-}
+    Color,
 
-/// <summary>The view a camera is currently rendering. Mono is a normal render, Left and Right are headset eyes.</summary>
-public enum StereoEye
-{
-    Mono,
-    Left,
-    Right,
+    /// <summary>
+    /// The cameras drawn before it into the same target, a lower <see cref="Camera.Depth"/>, for cameras stacked over
+    /// others such as a first person weapon or world space UI.
+    /// </summary>
+    None,
 }
 
 /// <summary>Which headset eyes a camera renders to while XR is running.</summary>
@@ -97,14 +36,75 @@ public enum StereoTargetEyeMask
     Both = Left | Right,
 }
 
+/// <summary>How one render of a camera goes, beyond the camera's own settings.</summary>
+public struct CameraRenderOptions
+{
+    /// <summary>Where the camera draws when it has no <see cref="Camera.Target"/>, null for the window.</summary>
+    public RenderTexture? FallbackTarget;
+
+    /// <summary>Draws the gizmos and Debug.Draw shapes queued this frame.</summary>
+    public bool DisplayGizmos;
+
+    /// <summary>What the view is for, which decides the features that run on it.</summary>
+    public ViewKind Kind;
+
+    /// <summary>Features drawn on this render only, after the camera's effects.</summary>
+    public IReadOnlyList<RenderFeature>? Features;
+
+    /// <summary>Views that must draw before this one, such as ones whose targets it samples.</summary>
+    public int[]? DependsOn;
+
+    /// <summary>Global axis values for this render alone, such as a debug view's GRAPHITE_DEBUG.</summary>
+    public Graphite.ShaderDef.Keyword[]? Keywords;
+}
+
+/// <summary>
+/// How cameras become views of a frame. Prowl's own, <see cref="ForwardCameraPipeline"/>, draws each camera as a Graphite
+/// view running the world's features and the camera's effects. A pipeline of another design, such as deferred, adds
+/// each camera as an external view (<see cref="Camera.BuildView"/> with ViewDesc.External set), which Graphite culls and
+/// prepares draws for, and records it in passes of its own added with <see cref="Graphics.AddPipeline"/>, drawing through
+/// Renderer.Draws. Set it on <see cref="Graphics.CameraPipeline"/>.
+/// </summary>
+public abstract class CameraPipeline
+{
+    /// <summary>Adds a camera's render to this frame. Main thread.</summary>
+    public abstract void Render(Camera camera, in CameraRenderOptions options);
+}
+
+/// <summary>Prowl's forward pipeline: each camera a Graphite view with the world's features and the camera's effects.</summary>
+public sealed class ForwardCameraPipeline : CameraPipeline
+{
+    public override void Render(Camera camera, in CameraRenderOptions options) => camera.RenderForward(options);
+}
+
 [AddComponentMenu("Rendering/Camera")]
-[ComponentIcon("\uf030")] // Camera
+[ComponentIcon("")] // Camera
 public class Camera : Component
 {
-    public List<ImageEffect> Effects = [];
+    /// <summary>Draws the effects of the volumes the camera listens to and of its base profile.</summary>
+    public bool PostProcessing = true;
 
-    public CameraClearFlags ClearFlags = CameraClearFlags.Skybox;
-    public Color ClearColor = new(0f, 0f, 0f, 1f);
+    /// <summary>The camera's own effects, under every volume: an asset, or a profile embedded in the scene.</summary>
+    public VolumeProfile? Profile;
+
+    /// <summary>The layers of the volumes the camera listens to.</summary>
+    public LayerMask VolumeMask = LayerMask.Everything;
+
+    /// <summary>Where local volumes are measured from, the camera itself when empty.</summary>
+    public GameObject? VolumeTrigger;
+
+    public AntiAliasingMode AntiAliasing = AntiAliasingMode.None;
+    [ShowIf(nameof(UsesFxaa))] public FxaaSettings Fxaa = new();
+    [ShowIf(nameof(UsesSmaa))] public SmaaSettings Smaa = new();
+    [ShowIf(nameof(UsesTaa))] public TaaSettings Taa = new();
+
+    private bool UsesFxaa => AntiAliasing == AntiAliasingMode.FXAA;
+    private bool UsesSmaa => AntiAliasing == AntiAliasingMode.SMAA;
+    private bool UsesTaa => AntiAliasing == AntiAliasingMode.TAA;
+    private bool UsesBackgroundColor => Background == CameraBackground.Color;
+
+    public CameraBackground Background = CameraBackground.Skybox;
+    [ShowIf(nameof(UsesBackgroundColor))] public Color BackgroundColor = new(0f, 0f, 0f, 1f);
     public LayerMask CullingMask = LayerMask.Everything;
 
     public enum ProjectionType { Perspective, Orthographic }
@@ -118,8 +118,14 @@ public class Camera : Component
     /// </summary>
     public float OrthographicSize = 5f;
     public float NearClipPlane = 0.1f;
+
+    /// <summary>The farthest distance the camera draws and effects such as fog and shadows reach.</summary>
     public float FarClipPlane = 100f;
-    //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
+
+    /// <summary>The part of the target the camera draws into, as x, y, width and height from 0 to 1, y down from the top.</summary>
+    public Float4 ViewportRect = new(0, 0, 1, 1);
+
+    /// <summary>Cameras draw lowest depth first, each over the ones before.</summary>
     public int Depth = -1;
 
     private static Camera? s_main;
@@ -128,7 +134,8 @@ public class Camera : Component
 
     /// <summary>
     /// The camera shown on top: the enabled camera with the highest <see cref="Depth"/> in the current scene
-    /// that draws to the screen. Cameras drawing into a render texture and editor helper cameras are never main.
+    /// that draws to the screen. Cameras drawing into a render texture, cameras stacked over others and editor helper
+    /// cameras are never main.
     /// Found once per frame, null when there is none.
     /// </summary>
     public static Camera? Main
@@ -146,76 +153,43 @@ public class Camera : Component
         }
     }
 
-    public RenderPipeline? Pipeline;
-
     /// <summary>
-    /// The render texture asset this camera draws into. None means it draws wherever the render it takes
-    /// part in is going - the backbuffer in a player, the Game View or scene view texture in the editor
-    /// (see <see cref="RenderingData.FallbackTarget"/>).
+    /// The render texture asset this camera draws into. None means it draws wherever the render it takes part in is
+    /// going: the window in a player, the Game View or scene view texture in the editor.
     /// </summary>
     public RenderTexture? Target;
-    public bool HDR = false;
+
+    /// <summary>Resolution the camera renders at against its target, presented scaled to fit.</summary>
     public float RenderScale = 1.0f;
 
     /// <summary>
     /// The headset eyes this camera renders while XR is running. A perspective camera with no <see cref="Target"/>
-    /// renders once per eye from its transform, which stands for the head, into the headset, and mirrors the
-    /// left eye to wherever it would normally draw.
+    /// renders both eyes from its transform, which stands for the head, into the headset.
     /// </summary>
     public StereoTargetEyeMask StereoTargetEye = StereoTargetEyeMask.Both;
-
-    /// <summary>The eye being rendered right now. Mono outside a stereo render.</summary>
-    public StereoEye ActiveEye { get; private set; }
-
-    /// <summary>World position the current view is rendered from: the active eye in stereo, otherwise the transform.</summary>
-    public Float3 ViewPosition => ActiveEye != StereoEye.Mono ? _eyePosition : Transform.Position;
-
-    /// <summary>World rotation the current view is rendered with: the active eye in stereo, otherwise the transform.</summary>
-    public Quaternion ViewRotation => ActiveEye != StereoEye.Mono ? _eyeRotation : Transform.Rotation;
-
-    private XRView _eyeView;
-    private Float3 _eyePosition;
-    private Quaternion _eyeRotation;
-    private bool _renderedStereo;
-
-    // A projection the user set by hand, kept aside while the eyes' own projections are in use.
-    private Float4x4 _monoProjection, _monoNonJitteredProjection;
-    private bool _monoCustomProjection, _monoCustomNonJitteredProjection;
 
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
 
     private float _aspect;
     private bool _customAspect;
-
-    // The projection matrix used for rendering. May be jittered by TAA.
     private Float4x4 _projectionMatrix;
     private bool _customProjectionMatrix;
 
-    // The unjittered projection matrix. Always reflects the clean base projection.
-    // TAA sets ProjectionMatrix (jittered) while this stays clean.
-    private Float4x4 _nonJitteredProjectionMatrix;
-    private bool _customNonJitteredProjectionMatrix;
-
-    // Previous frame state per eye, written by the render pipeline at end of frame.
-    [SerializeIgnore]
-    private readonly Float4x4[] _previousViewProjectionMatrix = new Float4x4[3];
-    [SerializeIgnore]
-    private readonly bool[] _hasPreviousViewProjectionMatrix = new bool[3];
-
-    // Image effects that were considered active on the previous render tick for this
-    // camera. Compared against the current list each frame to fire OnDisable() on
-    // anything that's been disabled, removed, or hot-swapped out.
-    [SerializeIgnore]
-    private readonly HashSet<ImageEffect> _lastActiveEffects = [];
-
+    [SerializeIgnore, NonSerialized, NotHeld] private int _viewId;
+    [SerializeIgnore, NonSerialized, NotHeld] private int _stereoViewId;
+    [SerializeIgnore, NonSerialized, NotHeld] private bool _cut;
+    [SerializeIgnore, NonSerialized, NotHeld] private readonly FeatureSet _features = new();
+    [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderFeature> _activeFeatures = [];
+    [SerializeIgnore, NonSerialized, NotHeld] private VolumeStack? _volumes;
+    [SerializeIgnore, NonSerialized, NotHeld] private AntiAliasingFeatures? _antiAliasing;
     [NonSerialized, NotHeld] private readonly Dictionary<Type, object> _renderData = [];
 
-    /// <summary>Size of this camera's shadow atlas, 0 for <see cref="Rendering.ShadowAtlas.RequestedSize"/>.</summary>
-    public int ShadowAtlasSize = 0;
+    /// <summary>The id of this camera's view, which keys Graphite's state for it such as temporal history.</summary>
+    public int ViewId => _viewId == 0 ? _viewId = Graphics.NewViewId() : _viewId;
 
     /// <summary>
-    /// Data a render pipeline keeps for this camera from one render to the next, such as its shadow maps or history
-    /// buffers. One value per type, made by <paramref name="create"/> on first use and disposed with the camera.
+    /// Data kept for this camera from one render to the next. One value per type, made by <paramref name="create"/>
+    /// on first use and disposed with the camera.
     /// </summary>
     public T GetRenderData<T>(Func<T> create) where T : class
     {
@@ -240,10 +214,14 @@ public class Camera : Component
             catch (Exception e) { Debug.LogError($"Disposing render data of camera '{Name}' threw: {e.Message}"); }
         }
         _renderData.Clear();
+        ReleaseVolumes();
         base.OnDispose();
     }
 
+    /// <summary>The width the camera last rendered at, in pixels.</summary>
     public uint PixelWidth { get; private set; }
+
+    /// <summary>The height the camera last rendered at, in pixels.</summary>
     public uint PixelHeight { get; private set; }
 
     public float Aspect
@@ -257,9 +235,8 @@ public class Camera : Component
     }
 
     /// <summary>
-    /// The projection matrix used for rendering. May include jitter from TAA.
-    /// Setting this overrides the auto-computed projection from FOV/aspect/clip planes.
-    /// Also updates NonJitteredProjectionMatrix unless it was explicitly set.
+    /// The projection matrix, depth 0 at the near plane to 1 at the far plane. Setting it overrides the projection
+    /// computed from the field of view, aspect and clip planes.
     /// </summary>
     public Float4x4 ProjectionMatrix
     {
@@ -271,138 +248,38 @@ public class Camera : Component
         }
     }
 
-    /// <summary>
-    /// The unjittered projection matrix. Used by the render pipeline for motion vectors
-    /// and other operations that need a stable, non-jittered projection.
-    /// If not explicitly set, returns the base projection computed from FOV/aspect/clip planes.
-    /// TAA effects should set ProjectionMatrix (jittered) while leaving this at the clean value,
-    /// or set this explicitly before applying jitter to ProjectionMatrix.
-    /// </summary>
-    public Float4x4 NonJitteredProjectionMatrix
+    /// <summary>The world to view matrix of the camera's transform.</summary>
+    public Float4x4 ViewMatrix => Float4x4.CreateLookTo(Transform.Position, Transform.Forward, Transform.Up);
+
+    /// <summary>The volume settings blended for this camera on its last render.</summary>
+    public VolumeStack Volumes => _volumes ??= new VolumeStack();
+
+    /// <summary>Blends the volumes at the camera's trigger into <see cref="Volumes"/>.</summary>
+    public void ResolveVolumes()
     {
-        get => _nonJitteredProjectionMatrix;
-        set
-        {
-            _nonJitteredProjectionMatrix = value;
-            _customNonJitteredProjectionMatrix = true;
-        }
+        Float3 at = VolumeTrigger.IsValid() ? VolumeTrigger.Transform.Position : Transform.Position;
+        Volumes.Resolve(GameObject.IsValid() ? GameObject.Scene : null, at, VolumeMask, Profile);
     }
 
-    /// <summary>True when <see cref="ProjectionMatrix"/> was set by hand rather than computed from the field of view and clip planes.</summary>
-    public bool HasCustomProjectionMatrix => _customProjectionMatrix;
-
-    /// <summary>True when <see cref="NonJitteredProjectionMatrix"/> was set by hand.</summary>
-    public bool HasCustomNonJitteredProjectionMatrix => _customNonJitteredProjectionMatrix;
-
-    public Float4x4 ViewMatrix { get; private set; }
-
-    /// <summary>
-    /// The previous frame's unjittered view-projection matrix.
-    /// Set by the render pipeline at the end of each frame. Used for motion vectors
-    /// and temporal reprojection. Returns identity on the first frame.
-    /// </summary>
-    public Float4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix[(int)ActiveEye];
-
-    /// <summary>
-    /// Whether a valid previous view-projection matrix exists (false on the first frame).
-    /// </summary>
-    public bool HasPreviousViewProjectionMatrix => _hasPreviousViewProjectionMatrix[(int)ActiveEye];
-
-    public override void OnEnable()
+    /// <summary>Frees the camera's effect features and forgets its blended components, made again on the next render.</summary>
+    public void ReleaseVolumes()
     {
-        ResetMotionHistory();
-    }
-
-    /// <summary>
-    /// Renders the following views as <paramref name="eye"/>, posed and projected by <paramref name="view"/>,
-    /// until <see cref="EndStereoEye"/>. Called by render pipelines around each eye of a stereo render.
-    /// </summary>
-    public void BeginStereoEye(StereoEye eye, in XRView view)
-    {
-        if (ActiveEye == StereoEye.Mono)
-        {
-            _monoProjection = _projectionMatrix;
-            _monoNonJitteredProjection = _nonJitteredProjectionMatrix;
-            _monoCustomProjection = _customProjectionMatrix;
-            _monoCustomNonJitteredProjection = _customNonJitteredProjectionMatrix;
-        }
-
-        ActiveEye = eye;
-        _eyeView = view;
-    }
-
-    public void EndStereoEye()
-    {
-        if (ActiveEye == StereoEye.Mono) return;
-        ActiveEye = StereoEye.Mono;
-        _projectionMatrix = _monoProjection;
-        _nonJitteredProjectionMatrix = _monoNonJitteredProjection;
-        _customProjectionMatrix = _monoCustomProjection;
-        _customNonJitteredProjectionMatrix = _monoCustomNonJitteredProjection;
-    }
-
-    /// <summary>
-    /// Tells the camera whether this render is stereo. Switching between mono and stereo forgets the motion history,
-    /// since the last frame of the other kind was rendered from a different view, possibly long ago.
-    /// </summary>
-    public void SetRenderingStereo(bool stereo)
-    {
-        if (stereo == _renderedStereo) return;
-        _renderedStereo = stereo;
-        ResetMotionHistory();
-    }
-
-    /// <summary>
-    /// Fire OnDisable on every image effect we were rendering, because the camera
-    /// itself is going away (disabled or destroyed). Render pipelines never get
-    /// another chance to do this for us, so it has to happen here.
-    /// </summary>
-    public override void OnDisable()
-    {
-        foreach (ImageEffect effect in _lastActiveEffects)
-        {
-            if (effect == null) continue;
-            try { effect.OnDisable(); }
-            catch (Exception e) { Debug.LogError($"ImageEffect.OnDisable threw: {e}"); }
-        }
-        _lastActiveEffects.Clear();
-    }
-
-    /// <summary>
-    /// Called once per render tick by the render pipeline. Fires OnDisable on any
-    /// effect that was active last frame but isn't in <paramref name="currentlyActive"/>
-    /// this frame covers disabled, removed, and hot-swapped effects. Pipelines
-    /// don't need to track this themselves; they just pass in whatever they're about
-    /// to render.
-    /// </summary>
-    public void UpdateImageEffectLifecycle(IEnumerable<ImageEffect> currentlyActive)
-    {
-        var current = new HashSet<ImageEffect>();
-        foreach (ImageEffect effect in currentlyActive)
-            if (effect != null) current.Add(effect);
-
-        foreach (ImageEffect previous in _lastActiveEffects)
-        {
-            if (previous == null || current.Contains(previous)) continue;
-            try { previous.OnDisable(); }
-            catch (Exception e) { Debug.LogError($"ImageEffect.OnDisable threw: {e}"); }
-        }
-
-        _lastActiveEffects.Clear();
-        foreach (ImageEffect effect in current)
-            _lastActiveEffects.Add(effect);
+        _volumes?.Dispose();
+        _volumes = null;
+        _antiAliasing?.Dispose();
+        _antiAliasing = null;
     }
 
     public override void DrawGizmos()
     {
         if (GameObject.HideFlags.HasFlag(HideFlags.NoGizmos)) return;
 
-        var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconCamera);
+        Texture2D icon = Texture2D.LoadDefault(DefaultTexture.IconCamera);
         if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
 
         // The aspect of the camera's last render, 16:9 before it has rendered.
         float aspect = _aspect > 0 ? _aspect : 16f / 9f;
-        Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * GetViewMatrix();
+        Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * ViewMatrix;
 
         Frustum frustum = Frustum.FromMatrix(viewProjectionMatrix);
         Float3[] corners = frustum.GetCorners();
@@ -427,119 +304,238 @@ public class Camera : Component
         Debug.DrawLine(corners[3], corners[7], Color.White);
     }
 
-    public void Render(in RenderingData? data = null)
+    /// <summary>
+    /// Adds this camera's view to the frame through <see cref="Graphics.CameraPipeline"/>: the scene seen from the camera,
+    /// drawn into its target with its effects. Nothing headless.
+    /// </summary>
+    public void Render(in CameraRenderOptions options = default)
     {
-        RenderPipeline pipeline = Pipeline.IsValid() ? Pipeline : DefaultRenderPipeline.Default;
-        pipeline.Render(this, data ?? new());
+        using FrameStatScope stats = FrameStats.Render.Scope();
+        Graphics.CameraPipeline.Render(this, options);
     }
 
-    /// <param name="fallbackTarget">Where this render goes when the camera has no <see cref="Target"/>
-    /// asset of its own. Null means the backbuffer.</param>
+    /// <summary>
+    /// Tells the next frame the camera jumped, like a teleport or a scene switch, so motion and every effect's history
+    /// start over instead of smearing the old view into the new one.
+    /// </summary>
+    public void Cut() => _cut = true;
+
+    internal void RenderForward(in CameraRenderOptions options)
+    {
+        if (Graphics.Renderer == null || !GameObject.IsValid() || !GameObject.Scene.IsValid()) return;
+        Scene scene = GameObject.Scene;
+        scene.Rendering.Sync();
+        RenderWorld? world = scene.Rendering.World;
+        if (world == null) return;
+
+        RenderTexture? target = UpdateRenderData(options.FallbackTarget);
+        RenderTexture? window = Graphics.WindowTarget;
+        Graphite.Framebuffer? framebuffer = target.IsValid() ? target.Framebuffer : window.IsValid() ? window.Framebuffer : null;
+
+        if (options.Kind == ViewKind.Game && XR.ShouldRenderStereo(this))
+        {
+            if (XR.ClaimEyes(this, out Graphite.Framebuffer eyes))
+            {
+                ViewDesc stereo = BuildView(world, eyes, options.Kind);
+                stereo.Features = BuildFeatures(options.Features);
+                stereo.Keywords = options.Keywords;
+                Graphics.AddView(stereo);
+                _cut = false;
+            }
+            if (framebuffer != null) XR.MirrorEyes(this, framebuffer);
+            return;
+        }
+
+        if (framebuffer == null) return;
+
+        ViewDesc view = BuildView(world, framebuffer, options.Kind);
+        XR.CoverMirror(framebuffer, view.Viewport);
+        view.DependsOn = options.DependsOn;
+        view.Features = BuildFeatures(options.Features);
+        view.Keywords = options.Keywords;
+        if (options.DisplayGizmos)
+        {
+            Debug.SubmitGizmos(world);
+            view.CullingMask |= Debug.GizmoLayerMask;
+        }
+        Graphics.AddView(view);
+        _cut = false;
+    }
+
+    /// <summary>
+    /// The view this camera would draw into <paramref name="framebuffer"/>, without effects. For hosts that draw a
+    /// camera their own way, such as XR or a preview.
+    /// </summary>
+    public ViewDesc BuildView(RenderWorld world, Graphite.Framebuffer framebuffer, ViewKind kind = ViewKind.Game)
+    {
+        Float3 position = Transform.Position;
+        ViewDesc view = new()
+        {
+            World = world,
+            ViewId = ViewId,
+            LayerCount = 1,
+            Target = framebuffer,
+            CullingMask = (uint)CullingMask.Mask & ~Debug.GizmoLayerMask,
+            ClearColor = Background == CameraBackground.Skybox ? GameObject.Scene.Environment.SkyColor.ToFloat4() : BackgroundColor.ToFloat4(),
+            Sky = Background == CameraBackground.Skybox && GameObject.Scene.Rendering.HasSky,
+            Overlay = Background == CameraBackground.None,
+            Near = NearClipPlane,
+            FarDistance = FarClipPlane,
+            Kind = kind,
+            Viewport = ClampViewport(ViewportRect),
+            RenderScale = Maths.Clamp(RenderScale, 0.1f, 2.0f),
+            Order = Depth,
+            Cut = _cut,
+        };
+        view.Layers[0] = new ViewLayer
+        {
+            View = Float4x4.CreateLookTo(Float3.Zero, Transform.Forward, Transform.Up),
+            Projection = GraphiteProjection(),
+            Position = new Double3(position.X, position.Y, position.Z),
+        };
+
+        // A two layer target is the headset's eyes, each layer drawn from its eye with the camera as the head
+        if (framebuffer.ViewCount == 2)
+        {
+            view.ViewId = _stereoViewId == 0 ? _stereoViewId = Graphics.NewViewId() : _stereoViewId;
+            view.LayerCount = 2;
+            view.Viewport = new Float4(0, 0, 1, 1);
+            for (int layer = 0; layer < 2; layer++)
+                view.Layers[layer] = EyeLayer(XR.GetEyeView(XR.EyeDrawnInLayer(this, layer)));
+        }
+        return view;
+    }
+
+    private ViewLayer EyeLayer(in XRView eye)
+    {
+        Float3 position = Transform.TransformPoint(eye.Position);
+        Quaternion rotation = Transform.Rotation * eye.Rotation;
+        float width = eye.TanRight - eye.TanLeft, height = eye.TanUp - eye.TanDown;
+        return new ViewLayer
+        {
+            View = Float4x4.CreateLookTo(Float3.Zero, Quaternion.Forward(rotation), Quaternion.Up(rotation)),
+            Projection = new Float4x4(
+                new Float4(2f / width, 0, 0, 0),
+                new Float4(0, 2f / height, 0, 0),
+                new Float4(-(eye.TanRight + eye.TanLeft) / width, -(eye.TanUp + eye.TanDown) / height, 0, 1),
+                new Float4(0, 0, Maths.Max(NearClipPlane, 0.0001f), 0)),
+            Position = new Double3(position.X, position.Y, position.Z),
+        };
+    }
+
+    private static Float4 ClampViewport(Float4 rect)
+    {
+        float x = Maths.Clamp(rect.X, 0, 0.999f), y = Maths.Clamp(rect.Y, 0, 0.999f);
+        return new Float4(x, y, Maths.Clamp(rect.Z, 0.001f, 1 - x), Maths.Clamp(rect.W, 0.001f, 1 - y));
+    }
+
+    /// <summary>
+    /// The projection Graphite draws with: reversed depth, 1 at the near plane falling toward 0 into the distance, with
+    /// no far plane for a perspective camera. A hand set projection is turned around to match.
+    /// </summary>
+    private Float4x4 GraphiteProjection()
+    {
+        if (_customProjectionMatrix)
+        {
+            Float4x4 p = _projectionMatrix;
+            p.c0.Z = p.c0.W - p.c0.Z;
+            p.c1.Z = p.c1.W - p.c1.Z;
+            p.c2.Z = p.c2.W - p.c2.Z;
+            p.c3.Z = p.c3.W - p.c3.Z;
+            return p;
+        }
+        return ReversedProjection(_aspect);
+    }
+
+    private Float4x4 ReversedProjection(float aspect)
+    {
+        float near = Maths.Max(NearClipPlane, 0.0001f);
+        if (IsOrthographic)
+        {
+            float far = Maths.Max(FarClipPlane, near + 0.001f);
+            float height = Maths.Max(OrthographicSize, 0.0001f);
+            float range = 1f / (far - near);
+            return new Float4x4(
+                new Float4(1f / (height * aspect), 0, 0, 0),
+                new Float4(0, 1f / height, 0, 0),
+                new Float4(0, 0, -range, 0),
+                new Float4(0, 0, far * range, 1));
+        }
+
+        float fov = Maths.Clamp(FieldOfView, 1f, 179f);
+        float y = 1f / Maths.Tan(Maths.ToRadians(fov) * 0.5f);
+        return new Float4x4(
+            new Float4(y / aspect, 0, 0, 0),
+            new Float4(0, y, 0, 0),
+            new Float4(0, 0, 0, 1),
+            new Float4(0, 0, near, 0));
+    }
+
+    // The features of the blended volumes and the anti aliasing, then the render's own
+    private FeatureSet BuildFeatures(IReadOnlyList<RenderFeature>? extra)
+    {
+        Renderer renderer = Graphics.Renderer!;
+        _activeFeatures.Clear();
+        if (PostProcessing)
+        {
+            ResolveVolumes();
+            Volumes.CollectFeatures(renderer, this, _activeFeatures);
+        }
+        _antiAliasing ??= new AntiAliasingFeatures();
+        RenderFeature? antiAliasing = _antiAliasing.Get(renderer, AntiAliasing, Fxaa, Smaa, Taa);
+        if (antiAliasing != null) _activeFeatures.Add(antiAliasing);
+        if (extra != null) _activeFeatures.AddRange(extra);
+
+        List<RenderFeature> stale = [];
+        foreach (RenderFeature feature in _features)
+            if (!_activeFeatures.Contains(feature)) stale.Add(feature);
+        foreach (RenderFeature feature in stale) _features.Remove(feature);
+        foreach (RenderFeature feature in _activeFeatures)
+            if (!_features.Contains(feature)) _features.Add(feature);
+        return _features;
+    }
+
+    /// <param name="fallbackTarget">Where this render goes when the camera has no <see cref="Target"/> of its own. Null means the window.</param>
     public RenderTexture? UpdateRenderData(RenderTexture? fallbackTarget = null)
     {
-        // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
         RenderTexture? camTarget = Target;
         if (camTarget.IsNotValid()) camTarget = fallbackTarget;
 
-        int width = camTarget.IsValid() ? camTarget.Width : Window.InternalWindow.FramebufferSize.X;
-        int height = camTarget.IsValid() ? camTarget.Height : Window.InternalWindow.FramebufferSize.Y;
+        int width = camTarget.IsValid() ? camTarget.Width : Window.InternalWindow != null ? Window.InternalWindow.FramebufferSize.X : 1;
+        int height = camTarget.IsValid() ? camTarget.Height : Window.InternalWindow != null ? Window.InternalWindow.FramebufferSize.Y : 1;
+        Float4 rect = ClampViewport(ViewportRect);
+        width = Maths.Max(1, (int)(width * rect.Z));
+        height = Maths.Max(1, (int)(height * rect.W));
 
         // Screen points use the same space Input.MousePosition reports: target pixels when drawing into a
-        // target (the editor's Game view included), window coordinates when drawing to the backbuffer.
+        // target (the editor's Game view included), window coordinates when drawing to the window.
         _screenSize = camTarget.IsValid()
             ? new Float2(camTarget.Width, camTarget.Height)
-            : new Float2(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
+            : Window.InternalWindow != null ? new Float2(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y) : Float2.One;
 
         float renderScale = Maths.Clamp(RenderScale, 0.1f, 2.0f);
         PixelWidth = (uint)Maths.Max(1, (int)(width * renderScale));
         PixelHeight = (uint)Maths.Max(1, (int)(height * renderScale));
 
-        if (ActiveEye != StereoEye.Mono)
-        {
-            // An eye's frustum is fixed by the headset, so it replaces the projection for this render. The eye's
-            // offset goes through the transform, so a scaled play area scales the distance between the eyes too.
-            _eyePosition = Transform.TransformPoint(_eyeView.Position);
-            _eyeRotation = Transform.Rotation * _eyeView.Rotation;
-            _projectionMatrix = CreateEyeProjection(_eyeView, NearClipPlane, FarClipPlane);
-            _nonJitteredProjectionMatrix = _projectionMatrix;
-        }
-        else
-        {
-            if (!_customAspect)
-                _aspect = PixelWidth / (float)PixelHeight;
-
-            // Recompute the base projection unless the user set it manually
-            if (!_customProjectionMatrix)
-                _projectionMatrix = GetProjectionMatrix(_aspect);
-
-            // Keep the non-jittered projection in sync unless explicitly overridden
-            if (!_customNonJitteredProjectionMatrix)
-                _nonJitteredProjectionMatrix = GetProjectionMatrix(_aspect);
-        }
-
-        ViewMatrix = Float4x4.CreateLookTo(ViewPosition, Quaternion.Forward(ViewRotation), Quaternion.Up(ViewRotation));
+        if (!_customAspect)
+            _aspect = width / (float)height;
+        if (!_customProjectionMatrix)
+            _projectionMatrix = GetProjectionMatrix(_aspect);
 
         return camTarget;
     }
 
-    /// <summary>An off center perspective projection from an eye's frustum, in the same depth convention as <see cref="Float4x4.CreatePerspectiveFov"/>.</summary>
-    private static Float4x4 CreateEyeProjection(in XRView view, float nearPlane, float farPlane)
-    {
-        float width = view.TanRight - view.TanLeft;
-        float height = view.TanUp - view.TanDown;
-        float range = farPlane / (farPlane - nearPlane);
-
-        return new Float4x4(
-            new Float4(2f / width, 0, 0, 0),
-            new Float4(0, 2f / height, 0, 0),
-            new Float4(-(view.TanRight + view.TanLeft) / width, -(view.TanUp + view.TanDown) / height, range, 1f),
-            new Float4(0, 0, -range * nearPlane, 0));
-    }
-
-    /// <summary>
-    /// Called by the render pipeline at end of frame to store the current unjittered
-    /// view-projection matrix as the previous frame's matrix for next frame's motion vectors.
-    /// </summary>
-    public void SavePreviousViewProjectionMatrix()
-    {
-        _previousViewProjectionMatrix[(int)ActiveEye] = _nonJitteredProjectionMatrix * ViewMatrix;
-        _hasPreviousViewProjectionMatrix[(int)ActiveEye] = true;
-    }
-
     public void ResetAspect()
     {
-        _aspect = PixelWidth / (float)PixelHeight;
+        _aspect = PixelWidth / (float)Maths.Max(1u, PixelHeight);
         _customAspect = false;
     }
 
-    /// <summary>
-    /// Resets the projection matrix to the auto-computed value from FOV/aspect/clip planes.
-    /// Also resets the non-jittered projection matrix.
-    /// </summary>
+    /// <summary>Resets the projection matrix to the one computed from the field of view, aspect and clip planes.</summary>
     public void ResetProjectionMatrix()
     {
         _projectionMatrix = GetProjectionMatrix(_aspect);
         _customProjectionMatrix = false;
-        _nonJitteredProjectionMatrix = _projectionMatrix;
-        _customNonJitteredProjectionMatrix = false;
-    }
-
-    /// <summary>
-    /// Resets the non-jittered projection matrix to the auto-computed value.
-    /// </summary>
-    public void ResetNonJitteredProjectionMatrix()
-    {
-        _nonJitteredProjectionMatrix = GetProjectionMatrix(_aspect);
-        _customNonJitteredProjectionMatrix = false;
-    }
-
-    /// <summary>
-    /// Clears the stored previous view-projection matrix, forcing the next frame
-    /// to treat itself as the first frame (no temporal history).
-    /// </summary>
-    public void ResetMotionHistory()
-    {
-        Array.Clear(_hasPreviousViewProjectionMatrix);
     }
 
     private Float2 _screenSize;
@@ -597,45 +593,33 @@ public class Camera : Component
         return ray.Origin + ray.Direction * ((screenPoint.Z - startDepth) / along);
     }
 
-    // Unjittered, from the transform, so it matches what the player sees rather than a TAA sample.
-    private Float4x4 ScreenViewProjection(Float2 screenSize) => GetProjectionMatrix(screenSize.X / screenSize.Y) * GetViewMatrix();
+    private Float4x4 ScreenViewProjection(Float2 screenSize) => GetProjectionMatrix(screenSize.X / screenSize.Y) * ViewMatrix;
 
     public Ray ScreenPointToRay(Float2 screenPoint, Float2 screenSize)
     {
-        // Normalize screen coordinates to [-1, 1]
         Float2 ndc = new(
             (screenPoint.X / screenSize.X) * 2.0f - 1.0f,
             1.0f - (screenPoint.Y / screenSize.Y) * 2.0f
         );
 
-        // Create the near and far points in NDC
         Float4 nearPointNDC = new(ndc.X, ndc.Y, 0.0f, 1.0f);
         Float4 farPointNDC = new(ndc.X, ndc.Y, 1.0f, 1.0f);
 
         Float4x4 inverseViewProjectionMatrix = ScreenViewProjection(screenSize).Invert();
 
-        // Unproject the near and far points to world space
         Float4 nearPointWorld = Float4x4.TransformPoint(nearPointNDC, inverseViewProjectionMatrix);
         Float4 farPointWorld = Float4x4.TransformPoint(farPointNDC, inverseViewProjectionMatrix);
 
-        // Perform perspective divide
         nearPointWorld /= nearPointWorld.W;
         farPointWorld /= farPointWorld.W;
 
-        // Create the ray
         Float3 rayOrigin = new(nearPointWorld.X, nearPointWorld.Y, nearPointWorld.Z);
         Float3 rayDirection = Float3.Normalize(new Float3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z) - rayOrigin);
 
         return new Ray(rayOrigin, rayDirection);
     }
 
-    public Float4x4 GetViewMatrix(bool applyPosition = true)
-    {
-        Float3 position = applyPosition ? Transform.Position : Float3.Zero;
-
-        return Float4x4.CreateLookTo(position, Transform.Forward, Transform.Up);
-    }
-
+    // The projection from the field of view, or orthographic size, and clip planes, depth 0 near to 1 far
     private Float4x4 GetProjectionMatrix(float aspect)
     {
         if (FieldOfView <= 0)
@@ -643,15 +627,10 @@ public class Camera : Component
         if (FieldOfView >= 180)
             FieldOfView = 179f;
 
-        Float4x4 proj;
-
+        float near = Maths.Max(NearClipPlane, 0.0001f);
+        float far = Maths.Max(FarClipPlane, near + 0.001f);
         if (ProjectionMode == ProjectionType.Orthographic)
-            // CreateOrtho takes the full extents, and the width has to follow the aspect: passing the
-            // size for both squares the view, so anything but a square target came out squashed.
-            proj = Float4x4.CreateOrtho(OrthographicSize * 2f * aspect, OrthographicSize * 2f, NearClipPlane, FarClipPlane);
-        else
-            proj = Float4x4.CreatePerspectiveFov(Maths.ToRadians(FieldOfView), aspect, NearClipPlane, FarClipPlane);
-
-        return proj;
+            return Float4x4.CreateOrtho(OrthographicSize * 2f * aspect, OrthographicSize * 2f, near, far);
+        return Float4x4.CreatePerspectiveFov(Maths.ToRadians(FieldOfView), aspect, near, far);
     }
 }
