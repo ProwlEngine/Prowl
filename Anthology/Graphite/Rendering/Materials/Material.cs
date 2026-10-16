@@ -208,9 +208,15 @@ public sealed class Material : IDisposable
     /// <summary>Picks a value of a material axis. Global axes are set by the renderer, a world or a view and are ignored here.</summary>
     public void SetKeyword(string axis, string value)
     {
-        if (_shader.FindAxis(axis, out VariantScope scope) >= 0 && scope == VariantScope.Global)
+        int index = _shader.FindAxis(axis, out VariantScope scope);
+        if (index >= 0 && scope == VariantScope.Global)
         {
             _system.Report(new RendererError("material.keyword.global", $"The axis {axis} is global in {_shader.Name}, materials cannot set it.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{axis}" });
+            return;
+        }
+        if (index >= 0 && !HasValue(_shader.MaterialAxes[index], value))
+        {
+            _system.Report(new RendererError("material.keyword.value", $"The axis {axis} of {_shader.Name} has no value {value}, only {string.Join(" ", _shader.MaterialAxes[index].Values)}.", RendererErrorSeverity.Warning, this) { Key = $"{_shader.Name}.{axis}.{value}" });
             return;
         }
 
@@ -415,7 +421,7 @@ public sealed class Material : IDisposable
             child.Changed(dirt);
     }
 
-    private static MaterialPropertyType TextureTypeOf(Texture? texture)
+    internal static MaterialPropertyType TextureTypeOf(Texture? texture)
     {
         if (texture == null)
             return MaterialPropertyType.Texture2D;
