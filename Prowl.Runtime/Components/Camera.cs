@@ -6,7 +6,6 @@ using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Graphite.Rendering;
-using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -310,7 +309,7 @@ public class Camera : Component
     /// </summary>
     public void Render(in CameraRenderOptions options = default)
     {
-        using FrameStatScope stats = FrameStats.Render.Scope();
+        using Diagnostics.FrameStatScope stats = Diagnostics.FrameStats.Render.Scope();
         Graphics.CameraPipeline.Render(this, options);
     }
 

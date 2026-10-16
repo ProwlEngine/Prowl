@@ -9,7 +9,6 @@ using Prowl.Graphite;
 using Prowl.Graphite.Rendering;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
-using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -281,7 +280,7 @@ public static class Graphics
 
         s_time += deltaTime;
         long start = Stopwatch.GetTimestamp();
-        using (FrameStats.RenderWait.Scope())
+        using (Diagnostics.FrameStats.RenderWait.Scope())
         {
             Renderer.SubmitFrame(new FrameDesc
             {

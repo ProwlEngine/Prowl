@@ -17,6 +17,7 @@ using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 
@@ -121,7 +122,7 @@ public static class VolumeProfileGUI
 
                 HeaderText(paper, $"{id}_all", "All", font, () => { component.SetAllOverrides(true); changed?.Invoke(); });
                 HeaderText(paper, $"{id}_none", "None", font, () => { component.SetAllOverrides(false); changed?.Invoke(); });
-                EditorGUI.HeaderIconButton(paper, $"{id}_remove", EditorIcons.Trash, () =>
+                EditorGUI.HeaderIconButton(paper, $"{id}_remove", EditorIcons.Trash, Loc.Get("inspector.remove"), () =>
                 {
                     Undo.Snapshot(profile);
                     profile.Remove(component.GetType());
