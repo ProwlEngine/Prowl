@@ -773,13 +773,7 @@ internal sealed class CameraFrame : IDisposable
     public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_device, $"View {View.ViewId} set {slot}");
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private readonly List<IPass> _passList = new();
-
-    // Features that failed on this view with their version, left out until they or the view's features change
-    private readonly Dictionary<RenderFeature, int> _failed = new();
-    private readonly List<RenderFeature> _unfiltered = new();
-    private readonly List<RenderFeature> _lastUnfiltered = new();
     private RenderFeature[] _worldFeatures = [], _viewFeatures = [];
-    private Action<RendererError> _report = _ => { };
 
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
@@ -802,33 +796,17 @@ internal sealed class CameraFrame : IDisposable
         _device = device;
     }
 
-    /// <summary>Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed.</summary>
-    /// <summary>Picks this frame's features, leaving out ones that failed until they or the view's other features change.</summary>
-    public void SelectFeatures(RenderFeature[] world, RenderFeature[] view, Action<RendererError> report)
+    /// <summary>Picks this frame's features.</summary>
+    public void SelectFeatures(RenderFeature[] world, RenderFeature[] view)
     {
-        (_worldFeatures, _viewFeatures, _report) = (world, view, report);
-        FeatureSelection.Select(_unfiltered, world, view, Info, report);
-        bool changed = !Same(_unfiltered, _lastUnfiltered);
-        foreach ((RenderFeature feature, int version) in _failed)
-            changed |= feature.Version != version;
-        if (changed)
-        {
-            _failed.Clear();
-            _lastUnfiltered.Clear();
-            _lastUnfiltered.AddRange(_unfiltered);
-        }
-        if (_failed.Count == 0)
-        {
-            Selected.Clear();
-            Selected.AddRange(_unfiltered);
-        }
-        else
-        {
-            FeatureSelection.Select(Selected, world, view, Info, report, _failed);
-        }
+        (_worldFeatures, _viewFeatures) = (world, view);
+        FeatureSelection.Select(Selected, world, view, Info);
     }
 
-    /// <summary>Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed.</summary>
+    /// <summary>
+    /// Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed. A feature that
+    /// throws in Setup or breaks the graph fails the frame, and the next frame builds again.
+    /// </summary>
     public void ApplyFeatures()
     {
         if (EnsureScreenLighting())
@@ -836,22 +814,7 @@ internal sealed class CameraFrame : IDisposable
         if (!Rebuild && Same(Features, Selected) && !Invalidated())
             return;
 
-        // Built now, so a host feature that breaks the graph is left out of this view instead of failing the frame
-        while (TryBuild(Selected) is { } error)
-        {
-            RenderFeature? culprit = error switch
-            {
-                FeatureSetupException setup => setup.Feature,
-                RenderGraphException { Pass: FeaturePass pass } => pass.Feature,
-                _ => null,
-            };
-            if (culprit == null || Array.IndexOf(FeatureSelection.BuiltIn, culprit) >= 0)
-                throw error;
-            _failed[culprit] = culprit.Version;
-            _report(new RendererError("feature.setup", $"{culprit.GetType().Name} broke the graph of view {View.ViewId}, which runs without it: {error.InnerException ?? error}", RendererErrorSeverity.Error, culprit) { Key = $"feature.setup.{View.ViewId}.{culprit.GetType().FullName}" });
-            FeatureSelection.Select(Selected, _worldFeatures, _viewFeatures, Info, _report, _failed);
-        }
-
+        Build(Selected);
         Features.Clear();
         Features.AddRange(Selected);
         PruneFeatures();
@@ -877,7 +840,7 @@ internal sealed class CameraFrame : IDisposable
         return had;
     }
 
-    private Exception? TryBuild(List<RenderFeature> features)
+    private void Build(List<RenderFeature> features)
     {
         _passList.Clear();
         _passList.Add(Setup);
@@ -889,15 +852,7 @@ internal sealed class CameraFrame : IDisposable
         }
         _passList.Add(Present);
         Pipeline.SetPasses(_passList);
-        try
-        {
-            _ = Pipeline.Graph;
-            return null;
-        }
-        catch (Exception e)
-        {
-            return e;
-        }
+        _ = Pipeline.Graph;
     }
 
     // Passes and states are kept while their feature is in the world's or view's set, so ids and history survive toggles
@@ -1660,7 +1615,7 @@ internal sealed partial class FramePipeline : IDisposable
         camera.Info = new FeatureView(view, width, height, camera.Chain.SceneColor != null);
         if (!view.External)
         {
-            camera.SelectFeatures(world.World.FeatureSnapshot, features, Report);
+            camera.SelectFeatures(world.World.FeatureSnapshot, features);
             camera.ApplyFeatures();
         }
         if (view.External)
@@ -1678,7 +1633,7 @@ internal sealed partial class FramePipeline : IDisposable
         if (!view.External && UpdateSceneColor(camera))
         {
             camera.Info = new FeatureView(view, width, height, true);
-            camera.SelectFeatures(world.World.FeatureSnapshot, features, Report);
+            camera.SelectFeatures(world.World.FeatureSnapshot, features);
             camera.ApplyFeatures();
         }
         camera.View.Target = view.Target;

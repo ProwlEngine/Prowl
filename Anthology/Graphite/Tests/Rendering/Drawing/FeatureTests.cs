@@ -1305,7 +1305,7 @@ public sealed class FeatureTests : IDisposable
             feature.TakeSnapshot();
         ViewDesc desc = new() { Kind = kind };
         List<RenderFeature> result = new();
-        FeatureSelection.Select(result, world, view, new FeatureView(desc, 1, 1), _ => { });
+        FeatureSelection.Select(result, world, view, new FeatureView(desc, 1, 1));
         return result.Select(f => f is Named ? f.ToString()! : f.GetType().Name).ToList();
     }
 
@@ -1336,13 +1336,17 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
-    public void FeaturesThatThrowInSetup_AreLeftOut_ThrowingWhileRecordingFailsTheFrame()
+    public void FeaturesThatThrowInSetupOrWhileRecording_FailTheFrame()
     {
         AddQuad(new Float3(0.25f, 0.5f, 1));
-        _world.Features.Add(new Throws(inSetup: true));
+        Throws setup = new(inSetup: true);
+        _world.Features.Add(setup);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
-        Assert.Equal("feature.setup", Assert.Single(_errors).Code);
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        Assert.Equal("frame.failed", Assert.Single(_errors).Code);
         _errors.Clear();
+        _world.Features.Remove(setup);
         AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
 
         _world.Features.Add(new Throws(inSetup: false));
@@ -1720,15 +1724,17 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
-    public void AFeatureBreakingTheGraphAfterItsSetup_IsLeftOut_AndTheViewDrawsOn()
+    public void AFeatureBreakingTheGraphAfterItsSetup_FailsTheFrame_UntilItIsRemoved()
     {
         AddQuad(new Float3(0.25f, 0.5f, 1));
-        _world.Features.Add(new BreaksTheGraph());
+        BreaksTheGraph broken = new();
+        _world.Features.Add(broken);
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
-        RendererError error = Assert.Single(_errors);
-        Assert.Equal("feature.setup", error.Code);
-        Assert.IsType<BreaksTheGraph>(error.Source);
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        Assert.Equal("frame.failed", Assert.Single(_errors).Code);
         _errors.Clear();
+        _world.Features.Remove(broken);
         AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
     }
 
@@ -1761,16 +1767,17 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
-    public void AFeatureThatFailed_IsTriedAgain_WhenTheViewsFeaturesChange()
+    public void AFailedGraph_IsBuiltAgain_WhenTheViewsFeaturesChange()
     {
         AddQuad(new Float3(0.25f, 0.5f, 1));
         Publisher publisher = new() { On = false };
         _world.Features.Add(publisher);
         _world.Features.Add(new Reader(Program("void main() { outColor = vec4(1.0 - Graphite_SampleSource(vUV).rgb, 1.0); }")));
         _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
-        Assert.Equal("feature.setup", Assert.Single(_errors).Code);
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { View() } });
+        _device.WaitForIdle();
+        Assert.Equal("frame.failed", Assert.Single(_errors).Code);
         _errors.Clear();
-        AssertAll(new Float3(0.25f, 0.5f, 1), Frame(View()));
 
         publisher.On = true;
         AssertAll(new Float3(0.75f, 0.5f, 0), Frame(View()));

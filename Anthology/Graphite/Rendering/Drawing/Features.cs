@@ -965,12 +965,6 @@ public sealed class FeatureContext
 
 }
 
-/// <summary>A feature's Setup threw while its view's graph was built.</summary>
-internal sealed class FeatureSetupException(RenderFeature feature, Exception inner) : Exception(inner.Message, inner)
-{
-    public RenderFeature Feature { get; } = feature;
-}
-
 /// <summary>Runs one feature as a pass of its view's graph.</summary>
 internal sealed class FeaturePass : IPass
 {
@@ -1017,14 +1011,7 @@ internal sealed class FeaturePass : IPass
         Draws = false;
         Lists.Clear();
         BuiltVersion = Feature.Version;
-        try
-        {
-            Feature.Setup(new FeatureBuilder(this, builder), Camera.Info);
-        }
-        catch (Exception e)
-        {
-            throw new FeatureSetupException(Feature, e);
-        }
+        Feature.Setup(new FeatureBuilder(this, builder), Camera.Info);
     }
 
     public void Render(RenderContext context, CommandBuffer cmd)
@@ -1238,12 +1225,12 @@ internal static class FeatureSelection
             feature.TakeSnapshot();
     }
 
-    public static void Select(List<RenderFeature> result, RenderFeature[] world, RenderFeature[] view, in FeatureView info, Action<RendererError> report, IReadOnlyDictionary<RenderFeature, int>? failed = null)
+    public static void Select(List<RenderFeature> result, RenderFeature[] world, RenderFeature[] view, in FeatureView info)
     {
         result.Clear();
-        Add(result, BuiltIn, info, report, failed);
-        Add(result, world, info, report, failed);
-        Add(result, view, info, report, failed);
+        Add(result, BuiltIn, info);
+        Add(result, world, info);
+        Add(result, view, info);
 
         // Later entries win: the view's over the world's over the built in ones
         for (int i = result.Count - 1; i > 0; i--)
@@ -1280,24 +1267,14 @@ internal static class FeatureSelection
         return slot != 0 ? slot : a.OrderSnapshot.CompareTo(b.OrderSnapshot);
     }
 
-    private static void Add(List<RenderFeature> result, RenderFeature[] features, in FeatureView info, Action<RendererError> report, IReadOnlyDictionary<RenderFeature, int>? failed)
+    private static void Add(List<RenderFeature> result, RenderFeature[] features, in FeatureView info)
     {
         ViewKinds kind = (ViewKinds)(1 << (int)info.Kind);
         foreach (RenderFeature feature in features)
         {
-            if (!feature.EnabledSnapshot || (feature.RunsOnSnapshot & kind) == 0 || result.Contains(feature) || failed?.ContainsKey(feature) == true)
+            if (!feature.EnabledSnapshot || (feature.RunsOnSnapshot & kind) == 0 || result.Contains(feature))
                 continue;
-            bool active;
-            try
-            {
-                active = feature.IsActive(info);
-            }
-            catch (Exception e)
-            {
-                report(new RendererError("feature.active", $"{feature.GetType().Name}.IsActive threw, so it does not run: {e}", RendererErrorSeverity.Error, feature) { Key = $"feature.active.{feature.GetType().FullName}" });
-                active = false;
-            }
-            if (active)
+            if (feature.IsActive(info))
                 result.Add(feature);
         }
     }
