@@ -5,7 +5,7 @@ using Prowl.Graphite.ShaderDef;
 
 namespace Prowl.Runtime.Rendering;
 
-/// <summary>What a view shows in place of the lit scene, through Graphite's GRAPHITE_DEBUG axis.</summary>
+/// <summary>What a view shows in place of the lit scene: its surfaces draw through their Debug pass with the GRAPHITE_DEBUG value.</summary>
 public enum DebugViewMode
 {
     Lit,
@@ -31,6 +31,6 @@ public static class DebugViews
     {
         int index = (int)mode;
         if (index <= 0 || index >= s_values.Length) return null;
-        return s_keywords[index] ??= [new Keyword("GRAPHITE_DEBUG", s_values[index])];
+        return s_keywords[index] ??= [new Keyword(Prowl.Graphite.Rendering.Shader.DebugAxis, s_values[index])];
     }
 }

@@ -1004,9 +1004,10 @@ public static class Sample
         return material;
     }
 
+    /// <summary>Tiles the material's main texture, to build one in a single expression.</summary>
     public static Material Tiled(this Material material, float x, float y)
     {
-        material.SetVector("_Tiling", new Float2(x, y));
+        material.SetTextureScaleOffset("_MainTex", new Float4(x, y, 0, 0));
         return material;
     }
 

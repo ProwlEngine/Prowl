@@ -203,6 +203,18 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         return _parent.IsValid() ? _parent.GetMatrix(name) : Default(name)?.Default.Matrix ?? Float4x4.Identity;
     }
 
+    /// <summary>Sets a texture's scale (xy) and offset (zw), kept as the vector "name_ST".</summary>
+    public void SetTextureScaleOffset(string name, Float4 scaleOffset) => SetVector(name + "_ST", scaleOffset);
+
+    /// <summary>A texture's scale (xy) and offset (zw), (1, 1, 0, 0) when nothing sets it.</summary>
+    public Float4 GetTextureScaleOffset(string name)
+    {
+        EnsureLoaded();
+        string key = name + "_ST";
+        if (_properties.HasVector4(key)) return _properties.GetVector4(key);
+        return _parent.IsValid() ? _parent.GetTextureScaleOffset(name) : MaterialValue.IdentityScaleOffset;
+    }
+
     public Texture2D? GetTexture(string name) { EnsureLoaded(); return _overrides.Contains(name) || _parent.IsNotValid() ? _properties.GetTexture(name) : _parent.GetTexture(name); }
     public Texture3D? GetTexture3D(string name) { EnsureLoaded(); return _overrides.Contains(name) || _parent.IsNotValid() ? _properties.GetTexture3D(name) : _parent.GetTexture3D(name); }
     public Cubemap? GetTextureCube(string name) { EnsureLoaded(); return _overrides.Contains(name) || _parent.IsNotValid() ? _properties.GetTextureCube(name) : _parent.GetTextureCube(name); }
@@ -226,6 +238,11 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         _properties.Remove(name);
         _gpu?.ClearOverride(name);
         _boundTextures.Remove(name);
+        if (_gpu != null && ScaleOffsetTexture(name) is { } texture)
+        {
+            _gpu.ClearOverride(texture);
+            Push(texture);
+        }
     }
 
     /// <summary>True if this material sets the property rather than reading the shader's default.</summary>
@@ -413,7 +430,13 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     // Gives one value to the Graphite material, when the shader has the property
     private void Push(string name)
     {
-        if (_gpu == null || _gpu.Shader.FindProperty(name) < 0) return;
+        if (_gpu == null) return;
+        if (_gpu.Shader.FindProperty(name) < 0)
+        {
+            if (ScaleOffsetTexture(name) is { } texture && _properties.HasVector4(name))
+                _gpu.SetTextureScaleOffset(texture, _properties.GetVector4(name));
+            return;
+        }
         MaterialProperties p = _properties;
         if (p._colors.TryGetValue(name, out Color color)) _gpu.SetColor(name, new Float4(color.R, color.G, color.B, color.A));
         else if (p._floats.TryGetValue(name, out float f)) PushNumber(name, f);
@@ -425,6 +448,15 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         else if (p._textures.TryGetValue(name, out Texture2D? t2)) PushTexture(name, t2);
         else if (p._textures3D.TryGetValue(name, out Texture3D? t3)) PushTexture(name, t3);
         else if (p._texturesCube.TryGetValue(name, out Cubemap? tc)) PushTexture(name, tc);
+    }
+
+    // The texture property a "name_ST" vector scales and offsets, or null
+    private string? ScaleOffsetTexture(string name)
+    {
+        if (_gpu == null || !name.EndsWith("_ST", StringComparison.Ordinal)) return null;
+        string texture = name[..^3];
+        int index = _gpu.Shader.FindProperty(texture);
+        return index >= 0 && _gpu.Shader.Properties[index].Type >= MaterialPropertyType.Texture2D ? texture : null;
     }
 
     // Older materials store ints and floats under either kind, so the value follows the shader's type

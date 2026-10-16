@@ -324,7 +324,11 @@ internal static class UIRendering
             {
                 GMaterial made = parent.CreateChild();
                 GShader shader = parent.Shader;
-                if (shader.FindProperty("_MainTex") >= 0) made.SetTexture("_MainTex", gpuTexture, sampler);
+                if (shader.FindProperty("_MainTex") >= 0)
+                {
+                    made.SetTexture("_MainTex", gpuTexture, sampler);
+                    made.SetTextureScaleOffset("_MainTex", MaterialValue.IdentityScaleOffset);
+                }
                 if (shader.FindProperty("_MainColor") >= 0) made.SetColor("_MainColor", new Float4(1, 1, 1, 1));
                 if (shader.FindProperty("_Tiling") >= 0) made.SetFloat2("_Tiling", new Float2(1, 1));
                 if (shader.FindProperty("_Offset") >= 0) made.SetFloat2("_Offset", Float2.Zero);

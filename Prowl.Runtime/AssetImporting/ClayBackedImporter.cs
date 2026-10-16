@@ -582,38 +582,25 @@ internal static class ClayBackedImporter
         return 0;
     }
 
-    /// <summary>
-    /// Carries KHR_texture_transform across. The Standard shaders apply one tiling/offset pair to
-    /// every slot, so the base-colour slot wins and anything the shader cannot express is reported
-    /// rather than dropped silently.
-    /// </summary>
+    /// <summary>Carries KHR_texture_transform across as each slot's texture scale and offset.</summary>
     private static void ApplyTextureTransform(PMaterial mat, ClayMaterial src)
     {
-        MaterialTextureSlot? slot = src.BaseColorTexture;
-        if (slot is not null)
-        {
-            mat.SetVector("_Tiling", slot.Scale);
-            mat.SetVector("_Offset", slot.Offset);
+        ApplyTextureTransform(mat, src, "_MainTex", src.BaseColorTexture);
+        ApplyTextureTransform(mat, src, "_SurfaceTex", src.MetallicRoughnessTexture);
+        ApplyTextureTransform(mat, src, "_NormalTex", src.NormalTexture);
+        ApplyTextureTransform(mat, src, "_OcclusionTex", src.OcclusionTexture);
+        ApplyTextureTransform(mat, src, "_EmissionTex", src.EmissiveTexture);
+    }
 
-            if (slot.Rotation != 0f)
-                Debug.LogWarning($"[Clay] Material '{src.Name}' uses a rotated UV transform ({slot.Rotation:0.###} rad); " +
-                    "the Standard shaders only support tiling and offset, so the rotation was dropped.");
-        }
+    private static void ApplyTextureTransform(PMaterial mat, ClayMaterial src, string name, MaterialTextureSlot? slot)
+    {
+        if (slot is null) return;
+        if (slot.Scale != Float2.One || slot.Offset != Float2.Zero)
+            mat.SetTextureScaleOffset(name, new Float4(slot.Scale.X, slot.Scale.Y, slot.Offset.X, slot.Offset.Y));
 
-        foreach (MaterialTextureSlot? other in EnumerateSlots(src))
-        {
-            if (other is null || ReferenceEquals(other, slot)) continue;
-
-            bool differs = slot is null
-                ? other.Scale != Float2.One || other.Offset != Float2.Zero
-                : other.Scale != slot.Scale || other.Offset != slot.Offset;
-
-            if (differs)
-            {
-                Debug.LogWarning($"[Clay] Material '{src.Name}' uses per-slot UV transforms that differ from its base " +
-                    "colour slot; the Standard shaders apply one transform to every slot, so the base colour slot won.");
-            }
-        }
+        if (slot.Rotation != 0f)
+            Debug.LogWarning($"[Clay] Material '{src.Name}' uses a rotated UV transform ({slot.Rotation:0.###} rad) on {name}; " +
+                "the Standard shaders only support scale and offset, so the rotation was dropped.");
     }
 
     private static IEnumerable<MaterialTextureSlot?> EnumerateSlots(ClayMaterial src)

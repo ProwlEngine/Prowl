@@ -24,7 +24,7 @@ public class MaterialTests
         Assert.Equal(0.5f, material.GetFloat("_ScatteringDistortion"));
         Assert.Equal(16, material.GetInt("_ParallaxSteps"));
         Assert.Equal(Color.White, material.GetColor("_MainColor"));
-        Assert.Equal(new Float4(1, 1, 0, 0), material.GetVector("_Tiling"));
+        Assert.Equal(new Float4(1, 1, 0, 0), material.GetTextureScaleOffset("_MainTex"));
         Assert.False(material.IsOverridden("_Metallic"));
         Assert.True(material.HasProperty("_Metallic"));
         Assert.False(material.HasProperty("_NotAProperty"));
@@ -60,9 +60,22 @@ public class MaterialTests
     public void SmallerVectors_ReadBackWidened()
     {
         Material material = Standard();
-        material.SetVector("_Tiling", new Float2(3, 4));
+        material.SetVector("_Scroll", new Float2(3, 4));
 
-        Assert.Equal(new Float4(3, 4, 0, 0), material.GetVector("_Tiling"));
+        Assert.Equal(new Float4(3, 4, 0, 0), material.GetVector("_Scroll"));
+    }
+
+    [Fact]
+    public void TextureScaleOffsets_AreSetPerTexture_AndRevert()
+    {
+        Material material = Standard();
+        material.SetTextureScaleOffset("_NormalTex", new Float4(2, 3, 0.5f, 0.25f));
+
+        Assert.Equal(new Float4(2, 3, 0.5f, 0.25f), material.GetTextureScaleOffset("_NormalTex"));
+        Assert.Equal(new Float4(1, 1, 0, 0), material.GetTextureScaleOffset("_MainTex"));
+
+        material.RevertProperty("_NormalTex_ST");
+        Assert.Equal(new Float4(1, 1, 0, 0), material.GetTextureScaleOffset("_NormalTex"));
     }
 
     [Fact]

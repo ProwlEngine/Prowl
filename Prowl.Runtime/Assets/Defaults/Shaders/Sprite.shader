@@ -40,6 +40,7 @@ Shader "Default/Sprite"
         {
             #include "Prowl/Common.glsl"
             #include "Graphite/Lighting.glsl"
+            #pragma variant global GRAPHITE_DEBUG OFF UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
             #include "Graphite/Debug.glsl"
 
             uniform sampler2D _MainTex;

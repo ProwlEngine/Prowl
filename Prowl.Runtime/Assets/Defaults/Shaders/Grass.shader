@@ -72,6 +72,7 @@ Shader "Default/Grass"
             #include "Prowl/Common.glsl"
             #include "Graphite/Lighting.glsl"
             #include "Graphite/Passes.glsl"
+            #pragma variant global GRAPHITE_DEBUG OFF UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
             #include "Graphite/Debug.glsl"
 
             layout(location = 0) out vec4 fragColor;

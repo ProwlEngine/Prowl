@@ -84,6 +84,7 @@ Shader "Default/Terrain"
             #include "Graphite/Lighting.glsl"
             #include "Graphite/Decals.glsl"
             #include "Graphite/Passes.glsl"
+            #pragma variant global GRAPHITE_DEBUG OFF UNLIT ALBEDO NORMALS ROUGHNESS METALLIC AO EMISSION LIGHTING CASCADES LIGHTMAP_DENSITY
             #include "Graphite/Debug.glsl"
 
             #pragma variant TERRAIN_8_LAYERS
