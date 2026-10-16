@@ -177,6 +177,8 @@ public class PhysicsWorld
     // Every registered rigidbody. Dense so walks over them stay cheap; each body keeps its own slot for swap removal.
     private readonly List<Rigidbody3D> _syncBodies = [];
 
+    private float _dampingDeltaTime;
+
     // Bodies whose Transform or layer was edited since the last sync.
     private readonly List<Rigidbody3D> _pendingSync = [];
 
@@ -896,6 +898,13 @@ public class PhysicsWorld
         World.SolverIterations = (SolverIterations, RelaxIterations);
 
         World.Gravity = Gravity.ToJitter();
+
+        if (_dampingDeltaTime != Time.FixedDeltaTime)
+        {
+            _dampingDeltaTime = Time.FixedDeltaTime;
+            foreach (Rigidbody3D body in _syncBodies)
+                if (body.IsValid() && body.IsSimulated) body.ApplyDamping(body.Native);
+        }
 
         World.SolveMode = EnhancedDeterminism ? SolveMode.Deterministic : SolveMode.Regular;
         World.ThreadModel = ThreadModel == PhysicsThreadModel.Persistent

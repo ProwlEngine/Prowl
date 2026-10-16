@@ -316,7 +316,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
 
     /// <summary>
     /// Gets or sets the linear damping of this Rigidbody3D.
-    /// Higher values slow down linear movement faster. Range: 0 to 1.
+    /// The fraction of linear velocity removed every 1/60 s, whatever the fixed timestep. Range: 0 to 1.
     /// </summary>
     public float LinearDamping
     {
@@ -328,13 +328,13 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
                 throw new ArgumentOutOfRangeException(nameof(value), "Linear damping must be between 0 and 1.");
 
             linearDamping = value;
-            if (IsSimulated) _body.Damping = (linearDamping, _body.Damping.angular);
+            if (IsSimulated) ApplyDamping(_body);
         }
     }
 
     /// <summary>
     /// Gets or sets the angular damping of this Rigidbody3D.
-    /// Higher values slow down rotation faster. Range: 0 to 1.
+    /// The fraction of angular velocity removed every 1/60 s, whatever the fixed timestep. Range: 0 to 1.
     /// </summary>
     public float AngularDamping
     {
@@ -346,7 +346,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
                 throw new ArgumentOutOfRangeException(nameof(value), "Angular damping must be between 0 and 1.");
 
             angularDamping = value;
-            if (IsSimulated) _body.Damping = (_body.Damping.linear, angularDamping);
+            if (IsSimulated) ApplyDamping(_body);
         }
     }
 
@@ -660,13 +660,20 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
             if (collider.IsValid() && collider.EnabledInHierarchy) collider.Reattach();
     }
 
+    /// <summary>Converts the per 1/60 s damping into the per step factor Jitter applies.</summary>
+    internal void ApplyDamping(RigidBody rb)
+    {
+        float steps = Time.FixedDeltaTime * 60.0f;
+        rb.Damping = (1.0f - MathF.Pow(1.0f - linearDamping, steps), 1.0f - MathF.Pow(1.0f - angularDamping, steps));
+    }
+
     internal void UpdateProperties(RigidBody rb)
     {
         ClampSettings();
         rb.MotionType = motionType;
         rb.AllowedMotion = MotionAxes.All & ~(MotionAxes)constraints;
         rb.EnableSpeculativeContacts = isSpeculative;
-        rb.Damping = (linearDamping, angularDamping);
+        ApplyDamping(rb);
         rb.Friction = friction;
         rb.AffectedByGravity = useGravity;
         rb.Restitution = restitution;
