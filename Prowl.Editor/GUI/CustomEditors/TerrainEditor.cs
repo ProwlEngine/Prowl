@@ -247,7 +247,8 @@ public class TerrainEditor : CustomEditor
                         paper.Box($"{id}_l{i}_bar").Width(2).Height(UnitValue.StretchOne)
                             .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(EditorTheme.Accent).IsNotInteractable();
-                    Texture2D? albThumb = EditorAssetBackend.Instance?.GetThumbnailTexture(data.Layers[i].Albedo.AssetID);
+                    Guid albedoId = data.Layers[i].Albedo.IsValid() ? data.Layers[i].Albedo.AssetID : Guid.Empty;
+                    Texture2D? albThumb = EditorAssetBackend.Instance?.GetThumbnailTexture(albedoId);
                     ElementBuilder swBox = paper.Box($"{id}_l{i}_sw").Width(16).Height(16).Rounded(m.SmallRounding)
                         .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                         .BorderColor(EditorTheme.WithAlpha(SColor.White, 38)).BorderWidth(1).IsNotInteractable();
@@ -413,7 +414,7 @@ public class TerrainEditor : CustomEditor
             },
             _ => EditorIcons.Leaf_I,
             () => { data.TreePrototypes.Add(new TreePrototype()); _isDirty = true; },
-            i => data.TreePrototypes[i].Mesh.AssetID);
+            i => data.TreePrototypes[i].Mesh.IsValid() ? data.TreePrototypes[i].Mesh.AssetID : Guid.Empty);
 
         if (data.TreePrototypes.Count > 0 && ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Count)
         {
