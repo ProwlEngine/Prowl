@@ -796,7 +796,7 @@ public sealed class Rigidbody3D : Component, ITransformChangeListener
     /// <summary>
     /// Pushes the Transform into the physics body, but only if the Transform changed since the last
     /// sync (a genuine user edit) - so it never clobbers the simulated pose. Called by the physics
-    /// world before each step and, when AutoSyncTransforms is on, before queries.
+    /// world before each step when AutoSyncTransforms is on, and by SyncTransforms.
     /// </summary>
     /// <summary>
     /// The pose a joint made now should be built against. That is the simulated pose, since the Transform is

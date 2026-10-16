@@ -789,7 +789,7 @@ public class PhysicsWorld
     private void OnPostStep(TimeStep timeStep) => InvokeStepEvent(PostStep, timeStep.StepDt, nameof(PostStep));
 
     private const float MaxLinearVelocity = 1000000f;
-    private const float MaxAngularVelocity = 7f;
+    private const float MaxAngularVelocity = 1000000f;
 
     // Same batch sizing Jitter uses for its own per body passes.
     private const int ClampBatchSize = 256;
@@ -1070,7 +1070,7 @@ public class PhysicsWorld
 
     /// <summary>
     /// Shared prologue for the ray queries: validates the inputs, normalizes the direction, publishes
-    /// the filter for the shared callbacks and syncs pending Transform edits into the bodies.
+    /// the filter for the shared callbacks.
     /// </summary>
     private bool BeginRayQuery(ref Float3 origin, ref Float3 direction, float maxDistance, in QueryFilter filter, string query)
     {

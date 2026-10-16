@@ -377,7 +377,7 @@ public abstract class EditorTestHarness : IDisposable
     public virtual void Dispose()
     {
         // Drop this test's scene so the next one starts from a fresh empty Scene.Current.
-        try { Scene.Current.Dispose(); } catch { }
+        try { Scene.Shutdown(); } catch { }
 
         Assets.Dispose(); // stops the FileSystemWatcher and clears AssetDatabase.Current / Instance
         Project.CloseCurrent();
