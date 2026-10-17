@@ -13,7 +13,7 @@ internal sealed class IntermediateMesh
 {
     public string Name { get; set; } = string.Empty;
 
-    public List<Float3> Positions { get; } = new();
+    public List<Float3> Positions { get; set; } = new();
     public List<Float3>? Normals { get; set; }
     public List<Float4>? Tangents { get; set; }
     public List<Color>? Colors0 { get; set; }

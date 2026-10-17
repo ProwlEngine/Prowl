@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -44,11 +46,11 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
             var tan1 = new Float3[vertexCount];
             var tan2 = new Float3[vertexCount];
 
-            var positions = mesh.Positions;
-            var normals = mesh.Normals;
-            var uvs = mesh.UVs[0]!;
+            var positions = CollectionsMarshal.AsSpan(mesh.Positions);
+            var normals = CollectionsMarshal.AsSpan(mesh.Normals);
+            var uvs = CollectionsMarshal.AsSpan(mesh.UVs[0]);
 
-            foreach (var face in mesh.Faces)
+            foreach (var face in CollectionsMarshal.AsSpan(mesh.Faces))
             {
                 if (face.Indices.Length != 3) continue;
                 int i1 = face.Indices[0];
@@ -93,6 +95,8 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
             }
 
             var result = new List<Float4>(vertexCount);
+            CollectionsMarshal.SetCount(result, vertexCount);
+            var resultSpan = CollectionsMarshal.AsSpan(result);
             for (int i = 0; i < vertexCount; i++)
             {
                 Float3 n = normals[i];
@@ -102,7 +106,7 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
                 Float3 tangent = Normalize(t - n * Float3.Dot(n, t));
                 // Bitangent handedness from cross-product sign.
                 float w = (Float3.Dot(Float3.Cross(n, t), tan2[i]) < 0f) ? -1f : 1f;
-                result.Add(new Float4(tangent.X, tangent.Y, tangent.Z, w));
+                resultSpan[i] = new Float4(tangent.X, tangent.Y, tangent.Z, w);
             }
 
             mesh.Tangents = result;

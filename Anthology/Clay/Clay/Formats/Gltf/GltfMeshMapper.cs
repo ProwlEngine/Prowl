@@ -143,6 +143,10 @@ internal static class GltfMeshMapper
             if (shapeHasTangents[t]) shapeTangents[t] = new Float3[totalVertices];
         }
 
+        int totalFaces = 0;
+        foreach (var p in parts) totalFaces += p.Faces.Count;
+        merged.Faces.EnsureCapacity(totalFaces);
+
         int offset = 0;
         foreach (var part in parts)
         {
@@ -183,13 +187,12 @@ internal static class GltfMeshMapper
 
             foreach (var face in part.Faces)
             {
-                var shifted = new int[face.Indices.Length];
-                for (int k = 0; k < shifted.Length; k++)
-                    shifted[k] = face.Indices[k] + offset;
+                for (int k = 0; k < face.Indices.Length; k++)
+                    face.Indices[k] += offset;
 
                 // The primitive's material becomes this face's, which is what makes the merged mesh
                 // resolve back into one sub-mesh per material at bake.
-                merged.Faces.Add(new IntermediateFace(shifted, part.MaterialIndex));
+                merged.Faces.Add(new IntermediateFace(face.Indices, part.MaterialIndex));
             }
 
             merged.PrimitiveKinds |= part.PrimitiveKinds;
@@ -267,14 +270,14 @@ internal static class GltfMeshMapper
                 "GltfMeshMapper");
         }
 
-        mesh.Positions.AddRange(reader.ReadVec3(posIdx));
+        mesh.Positions = reader.ReadVec3List(posIdx);
         int vertexCount = mesh.Positions.Count;
 
         if (prim.Attributes.TryGetValue("NORMAL", out int normIdx))
-            mesh.Normals = new List<Float3>(reader.ReadVec3(normIdx));
+            mesh.Normals = reader.ReadVec3List(normIdx);
 
         if (prim.Attributes.TryGetValue("TANGENT", out int tanIdx))
-            mesh.Tangents = new List<Float4>(reader.ReadVec4(tanIdx));
+            mesh.Tangents = reader.ReadVec4List(tanIdx);
 
         if (prim.Attributes.TryGetValue("COLOR_0", out int colIdx))
             mesh.Colors0 = new List<Color>(reader.ReadColor(colIdx));
@@ -282,7 +285,7 @@ internal static class GltfMeshMapper
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
         {
             if (prim.Attributes.TryGetValue($"TEXCOORD_{uv}", out int uvIdx))
-                mesh.UVs[uv] = new List<Float2>(reader.ReadVec2(uvIdx));
+                mesh.UVs[uv] = reader.ReadVec2List(uvIdx);
         }
 
         ReadJointsAndWeights(prim, reader, mesh, vertexCount, ctx, parentName);
@@ -463,6 +466,7 @@ internal static class GltfMeshMapper
             case GltfPrimitiveMode.Triangles:
                 mesh.PrimitiveKinds |= PrimitiveKind.Triangle;
                 int triCount = indices.Length / 3;
+                mesh.Faces.EnsureCapacity(mesh.Faces.Count + triCount);
                 if (indices.Length % 3 != 0)
                     ctx.Log.Warning($"{parentName}: TRIANGLES primitive has {indices.Length} indices (not a multiple of 3); trailing indices dropped.", "GltfMeshMapper");
                 for (int i = 0; i < triCount; i++)

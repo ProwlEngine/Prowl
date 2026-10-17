@@ -66,6 +66,22 @@ internal sealed class GltfAccessorReader
         return result;
     }
 
+    public List<Float2> ReadVec2List(int index) => ReadList<Float2>(index, "VEC2", 2);
+
+    public List<Float3> ReadVec3List(int index) => ReadList<Float3>(index, "VEC3", 3);
+
+    public List<Float4> ReadVec4List(int index) => ReadList<Float4>(index, "VEC4", 4);
+
+    private List<T> ReadList<T>(int index, string type, int components) where T : unmanaged
+    {
+        var a = Get(index);
+        EnsureType(a, type);
+        var result = new List<T>(a.Count);
+        CollectionsMarshal.SetCount(result, a.Count);
+        DecodeFloats(a, components, MemoryMarshal.Cast<T, float>(CollectionsMarshal.AsSpan(result)));
+        return result;
+    }
+
     public Color[] ReadColor(int index)
     {
         var a = Get(index);
@@ -166,12 +182,19 @@ internal sealed class GltfAccessorReader
             int stride = view.ByteStride is { } s && s > 0 ? s : elementBytes;
             int byteOffset = a.ByteOffset;
 
-            for (int i = 0; i < a.Count; i++)
+            if (a.ComponentType == GltfComponentType.Float && stride == elementBytes && BitConverter.IsLittleEndian)
             {
-                int srcOff = byteOffset + i * stride;
-                int dstOff = i * componentsPerElement;
-                for (int c = 0; c < componentsPerElement; c++)
-                    dst[dstOff + c] = ReadComponentAsFloat(data, srcOff + c * compBytes, a.ComponentType, a.Normalized);
+                MemoryMarshal.Cast<byte, float>(data.Slice(byteOffset, total * 4)).CopyTo(dst);
+            }
+            else
+            {
+                for (int i = 0; i < a.Count; i++)
+                {
+                    int srcOff = byteOffset + i * stride;
+                    int dstOff = i * componentsPerElement;
+                    for (int c = 0; c < componentsPerElement; c++)
+                        dst[dstOff + c] = ReadComponentAsFloat(data, srcOff + c * compBytes, a.ComponentType, a.Normalized);
+                }
             }
         }
         else
@@ -193,10 +216,23 @@ internal sealed class GltfAccessorReader
             int stride = view.ByteStride is { } s && s > 0 ? s : compBytes;
             int byteOffset = a.ByteOffset;
 
-            for (int i = 0; i < a.Count; i++)
+            if (stride == compBytes && BitConverter.IsLittleEndian && a.ComponentType == GltfComponentType.UnsignedInt)
             {
-                int srcOff = byteOffset + i * stride;
-                dst[i] = ReadComponentAsUInt(data, srcOff, a.ComponentType);
+                MemoryMarshal.Cast<byte, uint>(data.Slice(byteOffset, a.Count * 4)).CopyTo(dst);
+            }
+            else if (stride == compBytes && BitConverter.IsLittleEndian && a.ComponentType == GltfComponentType.UnsignedShort)
+            {
+                var src = MemoryMarshal.Cast<byte, ushort>(data.Slice(byteOffset, a.Count * 2));
+                for (int i = 0; i < src.Length; i++)
+                    dst[i] = src[i];
+            }
+            else
+            {
+                for (int i = 0; i < a.Count; i++)
+                {
+                    int srcOff = byteOffset + i * stride;
+                    dst[i] = ReadComponentAsUInt(data, srcOff, a.ComponentType);
+                }
             }
         }
         else

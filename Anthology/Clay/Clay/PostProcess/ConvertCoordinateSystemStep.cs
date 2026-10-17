@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -60,24 +62,24 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
 
         foreach (var mesh in scene.Meshes)
         {
-            for (int i = 0; i < mesh.Positions.Count; i++)
-                mesh.Positions[i] = map.Vector(mesh.Positions[i]);
+            map.Vectors(CollectionsMarshal.AsSpan(mesh.Positions));
 
             if (mesh.Normals is not null)
-                for (int i = 0; i < mesh.Normals.Count; i++)
-                    mesh.Normals[i] = map.Vector(mesh.Normals[i]);
+                map.Vectors(CollectionsMarshal.AsSpan(mesh.Normals));
 
             if (mesh.Tangents is not null)
-                for (int i = 0; i < mesh.Tangents.Count; i++)
-                {
-                    var t = mesh.Tangents[i];
-                    Float3 v = map.Vector(new Float3(t.X, t.Y, t.Z));
-                    mesh.Tangents[i] = new Float4(v.X, v.Y, v.Z, -t.W);
-                }
-
-            for (int fi = 0; fi < mesh.Faces.Count; fi++)
             {
-                var face = mesh.Faces[fi];
+                var tangents = CollectionsMarshal.AsSpan(mesh.Tangents);
+                for (int i = 0; i < tangents.Length; i++)
+                {
+                    var t = tangents[i];
+                    Float3 v = map.Vector(new Float3(t.X, t.Y, t.Z));
+                    tangents[i] = new Float4(v.X, v.Y, v.Z, -t.W);
+                }
+            }
+
+            foreach (var face in CollectionsMarshal.AsSpan(mesh.Faces))
+            {
                 if (face.Indices.Length == 3)
                     (face.Indices[1], face.Indices[2]) = (face.Indices[2], face.Indices[1]);
                 else if (face.Indices.Length > 3)
@@ -88,17 +90,9 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
             {
                 foreach (var frame in bs.Frames)
                 {
-                    var verts = frame.DeltaPositions;
-                    for (int i = 0; i < verts.Length; i++)
-                        verts[i] = map.Vector(verts[i]);
-
-                    if (frame.DeltaNormals is { } dn)
-                        for (int i = 0; i < dn.Length; i++)
-                            dn[i] = map.Vector(dn[i]);
-
-                    if (frame.DeltaTangents is { } dt)
-                        for (int i = 0; i < dt.Length; i++)
-                            dt[i] = map.Vector(dt[i]);
+                    map.Vectors(frame.DeltaPositions);
+                    if (frame.DeltaNormals is { } dn) map.Vectors(dn);
+                    if (frame.DeltaTangents is { } dt) map.Vectors(dt);
                 }
             }
         }
@@ -171,6 +165,14 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
         }
 
         public Float3 Vector(Float3 v) => new(_signs[0] * v[_sources[0]], _signs[1] * v[_sources[1]], _signs[2] * v[_sources[2]]);
+
+        public void Vectors(Span<Float3> values)
+        {
+            int sx = _sources[0], sy = _sources[1], sz = _sources[2];
+            float fx = _signs[0], fy = _signs[1], fz = _signs[2];
+            foreach (ref Float3 v in values)
+                v = new Float3(fx * v[sx], fy * v[sy], fz * v[sz]);
+        }
 
         public Float3 Scale(Float3 s) => new(s[_sources[0]], s[_sources[1]], s[_sources[2]]);
 

@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.CompilerServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -26,6 +28,7 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
     /// </summary>
     private const float SinSqEpsilon = 1e-12f;
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public void Execute(IntermediateScene scene, ImportContext context)
     {
         int removedTotal = 0;
@@ -51,6 +54,7 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
             context.Log.Info($"Removed {removedTotal} degenerate face(s).", Name);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static bool IsDegenerate(IntermediateMesh mesh, int[] indices)
     {
         switch (indices.Length)

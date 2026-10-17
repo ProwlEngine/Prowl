@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.CompilerServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -27,6 +29,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         _ = context;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void JoinOne(IntermediateMesh mesh)
     {
         int oldCount = mesh.Positions.Count;
@@ -54,22 +57,25 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         var oldToNew = new int[oldCount];
         Array.Fill(oldToNew, -1);
 
-        // Bucket by position-hash first to avoid quadratic comparisons.
-        var buckets = new Dictionary<int, List<int>>(oldCount);
+        // Hash chains over the kept vertices, stored in flat arrays.
+        int tableSize = 1;
+        while (tableSize < oldCount * 2) tableSize <<= 1;
+        int mask = tableSize - 1;
+        var heads = new int[tableSize];
+        Array.Fill(heads, -1);
+        var next = new int[oldCount];
+        var hashes = new int[oldCount];
 
         for (int i = 0; i < oldCount; i++)
         {
             int hash = HashVertex(mesh, i);
-            if (!buckets.TryGetValue(hash, out var bucket))
-            {
-                bucket = new List<int>(1);
-                buckets[hash] = bucket;
-            }
+            hashes[i] = hash;
+            int slot = hash & mask;
 
             int matchedNew = -1;
-            foreach (int candidate in bucket)
+            for (int candidate = heads[slot]; candidate >= 0; candidate = next[candidate])
             {
-                if (VerticesEqual(mesh, candidate, i, hasMorph))
+                if (hashes[candidate] == hash && VerticesEqual(mesh, candidate, i, hasMorph))
                 {
                     matchedNew = oldToNew[candidate];
                     break;
@@ -88,7 +94,8 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
                     if (newUVs[uv] is { } list)
                         list.Add(mesh.UVs[uv]![i]);
                 }
-                bucket.Add(i);
+                next[i] = heads[slot];
+                heads[slot] = i;
             }
 
             oldToNew[i] = matchedNew;
@@ -157,21 +164,15 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         if (keptFaces < mesh.Faces.Count)
             mesh.Faces.RemoveRange(keptFaces, mesh.Faces.Count - keptFaces);
 
-        // Swap buffers in.
-        mesh.Positions.Clear();
-        mesh.Positions.AddRange(newPos);
-        if (newNormal is not null) { mesh.Normals!.Clear(); mesh.Normals.AddRange(newNormal); }
-        if (newTangent is not null) { mesh.Tangents!.Clear(); mesh.Tangents.AddRange(newTangent); }
-        if (newColor is not null) { mesh.Colors0!.Clear(); mesh.Colors0.AddRange(newColor); }
+        mesh.Positions = newPos;
+        if (newNormal is not null) mesh.Normals = newNormal;
+        if (newTangent is not null) mesh.Tangents = newTangent;
+        if (newColor is not null) mesh.Colors0 = newColor;
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
         {
-            if (newUVs[uv] is { } list && mesh.UVs[uv] is { } existing)
-            {
-                existing.Clear();
-                existing.AddRange(list);
-            }
+            if (newUVs[uv] is { } list)
+                mesh.UVs[uv] = list;
         }
-
     }
 
     /// <summary>True when a face names the same vertex twice, which only a point can survive.</summary>
@@ -184,6 +185,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         return false;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static int HashVertex(IntermediateMesh m, int i)
     {
         var hc = new HashCode();
@@ -205,6 +207,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         return hc.ToHashCode();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static bool VerticesEqual(IntermediateMesh m, int a, int b, bool includeMorph)
     {
         if (!m.Positions[a].Equals(m.Positions[b])) return false;
