@@ -100,6 +100,8 @@ public static class AssetTypeStyles
             // Materials.
             [".mat"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
             [".material"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
+            // Input.
+            [".inputactions"] = new() { Icon = EditorIcons.Gamepad_I, Color = Green },
             // Meshes / models.
             [".fbx"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
             [".obj"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },

@@ -17,76 +17,97 @@ namespace Prowl.Runtime;
 [CreateAssetMenu("Input Actions", Extension = ".inputactions", Order = 2)]
 public class InputActionMap : Asset, ISerializable
 {
-    private readonly Dictionary<string, InputAction> _actions = [];
+    private readonly List<InputAction> _actions = [];
 
-    /// <summary>All actions in this map.</summary>
-    public IReadOnlyCollection<InputAction> Actions { get { EnsureLoaded(); return _actions.Values; } }
+    /// <summary>All actions in this map, in their saved order.</summary>
+    public IReadOnlyList<InputAction> Actions { get { EnsureLoaded(); return _actions; } }
 
     /// <summary>Whether any action in this map is enabled.</summary>
-    public bool Enabled { get { EnsureLoaded(); return _actions.Values.Any(a => a.Enabled); } }
+    public bool Enabled { get { EnsureLoaded(); return _actions.Any(a => a.Enabled); } }
 
     public InputActionMap() : base("New InputActionMap") { }
 
     public InputActionMap(string name) : base(name) { }
 
-    /// <summary>Adds a new action to this map.</summary>
+    /// <summary>Adds a new action to the end of this map.</summary>
     public InputAction AddAction(string name, InputActionType type = InputActionType.Button)
     {
-        EnsureLoaded();
-        if (_actions.ContainsKey(name))
-            throw new ArgumentException($"Action '{name}' already exists in map '{Name}'");
-
-        var action = new InputAction(name, type) { ActionMap = this };
-        _actions[name] = action;
+        var action = new InputAction(name, type);
+        AddAction(action);
         return action;
     }
 
-    /// <summary>Adds an existing action to this map.</summary>
-    public void AddAction(InputAction action)
+    /// <summary>Adds an existing action to the end of this map.</summary>
+    public void AddAction(InputAction action) => InsertAction(Actions.Count, action);
+
+    /// <summary>Adds an existing action at a position in this map.</summary>
+    public void InsertAction(int index, InputAction action)
     {
         EnsureLoaded();
-        if (_actions.ContainsKey(action.Name))
+        if (IndexOf(action.Name) >= 0)
             throw new ArgumentException($"Action '{action.Name}' already exists in map '{Name}'");
 
         action.ActionMap = this;
-        _actions[action.Name] = action;
+        _actions.Insert(index, action);
+    }
+
+    /// <summary>The position of an action, or -1 when this map has none by that name.</summary>
+    public int IndexOf(string name)
+    {
+        EnsureLoaded();
+        return _actions.FindIndex(a => a.Name == name);
     }
 
     /// <summary>Finds an action by name.</summary>
     public InputAction? FindAction(string name)
     {
-        EnsureLoaded();
-        _actions.TryGetValue(name, out InputAction? action);
-        return action;
+        int index = IndexOf(name);
+        return index >= 0 ? _actions[index] : null;
     }
 
     /// <summary>Gets an action by name, throws if not found.</summary>
     public InputAction GetAction(string name)
+        => FindAction(name) ?? throw new KeyNotFoundException($"Action '{name}' not found in map '{Name}'");
+
+    /// <summary>Renames an action in place, so it stays enabled and keeps its listeners.</summary>
+    public bool RenameAction(string oldName, string newName)
+    {
+        InputAction? action = FindAction(oldName);
+        if (action == null || string.IsNullOrWhiteSpace(newName) || FindAction(newName) != null)
+            return false;
+
+        action.Name = newName;
+        return true;
+    }
+
+    /// <summary>Moves an action to another position in this map.</summary>
+    public void MoveAction(int from, int to)
     {
         EnsureLoaded();
-        if (!_actions.TryGetValue(name, out InputAction? action))
-            throw new KeyNotFoundException($"Action '{name}' not found in map '{Name}'");
-        return action;
+        InputAction action = _actions[from];
+        _actions.RemoveAt(from);
+        _actions.Insert(to, action);
     }
 
     /// <summary>Removes an action from this map.</summary>
     public bool RemoveAction(string name)
     {
-        EnsureLoaded();
-        if (_actions.TryGetValue(name, out InputAction? action))
-        {
-            action.Disable();
-            action.ActionMap = null;
-            return _actions.Remove(name);
-        }
-        return false;
+        int index = IndexOf(name);
+        if (index < 0)
+            return false;
+
+        InputAction action = _actions[index];
+        action.Disable();
+        action.ActionMap = null;
+        _actions.RemoveAt(index);
+        return true;
     }
 
     /// <summary>Enables all actions in this map.</summary>
     public void Enable()
     {
         EnsureLoaded();
-        foreach (InputAction action in _actions.Values)
+        foreach (InputAction action in _actions)
             action.Enable();
     }
 
@@ -94,14 +115,14 @@ public class InputActionMap : Asset, ISerializable
     public void Disable()
     {
         EnsureLoaded();
-        foreach (InputAction action in _actions.Values)
+        foreach (InputAction action in _actions)
             action.Disable();
     }
 
     /// <summary>Internal method to update all actions in this map.</summary>
     internal void UpdateActions(IInputHandler inputHandler, float currentTime)
     {
-        foreach (InputAction action in _actions.Values)
+        foreach (InputAction action in _actions)
         {
             if (action.Enabled)
                 action.UpdateState(inputHandler, currentTime);
@@ -118,14 +139,14 @@ public class InputActionMap : Asset, ISerializable
     // unload there is nothing to keep, and the actions read are used as they are.
     protected override void TakeContent(Asset staging)
     {
-        Dictionary<string, InputAction>? previous = State == AssetState.Loaded ? new(_actions) : null;
+        Dictionary<string, InputAction>? previous = State == AssetState.Loaded ? _actions.ToDictionary(a => a.Name) : null;
 
         base.TakeContent(staging);
 
-        foreach (string name in _actions.Keys.ToList())
+        for (int i = 0; i < _actions.Count; i++)
         {
-            InputAction read = _actions[name];
-            if (previous == null || !previous.Remove(name, out InputAction? kept))
+            InputAction read = _actions[i];
+            if (previous == null || !previous.Remove(read.Name, out InputAction? kept))
             {
                 read.ActionMap = this;
                 continue;
@@ -134,7 +155,7 @@ public class InputActionMap : Asset, ISerializable
             bool enabled = kept.Enabled;
             if (enabled) kept.Disable();
             kept.TakeConfiguration(read);
-            _actions[name] = kept;
+            _actions[i] = kept;
             if (enabled) kept.Enable();
         }
 
@@ -156,7 +177,7 @@ public class InputActionMap : Asset, ISerializable
         compound.Add("Name", new EchoObject(Name));
 
         var actionsList = EchoObject.NewList();
-        foreach (InputAction action in _actions.Values)
+        foreach (InputAction action in _actions)
         {
             var actionTag = EchoObject.NewCompound();
             actionTag["name"] = new EchoObject(action.Name);
@@ -212,7 +233,9 @@ public class InputActionMap : Asset, ISerializable
                             action.AddBinding(composite);
                     }
 
-                _actions[name] = action;
+                if (_actions.Exists(a => a.Name == name))
+                    continue;
+                _actions.Add(action);
             }
         }
     }
@@ -221,7 +244,7 @@ public class InputActionMap : Asset, ISerializable
     {
         var tag = EchoObject.NewCompound();
         tag["bindingType"] = new EchoObject((int)binding.BindingType);
-        tag["interaction"] = new EchoObject((int)binding.Interaction);
+        SerializeInteraction(tag, binding);
 
         if (binding.Key.HasValue) tag["key"] = new EchoObject((int)binding.Key.Value);
         if (binding.MouseButton.HasValue) tag["mouseButton"] = new EchoObject((int)binding.MouseButton.Value);
@@ -232,12 +255,6 @@ public class InputActionMap : Asset, ISerializable
         if (binding.XRButton.HasValue) tag["xrButton"] = new EchoObject((int)binding.XRButton.Value);
         if (binding.XRAxis.HasValue) tag["xrAxis"] = new EchoObject((int)binding.XRAxis.Value);
         if (binding.XRTouch.HasValue) tag["xrTouch"] = new EchoObject((int)binding.XRTouch.Value);
-
-        // Interaction parameters
-        tag["holdDuration"] = new EchoObject(binding.HoldDuration);
-        tag["tapCount"] = new EchoObject(binding.TapCount);
-        tag["tapWindow"] = new EchoObject(binding.TapWindow);
-        tag["maxTapDuration"] = new EchoObject(binding.MaxTapDuration);
 
         // Processors
         if (binding.Processors.Count > 0)
@@ -253,11 +270,8 @@ public class InputActionMap : Asset, ISerializable
 
     private static InputBinding DeserializeBinding(EchoObject tag)
     {
-        var binding = new InputBinding
-        {
-            BindingType = (InputBindingType)tag.Get("bindingType").IntValue,
-            Interaction = (InputInteractionType)tag.Get("interaction").IntValue,
-        };
+        var binding = new InputBinding { BindingType = (InputBindingType)tag.Get("bindingType").IntValue };
+        DeserializeInteraction(tag, binding);
 
         if (tag.TryGet("key", out EchoObject? k)) binding.Key = (KeyCode)k.IntValue;
         if (tag.TryGet("mouseButton", out EchoObject? mb)) binding.MouseButton = (MouseButton)mb.IntValue;
@@ -268,11 +282,6 @@ public class InputActionMap : Asset, ISerializable
         if (tag.TryGet("xrButton", out EchoObject? xb)) binding.XRButton = (XRButton)xb.IntValue;
         if (tag.TryGet("xrAxis", out EchoObject? xa)) binding.XRAxis = (XRAxis)xa.IntValue;
         if (tag.TryGet("xrTouch", out EchoObject? xt)) binding.XRTouch = (XRTouch)xt.IntValue;
-
-        if (tag.TryGet("holdDuration", out EchoObject? hd)) binding.HoldDuration = hd.FloatValue;
-        if (tag.TryGet("tapCount", out EchoObject? tc)) binding.TapCount = tc.IntValue;
-        if (tag.TryGet("tapWindow", out EchoObject? tw)) binding.TapWindow = tw.FloatValue;
-        if (tag.TryGet("maxTapDuration", out EchoObject? mtd)) binding.MaxTapDuration = mtd.FloatValue;
 
         // Processors
         if (tag.TryGet("processors", out EchoObject? procList) && procList.TagType == EchoType.List)
@@ -285,9 +294,30 @@ public class InputActionMap : Asset, ISerializable
         return binding;
     }
 
+    private static void SerializeInteraction(EchoObject tag, IInputInteractionSettings settings)
+    {
+        tag["interaction"] = new EchoObject((int)settings.Interaction);
+        tag["holdDuration"] = new EchoObject(settings.HoldDuration);
+        tag["tapCount"] = new EchoObject(settings.TapCount);
+        tag["tapWindow"] = new EchoObject(settings.TapWindow);
+        tag["maxTapDuration"] = new EchoObject(settings.MaxTapDuration);
+        tag["pressPoint"] = new EchoObject(settings.PressPoint);
+    }
+
+    private static void DeserializeInteraction(EchoObject tag, IInputInteractionSettings settings)
+    {
+        if (tag.TryGet("interaction", out EchoObject? it)) settings.Interaction = (InputInteractionType)it.IntValue;
+        if (tag.TryGet("holdDuration", out EchoObject? hd)) settings.HoldDuration = hd.FloatValue;
+        if (tag.TryGet("tapCount", out EchoObject? tc)) settings.TapCount = tc.IntValue;
+        if (tag.TryGet("tapWindow", out EchoObject? tw)) settings.TapWindow = tw.FloatValue;
+        if (tag.TryGet("maxTapDuration", out EchoObject? mtd)) settings.MaxTapDuration = mtd.FloatValue;
+        if (tag.TryGet("pressPoint", out EchoObject? pp)) settings.PressPoint = pp.FloatValue;
+    }
+
     private static EchoObject SerializeComposite(InputCompositeBinding composite)
     {
         var tag = EchoObject.NewCompound();
+        SerializeInteraction(tag, composite);
 
         if (composite is Vector2CompositeBinding v2)
         {
@@ -345,6 +375,9 @@ public class InputActionMap : Asset, ISerializable
                 parts.GetValueOrDefault("negative", dummy)),
             _ => null
         };
+
+        if (composite != null)
+            DeserializeInteraction(tag, composite);
 
         // Composite processors
         if (composite != null && tag.TryGet("processors", out EchoObject? cprocList) && cprocList.TagType == EchoType.List)

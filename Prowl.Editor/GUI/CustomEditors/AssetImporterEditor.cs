@@ -37,6 +37,12 @@ public abstract class AssetImporterEditor
     /// <summary>Draw the asset editor UI.</summary>
     public abstract void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset);
 
+    /// <summary>
+    /// Draws over the inspector's visible area, outside its scroll view, after <see cref="OnGUI"/>.
+    /// For panels that should cover the inspector rather than scroll with it.
+    /// </summary>
+    public virtual void OnPanelOverlay(Paper paper, string id, float width, float height) { }
+
     // ============================================================
     // Pending changes
     // ============================================================

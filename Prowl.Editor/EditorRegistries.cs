@@ -789,6 +789,7 @@ public static class EditorRegistries
         RegisterFileIcons(EditorIcons.VectorSquare, ".fbx", ".obj", ".gltf", ".glb", ".dae", ".mesh");
         RegisterFileIcons(EditorIcons.Cubes, ".scene", ".prefab");
         RegisterFileIcons(EditorIcons.Palette, ".mat", ".material");
+        RegisterFileIcons(EditorIcons.Gamepad, ".inputactions");
         RegisterFileIcons(EditorIcons.FilePdf, ".pdf");
         RegisterFileIcons(EditorIcons.FileLines, ".txt", ".md", ".log", ".json", ".xml", ".yaml", ".yml");
         RegisterFileIcons(EditorIcons.FileZipper, ".zip", ".rar", ".7z", ".tar", ".gz", ".prowlpackage");

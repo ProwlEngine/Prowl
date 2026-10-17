@@ -85,6 +85,9 @@ public class InspectorPanel : DockPanel
     private AssetEntry? _openEntry;
     private EngineObject? _openAsset;
 
+    // The asset editor drawn this frame, which gets to draw over the inspector after the scroll view.
+    private AssetImporterEditor? _overlayEditor;
+
     // What the inspector was showing, and whether the unapplied-changes prompt is up. While it is, the
     // selection change is held: the inspector keeps drawing the asset the prompt is about, so the choice
     // is made against what is on screen rather than behind a dialog for something already gone.
@@ -237,6 +240,7 @@ public class InspectorPanel : DockPanel
             _subscribed = true;
         }
 
+        _overlayEditor = null;
         Origami.ScrollView(paper, "insp_scroll", width, height).Padding(0, 0, 0, 0).Body(() =>
         {
             // Determine what to inspect: current selection, unless it's a folder
@@ -329,6 +333,12 @@ public class InspectorPanel : DockPanel
 
         // Drag a script (.cs) from the Project panel onto the inspector to add it as a component.
         DrawScriptComponentDropZone(paper, font, width, height);
+
+        try { _overlayEditor?.OnPanelOverlay(paper, "insp_asset_overlay", width, height); }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Inspector] Asset editor overlay threw and was skipped: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -455,6 +465,7 @@ public class InspectorPanel : DockPanel
                 _openEntry = entry;
                 _openAsset = asset;
 
+                _overlayEditor = assetEditor;
                 try { assetEditor.OnGUI(paper, "insp_asset_editor", entry, asset); }
                 catch (Exception ex)
                 {

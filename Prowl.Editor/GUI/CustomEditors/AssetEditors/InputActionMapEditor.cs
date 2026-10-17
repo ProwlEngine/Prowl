@@ -18,8 +18,10 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(InputActionMap))]
 public class InputActionMapEditor : AssetImporterEditor
 {
-    private string? _selectedAction;
-    private int _selectedBindingIdx = -1; // -1 = none, 0..N-1 = binding, N..N+M-1 = composite
+    private string? _openAction;
+    private string _filter = "";
+    private string? _confirmDelete;
+    private readonly InputBindingPopup _popup = new();
 
     // ============================================================
     // Pending changes
@@ -45,739 +47,439 @@ public class InputActionMapEditor : AssetImporterEditor
         if (asset is not InputActionMap map || map.IsNotValid()) return;
 
         // Refilled in place, so anything already holding this map sees the revert.
+        _popup.Close();
         EditorAssetBackend.Instance?.RevertToSaved(map);
-        _selectedBindingIdx = -1;
     }
 
     /// <summary>Serializes the map as its file form.</summary>
     private static EchoObject Serialize(InputActionMap map) => Serializer.Serialize(typeof(object), map);
 
-    // Listening state which binding slot we're listening for
-    private bool _listeningForBinding;
-    private string? _listenCompositePartName;
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
-        if (font == null) return;
-        var map = asset as InputActionMap;
-        if (map == null) return;
+        if (font == null || asset is not InputActionMap map) return;
 
-        // Handle listen mode
-        if (_listeningForBinding)
+        if (_popup.IsOpen && _popup.Map != map) _popup.Close();
+        OrigamiMetrics m = Origami.Current.Metrics;
+
+        using (paper.Row($"{id}_tools").Height(34).Gap(m.SpacingLarge)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Enter())
         {
-            InputBindingListener.Update();
-            if (!InputBindingListener.IsListening)
-                _listeningForBinding = false;
-        }
+            using (paper.Box($"{id}_search_w").Width(UnitValue.Stretch()).Height(34).Enter())
+                Origami.SearchField(paper, $"{id}_search", _filter, v => _filter = v, "Search actions or keys").Height(34).Show();
 
-        // Header
-        using (paper.Row($"{id}_hdr").Height(EditorTheme.RowHeight + 4).Gap(8).Enter())
-        {
-            Origami.Header(paper, $"{id}_title", $"{EditorIcons.Gamepad}  Input Actions: {map.Name}").Show();
-
-            if (HasPendingChanges(entry, asset))
-            {
-                Origami.Button(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"),
-                    () => RevertPendingChanges(entry, asset)).Width(80).Show();
-                Origami.Button(paper, $"{id}_apply", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}",
-                    () => ApplyPendingChanges(entry, asset)).Width(90).Show();
-            }
-        }
-        Origami.Separator(paper, $"{id}_sep").Show();
-
-        // Two-column layout
-        using (paper.Row($"{id}_body").Height(UnitValue.Auto).Gap(4).Enter())
-        {
-            DrawActionList(paper, $"{id}_al", map, font);
-            DrawBindingsPanel(paper, $"{id}_bp", map, font);
-        }
-    }
-
-    // ================================================================
-    //  Left: Action List
-    // ================================================================
-
-    private void DrawActionList(Paper paper, string id, InputActionMap map, Prowl.Scribe.FontFile font)
-    {
-        float fs = EditorTheme.FontSize;
-
-        using (paper.Column(id)
-            .Width(paper.Percent(28)).MinWidth(120)
-            .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.Neutral400).Rounded(Origami.Current.Metrics.ContainerRounding)
-            .Padding(4, 4, 4, 4)
-            .Enter())
-        {
-            // Header
-            using (paper.Row($"{id}_hdr").Height(20).Gap(4).Enter())
-            {
-                paper.Box($"{id}_lbl")
-                    .Width(UnitValue.Stretch()).Height(20)
-                    .Text("Actions", font).TextColor(EditorTheme.Ink400)
-                    .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
-
-                paper.Box($"{id}_add")
-                    .Width(18).Height(18).Rounded(Origami.Current.Metrics.SmallRounding)
-                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                    .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) =>
-                    {
-                        string name = FindUniqueName(map, "NewAction");
-                        map.AddAction(name, InputActionType.Button);
-                        _selectedAction = name;
-                        _selectedBindingIdx = -1;
-                    });
-            }
-
-            paper.Box($"{id}_div").Height(1).BackgroundColor(EditorTheme.Ink200).Margin(0, 3, 0, 3);
-
-            foreach (InputAction? action in map.Actions.ToList())
-            {
-                bool sel = _selectedAction == action.Name;
-                string icon = action.ActionType switch
-                {
-                    InputActionType.Button => EditorIcons.Circle,
-                    InputActionType.Value => EditorIcons.ArrowsLeftRight,
-                    InputActionType.PassThrough => EditorIcons.ArrowRight,
-                    _ => EditorIcons.Circle
-                };
-
-                paper.Box($"{id}_{action.Name}")
-                    .Height(EditorTheme.RowHeight)
-                    .BackgroundColor(sel ? EditorTheme.Purple400 : Color.Transparent)
-                    .Hovered.BackgroundColor(sel ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-                    .Rounded(Origami.Current.Metrics.Rounding)
-                    .Text($"  {icon}  {action.Name}", font).TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink500)
-                    .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft)
-                    .OnClick(action.Name, (n, _) => { _selectedAction = n; _selectedBindingIdx = -1; });
-            }
-        }
-    }
-
-    // ================================================================
-    //  Right: Bindings Panel (bindings list + selected binding properties)
-    // ================================================================
-
-    private void DrawBindingsPanel(Paper paper, string id, InputActionMap map, Prowl.Scribe.FontFile font)
-    {
-        float fs = EditorTheme.FontSize;
-
-        using (paper.Column(id)
-            .Width(UnitValue.Stretch())
-            .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.Neutral400).Rounded(Origami.Current.Metrics.ContainerRounding)
-            .Padding(6, 6, 6, 6)
-            .Enter())
-        {
-            InputAction? action = _selectedAction != null ? map.FindAction(_selectedAction) : null;
-            if (action == null)
-            {
-                paper.Box($"{id}_empty").Height(80)
-                    .Text("Select an action", font).TextColor(EditorTheme.Ink300)
-                    .FontSize(fs).Alignment(TextAlignment.MiddleCenter);
-                return;
-            }
-
-            // -- Action Properties --
-            EditorGUI.Row(paper, $"{id}_name", "Name", () =>
-                Origami.TextField(paper, $"{id}_name_v", action.Name, v =>
-                {
-                    if (!string.IsNullOrWhiteSpace(v) && v != action.Name && map.FindAction(v) == null)
-                    {
-                        map.RemoveAction(action.Name);
-                        action.Name = v;
-                        map.AddAction(action);
-                        _selectedAction = v;
-                    }
-                }).Show());
-
-            EditorGUI.Row(paper, $"{id}_atype", "Type", () =>
-                Origami.EnumDropdown(paper, $"{id}_atype_v", action.ActionType,
-                    v => { action.ActionType = v; }).Show());
-
-            bool isFloat2 = action.ExpectedValueType == typeof(Prowl.Vector.Float2);
-            EditorGUI.Row(paper, $"{id}_vtype", "Value", () =>
-                Origami.Dropdown(paper, $"{id}_vtype_v", isFloat2 ? 1 : 0,
-                    v => { action.ExpectedValueType = v == 1 ? typeof(Prowl.Vector.Float2) : typeof(float); },
-                    new[] { "float", "Float2" }).Show());
-
-            paper.Box($"{id}_sp1").Height(6);
-            Origami.Separator(paper, $"{id}_bsep").Show();
-
-            // -- Bindings List --
-            using (paper.Row($"{id}_bhdr").Height(20).Gap(4).Enter())
-            {
-                paper.Box($"{id}_blbl")
-                    .Width(UnitValue.Stretch()).Height(20)
-                    .Text("Bindings", font).TextColor(EditorTheme.Ink400)
-                    .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
-            }
-
-            // Regular bindings
-            for (int i = 0; i < action.Bindings.Count; i++)
-            {
-                int idx = i;
-                InputBinding binding = action.Bindings[i];
-                bool sel = _selectedBindingIdx == i;
-
-                DrawBindingRow(paper, $"{id}_br{i}", binding, sel, () =>
-                {
-                    _selectedBindingIdx = sel ? -1 : idx;
-                    _listenCompositePartName = null;
-                }, () =>
-                {
-                    action.Bindings.RemoveAt(idx);
-                    if (_selectedBindingIdx >= action.Bindings.Count) _selectedBindingIdx = -1;
-                });
-
-                // Inline properties when selected
-                if (sel)
-                    DrawBindingProperties(paper, $"{id}_bp{i}", binding, action, i);
-            }
-
-            // Composite bindings
-            int bindingOffset = action.Bindings.Count;
-            for (int i = 0; i < action.CompositeBindings.Count; i++)
-            {
-                int idx = i;
-                int selIdx = bindingOffset + i;
-                InputCompositeBinding composite = action.CompositeBindings[i];
-                bool sel = _selectedBindingIdx == selIdx;
-
-                DrawCompositeRow(paper, $"{id}_cr{i}", composite, font, fs, sel, () =>
-                {
-                    _selectedBindingIdx = sel ? -1 : selIdx;
-                    _listenCompositePartName = null;
-                }, () =>
-                {
-                    action.RemoveCompositeAt(idx);
-                    if (_selectedBindingIdx >= bindingOffset + action.CompositeBindings.Count)
-                        _selectedBindingIdx = -1;
-                });
-
-                // Inline properties when selected
-                if (sel)
-                    DrawCompositeProperties(paper, $"{id}_cp{i}", composite, action);
-            }
-
-            paper.Box($"{id}_sp2").Height(6);
-
-            // -- Add Buttons --
-            using (paper.Row($"{id}_add1").Height(EditorTheme.RowHeight).Gap(4).Enter())
-            {
-                Origami.Button(paper, $"{id}_abind", $"{EditorIcons.Plus} Add Binding", () =>
-                {
-                    action.AddBinding(KeyCode.Space);
-                    _selectedBindingIdx = action.Bindings.Count - 1;
-                }).Width(110).Show();
-
-                Origami.Button(paper, $"{id}_awasd", $"{EditorIcons.Plus} WASD", () =>
-                {
-                    action.AddBinding(new Vector2CompositeBinding(
-                        InputBinding.CreateKeyBinding(KeyCode.W),
-                        InputBinding.CreateKeyBinding(KeyCode.S),
-                        InputBinding.CreateKeyBinding(KeyCode.A),
-                        InputBinding.CreateKeyBinding(KeyCode.D)));
-                    _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
-                }).Width(80).Show();
-
-                Origami.Button(paper, $"{id}_aaxis", $"{EditorIcons.Plus} Axis", () =>
-                {
-                    action.AddBinding(new AxisCompositeBinding(
-                        InputBinding.CreateKeyBinding(KeyCode.D),
-                        InputBinding.CreateKeyBinding(KeyCode.A)));
-                    _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
-                }).Width(75).Show();
-            }
-
-            paper.Box($"{id}_sp3").Height(12);
-
-            Origami.Button(paper, $"{id}_del", $"{EditorIcons.Trash}  Delete Action", () =>
-            {
-                map.RemoveAction(action.Name);
-                _selectedAction = null;
-                _selectedBindingIdx = -1;
-            }).Width(130).Show();
-        }
-    }
-
-    // ================================================================
-    //  Binding Row (summary line)
-    // ================================================================
-
-    private void DrawBindingRow(Paper paper, string id, InputBinding binding, bool selected,
-        Action onSelect, Action onRemove)
-    {
-        Scribe.FontFile font = EditorTheme.DefaultFont!;
-        float fs = EditorTheme.FontSize;
-
-        using (paper.Row(id)
-            .Height(EditorTheme.RowHeight)
-            .BackgroundColor(selected ? Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(selected ? Color.FromArgb(80, EditorTheme.Purple400) : EditorTheme.Ink200).End()
-            .Rounded(Origami.Current.Metrics.Rounding).Margin(0, 0, 0, 1)
-            .PaddingLeft(8).Gap(4)
-            .OnClick(0, (_, _) => onSelect())
-            .Enter())
-        {
-            paper.Box($"{id}_lbl")
-                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                .Text(GetBindingSummary(binding), font).TextColor(EditorTheme.Ink500)
-                .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box($"{id}_x")
-                .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, e) => { e.StopPropagation(); onRemove(); });
-        }
-    }
-
-    private void DrawCompositeRow(Paper paper, string id, InputCompositeBinding composite,
-        Prowl.Scribe.FontFile font, float fs, bool selected, Action onSelect, Action onRemove)
-    {
-        string label = composite switch
-        {
-            Vector2CompositeBinding => "Vector2 Composite",
-            AxisCompositeBinding => "Axis Composite",
-            DualAxisCompositeBinding => "Dual Axis Composite",
-            _ => "Composite"
-        };
-
-        // Build a summary of parts
-        string parts = string.Join(", ", composite.Parts.Select(p => GetPartSummary(p.Value)));
-
-        using (paper.Row(id)
-            .Height(EditorTheme.RowHeight)
-            .BackgroundColor(selected ? Color.FromArgb(60, EditorTheme.Purple400) : Color.FromArgb(30, EditorTheme.Purple400))
-            .Hovered.BackgroundColor(selected ? Color.FromArgb(80, EditorTheme.Purple400) : Color.FromArgb(50, EditorTheme.Purple400)).End()
-            .BorderColor(EditorTheme.Purple300).BorderWidth(selected ? 1 : 0)
-            .Rounded(Origami.Current.Metrics.Rounding).Margin(0, 0, 0, 1)
-            .PaddingLeft(8).Gap(4)
-            .OnClick(0, (_, _) => onSelect())
-            .Enter())
-        {
-            paper.Box($"{id}_lbl")
-                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                .Text($"{label}  ({parts})", font).TextColor(EditorTheme.Purple400)
-                .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box($"{id}_x")
-                .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, e) => { e.StopPropagation(); onRemove(); });
-        }
-    }
-
-    // ================================================================
-    //  Binding Properties (inline, shown below selected binding)
-    // ================================================================
-
-    private void DrawBindingProperties(Paper paper, string id, InputBinding binding, InputAction action, int bindingIdx)
-    {
-        using (paper.Column(id)
-            .Height(UnitValue.Auto)
-            .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
-            .Rounded(Origami.Current.Metrics.Rounding).Margin(12, 0, 0, 2)
-            .Padding(8, 8, 6, 6)
-            .Enter())
-        {
-            // "Listen" button press any key to rebind
-            DrawListenButton(paper, $"{id}_listen", binding, null);
-
-            paper.Box($"{id}_sp").Height(4);
-
-            // Binding type
-            EditorGUI.Row(paper, $"{id}_btype", "Input Type", () =>
-                Origami.EnumDropdown(paper, $"{id}_btype_v", binding.BindingType, v =>
-                {
-                    binding.BindingType = v;
-                    // Reset to sensible defaults
-                    switch (v)
-                    {
-                        case InputBindingType.Key: binding.Key = KeyCode.Space; break;
-                        case InputBindingType.MouseButton: binding.MouseButton = MouseButton.Left; break;
-                        case InputBindingType.GamepadButton: binding.GamepadButton = GamepadButton.A; break;
-                        case InputBindingType.MouseAxis: binding.AxisIndex = 0; break;
-                        case InputBindingType.GamepadAxis: binding.AxisIndex = 0; break;
-                        case InputBindingType.GamepadTrigger: binding.AxisIndex = 0; break;
-                        case InputBindingType.XRButton: binding.XRHand = XRHand.Right; binding.XRButton = XRButton.Primary; break;
-                        case InputBindingType.XRAxis: binding.XRHand = XRHand.Right; binding.XRAxis = XRAxis.Trigger; break;
-                        case InputBindingType.XRStick: binding.XRHand = XRHand.Right; break;
-                        case InputBindingType.XRTouch: binding.XRHand = XRHand.Right; binding.XRTouch = XRTouch.Trigger; break;
-                    }
-                }).Show());
-
-            // Type-specific fields
-            DrawBindingControl(paper, $"{id}_ctrl", binding);
-
-            paper.Box($"{id}_isep").Height(4);
-            Origami.Separator(paper, $"{id}_isep2").Show();
-
-            // Interaction
-            EditorGUI.Row(paper, $"{id}_inter", "Interaction", () =>
-                Origami.EnumDropdown(paper, $"{id}_inter_v", binding.Interaction,
-                    v => { binding.Interaction = v; }).Show());
-
-            DrawInteractionParams(paper, $"{id}_ip", binding);
-
-            paper.Box($"{id}_psep").Height(4);
-            Origami.Separator(paper, $"{id}_psep2").Show();
-
-            // Processors
-            DrawProcessorList(paper, $"{id}_proc", binding.Processors);
-        }
-    }
-
-    private void DrawCompositeProperties(Paper paper, string id, InputCompositeBinding composite, InputAction action)
-    {
-        using (paper.Column(id)
-            .Height(UnitValue.Auto)
-            .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
-            .Rounded(Origami.Current.Metrics.Rounding).Margin(12, 0, 0, 2)
-            .Padding(8, 8, 6, 6)
-            .Enter())
-        {
-            // Vector2-specific options
-            if (composite is Vector2CompositeBinding v2c)
-            {
-                Origami.Checkbox(paper, $"{id}_norm", v2c.Normalize,
-                        v => { v2c.Normalize = v; })
-                    .LabelRight("Normalize").Show();
-                paper.Box($"{id}_sp").Height(4);
-            }
-
-            // Each part with a listen button
-            var partNames = composite.Parts.Keys.ToList();
-            for (int i = 0; i < partNames.Count; i++)
-            {
-                string partName = partNames[i];
-                InputBinding partBinding = composite.Parts[partName];
-
-                Origami.Header(paper, $"{id}_ph{i}", $"{partName.ToUpper()}").Show();
-
-                DrawListenButton(paper, $"{id}_pl{i}", partBinding, partName);
-                DrawBindingControl(paper, $"{id}_pc{i}", partBinding);
-
-                if (i < partNames.Count - 1)
-                    paper.Box($"{id}_psep{i}").Height(4);
-            }
-
-            paper.Box($"{id}_procsep").Height(4);
-            Origami.Separator(paper, $"{id}_procsep2").Show();
-
-            // Composite-level processors
-            DrawProcessorList(paper, $"{id}_proc", composite.Processors);
-        }
-    }
-
-    // ================================================================
-    //  Listen Button "Press any key to bind"
-    // ================================================================
-
-    private void DrawListenButton(Paper paper, string id, InputBinding binding, string? compositePartName)
-    {
-        Scribe.FontFile font = EditorTheme.DefaultFont!;
-        bool isThisListening = _listeningForBinding && _listenCompositePartName == compositePartName;
-
-        if (isThisListening)
-        {
-            paper.Box($"{id}_btn")
-                .Height(EditorTheme.RowHeight)
-                .BackgroundColor(EditorTheme.Purple300)
-                .Rounded(Origami.Current.Metrics.Rounding)
-                .Text("  Press any key...  (Esc to cancel)", font)
-                .TextColor(EditorTheme.Ink500)
+            paper.Box($"{id}_add").Width(UnitValue.Auto).Height(34).Padding(14, 14, 0, 0).Rounded(m.Rounding)
+                .BackgroundColor(EditorTheme.Accent)
+                .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
+                .Text($"{EditorIcons.Plus}  Action", EditorTheme.FontSemiBold ?? font).TextColor(Color.White)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) =>
-                {
-                    InputBindingListener.Cancel();
-                    _listeningForBinding = false;
-                });
+                .Cursor(PaperCursor.Pointer)
+                .OnClick(0, (_, _) => AddAction(map));
         }
-        else
+
+        Dictionary<string, List<string>> usage = BuildUsage(map);
+        List<InputAction> shown = [.. map.Actions.Where(Matches)];
+
+        using (paper.Column($"{id}_list").Height(UnitValue.Auto).Gap(4)
+            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.PaddingLarge).Enter())
         {
-            string current = GetBindingSummary(binding);
-            Origami.Button(paper, $"{id}_btn", $"{EditorIcons.Bullseye}  Listen  ({current})", () =>
-            {
-                _listenCompositePartName = compositePartName;
-                _listeningForBinding = true;
-                InputBindingListener.Start(detected =>
-                {
-                    binding.BindingType = detected.BindingType;
-                    binding.Key = detected.Key;
-                    binding.MouseButton = detected.MouseButton;
-                    binding.GamepadButton = detected.GamepadButton;
-                    binding.AxisIndex = detected.AxisIndex;
-                    binding.RequiredDeviceIndex = detected.RequiredDeviceIndex;
-                    _listeningForBinding = false;
-                });
-            }).Show();
+            if (shown.Count == 0)
+                EditorGUI.EmptyState(paper, $"{id}_empty",
+                    map.Actions.Count == 0 ? "No actions yet. Add one to get started." : $"No action or key matches \"{_filter}\"", font);
+
+            foreach (InputAction action in shown)
+                DrawAction(paper, $"{id}_a{map.IndexOf(action.Name)}", map, action, usage);
         }
+
+        DrawPendingFooter(paper, $"{id}_pending", entry, asset);
     }
 
-    // ================================================================
-    //  Binding Control Fields (type-specific)
-    // ================================================================
-
-    private void DrawBindingControl(Paper paper, string id, InputBinding binding)
+    public override void OnPanelOverlay(Paper paper, string id, float width, float height)
     {
-        switch (binding.BindingType)
+        if (_popup.IsOpen) _popup.Draw(paper, id, width, height);
+    }
+
+    /// <summary>A bar under the list that says the map has unsaved edits, with Revert and Apply.</summary>
+    private void DrawPendingFooter(Paper paper, string id, AssetEntry entry, EngineObject? asset)
+    {
+        if (Origami.IsReadOnly || !HasPendingChanges(entry, asset)) return;
+        OrigamiMetrics m = Origami.Current.Metrics;
+
+        using (paper.Row(id).Height(48).Padding(14, 10, 0, 0).Gap(m.SpacingLarge)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
+            .Rounded(m.ContainerRounding).BackgroundColor(EditorTheme.Neutral400)
+            .BorderColor(EditorTheme.WithAlpha(EditorTheme.Amber400, 90)).BorderWidth(1).Enter())
         {
-            case InputBindingType.Key:
-                EditorGUI.Row(paper, $"{id}_key", "Key", () =>
-                    Origami.EnumDropdown(paper, $"{id}_key_v", binding.Key ?? KeyCode.Unknown,
-                        v => { binding.Key = v; }).Searchable().Show());
-                break;
-
-            case InputBindingType.MouseButton:
-                EditorGUI.Row(paper, $"{id}_mb", "Button", () =>
-                    Origami.EnumDropdown(paper, $"{id}_mb_v", binding.MouseButton ?? MouseButton.Left,
-                        v => { binding.MouseButton = v; }).Show());
-                break;
-
-            case InputBindingType.MouseAxis:
-                EditorGUI.Row(paper, $"{id}_ma", "Axis", () =>
-                    Origami.Dropdown(paper, $"{id}_ma_v", binding.AxisIndex ?? 0,
-                        v => { binding.AxisIndex = v; },
-                        new[] { "X", "Y", "Wheel" }).Show());
-                break;
-
-            case InputBindingType.GamepadButton:
-                EditorGUI.Row(paper, $"{id}_gb", "Button", () =>
-                    Origami.EnumDropdown(paper, $"{id}_gb_v", binding.GamepadButton ?? GamepadButton.A,
-                        v => { binding.GamepadButton = v; }).Show());
-                DrawDeviceField(paper, $"{id}_gbd", binding);
-                break;
-
-            case InputBindingType.GamepadAxis:
-                EditorGUI.Row(paper, $"{id}_ga", "Stick", () =>
-                    Origami.Dropdown(paper, $"{id}_ga_v", binding.AxisIndex ?? 0,
-                        v => { binding.AxisIndex = v; },
-                        new[] { "Left Stick", "Right Stick" }).Show());
-                DrawDeviceField(paper, $"{id}_gad", binding);
-                break;
-
-            case InputBindingType.GamepadTrigger:
-                EditorGUI.Row(paper, $"{id}_gt", "Trigger", () =>
-                    Origami.Dropdown(paper, $"{id}_gt_v", binding.AxisIndex ?? 0,
-                        v => { binding.AxisIndex = v; },
-                        new[] { "Left", "Right" }).Show());
-                DrawDeviceField(paper, $"{id}_gtd", binding);
-                break;
-
-            case InputBindingType.XRButton:
-                DrawXRHandField(paper, $"{id}_xbh", binding);
-                EditorGUI.Row(paper, $"{id}_xb", "Button", () =>
-                    Origami.EnumDropdown(paper, $"{id}_xb_v", binding.XRButton ?? XRButton.Primary,
-                        v => { binding.XRButton = v; }).Show());
-                break;
-
-            case InputBindingType.XRAxis:
-                DrawXRHandField(paper, $"{id}_xah", binding);
-                EditorGUI.Row(paper, $"{id}_xa", "Axis", () =>
-                    Origami.EnumDropdown(paper, $"{id}_xa_v", binding.XRAxis ?? XRAxis.Trigger,
-                        v => { binding.XRAxis = v; }).Show());
-                break;
-
-            case InputBindingType.XRStick:
-                DrawXRHandField(paper, $"{id}_xsh", binding);
-                break;
-
-            case InputBindingType.XRTouch:
-                DrawXRHandField(paper, $"{id}_xth", binding);
-                EditorGUI.Row(paper, $"{id}_xt", "Touch", () =>
-                    Origami.EnumDropdown(paper, $"{id}_xt_v", binding.XRTouch ?? XRTouch.Trigger,
-                        v => { binding.XRTouch = v; }).Show());
-                break;
+            paper.Box($"{id}_dot").Width(8).Height(8).Rounded(4).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .BackgroundColor(EditorTheme.Amber400).IsNotInteractable();
+            paper.Box($"{id}_t").Height(48)
+                .Text("Unsaved changes, already live in play mode", EditorTheme.FontMedium ?? EditorTheme.DefaultFont!)
+                .TextColor(EditorTheme.Amber400).FontSize(InputBindingDisplay.LabelSize + 1)
+                .Alignment(TextAlignment.MiddleLeft).TextTruncate().IsNotInteractable();
+            InputBindingDisplay.SmallButton(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"), () => RevertPendingChanges(entry, asset));
+            InputBindingDisplay.SmallButton(paper, $"{id}_apply", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}",
+                () => ApplyPendingChanges(entry, asset), primary: true);
         }
     }
 
-    private void DrawXRHandField(Paper paper, string id, InputBinding binding)
+    private bool Matches(InputAction action)
     {
-        EditorGUI.Row(paper, id, "Hand", () =>
-            Origami.EnumDropdown(paper, $"{id}_v", binding.XRHand ?? XRHand.Right,
-                v => { binding.XRHand = v; }).Show());
+        if (string.IsNullOrWhiteSpace(_filter)) return true;
+        return action.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+            || Controls(action).Any(c => c.Label.Contains(_filter, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void DrawDeviceField(Paper paper, string id, InputBinding binding)
+    private void AddAction(InputActionMap map)
     {
-        EditorGUI.Row(paper, $"{id}_dev", "Device Index", () =>
-            Origami.NumericField<int>(paper, $"{id}_dev_v", binding.RequiredDeviceIndex ?? 0,
-                v => { binding.RequiredDeviceIndex = Math.Max(0, v); }).Min(0).Show());
-    }
-
-    private void DrawInteractionParams(Paper paper, string id, InputBinding binding)
-    {
-        switch (binding.Interaction)
-        {
-            case InputInteractionType.Hold:
-                EditorGUI.Row(paper, $"{id}_hd", "Hold Duration (s)", () =>
-                    Origami.NumericField<float>(paper, $"{id}_hd_v", binding.HoldDuration,
-                        v => { binding.HoldDuration = MathF.Max(0.01f, v); }).Show());
-                break;
-
-            case InputInteractionType.Tap:
-                EditorGUI.Row(paper, $"{id}_td", "Max Tap Duration (s)", () =>
-                    Origami.NumericField<float>(paper, $"{id}_td_v", binding.MaxTapDuration,
-                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); }).Show());
-                break;
-
-            case InputInteractionType.MultiTap:
-                EditorGUI.Row(paper, $"{id}_tc", "Tap Count", () =>
-                    Origami.NumericField<int>(paper, $"{id}_tc_v", binding.TapCount,
-                        v => { binding.TapCount = Math.Max(2, v); }).Min(2).Show());
-                EditorGUI.Row(paper, $"{id}_tw", "Tap Window (s)", () =>
-                    Origami.NumericField<float>(paper, $"{id}_tw_v", binding.TapWindow,
-                        v => { binding.TapWindow = MathF.Max(0.01f, v); }).Show());
-                EditorGUI.Row(paper, $"{id}_mtd", "Max Tap Duration (s)", () =>
-                    Origami.NumericField<float>(paper, $"{id}_mtd_v", binding.MaxTapDuration,
-                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); }).Show());
-                break;
-        }
+        string name = FindUniqueName(map, "NewAction");
+        map.AddAction(name, InputActionType.Button);
+        _openAction = name;
+        _filter = "";
     }
 
     // ================================================================
-    //  Processor List Editor
+    //  Action row
     // ================================================================
 
-    private static readonly string[] _processorTypes = ["Normalize", "Invert", "Scale", "Clamp", "Deadzone", "Exponential"];
-
-    private void DrawProcessorList(Paper paper, string id, List<IInputProcessor> processors)
+    private void DrawAction(Paper paper, string id, InputActionMap map, InputAction action, Dictionary<string, List<string>> usage)
     {
+        OrigamiMetrics m = Origami.Current.Metrics;
         Scribe.FontFile font = EditorTheme.DefaultFont!;
-        float fs = EditorTheme.FontSize;
+        bool open = _openAction == action.Name;
+        ActionKind kind = InputBindingDisplay.GetKind(action);
+        List<string> shared = SharedWith(action, usage);
+        Color kindColor = InputBindingDisplay.KindColor(kind);
 
-        paper.Box($"{id}_lbl").Height(18)
-            .Text("Processors", font).TextColor(EditorTheme.Ink400)
-            .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+        const float rowHeight = 42f;
+        using IDisposable group = paper.Column($"{id}_group").Height(UnitValue.Auto)
+            .Rounded(m.ContainerRounding)
+            .BackgroundColor(open ? EditorTheme.Neutral400 : Color.Transparent)
+            .BorderColor(open ? EditorTheme.BorderStrong : Color.Transparent).BorderWidth(1)
+            .Margin(0, 0, 0, open ? m.SpacingLarge : 0)
+            .Enter();
 
-        for (int i = 0; i < processors.Count; i++)
-        {
-            int idx = i;
-            IInputProcessor proc = processors[i];
-
-            using (paper.Column($"{id}_p{i}")
-                .Height(UnitValue.Auto)
-                .BackgroundColor(EditorTheme.Neutral300).Rounded(Origami.Current.Metrics.Rounding)
-                .Margin(0, 0, 0, 2)
-                .Padding(6, 6, 3, 3)
-                .Enter())
+        using (paper.Row($"{id}_row").Height(rowHeight).Padding(12, 12, 0, 0).Gap(m.SpacingLarge + 2).Clip()
+            .Rounded(m.ContainerRounding)
+            .BackgroundColor(Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.WithAlpha(EditorTheme.Ink300, open ? 10 : 18)).End()
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(action.Name, (n, _) =>
             {
-                // Header with name and remove button
-                using (paper.Row($"{id}_ph{i}").Height(EditorTheme.RowHeight).Gap(4).Enter())
+                _openAction = _openAction == n ? null : n;
+                _confirmDelete = null;
+                _popup.Close();
+            })
+            .Enter())
+        {
+            paper.Box($"{id}_kind").Width(26).Height(26).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Rounded(m.SmallRounding + 1).BackgroundColor(EditorTheme.WithAlpha(kindColor, 36))
+                .Text(InputBindingDisplay.KindIcon(kind), font).TextColor(kindColor)
+                .FontSize(InputBindingDisplay.LabelSize).Alignment(TextAlignment.MiddleCenter).IsNotInteractable();
+
+            paper.Box($"{id}_name").Width(UnitValue.Auto).Height(rowHeight)
+                .Text(action.Name, EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
+
+            if (action.Bindings.Count + action.CompositeBindings.Count == 0)
+                InputBindingDisplay.Tag(paper, $"{id}_flag", "No bindings", EditorTheme.Amber400).IsNotInteractable();
+            else if (shared.Count > 0)
+                InputBindingDisplay.Tag(paper, $"{id}_flag", "Shared key", EditorTheme.Red400).Tooltip(string.Join("\n", shared));
+
+            paper.Box($"{id}_sp").Height(1).IsNotInteractable();
+
+            if (!open)
+            {
+                List<(string Label, InputDevice Device)> controls = Summaries(action);
+                for (int i = 0; i < Math.Min(3, controls.Count); i++)
+                    InputBindingDisplay.Keycap(paper, $"{id}_chip{i}", controls[i].Label, InputBindingDisplay.DeviceColor(controls[i].Device));
+                if (controls.Count > 3)
+                    InputBindingDisplay.Tag(paper, $"{id}_more", $"+{controls.Count - 3}", EditorTheme.Ink400).IsNotInteractable();
+            }
+
+            paper.Box($"{id}_chev").Width(20).Height(rowHeight)
+                .Text(open ? EditorIcons.ChevronDown : EditorIcons.ChevronRight, font).TextColor(EditorTheme.Ink400)
+                .FontSize(InputBindingDisplay.LabelSize).Alignment(TextAlignment.MiddleCenter).IsNotInteractable();
+        }
+
+        if (open)
+        {
+            EditorGUI.Divider(paper, $"{id}_div");
+            DrawActionBody(paper, $"{id}_body", map, action, shared);
+        }
+    }
+
+    // ================================================================
+    //  Action body
+    // ================================================================
+
+    private void DrawActionBody(Paper paper, string id, InputActionMap map, InputAction action, List<string> shared)
+    {
+        OrigamiMetrics m = Origami.Current.Metrics;
+        ActionKind kind = InputBindingDisplay.GetKind(action);
+
+        using (paper.Column(id).Height(UnitValue.Auto).Gap(m.SpacingLarge)
+            .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge).Enter())
+        {
+            InputBindingDisplay.FieldHeading(paper, $"{id}_name_h", "Name");
+            Origami.TextField(paper, $"{id}_name_v", action.Name, v =>
+            {
+                string oldName = action.Name;
+                if (map.RenameAction(oldName, v.Trim()) && _openAction == oldName)
+                    _openAction = action.Name;
+            }).Height(34).Show();
+
+            InputBindingDisplay.FieldHeading(paper, $"{id}_kind_h", "Kind", "what your code reads");
+            InputBindingDisplay.Segmented(paper, $"{id}_kind",
+                [
+                    new("Button", "on or off", InputBindingDisplay.KindDescription(ActionKind.Button)),
+                    new("Axis", "float", InputBindingDisplay.KindDescription(ActionKind.Axis)),
+                    new("Vector2", "Float2", InputBindingDisplay.KindDescription(ActionKind.Vector2)),
+                    new("Pass Through", "raw", InputBindingDisplay.KindDescription(ActionKind.PassThrough)),
+                ],
+                Array.IndexOf(InputBindingDisplay.Kinds, kind), i => InputBindingDisplay.SetKind(action, InputBindingDisplay.Kinds[i]));
+
+            if (kind == ActionKind.PassThrough)
+                InputBindingDisplay.Segmented(paper, $"{id}_out", [new("float"), new("Float2")],
+                    InputBindingDisplay.OutputsVector(action) ? 1 : 0,
+                    i => action.ExpectedValueType = i == 1 ? typeof(Prowl.Vector.Float2) : typeof(float));
+
+            InputBindingDisplay.Hint(paper, $"{id}_kind_hint", InputBindingDisplay.KindDescription(kind));
+
+            int count = action.Bindings.Count + action.CompositeBindings.Count;
+            InputBindingDisplay.FieldHeading(paper, $"{id}_b_h", "Bindings", count == 1 ? "1 binding" : $"{count} bindings");
+
+            using (paper.Column($"{id}_blist").Height(UnitValue.Auto).Gap(6).Enter())
+            {
+                for (int i = 0; i < action.CompositeBindings.Count; i++)
+                    DrawCompositeRow(paper, $"{id}_c{i}", map, action, action.CompositeBindings[i]);
+                for (int i = 0; i < action.Bindings.Count; i++)
+                    DrawBindingRow(paper, $"{id}_b{i}", map, action, action.Bindings[i]);
+
+                bool adding = _popup.IsOpenFor(action, null);
+                paper.Box($"{id}_addb").Height(38).Rounded(m.Rounding)
+                    .BackgroundColor(adding ? EditorTheme.WithAlpha(EditorTheme.Accent, 30) : Color.Transparent)
+                    .BorderColor(adding ? EditorTheme.Accent : EditorTheme.BorderStrong).BorderWidth(1)
+                    .Hovered.BorderColor(EditorTheme.AccentBright).BackgroundColor(EditorTheme.WithAlpha(EditorTheme.Ink300, 14)).End()
+                    .Text($"{EditorIcons.Plus}  Add binding", EditorTheme.FontMedium ?? EditorTheme.DefaultFont!).TextColor(EditorTheme.Ink400)
+                    .FontSize(InputBindingDisplay.LabelSize + 1).Alignment(TextAlignment.MiddleCenter)
+                    .Cursor(PaperCursor.Pointer)
+                    .OnClick(0, (_, _) => _popup.OpenAdd(map, action));
+            }
+
+            if (shared.Count > 0)
+                InputBindingDisplay.Hint(paper, $"{id}_shared", string.Join(". ", shared) + ".", EditorTheme.Red400);
+
+            DrawCodeLine(paper, $"{id}_code", action);
+            DrawActionFooter(paper, $"{id}_foot", map, action);
+        }
+    }
+
+    private void DrawCodeLine(Paper paper, string id, InputAction action)
+    {
+        OrigamiMetrics m = Origami.Current.Metrics;
+        string code = InputBindingDisplay.CodeLine(action);
+
+        using (paper.Row(id).Height(36).Padding(12, 5, 0, 0).Gap(6).Clip()
+            .Rounded(m.Rounding).BackgroundColor(EditorTheme.Neutral200).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
+        {
+            paper.Box($"{id}_t").Height(36)
+                .Text(code, EditorTheme.FontMono ?? EditorTheme.DefaultFont!).TextColor(EditorTheme.Ink400)
+                .FontSize(InputBindingDisplay.LabelSize).Alignment(TextAlignment.MiddleLeft).TextTruncate().IsNotInteractable();
+            InputBindingDisplay.IconBox(paper, $"{id}_copy", EditorIcons.Copy, () => Input.Clipboard = code, tooltip: "Copy");
+        }
+    }
+
+    private void DrawActionFooter(Paper paper, string id, InputActionMap map, InputAction action)
+    {
+        int index = map.IndexOf(action.Name);
+        using (paper.Row(id).Height(30).Gap(6).Enter())
+        {
+            InputBindingDisplay.SmallButton(paper, $"{id}_up", $"{EditorIcons.ChevronUp}  Up", () => map.MoveAction(index, index - 1), disabled: index <= 0);
+            InputBindingDisplay.SmallButton(paper, $"{id}_down", $"{EditorIcons.ChevronDown}  Down", () => map.MoveAction(index, index + 1),
+                disabled: index >= map.Actions.Count - 1);
+            InputBindingDisplay.SmallButton(paper, $"{id}_dup", $"{EditorIcons.Clone}  Duplicate", () => DuplicateAction(map, action));
+
+            paper.Box($"{id}_sp").Height(1).IsNotInteractable();
+
+            if (_confirmDelete == action.Name)
+            {
+                InputBindingDisplay.Caption(paper, $"{id}_q", $"Delete {action.Name}?");
+                InputBindingDisplay.SmallButton(paper, $"{id}_yes", "Delete", () =>
                 {
-                    string name = proc switch
-                    {
-                        NormalizeProcessor => "Normalize",
-                        InvertProcessor => "Invert",
-                        ScaleProcessor => "Scale",
-                        ClampProcessor => "Clamp",
-                        DeadzoneProcessor => "Deadzone",
-                        ExponentialProcessor => "Exponential",
-                        _ => proc.GetType().Name
-                    };
-
-                    paper.Box($"{id}_pn{i}")
-                        .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                        .Text(name, font).TextColor(EditorTheme.Ink500)
-                        .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
-
-                    paper.Box($"{id}_px{i}")
-                        .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
-                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                        .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(idx, (ci, _) => { processors.RemoveAt(ci); });
-                }
-
-                // Processor-specific parameters
-                switch (proc)
-                {
-                    case ScaleProcessor sp:
-                        EditorGUI.Row(paper, $"{id}_ps{i}", "Scale", () =>
-                            Origami.NumericField<float>(paper, $"{id}_ps{i}_v", sp.Scale,
-                                v => { sp.Scale = v; }).Show());
-                        break;
-
-                    case ClampProcessor cp:
-                        EditorGUI.Row(paper, $"{id}_pmn{i}", "Min", () =>
-                            Origami.NumericField<float>(paper, $"{id}_pmn{i}_v", cp.Min,
-                                v => { cp.Min = v; }).Show());
-                        EditorGUI.Row(paper, $"{id}_pmx{i}", "Max", () =>
-                            Origami.NumericField<float>(paper, $"{id}_pmx{i}_v", cp.Max,
-                                v => { cp.Max = v; }).Show());
-                        break;
-
-                    case DeadzoneProcessor dp:
-                        EditorGUI.Row(paper, $"{id}_pd{i}", "Threshold", () =>
-                            Origami.NumericField<float>(paper, $"{id}_pd{i}_v", dp.Threshold,
-                                v => { dp.Threshold = MathF.Max(0f, v); }).Min(0f).Show());
-                        break;
-
-                    case ExponentialProcessor ep:
-                        EditorGUI.Row(paper, $"{id}_pe{i}", "Exponent", () =>
-                            Origami.NumericField<float>(paper, $"{id}_pe{i}_v", ep.Exponent,
-                                v => { ep.Exponent = MathF.Max(0.1f, v); }).Min(0.1f).Show());
-                        break;
-                }
+                    map.RemoveAction(action.Name);
+                    _openAction = null;
+                    _confirmDelete = null;
+                }, EditorTheme.Red400);
+                InputBindingDisplay.SmallButton(paper, $"{id}_no", "Keep", () => _confirmDelete = null);
+            }
+            else
+            {
+                InputBindingDisplay.SmallButton(paper, $"{id}_del", $"{EditorIcons.Trash}  Delete", () => _confirmDelete = action.Name, EditorTheme.Red400);
             }
         }
+    }
 
-        // Add processor dropdown
-        EditorGUI.Row(paper, $"{id}_add", "Add Processor", () =>
-            Origami.Dropdown(paper, $"{id}_add_v", -1,
-                v =>
-                {
-                    IInputProcessor? newProc = v switch
-                    {
-                        0 => new NormalizeProcessor(),
-                        1 => new InvertProcessor(),
-                        2 => new ScaleProcessor(1f),
-                        3 => new ClampProcessor(0f, 1f),
-                        4 => new DeadzoneProcessor(0.2f),
-                        5 => new ExponentialProcessor(2f),
-                        _ => null
-                    };
-                    if (newProc != null) { processors.Add(newProc); }
-                }, _processorTypes).Placeholder("Select a processor...").Show());
+    // ================================================================
+    //  Binding rows
+    // ================================================================
+
+    private void DrawBindingRow(Paper paper, string id, InputActionMap map, InputAction action, InputBinding binding)
+    {
+        InputDevice device = InputBindingDisplay.GetDevice(binding);
+        bool open = _popup.IsOpenFor(action, binding);
+        using (BindingRow(paper, id, open, () => _popup.OpenEdit(map, action, binding)))
+        {
+            DeviceIcon(paper, $"{id}_dev", device);
+            InputBindingDisplay.Keycap(paper, $"{id}_key", InputBindingDisplay.ControlName(binding), InputBindingDisplay.DeviceColor(device));
+            paper.Box($"{id}_sp").Height(1).IsNotInteractable();
+
+            DrawInteractionTags(paper, id, binding, InputBindingDisplay.IsAnalog(binding));
+            if (device == InputDevice.Gamepad && binding.RequiredDeviceIndex.HasValue)
+                InputBindingDisplay.Tag(paper, $"{id}_pad", $"Gamepad {binding.RequiredDeviceIndex}", EditorTheme.Ink400).IsNotInteractable();
+            DrawProcessorTags(paper, id, binding.Processors);
+            DrawMismatch(paper, id, InputBindingDisplay.Mismatch(action, InputBindingDisplay.GivesVector(binding), false));
+            Chevron(paper, $"{id}_chev");
+        }
+    }
+
+    private void DrawCompositeRow(Paper paper, string id, InputActionMap map, InputAction action, InputCompositeBinding composite)
+    {
+        bool open = _popup.IsOpenFor(action, composite);
+        using (BindingRow(paper, id, open, () => _popup.OpenEdit(map, action, composite)))
+        {
+            DeviceIcon(paper, $"{id}_dev", InputBindingDisplay.GetDevice(composite));
+            InputBindingDisplay.CompositeSummary(paper, $"{id}_sum", composite);
+            paper.Box($"{id}_sp").Height(1).IsNotInteractable();
+
+            DrawInteractionTags(paper, id, composite, analog: true);
+            if (composite is Vector2CompositeBinding { Normalize: true })
+                InputBindingDisplay.Tag(paper, $"{id}_norm", "Normalized", EditorTheme.Ink400).IsNotInteractable();
+            DrawProcessorTags(paper, id, composite.Processors);
+            DrawMismatch(paper, id, InputBindingDisplay.Mismatch(action, InputBindingDisplay.GivesVector(composite), true));
+            Chevron(paper, $"{id}_chev");
+        }
+    }
+
+    private static IDisposable BindingRow(Paper paper, string id, bool open, Action onClick)
+    {
+        OrigamiMetrics m = Origami.Current.Metrics;
+        return paper.Row(id).Height(UnitValue.Auto).MinHeight(42).Padding(12, 10, 8, 8).Gap(m.SpacingLarge + 2)
+            .Rounded(m.Rounding).BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(open ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(1)
+            .Hovered.BorderColor(open ? EditorTheme.Accent : EditorTheme.BorderStrong).End()
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(0, (_, _) => onClick())
+            .Enter();
+    }
+
+    private static void DrawInteractionTags(Paper paper, string id, IInputInteractionSettings settings, bool analog)
+    {
+        if (settings.Interaction != InputInteractionType.Default)
+            InputBindingDisplay.Tag(paper, $"{id}_it", InputBindingDisplay.InteractionSummary(settings), EditorTheme.AccentText).IsNotInteractable();
+        if (analog && MathF.Abs(settings.PressPoint - 0.5f) > 0.001f)
+            InputBindingDisplay.Tag(paper, $"{id}_pp", $"Press at {settings.PressPoint:0.##}", EditorTheme.Ink400).IsNotInteractable();
+    }
+
+    private static void DrawProcessorTags(Paper paper, string id, List<IInputProcessor> processors)
+    {
+        if (processors.Count > 0)
+            InputBindingDisplay.Tag(paper, $"{id}_proc", processors.Count == 1 ? "1 processor" : $"{processors.Count} processors", EditorTheme.Ink400)
+                .IsNotInteractable();
+    }
+
+    private static void DrawMismatch(Paper paper, string id, string? warning)
+    {
+        if (warning != null)
+            InputBindingDisplay.Tag(paper, $"{id}_warn", warning, EditorTheme.Amber400).IsNotInteractable();
+    }
+
+    private static void DeviceIcon(Paper paper, string id, InputDevice device)
+    {
+        paper.Box(id).Width(18).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .Text(InputBindingDisplay.DeviceIcon(device), EditorTheme.DefaultFont!).TextColor(InputBindingDisplay.DeviceColor(device))
+            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter).IsNotInteractable();
+    }
+
+    private static void Chevron(Paper paper, string id)
+    {
+        paper.Box(id).Width(18).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .Text(EditorIcons.ChevronRight, EditorTheme.DefaultFont!).TextColor(EditorTheme.Ink400)
+            .FontSize(InputBindingDisplay.LabelSize - 1).Alignment(TextAlignment.MiddleCenter).IsNotInteractable();
+    }
+
+    // ================================================================
+    //  Controls, summaries and shared keys
+    // ================================================================
+
+    /// <summary>Every control an action reads, with the interaction it is read through.</summary>
+    private static IEnumerable<(string Label, string Key)> Controls(InputAction action)
+    {
+        foreach (InputCompositeBinding composite in action.CompositeBindings)
+            foreach (InputBinding part in composite.Parts.Values)
+                yield return (InputBindingDisplay.ControlName(part), $"{ControlKey(part)}|{composite.Interaction}");
+        foreach (InputBinding binding in action.Bindings)
+            yield return (InputBindingDisplay.ControlName(binding), $"{ControlKey(binding)}|{binding.Interaction}");
+    }
+
+    private static string ControlKey(InputBinding b)
+        => $"{b.BindingType}:{b.Key}:{b.MouseButton}:{b.GamepadButton}:{b.AxisIndex}:{b.XRHand}:{b.XRButton}:{b.XRAxis}:{b.XRTouch}";
+
+    private static Dictionary<string, List<string>> BuildUsage(InputActionMap map)
+    {
+        var usage = new Dictionary<string, List<string>>();
+        foreach (InputAction action in map.Actions)
+            foreach ((string _, string key) in Controls(action).DistinctBy(c => c.Key))
+            {
+                if (!usage.TryGetValue(key, out List<string>? names))
+                    usage[key] = names = [];
+                names.Add(action.Name);
+            }
+        return usage;
+    }
+
+    /// <summary>Lines like "E is also bound to Interact", for controls another action reads through the same interaction.</summary>
+    private static List<string> SharedWith(InputAction action, Dictionary<string, List<string>> usage)
+    {
+        var lines = new List<string>();
+        foreach ((string label, string key) in Controls(action).DistinctBy(c => c.Key))
+        {
+            if (key.StartsWith($"{InputBindingType.AnyKey}:") || key.StartsWith($"{InputBindingType.AnyGamepadButton}:")) continue;
+            List<string> others = [.. usage[key].Where(n => n != action.Name)];
+            if (others.Count > 0)
+                lines.Add($"{label} is also bound to {string.Join(", ", others)}");
+        }
+        return lines;
+    }
+
+    private static List<(string Label, InputDevice Device)> Summaries(InputAction action)
+    {
+        var list = new List<(string, InputDevice)>();
+        foreach (InputCompositeBinding composite in action.CompositeBindings)
+            list.Add((string.Join(" ", composite.Parts.Values.Select(InputBindingDisplay.ControlName)), InputBindingDisplay.GetDevice(composite)));
+        foreach (InputBinding binding in action.Bindings)
+            list.Add((InputBindingDisplay.ControlName(binding), InputBindingDisplay.GetDevice(binding)));
+        return list;
     }
 
     // ================================================================
     //  Helpers
     // ================================================================
 
-    private static string GetBindingSummary(InputBinding binding)
+    /// <summary>Copies an action through the file form, so every binding and processor is a fresh object.</summary>
+    private void DuplicateAction(InputActionMap map, InputAction action)
     {
-        return binding.BindingType switch
-        {
-            InputBindingType.Key => $"{binding.Key}",
-            InputBindingType.MouseButton => $"Mouse {binding.MouseButton}",
-            InputBindingType.MouseAxis => binding.AxisIndex switch { 0 => "Mouse X", 1 => "Mouse Y", _ => "Mouse Wheel" },
-            InputBindingType.GamepadButton => $"Gamepad {binding.GamepadButton}",
-            InputBindingType.GamepadAxis => binding.AxisIndex == 0 ? "Left Stick" : "Right Stick",
-            InputBindingType.GamepadTrigger => binding.AxisIndex == 0 ? "Left Trigger" : "Right Trigger",
-            InputBindingType.XRButton => $"XR {binding.XRHand} {binding.XRButton}",
-            InputBindingType.XRAxis => $"XR {binding.XRHand} {binding.XRAxis}",
-            InputBindingType.XRStick => $"XR {binding.XRHand} Stick",
-            InputBindingType.XRTouch => $"XR {binding.XRHand} {binding.XRTouch} Touch",
-            _ => binding.BindingType.ToString()
-        };
-    }
+        var ctx = new SerializationContext();
+        var tag = EchoObject.NewCompound();
+        map.Serialize(ref tag, ctx);
 
-    private static string GetPartSummary(InputBinding binding)
-    {
-        return binding.BindingType switch
-        {
-            InputBindingType.Key => binding.Key?.ToString() ?? "?",
-            InputBindingType.GamepadButton => binding.GamepadButton?.ToString() ?? "?",
-            _ => GetBindingSummary(binding)
-        };
+        var scratch = new InputActionMap();
+        scratch.Deserialize(tag, ctx);
+        InputAction copy = scratch.GetAction(action.Name);
+        scratch.RemoveAction(action.Name);
+
+        copy.Name = FindUniqueName(map, action.Name + "Copy");
+        map.InsertAction(map.IndexOf(action.Name) + 1, copy);
+        _openAction = copy.Name;
     }
 
     private static bool SaveMap(InputActionMap map, AssetEntry entry)

@@ -22,7 +22,9 @@ public class InputAction
 
     /// <summary>The composite bindings for this action (read-only).</summary>
     public IReadOnlyList<InputCompositeBinding> CompositeBindings => _composites;
-    private Dictionary<InputBinding, InteractionState> _interactionStates = [];
+    private Dictionary<IInputInteractionSettings, InteractionState> _interactionStates = [];
+    private long _changeCounter;
+    private bool _performedThisFrame;
 
     /// <summary>
     /// The name of this action.
@@ -192,7 +194,11 @@ public class InputAction
     }
 
     /// <summary>Removes a composite binding by index.</summary>
-    public void RemoveCompositeAt(int index) => _composites.RemoveAt(index);
+    public void RemoveCompositeAt(int index)
+    {
+        _interactionStates.Remove(_composites[index]);
+        _composites.RemoveAt(index);
+    }
 
     /// <summary>
     /// Reads the current value of this action.
@@ -240,6 +246,12 @@ public class InputAction
     }
 
     /// <summary>
+    /// Whether the action performed this frame, for any action type. For a Value action with an interaction,
+    /// such as a double tap Dash, this is the frame to act on, and ReadValue gives the value it performed with.
+    /// </summary>
+    public bool WasPerformedThisFrame() => Enabled && _performedThisFrame;
+
+    /// <summary>
     /// Checks if the action is currently pressed (for button actions).
     /// </summary>
     public bool IsPressed()
@@ -260,24 +272,21 @@ public class InputAction
             return;
 
         _previousValue = _currentValue;
+        _performedThisFrame = false;
 
         // Read the current value from bindings with interaction logic
         object newValue = ReadValueFromBindings(inputHandler, currentTime);
 
         bool valueChanged = !newValue.Equals(_currentValue);
+        bool actuated = IsValueActuated(newValue);
         _currentValue = newValue;
 
-        // Determine if the action should trigger based on its type
-        bool shouldTrigger = ActionType switch
-        {
-            InputActionType.Value => valueChanged,
-            InputActionType.Button => IsValueActuated(newValue),
-            InputActionType.PassThrough => valueChanged,
-            _ => false
-        };
+        // A button performs every frame it is held. Values perform when they change and cancel when they
+        // go back to rest, so holding a stick still is not a cancel and a double tap performs once.
+        bool perform = ActionType == InputActionType.Button ? actuated : valueChanged && actuated;
+        bool cancel = ActionType == InputActionType.Button ? !actuated : valueChanged && !actuated;
 
-        // Update phase and invoke callbacks
-        if (shouldTrigger)
+        if (perform)
         {
             if (_phase == InputActionPhase.Waiting || _phase == InputActionPhase.Canceled)
             {
@@ -289,10 +298,11 @@ public class InputAction
 
             // Action is performing
             _phase = InputActionPhase.Performed;
+            _performedThisFrame = true;
             float duration = currentTime - _startTime;
             InvokeCallback(Performed, InputActionPhase.Performed, currentTime, duration);
         }
-        else if (_phase == InputActionPhase.Performed || _phase == InputActionPhase.Started)
+        else if (cancel && (_phase == InputActionPhase.Performed || _phase == InputActionPhase.Started))
         {
             // Action was canceled
             _phase = InputActionPhase.Canceled;
@@ -302,33 +312,22 @@ public class InputAction
         }
     }
 
+    /// <summary>
+    /// Runs every binding and composite through its interaction, so each keeps its own timing, then picks one.
+    /// Button and Value actions take the one pushed furthest. PassThrough takes the one that moved last.
+    /// </summary>
     private object ReadValueFromBindings(IInputHandler inputHandler, float currentTime)
     {
-        // Check composites first - return the first actuated composite
-        foreach (InputCompositeBinding composite in _composites)
-        {
-            object compositeValue = composite.ReadValue(inputHandler);
-            if (IsValueActuated(compositeValue))
-            {
-                // Apply processors from the composite
-                foreach (IInputProcessor processor in composite.Processors)
-                {
-                    if (compositeValue is float floatValue)
-                        compositeValue = processor.Process(floatValue);
-                    else if (compositeValue is Float2 vectorValue)
-                        compositeValue = processor.Process(vectorValue);
-                }
-                return compositeValue;
-            }
-        }
+        object? best = null;
+        float bestMagnitude = 0f;
+        long bestChange = -1;
 
-        // Then check regular bindings with interaction logic
+        // ReadValue already ran the composite's processors.
+        foreach (InputCompositeBinding composite in _composites)
+            Consider(composite, composite.ReadValue(inputHandler));
+
         foreach (InputBinding binding in Bindings)
         {
-            // Ensure interaction state exists for this binding
-            if (!_interactionStates.ContainsKey(binding))
-                _interactionStates[binding] = new InteractionState();
-
             object rawValue = ReadBinding(binding, inputHandler);
 
             // Apply processors from THIS binding only
@@ -340,22 +339,73 @@ public class InputAction
                     rawValue = processor.Process(vectorValue);
             }
 
-            bool isActuated = IsValueActuated(rawValue);
-
-            // Evaluate interaction and get the result
-            if (EvaluateInteraction(binding, rawValue, isActuated, currentTime, out object interactionValue))
-            {
-                return interactionValue;
-            }
+            Consider(binding, rawValue);
         }
 
-        return GetDefaultValue();
+        return best ?? GetDefaultValue();
+
+        void Consider(IInputInteractionSettings source, object rawValue)
+        {
+            InteractionState state = StateFor(source);
+            if (!rawValue.Equals(state.LastRaw))
+            {
+                state.LastRaw = rawValue;
+                state.ChangeOrder = ++_changeCounter;
+            }
+
+            if (!EvaluateInteraction(source, rawValue, IsActuated(source, rawValue), currentTime, out object value))
+                return;
+
+            if (ActionType == InputActionType.PassThrough)
+            {
+                if (state.ChangeOrder <= bestChange) return;
+                bestChange = state.ChangeOrder;
+                best = value;
+                return;
+            }
+
+            float magnitude = Magnitude(value);
+            if (best != null && magnitude <= bestMagnitude) return;
+            bestMagnitude = magnitude;
+            best = value;
+        }
     }
 
-    private bool EvaluateInteraction(InputBinding binding, object rawValue, bool isActuated, float currentTime, out object value)
+    private static float Magnitude(object value) => value switch
     {
-        InteractionState state = _interactionStates[binding];
+        float f => Maths.Abs(f),
+        Float2 v => Maths.Sqrt(v.X * v.X + v.Y * v.Y),
+        _ => 0f
+    };
+
+    private InteractionState StateFor(IInputInteractionSettings source)
+    {
+        if (!_interactionStates.TryGetValue(source, out InteractionState? state))
+            _interactionStates[source] = state = new InteractionState();
+        return state;
+    }
+
+    /// <summary>
+    /// A plain Value or PassThrough binding passes any movement through. Button actions and interactions
+    /// wait for the press point.
+    /// </summary>
+    private bool IsActuated(IInputInteractionSettings settings, object value)
+    {
+        if (ActionType != InputActionType.Button && settings.Interaction == InputInteractionType.Default)
+            return IsValueActuated(value);
+
+        return Magnitude(value) >= settings.PressPoint;
+    }
+
+    /// <summary>Runs one binding or composite through its interaction. A performed value is the value it was pressed with.</summary>
+    private bool EvaluateInteraction(IInputInteractionSettings binding, object rawValue, bool isActuated, float currentTime, out object value)
+    {
+        InteractionState state = StateFor(binding);
+
         value = GetDefaultValue();
+        object pressedValue = state.PressedValue ?? rawValue;
+        if (isActuated)
+            state.PressedValue = rawValue;
 
         switch (binding.Interaction)
         {
@@ -372,7 +422,7 @@ public class InputAction
                 // Only trigger on initial press (down)
                 if (isActuated && !state.WasActuated)
                 {
-                    value = GetActuatedValue();
+                    value = rawValue;
                     state.WasActuated = true;
                     return true;
                 }
@@ -386,7 +436,7 @@ public class InputAction
                 // Only trigger on release (up)
                 if (!isActuated && state.WasActuated)
                 {
-                    value = GetActuatedValue();
+                    value = pressedValue;
                     state.WasActuated = false;
                     return true;
                 }
@@ -413,7 +463,7 @@ public class InputAction
                         float heldDuration = currentTime - state.PressStartTime;
                         if (heldDuration >= binding.HoldDuration)
                         {
-                            value = GetActuatedValue();
+                            value = rawValue;
                             state.HoldTriggered = true;
                             return true;
                         }
@@ -452,7 +502,7 @@ public class InputAction
                     state.WasActuated = false;
                     if (!state.TapCompleted && currentTime - state.PressStartTime <= binding.MaxTapDuration)
                     {
-                        value = GetActuatedValue();
+                        value = pressedValue;
                         return true;
                     }
                 }
@@ -481,7 +531,7 @@ public class InputAction
                     // Check if we reached the required tap count
                     if (state.CurrentTapCount >= binding.TapCount)
                     {
-                        value = GetActuatedValue();
+                        value = rawValue;
                         state.CurrentTapCount = 0; // Reset
                         return true;
                     }
@@ -496,13 +546,13 @@ public class InputAction
                 // Trigger on both press and release
                 if (isActuated && !state.WasActuated)
                 {
-                    value = GetActuatedValue();
+                    value = rawValue;
                     state.WasActuated = true;
                     return true;
                 }
                 else if (!isActuated && state.WasActuated)
                 {
-                    value = GetActuatedValue();
+                    value = pressedValue;
                     state.WasActuated = false;
                     return true;
                 }
@@ -516,11 +566,10 @@ public class InputAction
     {
         return binding.BindingType switch
         {
-            InputBindingType.Key => binding.Key.HasValue && inputHandler.GetKey(binding.Key.Value) ? 1.0f : 0.0f,
-            InputBindingType.MouseButton => binding.MouseButton.HasValue && inputHandler.GetMouseButton((int)binding.MouseButton.Value) ? 1.0f : 0.0f,
-            InputBindingType.GamepadButton => binding.GamepadButton.HasValue && inputHandler.GetGamepadButton(binding.RequiredDeviceIndex ?? 0, binding.GamepadButton.Value) ? 1.0f : 0.0f,
-            InputBindingType.GamepadAxis => inputHandler.GetGamepadAxis(binding.RequiredDeviceIndex ?? 0, binding.AxisIndex ?? 0),
-            InputBindingType.GamepadTrigger => inputHandler.GetGamepadTrigger(binding.RequiredDeviceIndex ?? 0, binding.AxisIndex ?? 0),
+            InputBindingType.Key or InputBindingType.AnyKey or InputBindingType.MouseButton
+                or InputBindingType.GamepadButton or InputBindingType.AnyGamepadButton => binding.IsPressed(inputHandler) ? 1.0f : 0.0f,
+            InputBindingType.GamepadAxis => binding.ReadGamepadAxis(inputHandler),
+            InputBindingType.GamepadTrigger => binding.ReadGamepadTrigger(inputHandler),
             InputBindingType.MouseAxis => binding.AxisIndex switch
             {
                 0 => inputHandler.MouseDelta.X,
@@ -529,7 +578,7 @@ public class InputAction
                 _ => 0.0f
             },
             InputBindingType.XRButton or InputBindingType.XRTouch => binding.IsPressed(inputHandler) ? 1.0f : 0.0f,
-            // A button reads a trigger or grip as pressed past halfway, the same point composites use.
+            // A button reads a trigger or grip as pressed past its press point, the same point composites use.
             InputBindingType.XRAxis => ActionType == InputActionType.Button ? (binding.IsPressed(inputHandler) ? 1.0f : 0.0f) : binding.ReadXRAxis(),
             InputBindingType.XRStick => XRInput.GetThumbstick(binding.XRHand ?? XRHand.Right),
             _ => GetDefaultValue()
@@ -550,13 +599,6 @@ public class InputAction
         if (ExpectedValueType == typeof(Float2))
             return Float2.Zero;
         return 0.0f;
-    }
-
-    private object GetActuatedValue()
-    {
-        if (ExpectedValueType == typeof(Float2))
-            return new Float2(1.0f, 1.0f);
-        return 1.0f;
     }
 
     private void InvokeCallback(Action<InputActionContext>? callback, InputActionPhase phase, float time, float duration)

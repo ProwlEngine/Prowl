@@ -10,8 +10,15 @@ namespace Prowl.Runtime;
 /// <summary>
 /// Base class for composite bindings that combine multiple inputs into a single value.
 /// </summary>
-public abstract class InputCompositeBinding
+public abstract class InputCompositeBinding : IInputInteractionSettings
 {
+    public InputInteractionType Interaction { get; set; } = InputInteractionType.Default;
+    public float HoldDuration { get; set; } = 0.4f;
+    public int TapCount { get; set; } = 2;
+    public float TapWindow { get; set; } = 0.3f;
+    public float MaxTapDuration { get; set; } = 0.2f;
+    public float PressPoint { get; set; } = 0.5f;
+
     /// <summary>
     /// The component bindings that make up this composite.
     /// </summary>
@@ -133,7 +140,7 @@ public class DualAxisCompositeBinding : InputCompositeBinding
         return binding.BindingType switch
         {
             // For triggers, read the trigger value directly
-            InputBindingType.GamepadTrigger => inputHandler.GetGamepadTrigger(binding.RequiredDeviceIndex ?? 0, binding.AxisIndex ?? 0),
+            InputBindingType.GamepadTrigger => binding.ReadGamepadTrigger(inputHandler),
             InputBindingType.XRAxis => binding.ReadXRAxis(),
 
             // For mouse axis, read the specified axis
