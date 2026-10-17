@@ -33,7 +33,6 @@
     <Project Path="Echo/Benchmarks/Benchmarks.csproj" />
     <Project Path="Quill/ShaderGen/Quill.ShaderGen.csproj" />
     <Project Path="Graphite/Tools/GraphiteBench/GraphiteBench.csproj" />
-    <Project Path="Graphite/Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
   </Folder>
   <Folder Name="/Samples/" />
   <Folder Name="/Samples/Vector/">
