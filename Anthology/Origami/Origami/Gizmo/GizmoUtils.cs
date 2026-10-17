@@ -123,18 +123,6 @@ public static class GizmoUtils
         return norm;
     }
 
-    /// <summary>
-    /// Returns +1 or -1 to flip an axis so it always faces the camera.
-    /// Arrows and plane handles use this to stay on the visible side of the gizmo.
-    /// </summary>
-    public static float AxisSign(TransformGizmo gizmo, GizmoDirection direction)
-    {
-        if (direction == GizmoDirection.View) return 1f;
-        var worldAxis = GizmoNormal(gizmo, direction);
-        var toCamera = gizmo.ViewPosition - gizmo.Translation;
-        return Float3.Dot(toCamera, worldAxis) >= 0 ? 1f : -1f;
-    }
-
     public static Float3 PlaneGlobalOrigin(TransformGizmo gizmo, GizmoDirection direction)
     {
         var origin = PlaneLocalOrigin(gizmo, direction);
@@ -146,20 +134,7 @@ public static class GizmoUtils
     public static Float3 PlaneLocalOrigin(TransformGizmo gizmo, GizmoDirection direction)
     {
         var offset = gizmo.ScaleFactor * gizmo.GizmoSize * 0.5f;
-        var bitangent = PlaneBitangent(direction);
-        var tangent = PlaneTangent(direction);
-
-        // Flip each axis independently so the plane handle stays on the camera-facing side
-        var bDir = VectorToDirection(bitangent);
-        var tDir = VectorToDirection(tangent);
-        return (bitangent * AxisSign(gizmo, bDir) + tangent * AxisSign(gizmo, tDir)) * offset;
-    }
-
-    private static GizmoDirection VectorToDirection(Float3 v)
-    {
-        if (MathF.Abs(v.X) > 0.5f) return GizmoDirection.X;
-        if (MathF.Abs(v.Y) > 0.5f) return GizmoDirection.Y;
-        return GizmoDirection.Z;
+        return (PlaneBitangent(direction) + PlaneTangent(direction)) * offset;
     }
 
     public static float InnerCircleRadius(TransformGizmo gizmo)
@@ -171,7 +146,7 @@ public static class GizmoUtils
     public static PickResult PickArrow(TransformGizmo gizmo, Ray ray, GizmoDirection direction, TransformGizmoMode mode)
     {
         const float rayLength = 1e+14f;
-        var normal = GizmoNormal(gizmo, direction) * AxisSign(gizmo, direction);
+        var normal = GizmoNormal(gizmo, direction);
         var (start, end, length) = ArrowParams(gizmo, normal, mode);
 
         start += gizmo.Translation;
@@ -413,7 +388,7 @@ public static class GizmoUtils
         using (gizmo.Draw3D.Matrix(gizmo.ViewProjection * transform))
         {
             var color = GizmoColor(gizmo, focused, direction);
-            var normal = GizmoLocalNormal(gizmo, direction) * AxisSign(gizmo, direction);
+            var normal = GizmoLocalNormal(gizmo, direction);
             var (start, end, length) = ArrowParams(gizmo, normal, mode);
 
             end *= scale;
