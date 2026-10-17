@@ -165,6 +165,17 @@ public sealed class MaterialTests : IDisposable
     }
 
     [Fact]
+    public void DisposedChildren_LeaveTheirParent()
+    {
+        Material parent = _system.Create(_shader);
+        Material kept = parent.CreateChild();
+        for (int i = 0; i < 100; i++)
+            parent.CreateChild().Dispose();
+
+        Assert.Equal([kept], parent.Children);
+    }
+
+    [Fact]
     public void Cycles_Throw()
     {
         Material a = _system.Create(_shader);

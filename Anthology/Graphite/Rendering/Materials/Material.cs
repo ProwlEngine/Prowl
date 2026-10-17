@@ -47,6 +47,8 @@ public sealed class Material : IDisposable
 
     public bool IsDisposed { get; private set; }
 
+    internal IReadOnlyList<Material> Children => _children;
+
     internal Dirt Dirty { get; set; }
 
     /// <summary>The table and slot the record was last written to, owned by the material system.</summary>
@@ -106,7 +108,8 @@ public sealed class Material : IDisposable
 
             _parent?._children.Remove(this);
             _parent = value;
-            value?._children.Add(this);
+            if (!IsDisposed)
+                value?._children.Add(this);
             Changed(Dirt.Record | Dirt.Draw);
         }
     }
@@ -339,6 +342,7 @@ public sealed class Material : IDisposable
             return;
 
         IsDisposed = true;
+        _parent?._children.Remove(this);
         _system.Free(this);
     }
 
