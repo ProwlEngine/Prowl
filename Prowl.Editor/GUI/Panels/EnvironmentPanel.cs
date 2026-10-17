@@ -227,14 +227,7 @@ public class EnvironmentPanel : DockPanel
             .Text(text, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
     private static void SmallButton(Paper paper, string id, string label, Action onClick)
-    {
-        Scribe.FontFile? font = EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(26).Rounded(Origami.Current.Metrics.Rounding).Padding(10, 10, 0, 0)
-            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-            .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
-    }
+        => Origami.Button(paper, id, label, onClick).Small().Show();
 
     private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
@@ -326,12 +319,5 @@ public class EnvironmentPanel : DockPanel
     }
 
     private static void ChipButton(Paper paper, string id, string label, Action onClick)
-    {
-        Scribe.FontFile? font = EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(34).Rounded(Origami.Current.Metrics.Rounding).Padding(14, 14, 0, 0)
-            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-            .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
-    }
+        => Origami.Button(paper, id, label, onClick).Height(34).Show();
 }

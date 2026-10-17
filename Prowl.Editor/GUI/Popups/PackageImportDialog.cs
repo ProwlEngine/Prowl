@@ -339,13 +339,7 @@ public static class PackageImportDialog
 
             paper.Box("pkgimp_title_spacer").Width(UnitValue.Stretch());
 
-            paper.Box("pkgimp_close")
-                .Size(32)
-                .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Rounded(Origami.Current.Metrics.Rounding)
-                .OnClick((_) => Close());
+            Origami.IconButton(paper, "pkgimp_close", EditorIcons.Xmark_I, Close).Ghost().Show();
         }
     }
 

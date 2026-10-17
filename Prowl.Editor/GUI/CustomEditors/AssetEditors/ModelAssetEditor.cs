@@ -113,19 +113,14 @@ public class ModelAssetEditor : ImportSettingsEditor
         // Reimport stays available when there is nothing pending, for re-running the import as-is.
         if (!HasPendingChanges(entry, asset))
         {
-            paper.Box($"{id}_reimport").Width(UnitValue.Auto).Height(30)
-                .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(m.Rounding).Padding(16, 16, 0, 0)
-                .BackgroundColor(EditorTheme.Accent)
-                .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
-                .Text($"{EditorIcons.ArrowsRotate}  Reimport", EditorTheme.FontSemiBold ?? font)
-                .TextColor(System.Drawing.Color.White).FontSize(EditorTheme.FontSizeSmall)
-                .Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) =>
+            using (paper.Box($"{id}_reimport_w").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Enter())
+                Origami.Button(paper, $"{id}_reimport", $"{EditorIcons.ArrowsRotate}  Reimport", () =>
                 {
                     PreviewWidget.For(entry.Guid, showGrid: true).Invalidate();
                     s_views.Remove(entry.Guid);
                     EditorAssetBackend.Instance?.Reimport(entry.Guid);
-                });
+                }).Primary().Height(30).Show();
         }
     }
 
@@ -327,15 +322,14 @@ public class ModelAssetEditor : ImportSettingsEditor
         }
 
         Guid modelGuid = entry.Guid;
-        paper.Box($"{id}_openAvatar").Width(UnitValue.Auto).Height(30)
-            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, 0).Rounded(m.Rounding).Padding(16, 16, 0, 0)
-            .BackgroundColor(avatar.IsHuman ? EditorTheme.Neutral300 : EditorTheme.Accent)
-            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .Hovered.BackgroundColor(avatar.IsHuman ? EditorTheme.Neutral400 : EditorTheme.AccentBright).End()
-            .Text($"{EditorIcons.Bone}  Open Avatar Editor", font)
-            .TextColor(avatar.IsHuman ? EditorTheme.Ink400 : System.Drawing.Color.White)
-            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => AvatarEditorWindow.OpenFor(modelGuid));
+        using (paper.Box($"{id}_openAvatar_w").Width(UnitValue.Auto).Height(UnitValue.Auto)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, 0).Enter())
+        {
+            ButtonBuilder open = Origami.Button(paper, $"{id}_openAvatar", $"{EditorIcons.Bone}  Open Avatar Editor",
+                () => AvatarEditorWindow.OpenFor(modelGuid)).Height(30);
+            if (!avatar.IsHuman) open.Primary();
+            open.Show();
+        }
     }
 
 
@@ -515,13 +509,10 @@ public class ModelAssetEditor : ImportSettingsEditor
             .AlignItems(LayoutAlignment.Center).Enter())
         {
             bool playing = view.Playing;
-            paper.Box($"{id}_playBtn").Width(34).Height(26).Rounded(m.Rounding)
-                .BackgroundColor(playing ? EditorTheme.Accent : EditorTheme.Neutral300)
-                .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                .Text(playing ? EditorIcons.CirclePause : EditorIcons.CirclePlay, font)
-                .TextColor(playing ? System.Drawing.Color.White : EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => view.Playing = !view.Playing);
+            ButtonBuilder play = Origami.IconButton(paper, $"{id}_playBtn", playing ? EditorIcons.CirclePause_I : EditorIcons.CirclePlay_I,
+                () => view.Playing = !view.Playing).Small().Width(34).Height(26);
+            if (playing) play.Primary();
+            play.Show();
 
             using (paper.Box($"{id}_scrubWrap").Width(UnitValue.Stretch()).Height(26)
                 .AlignItems(LayoutAlignment.Center).Enter())

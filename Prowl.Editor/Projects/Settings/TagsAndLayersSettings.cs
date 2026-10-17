@@ -79,16 +79,12 @@ public class TagsAndLayersSettings : ProjectSettingsBase
 
                 if (!isBuiltin)
                 {
-                    paper.Box($"tl_tag_del_{i}")
-                        .Width(TagDelW).Height(22).Rounded(Origami.Current.Metrics.SmallRounding)
-                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                        .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(idx, (id, _) =>
+                    Origami.IconButton(paper, $"tl_tag_del_{i}", EditorIcons.Xmark_I, () =>
                         {
-                            Tags.RemoveAt(id);
+                            Tags.RemoveAt(idx);
                             Changed();
-                        });
+                        })
+                        .Small().Width(TagDelW).Height(22).Ghost().Show();
                 }
                 else
                 {

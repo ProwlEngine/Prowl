@@ -7,13 +7,12 @@ using System.Collections.Generic;
 using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Vector;
-
-using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
@@ -67,79 +66,53 @@ public class TerrainSceneEditor : SceneTool
     public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
         if (_terrain == null) return;
-        Scribe.FontFile font = Theming.EditorTheme.DefaultFont!;
-
         // Transform tool button (always available)
-        bool isTransform = _useTransformTool;
-        paper.Box($"{id}_xform")
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
-            .BackgroundColor(isTransform ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => _useTransformTool = true);
+        EditorGUI.ToolStripButton(paper, $"{id}_xform", EditorIcons.ArrowsUpDownLeftRight_I, "Move", _useTransformTool,
+            () => _useTransformTool = true);
 
-        paper.Box($"{id}_sep").Width(1).Height(18).BackgroundColor(EditorTheme.Ink200);
+        EditorGUI.Divider(paper, $"{id}_sep", 4f);
 
         // Terrain-specific tools based on active tab
         if (TerrainEditor.ActiveTab == TerrainTab.Height)
         {
-            DrawHeightToolButtons(paper, id, font);
+            DrawHeightToolButtons(paper, id);
         }
         else if (TerrainEditor.ActiveTab == TerrainTab.Paint)
         {
-            DrawSimpleToolBtn(paper, $"{id}_paint", EditorIcons.Paintbrush, font);
+            DrawSimpleToolBtn(paper, $"{id}_paint", EditorIcons.Paintbrush_I, "Paint");
         }
         else if (TerrainEditor.ActiveTab == TerrainTab.Holes)
         {
-            DrawSimpleToolBtn(paper, $"{id}_holes", EditorIcons.CircleXmark, font);
+            DrawSimpleToolBtn(paper, $"{id}_holes", EditorIcons.CircleXmark_I, "Holes");
         }
         else if (TerrainEditor.ActiveTab == TerrainTab.Details)
         {
-            DrawSimpleToolBtn(paper, $"{id}_grass", EditorIcons.Seedling, font);
+            DrawSimpleToolBtn(paper, $"{id}_grass", EditorIcons.Seedling_I, "Details");
         }
         else if (TerrainEditor.ActiveTab == TerrainTab.Trees)
         {
-            DrawSimpleToolBtn(paper, $"{id}_tplace", EditorIcons.Leaf, font);
+            DrawSimpleToolBtn(paper, $"{id}_tplace", EditorIcons.Leaf_I, "Trees");
         }
 
     }
 
-    private void DrawSimpleToolBtn(Paper paper, string id, string icon, Scribe.FontFile font)
+    private void DrawSimpleToolBtn(Paper paper, string id, IOrigamiIcon icon, string tooltip)
+        => EditorGUI.ToolStripButton(paper, id, icon, tooltip, !_useTransformTool, () => _useTransformTool = false);
+
+    private void DrawHeightToolButtons(Paper paper, string id)
     {
-        bool active = !_useTransformTool;
-        paper.Box(id)
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
-            .BackgroundColor(active ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Text(icon, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => _useTransformTool = false);
+        DrawHeightToolBtn(paper, $"{id}_raise", EditorIcons.ArrowUp_I, "Raise", HeightTool.Raise);
+        DrawHeightToolBtn(paper, $"{id}_lower", EditorIcons.ArrowDown_I, "Lower", HeightTool.Lower);
+        DrawHeightToolBtn(paper, $"{id}_flat", EditorIcons.GripLines_I, "Flatten", HeightTool.Flatten);
+        DrawHeightToolBtn(paper, $"{id}_smooth", EditorIcons.WaveSquare_I, "Smooth", HeightTool.Smooth);
     }
 
-    private void DrawHeightToolButtons(Paper paper, string id, Scribe.FontFile font)
-    {
-        DrawHeightToolBtn(paper, $"{id}_raise", EditorIcons.ArrowUp, HeightTool.Raise, font);
-        DrawHeightToolBtn(paper, $"{id}_lower", EditorIcons.ArrowDown, HeightTool.Lower, font);
-        DrawHeightToolBtn(paper, $"{id}_flat", EditorIcons.GripLines, HeightTool.Flatten, font);
-        DrawHeightToolBtn(paper, $"{id}_smooth", EditorIcons.WaveSquare, HeightTool.Smooth, font);
-    }
-
-    private void DrawHeightToolBtn(Paper paper, string id, string icon, HeightTool tool, Scribe.FontFile font)
-    {
-        bool active = !_useTransformTool && TerrainEditor.ActiveHeightTool == tool;
-        paper.Box(id)
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
-            .BackgroundColor(active ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Text(icon, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) =>
-            {
-                _useTransformTool = false;
-                TerrainEditor.ActiveHeightTool = tool;
-            });
-    }
+    private void DrawHeightToolBtn(Paper paper, string id, IOrigamiIcon icon, string tooltip, HeightTool tool)
+        => EditorGUI.ToolStripButton(paper, id, icon, tooltip, !_useTransformTool && TerrainEditor.ActiveHeightTool == tool, () =>
+        {
+            _useTransformTool = false;
+            TerrainEditor.ActiveHeightTool = tool;
+        });
 
     public override void OnSceneInput(SceneToolContext toolCtx)
     {

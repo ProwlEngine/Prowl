@@ -214,7 +214,7 @@ public class SceneViewPanel : DockPanel
 
     // Floating transform-tools panel, top-left of the viewport. The active scene-view
     // editor may replace the default gizmo-mode buttons with its own toolbar.
-    private void DrawTransformTools(Paper paper, Scribe.FontFile font)
+    private void DrawTransformTools(Paper paper)
     {
         using (paper.Column("sv_tools")
             .PositionType(PositionType.SelfDirected)
@@ -228,7 +228,7 @@ public class SceneViewPanel : DockPanel
             // The viewport owns the strip and draws the built-in buttons, so they exist even with no
             // tool doing anything. Live tools append their own; a tool can also replace the built-ins.
             if (!SceneToolManager.AnyOverridesToolStrip())
-                DrawDefaultToolbar(paper, font);
+                DrawDefaultToolbar(paper);
 
             foreach (SceneTool tool in SceneToolManager.Live)
             {
@@ -238,52 +238,25 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    private void DrawDefaultToolbar(Paper paper, Scribe.FontFile font)
+    private void DrawDefaultToolbar(Paper paper)
     {
         bool isTranslate = SceneTools.Transform == TransformTool.Translate;
         bool isRotate = SceneTools.Transform == TransformTool.Rotate;
         bool isScale = SceneTools.Transform == TransformTool.Scale;
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
-        paper.Box("sv_move_btn")
-            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_move"), "Scene/ToolTranslate"))
-            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
-            .Cursor(PaperCursor.Pointer)
-            .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(isTranslate ? EditorTheme.Purple400 : EditorTheme.Hover).End()
-            .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
-
-        paper.Box("sv_rotate_btn")
-            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_rotate"), "Scene/ToolRotate"))
-            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
-            .Cursor(PaperCursor.Pointer)
-            .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(isRotate ? EditorTheme.Purple400 : EditorTheme.Hover).End()
-            .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
-
-        paper.Box("sv_scale_btn")
-            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_scale"), "Scene/ToolScale"))
-            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
-            .Cursor(PaperCursor.Pointer)
-            .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(isScale ? EditorTheme.Purple400 : EditorTheme.Hover).End()
-            .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
-
-        paper.Box("sv_universal_btn")
-            .Tooltip(ShortcutManager.GetTooltip(Loc.Get("scene.tool_universal"), "Scene/ToolUniversal"))
-            .Width(UnitValue.StretchOne).Height(30).Rounded(EditorTheme.Roundness)
-            .Cursor(PaperCursor.Pointer)
-            .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(isUniversal ? EditorTheme.Purple400 : EditorTheme.Hover).End()
-            .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Universal));
+        EditorGUI.ToolStripButton(paper, "sv_move_btn", EditorIcons.ArrowsUpDownLeftRight_I,
+            ShortcutManager.GetTooltip(Loc.Get("scene.tool_move"), "Scene/ToolTranslate"), isTranslate,
+            () => SetGizmoMode(TransformTool.Translate));
+        EditorGUI.ToolStripButton(paper, "sv_rotate_btn", EditorIcons.ArrowsRotate_I,
+            ShortcutManager.GetTooltip(Loc.Get("scene.tool_rotate"), "Scene/ToolRotate"), isRotate,
+            () => SetGizmoMode(TransformTool.Rotate));
+        EditorGUI.ToolStripButton(paper, "sv_scale_btn", EditorIcons.Maximize_I,
+            ShortcutManager.GetTooltip(Loc.Get("scene.tool_scale"), "Scene/ToolScale"), isScale,
+            () => SetGizmoMode(TransformTool.Scale));
+        EditorGUI.ToolStripButton(paper, "sv_universal_btn", EditorIcons.Expand_I,
+            ShortcutManager.GetTooltip(Loc.Get("scene.tool_universal"), "Scene/ToolUniversal"), isUniversal,
+            () => SetGizmoMode(TransformTool.Universal));
     }
 
     private void DrawViewport(Paper paper, Scribe.FontFile font, float width, float height)
@@ -556,7 +529,7 @@ public class SceneViewPanel : DockPanel
             }
 
             // Floating transform-tools panel (top-left)
-            DrawTransformTools(paper, font);
+            DrawTransformTools(paper);
 
             // Speed indicator (shows briefly when scroll changes fly speed)
             DrawSpeedIndicator(paper, font, width, height);

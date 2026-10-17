@@ -264,10 +264,7 @@ public static class MenuTreePopup
 
     private static void DrawEmpty(Paper paper, Prowl.Scribe.FontFile font, string id, string emptyText)
     {
-        paper.Box($"{id}_empty").Height(40)
-            .Text(emptyText, font)
-            .TextColor(EditorTheme.Ink300)
-            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+        EditorGUI.EmptyState(paper, $"{id}_empty", emptyText, font);
     }
 
     private static void DrawItem(Paper paper, Prowl.Scribe.FontFile font, string id,

@@ -126,12 +126,8 @@ public static class SelectorModal
 
             paper.Box("sel_spacer");
 
-            paper.Box("sel_close")
-                .Width(24).Height(24).Rounded(Origami.Current.Metrics.Rounding)
-                .Hovered.BackgroundColor(EditorTheme.Red300).End()
-                .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => Close());
+            Origami.IconButton(paper, "sel_close", EditorIcons.Xmark_I, Close)
+                .Width(24).Height(24).Ghost().Show();
         }
     }
 
@@ -153,24 +149,15 @@ public static class SelectorModal
 
     private static void DrawTabs(Paper paper, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row("sel_tabs").Height(28).Margin(6, 6, 0, 0).Gap(2).Enter())
+        using (paper.Row("sel_tabs").Height(28).Margin(6, 6, 0, 0).Enter())
         {
-            DrawTabButton(paper, font, "sel_tab_scene", $"{EditorIcons.Sitemap}  {Loc.Get("panel.scene")}", SelectorTabs.Scene);
-            DrawTabButton(paper, font, "sel_tab_assets", $"{EditorIcons.FolderOpen}  {Loc.Get("menu.assets")}", SelectorTabs.Assets);
+            Origami.ButtonGroup(paper, "sel_tab_group", _activeTab == SelectorTabs.Scene ? 0 : 1,
+                    i => _activeTab = i == 0 ? SelectorTabs.Scene : SelectorTabs.Assets)
+                .Height(24).FullWidth()
+                .Item(Loc.Get("panel.scene"), EditorIcons.Sitemap)
+                .Item(Loc.Get("menu.assets"), EditorIcons.FolderOpen)
+                .Show();
         }
-    }
-
-    private static void DrawTabButton(Paper paper, Prowl.Scribe.FontFile font, string id, string label, SelectorTabs tab)
-    {
-        bool active = _activeTab == tab;
-        paper.Box(id)
-            .Height(24).Rounded(Origami.Current.Metrics.Rounding)
-            .BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Neutral200)
-            .Hovered.BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-            .Text(label, font)
-            .TextColor(active ? EditorTheme.Ink500 : EditorTheme.Ink400)
-            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(tab, (t, _) => _activeTab = t);
     }
 
     // ================================================================
@@ -182,10 +169,7 @@ public static class SelectorModal
         Scene scene = Runtime.Resources.Scene.Current;
         if (scene == null)
         {
-            paper.Box("sel_scene_empty").Height(40)
-                .Text(Loc.Get("selector.no_scene"), font)
-                .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+            EditorGUI.EmptyState(paper, "sel_scene_empty", Loc.Get("selector.no_scene"), font);
             return;
         }
 
@@ -199,7 +183,7 @@ public static class SelectorModal
             // None option always first
             paper.Box("sel_s_none")
                 .Height(EditorTheme.RowHeight).PaddingLeft(8)
-                .Hovered.BackgroundColor(EditorTheme.Purple400).End()
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Rounded(Origami.Current.Metrics.Rounding)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
                 .TextColor(EditorTheme.Ink400)
@@ -249,10 +233,7 @@ public static class SelectorModal
 
             if (idx == 0)
             {
-                paper.Box("sel_scene_none").Height(40)
-                    .Text(Loc.Get("selector.no_objects"), font)
-                    .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                EditorGUI.EmptyState(paper, "sel_scene_none", Loc.Get("selector.no_objects"), font);
             }
         });
     }
@@ -262,7 +243,7 @@ public static class SelectorModal
     {
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight).PaddingLeft(8).Gap(4)
-            .Hovered.BackgroundColor(EditorTheme.Purple400).End()
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Rounded(Origami.Current.Metrics.Rounding)
             .OnClick(value, (val, _) =>
             {
@@ -300,10 +281,7 @@ public static class SelectorModal
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null)
         {
-            paper.Box("sel_asset_empty").Height(40)
-                .Text(Loc.Get("selector.no_database"), font)
-                .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+            EditorGUI.EmptyState(paper, "sel_asset_empty", Loc.Get("selector.no_database"), font);
             return;
         }
 
@@ -328,7 +306,7 @@ public static class SelectorModal
             // None option always first
             paper.Box("sel_a_none")
                 .Height(EditorTheme.RowHeight).PaddingLeft(8)
-                .Hovered.BackgroundColor(EditorTheme.Purple400).End()
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Rounded(Origami.Current.Metrics.Rounding)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
                 .TextColor(EditorTheme.Ink400)
@@ -337,10 +315,7 @@ public static class SelectorModal
 
             if (items.Count == 0)
             {
-                paper.Box("sel_asset_none").Height(40)
-                    .Text(Loc.Get("selector.no_assets"), font)
-                    .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                EditorGUI.EmptyState(paper, "sel_asset_none", Loc.Get("selector.no_assets"), font);
             }
             else
             {

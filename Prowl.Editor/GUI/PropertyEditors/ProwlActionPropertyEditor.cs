@@ -68,7 +68,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
                     .Text($"{title}   ({calls.Count})", semi).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
             }
-            paper.Box($"{id}_hd").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            EditorGUI.Divider(paper, $"{id}_hd");
 
             using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(6, 6, 6, 6).Gap(6).Enter())
             {
@@ -80,22 +80,19 @@ public class ProwlActionPropertyEditor : PropertyEditor
                 for (int i = 0; i < calls.Count; i++)
                 {
                     int idx = i;
-                    DrawCallCard(paper, $"{id}_c{idx}", idx, calls[idx], mono, font,
+                    DrawCallCard(paper, $"{id}_c{idx}", idx, calls[idx], mono,
                         changed: () => onChange(action),
                         remove: () => { calls.RemoveAt(idx); onChange(action); });
                 }
 
-                paper.Box($"{id}_add").Height(26).Rounded(Origami.Current.Metrics.Rounding)
-                    .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                    .Text("+ Add Call", semi).TextColor(EditorTheme.AccentText)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => { calls.Add(new ProwlCall()); onChange(action); });
+                Origami.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add Call", () => { calls.Add(new ProwlCall()); onChange(action); })
+                    .Primary().Ghost().FullWidth().Height(26).Show();
             }
         }
     }
 
     private static void DrawCallCard(Paper paper, string id, int index, ProwlCall call,
-        Prowl.Scribe.FontFile mono, Prowl.Scribe.FontFile font, Action changed, Action remove)
+        Prowl.Scribe.FontFile mono, Action changed, Action remove)
     {
 
         // The stored Target is the exact object the call runs on (a GameObject or one of its
@@ -114,13 +111,10 @@ public class ProwlActionPropertyEditor : PropertyEditor
                 paper.Box($"{id}_ct").Height(26).IsNotInteractable()
                     .Text($"Call {index}", mono).TextColor(EditorTheme.InkDim)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                paper.Box($"{id}_cx").Width(18).Height(18).Rounded(Origami.Current.Metrics.SmallRounding).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                    .Hovered.BackgroundColor(Color.FromArgb(40, EditorTheme.Red400)).End()
-                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => remove());
+                using (paper.Box($"{id}_cx_w").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                    Origami.IconButton(paper, $"{id}_cx", EditorIcons.Xmark_I, remove).Small().Width(20).Height(20).Ghost().Show();
             }
-            paper.Box($"{id}_cd").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            EditorGUI.Divider(paper, $"{id}_cd");
 
             // Card body: target, function, argument.
             using (paper.Column($"{id}_cb").Height(UnitValue.Auto).Padding(2, 2, 4, 4).Enter())

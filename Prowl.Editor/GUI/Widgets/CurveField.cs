@@ -106,6 +106,8 @@ public static class CurveRenderer
     private const int PreviewSteps = 40;
     private const int EditorSteps = 120;
 
+    private static Vector.Color Solid(Color c) => Color32.FromArgb(255, c.R, c.G, c.B);
+
     /// <summary> Draws a simplified preview of the curve within the given rectangle, using the theme's green color. Does nothing when the curve has no keys. </summary>
     public static void DrawPreview(Canvas canvas, Rect r, AnimationCurve curve, OrigamiTheme theme)
     {
@@ -114,7 +116,7 @@ public static class CurveRenderer
         float w = (float)r.Size.X - 4, h = (float)r.Size.Y - 4;
         GetBounds(curve, out float minT, out float maxT, out float minV, out float maxV);
 
-        Vector.Color curveColor = Color32.FromArgb(255, (byte)theme.Green.C500.R, (byte)theme.Green.C500.G, (byte)theme.Green.C500.B);
+        Vector.Color curveColor = Solid(theme.Green.C500);
         canvas.SetStrokeColor(curveColor);
         canvas.SetStrokeWidth(1.5f);
         canvas.BeginPath();
@@ -170,7 +172,7 @@ public static class CurveRenderer
         }
 
         // Curve line
-        Vector.Color curveColor = Color32.FromArgb(255, (byte)theme.Green.C500.R, (byte)theme.Green.C500.G, (byte)theme.Green.C500.B);
+        Vector.Color curveColor = Solid(theme.Green.C500);
         canvas.SetStrokeColor(curveColor);
         canvas.SetStrokeWidth(2f);
         canvas.BeginPath();
@@ -194,29 +196,27 @@ public static class CurveRenderer
             if (kx < x - 6 || kx > x + w + 6 || ky < y - 6 || ky > y + h + 6) continue;
 
             bool isSel = i == selectedIdx;
-            Vector.Color dotColor = isSel
-                ? Color32.FromArgb(255, 255, 210, 60)
-                : Color32.FromArgb(255, 240, 240, 240);
+            Vector.Color dotColor = Solid(isSel ? theme.Amber.C500 : theme.Ink.C500);
             canvas.SetFillColor(dotColor);
             canvas.BeginPath(); canvas.Circle(kx, ky, isSel ? 4.5f : 3.5f, 12); canvas.Fill();
 
             // Tangent lines for selected key
             if (isSel)
             {
-                canvas.SetStrokeColor(Color32.FromArgb(160, 200, 200, 60));
+                canvas.SetStrokeColor(Color32.FromArgb(160, theme.Amber.C400.R, theme.Amber.C400.G, theme.Amber.C400.B));
                 canvas.SetStrokeWidth(1.5f);
                 if (i > 0)
                 {
                     (float tinX, float tinY) = GetTangentScreenPos(kx, ky, key.InTangent, -1f, tToX, vToY);
                     canvas.BeginPath(); canvas.MoveTo(kx, ky); canvas.LineTo(tinX, tinY); canvas.Stroke();
-                    canvas.SetFillColor(Color32.FromArgb(255, 200, 200, 60));
+                    canvas.SetFillColor(Solid(theme.Amber.C400));
                     canvas.BeginPath(); canvas.Circle(tinX, tinY, 3f, 8); canvas.Fill();
                 }
                 if (i < curve.Count - 1)
                 {
                     (float toutX, float toutY) = GetTangentScreenPos(kx, ky, key.OutTangent, 1f, tToX, vToY);
                     canvas.BeginPath(); canvas.MoveTo(kx, ky); canvas.LineTo(toutX, toutY); canvas.Stroke();
-                    canvas.SetFillColor(Color32.FromArgb(255, 200, 200, 60));
+                    canvas.SetFillColor(Solid(theme.Amber.C400));
                     canvas.BeginPath(); canvas.Circle(toutX, toutY, 3f, 8); canvas.Fill();
                 }
             }
@@ -455,8 +455,8 @@ internal static class CurvePopover
                 paper.Box($"{id}_key_{i}")
                     .PositionType(PositionType.SelfDirected)
                     .Position(kx - dotSize * 0.5f, ky - dotSize * 0.5f).Size(dotSize, dotSize)
-                    .BackgroundColor(isSelected ? Color.FromArgb(255, 255, 210, 60) : Color.White)
-                    .Hovered.BackgroundColor(Color.FromArgb(255, theme.Primary.C400.R, theme.Primary.C400.G, theme.Primary.C400.B)).End()
+                    .BackgroundColor(isSelected ? theme.Amber.C500 : theme.Ink.C500)
+                    .Hovered.BackgroundColor(theme.Primary.C400).End()
                     .Rounded(dotSize * 0.5f)
                     .StopEventPropagation()
                     .OnClick(idx, (ci, _) => paper.SetElementStorage(el, "sel", ci))
@@ -549,8 +549,8 @@ internal static class CurvePopover
         paper.Box($"{id}_tan{side}_{keyIdx}")
             .PositionType(PositionType.SelfDirected)
             .Position(hx - 4, hy - 4).Size(8, 8)
-            .BackgroundColor(Color.FromArgb(255, 200, 200, 60))
-            .Hovered.BackgroundColor(Color.FromArgb(255, 255, 255, 80)).End()
+            .BackgroundColor(theme.Amber.C400)
+            .Hovered.BackgroundColor(theme.Amber.C600).End()
             .Rounded(4)
             .StopEventPropagation()
             .OnDragging(keyIdx, (ci, e) =>
@@ -614,7 +614,7 @@ internal sealed class CurveEditorModal : IModal
             .BackgroundColor(theme.Neutral.C300)
             .BorderColor(theme.Ink.C200).BorderWidth(1)
             .Rounded(m.ContainerRounding)
-            .DropShadow(0, 4, 24, 0, Color.FromArgb(100, 0, 0, 0))
+            .DropShadow(0, 4, 24, 0, theme.Shadow)
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()

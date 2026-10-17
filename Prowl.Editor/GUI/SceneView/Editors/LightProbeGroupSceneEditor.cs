@@ -12,7 +12,6 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using Color = Prowl.Vector.Color;
-using SColor = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.SceneView.Editors;
 
@@ -131,28 +130,17 @@ public class LightProbeGroupSceneEditor : SceneTool
         if (_group == null) return;
         Scribe.FontFile font = Theming.EditorTheme.DefaultFont!;
 
-        ToolBtn(paper, $"{id}_add", EditorIcons.Plus, font, AddProbe);
-        ToolBtn(paper, $"{id}_dup", EditorIcons.Clone, font, () => { if (_selection.Count > 0) DuplicateSelected(); });
-        ToolBtn(paper, $"{id}_del", EditorIcons.Trash, font, () => { if (_selection.Count > 0) DeleteSelected(); });
-        paper.Box($"{id}_sep").Width(1).Height(18).BackgroundColor(EditorTheme.Ink200);
-        ToolBtn(paper, $"{id}_all", EditorIcons.CheckDouble, font, SelectAll);
-        ToolBtn(paper, $"{id}_none", EditorIcons.Xmark, font, () => _selection.Clear());
+        EditorGUI.ToolStripButton(paper, $"{id}_add", EditorIcons.Plus_I, "Add Probe", false, AddProbe);
+        EditorGUI.ToolStripButton(paper, $"{id}_dup", EditorIcons.Clone_I, "Duplicate", false, () => { if (_selection.Count > 0) DuplicateSelected(); });
+        EditorGUI.ToolStripButton(paper, $"{id}_del", EditorIcons.Trash_I, "Delete", false, () => { if (_selection.Count > 0) DeleteSelected(); });
+        EditorGUI.Divider(paper, $"{id}_sep", 4f);
+        EditorGUI.ToolStripButton(paper, $"{id}_all", EditorIcons.CheckDouble_I, "Select All", false, SelectAll);
+        EditorGUI.ToolStripButton(paper, $"{id}_none", EditorIcons.Xmark_I, "Select None", false, () => _selection.Clear());
 
         paper.Box($"{id}_count").Height(24).Width(70)
             .Text($"{_selection.Count}/{_group.ProbePositions.Count}", font)
             .TextColor(EditorTheme.Ink400).FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-    }
-
-    private void ToolBtn(Paper paper, string id, string icon, Scribe.FontFile font, Action onClick)
-    {
-        paper.Box(id)
-            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
-            .BackgroundColor(SColor.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Text(icon, font).TextColor(EditorTheme.Ink500)
-            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
     }
 
     // --- probe ops ---

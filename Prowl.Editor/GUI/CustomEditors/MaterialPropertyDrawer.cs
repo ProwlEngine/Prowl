@@ -323,13 +323,8 @@ public static class MaterialPropertyDrawer
 
             if (overridden)
             {
-                paper.Box($"{id}_revert")
-                    .Width(24).Height(UnitValue.Stretch()).Rounded(EditorTheme.Roundness)
-                    .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                    .Hovered.BackgroundColor(EditorTheme.Hover).BorderColor(EditorTheme.BorderStrong).End()
-                    .Text(EditorIcons.ArrowRotateLeft, EditorTheme.DefaultFont).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => revert());
+                Origami.IconButton(paper, $"{id}_revert", EditorIcons.ArrowRotateLeft_I, revert)
+                    .Small().Width(24).Height(EditorTheme.RowHeight).Soft().Show();
             }
         }
     }

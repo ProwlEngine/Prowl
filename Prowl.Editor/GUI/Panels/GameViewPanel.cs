@@ -472,10 +472,8 @@ public class GameViewPanel : DockPanel
         float gx = x + 1, gy = y + 1, gw = w - 2, gh = h - 2;
 
         // Target lines
-        DrawTargetLine(canvas, font, gx, gy, gw, gh, maxMs, 16.67f, "60",
-            Prowl.Vector.Color32.FromArgb(35, 80, 200, 100));
-        DrawTargetLine(canvas, font, gx, gy, gw, gh, maxMs, 33.33f, "30",
-            Prowl.Vector.Color32.FromArgb(35, 220, 180, 50));
+        DrawTargetLine(canvas, font, gx, gy, gw, gh, maxMs, 16.67f, "60", EditorTheme.ToColor32(EditorTheme.Green400, 0.14f));
+        DrawTargetLine(canvas, font, gx, gy, gw, gh, maxMs, 33.33f, "30", EditorTheme.ToColor32(EditorTheme.Amber400, 0.14f));
 
         // Bars
         float barW = gw / len;
@@ -484,9 +482,8 @@ public class GameViewPanel : DockPanel
             float ms = history[(head + i) % len];
             if (ms <= 0) continue;
             float barH = MathF.Min((ms / maxMs) * gh, gh);
-            Vector.Color col = ms < 16.67f ? Prowl.Vector.Color32.FromArgb(200, 70, 190, 110)
-                : ms < 33.33f ? Prowl.Vector.Color32.FromArgb(200, 210, 170, 50)
-                : Prowl.Vector.Color32.FromArgb(200, 210, 55, 55);
+            Vector.Color col = EditorTheme.ToColor32(ms < 16.67f ? EditorTheme.Green400
+                : ms < 33.33f ? EditorTheme.Amber400 : EditorTheme.Red400, 0.78f);
             canvas.RectFilled(gx + i * barW, gy + gh - barH, MathF.Max(1, barW - 0.5f), barH, col);
         }
     }

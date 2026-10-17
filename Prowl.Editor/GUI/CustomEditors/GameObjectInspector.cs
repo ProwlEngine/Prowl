@@ -32,7 +32,7 @@ public static class GameObjectInspector
         if (go.IsPrefabInstance)
             DrawPrefabHeader(paper, font, go);
 
-        DrawHeader(paper, font, go);
+        DrawHeader(paper, go);
         EditorGUI.Divider(paper, "gi_sep_header", 6f);
         if (go.RectTransform != null)
         {
@@ -93,37 +93,6 @@ public static class GameObjectInspector
         return expanded;
     }
 
-
-    private static void SelDropdown(Paper paper, Prowl.Scribe.FontFile font, string id,
-        string? label, string value, string[] options, int current, Action<int> onSelect, bool chevron, UnitValue width)
-    {
-        using (paper.Row(id).Width(width).Height(26).Rounded(EditorTheme.Roundness).Padding(9, 9, 0, 0).Gap(6)
-            .BackgroundColor(EditorTheme.Glass)
-            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-            .OnClick(0, (_, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
-            {
-                for (int i = 0; i < options.Length; i++)
-                {
-                    int idx = i;
-                    b.Item(options[idx], () => onSelect(idx), on: idx == current);
-                }
-            }))
-            .Enter())
-        {
-            if (!string.IsNullOrEmpty(label))
-                paper.Box($"{id}_lbl").Width(UnitValue.Auto).Height(26).IsNotInteractable()
-                    .Text(label, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box($"{id}_val").Width(UnitValue.Stretch()).Height(26).IsNotInteractable()
-                .Text(value, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
-                .Alignment(string.IsNullOrEmpty(label) ? TextAlignment.MiddleLeft : TextAlignment.MiddleRight);
-
-            if (chevron)
-                paper.Box($"{id}_chev").Width(10).Height(26).IsNotInteractable()
-                    .Text(EditorIcons.ChevronDown, font).TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleCenter);
-        }
-    }
 
     // ================================================================
     //  Multi-object inspector
@@ -302,7 +271,7 @@ public static class GameObjectInspector
     //  Header: Name, Enabled, Tag, Layer
     // ================================================================
 
-    private static void DrawHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
+    private static void DrawHeader(Paper paper, GameObject go)
     {
         Guid goId = go.Identifier;
 
@@ -329,9 +298,7 @@ public static class GameObjectInspector
                 .Width(UnitValue.Stretch()).Height(26)
                 .Show();
 
-            SelDropdown(paper, font, "gi_static", null,
-                go.IsStatic ? "Static" : "Dynamic",
-                ["Dynamic", "Static"], go.IsStatic ? 1 : 0,
+            Origami.Dropdown(paper, "gi_static", go.IsStatic ? 1 : 0,
                 idx =>
                 {
                     bool v = idx == 1;
@@ -343,7 +310,7 @@ public static class GameObjectInspector
                         Origami.Confirm("Apply to Children?",
                             $"Also set Static = {v} on all child objects of \"{go.Name}\"?",
                             () => ApplyStaticToChildren(go, v));
-                }, chevron: true, width: UnitValue.Pixels(90));
+                }, ["Dynamic", "Static"]).Width(90).Height(26).Show();
         }
 
         // Tag + Layer row (label-inside sel dropdowns)
@@ -357,7 +324,7 @@ public static class GameObjectInspector
             string[] tagNames = [.. TagLayerManager.tags];
             int tagIdx = TagLayerManager.tags.IndexOf(go.Tag);
             if (tagIdx < 0) tagIdx = 0;
-            SelDropdown(paper, font, "gi_tag", Loc.Get("inspector.tag"), go.Tag, tagNames, tagIdx,
+            Origami.Dropdown(paper, "gi_tag", tagIdx,
                 v =>
                 {
                     if (v >= 0 && v < tagNames.Length)
@@ -366,7 +333,7 @@ public static class GameObjectInspector
                         Undo.RecordGameObjectChange(go, "Change Tag", go.Tag, newTag, (g, x) => g.Tag = x);
                         go.Tag = newTag;
                     }
-                }, chevron: false, width: UnitValue.Stretch());
+                }, tagNames).Inline(Loc.Get("inspector.tag")).Width(UnitValue.Stretch()).Height(26).Show();
 
             string[] allLayers = TagLayerManager.layers;
             var layerNames = new List<string>();
@@ -376,8 +343,7 @@ public static class GameObjectInspector
 
             int selLayer = layerIndices.IndexOf(go.LayerIndex);
             if (selLayer < 0) selLayer = 0;
-            string layerVal = selLayer >= 0 && selLayer < layerNames.Count ? layerNames[selLayer] : "";
-            SelDropdown(paper, font, "gi_layer", Loc.Get("inspector.layer"), layerVal, [.. layerNames], selLayer,
+            Origami.Dropdown(paper, "gi_layer", selLayer,
                 v =>
                 {
                     if (v >= 0 && v < layerIndices.Count)
@@ -386,7 +352,7 @@ public static class GameObjectInspector
                         Undo.RecordGameObjectChange(go, "Change Layer", go.LayerIndex, newIdx, (g, x) => g.LayerIndex = x);
                         go.LayerIndex = newIdx;
                     }
-                }, chevron: false, width: UnitValue.Stretch());
+                }, layerNames).Inline(Loc.Get("inspector.layer")).Width(UnitValue.Stretch()).Height(26).Show();
         }
     }
 
@@ -1326,11 +1292,11 @@ public static class GameObjectInspector
                 .TextColor(EditorTheme.Green400)
                 .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
 
-            OverrideButton(paper, font, $"gi_add_remove_{key}", Loc.Get("inspector.remove"), 55,
+            OverrideButton(paper, $"gi_add_remove_{key}", Loc.Get("inspector.remove"), 55,
                 root, r => PrefabUtility.RemoveAddition(r, addition));
 
             if (canApply)
-                OverrideButton(paper, font, $"gi_add_apply_{key}", Loc.Get("inspector.apply"), 45,
+                OverrideButton(paper, $"gi_add_apply_{key}", Loc.Get("inspector.apply"), 45,
                     root, r => PrefabUtility.ApplyAddition(r, addition));
         }
     }
@@ -1354,11 +1320,11 @@ public static class GameObjectInspector
             Component? component = ComponentFor(root, first);
             if (component.IsNotValid()) return;
 
-            OverrideButton(paper, font, $"gi_ovg_revert_{key}", Loc.Get("inspector.revert"), 50,
+            OverrideButton(paper, $"gi_ovg_revert_{key}", Loc.Get("inspector.revert"), 50,
                 root, _ => PrefabUtility.RevertComponentOverrides(component!.GameObject, component!));
 
             if (canApply)
-                OverrideButton(paper, font, $"gi_ovg_apply_{key}", Loc.Get("inspector.apply"), 45,
+                OverrideButton(paper, $"gi_ovg_apply_{key}", Loc.Get("inspector.apply"), 45,
                     root, _ => PrefabUtility.ApplyComponentOverrides(component!.GameObject, component!));
         }
     }
@@ -1391,16 +1357,16 @@ public static class GameObjectInspector
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
 
-                OverrideButton(paper, font, $"gi_ov_revert_{key}", Loc.Get("inspector.revert"), 50,
+                OverrideButton(paper, $"gi_ov_revert_{key}", Loc.Get("inspector.revert"), 50,
                     root, r => PrefabUtility.RevertSingleOverride(r, path));
 
                 if (canApply)
-                    OverrideButton(paper, font, $"gi_ov_apply_{key}", Loc.Get("inspector.apply"), 45,
+                    OverrideButton(paper, $"gi_ov_apply_{key}", Loc.Get("inspector.apply"), 45,
                         root, r => PrefabUtility.ApplySingleOverride(r, path));
             }
             else
             {
-                OverrideButton(paper, font, $"gi_ov_remove_{key}", Loc.Get("inspector.remove_override"), 95,
+                OverrideButton(paper, $"gi_ov_remove_{key}", Loc.Get("inspector.remove_override"), 95,
                     root, r => PrefabUtility.RemoveOverride(r, path));
             }
         }
@@ -1421,21 +1387,17 @@ public static class GameObjectInspector
     /// captured: these operations replace what they touch, so a handler holding an object would be
     /// holding a dead one by the time it ran.
     /// </summary>
-    private static void OverrideButton(Paper paper, Prowl.Scribe.FontFile font, string id, string label,
+    private static void OverrideButton(Paper paper, string id, string label,
         float width, GameObject root, Action<GameObject> act)
     {
         Guid rootId = root.Identifier;
 
-        paper.Box(id)
-            .Width(width).Height(EditorTheme.RowHeight).Rounded(EditorTheme.Roundness)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Text(label, font).TextColor(EditorTheme.Ink400)
-            .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter)
-            .OnClick((rootId, act), (cap, _) =>
+        Origami.Button(paper, id, label, () =>
             {
-                GameObject? live = Undo.FindGO(cap.rootId);
-                if (live.IsValid()) cap.act(live!);
-            });
+                GameObject? live = Undo.FindGO(rootId);
+                if (live.IsValid()) act(live!);
+            })
+            .Small().Width(width).Height(EditorTheme.RowHeight).Ghost().Show();
     }
 
 

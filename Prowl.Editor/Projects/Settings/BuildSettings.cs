@@ -135,29 +135,21 @@ public sealed class BuildSettings : ProjectSettingsBase
                 // Move up/down
                 if (i > 0)
                 {
-                    paper.Box($"bld_su_{i}")
-                        .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
-                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(EditorIcons.ArrowUp, font).TextColor(EditorTheme.Ink400)
-                        .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(idx, (ci, _) =>
+                    Origami.IconButton(paper, $"bld_su_{i}", EditorIcons.ArrowUp_I, () =>
                         {
-                            (Scenes[ci - 1], Scenes[ci]) = (Scenes[ci], Scenes[ci - 1]);
+                            (Scenes[idx - 1], Scenes[idx]) = (Scenes[idx], Scenes[idx - 1]);
                             EditorRegistries.SaveSettings();
-                        });
+                        })
+                        .Small().Width(EditorTheme.RowHeight).Height(EditorTheme.RowHeight).Ghost().Show();
                 }
 
                 // Remove
-                paper.Box($"bld_sr_{i}")
-                    .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
-                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(idx, (ci, _) =>
+                Origami.IconButton(paper, $"bld_sr_{i}", EditorIcons.Xmark_I, () =>
                     {
-                        Scenes.RemoveAt(ci);
+                        Scenes.RemoveAt(idx);
                         EditorRegistries.SaveSettings();
-                    });
+                    })
+                    .Small().Width(EditorTheme.RowHeight).Height(EditorTheme.RowHeight).Ghost().Show();
             }
         }
 

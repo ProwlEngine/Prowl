@@ -270,7 +270,7 @@ public class AssetDatabasePanel : DockPanel
             if (value <= 0) continue;
             float barH = MathF.Min((value / (float)max) * h, h);
             canvas.RectFilled(x + i * barW, y + h - barH, MathF.Max(1, barW - 0.5f), barH,
-                Color32.FromArgb(200, 90, 140, 220));
+                EditorTheme.ToColor32(EditorTheme.Blue400, 0.78f));
         }
     }
 

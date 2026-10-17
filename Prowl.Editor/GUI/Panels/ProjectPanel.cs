@@ -283,8 +283,8 @@ public class ProjectPanel : DockPanel
                 .PaddingLeft(8).PaddingRight(8).Gap(5)
                 .Enter())
             {
-                NavBtn(paper, font, "proj_back", EditorIcons.ChevronLeft, _navBack.Count > 0, NavBack);
-                NavBtn(paper, font, "proj_fwd", EditorIcons.ChevronRight, _navForward.Count > 0, NavForward);
+                NavBtn(paper, "proj_back", EditorIcons.ChevronLeft_I, _navBack.Count > 0, NavBack);
+                NavBtn(paper, "proj_fwd", EditorIcons.ChevronRight_I, _navForward.Count > 0, NavForward);
 
                 DrawCrumbs(paper, font);
 
@@ -299,7 +299,7 @@ public class ProjectPanel : DockPanel
                 ToolbarIconBtn(paper, "proj_opts", EditorIcons.EllipsisVertical, Loc.Get("project.options"), false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
-            paper.Box("proj_tb_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            EditorGUI.Divider(paper, "proj_tb_div");
         }
     }
 
@@ -322,12 +322,10 @@ public class ProjectPanel : DockPanel
         b.Toggle(Loc.Get("project.group_by_type"), () => _groupByType = !_groupByType, () => _groupByType);
     }
 
-    private void NavBtn(Paper p, Scribe.FontFile font, string id, string glyph, bool enabled, Action onClick)
+    private static void NavBtn(Paper p, string id, IOrigamiIcon icon, bool enabled, Action onClick)
     {
-        ElementBuilder b = p.Box(id).Width(24).Height(24).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-            .Text(glyph, font).TextColor(enabled ? EditorTheme.Ink300 : EditorTheme.InkFaint).FontSize(13f).Alignment(TextAlignment.MiddleCenter);
-        if (enabled) { b.Hovered.BackgroundColor(EditorTheme.Hover).End(); b.OnClick(_ => onClick()); }
-        else b.IsNotInteractable();
+        using (p.Box($"{id}_w").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+            Origami.IconButton(p, id, icon, onClick).Small().Width(24).Height(24).Ghost().Disabled(!enabled).Show();
     }
 
     // Breadcrumb trail (Origami widget); the Assets root carries a folder icon, deeper segments are labels.

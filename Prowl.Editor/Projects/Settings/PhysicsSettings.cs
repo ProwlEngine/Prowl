@@ -223,9 +223,9 @@ public class PhysicsSettings : ProjectSettingsBase
 
                     paper.Box($"phys_cmc_{i}_{j}")
                         .Size(cellSize, cellSize)
-                        .BackgroundColor(collides ? Color.FromArgb(255, 60, 160, 60) : EditorTheme.Ink100)
+                        .BackgroundColor(collides ? EditorTheme.Green400 : EditorTheme.Ink100)
                         .Rounded(Origami.Current.Metrics.SmallRounding)
-                        .Hovered.BackgroundColor(collides ? Color.FromArgb(255, 80, 180, 80) : EditorTheme.Ink200).End()
+                        .Hovered.BackgroundColor(collides ? EditorTheme.Green500 : EditorTheme.Ink200).End()
                         .OnClick((ci, cj), (pair, _) =>
                         {
                             bool current = (CollisionMatrixRows[pair.ci] & (1u << pair.cj)) != 0;

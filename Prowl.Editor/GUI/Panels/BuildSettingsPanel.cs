@@ -139,10 +139,7 @@ public class BuildSettingsPanel : DockPanel
                     List<SceneBuildEntry> scenes = _buildSettings.Scenes;
                     if (scenes.Count == 0)
                     {
-                        paper.Box("bp_scenes_empty").Height(40).Margin(6, 6, 6, 0).IsNotInteractable()
-                            .Text(Loc.Get("build.no_scenes"), font)
-                            .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
-                            .Alignment(TextAlignment.MiddleCenter);
+                        EditorGUI.EmptyState(paper, "bp_scenes_empty", Loc.Get("build.no_scenes"), font);
                         return;
                     }
 
@@ -495,7 +492,7 @@ public class BuildSettingsPanel : DockPanel
 
             drawAction?.Invoke();
         }
-        paper.Box($"{id}_d").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+        EditorGUI.Divider(paper, $"{id}_d");
     }
 
     /// <summary>A card per pipeline, from the same discovery the build itself uses.</summary>

@@ -120,8 +120,8 @@ public static class VolumeProfileGUI
                         .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
                 }
 
-                HeaderText(paper, $"{id}_all", "All", font, () => { component.SetAllOverrides(true); changed?.Invoke(); });
-                HeaderText(paper, $"{id}_none", "None", font, () => { component.SetAllOverrides(false); changed?.Invoke(); });
+                HeaderText(paper, $"{id}_all", "All", () => { component.SetAllOverrides(true); changed?.Invoke(); });
+                HeaderText(paper, $"{id}_none", "None", () => { component.SetAllOverrides(false); changed?.Invoke(); });
                 EditorGUI.HeaderIconButton(paper, $"{id}_remove", EditorIcons.Trash, Loc.Get("inspector.remove"), () =>
                 {
                     Undo.Snapshot(profile);
@@ -141,12 +141,11 @@ public static class VolumeProfileGUI
         }
     }
 
-    private static void HeaderText(Paper paper, string id, string text, Scribe.FontFile font, Action onClick)
-        => paper.Box(id).Width(UnitValue.Auto).Height(22).Padding(6, 6, 0, 0).Rounded(EditorTheme.Roundness)
-            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
+    private static void HeaderText(Paper paper, string id, string text, Action onClick)
+    {
+        using (paper.Box($"{id}_w").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+            Origami.Button(paper, id, text, onClick).Small().Height(22).Ghost().Show();
+    }
 
     /// <summary>A row per parameter of <paramref name="component"/>, for custom component editors too.</summary>
     public static void DrawParameters(Paper paper, string id, VolumeComponent component, Action? changed = null)

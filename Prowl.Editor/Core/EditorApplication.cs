@@ -758,12 +758,8 @@ public class EditorApplication : Game
             StatusChip(paper, "hs_ver", clH, versionText, font);
             StatusChip(paper, "hs_proj", clH, projectText, font);
 
-            paper.Box("hs_cog").Width(clH).Height(clH).Rounded(EditorTheme.Roundness)
-                .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink400)
-                .Hovered.TextColor(EditorTheme.Ink500).End()
-                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => OpenPanel(typeof(ProjectSettingsPanel)));
+            Origami.IconButton(paper, "hs_cog", EditorIcons.Gear_I, () => OpenPanel(typeof(ProjectSettingsPanel)))
+                .Width(clH).Height(clH).Ghost().Show();
         }
     }
 

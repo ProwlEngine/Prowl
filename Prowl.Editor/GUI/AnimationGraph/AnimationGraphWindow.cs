@@ -1129,7 +1129,7 @@ public class AnimationGraphWindow : DockPanel
             .BackgroundColor(EditorTheme.Neutral200).Rounded(m.ContainerRounding)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Padding(m.Padding, m.Padding, m.Padding, m.Padding).Gap(m.Spacing)
-            .BoxShadow(0, 8, 24, 0, System.Drawing.Color.FromArgb(120, 0, 0, 0)).Enter())
+            .DropShadow(0, 8, 24, 0, EditorTheme.Shadow).Enter())
         {
             Origami.SearchField(paper, "ag_pickSearch", _pickerSearch, v => _pickerSearch = v,
                 _pickerKind.HasValue ? $"{AnimationGraphView.KindLabel(_pickerKind.Value)} nodes..." : "Search nodes...").Show();
@@ -1501,16 +1501,11 @@ public class AnimationGraphWindow : DockPanel
                     .Text("Parameters", EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink600)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
-                paper.Box("ag_paramAdd").Width(22).Height(22).Rounded(m.SmallRounding)
-                    .BackgroundColor(EditorTheme.Neutral300)
-                    .Hovered.BackgroundColor(EditorTheme.Neutral400).End()
-                    .Cursor(PaperCursor.Pointer).Tooltip("Add a parameter")
-                    .OnClick(0, (_, e) => OpenParameterPopup(e.PointerPosition))
-                    .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Ink600)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                Origami.IconButton(paper, "ag_paramAdd", EditorIcons.Plus_I, () => OpenParameterPopup(paper.PointerPos))
+                    .Small().Width(22).Height(22).Tooltip("Add a parameter").Show();
             }
 
-            Hairline(paper, "ag_paramSep");
+            EditorGUI.Divider(paper, "ag_paramSep");
 
             List<GraphProblem> problems = GraphProblems();
             float footer = FooterHeight(problems);
@@ -1536,9 +1531,6 @@ public class AnimationGraphWindow : DockPanel
         }
     }
 
-    private static void Hairline(Paper paper, string id)
-        => paper.Box(id).Width(UnitValue.Stretch()).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
-
     /// <summary>The problems that belong to the graph as a whole rather than to one node, like having no output.</summary>
     private List<GraphProblem> GraphProblems()
     {
@@ -1554,7 +1546,7 @@ public class AnimationGraphWindow : DockPanel
     /// <summary>The graph's problems that belong to no node, pinned to the bottom of the panel.</summary>
     private void DrawFooter(Paper paper, Scribe.FontFile font, OrigamiMetrics m, List<GraphProblem> problems, float height)
     {
-        Hairline(paper, "ag_footSep");
+        EditorGUI.Divider(paper, "ag_footSep");
 
         using (paper.Column("ag_foot").Width(UnitValue.Stretch()).Height(height - 1f)
             .Padding(m.Padding, m.Padding, 5, 5).Gap(2).Enter())
@@ -1715,7 +1707,7 @@ public class AnimationGraphWindow : DockPanel
             .BackgroundColor(EditorTheme.Neutral200).Rounded(m.ContainerRounding)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge).Gap(m.Spacing)
-            .BoxShadow(0, 8, 24, 0, System.Drawing.Color.FromArgb(120, 0, 0, 0)).Enter())
+            .DropShadow(0, 8, 24, 0, EditorTheme.Shadow).Enter())
         {
             paper.Box("ag_ppTitle").Width(UnitValue.Stretch()).Height(20).IsNotInteractable()
                 .Text("New Parameter", EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink600)
@@ -1995,12 +1987,8 @@ public class AnimationGraphAssetEditor : AssetImporterEditor
         using (paper.Row($"{id}_open").Width(UnitValue.Stretch()).Height(34)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.SpacingMedium).Enter())
         {
-            paper.Box($"{id}_openBtn").Width(UnitValue.Stretch()).Height(30)
-                .Rounded(m.SmallRounding).BackgroundColor(EditorTheme.Accent)
-                .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
-                .Text("Open Graph", font).TextColor(System.Drawing.Color.White)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => AnimationGraphWindow.OpenFor(entry.Guid));
+            Origami.Button(paper, $"{id}_openBtn", "Open Graph", () => AnimationGraphWindow.OpenFor(entry.Guid))
+                .Primary().FullWidth().Height(30).Show();
         }
 
         if (graph.IsNotValid()) return;

@@ -73,7 +73,7 @@ public sealed class BuildProgressModal : IModal
             .BackgroundColor(theme.Popover)
             .BorderColor(theme.BorderStrong).BorderWidth(1)
             .Rounded(theme.Metrics.ContainerRounding).Clip()
-            .DropShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
+            .DropShadow(0, 24, 64, 0, EditorTheme.Shadow)
             .Layer(layer)
             .StopEventPropagation();
 

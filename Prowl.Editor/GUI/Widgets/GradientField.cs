@@ -182,7 +182,7 @@ internal sealed class GradientEditorModal : IModal
             .BackgroundColor(theme.Neutral.C300)
             .BorderColor(ink.C200).BorderWidth(1)
             .Rounded(m.ContainerRounding)
-            .DropShadow(0, 4, 24, 0, Color.FromArgb(100, 0, 0, 0))
+            .DropShadow(0, 4, 24, 0, theme.Shadow)
             .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge)
             .Gap(m.SpacingMedium)
             .Layer(layer)

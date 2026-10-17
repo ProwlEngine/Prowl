@@ -252,7 +252,7 @@ public class ConsolePanel : DockPanel
                 ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, Loc.Get("console.options"), false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
-            paper.Box("con_tb_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            EditorGUI.Divider(paper, "con_tb_div");
         }
     }
 

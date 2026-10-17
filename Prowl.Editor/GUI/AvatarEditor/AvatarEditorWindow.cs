@@ -536,11 +536,9 @@ public class AvatarEditorWindow : DockPanel
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
 
             if (mapped)
-                paper.Box($"{id}_clear").Width(22).Height(m.RowHeight).Margin(m.SpacingMedium, 0, 0, 0)
-                    .Text(EditorIcons.Xmark, font)
-                    .TextColor(selected ? System.Drawing.Color.White : EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => { _map.Remove(bone); _dirty = true; });
+                using (paper.Box($"{id}_clear_w").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(m.SpacingMedium, 0, 0, 0).Enter())
+                    Origami.IconButton(paper, $"{id}_clear", EditorIcons.Xmark_I, () => { _map.Remove(bone); _dirty = true; })
+                        .Small().Width(22).Height(m.RowHeight).Ghost().Show();
         }
     }
 

@@ -297,7 +297,7 @@ public class SpriteEditorWindow : DockPanel
             .Width(300).Height(UnitValue.Auto)
             .Layer(Layer.Overlay + 1)
             .BackgroundColor(Origami.Current.Popover)
-            .BorderColor(System.Drawing.Color.FromArgb(255, 60, 62, 72)).BorderWidth(1).Rounded(Origami.Current.Metrics.ContainerRounding)
+            .BorderColor(EditorTheme.BorderStrong).BorderWidth(1).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(8).Gap(6)
             .StopEventPropagation()
             .Enter())

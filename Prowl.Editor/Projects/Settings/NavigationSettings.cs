@@ -164,7 +164,7 @@ public class NavigationSettings : ProjectSettingsBase
                 DrawAgentNumField(paper, $"nav_agent_s_{type.Id}", NumW, type.MaxSlope, v => { AgentTypes[idx].MaxSlope = Math.Clamp(v, 0f, 89f); Changed(); });
                 DrawAgentNumField(paper, $"nav_agent_c_{type.Id}", NumW, type.MaxClimb, v => { AgentTypes[idx].MaxClimb = MathF.Max(0f, v); Changed(); });
 
-                DrawDeleteButton(paper, $"nav_agent_del_{type.Id}", font, DelW, idx, isBuiltin ? null : id =>
+                DrawDeleteButton(paper, $"nav_agent_del_{type.Id}", DelW, idx, isBuiltin ? null : id =>
                 {
                     // Ids are persistent: removing an entry never renumbers others.
                     AgentTypes.RemoveAt(id);
@@ -201,7 +201,7 @@ public class NavigationSettings : ProjectSettingsBase
     }
 
     /// <summary>A row's delete button, or an empty spacer when <paramref name="onDelete"/> is null so the columns stay aligned.</summary>
-    private static void DrawDeleteButton(Paper paper, string id, Prowl.Scribe.FontFile font, float width, int index, Action<int>? onDelete)
+    private static void DrawDeleteButton(Paper paper, string id, float width, int index, Action<int>? onDelete)
     {
         if (onDelete == null)
         {
@@ -209,12 +209,8 @@ public class NavigationSettings : ProjectSettingsBase
             return;
         }
 
-        paper.Box(id)
-            .Width(width).Height(22).Rounded(Origami.Current.Metrics.SmallRounding)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-            .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(index, (i, _) => onDelete(i));
+        Origami.IconButton(paper, id, EditorIcons.Xmark_I, () => onDelete(index))
+            .Small().Width(width).Height(22).Ghost().Show();
     }
 
     private static void DrawAgentNumField(Paper paper, string id, float width, float value, Action<float> setter)
@@ -298,7 +294,7 @@ public class NavigationSettings : ProjectSettingsBase
                     }
                 }
 
-                DrawDeleteButton(paper, $"nav_area_del_{i}", font, DelW, idx, isBuiltin ? null : id =>
+                DrawDeleteButton(paper, $"nav_area_del_{i}", DelW, idx, isBuiltin ? null : id =>
                 {
                     // Clear the slot in place; shifting would re-index later areas
                     // under existing masks and baked navmeshes.

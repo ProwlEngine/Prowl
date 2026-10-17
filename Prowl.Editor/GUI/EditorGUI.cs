@@ -426,6 +426,15 @@ public static class EditorGUI
             .OnClick(_ => onClick());
     }
 
+    /// <summary>A button in the scene view's floating tool strip, filled with the accent while active.</summary>
+    public static void ToolStripButton(Paper paper, string id, IOrigamiIcon icon, string tooltip, bool active, Action onClick)
+    {
+        ButtonBuilder b = Origami.IconButton(paper, id, icon, onClick)
+            .Small().Width(UnitValue.StretchOne).Height(30).Tooltip(tooltip);
+        if (active) b.Primary(); else b.Ghost();
+        b.Show();
+    }
+
     /// <summary>A centered "nothing here" placeholder for empty lists and panels.</summary>
     public static void EmptyState(Paper paper, string id, string message, Scribe.FontFile font)
     {

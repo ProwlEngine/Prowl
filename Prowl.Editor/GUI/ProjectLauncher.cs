@@ -148,7 +148,7 @@ public static class ProjectLauncher
             .Enter())
         {
             Header(paper, font);
-            paper.Box("pl_head_div").Height(1).BackgroundColor(EditorTheme.BorderSoft);
+            EditorGUI.Divider(paper, "pl_head_div");
             if (_tab == 0) RecentBody(paper, font);
             else NewProjectBody(paper, font);
         }

@@ -233,8 +233,8 @@ public class PreferencesPanel : DockPanel
                 }
             }
 
-            paper.Box("pref_theme_fdiv").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
-            DrawThemeFooter(paper, font, s, theme, footerH);
+            EditorGUI.Divider(paper, "pref_theme_fdiv");
+            DrawThemeFooter(paper, s, theme, footerH);
         }
     }
 
@@ -257,9 +257,8 @@ public class PreferencesPanel : DockPanel
     }
 
     // Footer shown on every category: Reset (left), Import / Export / Apply (right).
-    private void DrawThemeFooter(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme, float h)
+    private void DrawThemeFooter(Paper paper, EditorSettings s, EditorThemeData theme, float h)
     {
-        Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
         using (paper.Row("pref_theme_footer").Height(h).Padding(PAD * 2, PAD * 2, 0, 0).Gap(SP * 2).Enter())
         {
             EditorGUI.Chip(paper, "pref_ft_reset", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_default")}", () => s.ResetTheme());
@@ -283,12 +282,9 @@ public class PreferencesPanel : DockPanel
                     Toasts.Info(Loc.Get("pref.toast_theme"), Loc.Get("pref.toast_exported", new { file = System.IO.Path.GetFileName(path) }));
                 }, filters: ["*.prowltheme"], filterLabels: [Loc.Get("pref.theme_filter")]), leftGap: 8f);
 
-            paper.Box("pref_ft_apply").Width(UnitValue.Auto).Height(30).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(16, 16, 0, 0)
-                .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright)
-                .Hovered.Glow(0, 2, 12, -2, Color.FromArgb(150, EditorTheme.Accent)).End()
-                .Text($"{EditorIcons.Check}  Apply", semi).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
-                .Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => { s.ApplyTheme(); s.Save(); });
+            using (paper.Box("pref_ft_apply_w").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                Origami.Button(paper, "pref_ft_apply", $"{EditorIcons.Check}  Apply", () => { s.ApplyTheme(); s.Save(); })
+                    .Primary().Height(30).Show();
         }
     }
 
@@ -567,7 +563,7 @@ public class PreferencesPanel : DockPanel
         using (paper.Column("pref_pv_center").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Gap(SP * 2).Enter())
         {
             using (paper.Column("pref_pv_card").Height(cardH).Rounded(Origami.Current.Metrics.ContainerRounding).Clip()
-                .DropShadow(0, 10, 26, -6, Color.FromArgb(150, 0, 0, 0))
+                .DropShadow(0, 10, 26, -6, EditorTheme.Shadow)
                 .BackgroundColor(EditorTheme.Neutral200).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
                 // Titlebar
@@ -583,7 +579,7 @@ public class PreferencesPanel : DockPanel
                         paper.Box($"pref_pv_wdot{i}").Width(7).Height(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(4)
                             .BackgroundColor(i == 2 ? EditorTheme.Red400 : EditorTheme.Ink200).IsNotInteractable();
                 }
-                paper.Box("pref_pv_td").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+                EditorGUI.Divider(paper, "pref_pv_td");
 
                 // Toolbar
                 using (paper.Row("pref_pv_tool").Height(28).Padding(PAD, PAD, 0, 0).Gap(PAD * 2)
@@ -794,16 +790,9 @@ public class PreferencesPanel : DockPanel
                 // Reset button (only if overridden)
                 if (isOverridden)
                 {
-                    paper.Box($"pref_sc_rst_{shortcut.Id}")
-                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(EditorTheme.Roundness)
-                        .BackgroundColor(EditorTheme.Glass)
-                        .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                        .Hovered.BackgroundColor(EditorTheme.Hover).BorderColor(EditorTheme.BorderStrong).End()
-                        .Text(Loc.Get("inspector.reset"), font)
-                        .TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSizeSmall)
-                        .Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(shortcut.Id, (id, _) => ShortcutManager.ClearOverride(id));
+                    string shortcutId = shortcut.Id;
+                    Origami.Button(paper, $"pref_sc_rst_{shortcutId}", Loc.Get("inspector.reset"), () => ShortcutManager.ClearOverride(shortcutId))
+                        .Small().Height(EditorTheme.RowHeight - 4).Show();
                 }
             }
         }

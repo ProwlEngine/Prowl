@@ -145,8 +145,6 @@ public abstract class AssetImporterEditor
     {
         if (Origami.IsReadOnly || !HasPendingChanges(entry, asset)) return;
 
-        Scribe.FontFile? font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
-        if (font == null) return;
         OrigamiMetrics m = Origami.Current.Metrics;
 
         using (paper.Row($"{id}_applybar").Height(UnitValue.Auto)
@@ -156,20 +154,11 @@ public abstract class AssetImporterEditor
             // Pushes both buttons to the right.
             paper.Box($"{id}_applybar_spacer").Height(1).IsNotInteractable();
 
-            paper.Box($"{id}_revert").Width(UnitValue.Auto).Height(30).Rounded(m.Rounding).Padding(16, 16, 0, 0)
-                .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                .Hovered.BackgroundColor(EditorTheme.Neutral300).End()
-                .Text(Prowl.Rosetta.Loc.Get("dialog.revert"), font).TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => RevertPendingChanges(entry, asset));
+            Origami.Button(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"),
+                () => RevertPendingChanges(entry, asset)).Height(30).Show();
 
-            paper.Box($"{id}_apply").Width(UnitValue.Auto).Height(30).Rounded(m.Rounding).Padding(16, 16, 0, 0)
-                .BackgroundColor(EditorTheme.Accent)
-                .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
-                .Text($"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}", font)
-                .TextColor(System.Drawing.Color.White).FontSize(EditorTheme.FontSizeSmall)
-                .Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => ApplyPendingChanges(entry, asset));
+            Origami.Button(paper, $"{id}_apply", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}",
+                () => ApplyPendingChanges(entry, asset)).Primary().Height(30).Show();
         }
     }
 }
