@@ -63,7 +63,7 @@ public class InputActionMapEditor : AssetImporterEditor
         OrigamiMetrics m = Origami.Current.Metrics;
 
         using (paper.Row($"{id}_tools").Height(34).Gap(m.SpacingLarge)
-            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Enter())
+            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Enter())
         {
             using (paper.Box($"{id}_search_w").Width(UnitValue.Stretch()).Height(34).Enter())
                 Origami.SearchField(paper, $"{id}_search", _filter, v => _filter = v, "Search actions or keys").Height(34).Show();

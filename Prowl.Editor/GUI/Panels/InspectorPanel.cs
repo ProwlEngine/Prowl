@@ -289,7 +289,8 @@ public class InspectorPanel : DockPanel
                 if (active is ContentItem contentItem)
                 {
                     DrawAssetHeader(paper, font, contentItem);
-                    Origami.Separator(paper, "insp_sep_header").Show();
+                    EditorGUI.Divider(paper, "insp_sep_header");
+                    paper.Box("insp_sep_gap").Height(Origami.Current.Metrics.PaddingLarge).IsNotInteractable();
                     DrawAssetInspector(paper, font, contentItem);
                 }
                 else
@@ -399,13 +400,14 @@ public class InspectorPanel : DockPanel
         string name = ci.Name;
         string typeName = ci.IsFolder ? Loc.Get("inspector.folder") : ci.TypeLabel;
 
+        OrigamiMetrics m = Origami.Current.Metrics;
         using (paper.Row("insp_header")
-            .Height(40).Padding(4, 0, 4, 4).Gap(8)
+            .Height(56).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(10)
             .Enter())
         {
             // Large icon
             paper.Box("insp_h_icon")
-                .Width(32).Height(32)
+                .Width(36).Height(36).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .BackgroundColor(EditorTheme.Hover)
                 .Rounded(EditorTheme.Roundness)
                 .Text(icon, font)
@@ -413,17 +415,18 @@ public class InspectorPanel : DockPanel
                 .FontSize(18f)
                 .Alignment(TextAlignment.MiddleCenter);
 
-            using (paper.Column("insp_h_info").Height(32).Gap(1).Enter())
+            using (paper.Column("insp_h_info").Height(UnitValue.Auto).Gap(2)
+                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             {
                 paper.Box("insp_h_name")
-                    .Height(18)
+                    .Height(22)
                     .Text(name, font)
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("insp_h_type")
-                    .Height(14)
+                    .Height(18)
                     .Text(typeName, font)
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSizeSmall)
