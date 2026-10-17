@@ -476,12 +476,9 @@ internal static class GltfMeshMapper
 
             case GltfPrimitiveMode.Triangles:
                 mesh.PrimitiveKinds |= PrimitiveKind.Triangle;
-                int triCount = indices.Length / 3;
-                faces.EnsureCapacity(triCount, triCount * 3);
                 if (indices.Length % 3 != 0)
                     ctx.Log.Warning($"{parentName}: TRIANGLES primitive has {indices.Length} indices (not a multiple of 3); trailing indices dropped.", "GltfMeshMapper");
-                for (int i = 0; i < triCount; i++)
-                    faces.AddTriangle((int)indices[i * 3 + 0], (int)indices[i * 3 + 1], (int)indices[i * 3 + 2]);
+                faces.AddTriangles(indices);
                 break;
 
             case GltfPrimitiveMode.TriangleStrip:

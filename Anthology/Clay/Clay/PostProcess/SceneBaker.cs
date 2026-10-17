@@ -1,6 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -207,6 +210,7 @@ internal static class SceneBaker
             nodes[i].BakeIndex = i;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static Mesh BakeMesh(IntermediateMesh src, int skinIndex, List<BakedSkin> skins, ImportContext context)
     {
         int vertexCount = src.Positions.Count;
@@ -217,13 +221,14 @@ internal static class SceneBaker
         bool hasPolys = (src.PrimitiveKinds & PrimitiveKind.Polygon) != 0;
         if (hasPolys) hasTris = true;
 
-        var indicesList = new List<uint>(EstimateIndexCount(src));
+        var indices = new uint[src.Faces.AllIndices.Length];
+        int indexCount = 0;
         var submeshes = new List<SubMesh>(3);
-        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Triangles, hasTris, vertexCount);
-        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Lines, hasLines, vertexCount);
-        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Points, hasPoints, vertexCount);
-
-        uint[] indices = indicesList.ToArray();
+        AppendSubMeshes(src, indices, ref indexCount, submeshes, PrimitiveTopology.Triangles, hasTris, vertexCount);
+        AppendSubMeshes(src, indices, ref indexCount, submeshes, PrimitiveTopology.Lines, hasLines, vertexCount);
+        AppendSubMeshes(src, indices, ref indexCount, submeshes, PrimitiveTopology.Points, hasPoints, vertexCount);
+        if (indexCount < indices.Length)
+            Array.Resize(ref indices, indexCount);
         bool has32 = vertexCount > ushort.MaxValue;
 
         BoneWeight[]? boneWeights = BakeBoneWeights(src, context);
@@ -252,12 +257,13 @@ internal static class SceneBaker
             BlendShapes = blendShapes,
         };
 
+        var vertices = mesh.Vertices;
         for (int s = 0; s < mesh.SubMeshes.Length; s++)
         {
             var sm = mesh.SubMeshes[s];
             Bounds sb = Bounds.Empty;
-            for (int i = 0; i < sm.IndexCount; i++)
-                sb.Encapsulate(mesh.Vertices[(int)indices[sm.IndexStart + i] + sm.BaseVertex]);
+            foreach (uint index in indices.AsSpan(sm.IndexStart, sm.IndexCount))
+                sb.Encapsulate(vertices[(int)index + sm.BaseVertex]);
             mesh.SubMeshes[s] = new SubMesh
             {
                 Topology = sm.Topology,
@@ -531,9 +537,11 @@ internal static class SceneBaker
     /// Materials keep the order they are first met in the face list, so a merged glTF mesh's
     /// sub-meshes come out in its primitive order.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void AppendSubMeshes(
         IntermediateMesh src,
-        List<uint> indicesList,
+        uint[] indices,
+        ref int indexCount,
         List<SubMesh> submeshes,
         PrimitiveTopology topology,
         bool include,
@@ -561,7 +569,7 @@ internal static class SceneBaker
 
         foreach (int material in materialOrder)
         {
-            int start = indicesList.Count;
+            int start = indexCount;
             foreach (var face in faces)
             {
                 if (face.Count != indicesPerFace) continue;
@@ -573,11 +581,11 @@ internal static class SceneBaker
                     if ((uint)index >= (uint)vertexCount)
                         throw new ImportException(
                             $"Mesh '{src.Name}' has index {index} but only {vertexCount} vertices.");
-                    indicesList.Add((uint)index);
+                    indices[indexCount++] = (uint)index;
                 }
             }
 
-            int count = indicesList.Count - start;
+            int count = indexCount - start;
             if (count == 0) continue;
 
             submeshes.Add(new SubMesh
@@ -592,13 +600,11 @@ internal static class SceneBaker
         }
     }
 
-    private static int EstimateIndexCount(IntermediateMesh src) => src.Faces.AllIndices.Length;
-
     private static Bounds ComputeBounds(List<Float3> positions)
     {
         Bounds b = Bounds.Empty;
-        for (int i = 0; i < positions.Count; i++)
-            b.Encapsulate(positions[i]);
+        foreach (var position in CollectionsMarshal.AsSpan(positions))
+            b.Encapsulate(position);
         return b;
     }
 

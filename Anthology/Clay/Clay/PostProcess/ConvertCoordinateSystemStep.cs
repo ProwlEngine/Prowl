@@ -78,13 +78,13 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
                 }
             }
 
+            var allIndices = mesh.Faces.AllIndices;
             foreach (var face in mesh.Faces.AsSpan())
             {
-                var indices = mesh.Faces.IndicesOf(face);
-                if (indices.Length == 3)
-                    (indices[1], indices[2]) = (indices[2], indices[1]);
-                else if (indices.Length > 3)
-                    indices.Reverse();
+                if (face.Count == 3)
+                    (allIndices[face.Start + 1], allIndices[face.Start + 2]) = (allIndices[face.Start + 2], allIndices[face.Start + 1]);
+                else if (face.Count > 3)
+                    allIndices.Slice(face.Start, face.Count).Reverse();
             }
 
             foreach (var bs in mesh.BlendShapes)
@@ -171,8 +171,14 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
         {
             int sx = _sources[0], sy = _sources[1], sz = _sources[2];
             float fx = _signs[0], fy = _signs[1], fz = _signs[2];
-            foreach (ref Float3 v in values)
-                v = new Float3(fx * v[sx], fy * v[sy], fz * v[sz]);
+            var f = MemoryMarshal.Cast<Float3, float>(values);
+            for (int i = 0; i < f.Length; i += 3)
+            {
+                float x = f[i + sx], y = f[i + sy], z = f[i + sz];
+                f[i] = fx * x;
+                f[i + 1] = fy * y;
+                f[i + 2] = fz * z;
+            }
         }
 
         public Float3 Scale(Float3 s) => new(s[_sources[0]], s[_sources[1]], s[_sources[2]]);

@@ -60,6 +60,24 @@ internal sealed class FaceList
         _indices.Add(c);
     }
 
+    /// <summary>Appends one triangle per three entries of <paramref name="indices"/>, ignoring any remainder.</summary>
+    public void AddTriangles(ReadOnlySpan<uint> indices)
+    {
+        int triCount = indices.Length / 3;
+        int firstFace = _faces.Count, firstIndex = _indices.Count;
+        CollectionsMarshal.SetCount(_faces, firstFace + triCount);
+        CollectionsMarshal.SetCount(_indices, firstIndex + triCount * 3);
+        var faces = CollectionsMarshal.AsSpan(_faces).Slice(firstFace);
+        var dst = CollectionsMarshal.AsSpan(_indices).Slice(firstIndex);
+        for (int t = 0; t < triCount; t++)
+        {
+            faces[t] = new IntermediateFace { Start = firstIndex + t * 3, Count = 3, Material = IntermediateFace.InheritMaterial, SmoothingGroup = IntermediateFace.NoSmoothingGroup };
+            dst[t * 3] = (int)indices[t * 3];
+            dst[t * 3 + 1] = (int)indices[t * 3 + 1];
+            dst[t * 3 + 2] = (int)indices[t * 3 + 2];
+        }
+    }
+
     /// <summary>Appends a face with the same material and smoothing group as <paramref name="like"/>.</summary>
     public void Add(ReadOnlySpan<int> indices, IntermediateFace like) => Add(indices, like.Material, like.SmoothingGroup);
 

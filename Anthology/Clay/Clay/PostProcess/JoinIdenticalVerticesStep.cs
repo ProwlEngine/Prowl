@@ -1,7 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
@@ -44,18 +46,10 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         // on everything else, which is the handful of seam duplicates rather than all of them.
         bool hasMorph = mesh.BlendShapes.Count > 0;
 
-        // Output buffers (we'll swap them in at the end).
-        var newPos = new List<Float3>(oldCount);
-        var newNormal = mesh.Normals is null ? null : new List<Float3>(oldCount);
-        var newTangent = mesh.Tangents is null ? null : new List<Float4>(oldCount);
-        var newColor = mesh.Colors0 is null ? null : new List<Color>(oldCount);
-        var newUVs = new List<Float2>?[Mesh.MaxUVChannels];
-        for (int i = 0; i < Mesh.MaxUVChannels; i++)
-            newUVs[i] = mesh.UVs[i] is null ? null : new List<Float2>(oldCount);
-
-        // Old-index -> new-index map; -1 means "not yet assigned a new slot".
+        // Old-index -> new-index map, and the old index each new vertex is copied from.
         var oldToNew = new int[oldCount];
-        Array.Fill(oldToNew, -1);
+        var kept = new int[oldCount];
+        int newCount = 0;
 
         // Hash chains over the kept vertices, stored in flat arrays.
         int tableSize = 1;
@@ -64,13 +58,12 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         var heads = new int[tableSize];
         Array.Fill(heads, -1);
         var next = new int[oldCount];
-        var hashes = new int[oldCount];
+        var hashes = HashVertices(mesh);
 
         for (int i = 0; i < oldCount; i++)
         {
-            int hash = HashVertex(mesh, i);
-            hashes[i] = hash;
-            int slot = hash & mask;
+            uint hash = hashes[i];
+            int slot = (int)(hash & (uint)mask);
 
             int matchedNew = -1;
             for (int candidate = heads[slot]; candidate >= 0; candidate = next[candidate])
@@ -84,16 +77,8 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
 
             if (matchedNew < 0)
             {
-                matchedNew = newPos.Count;
-                newPos.Add(mesh.Positions[i]);
-                if (newNormal is not null) newNormal.Add(mesh.Normals![i]);
-                if (newTangent is not null) newTangent.Add(mesh.Tangents![i]);
-                if (newColor is not null) newColor.Add(mesh.Colors0![i]);
-                for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
-                {
-                    if (newUVs[uv] is { } list)
-                        list.Add(mesh.UVs[uv]![i]);
-                }
+                matchedNew = newCount;
+                kept[newCount++] = i;
                 next[i] = heads[slot];
                 heads[slot] = i;
             }
@@ -101,13 +86,40 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
             oldToNew[i] = matchedNew;
         }
 
+        if (newCount < oldCount)
+            Compact(mesh, oldToNew, kept, newCount);
+
+        // Drop faces the weld collapsed. A thin triangle whose two ends merge becomes a face naming
+        // one vertex twice, which is not a face at all, and the degenerate pass runs before this step
+        // rather than after, so nothing else would catch it.
+        var faces = mesh.Faces;
+        var collapsed = new bool[faces.Count];
+        bool anyCollapsed = false;
+        for (int f = 0; f < collapsed.Length; f++)
+            anyCollapsed |= collapsed[f] = HasRepeatedIndex(faces.IndicesOf(f));
+        if (anyCollapsed)
+            faces.RemoveAll(collapsed);
+    }
+
+    /// <summary>Rewrites every per-vertex stream and the face indices to the welded vertex order.</summary>
+    private static void Compact(IntermediateMesh mesh, int[] oldToNew, int[] kept, int newCount)
+    {
+        int oldCount = oldToNew.Length;
+        var newKept = kept.AsSpan(0, newCount);
+        mesh.Positions = Gather(mesh.Positions, newKept);
+        if (mesh.Normals is { } normals) mesh.Normals = Gather(normals, newKept);
+        if (mesh.Tangents is { } tangents) mesh.Tangents = Gather(tangents, newKept);
+        if (mesh.Colors0 is { } colors) mesh.Colors0 = Gather(colors, newKept);
+        for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
+            if (mesh.UVs[uv] is { } list)
+                mesh.UVs[uv] = Gather(list, newKept);
+
         // Remap per-vertex joint/weight arrays into the new vertex order.
         if (mesh.VertexJoints is { } srcJoints && mesh.VertexWeights is { } srcWeights)
         {
             int influences = mesh.MaxInfluencesPerVertex;
-            int newVertexCount = newPos.Count;
-            int[] dstJoints = new int[newVertexCount * influences];
-            float[] dstWeights = new float[newVertexCount * influences];
+            int[] dstJoints = new int[newCount * influences];
+            float[] dstWeights = new float[newCount * influences];
             for (int i = 0; i < oldCount; i++)
             {
                 int dst = oldToNew[i];
@@ -127,9 +139,9 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
             for (int fi = 0; fi < bs.Frames.Count; fi++)
             {
                 var frame = bs.Frames[fi];
-                var newDelta = new Float3[newPos.Count];
-                Float3[]? newNorm = frame.DeltaNormals is null ? null : new Float3[newPos.Count];
-                Float3[]? newTan = frame.DeltaTangents is null ? null : new Float3[newPos.Count];
+                var newDelta = new Float3[newCount];
+                Float3[]? newNorm = frame.DeltaNormals is null ? null : new Float3[newCount];
+                Float3[]? newTan = frame.DeltaTangents is null ? null : new Float3[newCount];
                 for (int i = 0; i < oldCount; i++)
                 {
                     int dst = oldToNew[i];
@@ -147,26 +159,19 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
             }
         }
 
-        // Rewrite faces with the new indices, dropping any the weld collapsed. A thin triangle whose
-        // two ends merge becomes a face naming one vertex twice, which is not a face at all, and the
-        // degenerate pass runs before this step rather than after, so nothing else would catch it.
-        var faces = mesh.Faces;
-        foreach (ref int index in faces.AllIndices)
+        foreach (ref int index in mesh.Faces.AllIndices)
             index = oldToNew[index];
-        var collapsed = new bool[faces.Count];
-        for (int f = 0; f < collapsed.Length; f++)
-            collapsed[f] = HasRepeatedIndex(faces.IndicesOf(f));
-        faces.RemoveAll(collapsed);
+    }
 
-        mesh.Positions = newPos;
-        if (newNormal is not null) mesh.Normals = newNormal;
-        if (newTangent is not null) mesh.Tangents = newTangent;
-        if (newColor is not null) mesh.Colors0 = newColor;
-        for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
-        {
-            if (newUVs[uv] is { } list)
-                mesh.UVs[uv] = list;
-        }
+    private static List<T> Gather<T>(List<T> source, ReadOnlySpan<int> kept)
+    {
+        var src = CollectionsMarshal.AsSpan(source);
+        var result = new List<T>(kept.Length);
+        CollectionsMarshal.SetCount(result, kept.Length);
+        var dst = CollectionsMarshal.AsSpan(result);
+        for (int i = 0; i < kept.Length; i++)
+            dst[i] = src[kept[i]];
+        return result;
     }
 
     /// <summary>True when a face names the same vertex twice, which only a point can survive.</summary>
@@ -179,26 +184,50 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         return false;
     }
 
+    /// <summary>Hashes every vertex over the same attributes <see cref="VerticesEqual"/> compares, morph deltas aside.</summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    private static int HashVertex(IntermediateMesh m, int i)
+    private static uint[] HashVertices(IntermediateMesh m)
     {
-        var hc = new HashCode();
-        hc.Add(m.Positions[i]);
-        if (m.Normals is not null) hc.Add(m.Normals[i]);
-        if (m.Tangents is not null) hc.Add(m.Tangents[i]);
-        if (m.Colors0 is not null) hc.Add(m.Colors0[i]);
+        var hashes = new uint[m.Positions.Count];
+        Mix(hashes, MemoryMarshal.Cast<Float3, float>(CollectionsMarshal.AsSpan(m.Positions)), 3);
+        if (m.Normals is { } n) Mix(hashes, MemoryMarshal.Cast<Float3, float>(CollectionsMarshal.AsSpan(n)), 3);
+        if (m.Tangents is { } t) Mix(hashes, MemoryMarshal.Cast<Float4, float>(CollectionsMarshal.AsSpan(t)), 4);
+        if (m.Colors0 is { } c) Mix(hashes, MemoryMarshal.Cast<Color, float>(CollectionsMarshal.AsSpan(c)), 4);
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
-            if (m.UVs[uv] is { } u) hc.Add(u[i]);
-        if (m.VertexJoints is { } vj && m.VertexWeights is { } vw)
+            if (m.UVs[uv] is { } u) Mix(hashes, MemoryMarshal.Cast<Float2, float>(CollectionsMarshal.AsSpan(u)), 2);
+        if (m.VertexWeights is { } vw && m.VertexJoints is not null)
+            Mix(hashes, vw, m.MaxInfluencesPerVertex);
+
+        for (int i = 0; i < hashes.Length; i++)
+            hashes[i] = Avalanche(hashes[i]);
+        return hashes;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static void Mix(uint[] hashes, ReadOnlySpan<float> values, int perVertex)
+    {
+        values = values[..(hashes.Length * perVertex)];
+        for (int i = 0, v = 0; i < hashes.Length; i++)
         {
-            int influences = m.MaxInfluencesPerVertex;
-            for (int k = 0; k < influences; k++)
-            {
-                hc.Add(vj[i * influences + k]);
-                hc.Add(vw[i * influences + k]);
-            }
+            uint h = hashes[i];
+            for (int k = 0; k < perVertex; k++, v++)
+                h = (BitOperations.RotateLeft(h, 5) ^ Bits(values[v])) * 0x9E3779B1u;
+            hashes[i] = h;
         }
-        return hc.ToHashCode();
+    }
+
+    // Equal floats give equal bits: both zeros map to 0 and every NaN to one pattern.
+    private static uint Bits(float f) =>
+        f == 0f ? 0u : float.IsNaN(f) ? 0x7FC00000u : BitConverter.SingleToUInt32Bits(f);
+
+    private static uint Avalanche(uint h)
+    {
+        h ^= h >> 16;
+        h *= 0x85EBCA6Bu;
+        h ^= h >> 13;
+        h *= 0xC2B2AE35u;
+        h ^= h >> 16;
+        return h;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]

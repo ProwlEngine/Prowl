@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -50,19 +52,20 @@ internal sealed class FindInvalidDataStep : IPostProcess
     private static int SanitizeMesh(IntermediateMesh mesh, ImportContext ctx)
     {
         int fixedCount = 0;
-        for (int i = 0; i < mesh.Positions.Count; i++)
+        var positions = CollectionsMarshal.AsSpan(mesh.Positions);
+        for (int i = 0; i < positions.Length; i++)
         {
-            var p = mesh.Positions[i];
-            if (!Finite(p))
+            if (!Finite(positions[i]))
             {
-                mesh.Positions[i] = Float3.Zero;
+                positions[i] = Float3.Zero;
                 fixedCount += 3;
             }
         }
 
-        if (mesh.Normals is { } normals)
+        if (mesh.Normals is { } normalList)
         {
-            for (int i = 0; i < normals.Count; i++)
+            var normals = CollectionsMarshal.AsSpan(normalList);
+            for (int i = 0; i < normals.Length; i++)
             {
                 if (!Finite(normals[i]) || Float3.Length(normals[i]) < 1e-12f)
                 {
@@ -72,9 +75,10 @@ internal sealed class FindInvalidDataStep : IPostProcess
             }
         }
 
-        if (mesh.Tangents is { } tangents)
+        if (mesh.Tangents is { } tangentList)
         {
-            for (int i = 0; i < tangents.Count; i++)
+            var tangents = CollectionsMarshal.AsSpan(tangentList);
+            for (int i = 0; i < tangents.Length; i++)
             {
                 var t = tangents[i];
                 if (!Finite(t))
@@ -85,9 +89,10 @@ internal sealed class FindInvalidDataStep : IPostProcess
             }
         }
 
-        if (mesh.Colors0 is { } colors)
+        if (mesh.Colors0 is { } colorList)
         {
-            for (int i = 0; i < colors.Count; i++)
+            var colors = CollectionsMarshal.AsSpan(colorList);
+            for (int i = 0; i < colors.Length; i++)
             {
                 var c = colors[i];
                 if (!Finite(c))
@@ -100,9 +105,10 @@ internal sealed class FindInvalidDataStep : IPostProcess
 
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
         {
-            if (mesh.UVs[uv] is { } list)
+            if (mesh.UVs[uv] is { } uvList)
             {
-                for (int i = 0; i < list.Count; i++)
+                var list = CollectionsMarshal.AsSpan(uvList);
+                for (int i = 0; i < list.Length; i++)
                 {
                     var u = list[i];
                     if (!Finite(u))
