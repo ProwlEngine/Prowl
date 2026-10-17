@@ -11,7 +11,8 @@ internal sealed class ExecutionPool<TDesc, TResource>(
     where TDesc : notnull
     where TResource : class
 {
-    internal const ulong RetentionExecutions = 120;
+    // Free entries not rented for this many executions go, so sizes a resized view left behind are freed within frames
+    internal const ulong RetentionExecutions = 4;
 
     private readonly GraphicsDevice _device = device;
     private readonly Func<TDesc, TResource> _create = create;
