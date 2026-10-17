@@ -28,7 +28,7 @@ public sealed class BoxCollider : Collider
 
     public override RigidBodyShape[] CreateShapes() => [new BoxShape(Maths.Max(size.X, 0.01f), Maths.Max(size.Y, 0.01f), Maths.Max(size.Z, 0.01f))];
 
-    public override void DrawGizmos()
+    public override void DrawGizmosSelected()
     {
         Debug.PushMatrix(GizmoMatrix);
         Debug.DrawWireCube(Float3.Zero, size * 0.5f, Color.Green);

@@ -37,7 +37,7 @@ public sealed class ConeCollider : Collider
 
     public override RigidBodyShape[] CreateShapes() => [new ConeShape(Maths.Max(radius, 0.01f), Maths.Max(height, 0.01f))];
 
-    public override void DrawGizmos()
+    public override void DrawGizmosSelected()
     {
         Debug.PushMatrix(GizmoMatrix);
         Debug.DrawWireCone(new Float3(0, -height * 0.25f, 0), new Float3(0, height, 0), radius, Color.Green);

@@ -210,7 +210,7 @@ public sealed class MeshCollider : Collider
         base.OnEnable();
     }
 
-    public override void DrawGizmos()
+    public override void DrawGizmosSelected()
     {
         Mesh? m = mesh;
         if (m == null)

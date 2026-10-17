@@ -39,7 +39,7 @@ public sealed class CapsuleCollider : Collider
 
     public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(Maths.Max(radius, 0.01f), SegmentLength)];
 
-    public override void DrawGizmos()
+    public override void DrawGizmosSelected()
     {
         float halfSegment = SegmentLength * 0.5f;
         Debug.PushMatrix(GizmoMatrix);

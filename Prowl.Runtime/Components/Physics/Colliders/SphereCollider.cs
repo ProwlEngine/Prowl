@@ -26,7 +26,7 @@ public sealed class SphereCollider : Collider
 
     public override RigidBodyShape[] CreateShapes() => [new SphereShape(Maths.Max(radius, 0.01f))];
 
-    public override void DrawGizmos()
+    public override void DrawGizmosSelected()
     {
         Debug.PushMatrix(GizmoMatrix);
         Debug.DrawWireSphere(Float3.Zero, radius, Color.Green);

@@ -38,7 +38,7 @@ public sealed class CylinderCollider : Collider
     // CylinderShape takes (height, radius) in that order.
     public override RigidBodyShape[] CreateShapes() => [new CylinderShape(Maths.Max(height, 0.01f), Maths.Max(radius, 0.01f))];
 
-    public override void DrawGizmos()
+    public override void DrawGizmosSelected()
     {
         Debug.PushMatrix(GizmoMatrix);
         Debug.DrawWireCylinder(Float3.Zero, Quaternion.Identity, radius, height, Color.Green);
