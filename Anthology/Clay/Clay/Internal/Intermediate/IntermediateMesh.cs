@@ -19,7 +19,7 @@ internal sealed class IntermediateMesh
     public List<Color>? Colors0 { get; set; }
     public List<Float2>?[] UVs { get; } = new List<Float2>?[Mesh.MaxUVChannels];
 
-    public List<IntermediateFace> Faces { get; } = new();
+    public FaceList Faces { get; set; } = new();
 
     /// <summary>
     /// Per-vertex joint indices when skinned. Packed as <c>vertexCount * MaxInfluencesPerVertex</c>
@@ -66,7 +66,7 @@ internal sealed class IntermediateMesh
     public PrimitiveKind PrimitiveKinds { get; set; }
 }
 
-/// <summary>A single face with N indices (3 for triangles, 2 for lines, 1 for points, N for polygons).</summary>
+/// <summary>A single face: a run of N indices in its <see cref="FaceList"/> (3 for triangles, 2 for lines, 1 for points, N for polygons).</summary>
 /// <remarks>
 /// The material rides on the face rather than beside it so that every post-process step which
 /// reorders, filters or moves faces between meshes carries the assignment along without having to
@@ -83,7 +83,11 @@ internal struct IntermediateFace
     /// the smoothing angle. Distinct from 0, which is an author saying this face smooths with nothing.</summary>
     public const int NoSmoothingGroup = -1;
 
-    public int[] Indices;
+    /// <summary>Offset of this face's first index in the owning <see cref="FaceList"/>.</summary>
+    public int Start;
+
+    /// <summary>Number of indices in this face.</summary>
+    public int Count;
 
     /// <summary>Material index for this face, or <see cref="InheritMaterial"/> to use the mesh's.</summary>
     public int Material;
@@ -94,30 +98,6 @@ internal struct IntermediateFace
     /// groups never are.
     /// </summary>
     public int SmoothingGroup;
-
-    public IntermediateFace(int[] indices)
-    {
-        Indices = indices;
-        Material = InheritMaterial;
-        SmoothingGroup = NoSmoothingGroup;
-    }
-
-    public IntermediateFace(int[] indices, int material)
-    {
-        Indices = indices;
-        Material = material;
-        SmoothingGroup = NoSmoothingGroup;
-    }
-
-    public IntermediateFace(int[] indices, int material, int smoothingGroup)
-    {
-        Indices = indices;
-        Material = material;
-        SmoothingGroup = smoothingGroup;
-    }
-
-    /// <summary>Carries this face's material and smoothing group onto a new set of indices.</summary>
-    public readonly IntermediateFace WithIndices(int[] indices) => new(indices, Material, SmoothingGroup);
 }
 
 [Flags]

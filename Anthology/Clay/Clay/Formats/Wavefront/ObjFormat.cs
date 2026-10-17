@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
@@ -384,21 +385,21 @@ internal sealed class ObjFormat : IModelFormat
             {
                 case PrimitiveKind.Point:
                     mesh.PrimitiveKinds |= PrimitiveKind.Point;
-                    foreach (int v in faceIndices)
-                        mesh.Faces.Add(new IntermediateFace(new[] { v }, IntermediateFace.InheritMaterial, _smoothingGroup));
+                    for (int i = 0; i < faceIndices.Count; i++)
+                        mesh.Faces.Add(CollectionsMarshal.AsSpan(faceIndices).Slice(i, 1), IntermediateFace.InheritMaterial, _smoothingGroup);
                     break;
 
                 case PrimitiveKind.Line:
                     mesh.PrimitiveKinds |= PrimitiveKind.Line;
                     for (int i = 0; i + 1 < faceIndices.Count; i++)
-                        mesh.Faces.Add(new IntermediateFace(new[] { faceIndices[i], faceIndices[i + 1] }, IntermediateFace.InheritMaterial, _smoothingGroup));
+                        mesh.Faces.Add(CollectionsMarshal.AsSpan(faceIndices).Slice(i, 2), IntermediateFace.InheritMaterial, _smoothingGroup);
                     break;
 
                 default:
                     if (faceIndices.Count == 3)
                     {
                         mesh.PrimitiveKinds |= PrimitiveKind.Triangle;
-                        mesh.Faces.Add(new IntermediateFace(faceIndices.ToArray(), IntermediateFace.InheritMaterial, _smoothingGroup));
+                        mesh.Faces.Add(CollectionsMarshal.AsSpan(faceIndices), IntermediateFace.InheritMaterial, _smoothingGroup);
                     }
                     else if (faceIndices.Count < 3)
                     {
@@ -408,7 +409,7 @@ internal sealed class ObjFormat : IModelFormat
                     {
                         // Polygon - mark and let TriangulateStep break it up.
                         mesh.PrimitiveKinds |= PrimitiveKind.Polygon;
-                        mesh.Faces.Add(new IntermediateFace(faceIndices.ToArray(), IntermediateFace.InheritMaterial, _smoothingGroup));
+                        mesh.Faces.Add(CollectionsMarshal.AsSpan(faceIndices), IntermediateFace.InheritMaterial, _smoothingGroup);
                     }
                     break;
             }

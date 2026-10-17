@@ -34,20 +34,11 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
         int removedTotal = 0;
         foreach (var mesh in scene.Meshes)
         {
-            int kept = 0;
-            for (int i = 0; i < mesh.Faces.Count; i++)
-            {
-                if (IsDegenerate(mesh, mesh.Faces[i].Indices))
-                {
-                    removedTotal++;
-                    continue;
-                }
-                if (kept != i)
-                    mesh.Faces[kept] = mesh.Faces[i];
-                kept++;
-            }
-            if (kept < mesh.Faces.Count)
-                mesh.Faces.RemoveRange(kept, mesh.Faces.Count - kept);
+            var faces = mesh.Faces;
+            var degenerate = new bool[faces.Count];
+            for (int f = 0; f < degenerate.Length; f++)
+                degenerate[f] = IsDegenerate(mesh, faces.IndicesOf(f));
+            removedTotal += faces.RemoveAll(degenerate);
         }
 
         if (removedTotal > 0)
@@ -55,7 +46,7 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    private static bool IsDegenerate(IntermediateMesh mesh, int[] indices)
+    private static bool IsDegenerate(IntermediateMesh mesh, ReadOnlySpan<int> indices)
     {
         switch (indices.Length)
         {

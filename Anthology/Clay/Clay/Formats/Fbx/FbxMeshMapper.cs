@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -173,7 +175,7 @@ internal static class FbxMeshMapper
 
             // Per-polygon-vertex unpack: every entry in unpackedVertexIndices becomes its own mesh
             // vertex with the corresponding layered attributes. JoinIdenticalVertices later collapses.
-            var faceList = new List<int[]>(faceSizes.Count);
+            var corners = new List<int>(4);
             int cursor = 0;
             for (int f = 0; f < faceSizes.Count; f++)
             {
@@ -183,7 +185,7 @@ internal static class FbxMeshMapper
                     cursor += n;
                     continue;
                 }
-                int[] faceIndices = new int[n];
+                corners.Clear();
                 for (int k = 0; k < n; k++)
                 {
                     int pv = cursor + k;
@@ -222,35 +224,22 @@ internal static class FbxMeshMapper
                         mesh.Colors0 ??= new List<Color>();
                         mesh.Colors0.Add(unpackedColors[pv]);
                     }
-                    faceIndices[k] = meshVi;
+                    corners.Add(meshVi);
                 }
-                faceList.Add(faceIndices);
-                cursor += n;
-            }
 
-            foreach (var f in faceList)
-            {
-                if (f.Length == 3)
+                if (n == 3)
                 {
                     mesh.PrimitiveKinds |= PrimitiveKind.Triangle;
                     mesh.PrimitiveKinds &= ~PrimitiveKind.Polygon;
-                    mesh.Faces.Add(new IntermediateFace(f));
                 }
-                else if (f.Length == 2)
-                {
+                else if (n == 2)
                     mesh.PrimitiveKinds |= PrimitiveKind.Line;
-                    mesh.Faces.Add(new IntermediateFace(f));
-                }
-                else if (f.Length == 1)
-                {
+                else if (n == 1)
                     mesh.PrimitiveKinds |= PrimitiveKind.Point;
-                    mesh.Faces.Add(new IntermediateFace(f));
-                }
                 else
-                {
                     mesh.PrimitiveKinds |= PrimitiveKind.Polygon;
-                    mesh.Faces.Add(new IntermediateFace(f));
-                }
+                mesh.Faces.Add(CollectionsMarshal.AsSpan(corners));
+                cursor += n;
             }
 
             scene.Meshes.Add(mesh);

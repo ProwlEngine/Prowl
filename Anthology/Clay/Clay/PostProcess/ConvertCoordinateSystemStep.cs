@@ -78,12 +78,13 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
                 }
             }
 
-            foreach (var face in CollectionsMarshal.AsSpan(mesh.Faces))
+            foreach (var face in mesh.Faces.AsSpan())
             {
-                if (face.Indices.Length == 3)
-                    (face.Indices[1], face.Indices[2]) = (face.Indices[2], face.Indices[1]);
-                else if (face.Indices.Length > 3)
-                    Array.Reverse(face.Indices);
+                var indices = mesh.Faces.IndicesOf(face);
+                if (indices.Length == 3)
+                    (indices[1], indices[2]) = (indices[2], indices[1]);
+                else if (indices.Length > 3)
+                    indices.Reverse();
             }
 
             foreach (var bs in mesh.BlendShapes)

@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -174,17 +176,19 @@ internal sealed class OptimizeMeshesStep : IPostProcess
                 pu.AddRange(su);
         }
 
+        var shifted = new List<int>();
         foreach (var face in source.Faces)
         {
-            int[] shifted = new int[face.Indices.Length];
-            for (int k = 0; k < face.Indices.Length; k++)
+            var indices = source.Faces.IndicesOf(face);
+            shifted.Clear();
+            for (int k = 0; k < indices.Length; k++)
             {
-                int src = mirrored ? face.Indices.Length - 1 - k : k;
-                shifted[k] = face.Indices[src] + vertexOffset;
+                int src = mirrored ? indices.Length - 1 - k : k;
+                shifted.Add(indices[src] + vertexOffset);
             }
             // Resolved rather than copied: the source may have been inheriting its own mesh material,
             // which would silently become the primary's after the move.
-            primary.Faces.Add(new IntermediateFace(shifted, source.MaterialForFace(face), face.SmoothingGroup));
+            primary.Faces.Add(CollectionsMarshal.AsSpan(shifted), source.MaterialForFace(face), face.SmoothingGroup);
         }
     }
 

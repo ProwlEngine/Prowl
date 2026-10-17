@@ -143,9 +143,13 @@ internal static class GltfMeshMapper
             if (shapeHasTangents[t]) shapeTangents[t] = new Float3[totalVertices];
         }
 
-        int totalFaces = 0;
-        foreach (var p in parts) totalFaces += p.Faces.Count;
-        merged.Faces.EnsureCapacity(totalFaces);
+        int totalFaces = 0, totalIndices = 0;
+        foreach (var p in parts)
+        {
+            totalFaces += p.Faces.Count;
+            totalIndices += p.Faces.AllIndices.Length;
+        }
+        merged.Faces.EnsureCapacity(totalFaces, totalIndices);
 
         int offset = 0;
         foreach (var part in parts)
@@ -185,15 +189,13 @@ internal static class GltfMeshMapper
                     Array.Copy(dt, 0, shapeTangents[t], offset, Math.Min(dt.Length, count));
             }
 
-            foreach (var face in part.Faces)
-            {
-                for (int k = 0; k < face.Indices.Length; k++)
-                    face.Indices[k] += offset;
+            foreach (ref int index in part.Faces.AllIndices)
+                index += offset;
 
-                // The primitive's material becomes this face's, which is what makes the merged mesh
-                // resolve back into one sub-mesh per material at bake.
-                merged.Faces.Add(new IntermediateFace(face.Indices, part.MaterialIndex));
-            }
+            // The primitive's material becomes this face's, which is what makes the merged mesh
+            // resolve back into one sub-mesh per material at bake.
+            foreach (var face in part.Faces)
+                merged.Faces.Add(part.Faces.IndicesOf(face), part.MaterialIndex);
 
             merged.PrimitiveKinds |= part.PrimitiveKinds;
             offset += count;
@@ -429,14 +431,27 @@ internal static class GltfMeshMapper
         }
     }
 
+    private static Span<int> Pair(Span<int> pair, uint a, uint b)
+    {
+        pair[0] = (int)a;
+        pair[1] = (int)b;
+        return pair;
+    }
+
     private static void BuildFaces(int mode, uint[] indices, IntermediateMesh mesh, ImportContext ctx, string parentName)
     {
+        var faces = mesh.Faces;
+        Span<int> pair = stackalloc int[2];
         switch (mode)
         {
             case GltfPrimitiveMode.Points:
                 mesh.PrimitiveKinds |= PrimitiveKind.Point;
+                faces.EnsureCapacity(indices.Length, indices.Length);
                 for (int i = 0; i < indices.Length; i++)
-                    mesh.Faces.Add(new IntermediateFace(new[] { (int)indices[i] }));
+                {
+                    pair[0] = (int)indices[i];
+                    faces.Add(pair[..1]);
+                }
                 break;
 
             case GltfPrimitiveMode.Lines:
@@ -444,40 +459,29 @@ internal static class GltfMeshMapper
                 if ((indices.Length & 1) != 0)
                     ctx.Log.Warning($"{parentName}: LINES primitive has odd index count; trailing index dropped.", "GltfMeshMapper");
                 for (int i = 0; i + 1 < indices.Length; i += 2)
-                    mesh.Faces.Add(new IntermediateFace(new[] { (int)indices[i], (int)indices[i + 1] }));
+                    faces.Add(Pair(pair, indices[i], indices[i + 1]));
                 break;
 
             case GltfPrimitiveMode.LineLoop:
                 mesh.PrimitiveKinds |= PrimitiveKind.Line;
                 for (int i = 0; i < indices.Length; i++)
-                {
-                    int a = (int)indices[i];
-                    int b = (int)indices[(i + 1) % indices.Length];
-                    mesh.Faces.Add(new IntermediateFace(new[] { a, b }));
-                }
+                    faces.Add(Pair(pair, indices[i], indices[(i + 1) % indices.Length]));
                 break;
 
             case GltfPrimitiveMode.LineStrip:
                 mesh.PrimitiveKinds |= PrimitiveKind.Line;
                 for (int i = 0; i + 1 < indices.Length; i++)
-                    mesh.Faces.Add(new IntermediateFace(new[] { (int)indices[i], (int)indices[i + 1] }));
+                    faces.Add(Pair(pair, indices[i], indices[i + 1]));
                 break;
 
             case GltfPrimitiveMode.Triangles:
                 mesh.PrimitiveKinds |= PrimitiveKind.Triangle;
                 int triCount = indices.Length / 3;
-                mesh.Faces.EnsureCapacity(mesh.Faces.Count + triCount);
+                faces.EnsureCapacity(triCount, triCount * 3);
                 if (indices.Length % 3 != 0)
                     ctx.Log.Warning($"{parentName}: TRIANGLES primitive has {indices.Length} indices (not a multiple of 3); trailing indices dropped.", "GltfMeshMapper");
                 for (int i = 0; i < triCount; i++)
-                {
-                    mesh.Faces.Add(new IntermediateFace(new[]
-                    {
-                        (int)indices[i * 3 + 0],
-                        (int)indices[i * 3 + 1],
-                        (int)indices[i * 3 + 2],
-                    }));
-                }
+                    faces.AddTriangle((int)indices[i * 3 + 0], (int)indices[i * 3 + 1], (int)indices[i * 3 + 2]);
                 break;
 
             case GltfPrimitiveMode.TriangleStrip:
@@ -488,9 +492,9 @@ internal static class GltfMeshMapper
                     int b = (int)indices[i + 1];
                     int c = (int)indices[i + 2];
                     if ((i & 1) == 0)
-                        mesh.Faces.Add(new IntermediateFace(new[] { a, b, c }));
+                        faces.AddTriangle(a, b, c);
                     else
-                        mesh.Faces.Add(new IntermediateFace(new[] { b, a, c }));
+                        faces.AddTriangle(b, a, c);
                 }
                 break;
 
@@ -500,14 +504,7 @@ internal static class GltfMeshMapper
                 {
                     int center = (int)indices[0];
                     for (int i = 1; i + 1 < indices.Length; i++)
-                    {
-                        mesh.Faces.Add(new IntermediateFace(new[]
-                        {
-                            center,
-                            (int)indices[i],
-                            (int)indices[i + 1],
-                        }));
-                    }
+                        faces.AddTriangle(center, (int)indices[i], (int)indices[i + 1]);
                 }
                 break;
 

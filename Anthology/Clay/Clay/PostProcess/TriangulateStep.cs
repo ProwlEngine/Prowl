@@ -25,43 +25,51 @@ internal sealed class TriangulateStep : IPostProcess
     {
         foreach (var mesh in scene.Meshes)
         {
-            if ((mesh.PrimitiveKinds & PrimitiveKind.Polygon) == 0)
-            {
-                // Even meshes the reader marked as "Triangle only" may carry polygons if a later
-                // step inserted some; we still walk the face list to be safe.
-            }
+            if (HasPolygons(mesh.Faces))
+                mesh.Faces = Triangulate(mesh, context);
 
-            var oldFaces = mesh.Faces;
-            var newFaces = new List<IntermediateFace>(oldFaces.Count);
-
-            foreach (var face in oldFaces)
-            {
-                int n = face.Indices.Length;
-                if (n <= 3)
-                {
-                    newFaces.Add(face);
-                    continue;
-                }
-
-                if (n == 4 && IsConvexQuad(mesh, face.Indices))
-                {
-                    int a = face.Indices[0], b = face.Indices[1], c = face.Indices[2], d = face.Indices[3];
-                    newFaces.Add(face.WithIndices(new[] { a, b, c }));
-                    newFaces.Add(face.WithIndices(new[] { a, c, d }));
-                    continue;
-                }
-
-                EarClip(mesh, face, newFaces, context);
-            }
-
-            mesh.Faces.Clear();
-            mesh.Faces.AddRange(newFaces);
             mesh.PrimitiveKinds &= ~PrimitiveKind.Polygon;
             mesh.PrimitiveKinds |= PrimitiveKind.Triangle;
         }
     }
 
-    private static bool IsConvexQuad(IntermediateMesh mesh, int[] q)
+    private static bool HasPolygons(FaceList faces)
+    {
+        foreach (var face in faces.AsSpan())
+            if (face.Count > 3)
+                return true;
+        return false;
+    }
+
+    private static FaceList Triangulate(IntermediateMesh mesh, ImportContext context)
+    {
+        var oldFaces = mesh.Faces;
+        var newFaces = new FaceList(oldFaces.Count, oldFaces.AllIndices.Length);
+
+        foreach (var face in oldFaces)
+        {
+            var indices = oldFaces.IndicesOf(face);
+            if (face.Count <= 3)
+            {
+                newFaces.Add(indices, face);
+                continue;
+            }
+
+            if (face.Count == 4 && IsConvexQuad(mesh, indices))
+            {
+                int a = indices[0], b = indices[1], c = indices[2], d = indices[3];
+                newFaces.AddTriangle(a, b, c, face.Material, face.SmoothingGroup);
+                newFaces.AddTriangle(a, c, d, face.Material, face.SmoothingGroup);
+                continue;
+            }
+
+            EarClip(mesh, indices.ToArray(), face, newFaces, context);
+        }
+
+        return newFaces;
+    }
+
+    private static bool IsConvexQuad(IntermediateMesh mesh, ReadOnlySpan<int> q)
     {
         Float3 a = mesh.Positions[q[0]];
         Float3 b = mesh.Positions[q[1]];
@@ -76,9 +84,8 @@ internal sealed class TriangulateStep : IPostProcess
         return Float3.Dot(n0, n1) > 0f && Float3.Dot(n1, n2) > 0f && Float3.Dot(n2, n3) > 0f;
     }
 
-    private static void EarClip(IntermediateMesh mesh, IntermediateFace source, List<IntermediateFace> output, ImportContext ctx)
+    private static void EarClip(IntermediateMesh mesh, int[] poly, IntermediateFace source, FaceList output, ImportContext ctx)
     {
-        int[] poly = source.Indices;
         int n = poly.Length;
         Float3 normal = PolygonNormal(mesh, poly);
         (int axisU, int axisV) = PickProjectionAxes(normal);
@@ -105,9 +112,13 @@ internal sealed class TriangulateStep : IPostProcess
         // triangle wound opposite to the source polygon, flipping its normal. Which case a polygon
         // lands in depends only on whether its normal points along the negative side of the axis the
         // projection dropped, so this is not a rare shape: it is half of them.
-        void Emit(int p, int q, int r) => output.Add(source.WithIndices(reversed
-            ? new[] { poly[r], poly[q], poly[p] }
-            : new[] { poly[p], poly[q], poly[r] }));
+        void Emit(int p, int q, int r)
+        {
+            if (reversed)
+                output.AddTriangle(poly[r], poly[q], poly[p], source.Material, source.SmoothingGroup);
+            else
+                output.AddTriangle(poly[p], poly[q], poly[r], source.Material, source.SmoothingGroup);
+        }
 
         // Build the working linked list (prev/next), respecting the desired winding direction.
         var prev = new int[n];

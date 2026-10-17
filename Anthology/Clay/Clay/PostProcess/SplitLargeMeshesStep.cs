@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Runtime.InteropServices;
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -58,44 +60,46 @@ internal sealed class SplitLargeMeshesStep : IPostProcess
     private static List<IntermediateMesh> SplitOne(IntermediateMesh src, int maxVertices)
     {
         var result = new List<IntermediateMesh>();
-        var currentFaces = new List<IntermediateFace>();
+        var currentFaces = new FaceList();
         var seen = new Dictionary<int, int>(); // old index -> new index in current chunk
 
         void Flush()
         {
             if (currentFaces.Count == 0) return;
             result.Add(BuildChunk(src, seen, currentFaces));
-            currentFaces = new List<IntermediateFace>();
+            currentFaces = new FaceList();
             seen = new Dictionary<int, int>();
         }
 
+        var remapped = new List<int>();
         foreach (var face in src.Faces)
         {
+            var indices = src.Faces.IndicesOf(face);
             int wouldAdd = 0;
-            for (int k = 0; k < face.Indices.Length; k++)
-                if (!seen.ContainsKey(face.Indices[k])) wouldAdd++;
+            for (int k = 0; k < indices.Length; k++)
+                if (!seen.ContainsKey(indices[k])) wouldAdd++;
 
             if (seen.Count + wouldAdd > maxVertices && currentFaces.Count > 0)
                 Flush();
 
-            int[] remapped = new int[face.Indices.Length];
-            for (int k = 0; k < face.Indices.Length; k++)
+            remapped.Clear();
+            for (int k = 0; k < indices.Length; k++)
             {
-                int old = face.Indices[k];
+                int old = indices[k];
                 if (!seen.TryGetValue(old, out int nu))
                 {
                     nu = seen.Count;
                     seen[old] = nu;
                 }
-                remapped[k] = nu;
+                remapped.Add(nu);
             }
-            currentFaces.Add(new IntermediateFace(remapped, face.Material));
+            currentFaces.Add(CollectionsMarshal.AsSpan(remapped), face.Material);
         }
         Flush();
         return result;
     }
 
-    private static IntermediateMesh BuildChunk(IntermediateMesh src, Dictionary<int, int> oldToNew, List<IntermediateFace> faces)
+    private static IntermediateMesh BuildChunk(IntermediateMesh src, Dictionary<int, int> oldToNew, FaceList faces)
     {
         var dst = new IntermediateMesh
         {
@@ -132,7 +136,7 @@ internal sealed class SplitLargeMeshesStep : IPostProcess
             dst.UVs[uv] = list;
         }
 
-        dst.Faces.AddRange(faces);
+        dst.Faces = faces;
         return dst;
     }
 }

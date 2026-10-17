@@ -65,10 +65,10 @@ internal sealed class ValidateDataStructureStep : IPostProcess
             // Face indices in range.
             for (int fi = 0; fi < mesh.Faces.Count; fi++)
             {
-                var face = mesh.Faces[fi];
-                for (int k = 0; k < face.Indices.Length; k++)
+                var indices = mesh.Faces.IndicesOf(fi);
+                for (int k = 0; k < indices.Length; k++)
                 {
-                    int idx = face.Indices[k];
+                    int idx = indices[k];
                     if ((uint)idx >= (uint)vc)
                     {
                         r.Add($"Mesh {mi}, face {fi}: index {idx} out of range [0, {vc}).");

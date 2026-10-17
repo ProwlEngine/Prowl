@@ -549,10 +549,12 @@ internal static class SceneBaker
             _ => 3,
         };
 
+        var faces = src.Faces.AsSpan();
+        var allIndices = src.Faces.AllIndices;
         var materialOrder = new List<int>();
-        foreach (var face in src.Faces)
+        foreach (var face in faces)
         {
-            if (face.Indices.Length != indicesPerFace) continue;
+            if (face.Count != indicesPerFace) continue;
             int material = src.MaterialForFace(face);
             if (!materialOrder.Contains(material)) materialOrder.Add(material);
         }
@@ -560,13 +562,12 @@ internal static class SceneBaker
         foreach (int material in materialOrder)
         {
             int start = indicesList.Count;
-            foreach (var face in src.Faces)
+            foreach (var face in faces)
             {
-                if (face.Indices.Length != indicesPerFace) continue;
+                if (face.Count != indicesPerFace) continue;
                 if (src.MaterialForFace(face) != material) continue;
-                for (int k = 0; k < face.Indices.Length; k++)
+                foreach (int index in allIndices.Slice(face.Start, face.Count))
                 {
-                    int index = face.Indices[k];
                     // Checked here rather than left to the bounds pass below, which would fault on it
                     // with nothing to say about which mesh the bad index came from.
                     if ((uint)index >= (uint)vertexCount)
@@ -591,13 +592,7 @@ internal static class SceneBaker
         }
     }
 
-    private static int EstimateIndexCount(IntermediateMesh src)
-    {
-        int sum = 0;
-        foreach (var face in src.Faces)
-            sum += face.Indices.Length;
-        return sum;
-    }
+    private static int EstimateIndexCount(IntermediateMesh src) => src.Faces.AllIndices.Length;
 
     private static Bounds ComputeBounds(List<Float3> positions)
     {

@@ -150,19 +150,13 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         // Rewrite faces with the new indices, dropping any the weld collapsed. A thin triangle whose
         // two ends merge becomes a face naming one vertex twice, which is not a face at all, and the
         // degenerate pass runs before this step rather than after, so nothing else would catch it.
-        int keptFaces = 0;
-        for (int fi = 0; fi < mesh.Faces.Count; fi++)
-        {
-            var face = mesh.Faces[fi];
-            for (int k = 0; k < face.Indices.Length; k++)
-                face.Indices[k] = oldToNew[face.Indices[k]];
-
-            if (HasRepeatedIndex(face.Indices)) continue;
-
-            mesh.Faces[keptFaces++] = face;
-        }
-        if (keptFaces < mesh.Faces.Count)
-            mesh.Faces.RemoveRange(keptFaces, mesh.Faces.Count - keptFaces);
+        var faces = mesh.Faces;
+        foreach (ref int index in faces.AllIndices)
+            index = oldToNew[index];
+        var collapsed = new bool[faces.Count];
+        for (int f = 0; f < collapsed.Length; f++)
+            collapsed[f] = HasRepeatedIndex(faces.IndicesOf(f));
+        faces.RemoveAll(collapsed);
 
         mesh.Positions = newPos;
         if (newNormal is not null) mesh.Normals = newNormal;
@@ -176,7 +170,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
     }
 
     /// <summary>True when a face names the same vertex twice, which only a point can survive.</summary>
-    private static bool HasRepeatedIndex(int[] indices)
+    private static bool HasRepeatedIndex(ReadOnlySpan<int> indices)
     {
         for (int i = 0; i < indices.Length; i++)
             for (int j = i + 1; j < indices.Length; j++)

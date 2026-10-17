@@ -42,7 +42,7 @@ internal static class NormalGeneration
         var faceValid = new bool[mesh.Faces.Count];
         for (int f = 0; f < mesh.Faces.Count; f++)
         {
-            int[] idx = mesh.Faces[f].Indices;
+            var idx = mesh.Faces.IndicesOf(f);
             if (idx.Length != 3) continue;
 
             Float3 a = mesh.Positions[idx[0]];
@@ -119,7 +119,7 @@ internal static class NormalGeneration
                     int group = groupOf[f];
                     if (group == 0) continue;
 
-                    int[] idx = mesh.Faces[f].Indices;
+                    var idx = mesh.Faces.IndicesOf(f);
                     for (int c = 0; c < idx.Length; c++)
                         if (idx[c] == v)
                             cornerRemap[(f, c)] = groupVertex[group];
@@ -141,7 +141,7 @@ internal static class NormalGeneration
         for (int f = 0; f < mesh.Faces.Count; f++)
         {
             if (!faceValid[f]) continue;
-            foreach (int v in mesh.Faces[f].Indices)
+            foreach (int v in mesh.Faces.IndicesOf(f))
             {
                 if ((uint)v >= (uint)vertexCount) continue;
                 (adjacency[v] ??= new List<int>(4)).Add(f);
@@ -215,7 +215,7 @@ internal static class NormalGeneration
     /// <summary>Interior angle of face <paramref name="face"/> at vertex <paramref name="vertex"/>.</summary>
     private static float CornerAngle(IntermediateMesh mesh, int face, int vertex)
     {
-        int[] idx = mesh.Faces[face].Indices;
+        var idx = mesh.Faces.IndicesOf(face);
         int corner = -1;
         for (int c = 0; c < idx.Length; c++)
             if (idx[c] == vertex) { corner = c; break; }
@@ -308,7 +308,7 @@ internal static class NormalGeneration
         }
 
         foreach (var kvp in cornerRemap)
-            mesh.Faces[kvp.Key.Face].Indices[kvp.Key.Corner] = kvp.Value;
+            mesh.Faces.IndicesOf(kvp.Key.Face)[kvp.Key.Corner] = kvp.Value;
     }
 
     private static Float3[]? GrowDeltas(Float3[]? source, int oldCount, List<int> extraSourceVertex)

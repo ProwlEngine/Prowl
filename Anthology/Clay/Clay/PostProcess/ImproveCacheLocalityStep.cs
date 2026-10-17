@@ -35,7 +35,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
         // Collect triangle faces and keep non-triangle ones aside.
         var triIndex = new List<int>();
         for (int i = 0; i < mesh.Faces.Count; i++)
-            if (mesh.Faces[i].Indices.Length == 3)
+            if (mesh.Faces[i].Count == 3)
                 triIndex.Add(i);
         if (triIndex.Count <= 1) return;
 
@@ -45,7 +45,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
         int[] triVerts = new int[triCount * 3];
         for (int i = 0; i < triCount; i++)
         {
-            var face = mesh.Faces[triIndex[i]].Indices;
+            var face = mesh.Faces.IndicesOf(triIndex[i]);
             triVerts[i * 3 + 0] = face[0];
             triVerts[i * 3 + 1] = face[1];
             triVerts[i * 3 + 2] = face[2];
@@ -129,31 +129,25 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
         }
 
         // Write reordered triangles back into the mesh's face list (preserve non-triangle faces).
-        var newFaces = new List<IntermediateFace>(mesh.Faces.Count);
+        var newFaces = new FaceList(mesh.Faces.Count, mesh.Faces.AllIndices.Length);
         int triRead = 0;
         for (int i = 0; i < mesh.Faces.Count; i++)
         {
             var face = mesh.Faces[i];
-            if (face.Indices.Length == 3)
+            if (face.Count == 3)
             {
                 if (triRead < triCount)
                 {
-                    newFaces.Add(mesh.Faces[triIndex[outTriSource[triRead]]].WithIndices(new[]
-                    {
-                        outIndices[triRead * 3 + 0],
-                        outIndices[triRead * 3 + 1],
-                        outIndices[triRead * 3 + 2],
-                    }));
+                    newFaces.Add(outIndices.AsSpan(triRead * 3, 3), mesh.Faces[triIndex[outTriSource[triRead]]]);
                     triRead++;
                 }
             }
             else
             {
-                newFaces.Add(face);
+                newFaces.Add(mesh.Faces.IndicesOf(face), face);
             }
         }
-        mesh.Faces.Clear();
-        mesh.Faces.AddRange(newFaces);
+        mesh.Faces = newFaces;
     }
 
     private static void EmitTri(

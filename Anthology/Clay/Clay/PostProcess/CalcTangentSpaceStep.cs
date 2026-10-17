@@ -50,12 +50,13 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
             var normals = CollectionsMarshal.AsSpan(mesh.Normals);
             var uvs = CollectionsMarshal.AsSpan(mesh.UVs[0]);
 
-            foreach (var face in CollectionsMarshal.AsSpan(mesh.Faces))
+            var allIndices = mesh.Faces.AllIndices;
+            foreach (var face in mesh.Faces.AsSpan())
             {
-                if (face.Indices.Length != 3) continue;
-                int i1 = face.Indices[0];
-                int i2 = face.Indices[1];
-                int i3 = face.Indices[2];
+                if (face.Count != 3) continue;
+                int i1 = allIndices[face.Start];
+                int i2 = allIndices[face.Start + 1];
+                int i3 = allIndices[face.Start + 2];
 
                 Float3 v1 = positions[i1];
                 Float3 v2 = positions[i2];

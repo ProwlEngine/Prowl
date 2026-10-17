@@ -38,25 +38,25 @@ internal sealed class SortByPrimitiveTypeStep : IPostProcess
         if (kindCount <= 1) return;
 
         // Bucket faces by topology.
-        var pointFaces = new List<IntermediateFace>();
-        var lineFaces = new List<IntermediateFace>();
-        var triFaces = new List<IntermediateFace>();
+        var pointFaces = new FaceList();
+        var lineFaces = new FaceList();
+        var triFaces = new FaceList();
         foreach (var face in mesh.Faces)
         {
-            (face.Indices.Length switch
+            (face.Count switch
             {
                 1 => pointFaces,
                 2 => lineFaces,
                 _ => triFaces,
-            }).Add(face);
+            }).Add(mesh.Faces.IndicesOf(face), face);
         }
 
         // Keep the largest bucket in-place; split the others into clones.
-        IntermediateFace[] keep;
+        FaceList keep;
         PrimitiveKind keepKind;
-        IntermediateFace[]? splitPoints = pointFaces.Count > 0 ? pointFaces.ToArray() : null;
-        IntermediateFace[]? splitLines = lineFaces.Count > 0 ? lineFaces.ToArray() : null;
-        IntermediateFace[]? splitTris = triFaces.Count > 0 ? triFaces.ToArray() : null;
+        FaceList? splitPoints = pointFaces.Count > 0 ? pointFaces : null;
+        FaceList? splitLines = lineFaces.Count > 0 ? lineFaces : null;
+        FaceList? splitTris = triFaces.Count > 0 ? triFaces : null;
 
         if (triFaces.Count >= lineFaces.Count && triFaces.Count >= pointFaces.Count)
         {
@@ -77,21 +77,20 @@ internal sealed class SortByPrimitiveTypeStep : IPostProcess
             splitPoints = null;
         }
 
-        mesh.Faces.Clear();
-        mesh.Faces.AddRange(keep);
+        mesh.Faces = keep;
         mesh.PrimitiveKinds = keepKind;
 
-        if (splitTris is { Length: > 0 })
+        if (splitTris is not null)
             scene.Meshes.Add(CloneWithFaces(mesh, splitTris, PrimitiveKind.Triangle));
-        if (splitLines is { Length: > 0 })
+        if (splitLines is not null)
             scene.Meshes.Add(CloneWithFaces(mesh, splitLines, PrimitiveKind.Line));
-        if (splitPoints is { Length: > 0 })
+        if (splitPoints is not null)
             scene.Meshes.Add(CloneWithFaces(mesh, splitPoints, PrimitiveKind.Point));
 
         _ = meshIndex; _ = ctx;
     }
 
-    private static IntermediateMesh CloneWithFaces(IntermediateMesh src, IntermediateFace[] faces, PrimitiveKind kind)
+    private static IntermediateMesh CloneWithFaces(IntermediateMesh src, FaceList faces, PrimitiveKind kind)
     {
         var dst = new IntermediateMesh
         {
@@ -129,7 +128,7 @@ internal sealed class SortByPrimitiveTypeStep : IPostProcess
             dst.BlendShapes.Add(copy);
         }
 
-        dst.Faces.AddRange(faces);
+        dst.Faces = faces;
         return dst;
     }
 
