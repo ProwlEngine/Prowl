@@ -60,7 +60,7 @@ internal sealed class GridFeature : RenderFeature
 
             float sg = pristineGrid(uv * _PrimaryGridSize, vec2(_LineWidth));
             float bg = pristineGrid(uv * _SecondaryGridSize, vec2(_LineWidth));
-            float gridAlpha = max(sg, bg);
+            float gridAlpha = max(sg, bg * 0.5);
             vec3 color = _GridColor.rgb;
 
             float dzPerPx = length(vec2(dFdx(uv.y), dFdy(uv.y)));
@@ -122,7 +122,7 @@ internal sealed class GridFeature : RenderFeature
     public override void Render(FeatureContext context)
     {
         _properties.SetTexture("_CameraDepthTexture", context.Depth!, _point);
-        _properties.SetFloat4("_GridColor", new Prowl.Vector.Float4(0.5f, 0.5f, 0.5f, 0.3f));
+        _properties.SetFloat4("_GridColor", new Prowl.Vector.Float4(0.8f, 0.8f, 0.8f, 0.65f));
         _properties.SetFloat("_PrimaryGridSize", 1f);
         _properties.SetFloat("_SecondaryGridSize", 0.25f);
         _properties.SetFloat("_LineWidth", 0.02f);

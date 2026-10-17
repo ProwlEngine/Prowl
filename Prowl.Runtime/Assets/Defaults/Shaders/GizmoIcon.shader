@@ -18,6 +18,7 @@ Shader "Hidden/GizmoIcon"
         GLSLPROGRAM
         Shared
         {
+            #define GIZMO_ICON 1
             // The occluded draw of a gizmo, behind geometry, faded; a child material turns it on and tests depth Less
             #pragma variant GIZMO_OCCLUDED
         }

@@ -24,7 +24,7 @@ void main()
     vec3 world = center + (right * vertexPosition.x + up * vertexPosition.y) * scale;
     gl_Position = Graphite_RelativeToClip(world);
     vColor = _Color;
-    vUV = vertexUV0;
+    vUV = vec2(vertexUV0.x, 1.0 - vertexUV0.y);
 #else
     gl_Position = Graphite_ObjectToClip(vertexPosition);
     vColor = vertexColor;
