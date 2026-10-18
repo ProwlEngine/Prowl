@@ -154,7 +154,8 @@ public sealed class Parser
         // A qualifier applied to an already-declared variable, e.g. `invariant gl_Position;`.
         if (AcceptKind(TokenKind.Semicolon)) return new QualifierRedecl(quals, name);
 
-        var type = new TypeRef(name, ParseArrayDims());   // `float[4] f(...)` / `float[4] v;`
+        IReadOnlyList<Expr>? templateArgs = name == "coopmat" && IsOp("<") ? ParseTemplateArgs() : null;
+        var type = new TypeRef(name, ParseArrayDims(), templateArgs);   // `float[4] f(...)` / `float[4] v;`
         var name2Tok = ExpectName();
         string name2 = name2Tok.Text;
         if (IsKind(TokenKind.LParen))
@@ -304,17 +305,18 @@ public sealed class Parser
     TypeRef ParseType()
     {
         string name = Expect(TokenKind.Identifier, "type").Text;
-        IReadOnlyList<Expr>? templateArgs = null;
-        if (IsOp("<"))
-        {
-            AcceptOp("<");
-            // Parse each argument above relational precedence so the closing '>' is not read as a compare.
-            var args = new List<Expr> { ParseBinary(9) };
-            while (AcceptKind(TokenKind.Comma)) args.Add(ParseBinary(9));
-            if (!AcceptOp(">")) throw Error($"expected '>' to close template arguments but found '{Cur.Text}'");
-            templateArgs = args;
-        }
+        IReadOnlyList<Expr>? templateArgs = IsOp("<") ? ParseTemplateArgs() : null;
         return new TypeRef(name, ParseArrayDims(), templateArgs);
+    }
+
+    List<Expr> ParseTemplateArgs()
+    {
+        AcceptOp("<");
+        // Parse each argument above relational precedence so the closing '>' is not read as a compare.
+        var args = new List<Expr> { ParseBinary(9) };
+        while (AcceptKind(TokenKind.Comma)) args.Add(ParseBinary(9));
+        if (!AcceptOp(">")) throw Error($"expected '>' to close template arguments but found '{Cur.Text}'");
+        return args;
     }
 
     Declarator ParseDeclaratorTail(string name) => ParseDeclaratorTail(name, null);
@@ -803,6 +805,11 @@ public sealed class Parser
             case TokenKind.Identifier:
                 string name = Advance().Text;
                 if (IsKind(TokenKind.LParen)) return new Call(name, ParseArgs());
+                if (name == "coopmat" && IsOp("<"))
+                {
+                    var templateArgs = ParseTemplateArgs();
+                    return new Call(name, ParseArgs(), TemplateArgs: templateArgs);
+                }
                 if (IsKind(TokenKind.LBracket))
                 {
                     var dims = new List<Expr?>();

@@ -47,7 +47,25 @@ public static class Types
     public static readonly ScalarType Int16 = new(Scalar.Int16);
     public static readonly ScalarType UInt16 = new(Scalar.UInt16);
 
-    public static GlslType? Resolve(string name) => name switch
+    public static GlslType? Resolve(string name) => ResolveCanonical(SizedAlias(name) ?? name);
+
+    // GL_EXT_shader_explicit_arithmetic_types spells the 32 and 64 bit types with their width too.
+    static string? SizedAlias(string name) => name switch
+    {
+        "int32_t" => "int",
+        "uint32_t" => "uint",
+        "float32_t" => "float",
+        "float64_t" => "double",
+        _ when name.StartsWith("i32vec", StringComparison.Ordinal) => "ivec" + name[6..],
+        _ when name.StartsWith("u32vec", StringComparison.Ordinal) => "uvec" + name[6..],
+        _ when name.StartsWith("f32vec", StringComparison.Ordinal) => "vec" + name[6..],
+        _ when name.StartsWith("f64vec", StringComparison.Ordinal) => "dvec" + name[6..],
+        _ when name.StartsWith("f32mat", StringComparison.Ordinal) => "mat" + name[6..],
+        _ when name.StartsWith("f64mat", StringComparison.Ordinal) => "dmat" + name[6..],
+        _ => null,
+    };
+
+    static GlslType? ResolveCanonical(string name) => name switch
     {
         "void" => Void,
         "bool" => Bool,

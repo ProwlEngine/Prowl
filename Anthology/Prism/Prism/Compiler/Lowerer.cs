@@ -411,7 +411,7 @@ public sealed partial class Lowerer
         _writeOnlyVars.Clear();
         _writeOnlyMembers.Clear();
         _memberIndexOf.Clear();
-        _perVertexOut = _perVertexIn = _meshVerticesRedecl = _meshVerticesNVRedecl = _meshPrimitivesNVRedecl = null;
+        _perVertexOut = _perVertexIn = _meshVerticesRedecl = _meshPrimitivesRedecl = _meshVerticesNVRedecl = _meshPrimitivesNVRedecl = null;
         _localSize = [];
         return this;
     }
@@ -1750,7 +1750,8 @@ public sealed partial class Lowerer
                 break;
             case PureSamplerType ps: sb.Append(ps.Shadow ? "pS1" : "p1"); break;   // glslang: pure, shadow flag, no dim
             case BufferReferenceType: sb.Append('1'); break;
-            case RayQueryType: sb.Append("rq1"); break;   // glslang has no letter for a reference, only the size
+            case RayQueryType: sb.Append("rq1"); break;
+            case CoopMatType cm: sb.Append(ScalarMangle(cm.Component)).Append($"1<{cm.Scope}><{cm.Rows}><{cm.Cols}><{cm.Use}>"); break;   // glslang has no letter for a reference, only the size
             default: throw new GlslParseException($"cannot mangle parameter type '{t}'");
         }
     }
@@ -3231,9 +3232,18 @@ public sealed partial class Lowerer
         {
             CScalar s => ScalarUnary(u.Op, s),
             CAgg { Type: VectorType } v => MapScalars(v, s => ScalarUnary(u.Op, s)),
+            CAgg { Type: MatrixType } m when u.Op is "-" or "+" => MapColumns(m, s => ScalarUnary(u.Op, s)),
             _ => null,
         };
     }
+
+    // Whole-value equality of two folded matrices, arrays or structs; null when a part does not fold.
+    bool? ConstEqual(CVal l, CVal r) => (l, r) switch
+    {
+        (CScalar a, CScalar b) => ScalarBinary("==", a, b) is CScalar eq ? eq.I != 0 : null,
+        (CAgg a, CAgg b) when a.Parts.Count == b.Parts.Count => a.Parts.Zip(b.Parts).Aggregate((bool?)true, (all, p) => all == false ? false : ConstEqual(p.First, p.Second) is bool e ? all & e : null),
+        _ => null,
+    };
 
     static CScalar? ScalarUnary(string op, CScalar a) => op switch
     {
@@ -3261,6 +3271,9 @@ public sealed partial class Lowerer
         }
         if (l is CAgg { Type: VectorType } lvec && r is CScalar rsc) return MapScalars(lvec, s => ScalarBinary(op, s, rsc));
         if (l is CScalar lsc && r is CAgg { Type: VectorType } rvec) return MapScalars(rvec, s => ScalarBinary(op, lsc, s));
+
+        if (op is "==" or "!=" && l is CAgg la && r is CAgg ra && la.Type is not VectorType && la.Type.Equals(ra.Type))
+            return ConstEqual(la, ra) is bool same ? Bool(same == (op == "==")) : null;
 
         // Component-wise matrix ops (matrix * scalar / matrix +/- matrix); matrix products are not folded.
         if (l is CAgg { Type: MatrixType } lm && r is CScalar msc) return MapColumns(lm, s => ScalarBinary(op, s, msc));
@@ -3658,6 +3671,20 @@ public sealed partial class Lowerer
         if (block.BlockName == "gl_MeshPerVertexEXT" && block.Qualifiers.Has("out"))
         {
             _meshVerticesRedecl = PerVertexMembers(block);
+            return;
+        }
+        // The mesh per-primitive output block can be redeclared too, keeping only the members it lists.
+        if (block.BlockName == "gl_MeshPerPrimitiveEXT" && block.Qualifiers.Has("out"))
+        {
+            var redecl = new List<(string Name, GlslType Type)>();
+            foreach (var member in block.Members)
+                foreach (var d in member.Declarators)
+                {
+                    if (MeshPrimitiveBuiltIn(d.Name) is null)
+                        throw new GlslParseException($"'{d.Name}' : not a member of gl_MeshPerPrimitiveEXT");
+                    redecl.Add((d.Name, ResolveTypeRef(member.Type)));
+                }
+            _meshPrimitivesRedecl = redecl;
             return;
         }
         if (_nvMesh && stage == ShaderStage.Mesh && block.Qualifiers.Has("out") && block.BlockName is "gl_MeshPerVertexNV" or "gl_MeshPerPrimitiveNV")
@@ -4118,6 +4145,9 @@ public sealed partial class Lowerer
             var c = BuildAccess(m);
             return FromStored(WithChainPrecision(LoadFrom(AccessOf(c)), c), InferType(m));   // a block's bool member loads as uint
         }
+        if (IsSwizzleName(m.Name) && m.Name.Length == 1 && m.Target is Index cix && EvalConst(cix.Idx) is null
+            && InferType(cix.Target) is MatrixType && ConstValueRoot(cix.Target) is { Type: MatrixType })
+            return LowerRValueIndex(cix, SwizzleIndex(m.Name[0]));
         return LowerSwizzle(m);
     }
 
@@ -4840,6 +4870,7 @@ public sealed partial class Lowerer
             => throw new GlslParseException($"'{Clip(call.Name)}' : can't use function syntax on variable"),
         Call call when Types.IsTypeName(call.Name) && UsesSpecConstant(call) && IsSpecConstExpr(call) => SpecConstantExpr(call),
         Call call when Types.IsTypeName(call.Name) => LowerConstructor(call),
+        Call { TemplateArgs: { } } call => LowerCoopMatConstructor(call),
         Call { IsArray: true } call when _structs.ContainsKey(call.Name) => LowerArrayConstructor(call),
         Call call when _structs.ContainsKey(call.Name) => LowerStructConstructor(call),
         Call { IsArray: false } call when _bufferRefs.ContainsKey(call.Name) => LowerReferenceConstructor(call),
@@ -5203,6 +5234,7 @@ public sealed partial class Lowerer
             "max" => Ext(Fsu(Widest(args), GLSLstd450.FMax, GLSLstd450.SMax, GLSLstd450.UMax), args),
             "clamp" => Ext(Fsu(Widest(args), GLSLstd450.FClamp, GLSLstd450.SClamp, GLSLstd450.UClamp), args),
             _ when ComponentwiseExt.TryGetValue(call.Name, out var g) => Ext(g, args),
+            _ when ExplicitPackType(call.Name, args[0].Type) is { } packed => Reinterpret(args[0], packed),
             _ => throw new GlslParseException($"call to unknown function '{call.Name}'"),
         };
         // A texture-sampling / image-load result takes the sampler's (mediump/lowp) precision, so it is
@@ -5268,6 +5300,7 @@ public sealed partial class Lowerer
         var savedRValue = new Value?[n];
         var savedSwizzle = new (Value Base, int[] Select)?[n];
         var savedIndexable = new (uint ConstId, Value Index, ArrayType Type)?[n];
+        var savedExtract = new (Value Base, uint Index)?[n];
         for (int i = 0; i < n; i++)
         {
             var p = fn.Params[i];
@@ -5321,6 +5354,16 @@ public sealed partial class Lowerer
                     else savedSwizzle[i] = (baseVal, sel);
                 }
             }
+            // A constant index into an r-value is an r-value access chain: its base is evaluated here, the extract waits for step 2.
+            else if (!p.ByValue && p.IsIn && !p.IsOut && call.Args[i] is Index rix && !IsAddressable(rix.Target)
+                     && EvalConst(call.Args[i]) is null && EvalConst(rix.Idx) is CScalar { I: var ri }
+                     && InferType(rix.Target) is MatrixType or VectorType && InferType(call.Args[i]).Equals(p.Type))
+            {
+                var baseVal = LowerExpr(rix.Target);
+                if (baseVal.Type is VectorType) _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)ri);
+                else MemberIndexConst((int)ri);
+                savedExtract[i] = (baseVal, (uint)ri);
+            }
             // A branching ternary leaves its temporary as the argument's l-value (copied in step 2).
             else if (!p.ByValue && p.IsIn && !p.IsOut && call.Args[i] is Conditional cnd && InferType(cnd).Equals(p.Type))
             {
@@ -5359,6 +5402,7 @@ public sealed partial class Lowerer
                 var inValue = savedChain[i] is { } chain ? LoadChain(chain)
                             : savedSwizzle[i] is { } sz ? Shuffle(sz.Base, sz.Select)
                             : savedIndexable[i] is { } ixa ? IndexableLoad(ixa.ConstId, ixa.Index, ixa.Type)
+                            : savedExtract[i] is { } ex ? new Value(Emit(Op.CompositeExtract, SpvType(p.Type), ex.Base.Id, ex.Index), p.Type, false)
                             : savedRValue[i]!.Value;
                 MultiTypeStore(new Chain(temp, [], p.Type, StorageClass.Function), inValue);
             }
@@ -5488,6 +5532,47 @@ public sealed partial class Lowerer
     // A scalar/vector type with the same shape as `t` but a different component type.
     static GlslType ReplaceComponent(GlslType t, Scalar component) =>
         t is VectorType v ? new VectorType(component, v.Size) : new ScalarType(component);
+
+    // The GL_EXT_shader_explicit_arithmetic_types packers and bit casts, all a plain OpBitcast. Null for any other name.
+    static GlslType? ExplicitPackType(string name, GlslType arg)
+    {
+        Scalar s = arg is VectorType v ? v.Component : arg is ScalarType sc ? sc.Kind : Scalar.Void;
+        int count = arg is VectorType vc ? vc.Size : 1;
+        bool unsigned = s is Scalar.UInt8 or Scalar.UInt16 or Scalar.UInt or Scalar.UInt64;
+        int total = count * (s switch { Scalar.Int8 or Scalar.UInt8 => 8, Scalar.Int16 or Scalar.UInt16 or Scalar.Half => 16, Scalar.Int64 or Scalar.UInt64 or Scalar.Double => 64, _ => 32 });
+        static Scalar Sized(int bits, bool unsigned) => bits switch
+        {
+            8 => unsigned ? Scalar.UInt8 : Scalar.Int8,
+            16 => unsigned ? Scalar.UInt16 : Scalar.Int16,
+            64 => unsigned ? Scalar.UInt64 : Scalar.Int64,
+            _ => unsigned ? Scalar.UInt : Scalar.Int,
+        };
+        static GlslType Split(Scalar component, int count) => count == 1 ? new ScalarType(component) : new VectorType(component, count);
+        return name switch
+        {
+            "packFloat2x16" => Types.UInt,
+            "unpackFloat2x16" => new VectorType(Scalar.Half, 2),
+            "doubleBitsToInt64" => ReplaceComponent(arg, Scalar.Int64),
+            "doubleBitsToUint64" => ReplaceComponent(arg, Scalar.UInt64),
+            "int64BitsToDouble" or "uint64BitsToDouble" => ReplaceComponent(arg, Scalar.Double),
+            "float16BitsToInt16" => ReplaceComponent(arg, Scalar.Int16),
+            "float16BitsToUint16" => ReplaceComponent(arg, Scalar.UInt16),
+            "int16BitsToFloat16" or "uint16BitsToFloat16" => ReplaceComponent(arg, Scalar.Half),
+            "packInt2x16" => Types.Int,
+            "packUint2x16" => Types.UInt,
+            "unpackInt2x16" => new VectorType(Scalar.Int16, 2),
+            "unpackUint2x16" => new VectorType(Scalar.UInt16, 2),
+            "packInt4x16" => Types.Int64,
+            "packUint4x16" => Types.UInt64,
+            "unpackInt4x16" => new VectorType(Scalar.Int16, 4),
+            "unpackUint4x16" => new VectorType(Scalar.UInt16, 4),
+            "pack16" or "pack32" or "pack64" => new ScalarType(Sized(total, unsigned)),
+            "unpack8" => Split(Sized(8, unsigned), total / 8),
+            "unpack16" => Split(Sized(16, unsigned), total / 16),
+            "unpack32" => Split(Sized(32, unsigned), total / 32),
+            _ => null,
+        };
+    }
 
     Value Reinterpret(Value v, Scalar target)   // bit-preserving reinterpret (floatBitsToInt etc.)
     {
@@ -5773,14 +5858,14 @@ public sealed partial class Lowerer
     Value TextureQueryLevels(Value[] args)
     {
         _m.AddCapability(Capability.ImageQuery);
-        uint image = ExtractImage(args[0]);
+        uint image = QueryImage(args[0]).Image;
         return new Value(Emit(Op.ImageQueryLevels, SpvType(Types.Int), image), Types.Int, false);
     }
 
     Value TextureSamples(Value[] args)   // the sample count of a multisampled texture
     {
         _m.AddCapability(Capability.ImageQuery);
-        uint image = ExtractImage(args[0]);
+        uint image = QueryImage(args[0]).Image;
         return new Value(Emit(Op.ImageQuerySamples, SpvType(Types.Int), image), Types.Int, false);
     }
 
@@ -6308,6 +6393,18 @@ public sealed partial class Lowerer
         };
         Store(outArg.Pointer, Emit(Op.CompositeExtract, SpvType(texel), res, 1));
         return new Value(Emit(Op.CompositeExtract, SpvType(Types.Int), res, 0), Types.Int, false);
+    }
+
+    // coopmat<...>(s) fills every component with the scalar; a matrix of the same type copies through.
+    Value LowerCoopMatConstructor(Call call)
+    {
+        var type = (CoopMatType)InferType(call);
+        if (call.Args.Count != 1) throw new GlslParseException("'coopmat' constructor takes exactly one argument");
+        if (InferType(call.Args[0]) is CoopMatType source)
+            return source.Equals(type) ? LowerExpr(call.Args[0]) : throw new GlslParseException("'coopmat' : converting between cooperative matrix types is not supported");
+        var fill = LowerCoerced(call.Args[0], new ScalarType(type.Component), "coopmat constructor");
+        if (fill.IsConstant) return new Value(_m.ConstantComposite(SpvType(type), fill.Id), type, true);
+        return new Value(Emit(Op.CompositeConstruct, SpvType(type), fill.Id), type, false);
     }
 
     // coopMatLoad(out m, buf, index, stride, layout): OpCooperativeMatrixLoadKHR reads &buf[index] into a
@@ -7689,6 +7786,8 @@ public sealed partial class Lowerer
     Value LowerBinary(Binary b)
     {
         if (b.Op is "^^" or "<<" or ">>") return ApplyBinary(b.Op, LowerExpr(b.Left), LowerExpr(b.Right));
+        if (b.Op is "+" or "-" && InferType(b.Left) is BufferReferenceType) return BufferRefOffset(b.Op, b.Left, b.Right);
+        if (b.Op == "+" && InferType(b.Right) is BufferReferenceType) return BufferRefOffset(b.Op, b.Right, b.Left, countFirst: true);
 
         // glslang's addPairConversion: both operands convert to a common base type (shapes are left
         // alone: a vector op scalar stays native). An implicit conversion is a node wrapped around the
@@ -7903,6 +8002,7 @@ public sealed partial class Lowerer
 
     Value Arithmetic(string op, Value l, Value r)
     {
+        if (l.Type is CoopMatType || r.Type is CoopMatType) return CoopMatArithmetic(op, l, r);
         if (l.Type is not (ScalarType or VectorType or MatrixType) || r.Type is not (ScalarType or VectorType or MatrixType))
             throw new GlslParseException($"operator '{op}' cannot be applied to '{Types.Name(l.Type)}' and '{Types.Name(r.Type)}'");
         if (op == "*")
@@ -7949,6 +8049,82 @@ public sealed partial class Lowerer
                 ? new Value(Emit(Op.VectorTimesScalar, SpvType(rv), r.Id, l.Id), rv, false)
                 : new Value(Emit(ArithOp(op, rv), SpvType(rv), Splat(l, rv).Id, r.Id), rv, false);
 
+        throw new GlslParseException($"operator '{op}' cannot be applied to '{Types.Name(l.Type)}' and '{Types.Name(r.Type)}'");
+    }
+
+    // GL_EXT_buffer_reference2: a reference moves by whole blocks, its block size rounded up to buffer_reference_align.
+    // The address converts before the count is evaluated, the count goes through int64, and a constant count folds into the byte offset.
+    Value BufferRefOffset(string op, Expr reference, Expr count, bool countFirst = false)
+    {
+        var brt = (BufferReferenceType)InferType(reference);
+        long stride = BufferRefStride(brt.Name);
+
+        uint Bytes()
+        {
+            uint u64 = SpvType(Types.UInt64);
+            if (EvalConst(count) is CScalar { Kind: var kind } c && IsIntegral(kind))
+            {
+                long offset = unchecked(c.I * stride);
+                return Materialize(new CScalar(Scalar.UInt64, offset, offset)).Id;
+            }
+            var countValue = LowerExpr(count);
+            if (countValue.Type is not ScalarType || !IsIntegral(BaseScalar(countValue.Type)))
+                throw new GlslParseException($"operator '{op}' cannot be applied to '{Types.Name(brt)}' and '{Types.Name(countValue.Type)}'");
+            uint i64 = SpvType(Types.Int64);
+            uint signed = BaseScalar(countValue.Type) switch
+            {
+                Scalar.Int64 => countValue.Id,
+                Scalar.UInt64 => Emit(Op.Bitcast, i64, countValue.Id),
+                var s when IsSigned(s) => Emit(Op.SConvert, i64, countValue.Id),
+                _ => Emit(Op.Bitcast, i64, Emit(Op.UConvert, u64, countValue.Id)),
+            };
+            return Emit(Op.IMul, u64, Emit(Op.Bitcast, u64, signed), Materialize(new CScalar(Scalar.UInt64, stride, stride)).Id);
+        }
+
+        uint Address()
+        {
+            uint refId = LowerExpr(reference).Id;
+            BufferRefDefine(brt.Name);
+            return Emit(Op.ConvertPtrToU, SpvType(Types.UInt64), refId);
+        }
+
+        uint moved;
+        if (countFirst)
+        {
+            uint bytes = Bytes();
+            moved = Emit(Op.IAdd, SpvType(Types.UInt64), bytes, Address());
+        }
+        else
+        {
+            uint address = Address();
+            moved = Emit(op == "+" ? Op.IAdd : Op.ISub, SpvType(Types.UInt64), address, Bytes());
+        }
+        return new Value(Emit(Op.ConvertUToPtr, SpvType(brt), moved), brt, false);
+    }
+
+    int BufferRefStride(string name)
+    {
+        var st = _bufferRefs[name];
+        var layout = _bufferRefLayout[name];
+        int size = 0;
+        for (int i = 0; i < st.Fields.Count; i++)
+        {
+            bool rowMajor = _bufferRefRowMajor.TryGetValue(name, out var rows) && i < rows.Length && rows[i];
+            size = RoundUp(size, Align(st.Fields[i].Type, layout, rowMajor)) + Size(st.Fields[i].Type, layout, rowMajor);
+        }
+        int align = _bufferRefAlign.GetValueOrDefault(name, 16);
+        return RoundUp(size, align);
+    }
+
+    // Two cooperative matrices of one type add, subtract and divide component-wise; a scalar scales one.
+    Value CoopMatArithmetic(string op, Value l, Value r)
+    {
+        if (l.Type is CoopMatType && l.Type.Equals(r.Type) && op is "+" or "-" or "/")
+            return new Value(Emit(ArithOp(op, l.Type), SpvType(l.Type), l.Id, r.Id), l.Type, false);
+        if (op == "*" && l.Type is CoopMatType && r.Type is ScalarType)
+            return new Value(Emit(Op.MatrixTimesScalar, SpvType(l.Type), l.Id, r.Id), l.Type, false);
+        if (op == "*" && l.Type is ScalarType && r.Type is CoopMatType)
+            return new Value(Emit(Op.MatrixTimesScalar, SpvType(r.Type), r.Id, l.Id), r.Type, false);
         throw new GlslParseException($"operator '{op}' cannot be applied to '{Types.Name(l.Type)}' and '{Types.Name(r.Type)}'");
     }
 
@@ -8302,12 +8478,23 @@ public sealed partial class Lowerer
             throw new GlslParseException("'variable index' : required extension not requested: GL_EXT_nonuniform_qualifier");
     }
 
+    // The const value an access path starts from, when it starts from one rather than a variable.
+    CAgg? ConstValueRoot(Expr e) => e switch
+    {
+        Ident id when !LocalExists(id.Name) && _constValues.TryGetValue(id.Name, out var cv) => cv as CAgg,
+        Index ix => ConstValueRoot(ix.Target),
+        Member m => ConstValueRoot(m.Target),
+        _ => null,
+    };
+
     Value LowerIndex(Index ix)
     {
+        if (InferType(ix.Target) is BufferReferenceType)
+            return BufferRefOffset("+", ix.Target, ix.Idx);
         CheckVariableDescriptorIndex(ix);
         CheckConstIndexBounds(ix);
         if (EvalConst(ix) is { } c) return Materialize(c);
-        if (!IsLValuePath(ix.Target)) return LowerRValueIndex(ix);
+        if (!IsLValuePath(ix.Target) || ConstValueRoot(ix.Target) is { Type: VectorType or MatrixType }) return LowerRValueIndex(ix);
         var chain = BuildAccess(ix);
         return FromStored(WithChainPrecision(LoadFrom(AccessOf(chain)), chain), InferType(ix));
     }
@@ -8316,7 +8503,8 @@ public sealed partial class Lowerer
     // r-value access chain does: a constant index extracts (after creating the index constant - unsigned
     // for a vector component, signed otherwise), a dynamic one extracts a vector component dynamically or
     // copies an array/matrix into an "indexable" temporary to access-chain into it.
-    Value LowerRValueIndex(Index ix)
+    // component selects one component of the indexed vector, kept in the access chain like glslang does.
+    Value LowerRValueIndex(Index ix, int component = -1)
     {
         var targetType = InferType(ix.Target);
         GlslType element = targetType switch
@@ -8338,8 +8526,14 @@ public sealed partial class Lowerer
         var index = LowerExpr(ix.Idx);
         if (targetType is VectorType)
             return new Value(Emit(Op.VectorExtractDynamic, SpvType(element), baseV.Id, index.Id), element, false);
+        if (component >= 0) _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)component);
         uint temp = IndexableTemp(baseV.Id, _m.TypePointer(StorageClass.Function, SpvType(targetType)),
             baseV.IsConstant || _specConstIds.Contains(baseV.Id));
+        if (component >= 0 && element is VectorType ev)
+        {
+            var scalar = new ScalarType(ev.Component);
+            return Load(scalar, Collapse(new Chain(temp, [index.Id], scalar, StorageClass.Function, DeferredComp: component)));
+        }
         return Load(element, Collapse(new Chain(temp, [index.Id], element, StorageClass.Function)));
     }
 
@@ -8384,6 +8578,15 @@ public sealed partial class Lowerer
                 return SpecConstantExpr(specLength);
             case ArrayType arr:
                 return new Value(_m.ConstantInt(SpvType(Types.Int), (uint)arr.Length), Types.Int, true);
+            case VectorType vec:
+                return new Value(_m.ConstantInt(SpvType(Types.Int), (uint)vec.Size), Types.Int, true);
+            case MatrixType mat:
+                return new Value(_m.ConstantInt(SpvType(Types.Int), (uint)mat.Columns), Types.Int, true);
+            case CoopMatType cm:
+            {
+                uint count = Emit(Op.CooperativeMatrixLengthKHR, SpvType(Types.UInt), SpvType(cm));
+                return new Value(Emit(Op.Bitcast, SpvType(Types.Int), count), Types.Int, false);
+            }
             case RuntimeArrayType when meth.Target is Member m:
                 var block = ResolveAccess(m.Target);
                 if (block.Type is not StructType st) throw new GlslParseException("runtime-array length requires a buffer-block member");
@@ -8802,8 +9005,8 @@ public sealed partial class Lowerer
             case Member m when InferType(m.Target) is BufferReferenceType brt:
             {
                 // A reference read out of another reference (`node.next.v`) is itself a physical load: Aligned.
-                var refChain = BuildAccess(m.Target);
-                uint ptr = Load(new BufferReferenceType(brt.Name), Collapse(refChain)).Id;
+                bool stored = IsLValuePath(m.Target) && !(m.Target is Index rix && InferType(rix.Target) is BufferReferenceType);
+                uint ptr = stored ? Load(new BufferReferenceType(brt.Name), Collapse(BuildAccess(m.Target))).Id : LowerExpr(m.Target).Id;
                 BufferRefDefine(brt.Name);
                 var rst = _bufferRefs[brt.Name];
                 int ri = IndexOfField(rst, m.Name);
@@ -8818,6 +9021,8 @@ public sealed partial class Lowerer
                 // index constant until the chain is collapsed, so record it rather than emitting it now.
                 if (baseC.Type is VectorType bvec && IsSwizzleName(m.Name) && m.Name.Length == 1)
                     return baseC with { Type = new ScalarType(bvec.Component), DeferredComp = SwizzleIndex(m.Name[0]), Swizzle = null, TypeId = 0 };
+                if (baseC.Type is ScalarType && IsSwizzleName(m.Name) && m.Name.Length == 1)
+                    return SwizzleIndex(m.Name[0]) == 0 ? baseC : throw new GlslParseException($"'{m.Name}' : vector swizzle selection out of range");
                 if (baseC.Type is not StructType st)
                     throw new GlslParseException($"type '{Types.Name(baseC.Type)}' has no member '.{m.Name}'");
                 int index = IndexOfField(st, m.Name);
@@ -8882,31 +9087,20 @@ public sealed partial class Lowerer
     // type just before the struct).
     uint MeshPerPrimitiveBlockType()
     {
-        uint i = SpvType(Types.Int);
-        uint b = _m.TypeBool();
-        // GL_EXT_fragment_shading_rate unhides the block's gl_PrimitiveShadingRateEXT member (glslang filterMember).
-        bool shadingRate = _extensions.Contains("GL_EXT_fragment_shading_rate");
-        uint s = shadingRate ? _m.TypeStructUnique(i, i, i, b, i) : _m.TypeStructUnique(i, i, i, b);
+        var members = MeshPrimitiveMembers();
+        uint[] memberTypes = [.. members.Select(m => SpvType(m.Type))];
+        uint s = _m.TypeStructUnique(memberTypes);
         _m.AddName(s, "gl_MeshPerPrimitiveEXT");
-        _m.AddMemberName(s, 0, "gl_PrimitiveID");
-        _m.AddMemberName(s, 1, "gl_Layer");
-        _m.AddMemberName(s, 2, "gl_ViewportIndex");
-        _m.AddMemberName(s, 3, "gl_CullPrimitiveEXT");
-        _m.MemberDecorate(s, 0, Decoration.BuiltIn, (uint)BuiltIn.PrimitiveId);
-        _m.MemberDecorate(s, 0, Decoration.PerPrimitiveEXT);
-        _m.MemberDecorate(s, 1, Decoration.BuiltIn, (uint)BuiltIn.Layer);
-        _m.MemberDecorate(s, 1, Decoration.PerPrimitiveEXT);
-        _m.MemberDecorate(s, 2, Decoration.BuiltIn, (uint)BuiltIn.ViewportIndex);
-        _m.MemberDecorate(s, 2, Decoration.PerPrimitiveEXT);
-        _m.MemberDecorate(s, 3, Decoration.BuiltIn, (uint)BuiltIn.CullPrimitiveEXT);
-        _m.MemberDecorate(s, 3, Decoration.PerPrimitiveEXT);
-        if (shadingRate)
+        for (int k = 0; k < members.Count; k++) _m.AddMemberName(s, k, members[k].Name);
+        for (int k = 0; k < members.Count; k++)
         {
-            _m.AddMemberName(s, 4, "gl_PrimitiveShadingRateEXT");
-            _m.MemberDecorate(s, 4, Decoration.BuiltIn, (uint)BuiltIn.PrimitiveShadingRateKHR);
-            _m.MemberDecorate(s, 4, Decoration.PerPrimitiveEXT);
-            _m.AddExtension("SPV_KHR_fragment_shading_rate");
-            _m.AddCapability(Capability.FragmentShadingRateKHR);
+            _m.MemberDecorate(s, k, Decoration.BuiltIn, (uint)MeshPrimitiveBuiltIn(members[k].Name)!.Value);
+            _m.MemberDecorate(s, k, Decoration.PerPrimitiveEXT);
+            if (members[k].Name == "gl_PrimitiveShadingRateEXT")
+            {
+                _m.AddExtension("SPV_KHR_fragment_shading_rate");
+                _m.AddCapability(Capability.FragmentShadingRateKHR);
+            }
         }
         _m.Decorate(s, Decoration.Block);
         return s;
@@ -9166,13 +9360,27 @@ public sealed partial class Lowerer
     };
 
     // The gl_MeshPerPrimitiveEXT member a name selects: index in the block and type.
-    (int Index, GlslType Type)? MeshPrimitiveMember(string name) => name switch
+    (int Index, GlslType Type)? MeshPrimitiveMember(string name)
     {
-        "gl_PrimitiveShadingRateEXT" when _extensions.Contains("GL_EXT_fragment_shading_rate") => (4, Types.Int),
-        "gl_PrimitiveID" => (0, Types.Int),
-        "gl_Layer" => (1, Types.Int),
-        "gl_ViewportIndex" => (2, Types.Int),
-        "gl_CullPrimitiveEXT" => (3, Types.Bool),
+        var members = MeshPrimitiveMembers();
+        int index = members.FindIndex(m => m.Name == name);
+        return index < 0 ? null : (index, members[index].Type);
+    }
+
+    List<(string Name, GlslType Type)>? _meshPrimitivesRedecl;   // `out gl_MeshPerPrimitiveEXT { ... } gl_MeshPrimitivesEXT[];`
+
+    // GL_EXT_fragment_shading_rate unhides the block's gl_PrimitiveShadingRateEXT member (glslang filterMember).
+    List<(string Name, GlslType Type)> MeshPrimitiveMembers() => _meshPrimitivesRedecl ??
+        [("gl_PrimitiveID", Types.Int), ("gl_Layer", Types.Int), ("gl_ViewportIndex", Types.Int), ("gl_CullPrimitiveEXT", Types.Bool),
+         .. _extensions.Contains("GL_EXT_fragment_shading_rate") ? [("gl_PrimitiveShadingRateEXT", (GlslType)Types.Int)] : Array.Empty<(string, GlslType)>()];
+
+    static BuiltIn? MeshPrimitiveBuiltIn(string name) => name switch
+    {
+        "gl_PrimitiveID" => BuiltIn.PrimitiveId,
+        "gl_Layer" => BuiltIn.Layer,
+        "gl_ViewportIndex" => BuiltIn.ViewportIndex,
+        "gl_CullPrimitiveEXT" => BuiltIn.CullPrimitiveEXT,
+        "gl_PrimitiveShadingRateEXT" => BuiltIn.PrimitiveShadingRateKHR,
         _ => null,
     };
 
@@ -10153,11 +10361,12 @@ public sealed partial class Lowerer
         Ident id => LocalExists(id.Name) || GlobalExists(id.Name) || _blockMembers.ContainsKey(id.Name)
                     || (Builtins.ContainsKey(id.Name) && !IsForcedBuiltin(id.Name))
                     || id.Name is "gl_Position" or "gl_PointSize" or "gl_ClipDistance" or "gl_CullDistance"
-                              or "gl_TessLevelOuter" or "gl_TessLevelInner" or "gl_in" or "gl_out",
+                              or "gl_TessLevelOuter" or "gl_TessLevelInner" or "gl_in" or "gl_out" or "gl_MeshVerticesEXT"
+                              or "gl_MeshPrimitivesEXT" or "gl_PrimitiveTriangleIndicesEXT" or "gl_PrimitiveLineIndicesEXT" or "gl_PrimitivePointIndicesEXT",
         Index ix => IsAddressable(ix.Target),
         // Only a member of a VECTOR is a swizzle; a struct field merely spelled from swizzle letters
         // ("arr", "st") is an ordinary field and stays addressable at any length.
-        Member m => IsSwizzleName(m.Name) && InferType(m.Target) is VectorType
+        Member m => IsSwizzleName(m.Name) && InferType(m.Target) is VectorType or ScalarType
             ? m.Name.Length == 1 && IsAddressable(m.Target)
             : IsAddressable(m.Target),
         _ => false,
@@ -10676,11 +10885,13 @@ public sealed partial class Lowerer
             MatrixType m => new VectorType(m.Component, m.Rows),
             VectorType v => new ScalarType(v.Component),
             CoopMatType cm => new ScalarType(cm.Component),
+            BufferReferenceType brt => brt,
             _ => throw new GlslParseException("cannot infer index type"),
         },
         Member m => InferMember(m),
         Method { Name: "length" } => Types.Int,
         Call c when Types.IsTypeName(c.Name) => c.IsArray ? ArrayCtorType(c, Resolve(c.Name)) : Resolve(c.Name),
+        Call { TemplateArgs: { } } c => ResolveTypeRef(new TypeRef(c.Name, null, c.TemplateArgs)),
         Call c when _structs.TryGetValue(c.Name, out var st) => c.IsArray ? ArrayCtorType(c, st) : st,
         Call { IsArray: false } c when _bufferRefs.ContainsKey(c.Name) => new BufferReferenceType(c.Name),
         Call c when CallsUserFunction(c) => ResolveOverload(_userFunctions[c.Name], c.Args).ReturnType,
@@ -10694,6 +10905,8 @@ public sealed partial class Lowerer
     {
         var l = InferType(b.Left);
         var r = InferType(b.Right);
+        if (l is BufferReferenceType or CoopMatType) return l;
+        if (r is BufferReferenceType or CoopMatType) return r;
         var shape = b.Op == "*" ? InferMul(l, r) : l is VectorType or MatrixType ? l : r is VectorType or MatrixType ? r : l;
         if (l is not (ScalarType or VectorType or MatrixType) || r is not (ScalarType or VectorType or MatrixType)) return shape;
         return ConversionDestination(BaseScalar(l), BaseScalar(r)) is { } d ? WithBase(shape, d) : shape;
@@ -10728,6 +10941,7 @@ public sealed partial class Lowerer
             : throw new GlslParseException("'outerProduct' : no matching overloaded function found"),
         "anyInvocationARB" or "allInvocationsARB" or "allInvocationsEqualARB" => Types.Bool,
         "ballotARB" => Types.UInt64,
+        _ when c.Args.Count == 1 && ExplicitPackType(c.Name, Types.Void) is not null => ExplicitPackType(c.Name, InferType(c.Args[0]))!,
         "reportIntersectionEXT" or "reportIntersectionNV" or "textureFootprintNV" => Types.Bool,
         "textureSize" or "imageSize" => InferType(c.Args[0]) switch
         {
@@ -10859,8 +11073,7 @@ public sealed partial class Lowerer
             return new ArrayType(new StructType("gl_MeshPerVertexEXT", _meshVerticesRedecl ?? [("gl_Position", Vec4), ("gl_PointSize", Types.Float),
                 ("gl_ClipDistance", ClipCullArray("gl_ClipDistance", input: false)), ("gl_CullDistance", ClipCullArray("gl_CullDistance", input: false))]), _meshMaxVertices);
         if (name == "gl_MeshPrimitivesEXT")
-            return new ArrayType(new StructType("gl_MeshPerPrimitiveEXT", [("gl_PrimitiveID", Types.Int), ("gl_Layer", Types.Int),
-                ("gl_ViewportIndex", Types.Int), ("gl_CullPrimitiveEXT", Types.Bool), ("gl_PrimitiveShadingRateEXT", Types.Int)]), _meshMaxPrimitives);
+            return new ArrayType(new StructType("gl_MeshPerPrimitiveEXT", MeshPrimitiveMembers()), _meshMaxPrimitives);
         if (name == "gl_PrimitiveTriangleIndicesEXT") return new ArrayType(new VectorType(Scalar.UInt, 3), _meshMaxPrimitives);
         if (name == "gl_PrimitiveLineIndicesEXT") return new ArrayType(new VectorType(Scalar.UInt, 2), _meshMaxPrimitives);
         if (name == "gl_PrimitivePointIndicesEXT") return new ArrayType(Types.UInt, _meshMaxPrimitives);
@@ -10890,6 +11103,7 @@ public sealed partial class Lowerer
         MatrixType m => m.Component,
         ArrayType a => BaseScalar(a.Element),
         RuntimeArrayType r => BaseScalar(r.Element),
+        CoopMatType cm => cm.Component,
         _ => Scalar.Float,
     };
 

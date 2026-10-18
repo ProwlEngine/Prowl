@@ -66,7 +66,7 @@ public sealed record Ident(string Name) : Expr;
 public sealed record Unary(string Op, Expr Operand, bool Prefix) : Expr;
 public sealed record Binary(string Op, Expr Left, Expr Right) : Expr;    // includes assignment ops
 public sealed record Conditional(Expr Cond, Expr Then, Expr Else) : Expr;
-public sealed record Call(string Name, IReadOnlyList<Expr> Args, Expr? ArraySize = null, bool IsArray = false, IReadOnlyList<Expr?>? ArrayDims = null) : Expr;  // f(...), T(...), T[N](...), T[](...), T[A][B](...)
+public sealed record Call(string Name, IReadOnlyList<Expr> Args, Expr? ArraySize = null, bool IsArray = false, IReadOnlyList<Expr?>? ArrayDims = null, IReadOnlyList<Expr>? TemplateArgs = null) : Expr;  // f(...), T(...), T[N](...), T[](...), T[A][B](...)
 public sealed record Index(Expr Target, Expr Idx) : Expr;
 public sealed record Member(Expr Target, string Name) : Expr;           // ".field" / swizzle
 public sealed record Method(Expr Target, string Name, IReadOnlyList<Expr> Args) : Expr;  // e.g. arr.length()

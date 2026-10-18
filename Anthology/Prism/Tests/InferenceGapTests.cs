@@ -104,7 +104,7 @@ public sealed class InferenceGapTests
             "#extension GL_ARB_shader_group_vote : require\n" +
             "layout(local_size_x=1) in;\n" +
             "layout(std430,set=0,binding=0) buffer B { float v; uint o; };\n" +
-            "void main() { o = allInvocationsEqualARB(v) ? 1u : 0u; }\n");
+            "void main() { o = allInvocationsEqualARB(v > 0.0) ? 1u : 0u; }\n");
 
     [Fact]
     public void ReportIntersectionAsTernaryCondition() =>
