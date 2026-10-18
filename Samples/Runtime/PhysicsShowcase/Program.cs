@@ -66,6 +66,7 @@ public sealed class PhysicsShowcaseGame : StationGame
     private float _throwSpeed = 22f;
     private float _ballMass = 3f;
     private bool _showColliders;
+    private ColliderGizmos _colliderGizmos = null!;
     private bool _slowMotion;
     private readonly Queue<GameObject> _thrown = new();
 
@@ -85,6 +86,10 @@ public sealed class PhysicsShowcaseGame : StationGame
         light.Intensity = 0.6f;
         sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         Add(sun);
+
+        var colliderGizmos = new GameObject("Collider Gizmos");
+        _colliderGizmos = colliderGizmos.AddComponent<ColliderGizmos>();
+        Add(colliderGizmos);
 
         float length = StationSpacing * StationCount + 40f;
         Add(Block("Floor", new Float3(length, 1f, 80f), Floor(length, 80f), new Float3(StationSpacing * (StationCount - 1) * 0.5f, -0.5f, 0f)));
@@ -126,7 +131,7 @@ public sealed class PhysicsShowcaseGame : StationGame
         Header(paper, font, "Physics");
         Slider(paper, font, "Gravity", -SampleScene.Physics.Gravity.Y, 0f, 20f, v => SampleScene.Physics.Gravity = new Float3(0f, -v, 0f), "0.0");
         Toggle(paper, font, "Slow motion", _slowMotion, v => { _slowMotion = v; Time.TimeScale = v ? 0.25f : 1f; });
-        Toggle(paper, font, "Show colliders and joints", _showColliders, v => { _showColliders = v; DrawGizmos = v || CurrentStation == QueriesStation; });
+        Toggle(paper, font, "Show colliders and joints", _showColliders, v => { _showColliders = v; _colliderGizmos.Show = v; DrawGizmos = v || CurrentStation == QueriesStation; });
 
         Header(paper, font, "Thrown balls", 1);
         Slider(paper, font, "Speed", _throwSpeed, 5f, 50f, v => _throwSpeed = v, "0");
@@ -1050,5 +1055,21 @@ public sealed class Recycler : Component
         other.MovePosition(Target());
         other.LinearVelocity = Float3.Zero;
         other.AngularVelocity = Float3.Zero;
+    }
+}
+
+/// <summary>Draws every collider shape while the colliders toggle is on, since colliders only draw when selected.</summary>
+public sealed class ColliderGizmos : Component
+{
+    public bool Show;
+
+    public override void DrawGizmos()
+    {
+        if (!Show)
+            return;
+
+        foreach (Collider? collider in GameObject.Scene.FindObjectsOfType<Collider>())
+            if (collider.IsValid() && collider.EnabledInHierarchy)
+                collider.DrawGizmosSelected();
     }
 }
