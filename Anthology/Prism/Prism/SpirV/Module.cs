@@ -420,7 +420,8 @@ public sealed class Module
                     }
                     if (!hasStorage8 && Contains(type, Op.TypeInt, 8)) AddCapability(Capability.Int8);
                     break;
-                case Op.ExtInst:
+                // GLSL.std.450 InterpolateAtCentroid, InterpolateAtSample and InterpolateAtOffset read an input, they do no arithmetic.
+                case Op.ExtInst when inst.Operands.Count > 1 && inst.Operands[1] is 76 or 77 or 78:
                     break;
                 case Op.AccessChain or Op.PtrAccessChain or Op.InBoundsAccessChain:
                     if (defs[type].Op == Op.TypePointer) break;

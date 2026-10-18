@@ -389,12 +389,17 @@ public sealed partial class Lowerer
     }
 
     // Lowers a built-in call's arguments, each converted to its resolved parameter type.
-    Value[] LowerBuiltinArgs(Call call)
+    // A sparse call's out texel is resolved where it stands in the source, before the argument it preceded.
+    Value[] LowerBuiltinArgs(Call call, (Expr Arg, int Slot)? sparseTexel = null)
     {
         var targets = BuiltinArgTargets(call);
         var args = new Value[call.Args.Count];
         for (int i = 0; i < args.Length; i++)
+        {
+            if (sparseTexel is { Slot: var slot } && slot == i) _sparseTexelAccess = ResolveAccess(sparseTexel.Value.Arg);
             args[i] = targets?[i] is { } t ? LowerArgAs(call.Args[i], t, $"argument {i + 1} of '{call.Name}'") : LowerExpr(call.Args[i]);
+        }
+        if (sparseTexel is { Slot: var last } && last == args.Length) _sparseTexelAccess = ResolveAccess(sparseTexel.Value.Arg);
         return args;
     }
 

@@ -13,6 +13,66 @@ public sealed partial class Lowerer
 {
     bool _computeDerivatives;   // a compute shader with a derivative_group_* layout keeps implicit LODs
 
+    // A sparse* call lowers through its plain sibling: pending until the sibling's arguments are lowered, then
+    // armed for the one sampling instruction it emits.
+    (Expr Arg, int Slot)? _sparsePending;
+    bool _sparseArmed, _sparseEmitted;
+    Access _sparseTexelAccess;
+
+    // The opcode and result type a sampling instruction is emitted with: in a sparse call, its OpImageSparse*
+    // form returning the {residency code, texel} struct.
+    (Op Op, uint Type) SampleForm(Op op, uint typeId, GlslType result)
+    {
+        if (!_sparseArmed) return (op, typeId);
+        _sparseArmed = false;
+        _sparseEmitted = true;
+        Op sparse = op switch
+        {
+            Op.ImageSampleImplicitLod => Op.ImageSparseSampleImplicitLod,
+            Op.ImageSampleExplicitLod => Op.ImageSparseSampleExplicitLod,
+            Op.ImageSampleDrefImplicitLod => Op.ImageSparseSampleDrefImplicitLod,
+            Op.ImageSampleDrefExplicitLod => Op.ImageSparseSampleDrefExplicitLod,
+            Op.ImageSampleProjImplicitLod => Op.ImageSparseSampleProjImplicitLod,
+            Op.ImageSampleProjExplicitLod => Op.ImageSparseSampleProjExplicitLod,
+            Op.ImageSampleProjDrefImplicitLod => Op.ImageSparseSampleProjDrefImplicitLod,
+            Op.ImageSampleProjDrefExplicitLod => Op.ImageSparseSampleProjDrefExplicitLod,
+            Op.ImageFetch => Op.ImageSparseFetch,
+            Op.ImageGather => Op.ImageSparseGather,
+            Op.ImageDrefGather => Op.ImageSparseDrefGather,
+            Op.ImageRead => Op.ImageSparseRead,
+            _ => throw new GlslParseException($"'{op}' has no sparse form"),
+        };
+        return (sparse, ResTypeStruct2(Types.Int, result));
+    }
+
+    // GL_ARB_sparse_texture2 and _clamp: the plain built-in a sparse* name stands for, or null.
+    static string? SparseSibling(string name)
+    {
+        if (!name.StartsWith("sparse", StringComparison.Ordinal) || !name.EndsWith("ARB", StringComparison.Ordinal)) return null;
+        string core = name["sparse".Length..^"ARB".Length];
+        string plain = char.ToLowerInvariant(core[0]) + core[1..];
+        if (plain.EndsWith("Clamp", StringComparison.Ordinal)) plain += "ARB";
+        return IsGenericSample(plain) || plain is "texelFetch" or "texelFetchOffset" or "textureGather" or "textureGatherOffset"
+            or "textureGatherOffsets" or "imageLoad" ? plain : null;
+    }
+
+    // Where the out texel sits in a sparse call: after the arguments its plain sibling requires, before any optional trailing one.
+    static int SparseTexelIndex(string plain, GlslType target)
+    {
+        if (target is ImageType image) return image.Multisampled ? 3 : 2;
+        if (target is not SamplerType s) return 2;
+        return plain switch
+        {
+            "texelFetch" => s.Dim is Dim.Buffer or Dim.Rect ? 2 : 3,
+            "texelFetchOffset" => s.Dim is Dim.Rect ? 3 : 4,
+            "textureGather" => s.Shadow ? 3 : 2,
+            "textureGatherOffset" or "textureGatherOffsets" => s.Shadow ? 4 : 3,
+            _ => 2 + (s.Dim == Dim.Cube && s.Arrayed && s.Shadow ? 1 : 0) + (plain.Contains("Lod", StringComparison.Ordinal) ? 1 : 0)
+                + (plain.Contains("Grad", StringComparison.Ordinal) ? 2 : 0) + (plain.Contains("Offset", StringComparison.Ordinal) ? 1 : 0)
+                + (plain.EndsWith("ClampARB", StringComparison.Ordinal) ? 1 : 0),
+        };
+    }
+
     static bool IsGenericSample(string name) => name is "texture" or "textureLod" or "textureGrad" or "textureOffset"
         or "textureLodOffset" or "textureGradOffset" or "textureProj" or "textureProjLod" or "textureProjOffset"
         or "textureProjGrad" or "textureProjLodOffset" or "textureProjGradOffset"
@@ -29,15 +89,13 @@ public sealed partial class Lowerer
         bool cubeCompare = sampler.Dim == Dim.Cube && sampler.Arrayed && sampler.Shadow;
 
         int required = 2 + (cubeCompare ? 1 : 0) + (lod ? 1 : 0) + (grad ? 2 : 0) + (offset ? 1 : 0) + (lodClamp ? 1 : 0);
-        int allowed = required + (!lod && !grad && !cubeCompare ? 1 : 0);
+        // GL_EXT_texture_shadow_lod adds the biased cube array shadow form.
+        bool biasAllowed = !lod && !grad && (!cubeCompare || _requestedExts.Contains("GL_EXT_texture_shadow_lod"));
+        int allowed = required + (biasAllowed ? 1 : 0);
         if (args.Length < required || args.Length > allowed)
             throw new GlslParseException($"'{name}' : no matching overloaded function found");
-        bool bias = false;
-        if (!lod && !grad && !cubeCompare)
-        {
-            int nonBias = 2 + (offset ? 1 : 0) + (lodClamp ? 1 : 0);
-            bias = args.Length > nonBias;
-        }
+        // glslang accepts that bias but leaves it off the instruction, so it is read and not emitted.
+        bool bias = biasAllowed && !cubeCompare && args.Length > required;
 
         Value coords = args[1];
         int extra = 0;
@@ -104,6 +162,7 @@ public sealed partial class Lowerer
             (false, false, true) => Op.ImageSampleProjImplicitLod,
             _ => Op.ImageSampleImplicitLod,
         };
+        (op, resultTypeId) = SampleForm(op, resultTypeId, resultType);
         var inst = InstrPool.Rent(op, resultTypeId, _m.AllocId()).Add(args[0].Id, coordId);
         if (dref != 0) inst.Add(dref);
         if (mask != 0) inst.Add(mask);

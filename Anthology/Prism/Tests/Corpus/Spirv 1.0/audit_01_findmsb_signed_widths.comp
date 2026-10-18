@@ -1,0 +1,5 @@
+#version 460
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { int64_t l; int16_t s; int8_t c; uint64_t ul; int r[4]; };
+void main() { r[0] = int(findMSB(l)); r[1] = int(findMSB(s)); r[2] = int(findMSB(c)); r[3] = int(findMSB(ul)); }

@@ -555,7 +555,7 @@ public sealed partial class Lowerer
         // A specializable local size makes gl_WorkGroupSize a specialization constant (an array size, an
         // OpSpecConstantOp operand).
         if (stage == ShaderStage.Compute && _localSize.Any(d => d.SpecId is not null)) _specConstNames.Add("gl_WorkGroupSize");
-        _derivativeGroup = InLayout(unit, "derivative_group_quadsNV") || InLayout(unit, "derivative_group_linearNV");   // gl_WorkGroupSize may be read from a body, before the mode is emitted
+        _derivativeGroup = InLayout(unit, "derivative_group_quadsNV") || InLayout(unit, "derivative_group_linearNV") || InLayout(unit, "derivative_group_quadsKHR") || InLayout(unit, "derivative_group_linearKHR");   // gl_WorkGroupSize may be read from a body, before the mode is emitted
         // Unless a dimension is specializable, gl_WorkGroupSize is a compile-time constant, so reads of it
         // fold (glslang turns `gl_WorkGroupSize.x` into a literal rather than extracting from the composite).
         if (stage == ShaderStage.Compute && !_localSize.Any(d => d.SpecId is not null))
@@ -719,17 +719,21 @@ public sealed partial class Lowerer
         {
             _m.AddExecutionMode(mainId, ExecutionMode.LocalSize, _localSize[0].Value, _localSize[1].Value, _localSize[2].Value);
         }
-        if (stage == ShaderStage.Compute && InLayout(unit, "derivative_group_quadsNV"))
+        // The KHR derivative groups share the NV capability and execution mode values, only the extension differs.
+        foreach (string vendor in (string[])["NV", "KHR"])
         {
-            _m.AddCapability(Capability.ComputeDerivativeGroupQuadsNV);
-            _m.AddExtension("SPV_NV_compute_shader_derivatives");
-            _m.AddExecutionMode(mainId, ExecutionMode.DerivativeGroupQuadsNV);
-        }
-        if (stage == ShaderStage.Compute && InLayout(unit, "derivative_group_linearNV"))
-        {
-            _m.AddCapability(Capability.ComputeDerivativeGroupLinearNV);
-            _m.AddExtension("SPV_NV_compute_shader_derivatives");
-            _m.AddExecutionMode(mainId, ExecutionMode.DerivativeGroupLinearNV);
+            if (stage == ShaderStage.Compute && InLayout(unit, "derivative_group_quads" + vendor))
+            {
+                _m.AddCapability(Capability.ComputeDerivativeGroupQuadsNV);
+                _m.AddExtension($"SPV_{vendor}_compute_shader_derivatives");
+                _m.AddExecutionMode(mainId, ExecutionMode.DerivativeGroupQuadsNV);
+            }
+            if (stage == ShaderStage.Compute && InLayout(unit, "derivative_group_linear" + vendor))
+            {
+                _m.AddCapability(Capability.ComputeDerivativeGroupLinearNV);
+                _m.AddExtension($"SPV_{vendor}_compute_shader_derivatives");
+                _m.AddExecutionMode(mainId, ExecutionMode.DerivativeGroupLinearNV);
+            }
         }
         if (stage == ShaderStage.Mesh) EmitMeshModes(unit, mainId);
         EmitStageModes(unit, mainId);
@@ -828,7 +832,7 @@ public sealed partial class Lowerer
                         foreach (var item in l.Qualifiers.Layout)
                         {
                             if (!isIn && item.Name is "early_fragment_tests" or "early_and_late_fragment_tests_amd"
-                                    or "derivative_group_quadsNV" or "derivative_group_linearNV")
+                                    or "derivative_group_quadsNV" or "derivative_group_linearNV" or "derivative_group_quadsKHR" or "derivative_group_linearKHR")
                                 throw new GlslParseException($"'{item.Name}' : can only apply to 'in'");
                             if (item.Name is "local_size_x" or "local_size_y" or "local_size_z")
                             {
@@ -2800,7 +2804,7 @@ public sealed partial class Lowerer
         if (target.Kind == Scalar.Bool && IsIntegral(from))
         {
             uint targetId = SpvType(target);
-            uint zero = Is64Bit(from) ? _m.ConstantInt64(SpvType(Types.UInt64), 0) : _m.ConstantInt(SpvType(Types.UInt), 0);
+            uint zero = Materialize(new CScalar(UnsignedOfWidth(IntWidth(from)), 0, 0)).Id;
             return TrackSpec(_m.SpecConstantOp(targetId, Op.INotEqual, operand.Id, zero), target);
         }
         // A bool to integer selects between one and zero of the target's own signedness.
@@ -2811,12 +2815,17 @@ public sealed partial class Lowerer
             uint one = Materialize(new CScalar(target.Kind, 1, 1)).Id;
             return TrackSpec(_m.SpecConstantOp(targetId, Op.Select, operand.Id, one, zero), target);
         }
-        if (IsIntegral(from) && IsIntegral(target.Kind) && Is64Bit(from) == Is64Bit(target.Kind))
+        // Integers change width keeping the source's signedness, then change signedness by adding an unsigned zero.
+        if (IsIntegral(from) && IsIntegral(target.Kind))
         {
+            if (UnsignedOfWidth(IntWidth(from)) != UnsignedOfWidth(IntWidth(target.Kind)))
+            {
+                var widened = new ScalarType(IsSigned(from) ? SignedOfWidth(IntWidth(target.Kind)) : UnsignedOfWidth(IntWidth(target.Kind)));
+                operand = TrackSpec(_m.SpecConstantOp(SpvType(widened), IsSigned(from) ? Op.SConvert : Op.UConvert, operand.Id), widened);
+                if (widened.Kind == target.Kind) return operand;
+            }
             uint targetId = SpvType(target);
-            uint zero = Is64Bit(target.Kind)
-                ? _m.ConstantInt64(SpvType(Types.UInt64), 0)
-                : _m.ConstantInt(SpvType(Types.UInt), 0);
+            uint zero = Materialize(new CScalar(UnsignedOfWidth(IntWidth(target.Kind)), 0, 0)).Id;
             return TrackSpec(_m.SpecConstantOp(targetId, Op.IAdd, operand.Id, zero), target);
         }
         if (ConvertOp(from, target.Kind) is not { } op)
@@ -2942,7 +2951,7 @@ public sealed partial class Lowerer
 
     // A constant struct constructor: one argument per member, each implicitly converted to its member's
     // type (an argument that does not convert leaves it unfoldable, for lowering to report).
-    static CAgg? ConstStruct(StructType st, List<CVal> fields)
+    CAgg? ConstStruct(StructType st, List<CVal> fields)
     {
         if (fields.Count != st.Fields.Count)
             throw new GlslParseException("'constructor' : Number of constructor parameters does not match the number of structure fields");
@@ -4946,7 +4955,7 @@ public sealed partial class Lowerer
         ["pow"] = 2, ["mod"] = 2, ["min"] = 2, ["max"] = 2, ["step"] = 2, ["reflect"] = 2,
         ["distance"] = 2, ["dot"] = 2, ["cross"] = 2, ["outerProduct"] = 2, ["matrixCompMult"] = 2,
         ["clamp"] = 3, ["mix"] = 3, ["smoothstep"] = 3, ["faceforward"] = 3, ["refract"] = 3,
-        ["textureLod"] = 3, ["textureGrad"] = 4,
+        ["textureGrad"] = 4,
     };
 
     // Built-ins whose arguments must be a numeric scalar or vector. Integer arguments are allowed because
@@ -4988,15 +4997,15 @@ public sealed partial class Lowerer
         if (call.Name == "dot" && n == 2 && VecOrScalarSize(InferType(call.Args[0])) != VecOrScalarSize(InferType(call.Args[1])))
             throw new GlslParseException($"'dot' requires two arguments of the same size, but got '{Types.Name(InferType(call.Args[0]))}' and '{Types.Name(InferType(call.Args[1]))}'");
 
-        // A sampling coordinate must be floating-point with at least the sampler's spatial dimensionality;
+        // A sampling coordinate must be numeric (an integer one converts to float) with at least the sampler's spatial dimensionality;
         // projection, array layers and shadow compares only ADD components, so this lower bound is safe.
         if (call.Name is "texture" or "textureLod" or "textureGrad" or "textureProj" or "textureGather"
             && n >= 2 && InferType(call.Args[0]) is SamplerType samp)
         {
             var coord = InferType(call.Args[1]);
             int need = SamplerSpatialDim(samp);
-            if (!IsFloating(BaseScalar(coord)) || VecOrScalarSize(coord) < need)
-                throw new GlslParseException($"the coordinate for '{call.Name}' on this sampler needs at least {need} floating-point component{(need == 1 ? "" : "s")}, not '{Types.Name(coord)}'");
+            if (coord is not (ScalarType or VectorType) || BaseScalar(coord) is Scalar.Bool or Scalar.Void || VecOrScalarSize(coord) < need)
+                throw new GlslParseException($"the coordinate for '{call.Name}' on this sampler needs at least {need} numeric component{(need == 1 ? "" : "s")}, not '{Types.Name(coord)}'");
         }
     }
 
@@ -5013,13 +5022,13 @@ public sealed partial class Lowerer
         ["dFdx", "dFdy", "fwidth", "dFdxFine", "dFdyFine", "fwidthFine", "dFdxCoarse", "dFdyCoarse", "fwidthCoarse"];
 
     // Built-ins glslang declares only for some stages (Initialize.cpp): the derivatives exist in fragment
-    // shaders, and in compute shaders (desktop 450+/ES 320+) behind GL_NV_compute_shader_derivatives.
+    // shaders, and in compute shaders (desktop 450+/ES 320+) behind GL_NV_compute_shader_derivatives or GL_KHR_compute_shader_derivatives.
     void CheckBuiltinStage(Call call)
     {
         if (!DerivativeBuiltins.Contains(call.Name) || stage == ShaderStage.Fragment) return;
         if (stage == ShaderStage.Compute && (_isEs ? _glslVersion >= 320 : _glslVersion >= 450))
         {
-            if (!_requestedExts.Contains("GL_NV_compute_shader_derivatives"))
+            if (!_requestedExts.Contains("GL_NV_compute_shader_derivatives") && !_requestedExts.Contains("GL_KHR_compute_shader_derivatives"))
                 throw new GlslParseException($"'{call.Name}' : required extension not requested: GL_NV_compute_shader_derivatives");
             return;
         }
@@ -5042,6 +5051,8 @@ public sealed partial class Lowerer
 
     Value LowerBuiltinCallCore(Call call)
     {
+        var sparseTexel = _sparsePending;
+        _sparsePending = null;
         CheckBuiltinArgs(call);
         if (stage != ShaderStage.Geometry && call.Name is "EmitVertex" or "EndPrimitive" or "EmitStreamVertex" or "EndStreamPrimitive")
             throw new GlslParseException($"'{call.Name}' is only valid in a geometry shader");
@@ -5108,7 +5119,8 @@ public sealed partial class Lowerer
         if (call.Name is "ignoreIntersectionNV") return VoidOp(Op.IgnoreIntersectionNV);
         if (call.Name is "terminateRayNV") return VoidOp(Op.TerminateRayNV);
 
-        var args = LowerBuiltinArgs(call);
+        var args = LowerBuiltinArgs(call, sparseTexel);
+        _sparseArmed = sparseTexel is not null;
         var builtinResult = call.Name switch
         {
             _ when IsGenericSample(call.Name) && args.Length > 1 && args[0].Type is SamplerType => SampleGeneric(call.Name, args),
@@ -5176,9 +5188,9 @@ public sealed partial class Lowerer
             "intBitsToFloat" or "uintBitsToFloat" => Reinterpret(args[0], Scalar.Float),
             "isnan" => WithComponent(Op.IsNan, args[0], Scalar.Bool),
             "isinf" => WithComponent(Op.IsInf, args[0], Scalar.Bool),
-            "bitCount" => WithComponent(Op.BitCount, args[0], Scalar.Int),
-            "findLSB" => ExtFixed(GLSLstd450.FindILsb, ReplaceComponent(args[0].Type, Scalar.Int), args),
-            "findMSB" => ExtFixed(BaseScalar(args[0].Type) == Scalar.Int ? GLSLstd450.FindSMsb : GLSLstd450.FindUMsb, ReplaceComponent(args[0].Type, Scalar.Int), args),
+            "bitCount" => WithComponent(Op.BitCount, args[0], SignedOfWidth(IntWidth(BaseScalar(args[0].Type)))),
+            "findLSB" => ExtFixed(GLSLstd450.FindILsb, ReplaceComponent(args[0].Type, SignedOfWidth(IntWidth(BaseScalar(args[0].Type)))), args),
+            "findMSB" => ExtFixed(IsSigned(BaseScalar(args[0].Type)) ? GLSLstd450.FindSMsb : GLSLstd450.FindUMsb, ReplaceComponent(args[0].Type, SignedOfWidth(IntWidth(BaseScalar(args[0].Type)))), args),
             "bitfieldReverse" => new Value(Emit(Op.BitReverse, SpvType(args[0].Type), args[0].Id), args[0].Type, false),
             "bitfieldExtract" => new Value(Emit(BaseScalar(args[0].Type) == Scalar.Int ? Op.BitFieldSExtract : Op.BitFieldUExtract, SpvType(args[0].Type), args[0].Id, args[1].Id, args[2].Id), args[0].Type, false),
             "bitfieldInsert" => new Value(Emit(Op.BitFieldInsert, SpvType(args[0].Type), args[0].Id, args[1].Id, args[2].Id, args[3].Id), args[0].Type, false),
@@ -5518,11 +5530,11 @@ public sealed partial class Lowerer
     }
 
     // glslang's findFunction400: an input converts argument -> parameter, an output parameter -> argument.
-    static bool ArgFits(FnParam p, GlslType arg, bool exact) =>
+    bool ArgFits(FnParam p, GlslType arg, bool exact) =>
         p.Type.Equals(arg) || (!exact && (!p.IsIn || CanImplicitlyConvert(arg, p.Type)) && (!p.IsOut || CanImplicitlyConvert(p.Type, arg)));
 
     // Whether a value of `from` can be passed where `to` is expected via GLSL's implicit widening.
-    static bool CanImplicitlyConvert(GlslType from, GlslType to) => (from, to) switch
+    bool CanImplicitlyConvert(GlslType from, GlslType to) => (from, to) switch
     {
         (ScalarType a, ScalarType b) => ImplicitAllowed(a.Kind, b.Kind),
         (VectorType a, VectorType b) => a.Size == b.Size && ImplicitAllowed(a.Component, b.Component),
@@ -5764,11 +5776,15 @@ public sealed partial class Lowerer
         var result = SampleResult(sampler);
         // Buffer and Rect images have no mip levels, so texelFetch takes no LOD and emits no operand.
         if (sampler.Dim is Dim.Buffer or Dim.Rect)
-            return new Value(Emit(Op.ImageFetch, SpvType(result), image, args[1].Id), result, false);
+        {
+            var (rectOp, rectType) = SampleForm(Op.ImageFetch, SpvType(result), result);
+            return new Value(Emit(rectOp, rectType, image, args[1].Id), result, false);
+        }
         // For a multisample sampler the third argument is the sample index (Sample operand), else the LOD.
         var mask = sampler.Multisampled ? ImageOperands.Sample : ImageOperands.Lod;
         if (offset is not null) mask |= ImageOperands.ConstOffset;
-        var instr = InstrPool.Rent(Op.ImageFetch, SpvType(result), _m.AllocId()).Add(image, args[1].Id).Add((uint)mask).Add(args[2].Id);
+        var (fetchOp, fetchType) = SampleForm(Op.ImageFetch, SpvType(result), result);
+        var instr = InstrPool.Rent(fetchOp, fetchType, _m.AllocId()).Add(image, args[1].Id).Add((uint)mask).Add(args[2].Id);
         if (offset is Value o) instr.Add(o.Id);
         _code.Add(instr);
         return new Value(instr.ResultId, result, false);
@@ -5857,6 +5873,8 @@ public sealed partial class Lowerer
 
     Value TextureQueryLevels(Value[] args)
     {
+        if (QueriedSampler(args[0], "textureQueryLevels") is { Dim: Dim.Buffer or Dim.Rect } or { Multisampled: true })
+            throw new GlslParseException("'textureQueryLevels' : no matching overloaded function found");
         _m.AddCapability(Capability.ImageQuery);
         uint image = QueryImage(args[0]).Image;
         return new Value(Emit(Op.ImageQueryLevels, SpvType(Types.Int), image), Types.Int, false);
@@ -5864,6 +5882,8 @@ public sealed partial class Lowerer
 
     Value TextureSamples(Value[] args)   // the sample count of a multisampled texture
     {
+        if (QueriedSampler(args[0], "textureSamples") is { Multisampled: false })
+            throw new GlslParseException("'textureSamples' : no matching overloaded function found");
         _m.AddCapability(Capability.ImageQuery);
         uint image = QueryImage(args[0]).Image;
         return new Value(Emit(Op.ImageQuerySamples, SpvType(Types.Int), image), Types.Int, false);
@@ -5871,9 +5891,22 @@ public sealed partial class Lowerer
 
     Value TextureQueryLod(Value[] args)   // returns (mip level of detail, clamped LOD)
     {
+        var sampler = QueriedSampler(args[0], "textureQueryLod");
+        int coords = sampler.Dim switch { Dim.D1 => 1, Dim.D2 => 2, Dim.D3 or Dim.Cube => 3, _ => 0 };
+        if (coords == 0 || sampler.Multisampled || args[0].Type is not SamplerType || args[1].Type is not (ScalarType or VectorType) || !IsFloating(BaseScalar(args[1].Type))
+            || (args[1].Type is VectorType cv ? cv.Size : 1) != coords)
+            throw new GlslParseException("'textureQueryLod' : no matching overloaded function found");
         _m.AddCapability(Capability.ImageQuery);
         return new Value(Emit(Op.ImageQueryLod, SpvType(Vec2), args[0].Id, args[1].Id), Vec2, false);
     }
+
+    // The sampler a texture query reads, from a combined sampler or a separate texture.
+    static SamplerType QueriedSampler(Value v, string name) => v.Type switch
+    {
+        SamplerType s => s,
+        TextureType t => new SamplerType(t.Dim, t.Arrayed, t.Shadow, t.Sampled, t.Multisampled),
+        _ => throw new GlslParseException($"'{name}' : no matching overloaded function found"),
+    };
 
     Value VoidOp(Op op)
     {
@@ -6353,7 +6386,8 @@ public sealed partial class Lowerer
     }
 
     // GL_ARB_sparse_texture2: the sparse* family returns an int residency code and writes the texel to
-    // an out parameter, via an OpImageSparse* that yields a {code, texel} struct (named "ResType").
+    // an out parameter, via an OpImageSparse* that yields a {code, texel} struct (named "ResType"). Each
+    // lowers as its plain sibling with the out texel left out, emitting the sibling's instruction in its sparse form.
     Value LowerSparse(Call call)
     {
         _m.AddCapability(Capability.SparseResidency);
@@ -6363,36 +6397,20 @@ public sealed partial class Lowerer
             return new Value(Emit(Op.ImageSparseTexelsResident, SpvType(Types.Bool), code), Types.Bool, false);
         }
 
-        var s = LowerExpr(call.Args[0]);
-        var coord = LowerExpr(call.Args[1]);
-        GlslType texel = s.Type is ImageType it ? new VectorType(it.Sampled, 4) : SampleResult((SamplerType)s.Type);
-        // Lower the value args and resolve the out-param texel in SOURCE order (the lod precedes the
-        // out texel; for gather the component follows it), matching glslang's evaluation and id order.
-        uint extra = 0; Access outArg;
-        if (call.Name is "sparseTextureLodARB" or "sparseTexelFetchARB")
-        {
-            extra = LowerExpr(call.Args[2]).Id;
-            outArg = ResolveAccess(call.Args[3]);
-        }
-        else if (call.Name == "sparseTextureGatherARB")
-        {
-            outArg = ResolveAccess(call.Args[2]);
-            extra = call.Args.Count > 3 ? LowerExpr(call.Args[3]).Id : _m.ConstantInt(SpvType(Types.Int), 0);
-        }
-        else outArg = ResolveAccess(call.Args[2]);
-        // texelFetch extracts the underlying image (OpImage) before the ResType struct.
-        uint fetchImage = call.Name == "sparseTexelFetchARB" ? ExtractImage(s) : 0;
-        uint structType = ResTypeStruct2(Types.Int, texel);
-        uint res = call.Name switch
-        {
-            "sparseTextureARB" => Emit(Op.ImageSparseSampleImplicitLod, structType, s.Id, coord.Id),
-            "sparseImageLoadARB" => Emit(Op.ImageSparseRead, structType, s.Id, coord.Id),
-            "sparseTextureLodARB" => Emit(Op.ImageSparseSampleExplicitLod, structType, s.Id, coord.Id, (uint)ImageOperands.Lod, extra),
-            "sparseTexelFetchARB" => Emit(Op.ImageSparseFetch, structType, fetchImage, coord.Id, (uint)ImageOperands.Lod, extra),
-            _ => Emit(Op.ImageSparseGather, structType, s.Id, coord.Id, extra),
-        };
-        Store(outArg.Pointer, Emit(Op.CompositeExtract, SpvType(texel), res, 1));
-        return new Value(Emit(Op.CompositeExtract, SpvType(Types.Int), res, 0), Types.Int, false);
+        string plain = SparseSibling(call.Name) ?? throw new GlslParseException($"call to unknown function '{call.Name}'");
+        int texelIndex = call.Args.Count > 0 ? SparseTexelIndex(plain, InferType(call.Args[0])) : 0;
+        if (texelIndex >= call.Args.Count)
+            throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        var sibling = call with { Name = plain, Args = [.. call.Args.Where((_, i) => i != texelIndex)] };
+
+        _sparsePending = (call.Args[texelIndex], texelIndex);
+        _sparseEmitted = false;
+        var result = LowerBuiltinCall(sibling);
+        _sparseArmed = false;
+        if (!_sparseEmitted) throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
+        var texel = _sparseTexelAccess;
+        Store(texel.Pointer, Emit(Op.CompositeExtract, SpvType(result.Type), result.Id, 1));
+        return new Value(Emit(Op.CompositeExtract, SpvType(Types.Int), result.Id, 0), Types.Int, false);
     }
 
     // coopmat<...>(s) fills every component with the scalar; a matrix of the same type copies through.
@@ -6873,7 +6891,8 @@ public sealed partial class Lowerer
         if (image.Multisampled)   // imageLoad(img, coord, sample): the sample index is a Sample image operand
         {
             _m.AddCapability(Capability.StorageImageMultisample);
-            var msRead = InstrPool.Rent(Op.ImageRead, SpvType(texel), _m.AllocId()).Add(args[0].Id, args[1].Id);
+            var (msOp, msType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
+            var msRead = InstrPool.Rent(msOp, msType, _m.AllocId()).Add(args[0].Id, args[1].Id);
             if (ImageMemOperands(mem, store: false) is (uint msMask, uint msScope))
                 msRead.Add((uint)ImageOperands.Sample | msMask).Add(args[2].Id, msScope);
             else msRead.Add((uint)ImageOperands.Sample).Add(args[2].Id);
@@ -6882,11 +6901,13 @@ public sealed partial class Lowerer
         }
         if (ImageMemOperands(mem, store: false) is (uint mask, uint scope))
         {
-            var read = InstrPool.Rent(Op.ImageRead, SpvType(texel), _m.AllocId()).Add(args[0].Id, args[1].Id).Add(mask, scope);
+            var (memOp, memType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
+            var read = InstrPool.Rent(memOp, memType, _m.AllocId()).Add(args[0].Id, args[1].Id).Add(mask, scope);
             _code.Add(read);
             return new Value(read.ResultId, texel, false);
         }
-        return new Value(Emit(Op.ImageRead, SpvType(texel), args[0].Id, args[1].Id), texel, false);
+        var (readOp, readType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
+        return new Value(Emit(readOp, readType, args[0].Id, args[1].Id), texel, false);
     }
 
     Value SubpassLoad(Value[] args)   // reads the current fragment's input attachment at coordinate (0,0)
@@ -6951,7 +6972,8 @@ public sealed partial class Lowerer
         if (offsetKind is not ImageOperands.ConstOffset) _m.AddCapability(Capability.ImageGatherExtended);
         var result = SampleResult((SamplerType)args[0].Type);
         uint component = args.Length > 3 ? args[3].Id : _m.ConstantInt(SpvType(Types.Int), 0);
-        _code.Add(InstrPool.Rent(Op.ImageGather, SpvType(result), _m.AllocId())
+        var (gatherOp, gatherType) = SampleForm(Op.ImageGather, SpvType(result), result);
+        _code.Add(InstrPool.Rent(gatherOp, gatherType, _m.AllocId())
             .Add(args[0].Id, args[1].Id, component).Add((uint)offsetKind).Add(args[2].Id));
         return new Value(_code[^1].ResultId, result, false);
     }
@@ -6960,7 +6982,8 @@ public sealed partial class Lowerer
     Value GatherDref(Value sampler, Value coord, Value refZ, ImageOperands offsetKind, Value offset)
     {
         if (offsetKind is not ImageOperands.ConstOffset) _m.AddCapability(Capability.ImageGatherExtended);
-        _code.Add(InstrPool.Rent(Op.ImageDrefGather, SpvType(Vec4), _m.AllocId())
+        var (drefOp, drefType) = SampleForm(Op.ImageDrefGather, SpvType(Vec4), Vec4);
+        _code.Add(InstrPool.Rent(drefOp, drefType, _m.AllocId())
             .Add(sampler.Id, coord.Id, refZ.Id).Add((uint)offsetKind).Add(offset.Id));
         return new Value(_code[^1].ResultId, Vec4, false);
     }
@@ -6972,9 +6995,13 @@ public sealed partial class Lowerer
         var sampler = (SamplerType)args[0].Type;
         var result = SampleResult(sampler);
         if (sampler.Shadow)
-            return new Value(Emit(Op.ImageDrefGather, SpvType(result), args[0].Id, args[1].Id, args[2].Id), result, false);
+        {
+            var (drefOp, drefType) = SampleForm(Op.ImageDrefGather, SpvType(result), result);
+            return new Value(Emit(drefOp, drefType, args[0].Id, args[1].Id, args[2].Id), result, false);
+        }
         uint component = args.Length > 2 ? args[2].Id : _m.ConstantInt(SpvType(Types.Int), 0);
-        return new Value(Emit(Op.ImageGather, SpvType(result), args[0].Id, args[1].Id, component), result, false);
+        var (gatherOp, gatherType) = SampleForm(Op.ImageGather, SpvType(result), result);
+        return new Value(Emit(gatherOp, gatherType, args[0].Id, args[1].Id, component), result, false);
     }
 
     // Image atomics operate on a texel pointer obtained from the image variable, not a loaded value.
@@ -7199,6 +7226,11 @@ public sealed partial class Lowerer
         {
             _m.AddExtension("SPV_EXT_shader_image_int64");
             _m.AddCapability(Capability.Int64ImageEXT);
+        }
+        if (sampled == Scalar.Half)
+        {
+            _m.AddExtension("SPV_AMD_gpu_shader_half_float_fetch");
+            _m.AddCapability(Capability.Float16ImageAMD);
         }
         return SpvType(new ScalarType(sampled));
     }
@@ -7629,20 +7661,8 @@ public sealed partial class Lowerer
         return new Value(result, Types.Bool, false);
     }
 
-    // GLSL implicit conversions only widen: int -> uint/float, uint -> float, half -> float.
-    static bool ImplicitAllowed(Scalar from, Scalar to) => (from, to) switch
-    {
-        (Scalar.Int, Scalar.UInt) or (Scalar.Int, Scalar.Float) or (Scalar.UInt, Scalar.Float) => true,
-        (Scalar.Half, Scalar.Float) => true,
-        // Anything numeric widens to double.
-        (Scalar.Int or Scalar.UInt or Scalar.Float or Scalar.Half, Scalar.Double) => true,
-        // An integer widens to a wider integer, and any integer widens to a float.
-        (Scalar.Int, Scalar.Int64 or Scalar.UInt64) => true,
-        (Scalar.UInt, Scalar.UInt64 or Scalar.Int64) => true,
-        (Scalar.Int64, Scalar.UInt64) => true,
-        (Scalar.Int64 or Scalar.UInt64, Scalar.Float) => true,
-        _ => false,
-    };
+    // An implicit conversion between two different scalar kinds, by glslang's promotion rules for this version and extensions.
+    bool ImplicitAllowed(Scalar from, Scalar to) => from != to && CanPromote(from, to);
 
     static Scalar Wider(Scalar a, Scalar b) =>
         a == Scalar.Double || b == Scalar.Double ? Scalar.Double :
@@ -8150,6 +8170,10 @@ public sealed partial class Lowerer
     {
         if (!l.Type.Equals(r.Type))
             throw new GlslParseException($"cannot compare '{Types.Name(l.Type)}' and '{Types.Name(r.Type)}'");
+        if (IsOpaque(l.Type) || l.Type is BufferReferenceType)
+            throw new GlslParseException($"operator '{op}' cannot be applied to '{Types.Name(l.Type)}'");
+        if (op is not ("==" or "!=") && l.Type is not ScalarType)
+            throw new GlslParseException($"operator '{op}' needs scalar operands, not '{Types.Name(l.Type)}'");
 
         if (l.Type is VectorType v)
         {
@@ -8162,7 +8186,9 @@ public sealed partial class Lowerer
         // == is the AND of every part being equal, != the OR of every part differing.
         if (l.Type is StructType or MatrixType or ArrayType)
             return AggregateCompare(op, l.Id, r.Id, l.Type);
-        return new Value(Emit(CompareOp(op, BaseScalar(l.Type)), SpvType(Types.Bool), l.Id, r.Id), Types.Bool, false);
+        if (l.Type is not ScalarType st)
+            throw new GlslParseException($"operator '{op}' cannot be applied to '{Types.Name(l.Type)}'");
+        return new Value(Emit(CompareOp(op, st.Kind), SpvType(Types.Bool), l.Id, r.Id), Types.Bool, false);
     }
 
     // Recursively compares two aggregates: each scalar/vector part is compared, then the part results are
@@ -8261,6 +8287,8 @@ public sealed partial class Lowerer
         if (u.Operand is Member sw && IsSwizzleName(sw.Name) && sw.Name.Length > 1 && InferType(sw.Target) is VectorType swVec)
             return LowerSwizzleIncDec(u, sw, swVec);
         var (pointer, type) = ResolveLValue(u.Operand);
+        if (type is not (ScalarType or VectorType or MatrixType) || BaseScalar(type) == Scalar.Bool)
+            throw new GlslParseException($"'{u.Op}' : wrong operand type, cannot apply to '{Types.Name(type)}'");
         var current = Load(type, pointer);
         // glslang adds a SIGNED one to an integer of either signedness and smears it to a vector of the
         // ONE's own type, relying on OpIAdd ignoring signedness rather than matching component types.
@@ -8327,7 +8355,7 @@ public sealed partial class Lowerer
     {
         Scalar.Float => _m.ConstantFloat(SpvType(Types.Float), 1f),
         Scalar.Double => _m.ConstantDouble(SpvType(Types.Double), 1.0),
-        Scalar.Half => _m.ConstantFloat(SpvType(Types.Half), 1f),
+        Scalar.Half => Materialize(new CScalar(Scalar.Half, 1.0, 0)).Id,
         Scalar.Int64 or Scalar.UInt64 => _m.ConstantInt64(SpvType(Types.Int64), 1),
         Scalar.Int8 or Scalar.UInt8 => _m.ConstantInt(SpvType(Types.Int8), 1),
         Scalar.Int16 or Scalar.UInt16 => _m.ConstantInt(SpvType(Types.Int16), 1),
@@ -10242,7 +10270,7 @@ public sealed partial class Lowerer
         // glslang creates the bvec result type before smearing the zero it compares against, and creates
         // the scalar zero constant before the vector type it broadcasts into.
         uint resultType = SpvType(target);
-        var zeroComp = new CScalar(sourceFloat ? source.Component : Scalar.UInt, 0, 0);
+        var zeroComp = new CScalar(sourceFloat ? source.Component : UnsignedOfWidth(IntWidth(source.Component)), 0, 0);
         Materialize(zeroComp);
         var zeroType = new VectorType(zeroComp.Kind, target.Size);
         uint zeroVec = Materialize(new CAgg(zeroType, [.. Enumerable.Repeat((CVal)zeroComp, target.Size)])).Id;
@@ -10280,7 +10308,7 @@ public sealed partial class Lowerer
             // not signedness), so `bool(int)` uses a uint 0 too.
             var (zero, cmp) = IsFloating(source)
                 ? (Materialize(new CScalar(source, 0, 0)).Id, Op.FUnordNotEqual)
-                : (_m.ConstantInt(SpvType(Types.UInt), 0), Op.INotEqual);
+                : (Materialize(new CScalar(UnsignedOfWidth(IntWidth(source)), 0, 0)).Id, Op.INotEqual);
             return new Value(Emit(cmp, SpvType(Types.Bool), arg.Id, zero), Types.Bool, false);
         }
 
@@ -10971,7 +10999,7 @@ public sealed partial class Lowerer
         "packHalf2x16" or "packUnorm2x16" or "packSnorm2x16" or "packUnorm4x8" or "packSnorm4x8" => Types.UInt,
         "unpackHalf2x16" or "unpackUnorm2x16" or "unpackSnorm2x16" => new VectorType(Scalar.Float, 2),
         "unpackUnorm4x8" or "unpackSnorm4x8" => Vec4,
-        "bitCount" or "findLSB" or "findMSB" => ReplaceComponent(InferType(c.Args[0]), Scalar.Int),
+        "bitCount" or "findLSB" or "findMSB" => ReplaceComponent(InferType(c.Args[0]), SignedOfWidth(IntWidth(BaseScalar(InferType(c.Args[0]))))),
         // Subgroup operations: return types exactly as lowered (LowerSubgroup / SubgroupElect / ...).
         // The arg0 fallback below is right for the shuffle/broadcast/quad/arithmetic/partitioned/rotate
         // forms (they return their value argument's type) but wrong for the zero-argument subgroupElect

@@ -1,0 +1,7 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x=1) in;
+layout(buffer_reference, std430) buffer R { int v; };
+layout(push_constant) uniform PC { R a; R b; } pc;
+layout(std430,set=0,binding=0) buffer O { int o; };
+void main() { o = (pc.a == pc.b) ? 1 : 0; if (pc.a != pc.b) o += 2; }

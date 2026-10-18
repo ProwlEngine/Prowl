@@ -933,7 +933,7 @@ public sealed class Parser
         "input_points", "input_lines", "input_lines_adjacency", "input_triangles", "input_triangles_adjacency",
         "input_quads", "input_quads_adjacency", "input_isolines",
         "max_vertices", "max_primitives", "vertices", "invocations",
-        "passthrough", "derivative_group_linearNV", "derivative_group_quadsNV",
+        "passthrough", "derivative_group_linearNV", "derivative_group_quadsNV", "derivative_group_linearKHR", "derivative_group_quadsKHR",
         "viewport_relative", "secondary_view_offset",
         // fragment / depth / stencil / ordering
         "origin_upper_left", "pixel_center_integer",

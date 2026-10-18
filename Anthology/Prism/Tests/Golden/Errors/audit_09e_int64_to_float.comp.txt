@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:5: '=' :  cannot convert from 'layout( column_major std430 offset=0) buffer int64_t' to ' temp highp float'
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

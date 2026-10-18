@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:7: '==' : can't use with reference types 
+ERROR: <shader>:7: 'buffer reference math' : required extension not requested: GL_EXT_buffer_reference2
+ERROR: <shader>:7: '==' :  wrong operand types: no operation '==' exists that takes a left-hand operand of type 'layout( column_major std430 offset=0) uniform reference' and a right operand of type 'layout( column_major std430 offset=8) uniform reference' (or there is no acceptable conversion)
+ERROR: <shader>:7: 'assign' :  cannot convert from ' const bool' to 'layout( column_major std430 offset=0) buffer highp int'
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 5 compilation errors.  No code generated.
+
+
