@@ -48,11 +48,11 @@
     <PackageReference Include="Prowl.Graphite.Rendering" Version="$(ProwlPackageVersion)" />
 
     <PackageReference Include="Jitter2" Version="2.10.0" />
-    <PackageReference Include="Silk.NET" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Input.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR.Extensions.KHR" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR.Extensions.EXT" Version="2.23.0" />
-    <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
     <!-- EngineObject null-safety analyzer (?./??/??= on EngineObject). Analyzes this project's own source. -->
     <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
@@ -65,13 +65,17 @@
     <LibraryFiles Include="..\Libraries\**\*.*" />
   </ItemGroup>
 
-  <!-- Stamp each PackageReference as AssemblyMetadata so the build pipeline
+  <!-- Stamp each PackageReference and engine native library as AssemblyMetadata so the build pipeline
        can read dependencies from the compiled DLL without needing the .csproj file. -->
   <Target Name="EmbedPackageReferences" BeforeTargets="GetAssemblyAttributes">
     <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
         <_Parameter1>PackageReference:%(PackageReference.Identity)</_Parameter1>
         <_Parameter2>%(PackageReference.Version)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>NativeLibrary:%(LibraryFiles.RecursiveDir)%(LibraryFiles.Filename)%(LibraryFiles.Extension)</_Parameter1>
+        <_Parameter2>runtimes</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>

@@ -750,36 +750,40 @@ public class DesktopBuildPipeline : BuildPipeline
     /// <remarks>
     /// The engine ships natives for every identifier it supports. Copying the lot would put Android and
     /// macOS binaries inside a Windows build, so the folders are filtered by name against the target.
+    /// Only the files stamped into the runtime are copied. The editor's runtimes folder also holds NuGet
+    /// natives that publish already places, and whatever older builds left behind.
     /// </remarks>
     private static void CopyEngineNatives(string outputDirectory, PlatformTarget target, CancellationToken ct)
     {
         string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         string engineRuntimes = Path.Combine(engineDir, "runtimes");
-        if (!Directory.Exists(engineRuntimes)) return;
-
         string destinationRoot = Path.Combine(outputDirectory, "runtimes");
 
-        // Files at the root belong to no identifier. They are the third party licence texts, and they
-        // ship with every build.
-        Copy(Directory.EnumerateFiles(engineRuntimes), engineRuntimes);
-
-        foreach (string rid in target.RuntimeIdentifiers)
+        foreach (string relative in GetEngineNativeLibraries().OrderBy(f => f, StringComparer.Ordinal))
         {
-            string source = Path.Combine(engineRuntimes, rid);
-            if (Directory.Exists(source))
-                Copy(Directory.EnumerateFiles(source, "*.*", SearchOption.AllDirectories), engineRuntimes);
+            ct.ThrowIfCancellationRequested();
+
+            // Files at the root belong to no identifier. They are the third party licence texts, and they
+            // ship with every build.
+            int slash = relative.IndexOf('/');
+            if (slash >= 0 && !target.RuntimeIdentifiers.Contains(relative[..slash])) continue;
+
+            string source = Path.Combine(engineRuntimes, relative);
+            if (!File.Exists(source)) continue;
+
+            string dest = Path.Combine(destinationRoot, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(source, dest, true);
         }
+    }
 
-        void Copy(IEnumerable<string> files, string relativeTo)
+    private static IEnumerable<string> GetEngineNativeLibraries()
+    {
+        const string prefix = "NativeLibrary:";
+        foreach (AssemblyMetadataAttribute attr in typeof(Prowl.Runtime.EngineObject).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>())
         {
-            foreach (string? file in files.OrderBy(f => f, StringComparer.Ordinal))
-            {
-                ct.ThrowIfCancellationRequested();
-
-                string dest = Path.Combine(destinationRoot, Path.GetRelativePath(relativeTo, file));
-                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                File.Copy(file, dest, true);
-            }
+            if (attr.Key != null && attr.Key.StartsWith(prefix, StringComparison.Ordinal))
+                yield return attr.Key[prefix.Length..].Replace('\\', '/');
         }
     }
 
@@ -863,6 +867,8 @@ public class DesktopBuildPipeline : BuildPipeline
             // Deliberately no PROWL_EDITOR: this is the shipped game, not the editor.
             ["DefineConstants"] = string.Join(';', PlayerDefines(settings, this)),
             ["IncludeNativeLibrariesForSelfExtract"] = "true",
+            // Keeps the engine's XML docs out of the player, only symbols ship beside its assemblies.
+            ["AllowedReferenceRelatedFileExtensions"] = ".pdb",
         };
 
         if (desktopProfile.SelfContained)
