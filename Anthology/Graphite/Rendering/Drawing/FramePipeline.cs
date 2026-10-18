@@ -1331,7 +1331,7 @@ internal sealed partial class FramePipeline : IDisposable
         _readback = new ReadbackPass(device, report);
         _readbackPipeline.SetPasses([_readback]);
 
-        const string present = InternalShaders.Present, decode = InternalShaders.Decode;
+        const string present = InternalShaders.Present, decode = InternalShaders.Decode, encode = InternalShaders.Encode;
         BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
         _present =
         [
@@ -1339,6 +1339,8 @@ internal sealed partial class FramePipeline : IDisposable
             FullscreenProgram.Create(device, compiler, present, "Graphite/PresentOver", blend: over),
             FullscreenProgram.Create(device, compiler, decode, "Graphite/PresentDecode"),
             FullscreenProgram.Create(device, compiler, decode, "Graphite/PresentDecodeOver", blend: over),
+            FullscreenProgram.Create(device, compiler, encode, "Graphite/PresentEncode"),
+            FullscreenProgram.Create(device, compiler, encode, "Graphite/PresentEncodeOver", blend: over),
         ];
         Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
         SmaaArea = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false);
@@ -1380,9 +1382,10 @@ internal sealed partial class FramePipeline : IDisposable
 
     /// <summary>
     /// Copies the view's colour to its target with its rows reversed, the first row at the bottom of clip space. Decoding
-    /// undoes a tonemapper's encode for sRGB and float targets so theirs applies once, and over blends it as premultiplied by its alpha.
+    /// undoes a tonemapper's encode for sRGB and float targets so theirs applies once, encoding sRGB encodes linear colour for
+    /// targets that store display values, and over blends it as premultiplied by its alpha.
     /// </summary>
-    public FullscreenProgram Present(bool decode, bool over) => _present[(decode ? 2 : 0) + (over ? 1 : 0)];
+    public FullscreenProgram Present(bool decode, bool encode, bool over) => _present[(decode ? 2 : encode ? 4 : 0) + (over ? 1 : 0)];
 
     /// <summary>Prowl's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
     public Texture Noise { get; }
@@ -1642,7 +1645,7 @@ internal sealed partial class FramePipeline : IDisposable
         if (!view.External)
         {
             camera.SelectFeatures(world.World.FeatureSnapshot, features);
-            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight))
+            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight, view.Ldr))
                 camera.Rebuild = true;
             camera.ApplyFeatures();
         }
@@ -1662,7 +1665,7 @@ internal sealed partial class FramePipeline : IDisposable
         {
             camera.Info = new FeatureView(view, width, height, true);
             camera.SelectFeatures(world.World.FeatureSnapshot, features);
-            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight))
+            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight, view.Ldr))
                 camera.Rebuild = true;
             camera.ApplyFeatures();
         }

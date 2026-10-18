@@ -9,7 +9,7 @@ namespace Prowl.Clay.PostProcess;
 
 /// <summary>
 /// Flips the V coordinate on every UV channel: <c>V := 1 - V</c>. Bitangent signs in
-/// <see cref="IntermediateMesh.Tangents"/> are negated to keep the tangent frame consistent.
+/// <see cref="IntermediateMesh.Tangents"/> are negated, since the bitangent follows +V.
 /// </summary>
 /// <remarks>
 /// Use when the source's UV origin convention doesn't match the engine's. glTF authors V starting

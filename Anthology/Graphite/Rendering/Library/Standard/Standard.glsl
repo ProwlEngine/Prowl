@@ -128,12 +128,12 @@ void Graphite_StandardTangentFrame(vec3 worldNormal, vec3 worldTangent, float ha
     if (hasTangent)
     {
         tangent = worldTangent;
-        bitangent = cross(tangent, worldNormal) * sign;
+        bitangent = cross(worldNormal, tangent) * sign;
         if (dot(bitangent, bitangent) > 0.000001)
             return;
     }
     tangent = abs(worldNormal.y) < 0.999 ? normalize(cross(worldNormal, vec3(0.0, 1.0, 0.0))) : normalize(cross(worldNormal, vec3(1.0, 0.0, 0.0)));
-    bitangent = cross(tangent, worldNormal) * sign;
+    bitangent = cross(worldNormal, tangent) * sign;
 }
 
 #ifdef GRAPHITE_VERTEX

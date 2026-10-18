@@ -15,7 +15,7 @@ namespace Prowl.Clay.PostProcess;
 /// </summary>
 /// <remarks>
 /// Tangent stream layout matches MikkTSpace: <c>(tangent.xyz, bitangent_sign)</c>. The bitangent
-/// is reconstructed in the shader as <c>cross(normal, tangent.xyz) * tangent.w</c>.
+/// is <c>cross(normal, tangent.xyz) * tangent.w</c> and points along increasing V.
 /// <para>
 /// The full MikkTSpace algorithm gives bit-exact results for mirrored UV islands and is preferred
 /// for authoring pipelines that pre-bake their tangents the same way. The Lengyel method used here

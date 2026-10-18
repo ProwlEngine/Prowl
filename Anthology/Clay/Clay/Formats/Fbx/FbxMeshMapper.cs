@@ -112,6 +112,7 @@ internal static class FbxMeshMapper
         // Layered data: normals/UVs/colors/material indices.
         var unpackedNormals = ReadLayerVec3(node, "LayerElementNormal", "Normals", "NormalIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
         var unpackedTangents = ReadLayerVec3(node, "LayerElementTangent", "Tangents", "TangentIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
+        var unpackedBinormals = ReadLayerVec3(node, "LayerElementBinormal", "Binormals", "BinormalsIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
         // UV: enumerate every LayerElementUV node (each carries its own slot index in property[0])
         // and route into the per-channel slots on the intermediate mesh. Slot indices that go out
         // of range are dropped with a warning.
@@ -210,7 +211,10 @@ internal static class FbxMeshMapper
                     {
                         mesh.Tangents ??= new List<Float4>();
                         var t = unpackedTangents[pv];
-                        mesh.Tangents.Add(new Float4(t.X, t.Y, t.Z, 1f));
+                        float w = 1f;
+                        if (unpackedBinormals is not null && unpackedNormals is not null)
+                            w = Float3.Dot(Float3.Cross(unpackedNormals[pv], t), unpackedBinormals[pv]) < 0f ? -1f : 1f;
+                        mesh.Tangents.Add(new Float4(t.X, t.Y, t.Z, w));
                     }
                     for (int uv = 0; uv < Prowl.Clay.Mesh.MaxUVChannels; uv++)
                     {

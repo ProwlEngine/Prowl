@@ -25,7 +25,8 @@ public sealed class Mesh
 
     /// <summary>
     /// Vertex tangents in the MikkTSpace convention: xyz is the tangent direction and w is the
-    /// bitangent sign (+1 or -1). Bitangent is reconstructed in the shader as <c>cross(N, T) * T.w</c>.
+    /// bitangent sign (+1 or -1). The bitangent is <c>cross(N, T) * T.w</c> and points along increasing V of this
+    /// mesh's UVs.
     /// </summary>
     public Float4[]? Tangents { get; init; }
 

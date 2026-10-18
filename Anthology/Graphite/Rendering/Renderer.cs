@@ -187,6 +187,12 @@ public struct ViewDesc
     public float RenderScale;
 
     /// <summary>
+    /// Renders the scene into 8 bit sRGB colour instead of 16 bit float: half the bandwidth, and light above 1 clips. For
+    /// views with no tonemapper.
+    /// </summary>
+    public bool Ldr;
+
+    /// <summary>
     /// The camera jumped, like a teleport or a scene switch: this frame has no previous one, so motion is none and every
     /// feature's history starts over.
     /// </summary>

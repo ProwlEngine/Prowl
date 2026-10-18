@@ -480,6 +480,9 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
     /// <summary>The scene's colour, motion, normal and material formats, a view taking as many as its targets need.</summary>
     public static readonly PixelFormat[] SceneFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm];
 
+    /// <summary>The colour format of an LDR view's scene and the colours after it.</summary>
+    public const PixelFormat LdrColorFormat = PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
+
     public static int SceneTargetCount(SceneTargets targets)
         => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 4 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
 
@@ -513,16 +516,17 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
     private TextureView? _sceneColorView;
 
     private uint _width, _height, _layers, _outputWidth, _outputHeight;
+    private PixelFormat _colorFormat = PixelFormat.R16_G16_B16_A16_Float;
 
     /// <summary>Makes the scene colour for the view's size. Returns whether it did.</summary>
     public bool EnsureSceneColor()
     {
         uint layers = Math.Max(_layers, 1u);
-        if (SceneColor is { } existing && existing.Width == _width && existing.Height == _height && existing.ArrayLayers == layers)
+        if (SceneColor is { } existing && existing.Width == _width && existing.Height == _height && existing.ArrayLayers == layers && existing.Format == _colorFormat)
             return false;
         ReleaseSceneColor();
         uint mips = (uint)Math.Log2(Math.Max(_width, _height)) + 1;
-        SceneColor = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(_width, _height, mips, layers, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Sampled));
+        SceneColor = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(_width, _height, mips, layers, _colorFormat, TextureUsage.Sampled));
         SceneColor.Name = $"Graphite.SceneColor {viewId}";
         return true;
     }
@@ -566,11 +570,16 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
             ScreenIrradiance.Release(Retired);
     }
 
-    /// <summary>Sizes the textures for a view, the scene with the targets its features read. Returns whether any was recreated.</summary>
-    public bool Ensure(uint width, uint height, int layers, SceneTargets targets, uint outputWidth, uint outputHeight)
+    /// <summary>
+    /// Sizes the textures for a view, the scene with the targets its features read, its colours 8 bit sRGB when LDR.
+    /// Returns whether any was recreated.
+    /// </summary>
+    public bool Ensure(uint width, uint height, int layers, SceneTargets targets, uint outputWidth, uint outputHeight, bool ldr)
     {
         (_width, _height, _layers, _outputWidth, _outputHeight) = (width, height, layers > 1 ? (uint)layers : 0, outputWidth, outputHeight);
+        _colorFormat = ldr ? LdrColorFormat : SceneFormats[0];
         PixelFormat[] formats = SceneFormats[..SceneTargetCount(targets)];
+        formats[0] = _colorFormat;
         bool changed = Scene.Ensure(device, new RenderTextureDescription(width, height, formats, PixelFormat.D32_Float) { ArrayLayers = _layers }, Retired);
         foreach (ChainTexture color in (ChainTexture[])[.. Colors, .. OutputColors])
         {
@@ -585,7 +594,7 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
     public bool EnsureColor(ChainTexture color)
     {
         bool output = Array.IndexOf(OutputColors, color) >= 0;
-        return color.Ensure(device, new RenderTextureDescription(output ? _outputWidth : _width, output ? _outputHeight : _height, PixelFormat.R16_G16_B16_A16_Float, false) { ArrayLayers = _layers }, Retired);
+        return color.Ensure(device, new RenderTextureDescription(output ? _outputWidth : _width, output ? _outputHeight : _height, _colorFormat, false) { ArrayLayers = _layers }, Retired);
     }
 
     /// <summary>The colour after the current one, at the output resolution once upscaled, made the first time.</summary>
@@ -1130,7 +1139,7 @@ internal sealed class SetupPass(FramePipeline frame, CameraFrame camera) : IPass
 internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPass
 {
     // sRGB targets encode what they are given and float targets hold linear light, so display encoded colour is decoded
-    // for both. Other formats take display values as they are.
+    // for both. Other formats store display values, so linear colour is encoded for them.
     private static bool TakesLinear(PixelFormat format) => format is PixelFormat.R8_G8_B8_A8_UNorm_SRgb or PixelFormat.B8_G8_R8_A8_UNorm_SRgb
         or PixelFormat.R16_Float or PixelFormat.R16_G16_Float or PixelFormat.R16_G16_B16_A16_Float or PixelFormat.R11_G11_B10_Float
         or PixelFormat.R32_Float or PixelFormat.R32_G32_Float or PixelFormat.R32_G32_B32_A32_Float;
@@ -1165,8 +1174,10 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
         cmd.SetVertexSource(VertexSource.None);
         if (_source is { } source)
         {
-            bool decode = camera.Chain.DisplayEncoded && TakesLinear(target.ColorTargets[0].Target.Format);
-            cmd.SetShader(frame.Present(decode, overlay).For(camera.LayerCount));
+            bool linearTarget = TakesLinear(target.ColorTargets[0].Target.Format);
+            bool decode = camera.Chain.DisplayEncoded && linearTarget;
+            bool encode = !camera.Chain.DisplayEncoded && !linearTarget;
+            cmd.SetShader(frame.Present(decode, encode, overlay).For(camera.LayerCount));
             _properties.SetTexture("Graphite_Source", context.GetRenderTexture(source).ColorTextures[0], frame.LinearSampler);
         }
         else if (!whole)

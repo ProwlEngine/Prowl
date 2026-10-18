@@ -118,30 +118,29 @@ internal static class Halton
 
 public enum TonemapOperator
 {
-    Melon,
     Aces,
-    AcesSimple,
-    AgX,
-    ReinhardSimple,
-    ReinhardLuma,
-    ReinhardWhitePreserving,
+
+    /// <summary>AgX with no look, flat and desaturated.</summary>
+    AgXNeutral,
+
+    /// <summary>AgX with the reference Punchy look: more contrast and saturation.</summary>
+    AgXPunchy,
+
+    /// <summary>Extended Reinhard on luminance, white at 2.</summary>
+    Reinhard,
     RomBinDaHouse,
     Uncharted2,
 }
 
 /// <summary>
-/// Prowl's tonemapper, the Tonemap slot's exclusive feature: an operator into 0 to 1, display gamma, then contrast and
-/// saturation in display space. Later slots read display encoded colour, which the present decodes for sRGB targets.
+/// Prowl's tonemapper, the Tonemap slot's exclusive feature: an operator into 0 to 1, then the sRGB encode. Later slots
+/// read display encoded colour, which the present decodes for sRGB targets.
 /// </summary>
 public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
 {
     private FullscreenProgram _program = null!;
-    private (float Contrast, float Saturation) _settings;
-    private readonly PropertySet _properties = new();
 
-    public TonemapOperator Operator { get; set; } = TonemapOperator.AgX;
-    public float Contrast { get; set; } = 1.1f;
-    public float Saturation { get; set; } = 1.1f;
+    public TonemapOperator Operator { get; set; } = TonemapOperator.AgXPunchy;
 
     public override RenderSlot Slot => RenderSlot.Tonemap;
     public override string? ExclusiveGroup => "Tonemap";
@@ -150,19 +149,15 @@ public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
     {
         string define = Operator switch
         {
-            TonemapOperator.Melon => "TONEMAP_MELON",
             TonemapOperator.Aces => "TONEMAP_ACES",
-            TonemapOperator.AcesSimple => "TONEMAP_ACES_SIMPLE",
-            TonemapOperator.AgX => "TONEMAP_AGX",
-            TonemapOperator.ReinhardSimple => "TONEMAP_REINHARD_SIMPLE",
-            TonemapOperator.ReinhardLuma => "TONEMAP_REINHARD_LUMA",
-            TonemapOperator.ReinhardWhitePreserving => "TONEMAP_REINHARD_WHITE",
+            TonemapOperator.AgXNeutral => "TONEMAP_AGX_NEUTRAL",
+            TonemapOperator.AgXPunchy => "TONEMAP_AGX_PUNCHY",
+            TonemapOperator.Reinhard => "TONEMAP_REINHARD",
             TonemapOperator.RomBinDaHouse => "TONEMAP_ROMBINDAHOUSE",
             TonemapOperator.Uncharted2 => "TONEMAP_UNCHARTED2",
             _ => "TONEMAP_CLAMP",
         };
         _program = Program("Tonemap", $"#define {define} 1\n");
-        _settings = (Contrast, Saturation);
     }
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
@@ -171,12 +166,7 @@ public sealed class Tonemapper(Renderer renderer) : PostEffect(renderer)
         builder.EncodesForDisplay();
     }
 
-    public override void Render(FeatureContext context)
-    {
-        _properties.SetFloat("_Contrast", _settings.Contrast);
-        _properties.SetFloat("_Saturation", _settings.Saturation);
-        context.Fullscreen(_program, _properties);
-    }
+    public override void Render(FeatureContext context) => context.Fullscreen(_program);
 }
 
 /// <summary>

@@ -279,7 +279,12 @@ internal static class GltfMeshMapper
             mesh.Normals = reader.ReadVec3List(normIdx);
 
         if (prim.Attributes.TryGetValue("TANGENT", out int tanIdx))
+        {
+            // glTF's bitangent points up the image, which is -V in its top left UVs, so the sign flips to follow +V
             mesh.Tangents = reader.ReadVec4List(tanIdx);
+            for (int i = 0; i < mesh.Tangents.Count; i++)
+                mesh.Tangents[i] = mesh.Tangents[i] with { W = -mesh.Tangents[i].W };
+        }
 
         if (prim.Attributes.TryGetValue("COLOR_0", out int colIdx))
             mesh.Colors0 = new List<Color>(reader.ReadColor(colIdx));

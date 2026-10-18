@@ -228,17 +228,14 @@ public sealed class PostStackTests : IDisposable
 
     private static float Luminance(Float3 c) => c.X * 0.2126f + c.Y * 0.7152f + c.Z * 0.0722f;
 
-    // Prowl's tonemap operators, then its gamma encode and its contrast and saturation matrices
-    private static Float3 CpuTonemap(TonemapOperator op, Float3 c, float contrast, float saturation)
+    // Prowl's tonemap operators, then its sRGB encode
+    private static Float3 CpuTonemap(TonemapOperator op, Float3 c)
     {
         static Float3 Mul(Float3 v, float[] m) => new(v.X * m[0] + v.Y * m[1] + v.Z * m[2], v.X * m[3] + v.Y * m[4] + v.Z * m[5], v.X * m[6] + v.Y * m[7] + v.Z * m[8]);
         static Float3 MulColumns(float[] m, Float3 v) => new(m[0] * v.X + m[3] * v.Y + m[6] * v.Z, m[1] * v.X + m[4] * v.Y + m[7] * v.Z, m[2] * v.X + m[5] * v.Y + m[8] * v.Z);
         Float3 mapped = op switch
         {
-            TonemapOperator.AcesSimple => Map(c, x => x * (2.51f * x + 0.03f) / (x * (2.43f * x + 0.59f) + 0.14f)),
-            TonemapOperator.ReinhardSimple => Map(c, x => x * (1.5f / (1 + x / 1.5f))),
-            TonemapOperator.ReinhardLuma => c * (Luminance(c) / (1 + Luminance(c)) / MathF.Max(Luminance(c), 1e-5f)),
-            TonemapOperator.ReinhardWhitePreserving => c * (Luminance(c) * (1 + Luminance(c) / 4) / (1 + Luminance(c)) / MathF.Max(Luminance(c), 1e-5f)),
+            TonemapOperator.Reinhard => c *(Luminance(c) * (1 + Luminance(c) / 4) / (1 + Luminance(c)) / MathF.Max(Luminance(c), 1e-5f)),
             TonemapOperator.RomBinDaHouse => Map(c, x => MathF.Exp(-1 / (2.72f * x + 0.15f))),
             TonemapOperator.Uncharted2 => Map(c, x =>
             {
@@ -248,66 +245,45 @@ public sealed class PostStackTests : IDisposable
             TonemapOperator.Aces => Mul(Map(Mul(c, [0.59719f, 0.35458f, 0.04823f, 0.07600f, 0.90834f, 0.01566f, 0.02840f, 0.13383f, 0.83777f]),
                 v => (v * (v + 0.0245786f) - 0.000090537f) / (v * (0.983729f * v + 0.4329510f) + 0.238081f)),
                 [1.60475f, -0.53108f, -0.07367f, -0.10208f, 1.10813f, -0.00605f, -0.00327f, -0.07276f, 1.07602f]),
-            TonemapOperator.AgX => AgX(c),
-            _ => Melon(c),
+            TonemapOperator.AgXNeutral => AgX(c, false),
+            _ => AgX(c, true),
         };
 
-        static Float3 AgX(Float3 c)
+        static Float3 AgX(Float3 c, bool punchy)
         {
             const float minEv = -12.47393f, maxEv = 4.026069f;
             Float3 v = MulColumns([0.842479062253094f, 0.0423282422610123f, 0.0423756549057051f, 0.0784335999999992f, 0.878468636469772f, 0.0784336f, 0.0792237451477643f, 0.0791661274605434f, 0.879142973793104f], c);
             v = Map(v, x => (Math.Clamp(MathF.Log2(MathF.Max(x, 1e-10f)), minEv, maxEv) - minEv) / (maxEv - minEv));
             v = Map(v, x => 15.5f * MathF.Pow(x, 6) - 40.14f * MathF.Pow(x, 5) + 31.96f * MathF.Pow(x, 4) - 6.868f * x * x * x + 0.4298f * x * x + 0.1191f * x - 0.00232f);
-            float luma = v.X * 0.2126729f + v.Y * 0.7151522f + v.Z * 0.0721750f;
-            v = Map(v, x => MathF.Pow(MathF.Max(x * 1.1f, 0), 1.2f));
-            v = Map(v, x => MathF.Max(luma + 1.3f * (x - luma), 0));
-            v = MulColumns([1.19687900512017f, -0.0528968517574562f, -0.0529716355144438f, -0.0980208811401368f, 1.15190312990417f, -0.0980434501171241f, -0.0990297440797205f, -0.0989611768448433f, 1.15107367264116f], v);
-            return Map(v, x => MathF.Pow(MathF.Max(0, x), 2.2f));
+            if (punchy)
+            {
+                float luma = Luminance(v);
+                v = Map(v, x => MathF.Pow(MathF.Max(x, 0), 1.35f));
+                v = new Float3(luma) + (v - new Float3(luma)) * 1.4f;
+            }
+            return MulColumns([1.19687900512017f, -0.0528968517574562f, -0.0529716355144438f, -0.0980208811401368f, 1.15190312990417f, -0.0980434501171241f, -0.0990297440797205f, -0.0989611768448433f, 1.15107367264116f], v);
         }
 
-        static Float3 Melon(Float3 c)
-        {
-            Float3 v = Map(c, x => MathF.Pow(x, 1.56f));
-            v = Map(v, x => x / (x + 0.84f));
-            float factor = MathF.Max(MathF.Max(v.X, v.Y), v.Z) * 0.15f;
-            factor /= factor + 1;
-            factor *= factor;
-            float a = MathF.Max(v.X, v.Y);
-            Float3 shifted = new(a, MathF.Max(a, v.Z), v.Z);
-            v += (shifted - v) * factor;
-            return v + (new Float3(1) - v) * factor;
-        }
-
-        Float3 gamma = Map(mapped, x => MathF.Max(1.055f * MathF.Pow(Math.Clamp(x, 0, 1), 0.416666667f) - 0.055f, 0));
-        float oneMinus = 1 - saturation;
-        Float3 lum = new Float3(0.3086f, 0.6094f, 0.0820f) * oneMinus;
-        Float3 saturated = new(
-            gamma.X * (lum.X + saturation) + gamma.Y * lum.Y + gamma.Z * lum.Z,
-            gamma.X * lum.X + gamma.Y * (lum.Y + saturation) + gamma.Z * lum.Z,
-            gamma.X * lum.X + gamma.Y * lum.Y + gamma.Z * (lum.Z + saturation));
-        float t = (1 - contrast) / 2;
-        return saturated * contrast + new Float3(t);
+        Float3 display = Map(mapped, x => Math.Clamp(x, 0, 1));
+        return op is TonemapOperator.AgXNeutral or TonemapOperator.AgXPunchy ? display : Map(display, x => x <= 0.0031308f ? x * 12.92f : 1.055f * MathF.Pow(x, 1 / 2.4f) - 0.055f);
     }
 
     // A float target holds linear light, so the present undoes the tonemapper's display encode
-    private static Float3 Decode(Float3 display) => Map(display, x => MathF.Pow((MathF.Max(x, 0) + 0.055f) / 1.055f, 2.4f));
+    private static Float3 Decode(Float3 display) => Map(display, x => MathF.Max(x, 0) <= 0.04045f ? MathF.Max(x, 0) / 12.92f : MathF.Pow((x + 0.055f) / 1.055f, 2.4f));
 
     [Theory]
-    [InlineData(TonemapOperator.Melon)]
     [InlineData(TonemapOperator.Aces)]
-    [InlineData(TonemapOperator.AcesSimple)]
-    [InlineData(TonemapOperator.AgX)]
-    [InlineData(TonemapOperator.ReinhardSimple)]
-    [InlineData(TonemapOperator.ReinhardLuma)]
-    [InlineData(TonemapOperator.ReinhardWhitePreserving)]
+    [InlineData(TonemapOperator.AgXNeutral)]
+    [InlineData(TonemapOperator.AgXPunchy)]
+    [InlineData(TonemapOperator.Reinhard)]
     [InlineData(TonemapOperator.RomBinDaHouse)]
     [InlineData(TonemapOperator.Uncharted2)]
     public void Tonemapper_MatchesProwlsOperator(TonemapOperator op)
     {
         Float3 color = new(0.3f, 1.4f, 4.5f);
         AddBackdrop(color);
-        Effect(new Tonemapper(_renderer) { Operator = op, Contrast = 1.2f, Saturation = 0.9f });
-        AssertAll(Decode(CpuTonemap(op, color, 1.2f, 0.9f)), Frame(), 4e-3f);
+        Effect(new Tonemapper(_renderer) { Operator = op });
+        AssertAll(Decode(CpuTonemap(op, color)), Frame(), 4e-3f);
     }
 
     // Draws the view into an sRGB target and returns its first pixel's stored bytes
@@ -356,7 +332,7 @@ public sealed class PostStackTests : IDisposable
         _device.Unmap(readback);
 
         // The stored bytes are the tonemapper's display values, clamped by the target, its encode undone and the target's applied
-        Float3 display = Map(CpuTonemap(TonemapOperator.AgX, color, 1.1f, 1.1f), x => Math.Clamp(x, 0, 1));
+        Float3 display = Map(CpuTonemap(TonemapOperator.AgXPunchy, color), x => Math.Clamp(x, 0, 1));
         Assert.InRange(bytes[0], display.X * 255 - 2, display.X * 255 + 2);
         Assert.InRange(bytes[1], display.Y * 255 - 2, display.Y * 255 + 2);
         Assert.InRange(bytes[2], display.Z * 255 - 2, display.Z * 255 + 2);

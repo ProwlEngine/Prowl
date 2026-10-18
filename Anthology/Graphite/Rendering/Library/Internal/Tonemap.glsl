@@ -1,29 +1,8 @@
-#pragma variant TONEMAP CLAMP MELON ACES ACES_SIMPLE AGX REINHARD_SIMPLE REINHARD_LUMA REINHARD_WHITE ROMBINDAHOUSE UNCHARTED2
-// Prowl's tonemapper: one operator by define, clamped to 0 to 1, encoded to display gamma, then contrast and saturation
-// in display space. Without an operator define it only clamps.
+#pragma variant TONEMAP CLAMP ACES AGX_NEUTRAL AGX_PUNCHY REINHARD ROMBINDAHOUSE UNCHARTED2
+// Prowl's tonemapper: one operator by define, clamped to 0 to 1, then sRGB encoded. Without an operator define it only
+// clamps.
 
-uniform float _Contrast;
-uniform float _Saturation;
-
-#ifdef TONEMAP_MELON
-// Shifts red to yellow, green to yellow, blue to cyan
-vec3 HueShift(vec3 c)
-{
-    float a = max(c.x, c.y);
-    return vec3(a, max(a, c.z), c.z);
-}
-
-vec3 Tonemap(vec3 color)
-{
-    color = pow(color, vec3(1.56));
-    color = color / (color + 0.84);
-    float factor = max(max(color.r, color.g), color.b) * 0.15;
-    factor = factor / (factor + 1.0);
-    factor *= factor;
-    color = mix(color, HueShift(color), factor);
-    return mix(color, vec3(1.0), factor);
-}
-#elif defined(TONEMAP_ACES)
+#if defined(TONEMAP_ACES)
 // ACES fitted, row major as written
 const mat3 ACESInputMat = mat3(
     0.59719, 0.35458, 0.04823,
@@ -48,12 +27,10 @@ vec3 Tonemap(vec3 color)
     color = RRTAndODTFit(color);
     return color * ACESOutputMat;
 }
-#elif defined(TONEMAP_ACES_SIMPLE)
-vec3 Tonemap(vec3 c)
-{
-    return (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
-}
-#elif defined(TONEMAP_AGX)
+#elif defined(TONEMAP_AGX_NEUTRAL) || defined(TONEMAP_AGX_PUNCHY)
+// AgX's curve already produces display encoded values
+#define TONEMAP_DISPLAY_ENCODED
+
 const mat3 agxTransform = mat3(
     0.842479062253094, 0.0423282422610123, 0.0423756549057051,
     0.0784335999999992, 0.878468636469772, 0.0784336,
@@ -80,27 +57,17 @@ vec3 Tonemap(vec3 color)
     color = (color - minEv) / (maxEv - minEv);
     color = agxDefaultContrastApproximation(color);
 
-    // Punchy look
-    float luma = dot(color, vec3(0.2126729, 0.7151522, 0.0721750));
-    color = pow(max(color * vec3(1.1), vec3(0.0)), vec3(1.2));
-    color = max(luma + 1.3 * (color - luma), vec3(0.0));
-
-    color = agxTransformInverse * color;
-    return pow(max(vec3(0.0), color), vec3(2.2));
-}
-#elif defined(TONEMAP_REINHARD_SIMPLE)
-vec3 Tonemap(vec3 color)
-{
-    float exposure = 1.5;
-    return color * (exposure / (1.0 + color / exposure));
-}
-#elif defined(TONEMAP_REINHARD_LUMA)
-vec3 Tonemap(vec3 color)
-{
+#ifdef TONEMAP_AGX_PUNCHY
+    // The reference Punchy look, an ASC CDL power and saturation
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    return color * ((luma / (1.0 + luma)) / max(luma, 1e-5));
+    color = pow(max(color, vec3(0.0)), vec3(1.35));
+    color = luma + 1.4 * (color - luma);
+#endif
+
+    return agxTransformInverse * color;
 }
-#elif defined(TONEMAP_REINHARD_WHITE)
+#elif defined(TONEMAP_REINHARD)
+// Extended Reinhard on luminance, white at 2
 vec3 Tonemap(vec3 color)
 {
     float white = 2.0;
@@ -128,24 +95,18 @@ vec3 Tonemap(vec3 color)
 vec3 Tonemap(vec3 color) { return color; }
 #endif
 
-vec3 LinearToGamma(vec3 lin)
+vec3 LinearToSrgb(vec3 lin)
 {
-    return max(1.055 * pow(max(lin, vec3(0.0)), vec3(0.416666667)) - 0.055, 0.0);
+    lin = max(lin, vec3(0.0));
+    return mix(lin * 12.92, 1.055 * pow(lin, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), lin));
 }
 
 void main()
 {
     vec4 source = Graphite_SampleSource(vUV);
-    vec3 color = LinearToGamma(clamp(Tonemap(source.rgb), 0.0, 1.0));
-
-    float t = (1.0 - _Contrast) / 2.0;
-    mat4 contrast = mat4(_Contrast, 0, 0, 0, 0, _Contrast, 0, 0, 0, 0, _Contrast, 0, t, t, t, 1);
-    vec3 luminance = vec3(0.3086, 0.6094, 0.0820);
-    float oneMinusSat = 1.0 - _Saturation;
-    mat4 saturation = mat4(
-        vec4(vec3(luminance.x * oneMinusSat) + vec3(_Saturation, 0, 0), 0),
-        vec4(vec3(luminance.y * oneMinusSat) + vec3(0, _Saturation, 0), 0),
-        vec4(vec3(luminance.z * oneMinusSat) + vec3(0, 0, _Saturation), 0),
-        vec4(0, 0, 0, 1));
-    outColor = vec4((contrast * saturation * vec4(color, source.a)).rgb, source.a);
+    vec3 color = clamp(Tonemap(source.rgb), 0.0, 1.0);
+#ifndef TONEMAP_DISPLAY_ENCODED
+    color = LinearToSrgb(color);
+#endif
+    outColor = vec4(color, source.a);
 }
