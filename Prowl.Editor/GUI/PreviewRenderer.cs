@@ -38,16 +38,17 @@ public class PreviewRenderer : IDisposable
     /// <summary>Whether to draw a grid plane in the preview.</summary>
     public bool ShowGrid { get; set; }
 
-    /// <summary>Clear to transparent instead of the skybox, so only the subject has alpha.</summary>
+    /// <summary>
+    /// Draws as an overlay onto a target cleared to transparent instead of over the skybox, so only the subject has
+    /// alpha. Graphite views clear opaque, so the target is zeroed before each render. Colour comes out premultiplied.
+    /// </summary>
     public bool TransparentBackground
     {
-        get => _camera.Background == CameraBackground.Color;
-        set
-        {
-            _camera.Background = value ? CameraBackground.Color : CameraBackground.Skybox;
-            _camera.BackgroundColor = new Color(0f, 0f, 0f, 0f);
-        }
+        get => _camera.Background == CameraBackground.None;
+        set => _camera.Background = value ? CameraBackground.None : CameraBackground.Skybox;
     }
+
+    private byte[]? _transparentPixels;
 
     // Orbit camera state
     private float _orbitYaw = 30f;
@@ -248,6 +249,13 @@ public class PreviewRenderer : IDisposable
         if (_rt == null) return;
 
         _camera.UpdateRenderData(_rt);
+
+        if (TransparentBackground)
+        {
+            int bytes = _rt.MainTexture.GetSize();
+            if (_transparentPixels?.Length != bytes) _transparentPixels = new byte[bytes];
+            _rt.MainTexture.SetData(_transparentPixels, 0, 0, (uint)Width, (uint)Height);
+        }
 
         _camera.Render(new CameraRenderOptions
         {

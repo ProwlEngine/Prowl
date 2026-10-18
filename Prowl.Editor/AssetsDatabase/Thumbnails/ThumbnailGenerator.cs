@@ -36,6 +36,7 @@ public static class ThumbnailGenerator
         public long FirstWaitTimestamp;
         public bool Finished;
         public byte[]? Pixels;
+        public bool Stale;
     }
 
     // Wall-clock (not frame-count) cap on waiting for dependencies to stream in. Frame rate is a
@@ -129,7 +130,7 @@ public static class ThumbnailGenerator
         AssetDatabase.ReleaseAll(job);
 
         byte[]? pixels = job.Pixels;
-        if (pixels == null || pixels.Length == 0) return;
+        if (job.Stale || pixels == null || pixels.Length == 0) return;
 
         try
         {
@@ -209,6 +210,7 @@ public static class ThumbnailGenerator
         if (File.Exists(path))
             try { File.Delete(path); } catch { }
         _queued.Remove(guid);
+        if (_active != null && _active.Guid == guid) _active.Stale = true;
     }
 
     /// <summary>Delete all thumbnail files on disk and clear the queue.</summary>
