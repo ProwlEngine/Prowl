@@ -10715,6 +10715,13 @@ public sealed partial class Lowerer
             or "textureGather" or "textureGatherOffset" or "textureGatherOffsets"
             or "texelFetch" or "texelFetchOffset" => SampleResultType(c),
         "imageLoad" or "subpassLoad" => InferType(c.Args[0]) is ImageType img ? new VectorType(img.Sampled, 4) : Vec4,
+        "textureSize" or "imageSize" => InferType(c.Args[0]) switch
+        {
+            SamplerType s => IntCoordType(s.Dim, s.Arrayed),
+            TextureType t => IntCoordType(t.Dim, t.Arrayed),
+            ImageType i => IntCoordType(i.Dim, i.Arrayed),
+            _ => Types.Int,
+        },
         // These reduce to the component scalar (a double matrix/vector yields a double, not a float).
         "dot" or "length" or "distance" => new ScalarType(BaseScalar(InferType(c.Args[0]))),
         "cross" => InferType(c.Args[0]),

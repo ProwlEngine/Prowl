@@ -34,6 +34,22 @@ public sealed class ValidOutputTests
             "layout(std430,set=0,binding=0) buffer B { float o; };\n" +
             "void main() { " + type + " m = " + type + "(float16_t(1.5)); o = float(m[0][0]); }\n");
 
+    [Theory]
+    [InlineData("textureSize(s, 0).x - 1")]
+    [InlineData("textureSize(sampler2D(t, p), 0).x - 1")]
+    [InlineData("textureSize(s, 0).y * 2")]
+    [InlineData("imageSize(img).x - 1")]
+    public void TextureSizeMemberInArithmeticCompiles(string expr) =>
+        CompilesAndValidates(
+            "#version 450\n" +
+            "layout(local_size_x=1) in;\n" +
+            "layout(set=0,binding=0) uniform sampler2D s;\n" +
+            "layout(set=0,binding=1) uniform texture2D t;\n" +
+            "layout(set=0,binding=2) uniform sampler p;\n" +
+            "layout(std430,set=0,binding=3) buffer B { int o; };\n" +
+            "layout(set=0,binding=4,r32f) uniform image2D img;\n" +
+            "void main() { int last = " + expr + "; o = last; }\n");
+
     [Fact]
     public void Float16MathCompiles() =>
         CompilesAndValidates(
