@@ -7,14 +7,15 @@ using Prowl.Aperture.Utilities;
 using Prowl.Editor.GUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Thumbnails;
 
 /// <summary>
-/// Lazily generates small thumbnail images for assets. Queues work and processes
-/// one thumbnail per frame to avoid hitching. Thumbnails stored as raw RGBA bytes (top-down).
+/// Lazily generates small thumbnail images for assets. Queues work and generates one thumbnail at a
+/// time, a rendered one finishing frames later once its readback arrives. Thumbnails stored as raw RGBA bytes (top-down).
 /// </summary>
 public static class ThumbnailGenerator
 {
@@ -23,6 +24,8 @@ public static class ThumbnailGenerator
 
     private static readonly Queue<ThumbnailJob> _queue = new();
     private static readonly HashSet<Guid> _queued = [];
+    private static ThumbnailJob? _active;
+    private static PreviewCapture? _capture;
 
     private sealed class ThumbnailJob
     {
@@ -31,6 +34,8 @@ public static class ThumbnailGenerator
         public string? SourceFilePath;
         // Stopwatch timestamp when this job first started waiting on dependencies (0 = not waiting yet).
         public long FirstWaitTimestamp;
+        public bool Finished;
+        public byte[]? Pixels;
     }
 
     // Wall-clock (not frame-count) cap on waiting for dependencies to stream in. Frame rate is a
@@ -57,13 +62,20 @@ public static class ThumbnailGenerator
         _queue.Enqueue(job);
     }
 
-    /// <summary> Processes one queued thumbnail job. Waits for asset dependencies to load (up to a time budget), generates the thumbnail via the appropriate generator, and writes it to disk. Call once per frame. </summary>
+    /// <summary> Advances thumbnail generation by one frame. Finishes the job in flight once its pixels arrive, otherwise starts the next queued job, waiting for its asset dependencies to load (up to a time budget). Call once per frame. </summary>
     public static void ProcessOne()
     {
-        if (_queue.Count == 0) return;
-
         EditorAssetBackend? db = EditorAssetBackend.Instance;
         if (db == null) return;
+
+        if (_active != null)
+        {
+            _capture?.Step();
+            if (_active.Finished) Finish(db);
+            return;
+        }
+
+        if (_queue.Count == 0) return;
 
         ThumbnailJob job = _queue.Dequeue();
         _queued.Remove(job.Guid);
@@ -78,8 +90,7 @@ public static class ThumbnailGenerator
         // dependencies (a material's shader/textures, a model's materials, etc.) may not be loaded
         // yet, and we'd cache a blank thumbnail. Rather than block the main thread loading them,
         // request the missing ones in the background and re-queue this job for a later frame; only
-        // render once everything is cached (its GPU create/upload commands are then already queued
-        // ahead of the preview draw). Give up after a time budget so a broken dependency can't loop forever.
+        // render once everything is cached. Give up after a time budget so a broken dependency can't loop forever.
         if (!RequestDependencies(db, job))
         {
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -95,35 +106,45 @@ public static class ThumbnailGenerator
             // Timed out waiting render best-effort below with whatever loaded.
         }
 
-        byte[]? pixels = null;
+        _active = job;
         try
         {
             IThumbnailGenerator? gen = EditorRegistries.GetThumbnailGenerator(job.Asset.GetType());
-            if (gen != null) pixels = gen.Generate(job.Asset, job.SourceFilePath);
+            if (gen == null) job.Finished = true;
+            else gen.Generate(job.Asset, job.SourceFilePath, pixels => { job.Pixels = pixels; job.Finished = true; });
         }
         catch (Exception ex)
         {
             Debug.LogWarning($"Thumbnail generation failed for {job.Guid}: {ex.Message}");
+            job.Finished = true;
         }
+
+        if (job.Finished) Finish(db);
+    }
+
+    private static void Finish(EditorAssetBackend db)
+    {
+        ThumbnailJob job = _active!;
+        _active = null;
         AssetDatabase.ReleaseAll(job);
 
-        if (pixels != null && pixels.Length > 0)
-        {
-            try
-            {
-                Directory.CreateDirectory(db.ThumbnailsPath);
-                string thumbPath = GetThumbnailPath(job.Guid, db.ThumbnailsPath);
+        byte[]? pixels = job.Pixels;
+        if (pixels == null || pixels.Length == 0) return;
 
-                // Write with size header: [width:int32 LE][height:int32 LE][RGBA pixels]
-                int size = ThumbnailSize;
-                byte[] fileData = new byte[8 + pixels.Length];
-                BitConverter.TryWriteBytes(fileData.AsSpan(0, 4), size);
-                BitConverter.TryWriteBytes(fileData.AsSpan(4, 4), size);
-                pixels.CopyTo(fileData, 8);
-                File.WriteAllBytes(thumbPath, fileData);
-            }
-            catch { }
+        try
+        {
+            Directory.CreateDirectory(db.ThumbnailsPath);
+            string thumbPath = GetThumbnailPath(job.Guid, db.ThumbnailsPath);
+
+            // Write with size header: [width:int32 LE][height:int32 LE][RGBA pixels]
+            int size = ThumbnailSize;
+            byte[] fileData = new byte[8 + pixels.Length];
+            BitConverter.TryWriteBytes(fileData.AsSpan(0, 4), size);
+            BitConverter.TryWriteBytes(fileData.AsSpan(4, 4), size);
+            pixels.CopyTo(fileData, 8);
+            File.WriteAllBytes(thumbPath, fileData);
         }
+        catch { }
     }
 
     /// <summary>
@@ -205,6 +226,10 @@ public static class ThumbnailGenerator
 
         _queue.Clear();
         _queued.Clear();
+        _capture?.Abandon();
+        _capture = null;
+        if (_active != null) AssetDatabase.ReleaseAll(_active);
+        _active = null;
     }
 
     /// <summary> Returns the full file path for a thumbnail with the given guid, using the .thumb extension. </summary>
@@ -236,28 +261,93 @@ public static class ThumbnailGenerator
         catch { return null; }
     }
 
-    internal static byte[]? GenerateFor3D(Action<PreviewRenderer> setup)
+    internal static void GenerateFor3D(Action<PreviewRenderer> setup, Action<byte[]?> done)
     {
+        if (Graphics.Renderer is not { } renderer)
+        {
+            done(null);
+            return;
+        }
+
+        var preview = new PreviewRenderer(ThumbnailSize, ThumbnailSize) { TransparentBackground = true };
         try
         {
-            using var preview = new PreviewRenderer(ThumbnailSize, ThumbnailSize) { TransparentBackground = true };
             setup(preview);
-            preview.Render();
+        }
+        catch
+        {
+            preview.Dispose();
+            throw;
+        }
 
-            RenderTexture? rt = preview.Result;
-            if (rt == null || rt.MainTexture == null) return null;
+        _capture = new PreviewCapture(preview, renderer, done);
+        _capture.Step();
+    }
 
-            int w = rt.Width;
-            int h = rt.Height;
-            byte[] pixels = new byte[w * h * 4];
-            rt.MainTexture.GetData<byte>(pixels);
+    /// <summary>
+    /// Draws a preview each frame until its shaders are compiled, then reads it back after the frame that draws it.
+    /// Camera.Render only adds a view to the frame, so the pixels exist once the renderer has run that frame.
+    /// </summary>
+    private sealed class PreviewCapture(PreviewRenderer preview, Renderer renderer, Action<byte[]?> done)
+    {
+        // A frame's draws are prepared while the next one is built, so its shader compiles show two frames later
+        private const int MinFrames = 3;
+
+        private readonly long _started = System.Diagnostics.Stopwatch.GetTimestamp();
+        private int _frames;
+        private bool _requested;
+        private TextureReadback? _result;
+
+        public void Step()
+        {
+            try
+            {
+                if (_result is { } result)
+                {
+                    Complete(result.Failed ? null : result.Data);
+                    return;
+                }
+                if (_requested) return;
+
+                preview.Render();
+                _frames++;
+
+                bool compiling = _frames < MinFrames || renderer.ShaderCompilesPending > 0;
+                if (compiling && System.Diagnostics.Stopwatch.GetElapsedTime(_started).TotalSeconds < MaxDependencyWaitSeconds) return;
+
+                if (preview.Result.IsNotValid() || preview.Result!.MainTexture.GpuTexture is not { } texture)
+                {
+                    Complete(null);
+                    return;
+                }
+                renderer.Readback(texture, r => _result = r);
+                _requested = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Thumbnail render failed: {ex.Message}");
+                Complete(null);
+            }
+        }
+
+        public void Abandon() => preview.Dispose();
+
+        private void Complete(byte[]? pixels)
+        {
+            int w = preview.Width, h = preview.Height;
+            _capture = null;
+            preview.Dispose();
+
+            if (pixels == null || pixels.Length != w * h * 4)
+            {
+                done(null);
+                return;
+            }
 
             // Render targets hold their bottom row first, thumbnails top first
             FlipVertical(pixels, w, h);
-
-            return pixels;
+            done(pixels);
         }
-        catch { return null; }
     }
 
     /// <summary>

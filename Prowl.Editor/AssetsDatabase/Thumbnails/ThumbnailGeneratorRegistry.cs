@@ -18,8 +18,8 @@ public class CustomThumbnailGeneratorAttribute : Attribute
 /// <summary> Defines a method for generating thumbnail images for engine assets. </summary>
 public interface IThumbnailGenerator
 {
-    /// <summary> Generates a thumbnail for the specified asset. Returns the raw image data as a byte array, or null if generation fails. </summary>
-    byte[]? Generate(EngineObject asset, string? sourceFilePath);
+    /// <summary> Generates a thumbnail for the specified asset and hands its RGBA pixels to <paramref name="done"/>, or null if generation fails. A generator that renders calls it frames later, once the GPU has drawn it. </summary>
+    void Generate(EngineObject asset, string? sourceFilePath, Action<byte[]?> done);
 }
 
 // ================================================================
@@ -29,34 +29,34 @@ public interface IThumbnailGenerator
 [CustomThumbnailGenerator(typeof(Texture2D))]
 internal class Texture2DThumbnailGenerator : IThumbnailGenerator
 {
-    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
-        => ThumbnailGenerator.GenerateForTextureFile(sourceFilePath);
+    public void Generate(EngineObject asset, string? sourceFilePath, Action<byte[]?> done)
+        => done(ThumbnailGenerator.GenerateForTextureFile(sourceFilePath));
 }
 
 [CustomThumbnailGenerator(typeof(Sprite))]
 internal class SpriteThumbnailGenerator : IThumbnailGenerator
 {
-    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
-        => ThumbnailGenerator.GenerateForSprite((Sprite)asset);
+    public void Generate(EngineObject asset, string? sourceFilePath, Action<byte[]?> done)
+        => done(ThumbnailGenerator.GenerateForSprite((Sprite)asset));
 }
 
 [CustomThumbnailGenerator(typeof(Material))]
 internal class MaterialThumbnailGenerator : IThumbnailGenerator
 {
-    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
-        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForMaterial((Material)asset));
+    public void Generate(EngineObject asset, string? sourceFilePath, Action<byte[]?> done)
+        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForMaterial((Material)asset), done);
 }
 
 [CustomThumbnailGenerator(typeof(Mesh))]
 internal class MeshThumbnailGenerator : IThumbnailGenerator
 {
-    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
-        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForMesh((Mesh)asset));
+    public void Generate(EngineObject asset, string? sourceFilePath, Action<byte[]?> done)
+        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForMesh((Mesh)asset), done);
 }
 
 [CustomThumbnailGenerator(typeof(PrefabAsset))]
 internal class PrefabAssetThumbnailGenerator : IThumbnailGenerator
 {
-    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
-        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForPrefab((PrefabAsset)asset));
+    public void Generate(EngineObject asset, string? sourceFilePath, Action<byte[]?> done)
+        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForPrefab((PrefabAsset)asset), done);
 }
