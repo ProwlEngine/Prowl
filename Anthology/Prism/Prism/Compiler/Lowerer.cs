@@ -8324,6 +8324,7 @@ public sealed partial class Lowerer
             ArrayType arr => arr.Element,
             MatrixType mt => new VectorType(mt.Component, mt.Rows),
             VectorType vt => new ScalarType(vt.Component),
+            CoopMatType cm => new ScalarType(cm.Component),
             _ => throw new GlslParseException($"cannot index into '{Types.Name(targetType)}'"),
         };
         RejectOutOfRangeIndex(targetType, ix.Idx);
@@ -8780,6 +8781,7 @@ public sealed partial class Lowerer
                     RuntimeArrayType rarr => rarr.Element,
                     MatrixType mt => new VectorType(mt.Component, mt.Rows),   // matrix[i] selects column i
                     VectorType vt => new ScalarType(vt.Component),            // vector[i] / matrix[i][j] selects a component
+                    CoopMatType cm => new ScalarType(cm.Component),
                     _ => throw new GlslParseException($"cannot index into '{Types.Name(baseC.Type)}'"),
                 };
                 var idxValue = LowerExpr(ix.Idx);
@@ -10666,13 +10668,14 @@ public sealed partial class Lowerer
         Binary { Op: "," } b => InferType(b.Right),
         Binary b when b.Op is "=" or "<<" or ">>" || IsCompoundAssign(b.Op) => InferType(b.Left),
         Binary b => InferArithmetic(b),
-        Conditional c => InferType(c.Then),
+        Conditional c => CommonType(InferType(c.Then), InferType(c.Else)),
         Index ix => InferType(ix.Target) switch
         {
             ArrayType a => a.Element,
             RuntimeArrayType r => r.Element,
             MatrixType m => new VectorType(m.Component, m.Rows),
             VectorType v => new ScalarType(v.Component),
+            CoopMatType cm => new ScalarType(cm.Component),
             _ => throw new GlslParseException("cannot infer index type"),
         },
         Member m => InferMember(m),
@@ -10713,8 +10716,19 @@ public sealed partial class Lowerer
             or "textureGradOffset" or "textureProj" or "textureProjLod" or "textureProjOffset"
             or "textureProjGrad" or "textureProjLodOffset" or "textureProjGradOffset"
             or "textureGather" or "textureGatherOffset" or "textureGatherOffsets"
-            or "texelFetch" or "texelFetchOffset" => SampleResultType(c),
+            or "texelFetch" or "texelFetchOffset"
+            or "textureClampARB" or "textureOffsetClampARB" or "textureGradClampARB" or "textureGradOffsetClampARB" => SampleResultType(c),
         "imageLoad" or "subpassLoad" => InferType(c.Args[0]) is ImageType img ? new VectorType(img.Sampled, 4) : Vec4,
+        "imageAtomicStore" => Types.Void,
+        _ when c.Name.StartsWith("imageAtomic", StringComparison.Ordinal) => InferType(c.Args[0]) is ImageType img ? new ScalarType(img.Sampled) : Types.Int,
+        "textureQueryLod" => Vec2,
+        "transpose" => Transposed(InferType(c.Args[0])),
+        "outerProduct" => InferType(c.Args[0]) is VectorType col && InferType(c.Args[1]) is VectorType row
+            ? new MatrixType(row.Size, col.Size, col.Component)
+            : throw new GlslParseException("'outerProduct' : no matching overloaded function found"),
+        "anyInvocationARB" or "allInvocationsARB" or "allInvocationsEqualARB" => Types.Bool,
+        "ballotARB" => Types.UInt64,
+        "reportIntersectionEXT" or "reportIntersectionNV" or "textureFootprintNV" => Types.Bool,
         "textureSize" or "imageSize" => InferType(c.Args[0]) switch
         {
             SamplerType s => IntCoordType(s.Dim, s.Arrayed),
@@ -10727,6 +10741,7 @@ public sealed partial class Lowerer
         "cross" => InferType(c.Args[0]),
         "textureSamples" or "textureQueryLevels" or "imageSamples" => Types.Int,
         "any" or "all" or "sparseTexelsResidentARB" => Types.Bool,
+        _ when c.Name.StartsWith("sparse", StringComparison.Ordinal) => Types.Int,
         "isnan" or "isinf" => ReplaceComponent(InferType(c.Args[0]), Scalar.Bool),
         "lessThan" or "lessThanEqual" or "greaterThan" or "greaterThanEqual" or "equal" or "notEqual" => ReplaceComponent(InferType(c.Args[0]), Scalar.Bool),
         "determinant" => new ScalarType(BaseScalar(InferType(c.Args[0]))),
@@ -10840,6 +10855,15 @@ public sealed partial class Lowerer
         if (name == "gl_out") return new ArrayType(PerVertexStructOf(input: false), _outVertexCount);
         if (name == "gl_MeshVerticesNV") return new ArrayType(new StructType("gl_MeshPerVertexNV", MeshVerticesNVMembers()), _meshMaxVertices);
         if (name == "gl_MeshPrimitivesNV") return new ArrayType(new StructType("gl_MeshPerPrimitiveNV", MeshPrimitivesNVMembers()), _meshMaxPrimitives);
+        if (name == "gl_MeshVerticesEXT")
+            return new ArrayType(new StructType("gl_MeshPerVertexEXT", _meshVerticesRedecl ?? [("gl_Position", Vec4), ("gl_PointSize", Types.Float),
+                ("gl_ClipDistance", ClipCullArray("gl_ClipDistance", input: false)), ("gl_CullDistance", ClipCullArray("gl_CullDistance", input: false))]), _meshMaxVertices);
+        if (name == "gl_MeshPrimitivesEXT")
+            return new ArrayType(new StructType("gl_MeshPerPrimitiveEXT", [("gl_PrimitiveID", Types.Int), ("gl_Layer", Types.Int),
+                ("gl_ViewportIndex", Types.Int), ("gl_CullPrimitiveEXT", Types.Bool), ("gl_PrimitiveShadingRateEXT", Types.Int)]), _meshMaxPrimitives);
+        if (name == "gl_PrimitiveTriangleIndicesEXT") return new ArrayType(new VectorType(Scalar.UInt, 3), _meshMaxPrimitives);
+        if (name == "gl_PrimitiveLineIndicesEXT") return new ArrayType(new VectorType(Scalar.UInt, 2), _meshMaxPrimitives);
+        if (name == "gl_PrimitivePointIndicesEXT") return new ArrayType(Types.UInt, _meshMaxPrimitives);
         // glslang: "'zz' : undeclared identifier" - an identifier nothing can resolve is undeclared,
         // not an overload-resolution failure.
         throw new GlslParseException($"unresolved identifier '{Clip(name)}'");
