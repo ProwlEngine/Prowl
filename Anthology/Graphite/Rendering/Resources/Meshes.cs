@@ -87,6 +87,16 @@ public sealed class MeshData
 
     /// <summary>Shapes the mesh morphs by, weighted per renderable with RenderWorld.SetBlendShapeWeights.</summary>
     public BlendShapeData[] BlendShapes = [];
+
+    /// <summary>
+    /// Streams the GPU writes instead of the host: room is made for them in the page, nothing is uploaded, and a compute
+    /// pass of the host's fills them through <see cref="GpuMesh.TryGetStorage"/>. A mesh with GPU written positions
+    /// needs <see cref="Bounds"/> for culling.
+    /// </summary>
+    public VertexSemantic[] GpuStreams = [];
+
+    /// <summary>Object space bounds every vertex stays inside, required when the GPU writes the positions.</summary>
+    public AABB? Bounds;
 }
 
 /// <summary>A blend shape frame's words as they are placed: its weight, delta count and where each delta array starts.</summary>
@@ -154,8 +164,18 @@ internal sealed class MeshLayout
             VertexWords += (uint)canonical.Length;
         }
 
-        uint[]? positions = Streams[(int)VertexSemantic.Position]
-            ?? throw new ArgumentException("A mesh needs a Position stream.");
+        foreach (VertexSemantic semantic in data.GpuStreams)
+        {
+            if ((StreamsPresent & (1u << (int)semantic)) != 0)
+                throw new ArgumentException($"The mesh supplies the {semantic} stream twice.");
+            StreamsPresent |= 1u << (int)semantic;
+        }
+
+        uint[]? positions = Streams[(int)VertexSemantic.Position];
+        if (positions == null && (StreamsPresent & 1u) == 0)
+            throw new ArgumentException("A mesh needs a Position stream.");
+        if (positions == null && data.Bounds == null)
+            throw new ArgumentException("A mesh whose positions the GPU writes needs Bounds.");
 
         Indices = data.Indices.ToArray();
         foreach (uint index in Indices)
@@ -180,7 +200,7 @@ internal sealed class MeshLayout
             for (uint start = 0; start < sub.IndexCount; start += chunkIndices)
             {
                 uint count = Math.Min(chunkIndices, sub.IndexCount - start);
-                AABB chunkBounds = BoundsOf(positions, Indices.AsSpan((int)(sub.IndexStart + start), (int)count));
+                AABB chunkBounds = positions != null ? BoundsOf(positions, Indices.AsSpan((int)(sub.IndexStart + start), (int)count)) : data.Bounds!.Value;
                 chunks.Add(new MeshChunk(s, sub.IndexStart + start, count, chunkBounds));
                 bounds.Encapsulate(chunkBounds);
             }

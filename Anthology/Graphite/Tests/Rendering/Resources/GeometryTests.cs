@@ -97,6 +97,28 @@ public class MeshLayoutTests
     }
 
     [Fact]
+    public void GpuStreams_TakeRoomWithoutData_AndChunksUseTheGivenBounds()
+    {
+        AABB bounds = new(new Float3(-5), new Float3(5));
+        MeshLayout layout = new(new MeshData
+        {
+            VertexCount = 4,
+            Indices = new uint[] { 0, 1, 2, 0, 2, 3 },
+            GpuStreams = [VertexSemantic.Position, VertexSemantic.UV0],
+            Bounds = bounds,
+        });
+
+        Assert.Equal((1u << (int)VertexSemantic.Position) | (1u << (int)VertexSemantic.UV0), layout.StreamsPresent);
+        Assert.Null(layout.Streams[(int)VertexSemantic.Position]);
+        Assert.Equal(0u, layout.VertexWords);
+        Assert.All(layout.Chunks, c => Assert.Equal(bounds, c.Bounds));
+    }
+
+    [Fact]
+    public void GpuWrittenPositions_NeedBounds()
+        => Assert.Throws<ArgumentException>(() => new MeshLayout(new MeshData { VertexCount = 3, Indices = new uint[] { 0, 1, 2 }, GpuStreams = [VertexSemantic.Position] }));
+
+    [Fact]
     public void HalfUVs_WidenToFloats()
     {
         MeshLayout layout = new(Triangle(Stream(VertexSemantic.UV0, VertexElementFormat.Half2,

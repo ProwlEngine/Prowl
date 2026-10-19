@@ -45,7 +45,35 @@ public sealed class GpuMesh : IDisposable
     public bool IsDisposed { get; private set; }
 
     /// <summary>Where the data lives, null until it is resident. Render thread only.</summary>
-    internal MeshPlacement? Placement { get; set; }
+    internal MeshPlacement? Placement
+    {
+        get => _placement;
+        set
+        {
+            _placement = value;
+            if (value != null)
+                _placements++;
+        }
+    }
+
+    private MeshPlacement? _placement;
+    private uint _placements;
+
+    /// <summary>
+    /// Where a resident mesh's vertex streams live, for a compute pass writing its <see cref="MeshData.GpuStreams"/>.
+    /// False until the mesh is resident. A new <see cref="GpuMeshStorage.Placement"/> means the mesh moved and its GPU
+    /// streams have to be written again. Render thread, such as in a RenderProvider's Compute.
+    /// </summary>
+    public bool TryGetStorage(out GpuMeshStorage storage)
+    {
+        if (_placement is not { } placement)
+        {
+            storage = default;
+            return false;
+        }
+        storage = new GpuMeshStorage(_pool.Pages[placement.Page].Vertices, placement.StreamOffsets, placement.VertexCount, _placements);
+        return true;
+    }
 
     /// <summary>Replaces the mesh's data, keeping its id. Thread safe, the upload happens on a later frame.</summary>
     public void SetData(MeshData data)
@@ -66,6 +94,37 @@ public sealed class GpuMesh : IDisposable
         IsDisposed = true;
         _pool.Queue(this, null);
     }
+}
+
+/// <summary>
+/// A resident mesh's vertex streams: the page buffer holding them as 32 bit words, and the first word of each stream.
+/// Each stream is tightly packed in its canonical layout, Position and Normal 3 floats, Tangent 4, UVs 2, Custom 4.
+/// </summary>
+public readonly struct GpuMeshStorage
+{
+    private readonly uint[] _offsets;
+
+    internal GpuMeshStorage(DeviceBuffer vertices, uint[] offsets, uint vertexCount, uint placement)
+    {
+        Vertices = vertices;
+        _offsets = offsets;
+        VertexCount = vertexCount;
+        Placement = placement;
+    }
+
+    /// <summary>The page's word buffer, shared with other meshes.</summary>
+    public DeviceBuffer Vertices { get; }
+
+    public uint VertexCount { get; }
+
+    /// <summary>Counts the mesh's placements, so a host notices when it moved.</summary>
+    public uint Placement { get; }
+
+    /// <summary>The word the stream starts at in <see cref="Vertices"/>.</summary>
+    public uint StreamOffset(VertexSemantic semantic) => _offsets[(int)semantic];
+
+    /// <summary>Words one vertex of the stream takes.</summary>
+    public static uint WordsPerVertex(VertexSemantic semantic) => MeshLayout.WordsPerVertex(semantic);
 }
 
 /// <summary>A placed blend shape frame: its weight, delta count, and the first word of each delta array, none when absent.</summary>
