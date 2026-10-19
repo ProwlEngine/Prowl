@@ -254,6 +254,9 @@ public struct FrameDesc
     /// <summary>Runs on the render thread before the frame is prepared, for host work its submission has to follow.</summary>
     public Action? Started;
 
+    /// <summary>Profilers the frame's execution reports its passes to, such as GPU timers.</summary>
+    public IProfiler[]? Profilers;
+
     /// <summary>
     /// Runs on the render thread once the frame's command buffers are on the graphics queue, with false when the frame
     /// failed. Always follows <see cref="Started"/>.
@@ -504,6 +507,7 @@ public sealed class Renderer : IDisposable
             _pipelines = frame.Pipelines.ToArray();
             _started = frame.Started;
             _submitted = frame.Submitted;
+            _profilers = frame.Profilers ?? [];
             _frameReadbacks.Clear();
             while (_readbacks.TryDequeue(out ReadbackRequest? request))
                 _frameReadbacks.Add(request);
@@ -534,6 +538,7 @@ public sealed class Renderer : IDisposable
     private GraphDispatch[] _pipelines = [];
     private Action? _started;
     private Action<bool>? _submitted;
+    private IProfiler[] _profilers = [];
     private readonly ConcurrentQueue<ReadbackRequest> _readbacks = new();
     private readonly List<ReadbackRequest> _frameReadbacks = new();
     private readonly List<ReadbackRequest> _pendingReadbacks = new();
@@ -579,6 +584,13 @@ public sealed class Renderer : IDisposable
     /// <see cref="FrameDesc.Pipelines"/>.
     /// </summary>
     public ViewDraws Draws(int viewId) => _frame.Draws(viewId);
+
+    /// <summary>
+    /// The GPU execution of the last frame dispatched, for hosts tracking their own readbacks or staging against it.
+    /// Set on the render thread before <see cref="FrameDesc.Submitted"/> runs, so read it there or after SubmitFrame
+    /// returns with inline threading.
+    /// </summary>
+    public ExecutionTask? LastExecution { get; private set; }
 
     /// <summary>The counts of the last frame recorded. Any thread.</summary>
     public FrameStats LastFrameStats => _frame.LastStats;
@@ -888,8 +900,9 @@ public sealed class Renderer : IDisposable
         foreach (DeviceBuffer buffer in _replaced)
             _retiring.Add((_lastDispatched, buffer));
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _pipelines, _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _pipelines, _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
         _lastDispatched = task.Id;
+        LastExecution = task;
         foreach (ReadbackRequest request in _frameReadbacks)
         {
             request.Execution = task.Id;

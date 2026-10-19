@@ -1491,7 +1491,7 @@ internal sealed partial class FramePipeline : IDisposable
         else { _drawCalls++; _drawCommands += commands; }
     }
 
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, GraphDispatch[] pipelines, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, GraphDispatch[] pipelines, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
     {
         LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk);
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
@@ -1599,7 +1599,7 @@ internal sealed partial class FramePipeline : IDisposable
             _readbackPipeline.SetPasses([_readback]);
             _dispatches.Add(new GraphDispatch(_readbackPipeline, _frameStartViews));
         }
-        ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches));
+        ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches), profilers ?? []);
         foreach (Texture texture in _disposeAfterDispatch)
             texture.Dispose();
         _disposeAfterDispatch.Clear();
