@@ -132,6 +132,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     private readonly Dictionary<(int Slot, float Bias), Sampler> _biased = new();
     private readonly Stack<uint>[] _freeSlots = [new(), new(), new(), new(), new()];
     private readonly List<(ulong Execution, int Table, uint Slot)> _retiringSlots = new();
+    private readonly HashSet<uint> _shadowSlots = new();
     private static readonly MaterialPropertyType[] s_tableTypes = [MaterialPropertyType.Texture2D, MaterialPropertyType.Texture2DArray, MaterialPropertyType.Texture3D, MaterialPropertyType.TextureCube, MaterialPropertyType.TextureCubeArray];
 
     internal RendererTextures(GraphicsDevice device)
@@ -181,6 +182,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
         {
             uint slot = Slot(texture, MaterialPropertyType.Texture2D);
             Table.SetTexture("Graphite_ShadowTextures2D", slot, texture);
+            _shadowSlots.Add(slot);
             return slot;
         }
     }
@@ -224,6 +226,8 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
                     continue;
                 (_, int retired, uint slot) = _retiringSlots[i];
                 Table.SetTexture(s_tableNames[retired], slot, Default("black", s_tableTypes[retired]));
+                if (retired == 0 && _shadowSlots.Remove(slot))
+                    Table.SetTexture("Graphite_ShadowTextures2D", slot, Default("black", MaterialPropertyType.Texture2D));
                 _freeSlots[retired].Push(slot);
                 _retiringSlots.RemoveAt(i);
             }
