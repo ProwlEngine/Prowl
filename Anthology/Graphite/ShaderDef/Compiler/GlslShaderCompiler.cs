@@ -512,7 +512,7 @@ internal sealed class GlslSection
 internal static class GlslPragmas
 {
     /// <summary>The GLSL types a global pragma can declare.</summary>
-    public static readonly string[] GlobalTypes = ["float", "int", "vec2", "vec3", "vec4", "mat4", "sampler2D", "sampler2DArray", "sampler3D", "samplerCube", "samplerCubeArray"];
+    public static readonly string[] GlobalTypes = ["float", "int", "ivec2", "ivec3", "ivec4", "vec2", "vec3", "vec4", "mat4", "sampler2D", "sampler2DArray", "sampler3D", "samplerCube", "samplerCubeArray"];
 
     /// <summary>True for the variant and global pragmas, which only Graphite reads and which are removed before compiling.</summary>
     public static bool IsGraphitePragma(string directive)
