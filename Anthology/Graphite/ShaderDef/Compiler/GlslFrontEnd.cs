@@ -30,6 +30,8 @@ internal sealed class GlslMember
     public required string Name;
     public required string ArrayText;
     public required int[] ArrayDims;
+    public string? File;
+    public int Line;
 }
 
 
@@ -586,7 +588,10 @@ internal sealed class GlslStageSource
                     {
                         firstUniform = d;
                         CheckUniformTypes(layout, d);
-                        edits.Add(Replace(d, layout.UniformBlockText()));
+                        int start = Tokens[d.First].Start;
+                        int end = Tokens[d.Last].End;
+                        (string file, int line) = Locate(end);
+                        edits.Add((start, end - start, layout.UniformBlockText(file, line)));
                     }
                     else
                     {
@@ -971,6 +976,7 @@ internal sealed class GlslProgramLayout
         GlslMember? existing = Uniforms.Find(u => u.Name == member.Name);
         if (existing == null)
         {
+            (member.File, member.Line) = stage.Locate(stage.Tokens[d.First].Start);
             Uniforms.Add(member);
             return;
         }
@@ -1260,13 +1266,20 @@ internal sealed class GlslProgramLayout
     }
 
 
-    public string UniformBlockText()
+    /// <summary>
+    /// The merged uniform block. Each member carries a #line back to its own declaration, and the text after the block
+    /// continues at <paramref name="line"/> of <paramref name="file"/>, where the replaced declaration ended.
+    /// </summary>
+    public string UniformBlockText(string file, int line)
     {
         StringBuilder sb = new();
-        sb.Append($"layout(set = {_global!.Set}, binding = {_global.Binding}, std140) uniform {GlobalBlockType} {{ ");
+        sb.Append($"layout(set = {_global!.Set}, binding = {_global.Binding}, std140) uniform {GlobalBlockType} {{\n");
         foreach (GlslMember uniform in Uniforms)
-            sb.Append(uniform.TypeText).Append(' ').Append(uniform.Name).Append(uniform.ArrayText).Append("; ");
-        sb.Append("};");
+        {
+            sb.Append("#line ").Append(uniform.Line).Append(" \"").Append(uniform.File).Append("\"\n");
+            sb.Append(uniform.TypeText).Append(' ').Append(uniform.Name).Append(uniform.ArrayText).Append(";\n");
+        }
+        sb.Append("};\n#line ").Append(line).Append(" \"").Append(file).Append("\"\n");
         return sb.ToString();
     }
 

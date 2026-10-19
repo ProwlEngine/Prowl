@@ -141,6 +141,30 @@ public class GlslCompilerTests
 
 
     [Fact]
+    public void LooseUniforms_MergedFromAnInclude_ReportTheirOwnLines()
+    {
+        Dictionary<string, string> files = new() { ["Camera.glsl"] = "uniform vec3 eye;\nuniform float zoom;\n" };
+        string message = Glsl.Fails("""
+            Shared
+            {
+                #include "Camera.glsl"
+                uniform float scale;
+                uniform int active;
+            }
+            Vertex { void main() { gl_Position = vec4(eye * zoom * scale, float(active)); } }
+            Fragment
+            {
+                out vec4 color;
+                void main() { color = vec4(1); }
+            }
+            """, files).Message;
+
+        Assert.Contains("Test:5:", message);
+        Assert.Contains("active", message);
+    }
+
+
+    [Fact]
     public void Includes_ResolveThroughTheHost_AndReportTheirOwnLines()
     {
         Dictionary<string, string> files = new() { ["Broken.glsl"] = "float helper()\n{\n    return nope;\n}\n" };

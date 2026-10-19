@@ -52,7 +52,7 @@ public class GlslLayoutTests
 
         string[] stages = Glsl.Rewritten(source);
         const string block = "uniform _GraphiteGlobal { vec4 _V; vec4 _F; };";
-        Assert.All(stages, s => Assert.Contains(block, s));
+        Assert.All(stages, s => Assert.Contains(block, string.Join(" ", s.Split('\n').Where(l => !l.StartsWith("#line")))));
 
         ShaderDescription d = Glsl.Describe(source);
         Assert.Equal(ShaderStages.Vertex | ShaderStages.Fragment, Glsl.Element(d, "$Global").Stages);
