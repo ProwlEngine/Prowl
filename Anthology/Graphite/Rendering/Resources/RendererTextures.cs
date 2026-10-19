@@ -173,6 +173,18 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
             return Slot(texture is { IsDisposed: false } ? texture : Default(defaultName, type), type);
     }
 
+    // Shadow maps keep their ordinary 2D slot for the existing light records, but comparison
+    // sampling uses a separate descriptor array so Metal does not treat color textures as depth.
+    internal uint ShadowSlot(Texture texture)
+    {
+        lock (_lock)
+        {
+            uint slot = Slot(texture, MaterialPropertyType.Texture2D);
+            Table.SetTexture("Graphite_ShadowTextures2D", slot, texture);
+            return slot;
+        }
+    }
+
     uint IMaterialResources.SamplerSlot(SamplerDescription? sampler)
     {
         lock (_lock)

@@ -5,6 +5,7 @@
 
 layout(set = 0, binding = 0) uniform texture2D Graphite_Textures2D[16384];
 layout(set = 0, binding = 3) uniform textureCube Graphite_TexturesCube[2048];
+layout(set = 0, binding = 5) uniform texture2D Graphite_ShadowTextures2D[16384];
 layout(set = 1, binding = 0) uniform sampler Graphite_Samplers[64];
 
 // Samplers cannot live in locals, so the tables are indexed at each read

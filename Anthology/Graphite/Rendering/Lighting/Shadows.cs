@@ -1707,7 +1707,7 @@ internal sealed partial class FramePipeline
             {
                 RenderTexture texture = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription((uint)pageSize, (uint)pageSize, [], ShadowFormat));
                 texture.Name = isStatic ? "Graphite static shadow page" : "Graphite shadow page";
-                found = new ShadowPage(texture, ((IMaterialResources)_textures).TextureSlot(texture.DepthTexture, MaterialPropertyType.Texture2D, "black"), isStatic, TileClearProgram);
+                found = new ShadowPage(texture, _textures.ShadowSlot(texture.DepthTexture), isStatic, TileClearProgram);
                 found.LastUsed = _frame;
                 pages.Add(found);
                 if (!found.Tiles.TryAllocate(size, out tile))
@@ -2084,7 +2084,7 @@ internal sealed partial class FramePipeline
             {
                 cascade.Texture = _device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(resolution, resolution, [], ShadowFormat));
                 cascade.Texture.Name = $"Graphite cascade {c}";
-                cascade.Slot = ((IMaterialResources)_textures).TextureSlot(cascade.Texture.DepthTexture, MaterialPropertyType.Texture2D, "black");
+                cascade.Slot = _textures.ShadowSlot(cascade.Texture.DepthTexture);
                 cascade.Target = new ShadowTarget(cascade.Texture, "Graphite.Cascade", TileClearProgram);
                 cascade.Camera = ShadowCamera();
                 cascade.Valid = false;
