@@ -82,7 +82,7 @@ float Graphite_SampleShadow(uint slot, vec4 rect, float inverseSize, vec3 coords
     vec2 tileMin = rect.xy + 0.5 * inverseSize;
     vec2 tileMax = rect.xy + rect.z - 0.5 * inverseSize;
     if (filtering == GRAPHITE_SHADOW_HARD)
-        return texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(clamp(coords.xy, tileMin, tileMax), coords.z));
+        return texture(sampler2DShadow(Graphite_ShadowTextures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(clamp(coords.xy, tileMin, tileMax), coords.z));
 
     // Three bilinear taps per axis reproduce a five texel tent exactly: weights 4 - 3f, 7 and 1 + 3f summing to 12, each
     // tap's worked out where it is taken so none are held across the others
@@ -99,7 +99,7 @@ float Graphite_SampleShadow(uint slot, vec4 rect, float inverseSize, vec3 coords
         {
             vec2 x = graphite_TentTap(i, f.x);
             vec2 uv = clamp((base + vec2(x.y, y.y)) * inverseSize, tileMin, tileMax);
-            lit += x.x * y.x * texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
+            lit += x.x * y.x * texture(sampler2DShadow(Graphite_ShadowTextures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
         }
     }
     return lit / 144.0;
@@ -239,7 +239,7 @@ float Graphite_LocalContact(uint first, bool cube, uint centre, vec3 receiver, v
         Graphite_LocalTap tap = Graphite_LocalShadowTap(first, cube, receiver, normal, t1, t2, Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * radius * texelWorld);
         vec4 rect = Graphite_FaceRect(tap.face);
         vec2 uv = clamp(tap.coords.xy, rect.xy + 0.5 * inverseSize, rect.xy + rect.z - 0.5 * inverseSize);
-        lit += texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(floatBitsToUint(Graphite_FaceParams(tap.face).x))], Graphite_ShadowSampler), vec3(uv, tap.coords.z));
+        lit += texture(sampler2DShadow(Graphite_ShadowTextures2D[nonuniformEXT(floatBitsToUint(Graphite_FaceParams(tap.face).x))], Graphite_ShadowSampler), vec3(uv, tap.coords.z));
     }
     return lit / float(GRAPHITE_SHADOW_TAPS);
 }
@@ -294,7 +294,7 @@ float Graphite_CascadeContact(Graphite_Cascade c, vec3 receiver, vec3 normal, ve
     {
         vec3 coords = Graphite_CascadeTap(c, receiver, normal, toLight, t1, t2, Graphite_VogelDisc(i, GRAPHITE_SHADOW_TAPS, angle) * radius * texelWorld);
         vec2 uv = clamp(coords.xy, vec2(0.5 * inverseSize), vec2(1.0 - 0.5 * inverseSize));
-        lit += texture(sampler2DShadow(Graphite_Textures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
+        lit += texture(sampler2DShadow(Graphite_ShadowTextures2D[nonuniformEXT(slot)], Graphite_ShadowSampler), vec3(uv, coords.z));
     }
     return lit / float(GRAPHITE_SHADOW_TAPS);
 }

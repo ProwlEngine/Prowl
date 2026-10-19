@@ -166,6 +166,13 @@ full past of that library.
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/mrunion">
+                    <img src="https://avatars.githubusercontent.com/u/5022458?v=4" width="100;" alt="mrunion"/>
+                    <br />
+                    <sub><b>Matt Runion</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/mberthaud">
                     <img src="https://avatars.githubusercontent.com/u/26536123?v=4" width="100;" alt="mberthaud"/>
                     <br />
