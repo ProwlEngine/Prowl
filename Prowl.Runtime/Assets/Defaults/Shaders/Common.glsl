@@ -9,7 +9,8 @@
 
 vec3 linearToGammaSpace(vec3 lin)
 {
-    return max(1.055 * pow(max(lin, vec3(0.0)), vec3(0.416666667)) - 0.055, 0.0);
+    lin = max(lin, vec3(0.0));
+    return mix(lin * 12.92, 1.055 * pow(lin, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), lin));
 }
 
 vec3 gammaToLinearSpace(vec3 gamma)
@@ -27,12 +28,12 @@ void Prowl_TangentFrame(vec3 worldNormal, vec3 worldTangent, float handedness, b
     if (hasTangent)
     {
         tangent = worldTangent;
-        bitangent = cross(tangent, worldNormal) * sign;
+        bitangent = cross(worldNormal, tangent) * sign;
         if (dot(bitangent, bitangent) > 0.000001)
             return;
     }
     tangent = abs(worldNormal.y) < 0.999 ? normalize(cross(worldNormal, vec3(0.0, 1.0, 0.0))) : normalize(cross(worldNormal, vec3(1.0, 0.0, 0.0)));
-    bitangent = cross(tangent, worldNormal) * sign;
+    bitangent = cross(worldNormal, tangent) * sign;
 }
 
 // A tangent space normal map texel, scaled, into world space. Falls back to the surface normal when the result is bad.

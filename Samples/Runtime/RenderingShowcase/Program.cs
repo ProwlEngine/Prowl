@@ -61,7 +61,7 @@ public sealed class RenderingShowcaseGame : StationGame
     private VolumetricClouds _clouds = null!;
     private float _cloudFlightSpeed = 300f;
     private Bloom _bloom = null!;
-    private Tonemapping _tonemapper = null!;
+
     private float _hours = 14f;
     private bool _animateSky;
     private float _sunStrength = 1f;
@@ -89,7 +89,6 @@ public sealed class RenderingShowcaseGame : StationGame
         _fog.GlobalDensity.Value = 0.02f;
         _fog.MaxDistance.Value = 60f;
         _bloom = MainCamera.Profile.Get<Bloom>()!;
-        _tonemapper = MainCamera.Profile.Get<Tonemapping>()!;
         SampleScene.Environment.Fog.Mode = FogMode.Off;
 
         float length = StationSpacing * StationCount + 30f;
@@ -224,7 +223,7 @@ public sealed class RenderingShowcaseGame : StationGame
         Toggle(paper, font, "Bloom", _bloom.Active, v => _bloom.Active = v);
         Slider(paper, font, "Bloom intensity", _bloom.Intensity, 0f, 2f, v => _bloom.Intensity.Value = v);
         Toggle(paper, font, "Volumetric fog", _fog.Enabled, v => _fog.Enabled.Value = v);
-        Cycle(paper, font, "Tonemapper", _tonemapper.Mode.Value, v => _tonemapper.Mode.Value = v);
+        Cycle(paper, font, "Tonemapper", MainCamera.Tonemapping, v => MainCamera.Tonemapping = v);
     }
 
     // ----------------------------------------------------------------
@@ -733,8 +732,6 @@ public sealed class RenderingShowcaseGame : StationGame
         security.Target = target;
         security.Depth = -2;
         security.FieldOfView = 70f;
-        security.Profile = new VolumeProfile();
-        security.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
         Pan pan = head.AddComponent<Pan>();
         pan.Pitch = 15f;
         pan.Center = 150f;

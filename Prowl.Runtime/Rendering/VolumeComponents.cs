@@ -14,40 +14,6 @@ internal static class EffectSettings
     public static Float4 ToFloat4(this Color color) => new(color.R, color.G, color.B, color.A);
 }
 
-public enum TonemappingMode
-{
-    None,
-    Melon,
-    ACES,
-    ACESSimple,
-    AgX,
-    ReinhardSimple,
-    ReinhardLuma,
-    ReinhardWhitePreserving,
-    RomBinDaHouse,
-    Uncharted2,
-}
-
-/// <summary>Maps HDR colour to the display, with contrast and saturation around it. Off while the mode is None.</summary>
-[VolumeComponentMenu("Image/Tonemapping")]
-public sealed class Tonemapping : VolumeComponent<G.Tonemapper>
-{
-    public VolumeParameter<TonemappingMode> Mode = new(TonemappingMode.None);
-    [Range(0f, 2f)] public VolumeParameter<float> Contrast = new(1.1f);
-    [Range(0f, 2f)] public VolumeParameter<float> Saturation = new(1.1f);
-
-    public override bool IsActive => Mode.Value != TonemappingMode.None;
-
-    protected override G.Tonemapper CreateFeature(G.Renderer renderer) => new(renderer);
-
-    protected override void Apply(G.Tonemapper feature, Camera camera)
-    {
-        feature.Operator = (G.TonemapOperator)((int)Mode.Value - 1);
-        feature.Contrast = Contrast;
-        feature.Saturation = Saturation;
-    }
-}
-
 /// <summary>Adapts exposure to the scene's brightness over time.</summary>
 [VolumeComponentMenu("Camera/Auto Exposure")]
 public sealed class AutoExposure : VolumeComponent<G.AutoExposure>

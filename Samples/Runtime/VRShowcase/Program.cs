@@ -165,7 +165,6 @@ public sealed partial class VRShowcaseGame : StationGame
         Bloom bloom = camera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.4f);
         bloom.Threshold.Set(1.0f);
-        camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
         camera.AntiAliasing = AntiAliasingMode.FXAA;
         head.AddComponent<TrackedPoseDriver>().Node = XRNode.Head;
         head.AddComponent<AudioListener>();

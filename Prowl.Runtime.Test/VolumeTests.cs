@@ -147,17 +147,17 @@ public class VolumeTests : RuntimeTestBase
     }
 
     [Theory]
-    [InlineData(0.4f, TonemappingMode.None)]
-    [InlineData(0.6f, TonemappingMode.AgX)]
-    public void Enums_SwitchAtHalfway(float weight, TonemappingMode expected)
+    [InlineData(0.4f, DepthOfFieldMode.Off)]
+    [InlineData(0.6f, DepthOfFieldMode.Auto)]
+    public void Enums_SwitchAtHalfway(float weight, DepthOfFieldMode expected)
     {
         var profile = new VolumeProfile();
-        profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
+        profile.Add<DepthOfField>().Mode.Set(DepthOfFieldMode.Auto);
         AddVolume(profile, weight: weight);
 
         Resolve();
 
-        Assert.Equal(expected, _stack.Get<Tonemapping>()!.Mode.Value);
+        Assert.Equal(expected, _stack.Get<DepthOfField>()!.Mode.Value);
     }
 
     [Fact]

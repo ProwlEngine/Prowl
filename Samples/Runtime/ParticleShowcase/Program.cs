@@ -119,7 +119,6 @@ public sealed class ParticleShowcaseGame : StationGame
         Bloom bloom = MainCamera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.6f);
         bloom.Threshold.Set(1.0f);
-        MainCamera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
         MainCamera.AntiAliasing = AntiAliasingMode.FXAA;
 
         // One long floor under every station, with a collider for the world collision stations.

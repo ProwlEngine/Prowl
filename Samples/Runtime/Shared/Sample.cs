@@ -95,7 +95,6 @@ public abstract class StationGame : Game
         Bloom bloom = MainCamera.Profile.Add<Bloom>();
         bloom.Intensity.Set(0.4f);
         bloom.Threshold.Set(1.0f);
-        MainCamera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
         MainCamera.AntiAliasing = AntiAliasingMode.FXAA;
         CameraObject.AddComponent<FlyCamera>();
         CameraObject.AddComponent<PhysicsGrabber>().Game = this;

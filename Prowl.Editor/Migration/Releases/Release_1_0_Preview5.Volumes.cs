@@ -37,7 +37,6 @@ internal sealed partial class Release_1_0_Preview5
     // Effects that become one component each, with the parameters every saved value moves to
     private static readonly Dictionary<string, (string Component, FieldMap[] Fields)> s_effectMaps = new()
     {
-        ["TonemapperEffect"] = ("Tonemapping", [F("Contrast", new(1.1f)), F("Saturation", new(1.1f))]),
         ["AutoExposureEffect"] = ("AutoExposure", [F("ExposureCompensation", new(0f)), F("AdaptSpeedUp", new(3f)), F("AdaptSpeedDown", new(1.5f)), F("MinExposure", new(0.1f)), F("MaxExposure", new(10f))]),
         ["BloomEffect"] = ("Bloom", [F("Intensity", new(1.5f)), F("Threshold", new(1.2f)), F("SoftKnee", new(0.5f)), F("Clamp", new(65000f)), F("AntiFlicker", new(false)), F("Iterations", new(6)), F("Scatter", new(0.7f))]),
         ["GTAOEffect"] = ("AmbientOcclusion", [F("Intensity", new(1f)), F("Radius", new(1f)), F("Slices", new(6)), F("DirectionSamples", new(32)), F("BlurRadius", new(1f)), F("UseTemporal", new(true)), F("TemporalResponse", new(0.9f)), F("Resolution", new(2L))]),
@@ -61,6 +60,10 @@ internal sealed partial class Release_1_0_Preview5
         ("EnableVignette", "Vignette", [F("VignetteIntensity", "Intensity", new(0.4f)), F("VignetteSmoothness", "Smoothness", new(0.2f)), F("VignetteRoundness", "Roundness", new(1f))]),
     ];
 
+    // The old tonemapper's operators in order (Melon, ACES, ACES simple, AgX, three Reinhards, RomBinDaHouse, Uncharted 2)
+    // as Camera.Tonemapping values, removed ones taking the nearest left. A disabled one turns the camera's HDR off.
+    private static readonly long[] s_tonemapModes = [2, 0, 0, 2, 3, 3, 3, 4, 5];
+
     // Anti aliasing effects become Camera.AntiAliasing and its settings block
     private static readonly Dictionary<string, (long Mode, string Settings, FieldMap[] Fields)> s_antiAliasingMaps = new()
     {
@@ -73,6 +76,8 @@ internal sealed partial class Release_1_0_Preview5
     internal sealed class ConvertedEffects
     {
         public EchoObject? Profile;
+        public long? Tonemapping;
+        public bool? Hdr;
         public long AntiAliasing;
         public string? AntiAliasingSettings;
         public EchoObject? Settings;
@@ -102,6 +107,8 @@ internal sealed partial class Release_1_0_Preview5
             ConvertedEffects converted = ConvertEffectList(effects!);
             tag.Remove("Effects");
             if (converted.Profile != null && !tag.TryGet("Profile", out _)) tag["Profile"] = converted.Profile;
+            if (converted.Tonemapping is long tonemapping) tag["Tonemapping"] = new EchoObject(tonemapping);
+            if (converted.Hdr is bool hdr) tag["HDR"] = new EchoObject(hdr);
             if (converted.AntiAliasingSettings != null)
             {
                 tag["AntiAliasing"] = new EchoObject(converted.AntiAliasing);
@@ -143,6 +150,10 @@ internal sealed partial class Release_1_0_Preview5
             string prefix = path[..member];
             ConvertedEffects converted = ConvertEffectList(value!);
             items.Insert(i, Override(prefix + "Profile", converted.Profile ?? new EchoObject(EchoType.Null, null)));
+            if (converted.Tonemapping is long tonemapping)
+                items.Insert(i + 1, Override(prefix + "Tonemapping", new EchoObject(tonemapping)));
+            if (converted.Hdr is bool hdr)
+                items.Insert(i + 1, Override(prefix + "HDR", new EchoObject(hdr)));
             if (converted.AntiAliasingSettings != null)
             {
                 items.Insert(i + 1, Override(prefix + "AntiAliasing", new EchoObject(converted.AntiAliasing)));
@@ -181,6 +192,16 @@ internal sealed partial class Release_1_0_Preview5
             string name = fullName.StartsWith(OldEffects, StringComparison.Ordinal) ? fullName[OldEffects.Length..] : "";
             bool enabled = !effect.TryGet("Enabled", out EchoObject? enabledTag) || enabledTag!.BoolValue;
 
+            if (name == "TonemapperEffect")
+            {
+                long op = effect.TryGet("Type", out EchoObject? opTag) ? opTag!.LongValue : 3;
+                if (!enabled)
+                    result.Hdr = false;
+                else if (op >= 0 && op < s_tonemapModes.Length)
+                    result.Tonemapping = s_tonemapModes[op];
+                continue;
+            }
+
             if (s_antiAliasingMaps.TryGetValue(name, out var aa))
             {
                 if (result.AntiAliasingSettings != null) continue;
@@ -210,10 +231,6 @@ internal sealed partial class Release_1_0_Preview5
             EchoObject converted = Component(target.Component, enabled, effect, target.Fields);
             switch (name)
             {
-                case "TonemapperEffect":
-                    long op = effect.TryGet("Type", out EchoObject? opTag) ? opTag!.LongValue : 3;
-                    converted["Mode"] = Parameter(new EchoObject(op + 1));
-                    break;
                 case "BokehDepthOfFieldEffect":
                     bool auto = !effect.TryGet("UseAutoFocus", out EchoObject? autoTag) || autoTag!.BoolValue;
                     converted["Mode"] = Parameter(new EchoObject(auto ? 1L : 2L));

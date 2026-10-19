@@ -655,7 +655,7 @@ public class Mesh : Asset, ISerializable
                     : Float3.Normalize(Float3.Cross(n, Float3.UnitX));
 
             // Handedness: sign of dot(cross(n, t), bitangent)
-            float w = Float3.Dot(Float3.Cross(t, n), tan2[i]) < 0.0f ? -1.0f : 1.0f;
+            float w = Float3.Dot(Float3.Cross(n, t), tan2[i]) < 0.0f ? -1.0f : 1.0f;
 
             result[i] = new Float4(orthoT.X, orthoT.Y, orthoT.Z, w);
         }
@@ -826,7 +826,7 @@ public class Mesh : Asset, ISerializable
                 // Along increasing u, with the sign saying which way increasing v runs
                 Float3 tangent = new(-MathF.Sin(theta), 0, MathF.Cos(theta));
                 Float3 bitangent = new(MathF.Cos(phi) * MathF.Cos(theta), -MathF.Sin(phi), MathF.Cos(phi) * MathF.Sin(theta));
-                float handedness = Float3.Dot(Float3.Cross(tangent, new Float3(x, y, z)), bitangent) < 0f ? -1f : 1f;
+                float handedness = Float3.Dot(Float3.Cross(new Float3(x, y, z), tangent), bitangent) < 0f ? -1f : 1f;
                 tangents.Add(new Float4(tangent.X, tangent.Y, tangent.Z, handedness));
             }
         }

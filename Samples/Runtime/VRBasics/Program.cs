@@ -79,8 +79,6 @@ public sealed class VRBasicsGame : Game
         head.Transform.LocalPosition = new Float3(0f, 1.65f, 0f);
         Camera camera = head.AddComponent<Camera>();
         camera.NearClipPlane = 0.05f;
-        camera.Profile = new VolumeProfile();
-        camera.Profile.Add<Tonemapping>().Mode.Set(TonemappingMode.AgX);
         head.AddComponent<TrackedPoseDriver>().Node = XRNode.Head;
 
         foreach (XRHand side in new[] { XRHand.Left, XRHand.Right })
