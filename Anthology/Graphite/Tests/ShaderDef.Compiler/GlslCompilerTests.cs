@@ -283,6 +283,33 @@ public class GlslCompilerTests
 
 
     [Fact]
+    public void Globals_OutsideAMaterial_AreLooseUniformsOfTheStagesReadingThem()
+    {
+        ShaderDescription d = Glsl.Describe("""
+            Shared
+            {
+                #pragma global vec4 _Tint
+                #pragma global ivec3 _Cell
+                #pragma global float _Unread
+            }
+            Vertex
+            {
+                void main() { gl_Position = vec4(vec3(_Cell), 1.0); }
+            }
+            Fragment
+            {
+                out vec4 color;
+                void main() { color = _Tint; }
+            }
+            """);
+
+        Assert.Equal(UniformScalarType.Float4, Glsl.Field(d, "_Tint").Type);
+        Assert.Equal(UniformScalarType.Int3, Glsl.Field(d, "_Cell").Type);
+        Assert.DoesNotContain(Glsl.Element(d, "$Global").UniformFields, f => PropertyID.ToString(f.Name) == "_Unread");
+    }
+
+
+    [Fact]
     public void Axes_DeclaredTwiceDifferently_Fail()
     {
         using GlslShaderCompiler compiler = Glsl.Compiler();
