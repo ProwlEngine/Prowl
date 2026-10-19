@@ -106,7 +106,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - Unit Tested - 450+ tests across the Runtime and Editor
 
 -   **Graphics Rendering:**
-    - OpenGL Backend via [Silk.NET](https://github.com/dotnet/Silk.NET)
+    - Vulkan Backend via Prowl.Graphite (MoltenVK on macOS)
 	- Dedicated Render Thread
     - Extensible Render Pipeline (Custom Pipelines Supported)
     - Forward-Lit Pipeline with Thin G-Buffer Pre-Pass (Depth, Normals, Motion, Roughness, Metallic)
@@ -414,7 +414,7 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 
 ## Dependencies 📦
 
-- [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input, OpenGL & Audio Bindings
+- [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input, OpenXR & Audio Bindings
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2) - Physics Engine
 - [Magick.NET](https://github.com/dlemstra/Magick.NET) - Image Processing
 - [Prowl.Echo](https://github.com/ProwlEngine/Anthology) - Serialization
