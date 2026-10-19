@@ -25,6 +25,7 @@ internal static class GraphiteBindings
     public const int Texture3DTable = 2;
     public const int TextureCubeTable = 3;
     public const int TextureCubeArrayTable = 4;
+    public const int ShadowTexture2DTable = 5;
 
 
     public const int SamplerTable = 0;
@@ -79,7 +80,8 @@ internal static class GraphiteBindings
         new ResourceLayoutElementDescription("Graphite_Textures2DArray", ResourceKind.TextureReadOnly, Graphics, Texture2DArrayTable) { ArrayCount = otherTextures },
         new ResourceLayoutElementDescription("Graphite_Textures3D", ResourceKind.TextureReadOnly, Graphics, Texture3DTable) { ArrayCount = otherTextures },
         new ResourceLayoutElementDescription("Graphite_TexturesCube", ResourceKind.TextureReadOnly, Graphics, TextureCubeTable) { ArrayCount = otherTextures },
-        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, Graphics, TextureCubeArrayTable) { ArrayCount = otherTextures })
+        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, Graphics, TextureCubeArrayTable) { ArrayCount = otherTextures },
+        new ResourceLayoutElementDescription("Graphite_ShadowTextures2D", ResourceKind.TextureReadOnly, Graphics, ShadowTexture2DTable) { ArrayCount = textures2D })
     {
         Table = true,
     };
@@ -187,6 +189,7 @@ internal static class MaterialLayout
             ("Graphite_Textures3D", Table("texture3D", "Graphite_Textures3D", GraphiteBindings.Texture3DTable, RendererTextures.OtherTextures)),
             ("Graphite_TexturesCube", Table("textureCube", "Graphite_TexturesCube", GraphiteBindings.TextureCubeTable, RendererTextures.OtherTextures)),
             ("Graphite_TexturesCubeArray", Table("textureCubeArray", "Graphite_TexturesCubeArray", GraphiteBindings.TextureCubeArrayTable, RendererTextures.OtherTextures)),
+            ("Graphite_ShadowTextures2D", Table("texture2D", "Graphite_ShadowTextures2D", GraphiteBindings.ShadowTexture2DTable, RendererTextures.Textures2D)),
             ("Graphite_Samplers", $"layout(set = {GraphiteBindings.ViewSet}, binding = {GraphiteBindings.SamplerTable}) uniform sampler Graphite_Samplers[{RendererTextures.Samplers}];"),
             ("Graphite_Globals", $"layout(set = {GraphiteBindings.ViewSet}, binding = {GraphiteBindings.Globals}, std430) readonly buffer Graphite_Globals {{ uint graphite_GlobalWords[]; }};"),
             ("Graphite_Global_float", "#define Graphite_Global_float(o) uintBitsToFloat(graphite_GlobalWords[o])"),
