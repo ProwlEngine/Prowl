@@ -40,6 +40,9 @@ public enum MaterialPropertyType : byte
     Float4,
     Color,
     Int,
+    Int2,
+    Int3,
+    Int4,
     Matrix,
     Texture2D,
     Texture2DArray,
@@ -109,6 +112,15 @@ public readonly struct MaterialValue
     public static MaterialValue FromColor(Float4 value) => new(MaterialPropertyType.Color, value);
 
     public static MaterialValue FromInt(int value) => new(MaterialPropertyType.Int, new Float4(value, 0, 0, 0), value);
+
+    // Integer vectors keep their exact bits in the vector's words.
+    public static MaterialValue FromInt2(Int2 value) => new(MaterialPropertyType.Int2, IntBits(value.X, value.Y, 0, 0));
+
+    public static MaterialValue FromInt3(Int3 value) => new(MaterialPropertyType.Int3, IntBits(value.X, value.Y, value.Z, 0));
+
+    public static MaterialValue FromInt4(Int4 value) => new(MaterialPropertyType.Int4, IntBits(value.X, value.Y, value.Z, value.W));
+
+    private static Float4 IntBits(int x, int y, int z, int w) => new(BitConverter.Int32BitsToSingle(x), BitConverter.Int32BitsToSingle(y), BitConverter.Int32BitsToSingle(z), BitConverter.Int32BitsToSingle(w));
 
     public static MaterialValue FromMatrix(Float4x4 value) => new(MaterialPropertyType.Matrix, Float4.Zero, 0, new MatrixBox(value));
 
@@ -257,7 +269,14 @@ public sealed class MaterialSchema
                 record[word] = (uint)(value.Type == MaterialPropertyType.Int ? value.Int : (int)value.Vector.X);
                 break;
             case MaterialPropertyType.Float2:
+            case MaterialPropertyType.Int2:
                 WriteFloats(record, word, value.Vector, 2);
+                break;
+            case MaterialPropertyType.Int3:
+                WriteFloats(record, word, value.Vector, 3);
+                break;
+            case MaterialPropertyType.Int4:
+                WriteFloats(record, word, value.Vector, 4);
                 break;
             case MaterialPropertyType.Float3:
                 WriteFloats(record, word, value.Vector, 3);
@@ -282,9 +301,9 @@ public sealed class MaterialSchema
     internal static (uint Size, uint Alignment) Std430(MaterialPropertyType type) => type switch
     {
         MaterialPropertyType.Float or MaterialPropertyType.Int => (4u, 4u),
-        MaterialPropertyType.Float2 => (8u, 8u),
-        MaterialPropertyType.Float3 => (12u, 16u),
-        MaterialPropertyType.Float4 or MaterialPropertyType.Color => (16u, 16u),
+        MaterialPropertyType.Float2 or MaterialPropertyType.Int2 => (8u, 8u),
+        MaterialPropertyType.Float3 or MaterialPropertyType.Int3 => (12u, 16u),
+        MaterialPropertyType.Float4 or MaterialPropertyType.Color or MaterialPropertyType.Int4 => (16u, 16u),
         MaterialPropertyType.Matrix => (64u, 16u),
         _ => (8u, 4u),
     };

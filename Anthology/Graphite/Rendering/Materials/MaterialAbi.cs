@@ -194,6 +194,9 @@ internal static class MaterialLayout
             ("Graphite_Global_vec2", "#define Graphite_Global_vec2(o) uintBitsToFloat(uvec2(graphite_GlobalWords[o], graphite_GlobalWords[(o) + 1u]))"),
             ("Graphite_Global_vec3", "#define Graphite_Global_vec3(o) uintBitsToFloat(uvec3(graphite_GlobalWords[o], graphite_GlobalWords[(o) + 1u], graphite_GlobalWords[(o) + 2u]))"),
             ("Graphite_Global_vec4", "#define Graphite_Global_vec4(o) uintBitsToFloat(uvec4(graphite_GlobalWords[o], graphite_GlobalWords[(o) + 1u], graphite_GlobalWords[(o) + 2u], graphite_GlobalWords[(o) + 3u]))"),
+            ("Graphite_Global_ivec2", "#define Graphite_Global_ivec2(o) ivec2(graphite_GlobalWords[o], graphite_GlobalWords[(o) + 1u])"),
+            ("Graphite_Global_ivec3", "#define Graphite_Global_ivec3(o) ivec3(graphite_GlobalWords[o], graphite_GlobalWords[(o) + 1u], graphite_GlobalWords[(o) + 2u])"),
+            ("Graphite_Global_ivec4", "#define Graphite_Global_ivec4(o) ivec4(graphite_GlobalWords[o], graphite_GlobalWords[(o) + 1u], graphite_GlobalWords[(o) + 2u], graphite_GlobalWords[(o) + 3u])"),
             ("Graphite_Global_mat4", "#define Graphite_Global_mat4(o) mat4(Graphite_Global_vec4(o), Graphite_Global_vec4((o) + 4u), Graphite_Global_vec4((o) + 8u), Graphite_Global_vec4((o) + 12u))"),
         ];
         foreach (MaterialPropertyType type in (MaterialPropertyType[])[MaterialPropertyType.Texture2D, MaterialPropertyType.Texture2DArray, MaterialPropertyType.Texture3D, MaterialPropertyType.TextureCube, MaterialPropertyType.TextureCubeArray])
@@ -226,6 +229,9 @@ internal static class MaterialLayout
         "vec2" => MaterialPropertyType.Float2,
         "vec3" => MaterialPropertyType.Float3,
         "vec4" => MaterialPropertyType.Float4,
+        "ivec2" => MaterialPropertyType.Int2,
+        "ivec3" => MaterialPropertyType.Int3,
+        "ivec4" => MaterialPropertyType.Int4,
         "mat4" => MaterialPropertyType.Matrix,
         "sampler2D" => MaterialPropertyType.Texture2D,
         "sampler2DArray" => MaterialPropertyType.Texture2DArray,

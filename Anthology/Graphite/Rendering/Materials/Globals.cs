@@ -63,6 +63,12 @@ public sealed class GlobalProperties
 
     public void SetInt(PropertyID name, int value) => Set(name, MaterialValue.FromInt(value));
 
+    public void SetInt2(PropertyID name, Int2 value) => Set(name, MaterialValue.FromInt2(value));
+
+    public void SetInt3(PropertyID name, Int3 value) => Set(name, MaterialValue.FromInt3(value));
+
+    public void SetInt4(PropertyID name, Int4 value) => Set(name, MaterialValue.FromInt4(value));
+
     public void SetMatrix(PropertyID name, Float4x4 value) => Set(name, MaterialValue.FromMatrix(value));
 
     /// <summary>
@@ -125,6 +131,42 @@ public sealed class GlobalProperties
             ? property.Type
             : Material.TextureTypeOf(texture);
         Set(name, MaterialValue.FromTexture(type, texture, sampler, MaterialValue.IdentityScaleOffset));
+    }
+
+    /// <summary>
+    /// Takes every value of a property set as a global: its numbers, its textures with their samplers' states, and its
+    /// whole buffers. For hosts that already describe a draw's inputs as a property set. Host thread.
+    /// </summary>
+    public void SetFrom(PropertySet properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        properties.Visit(new Copier(this));
+    }
+
+    private sealed class Copier(GlobalProperties target) : IPropertyVisitor
+    {
+        public void Uniform(PropertyID name, UniformScalarType type, ReadOnlySpan<byte> value)
+        {
+            ReadOnlySpan<float> f = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(value);
+            ReadOnlySpan<int> i = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, int>(value);
+            switch (type)
+            {
+                case UniformScalarType.Float1: target.SetFloat(name, f[0]); break;
+                case UniformScalarType.Float2: target.SetFloat2(name, new Float2(f[0], f[1])); break;
+                case UniformScalarType.Float3: target.SetFloat3(name, new Float3(f[0], f[1], f[2])); break;
+                case UniformScalarType.Float4: target.SetFloat4(name, new Float4(f[0], f[1], f[2], f[3])); break;
+                case UniformScalarType.Int1 or UniformScalarType.UInt1: target.SetInt(name, i[0]); break;
+                case UniformScalarType.Int2 or UniformScalarType.UInt2: target.SetInt2(name, new Int2(i[0], i[1])); break;
+                case UniformScalarType.Int3 or UniformScalarType.UInt3: target.SetInt3(name, new Int3(i[0], i[1], i[2])); break;
+                case UniformScalarType.Int4 or UniformScalarType.UInt4: target.SetInt4(name, new Int4(i[0], i[1], i[2], i[3])); break;
+                case UniformScalarType.Float4x4: target.SetMatrix(name, System.Runtime.InteropServices.MemoryMarshal.Read<Float4x4>(value)); break;
+            }
+        }
+
+        public void Texture(PropertyID name, Texture? texture, TextureView? view, Sampler? sampler)
+            => target.SetTexture(name, texture ?? view?.Target, sampler?.Description);
+
+        public void Buffer(PropertyID name, DeviceBufferRange buffer) => target.SetBuffer(name, buffer.Buffer);
     }
 
     /// <summary>Removes a value, falling back to the renderer's for a world, then zero.</summary>
