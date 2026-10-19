@@ -30,6 +30,43 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         AssertCopiedSource(result);
     }
 
+    [SkippableFact]
+    public void LooseUniforms_StayBoundAcrossComputeShaderSwitch()
+    {
+        ComputeProgram first = CreateBasicComputeProgram();
+        float[] result = RunCompute(SetCopyProperties, (cl, program, props) =>
+        {
+            cl.SetComputeShader(first);
+            cl.SetProperties(props);
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.Dispatch(Side / 16, Side / 16, 1);
+        });
+
+        AssertCopiedSource(result);
+    }
+
+    [SkippableFact]
+    public void LooseUniforms_SetBeforeComputeShader_ReachTheDispatch()
+    {
+        float[] result = RunCompute(SetCopyProperties, (cl, program, props) =>
+        {
+            cl.SetProperties(props);
+            cl.SetComputeShader(program);
+            cl.Dispatch(Side / 16, Side / 16, 1);
+        });
+
+        AssertCopiedSource(result);
+    }
+
+    private static void SetCopyProperties(PropertySet props, DeviceBuffer source, DeviceBuffer destination)
+    {
+        props.SetInt("Width", (int)Side);
+        props.SetInt("Height", (int)Side);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
+    }
+
     private void AssertCopiedSource(float[] destination)
     {
         for (int i = 0; i < Count; i++)
@@ -40,7 +77,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
     // Runs BasicComputeTest with a caller-configured PropertySet and returns the Destination
     // buffer contents. Source is seeded with 0..Count-1.
-    private float[] RunCompute(Action<PropertySet, DeviceBuffer, DeviceBuffer> configure)
+    private float[] RunCompute(Action<PropertySet, DeviceBuffer, DeviceBuffer> configure, Action<CommandBuffer, ComputeProgram, PropertySet>? record = null)
     {
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(
             Count * sizeof(float), BufferUsage.StructuredBufferReadWrite));
@@ -58,6 +95,12 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
         GD.RunTestGraph((context, cl) =>
         {
+            if (record != null)
+            {
+                record(cl, program, props);
+                return;
+            }
+
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(Side / 16, Side / 16, 1);

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Prowl.Vector;
@@ -30,7 +31,54 @@ public class UniformShadowsTests
     }
 
     [Fact]
-    public void ChangingPlanZeroesTheBlocks()
+    public void ChangingPlanReplaysAppliedValuesInCallOrder()
+    {
+        UniformShadows shadows = new();
+        PropertySet early = new();
+        early.SetFloat("A", 1);
+        early.SetFloat("B", 5);
+        shadows.Apply(early);
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1)));
+        PropertySet defaults = new();
+        defaults.SetFloat("B", 2);
+        shadows.ApplyDefaults(defaults);
+        PropertySet late = new();
+        late.SetFloat("A", 3);
+        shadows.Apply(late);
+
+        shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1)));
+
+        Assert.Equal(new float[] { 3, 2 }, Floats(shadows[0]));
+    }
+
+    [Fact]
+    public void SwitchingBackToAPlanKeepsWritesMadeAfterItsFullBlockSource()
+    {
+        UniformShadows shadows = new();
+        UniformBindingPlan both = Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1), new UniformBlockField("B", 4, 4, UniformScalarType.Float1));
+        UniformBindingPlan other = Plan(new UniformBlockField("B", 0, 4, UniformScalarType.Float1));
+        shadows.UsePlan(both);
+        PropertySet old = new();
+        old.SetFloat("A", 1);
+        old.SetFloat("B", 1);
+        shadows.Apply(old);
+        PropertySet full = new();
+        full.SetFloat("A", 2);
+        full.SetFloat("B", 2);
+        shadows.Apply(full);
+        PropertySet partial = new();
+        partial.SetFloat("B", 7);
+        shadows.Apply(partial);
+
+        shadows.UsePlan(other);
+        Assert.Equal(new float[] { 7 }, Floats(shadows[0]));
+
+        shadows.UsePlan(both);
+        Assert.Equal(new float[] { 2, 7 }, Floats(shadows[0]));
+    }
+
+    [Fact]
+    public void ClearDropsAppliedValuesForLaterPlans()
     {
         UniformShadows shadows = new();
         shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1)));
@@ -38,9 +86,16 @@ public class UniformShadowsTests
         source.SetFloat("A", 5);
         shadows.Apply(source);
 
+        shadows.Clear();
         shadows.UsePlan(Plan(new UniformBlockField("A", 0, 4, UniformScalarType.Float1)));
 
-        Assert.Equal(0f, System.BitConverter.ToSingle(shadows[0].Data));
+        Assert.Equal(new float[] { 0 }, Floats(shadows[0]));
+    }
+
+    private static float[] Floats(ShadowBlock block)
+    {
+        ReadOnlySpan<byte> bytes = block.Cache != null ? block.Cache.Bytes.AsSpan(0, (int)block.Size) : block.Data;
+        return System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(bytes).ToArray();
     }
 
     [Fact]

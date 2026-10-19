@@ -26,12 +26,18 @@ internal sealed class UniformShadows
     private bool[] _blit = Array.Empty<bool>();
     private PackedBlock?[] _pack = Array.Empty<PackedBlock?>();
     private int[] _hits = Array.Empty<int>();
+    private bool[] _covered = Array.Empty<bool>();
+    private readonly List<(PropertySet Source, bool Defaults)> _applied = new();
 
     public UniformBindingPlan? Plan => _plan;
 
     public ShadowBlock this[int block] => _blocks[block];
 
-    public void Reset() => _plan = null;
+    public void Reset()
+    {
+        _plan = null;
+        _applied.Clear();
+    }
 
     public void UsePlan(UniformBindingPlan plan)
     {
@@ -40,10 +46,12 @@ internal sealed class UniformShadows
 
         _plan = plan;
         Rebuild();
+        Replay();
     }
 
     public void Clear()
     {
+        _applied.Clear();
         if (_plan != null)
             Rebuild();
     }
@@ -62,6 +70,7 @@ internal sealed class UniformShadows
             _blit = new bool[count];
             _pack = new PackedBlock?[count];
             _hits = new int[count];
+            _covered = new bool[count];
         }
 
         for (int i = 0; i < count; i++)
@@ -82,6 +91,57 @@ internal sealed class UniformShadows
     }
 
     public void Apply(PropertySet source)
+    {
+        _applied.Add((source, false));
+        Merge(source);
+    }
+
+    public void ApplyDefaults(PropertySet defaults)
+    {
+        _applied.Add((defaults, true));
+        MergeDefaults(defaults);
+    }
+
+    private void Replay()
+    {
+        for (int i = FirstVisible(); i < _applied.Count; i++)
+        {
+            (PropertySet source, bool defaults) = _applied[i];
+            if (defaults)
+                MergeDefaults(source);
+            else
+                Merge(source);
+        }
+    }
+
+    // Applications older than the newest full block source of every block are fully overwritten.
+    private int FirstVisible()
+    {
+        UniformBindingPlan plan = _plan!;
+        int open = plan.BlockCount;
+        Array.Clear(_covered, 0, open);
+        int first = _applied.Count;
+        while (open > 0 && first > 0)
+        {
+            (PropertySet source, bool defaults) = _applied[--first];
+            if (defaults)
+                continue;
+
+            for (int b = 0; b < plan.BlockCount; b++)
+            {
+                UniformBlockLayout layout = plan.Layouts[b];
+                if (_covered[b] || !layout.Cacheable || source.FindPacked(layout) is not { Full: true } cache || cache.Version != source.Version)
+                    continue;
+
+                _covered[b] = true;
+                open--;
+            }
+        }
+
+        return open == 0 ? first : 0;
+    }
+
+    private void Merge(PropertySet source)
     {
         if (_plan == null)
             return;
@@ -164,7 +224,7 @@ internal sealed class UniformShadows
         }
     }
 
-    public void ApplyDefaults(PropertySet defaults)
+    private void MergeDefaults(PropertySet defaults)
     {
         if (_plan == null)
             return;
