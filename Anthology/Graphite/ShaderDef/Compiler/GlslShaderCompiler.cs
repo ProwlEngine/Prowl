@@ -305,7 +305,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     private readonly ConcurrentDictionary<string, byte[]> _spirv = new(StringComparer.Ordinal);
 
     // Bump when the compile settings below change in a way the source does not show
-    private const string CacheSalt = "graphite-prism-1";
+    private const string CacheSalt = "graphite-prism-2";
 
     private byte[] Run(string source, GlslStage stage, string file, Dictionary<string, string> defines, bool preprocess, StringBuilder warnings)
     {

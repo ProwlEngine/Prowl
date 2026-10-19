@@ -1897,7 +1897,10 @@ public sealed partial class Lowerer
         bool isVoid = d.Info.ReturnType is ScalarType { Kind: Scalar.Void };
         var prevBody = _currentBody;
         _currentBody = d.Def.Body;
+        var savedConstants = new Dictionary<string, Value>(_constants);
+        var savedConstValues = new Dictionary<string, CVal>(_constValues);
         LowerStatements(d.Def.Body.Statements);
+        RestoreConstScope(savedConstants, savedConstValues, _scopeNames.Peek());
         _currentBody = prevBody;
         // glslang's leaveFunction terminates whatever trailing block a non-void function is left on with
         // OpReturnValue(OpUndef): falling off the end returns an undefined value. When that block is dead (after a
@@ -4473,11 +4476,16 @@ public sealed partial class Lowerer
         foreach (var (name, pending) in savedPendingLocals)
             if (pending.VarId != 0) { _locals[name] = (pending.Type, pending.VarId); _pendingLocals.Remove(name); }
 
-        // Only a const DECLARED in this scope is scoped. A global const or specialization constant that
-        // merely happened to be first referenced here keeps its materialization: its pending entry has
-        // already been consumed, so dropping it would leave the name unresolvable.
+        RestoreConstScope(savedConstants, savedConstValues, declaredHere);
+    }
+
+    // Only a const DECLARED in this scope is scoped. A global const or specialization constant that
+    // merely happened to be first referenced here keeps its materialization: its pending entry has
+    // already been consumed, so dropping it would leave the name unresolvable.
+    void RestoreConstScope(Dictionary<string, Value> savedConstants, Dictionary<string, CVal> savedConstValues, HashSet<string> declaredHere)
+    {
         var keepConstants = _constants
-            .Where(kv => !savedConstants.ContainsKey(kv.Key)
+            .Where(kv => !savedConstants.ContainsKey(kv.Key) && !declaredHere.Contains(kv.Key)
                 && (savedConstValues.ContainsKey(kv.Key) || _specConstNames.Contains(kv.Key)))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
         Restore(_constants, savedConstants);
