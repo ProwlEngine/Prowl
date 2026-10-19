@@ -194,6 +194,8 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
 
         if (pass.Material is { } material)
             ApplyMaterial(file, material, Pragmas(pass).Globals, stages);
+        else if (Pragmas(pass).Globals.Length > 0)
+            DeclareGlobals(Pragmas(pass).Globals, stages);
 
         // The preprocessor drops pragmas it does not know, so the default set is read from the pass's own source
         System.Text.RegularExpressions.Match resourceSet = s_resourceSet.Match(pass.Source ?? "");
@@ -201,6 +203,13 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
         return (stages, new GlslProgramLayout(stages, defaultSet));
     }
 
+
+    // Outside a material a global is a plain uniform the caller sets, so one include serves both kinds of pass.
+    private static void DeclareGlobals(IReadOnlyList<ShaderGlobal> globals, List<GlslStageSource> stages)
+    {
+        for (int i = 0; i < stages.Count; i++)
+            stages[i] = new GlslStageSource(stages[i].Stage, stages[i].DeclareGlobals(globals));
+    }
 
     private static void ApplyMaterial(string file, MaterialAbi material, IReadOnlyList<ShaderGlobal> globals, List<GlslStageSource> stages)
     {

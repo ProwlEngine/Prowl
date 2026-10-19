@@ -656,6 +656,31 @@ internal sealed class GlslStageSource
     }
 
 
+    /// <summary>Declares each global the stage reads as a loose uniform, ahead of its first declaration.</summary>
+    public string DeclareGlobals(IReadOnlyList<ShaderGlobal> globals)
+    {
+        HashSet<string> read = new(StringComparer.Ordinal);
+        for (int k = 0; k < Tokens.Count; k++)
+        {
+            if (Tokens[k].Kind == TokenKind.Identifier)
+                read.Add(Str(k));
+        }
+
+        StringBuilder block = new();
+        foreach (ShaderGlobal global in globals)
+        {
+            if (read.Contains(global.Name))
+                block.Append("uniform ").Append(global.Type).Append(' ').Append(global.Name).Append(";\n");
+        }
+        if (block.Length == 0 || Declarations.Count == 0)
+            return Text;
+
+        int at = Tokens[Declarations[0].First].Start;
+        (string file, int line) = Locate(at);
+        block.Append("#line ").Append(line).Append(" \"").Append(file).Append("\"\n");
+        return Text.Insert(at, block.ToString());
+    }
+
     /// <summary>
     /// Puts the material ABI in place of the stage's loose uniforms, before the program is laid out. Properties and the
     /// pass's globals become macros over the ABI's reads, other loose uniforms an error where they are used, and a stage
