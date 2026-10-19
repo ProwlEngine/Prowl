@@ -36,6 +36,7 @@ public class TerrainSceneEditor : SceneTool
     private short[]? _preStrokeHeights;
     private float[]? _preStrokeSplats;
     private byte[]? _preStrokeHoles;
+    private float[]? _preStrokeWater;
     private List<byte[]>? _preStrokeDetails;
 
     public int Priority => 0;
@@ -92,6 +93,10 @@ public class TerrainSceneEditor : SceneTool
         else if (TerrainEditor.ActiveTab == TerrainTab.Trees)
         {
             DrawSimpleToolBtn(paper, $"{id}_tplace", EditorIcons.Leaf_I, "Trees");
+        }
+        else if (TerrainEditor.ActiveTab == TerrainTab.Water)
+        {
+            DrawSimpleToolBtn(paper, $"{id}_water", EditorIcons.Droplet_I, "Water");
         }
 
     }
@@ -222,7 +227,8 @@ public class TerrainSceneEditor : SceneTool
             if (_isPainting && leftDown)
             {
                 TerrainEditor.ApplyBrush(terrainData, terrainUV, Time.DeltaTime,
-                    out bool hChanged, out bool sChanged, out bool gChanged, out bool hoChanged);
+                    out bool hChanged, out bool sChanged, out bool gChanged, out bool hoChanged,
+                    eraseWater: TerrainEditor.ActiveTab == TerrainTab.Water && shiftHeld);
 
                 if (hChanged || sChanged || gChanged || hoChanged)
                 {
@@ -246,10 +252,13 @@ public class TerrainSceneEditor : SceneTool
         _preStrokeHeights = null;
         _preStrokeSplats = null;
         _preStrokeHoles = null;
+        _preStrokeWater = null;
         _preStrokeDetails = null;
 
         if (TerrainEditor.ActiveTab == TerrainTab.Height && data.Heights != null)
             _preStrokeHeights = (short[])data.Heights.Clone();
+        else if (TerrainEditor.ActiveTab == TerrainTab.Water)
+            _preStrokeWater = (float[])data.Water.Clone();
         else if (TerrainEditor.ActiveTab == TerrainTab.Paint && data.Splats != null)
             _preStrokeSplats = (float[])data.Splats.Clone();
         else if (TerrainEditor.ActiveTab == TerrainTab.Holes && data.Holes != null)
@@ -288,6 +297,16 @@ public class TerrainSceneEditor : SceneTool
                     () => { PasteRect(capturedData.Heights!, cres, cx, cz, cxe, cze, postRect); capturedData.SetHeightmapDirty(); });
             }
             _preStrokeHeights = null;
+        }
+        else if (_preStrokeWater != null)
+        {
+            float[] before = _preStrokeWater;
+            float[] after = (float[])data.Water.Clone();
+            TerrainData captured = data;
+            Undo.RegisterAction("Terrain Water",
+                () => captured.Water = (float[])before.Clone(),
+                () => captured.Water = (float[])after.Clone());
+            _preStrokeWater = null;
         }
         else if (_preStrokeSplats != null && data.Splats != null)
         {

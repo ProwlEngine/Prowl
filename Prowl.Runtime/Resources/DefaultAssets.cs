@@ -33,6 +33,7 @@ public enum DefaultShader
     DefaultUI,
     DefaultText,
     DefaultTextMesh,
+    Water,
 }
 
 /// <summary>

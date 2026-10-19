@@ -86,6 +86,7 @@ public class TerrainComponent : Component, IRenderSync
     [NonSerialized, NotHeld] private int _baseMeshResolution;
     [NonSerialized, NotHeld] private TerrainProvider? _provider;
     [NonSerialized, NotHeld] private TerrainMaterial? _material;
+    [NonSerialized, NotHeld] private TerrainMaterial? _waterMaterial;
     [NonSerialized, NotHeld] private TerrainMeshDetailRenderer? _meshDetailRenderer;
     [NonSerialized, NotHeld] private TerrainDetailRenderer? _detailRenderer;
     [NonSerialized, NotHeld] private TerrainTreeRenderer? _treeRenderer;
@@ -96,6 +97,7 @@ public class TerrainComponent : Component, IRenderSync
     [NonSerialized] private int _windZoneCount;
 
     [NonSerialized] private static Material? s_defaultTerrainMat;
+    [NonSerialized] private static Material? s_defaultWaterMat;
     [NonSerialized] private static Material? s_defaultDetailMat;
 
     private static readonly string[] s_splatNames = ["_Splatmap0", "_Splatmap1"];
@@ -186,6 +188,8 @@ public class TerrainComponent : Component, IRenderSync
         }
         _material?.Release();
         _material = null;
+        _waterMaterial?.Release();
+        _waterMaterial = null;
         _detailRenderer?.Dispose();
         _detailRenderer = null;
         _meshDetailRenderer?.Dispose();
@@ -221,7 +225,7 @@ public class TerrainComponent : Component, IRenderSync
             WorldToTerrain = Transform.WorldToLocalMatrix,
             MaxScale = MaxScale(terrainToWorld),
             Size = data.Size,
-            MinHeight = -0.05f * data.Height,
+            MinHeight = -data.WaterDepth - 0.05f * data.Height,
             MaxHeight = 1.05f * data.Height,
             MaxLOD = MaxLODLevel,
             LODQuality = LODQuality,
@@ -234,6 +238,18 @@ public class TerrainComponent : Component, IRenderSync
         };
 
         ApplyTerrainProperties(_material, data);
+        if (data.HasWater)
+        {
+            if (s_defaultWaterMat.IsNotValid()) s_defaultWaterMat = new Material(Resources.Shader.LoadDefault(DefaultShader.Water));
+            _waterMaterial ??= new TerrainMaterial();
+            frame.WaterMaterial = _waterMaterial.Bind(s_defaultWaterMat);
+            if (frame.WaterMaterial != null)
+            {
+                ApplyHeightfield(_waterMaterial, data);
+                _waterMaterial.SetTexture("_Heightmap", data.GetBaseHeightmapTexture());
+                _waterMaterial.SetTexture("_WaterMap", data.GetWaterTexture());
+            }
+        }
         PickWindZones();
 
         Material? detailSource = DetailMaterial;
@@ -509,6 +525,7 @@ internal sealed class TerrainFrame
     public float LODQuality;
     public GpuMesh BaseMesh = null!;
     public GMaterial Material = null!;
+    public GMaterial? WaterMaterial;
     public RenderableFlags Flags;
     public uint LayerMask;
     public uint ObjectId;
@@ -631,6 +648,8 @@ internal sealed class TerrainProvider : RenderProvider
             (Double3 centre, float radius) = frame.Sphere(min, max);
             if (!view.Sees(centre, radius)) continue;
             sink.Add(frame.BaseMesh, 0, frame.Material, frame.Item(new Float4(chunk.Position.X, chunk.Position.Z, chunk.Size, 0)));
+            if (frame.WaterMaterial != null && view.View.Kind != ViewKind.Shadow)
+                sink.Add(frame.BaseMesh, 0, frame.WaterMaterial, frame.Item(new Float4(chunk.Position.X, chunk.Position.Z, chunk.Size, 0)));
         }
     }
 

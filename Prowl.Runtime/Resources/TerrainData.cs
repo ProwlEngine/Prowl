@@ -117,6 +117,8 @@ public sealed class TerrainData : Asset, ISerializable
     private float _height = 100f;
     private TerrainInterpolation _interpolation = TerrainInterpolation.Bicubic;
     private short[]? _heightsField;
+    private float[]? _waterField;
+    private float _waterDepth = 3f;
     private float[]? _splatsField;
     private List<TerrainLayer> _layers = [new(), new(), new(), new()];
     private byte[]? _holesField;
@@ -139,7 +141,7 @@ public sealed class TerrainData : Asset, ISerializable
     /// </summary>
     public int SplatmapResolution { get { EnsureLoaded(); return _splatmapResolution; } private set => _splatmapResolution = value; }
     public float Size { get { EnsureLoaded(); return _size; } set { EnsureLoaded(); _size = value; } }
-    public float Height { get { EnsureLoaded(); return _height; } set { EnsureLoaded(); _height = value; } }
+    public float Height { get { EnsureLoaded(); return _height; } set { EnsureLoaded(); _height = value; SetWaterDirty(); } }
 
     /// <summary>Height interpolation mode for both CPU sampling and GPU shader.</summary>
     public TerrainInterpolation Interpolation { get { EnsureLoaded(); return _interpolation; } set { EnsureLoaded(); _interpolation = value; } }
@@ -149,6 +151,11 @@ public sealed class TerrainData : Asset, ISerializable
     /// Use GetHeight/SetHeight for float access. Halves memory vs float[].
     /// </summary>
     public short[] Heights { get { EnsureLoaded(); return _heightsField ??= new short[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _heightsField = value; } }
+    /// <summary>Painted water depth, 0..1, on the height vertex grid. Heights retain the unmodified ground.</summary>
+    public float[] Water { get { EnsureLoaded(); return _waterField ??= new float[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _waterField = value; SetWaterDirty(); } }
+    public float WaterDepth { get { EnsureLoaded(); return _waterDepth; } set { EnsureLoaded(); _waterDepth = MathF.Max(0f, value); SetWaterDirty(); } }
+    [NonSerialized] private bool? _hasWaterCache;
+    public bool HasWater { get { EnsureLoaded(); return _hasWaterCache ??= _waterField != null && Array.Exists(_waterField, v => v > 0.001f); } }
     /// <summary>
     /// Interleaved splatmap weights. For N layers, each pixel has N floats.
     /// Layout: [pixel0_layer0, pixel0_layer1, ..., pixel0_layerN-1, pixel1_layer0, ...].
@@ -195,8 +202,13 @@ public sealed class TerrainData : Asset, ISerializable
     // --- GPU Textures ---
 
     [NonSerialized] private Texture2D? _heightmapTexture;
+    [NonSerialized] private Texture2D? _baseHeightmapTexture;
+    [NonSerialized] private bool _baseHeightmapDirty = true;
+    [NonSerialized] private Texture2D? _waterTexture;
+    [NonSerialized] private bool _waterDirty = true;
     [NonSerialized] private List<Texture2D>? _splatmapTextures;
     [NonSerialized] private bool _heightmapDirty = true;
+    [NonSerialized] private bool _effectiveHeightsDirty = true;
     [NonSerialized] private bool _splatmapDirty = true;
     [NonSerialized] private bool _holesDirty = true;
     [NonSerialized] private Texture2D? _holesTexture;
@@ -238,8 +250,35 @@ public sealed class TerrainData : Asset, ISerializable
         EnsureLoaded();
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return 0f;
+        int index = z * HeightmapResolution + x;
+        return (float)Heights[index] / kMaxHeight - WaterAt(index) * WaterDepth / MathF.Max(Height, 0.001f);
+    }
+
+    public float GetBaseHeight(int x, int z)
+    {
+        EnsureLoaded();
+        if (x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution) return 0f;
         return (float)Heights[z * HeightmapResolution + x] / kMaxHeight;
     }
+
+    public float GetWater(int x, int z)
+    {
+        EnsureLoaded();
+        if (x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution) return 0f;
+        return WaterAt(z * HeightmapResolution + x);
+    }
+
+    private float WaterAt(int index) => _waterField != null && index < _waterField.Length ? _waterField[index] : 0f;
+
+    public void SetWater(int x, int z, float value)
+    {
+        EnsureLoaded();
+        if (x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution) return;
+        Water[z * HeightmapResolution + x] = Maths.Clamp(value, 0f, 1f);
+        SetWaterDirty();
+    }
+
+    public void SetWaterDirty() { _waterDirty = true; _heightmapDirty = true; _effectiveHeightsDirty = true; _hasWaterCache = null; _heightsVersion++; }
 
     /// <summary>Set normalized height (0-1) at integer coordinates. Stored as 16-bit.</summary>
     public void SetHeight(int x, int z, float value)
@@ -247,8 +286,12 @@ public sealed class TerrainData : Asset, ISerializable
         EnsureLoaded();
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return;
-        Heights[z * HeightmapResolution + x] = (short)(Maths.Clamp(value, 0f, 1f) * kMaxHeight);
+        int index = z * HeightmapResolution + x;
+        float baseValue = value + WaterAt(index) * WaterDepth / MathF.Max(Height, 0.001f);
+        Heights[index] = (short)(Maths.Clamp(baseValue, 0f, 1f) * kMaxHeight);
         _heightmapDirty = true;
+        _effectiveHeightsDirty = true;
+        _baseHeightmapDirty = true;
         _heightsVersion++;
     }
 
@@ -267,7 +310,7 @@ public sealed class TerrainData : Asset, ISerializable
     private float GetInterpolatedHeightBilinear(float u, float v)
     {
         int res = HeightmapResolution;
-        short[] heights = Heights;
+        float[] heights = EffectiveHeights();
         float px = u * (res - 1), pz = v * (res - 1);
         float baseX = MathF.Floor(px), baseZ = MathF.Floor(pz);
         float fx = px - baseX, fz = pz - baseZ;
@@ -286,7 +329,7 @@ public sealed class TerrainData : Asset, ISerializable
     private float GetInterpolatedHeightBicubic(float u, float v)
     {
         int res = HeightmapResolution;
-        short[] heights = Heights;
+        float[] heights = EffectiveHeights();
         float px = u * (res - 1), pz = v * (res - 1);
         float baseX = MathF.Floor(px), baseZ = MathF.Floor(pz);
         int x = (int)baseX, z = (int)baseZ;
@@ -312,11 +355,28 @@ public sealed class TerrainData : Asset, ISerializable
     }
 
     /// <summary>Normalized height at a sample, clamped to the grid edge like the GPU texelFetch.</summary>
-    private static float HeightTap(short[] heights, int res, int x, int z)
+    private static float HeightTap(float[] heights, int res, int x, int z)
     {
         x = Maths.Clamp(x, 0, res - 1);
         z = Maths.Clamp(z, 0, res - 1);
-        return heights[z * res + x] * (1f / kMaxHeight);
+        return heights[z * res + x];
+    }
+
+    private float[] EffectiveHeights()
+    {
+        int count = HeightmapResolution * HeightmapResolution;
+        if (_heightmapFloatBuffer == null || _heightmapFloatBuffer.Length != count)
+        {
+            _heightmapFloatBuffer = new float[count];
+            _effectiveHeightsDirty = true;
+        }
+        if (_effectiveHeightsDirty)
+        {
+            for (int i = 0; i < count; i++)
+                _heightmapFloatBuffer[i] = Heights[i] * (1f / kMaxHeight) - WaterAt(i) * WaterDepth / MathF.Max(Height, 0.001f);
+            _effectiveHeightsDirty = false;
+        }
+        return _heightmapFloatBuffer;
     }
 
     public void ResizeHeightmap(int newRes)
@@ -324,11 +384,14 @@ public sealed class TerrainData : Asset, ISerializable
         EnsureLoaded();
         HeightmapResolution = newRes;
         Heights = new short[newRes * newRes];
+        Water = new float[newRes * newRes];
         _heightmapDirty = true;
+        _effectiveHeightsDirty = true;
+        _baseHeightmapDirty = true;
         _heightsVersion++;
     }
 
-    public void SetHeightmapDirty() { EnsureLoaded(); _heightmapDirty = true; _heightsVersion++; }
+    public void SetHeightmapDirty() { EnsureLoaded(); _heightmapDirty = true; _effectiveHeightsDirty = true; _baseHeightmapDirty = true; _heightsVersion++; }
 
     /// <summary>Compute terrain normal at integer heightmap coordinates using Sobel operator.</summary>
     public Float3 CalculateNormalSobel(int x, int z)
@@ -726,17 +789,43 @@ public sealed class TerrainData : Asset, ISerializable
             int res = HeightmapResolution;
             int count = res * res;
 
-            if (_heightmapFloatBuffer == null || _heightmapFloatBuffer.Length != count)
-                _heightmapFloatBuffer = new float[count];
-            float scale = 1f / kMaxHeight;
-            for (int i = 0; i < count; i++)
-                _heightmapFloatBuffer[i] = Heights[i] * scale;
+            EffectiveHeights();
 
             _heightmapTexture = DataTexture(_heightmapTexture, res, TextureFormat.R32Float, false);
             _heightmapTexture.SetData(new Memory<float>(_heightmapFloatBuffer), 0, 0, (uint)res, (uint)res);
             _heightmapDirty = false;
         }
         return _heightmapTexture;
+    }
+
+    public Texture2D? GetWaterTexture()
+    {
+        EnsureLoaded();
+        if (_waterField == null) return null;
+        if (_waterDirty || _waterTexture.IsNotValid())
+        {
+            int res = HeightmapResolution;
+            _waterTexture = DataTexture(_waterTexture, res, TextureFormat.R32Float, false);
+            _waterTexture.SetData(new Memory<float>(_waterField), 0, 0, (uint)res, (uint)res);
+            _waterDirty = false;
+        }
+        return _waterTexture;
+    }
+
+    /// <summary>Original terrain heights for the surface of painted water.</summary>
+    public Texture2D? GetBaseHeightmapTexture()
+    {
+        EnsureLoaded();
+        if (_baseHeightmapDirty || _baseHeightmapTexture.IsNotValid())
+        {
+            int res = HeightmapResolution;
+            float[] values = new float[res * res];
+            for (int i = 0; i < values.Length; i++) values[i] = Heights[i] * (1f / kMaxHeight);
+            _baseHeightmapTexture = DataTexture(_baseHeightmapTexture, res, TextureFormat.R32Float, false);
+            _baseHeightmapTexture.SetData(new Memory<float>(values), 0, 0, (uint)res, (uint)res);
+            _baseHeightmapDirty = false;
+        }
+        return _baseHeightmapTexture;
     }
 
     /// <summary>
@@ -932,6 +1021,11 @@ public sealed class TerrainData : Asset, ISerializable
     protected override void TakeContent(Asset staging)
     {
         base.TakeContent(staging);
+        _heightmapDirty = true;
+        _effectiveHeightsDirty = true;
+        _baseHeightmapDirty = true;
+        _waterDirty = true;
+        _hasWaterCache = null;
         _heightsVersion++;
         _detailsVersion++;
         _holesVersion++;
@@ -940,6 +1034,8 @@ public sealed class TerrainData : Asset, ISerializable
     protected override void OnUnload()
     {
         if (_heightmapTexture.IsValid()) _heightmapTexture.Dispose();
+        if (_baseHeightmapTexture.IsValid()) _baseHeightmapTexture.Dispose();
+        if (_waterTexture.IsValid()) _waterTexture.Dispose();
         if (_holesTexture.IsValid()) _holesTexture.Dispose();
         if (_splatmapTextures != null)
             foreach (Texture2D t in _splatmapTextures) if (t.IsValid()) t.Dispose();
@@ -947,6 +1043,13 @@ public sealed class TerrainData : Asset, ISerializable
             foreach (Texture2D t in _detailTextures) if (t.IsValid()) t.Dispose();
 
         _heightmapTexture = null;
+        _baseHeightmapTexture = null;
+        _waterTexture = null;
+        _heightmapDirty = true;
+        _effectiveHeightsDirty = true;
+        _baseHeightmapDirty = true;
+        _waterDirty = true;
+        _hasWaterCache = null;
         _holesTexture = null;
         _splatmapTextures = null;
         _detailTextures = null;
@@ -980,6 +1083,8 @@ public sealed class TerrainData : Asset, ISerializable
 
         // Raw data
         SerializeShortArray(value, "Heights16", Heights);
+        if (_waterField != null) SerializeFloatArray(value, "Water", _waterField);
+        value.Add("WaterDepth", new EchoObject(WaterDepth));
         SerializeFloatArray(value, "Splats", Splats);
 
         // Holes (only serialize if any holes exist)
@@ -1105,6 +1210,10 @@ public sealed class TerrainData : Asset, ISerializable
             heights = new short[heightCount];
         }
         Heights = heights;
+        _waterDepth = MathF.Max(0f, value.Get("WaterDepth")?.FloatValue ?? 3f);
+        float[]? water = DeserializeFloatArray(value, "Water");
+        _waterField = water?.Length == heightCount ? water : null;
+        SetWaterDirty();
 
         int splatCount = SplatmapResolution * SplatmapResolution * Layers.Count;
         float[]? splats = DeserializeFloatArray(value, "Splats");

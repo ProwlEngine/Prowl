@@ -19,7 +19,7 @@ using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using SColor = System.Drawing.Color;
 namespace Prowl.Editor.Inspector;
 
-public enum TerrainTab { Height, Paint, Holes, Details, Trees, Settings }
+public enum TerrainTab { Height, Paint, Holes, Details, Trees, Water, Settings }
 public enum HeightTool { Raise, Lower, Flatten, Smooth }
 
 [CustomEditor(typeof(TerrainComponent))]
@@ -33,6 +33,7 @@ public class TerrainEditor : CustomEditor
     public static float BrushFalloff = 0.5f;
     public static float FlattenHeight = 0.5f;
     public static int PaintLayer = 0;
+    public static bool WaterEraseMode;
     public static int ActiveDetailIndex = 0;
     public static int ActiveTreePrototype = 0;
     public static float TreeBrushSize = 10f;
@@ -76,9 +77,9 @@ public class TerrainEditor : CustomEditor
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
         {
             // Left rail: vertical mode selector on a darker fill + a 1px right divider.
-            using (paper.Row($"{id}_railwrap").Width(UnitValue.Auto).Height(UnitValue.StretchOne).Enter())
+            using (paper.Row($"{id}_railwrap").Width(UnitValue.Auto).Height(UnitValue.Auto).Enter())
             {
-                using (paper.Column($"{id}_rail").Width(UnitValue.Auto).Height(UnitValue.StretchOne)
+                using (paper.Column($"{id}_rail").Width(UnitValue.Auto).Height(UnitValue.Auto)
                     .Padding(6, 6, 6, 6).BackgroundColor(SColor.FromArgb(51, 0, 0, 0)).Enter())
                 {
                     Origami.IconToolbar(paper, $"{id}_modes", (int)ActiveTab, v => ActiveTab = (TerrainTab)v)
@@ -88,6 +89,7 @@ public class TerrainEditor : CustomEditor
                         .Item(EditorIcons.Xmark_I, "Holes")
                         .Item(EditorIcons.Seedling_I, "Details")
                         .Item(EditorIcons.Leaf_I, "Trees")
+                        .Item(EditorIcons.Droplet_I, "Water")
                         .Item(EditorIcons.Gear_I, "Settings")
                         .Show();
                 }
@@ -105,6 +107,7 @@ public class TerrainEditor : CustomEditor
                 {
                     case TerrainTab.Height:   DrawSculpt(paper, $"{id}_ht", font, terrainData); break;
                     case TerrainTab.Paint:    DrawPaint(paper, $"{id}_pt", font, terrainData); break;
+                    case TerrainTab.Water:    DrawWater(paper, $"{id}_wt", font, terrainData); break;
                     case TerrainTab.Holes:    DrawHoles(paper, $"{id}_ho", font, terrainData); break;
                     case TerrainTab.Details:  DrawDetails(paper, $"{id}_dt", font, terrainData); break;
                     case TerrainTab.Trees:    DrawTrees(paper, $"{id}_tt", font, terrainData); break;
@@ -121,6 +124,7 @@ public class TerrainEditor : CustomEditor
     {
         TerrainTab.Height   => (EditorIcons.Mountain_I, "Sculpt"),
         TerrainTab.Paint    => (EditorIcons.Pencil_I, "Paint"),
+        TerrainTab.Water    => (EditorIcons.Droplet_I, "Water"),
         TerrainTab.Holes    => (EditorIcons.Xmark_I, "Holes"),
         TerrainTab.Details  => (EditorIcons.Seedling_I, "Details"),
         TerrainTab.Trees    => (EditorIcons.Leaf_I, "Trees"),
@@ -299,6 +303,18 @@ public class TerrainEditor : CustomEditor
         DrawBrushBlock(paper, $"{id}_brush", font);
     }
 
+    private void DrawWater(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h", "Water", first: true);
+        EditorGUI.Row(paper, $"{id}_mode", "", () =>
+            Origami.ButtonGroup(paper, $"{id}_mode_v", WaterEraseMode ? 1 : 0, v => WaterEraseMode = v == 1)
+                .Segmented().FullWidth().Item("Paint").Item("Erase").Show());
+        EditorGUI.Row(paper, $"{id}_depth", "Maximum Depth", () =>
+            Origami.NumericField<float>(paper, $"{id}_depth_v", data.WaterDepth,
+                v => { data.WaterDepth = MathF.Max(0f, v); _isDirty = true; if (_terrain.IsValid()) _terrain.InvalidateDetailCache(); }).Min(0f).Show());
+        DrawBrushBlock(paper, $"{id}_brush", font);
+    }
+
     private void DrawDetails(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
     {
         DrawSectionActions(paper, $"{id}_ph", "Detail Prototypes", () =>
@@ -331,7 +347,9 @@ public class TerrainEditor : CustomEditor
             i =>
             {
                 DetailPrototype p = data.DetailPrototypes[i];
-                return p.RenderMode == DetailRenderMode.Mesh ? p.Mesh.AssetID : p.Texture.AssetID;
+                return p.RenderMode == DetailRenderMode.Mesh
+                    ? (p.Mesh.IsValid() ? p.Mesh.AssetID : Guid.Empty)
+                    : (p.Texture.IsValid() ? p.Texture.AssetID : Guid.Empty);
             });
 
         if (ActiveDetailIndex >= 0 && ActiveDetailIndex < data.DetailPrototypes.Count)
@@ -625,7 +643,8 @@ public class TerrainEditor : CustomEditor
                             .BorderColor(sel ? EditorTheme.WithAlpha(EditorTheme.Accent, 102) : SColor.Transparent).BorderWidth(1)
                             .OnClick(_ => onSelect(capture)).Enter())
                         {
-                            Texture2D? thumb = EditorAssetBackend.Instance?.GetThumbnailTexture(getThumbGuid(idx));
+                            Guid thumbGuid = getThumbGuid(idx);
+                            Texture2D? thumb = thumbGuid == Guid.Empty ? null : EditorAssetBackend.Instance?.GetThumbnailTexture(thumbGuid);
                             ElementBuilder thumbBox = paper.Box($"{id}_t{idx}_th").Width(46).Height(46).Rounded(m.Rounding)
                                 .Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0)
                                 .BackgroundColor(EditorTheme.WithAlpha(tint, 34))
@@ -745,7 +764,7 @@ public class TerrainEditor : CustomEditor
     /// Called from TerrainSceneEditor during mouse drag.
     /// </summary>
     public static void ApplyBrush(TerrainData data, Float2 terrainUV, float deltaTime,
-        out bool heightChanged, out bool splatChanged, out bool detailChanged, out bool holesChanged)
+        out bool heightChanged, out bool splatChanged, out bool detailChanged, out bool holesChanged, bool eraseWater = false)
     {
         heightChanged = false;
         splatChanged = false;
@@ -760,6 +779,30 @@ public class TerrainEditor : CustomEditor
             ApplyHolesBrush(data, terrainUV, ref holesChanged);
         else if (ActiveTab == TerrainTab.Details)
             ApplyDetailBrush(data, terrainUV, deltaTime, ref detailChanged);
+        else if (ActiveTab == TerrainTab.Water)
+            ApplyWaterBrush(data, terrainUV, deltaTime, WaterEraseMode || eraseWater, ref heightChanged);
+    }
+
+    private static void ApplyWaterBrush(TerrainData data, Float2 uv, float dt, bool erase, ref bool changed)
+    {
+        int res = data.HeightmapResolution;
+        float radius = BrushSize / MathF.Max(data.Size, 0.001f) * (res - 1);
+        if (radius <= 0f) return;
+        int cx = (int)MathF.Round(uv.X * (res - 1));
+        int cz = (int)MathF.Round(uv.Y * (res - 1));
+        int r = (int)MathF.Ceiling(radius);
+        for (int z = Math.Max(0, cz - r); z <= Math.Min(res - 1, cz + r); z++)
+            for (int x = Math.Max(0, cx - r); x <= Math.Min(res - 1, cx + r); x++)
+            {
+                float dist = MathF.Sqrt((x - cx) * (x - cx) + (z - cz) * (z - cz));
+                if (dist > radius) continue;
+                float falloff = 1f - SmoothStep(1f - BrushFalloff, 1f, dist / radius);
+                float old = data.GetWater(x, z);
+                float value = Math.Clamp(old + (erase ? -1f : 1f) * BrushStrength * falloff * dt * 1.5f, 0f, 1f);
+                if (MathF.Abs(value - old) < 0.00001f) continue;
+                data.SetWater(x, z, value);
+                changed = true;
+            }
     }
 
     private static void ApplyHeightBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
