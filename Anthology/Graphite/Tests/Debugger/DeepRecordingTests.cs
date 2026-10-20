@@ -171,16 +171,17 @@ public class DeepRecordingTests
             1,
             1,
             new PushConstantRange(ShaderStages.Vertex | ShaderStages.Fragment, 16),
-            EquatableArray<SpecializationConstant>.Empty);
+            EquatableArray.Create(new SpecializationConstant(2, 7)));
         EquatableArray<RecordedCommand> commands = EquatableArray.Create<RecordedCommand>(
             new SetPipelineCommand(program.Key, 42, false, null, PrimitiveTopology.TriangleList),
             new SetPushConstantsCommand(4, new BlobRef(EquatableArray.Create<byte>(3, 4), 8)),
             new SetDescriptorTableCommand(0,
                 EquatableArray.Create(new ResourceLayoutElementDescription("Textures", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0) { ArrayCount = 64 }),
-                EquatableArray.Create(new RecordedTableEntry(3, new RecordedProperty("Textures", PropertyKind.Texture, default, EquatableArray<byte>.Empty, default, default, null, -1)))),
+                EquatableArray.Create(new RecordedTableEntry(3, new RecordedProperty("Textures", PropertyKind.Texture, default, EquatableArray<byte>.Empty, default, default, null, -1, true)))),
             new SetPropertiesCommand(
                 EquatableArray.Create(new RecordedProperty("Tint", PropertyKind.Uniform, UniformScalarType.Float1, EquatableArray.Create<byte>(0, 0, 128, 63), default, default, null, -1)),
                 EquatableArray.Create("Old")),
+            new BlitTextureCommand(default, default, EquatableArray.Create(new TextureBlit(0, 0, 8, 8, 0, 0, 4, 4))),
             new PushMarkerCommand("Group"),
             new DrawCommand(3, 1, 0, 0),
             new PopMarkerCommand());
