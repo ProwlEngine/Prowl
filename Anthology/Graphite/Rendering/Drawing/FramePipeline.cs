@@ -1258,6 +1258,8 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     }
 }
 
+internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, CameraFrame Camera);
+
 /// <summary>
 /// The frame's pipelines: the FrameStart pipeline uploading every change, then one camera pipeline per view, all in
 /// one execution. Graphs rebuild only when the set of persistent buffers changes.
@@ -1284,6 +1286,7 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly Dictionary<int, CameraFrame> _cameras = new();
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
     private readonly List<GraphDispatch> _dispatches = new();
+    private readonly List<PlannedInstance> _planned = new();
     private readonly List<DeviceBuffer> _buffers = new();
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
@@ -1497,6 +1500,7 @@ internal sealed partial class FramePipeline : IDisposable
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
         _dispatches.Clear();
+        _planned.Clear();
         _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
         _fenceAt.Clear();
         _fenceAt.Add(_dispatches.Count);
@@ -1673,8 +1677,18 @@ internal sealed partial class FramePipeline : IDisposable
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
         if (!view.External)
-            _dispatches.Add(new GraphDispatch(camera.Pipeline, camera.Views));
+            Plan(camera, view, world, width, height);
     }
+
+    private void Plan(CameraFrame camera, in ViewDesc view, WorldFrame world, uint width, uint height)
+        => _planned.Add(new PlannedInstance(KindOf(view.Kind), view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
+
+    private static GraphKind KindOf(ViewKind kind) => kind switch
+    {
+        ViewKind.SkyCapture => RenderKinds.SkyCapture,
+        ViewKind.ReflectionProbe => RenderKinds.ProbeCapture,
+        _ => RenderKinds.Camera,
+    };
 
     // Whether the view's transparent list reads the scene colour this frame. Returns whether its copy was just made, which
     // adds the copy to the view's graph; the lists keep their order through that rebuild, so what Prepare uploaded holds.
