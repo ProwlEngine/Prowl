@@ -320,6 +320,63 @@ public sealed class TerrainData : Asset, ISerializable
         float carve = old > 0f ? GetWaterCarve(x, z) * coverage / old : 0f;
         float level = old > 0f ? GetWaterLevel(x, z) : GetBaseHeight(x, z) * Height;
         SetWaterSample(x, z, coverage, level, carve);
+        RebuildWaterShore(x, z, x, z);
+    }
+
+    /// <summary>Shape the basin and its outer bank from the same coverage the water shader displays.</summary>
+    public void RebuildWaterShore(int minX, int minZ, int maxX, int maxZ)
+    {
+        int res = _heightmapResolution;
+        if (_heightsField == null || _waterField == null || _waterLevels == null) return;
+        _waterCarve ??= new float[res * res];
+        const int bankReach = 4;
+        minX = Math.Max(0, minX - bankReach);
+        minZ = Math.Max(0, minZ - bankReach);
+        maxX = Math.Min(res - 1, maxX + bankReach);
+        maxZ = Math.Min(res - 1, maxZ + bankReach);
+
+        for (int z = minZ; z <= maxZ; z++)
+            for (int x = minX; x <= maxX; x++)
+            {
+                int i = z * res + x;
+                float center = WaterAt(i);
+                float west = x > 0 ? WaterAt(i - 1) : center;
+                float east = x + 1 < res ? WaterAt(i + 1) : center;
+                float north = z > 0 ? WaterAt(i - res) : center;
+                float south = z + 1 < res ? WaterAt(i + res) : center;
+                // At a height-grid vertex this is exactly smoothWaterCoverage() in Water.shader.
+                float visibleCoverage = (4f * center + west + east + north + south) * 0.125f;
+
+                int nearest = -1;
+                int nearestDistanceSq = int.MaxValue;
+                for (int dz = -bankReach; dz <= bankReach; dz++)
+                    for (int dx = -bankReach; dx <= bankReach; dx++)
+                    {
+                        int sx = x + dx, sz = z + dz;
+                        if (sx < 0 || sx >= res || sz < 0 || sz >= res) continue;
+                        int candidate = sz * res + sx;
+                        int distanceSq = dx * dx + dz * dz;
+                        if (distanceSq >= nearestDistanceSq || WaterAt(candidate) <= 0.001f) continue;
+                        nearest = candidate;
+                        nearestDistanceSq = distanceSq;
+                    }
+                if (nearest < 0) { _waterCarve[i] = 0f; continue; }
+
+                float level = _waterLevels[nearest];
+                float baseHeight = _heightsField[i] * (_height / (float)kMaxHeight);
+                float target;
+                if (visibleCoverage > 0.001f)
+                    target = level - _waterDepth * visibleCoverage;
+                else
+                {
+                    // The visible mask ends one cell past painted water. Continue the bank
+                    // farther out so its outer edge eases into the untouched terrain.
+                    float bankWeight = Math.Clamp((bankReach - MathF.Sqrt(nearestDistanceSq)) / (bankReach - 1f), 0f, 1f);
+                    target = baseHeight + (level - baseHeight) * bankWeight;
+                }
+                _waterCarve[i] = baseHeight - target;
+            }
+        SetWaterDirty();
     }
 
     public void SetWaterDirty() { _waterDirty = true; _waterLevelDirty = true; _heightmapDirty = true; _effectiveHeightsDirty = true; _hasWaterCache = null; _maxWaterCarve = null; _heightsVersion++; }
@@ -1186,6 +1243,7 @@ public sealed class TerrainData : Asset, ISerializable
         if (_waterLevels != null) SerializeFloatArray(value, "WaterLevels", _waterLevels);
         if (_waterCarve != null) SerializeFloatArray(value, "WaterCarve", _waterCarve);
         value.Add("WaterDepth", new EchoObject(WaterDepth));
+        value.Add("WaterShoreVersion", new EchoObject(1));
         value.Add("ShallowWaterColor", Serializer.Serialize(ShallowWaterColor, ctx));
         value.Add("DeepWaterColor", Serializer.Serialize(DeepWaterColor, ctx));
         value.Add("WaterVisibilityDepth", new EchoObject(WaterVisibilityDepth));
@@ -1372,6 +1430,8 @@ public sealed class TerrainData : Asset, ISerializable
                 }
             }
         }
+        if (_waterField != null && (value.Get("WaterShoreVersion")?.IntValue ?? 0) < 1)
+            RebuildWaterShore(0, 0, HeightmapResolution - 1, HeightmapResolution - 1);
         SetWaterDirty();
 
         int splatCount = SplatmapResolution * SplatmapResolution * Layers.Count;

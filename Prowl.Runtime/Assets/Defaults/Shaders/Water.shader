@@ -37,7 +37,7 @@ Shader "Default/Water"
                 vec3 local = terrainVertex(vTerrainUV);
                 ivec2 last = textureSize(_WaterLevelMap, 0) - ivec2(1);
                 ivec2 sampleUV = ivec2(round(clamp(vTerrainUV, vec2(0.0), vec2(1.0)) * vec2(last)));
-                local.y = texelFetch(_WaterLevelMap, sampleUV, 0).r + 0.08;
+                local.y = texelFetch(_WaterLevelMap, sampleUV, 0).r + 0.002;
                 Graphite_SetPreviousPosition(local);
                 vec3 relative = Graphite_ObjectToWorld(local);
                 vWorldXZ = Graphite_AbsoluteFromRelative(relative).xz;

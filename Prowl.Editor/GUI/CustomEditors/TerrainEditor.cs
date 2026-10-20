@@ -840,21 +840,11 @@ public class TerrainEditor : CustomEditor
                 float value = Math.Clamp(old + (erase ? -1f : 1f) * BrushStrength * falloff * dt * 1.5f, 0f, 1f);
                 if (MathF.Abs(value - old) < 0.00001f) continue;
                 float level = old > 0.001f ? data.GetWaterLevel(x, z) : s_waterStrokeLevel ?? 0f;
-                float carve = data.GetWaterCarve(x, z);
-                if (erase)
-                    carve *= old > 0f ? value / old : 0f;
-                else
-                {
-                    float baseHeight = data.GetBaseHeight(x, z) * data.Height;
-                    // A signed offset lets the shoreline rise as well as fall.
-                    // At full coverage the basin sits Brush Depth below the waterline.
-                    float shoreBlend = SmoothStep(0f, 0.12f, value);
-                    float targetGround = level - data.WaterDepth * value;
-                    carve = (baseHeight - targetGround) * shoreBlend;
-                }
-                data.SetWaterSample(x, z, value, level, carve);
+                data.SetWaterSample(x, z, value, level, data.GetWaterCarve(x, z));
                 changed = true;
             }
+        if (changed)
+            data.RebuildWaterShore(cx - r, cz - r, cx + r, cz + r);
     }
 
     private static void ApplyHeightBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
