@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 

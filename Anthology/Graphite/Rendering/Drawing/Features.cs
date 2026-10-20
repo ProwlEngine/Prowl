@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 

@@ -1,6 +1,5 @@
 using System;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;

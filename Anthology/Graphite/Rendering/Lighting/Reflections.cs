@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Rendering;
