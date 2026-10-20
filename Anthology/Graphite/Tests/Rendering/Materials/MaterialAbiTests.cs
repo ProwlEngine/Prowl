@@ -92,17 +92,17 @@ public sealed class MaterialAbiTests : IDisposable
         """;
 
     private static readonly ResourceLayoutDescription s_frameTable = new(GraphiteBindings.FrameSet,
-        new ResourceLayoutElementDescription("Graphite_Textures2D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DTable) { ArrayCount = 16 },
-        new ResourceLayoutElementDescription("Graphite_Textures2DArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DArrayTable) { ArrayCount = 4 },
-        new ResourceLayoutElementDescription("Graphite_Textures3D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture3DTable) { ArrayCount = 4 },
-        new ResourceLayoutElementDescription("Graphite_TexturesCube", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeTable) { ArrayCount = 4 },
-        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeArrayTable) { ArrayCount = 4 })
+        new ResourceLayoutElementDescription("Graphite_Textures2D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DTable) { ArrayCount = RendererTextures.Textures2D },
+        new ResourceLayoutElementDescription("Graphite_Textures2DArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture2DArrayTable) { ArrayCount = RendererTextures.OtherTextures },
+        new ResourceLayoutElementDescription("Graphite_Textures3D", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Texture3DTable) { ArrayCount = RendererTextures.OtherTextures },
+        new ResourceLayoutElementDescription("Graphite_TexturesCube", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeTable) { ArrayCount = RendererTextures.OtherTextures },
+        new ResourceLayoutElementDescription("Graphite_TexturesCubeArray", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.TextureCubeArrayTable) { ArrayCount = RendererTextures.OtherTextures })
     {
         Table = true,
     };
 
     private static readonly ResourceLayoutDescription s_viewTable = new(GraphiteBindings.ViewSet,
-        new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.SamplerTable) { ArrayCount = 4 },
+        new ResourceLayoutElementDescription("Graphite_Samplers", ResourceKind.Sampler, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.SamplerTable) { ArrayCount = RendererTextures.Samplers },
         new ResourceLayoutElementDescription("Graphite_Globals", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex | ShaderStages.Fragment, GraphiteBindings.Globals))
     {
         Table = true,
