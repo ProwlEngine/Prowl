@@ -3,30 +3,15 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Graphite.RenderGraph;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct ResourceView : IRenderView
+file sealed class ResolvingPass : IInstancePass
 {
-    public Framebuffer? Target { get; }
+    public GraphKind Kind => TestViews.Kind;
 
-    public ResourceView(uint width, uint height, Swapchain? swapchain = null)
-    {
-        Target = swapchain?.Framebuffer;
-        PixelWidth = width;
-        PixelHeight = height;
-    }
-
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-file sealed class ResolvingPass : IPass
-{
     private readonly RenderResourceID _id;
     private readonly GraphTextureDesc _desc;
     private readonly bool _isOutput;
@@ -46,18 +31,20 @@ file sealed class ResolvingPass : IPass
 
     public List<RenderTexture> Resolved { get; } = new();
 
-    public void Setup(RenderContextBuilder builder)
+    public void Setup(InstanceContextBuilder builder)
         => _handle = _isOutput ? builder.DeclareOutputTexture(_id, _desc) : builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
         for (int i = 0; i < _resolvesPerRender; i++)
             Resolved.Add(context.GetRenderTexture(_handle));
     }
 }
 
-file sealed class ImportingPass : IPass
+file sealed class ImportingPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly RenderTexture _external;
     private TextureHandle _handle;
@@ -71,23 +58,23 @@ file sealed class ImportingPass : IPass
     public string Name => "Import";
     public RenderTexture? Resolved { get; private set; }
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareImportedTexture(_id, _external);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareImportedTexture(_id, _external);
 
-    public void Render(RenderContext context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
+    public void Render(InstanceContext context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
 }
 
 public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private static GraphTextureDesc ColorDesc(float scale = 1f)
-        => GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, scale);
+        => GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm, scale);
 
     [Fact]
     public void GetRenderTexture_SameHandleWithinContext_ReturnsCachedInstance()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_cache"), ColorDesc(), resolvesPerRender: 3);
-        using RenderPipeline pipeline = new([pass]);
+        using RenderGraph graph = TestViews.Build([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(64, 64)));
         GD.WaitForIdle();
 
         Assert.Equal(3, pass.Resolved.Count);
@@ -101,9 +88,9 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderResourceID id = RenderResourceID.Intern("resourcetest_shared");
         ResolvingPass writer = new("Writer", id, ColorDesc(), isOutput: true);
         ResolvingPass reader = new("Reader", id, ColorDesc(), isOutput: false);
-        using RenderPipeline pipeline = new([writer, reader]);
+        using RenderGraph graph = TestViews.Build([writer, reader]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(64, 64)));
         GD.WaitForIdle();
 
         Assert.Same(writer.Resolved[0], reader.Resolved[0]);
@@ -114,22 +101,21 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     {
         ResolvingPass a = new("A", RenderResourceID.Intern("resourcetest_distinct_a"), ColorDesc());
         ResolvingPass b = new("B", RenderResourceID.Intern("resourcetest_distinct_b"), ColorDesc());
-        using RenderPipeline pipeline = new([a, b]);
+        using RenderGraph graph = TestViews.Build([a, b]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(64, 64)));
         GD.WaitForIdle();
 
         Assert.NotSame(a.Resolved[0], b.Resolved[0]);
     }
 
     [Fact]
-    public void GetRenderTexture_TwoViewsInOneDispatch_ResolveToIndependentCorrectlySizedTextures()
+    public void GetRenderTexture_TwoInstancesInOneDispatch_ResolveToIndependentCorrectlySizedTextures()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_perview"), ColorDesc());
-        using RenderPipeline pipeline = new([pass]);
-        ResourceView[] views = { new(64, 48, GD.MainSwapchain), new(128, 96, GD.MainSwapchain) };
+        using RenderGraph graph = TestViews.Build([pass]);
 
-        GD.DispatchGraph(pipeline, views);
+        GD.DispatchGraph(graph, TestViews.Of(graph, (64u, 48u), (128u, 96u)));
         GD.WaitForIdle();
 
         Assert.Equal(2, pass.Resolved.Count);
@@ -141,12 +127,12 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     }
 
     [Fact]
-    public void GetRenderTexture_ViewSizedResource_ScalesToViewPixelSize()
+    public void GetRenderTexture_InstanceSizedResource_ScalesToInstanceExtent()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_scale"), ColorDesc(0.5f));
-        using RenderPipeline pipeline = new([pass]);
+        using RenderGraph graph = TestViews.Build([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 100, GD.MainSwapchain) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(200, 100)));
         GD.WaitForIdle();
 
         Assert.Equal(100u, pass.Resolved[0].Desc.Width);
@@ -159,9 +145,9 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderTexture external = RF.CreateRenderTexture(new RenderTextureDescription(
             64, 64, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, false, TextureSampleCount.Count1));
         ImportingPass pass = new(RenderResourceID.Intern("resourcetest_imported"), external);
-        using RenderPipeline pipeline = new([pass]);
+        using RenderGraph graph = TestViews.Build([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(64, 64)));
         GD.WaitForIdle();
 
         Assert.Same(external, pass.Resolved);

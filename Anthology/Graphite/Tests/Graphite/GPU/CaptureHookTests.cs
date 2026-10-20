@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -15,7 +14,7 @@ namespace Prowl.Graphite.Tests;
 internal sealed class HookRecorder : ICaptureProfiler
 {
     public readonly List<string> Log = new();
-    public ViewCaptureInfo View;
+    public InstanceCaptureInfo View;
     public readonly Dictionary<string, PassReference[]> References = new();
     public ulong ExecutionId;
     public string GraphName = "";
@@ -29,7 +28,7 @@ internal sealed class HookRecorder : ICaptureProfiler
 
     public void EndExecution() => Log.Add("End");
 
-    public void DescribeView(in ViewCaptureInfo view)
+    public void DescribeInstance(in InstanceCaptureInfo view)
     {
         View = view;
         Log.Add($"Describe:{view.Resources.Length}:{view.Passes.Length}");
@@ -42,16 +41,10 @@ internal sealed class HookRecorder : ICaptureProfiler
     }
 }
 
-file readonly struct HookView : IRenderView
+file sealed class ProducePass : InstanceRasterPass
 {
-    public uint PixelWidth => 32;
-    public uint PixelHeight => 32;
-    public int ViewId => 0;
-    public string Name => "HookView";
-}
+    public override GraphKind Kind => TestViews.Kind;
 
-file sealed class ProducePass : RasterPass
-{
     private readonly RenderResourceID _target;
     private readonly DeviceBuffer _external;
 
@@ -63,15 +56,17 @@ file sealed class ProducePass : RasterPass
 
     public override string Name => "Produce";
 
-    public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _target, GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
+    public override void Setup(InstanceContextBuilder builder)
+        => SetTarget(builder, _target, GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Render(InstanceContext context, CommandBuffer cmd)
         => cmd.UpdateBuffer(_external, 0, new byte[] { 1, 2, 3, 4 });
 }
 
-file sealed class ConsumePass : IPass
+file sealed class ConsumePass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _input;
     private readonly RenderResourceID _imported;
     private readonly RenderTexture _texture;
@@ -85,17 +80,19 @@ file sealed class ConsumePass : IPass
 
     public string Name => "Consume";
 
-    public void Setup(RenderContextBuilder builder)
+    public void Setup(InstanceContextBuilder builder)
     {
         builder.DeclareInputTexture(_input, TextureState.Sampled);
         builder.DeclareImportedTexture(_imported, _texture);
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd) { }
+    public void Render(InstanceContext context, CommandBuffer cmd) { }
 }
 
-file sealed class FinishPass : RasterPass
+file sealed class FinishPass : InstanceRasterPass
 {
+    public override GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _input;
     private readonly RenderResourceID _target;
 
@@ -107,13 +104,13 @@ file sealed class FinishPass : RasterPass
 
     public override string Name => "Finish";
 
-    public override void Setup(RenderContextBuilder builder)
+    public override void Setup(InstanceContextBuilder builder)
     {
         builder.DeclareInputTexture(_input, TextureState.Sampled);
-        SetTarget(builder, _target, GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
+        SetTarget(builder, _target, GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
     }
 
-    public override void Render(RenderContext context, CommandBuffer cmd) { }
+    public override void Render(InstanceContext context, CommandBuffer cmd) { }
 }
 
 public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -133,11 +130,11 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         ResourceVersion importedBefore = imported.ColorTextures[0].CurrentVersion;
         HookRecorder hook = new();
 
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = TestViews.Build([
             new ProducePass(ColorA, external),
             new ConsumePass(ColorA, Imported, imported),
-            new FinishPass(ColorA, ColorB)]);
-        ExecutionTask task = GD.DispatchGraph(pipeline, new HookView[] { new() }, hook);
+            new FinishPass(ColorA, ColorB)], name: "CaptureHook");
+        ExecutionTask task = GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)), hook);
         GD.WaitForIdle();
 
         return new Run(hook, external, externalBefore, imported, importedBefore, task.Id);
@@ -149,11 +146,11 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
         Run run = Execute();
 
         Assert.Equal(
-            ["Begin", "Describe:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "End"],
+            ["Begin", "Describe:0:0", "Describe:3:3", "PassEnd:Produce", "PassEnd:Consume", "PassEnd:Finish", "End"],
             run.Hook.Log);
         Assert.Equal(run.ExecutionId, run.Hook.ExecutionId);
-        Assert.Equal(nameof(RenderPipeline), run.Hook.GraphName);
-        Assert.Equal(0, run.Hook.View.ViewIndex);
+        Assert.Equal("CaptureHook", run.Hook.GraphName);
+        Assert.Equal(1, run.Hook.View.InstanceIndex);
         Assert.Equal(new[] { "Produce", "Consume", "Finish" }, run.Hook.View.Passes.ToArray().Select(p => p.Name));
     }
 
@@ -209,9 +206,9 @@ public abstract class CaptureHookTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void NoCaptureAssigned_RunsNormally()
     {
         DeviceBuffer external = RF.CreateBuffer(new BufferDescription(64, BufferUsage.StructuredBufferReadWrite));
-        using RenderPipeline pipeline = new([new ProducePass(ColorA, external), new FinishPass(ColorA, ColorB)]);
+        using RenderGraph graph = TestViews.Build([new ProducePass(ColorA, external), new FinishPass(ColorA, ColorB)]);
 
-        GD.DispatchGraph(pipeline, new HookView[] { new() });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)));
         GD.WaitForIdle();
 
         Assert.Equal(1u, external.ContentVersion);

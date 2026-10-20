@@ -3,28 +3,16 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct BarrierView : IRenderView
+file sealed class LambdaPass : IInstancePass
 {
-    public BarrierView(uint width, uint height)
-    {
-        PixelWidth = width;
-        PixelHeight = height;
-    }
+    public GraphKind Kind => TestViews.Kind;
 
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-file sealed class LambdaPass : IPass
-{
     private readonly Action<RenderContextBuilder> _setup;
     private readonly Action<RenderContext, CommandBuffer> _render;
 
@@ -36,8 +24,8 @@ file sealed class LambdaPass : IPass
     }
 
     public string Name { get; }
-    public void Setup(RenderContextBuilder builder) => _setup(builder);
-    public void Render(RenderContext context, CommandBuffer cmd) => _render(context, cmd);
+    public void Setup(InstanceContextBuilder builder) => _setup(builder);
+    public void Render(InstanceContext context, CommandBuffer cmd) => _render(context, cmd);
 }
 
 file static class BarrierPasses
@@ -199,8 +187,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.SetFullViewport();
             });
 
-        using RenderPipeline pipeline = new([upload, load, BarrierPasses.Readback(id, staging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
+        using RenderGraph graph = TestViews.Build([upload, load, BarrierPasses.Readback(id, staging)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 1)));
         GD.WaitForIdle();
 
         AssertTexels(staging);
@@ -269,15 +257,15 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 }
             });
 
-        using RenderPipeline pipeline = new([write, sample, BarrierPasses.Readback(outputId, staging)]);
-        BarrierView[] views = { new(size, size) };
+        using RenderGraph graph = TestViews.Build([write, sample, BarrierPasses.Readback(outputId, staging)]);
+        GraphInstances views = TestViews.Single(graph, new GraphExtent(size, size));
 
-        GD.DispatchGraph(pipeline, views);
+        GD.DispatchGraph(graph, views);
         GD.WaitForIdle();
         AssertUniform(staging, size, size, Color.Black);
 
         frameColor = Color.Blue;
-        GD.DispatchGraph(pipeline, views);
+        GD.DispatchGraph(graph, views);
         GD.WaitForIdle();
         AssertUniform(staging, size, size, Color.Red);
     }
@@ -325,8 +313,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                     PointSampler);
             });
 
-        using RenderPipeline pipeline = new([generate, sample, BarrierPasses.Readback(outputId, staging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
+        using RenderGraph graph = TestViews.Build([generate, sample, BarrierPasses.Readback(outputId, staging)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 1)));
         GD.WaitForIdle();
 
         AssertTexels(staging);
@@ -394,8 +382,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.Draw(4);
             });
 
-        using RenderPipeline pipeline = new([generate, draw, BarrierPasses.Readback(outputId, staging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
+        using RenderGraph graph = TestViews.Build([generate, draw, BarrierPasses.Readback(outputId, staging)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)));
         GD.WaitForIdle();
 
         AssertUniform(staging, size, size, new Color(1f, 0f, 0f, 1f));
@@ -441,8 +429,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.Draw(3);
             });
 
-        using RenderPipeline pipeline = new([depth, fog, BarrierPasses.Readback(id, staging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
+        using RenderGraph graph = TestViews.Build([depth, fog, BarrierPasses.Readback(id, staging)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)));
         GD.WaitForIdle();
 
         TexelData<Color> map = ReadTexels<Color>(staging, size, size);
@@ -469,8 +457,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.ClearDepthStencil(1f, 0);
             });
 
-        using RenderPipeline pipeline = new([pass]);
-        Assert.Throws<RenderException>(() => GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) }));
+        using RenderGraph graph = TestViews.Build([pass]);
+        Assert.Throws<RenderException>(() => GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 4))));
         GD.WaitForIdle();
     }
 
@@ -505,8 +493,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 }
             });
 
-        using RenderPipeline pipeline = new([write, thief]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
+        using RenderGraph graph = TestViews.Build([write, thief]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 4)));
         GD.WaitForIdle();
 
         Assert.Single(errors);
@@ -525,8 +513,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             builder => builder.DeclareOutputTexture(id, desc),
             (context, cmd) => { });
 
-        using RenderPipeline pipeline = new([idle, BarrierPasses.Upload(id, desc, source), BarrierPasses.Readback(id, staging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
+        using RenderGraph graph = TestViews.Build([idle, BarrierPasses.Upload(id, desc, source), BarrierPasses.Readback(id, staging)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 1)));
         GD.WaitForIdle();
 
         AssertTexels(staging);
@@ -560,8 +548,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.SetFramebuffer(sceneTexture.Framebuffer);
             });
 
-        using RenderPipeline pipeline = new([pass, BarrierPasses.Readback(sceneId, sceneStaging), BarrierPasses.Readback(copyId, copyStaging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
+        using RenderGraph graph = TestViews.Build([pass, BarrierPasses.Readback(sceneId, sceneStaging), BarrierPasses.Readback(copyId, copyStaging)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)));
         GD.WaitForIdle();
 
         AssertUniform(copyStaging, size, size, Color.Red);
@@ -577,8 +565,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         GraphicsProgram program = CreateSampleProgram();
         IPass pass = SplitPass(targetId, program, StoreAction.Store);
 
-        using RenderPipeline pipeline = new([pass, BarrierPasses.Readback(targetId, staging)]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
+        using RenderGraph graph = TestViews.Build([pass, BarrierPasses.Readback(targetId, staging)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(size, size)));
         GD.WaitForIdle();
 
         TexelData<Color> texels = ReadTexels<Color>(staging, size, size);
@@ -597,8 +585,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
 
         try
         {
-            using RenderPipeline pipeline = new([pass]);
-            RenderException ex = Assert.Throws<RenderException>(() => GD.DispatchGraph(pipeline, new BarrierView[] { new(8, 8) }));
+            using RenderGraph graph = TestViews.Build([pass]);
+            RenderException ex = Assert.Throws<RenderException>(() => GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(8, 8))));
             Assert.Contains("DontCare", ex.Message);
         }
         finally

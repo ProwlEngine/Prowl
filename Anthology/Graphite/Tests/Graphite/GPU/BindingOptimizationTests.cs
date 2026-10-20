@@ -1,7 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Vk;
 
 using Prowl.Vector;

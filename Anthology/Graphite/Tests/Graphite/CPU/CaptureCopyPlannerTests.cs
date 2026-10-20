@@ -1,7 +1,6 @@
 using System.Linq;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 
 using Xunit;
 

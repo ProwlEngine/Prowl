@@ -1,20 +1,14 @@
 using System;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Vk;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct SubmitBatchingView : IRenderView
+file sealed class BufferWritePass : IInstancePass
 {
-    public uint PixelWidth => 32;
-    public uint PixelHeight => 32;
-    public int ViewId => 0;
-}
+    public GraphKind Kind => TestViews.Kind;
 
-file sealed class BufferWritePass : IPass
-{
     private readonly string _name;
     private readonly DeviceBuffer _source;
     private readonly DeviceBuffer _destination;
@@ -28,9 +22,9 @@ file sealed class BufferWritePass : IPass
 
     public string Name => _name;
 
-    public void Setup(RenderContextBuilder builder) { }
+    public void Setup(InstanceContextBuilder builder) { }
 
-    public void Render(RenderContext context, CommandBuffer cl)
+    public void Render(InstanceContext context, CommandBuffer cl)
     {
         cl.CopyBuffer(_source, 0, _destination, 0, _destination.SizeInBytes);
     }
@@ -55,14 +49,14 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(3);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = TestViews.Build([
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
             new BufferWritePass("PassC", sourceC, destination)]);
 
         int before = vk.GraphicsQueueSubmitCount;
 
-        GD.DispatchGraph(pipeline, new SubmitBatchingView[] { new() });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)));
         GD.WaitForIdle();
 
         Assert.Equal(1, vk.GraphicsQueueSubmitCount - before);
@@ -76,12 +70,12 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(33);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite));
 
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = TestViews.Build([
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
             new BufferWritePass("PassC", sourceC, destination)]);
 
-        GD.DispatchGraph(pipeline, new SubmitBatchingView[] { new() });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)));
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(destination);

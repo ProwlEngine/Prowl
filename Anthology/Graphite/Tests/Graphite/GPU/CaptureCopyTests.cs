@@ -5,23 +5,16 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct CopyView : IRenderView
+file sealed class WritePass : IInstancePass
 {
-    public uint PixelWidth => 8;
-    public uint PixelHeight => 8;
-    public int ViewId => 0;
-    public Framebuffer? Target { get; init; }
-}
+    public GraphKind Kind => TestViews.Kind;
 
-file sealed class WritePass : IPass
-{
     private readonly string _name;
     private readonly RenderResourceID _target;
     private readonly RenderTexture _texture;
@@ -43,9 +36,9 @@ file sealed class WritePass : IPass
 
     public string Name => _name;
 
-    public void Setup(RenderContextBuilder builder) => builder.DeclareImportedTexture(_target, _texture, depthUsage: _depth ? TextureState.Attachment : null);
+    public void Setup(InstanceContextBuilder builder) => builder.DeclareImportedTexture(_target, _texture, depthUsage: _depth ? TextureState.Attachment : null);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
         cmd.ClearColorTarget(0, _color);
         if (_depth)
@@ -54,13 +47,15 @@ file sealed class WritePass : IPass
     }
 }
 
-file sealed class ViewTargetPass : RasterPass
+file sealed class ViewTargetPass : InstanceRasterPass
 {
+    public override GraphKind Kind => TestViews.Kind;
+
     public override string Name => "ViewTarget";
 
-    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder);
+    public override void Setup(InstanceContextBuilder builder) => SetInstanceTarget(builder);
 
-    public override void Render(RenderContext context, CommandBuffer cmd) { }
+    public override void Render(InstanceContext context, CommandBuffer cmd) { }
 }
 
 internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
@@ -73,7 +68,7 @@ internal sealed class CopyingProfiler : ICaptureProfiler, IDisposable
 
     public void EndExecution() { }
 
-    public void DescribeView(in ViewCaptureInfo view) { }
+    public void DescribeInstance(in InstanceCaptureInfo view) { }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)
     {
@@ -115,11 +110,11 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
         RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
         target.ColorTextures[0].Name = "Target";
         using CopyingProfiler profiler = new() { OnlyPass = "Second" };
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = TestViews.Build([
             new WritePass("First", Target, target, external, new Color(255, 0, 0, 255), 1),
             new WritePass("Second", Target, target, external, new Color(0, 0, 255, 255), 2)]);
 
-        GD.DispatchGraph(pipeline, new CopyView[] { new() }, profiler);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(8, 8)), profiler);
         GD.WaitForIdle();
 
         Assert.Empty(profiler.Errors);
@@ -167,9 +162,9 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
     {
         DeviceBuffer external = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         CopyingProfiler profiler = new();
-        using RenderPipeline pipeline = new([new WritePass("Only", Target, target, external, new Color(255, 0, 0, 255), 1, depth)]);
+        using RenderGraph graph = TestViews.Build([new WritePass("Only", Target, target, external, new Color(255, 0, 0, 255), 1, depth)]);
 
-        GD.DispatchGraph(pipeline, new CopyView[] { new() }, profiler);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(8, 8)), profiler);
         GD.WaitForIdle();
 
         return profiler;
@@ -180,9 +175,9 @@ public abstract class CaptureCopyTests<T> : GraphicsDeviceTestBase<T> where T : 
     {
         RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: true));
         using CopyingProfiler profiler = new();
-        using RenderPipeline pipeline = new([new ViewTargetPass()]);
+        using RenderGraph graph = TestViews.Build([new ViewTargetPass()]);
 
-        GD.DispatchGraph(pipeline, new CopyView[] { new() { Target = target.Framebuffer } }, profiler);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(8, 8), target.Framebuffer), profiler);
         GD.WaitForIdle();
 
         Assert.NotEmpty(profiler.Errors);

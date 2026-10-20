@@ -3,22 +3,16 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct VersionView : IRenderView
+file sealed class VersionClearPass : InstanceRasterPass
 {
-    public uint PixelWidth => 32;
-    public uint PixelHeight => 32;
-    public int ViewId => 0;
-}
+    public override GraphKind Kind => TestViews.Kind;
 
-file sealed class VersionClearPass : RasterPass
-{
     private readonly RenderResourceID _id;
     private readonly List<uint> _seen;
 
@@ -30,15 +24,17 @@ file sealed class VersionClearPass : RasterPass
 
     public override string Name => "VersionClear";
 
-    public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
+    public override void Setup(InstanceContextBuilder builder)
+        => SetTarget(builder, _id, GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Render(InstanceContext context, CommandBuffer cmd)
         => _seen.Add(context.GetRenderTexture(new TextureHandle(_id)).ColorTextures[0].ContentVersion);
 }
 
-file sealed class VersionReadPass : IPass
+file sealed class VersionReadPass : IInstancePass
 {
+    public GraphKind Kind => TestViews.Kind;
+
     private readonly RenderResourceID _id;
     private readonly List<uint> _seen;
     private TextureHandle _handle;
@@ -51,9 +47,9 @@ file sealed class VersionReadPass : IPass
 
     public string Name => "VersionRead";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureState.Sampled);
+    public void Setup(InstanceContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureState.Sampled);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
         => _seen.Add(context.GetRenderTexture(_handle).ColorTextures[0].ContentVersion);
 }
 
@@ -241,10 +237,10 @@ public abstract class ResourceVersionTests<T> : GraphicsDeviceTestBase<T> where 
         List<uint> clearSeen = new();
         List<uint> readSeen = new();
         RenderResourceID id = RenderResourceID.Intern("resource_version_target");
-        using RenderPipeline pipeline = new([new VersionClearPass(id, clearSeen), new VersionReadPass(id, readSeen)]);
-        VersionView[] views = [new()];
+        using RenderGraph graph = TestViews.Build([new VersionClearPass(id, clearSeen), new VersionReadPass(id, readSeen)]);
+        GraphInstances views = TestViews.Single(graph, new GraphExtent(32, 32));
 
-        GD.DispatchGraph(pipeline, views);
+        GD.DispatchGraph(graph, views);
         GD.WaitForIdle();
 
         uint clearBefore = Assert.Single(clearSeen);

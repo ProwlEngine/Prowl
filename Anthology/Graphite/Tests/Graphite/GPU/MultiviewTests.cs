@@ -1,37 +1,30 @@
 using System;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-file readonly struct MultiviewView : IRenderView
+file sealed class MultiviewPass(GraphicsProgram program, Texture left, Texture right, Action<RenderTexture> written) : IInstancePass
 {
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 4;
-    public uint PixelHeight => 4;
-    public int ViewId => 0;
-}
+    public GraphKind Kind => TestViews.Kind;
 
-file sealed class MultiviewPass(GraphicsProgram program, Texture left, Texture right, Action<RenderTexture> written) : IPass
-{
     private static readonly RenderResourceID s_eyes = RenderResourceID.Intern("Eyes");
     private TextureHandle _eyes;
 
     public string Name => "Eyes";
 
-    public void Setup(RenderContextBuilder builder)
+    public void Setup(InstanceContextBuilder builder)
         => _eyes = builder.DeclareOutputTexture(s_eyes, new GraphTextureDesc
         {
-            SizeMode = TextureSizeMode.ViewRelative,
+            SizeMode = TextureSizeMode.InstanceRelative,
             Scale = 1f,
             ColorFormats = [PixelFormat.R32_G32_B32_A32_Float],
             ArrayLayers = 2,
         }, usage: TextureState.Attachment | TextureState.TransferSrc);
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
         RenderTexture eyes = context.GetRenderTexture(_eyes);
         cmd.SetFramebuffer(eyes.Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
@@ -84,11 +77,11 @@ public abstract class MultiviewTests<T> : GraphicsDeviceTestBase<T> where T : Gr
         Texture right = RF.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
         uint layers = 0;
 
-        using RenderPipeline pipeline = new([new MultiviewPass(program, left, right, eyes =>
+        using RenderGraph graph = TestViews.Build([new MultiviewPass(program, left, right, eyes =>
         {
             layers = eyes.ColorTextures[0].ArrayLayers;
         })]);
-        GD.DispatchGraph(pipeline, new IRenderView[] { new MultiviewView() });
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 4)));
         GD.WaitForIdle();
 
         Assert.Equal(2u, layers);

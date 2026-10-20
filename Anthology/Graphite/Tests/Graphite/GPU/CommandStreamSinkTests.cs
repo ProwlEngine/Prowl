@@ -7,7 +7,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -118,24 +117,19 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
     public void PopMarker() => Log.Add("PopMarker");
 }
 
-file readonly struct SinkView : IRenderView
+file sealed class SinkPass : IInstancePass
 {
-    public uint PixelWidth => 32;
-    public uint PixelHeight => 32;
-    public int ViewId => 0;
-}
+    public GraphKind Kind => TestViews.Kind;
 
-file sealed class SinkPass : IPass
-{
     private readonly Action<CommandBuffer> _record;
 
     public SinkPass(Action<CommandBuffer> record) => _record = record;
 
     public string Name => "SinkPass";
 
-    public void Setup(RenderContextBuilder builder) { }
+    public void Setup(InstanceContextBuilder builder) { }
 
-    public void Render(RenderContext context, CommandBuffer cmd) => _record(cmd);
+    public void Render(InstanceContext context, CommandBuffer cmd) => _record(cmd);
 }
 
 public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -210,8 +204,8 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     private SinkRecorder Record(Action<CommandBuffer> record)
     {
         SinkRecorder sink = new();
-        using RenderPipeline pipeline = new([new SinkPass(record)]);
-        GD.DispatchGraph(pipeline, new SinkView[] { new() }, sink);
+        using RenderGraph graph = TestViews.Build([new SinkPass(record)]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)), sink);
         GD.WaitForIdle();
 
         return sink;
@@ -471,8 +465,8 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
     public void PassBeginAndEnd_BracketCommands()
     {
         SinkRecorder sink = new();
-        using RenderPipeline pipeline = new([new SinkPass(cmd => { })]);
-        GD.DispatchGraph(pipeline, new SinkView[] { new() }, sink);
+        using RenderGraph graph = TestViews.Build([new SinkPass(cmd => { })]);
+        GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)), sink);
         GD.WaitForIdle();
 
         Assert.Equal(["BeginPass:SinkPass", "EndPass"], sink.Log);
