@@ -451,10 +451,9 @@ internal sealed class GpuArray(GraphicsDevice device, BufferUsage usage, string 
     }
 }
 
-/// <summary>The view a camera pipeline draws for: its target and size. Kept per camera so a frame allocates nothing.</summary>
-internal sealed class CameraView : IRenderView
+/// <summary>The id and render size of a camera's view. Kept per camera so a frame allocates nothing.</summary>
+internal sealed class CameraView
 {
-    public Framebuffer? Target { get; set; }
     public uint PixelWidth { get; set; } = 1;
     public uint PixelHeight { get; set; } = 1;
     public int ViewId { get; set; }
@@ -795,7 +794,6 @@ internal sealed class CameraFrame : IDisposable
     public int JitterPhase;
     public Float2 Jitter, PreviousJitter;
     public int LayerCount = 1;
-    public readonly IRenderView[] Views;
 
     private IndirectDrawIndexedArguments[] _commands = new IndirectDrawIndexedArguments[64];
     private DrawRecord[] _records = new DrawRecord[64];
@@ -810,7 +808,6 @@ internal sealed class CameraFrame : IDisposable
     {
         _frame = frame;
         Drawer = new SceneDrawer(frame, this);
-        Views = [View];
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
@@ -1265,7 +1262,6 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly HashSet<RenderFeature> _prepared = new();
     private readonly List<int> _viewOrder = new();
     private readonly List<WorldFrame> _frameWorlds = new();
-    private readonly IRenderView[] _frameStartViews = [new CameraView { ViewId = -1 }];
     private int _frame;
 
     private readonly RendererTextures _textures;
@@ -1595,7 +1591,6 @@ internal sealed partial class FramePipeline : IDisposable
         ResolveScreenLighting(camera, shape, width, height);
         Prepare(camera, view, world, time, width, height);
         UpdateSceneColor(camera, shape, width, height);
-        camera.View.Target = view.Target;
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
         _planned.Add(new PlannedInstance(shape.Kind, view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
