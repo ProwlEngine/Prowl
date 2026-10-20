@@ -11,6 +11,7 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 // What the renderer frees once nothing needs it: bindless slots, draw program ids, material tables and table logs.
+[Collection("GPU Tests")]
 public sealed class LifetimeTests : IDisposable
 {
     private const string Source = """

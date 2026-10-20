@@ -32,6 +32,7 @@ file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : I
     public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
 }
 
+[Collection("GPU Tests")]
 public sealed class UploadTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));

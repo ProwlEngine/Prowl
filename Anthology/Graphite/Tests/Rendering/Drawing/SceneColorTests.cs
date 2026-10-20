@@ -12,6 +12,7 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 // Transparent passes tagged "SceneColor" = "Read" sampling the opaque colour behind them through Graphite/SceneColor.glsl
+[Collection("GPU Tests")]
 public sealed class SceneColorTests : IDisposable
 {
     // Colour from the world position, so a flipped or shifted read shows

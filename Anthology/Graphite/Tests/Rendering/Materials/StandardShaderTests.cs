@@ -16,6 +16,7 @@ file sealed class SlotResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0u;
 }
 
+[Collection("GPU Tests")]
 public sealed class StandardShaderTests : IDisposable
 {
     private static readonly string[] s_litToggles = ["_NORMALMAP", "_SURFACEMAP", "_OCCLUSIONMAP", "_EMISSION", "_PARALLAXMAP", "_TRANSLUCENCY", "_ANISOTROPIC", "_INSTANCE_TINT"];

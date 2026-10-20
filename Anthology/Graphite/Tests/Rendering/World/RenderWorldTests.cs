@@ -18,6 +18,7 @@ file sealed class NoResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0;
 }
 
+[Collection("GPU Tests")]
 public sealed class RenderWorldTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));

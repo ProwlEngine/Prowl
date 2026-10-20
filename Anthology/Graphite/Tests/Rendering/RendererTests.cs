@@ -11,6 +11,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
+[Collection("GPU Tests")]
 public sealed class RendererTests : IDisposable
 {
     private const string Source = """

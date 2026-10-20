@@ -16,6 +16,7 @@ namespace Prowl.Graphite.Rendering.Tests;
 
 // Draws a lit quad filling the view and checks every pixel against Prowl's lighting math done on the CPU, so Graphite's
 // port stays exact: point and spot lights from both trees, directional lights, ambient, fog and decals.
+[Collection("GPU Tests")]
 public sealed class LightingTests : IDisposable
 {
     private const string Source = """

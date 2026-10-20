@@ -13,6 +13,7 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 // Host features in a view's slots: which run, in what order, and what they draw onto
+[Collection("GPU Tests")]
 public sealed class FeatureTests : IDisposable
 {
     private const string UnlitSource = """

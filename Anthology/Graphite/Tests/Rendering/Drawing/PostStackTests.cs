@@ -12,6 +12,7 @@ using Xunit;
 namespace Prowl.Graphite.Rendering.Tests;
 
 // The stock post effects against CPU versions of Prowl's math, on small views
+[Collection("GPU Tests")]
 public sealed class PostStackTests : IDisposable
 {
     private const string UnlitSource = """

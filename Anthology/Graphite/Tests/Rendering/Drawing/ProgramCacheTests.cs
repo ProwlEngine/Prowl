@@ -45,6 +45,7 @@ internal sealed class GatedCompiler(GlslShaderCompiler inner) : IShaderCompiler
     public ComputeDescription CompileCompute(ShaderPass pass, Keyword[] combo, GraphicsBackend backend) => inner.CompileCompute(pass, combo, backend);
 }
 
+[Collection("GPU Tests")]
 public sealed class ProgramCacheTests : IDisposable
 {
     private const string Source = """

@@ -18,6 +18,7 @@ file sealed class NoResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0;
 }
 
+[Collection("GPU Tests")]
 public sealed class BucketTests : IDisposable
 {
     private const string Lit = """

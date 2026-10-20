@@ -27,6 +27,7 @@ file readonly struct NoView : IRenderView
     public int ViewId => 0;
 }
 
+[Collection("GPU Tests")]
 public sealed class MaterialTests : IDisposable
 {
     private const string Source = """

@@ -68,6 +68,7 @@ file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IPa
     public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyBuffer(output, 0, readback, 0, output.SizeInBytes);
 }
 
+[Collection("GPU Tests")]
 public sealed class GlobalsTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));

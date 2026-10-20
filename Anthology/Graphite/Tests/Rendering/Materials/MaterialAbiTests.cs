@@ -37,6 +37,7 @@ file sealed class DrawPass(Action<CommandBuffer> draw) : IPass
     public void Render(RenderContext context, CommandBuffer cmd) => draw(cmd);
 }
 
+[Collection("GPU Tests")]
 public sealed class MaterialAbiTests : IDisposable
 {
     private const string Source = """

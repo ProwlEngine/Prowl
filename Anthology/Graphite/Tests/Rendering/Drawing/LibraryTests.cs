@@ -45,6 +45,7 @@ file struct Push
     public uint Flags;
 }
 
+[Collection("GPU Tests")]
 public sealed class LibraryTests : IDisposable
 {
     private const string Source = """
