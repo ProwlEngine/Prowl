@@ -37,27 +37,23 @@ internal static class NetworkPopover
     };
 
     /// <summary>
-    /// The hierarchy's marker for an object, or null when it has nothing to say (an ordinary snapshot
-    /// object). While a session runs, a networked object shows whether this peer controls it.
+    /// The hierarchy's live ownership marker, or null outside play or when the object isn't networked.
     /// </summary>
     public static (IOrigamiIcon Icon, Color Color, string Tooltip)? HierarchyMarker(GameObject go)
     {
-        switch (go.NetworkMode)
+        if (!Application.IsPlaying || go.IsNetworkExcluded)
+            return null;
+
+        if (go.IsNetworked)
         {
-            case NetworkMode.Never:
-                return (EditorIcons.LinkSlash_I, EditorTheme.InkDim, Loc.Get("network.never"));
-
-            case NetworkMode.Object when go.IsNetworked:
-                return go.IsProxy
-                    ? (EditorIcons.Wifi_I, EditorTheme.Amber400, $"{Loc.Get("network.object")}: {Loc.Get("network.proxy")}")
-                    : (EditorIcons.Wifi_I, EditorTheme.Green400, $"{Loc.Get("network.object")}: {Loc.Get("network.controlled")}");
-
-            case NetworkMode.Object:
-                return (EditorIcons.Wifi_I, EditorTheme.Blue400, Loc.Get("network.object"));
-
-            default:
-                return null;
+            string owner = go.NetworkOwner is { } peer
+                ? peer.Name
+                : Loc.Get("network.owner.host");
+            string tooltip = Loc.Get("network.controlled_by", new { name = owner });
+            return (EditorIcons.Wifi_I, go.IsProxy ? EditorTheme.Amber400 : EditorTheme.Green400, tooltip);
         }
+
+        return null;
     }
 
     public static void DrawButton(Paper paper, FontFile font, GameObject go)

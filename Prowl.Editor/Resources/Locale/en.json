@@ -258,6 +258,7 @@
   "network.control": "Control",
   "network.proxy": "Proxy, driven from elsewhere",
   "network.controlled": "Controlled here",
+  "network.controlled_by": "Controlled by {name}",
   "inspector.transform": "Transform",
   "inspector.position": "Position",
   "inspector.rotation": "Rotation",
