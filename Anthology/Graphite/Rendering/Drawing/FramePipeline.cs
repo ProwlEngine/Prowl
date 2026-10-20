@@ -641,7 +641,7 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 }
 
 /// <summary>The FrameStart pass: the frame's single scatter into every persistent buffer, with each declared as written.</summary>
-internal sealed class UploadPass(Uploader uploader) : IPass
+internal sealed class UploadPass(Uploader uploader) : IExecutionPass
 {
     public DeviceBuffer[] Buffers = [];
 
