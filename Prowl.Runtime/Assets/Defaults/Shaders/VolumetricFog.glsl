@@ -1,9 +1,10 @@
-#pragma variant FOG COMPOSITE FROXEL MARCH TEMPORAL
-// Volumetric fog as four fullscreen passes. FOG_FROXEL lights a grid of cells fitted to the view, 8 pixels across and
+#pragma variant FOG COMPOSITE FROXEL MARCH
+// Volumetric fog as three fullscreen passes. FOG_FROXEL lights a grid of cells fitted to the view, 8 pixels across and
 // depth slices squared out to the fog's reach, kept as the slices tiled in one texture: each cell's scattered light and
 // extinction from the world's lights and shadows, as a lit program reading each light's HostData as its fog colour and
-// scattering bias. FOG_MARCH integrates the cells along each pixel's ray at a reduced resolution, FOG_TEMPORAL blends
-// it with last frame's reprojected result, and the default composites it over the colour with a depth aware upsample.
+// scattering bias, sampled at a point jittered through the cell each frame and blended with the cell's reprojected
+// value from last frame. FOG_MARCH integrates the cells along each pixel's ray at a reduced resolution, and the default
+// composites it over the colour with a depth aware upsample.
 // Positions are camera relative. The host's fog volumes are relative to the view's first layer.
 
 #include "Graphite/Internal/PostView.glsl"
@@ -22,6 +23,14 @@ float Fog_SliceDistance(float s)
 {
     float f = s / _FroxelGrid.z;
     return _FogMaxDistance * f * f;
+}
+
+// The texel of the atlas under a screen uv in a slice, kept half a cell inside the slice's tile so filtering stays in it
+vec2 Fog_AtlasUV(vec2 uv, float slice)
+{
+    vec2 tile = vec2(mod(slice, _FroxelGrid.w), floor(slice / _FroxelGrid.w));
+    vec2 cell = clamp(uv * _FroxelGrid.xy, vec2(0.5), _FroxelGrid.xy - 0.5);
+    return (tile * _FroxelGrid.xy + cell) / _FroxelAtlas;
 }
 
 float Fog_Hash13(vec3 p)
@@ -61,6 +70,10 @@ void Fog_Ray(Graphite_ViewData view, vec2 uv, out vec3 origin, out vec3 dir)
 // Fullscreen programs take no world keywords, so the fog always reads cookies and profiles
 #define GRAPHITE_LIGHT_MASKS 1
 #include "Graphite/Lighting.glsl"
+
+uniform GRAPHITE_SCREEN_TEXTURE _FroxelHistoryTex;
+uniform float _FogHistoryValid;
+uniform float _FogTemporalBlend;
 
 uniform float _FogDensity;
 uniform float _FogScattering;
@@ -201,7 +214,48 @@ vec3 Fog_SampleScattering(vec3 p, vec3 viewDir, vec3 volColor)
     return scatter * volColor;
 }
 
-// One cell: its scattered light per meter and extinction per meter, at a point moved through its slice each frame
+// One cell: its scattered light per meter and extinction per meter at a point in it
+vec4 Fog_LightCell(Graphite_ViewData view, vec2 cellUV, float slice)
+{
+    vec3 origin, viewDir;
+    Fog_Ray(view, cellUV, origin, viewDir);
+    vec3 p = origin + viewDir * Fog_SliceDistance(slice);
+
+    // The host's volumes are relative to the first layer's camera, the world's lights to this layer's
+    float volumeDensity;
+    vec3 volColor;
+    Fog_EvaluateVolumes(p + view.treeOffset.xyz, volumeDensity, volColor);
+    float density = max(_FogDensity + volumeDensity, 0.0);
+    if (density <= 0.0)
+        return vec4(0.0);
+
+    // Ambient keeps fog visible in shadow, a stand in for sky bounce
+    vec3 ambient = _FogAmbientColor.rgb * _FogAmbientIntensity * volColor;
+    vec3 inscatter = (Fog_SampleScattering(p, viewDir, volColor) + ambient) * density * _FogColorTint.rgb;
+    return vec4(inscatter, density * _FogExtinction);
+}
+
+// Last frame's cells at a screen uv and fractional slice, filtered between the two nearest slices
+vec4 Fog_History(vec2 uv, float slice)
+{
+    float s = clamp(slice - 0.5, 0.0, _FroxelGrid.z - 1.0);
+    float s0 = floor(s);
+    float s1 = min(s0 + 1.0, _FroxelGrid.z - 1.0);
+    vec4 a = Graphite_SampleLod(_FroxelHistoryTex, Fog_AtlasUV(uv, s0), 0.0);
+    vec4 b = Graphite_SampleLod(_FroxelHistoryTex, Fog_AtlasUV(uv, s1), 0.0);
+    return mix(a, b, s - s0);
+}
+
+// Where a camera relative point was in last frame's grid, as a screen uv and fractional slice
+bool Fog_Reproject(Graphite_ViewData view, vec3 p, vec3 origin, vec3 viewDir, out vec2 uv, out float slice)
+{
+    vec3 moved = p + (view.cameraHigh.xyz - view.previousCameraHigh.xyz) + (view.cameraLow.xyz - view.previousCameraLow.xyz);
+    uv = Graphite_PostPreviousUV(view, p);
+    float distance = Graphite_PostOrthographic(view) ? dot(moved - origin, viewDir) : length(moved);
+    slice = sqrt(max(distance, 0.0) / _FogMaxDistance) * _FroxelGrid.z;
+    return all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0))) && slice <= _FroxelGrid.z;
+}
+
 void main()
 {
     Graphite_ViewData view = Graphite_PostView();
@@ -214,28 +268,31 @@ void main()
         return;
     }
 
-    vec2 cellUV = (texel - tile * _FroxelGrid.xy + 0.5) / _FroxelGrid.xy;
-    vec3 origin, viewDir;
-    Fog_Ray(view, cellUV, origin, viewDir);
-    // One offset through the slices for every cell a frame, so neighbours agree and the temporal blend averages frames
-    float jitter = fract(floor(_FogTime * 60.0) * 0.618034);
-    vec3 p = origin + viewDir * Fog_SliceDistance(slice + jitter);
-
-    // The host's volumes are relative to the first layer's camera, the world's lights to this layer's
-    float volumeDensity;
-    vec3 volColor;
-    Fog_EvaluateVolumes(p + view.treeOffset.xyz, volumeDensity, volColor);
-    float density = max(_FogDensity + volumeDensity, 0.0);
-    if (density <= 0.0)
+    // Each cell samples a different point through its volume each frame, decorrelated from its neighbours
+    vec2 cell = texel - tile * _FroxelGrid.xy;
+    float frame = view.time.z;
+    float noise = Fog_InterleavedGradientNoise(cell + vec2(slice * 7.0, slice * 13.0) + 5.588238 * mod(frame, 64.0));
+    vec2 offset = fract(vec2(0.7548777, 0.5698403) * mod(frame, 1024.0) + noise) - 0.5;
+    vec4 current = Fog_LightCell(view, (cell + 0.5 + offset) / _FroxelGrid.xy, slice + noise);
+    if (_FogHistoryValid < 0.5)
     {
-        outColor = vec4(0.0);
+        outColor = current;
         return;
     }
 
-    // Ambient keeps fog visible in shadow, a stand in for sky bounce
-    vec3 ambient = _FogAmbientColor.rgb * _FogAmbientIntensity * volColor;
-    vec3 inscatter = (Fog_SampleScattering(p, viewDir, volColor) + ambient) * density * _FogColorTint.rgb;
-    outColor = vec4(inscatter, density * _FogExtinction);
+    // The cell's centre in last frame's grid
+    vec3 origin, viewDir;
+    vec2 centreUV = (cell + 0.5) / _FroxelGrid.xy;
+    Fog_Ray(view, centreUV, origin, viewDir);
+    vec3 centre = origin + viewDir * Fog_SliceDistance(slice + 0.5);
+    vec2 previousUV;
+    float previousSlice;
+    if (!Fog_Reproject(view, centre, origin, viewDir, previousUV, previousSlice))
+    {
+        outColor = current;
+        return;
+    }
+    outColor = mix(current, Fog_History(previousUV, previousSlice), _FogTemporalBlend);
 }
 
 #elif defined(FOG_MARCH)
@@ -246,9 +303,7 @@ uniform float _FogDithering;
 // The cell of a slice under a screen uv, filtered across its neighbours in the slice
 vec4 Fog_Froxel(vec2 uv, float slice)
 {
-    vec2 tile = vec2(mod(slice, _FroxelGrid.w), floor(slice / _FroxelGrid.w));
-    vec2 cell = clamp(uv * _FroxelGrid.xy, vec2(0.5), _FroxelGrid.xy - 0.5);
-    return Graphite_SampleLod(_FroxelTex, (tile * _FroxelGrid.xy + cell) / _FroxelAtlas, 0.0);
+    return Graphite_SampleLod(_FroxelTex, Fog_AtlasUV(uv, slice), 0.0);
 }
 
 void main()
@@ -288,52 +343,6 @@ void main()
     }
 
     outColor = vec4(accum, transmittance);
-}
-
-#elif defined(FOG_TEMPORAL)
-
-uniform GRAPHITE_SCREEN_TEXTURE _FogCurrentTex;
-uniform GRAPHITE_SCREEN_TEXTURE _FogHistoryTex;
-uniform float _FogHistoryValid;
-uniform float _FogTemporalBlend;
-
-void main()
-{
-    Graphite_ViewData view = Graphite_PostView();
-    vec2 uv = vUV;
-    vec4 current = Graphite_Sample(_FogCurrentTex, uv);
-    if (_FogHistoryValid < 0.5)
-    {
-        outColor = current;
-        return;
-    }
-
-    // The fog sits on the geometry behind each pixel, or at the march's end over the sky
-    float depth = Graphite_Sample(_CameraDepthTexture, uv).r;
-    vec3 origin, dir;
-    Fog_Ray(view, uv, origin, dir);
-    vec3 position = depth <= 1e-7 ? origin + dir * _FogMaxDistance : Graphite_PostRelativePosition(view, uv, depth);
-    vec2 previousUV = Graphite_PostPreviousUV(view, position);
-    if (any(lessThan(previousUV, vec2(0.0))) || any(greaterThan(previousUV, vec2(1.0))))
-    {
-        outColor = current;
-        return;
-    }
-
-    // History held within this frame's 3x3 neighbourhood, against disocclusion and moving lights
-    vec4 history = Graphite_Sample(_FogHistoryTex, previousUV);
-    vec2 texel = 1.0 / _LowResolution;
-    vec4 lowest = current, highest = current;
-    for (int y = -1; y <= 1; y++)
-    {
-        for (int x = -1; x <= 1; x++)
-        {
-            vec4 s = Graphite_Sample(_FogCurrentTex, uv + vec2(float(x), float(y)) * texel);
-            lowest = min(lowest, s);
-            highest = max(highest, s);
-        }
-    }
-    outColor = mix(current, clamp(history, lowest, highest), clamp(_FogTemporalBlend, 0.0, 0.99));
 }
 
 #else
