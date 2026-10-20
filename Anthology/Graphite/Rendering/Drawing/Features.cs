@@ -72,9 +72,8 @@ public enum ViewKinds : ushort
 /// <summary>What a feature knows about the view it runs on.</summary>
 public readonly struct FeatureView
 {
-    internal FeatureView(in ViewDesc desc, uint width, uint height, bool sceneColor = false)
+    internal FeatureView(in ViewDesc desc, uint width, uint height)
     {
-        SceneColor = sceneColor;
         World = desc.World;
         Kind = desc.Kind;
         ViewId = desc.ViewId;
@@ -125,9 +124,6 @@ public readonly struct FeatureView
 
     /// <summary>The first layer's camera position.</summary>
     public Double3 Position { get; }
-
-    /// <summary>Whether the view keeps an opaque colour copy, made once one of its transparent passes read it.</summary>
-    internal bool SceneColor { get; }
 
     /// <summary>A texture sized as a part of the colour's resolution, an array on layered views. Width and Height are zero in Setup, so size by scale.</summary>
     public GraphTextureDesc Texture(PixelFormat format, float scale = 1)
@@ -560,12 +556,12 @@ public sealed class FeatureBuilder
             throw new InvalidOperationException($"{_pass.Name} writes screen lighting without being a ScreenLightingFeature.");
         if (irradiance && !producer.IrradianceSnapshot)
             throw new InvalidOperationException($"{_pass.Name} writes screen irradiance without saying so through WritesIrradiance.");
-        TextureHandle visibility = _graph.DeclareOutputTexture(Shape.ScreenVisibilityId, Shape.ScreenDesc(PixelFormat.R8_UNorm));
+        TextureHandle visibility = _graph.DeclareOutputTexture(Shape.ScreenVisibilityId, Shape.ScreenDesc(PixelFormat.R8_UNorm), persistent: true);
         Shape.ScreenVisibilityWritten = true;
         if (!irradiance)
             return (visibility, null);
         Shape.ScreenIrradianceWritten = true;
-        return (visibility, _graph.DeclareOutputTexture(Shape.ScreenIrradianceId, Shape.ScreenDesc(PixelFormat.R16_G16_B16_A16_Float)));
+        return (visibility, _graph.DeclareOutputTexture(Shape.ScreenIrradianceId, Shape.ScreenDesc(PixelFormat.R16_G16_B16_A16_Float), persistent: true));
     }
 
     /// <summary>State this feature keeps for the views of the shape, made the first time it is asked for. Handles from Setup go here.</summary>
@@ -862,7 +858,11 @@ internal sealed class FeaturePass : IInstancePass
     public TextureHandle? CopyBack;
     public TextureHandle? Output;
 
-    public bool IsEnabled(GraphInstance instance) => ((CameraFrame)instance.Data!).Selected.Contains(Feature);
+    public bool IsEnabled(GraphInstance instance)
+    {
+        CameraFrame camera = (CameraFrame)instance.Data!;
+        return camera.Selected.Contains(Feature) && (Feature is not SceneColorFeature || camera.SceneColorUsed);
+    }
 
     public void Setup(InstanceContextBuilder builder)
     {
@@ -1071,8 +1071,6 @@ public sealed class SceneColorFeature : RenderFeature
     public override string? ExclusiveGroup => "SceneColor";
     public override ViewKinds RunsOn => ViewKinds.All;
 
-    public override bool IsActive(in FeatureView view) => view.SceneColor;
-
     public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadColor();
 
     public override void Render(FeatureContext context)
@@ -1132,7 +1130,7 @@ internal static class FeatureSelection
         }
     }
 
-    private static int Compare(RenderFeature a, RenderFeature b)
+    public static int Compare(RenderFeature a, RenderFeature b)
     {
         int slot = a.SlotSnapshot.CompareTo(b.SlotSnapshot);
         return slot != 0 ? slot : a.OrderSnapshot.CompareTo(b.OrderSnapshot);

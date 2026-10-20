@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite.Rendering;
 
-internal sealed class FeatureShape
+internal sealed class FeatureShape : IDisposable
 {
     public static readonly PixelFormat[] SceneFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm];
 
@@ -39,6 +39,8 @@ internal sealed class FeatureShape
 
     public FramePipeline Frame { get; set; } = null!;
 
+    public int LastFrame { get; set; }
+
     public readonly List<RenderFeature> Features = new();
     public readonly List<PassType> PassTypes = new();
     public readonly Dictionary<string, TextureHandle> Published = new(StringComparer.Ordinal);
@@ -69,6 +71,18 @@ internal sealed class FeatureShape
         if (!_passes.TryGetValue(feature, out FeaturePass? pass))
             _passes[feature] = pass = new FeaturePass(feature, this);
         return pass;
+    }
+
+    public bool Add(RenderFeature feature)
+    {
+        if (Features.Contains(feature))
+            return false;
+        int at = Features.Count;
+        while (at > 0 && FeatureSelection.Compare(Features[at - 1], feature) > 0)
+            at--;
+        Features.Insert(at, feature);
+        PassOf(feature);
+        return true;
     }
 
     public void Begin()
@@ -124,6 +138,13 @@ internal sealed class FeatureShape
             return builder.DeclareWriteTexture(SceneId);
         _sceneDescribed = true;
         return builder.DeclareOutputTexture(SceneId, SceneDesc());
+    }
+
+    public void Dispose()
+    {
+        foreach (object state in States.Values)
+            (state as IDisposable)?.Dispose();
+        States.Clear();
     }
 
     private uint Layers => Shape.Layers > 1 ? (uint)Shape.Layers : 0;

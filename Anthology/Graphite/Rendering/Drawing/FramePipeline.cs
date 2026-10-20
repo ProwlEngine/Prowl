@@ -681,6 +681,24 @@ internal sealed class CameraFrame : IDisposable
     public bool SceneColorUsed;
     private TextureView? _sceneColorView;
 
+    /// <summary>The persistent screen lighting a producer in the view's shape writes, resolved before the graph runs.</summary>
+    public RenderTexture? ScreenVisibility, ScreenIrradiance;
+    private (RenderTexture? Texture, TextureView? View) _visibilityView, _irradianceView;
+
+    public TextureView? ScreenVisibilityView() => ArrayView(ref _visibilityView, ScreenVisibility);
+
+    public TextureView? ScreenIrradianceView() => ArrayView(ref _irradianceView, ScreenIrradiance);
+
+    private TextureView? ArrayView(ref (RenderTexture? Texture, TextureView? View) cache, RenderTexture? texture)
+    {
+        if (cache.Texture == texture)
+            return cache.View;
+        if (cache.View != null)
+            _frame.Retired.Add(cache.View);
+        cache = (texture, texture == null ? null : _device.ResourceFactory.CreateTextureView(new TextureViewDescription(texture.ColorTextures[0]) { Arrayed = true }));
+        return cache.View;
+    }
+
     /// <summary>The host's buffers the view's graph declares, from the world's globals.</summary>
     public DeviceBuffer[] HostBuffers = [];
 
@@ -1036,11 +1054,10 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set("Graphite_ShadowSampler", 0, frame.ShadowSampler);
         camera.ViewTable.Set("Graphite_ShadowFaces", 0, camera.World.Shadows!.Faces.Buffer);
         camera.ViewTable.Set("Graphite_Cascades", 0, camera.Cascades.Buffer);
-        FeatureChain chain = camera.Chain;
-        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, chain.ScreenVisibility is { Filled: true, Texture: not null } visibility ? visibility.ArrayView(frame.Device) : frame.NoScreenVisibility);
-        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, chain.ScreenIrradiance is { Filled: true, Texture: not null } irradiance ? irradiance.ArrayView(frame.Device) : frame.NoScreenIrradiance);
+        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, camera.ScreenVisibilityView() ?? frame.NoScreenVisibility);
+        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, camera.ScreenIrradianceView() ?? frame.NoScreenIrradiance);
         camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.TrilinearClamp);
-        camera.ViewTable.Set("Graphite_SceneColor", 0, chain.SceneColor != null ? chain.SceneColorView() : frame.NoSceneColor);
+        camera.ViewTable.Set("Graphite_SceneColor", 0, camera.SceneColor != null ? camera.SceneColorView() : frame.NoSceneColor);
         camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.TrilinearClamp);
         _viewTable = camera.ViewTable.Get(ring);
         _properties.SetBuffer(GraphiteBindings.InstancesName, camera.Instances.Buffer);
@@ -1221,7 +1238,6 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly GraphicsDevice _device;
     private readonly IShaderCompiler? _compiler;
-    private readonly RenderPipeline _frameStart = new();
     private readonly UploadPass _upload;
     private readonly ProbePass _probes;
     private readonly DeformPass _deform;
@@ -1230,6 +1246,13 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<GraphDispatch> _dispatches = new();
     private readonly List<PlannedInstance> _planned = new();
     private readonly Dictionary<WorldFrame, GraphInstance> _worldInstances = new();
+    private readonly Dictionary<GraphKind, FeatureShape> _shapes = new();
+    private readonly GraphStore _store = new();
+    private readonly ReadbackTexturePass _readbackTexture = new();
+    private readonly ReadbackBufferPass _readbackBuffer = new();
+    private readonly List<GraphImport> _imports = new();
+    private RenderGraph? _graph;
+    private bool _graphDirty = true;
     private readonly List<DeviceBuffer> _buffers = new();
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
@@ -1268,8 +1291,6 @@ internal sealed partial class FramePipeline : IDisposable
         _upload = new UploadPass(uploader);
         _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
         _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry);
-        _frameStart.Name = "Graphite.FrameStart";
-        _frameStart.SetPasses([_upload, _probes, _deform]);
         _readback = new ReadbackStaging(device, report);
 
         const string present = InternalShaders.Present, decode = InternalShaders.Decode, encode = InternalShaders.Encode;
@@ -1439,7 +1460,6 @@ internal sealed partial class FramePipeline : IDisposable
         _frame++;
         _dispatches.Clear();
         _planned.Clear();
-        _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
         _frameWorlds.Clear();
         _prepared.Clear();
         foreach (WorldFrame world in allWorlds)
@@ -1525,7 +1545,9 @@ internal sealed partial class FramePipeline : IDisposable
             _dispatches.Insert(first + 1, new GraphDispatch(_shadowPipeline, _frameStartViews));
         _dispatches.AddRange(pipelines);
         _readback.Prepare(readbacks);
-        ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches), profilers ?? []);
+        if (_graphDirty)
+            BuildGraph();
+        ExecutionTask task = _device.DispatchGraph(_graph!, CreateInstances(_graph!), profilers ?? []);
         foreach (Texture texture in _disposeAfterDispatch)
             texture.Dispose();
         _disposeAfterDispatch.Clear();
@@ -1541,6 +1563,7 @@ internal sealed partial class FramePipeline : IDisposable
         _retired.Clear();
         ReleaseStaleCameras();
         ReleaseIdleCaptures();
+        ReleaseStaleShapes();
         return task;
     }
 
@@ -1554,56 +1577,94 @@ internal sealed partial class FramePipeline : IDisposable
             camera.HasPrevious = false;
         }
         if (view.Cut)
-        {
             camera.HasPrevious = false;
-            camera.Rebuild = true;
-        }
         camera.World = world;
         camera.ResolveKeywords();
-        if (camera.HostBuffers != world.World.Globals.BufferList)
-        {
-            camera.HostBuffers = world.World.Globals.BufferList;
-            camera.Rebuild = true;
-        }
+        camera.HostBuffers = world.World.Globals.BufferList;
         uint width = Math.Max(1u, (uint)MathF.Round(view.Target.Width * view.Viewport.Z * view.RenderScale));
         uint height = Math.Max(1u, (uint)MathF.Round(view.Target.Height * view.Viewport.W * view.RenderScale));
-        camera.Info = new FeatureView(view, width, height, camera.Chain.SceneColor != null);
-        if (!view.External)
+        camera.Info = new FeatureView(view, width, height);
+        camera.SelectFeatures(world.World.FeatureSnapshot, features);
+        camera.PruneStates(world.World.FeatureSnapshot, features);
+        FeatureShape shape = ShapeOf(camera, view);
+        camera.ResetPassLists();
+        foreach (RenderFeature feature in camera.Selected)
         {
-            camera.SelectFeatures(world.World.FeatureSnapshot, features);
-            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight, view.Ldr))
-                camera.Rebuild = true;
-            camera.ApplyFeatures();
+            foreach (PassType type in shape.PassOf(feature).Types)
+                camera.ListFor(type);
         }
-        if (view.External)
-        {
-            if (camera.Chain.Scene.Texture != null)
-            {
-                camera.Chain.Release();
-                camera.Rebuild = true;
-            }
-            camera.ResetPassLists();
-            foreach (PassType pass in view.Passes ?? [])
-                camera.ListFor(pass);
-        }
+        ResolveScreenLighting(camera, shape, width, height);
         Prepare(camera, view, world, time, width, height);
-        if (!view.External && UpdateSceneColor(camera))
-        {
-            camera.Info = new FeatureView(view, width, height, true);
-            camera.SelectFeatures(world.World.FeatureSnapshot, features);
-            if (camera.Chain.Ensure(width, height, view.LayerCount, camera.SceneReads, camera.Info.OutputWidth, camera.Info.OutputHeight, view.Ldr))
-                camera.Rebuild = true;
-            camera.ApplyFeatures();
-        }
+        UpdateSceneColor(camera, shape, width, height);
         camera.View.Target = view.Target;
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
-        if (!view.External)
-            Plan(camera, view, world, width, height);
+        _planned.Add(new PlannedInstance(shape.Kind, view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
     }
 
-    private void Plan(CameraFrame camera, in ViewDesc view, WorldFrame world, uint width, uint height)
-        => _planned.Add(new PlannedInstance(RenderKinds.Of(view.Kind, CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length)), view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
+    private void ReleaseStaleShapes()
+    {
+        List<GraphKind>? stale = null;
+        foreach ((GraphKind kind, FeatureShape shape) in _shapes)
+        {
+            if (_frame - shape.LastFrame > StaleViewFrames)
+                (stale ??= new()).Add(kind);
+        }
+        foreach (GraphKind kind in stale ?? [])
+        {
+            _shapes[kind].Dispose();
+            _shapes.Remove(kind);
+            _graphDirty = true;
+        }
+    }
+
+    private FeatureShape ShapeOf(CameraFrame camera, in ViewDesc view)
+    {
+        CameraShape key = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length);
+        GraphKind kind = RenderKinds.Of(view.Kind, key);
+        if (!_shapes.TryGetValue(kind, out FeatureShape? shape))
+        {
+            _shapes[kind] = shape = new FeatureShape(kind, view.Kind, key) { Frame = this };
+            _graphDirty = true;
+        }
+        shape.LastFrame = _frame;
+        foreach (RenderFeature feature in camera.Selected)
+        {
+            if (shape.Add(feature) || shape.PassOf(feature).BuiltVersion != feature.Version)
+                _graphDirty = true;
+        }
+        if (_graphDirty)
+            BuildGraph();
+        return shape;
+    }
+
+    private void BuildGraph()
+    {
+        List<IPass> passes = [_upload, _probes, _deform, _readbackTexture, _readbackBuffer];
+        List<GraphKind> kinds = [];
+        foreach (FeatureShape shape in _shapes.Values)
+        {
+            passes.AddRange(shape.Passes());
+            kinds.Add(shape.Kind);
+        }
+        _graph = RenderGraph.Build(passes, RenderKinds.Scopes(kinds), "Graphite", _store);
+        _graphDirty = false;
+    }
+
+    private void ResolveScreenLighting(CameraFrame camera, FeatureShape shape, uint width, uint height)
+    {
+        if (!shape.Shape.HasScreenLighting)
+        {
+            camera.ScreenVisibility = camera.ScreenIrradiance = null;
+            return;
+        }
+        GraphInstanceKey key = new(shape.Kind, camera.View.ViewId);
+        GraphExtent extent = new(width, height);
+        camera.ScreenVisibility = _store.ResolvePersistent(_device, shape.ScreenVisibilityId, shape.ScreenDesc(PixelFormat.R8_UNorm), key, extent);
+        camera.ScreenIrradiance = shape.Shape.ScreenIrradiance
+            ? _store.ResolvePersistent(_device, shape.ScreenIrradianceId, shape.ScreenDesc(PixelFormat.R16_G16_B16_A16_Float), key, extent)
+            : null;
+    }
 
     private GraphInstances CreateInstances(RenderGraph graph)
     {
@@ -1612,7 +1673,13 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in _frameWorlds)
             _worldInstances[world] = instances.Add(RenderKinds.World, world.World.Id, data: world, name: $"World {world.World.Id}");
         foreach (PlannedInstance planned in _planned)
-            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Camera, $"View {planned.Id}");
+        {
+            FeatureShape shape = _shapes[planned.Kind];
+            _imports.Clear();
+            for (int i = 0; i < planned.Camera.HostBuffers.Length; i++)
+                _imports.Add(GraphImport.Of(shape.HostId(i), planned.Camera.HostBuffers[i]));
+            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Camera, $"View {planned.Id}", _imports);
+        }
         for (int i = 0; i < _readback.Requests.Count; i++)
         {
             ReadbackRequest request = _readback.Requests[i];
@@ -1624,7 +1691,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     // Whether the view's transparent list reads the scene colour this frame. Returns whether its copy was just made, which
     // adds the copy to the view's graph; the lists keep their order through that rebuild, so what Prepare uploaded holds.
-    private bool UpdateSceneColor(CameraFrame camera)
+    private void UpdateSceneColor(CameraFrame camera, FeatureShape shape, uint width, uint height)
     {
         bool used = false;
         foreach (DrawCall call in camera.Transparent.Calls)
@@ -1636,9 +1703,9 @@ internal sealed partial class FramePipeline : IDisposable
                 break;
             }
         }
-        FeatureChain chain = camera.Chain;
-        chain.SceneColorUsed = used;
-        return used && chain.SceneColor == null && chain.EnsureSceneColor();
+        camera.SceneColorUsed = used;
+        if (used)
+            camera.EnsureSceneColor(width, height, (uint)shape.Shape.Layers, shape.ColorFormat);
     }
 
     /// <summary>The draws of an external view this frame. Render thread.</summary>
@@ -2152,10 +2219,10 @@ internal sealed partial class FramePipeline : IDisposable
             return;
 
         Buffers = [.. _buffers];
+        _graphDirty = true;
         _upload.Buffers = Buffers;
         _probes.Buffers = Buffers;
         _deform.Buffers = Buffers;
-        _frameStart.SetPasses([_upload, _probes, _deform]);
     }
 
     private static bool Same(DeviceBuffer[] a, List<DeviceBuffer> b)
@@ -2199,7 +2266,10 @@ internal sealed partial class FramePipeline : IDisposable
             camera.Dispose();
         _shadowCameraPool.Clear();
         _providerProbe?.Dispose();
-        _frameStart.Dispose();
+        _graph?.Dispose();
+        _store.Dispose();
+        foreach (FeatureShape shape in _shapes.Values)
+            shape.Dispose();
         _providerPipeline.Dispose();
         _shadowPipeline.Dispose();
         _shadowSampler?.Dispose();
