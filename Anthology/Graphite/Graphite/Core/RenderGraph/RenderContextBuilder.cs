@@ -10,6 +10,7 @@ namespace Prowl.Graphite;
 public class RenderContextBuilder
 {
     internal readonly List<ResourceAccess> Accesses = new();
+    internal readonly List<PassthroughLink> Passthroughs = new();
 
     internal RenderContextBuilder() { }
 
@@ -18,6 +19,7 @@ public class RenderContextBuilder
     internal void Reset()
     {
         Accesses.Clear();
+        Passthroughs.Clear();
     }
 
     /// <summary>Declares a texture this pass reads. Writer owns the description.</summary>
@@ -132,7 +134,27 @@ public class RenderContextBuilder
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: (usage & BufferAccess.AllWrites) != 0, new GraphBufferSlotResource(id)));
         return new BufferHandle(id);
     }
+
+    /// <summary>
+    /// Says that when this pass is disabled for an instance, reading the output gives the input instead. Both must be
+    /// transient textures that match, and the pass must read the input and write the output.
+    /// </summary>
+    public void Passthrough(TextureHandle input, TextureHandle output)
+    {
+        Passthroughs.Add(new PassthroughLink(input.Id, output.Id, true));
+    }
+
+    /// <summary>
+    /// Says that when this pass is disabled for an instance, reading the output gives the input instead. Both must be
+    /// transient buffers that match, and the pass must read the input and write the output.
+    /// </summary>
+    public void Passthrough(BufferHandle input, BufferHandle output)
+    {
+        Passthroughs.Add(new PassthroughLink(input.Id, output.Id, false));
+    }
 }
+
+internal readonly record struct PassthroughLink(RenderResourceID Input, RenderResourceID Output, bool IsTexture);
 
 /// <summary>The builder an instance pass declares with. Adds what only an instance has: its target and sizes relative to it.</summary>
 public sealed class InstanceContextBuilder : RenderContextBuilder
