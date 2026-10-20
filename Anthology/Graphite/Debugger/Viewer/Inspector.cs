@@ -20,7 +20,7 @@ internal sealed partial class ProfilerView
     {
         [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "History" },
         [NodeKind.View] = new[] { "Overview", "History" },
-        [NodeKind.Pass] = new[] { "Overview", "History" },
+        [NodeKind.Pass] = new[] { "Overview" },
         [NodeKind.CommandBuffer] = new[] { "Overview" },
     };
 
@@ -276,18 +276,18 @@ internal sealed partial class ProfilerView
 
     private readonly record struct Sparkline(string Title, double[] Values, Color Color, Func<double, string> Format, double[]? Second = null, Color? SecondColor = null, string Legend = "");
 
-    private void ChartsSection(string title, string note, int current, IReadOnlyList<Sparkline> charts)
+    private void ChartsSection(string title, string note, int current, IReadOnlyList<Sparkline> charts, float minColumn = 260f, float height = 120f)
         => Section(title, 0, note, width =>
         {
-            int columns = Math.Max(1, (int)((width + 8f) / 268f));
+            int columns = Math.Max(1, (int)((width + 8f) / (minColumn + 8f)));
             float chartWidth = (width - 8f * (columns - 1)) / columns;
             using (_paper.Row("charts").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(8).LineGap(8).Enter())
                 for (int i = 0; i < charts.Count; i++)
                     using (_paper.Column("ch", i).Width(chartWidth).Height(UnitValue.Auto).Gap(2).Enter())
-                        SparklineChart(charts[i], current, chartWidth);
+                        SparklineChart(charts[i], current, chartWidth, height);
         });
 
-    private void SparklineChart(Sparkline chart, int current, float width)
+    private void SparklineChart(Sparkline chart, int current, float width, float height)
     {
         double[] v = chart.Values;
         double avg = v.Length > 0 ? v.Average() : 0;
@@ -295,7 +295,7 @@ internal sealed partial class ProfilerView
         string cur = current >= 0 && current < v.Length ? chart.Format(v[current]) : "-";
         CartesianChart<object> c = Chart.CreateCartesian<object>(_paper, "c")
             .Title($"{chart.Title}   {cur}")
-            .Size(width, 120)
+            .Size(width, height)
             .Legend(false)
             .Bordered(false)
             .Axes(false)

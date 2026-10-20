@@ -80,13 +80,41 @@ internal sealed partial class ProfilerView
         {
             case "Overview":
             {
-                KvSection("Pass", 420, new Kv?[]
+                RecordedPass? Find(Recording f) => f.Views.FirstOrDefault(v => v.Name == view)?.Passes.FirstOrDefault(p => p.Name == pass.Name);
+                double Gpu(Recording f)
+                {
+                    RecordedView? v = f.Views.FirstOrDefault(x => x.Name == view);
+                    RecordedPass? p = Find(f);
+                    if (v == null || p == null) return 0;
+                    return f.CommandBuffers.FirstOrDefault(b => b.ViewIndex == v.Index && b.PassIndex == p.Index)?.Milliseconds ?? 0;
+                }
+
+                double[] gpu = Heavy ? [] : frames.Select(Gpu).ToArray();
+                double[] cpu = Heavy ? [] : frames.Select(f => Find(f)?.Stats.CpuMilliseconds ?? 0).ToArray();
+                double[] draws = Heavy ? [] : frames.Select(f => (double)(Find(f)?.Stats.Draws ?? 0)).ToArray();
+                double Avg(double[] v) => v.Length > 0 ? v.Average() : 0;
+                string Sub(double[] v, Func<double, string> format) => Heavy ? "this snapshot" : $"avg {format(Avg(v))}";
+                double viewMs = node.Parent!.Milliseconds;
+
+                HeroStrip(new Stat[]
+                {
+                    new("GPU time", Style.Ms2(node.Milliseconds), Sub(gpu, Style.Ms2), Heavy ? null : Versus(node.Milliseconds, Avg(gpu))),
+                    new("CPU record", Style.Ms2(stats.CpuMilliseconds), Sub(cpu, Style.Ms2), Heavy ? null : Versus(stats.CpuMilliseconds, Avg(cpu))),
+                    new("Draw calls", Style.Int(stats.Draws), Sub(draws, Style.Int)),
+                    new("Share of view", viewMs > 0 ? Style.F(node.Milliseconds / viewMs * 100.0, "0.0") + "%" : "-", $"of {view}"),
+                });
+
+                if (!Heavy)
+                    ChartsSection("Trend", "Frames without this pass plot as 0", CurrentIndex(frames, model), new[]
+                    {
+                        new Sparkline("GPU time", gpu, Style.KindDot(NodeKind.Pass), Style.Ms2),
+                        new Sparkline("CPU record", cpu, Style.KindDot(NodeKind.CommandBuffer), Style.Ms2),
+                    }, 420f, 180f);
+
+                Fold("Details", () => KvSection("Pass", 420, new Kv?[]
                 {
                     new("Name", pass.Name),
                     new("View", view),
-                    new("GPU", Style.Ms2(node.Milliseconds)),
-                    new("CPU record", Style.Ms2(stats.CpuMilliseconds)),
-                    new("Draw calls", Style.Int(stats.Draws)),
                     new("Indirect draws", Style.Int(stats.IndirectDraws)),
                     new("Dispatches", stats.Dispatches.ToString()),
                     new("Shader switches", Style.Int(stats.ShaderSwitches)),
@@ -96,10 +124,10 @@ internal sealed partial class ProfilerView
                     vertex != null ? new("Triangles", Style.F(vertex.Value.InputAssemblyPrimitives / 1e6, "0.000") + " M") : null,
                     vertex != null ? new("Vertices", Style.F(vertex.Value.InputAssemblyVertices / 1e6, "0.000") + " M") : null,
                     vertex != null ? new("Fragment invocations", Style.F(vertex.Value.FragmentShaderInvocations / 1e6, "0.00") + " M") : null,
-                });
+                }));
 
                 if (Heavy && model.PassOf(node) is { } deep && model.ViewOf(node) is { } deepView)
-                    PassDeepOverview(model, deepView, deep);
+                    Fold("Replay, attachments and barriers", () => PassDeepOverview(model, deepView, deep));
                 break;
             }
 
@@ -111,24 +139,6 @@ internal sealed partial class ProfilerView
                 PassCommands(model, node);
                 break;
 
-            case "History":
-            {
-                RecordedPass? Find(Recording f) => f.Views.FirstOrDefault(v => v.Name == view)?.Passes.FirstOrDefault(p => p.Name == pass.Name);
-                double Gpu(Recording f)
-                {
-                    RecordedView? v = f.Views.FirstOrDefault(x => x.Name == view);
-                    RecordedPass? p = Find(f);
-                    if (v == null || p == null) return 0;
-                    return f.CommandBuffers.FirstOrDefault(b => b.ViewIndex == v.Index && b.PassIndex == p.Index)?.Milliseconds ?? 0;
-                }
-                ChartsSection("Pass history", "Frames without this pass plot as 0", CurrentIndex(frames, model), new[]
-                {
-                    new Sparkline("GPU time", frames.Select(Gpu).ToArray(), Style.KindDot(NodeKind.Pass), Style.Ms2),
-                    new Sparkline("CPU record", frames.Select(f => Find(f)?.Stats.CpuMilliseconds ?? 0).ToArray(), Style.KindDot(NodeKind.CommandBuffer), Style.Ms2),
-                    new Sparkline("Draw calls", frames.Select(f => (double)(Find(f)?.Stats.Draws ?? 0)).ToArray(), Style.KindDot(NodeKind.Draw), Style.Int),
-                });
-                break;
-            }
         }
     }
 

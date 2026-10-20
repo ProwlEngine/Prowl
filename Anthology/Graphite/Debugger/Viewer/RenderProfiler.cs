@@ -204,8 +204,8 @@ internal sealed partial class ProfilerView
         });
     }
 
-    private ElementBuilder Card(string id)
-        => _paper.Column(id)
+    private ElementBuilder Card(string id, int index = 0)
+        => _paper.Column(id, index)
             .BackgroundColor(Style.CardFill)
             .BorderColor(Style.CardBorder).BorderWidth(1)
             .Rounded(Metrics.ContainerRounding)
