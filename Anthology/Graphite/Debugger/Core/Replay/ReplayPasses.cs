@@ -230,6 +230,9 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                     copy.SourceRegion.Width, copy.SourceRegion.Height, copy.SourceRegion.Depth,
                     copy.LayerCount);
                 break;
+            case BlitTextureCommand blit:
+                cmd.BlitTexture(scope.Texture(blit.Source.Resource), scope.Texture(blit.DestinationAfter.Resource), blit.Regions.AsSpan());
+                break;
             case CopyTextureToBufferCommand copy:
                 cmd.CopyTextureToBuffer(scope.Texture(copy.Source.Resource), scope.Buffer(copy.DestinationAfter.Resource), copy.DestinationOffset, copy.Region);
                 break;
@@ -381,6 +384,6 @@ internal static class ReplayEvents
             or DispatchCommand or DispatchIndirectCommand
             or ClearColorTargetCommand or ClearDepthStencilCommand
             or UpdateBufferCommand or UpdateTextureCommand
-            or CopyBufferCommand or CopyTextureCommand or CopyTextureToBufferCommand
+            or CopyBufferCommand or CopyTextureCommand or BlitTextureCommand or CopyTextureToBufferCommand
             or ResolveTextureCommand or GenerateMipsCommand;
 }
