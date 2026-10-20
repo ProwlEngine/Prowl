@@ -170,7 +170,7 @@ public sealed class RenderGraph : IDisposable
         if (texture.Description.SizeMode == TextureSizeMode.InstanceRelative && !extent.IsValid)
             throw new ArgumentException($"Resource '{RenderResourceID.ToString(handle.Id)}' is sized relative to its instance, so it needs an extent.", nameof(extent));
 
-        return texture.ResolveHistory(device, key, device.LastBegunExecutionId + 1, 0, texture.Allocation(extent));
+        return Store.ResolvePersistent(device, handle.Id, texture.Description, key, extent, texture.Storage);
     }
 
     /// <summary>Resolves a persistent buffer before any execution, for CPU code that needs it. A new size keeps its contents.</summary>
@@ -180,7 +180,7 @@ public sealed class RenderGraph : IDisposable
         if (!Resources.TryGetValue(handle.Id, out GraphResource? resource) || resource is not GraphBufferResource { Persistent: true } buffer)
             throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a persistent buffer of graph '{Name}'.");
 
-        return buffer.ResolveHistory(device, key, device.LastBegunExecutionId + 1, 0, buffer.Description.ToBufferDescription());
+        return Store.ResolvePersistent(device, handle.Id, buffer.Description, key);
     }
 
     /// <summary>
