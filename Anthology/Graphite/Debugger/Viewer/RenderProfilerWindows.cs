@@ -13,14 +13,15 @@ public sealed class RenderProfilerWindows
 {
     private readonly DockSpace _dock;
     private readonly ProfilerView _snapshotView;
+    private PopoutRequest? _pendingPopout;
 
     public RenderProfilerWindows(IRenderProfilerSource source, DockSpace dock)
     {
         _dock = dock;
         Live = new LiveProfilerPanel(new ProfilerView(source, false, "rp_live", ShowSnapshots));
         _snapshotView = new ProfilerView(source, true, "rp_snapshots", ShowSnapshots);
-        Snapshots = new SnapshotViewerPanel(_snapshotView);
-        _snapshotView.PopOut = OpenPopout;
+        Snapshots = new SnapshotViewerPanel(_snapshotView, FlushPopout);
+        _snapshotView.PopOut = request => _pendingPopout = request;
     }
 
     public DockPanel Live { get; }
@@ -36,8 +37,12 @@ public sealed class RenderProfilerWindows
     /// <summary>Asks for a saved snapshot file, opens it, and shows the snapshot viewer.</summary>
     public void LoadSnapshot() => _snapshotView.LoadSnapshot();
 
-    private void OpenPopout(PopoutRequest request)
+    private void FlushPopout()
     {
+        if (_pendingPopout is not { } request)
+            return;
+        _pendingPopout = null;
+
         Float2 position = new(120, 100), size = new(1100, 760);
         if (_dock.TryGetPanelRect(typeof(SnapshotViewerPanel), out Rect anchor))
         {
@@ -115,16 +120,23 @@ public sealed class SnapshotViewerPanel : DockPanel
 {
     private readonly ProfilerView _view;
 
-    internal SnapshotViewerPanel(ProfilerView view)
+    private readonly Action _beforeDraw;
+
+    internal SnapshotViewerPanel(ProfilerView view, Action beforeDraw)
     {
         _view = view;
+        _beforeDraw = beforeDraw;
     }
 
     public override string Title => "Snapshot";
 
     public override string Icon => Glyph.Camera;
 
-    public override void OnGUI(Paper paper, float width, float height) => _view.Draw(paper, width, height);
+    public override void OnGUI(Paper paper, float width, float height)
+    {
+        _beforeDraw();
+        _view.Draw(paper, width, height);
+    }
 }
 
 /// <summary>A resource viewer popped out of the snapshot inspector into its own dockable window.</summary>
