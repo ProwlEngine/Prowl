@@ -27,7 +27,7 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly Dictionary<TraceResourceId, DeviceBuffer> _buffers = new();
     private readonly Dictionary<ProgramKey, ShaderProgram> _programs = new();
     private readonly Dictionary<int, Sampler> _samplers = new();
-    private readonly Dictionary<(Texture, ResourceRange, PixelFormat?), TextureView> _views = new();
+    private readonly Dictionary<(Texture, ResourceRange, PixelFormat?, bool), TextureView> _views = new();
     private readonly Dictionary<TraceVersion, RecordedCopy> _copies = new();
     private readonly HashSet<TraceVersion> _planned = new();
     private readonly HashSet<TraceVersion> _produced = new();
@@ -74,9 +74,9 @@ internal sealed unsafe class ReplayScope : IDisposable
 
     public Sampler? Sampler(int index) => index < 0 ? null : _samplers[index];
 
-    public TextureView View(Texture texture, ResourceRange range, PixelFormat? format)
+    public TextureView View(Texture texture, ResourceRange range, PixelFormat? format, bool arrayed)
     {
-        if (_views.TryGetValue((texture, range, format), out TextureView? view))
+        if (_views.TryGetValue((texture, range, format, arrayed), out TextureView? view))
             return view;
 
         view = Own(_device.ResourceFactory.CreateTextureView(new TextureViewDescription(
@@ -85,8 +85,11 @@ internal sealed unsafe class ReplayScope : IDisposable
             range.IsTexture ? range.MipLevels : texture.MipLevels,
             range.BaseArrayLayer,
             range.IsTexture ? range.ArrayLayers : texture.ArrayLayers,
-            format)));
-        _views[(texture, range, format)] = view;
+            format)
+        {
+            Arrayed = arrayed,
+        }));
+        _views[(texture, range, format, arrayed)] = view;
         return view;
     }
 

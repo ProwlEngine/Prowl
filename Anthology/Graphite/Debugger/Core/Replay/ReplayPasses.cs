@@ -301,7 +301,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 Texture texture = scope.Texture(property.Resource.Resource);
                 Sampler? sampler = scope.Sampler(property.Sampler);
                 if (NeedsView(texture, property))
-                    set.SetTexture(name, scope.View(texture, property.Range, property.ViewFormat), sampler);
+                    set.SetTexture(name, scope.View(texture, property.Range, property.ViewFormat, property.Arrayed), sampler);
                 else
                     set.SetTexture(name, texture, sampler);
 
@@ -333,7 +333,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                     Texture texture = scope.Texture(property.Resource.Resource);
                     Sampler? sampler = scope.Sampler(property.Sampler);
                     if (NeedsView(texture, property))
-                        table.SetTexture(name, entry.Index, scope.View(texture, property.Range, property.ViewFormat), sampler);
+                        table.SetTexture(name, entry.Index, scope.View(texture, property.Range, property.ViewFormat, property.Arrayed), sampler);
                     else
                         table.SetTexture(name, entry.Index, texture, sampler);
                     break;
@@ -356,6 +356,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
 
     private static bool NeedsView(Texture texture, RecordedProperty property)
         => property.ViewFormat != null
+            || property.Arrayed
             || (property.Range.IsTexture
                 && (property.Range.BaseMipLevel != 0
                     || property.Range.MipLevels != texture.MipLevels
