@@ -35,7 +35,7 @@ public sealed class VolumetricFog : VolumeComponent<VolumetricFogFeature>
     /// <summary>Multiplier on density for the light the fog absorbs along the view ray. Lower is brighter, longer range fog.</summary>
     [Range(0f, 5f)] public VolumeParameter<float> Extinction = new(1.0f);
 
-    /// <summary>Per pixel random color shift to break up banding. 0 is none.</summary>
+    /// <summary>Per pixel fixed pattern color shift to break up banding. 0 is none.</summary>
     [Range(0f, 0.2f)] public VolumeParameter<float> Dithering = new(0.02f);
 
     /// <summary>Ambient light added to every fog sample, whatever the shadows or light coverage, so dense fog in shadow keeps some color.</summary>
@@ -67,7 +67,7 @@ public sealed class VolumetricFog : VolumeComponent<VolumetricFogFeature>
     public VolumeParameter<bool> EnableTemporalReprojection = new(true);
 
     /// <summary>How much of the reprojected cells to keep.</summary>
-    [Range(0f, 0.99f)] public VolumeParameter<float> TemporalBlendWeight = new(0.9f);
+    [Range(0f, 0.99f)] public VolumeParameter<float> TemporalBlendWeight = new(0.95f);
 
     public override bool IsActive => Enabled.Value;
 
@@ -249,7 +249,6 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         _properties.SetFloat("_FogDithering", s.Dithering);
         _properties.SetFloat4("_FogAmbientColor", s.AmbientColor);
         _properties.SetFloat("_FogAmbientIntensity", s.AmbientIntensity);
-        _properties.SetFloat("_FogTime", (float)context.Time.Time);
         _properties.SetFloat("_FogUpsampleThreshold", s.UpsampleThreshold);
         _properties.SetFloat3("_FogLightTypes", s.LightTypes);
         SetVolumes(context.View.Position);
