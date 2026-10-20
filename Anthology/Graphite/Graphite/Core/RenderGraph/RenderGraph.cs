@@ -433,6 +433,8 @@ public sealed class RenderGraph : IDisposable
             && a.Height == b.Height
             && a.EnableDepth == b.EnableDepth
             && Math.Max(1, a.ArrayLayers) == Math.Max(1, b.ArrayLayers)
+            && Math.Max(1, a.MipLevels) == Math.Max(1, b.MipLevels)
+            && a.Cube == b.Cube
             && a.SampleCount == b.SampleCount
             && (a.ColorFormats ?? []).AsSpan().SequenceEqual(b.ColorFormats ?? []);
 
@@ -445,6 +447,8 @@ public sealed class RenderGraph : IDisposable
             && input.Width == output.Width
             && input.Height == output.Height
             && Math.Max(1, input.ArrayLayers) == Math.Max(1, output.ArrayLayers)
+            && Math.Max(1, input.MipLevels) == Math.Max(1, output.MipLevels)
+            && input.Cube == output.Cube
             && input.SampleCount == output.SampleCount
             && outputColors.Length > 0
             && outputColors.Length <= inputColors.Length

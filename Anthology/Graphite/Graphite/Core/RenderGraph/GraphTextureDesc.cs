@@ -43,6 +43,12 @@ public struct GraphTextureDesc
     /// </summary>
     public uint ArrayLayers;
 
+    /// <summary>Mip levels, one by default. A pass draws into a level through <see cref="RenderTexture.MipFramebuffer"/>.</summary>
+    public uint MipLevels;
+
+    /// <summary>A cube Width by Width, drawn through six views. Needs one sample and no depth.</summary>
+    public bool Cube;
+
     /// <summary>
     /// Samples per pixel of every attachment, for MSAA, one by default. Resolve into a single sample texture with
     /// <see cref="CommandBuffer.ResolveTexture"/>.

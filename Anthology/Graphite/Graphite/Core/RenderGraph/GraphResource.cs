@@ -178,9 +178,9 @@ public sealed class GraphTextureResource : GraphResource
         (int width, int height) = Description.Resolve(extent.Width, extent.Height);
         PixelFormat[] colors = Description.ColorFormats ?? Array.Empty<PixelFormat>();
         if (Description.EnableDepth && Description.DepthFormat is PixelFormat depthFormat)
-            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers };
+            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers, MipLevels = Description.MipLevels, Cube = Description.Cube };
 
-        return new RenderTextureDescription((uint)width, (uint)height, colors, Description.EnableDepth, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers };
+        return new RenderTextureDescription((uint)width, (uint)height, colors, Description.EnableDepth, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers, MipLevels = Description.MipLevels, Cube = Description.Cube };
     }
 
     internal RenderTexture ResolveHistory(GraphicsDevice device, GraphInstanceKey key, ulong executionId, int framesAgo, in RenderTextureDescription desc)

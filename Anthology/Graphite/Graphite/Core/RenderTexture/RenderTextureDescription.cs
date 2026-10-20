@@ -48,6 +48,16 @@ public readonly record struct RenderTextureDescription
     public uint ArrayLayers { get; init; }
 
     /// <summary>
+    /// Mip levels of every attachment, one by default.
+    /// </summary>
+    public uint MipLevels { get; init; }
+
+    /// <summary>
+    /// Attachments are cubes of Width by Width, drawn through six views. Needs one sample and no depth.
+    /// </summary>
+    public bool Cube { get; init; }
+
+    /// <summary>
     /// New desc.
     /// </summary>
     /// <param name="width">Width in texels.</param>
@@ -128,9 +138,11 @@ public readonly record struct RenderTextureDescription
         && SampleCount == other.SampleCount
         && Storage == other.Storage
         && Math.Max(1, ArrayLayers) == Math.Max(1, other.ArrayLayers)
+        && Math.Max(1, MipLevels) == Math.Max(1, other.MipLevels)
+        && Cube == other.Cube
         && ColorFormats.AsSpan().SequenceEqual(other.ColorFormats);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Width, Height, Depth, DepthFormat, SampleCount, Storage, Math.Max(1, ArrayLayers), ColorFormats.ArrayHash());
+        => HashCode.Combine(HashCode.Combine(Width, Height, Depth, DepthFormat, SampleCount, Storage), Math.Max(1, ArrayLayers), Math.Max(1, MipLevels), Cube, ColorFormats.ArrayHash());
 }
