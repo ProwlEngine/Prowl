@@ -1661,7 +1661,7 @@ internal sealed partial class FramePipeline : IDisposable
     }
 
     private void Plan(CameraFrame camera, in ViewDesc view, WorldFrame world, uint width, uint height)
-        => _planned.Add(new PlannedInstance(KindOf(view.Kind), view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
+        => _planned.Add(new PlannedInstance(RenderKinds.Of(view.Kind, CameraShape.Of(view, camera.Selected)), view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
 
     private GraphInstances CreateInstances(RenderGraph graph)
     {
@@ -1679,13 +1679,6 @@ internal sealed partial class FramePipeline : IDisposable
         }
         return instances;
     }
-
-    private static GraphKind KindOf(ViewKind kind) => kind switch
-    {
-        ViewKind.SkyCapture => RenderKinds.SkyCapture,
-        ViewKind.ReflectionProbe => RenderKinds.ProbeCapture,
-        _ => RenderKinds.Camera,
-    };
 
     // Whether the view's transparent list reads the scene colour this frame. Returns whether its copy was just made, which
     // adds the copy to the view's graph; the lists keep their order through that rebuild, so what Prepare uploaded holds.
