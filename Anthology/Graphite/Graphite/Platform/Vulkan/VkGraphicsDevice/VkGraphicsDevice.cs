@@ -96,7 +96,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     private VkCaptureBackend? _captureBackend;
 
-    internal override Prowl.Graphite.RenderGraph.ICaptureBackend CaptureBackend
+    internal override ICaptureBackend CaptureBackend
         => System.Threading.LazyInitializer.EnsureInitialized(ref _captureBackend, () => new VkCaptureBackend(this))!;
 
     internal override CommandBuffer RentGraphCommandBuffer(ExecutionTask task)

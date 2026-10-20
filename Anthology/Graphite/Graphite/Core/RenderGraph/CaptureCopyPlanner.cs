@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 using Prowl.Graphite.Debugging;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 internal interface ICaptureBackend
 {

@@ -1,4 +1,4 @@
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Opaque handle to a graph texture. Get from builder in Setup, resolve to real target in Render.

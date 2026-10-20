@@ -1,6 +1,6 @@
 using System;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 internal readonly struct ResourceAccess
 {
