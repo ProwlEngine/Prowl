@@ -16,10 +16,10 @@ internal sealed partial class ProfilerView
 
     private readonly record struct Stat(string Label, string Value, string Sub, Color? Color = null);
 
-    private void HeroStrip(IReadOnlyList<Stat> stats)
+    private void HeroStrip(IReadOnlyList<Stat> stats, float? maxWidth = null, float valueScale = 1.6f)
     {
         float gap = Metrics.SpacingLarge;
-        float width = SectionWidth(0);
+        float width = maxWidth ?? SectionWidth(0);
         int perLine = Math.Clamp((int)((width + gap) / (HeroTileMinWidth + gap)), 1, stats.Count);
         float tileWidth = (width - gap * (perLine - 1)) / perLine;
 
@@ -31,7 +31,7 @@ internal sealed partial class ProfilerView
                 {
                     _paper.Box("l").Height(UnitValue.Auto).Text(stat.Label, Style.Font).FontSize(Style.Body).TextColor(Style.InkSoft)
                         .Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
-                    _paper.Box("v").Height(UnitValue.Auto).Text(stat.Value, Style.Strong).FontSize(Style.Title * 1.6f).TextColor(stat.Color ?? Style.Ink)
+                    _paper.Box("v").Height(UnitValue.Auto).Text(stat.Value, Style.Strong).FontSize(Style.Title * valueScale).TextColor(stat.Color ?? Style.Ink)
                         .Alignment(TextAlignment.MiddleLeft).TextTruncate().IsNotInteractable();
                     _paper.Box("s").Height(UnitValue.Auto).Text(stat.Sub, Style.Font).FontSize(Style.Small).TextColor(Style.InkDim)
                         .Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
@@ -42,12 +42,12 @@ internal sealed partial class ProfilerView
     private static Color? Versus(double value, double average)
         => average <= 0 ? null : value > average * 1.25 ? Style.Bad : value < average * 0.8 ? Style.Good : null;
 
-    private void Collapsible(string title, Action body, bool open = false)
+    private void Collapsible(string title, Action body, bool open = false, float? width = null)
     {
         float outer = _contentWidth;
-        using (_paper.Column("sec", _sectionIndex++).Width(SectionWidth(0)).Height(UnitValue.Auto).Enter())
+        using (_paper.Column("sec", _sectionIndex++).Width(width ?? SectionWidth(0)).Height(UnitValue.Auto).Enter())
         {
-            _contentWidth = outer - FoldInset;
+            _contentWidth = (width ?? outer) - FoldInset;
             Origami.Foldout(_paper, "fold", title).DefaultExpanded(open).Body(body);
             _contentWidth = outer;
         }

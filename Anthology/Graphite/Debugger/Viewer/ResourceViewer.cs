@@ -23,7 +23,7 @@ internal sealed partial class ProfilerView
     private readonly Dictionary<string, string> _viewerMode = new();
     private readonly Dictionary<string, int> _pages = new();
 
-    private void ResourceViewer(FrameModel model, ProfileNode node, string context, List<ViewerItem> items, TargetStep? step, float width)
+    private void ResourceViewer(FrameModel model, ProfileNode node, string context, List<ViewerItem> items, TargetStep? step, float width, bool compact = false)
     {
         if (items.Count == 0)
         {
@@ -46,6 +46,18 @@ internal sealed partial class ProfilerView
             : modes[0];
 
         ViewerData data = ResolveViewerData(model, node, key, step);
+
+        if (compact)
+        {
+            string shown = kind == "tex" ? "Texture" : data.Vertices != null && data.Indices != null && kind is "vb" or "ib" ? "Mesh" : "Raw";
+            switch (shown)
+            {
+                case "Texture": TextureView(model, data, step, width, true); break;
+                case "Mesh": MeshView(data, width, true); break;
+                default: BufferTable(key, "Raw", data, width, true); break;
+            }
+            return;
+        }
 
         using (_paper.Row("modes").Height(30).Gap(8).AlignItems(LayoutAlignment.Center).Enter())
         {
@@ -75,8 +87,11 @@ internal sealed partial class ProfilerView
                 }
             }
 
-            using (_paper.Column("info").Width(stacked ? width : InfoWidth).Height(UnitValue.Auto).Enter())
-                KvGrid(stacked ? width : InfoWidth, data.Info, 400f);
+            float infoWidth = stacked ? width : InfoWidth;
+            using (_paper.Column("info").Width(infoWidth).Height(UnitValue.Auto).Gap(Metrics.SpacingLarge).Enter())
+            {
+                KvGrid(infoWidth, data.Info, 400f);
+            }
         }
     }
 
@@ -236,8 +251,9 @@ internal sealed partial class ProfilerView
         return (new((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2), new((max[0] - min[0]) / 2, (max[1] - min[1]) / 2, (max[2] - min[2]) / 2));
     }
 
-    private void BufferTable(string key, string mode, ViewerData data, float width)
+    private void BufferTable(string key, string mode, ViewerData data, float width, bool compact = false)
     {
+        int pageRows = compact ? 8 : PageRows;
         string pageKey = key + "|" + mode;
         int page = _pages.GetValueOrDefault(pageKey);
         List<Row> rows = new();
@@ -249,38 +265,38 @@ internal sealed partial class ProfilerView
         if (mode == "Vertices" && data.Vertices != null)
         {
             total = data.Vertices.Length / data.Stride;
-            page = Math.Clamp(page, 0, Math.Max(0, (total - 1) / PageRows));
+            page = Math.Clamp(page, 0, Math.Max(0, (total - 1) / pageRows));
             head = new[] { "#", "POSITION", "NORMAL", "TEXCOORD0" };
             flex = new[] { 0.4f, 1.4f, 1.4f, 1f };
-            for (int i = page * PageRows; i < Math.Min(total, (page + 1) * PageRows); i++)
+            for (int i = page * pageRows; i < Math.Min(total, (page + 1) * pageRows); i++)
             {
                 int o = i * data.Stride;
                 string Vec(int offset, int n) => string.Join(", ", Enumerable.Range(0, n).Select(k => Style.F(BitConverter.ToSingle(data.Vertices, o + offset + k * 4), "0.0000")));
                 rows.Add(new Row { Cells = new[] { i.ToString(), Vec(data.PositionOffset, 3), Vec(data.NormalOffset, 3), Vec(data.UvOffset, 2) }, Colors = new Color?[] { Style.InkDim } });
             }
-            rangeLabel = $"Rows {page * PageRows}-{Math.Min(total, (page + 1) * PageRows) - 1} of {Style.Int(total)}";
+            rangeLabel = $"Rows {page * pageRows}-{Math.Min(total, (page + 1) * pageRows) - 1} of {Style.Int(total)}";
         }
         else if (mode == "Indices" && data.Indices != null)
         {
             int size = data.Index32 ? 4 : 2;
             total = data.Indices.Length / size / 3;
-            page = Math.Clamp(page, 0, Math.Max(0, (total - 1) / PageRows));
+            page = Math.Clamp(page, 0, Math.Max(0, (total - 1) / pageRows));
             head = new[] { "Tri", "i0", "i1", "i2", "Byte offset" };
             flex = new[] { 0.6f, 1f, 1f, 1f, 1f };
             uint Index(int i) => data.Index32 ? BitConverter.ToUInt32(data.Indices, i * 4) : BitConverter.ToUInt16(data.Indices, i * 2);
-            for (int t = page * PageRows; t < Math.Min(total, (page + 1) * PageRows); t++)
+            for (int t = page * pageRows; t < Math.Min(total, (page + 1) * pageRows); t++)
                 rows.Add(new Row { Cells = new[] { t.ToString(), Index(t * 3).ToString(), Index(t * 3 + 1).ToString(), Index(t * 3 + 2).ToString(), Style.Hex32((ulong)(t * 3 * size), 6) }, Colors = new Color?[] { Style.InkDim } });
-            rangeLabel = $"Rows {page * PageRows}-{Math.Min(total, (page + 1) * PageRows) - 1} of {Style.Int(total)}";
+            rangeLabel = $"Rows {page * pageRows}-{Math.Min(total, (page + 1) * pageRows) - 1} of {Style.Int(total)}";
         }
         else
         {
             byte[] bytes = (key.StartsWith("vb:") ? data.Vertices : key.StartsWith("ib:") ? data.Indices : data.Bytes) ?? Array.Empty<byte>();
             total = (bytes.Length + 15) / 16;
-            page = Math.Clamp(page, 0, Math.Max(0, (total - 1) / PageRows));
+            page = Math.Clamp(page, 0, Math.Max(0, (total - 1) / pageRows));
             string interp = key.StartsWith("ib:") ? (data.Index32 ? "u32" : "u16") : key.StartsWith("vb:") ? "f32" : "u32";
             head = new[] { "Offset", "Bytes", "As " + interp };
             flex = new[] { 0.6f, 2.4f, 1.6f };
-            for (int line = page * PageRows; line < Math.Min(total, (page + 1) * PageRows); line++)
+            for (int line = page * pageRows; line < Math.Min(total, (page + 1) * pageRows); line++)
             {
                 int start = line * 16, len = Math.Min(16, bytes.Length - start);
                 string hex = string.Join("  ", Enumerable.Range(0, 4).Select(g => string.Join(" ", Enumerable.Range(g * 4, 4).Where(b => b < len).Select(b => bytes[start + b].ToString("X2")))).Where(s => s.Length > 0));
@@ -292,11 +308,13 @@ internal sealed partial class ProfilerView
                         values.Add(interp == "f32" ? Style.F(BitConverter.ToSingle(bytes, start + b), "G4") : BitConverter.ToUInt32(bytes, start + b).ToString());
                 rows.Add(new Row { Cells = new[] { Style.Hex32((ulong)start, 6), hex, string.Join("  ", values) }, Colors = new Color?[] { Style.InkDim, Style.Ink, Style.RawValue } });
             }
-            rangeLabel = bytes.Length == 0 ? "No captured contents" : $"Bytes {Style.Hex32((ulong)(page * PageRows * 16), 6)}-{Style.Hex32((ulong)Math.Min(bytes.Length, (page + 1) * PageRows * 16) - 1, 6)}";
+            rangeLabel = bytes.Length == 0 ? "No captured contents" : $"Bytes {Style.Hex32((ulong)(page * pageRows * 16), 6)}-{Style.Hex32((ulong)Math.Min(bytes.Length, (page + 1) * pageRows * 16) - 1, 6)}";
         }
 
-        int pages = Math.Max(1, (total + PageRows - 1) / PageRows);
-        Table(width, head, flex, rows, 520f);
+        int pages = Math.Max(1, (total + pageRows - 1) / pageRows);
+        Table(width, head, flex, rows, compact ? 260f : 520f);
+        if (compact)
+            return;
 
         using (_paper.Row("pager").Height(Metrics.HeaderHeight).Gap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
         {

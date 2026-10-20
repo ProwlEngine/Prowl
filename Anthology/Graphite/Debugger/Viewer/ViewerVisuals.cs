@@ -187,12 +187,13 @@ internal sealed partial class ProfilerView
         return result;
     }
 
-    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, float width)
+    private void TextureView(FrameModel model, ViewerData data, TargetStep? step, float width, bool compact = false)
     {
         var t = data.Resource?.Texture;
         int mipMax = t is { } d ? (int)Math.Max(0, d.MipLevels - 1) : 0;
         _mip = Math.Min(_mip, mipMax);
 
+        if (!compact)
         using (_paper.Row("tools").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(Metrics.SpacingLarge).LineGap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
         {
             string[] names = { "R", "G", "B", "A" };
@@ -202,12 +203,12 @@ internal sealed partial class ProfilerView
             chans.Show();
 
             Dim("evl", "Exposure");
-            using (_paper.Box("evs").Width(120).Height(Metrics.HeaderHeight).Enter())
+            using (_paper.Row("evs").Width(120).Height(Metrics.HeaderHeight).AlignItems(LayoutAlignment.Center).Enter())
                 Origami.Slider(_paper, "ev", _exposure, v => _exposure = MathF.Round(v * 2f) / 2f, -4f, 4f).Small().ShowValue(false).Show();
             Mono("evv", (_exposure >= 0 ? "+" : "") + Style.F(_exposure, "0.0") + " EV", Style.InkSoft);
 
             Dim("mipl", "Mip");
-            using (_paper.Box("mips").Width(100).Height(Metrics.HeaderHeight).Enter())
+            using (_paper.Row("mips").Width(100).Height(Metrics.HeaderHeight).AlignItems(LayoutAlignment.Center).Enter())
                 Origami.IntSlider(_paper, "mip", _mip, v => _mip = v, 0, Math.Max(1, mipMax)).Small().ShowValue(false).Disabled(mipMax == 0).Show();
             string mipSize = t is { } td ? $"{Math.Max(1, td.Width >> _mip)}x{Math.Max(1, td.Height >> _mip)}" : "-";
             Mono("mipv", $"{_mip} / {mipSize}", Style.InkSoft);
@@ -228,7 +229,7 @@ internal sealed partial class ProfilerView
             : null;
 
         float aspect = (float)pw / ph;
-        float displayWidth = MathF.Min(width, 760f);
+        float displayWidth = MathF.Min(width, (compact ? 240f : 560f) * aspect);
         ElementBuilder box = _paper.Box("img").Width(displayWidth).Height(displayWidth / aspect)
             .Rounded(4).BorderColor(Style.Border).BorderWidth(1).Clip()
             .Cursor(PaperCursor.Crosshair)
@@ -277,7 +278,8 @@ internal sealed partial class ProfilerView
             }
         }
 
-        Mono("readout", PixelReadout(data), Style.InkSoft);
+        if (!compact)
+            Mono("readout", PixelReadout(data), Style.InkSoft);
     }
 
     private string PixelReadout(ViewerData data)
@@ -298,7 +300,7 @@ internal sealed partial class ProfilerView
         return where + value;
     }
 
-    private void MeshView(ViewerData data, float width)
+    private void MeshView(ViewerData data, float width, bool compact = false)
     {
         if (data.Vertices == null || data.Indices == null)
         {
@@ -309,7 +311,7 @@ internal sealed partial class ProfilerView
         Mesh mesh = Mesh.Decode(data);
         string stats = $"{mesh.VertexCount} verts / {mesh.TriangleCount} tris / {MeshModes[_meshMode]}";
 
-        ElementBuilder box = _paper.Box("mesh").Width(UnitValue.Stretch()).Height(340)
+        ElementBuilder box = _paper.Box("mesh").Width(UnitValue.Stretch()).Height(compact ? 240 : 460)
             .Rounded(4).BackgroundColor(Style.Theme.Neutral.C100).BorderColor(Style.Border).BorderWidth(1).Clip()
             .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing)
             .OnDragging(e =>
@@ -326,6 +328,7 @@ internal sealed partial class ProfilerView
             float yaw = _yaw, pitch = _pitch;
             _paper.Draw((canvas, r) => mesh.Draw(canvas, r, yaw, pitch, mode));
 
+            if (!compact)
             using (_paper.Row("tools").PositionType(PositionType.SelfDirected).Position(0, 0).Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                 .Padding(Metrics.SpacingLarge).Gap(Metrics.SpacingLarge).IsNotInteractable().Enter())
             {
@@ -338,7 +341,8 @@ internal sealed partial class ProfilerView
             }
         }
 
-        Mono("stats", stats, Style.InkDim);
+        if (!compact)
+            Mono("stats", stats, Style.InkDim);
     }
 
     private sealed class Mesh
