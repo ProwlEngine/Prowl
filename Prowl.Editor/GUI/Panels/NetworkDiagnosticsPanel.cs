@@ -297,7 +297,10 @@ public class NetworkDiagnosticsPanel : DockPanel
                     $"{(_paused ? "Paused with" : NetworkDiagnostics.Enabled ? "Capturing" : "Capture off with")} {_filtered.Count} events{(_showInternalEvents ? " (including internal events)" : "")}",
                     footerHeight, tooltip: $"Showing {_filtered.Count} of {_history.Count} retained events\n{NetworkDiagnostics.Overwritten} overwritten\nCapacity: {NetworkDiagnostics.Capacity}");
             if (width >= 420)
-                Label(paper, font, "net_rates", $"↑ {Bytes(_sendRate)}/s  ↓ {Bytes(_receiveRate)}/s", footerHeight);
+                paper.Box("net_rates").Width(Math.Min(240, width * 0.5f)).Height(footerHeight).Clip()
+                    .Text($"↑ {Bytes(_sendRate)}/s  ↓ {Bytes(_receiveRate)}/s", font)
+                    .FontSize(EditorTheme.FontSizeSmall).TextColor(EditorTheme.Ink400)
+                    .Alignment(TextAlignment.MiddleRight);
         }
     }
 
