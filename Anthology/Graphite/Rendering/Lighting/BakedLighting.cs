@@ -492,7 +492,7 @@ internal sealed class WorldProbes : IDisposable
 }
 
 /// <summary>Samples the light probes for every world's requests, after the upload and before any camera reads them.</summary>
-internal sealed class ProbePass(ComputeProgram program) : IPass, IDisposable
+internal sealed class ProbePass(ComputeProgram program) : IExecutionPass, IDisposable
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
