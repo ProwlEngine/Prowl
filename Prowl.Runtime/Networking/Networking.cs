@@ -4,6 +4,7 @@
 using System;
 using System.Diagnostics;
 
+using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Warp;
@@ -85,6 +86,7 @@ public static partial class Networking
     public static NetSession Host(Transport transport, string name = "Host", NetSessionOptions? options = null)
     {
         BeginSession();
+        using FrameStatScope stats = FrameStats.Networking.Scope();
         NetSession session = NetSession.Host(transport, name, options ?? s_configuration.CreateSessionOptions());
         Attach(session);
 
@@ -105,13 +107,21 @@ public static partial class Networking
     public static NetSession Join(Transport transport, string address, string name, ReadOnlySpan<byte> token = default, NetSessionOptions? options = null)
     {
         BeginSession();
+        using FrameStatScope stats = FrameStats.Networking.Scope();
         NetSession session = NetSession.Join(transport, address, name, token, options ?? s_configuration.CreateSessionOptions());
         Attach(session);
         return session;
     }
 
     /// <summary>Leaves the session, or ends it for everyone when hosting. Does nothing without one.</summary>
-    public static void Shutdown(string? message = null) => Session?.Shutdown(message);
+    public static void Shutdown(string? message = null)
+    {
+        if (Session is not { } session)
+            return;
+
+        using FrameStatScope stats = FrameStats.Networking.Scope();
+        session.Shutdown(message);
+    }
 
     // --- Called by the game loop -------------------------------------------------------------
 
@@ -122,6 +132,7 @@ public static partial class Networking
         if (session == null)
             return;
 
+        using FrameStatScope stats = FrameStats.Networking.Scope();
         s_frame++;
         session.Receive();
 
@@ -136,6 +147,7 @@ public static partial class Networking
         if (session == null)
             return;
 
+        using FrameStatScope stats = FrameStats.Networking.Scope();
         if (IsActive && Now >= s_nextTick)
         {
             // Fall behind by more than a tick, after a hitch, and the schedule restarts rather than bursting to catch up.

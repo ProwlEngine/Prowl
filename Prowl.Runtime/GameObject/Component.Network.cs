@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 
+using Prowl.Runtime.Diagnostics;
 using Prowl.Warp;
 
 namespace Prowl.Runtime;
@@ -32,6 +33,7 @@ public abstract partial class Component
         }
 
         // A proxy's value belongs to whoever controls it, and the next update would undo the change anyway.
+        using FrameStatScope stats = FrameStats.Networking.Scope();
         if (!Networking.HasControl(this, member.Flags))
             return;
 

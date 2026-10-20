@@ -349,9 +349,10 @@ internal static class NetworkCodeGen
             Changed = true;
             StringBuilder prologue = new();
             prologue.Append($"if (__Rpc_Begin({rpc.Descriptor}, out {WriterType} __rpc_w)) {{ ");
+            prologue.Append("using (global::Prowl.Runtime.Diagnostics.FrameStats.Networking.Scope()) { ");
             foreach (ParameterSyntax parameter in node.ParameterList.Parameters)
                 prologue.Append($"{Serializer}<{OneLine(parameter.Type!)}>.Write(__rpc_w, {parameter.Identifier.Text}); ");
-            prologue.Append($"if (!__Rpc_Send({rpc.Descriptor}, __rpc_w)) return; }} ");
+            prologue.Append($"if (!__Rpc_Send({rpc.Descriptor}, __rpc_w)) return; }} }} ");
             StatementSyntax check = SyntaxFactory.ParseStatement(prologue.ToString());
 
             // Inserted right after the opening brace, on its line, taking over whatever followed the brace, so

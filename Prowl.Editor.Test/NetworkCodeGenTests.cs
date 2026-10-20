@@ -76,6 +76,23 @@ public class NetworkCodeGenTests : EditorTestHarness
     private static List<uint> Slots(Component component) => NetworkMembers.Of(component).Syncs.Select(s => s.Slot).ToList();
 
     [Fact]
+    public void RpcStatsScopeDoesNotIntroduceALocalNameCollision()
+    {
+        WriteScript("StatsNames.cs", """
+            public class StatsNames : Prowl.Runtime.Component
+            {
+                [Prowl.Runtime.Rpc.Broadcast]
+                public void WithParameter(int __rpc_stats) { }
+
+                [Prowl.Runtime.Rpc.Broadcast]
+                public void WithLocal() { int __rpc_stats = 1; }
+            }
+            """);
+
+        Assert.NotNull(CompileGame().GetType("StatsNames"));
+    }
+
+    [Fact]
     public void GeneratedCodeCompilesAndBehavesNormallyWithoutASession()
     {
         WriteScript("Ship.cs", ShipScript);

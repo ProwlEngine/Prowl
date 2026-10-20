@@ -47,6 +47,7 @@ public static class FrameStats
     public static readonly FrameStat Physics = new("Physics", Hex(0xf3, 0x77, 0x48));
     public static readonly FrameStat Animation = new("Animation", Hex(0xff, 0x70, 0xa6));
     public static readonly FrameStat Navigation = new("Navigation", Hex(0x73, 0x8d, 0x45));
+    public static readonly FrameStat Networking = new("Networking", Hex(0x48, 0xca, 0xe4));
     public static readonly FrameStat Audio = new("Audio", Hex(0xbd, 0xb2, 0xff));
     public static readonly FrameStat Render = new("Render", Hex(0x8a, 0xc9, 0x26));
     public static readonly FrameStat UI = new("UI", Hex(0xb4, 0x86, 0x9f));
