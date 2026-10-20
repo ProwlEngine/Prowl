@@ -107,7 +107,7 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
 
         GraphKind camera = GraphKind.Intern("Test.Camera");
         using RenderGraph graph = RenderGraph.Build([new WriteValuesPass(data, [10, 20, 30, 40]), new AddOnePass(data, result, program, camera)], [new GraphScope(camera, GraphKind.Root)]);
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         instances.Add(camera, 0);
 
         GD.DispatchGraph(graph, instances);
@@ -136,7 +136,7 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer first = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         DeviceBuffer second = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         using RenderGraph graph = TestViews.Build([new SlotWritePass([1, 2, 3, 4])]);
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         instances.Add(TestViews.Kind, 0, imports: [GraphImport.Of(SlotWritePass.Slot, first)]);
         instances.Add(TestViews.Kind, 1, imports: [GraphImport.Of(SlotWritePass.Slot, second)]);
 
@@ -159,7 +159,7 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer readback = CreateTexelReadbackBuffer<uint>(2, 2);
         GD.Record(cmd => cmd.UpdateTexture<uint>(texture, [0xFF00FF00, 0xFF00FF00, 0xFF00FF00, 0xFF00FF00]));
         using RenderGraph graph = TestViews.Build([new SlotCopyPass(readback)]);
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         instances.Add(TestViews.Kind, 0, imports: [GraphImport.Of(SlotCopyPass.Slot, texture)]);
 
         GD.WaitForExecution(GD.DispatchGraph(graph, instances));

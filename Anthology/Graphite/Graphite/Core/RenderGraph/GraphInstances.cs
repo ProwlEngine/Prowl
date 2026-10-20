@@ -87,14 +87,20 @@ public sealed class GraphInstance
     }
 }
 
-/// <summary>The instances one dispatch runs: the root, then each instance after its parent, children in the order added.</summary>
+/// <summary>The instances one dispatch of a graph runs: the root, then each instance after its parent, children in the order added.</summary>
 public sealed class GraphInstances
 {
     private readonly List<GraphInstance> _all = new();
     private readonly HashSet<GraphInstanceKey> _keys = new();
 
-    public GraphInstances(GraphExtent extent = default, Framebuffer? target = null, object? data = null)
-        => Reset(extent, target, data);
+    internal GraphInstances(RenderGraph graph, GraphExtent extent, Framebuffer? target, object? data)
+    {
+        Graph = graph;
+        Reset(extent, target, data);
+    }
+
+    /// <summary>The graph these instances are for, which declares their kinds.</summary>
+    public RenderGraph Graph { get; }
 
     public GraphInstance Root { get; private set; } = null!;
 
@@ -116,9 +122,14 @@ public sealed class GraphInstances
     {
         if (!kind.IsValid || kind == GraphKind.Root)
             throw new ArgumentException("An instance needs a kind of its own, not the default or root kind.", nameof(kind));
+        if (!Graph.Contains(kind))
+            throw new ArgumentException($"Kind '{kind.Name}' is not declared by graph '{Graph.Name}'.", nameof(kind));
         parent ??= Root;
         if (_all.Count <= parent.Index || _all[parent.Index] != parent)
             throw new ArgumentException("The parent belongs to another set of instances.", nameof(parent));
+        GraphKind expected = Graph.ParentOf(kind);
+        if (parent.Kind != expected)
+            throw new ArgumentException($"Kind '{kind.Name}' runs under kind '{expected.Name}' in graph '{Graph.Name}', not under '{parent.Kind.Name}'.", nameof(parent));
 
         GraphInstanceKey key = new(kind, id);
         if (_keys.Contains(key))

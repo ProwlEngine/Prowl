@@ -143,7 +143,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(4, 4, [PixelFormat.R32_G32_B32_A32_Float], false));
         ThrowingPass pass = new(target);
         using RenderGraph graph = RenderGraph.Build([pass]);
-        GraphInstances instances = new(new GraphExtent(4, 4));
+        GraphInstances instances = graph.CreateInstances(new GraphExtent(4, 4));
 
         for (int i = 0; i < 8; i++)
             Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(graph, instances));
@@ -165,7 +165,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         using RenderGraph graph = RenderGraph.Build(
             [new RootOrderPass(log), new OrderPass("World", world, log), new OrderPass("Camera", camera, log)],
             [new GraphScope(world, GraphKind.Root), new GraphScope(camera, world)]);
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         GraphInstance first = instances.Add(world, 0, extent: new GraphExtent(16, 16));
         instances.Add(camera, 0, first, new GraphExtent(64, 64));
         instances.Add(camera, 1, first, new GraphExtent(32, 32));
@@ -185,7 +185,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         using RenderGraph graph = RenderGraph.Build(
             [new ClearSharedPass(new Color(0f, 1f, 0f, 1f)), new CopySharedPass(copy, reader)],
             [new GraphScope(reader, GraphKind.Root)]);
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         instances.Add(reader, 0);
 
         GD.DispatchGraph(graph, instances);
@@ -237,15 +237,23 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     [Fact]
-    public void Dispatch_AnInstanceUnderTheWrongParentKind_Throws()
+    public void Dispatch_InstancesOfAnotherGraph_Throws()
+    {
+        using RenderGraph graph = TestViews.Build([]);
+        using RenderGraph other = TestViews.Build([]);
+
+        Assert.Throws<ArgumentException>(() => GD.DispatchGraph(graph, TestViews.Single(other)));
+    }
+
+    [Fact]
+    public void Add_AnInstanceUnderTheWrongParentKind_Throws()
     {
         GraphKind world = GraphKind.Intern("Test.World");
         GraphKind camera = GraphKind.Intern("Test.Camera");
         using RenderGraph graph = RenderGraph.Build([], [new GraphScope(world, GraphKind.Root), new GraphScope(camera, world)]);
-        GraphInstances instances = new();
-        instances.Add(camera, 0);
+        GraphInstances instances = graph.CreateInstances();
 
-        Assert.Throws<ArgumentException>(() => GD.DispatchGraph(graph, instances));
+        Assert.Throws<ArgumentException>(() => instances.Add(camera, 0));
     }
 
     [Fact]

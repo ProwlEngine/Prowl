@@ -134,6 +134,10 @@ public sealed class RenderGraph : IDisposable
     /// <summary>True if the kind is the root or a declared scope.</summary>
     public bool Contains(GraphKind kind) => kind == GraphKind.Root || _parents.ContainsKey(kind);
 
+    /// <summary>Instances for one dispatch of this graph, holding the root.</summary>
+    public GraphInstances CreateInstances(GraphExtent extent = default, Framebuffer? target = null, object? data = null)
+        => new(this, extent, target, data);
+
     /// <summary>The kind an instance of the given kind runs under.</summary>
     public GraphKind ParentOf(GraphKind kind)
         => _parents.TryGetValue(kind, out GraphKind parent) ? parent : throw new ArgumentException($"Kind '{kind.Name}' is not declared by graph '{Name}'.", nameof(kind));

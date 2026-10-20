@@ -18,19 +18,8 @@ public abstract partial class GraphicsDevice
     {
         ValidationHelpers.RequireNotNull(this, graph, nameof(graph), nameof(DispatchGraph));
         ValidationHelpers.RequireNotNull(this, instances, nameof(instances), nameof(DispatchGraph));
-        foreach (GraphInstance instance in instances.All)
-        {
-            if (instance.Parent == null)
-                continue;
-
-            if (!graph.Contains(instance.Kind))
-                throw new ArgumentException($"Instance '{instance.Name}' has kind '{instance.Kind.Name}', which graph '{graph.Name}' does not declare.", nameof(instances));
-
-            GraphKind expected = graph.ParentOf(instance.Kind);
-            if (instance.Parent.Kind != expected)
-                throw new ArgumentException(
-                    $"Instance '{instance.Name}' of kind '{instance.Kind.Name}' runs under kind '{instance.Parent.Kind.Name}', but graph '{graph.Name}' declares '{expected.Name}' as its parent.", nameof(instances));
-        }
+        if (instances.Graph != graph)
+            throw new ArgumentException($"The instances were created for graph '{instances.Graph.Name}', not '{graph.Name}'.", nameof(instances));
 
         ExecutionTask task = BeginExecution(graph.Name, profilers);
         GraphExecution execution = new(this, task, graph, instances);

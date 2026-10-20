@@ -84,7 +84,7 @@ GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescriptio
 GraphicsProgram shader = /* load + create a ShaderProgram */;
 Mesh triangle = /* create vertex/index buffers */;
 RenderGraph graph = RenderGraph.Build([new TrianglePass(triangle, shader)], [new GraphScope(TrianglePass.View, GraphKind.Root)], "Triangle");
-GraphInstances instances = new();
+GraphInstances instances = graph.CreateInstances();
 instances.Add(TrianglePass.View, id: 0, extent: new GraphExtent(600, 600), target: device.MainSwapchain.Framebuffer);
 
 device.DispatchGraph(graph, instances);
@@ -101,7 +101,7 @@ slots a pass declares:
 GraphKind camera = GraphKind.Intern("Camera");
 RenderGraph graph = RenderGraph.Build([new SkinningPass(), new OpaquePass(camera), new PostPass(camera)], [new GraphScope(camera, GraphKind.Root)], "Scene");
 
-GraphInstances instances = new();
+GraphInstances instances = graph.CreateInstances();
 instances.Add(camera, id: 0, extent: new GraphExtent(1280, 720), target: device.MainSwapchain.Framebuffer);
 instances.Add(camera, id: 1, extent: new GraphExtent(256, 256), target: minimap);
 device.DispatchGraph(graph, instances);

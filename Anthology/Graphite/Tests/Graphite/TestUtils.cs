@@ -57,8 +57,9 @@ public static class TestGraphExtensions
 
     private static RenderContext RootContext(GraphicsDevice gd, ExecutionTask task)
     {
-        GraphInstances instances = new(new GraphExtent(256, 256));
-        return new GraphExecution(gd, task, RenderGraph.Build([]), instances).ContextOf(instances.Root);
+        RenderGraph graph = RenderGraph.Build([]);
+        GraphInstances instances = graph.CreateInstances(new GraphExtent(256, 256));
+        return new GraphExecution(gd, task, graph, instances).ContextOf(instances.Root);
     }
 }
 
@@ -73,14 +74,14 @@ public static class TestViews
 
     public static GraphInstances Single(RenderGraph graph, GraphExtent extent = default, Framebuffer? target = null)
     {
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         instances.Add(Kind, 0, extent: extent, target: target);
         return instances;
     }
 
     public static GraphInstances Of(RenderGraph graph, params (uint Width, uint Height)[] views)
     {
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         for (int i = 0; i < views.Length; i++)
             instances.Add(Kind, i, extent: new GraphExtent(views[i].Width, views[i].Height));
         return instances;
@@ -88,7 +89,7 @@ public static class TestViews
 
     public static GraphInstances Of(RenderGraph graph, params (int Id, uint Width, uint Height)[] views)
     {
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         foreach ((int id, uint width, uint height) in views)
             instances.Add(Kind, id, extent: new GraphExtent(width, height));
         return instances;

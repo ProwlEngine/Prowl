@@ -53,9 +53,9 @@ file sealed class OffscreenPass : IInstancePass
 // run on the windowed device creators (a headless device has no swapchain).
 public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    private GraphInstances SwapchainInstances()
+    private GraphInstances SwapchainInstances(RenderGraph graph)
     {
-        GraphInstances instances = new();
+        GraphInstances instances = graph.CreateInstances();
         instances.Add(TestViews.Kind, 0, extent: new GraphExtent(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height), target: GD.MainSwapchain.Framebuffer);
         return instances;
     }
@@ -65,15 +65,19 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     {
         using RenderGraph presenting = TestViews.Build([new ClearSwapchainPass()]);
         using RenderGraph offscreen = TestViews.Build([new OffscreenPass()]);
-        GraphInstances views = SwapchainInstances();
+        GraphInstances presentingViews = SwapchainInstances(presenting);
+        GraphInstances offscreenViews = SwapchainInstances(offscreen);
 
         for (int frame = 0; frame < 12; frame++)
         {
-            GD.DispatchGraph(frame % 4 != 3 ? presenting : offscreen, views);
+            if (frame % 4 != 3)
+                GD.DispatchGraph(presenting, presentingViews);
+            else
+                GD.DispatchGraph(offscreen, offscreenViews);
         }
 
         GD.ResizeMainWindow(128, 96);
-        views = SwapchainInstances();
+        GraphInstances views = SwapchainInstances(presenting);
 
         for (int frame = 0; frame < 12; frame++)
         {
@@ -87,7 +91,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     public void DispatchGraph_TargetDepth_CreatesSwapchainDepth()
     {
         using RenderGraph graph = TestViews.Build([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
-        GraphInstances views = SwapchainInstances();
+        GraphInstances views = SwapchainInstances(graph);
 
         GD.DispatchGraph(graph, views);
         GD.WaitForIdle();
@@ -106,18 +110,18 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     {
         using RenderGraph shallow = TestViews.Build([new DepthSwapchainPass(PixelFormat.R16_UNorm)]);
         using RenderGraph deep = TestViews.Build([new DepthSwapchainPass(PixelFormat.R32_Float)]);
-        GraphInstances views = SwapchainInstances();
+        GraphInstances shallowViews = SwapchainInstances(shallow);
 
         for (int frame = 0; frame < 6; frame++)
-            GD.DispatchGraph(shallow, views);
+            GD.DispatchGraph(shallow, shallowViews);
 
-        GD.DispatchGraph(deep, views);
+        GD.DispatchGraph(deep, SwapchainInstances(deep));
         Assert.Equal(PixelFormat.R32_Float, GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target.Format);
 
         GD.ResizeMainWindow(128, 96);
-        views = SwapchainInstances();
+        GraphInstances deepViews = SwapchainInstances(deep);
         for (int frame = 0; frame < 6; frame++)
-            GD.DispatchGraph(deep, views);
+            GD.DispatchGraph(deep, deepViews);
 
         Texture depth = GD.MainSwapchain.Framebuffer.DepthTarget!.Value.Target;
         Assert.Equal(GD.MainSwapchain.Framebuffer.Width, depth.Width);
