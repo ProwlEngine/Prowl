@@ -93,32 +93,34 @@ internal sealed partial class ProfilerView
                 {
                     int draws = node.CountDraws();
                     int markers = node.Children.Count(c => c.Kind == NodeKind.Marker);
-                    KvSection("Program", 420, new Kv?[]
+                    HeroStrip(new Stat[]
                     {
-                    new("Name", program.Name),
-                    new("Shader", shader),
-                    new("Shader pass", shaderPass),
-                    new("Graph pass", graphPass),
-                    new("Program key", program.Key.ToString()),
-                    new("Pipeline id", pipeline.PipelineId.ToString()),
-                    new("Kind", program.IsCompute ? "Compute" : "Graphics"),
-                    new("Stages", string.Join(" / ", program.Stages.Select(s => $"{s.Stage} ({s.EntryPoint})"))),
-                    new("SPIR-V", Style.Bytes(program.Stages.Sum(s => (double)s.Code.Length))),
-                    program.IsCompute ? new("Thread group", $"{program.ThreadGroupX} x {program.ThreadGroupY} x {program.ThreadGroupZ}") : new("Topology", pipeline.Topology?.ToString() ?? "-"),
-                    new("Outputs", pipeline.Outputs is { } outputs ? Describe.Outputs(outputs) : "-"),
-                    new("Specialization", program.Specializations.Length > 0 ? string.Join(", ", program.Specializations.Select(c => $"{c.Id}={c.Value}")) : "-"),
+                        new("Draws", draws.ToString(), "in this pass"),
+                        new("Renderers", markers.ToString(), $"{node.Children.Count - markers} loose draws"),
+                        new("Kind", program.IsCompute ? "Compute" : "Graphics", shaderPass),
+                        new("SPIR-V", Style.Bytes(program.Stages.Sum(s => (double)s.Code.Length)), $"{program.Stages.Length} stages"),
                     });
-                    KvSection("Use in this pass", 420, new Kv?[]
+                    Collapsible("Program details", () =>
                     {
-                    new("Draws", draws.ToString()),
-                    new("Renderers (markers)", markers.ToString()),
-                    new("Loose draws", (node.Children.Count - markers).ToString()),
+                        KvSection("Program", 420, new Kv?[]
+                        {
+                            new("Name", program.Name),
+                            new("Shader", shader),
+                            new("Shader pass", shaderPass),
+                            new("Graph pass", graphPass),
+                            new("Program key", program.Key.ToString()),
+                            new("Pipeline id", pipeline.PipelineId.ToString()),
+                            new("Stages", string.Join(" / ", program.Stages.Select(s => $"{s.Stage} ({s.EntryPoint})"))),
+                            program.IsCompute ? new("Thread group", $"{program.ThreadGroupX} x {program.ThreadGroupY} x {program.ThreadGroupZ}") : new("Topology", pipeline.Topology?.ToString() ?? "-"),
+                            new("Outputs", pipeline.Outputs is { } outputs ? Describe.Outputs(outputs) : "-"),
+                            new("Specialization", program.Specializations.Length > 0 ? string.Join(", ", program.Specializations.Select(c => $"{c.Id}={c.Value}")) : "-"),
+                        });
                     });
-                    TableSection("Vertex inputs", 420, "",
+                    Collapsible("Vertex inputs", () => TableSection("Vertex inputs", 420, "",
                         new[] { "Semantic", "Location", "Format", "Offset" }, new[] { 1.2f, 0.7f, 1.4f, 0.6f },
                         program.VertexLayouts.Length > 0
                             ? program.VertexLayouts.SelectMany(l => (l.Elements ?? []).Select(e => R(Describe.Name(e.Name), l.Location.ToString(), e.Format.ToString(), e.Offset.ToString()))).ToList()
-                            : new List<Row> { R("SV_VertexID", "-", "uint (system)", "-") });
+                            : new List<Row> { R("SV_VertexID", "-", "uint (system)", "-") }));
                     break;
                 }
 
@@ -200,14 +202,19 @@ internal sealed partial class ProfilerView
         switch (tab)
         {
             case "Overview":
-                KvSection("Renderer", 420, new Kv?[]
+                HeroStrip(new Stat[]
+                {
+                    new("Mesh", mesh, $"{draws.Count} submeshes"),
+                    new("Triangles", bound.Index != null ? Style.Int(bound.Index.IndexCount / 3.0) : "-", "first submesh"),
+                    new("Draws", draws.Count.ToString(), "this program"),
+                    new("Screen coverage", info != null ? Style.F(info.ScreenCoverage, "0.00") + "%" : "-", info != null ? Style.F(info.CameraDistance, "0.0") + " m from camera" : "no engine data"),
+                });
+                Collapsible("Renderer", () => KvSection("Renderer", 420, new Kv?[]
                 {
                     new("Name", node.Name),
                     new("Source", "Debug marker (PushMarker / PopMarker)"),
                     info != null ? new("Instance ID", info.InstanceId.ToString()) : null,
                     info != null ? new("Renderer type", info.RendererType) : null,
-                    new("Mesh", mesh),
-                    new("Submeshes", draws.Count.ToString()),
                     info != null ? new("Layer", info.Layer) : null,
                     info != null ? new("Static", info.StaticFlags) : null,
                     info != null ? new("Cast shadows", info.CastShadows ? "On" : "Off") : null,
@@ -215,18 +222,14 @@ internal sealed partial class ProfilerView
                     info != null ? new("Light probes", info.LightProbes) : null,
                     info != null ? new("Lightmap index", info.LightmapIndex >= 0 ? info.LightmapIndex.ToString() : "-") : null,
                     info != null ? new("Sorting order", info.SortingOrder.ToString()) : null,
-                    new("Draws (this program)", draws.Count.ToString()),
-                    bound.Index != null ? new("Triangles", Style.Int(bound.Index.IndexCount / 3.0)) : null,
-                });
+                }));
                 if (info != null)
-                    KvSection("Transform & bounds", 420, new Kv?[]
+                    Collapsible("Transform and bounds", () => KvSection("Transform & bounds", 420, new Kv?[]
                     {
                         new("Position", $"{Style.F(info.Position.X, "0.00")}, {Style.F(info.Position.Y, "0.00")}, {Style.F(info.Position.Z, "0.00")}"),
                         new("Rotation", $"{Style.F(info.Rotation.X, "0.0")}, {Style.F(info.Rotation.Y, "0.0")}, {Style.F(info.Rotation.Z, "0.0")}"),
                         new("Scale", $"{Style.F(info.Scale.X, "0.##")}, {Style.F(info.Scale.Y, "0.##")}, {Style.F(info.Scale.Z, "0.##")}"),
-                        new("Screen coverage", Style.F(info.ScreenCoverage, "0.00") + "%"),
-                        new("Distance to camera", Style.F(info.CameraDistance, "0.0") + " m"),
-                    });
+                    }));
                 break;
 
             case "Material":
@@ -320,25 +323,26 @@ internal sealed partial class ProfilerView
                     RecordedCommand cmd = node.Command!;
                     uint instances = cmd switch { DrawIndexedCommand d => d.InstanceCount, DrawCommand d => d.InstanceCount, _ => 1 };
                     uint indexCount = cmd switch { DrawIndexedCommand d => d.IndexCount, DrawCommand d => d.VertexCount, _ => bound.Index?.IndexCount ?? 0 };
-                    KvSection("Draw call", 0, new Kv?[]
+                    HeroStrip(new Stat[]
                     {
-                    new("EID", node.CommandIndex.ToString()),
-                    new("Replay event index", node.DrawOrdinal.ToString()),
-                    new("Command", CommandName(cmd)),
-                    new("Arguments", CommandArgs(index, cmd)),
-                    new("Index count", Style.Int(indexCount) + (bound.Index != null ? " (index buffer bind)" : "")),
-                    new("Instance count", instances.ToString()),
-                    cmd is DrawIndexedCommand di ? new("First index", Style.Int(di.FirstIndex)) : null,
-                    cmd is DrawIndexedCommand dv ? new("Vertex offset", dv.VertexOffset.ToString()) : null,
-                    new("Primitives", Style.Int(indexCount / 3.0 * instances)),
-                    new("Topology", bound.Pipeline?.Topology?.ToString() ?? "-"),
-                    new("Renderer (marker)", marker?.Name ?? "- (no marker)"),
-                    new("Submesh", node.SubIndex.ToString()),
-                    new("Mesh", mesh),
-                    new("Program", program?.Name ?? "-"),
-                    new("Pipeline id", program?.Pipeline?.PipelineId.ToString() ?? "-"),
-                    new("Index in pass", $"{position + 1} of {passDraws.Count}"),
+                        new("Command", CommandName(cmd), $"EID {node.CommandIndex}"),
+                        new("Index count", Style.Int(indexCount), bound.Index != null ? "indexed" : "vertices"),
+                        new("Instances", instances.ToString(), $"{Style.Int(indexCount / 3.0 * instances)} primitives"),
+                        new("Mesh", mesh, marker?.Name ?? "no marker"),
                     });
+                    Collapsible("Draw call", () => KvSection("Draw call", 0, new Kv?[]
+                    {
+                        new("Replay event index", node.DrawOrdinal.ToString()),
+                        new("Arguments", CommandArgs(index, cmd)),
+                        cmd is DrawIndexedCommand di ? new("First index", Style.Int(di.FirstIndex)) : null,
+                        cmd is DrawIndexedCommand dv ? new("Vertex offset", dv.VertexOffset.ToString()) : null,
+                        new("Topology", bound.Pipeline?.Topology?.ToString() ?? "-"),
+                        new("Renderer (marker)", marker?.Name ?? "- (no marker)"),
+                        new("Submesh", node.SubIndex.ToString()),
+                        new("Program", program?.Name ?? "-"),
+                        new("Pipeline id", program?.Pipeline?.PipelineId.ToString() ?? "-"),
+                        new("Index in pass", $"{position + 1} of {passDraws.Count}"),
+                    }));
                     break;
                 }
 
