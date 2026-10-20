@@ -197,7 +197,10 @@ public enum SceneTargets
 
 public abstract class RenderFeature
 {
+    private static int s_nextId;
     private int _version;
+
+    internal int Id { get; } = Interlocked.Increment(ref s_nextId);
 
     public abstract RenderSlot Slot { get; }
 
