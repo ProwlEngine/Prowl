@@ -177,8 +177,8 @@ public class NetworkingTests : RuntimeTestBase
         using Scene received = RoundTrip(scene);
         FrameStats.EndFrame();
 
-        Assert.Equal(2, FrameStats.Networking.GetSample(0).Calls);
-        Assert.True(FrameStats.Networking.GetSample(0).Ms > 0);
+        Assert.Equal(2, FrameStats.Network.GetSample(0).Calls);
+        Assert.True(FrameStats.Network.GetSample(0).Ms > 0);
         Assert.Contains(received.AllObjects, o => o.Name == "Snapshot object");
     }
 
@@ -270,8 +270,8 @@ public class NetworkingTests : RuntimeTestBase
             FrameStats.Start();
             MakeCurrent(second);
             FrameStats.EndFrame();
-            Assert.True(FrameStats.Networking.GetSample(0).Calls > 0);
-            Assert.True(FrameStats.Networking.GetSample(0).Ms > 0);
+            Assert.True(FrameStats.Network.GetSample(0).Calls > 0);
+            Assert.True(FrameStats.Network.GetSample(0).Ms > 0);
 
             Pump(() => alice.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, alice);
             reader = new NetReader(alice.Last(FakePeer.SceneSnapshot));

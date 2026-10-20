@@ -86,7 +86,7 @@ public static partial class Networking
     public static NetSession Host(Transport transport, string name = "Host", NetSessionOptions? options = null)
     {
         BeginSession();
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         NetSession session = NetSession.Host(transport, name, options ?? s_configuration.CreateSessionOptions());
         Attach(session);
 
@@ -107,7 +107,7 @@ public static partial class Networking
     public static NetSession Join(Transport transport, string address, string name, ReadOnlySpan<byte> token = default, NetSessionOptions? options = null)
     {
         BeginSession();
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         NetSession session = NetSession.Join(transport, address, name, token, options ?? s_configuration.CreateSessionOptions());
         Attach(session);
         return session;
@@ -119,7 +119,7 @@ public static partial class Networking
         if (Session is not { } session)
             return;
 
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         session.Shutdown(message);
     }
 
@@ -132,7 +132,7 @@ public static partial class Networking
         if (session == null)
             return;
 
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         s_frame++;
         session.Receive();
 
@@ -147,7 +147,7 @@ public static partial class Networking
         if (session == null)
             return;
 
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         if (IsActive && Now >= s_nextTick)
         {
             // Fall behind by more than a tick, after a hitch, and the schedule restarts rather than bursting to catch up.

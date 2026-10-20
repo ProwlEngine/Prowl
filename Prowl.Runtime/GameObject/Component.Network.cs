@@ -33,7 +33,7 @@ public abstract partial class Component
         }
 
         // A proxy's value belongs to whoever controls it, and the next update would undo the change anyway.
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         if (!Networking.HasControl(this, member.Flags))
             return;
 

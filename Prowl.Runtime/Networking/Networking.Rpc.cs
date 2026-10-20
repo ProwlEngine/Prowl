@@ -43,7 +43,7 @@ public static partial class Networking
         if (mode == RpcMode.Owner && HasControl(component.GameObject))
             return false;
 
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         s_rpcWriter.Reset();
         s_rpcWriter.WriteGuid(component.Identifier);
         s_rpcWriter.WriteUInt32(rpc.Id);
@@ -53,7 +53,7 @@ public static partial class Networking
 
     internal static bool SendRpc(Component component, RpcMember rpc, NetWriter writer)
     {
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         NetSession session = Session!;
         (uint id, RpcMode mode, RpcFlags flags) = (rpc.Id, rpc.Mode, rpc.Flags);
         Delivery delivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;

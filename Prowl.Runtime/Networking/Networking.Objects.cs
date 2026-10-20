@@ -162,7 +162,7 @@ public static partial class Networking
         if (!IsActive)
             return;
 
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         if (s_entries.TryGetValue(go.Identifier, out NetworkEntry? existing) && existing.GameObject == go)
         {
             existing.Orphaned = orphaned;
@@ -182,7 +182,7 @@ public static partial class Networking
     /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
     internal static void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output)
     {
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo;
         GameObject.WritingNetworkSnapshot = true;
         try
@@ -238,7 +238,7 @@ public static partial class Networking
         if (!IsHost || !s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go)
             return;
 
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         s_entries.Remove(go.Identifier);
 
         // A scene being swapped out is disabled first. Its objects aren't destroyed, they're replaced by the next snapshot.
@@ -271,7 +271,7 @@ public static partial class Networking
         if (!s_entries.TryGetValue(go.Identifier, out NetworkEntry? entry) || entry.GameObject != go)
             throw new InvalidOperationException($"'{go.Name}' is not a spawned networked object.");
 
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         ChangeOwner(entry, owner?.Id ?? NoOwner);
     }
 

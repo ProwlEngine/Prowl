@@ -24,7 +24,7 @@ public static partial class Networking
             return;
 
         // Objects that survived the swap (DontDestroyOnLoad) keep their network state; the rest went with the old scene.
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         s_scene = Scene.Current;
         s_index.Clear();
         s_dirty.Clear();
@@ -44,7 +44,7 @@ public static partial class Networking
             return;
 
         using NetWriter message = new(64 * 1024);
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         WriteSnapshot(s_scene, message);
         SendEngine(peer, EngineMessage.SceneSnapshot, message.WrittenSpan);
     }
@@ -55,7 +55,7 @@ public static partial class Networking
     /// </summary>
     internal static void WriteSnapshot(Scene scene, NetWriter output)
     {
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo;
         GameObject.WritingNetworkSnapshot = true;
         try
@@ -86,7 +86,7 @@ public static partial class Networking
     /// <exception cref="InvalidDataException">The snapshot can't be read.</exception>
     internal static Scene ReadSnapshot(ref NetReader reader)
     {
-        using FrameStatScope stats = FrameStats.Networking.Scope();
+        using FrameStatScope stats = FrameStats.Network.Scope();
         byte format = reader.ReadByte();
         if (format != SnapshotFormat)
             throw new InvalidDataException($"The host sent scene snapshot format {format}, this build reads {SnapshotFormat}.");
