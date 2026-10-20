@@ -582,6 +582,15 @@ public static partial class Origami
     public static TreeBuilder Tree(Paper paper, string id, float width, float height)
         => new TreeBuilder(paper, id, Current).Size(width, height);
 
+    // Code editor factory
+
+    /// <summary>
+    /// Draw a code editor. The <paramref name="editor"/> holds the text, carets, undo and language
+    /// state, so keep one per open file and pass it every frame. Terminate with <c>.Show()</c>.
+    /// </summary>
+    public static CodeEditorBuilder CodeEditor(Paper paper, string id, OrigamiUI.CodeEditor editor)
+        => new CodeEditorBuilder(paper, id, editor);
+
     // ── Node graph factory ─────────────────────────────────────
 
     /// <summary>

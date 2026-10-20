@@ -1,0 +1,97 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace Sample.Gameplay;
+
+/// <summary>
+/// Moves a player around a grid world and keeps a short history of where it has been.
+/// </summary>
+public sealed class PlayerController
+{
+    public const float MaxSpeed = 12.5f;
+
+    private readonly List<(int X, int Y)> _history = new();
+    private readonly Dictionary<string, int> _inventory = new(StringComparer.OrdinalIgnoreCase);
+    private float _speed = 4f;
+
+    public string Name { get; init; } = "Player";
+    public int Health { get; private set; } = 100;
+    public (int X, int Y) Position { get; private set; }
+
+    public event Action<int>? Damaged;
+
+    #region Movement
+
+    public void Move(int dx, int dy)
+    {
+        if (dx == 0 && dy == 0) return;
+
+        var next = (Position.X + dx, Position.Y + dy);
+        _history.Add(Position);
+        if (_history.Count > 32)
+            _history.RemoveAt(0);
+
+        Position = next;
+        _speed = Math.Min(MaxSpeed, _speed * 1.05f);
+    }
+
+    public IEnumerable<(int X, int Y)> RecentPositions(int count) =>
+        _history.Skip(Math.Max(0, _history.Count - count)).Reverse();
+
+    #endregion
+
+    public void TakeDamage(int amount)
+    {
+        if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount), "Damage must be positive");
+
+        Health = Math.Max(0, Health - amount);
+        Damaged?.Invoke(amount);
+
+        switch (Health)
+        {
+            case 0:
+                Console.WriteLine($"{Name} was defeated at {Position}");
+                break;
+            case < 25:
+                Console.WriteLine($"{Name} is low on health ({Health}%)");
+                break;
+        }
+    }
+
+    public void Pickup(string item, int count = 1)
+    {
+        _inventory[item] = _inventory.TryGetValue(item, out int existing) ? existing + count : count;
+    }
+
+    public string DescribeInventory()
+    {
+        var sb = new StringBuilder();
+        foreach (var (item, count) in _inventory.OrderByDescending(kv => kv.Value).Select(kv => (kv.Key, kv.Value)))
+            sb.AppendLine($"  {item,-12} x{count}");
+        return sb.ToString();
+    }
+
+    public override string ToString() => $"{Name} @ {Position} hp={Health} speed={_speed:0.00}";
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        var player = new PlayerController { Name = "Wulf" };
+        player.Damaged += amount => Console.WriteLine($"Ouch, {amount}");
+
+        for (int i = 0; i < 10; i++)
+            player.Move(i % 3 - 1, 1);
+
+        player.Pickup("Potion", 3);
+        player.Pickup("sword");
+        player.TakeDamage(80);
+
+        Console.WriteLine(player);
+        Console.WriteLine(player.DescribeInventory());
+        Console.WriteLine(player.Velocity);
+    }
+}
