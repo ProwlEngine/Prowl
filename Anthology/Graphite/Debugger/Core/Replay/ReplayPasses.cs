@@ -46,7 +46,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
         {
             DeviceBuffer buffer = scope.BindBuffer(scope.GraphBuffers[restore.Name].Id, context.GetRenderBuffer(_handles[restore.Name]));
             fixed (byte* source = restore.Data)
-                cmd.UpdateBuffer(buffer, 0, (IntPtr)source, Math.Min((uint)restore.Data.Length, buffer.SizeInBytes));
+                cmd.UpdateBuffer(buffer, restore.Offset, (IntPtr)source, Math.Min((uint)restore.Data.Length, buffer.SizeInBytes - restore.Offset));
         }
 
         scope.RestoreStep(cmd, step);
@@ -64,7 +64,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
     }
 }
 
-internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null) : IPass
+internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null, IndirectSlice? slice = null) : IPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
     private readonly Dictionary<string, RecordedProperty> _properties = new();
@@ -73,6 +73,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
     private BindIndexBufferCommand? _index;
     private SetPipelineCommand? _pipeline;
     private bool _sourceDirty;
+    private IndirectSlice? _slice;
 
     public string Name => name;
 
@@ -113,8 +114,10 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
         int events = -1;
         foreach (RecordedCommand command in pass.Commands)
         {
+            bool isEvent = ReplayEvents.IsEvent(command);
+            _slice = isEvent && events + 1 == lastEvent ? slice : null;
             Execute(cmd, command);
-            if (ReplayEvents.IsEvent(command) && ++events == lastEvent)
+            if (isEvent && ++events == lastEvent)
                 break;
         }
     }
@@ -185,11 +188,13 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 break;
             case DrawIndirectCommand draw:
                 BindSource(cmd);
-                cmd.DrawIndirect(scope.Buffer(draw.Buffer.Resource), draw.Offset, draw.DrawCount, draw.Stride);
+                if (Slice(draw.Offset, draw.DrawCount, draw.Stride) is var (offset, count) && count > 0)
+                    cmd.DrawIndirect(scope.Buffer(draw.Buffer.Resource), offset, count, draw.Stride);
                 break;
             case DrawIndexedIndirectCommand draw:
                 BindSource(cmd);
-                cmd.DrawIndexedIndirect(scope.Buffer(draw.Buffer.Resource), draw.Offset, draw.DrawCount, draw.Stride);
+                if (Slice(draw.Offset, draw.DrawCount, draw.Stride) is var (indexedOffset, indexedCount) && indexedCount > 0)
+                    cmd.DrawIndexedIndirect(scope.Buffer(draw.Buffer.Resource), indexedOffset, indexedCount, draw.Stride);
                 break;
             case DrawIndirectCountCommand draw:
                 BindSource(cmd);
@@ -247,6 +252,15 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
             default:
                 throw new NotSupportedException($"Unknown command {command.GetType().Name}.");
         }
+    }
+
+    private (uint Offset, uint Count) Slice(uint offset, uint count, uint stride)
+    {
+        if (_slice is not { } slice)
+            return (offset, count);
+
+        uint first = Math.Min(slice.First, count);
+        return (offset + first * stride, Math.Min(slice.Count, count - first));
     }
 
     private void BindSource(CommandBuffer cmd)

@@ -13,7 +13,7 @@ internal sealed record GraphTexture(RenderTexture Texture, TraceResourceId[] Bac
 
 internal sealed record GraphBuffer(TraceResourceId Id, GraphBufferDesc Desc);
 
-internal sealed record BufferRestore(int PassIndex, string Name, byte[] Data);
+internal sealed record BufferRestore(int PassIndex, string Name, byte[] Data, uint Offset = 0);
 
 internal sealed unsafe class ReplayScope : IDisposable
 {
@@ -33,6 +33,7 @@ internal sealed unsafe class ReplayScope : IDisposable
     private readonly HashSet<TraceVersion> _produced = new();
     private readonly List<(int PassIndex, TraceResourceId Id, Texture Texture, RecordedCopy Copy)> _textureRestores = new();
     private readonly List<(int PassIndex, DeviceBuffer Buffer, RecordedCopy Copy)> _externalBufferRestores = new();
+    private readonly List<(int PassIndex, DeviceBuffer Buffer, BufferPatch Patch)> _externalPatches = new();
 
     public ReplayScope(GraphicsDevice device, DeepRecording deep, Dictionary<BlobRef, EquatableArray<byte>> blobs, Dictionary<ProgramKey, RecordedProgram> programs)
     {
@@ -216,8 +217,27 @@ internal sealed unsafe class ReplayScope : IDisposable
         return null;
     }
 
+    public void AddPatches(int firstPass, IReadOnlyList<BufferPatch>? patches)
+    {
+        foreach (BufferPatch patch in patches ?? [])
+        {
+            string? name = GraphBuffers.FirstOrDefault(pair => pair.Value.Id == patch.Resource).Key;
+            if (name != null)
+            {
+                foreach (int step in BufferRestores.Where(r => r.Name == name && r.Offset == 0).Select(r => r.PassIndex).Append(firstPass).Distinct().ToList())
+                    BufferRestores.Add(new BufferRestore(step, name, patch.Data, patch.Offset));
+            }
+            else if (_buffers.TryGetValue(patch.Resource, out DeviceBuffer? buffer))
+            {
+                foreach (int step in _externalBufferRestores.Where(r => r.Buffer == buffer).Select(r => r.PassIndex).Append(firstPass).Distinct().ToList())
+                    _externalPatches.Add((step, buffer, patch));
+            }
+        }
+    }
+
     public IEnumerable<int> RestoreSteps()
         => _textureRestores.Select(r => r.PassIndex)
+            .Concat(_externalPatches.Select(r => r.PassIndex))
             .Concat(_externalBufferRestores.Select(r => r.PassIndex))
             .Concat(BufferRestores.Select(r => r.PassIndex))
             .Distinct()
@@ -235,6 +255,14 @@ internal sealed unsafe class ReplayScope : IDisposable
         {
             if (index == passIndex)
                 UpdateBuffer(cmd, buffer, copy);
+        }
+
+        foreach ((int index, DeviceBuffer buffer, BufferPatch patch) in _externalPatches)
+        {
+            if (index != passIndex)
+                continue;
+            fixed (byte* source = patch.Data)
+                cmd.UpdateBuffer(buffer, patch.Offset, (IntPtr)source, Math.Min((uint)patch.Data.Length, buffer.SizeInBytes - patch.Offset));
         }
     }
 

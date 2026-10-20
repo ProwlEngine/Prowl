@@ -51,7 +51,7 @@ public sealed class Replayer
                 return NotReplayable($"Event {eventIndex} is out of range, pass {pass.Name} has {events} events.");
         }
 
-        if (request.EventIndex == null && _recording.Mode == DeepMode.Full)
+        if (request.EventIndex == null && _recording.Mode == DeepMode.Full && request.Patches is not { Count: > 0 })
             return Restore(view, pass);
 
         try
@@ -64,7 +64,9 @@ public sealed class Replayer
                 return NotReplayable($"Pass {blocked.Name} is needed to reach {pass.Name}: {blocked.NotReplayable}");
 
             string? error = scope.Prepare(view, passes);
-            return error != null ? NotReplayable(error) : Run(scope, view, passes, pass, request.EventIndex);
+            if (error == null)
+                scope.AddPatches(passes[0].Index, request.Patches);
+            return error != null ? NotReplayable(error) : Run(scope, view, passes, pass, request.EventIndex, request.Indirect);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -72,7 +74,7 @@ public sealed class Replayer
         }
     }
 
-    private ReplayResult Run(ReplayScope scope, DeepView view, List<DeepPass> passes, DeepPass pass, int? eventIndex)
+    private ReplayResult Run(ReplayScope scope, DeepView view, List<DeepPass> passes, DeepPass pass, int? eventIndex, IndirectSlice? slice)
     {
         string name = $"Replay {pass.Index} {pass.Name}";
         ReplayCapture capture = new(name, ReplayScope.Outputs(view, pass), scope.ReplayIds);
@@ -83,7 +85,7 @@ public sealed class Replayer
             if (p == passes[0] || steps.Contains(p.Index))
                 replay.Add(new ReplayRestorePass(scope, passes, p.Index));
 
-            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null));
+            replay.Add(new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null, p == pass ? slice : null));
         }
         using RenderPipeline pipeline = new(replay.ToArray());
         ReplayView[] views = [new ReplayView(view.Name, view.PixelWidth, view.PixelHeight)];
