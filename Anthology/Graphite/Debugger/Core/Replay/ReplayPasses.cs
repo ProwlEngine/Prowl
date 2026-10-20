@@ -364,8 +364,10 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                     || property.Range.ArrayLayers != texture.ArrayLayers * (texture.Type == TextureType.TextureCube ? 6u : 1u)));
 }
 
-internal static class ReplayEvents
+/// <summary>Which recorded commands count as events, the steps a replay can stop after.</summary>
+public static class ReplayEvents
 {
+    /// <summary>Whether the command is a draw, dispatch, clear or copy.</summary>
     public static bool IsEvent(RecordedCommand command)
         => command is DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
             or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand
