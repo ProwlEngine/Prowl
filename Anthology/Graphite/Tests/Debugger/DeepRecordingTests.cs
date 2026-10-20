@@ -170,7 +170,8 @@ public class DeepRecordingTests
             1,
             1,
             1,
-            new PushConstantRange(ShaderStages.Vertex | ShaderStages.Fragment, 16));
+            new PushConstantRange(ShaderStages.Vertex | ShaderStages.Fragment, 16),
+            EquatableArray<SpecializationConstant>.Empty);
         EquatableArray<RecordedCommand> commands = EquatableArray.Create<RecordedCommand>(
             new SetPipelineCommand(program.Key, 42, false, null, PrimitiveTopology.TriangleList),
             new SetPushConstantsCommand(4, new BlobRef(EquatableArray.Create<byte>(3, 4), 8)),

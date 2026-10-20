@@ -494,10 +494,11 @@ internal sealed unsafe class ReplayScope : IDisposable
                 layouts)
             {
                 PushConstants = program.PushConstants,
+                Specializations = program.Specializations.ToArray(),
             });
         }
 
         _programs[key] = Own(built);
-        return built.Key == key ? null : "A rebuilt program does not match its recorded key.";
+        return (built is GraphicsProgram graphics ? graphics.VariantKey : built.Key) == key ? null : "A rebuilt program does not match its recorded key.";
     }
 }

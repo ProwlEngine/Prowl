@@ -26,7 +26,7 @@ public sealed record RecordedResource(
 /// <summary>One stage of a recorded program. The SPIR-V is a blob.</summary>
 public sealed record RecordedStage(ShaderStages Stage, string EntryPoint, BlobRef Code);
 
-/// <summary>A program, one per key, with the debug name it had when first bound. Graphics only fields are null for compute.</summary>
+/// <summary>A program, one per key, with the debug name it had when first bound. Graphics only fields are null for compute, and the key covers the specialization constants.</summary>
 public sealed record RecordedProgram(
     ProgramKey Key,
     string Name,
@@ -40,7 +40,8 @@ public sealed record RecordedProgram(
     uint ThreadGroupX,
     uint ThreadGroupY,
     uint ThreadGroupZ,
-    PushConstantRange PushConstants)
+    PushConstantRange PushConstants,
+    EquatableArray<SpecializationConstant> Specializations)
 {
     /// <summary>Compares layouts element by element.</summary>
     public bool Equals(RecordedProgram? other)
@@ -57,11 +58,12 @@ public sealed record RecordedProgram(
             && ThreadGroupX == other.ThreadGroupX
             && ThreadGroupY == other.ThreadGroupY
             && ThreadGroupZ == other.ThreadGroupZ
-            && PushConstants == other.PushConstants;
+            && PushConstants == other.PushConstants
+            && Specializations.Equals(other.Specializations);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Key, Name, IsCompute, Stages, ProgramEquality.Hash(Layouts), ProgramEquality.Hash(VertexLayouts), HashCode.Combine(ThreadGroupX, ThreadGroupY, ThreadGroupZ, PushConstants));
+        => HashCode.Combine(Key, Name, IsCompute, Stages, ProgramEquality.Hash(Layouts), ProgramEquality.Hash(VertexLayouts), HashCode.Combine(ThreadGroupX, ThreadGroupY, ThreadGroupZ, PushConstants, Specializations));
 }
 
 /// <summary>Content keyed by hash.</summary>

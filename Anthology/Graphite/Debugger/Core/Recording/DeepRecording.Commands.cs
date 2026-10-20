@@ -58,7 +58,7 @@ public sealed partial class DeepRecording
 
     private ProgramKey EnsureProgram(ShaderProgram program)
     {
-        ProgramKey key = program.Key;
+        ProgramKey key = program is GraphicsProgram variant ? variant.VariantKey : program.Key;
         if (_programs.ContainsKey(key))
             return key;
 
@@ -77,7 +77,8 @@ public sealed partial class DeepRecording
                 0,
                 0,
                 0,
-                program.PushConstants),
+                program.PushConstants,
+                graphics.Specializations.ToEquatableArray()),
             ComputeProgram compute => new RecordedProgram(
                 key,
                 program.Name,
@@ -91,7 +92,8 @@ public sealed partial class DeepRecording
                 compute.ThreadGroupSizeX,
                 compute.ThreadGroupSizeY,
                 compute.ThreadGroupSizeZ,
-                program.PushConstants),
+                program.PushConstants,
+                EquatableArray<SpecializationConstant>.Empty),
             _ => throw new NotSupportedException($"Unknown program type {program.GetType().Name}."),
         };
 
