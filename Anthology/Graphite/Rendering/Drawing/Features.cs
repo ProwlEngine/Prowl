@@ -653,52 +653,49 @@ internal sealed class FeatureChain(GraphicsDevice device, int viewId, List<IDisp
     }
 }
 
-/// <summary>What a feature declares when its view's graph is built.</summary>
+/// <summary>What a feature declares when the graph of its view shape is built. It runs once for every view of the shape.</summary>
 public sealed class FeatureBuilder
 {
     private readonly FeaturePass _pass;
-    private readonly RenderContextBuilder _graph;
+    private readonly InstanceContextBuilder _graph;
 
-    internal FeatureBuilder(FeaturePass pass, RenderContextBuilder graph)
+    internal FeatureBuilder(FeaturePass pass, InstanceContextBuilder graph)
     {
         _pass = pass;
         _graph = graph;
     }
 
+    private FeatureShape Shape => _pass.Shape;
+
     /// <summary>The underlying graph builder, for resources the methods here do not cover.</summary>
-    public RenderContextBuilder Graph => _graph;
+    public InstanceContextBuilder Graph => _graph;
 
     /// <summary>Reads the scene's depth, normals, and roughness and metallic.</summary>
     public void ReadScene()
     {
-        ChainTexture scene = _pass.Chain.Scene;
-        if (!scene.Written)
+        if (!Shape.SceneWritten)
             throw new InvalidOperationException($"{_pass.Name} reads the scene, which no earlier feature drew.");
-        if (_pass.Output == scene)
+        if (_pass.Output?.Id == Shape.SceneId)
             throw new InvalidOperationException($"{_pass.Name} reads the scene it draws onto.");
-        scene.ReadSinceWrite = true;
-        _pass.SceneRead = _graph.DeclareInputTexture(scene.Id, TextureState.Sampled, TextureState.Sampled);
+        _pass.SceneRead = _graph.DeclareInputTexture(Shape.SceneId, TextureState.Sampled, TextureState.Sampled);
     }
 
     /// <summary>Reads the current colour.</summary>
     public void ReadColor()
     {
-        ChainTexture current = _pass.Chain.Current;
-        if (!current.Written)
+        if (!Shape.CurrentWritten)
             throw new InvalidOperationException($"{_pass.Name} reads the colour, which no earlier feature drew.");
-        if (_pass.Output == current)
+        if (_pass.Output?.Id == Shape.Current)
             throw new InvalidOperationException($"{_pass.Name} reads the colour it draws onto.");
-        current.ReadSinceWrite = true;
-        _pass.Input = _pass.SceneRead?.Id == current.Id ? _pass.SceneRead : _graph.DeclareInputTexture(current.Id);
+        _pass.Input = _pass.SceneRead?.Id == Shape.Current ? _pass.SceneRead : _graph.DeclareInputTexture(Shape.Current);
     }
 
     /// <summary>Draws onto the current colour: the scene with its depth and G-buffer, or the last colour a feature wrote.</summary>
     public void DrawToColor()
     {
-        ChainTexture current = _pass.Chain.Current;
-        if (_pass.Input?.Id == current.Id || _pass.SceneRead?.Id == current.Id)
+        if (_pass.Input?.Id == Shape.Current || _pass.SceneRead?.Id == Shape.Current)
             throw new InvalidOperationException($"{_pass.Name} draws onto the colour it reads.");
-        Write(current);
+        Write(Shape.Current);
     }
 
     /// <summary>
@@ -707,58 +704,57 @@ public sealed class FeatureBuilder
     /// </summary>
     public void DrawToScene()
     {
-        FeatureChain chain = _pass.Chain;
-        if (_pass.SceneRead != null || (chain.Current == chain.Scene && _pass.Input != null))
+        if (_pass.SceneRead != null || (Shape.CurrentIsScene && _pass.Input != null))
             throw new InvalidOperationException($"{_pass.Name} draws onto the scene it reads.");
-        if (chain.Current != chain.Scene)
+        if (!Shape.CurrentIsScene)
         {
-            chain.Current.ReadSinceWrite = true;
-            _pass.CopyBack = _pass.Input?.Id == chain.Current.Id ? _pass.Input : _graph.DeclareInputTexture(chain.Current.Id);
-            chain.Current = chain.Scene;
+            _pass.CopyBack = _pass.Input?.Id == Shape.Current ? _pass.Input : _graph.DeclareInputTexture(Shape.Current);
+            Shape.Current = Shape.SceneId;
         }
-        Write(chain.Scene);
+        Write(Shape.SceneId);
     }
 
     /// <summary>Writes a new colour from the current one, which later features read. <see cref="FeatureContext.Fullscreen"/> draws it.</summary>
     public void WriteColor()
     {
         ReadColor();
-        FeatureChain chain = _pass.Chain;
-        ChainTexture next = chain.NextColor();
-        Write(next);
-        chain.Current = next;
+        RenderResourceID id = Shape.IdOf(_pass.Feature, "Color");
+        TextureHandle output = _graph.DeclareOutputTexture(id, Shape.ColorDesc(Shape.Upscaled));
+        _graph.Passthrough(_pass.Input!.Value, output);
+        Next(id, output);
     }
 
     /// <summary>
     /// Writes a new colour at the view's output resolution from the current one, as an upscaler does. Later features see
-    /// the view at the output resolution, and the present draws it as it is.
+    /// the view at the output resolution, and the present draws it as it is. Only features in the Upscale slot can.
     /// </summary>
     public void WriteOutputColor()
     {
+        if (!Shape.Shape.Upscales)
+            throw new InvalidOperationException($"{_pass.Name} writes the output colour outside the Upscale slot.");
         ReadColor();
-        FeatureChain chain = _pass.Chain;
-        chain.Upscaled = true;
-        ChainTexture next = chain.NextColor();
-        Write(next);
-        chain.Current = next;
+        Shape.Upscaled = true;
+        Shape.Upscale();
+        RenderResourceID id = Shape.IdOf(_pass.Feature, "Color");
+        Next(id, _graph.DeclareOutputTexture(id, Shape.ColorDesc(true)));
     }
 
     /// <summary>
     /// Says the colour this feature writes or draws is display encoded, as a tonemapper's is, so the present undoes the
     /// encode for targets that take linear light, sRGB and float ones. Later features keep it so.
     /// </summary>
-    public void EncodesForDisplay() => _pass.Chain.DisplayEncoded = true;
+    public void EncodesForDisplay() => _pass.EncodesForDisplay = true;
 
     /// <summary>A texture for this feature alone this frame, drawn and then read back in its pass by default.</summary>
     public TextureHandle Temporary(string name, GraphTextureDesc desc, TextureState usage = TextureState.Attachment | TextureState.Sampled)
-        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.Temporary.{name}"), desc, usage: usage);
+        => _graph.DeclareOutputTexture(Shape.IdOf(_pass.Feature, "Temporary." + name), desc, usage: usage);
 
     /// <summary>
-    /// A texture for this feature that keeps its last frames, read through <see cref="FeatureContext.History"/>. A graph
-    /// rebuild starts it over. Usage adds Sampled for a feature that reads it back in the same pass it draws it.
+    /// A texture for this feature that keeps its last frames, read through <see cref="FeatureContext.History"/>. It is kept
+    /// for each view across graph rebuilds. Usage adds Sampled for a feature that reads it back in the same pass it draws it.
     /// </summary>
     public TextureHandle History(string name, GraphTextureDesc desc, int frames = 1, TextureState usage = TextureState.Attachment)
-        => _graph.DeclareOutputTexture(RenderResourceID.Intern($"Graphite.Feature.{_pass.Id}.History.{name}"), desc, history: frames, usage: usage);
+        => _graph.DeclareOutputTexture(Shape.IdOf(_pass.Feature, "History." + name), desc, history: frames, usage: usage);
 
     /// <summary>
     /// Asks for the visible renderables whose materials have a pass of this type, the shader pass tagged
@@ -769,9 +765,10 @@ public sealed class FeatureBuilder
     public void DrawsPass(PassType type)
     {
         DrawsRenderables();
-        DrawList list = _pass.Camera.ListFor(type);
-        if (!_pass.Lists.Contains(list))
-            _pass.Lists.Add(list);
+        if (!_pass.Types.Contains(type))
+            _pass.Types.Add(type);
+        if (type != PassType.Prepass && type != PassType.Forward && !Shape.PassTypes.Contains(type))
+            Shape.PassTypes.Add(type);
     }
 
     /// <summary>
@@ -783,15 +780,12 @@ public sealed class FeatureBuilder
         if (_pass.Draws)
             return;
         _pass.Draws = true;
-        DeviceBuffer[] host = _pass.Camera.HostBuffers;
-        for (int i = 0; i < host.Length; i++)
-            _graph.DeclareImportedBuffer(FramePipeline.BufferId(i), host[i], BufferAccess.AllReads);
-        FeatureChain chain = _pass.Chain;
-        foreach (ChainTexture lighting in (ReadOnlySpan<ChainTexture>)[chain.ScreenVisibility, chain.ScreenIrradiance])
-        {
-            if (lighting.Written)
-                _graph.DeclareInputTexture(lighting.Id, TextureState.Sampled, TextureState.Sampled);
-        }
+        for (int i = 0; i < Shape.Shape.HostBuffers; i++)
+            _graph.DeclareImportSlotBuffer(Shape.HostId(i), BufferAccess.AllReads);
+        if (Shape.ScreenVisibilityWritten)
+            _graph.DeclareInputTexture(Shape.ScreenVisibilityId, TextureState.Sampled, TextureState.Sampled);
+        if (Shape.ScreenIrradianceWritten)
+            _graph.DeclareInputTexture(Shape.ScreenIrradianceId, TextureState.Sampled, TextureState.Sampled);
     }
 
     /// <summary>
@@ -805,43 +799,51 @@ public sealed class FeatureBuilder
             throw new InvalidOperationException($"{_pass.Name} writes screen lighting without being a ScreenLightingFeature.");
         if (irradiance && !producer.IrradianceSnapshot)
             throw new InvalidOperationException($"{_pass.Name} writes screen irradiance without saying so through WritesIrradiance.");
-        FeatureChain chain = _pass.Chain;
-        ChainTexture visibility = chain.ScreenVisibility;
-        visibility.Written = true;
-        TextureHandle visibilityHandle = _graph.DeclareImportedTexture(visibility.Id, visibility.Texture!);
+        TextureHandle visibility = _graph.DeclareOutputTexture(Shape.ScreenVisibilityId, Shape.ScreenDesc(PixelFormat.R8_UNorm));
+        Shape.ScreenVisibilityWritten = true;
         if (!irradiance)
-            return (visibilityHandle, null);
-        chain.ScreenIrradiance.Written = true;
-        return (visibilityHandle, _graph.DeclareImportedTexture(chain.ScreenIrradiance.Id, chain.ScreenIrradiance.Texture!));
+            return (visibility, null);
+        Shape.ScreenIrradianceWritten = true;
+        return (visibility, _graph.DeclareOutputTexture(Shape.ScreenIrradianceId, Shape.ScreenDesc(PixelFormat.R16_G16_B16_A16_Float)));
     }
 
-    /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
-    public T GetViewState<T>() where T : class, new() => _pass.Camera.State<T>(_pass.Feature);
+    /// <summary>State this feature keeps for the views of the shape, made the first time it is asked for. Handles from Setup go here.</summary>
+    public T GetSetupState<T>() where T : class, new() => Shape.State<T>(_pass.Feature);
 
     /// <summary>Hands a texture to later features of the view by name.</summary>
-    public void Publish(string name, TextureHandle texture) => _pass.Chain.Published[name] = texture;
+    public void Publish(string name, TextureHandle texture) => Shape.Published[name] = texture;
 
     /// <summary>A texture an earlier feature of the view published.</summary>
     public TextureHandle Read(string name)
     {
-        if (!_pass.Chain.Published.TryGetValue(name, out TextureHandle texture))
+        if (!Shape.Published.TryGetValue(name, out TextureHandle texture))
             throw new InvalidOperationException($"{_pass.Name} reads {name}, which no earlier feature published.");
         return _graph.DeclareInputTexture(texture.Id);
     }
 
-    private void Write(ChainTexture texture)
+    private void Write(RenderResourceID id)
     {
         if (_pass.Output != null)
             throw new InvalidOperationException($"{_pass.Name} draws onto more than one colour.");
-        if (texture.ReadSinceWrite)
+        if (id == Shape.SceneId)
         {
-            texture.Version++;
-            texture.ReadSinceWrite = false;
+            _pass.Output = Shape.DeclareScene(_graph);
+            Shape.SceneWritten = true;
         }
-        _pass.Clears = !texture.Written && _pass.Input == null && _pass.CopyBack == null;
-        texture.Written = true;
-        _pass.Output = texture;
-        _pass.OutputId = _graph.DeclareImportedTexture(texture.Id, texture.Texture!);
+        else
+        {
+            _pass.Output = _graph.DeclareWriteTexture(id);
+        }
+        Shape.CurrentWritten = true;
+    }
+
+    private void Next(RenderResourceID id, TextureHandle output)
+    {
+        if (_pass.Output != null)
+            throw new InvalidOperationException($"{_pass.Name} draws onto more than one colour.");
+        _pass.Output = output;
+        Shape.Current = id;
+        Shape.CurrentWritten = true;
     }
 }
 
