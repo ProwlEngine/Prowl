@@ -33,21 +33,21 @@ internal abstract class HistoryRings<TResource, TDesc>
         public int CurrentIndex;
     }
 
-    private readonly Dictionary<int, Ring> _rings = new();
-    private readonly List<int> _expired = new();
+    private readonly Dictionary<GraphInstanceKey, Ring> _rings = new();
+    private readonly List<GraphInstanceKey> _expired = new();
     private readonly int _slots;
     private ulong _lastExecutionId;
     private long _executionCount;
 
     protected HistoryRings(int slots) => _slots = slots;
 
-    protected abstract TResource Create(GraphicsDevice device, in TDesc desc, int viewId, int index);
+    protected abstract TResource Create(GraphicsDevice device, in TDesc desc, GraphInstanceKey key, int index);
 
-    public TResource Resolve(GraphicsDevice device, int viewId, ulong executionId, int framesAgo, in TDesc desc)
+    public TResource Resolve(GraphicsDevice device, GraphInstanceKey key, ulong executionId, int framesAgo, in TDesc desc)
     {
         Advance(executionId);
 
-        if (!_rings.TryGetValue(viewId, out Ring? ring) || !ring.Desc.Equals(desc))
+        if (!_rings.TryGetValue(key, out Ring? ring) || !ring.Desc.Equals(desc))
         {
             if (ring != null)
                 DisposeRing(ring);
@@ -60,8 +60,8 @@ internal abstract class HistoryRings<TResource, TDesc>
                 LastRotationExecutionId = executionId,
             };
             for (int i = 0; i < _slots; i++)
-                ring.Slots[i] = Create(device, desc, viewId, i);
-            _rings[viewId] = ring;
+                ring.Slots[i] = Create(device, desc, key, i);
+            _rings[key] = ring;
         }
         else if (ring.LastRotationExecutionId != executionId)
         {
@@ -75,12 +75,12 @@ internal abstract class HistoryRings<TResource, TDesc>
         return ring.Slots[index];
     }
 
-    public int CurrentSlot(int viewId) => _rings.TryGetValue(viewId, out Ring? ring) ? ring.CurrentIndex : -1;
+    public int CurrentSlot(GraphInstanceKey key) => _rings.TryGetValue(key, out Ring? ring) ? ring.CurrentIndex : -1;
 
-    public bool IsValid(int viewId, ulong executionId, in TDesc desc)
+    public bool IsValid(GraphInstanceKey key, ulong executionId, in TDesc desc)
     {
         Advance(executionId);
-        return _rings.TryGetValue(viewId, out Ring? ring)
+        return _rings.TryGetValue(key, out Ring? ring)
             && ring.Desc.Equals(desc)
             && ring.AllocationExecutionId != executionId;
     }
@@ -100,16 +100,16 @@ internal abstract class HistoryRings<TResource, TDesc>
         _lastExecutionId = executionId;
         _executionCount++;
 
-        foreach ((int viewId, Ring ring) in _rings)
+        foreach ((GraphInstanceKey key, Ring ring) in _rings)
         {
             if (_executionCount - ring.LastUsedExecution > RetentionExecutions)
-                _expired.Add(viewId);
+                _expired.Add(key);
         }
 
-        foreach (int viewId in _expired)
+        foreach (GraphInstanceKey key in _expired)
         {
-            DisposeRing(_rings[viewId]);
-            _rings.Remove(viewId);
+            DisposeRing(_rings[key]);
+            _rings.Remove(key);
         }
         _expired.Clear();
     }
@@ -150,18 +150,37 @@ public sealed class GraphTextureResource : GraphResource
         _rings = new TextureRings(id, historyDepth + 1);
     }
 
-    internal RenderTexture ResolveHistory(GraphicsDevice device, int viewId, ulong executionId, int framesAgo, in RenderTextureDescription desc)
+    internal RenderTextureDescription Allocation(GraphInstance instance)
+    {
+        if (Description.SizeMode == TextureSizeMode.InstanceRelative && !instance.Extent.IsValid)
+            throw new InvalidOperationException(
+                $"Resource '{RenderResourceID.ToString(Id)}' is sized relative to its instance, but instance '{instance.Name}' has no extent.");
+
+        return Allocation(instance.Extent);
+    }
+
+    internal RenderTextureDescription Allocation(GraphExtent extent)
+    {
+        (int width, int height) = Description.Resolve(extent.Width, extent.Height);
+        PixelFormat[] colors = Description.ColorFormats ?? Array.Empty<PixelFormat>();
+        if (Description.EnableDepth && Description.DepthFormat is PixelFormat depthFormat)
+            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers };
+
+        return new RenderTextureDescription((uint)width, (uint)height, colors, Description.EnableDepth, Description.SampleCount, Storage) { ArrayLayers = Description.ArrayLayers };
+    }
+
+    internal RenderTexture ResolveHistory(GraphicsDevice device, GraphInstanceKey key, ulong executionId, int framesAgo, in RenderTextureDescription desc)
     {
         if (framesAgo < 0 || framesAgo > HistoryDepth)
             throw new ArgumentOutOfRangeException(nameof(framesAgo), $"framesAgo must be in [0, {HistoryDepth}] for resource '{RenderResourceID.ToString(Id)}'.");
 
-        return _rings.Resolve(device, viewId, executionId, framesAgo, desc);
+        return _rings.Resolve(device, key, executionId, framesAgo, desc);
     }
 
-    internal bool IsHistoryValid(int viewId, ulong executionId, in RenderTextureDescription desc)
-        => HistoryDepth > 0 && _rings.IsValid(viewId, executionId, desc);
+    internal bool IsHistoryValid(GraphInstanceKey key, ulong executionId, in RenderTextureDescription desc)
+        => HistoryDepth > 0 && _rings.IsValid(key, executionId, desc);
 
-    internal int HistorySlot(int viewId) => HistoryDepth > 0 ? _rings.CurrentSlot(viewId) : -1;
+    internal int HistorySlot(GraphInstanceKey key) => HistoryDepth > 0 ? _rings.CurrentSlot(key) : -1;
 
     internal override void DisposeOwned() => _rings.DisposeAll();
 
@@ -171,12 +190,12 @@ public sealed class GraphTextureResource : GraphResource
 
         public TextureRings(RenderResourceID id, int slots) : base(slots) => _id = id;
 
-        protected override RenderTexture Create(GraphicsDevice device, in RenderTextureDescription desc, int viewId, int index)
+        protected override RenderTexture Create(GraphicsDevice device, in RenderTextureDescription desc, GraphInstanceKey key, int index)
         {
             RenderTexture texture = device.ResourceFactory.CreateRenderTexture(desc);
             string? baseName = RenderResourceID.ToString(_id);
             if (baseName != null)
-                texture.Name = $"{baseName}[v{viewId}][{index}]";
+                texture.Name = $"{baseName}[{key}][{index}]";
             return texture;
         }
     }
@@ -202,31 +221,37 @@ public sealed class GraphBufferResource : GraphResource
             throw new ArgumentOutOfRangeException(nameof(historyDepth), "History depth cannot be negative.");
         Description = desc;
         HistoryDepth = historyDepth;
-        _rings = new BufferRings(historyDepth + 1);
+        _rings = new BufferRings(id, historyDepth + 1);
     }
 
-    internal DeviceBuffer ResolveHistory(GraphicsDevice device, int viewId, ulong executionId, int framesAgo, in BufferDescription desc)
+    internal DeviceBuffer ResolveHistory(GraphicsDevice device, GraphInstanceKey key, ulong executionId, int framesAgo, in BufferDescription desc)
     {
         if (framesAgo < 0 || framesAgo > HistoryDepth)
             throw new ArgumentOutOfRangeException(nameof(framesAgo), $"framesAgo must be in [0, {HistoryDepth}] for resource '{RenderResourceID.ToString(Id)}'.");
 
-        return _rings.Resolve(device, viewId, executionId, framesAgo, desc);
+        return _rings.Resolve(device, key, executionId, framesAgo, desc);
     }
 
-    internal bool IsHistoryValid(int viewId, ulong executionId, in BufferDescription desc)
-        => HistoryDepth > 0 && _rings.IsValid(viewId, executionId, desc);
+    internal bool IsHistoryValid(GraphInstanceKey key, ulong executionId, in BufferDescription desc)
+        => HistoryDepth > 0 && _rings.IsValid(key, executionId, desc);
 
-    internal int HistorySlot(int viewId) => HistoryDepth > 0 ? _rings.CurrentSlot(viewId) : -1;
+    internal int HistorySlot(GraphInstanceKey key) => HistoryDepth > 0 ? _rings.CurrentSlot(key) : -1;
 
     internal override void DisposeOwned() => _rings.DisposeAll();
 
     private sealed class BufferRings : HistoryRings<DeviceBuffer, BufferDescription>
     {
-        public BufferRings(int slots) : base(slots) { }
+        private readonly RenderResourceID _id;
 
-        protected override DeviceBuffer Create(GraphicsDevice device, in BufferDescription desc, int viewId, int index)
+        public BufferRings(RenderResourceID id, int slots) : base(slots) => _id = id;
+
+        protected override DeviceBuffer Create(GraphicsDevice device, in BufferDescription desc, GraphInstanceKey key, int index)
         {
-            return device.ResourceFactory.CreateBuffer(desc);
+            DeviceBuffer buffer = device.ResourceFactory.CreateBuffer(desc);
+            string? baseName = RenderResourceID.ToString(_id);
+            if (baseName != null)
+                buffer.Name = $"{baseName}[{key}][{index}]";
+            return buffer;
         }
     }
 }
