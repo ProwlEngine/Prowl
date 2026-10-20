@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 
 using Prowl.Warp;
 
@@ -15,7 +16,11 @@ public static class NetworkDiagnostics
 {
     public const int Capacity = 1024;
     public readonly record struct Entry(long Sequence, DateTime Time, string Kind, string Direction,
-        string Peer, Guid Target, string Detail, int PayloadBytes, string Preview);
+        string Peer, Guid Target, string Detail, int PayloadBytes, string Preview)
+    {
+        public string? Context { get; init; }
+        public string? Name { get; init; }
+    }
 
     private static readonly Entry[] s_entries = new Entry[Capacity];
     private static int s_start, s_count;
@@ -54,11 +59,11 @@ public static class NetworkDiagnostics
     }
 
     internal static void Record(string kind, string direction, NetPeer? peer, Guid target, string detail,
-        ReadOnlySpan<byte> payload = default)
+        ReadOnlySpan<byte> payload = default, string? context = null, string? name = null)
     {
         if (!Enabled) return;
         var entry = new Entry(++s_sequence, DateTime.UtcNow, kind, direction, peer?.ToString() ?? "Session",
-            target, detail, payload.Length, Convert.ToHexString(payload[..Math.Min(payload.Length, 64)]));
+            target, detail, payload.Length, Convert.ToHexString(payload[..Math.Min(payload.Length, 64)])) { Context = context, Name = name };
         if (s_count == Capacity)
         {
             s_entries[s_start] = entry;
@@ -97,8 +102,10 @@ public static partial class Networking
             if (NetworkDiagnostics.Enabled)
             {
                 NetReader copy = reader;
+                ReadOnlySpan<byte> payload = copy.ReadBytes(copy.Remaining);
+                var description = DescribePayload(kind, payload);
                 NetworkDiagnostics.Record(kind.ToString(), "In", peer, Guid.Empty, delivery.ToString(),
-                    copy.ReadBytes(copy.Remaining));
+                    payload, description.Context, description.Name);
             }
             try
             {
@@ -122,7 +129,10 @@ public static partial class Networking
     {
         Session!.SendRaw(peer, (ushort)kind, payload, delivery);
         if (NetworkDiagnostics.Enabled)
-            NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, delivery.ToString(), payload);
+        {
+            var description = DescribePayload(kind, payload);
+            NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, delivery.ToString(), payload, description.Context, description.Name);
+        }
     }
 
     private static void BroadcastEngine(EngineMessage kind, ReadOnlySpan<byte> payload,
@@ -130,9 +140,64 @@ public static partial class Networking
     {
         Session!.BroadcastRaw((ushort)kind, payload, delivery, except);
         if (!NetworkDiagnostics.Enabled) return;
+        var description = DescribePayload(kind, payload);
         foreach (NetPeer peer in Session.Peers)
             if (!peer.IsLocal && peer != except)
-                NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, delivery.ToString(), payload);
+                NetworkDiagnostics.Record(kind.ToString(), "Out", peer, Guid.Empty, delivery.ToString(), payload, description.Context, description.Name);
+    }
+
+    // Decode a separate reader into captured text. Never apply values or invoke an RPC for diagnostics.
+    private static (string? Context, string? Name) DescribePayload(EngineMessage kind, ReadOnlySpan<byte> payload)
+    {
+        if (kind is not (EngineMessage.Sync or EngineMessage.RpcToHost or EngineMessage.RpcFromHost))
+            return (null, null);
+        try
+        {
+            NetReader reader = new(payload);
+            if (kind is EngineMessage.RpcToHost or EngineMessage.RpcFromHost)
+            {
+                string caller = kind == EngineMessage.RpcFromHost ? $"Caller ID: {reader.ReadVarUInt32()}\n" : "";
+                Guid id = reader.ReadGuid();
+                uint method = reader.ReadUInt32();
+                if (FindByIdentifier(id) is not Component component)
+                    return ($"{caller}Component: {id}\nUnknown RPC #{method}", $"Unknown RPC #{method}");
+                RpcMember? rpc = NetworkMembers.Of(component).Rpc(method);
+                return ($"{caller}Object: {component.GameObject.Name}\nComponent: {component.GetType().Name}\nRPC: {rpc?.Signature ?? $"#{method}"}"
+                    + (rpc == null ? "" : $"\nRecipient: {rpc.Mode}"), $"{component.GetType().Name}.{rpc?.Signature ?? $"#{method}"}");
+            }
+
+            uint count = reader.ReadVarUInt32();
+            StringBuilder context = new($"{count} SyncVar value(s)");
+            List<string> names = new();
+            // Bound capture work and retained text even for very large sync batches.
+            for (uint i = 0; i < Math.Min(count, 32u); i++)
+            {
+                Guid id = reader.ReadGuid();
+                uint slot = reader.ReadVarUInt32();
+                ReadOnlySpan<byte> value = reader.ReadBytesWithLength();
+                if (FindByIdentifier(id) is not Component component)
+                {
+                    context.Append($"\n\nComponent: {id}\nUnknown SyncVar #{slot}");
+                    if (i < 2) names.Add($"Unknown SyncVar #{slot}");
+                    continue;
+                }
+                SyncMember? sync = NetworkMembers.Of(component).Sync(slot);
+                if (i < 2) names.Add($"{component.GetType().Name}.{sync?.Name ?? $"#{slot}"}");
+                NetReader valueReader = new(value);
+                context.Append($"\n\nObject: {component.GameObject.Name}\nProperty: {component.GetType().Name}.{sync?.Name ?? $"#{slot}"}");
+                if (sync != null)
+                    context.Append($"\nValue: {sync.FormatPayload(ref valueReader)}");
+            }
+            if (count > 32) context.Append($"\n\n{count - 32} more values omitted");
+            string name = count == 0 ? "No SyncVars" : string.Join(", ", names);
+            if (count > 2) name += $" (+{count - 2} more)";
+            return (context.ToString(), name);
+        }
+        catch (Exception)
+        {
+            // Diagnostic decoding must never change whether a network message succeeds.
+            return ("Payload context unavailable", null);
+        }
     }
 
     private static void TraceMember(string kind, string direction, NetPeer? peer, Component component, uint id,
@@ -144,6 +209,8 @@ public static partial class Networking
         string member = (rpc ? members.Rpc(id)?.Signature : sync?.Name) ?? $"#{id}";
         string? value = sync?.FormatValue(component);
         NetworkDiagnostics.Record(kind, direction, peer, component.Identifier,
-            $"{component.GameObject.Name} / {component.GetType().Name}.{member} — {result}{(value == null ? "" : $" (local value: {value})")}", payload);
+            $"{component.GetType().Name}.{member}: {result}", payload,
+            $"Object: {component.GameObject.Name}\nComponent: {component.GetType().Name}\n{(rpc ? "RPC" : "Property")}: {member}"
+            + (value == null ? "" : $"\nLocal value: {value}"), $"{component.GetType().Name}.{member}");
     }
 }

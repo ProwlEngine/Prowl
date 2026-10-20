@@ -422,6 +422,7 @@ public static class EditorGUI
             .Transition(GuiProp.BackgroundColor, 0.15f)
             .Hovered.BackgroundColor(active ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Text(glyph, font).TextColor(active ? EditorTheme.Accent : EditorTheme.Ink300).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
+            .Cursor(PaperCursor.Pointer)
             .Tooltip(label)
             .OnClick(_ => onClick());
     }

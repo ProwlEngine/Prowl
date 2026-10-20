@@ -31,6 +31,8 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
     internal abstract void Read(Component component, ref NetReader reader);
 
     internal abstract string FormatValue(Component component);
+
+    internal virtual string FormatPayload(ref NetReader reader) => "Value unavailable";
 }
 
 /// <inheritdoc/>
@@ -43,6 +45,8 @@ public sealed class SyncMember<TComponent, T>(uint slot, string name, SyncFlags 
     internal override void Read(Component component, ref NetReader reader) => set((TComponent)component, NetSerializer<T>.Read(ref reader));
 
     internal override string FormatValue(Component component) => NetworkDiagnostics.FormatValue(get((TComponent)component));
+
+    internal override string FormatPayload(ref NetReader reader) => NetworkDiagnostics.FormatValue(NetSerializer<T>.Read(ref reader));
 }
 
 /// <summary>An RPC, as the script compiler describes it. Not meant to be created by hand.</summary>

@@ -86,6 +86,14 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
             Assert.Equal(100, component.Health);
             var entries = Enumerable.Range(0, NetworkDiagnostics.Count).Select(NetworkDiagnostics.GetEntry).ToArray();
             Assert.Contains(entries, e => e.Kind == "RpcToHost" && e.Direction == "In");
+            NetworkDiagnostics.Entry rpcMessage = Assert.Single(entries.Where(e => e.Kind == "RpcToHost" && e.Direction == "In"));
+            Assert.Contains("Diagnostic target", rpcMessage.Context);
+            Assert.Contains("AskHost", rpcMessage.Context);
+            Assert.Contains("AskHost", rpcMessage.Name);
+            NetworkDiagnostics.Entry syncMessage = Assert.Single(entries.Where(e => e.Kind == "Sync" && e.Direction == "In"));
+            Assert.Contains("Health", syncMessage.Context);
+            Assert.Contains("Health", syncMessage.Name);
+            Assert.Contains("Value: 1", syncMessage.Context);
             Assert.Contains(entries, e => e.Kind == "RPC" && e.Direction == "Invoke" && e.Target == component.Identifier);
             Assert.Contains(entries, e => e.Kind == "SyncVar" && e.Direction == "Rejected" && e.Target == component.Identifier);
             var objects = new List<Networking.ObjectDiagnostic>();
@@ -93,6 +101,8 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
             Assert.Contains(objects, o => o.Identifier == go.Identifier && o.Controlled && o.OwnerId == -1);
             Networking.Shutdown();
             Assert.True(NetworkDiagnostics.Count > 0);
+            Assert.Contains(Enumerable.Range(0, NetworkDiagnostics.Count).Select(NetworkDiagnostics.GetEntry),
+                e => e.Sequence == rpcMessage.Sequence && e.Context!.Contains("AskHost"));
             Assert.Contains(Enumerable.Range(0, NetworkDiagnostics.Count).Select(NetworkDiagnostics.GetEntry),
                 e => e.Kind == "Session" && e.Detail.StartsWith("Ended:"));
         }
