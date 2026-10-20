@@ -117,6 +117,32 @@ file sealed class SamplePass(RenderTexture target, GraphicsProgram program, Text
     }
 }
 
+file sealed class IndirectPass(RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, DeviceBuffer arguments) : IPass
+{
+    private readonly RenderResourceID _target = RenderResourceID.Intern("indirect_target");
+    private readonly RenderResourceID _arguments = RenderResourceID.Intern("indirect_arguments");
+
+    public string Name => "Indirect";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        builder.DeclareImportedTexture(_target, target);
+        builder.DeclareImportedBuffer(_arguments, arguments, BufferAccess.Indirect);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+    {
+        PropertySet properties = new();
+        properties.SetTexture("Tex", source);
+        properties.SetSampler("Smp", sampler);
+        cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(new Prowl.Vector.Color(0, 0, 0, 255)));
+        cmd.SetShader(program);
+        cmd.SetVertexSource(VertexSource.None);
+        cmd.SetProperties(properties);
+        cmd.DrawIndirect(arguments, 0, 2, 16);
+    }
+}
+
 file sealed class BlitPass(RenderTexture source, RenderTexture destination, string sourceId) : IPass
 {
     private readonly RenderResourceID _destination = RenderResourceID.Intern("blit_destination");
@@ -156,6 +182,44 @@ public class ReplayTests
         Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
         RecordedCopy copy = pass.Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
         Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, result.Outputs.Single().Data);
+    }
+
+    [SkippableFact]
+    public void Replay_IndirectSlicesAndPatchesChangeWhatIsDrawn()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        ResourceFactory factory = device.ResourceFactory;
+        using GraphicsProgram program = SampleProgram(factory);
+        using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        device.UpdateTexture(source, Enumerable.Repeat((byte)200, 64).ToArray());
+        using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
+        using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using DeviceBuffer arguments = factory.CreateBuffer(new BufferDescription(32, BufferUsage.IndirectBuffer));
+        device.UpdateBuffer(arguments, 0, new uint[] { 3, 1, 0, 0, 3, 1, 0, 0 });
+        using RenderPipeline pipeline = new(new IPass[] { new IndirectPass(target, program, source, sampler, arguments) });
+        DeepRecording deep = Record(device, pipeline, DeepMode.Full);
+        DeepPass pass = deep.Views[0].Passes[0];
+        Replayer replayer = new(device, deep);
+
+        static bool Drawn(ReplayResult result) => result.Outputs.Single().Data.Where((b, i) => i % 4 != 3).Any(b => b != 0);
+        ReplayResult whole = replayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        ReplayResult none = replayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(0, 0) });
+        ReplayResult second = replayer.Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(1, 1) });
+        TraceResourceId buffer = deep.Resources.Single(r => r.Buffer is { } b && b.SizeInBytes == 32).Id;
+        ReplayResult emptied = replayer.Replay(new ReplayRequest
+        {
+            ViewIndex = 0,
+            PassIndex = pass.Index,
+            EventIndex = 0,
+            Patches = [new BufferPatch(buffer, 0, new byte[32])],
+        });
+
+        Assert.True(whole.Status == ReplayStatus.Reexecuted, whole.Reason);
+        Assert.True(Drawn(whole));
+        Assert.False(Drawn(none));
+        Assert.True(Drawn(second));
+        Assert.True(emptied.Status == ReplayStatus.Reexecuted, emptied.Reason);
+        Assert.False(Drawn(emptied));
     }
 
     [SkippableFact]
