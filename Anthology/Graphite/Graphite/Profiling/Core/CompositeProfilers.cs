@@ -270,6 +270,12 @@ internal sealed class CompositePassCommandSink(IPassCommandSink[] sinks) : IPass
             sink.CopyTexture(in source, in sourceRegion, in destinationAfter, in destinationRegion, layerCount);
     }
 
+    public void BlitTexture(in ResourceVersion source, in ResourceVersion destinationAfter, ReadOnlySpan<TextureBlit> regions)
+    {
+        foreach (IPassCommandSink sink in sinks)
+            sink.BlitTexture(in source, in destinationAfter, regions);
+    }
+
     public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
     {
         foreach (IPassCommandSink sink in sinks)

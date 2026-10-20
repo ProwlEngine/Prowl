@@ -89,6 +89,8 @@ public interface IPassCommandSink
 
     void CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount);
 
+    void BlitTexture(in ResourceVersion source, in ResourceVersion destinationAfter, ReadOnlySpan<TextureBlit> regions);
+
     void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset);
 
     void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter);

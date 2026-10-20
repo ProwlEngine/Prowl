@@ -252,6 +252,12 @@ public sealed partial class DeepRecording
             pass.Commands.Add(new CopyTextureCommand(owner.Trace(source), sourceRegion, owner.Trace(destinationAfter), destinationRegion, layerCount));
         }
 
+        public void BlitTexture(in ResourceVersion source, in ResourceVersion destinationAfter, ReadOnlySpan<TextureBlit> regions)
+        {
+            pass.Written.Add(destinationAfter.Resource);
+            pass.Commands.Add(new BlitTextureCommand(owner.Trace(source), owner.Trace(destinationAfter), regions.ToArray().ToEquatableArray()));
+        }
+
         public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
         {
             pass.Written.Add(destinationAfter.Resource);

@@ -107,6 +107,8 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
     public void CopyTexture(in ResourceVersion source, in TextureRegion sourceRegion, in ResourceVersion destinationAfter, in TextureRegion destinationRegion, uint layerCount)
         => Log.Add("CopyTexture");
 
+    public void BlitTexture(in ResourceVersion source, in ResourceVersion destinationAfter, ReadOnlySpan<TextureBlit> regions) => Log.Add("BlitTexture");
+
     public void CopyTextureToBuffer(in ResourceVersion source, in TextureRegion region, in ResourceVersion destinationAfter, uint destinationOffset)
         => Log.Add("CopyTextureToBuffer");
 
