@@ -26,7 +26,7 @@ internal sealed class HelmetScene : DemoScene
     public HelmetScene(Demo demo) : base(demo)
     {
         _model = ModelAsset.Load(demo.Device, "Assets/Models/DamagedHelmet.glb", unwrapLightmapUVs: false);
-        _mesh = demo.Renderer.CreateMesh(Geometry.FromModel(_model));
+        _mesh = demo.Renderer.CreateMesh(ModelGeometry.FromModel(_model));
 
         MaterialInfo info = _model.Materials.Length > 0 ? _model.Materials[0] : default;
         Material helmetMaterial = Track(demo.Renderer.CreateMaterial(demo.Lit));

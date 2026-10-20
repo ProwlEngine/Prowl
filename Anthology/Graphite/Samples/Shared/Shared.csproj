@@ -8,6 +8,7 @@
 
     <ItemGroup>
         <ProjectReference Include="../../ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
+        <ProjectReference Include="../../Rendering/Prowl.Graphite.Rendering.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -15,6 +16,10 @@
 
         <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
         <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Shaders/**/*" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>

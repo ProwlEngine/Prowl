@@ -17,7 +17,7 @@ internal sealed class Demo : IDisposable
         Renderer = new Renderer(device, ShaderLoader.Compiler);
         Renderer.Error += error => Console.WriteLine($"[{error.Severity}] {error.Code}: {error.Message}");
 
-        Lit = Renderer.LoadShader(ShaderParser.Parse(File.ReadAllText("Shaders/Lit.shader")));
+        Lit = Renderer.LoadShader(ShaderParser.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Shaders", "Lit.shader"))));
         Cube = Renderer.CreateMesh(Geometry.Cube());
         Sphere = Renderer.CreateMesh(Geometry.Sphere());
         Cylinder = Renderer.CreateMesh(Geometry.Cylinder());
