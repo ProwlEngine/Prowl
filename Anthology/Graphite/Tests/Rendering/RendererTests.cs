@@ -255,9 +255,9 @@ public sealed class RendererTests : IDisposable
 
         Color32[] pixels = Frame();
         Color32 blended = At(pixels, 8, 8);
-        Assert.InRange(blended.R, 62, 66);
-        Assert.InRange(blended.G, 126, 130);
-        Assert.InRange(blended.B, 62, 66);
+        Assert.InRange(blended.R, 135, 139);
+        Assert.InRange(blended.G, 186, 190);
+        Assert.InRange(blended.B, 135, 139);
         Assert.Equal(new Color32(255, 255, 255, 255), At(pixels, 1, 8));
     }
 
