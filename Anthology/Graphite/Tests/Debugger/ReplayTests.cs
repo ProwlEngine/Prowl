@@ -159,6 +159,28 @@ public class ReplayTests
     }
 
     [SkippableFact]
+    public void Record_ProgramsDifferingOnlyInSpecializationsStayDistinct()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        ResourceFactory factory = device.ResourceFactory;
+        using GraphicsProgram first = SampleProgram(factory, [new SpecializationConstant(0, 1)]);
+        using GraphicsProgram second = SampleProgram(factory, [new SpecializationConstant(0, 2)]);
+        using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
+        using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
+        using RenderTexture a = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using RenderTexture b = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using RenderPipeline pipeline = new(new IPass[] { new SamplePass(a, first, source, sampler, "A"), new SamplePass(b, second, source, sampler, "B") });
+        DeepRecording deep = Record(device, pipeline, DeepMode.Full);
+
+        Assert.Equal(2, deep.Programs.Length);
+        Assert.Equal(new[] { 1u, 2u }, deep.Programs.Select(p => p.Specializations.Single().Value).Order());
+        DeepPass pass = deep.Views[0].Passes.Single(p => p.Name == "B");
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+        Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
+    }
+
+    [SkippableFact]
     public void Replay_RebuildsProgramAndPropertiesForADraw()
     {
         using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
