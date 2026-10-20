@@ -89,6 +89,8 @@ public sealed record CopyBufferCommand(TraceVersion Source, uint SourceOffset, T
 
 public sealed record CopyTextureCommand(TraceVersion Source, TextureRegion SourceRegion, TraceVersion DestinationAfter, TextureRegion DestinationRegion, uint LayerCount) : RecordedCommand;
 
+public sealed record BlitTextureCommand(TraceVersion Source, TraceVersion DestinationAfter, EquatableArray<TextureBlit> Regions) : RecordedCommand;
+
 public sealed record CopyTextureToBufferCommand(TraceVersion Source, TextureRegion Region, TraceVersion DestinationAfter, uint DestinationOffset) : RecordedCommand;
 
 public sealed record ResolveTextureCommand(TraceVersion Source, TraceVersion DestinationAfter) : RecordedCommand;
