@@ -154,7 +154,7 @@ public abstract partial class CommandBuffer
                     textureRange = ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
 
                 return new PropertyState(
-                    name, PropertyKind.Texture, default, default, resource, textureRange, view?.Format, entry.Sampler?.Description);
+                    name, PropertyKind.Texture, default, default, resource, textureRange, view?.Format, entry.Sampler?.Description, view?.Arrayed ?? false);
 
             default:
                 return new PropertyState(name, PropertyKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);
@@ -221,7 +221,7 @@ public abstract partial class CommandBuffer
                 ? ResourceRange.Subresources(view.BaseMipLevel, view.MipLevels, view.BaseArrayLayer, view.ArrayLayers)
                 : ResourceRange.Subresources(0, texture.MipLevels, 0, ValidationHelpers.GetEffectiveArrayLayers(texture));
             return new PropertyState(description.Name, PropertyKind.Texture, default, default, texture.CurrentVersion,
-                textureRange, view?.Format, entry.Sampler?.Description);
+                textureRange, view?.Format, entry.Sampler?.Description, view?.Arrayed ?? false);
         }
 
         return new PropertyState(description.Name, PropertyKind.Sampler, default, default, default, default, null, entry.Sampler?.Description);
