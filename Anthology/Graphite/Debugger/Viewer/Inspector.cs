@@ -292,10 +292,6 @@ internal sealed partial class ProfilerView
         double[] v = chart.Values;
         double avg = v.Length > 0 ? v.Average() : 0;
         double[] average = Enumerable.Repeat(avg, v.Length).ToArray();
-        double[] marker = new double[v.Length];
-        for (int i = 0; i < marker.Length; i++)
-            marker[i] = i == current ? v[i] : double.NaN;
-
         string cur = current >= 0 && current < v.Length ? chart.Format(v[current]) : "-";
         CartesianChart<object> c = Chart.CreateCartesian<object>(_paper, "c")
             .Title($"{chart.Title}   {cur}")
@@ -314,7 +310,8 @@ internal sealed partial class ProfilerView
         if (chart.Second != null)
             lines.Series(chart.Legend.Length > 0 ? chart.Legend.Split('/').Last().Trim() : "second", chart.SecondColor ?? Style.Snapshot, chart.Second).StrokeWidth(1.25f);
         lines.Series(chart.Title, chart.Color, v).StrokeWidth(1.25f);
-        c.AddScatterPlot().MarkerSize(6f).Series("this frame", Style.Selection, marker);
+        if (current >= 0 && current < v.Length)
+            lines.MarkerLine(current, Style.Selection);
         c.Show();
 
         string min = v.Length > 0 ? chart.Format(v.Min()) : "-", max = v.Length > 0 ? chart.Format(v.Max()) : "-";
