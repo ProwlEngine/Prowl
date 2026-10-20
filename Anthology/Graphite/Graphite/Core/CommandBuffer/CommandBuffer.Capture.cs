@@ -48,7 +48,20 @@ public abstract partial class CommandBuffer
     }
 
     private void TrackAttachment(Texture texture, LoadAction load)
-        => TrackTexture(texture, load != LoadAction.Load && texture.MipLevels == 1 && ValidationHelpers.GetEffectiveArrayLayers(texture) == 1);
+    {
+        bool overwrites = load != LoadAction.Load && texture.MipLevels == 1 && ValidationHelpers.GetEffectiveArrayLayers(texture) == 1;
+        if (overwrites && Stats is { Draws: 0, IndirectDraws: 0, Dispatches: 0 })
+        {
+            for (int i = 0; i < _referenced.Count; i++)
+            {
+                ReferencedResource entry = _referenced[i];
+                if (entry.Texture == texture && !entry.Overwritten)
+                    _referenced[i] = entry with { Overwritten = true };
+            }
+        }
+
+        TrackTexture(texture, overwrites);
+    }
 
     private void ReportFramebuffer(Framebuffer fb, in TargetLoadStoreOps ops)
     {
