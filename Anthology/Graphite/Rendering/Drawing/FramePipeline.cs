@@ -1661,7 +1661,7 @@ internal sealed partial class FramePipeline : IDisposable
     }
 
     private void Plan(CameraFrame camera, in ViewDesc view, WorldFrame world, uint width, uint height)
-        => _planned.Add(new PlannedInstance(RenderKinds.Of(view.Kind, CameraShape.Of(view, camera.Selected)), view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
+        => _planned.Add(new PlannedInstance(RenderKinds.Of(view.Kind, CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length)), view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
 
     private GraphInstances CreateInstances(RenderGraph graph)
     {
