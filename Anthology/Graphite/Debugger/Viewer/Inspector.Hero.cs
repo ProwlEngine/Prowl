@@ -12,8 +12,9 @@ namespace Prowl.Graphite.Debugger.Viewer;
 internal sealed partial class ProfilerView
 {
     private const float HeroTileMinWidth = 170f;
-    private const float FoldInset = 28f;
-    private const float AccordionInset = 24f;
+    private const float AccordionInset = 28f;
+    private const float AccordionPad = 10f;
+    private static float AccordionHeader => Metrics.HeaderHeight + 4f;
 
     private readonly record struct Stat(string Label, string Value, string Sub, Color? Color = null);
 
@@ -43,15 +44,23 @@ internal sealed partial class ProfilerView
     private static Color? Versus(double value, double average)
         => average <= 0 ? null : value > average * 1.25 ? Style.Bad : value < average * 0.8 ? Style.Good : null;
 
-    private void Collapsible(string title, Action body, bool open = false, float? width = null)
+    private bool _inGroup;
+
+    private void Collapsible(string title, Action body, bool open = false)
     {
-        float outer = _contentWidth;
-        using (_paper.Column("sec", _sectionIndex++).Width(width ?? SectionWidth(0)).Height(UnitValue.Auto).Enter())
+        Accordion(title, () =>
         {
-            _contentWidth = (width ?? outer) - FoldInset;
-            Origami.Foldout(_paper, "fold", title).DefaultExpanded(open).Body(body);
-            _contentWidth = outer;
-        }
+            _inGroup = true;
+            body();
+            _inGroup = false;
+        }, open);
+    }
+
+    private void NestedAccordion(string title, Action body)
+    {
+        _inGroup = false;
+        Accordion(title, body, true);
+        _inGroup = true;
     }
 
     private readonly HashSet<string> _accordionOpen = new();
@@ -69,7 +78,7 @@ internal sealed partial class ProfilerView
         float outer = _contentWidth;
         using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Enter())
         {
-            using (_paper.Row("ah").Width(UnitValue.Stretch()).Height(Metrics.CompactHeight + 4f).Gap(6).AlignItems(LayoutAlignment.Center).Cursor(PaperCursor.Pointer)
+            using (_paper.Row("ah").Width(UnitValue.Stretch()).Height(AccordionHeader).Padding(AccordionPad, 6, 0, 0).Gap(6).AlignItems(LayoutAlignment.Center).Cursor(PaperCursor.Pointer)
                 .Hovered.BackgroundColor(Style.Alpha(Style.Primary, 20)).End()
                 .OnClick(_ =>
                 {
@@ -80,7 +89,7 @@ internal sealed partial class ProfilerView
                 _paper.Box("caret").Width(12).Height(UnitValue.Stretch())
                     .Text(isOpen ? OrigamiGlyphs.ChevronDown : OrigamiGlyphs.ChevronRight, OrigamiFonts.IconSolid!).FontSize(Style.Small).TextColor(Style.InkSoft)
                     .Alignment(TextAlignment.MiddleCenter).IsNotInteractable();
-                Origami.Header(_paper, "t", title).Text().Show();
+                Origami.Header(_paper, "t", title).Text().Height(AccordionHeader).Show();
             }
 
             if (!isOpen)
@@ -88,7 +97,7 @@ internal sealed partial class ProfilerView
 
             using (_paper.Row("ab").Width(UnitValue.Stretch()).Height(UnitValue.Auto).AlignItems(LayoutAlignment.Stretch).Enter())
             {
-                _paper.Box("bar").Width(2).Margin(5, 5, 0, 4).BackgroundColor(Style.Alpha(Style.Primary, 140)).IsNotInteractable();
+                _paper.Box("bar").Width(2).Margin(AccordionPad + 5, 5, 0, 4).BackgroundColor(Style.Alpha(Style.Primary, 140)).IsNotInteractable();
                 using (_paper.Column("body").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(0, 0, Metrics.SpacingSmall, Metrics.Spacing).Enter())
                 {
                     _contentWidth = width - AccordionInset;

@@ -125,6 +125,11 @@ internal sealed partial class ProfilerView
 
     private void Section(string title, float basis, string note, Action<float> body, bool uniformPadding = false)
     {
+        if (_inGroup)
+        {
+            NestedAccordion(title, () => Section(title, basis, note, body, uniformPadding));
+            return;
+        }
         OrigamiMetrics m = Style.Theme.Metrics;
         float width = SectionWidth(basis);
         if (_inAccordion)
@@ -191,6 +196,11 @@ internal sealed partial class ProfilerView
 
     private void TableSection(string title, float basis, string note, string[] head, float[] flex, IReadOnlyList<Row> rows, float maxHeight = 360f)
     {
+        if (_inGroup)
+        {
+            NestedAccordion(title, () => TableSection(title, basis, note, head, flex, rows, maxHeight));
+            return;
+        }
         float width = SectionWidth(basis);
         using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Gap(Style.Theme.Metrics.SpacingSmall).Enter())
         {
