@@ -242,7 +242,7 @@
   "network.never": "Nie vernetzen",
   "network.never.desc": "Bleibt auf diesem Rechner. Clients erhalten es nie, auch nichts darunter.",
   "network.inherited_never": "Ein Elternobjekt wird nie vernetzt, daher wird auch dieses nicht geteilt.",
-  "network.part_of": "Teil des Netzwerkobjekts '{name}'.",
+  "network.part_of": "Teil des Netzwerkobjekts '{{name}}'.",
   "network.orphaned": "Verwaist-Modus",
   "network.orphaned.desc": "Was passiert, wenn sein Besitzer die Sitzung verlässt.",
   "network.orphaned.destroy": "Zerstören",

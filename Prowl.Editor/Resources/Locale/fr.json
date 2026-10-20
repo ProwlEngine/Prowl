@@ -242,7 +242,7 @@
   "network.never": "Jamais en réseau",
   "network.never.desc": "Reste sur cette machine. Les clients ne le reçoivent jamais, ni ce qui est en dessous.",
   "network.inherited_never": "Un parent n'est jamais en réseau, donc celui-ci n'est pas partagé non plus.",
-  "network.part_of": "Fait partie de l'objet réseau '{name}'.",
+  "network.part_of": "Fait partie de l'objet réseau '{{name}}'.",
   "network.orphaned": "Mode orphelin",
   "network.orphaned.desc": "Ce qui se passe quand son propriétaire part.",
   "network.orphaned.destroy": "Détruire",

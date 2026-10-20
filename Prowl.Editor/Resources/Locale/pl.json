@@ -264,7 +264,7 @@
   "network.never": "Nigdy w sieci",
   "network.never.desc": "Zostaje na tym komputerze. Klienci nigdy go nie otrzymują, ani niczego pod nim.",
   "network.inherited_never": "Rodzic nigdy nie jest w sieci, więc ten też nie jest udostępniany.",
-  "network.part_of": "Część obiektu sieciowego '{name}'.",
+  "network.part_of": "Część obiektu sieciowego '{{name}}'.",
   "network.orphaned": "Tryb osierocenia",
   "network.orphaned.desc": "Co się dzieje, gdy właściciel odchodzi.",
   "network.orphaned.destroy": "Zniszcz",

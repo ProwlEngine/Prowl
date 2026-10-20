@@ -264,7 +264,7 @@
   "network.never": "不联网",
   "network.never.desc": "只留在本机。客户端永远不会收到它及其子对象。",
   "network.inherited_never": "父对象不联网，因此它也不会共享。",
-  "network.part_of": "属于网络对象 '{name}'。",
+  "network.part_of": "属于网络对象 '{{name}}'。",
   "network.orphaned": "无主模式",
   "network.orphaned.desc": "所有者离开时如何处理。",
   "network.orphaned.destroy": "销毁",

@@ -242,7 +242,7 @@
   "network.never": "Nunca en red",
   "network.never.desc": "Se queda en esta máquina. Los clientes nunca lo reciben, ni nada por debajo.",
   "network.inherited_never": "Un padre nunca está en red, así que este tampoco se comparte.",
-  "network.part_of": "Parte del objeto de red '{name}'.",
+  "network.part_of": "Parte del objeto de red '{{name}}'.",
   "network.orphaned": "Modo huérfano",
   "network.orphaned.desc": "Qué ocurre cuando su propietario se va.",
   "network.orphaned.destroy": "Destruir",

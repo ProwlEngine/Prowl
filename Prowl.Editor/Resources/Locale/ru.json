@@ -264,7 +264,7 @@
   "network.never": "Без сети",
   "network.never.desc": "Остаётся на этой машине. Клиенты никогда не получают его и всё, что под ним.",
   "network.inherited_never": "Родитель не передаётся по сети, поэтому и этот объект тоже.",
-  "network.part_of": "Часть сетевого объекта '{name}'.",
+  "network.part_of": "Часть сетевого объекта '{{name}}'.",
   "network.orphaned": "Режим осиротения",
   "network.orphaned.desc": "Что происходит, когда владелец уходит.",
   "network.orphaned.destroy": "Удалить",

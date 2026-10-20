@@ -264,7 +264,7 @@
   "network.never": "Mai in rete",
   "network.never.desc": "Resta su questa macchina. I client non lo ricevono mai, né ciò che sta sotto.",
   "network.inherited_never": "Un genitore non è mai in rete, quindi neanche questo è condiviso.",
-  "network.part_of": "Parte dell'oggetto di rete '{name}'.",
+  "network.part_of": "Parte dell'oggetto di rete '{{name}}'.",
   "network.orphaned": "Modalità orfano",
   "network.orphaned.desc": "Cosa succede quando il proprietario se ne va.",
   "network.orphaned.destroy": "Distruggi",

@@ -264,7 +264,7 @@
   "network.never": "네트워크 안 함",
   "network.never.desc": "이 기기에만 남습니다. 클라이언트는 이것과 그 하위를 받지 않습니다.",
   "network.inherited_never": "부모가 네트워크 안 함이므로 이것도 공유되지 않습니다.",
-  "network.part_of": "네트워크 오브젝트 '{name}'의 일부입니다.",
+  "network.part_of": "네트워크 오브젝트 '{{name}}'의 일부입니다.",
   "network.orphaned": "소유자 이탈 시",
   "network.orphaned.desc": "소유자가 나갔을 때의 처리.",
   "network.orphaned.destroy": "파괴",

@@ -242,7 +242,7 @@
   "network.never": "ネットワークしない",
   "network.never.desc": "このマシンにのみ残ります。クライアントはこれも、その子も受け取りません。",
   "network.inherited_never": "親がネットワークしない設定のため、これも共有されません。",
-  "network.part_of": "ネットワークオブジェクト '{name}' の一部です。",
+  "network.part_of": "ネットワークオブジェクト '{{name}}' の一部です。",
   "network.orphaned": "孤立時の動作",
   "network.orphaned.desc": "所有者が抜けたときの扱い。",
   "network.orphaned.destroy": "破棄",

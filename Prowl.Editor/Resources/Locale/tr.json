@@ -264,7 +264,7 @@
   "network.never": "Asla ağda değil",
   "network.never.desc": "Bu makinede kalır. İstemciler bunu ve altındakileri asla almaz.",
   "network.inherited_never": "Bir üst nesne asla ağda değil, bu yüzden bu da paylaşılmaz.",
-  "network.part_of": "'{name}' ağ nesnesinin parçası.",
+  "network.part_of": "'{{name}}' ağ nesnesinin parçası.",
   "network.orphaned": "Sahipsiz kalma modu",
   "network.orphaned.desc": "Sahibi ayrıldığında ne olacağı.",
   "network.orphaned.destroy": "Yok et",
