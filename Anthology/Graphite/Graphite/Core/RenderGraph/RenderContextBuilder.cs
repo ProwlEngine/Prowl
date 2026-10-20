@@ -45,6 +45,13 @@ public sealed class RenderContextBuilder
         return new TextureHandle(id);
     }
 
+    /// <summary>Declares another write to a texture an earlier pass declared, for read-modify-write without describing it again.</summary>
+    public TextureHandle DeclareWriteTexture(RenderResourceID id, TextureState usage = TextureState.Attachment, TextureState? depthUsage = null)
+    {
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true));
+        return new TextureHandle(id);
+    }
+
     /// <summary>
     /// Imports an external render target under an ID so passes can read/order around it. Caller keeps ownership.
     /// </summary>
@@ -73,6 +80,13 @@ public sealed class RenderContextBuilder
     {
         ArgumentNullException.ThrowIfNull(existing);
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: (usage & BufferAccess.AllWrites) != 0, new GraphImportedBufferResource(id, existing)));
+        return new BufferHandle(id);
+    }
+
+    /// <summary>Declares another write to a buffer an earlier pass declared, for read-modify-write without describing it again.</summary>
+    public BufferHandle DeclareWriteBuffer(RenderResourceID id, BufferAccess usage = BufferAccess.ShaderRead | BufferAccess.ShaderWrite)
+    {
+        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true));
         return new BufferHandle(id);
     }
 
