@@ -248,6 +248,10 @@ public class TerrainComponent : Component, IRenderSync
                 ApplyHeightfield(_waterMaterial, data);
                 _waterMaterial.SetTexture("_Heightmap", data.GetBaseHeightmapTexture());
                 _waterMaterial.SetTexture("_WaterMap", data.GetWaterTexture());
+                _waterMaterial.SetFloat("_WaterDepth", data.WaterDepth);
+                _waterMaterial.SetFloat("_WaterVisibilityDepth", data.WaterVisibilityDepth);
+                _waterMaterial.SetColor("_ShallowWaterColor", data.ShallowWaterColor);
+                _waterMaterial.SetColor("_DeepWaterColor", data.DeepWaterColor);
             }
         }
         PickWindZones();

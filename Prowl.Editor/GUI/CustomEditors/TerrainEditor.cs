@@ -312,6 +312,15 @@ public class TerrainEditor : CustomEditor
         EditorGUI.Row(paper, $"{id}_depth", "Maximum Depth", () =>
             Origami.NumericField<float>(paper, $"{id}_depth_v", data.WaterDepth,
                 v => { data.WaterDepth = MathF.Max(0f, v); _isDirty = true; if (_terrain.IsValid()) _terrain.InvalidateDetailCache(); }).Min(0f).Show());
+        EditorGUI.Row(paper, $"{id}_shallow", "Shallow Color", () =>
+            Origami.ColorField(paper, $"{id}_shallow_v", data.ShallowWaterColor,
+                v => { data.ShallowWaterColor = v; _isDirty = true; }).Show());
+        EditorGUI.Row(paper, $"{id}_deep", "Deep Color", () =>
+            Origami.ColorField(paper, $"{id}_deep_v", data.DeepWaterColor,
+                v => { data.DeepWaterColor = v; _isDirty = true; }).Show());
+        EditorGUI.Row(paper, $"{id}_visibility", "Visibility Depth", () =>
+            Origami.NumericField<float>(paper, $"{id}_visibility_v", data.WaterVisibilityDepth,
+                v => { data.WaterVisibilityDepth = v; _isDirty = true; }).Min(0.01f).Show());
         DrawBrushBlock(paper, $"{id}_brush", font);
     }
 

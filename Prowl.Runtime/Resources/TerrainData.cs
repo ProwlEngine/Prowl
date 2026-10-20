@@ -119,6 +119,9 @@ public sealed class TerrainData : Asset, ISerializable
     private short[]? _heightsField;
     private float[]? _waterField;
     private float _waterDepth = 3f;
+    private Color _shallowWaterColor = new(0.13f, 0.55f, 0.62f, 1f);
+    private Color _deepWaterColor = new(0.02f, 0.16f, 0.30f, 1f);
+    private float _waterVisibilityDepth = 2f;
     private float[]? _splatsField;
     private List<TerrainLayer> _layers = [new(), new(), new(), new()];
     private byte[]? _holesField;
@@ -154,6 +157,9 @@ public sealed class TerrainData : Asset, ISerializable
     /// <summary>Painted water depth, 0..1, on the height vertex grid. Heights retain the unmodified ground.</summary>
     public float[] Water { get { EnsureLoaded(); return _waterField ??= new float[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _waterField = value; SetWaterDirty(); } }
     public float WaterDepth { get { EnsureLoaded(); return _waterDepth; } set { EnsureLoaded(); _waterDepth = MathF.Max(0f, value); SetWaterDirty(); } }
+    public Color ShallowWaterColor { get { EnsureLoaded(); return _shallowWaterColor; } set { EnsureLoaded(); _shallowWaterColor = value; } }
+    public Color DeepWaterColor { get { EnsureLoaded(); return _deepWaterColor; } set { EnsureLoaded(); _deepWaterColor = value; } }
+    public float WaterVisibilityDepth { get { EnsureLoaded(); return _waterVisibilityDepth; } set { EnsureLoaded(); _waterVisibilityDepth = MathF.Max(0.01f, value); } }
     [NonSerialized] private bool? _hasWaterCache;
     public bool HasWater { get { EnsureLoaded(); return _hasWaterCache ??= _waterField != null && Array.Exists(_waterField, v => v > 0.001f); } }
     /// <summary>
@@ -1085,6 +1091,9 @@ public sealed class TerrainData : Asset, ISerializable
         SerializeShortArray(value, "Heights16", Heights);
         if (_waterField != null) SerializeFloatArray(value, "Water", _waterField);
         value.Add("WaterDepth", new EchoObject(WaterDepth));
+        value.Add("ShallowWaterColor", Serializer.Serialize(ShallowWaterColor, ctx));
+        value.Add("DeepWaterColor", Serializer.Serialize(DeepWaterColor, ctx));
+        value.Add("WaterVisibilityDepth", new EchoObject(WaterVisibilityDepth));
         SerializeFloatArray(value, "Splats", Splats);
 
         // Holes (only serialize if any holes exist)
@@ -1211,6 +1220,11 @@ public sealed class TerrainData : Asset, ISerializable
         }
         Heights = heights;
         _waterDepth = MathF.Max(0f, value.Get("WaterDepth")?.FloatValue ?? 3f);
+        if (value.Get("ShallowWaterColor") is { } shallowWaterColor)
+            _shallowWaterColor = Serializer.Deserialize<Color>(shallowWaterColor, ctx);
+        if (value.Get("DeepWaterColor") is { } deepWaterColor)
+            _deepWaterColor = Serializer.Deserialize<Color>(deepWaterColor, ctx);
+        _waterVisibilityDepth = MathF.Max(0.01f, value.Get("WaterVisibilityDepth")?.FloatValue ?? 2f);
         float[]? water = DeserializeFloatArray(value, "Water");
         _waterField = water?.Length == heightCount ? water : null;
         SetWaterDirty();

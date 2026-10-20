@@ -6,6 +6,10 @@ Shader "Default/Water"
         _WaterMap("Water Map", Texture2D) = "black"
         _HolesMap("Holes Map", Texture2D) = "white"
         _HasHoles("Has Holes", Integer) = 0
+        _ShallowWaterColor("Shallow Color", Color) = (0.13, 0.55, 0.62, 1.0)
+        _DeepWaterColor("Deep Color", Color) = (0.02, 0.16, 0.30, 1.0)
+        _WaterDepth("Maximum Depth", Float) = 3.0
+        _WaterVisibilityDepth("Visibility Depth", Float) = 2.0
         _TerrainSize("Terrain Size", Float) = 1024.0
         _TerrainHeight("Terrain Height", Float) = 100.0
     }
@@ -21,7 +25,6 @@ Shader "Default/Water"
         Vertex
         {
             #include "Prowl/TerrainHeight.glsl"
-            uniform sampler2D _WaterMap;
             out vec2 vTerrainUV;
 
             void main()
@@ -35,6 +38,10 @@ Shader "Default/Water"
         Fragment
         {
             uniform sampler2D _WaterMap;
+            uniform vec4 _ShallowWaterColor;
+            uniform vec4 _DeepWaterColor;
+            uniform float _WaterDepth;
+            uniform float _WaterVisibilityDepth;
             in vec2 vTerrainUV;
             layout(location = 0) out vec4 fragColor;
 
@@ -54,12 +61,29 @@ Shader "Default/Water"
                 return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
             }
 
+            // The brush writes to the height vertex grid. Soften that grid's
+            // footprint on the water surface without changing the saved mask.
+            float smoothWaterCoverage(vec2 uv)
+            {
+                vec2 stepUV = 1.0 / max(vec2(textureSize(_WaterMap, 0) - ivec2(1)), vec2(1.0));
+                float center = waterCoverage(uv);
+                float neighbors = waterCoverage(uv + vec2(stepUV.x, 0.0))
+                                + waterCoverage(uv - vec2(stepUV.x, 0.0))
+                                + waterCoverage(uv + vec2(0.0, stepUV.y))
+                                + waterCoverage(uv - vec2(0.0, stepUV.y));
+                return (center * 4.0 + neighbors) * 0.125;
+            }
+
             void main()
             {
-                float coverage = waterCoverage(vTerrainUV);
-                if (coverage < 0.005) discard;
-                float alpha = 0.7 * smoothstep(0.005, 0.35, coverage);
-                fragColor = vec4(0.06, 0.32, 0.50, alpha);
+                float coverage = smoothWaterCoverage(vTerrainUV);
+                if (coverage < 0.001) discard;
+                float depth = coverage * max(_WaterDepth, 0.0);
+                float depthMix = smoothstep(0.0, max(_WaterVisibilityDepth, 0.01), depth);
+                vec3 waterColor = mix(_ShallowWaterColor.rgb, _DeepWaterColor.rgb, depthMix);
+                float opacity = mix(0.12, 1.0, depthMix);
+                float edge = smoothstep(0.001, 0.25, coverage);
+                fragColor = vec4(waterColor, opacity * edge);
             }
         }
         ENDGLSL
