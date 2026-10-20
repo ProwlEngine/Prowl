@@ -93,6 +93,7 @@ internal sealed partial class ProfilerView
 
                 if (_snapshotMode && OpenSnapshot == null)
                 {
+                Divider("rp_toolbar_div");
                     Dim("empty", "No snapshot open. Press Snapshot in the Render Profiler window, or load a saved one.");
                 }
                 else if (!_snapshotMode && live == null)
@@ -250,9 +251,12 @@ internal sealed partial class ProfilerView
         canvas.Fill();
     });
 
-    private void Divider(string id) => Origami.Separator(_paper, id).Height(1).Margin(0, 0).Show();
+    private void Divider(string id) => _paper.Box(id).Height(1).BackgroundColor(Style.CardBorder).IsNotInteractable();
 
-    private IDisposable Toolbar() => _paper.Row("rp_toolbar").Height(HeaderHeight).Gap(Metrics.SpacingLarge).AlignItems(LayoutAlignment.Center).Enter();
+    private const float ToolbarHeight = 34f;
+
+    private IDisposable Toolbar()
+        => _paper.Row("rp_toolbar").Height(ToolbarHeight - 1).Padding(10, 8, 0, 0).Gap(6).AlignItems(LayoutAlignment.Center).Enter();
 
     private void DrawLiveToolbar(IReadOnlyList<Recording> frames)
     {
