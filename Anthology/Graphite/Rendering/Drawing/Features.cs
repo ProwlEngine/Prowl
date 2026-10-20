@@ -1080,7 +1080,7 @@ internal sealed class FeaturePass : IPass
     /// <summary>The feature's version its declarations were made at.</summary>
     public int BuiltVersion = -1;
 
-    /// <summary>The view as the feature saw it at Setup, at the output resolution after an upscale.</summary>
+    /// <summary>The view at the output resolution after an upscale, refreshed each frame so its camera position is current.</summary>
     public FeatureView View;
 
     public readonly List<DrawList> Lists = new();
@@ -1111,6 +1111,7 @@ internal sealed class FeaturePass : IPass
     {
         _context.Graph = context;
         _context.Command = cmd;
+        View = View.Upscaled ? Camera.Info.AtOutput() : Camera.Info;
         _context.View = View;
         Feature.Render(_context);
         if (Feature is ScreenLightingFeature)
