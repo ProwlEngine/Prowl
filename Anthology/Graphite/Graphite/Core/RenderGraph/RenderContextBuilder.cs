@@ -7,9 +7,13 @@ namespace Prowl.Graphite;
 /// Lets a pass declare reads/writes during setup. Graph uses this to allocate resources, order passes
 /// (readers after writers) and plan the state each resource is in when the pass runs.
 /// </summary>
-public sealed class RenderContextBuilder
+public class RenderContextBuilder
 {
     internal readonly List<ResourceAccess> Accesses = new();
+
+    internal RenderContextBuilder() { }
+
+    internal virtual bool AllowsInstanceSizes => false;
 
     internal void Reset()
     {
@@ -41,6 +45,8 @@ public sealed class RenderContextBuilder
     {
         if (persistent && history > 0)
             throw new ArgumentException("A resource is persistent or has history, not both.", nameof(persistent));
+        if (desc.SizeMode == TextureSizeMode.InstanceRelative && !AllowsInstanceSizes)
+            throw new ArgumentException("An execution pass cannot size a texture relative to an instance.", nameof(desc));
         Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true, new GraphTextureResource(id, desc, history, ops, persistent)));
         return new TextureHandle(id);
     }
@@ -126,6 +132,14 @@ public sealed class RenderContextBuilder
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: (usage & BufferAccess.AllWrites) != 0, new GraphBufferSlotResource(id)));
         return new BufferHandle(id);
     }
+}
+
+/// <summary>The builder an instance pass declares with. Adds what only an instance has: its target and sizes relative to it.</summary>
+public sealed class InstanceContextBuilder : RenderContextBuilder
+{
+    internal InstanceContextBuilder() { }
+
+    internal override bool AllowsInstanceSizes => true;
 
     /// <summary>
     /// Declares a write to <see cref="GraphInstance.Target"/>, presented after dispatch when it is a swapchain's. Skipped for an instance with none.
