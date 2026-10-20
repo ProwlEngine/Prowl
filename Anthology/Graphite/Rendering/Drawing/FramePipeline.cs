@@ -468,7 +468,7 @@ internal sealed class CameraView : IRenderView
 /// words. A copy deformed the frame it is made skips the streams the deform writes. After the upload and before the
 /// fence every view follows.
 /// </summary>
-internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IPass, IDisposable
+internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) : IExecutionPass, IDisposable
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct Push
