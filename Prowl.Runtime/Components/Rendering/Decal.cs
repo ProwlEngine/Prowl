@@ -18,32 +18,39 @@ namespace Prowl.Runtime;
 public sealed class Decal : Component, IRenderSync
 {
     /// <summary>The box the decal fills: width along Right, height along Up and depth along Forward.</summary>
-    public Float3 Size = new(1f, 1f, 0.5f);
+    public Float3 Size { get => size; set { size = value; Wake(); } }
+    [SerializeField] private Float3 size = new(1f, 1f, 0.5f);
 
     /// <summary>Albedo with alpha as coverage. Without one the tint covers the whole box.</summary>
-    public Texture2D? Albedo;
+    public Texture2D? Albedo { get => albedo; set { albedo = value; Wake(); } }
+    [SerializeField] private Texture2D? albedo;
 
     /// <summary>Tangent space normal map, none to leave the surface's normals alone.</summary>
-    public Texture2D? Normal;
+    public Texture2D? Normal { get => normal; set { normal = value; Wake(); } }
+    [SerializeField] private Texture2D? normal;
 
     /// <summary>Occlusion in R, roughness in G and metallic in B, none to leave them alone.</summary>
-    public Texture2D? Mask;
+    public Texture2D? Mask { get => mask; set { mask = value; Wake(); } }
+    [SerializeField] private Texture2D? mask;
 
     /// <summary>Tint, alpha scales coverage.</summary>
-    public Color Color = Color.White;
+    public Color Color { get => color; set { color = value; Wake(); } }
+    [SerializeField] private Color color = Color.White;
 
-    [Range(0f, 2f)]
-    public float NormalStrength = 1f;
+    public float NormalStrength { get => normalStrength; set { normalStrength = value; Wake(); } }
+    [SerializeField, Range(0f, 2f)] private float normalStrength = 1f;
 
     /// <summary>Surfaces turned away from Forward fade out below this cosine to it, 0 for none.</summary>
-    [Range(0f, 1f)]
-    public float AngleFade = 0.2f;
+    public float AngleFade { get => angleFade; set { angleFade = value; Wake(); } }
+    [SerializeField, Range(0f, 1f)] private float angleFade = 0.2f;
 
     /// <summary>Higher draws over lower where decals overlap.</summary>
-    public int Priority;
+    public int Priority { get => priority; set { priority = value; Wake(); } }
+    [SerializeField] private int priority;
 
     /// <summary>The layers of the renderers it lands on.</summary>
-    public LayerMask LayerMask = LayerMask.Everything;
+    public LayerMask LayerMask { get => layerMask; set { layerMask = value; Wake(); } }
+    [SerializeField] private LayerMask layerMask = LayerMask.Everything;
 
     [System.NonSerialized, NotHeld] private DecalHandle _handle;
     [System.NonSerialized, NotHeld] private DecalDesc _last;
@@ -95,8 +102,12 @@ public sealed class Decal : Component, IRenderSync
             world.SetDecal(_handle, desc);
             _last = desc;
         }
-        return GameObject.IsStatic && Ready(Albedo) && Ready(Normal) && Ready(Mask);
+        return Ready(Albedo) && Ready(Normal) && Ready(Mask);
     }
+
+    // Syncs it again next frame, for a setting that changed
+    private void Wake() => SceneRendering.Wake(this, GameObject);
+
 
     private static bool Ready(Texture2D? texture) => texture.IsNotValid() || texture.IsLoaded;
 

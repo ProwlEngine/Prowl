@@ -74,6 +74,7 @@ public partial class GameObject : EngineObject, ISerializable
 
             // A rigidbody carries its layer into the physics world, so it has to pick the change up.
             if (TryGetComponent(out Rigidbody3D body)) body.QueueSync();
+            WakeRendering();
         }
     }
 
@@ -105,8 +106,7 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// The Static flag of this GameObject. While playing, a static object's renderers and lights sync into the render
-    /// world once and are then left alone, so moving it does nothing until it is made non static again.
+    /// The Static flag of this GameObject, for static batching and baked lighting.
     /// </summary>
     public bool IsStatic
     {
@@ -115,11 +115,17 @@ public partial class GameObject : EngineObject, ISerializable
         {
             if (_static == value) return;
             _static = value;
-            Scene? scene = Scene;
-            if (!scene.IsValid()) return;
-            foreach (Component component in _components)
-                if (component is Rendering.IRenderSync member) scene.Rendering.Refresh(member);
+            WakeRendering();
         }
+    }
+
+    /// <summary>Syncs this object's renderers and lights again next frame.</summary>
+    internal void WakeRendering()
+    {
+        Scene? scene = Scene;
+        if (!scene.IsValid() || scene.IsDisposed) return;
+        foreach (Component component in _components)
+            if (component is Rendering.IRenderSync member) scene.Rendering.Refresh(member);
     }
 
     /// <summary> The Identifier of this GameObject </summary>

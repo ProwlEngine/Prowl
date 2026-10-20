@@ -14,7 +14,7 @@ namespace Prowl.Editor.Projects;
 public class Project
 {
     /// <summary> The engine version projects are saved with. A project from an older version is migrated when opened. </summary>
-    public static readonly EngineVersion CurrentVersion = EngineVersion.Parse("1.0-preview.5");
+    public static readonly EngineVersion CurrentVersion = EngineVersion.Parse("1.0");
 
     /// <summary> Gets the currently active project, or null if no project is open. </summary>
     public static Project? Current { get; private set; }

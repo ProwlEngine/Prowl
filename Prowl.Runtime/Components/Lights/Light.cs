@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Echo;
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -83,88 +84,93 @@ public enum LightBakeMode
 [ComponentIcon("")] // Sun
 public class Light : Component, IRenderSync
 {
-    public LightType Type = LightType.Point;
+    public LightType Type { get => type; set { type = value; Wake(); } }
+    [SerializeField] private LightType type = LightType.Point;
 
     /// <summary>Linear colour.</summary>
-    public Color Color = Color.White;
-    public float Intensity = 1.0f;
+    public Color Color { get => color; set { color = value; Wake(); } }
+    [SerializeField] private Color color = Color.White;
+    public float Intensity { get => intensity; set { intensity = value; Wake(); } }
+    [SerializeField] private float intensity = 1.0f;
 
     /// <summary>Distance from the light at which it reaches zero.</summary>
-    [ShowIf(nameof(IsLocal))]
-    public float Range = 10.0f;
+    public float Range { get => range; set { range = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsLocal))] private float range = 10.0f;
 
     /// <summary>Half angle of the cone from its axis where the light is still full, in degrees.</summary>
-    [ShowIf(nameof(IsSpot)), Range(0f, 89.9f)]
-    public float InnerAngle = 30.0f;
+    public float InnerAngle { get => innerAngle; set { innerAngle = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsSpot)), Range(0f, 89.9f)] private float innerAngle = 30.0f;
 
     /// <summary>Half angle of the cone from its axis past which the light is gone, in degrees.</summary>
-    [ShowIf(nameof(IsSpot)), Range(0.1f, 89.9f)]
-    public float OuterAngle = 45.0f;
+    public float OuterAngle { get => outerAngle; set { outerAngle = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsSpot)), Range(0.1f, 89.9f)] private float outerAngle = 45.0f;
 
     /// <summary>A rect's width or a disk's diameter.</summary>
-    [ShowIf(nameof(HasWidth))]
-    public float Width = 1.0f;
+    public float Width { get => width; set { width = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(HasWidth))] private float width = 1.0f;
 
     /// <summary>A rect's height.</summary>
-    [ShowIf(nameof(IsRect))]
-    public float Height = 1.0f;
+    public float Height { get => height; set { height = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsRect))] private float height = 1.0f;
 
     /// <summary>A tube's length along Forward.</summary>
-    [ShowIf(nameof(IsTube))]
-    public float Length = 1.0f;
+    public float Length { get => length; set { length = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsTube))] private float length = 1.0f;
 
     /// <summary>The radius of a point or spot light's sphere, or of a tube, which softens highlights and contact hardening shadows.</summary>
-    [ShowIf(nameof(HasSourceRadius))]
-    public float SourceRadius = 0f;
+    public float SourceRadius { get => sourceRadius; set { sourceRadius = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(HasSourceRadius))] private float sourceRadius = 0f;
 
     /// <summary>The angular radius of the light's disk in degrees, the sun's about 0.27, which softens contact hardening shadows.</summary>
-    [ShowIf(nameof(IsDirectional))]
-    public float AngularRadius = 0.27f;
+    public float AngularRadius { get => angularRadius; set { angularRadius = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsDirectional))] private float angularRadius = 0.27f;
 
     /// <summary>A texture the light shines through: a 2D texture across a spot's cone, a cubemap around a point.</summary>
-    [ShowIf(nameof(HasProfile))]
-    public Texture? Cookie;
+    public Texture? Cookie { get => cookie; set { cookie = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(HasProfile))] private Texture? cookie;
 
     /// <summary>A photometric profile as a 2D texture: the angle from the axis across U, around it across V, intensity in R.</summary>
-    [ShowIf(nameof(HasProfile))]
-    public Texture2D? IesProfile;
+    public Texture2D? IesProfile { get => iesProfile; set { iesProfile = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(HasProfile))] private Texture2D? iesProfile;
 
     /// <summary>Which layers the light reaches.</summary>
-    public LayerMask LayerMask = LayerMask.Everything;
+    public LayerMask LayerMask { get => layerMask; set { layerMask = value; Wake(); } }
+    [SerializeField] private LayerMask layerMask = LayerMask.Everything;
 
-    [ShowIf(nameof(CanCastShadows))]
-    public bool CastShadows = true;
+    public bool CastShadows { get => castShadows; set { castShadows = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(CanCastShadows))] private bool castShadows = true;
 
-    [ShowIf(nameof(ShowsShadows)), Range(0f, 1f)]
-    public float ShadowStrength = 1.0f;
+    public float ShadowStrength { get => shadowStrength; set { shadowStrength = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsShadows)), Range(0f, 1f)] private float shadowStrength = 1.0f;
 
-    [ShowIf(nameof(ShowsShadows))]
-    public ShadowResolution ShadowResolution = ShadowResolution._1024;
+    public ShadowResolution ShadowResolution { get => shadowResolution; set { shadowResolution = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsShadows))] private ShadowResolution shadowResolution = ShadowResolution._1024;
 
-    [ShowIf(nameof(ShowsShadows))]
-    public ShadowFilter ShadowFilter = ShadowFilter.Tent;
+    public ShadowFilter ShadowFilter { get => shadowFilter; set { shadowFilter = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsShadows))] private ShadowFilter shadowFilter = ShadowFilter.Tent;
 
     /// <summary>How far receivers are pushed toward the light before the shadow test, in shadow map texels.</summary>
-    [ShowIf(nameof(ShowsShadows))]
-    public float DepthBias = 1.0f;
+    public float DepthBias { get => depthBias; set { depthBias = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsShadows))] private float depthBias = 1.0f;
 
     /// <summary>How far receivers are pushed out along their surface normal before the shadow test, in shadow map texels.</summary>
-    [ShowIf(nameof(ShowsShadows))]
-    public float NormalBias = 1.0f;
+    public float NormalBias { get => normalBias; set { normalBias = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsShadows))] private float normalBias = 1.0f;
 
-    [ShowIf(nameof(ShowsCascades))]
-    public ShadowCascades Cascades = ShadowCascades.Two;
+    public ShadowCascades Cascades { get => cascades; set { cascades = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsCascades))] private ShadowCascades cascades = ShadowCascades.Two;
 
     /// <summary>How far along the view shadows reach, in world units. They fade out over the last tenth.</summary>
-    [ShowIf(nameof(ShowsCascades))]
-    public float ShadowDistance = 50f;
+    public float ShadowDistance { get => shadowDistance; set { shadowDistance = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsCascades))] private float shadowDistance = 50f;
 
     /// <summary>The fraction of each cascade blended into the next, 0 for a hard switch.</summary>
-    [ShowIf(nameof(ShowsCascades)), Range(0f, 1f)]
-    public float CascadeBlend = 0.1f;
+    public float CascadeBlend { get => cascadeBlend; set { cascadeBlend = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(ShowsCascades)), Range(0f, 1f)] private float cascadeBlend = 0.1f;
 
     /// <summary>Baked lights live only in the lightmaps and probes, Mixed and Realtime ones light in realtime.</summary>
-    public LightBakeMode BakeMode = LightBakeMode.Realtime;
+    public LightBakeMode BakeMode { get => bakeMode; set { bakeMode = value; Wake(); } }
+    [SerializeField] private LightBakeMode bakeMode = LightBakeMode.Realtime;
 
     [System.NonSerialized, NotHeld] private LightHandle _handle;
     [System.NonSerialized, NotHeld] private LightDesc _last;
@@ -309,7 +315,7 @@ public class Light : Component, IRenderSync
         if (BakeMode == LightBakeMode.Baked)
         {
             Remove();
-            return false;
+            return true;
         }
 
         LightDesc desc = Describe();
@@ -331,8 +337,12 @@ public class Light : Component, IRenderSync
             _sunScene.Rendering.AddDirectional(this);
         }
         else if (!IsDirectional) LeaveSuns();
-        return GameObject.IsStatic && (!HasProfile || (Ready(Cookie) && Ready(IesProfile)));
+        return !HasProfile || (Ready(Cookie) && Ready(IesProfile));
     }
+
+    // Syncs it again next frame, for a setting that changed
+    private void Wake() => SceneRendering.Wake(this, GameObject);
+
 
     // A texture the light was given is in the world, none or loaded
     private static bool Ready(Texture? texture) => texture.IsNotValid() || texture.IsLoaded;

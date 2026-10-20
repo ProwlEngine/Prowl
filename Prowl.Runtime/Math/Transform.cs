@@ -239,7 +239,7 @@ public class Transform : ISerializationCallbackReceiver
     public uint Version
     {
         get => _version;
-        set { AssertOwner(); _version = value; ChangeListener?.TransformChanged(); }
+        set { AssertOwner(); _version = value; ChangeListener?.TransformChanged(); WakeRenderers(); }
     }
 
     public Transform Root => Parent == null ? this : Parent.Root;
@@ -263,6 +263,20 @@ public class Transform : ISerializationCallbackReceiver
     {
         _version++;
         ChangeListener?.TransformChanged();
+        WakeRenderers();
+    }
+
+    [SerializeIgnore] uint _wokeEpoch;
+
+    // The renderers of this object and every descendant sync again, the walk done once a scene sync
+    private void WakeRenderers()
+    {
+        uint epoch = Prowl.Runtime.Rendering.SceneRendering.Epoch;
+        if (_wokeEpoch == epoch || GameObject.IsNotValid()) return;
+        _wokeEpoch = epoch;
+        GameObject.WakeRendering();
+        foreach (GameObject child in GameObject.Children)
+            child.Transform.WakeRenderers();
     }
 
     // Lazy world-matrix cache. _cachedLocalVersion starts at 0 (Version starts at 1) so the first

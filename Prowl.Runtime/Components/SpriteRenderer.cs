@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Echo;
 using System.Collections.Generic;
 
 using Prowl.Graphite.Rendering;
@@ -32,21 +33,28 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     /// <summary>Sorting-order spacing along Z (world units) so higher orders sort in front for the transparent queue.</summary>
     private const float SortBias = 0.0001f;
 
-    public Sprite? Sprite;
+    public Sprite? Sprite { get => sprite; set { sprite = value; Wake(); } }
+    [SerializeField] private Sprite? sprite;
 
     /// <summary>Tint multiplied into the sprite. Baked into vertex color.</summary>
-    public Color Color = Color.White;
+    public Color Color { get => color; set { color = value; Wake(); } }
+    [SerializeField] private Color color = Color.White;
 
-    public bool FlipX;
-    public bool FlipY;
+    public bool FlipX { get => flipX; set { flipX = value; Wake(); } }
+    [SerializeField] private bool flipX;
+    public bool FlipY { get => flipY; set { flipY = value; Wake(); } }
+    [SerializeField] private bool flipY;
 
     /// <summary>Optional material override. Defaults to the built-in unlit alpha-blended sprite material.</summary>
-    public Material? Material;
+    public Material? Material { get => material; set { material = value; Wake(); } }
+    [SerializeField] private Material? material;
 
     /// <summary>Higher values render in front of lower ones (applied as a small Z bias for the transparent queue).</summary>
-    public int SortingOrder;
+    public int SortingOrder { get => sortingOrder; set { sortingOrder = value; Wake(); } }
+    [SerializeField] private int sortingOrder;
 
-    public ShadowCasting ShadowCasting = ShadowCasting.Off;
+    public ShadowCasting ShadowCasting { get => shadowCasting; set { shadowCasting = value; Wake(); } }
+    [SerializeField] private ShadowCasting shadowCasting = ShadowCasting.Off;
 
     [System.NonSerialized] private Mesh? _mesh;
     [System.NonSerialized, NotHeld] private readonly RenderableState _renderable = new();
@@ -69,6 +77,9 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
 
     /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
     public RenderableHandle Renderable => _renderable.Handle;
+
+    // Syncs it again next frame, for a setting that changed
+    private void Wake() => SceneRendering.Wake(this, GameObject);
 
     bool IRenderSync.Sync(RenderWorld world)
     {
@@ -122,7 +133,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
         });
-        return false;
+        return material.IsLoaded && tex.IsLoaded;
     }
 
     void IRenderSync.Detach(RenderWorld world) => Detach(world);

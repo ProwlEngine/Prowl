@@ -85,7 +85,8 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRend
     [SerializeField] private Material? _material;
     public Material? Material { get => _material; set => SetField(ref _material, value); }
 
-    public ShadowCasting ShadowCasting = ShadowCasting.Off;
+    [SerializeField] private ShadowCasting _shadowCasting = ShadowCasting.Off;
+    public ShadowCasting ShadowCasting { get => _shadowCasting; set => SetField(ref _shadowCasting, value); }
 
     // Shared world-space text material (Default/DefaultTextMesh - SDF, tagged Transparent so the scene
     // pipeline draws it). Distinct from the canvas text material, which is UI-tagged and only drawn by

@@ -313,10 +313,16 @@ public class Mesh : Asset, ISerializable
         get => _changed;
         set
         {
+            bool raise = value && !_changed;
             _changed = value;
-            if (value) _version++;
+            if (!value) return;
+            _version++;
+            if (raise) GeometryChanged?.Invoke(this);
         }
     }
+
+    /// <summary>Raised when a mesh's geometry changes after an upload, on whatever thread changed it.</summary>
+    internal static event Action<Mesh>? GeometryChanged;
 
     [SerializeIgnore, NotContent] private uint _version = 1;
 
@@ -761,6 +767,7 @@ public class Mesh : Asset, ISerializable
     {
         base.TakeContent(staging);
         _version++;
+        GeometryChanged?.Invoke(this);
     }
 
     protected internal override long EstimateBytes()

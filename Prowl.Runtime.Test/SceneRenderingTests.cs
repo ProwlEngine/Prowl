@@ -123,4 +123,80 @@ public class SceneRenderingTests : RuntimeTestBase
         Assert.True(go.IsDisposed);
         Assert.False(scene.Rendering.IsMember(renderer));
     }
+
+    // A renderer synced and left alone, as a play mode sync that found it wholly in the world leaves it
+    private static MeshRenderer Settled(Scene scene, GameObject go, Mesh? mesh = null)
+    {
+        MeshRenderer renderer = go.AddComponent<MeshRenderer>();
+        renderer.Mesh = mesh;
+        scene.Rendering.Settle(renderer);
+        Assert.True(scene.Rendering.IsParked(renderer));
+        return renderer;
+    }
+
+    [Fact]
+    public void ParkedRenderers_WakeWhenTheirTransformMoves()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        scene.Add(go);
+        MeshRenderer renderer = Settled(scene, go);
+
+        go.Transform.Position = new Prowl.Vector.Float3(1, 2, 3);
+        Assert.False(scene.Rendering.IsParked(renderer));
+    }
+
+    [Fact]
+    public void ParkedRenderers_WakeWhenAnAncestorMoves()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject parent = CreateGameObject();
+        scene.Add(parent);
+        GameObject child = CreateGameObject();
+        child.SetParent(parent);
+        GameObject grandchild = CreateGameObject();
+        grandchild.SetParent(child);
+        MeshRenderer renderer = Settled(scene, grandchild);
+
+        parent.Transform.Position = new Prowl.Vector.Float3(0, 5, 0);
+        Assert.False(scene.Rendering.IsParked(renderer));
+    }
+
+    [Fact]
+    public void ParkedRenderers_WakeOnTheirSettings_AndTheirObjectsLayer()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        scene.Add(go);
+        MeshRenderer renderer = Settled(scene, go);
+
+        renderer.ShadowCasting = ShadowCasting.Off;
+        Assert.False(scene.Rendering.IsParked(renderer));
+
+        scene.Rendering.Settle(renderer);
+        go.LayerIndex = 3;
+        Assert.False(scene.Rendering.IsParked(renderer));
+    }
+
+    [Fact]
+    public void ParkedRenderers_WakeWhenTheMeshTheyDrawIsEdited()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        scene.Add(go);
+        Mesh mesh = new() { Vertices = [new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)] };
+        mesh.Upload();
+        Mesh other = new() { Vertices = [new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)] };
+        other.Upload();
+        scene.Rendering.WakeChanged();
+        MeshRenderer renderer = Settled(scene, go, mesh);
+
+        other.Vertices = [new(0, 0, 0), new(2, 0, 0), new(0, 2, 0)];
+        scene.Rendering.WakeChanged();
+        Assert.True(scene.Rendering.IsParked(renderer));
+
+        mesh.Vertices = [new(0, 0, 0), new(2, 0, 0), new(0, 2, 0)];
+        scene.Rendering.WakeChanged();
+        Assert.False(scene.Rendering.IsParked(renderer));
+    }
 }

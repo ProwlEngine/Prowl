@@ -60,38 +60,47 @@ public enum ReflectionProbeTimeSlicing
 [ComponentIcon("")] // Dot circle
 public class ReflectionProbe : Component, IRenderSync
 {
-    public ReflectionProbeMode Mode = ReflectionProbeMode.Baked;
+    public ReflectionProbeMode Mode { get => mode; set { mode = value; Wake(); } }
+    [SerializeField] private ReflectionProbeMode mode = ReflectionProbeMode.Baked;
 
-    [ShowIf(nameof(IsRealtime))]
-    public ReflectionProbeRefreshMode RefreshMode = ReflectionProbeRefreshMode.OnEnable;
+    public ReflectionProbeRefreshMode RefreshMode { get => refreshMode; set { refreshMode = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsRealtime))] private ReflectionProbeRefreshMode refreshMode = ReflectionProbeRefreshMode.OnEnable;
 
-    [ShowIf(nameof(IsRealtime))]
-    public ReflectionProbeTimeSlicing TimeSlicing = ReflectionProbeTimeSlicing.AllFacesAtOnce;
+    public ReflectionProbeTimeSlicing TimeSlicing { get => timeSlicing; set { timeSlicing = value; Wake(); } }
+    [SerializeField, ShowIf(nameof(IsRealtime))] private ReflectionProbeTimeSlicing timeSlicing = ReflectionProbeTimeSlicing.AllFacesAtOnce;
 
     /// <summary>Wins over overlapping probes with a lower value, whatever their size.</summary>
-    public int Importance = 1;
+    public int Importance { get => importance; set { importance = value; Wake(); } }
+    [SerializeField] private int importance = 1;
 
-    public float Intensity = 1f;
+    public float Intensity { get => intensity; set { intensity = value; Wake(); } }
+    [SerializeField] private float intensity = 1f;
 
     /// <summary>Size of the box the probe affects and projects reflections onto, turned with the object.</summary>
-    [Header("Box")]
-    public Float3 BoxSize = new(10f, 10f, 10f);
+    public Float3 BoxSize { get => boxSize; set { boxSize = value; Wake(); } }
+    [SerializeField, Header("Box")] private Float3 boxSize = new(10f, 10f, 10f);
 
     /// <summary>Where the box sits relative to the object, which is where the capture is taken from.</summary>
-    public Float3 BoxOffset = Float3.Zero;
+    public Float3 BoxOffset { get => boxOffset; set { boxOffset = value; Wake(); } }
+    [SerializeField] private Float3 boxOffset = Float3.Zero;
 
     /// <summary>How far in from the box faces reflections fade in, so neighbouring probes blend.</summary>
-    public float BlendDistance = 1f;
+    public float BlendDistance { get => blendDistance; set { blendDistance = value; Wake(); } }
+    [SerializeField] private float blendDistance = 1f;
 
     /// <summary>Projects reflections onto the box rather than treating them as infinitely far away.</summary>
-    public bool BoxProjection = true;
+    public bool BoxProjection { get => boxProjection; set { boxProjection = value; Wake(); } }
+    [SerializeField] private bool boxProjection = true;
 
-    [Header("Capture")]
     /// <summary>Edge length of a realtime capture's cube, a power of two.</summary>
-    public int Resolution = 128;
-    public float NearClip = 0.1f;
-    public float FarClip = 1000f;
-    public LayerMask CullingMask = LayerMask.Everything;
+    public int Resolution { get => resolution; set { resolution = value; Wake(); } }
+    [SerializeField, Header("Capture")] private int resolution = 128;
+    public float NearClip { get => nearClip; set { nearClip = value; Wake(); } }
+    [SerializeField] private float nearClip = 0.1f;
+    public float FarClip { get => farClip; set { farClip = value; Wake(); } }
+    [SerializeField] private float farClip = 1000f;
+    public LayerMask CullingMask { get => cullingMask; set { cullingMask = value; Wake(); } }
+    [SerializeField] private LayerMask cullingMask = LayerMask.Everything;
 
     [SerializeField, HideInInspector] private BakedCubemap? _baked;
 
@@ -111,13 +120,21 @@ public class ReflectionProbe : Component, IRenderSync
     [NonSerialized, NotHeld] private ReflectionProbeDesc _last;
 
     /// <summary>Asks a realtime probe to capture again. It happens before a later frame renders.</summary>
-    public void RenderProbe() => _captureRequested = true;
+    public void RenderProbe() { _captureRequested = true; Wake(); }
 
     /// <summary>Captures the probe in a coming frame and keeps the result with the scene.</summary>
     [Button("Bake")]
-    public void Bake() => _bakeRequested = true;
+    public void Bake() { _bakeRequested = true; Wake(); }
 
-    internal void SetBaked(BakedCubemap? baked) => _baked = baked;
+    internal void SetBaked(BakedCubemap? baked)
+    {
+        _baked = baked;
+        Wake();
+    }
+
+    // Syncs it again next frame, for a setting that changed
+    private void Wake() => SceneRendering.Wake(this, GameObject);
+
 
     [Button("Clear Baked")]
     public void ClearBaked() => SetBaked(null);
@@ -180,7 +197,7 @@ public class ReflectionProbe : Component, IRenderSync
             _bakeRequested = false;
             world.BakeReflectionProbe(_handle, baked => SetBaked(new BakedCubemap { Size = baked.Size, Mips = baked.Mips, Faces = baked.Faces }));
         }
-        return false;
+        return true;
     }
 
     private static bool Same(in ReflectionProbeDesc a, in ReflectionProbeDesc b)

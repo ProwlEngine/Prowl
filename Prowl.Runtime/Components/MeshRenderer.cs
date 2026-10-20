@@ -3,6 +3,8 @@
 
 using System.Collections.Generic;
 
+using Prowl.Echo;
+
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -41,24 +43,55 @@ public static class ShadowCastingExtensions
 [ComponentIcon("")] // Cube
 public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
 {
-    int IMaterialRenderer.MaterialSlotCount => Materials.Count;
-    Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(Materials, slot);
-    void IMaterialRenderer.SetMaterial(int slot, Material? material) => MaterialSlots.Set(Materials, slot, material);
+    int IMaterialRenderer.MaterialSlotCount => materials.Count;
+    Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(materials, slot);
+    void IMaterialRenderer.SetMaterial(int slot, Material? material) { MaterialSlots.Set(materials, slot, material); Wake(); }
 
-    public Mesh? Mesh;
+    [SerializeField] private Mesh? mesh;
+    [SerializeField] private List<Material> materials = [];
+    [SerializeField] private ShadowCasting shadowCasting = ShadowCasting.On;
+    [SerializeField] private bool receiveShadows = true;
 
-    /// <summary>Materials, one per submesh. Submeshes past the list draw with its last material.</summary>
-    public List<Material> Materials = [];
+    public Mesh? Mesh
+    {
+        get => mesh;
+        set { mesh = value; Wake(); }
+    }
+
+    /// <summary>Materials, one per submesh. Submeshes past the list draw with its last material. Set a new list to change them.</summary>
+    public IReadOnlyList<Material> Materials
+    {
+        get => materials;
+        set { materials = [.. value]; Wake(); }
+    }
 
     /// <summary>Gets or sets Materials[0].</summary>
     public Material? Material
     {
-        get => Materials.Count > 0 ? Materials[0] : default;
-        set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
+        get => materials.Count > 0 ? materials[0] : default;
+        set
+        {
+            if (materials.Count == 0) materials.Add(value!); else materials[0] = value!;
+            Wake();
+        }
     }
 
-    public ShadowCasting ShadowCasting = ShadowCasting.On;
-    public bool ReceiveShadows = true;
+    public ShadowCasting ShadowCasting
+    {
+        get => shadowCasting;
+        set { shadowCasting = value; Wake(); }
+    }
+
+    public bool ReceiveShadows
+    {
+        get => receiveShadows;
+        set { receiveShadows = value; Wake(); }
+    }
+
+    Mesh? IRenderSync.SyncedMesh => mesh;
+
+    // Syncs it again next frame, for a setting that changed
+    private void Wake() => SceneRendering.Wake(this, GameObject);
 
     [System.NonSerialized, NotHeld] private readonly RenderableState _renderable = new();
     [System.NonSerialized, NotHeld] private GMaterial[] _gpuMaterials = [];
@@ -66,8 +99,8 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
     /// <summary>The renderable in the scene's world, invalid while nothing draws.</summary>
     public RenderableHandle Renderable => _renderable.Handle;
 
-    /// <summary>Kept for callers from before the renderer pushed its own changes. Does nothing.</summary>
-    public void MarkVisuallyDirty() { }
+    /// <summary>Syncs the renderer again next frame, for a change its setters cannot see, like a material list edited in place.</summary>
+    public void MarkVisuallyDirty() => Wake();
 
     bool IRenderSync.Sync(RenderWorld world)
     {
@@ -93,7 +126,7 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
             ObjectId = (uint)InstanceID,
             Lightmap = lightmap,
         });
-        return GameObject.IsStatic && RenderableState.MaterialsReady(Materials) && !(lightmap.Lightmapped && lightmap.Texture == null);
+        return RenderableState.MaterialsReady(Materials) && !(lightmap.Lightmapped && lightmap.Texture == null);
     }
 
     void IRenderSync.Detach(RenderWorld world) => _renderable.Detach(world);

@@ -87,7 +87,7 @@ public sealed class LightmapBakeService
             if (!go.IsStatic || !go.EnabledInHierarchy) continue;
 
             Mesh? mesh;
-            List<Material> mats;
+            IReadOnlyList<Material> mats;
             object renderer;
             if (go.GetComponent<MeshRenderer>() is { } mr) { mesh = mr.Mesh; mats = mr.Materials; renderer = mr; }
             else if (go.GetComponent<SkinnedMeshRenderer>() is { } smr) { mesh = smr.SharedMesh; mats = smr.Materials; renderer = smr; }
@@ -344,7 +344,7 @@ public sealed class LightmapBakeService
 
     // ---- helpers ----
 
-    private bool TryBuildBakeMesh(BakeScene bake, Mesh? mesh, List<Material> materials,
+    private bool TryBuildBakeMesh(BakeScene bake, Mesh? mesh, IReadOnlyList<Material> materials,
                                   string nameKey, ref int matCounter, out BakeMesh result, out bool hasLightmapUV)
     {
         result = null!;
@@ -378,8 +378,7 @@ public sealed class LightmapBakeService
             // One BakeMaterial per (renderer, submesh) with the Prowl material's base colour.
             string matName = $"m{matCounter++}";
             BakeMaterial bmat = bake.CreateMaterial(matName);
-            Span<Material> materialsSpan = CollectionsMarshal.AsSpan(materials);
-            Material? pm = (s < materialsSpan.Length ? materialsSpan[s] : (materialsSpan.Length > 0 ? materialsSpan[^1] : default));
+            Material? pm = s < materials.Count ? materials[s] : materials.Count > 0 ? materials[^1] : default;
             if (pm != null)
             {
                 Color c = pm._properties.GetColor("_MainColor");

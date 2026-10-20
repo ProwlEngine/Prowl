@@ -45,14 +45,28 @@ public class ProjectMigrationTests : IDisposable
         return path;
     }
 
-    private static string LegacyReference(Guid guid)
+    // A component as an older release saved it, its settings under their old names
+    private static EchoObject OldComponent(string type, Guid id, params (string Name, EchoObject Value)[] fields)
     {
-        var reference = EchoObject.NewCompound();
-        reference["AssetID"] = new EchoObject(guid.ToString());
+        var component = EchoObject.NewCompound();
+        component["$type"] = new EchoObject($"Prowl.Runtime.{type}, Prowl.Runtime");
+        component["_identifier"] = new EchoObject(id.ToString());
+        foreach ((string name, EchoObject value) in fields)
+            component[name] = value;
+        return component;
+    }
+
+    private static string Scene(params EchoObject[] items)
+    {
+        var list = EchoObject.NewList();
+        foreach (EchoObject item in items)
+            list.ListAdd(item);
         var root = EchoObject.NewCompound();
-        root["Material"] = reference;
+        root["Items"] = list;
         return root.WriteToString();
     }
+
+    private static EchoObject Item(string path) => EchoObject.ReadFromString(File.ReadAllText(path))["Items"];
 
     [Theory]
     [InlineData("1.0-preview.4", "1.0-preview.5")]
@@ -106,9 +120,7 @@ public class ProjectMigrationTests : IDisposable
     [Fact]
     public void UnversionedProject_MigratesToCurrent()
     {
-        Guid material = Guid.NewGuid();
-        string scene = WriteAsset("Main.scene", LegacyReference(material), "Prowl.Editor.Assets.SceneImporter");
-        string shader = WriteAsset("Lit.shader", "#include \"Fragment\"\nvoid main() {}", "ShaderImporter");
+        string scene = WriteAsset("Main.scene", Scene(OldComponent("MeshRenderer", Guid.NewGuid(), ("ShadowCasting", new EchoObject(0L)))), "Prowl.Editor.Assets.SceneImporter");
         Directory.CreateDirectory(Path.Combine(_root, "Library", "cache"));
         File.WriteAllText(Path.Combine(_root, "Library", "cache", "stale.bin"), "x");
 
@@ -118,10 +130,9 @@ public class ProjectMigrationTests : IDisposable
 
         ProjectMigration.Migrate(project);
 
-        EchoObject migrated = EchoObject.ReadFromString(File.ReadAllText(scene));
-        Assert.Equal(material.ToString(), migrated["Material"]["$asset"].StringValue);
-        Assert.False(migrated["Material"].TryGet("AssetID", out _));
-        Assert.Contains("#include \"ProwlCG\"", File.ReadAllText(shader));
+        EchoObject renderer = Item(scene)[0];
+        Assert.Equal(0L, renderer["shadowCasting"].LongValue);
+        Assert.False(renderer.TryGet("ShadowCasting", out _));
         Assert.False(File.Exists(Path.Combine(_root, "Library", "cache", "stale.bin")));
 
         using (ZipArchive backup = ZipFile.OpenRead(Assert.Single(Directory.GetFiles(project.BackupsPath, "*.zip"))))
@@ -138,10 +149,10 @@ public class ProjectMigrationTests : IDisposable
     [Fact]
     public void PartlyMigratedProject_ResumesAtTheNextStep()
     {
-        Guid material = Guid.NewGuid();
-        string scene = WriteAsset("Main.scene", LegacyReference(material), "SceneImporter");
-        string shader = WriteAsset("Lit.shader", "#include \"Fragment\"", "ShaderImporter");
-        WriteProwlFile("1.0-preview.5", appliedSteps: 1);
+        string scene = WriteAsset("Main.scene", Scene(
+            OldComponent("MeshRenderer", Guid.NewGuid(), ("ShadowCasting", new EchoObject(0L))),
+            OldComponent("Light", Guid.NewGuid(), ("Intensity", new EchoObject(3f)))), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: 1);
 
         Project project = Project.Open(_root);
         List<(MigrationRelease Release, int Index)> pending = ProjectMigration.PendingSteps(project);
@@ -150,51 +161,51 @@ public class ProjectMigrationTests : IDisposable
 
         ProjectMigration.Migrate(project);
 
-        Assert.Contains("#include \"ProwlCG\"", File.ReadAllText(shader));
-        Assert.True(EchoObject.ReadFromString(File.ReadAllText(scene))["Material"].TryGet("AssetID", out _));
+        EchoObject items = Item(scene);
+        Assert.True(items[0].TryGet("ShadowCasting", out _));
+        Assert.Equal(3f, items[1]["intensity"].FloatValue);
     }
 
     [Fact]
-    public void DirectionalLights_AreTurnedToShineAlongForward()
+    public void PrefabOverridesOnRenamedSettings_FollowTheRename()
     {
-        var sun = new Prowl.Runtime.GameObject("Sun");
-        sun.Transform.LocalEulerAngles = new Prowl.Vector.Float3(-50f, 30f, 0f);
-        sun.AddComponent<Light>().Type = LightType.Directional;
-        var lamp = new Prowl.Runtime.GameObject("Lamp");
-        lamp.Transform.LocalEulerAngles = new Prowl.Vector.Float3(-50f, 30f, 0f);
-        lamp.AddComponent<Light>().Type = LightType.Spot;
-        lamp.SetParent(sun);
-        Prowl.Vector.Float3 oldForward = sun.Transform.Forward, oldUp = sun.Transform.Up;
-        Prowl.Vector.Quaternion lampRotation = lamp.Transform.LocalRotation;
-
-        EchoObject saved = Serializer.Serialize(sun);
-        LightMigrationTests.MakeLegacy(saved);
-        string prefab = WriteAsset("Sun.prefab", saved.WriteToString(), "PrefabImporter");
-        WriteProwlFile("1.0-preview.5", appliedSteps: 2);
+        Guid light = Guid.NewGuid(), renderer = Guid.NewGuid(), unrelated = Guid.NewGuid();
+        WriteAsset("Lamp.prefab", Scene(OldComponent("Light", light), OldComponent("MeshRenderer", renderer)), "PrefabImporter");
+        EchoObject Override(string path)
+        {
+            var entry = EchoObject.NewCompound();
+            entry["Path"] = new EchoObject(path);
+            entry["Value"] = new EchoObject(1f);
+            return entry;
+        }
+        string target = Guid.NewGuid().ToString();
+        string scene = WriteAsset("Main.scene", Scene(
+            Override($"{target}/{light}/Color.R"),
+            Override($"{target}/{renderer}/ReceiveShadows"),
+            Override($"{target}/{unrelated}/Color.R")), "SceneImporter");
+        WriteProwlFile("1.0-preview.5");
 
         ProjectMigration.Migrate(Project.Open(_root));
 
-        GameObject migrated = Serializer.Deserialize<Prowl.Runtime.GameObject>(EchoObject.ReadFromString(File.ReadAllText(prefab)))!;
-        Assert.True(Prowl.Vector.Float3.Distance(-oldForward, migrated.Transform.Forward) < 1e-4f);
-        Assert.True(Prowl.Vector.Float3.Distance(oldUp, migrated.Transform.Up) < 1e-4f);
-        Assert.Equal(lampRotation, migrated.Children[0].Transform.LocalRotation);
-        Assert.Equal(LightType.Directional, migrated.GetComponent<Light>()!.Type);
-        Assert.Equal(LightType.Spot, migrated.Children[0].GetComponent<Light>()!.Type);
+        EchoObject items = Item(scene);
+        Assert.Equal($"{target}/{light}/color.R", items[0]["Path"].StringValue);
+        Assert.Equal($"{target}/{renderer}/receiveShadows", items[1]["Path"].StringValue);
+        Assert.Equal($"{target}/{unrelated}/Color.R", items[2]["Path"].StringValue);
     }
 
     [Fact]
-    public void LegacyPreviewProject_IsCurrent()
+    public void LegacyPreviewProject_NeedsMigration()
     {
         WriteProwlFile("preview-5");
         Project project = Project.Open(_root);
-        Assert.Equal(Project.CurrentVersion, project.Version);
-        Assert.False(project.NeedsMigration);
+        Assert.Equal(EngineVersion.Parse("1.0-preview.5"), project.Version);
+        Assert.True(project.NeedsMigration);
         Assert.False(project.IsFromNewerEngine);
     }
 
     [Theory]
     [InlineData("99.0", null)]
-    [InlineData("1.0-preview.5", 99)]
+    [InlineData("1.0", 99)]
     public void NewerProject_IsRefusedAndLeftAlone(string version, int? appliedSteps)
     {
         WriteProwlFile(version, appliedSteps);

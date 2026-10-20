@@ -22,10 +22,14 @@ public interface IRenderSync
 {
     /// <summary>
     /// Brings the world up to date with the component. Main thread, once a frame the scene renders. Returns true when the
-    /// component is static and wholly in the world, nothing of it still loading, so while playing it is left alone from then
-    /// on; static objects do not change at runtime, and <see cref="SceneRendering.Refresh"/> syncs one again if one does.
+    /// component is wholly in the world, nothing of it still loading, so while playing it is left alone until something
+    /// wakes it: its Transform or an ancestor's moving, its GameObject's layer or static flag, a change to the mesh it
+    /// draws, a lightmap rebake, or the component calling <see cref="SceneRendering.Wake"/> from a setting it changed.
     /// </summary>
     bool Sync(RenderWorld world);
+
+    /// <summary>The mesh the component last synced, so editing that mesh wakes it.</summary>
+    Mesh? SyncedMesh => null;
 
     /// <summary>Removes everything the component added to the world.</summary>
     void Detach(RenderWorld world);
@@ -41,8 +45,21 @@ public sealed class SceneRendering : IDisposable
     private readonly List<IRenderSync> _members = [];
     private readonly HashSet<IRenderSync> _memberSet = [];
 
-    // Static members wholly in the world while playing, not synced again until refreshed or the game stops
+    // Members wholly in the world while playing, not synced again until woken or the game stops
     private readonly HashSet<IRenderSync> _parked = [];
+
+    // Parked members by the mesh they draw, so a mesh edit wakes them, and meshes edited since the last sync
+    private readonly Dictionary<Mesh, List<IRenderSync>> _meshUsers = [];
+    private readonly Dictionary<IRenderSync, Mesh> _parkedMeshes = [];
+    private readonly System.Collections.Concurrent.ConcurrentQueue<Mesh> _changedMeshes = new();
+    private readonly Action<Mesh> _onMeshChanged;
+    private int _lightingVersion = -1;
+
+    /// <summary>
+    /// Moves once every scene sync. A Transform pushes its move to its renderers and its children's at most once a sync,
+    /// skipping the walk when it already did this sync.
+    /// </summary>
+    internal static uint Epoch { get; private set; } = 1;
     private RenderWorld? _world;
     private ulong _syncedFrame = ulong.MaxValue;
     private readonly List<Light> _directionals = [];
@@ -58,7 +75,12 @@ public sealed class SceneRendering : IDisposable
     private readonly Dictionary<(GpuMesh Mesh, GMaterial Material, RenderableFlags Flags, uint LayerMask), ImmediateBatch> _immediate = [];
     private readonly List<(GpuMesh, GMaterial, RenderableFlags, uint)> _immediateGone = [];
 
-    internal SceneRendering(Scene scene) => _scene = scene;
+    internal SceneRendering(Scene scene)
+    {
+        _scene = scene;
+        _onMeshChanged = _changedMeshes.Enqueue;
+        Mesh.GeometryChanged += _onMeshChanged;
+    }
 
     /// <summary>The scene's world, made on first use. Null when headless.</summary>
     public RenderWorld? World
@@ -86,6 +108,12 @@ public sealed class SceneRendering : IDisposable
         if (gameObject.IsValid() && gameObject.Scene.IsValid() && !gameObject.Scene.IsDisposed) gameObject.Scene.Rendering.Remove(member);
     }
 
+    /// <summary>Syncs a component again next frame, for a setting of it that changed.</summary>
+    public static void Wake(IRenderSync member, GameObject? gameObject)
+    {
+        if (gameObject.IsValid() && gameObject.Scene.IsValid() && !gameObject.Scene.IsDisposed) gameObject.Scene.Rendering.Refresh(member);
+    }
+
     public void Add(IRenderSync member)
     {
         if (_memberSet.Add(member))
@@ -95,7 +123,7 @@ public sealed class SceneRendering : IDisposable
     public void Remove(IRenderSync member)
     {
         if (!_memberSet.Remove(member)) return;
-        if (!_parked.Remove(member)) _members.Remove(member);
+        if (!Unpark(member)) _members.Remove(member);
         if (_world != null)
         {
             try { member.Detach(_world); }
@@ -103,13 +131,67 @@ public sealed class SceneRendering : IDisposable
         }
     }
 
+    /// <summary>Whether a member is parked, left alone until something wakes it.</summary>
+    internal bool IsParked(IRenderSync member) => _parked.Contains(member);
+
     /// <summary>Whether a component is currently joined to this scene's rendering.</summary>
     internal bool IsMember(IRenderSync? member) => member is not null && _memberSet.Contains(member);
 
-    /// <summary>Syncs a static member again next frame, for one a script changed at runtime.</summary>
+    /// <summary>Syncs a parked member again next frame.</summary>
     public void Refresh(IRenderSync member)
     {
-        if (_parked.Remove(member)) _members.Add(member);
+        if (Unpark(member)) _members.Add(member);
+    }
+
+    /// <summary>Parks a member as a sync that found it settled does.</summary>
+    internal void Settle(IRenderSync member)
+    {
+        if (_members.Remove(member)) Park(member);
+    }
+
+    private void Park(IRenderSync member)
+    {
+        _parked.Add(member);
+        if (member.SyncedMesh is not { } mesh) return;
+        if (!_meshUsers.TryGetValue(mesh, out List<IRenderSync>? users))
+            _meshUsers[mesh] = users = [];
+        users.Add(member);
+        _parkedMeshes[member] = mesh;
+    }
+
+    private bool Unpark(IRenderSync member)
+    {
+        if (!_parked.Remove(member)) return false;
+        if (_parkedMeshes.Remove(member, out Mesh? mesh) && _meshUsers.TryGetValue(mesh, out List<IRenderSync>? users))
+        {
+            users.Remove(member);
+            if (users.Count == 0) _meshUsers.Remove(mesh);
+        }
+        return true;
+    }
+
+    private void UnparkAll()
+    {
+        _members.AddRange(_parked);
+        _parked.Clear();
+        _meshUsers.Clear();
+        _parkedMeshes.Clear();
+    }
+
+    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake
+    internal void WakeChanged()
+    {
+        if (_scene.BakedLightingVersion != _lightingVersion)
+        {
+            _lightingVersion = _scene.BakedLightingVersion;
+            UnparkAll();
+        }
+        while (_changedMeshes.TryDequeue(out Mesh? mesh))
+        {
+            if (!_meshUsers.TryGetValue(mesh, out List<IRenderSync>? users)) continue;
+            foreach (IRenderSync member in users.ToArray())
+                Refresh(member);
+        }
     }
 
     /// <summary>Adds instances to this frame's batch of a mesh and material, drawn at the next sync and then gone.</summary>
@@ -169,10 +251,8 @@ public sealed class SceneRendering : IDisposable
 
         bool playing = Application.IsPlaying;
         if (!playing && _parked.Count > 0)
-        {
-            _members.AddRange(_parked);
-            _parked.Clear();
-        }
+            UnparkAll();
+        WakeChanged();
         for (int i = 0; i < _members.Count; i++)
         {
             IRenderSync member = _members[i];
@@ -180,7 +260,7 @@ public sealed class SceneRendering : IDisposable
             try { settled = member.Sync(world); }
             catch (Exception e) { Debug.LogErrorOnce($"RenderSync.{member.GetType().Name}", $"Syncing {member.GetType().Name} into the render world threw: {e}"); }
             if (!settled || !playing) continue;
-            _parked.Add(member);
+            Park(member);
             _members[i] = _members[^1];
             _members.RemoveAt(_members.Count - 1);
             i--;
@@ -189,6 +269,7 @@ public sealed class SceneRendering : IDisposable
         SyncImmediate(world);
         SyncEnvironment(world);
         SyncProbes(world);
+        Epoch++;
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }
 
@@ -248,6 +329,7 @@ public sealed class SceneRendering : IDisposable
 
     public void Dispose()
     {
+        Mesh.GeometryChanged -= _onMeshChanged;
         if (_world != null)
         {
             foreach (IRenderSync member in _memberSet)
@@ -261,6 +343,8 @@ public sealed class SceneRendering : IDisposable
         _members.Clear();
         _memberSet.Clear();
         _parked.Clear();
+        _meshUsers.Clear();
+        _parkedMeshes.Clear();
         _immediate.Clear();
         _directionals.Clear();
     }
