@@ -19,7 +19,7 @@ Both are passed to `DispatchGraph` as a profiler, used for exactly one execution
 | `DeepRecording`         | Full capture. Same lifecycle, plus `Views` (with commands and copies), `Programs`, `Resources`, `Blobs`. Disposable. |
 | `DeepMode`              | `Full` copies every pass output. `ReplayOnly` copies only what replay cannot recreate. |
 | `Replayer`              | `new Replayer(device, deepRecording)` then `Replay(request)`.            |
-| `ReplayRequest`         | `ViewIndex`, `PassIndex`, optional `EventIndex` (stop after that draw or dispatch). |
+| `ReplayRequest`         | `ViewIndex`, `PassIndex`, optional `EventIndex` (stop after that draw or dispatch), `Indirect` (run only some commands of an indirect draw) and `Patches` (bytes written over recorded buffers first). |
 | `ReplayResult`          | `Status`, `Reason`, and `Outputs` (the bytes of each pass output).       |
 | `ReplayStatus`          | `Restored`, `Reexecuted`, or `NotReplayable`.                            |
 | `DebuggerSerialization` | `Register()` once, then use Echo to save and load recordings.            |
