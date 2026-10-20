@@ -4,11 +4,11 @@ Shader "Default/Water"
     {
         _Heightmap("Terrain Heightmap", Texture2D) = "black"
         _WaterMap("Water Map", Texture2D) = "black"
+        _WaterLevelMap("Water Levels", Texture2D) = "black"
         _HolesMap("Holes Map", Texture2D) = "white"
         _HasHoles("Has Holes", Integer) = 0
         _ShallowWaterColor("Shallow Color", Color) = (0.13, 0.55, 0.62, 1.0)
         _DeepWaterColor("Deep Color", Color) = (0.02, 0.16, 0.30, 1.0)
-        _WaterDepth("Maximum Depth", Float) = 3.0
         _WaterVisibilityDepth("Visibility Depth", Float) = 2.0
         _TerrainSize("Terrain Size", Float) = 1024.0
         _TerrainHeight("Terrain Height", Float) = 100.0
@@ -25,22 +25,26 @@ Shader "Default/Water"
         Vertex
         {
             #include "Prowl/TerrainHeight.glsl"
+            uniform sampler2D _WaterLevelMap;
             out vec2 vTerrainUV;
 
             void main()
             {
                 vec3 local = terrainVertex(vTerrainUV);
-                local.y += 0.08;
+                ivec2 last = textureSize(_WaterLevelMap, 0) - ivec2(1);
+                ivec2 sampleUV = ivec2(round(clamp(vTerrainUV, vec2(0.0), vec2(1.0)) * vec2(last)));
+                local.y = texelFetch(_WaterLevelMap, sampleUV, 0).r + 0.08;
                 Graphite_SetPreviousPosition(local);
                 gl_Position = Graphite_RelativeToClip(Graphite_ObjectToWorld(local));
             }
         }
         Fragment
         {
+            #include "Prowl/TerrainHeight.glsl"
             uniform sampler2D _WaterMap;
+            uniform sampler2D _WaterLevelMap;
             uniform vec4 _ShallowWaterColor;
             uniform vec4 _DeepWaterColor;
-            uniform float _WaterDepth;
             uniform float _WaterVisibilityDepth;
             in vec2 vTerrainUV;
             layout(location = 0) out vec4 fragColor;
@@ -78,7 +82,10 @@ Shader "Default/Water"
             {
                 float coverage = smoothWaterCoverage(vTerrainUV);
                 if (coverage < 0.001) discard;
-                float depth = coverage * max(_WaterDepth, 0.0);
+                ivec2 last = textureSize(_WaterLevelMap, 0) - ivec2(1);
+                ivec2 sampleUV = ivec2(round(clamp(vTerrainUV, vec2(0.0), vec2(1.0)) * vec2(last)));
+                float level = texelFetch(_WaterLevelMap, sampleUV, 0).r;
+                float depth = max(level - terrainHeight(vTerrainUV), 0.0);
                 float depthMix = smoothstep(0.0, max(_WaterVisibilityDepth, 0.01), depth);
                 vec3 waterColor = mix(_ShallowWaterColor.rgb, _DeepWaterColor.rgb, depthMix);
                 float opacity = mix(0.12, 1.0, depthMix);

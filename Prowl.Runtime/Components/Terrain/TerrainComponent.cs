@@ -225,7 +225,7 @@ public class TerrainComponent : Component, IRenderSync
             WorldToTerrain = Transform.WorldToLocalMatrix,
             MaxScale = MaxScale(terrainToWorld),
             Size = data.Size,
-            MinHeight = -data.WaterDepth - 0.05f * data.Height,
+            MinHeight = -data.MaxWaterCarve - 0.05f * data.Height,
             MaxHeight = 1.05f * data.Height,
             MaxLOD = MaxLODLevel,
             LODQuality = LODQuality,
@@ -246,9 +246,8 @@ public class TerrainComponent : Component, IRenderSync
             if (frame.WaterMaterial != null)
             {
                 ApplyHeightfield(_waterMaterial, data);
-                _waterMaterial.SetTexture("_Heightmap", data.GetBaseHeightmapTexture());
                 _waterMaterial.SetTexture("_WaterMap", data.GetWaterTexture());
-                _waterMaterial.SetFloat("_WaterDepth", data.WaterDepth);
+                _waterMaterial.SetTexture("_WaterLevelMap", data.GetWaterLevelTexture());
                 _waterMaterial.SetFloat("_WaterVisibilityDepth", data.WaterVisibilityDepth);
                 _waterMaterial.SetColor("_ShallowWaterColor", data.ShallowWaterColor);
                 _waterMaterial.SetColor("_DeepWaterColor", data.DeepWaterColor);

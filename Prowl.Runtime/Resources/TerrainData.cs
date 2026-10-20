@@ -118,6 +118,8 @@ public sealed class TerrainData : Asset, ISerializable
     private TerrainInterpolation _interpolation = TerrainInterpolation.Bicubic;
     private short[]? _heightsField;
     private float[]? _waterField;
+    private float[]? _waterLevels;
+    private float[]? _waterCarve;
     private float _waterDepth = 3f;
     private Color _shallowWaterColor = new(0.13f, 0.55f, 0.62f, 1f);
     private Color _deepWaterColor = new(0.02f, 0.16f, 0.30f, 1f);
@@ -156,6 +158,21 @@ public sealed class TerrainData : Asset, ISerializable
     public short[] Heights { get { EnsureLoaded(); return _heightsField ??= new short[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _heightsField = value; } }
     /// <summary>Painted water depth, 0..1, on the height vertex grid. Heights retain the unmodified ground.</summary>
     public float[] Water { get { EnsureLoaded(); return _waterField ??= new float[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _waterField = value; SetWaterDirty(); } }
+    public float[] WaterLevels { get { EnsureLoaded(); return _waterLevels ??= new float[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _waterLevels = value; SetWaterDirty(); } }
+    public float[] WaterCarve { get { EnsureLoaded(); return _waterCarve ??= new float[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _waterCarve = value; SetWaterDirty(); } }
+    [NonSerialized] private float? _maxWaterCarve;
+    public float MaxWaterCarve
+    {
+        get
+        {
+            EnsureLoaded();
+            if (_maxWaterCarve is { } cached) return cached;
+            float max = 0f;
+            if (_waterCarve != null) foreach (float carve in _waterCarve) max = MathF.Max(max, carve);
+            _maxWaterCarve = max;
+            return max;
+        }
+    }
     public float WaterDepth { get { EnsureLoaded(); return _waterDepth; } set { EnsureLoaded(); _waterDepth = MathF.Max(0f, value); SetWaterDirty(); } }
     public Color ShallowWaterColor { get { EnsureLoaded(); return _shallowWaterColor; } set { EnsureLoaded(); _shallowWaterColor = value; } }
     public Color DeepWaterColor { get { EnsureLoaded(); return _deepWaterColor; } set { EnsureLoaded(); _deepWaterColor = value; } }
@@ -257,7 +274,7 @@ public sealed class TerrainData : Asset, ISerializable
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return 0f;
         int index = z * HeightmapResolution + x;
-        return (float)Heights[index] / kMaxHeight - WaterAt(index) * WaterDepth / MathF.Max(Height, 0.001f);
+        return (float)Heights[index] / kMaxHeight - WaterCarveAt(index) / MathF.Max(Height, 0.001f);
     }
 
     public float GetBaseHeight(int x, int z)
@@ -275,16 +292,31 @@ public sealed class TerrainData : Asset, ISerializable
     }
 
     private float WaterAt(int index) => _waterField != null && index < _waterField.Length ? _waterField[index] : 0f;
+    private float WaterCarveAt(int index) => _waterCarve != null && index < _waterCarve.Length ? _waterCarve[index] : 0f;
+    public float GetWaterLevel(int x, int z) { EnsureLoaded(); return WaterLevels[z * HeightmapResolution + x]; }
+    public float GetWaterCarve(int x, int z) { EnsureLoaded(); return WaterCarve[z * HeightmapResolution + x]; }
+
+    public void SetWaterSample(int x, int z, float coverage, float level, float carve)
+    {
+        int index = z * HeightmapResolution + x;
+        Water[index] = Maths.Clamp(coverage, 0f, 1f);
+        WaterLevels[index] = level;
+        WaterCarve[index] = carve;
+        SetWaterDirty();
+    }
 
     public void SetWater(int x, int z, float value)
     {
         EnsureLoaded();
         if (x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution) return;
-        Water[z * HeightmapResolution + x] = Maths.Clamp(value, 0f, 1f);
-        SetWaterDirty();
+        float old = GetWater(x, z);
+        float coverage = Maths.Clamp(value, 0f, 1f);
+        float carve = old > 0f ? GetWaterCarve(x, z) * coverage / old : 0f;
+        float level = old > 0f ? GetWaterLevel(x, z) : GetBaseHeight(x, z) * Height;
+        SetWaterSample(x, z, coverage, level, carve);
     }
 
-    public void SetWaterDirty() { _waterDirty = true; _heightmapDirty = true; _effectiveHeightsDirty = true; _hasWaterCache = null; _heightsVersion++; }
+    public void SetWaterDirty() { _waterDirty = true; _waterLevelDirty = true; _heightmapDirty = true; _effectiveHeightsDirty = true; _hasWaterCache = null; _maxWaterCarve = null; _heightsVersion++; }
 
     /// <summary>Set normalized height (0-1) at integer coordinates. Stored as 16-bit.</summary>
     public void SetHeight(int x, int z, float value)
@@ -293,7 +325,7 @@ public sealed class TerrainData : Asset, ISerializable
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return;
         int index = z * HeightmapResolution + x;
-        float baseValue = value + WaterAt(index) * WaterDepth / MathF.Max(Height, 0.001f);
+        float baseValue = value + WaterCarveAt(index) / MathF.Max(Height, 0.001f);
         Heights[index] = (short)(Maths.Clamp(baseValue, 0f, 1f) * kMaxHeight);
         _heightmapDirty = true;
         _effectiveHeightsDirty = true;
@@ -379,7 +411,7 @@ public sealed class TerrainData : Asset, ISerializable
         if (_effectiveHeightsDirty)
         {
             for (int i = 0; i < count; i++)
-                _heightmapFloatBuffer[i] = Heights[i] * (1f / kMaxHeight) - WaterAt(i) * WaterDepth / MathF.Max(Height, 0.001f);
+                _heightmapFloatBuffer[i] = Heights[i] * (1f / kMaxHeight) - WaterCarveAt(i) / MathF.Max(Height, 0.001f);
             _effectiveHeightsDirty = false;
         }
         return _heightmapFloatBuffer;
@@ -391,6 +423,8 @@ public sealed class TerrainData : Asset, ISerializable
         HeightmapResolution = newRes;
         Heights = new short[newRes * newRes];
         Water = new float[newRes * newRes];
+        WaterLevels = new float[newRes * newRes];
+        WaterCarve = new float[newRes * newRes];
         _heightmapDirty = true;
         _effectiveHeightsDirty = true;
         _baseHeightmapDirty = true;
@@ -818,6 +852,52 @@ public sealed class TerrainData : Asset, ISerializable
         return _waterTexture;
     }
 
+    [NonSerialized] private Texture2D? _waterLevelTexture;
+    [NonSerialized] private bool _waterLevelDirty = true;
+    [NonSerialized] private float[]? _waterLevelUpload;
+    public Texture2D? GetWaterLevelTexture()
+    {
+        EnsureLoaded();
+        if (_waterLevels == null) return null;
+        int res = HeightmapResolution;
+        if (_waterLevelDirty || _waterLevelTexture.IsNotValid())
+        {
+            int count = res * res;
+            _waterLevelUpload ??= new float[count];
+            if (_waterLevelUpload.Length != count) _waterLevelUpload = new float[count];
+            bool[] filled = new bool[count];
+            var pending = new Queue<int>();
+            for (int i = 0; i < count; i++)
+            {
+                if (WaterAt(i) <= 0.001f) continue;
+                _waterLevelUpload[i] = _waterLevels[i];
+                filled[i] = true;
+                pending.Enqueue(i);
+            }
+            while (pending.Count > 0)
+            {
+                int i = pending.Dequeue();
+                int x = i % res;
+                int z = i / res;
+                void Fill(int neighbor)
+                {
+                    if (filled[neighbor]) return;
+                    filled[neighbor] = true;
+                    _waterLevelUpload[neighbor] = _waterLevelUpload[i];
+                    pending.Enqueue(neighbor);
+                }
+                if (x > 0) Fill(i - 1);
+                if (x + 1 < res) Fill(i + 1);
+                if (z > 0) Fill(i - res);
+                if (z + 1 < res) Fill(i + res);
+            }
+            _waterLevelTexture = DataTexture(_waterLevelTexture, res, TextureFormat.R32Float, false);
+            _waterLevelTexture.SetData(new Memory<float>(_waterLevelUpload), 0, 0, (uint)res, (uint)res);
+            _waterLevelDirty = false;
+        }
+        return _waterLevelTexture;
+    }
+
     /// <summary>Original terrain heights for the surface of painted water.</summary>
     public Texture2D? GetBaseHeightmapTexture()
     {
@@ -1031,7 +1111,9 @@ public sealed class TerrainData : Asset, ISerializable
         _effectiveHeightsDirty = true;
         _baseHeightmapDirty = true;
         _waterDirty = true;
+        _waterLevelDirty = true;
         _hasWaterCache = null;
+        _maxWaterCarve = null;
         _heightsVersion++;
         _detailsVersion++;
         _holesVersion++;
@@ -1042,6 +1124,7 @@ public sealed class TerrainData : Asset, ISerializable
         if (_heightmapTexture.IsValid()) _heightmapTexture.Dispose();
         if (_baseHeightmapTexture.IsValid()) _baseHeightmapTexture.Dispose();
         if (_waterTexture.IsValid()) _waterTexture.Dispose();
+        if (_waterLevelTexture.IsValid()) _waterLevelTexture.Dispose();
         if (_holesTexture.IsValid()) _holesTexture.Dispose();
         if (_splatmapTextures != null)
             foreach (Texture2D t in _splatmapTextures) if (t.IsValid()) t.Dispose();
@@ -1051,11 +1134,15 @@ public sealed class TerrainData : Asset, ISerializable
         _heightmapTexture = null;
         _baseHeightmapTexture = null;
         _waterTexture = null;
+        _waterLevelTexture = null;
+        _waterLevelUpload = null;
         _heightmapDirty = true;
         _effectiveHeightsDirty = true;
         _baseHeightmapDirty = true;
         _waterDirty = true;
+        _waterLevelDirty = true;
         _hasWaterCache = null;
+        _maxWaterCarve = null;
         _holesTexture = null;
         _splatmapTextures = null;
         _detailTextures = null;
@@ -1090,6 +1177,8 @@ public sealed class TerrainData : Asset, ISerializable
         // Raw data
         SerializeShortArray(value, "Heights16", Heights);
         if (_waterField != null) SerializeFloatArray(value, "Water", _waterField);
+        if (_waterLevels != null) SerializeFloatArray(value, "WaterLevels", _waterLevels);
+        if (_waterCarve != null) SerializeFloatArray(value, "WaterCarve", _waterCarve);
         value.Add("WaterDepth", new EchoObject(WaterDepth));
         value.Add("ShallowWaterColor", Serializer.Serialize(ShallowWaterColor, ctx));
         value.Add("DeepWaterColor", Serializer.Serialize(DeepWaterColor, ctx));
@@ -1227,6 +1316,50 @@ public sealed class TerrainData : Asset, ISerializable
         _waterVisibilityDepth = MathF.Max(0.01f, value.Get("WaterVisibilityDepth")?.FloatValue ?? 2f);
         float[]? water = DeserializeFloatArray(value, "Water");
         _waterField = water?.Length == heightCount ? water : null;
+        float[]? levels = DeserializeFloatArray(value, "WaterLevels");
+        float[]? carve = DeserializeFloatArray(value, "WaterCarve");
+        _waterLevels = levels?.Length == heightCount ? levels : null;
+        _waterCarve = carve?.Length == heightCount ? carve : null;
+        if (_waterField != null && (_waterLevels == null || _waterCarve == null))
+        {
+            _waterLevels = new float[heightCount];
+            _waterCarve = new float[heightCount];
+            bool[] visited = new bool[heightCount];
+            var queue = new Queue<int>();
+            var body = new List<int>();
+            for (int seed = 0; seed < heightCount; seed++)
+            {
+                if (visited[seed] || _waterField[seed] <= 0.001f) continue;
+                visited[seed] = true;
+                queue.Enqueue(seed);
+                body.Clear();
+                float level = float.MaxValue;
+                while (queue.Count > 0)
+                {
+                    int i = queue.Dequeue();
+                    body.Add(i);
+                    level = MathF.Min(level, Heights[i] * (Height / (float)kMaxHeight));
+                    int x = i % HeightmapResolution;
+                    int z = i / HeightmapResolution;
+                    void Visit(int neighbor)
+                    {
+                        if (visited[neighbor] || _waterField[neighbor] <= 0.001f) return;
+                        visited[neighbor] = true;
+                        queue.Enqueue(neighbor);
+                    }
+                    if (x > 0) Visit(i - 1);
+                    if (x + 1 < HeightmapResolution) Visit(i + 1);
+                    if (z > 0) Visit(i - HeightmapResolution);
+                    if (z + 1 < HeightmapResolution) Visit(i + HeightmapResolution);
+                }
+                foreach (int i in body)
+                {
+                    float baseHeight = Heights[i] * (Height / (float)kMaxHeight);
+                    _waterLevels[i] = level;
+                    _waterCarve[i] = MathF.Max(0f, baseHeight - (level - WaterDepth)) * _waterField[i];
+                }
+            }
+        }
         SetWaterDirty();
 
         int splatCount = SplatmapResolution * SplatmapResolution * Layers.Count;

@@ -77,7 +77,7 @@ public class TerrainCollider : Component, ITerrainHeightProvider
 
         // Local bounds spanning the full possible height range (sculpting can never leave them), then
         // every corner through the matrix, so a rotated terrain still gets bounds that enclose it.
-        var localMin = new Float3(0, -data.WaterDepth - data.Height * 0.1f, 0);
+        var localMin = new Float3(0, -data.MaxWaterCarve - data.Height * 0.1f, 0);
         var localMax = new Float3(data.Size, data.Height, data.Size);
 
         Float3 worldMin = new(float.MaxValue), worldMax = new(float.MinValue);

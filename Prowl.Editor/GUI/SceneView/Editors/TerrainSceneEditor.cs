@@ -37,6 +37,8 @@ public class TerrainSceneEditor : SceneTool
     private float[]? _preStrokeSplats;
     private byte[]? _preStrokeHoles;
     private float[]? _preStrokeWater;
+    private float[]? _preStrokeWaterLevels;
+    private float[]? _preStrokeWaterCarve;
     private List<byte[]>? _preStrokeDetails;
 
     public int Priority => 0;
@@ -220,6 +222,7 @@ public class TerrainSceneEditor : SceneTool
             if (leftPressed && !_isPainting)
             {
                 _isPainting = true;
+                TerrainEditor.EndWaterStroke();
                 // Snapshot arrays before stroke begins
                 SnapshotPreStroke(terrainData);
             }
@@ -241,6 +244,7 @@ public class TerrainSceneEditor : SceneTool
             if (_isPainting && (leftReleased || !leftDown))
             {
                 _isPainting = false;
+                TerrainEditor.EndWaterStroke();
                 RegisterStrokeUndo(terrainData);
             }
         }
@@ -253,12 +257,18 @@ public class TerrainSceneEditor : SceneTool
         _preStrokeSplats = null;
         _preStrokeHoles = null;
         _preStrokeWater = null;
+        _preStrokeWaterLevels = null;
+        _preStrokeWaterCarve = null;
         _preStrokeDetails = null;
 
         if (TerrainEditor.ActiveTab == TerrainTab.Height && data.Heights != null)
             _preStrokeHeights = (short[])data.Heights.Clone();
         else if (TerrainEditor.ActiveTab == TerrainTab.Water)
+        {
             _preStrokeWater = (float[])data.Water.Clone();
+            _preStrokeWaterLevels = (float[])data.WaterLevels.Clone();
+            _preStrokeWaterCarve = (float[])data.WaterCarve.Clone();
+        }
         else if (TerrainEditor.ActiveTab == TerrainTab.Paint && data.Splats != null)
             _preStrokeSplats = (float[])data.Splats.Clone();
         else if (TerrainEditor.ActiveTab == TerrainTab.Holes && data.Holes != null)
@@ -302,11 +312,17 @@ public class TerrainSceneEditor : SceneTool
         {
             float[] before = _preStrokeWater;
             float[] after = (float[])data.Water.Clone();
+            float[] beforeLevels = _preStrokeWaterLevels!;
+            float[] afterLevels = (float[])data.WaterLevels.Clone();
+            float[] beforeCarve = _preStrokeWaterCarve!;
+            float[] afterCarve = (float[])data.WaterCarve.Clone();
             TerrainData captured = data;
             Undo.RegisterAction("Terrain Water",
-                () => captured.Water = (float[])before.Clone(),
-                () => captured.Water = (float[])after.Clone());
+                () => { captured.Water = (float[])before.Clone(); captured.WaterLevels = (float[])beforeLevels.Clone(); captured.WaterCarve = (float[])beforeCarve.Clone(); },
+                () => { captured.Water = (float[])after.Clone(); captured.WaterLevels = (float[])afterLevels.Clone(); captured.WaterCarve = (float[])afterCarve.Clone(); });
             _preStrokeWater = null;
+            _preStrokeWaterLevels = null;
+            _preStrokeWaterCarve = null;
         }
         else if (_preStrokeSplats != null && data.Splats != null)
         {

@@ -34,6 +34,8 @@ public class TerrainEditor : CustomEditor
     public static float FlattenHeight = 0.5f;
     public static int PaintLayer = 0;
     public static bool WaterEraseMode;
+    private static float? s_waterStrokeLevel;
+    public static void EndWaterStroke() => s_waterStrokeLevel = null;
     public static int ActiveDetailIndex = 0;
     public static int ActiveTreePrototype = 0;
     public static float TreeBrushSize = 10f;
@@ -309,7 +311,7 @@ public class TerrainEditor : CustomEditor
         EditorGUI.Row(paper, $"{id}_mode", "", () =>
             Origami.ButtonGroup(paper, $"{id}_mode_v", WaterEraseMode ? 1 : 0, v => WaterEraseMode = v == 1)
                 .Segmented().FullWidth().Item("Paint").Item("Erase").Show());
-        EditorGUI.Row(paper, $"{id}_depth", "Maximum Depth", () =>
+        EditorGUI.Row(paper, $"{id}_depth", "Brush Depth", () =>
             Origami.NumericField<float>(paper, $"{id}_depth_v", data.WaterDepth,
                 v => { data.WaterDepth = MathF.Max(0f, v); _isDirty = true; if (_terrain.IsValid()) _terrain.InvalidateDetailCache(); }).Min(0f).Show());
         EditorGUI.Row(paper, $"{id}_shallow", "Shallow Color", () =>
@@ -799,7 +801,23 @@ public class TerrainEditor : CustomEditor
         if (radius <= 0f) return;
         int cx = (int)MathF.Round(uv.X * (res - 1));
         int cz = (int)MathF.Round(uv.Y * (res - 1));
+        cx = Math.Clamp(cx, 0, res - 1);
+        cz = Math.Clamp(cz, 0, res - 1);
         int r = (int)MathF.Ceiling(radius);
+        if (!erase && s_waterStrokeLevel == null)
+        {
+            // Only a stroke started on the existing shoreline joins that body.
+            // A distant lake inside the brush radius must not set this stroke's level.
+            float nearest = float.MaxValue;
+            for (int z = Math.Max(0, cz - 1); z <= Math.Min(res - 1, cz + 1); z++)
+                for (int x = Math.Max(0, cx - 1); x <= Math.Min(res - 1, cx + 1); x++)
+                {
+                    float distance = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+                    if (distance < nearest && data.GetWater(x, z) > 0.1f)
+                    { nearest = distance; s_waterStrokeLevel = data.GetWaterLevel(x, z); }
+                }
+            s_waterStrokeLevel ??= data.GetBaseHeight(cx, cz) * data.Height;
+        }
         for (int z = Math.Max(0, cz - r); z <= Math.Min(res - 1, cz + r); z++)
             for (int x = Math.Max(0, cx - r); x <= Math.Min(res - 1, cx + r); x++)
             {
@@ -807,9 +825,24 @@ public class TerrainEditor : CustomEditor
                 if (dist > radius) continue;
                 float falloff = 1f - SmoothStep(1f - BrushFalloff, 1f, dist / radius);
                 float old = data.GetWater(x, z);
+                if (!erase && old > 0.001f && MathF.Abs(data.GetWaterLevel(x, z) - s_waterStrokeLevel!.Value) > 0.1f)
+                    continue;
                 float value = Math.Clamp(old + (erase ? -1f : 1f) * BrushStrength * falloff * dt * 1.5f, 0f, 1f);
                 if (MathF.Abs(value - old) < 0.00001f) continue;
-                data.SetWater(x, z, value);
+                float level = old > 0.001f ? data.GetWaterLevel(x, z) : s_waterStrokeLevel ?? 0f;
+                float carve = data.GetWaterCarve(x, z);
+                if (erase)
+                    carve *= old > 0f ? value / old : 0f;
+                else
+                {
+                    float baseHeight = data.GetBaseHeight(x, z) * data.Height;
+                    // A signed offset lets the shoreline rise as well as fall.
+                    // At full coverage the basin sits Brush Depth below the waterline.
+                    float shoreBlend = SmoothStep(0f, 0.12f, value);
+                    float targetGround = level - data.WaterDepth * value;
+                    carve = (baseHeight - targetGround) * shoreBlend;
+                }
+                data.SetWaterSample(x, z, value, level, carve);
                 changed = true;
             }
     }
