@@ -59,10 +59,10 @@ internal static class GraphiteBindings
     public const int Vertices = 3;
 
     /// <summary>The flat varying carrying the material slot from the vertex to the fragment stage.</summary>
-    public const uint MaterialSlotLocation = 31;
+    public const uint MaterialSlotLocation = 29;
 
     /// <summary>The flat varying carrying the object index from the vertex to the fragment stage.</summary>
-    public const uint ObjectIndexLocation = 30;
+    public const uint ObjectIndexLocation = 28;
 
     public const string MaterialsName = "Graphite_Materials";
     public const string InstancesName = "Graphite_Instances";

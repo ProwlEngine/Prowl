@@ -7,10 +7,10 @@
 
 layout(set = 2, binding = 3, std430) readonly buffer Graphite_Vertices { uint graphite_Words[]; };
 
-layout(location = 28) out vec4 graphite_MotionCurrent;
-layout(location = 29) out vec4 graphite_MotionPrevious;
-layout(location = 30) flat out uint graphite_ObjectIndex;
-layout(location = 31) flat out uint graphite_MaterialSlot;
+layout(location = 26) out vec4 graphite_MotionCurrent;
+layout(location = 27) out vec4 graphite_MotionPrevious;
+layout(location = 28) flat out uint graphite_ObjectIndex;
+layout(location = 29) flat out uint graphite_MaterialSlot;
 
 invariant gl_Position;
 
