@@ -7,44 +7,57 @@ using Prowl.Warp.Transports.Steam;
 
 namespace Prowl.Runtime.Networking;
 
-public enum NetworkTransport { Kcp, Local, Steam }
+public enum NetworkTransport
+{
+    Kcp,
+    Local,
+    Steam
+}
 
 /// <summary>Serializable project defaults. Explicit transports and session options can override these per session.</summary>
 public sealed class NetworkConfiguration
 {
-    public NetworkTransport Transport = NetworkTransport.Kcp;
-    public int Port = 7777;
-    public string LocalAddress = "host";
-    public float TickRate = 30;
-    public float InterpolationMilliseconds = 100;
-    public uint ProtocolId = 0x50524157;
     public uint AppVersion;
-    public int MaxPeers = 64;
-    public int MaxMessageSize = 16 * 1024 * 1024;
-    public float JoinTimeoutSeconds = 10;
+    public bool CongestionControl;
     public float ConnectTimeoutSeconds = 5;
-    public float TimeoutSeconds = 10;
-    public float PingIntervalSeconds = 1;
+    public int FastResend = 2;
+    public float InterpolationMilliseconds = 100;
+    public float JitterMilliseconds;
+    public float JoinTimeoutSeconds = 10;
+    public float LatencyMilliseconds;
+    public string LocalAddress = "host";
+    public int MaxMessageSize = 16 * 1024 * 1024;
+    public int MaxPeers = 64;
+    public int MaxRetransmits = 40;
     public int Mtu = 1200;
     public bool NoDelay = true;
-    public int UpdateIntervalMilliseconds = 10;
-    public int FastResend = 2;
-    public bool CongestionControl;
-    public int SendWindow = 4096;
-    public int ReceiveWindow = 4096;
-    public int MaxRetransmits = 40;
-    public bool SimulateNetwork;
     public float PacketLossPercent;
-    public float LatencyMilliseconds;
-    public float JitterMilliseconds;
+    public float PingIntervalSeconds = 1;
+    public int Port = 7777;
+    public uint ProtocolId = 0x50524157;
+    public int ReceiveWindow = 4096;
+    public int SendWindow = 4096;
+    public bool SimulateNetwork;
+    public float TickRate = 30;
+    public float TimeoutSeconds = 10;
+    public NetworkTransport Transport = NetworkTransport.Kcp;
+    public int UpdateIntervalMilliseconds = 10;
 
     /// <summary>Returns an independent, normalized copy so editing project defaults cannot mutate a running session.</summary>
     public NetworkConfiguration ValidatedCopy()
     {
-        var copy = (NetworkConfiguration)MemberwiseClone();
-        if (!Enum.IsDefined(copy.Transport)) copy.Transport = NetworkTransport.Kcp;
+        NetworkConfiguration copy = (NetworkConfiguration)MemberwiseClone();
+        if (!Enum.IsDefined(copy.Transport))
+        {
+            copy.Transport = NetworkTransport.Kcp;
+        }
+
         copy.Port = Math.Clamp(copy.Port, 0, 65535);
-        if (string.IsNullOrWhiteSpace(copy.LocalAddress)) copy.LocalAddress = "host";
+        if (string.IsNullOrWhiteSpace(copy.LocalAddress))
+        {
+            copy.LocalAddress = "host";
+        }
+
         copy.TickRate = Limit(copy.TickRate, 1, 240, 30);
         copy.InterpolationMilliseconds = Limit(copy.InterpolationMilliseconds, 0, 5000, 100);
         copy.MaxPeers = Math.Clamp(copy.MaxPeers, 1, 4096);
@@ -72,23 +85,46 @@ public sealed class NetworkConfiguration
     public NetSessionOptions CreateSessionOptions()
     {
         NetworkConfiguration c = ValidatedCopy();
-        return new() { AppVersion = c.AppVersion, MaxPeers = c.MaxPeers, MaxMessageSize = c.MaxMessageSize,
-            JoinTimeout = TimeSpan.FromSeconds(c.JoinTimeoutSeconds) };
+        return new NetSessionOptions
+        {
+            AppVersion = c.AppVersion,
+            MaxPeers = c.MaxPeers,
+            MaxMessageSize = c.MaxMessageSize,
+            JoinTimeout = TimeSpan.FromSeconds(c.JoinTimeoutSeconds)
+        };
     }
 
     public KcpTransportOptions CreateKcpOptions()
     {
         NetworkConfiguration c = ValidatedCopy();
-        return new()
+        return new KcpTransportOptions
         {
-            Port = c.Port, ProtocolId = c.ProtocolId, MaxConnections = c.MaxPeers, Mtu = c.Mtu,
-            ConnectTimeout = TimeSpan.FromSeconds(c.ConnectTimeoutSeconds), Timeout = TimeSpan.FromSeconds(c.TimeoutSeconds),
+            Port = c.Port,
+            ProtocolId = c.ProtocolId,
+            MaxConnections = c.MaxPeers,
+            Mtu = c.Mtu,
+            ConnectTimeout = TimeSpan.FromSeconds(c.ConnectTimeoutSeconds),
+            Timeout = TimeSpan.FromSeconds(c.TimeoutSeconds),
             PingInterval = TimeSpan.FromSeconds(c.PingIntervalSeconds),
-            Reliability = new() { NoDelay = c.NoDelay, Interval = (uint)c.UpdateIntervalMilliseconds,
-                FastResend = c.FastResend, CongestionControl = c.CongestionControl, SendWindow = (uint)c.SendWindow,
-                ReceiveWindow = (uint)c.ReceiveWindow, MaxRetransmits = (uint)c.MaxRetransmits },
-            Simulation = c.SimulateNetwork ? new LinkSimulation { PacketLoss = c.PacketLossPercent / 100.0,
-                Latency = TimeSpan.FromMilliseconds(c.LatencyMilliseconds), Jitter = TimeSpan.FromMilliseconds(c.JitterMilliseconds) } : null,
+            Reliability =
+                new KcpReliabilityOptions
+                {
+                    NoDelay = c.NoDelay,
+                    Interval = (uint)c.UpdateIntervalMilliseconds,
+                    FastResend = c.FastResend,
+                    CongestionControl = c.CongestionControl,
+                    SendWindow = (uint)c.SendWindow,
+                    ReceiveWindow = (uint)c.ReceiveWindow,
+                    MaxRetransmits = (uint)c.MaxRetransmits
+                },
+            Simulation = c.SimulateNetwork
+                ? new LinkSimulation
+                {
+                    PacketLoss = c.PacketLossPercent / 100.0,
+                    Latency = TimeSpan.FromMilliseconds(c.LatencyMilliseconds),
+                    Jitter = TimeSpan.FromMilliseconds(c.JitterMilliseconds)
+                }
+                : null
         };
     }
 }
@@ -113,26 +149,41 @@ public static partial class Networking
     /// <summary>Creates a transport using project defaults. Local transports share a network within this process only.</summary>
     public static Transport CreateTransport(bool hosting) => s_configuration.Transport switch
     {
-        NetworkTransport.Local => new LocalTransport(s_localNetwork, hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString()),
+        NetworkTransport.Local => new LocalTransport(s_localNetwork,
+            hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString()),
         NetworkTransport.Steam => new SteamTransport(),
-        _ => new KcpTransport(s_configuration.CreateKcpOptions()),
+        _ => new KcpTransport(s_configuration.CreateKcpOptions())
     };
 
     /// <summary>Hosts using the project's transport and session defaults.</summary>
     public static NetSession Host(string name = "Host")
     {
         BeginSession();
-        Transport transport = CreateTransport(hosting: true);
-        try { return Host(transport, name); }
-        catch { transport.Dispose(); throw; }
+        Transport transport = CreateTransport(true);
+        try
+        {
+            return Host(transport, name);
+        }
+        catch
+        {
+            transport.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Joins using the project's transport and session defaults. KCP addresses may include a port.</summary>
     public static NetSession Join(string address, string name, ReadOnlySpan<byte> token = default)
     {
         BeginSession();
-        Transport transport = CreateTransport(hosting: false);
-        try { return Join(transport, address, name, token); }
-        catch { transport.Dispose(); throw; }
+        Transport transport = CreateTransport(false);
+        try
+        {
+            return Join(transport, address, name, token);
+        }
+        catch
+        {
+            transport.Dispose();
+            throw;
+        }
     }
 }

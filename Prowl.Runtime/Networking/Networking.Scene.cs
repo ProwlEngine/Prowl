@@ -21,7 +21,9 @@ public static partial class Networking
     private static void OnHostSceneLoaded()
     {
         if (Session is not { IsHost: true, State: SessionState.Active } session)
+        {
             return;
+        }
 
         // Objects that survived the swap (DontDestroyOnLoad) keep their network state; the rest went with the old scene.
         using FrameStatScope stats = FrameStats.Network.Scope();
@@ -34,14 +36,18 @@ public static partial class Networking
         foreach (NetPeer peer in session.Peers)
         {
             if (!peer.IsLocal)
+            {
                 SendSnapshot(peer);
+            }
         }
     }
 
     private static void SendSnapshot(NetPeer peer)
     {
         if (Session is not { } session || s_scene == null)
+        {
             return;
+        }
 
         using NetWriter message = new(64 * 1024);
         using FrameStatScope stats = FrameStats.Network.Scope();
@@ -50,8 +56,8 @@ public static partial class Networking
     }
 
     /// <summary>
-    /// Writes <paramref name="scene"/> as clients receive it: the scene itself, minus anything that is
-    /// <see cref="NetworkMode.Never"/>, then the networked objects' owners and every [Sync] value.
+    ///     Writes <paramref name="scene" /> as clients receive it: the scene itself, minus anything that is
+    ///     <see cref="NetworkMode.Never" />, then the networked objects' owners and every [Sync] value.
     /// </summary>
     internal static void WriteSnapshot(Scene scene, NetWriter output)
     {
@@ -89,12 +95,18 @@ public static partial class Networking
         using FrameStatScope stats = FrameStats.Network.Scope();
         byte format = reader.ReadByte();
         if (format != SnapshotFormat)
-            throw new InvalidDataException($"The host sent scene snapshot format {format}, this build reads {SnapshotFormat}.");
+        {
+            throw new InvalidDataException(
+                $"The host sent scene snapshot format {format}, this build reads {SnapshotFormat}.");
+        }
 
         string name = reader.ReadString();
         Scene? scene = Serializer.Deserialize<Scene>(Decompress(reader.ReadBytesWithLength()));
         if (scene.IsNotValid())
+        {
             throw new InvalidDataException("The host's scene snapshot was empty.");
+        }
+
         scene!.Name = name;
         return scene;
     }
@@ -102,7 +114,9 @@ public static partial class Networking
     private static void OnSceneSnapshot(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (IsHost)
+        {
             return;
+        }
 
         Scene scene = ReadSnapshot(ref reader);
 
@@ -121,10 +135,12 @@ public static partial class Networking
             int owner = (int)reader.ReadVarUInt32() - 1;
             NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
             if (FindByIdentifier(id) is GameObject go)
+            {
                 s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned });
+            }
         }
 
-        ApplySyncState(sender, ref reader, relay: null);
+        ApplySyncState(sender, ref reader, null);
         Scene.Load(scene);
     }
 
@@ -133,19 +149,23 @@ public static partial class Networking
     {
         foreach (GameObject go in scene.AllObjects)
         {
-            if (go.NetworkMode == NetworkMode.Object && go.NetworkRoot == go && !go.IsNetworkExcluded && !s_entries.Contains(go.Identifier))
+            if (go.NetworkMode == NetworkMode.Object && go.NetworkRoot == go && !go.IsNetworkExcluded &&
+                !s_entries.Contains(go.Identifier))
+            {
                 s_entries.Add(new NetworkEntry(go) { Orphaned = go.NetworkOrphaned });
+            }
         }
     }
 
     internal static byte[] Compress(EchoObject echo)
     {
         using MemoryStream compressed = new();
-        using (ZLibStream zlib = new(compressed, CompressionLevel.Fastest, leaveOpen: true))
+        using (ZLibStream zlib = new(compressed, CompressionLevel.Fastest, true))
         using (BinaryWriter writer = new(zlib))
         {
             echo.WriteToBinary(writer);
         }
+
         return compressed.ToArray();
     }
 

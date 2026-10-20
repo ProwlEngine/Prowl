@@ -12,46 +12,43 @@ using Prowl.Warp;
 namespace Prowl.Runtime.Networking;
 
 /// <summary>
-/// Multiplayer, built on <see cref="NetSession"/> from Prowl.Warp. Host or join a session here and the
-/// engine pumps it every frame, around the fixed update. With no session running, none of this does anything.
+///     Multiplayer, built on <see cref="NetSession" /> from Prowl.Warp. Host or join a session here and the
+///     engine pumps it every frame, around the fixed update. With no session running, none of this does anything.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The host shares its scene: a client that joins, and every client whenever the host changes scene,
-/// gets the host's current scene and loads it in place of its own. Objects that are
-/// <see cref="NetworkMode.Never"/> stay behind. Scene-placed objects keep their
-/// <see cref="GameObject.Identifier"/>s, so host and clients agree on which object is which.
-/// </para>
-/// <para>
-/// <see cref="NetworkMode.Object"/> objects are networked objects: the host spawns them with
-/// <see cref="GameObject.NetworkSpawn"/>, each has an owner (or the host), and their transform and
-/// <see cref="SyncAttribute"/> properties follow whoever controls them. <see cref="Rpc"/> methods call across peers.
-/// </para>
-/// <para>
-/// Game messages can also go through <see cref="Session"/> directly (<see cref="NetSession.On{T}"/>,
-/// <see cref="NetSession.Send{T}"/>), with ids below <see cref="EngineMessageIds"/>.
-/// In the editor, leaving play mode ends the session.
-/// </para>
+///     <para>
+///         The host shares its scene: a client that joins, and every client whenever the host changes scene,
+///         gets the host's current scene and loads it in place of its own. Objects that are
+///         <see cref="NetworkMode.Never" /> stay behind. Scene-placed objects keep their
+///         <see cref="GameObject.Identifier" />s, so host and clients agree on which object is which.
+///     </para>
+///     <para>
+///         <see cref="NetworkMode.Object" /> objects are networked objects: the host spawns them with
+///         <see cref="GameObject.NetworkSpawn" />, each has an owner (or the host), and their transform and
+///         <see cref="SyncAttribute" /> properties follow whoever controls them. <see cref="Rpc" /> methods call across
+///         peers.
+///     </para>
+///     <para>
+///         Game messages can also go through <see cref="Session" /> directly (<see cref="NetSession.On{T}" />,
+///         <see cref="NetSession.Send{T}" />), with ids below <see cref="EngineMessageIds" />.
+///         In the editor, leaving play mode ends the session.
+///     </para>
 /// </remarks>
 public static partial class Networking
 {
     /// <summary>
-    /// Message ids from here up to <see cref="NetSession.ReservedMessageIds"/> are the engine's own.
-    /// Game messages use ids below it.
+    ///     Message ids from here up to <see cref="NetSession.ReservedMessageIds" /> are the engine's own.
+    ///     Game messages use ids below it.
     /// </summary>
     public const ushort EngineMessageIds = 0xFE00;
 
-    private enum EngineMessage : ushort
-    {
-        SceneSnapshot = EngineMessageIds,
-        Spawn,
-        Despawn,
-        Owner,
-        Sync,
-        Transform,
-        RpcToHost,
-        RpcFromHost,
-    }
+    // The scene this session replicates: the current one on the host, the last one received on a client
+    // (which only becomes current at the end of the frame it arrived in).
+    private static Scene? s_scene;
+
+    private static readonly Stopwatch s_clock = Stopwatch.StartNew();
+    private static double s_nextTick;
+    private static int s_frame;
 
     /// <summary>The running session, or null when there is none.</summary>
     public static NetSession? Session { get; private set; }
@@ -69,18 +66,10 @@ public static partial class Networking
     /// <summary>How far behind proxies show networked transforms, so they move smoothly between updates despite jitter.</summary>
     public static TimeSpan InterpolationDelay { get; set; } = TimeSpan.FromMilliseconds(100);
 
-    // The scene this session replicates: the current one on the host, the last one received on a client
-    // (which only becomes current at the end of the frame it arrived in).
-    private static Scene? s_scene;
-
-    private static readonly Stopwatch s_clock = Stopwatch.StartNew();
-    private static double s_nextTick;
-    private static int s_frame;
-
     private static double Now => s_clock.Elapsed.TotalSeconds;
 
     /// <summary>
-    /// Hosts a session on <paramref name="transport"/>, sharing the current scene with everyone who joins.
+    ///     Hosts a session on <paramref name="transport" />, sharing the current scene with everyone who joins.
     /// </summary>
     /// <exception cref="InvalidOperationException">A session is already running.</exception>
     public static NetSession Host(Transport transport, string name = "Host", NetSessionOptions? options = null)
@@ -100,15 +89,17 @@ public static partial class Networking
     }
 
     /// <summary>
-    /// Joins a host. Once let in, the client receives the host's scene and loads it, replacing the
-    /// current one at the end of that frame.
+    ///     Joins a host. Once let in, the client receives the host's scene and loads it, replacing the
+    ///     current one at the end of that frame.
     /// </summary>
     /// <exception cref="InvalidOperationException">A session is already running.</exception>
-    public static NetSession Join(Transport transport, string address, string name, ReadOnlySpan<byte> token = default, NetSessionOptions? options = null)
+    public static NetSession Join(Transport transport, string address, string name, ReadOnlySpan<byte> token = default,
+        NetSessionOptions? options = null)
     {
         BeginSession();
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetSession session = NetSession.Join(transport, address, name, token, options ?? s_configuration.CreateSessionOptions());
+        NetSession session = NetSession.Join(transport, address, name, token,
+            options ?? s_configuration.CreateSessionOptions());
         Attach(session);
         return session;
     }
@@ -117,7 +108,9 @@ public static partial class Networking
     public static void Shutdown(string? message = null)
     {
         if (Session is not { } session)
+        {
             return;
+        }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         session.Shutdown(message);
@@ -130,14 +123,18 @@ public static partial class Networking
     {
         NetSession? session = Session;
         if (session == null)
+        {
             return;
+        }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         s_frame++;
         session.Receive();
 
         if (IsActive)
+        {
             ApplyInterpolation();
+        }
     }
 
     /// <summary>After the frame's update: sends what this frame produced.</summary>
@@ -145,7 +142,9 @@ public static partial class Networking
     {
         NetSession? session = Session;
         if (session == null)
+        {
             return;
+        }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         if (IsActive && Now >= s_nextTick)
@@ -167,17 +166,22 @@ public static partial class Networking
     {
         MainThreadContext.AssertMainThread();
         if (Session != null)
-            throw new InvalidOperationException("A network session is already running. Call Networking.Shutdown first.");
+        {
+            throw new InvalidOperationException(
+                "A network session is already running. Call Networking.Shutdown first.");
+        }
     }
 
     private static void Attach(NetSession session)
     {
         Session = session;
         s_nextTick = Now;
-        NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, session.IsHost ? "Hosting" : "Joining");
+        NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty,
+            session.IsHost ? "Hosting" : "Joining");
         session.Joined += () => NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, "Joined");
         session.PeerJoined += peer => NetworkDiagnostics.Record("Session", "Local", peer, Guid.Empty, "Peer joined");
-        session.PeerLeft += (peer, reason) => NetworkDiagnostics.Record("Session", "Local", peer, Guid.Empty, $"Peer left: {reason}");
+        session.PeerLeft += (peer, reason) =>
+            NetworkDiagnostics.Record("Session", "Local", peer, Guid.Empty, $"Peer left: {reason}");
 
         RegisterEngineMessage(session, EngineMessage.SceneSnapshot, OnSceneSnapshot);
         RegisterEngineMessage(session, EngineMessage.Spawn, OnSpawn);
@@ -191,13 +195,17 @@ public static partial class Networking
         session.Ended += (reason, message) =>
         {
             if (Session != session)
+            {
                 return;
+            }
 
             NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, $"Ended: {reason}: {message}");
             Session = null;
             Scene.OnSceneLoaded -= OnHostSceneLoaded;
             ResetState();
-            Debug.Log(message == null ? $"[Network] Session ended: {reason}." : $"[Network] Session ended: {reason}: {message}");
+            Debug.Log(message == null
+                ? $"[Network] Session ended: {reason}."
+                : $"[Network] Session ended: {reason}: {message}");
         };
     }
 
@@ -210,5 +218,17 @@ public static partial class Networking
         s_incoming = null;
         s_incomingRead = false;
         CurrentCaller = null;
+    }
+
+    private enum EngineMessage : ushort
+    {
+        SceneSnapshot = EngineMessageIds,
+        Spawn,
+        Despawn,
+        Owner,
+        Sync,
+        Transform,
+        RpcToHost,
+        RpcFromHost
     }
 }

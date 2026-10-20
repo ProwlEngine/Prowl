@@ -25,7 +25,9 @@ public static partial class Networking
     internal static void MarkSyncDirty(Component component, uint slot)
     {
         if (!component.GameObject.IsNetworkExcluded)
+        {
             s_dirty.Add((component, slot));
+        }
     }
 
     /// <summary>Whether the peer whose values are being applied may change this [Sync] property.</summary>
@@ -33,18 +35,25 @@ public static partial class Networking
     {
         NetPeer? sender = s_syncSender;
         if (sender == null)
+        {
             return false;
+        }
 
         // The host is the authority over everything; a client only over what it owns.
         if (sender.IsHost)
+        {
             return true;
+        }
+
         return (flags & SyncFlags.FromHost) == 0 && OwnerOf(component.GameObject) == sender.Id;
     }
 
     private static void SendSyncChanges()
     {
         if (s_dirty.Count == 0)
+        {
             return;
+        }
 
         using NetWriter message = new(1024);
         int count = 0;
@@ -52,26 +61,37 @@ public static partial class Networking
         foreach ((Component component, uint slot) in s_dirty)
         {
             if (!component.IsDisposed && WriteValue(values, component, slot))
+            {
                 count++;
+            }
         }
+
         s_dirty.Clear();
 
         if (count == 0)
+        {
             return;
+        }
 
         message.WriteVarUInt32((uint)count);
         message.WriteBytes(values.WrittenSpan);
 
         if (IsHost)
+        {
             BroadcastEngine(EngineMessage.Sync, message.WrittenSpan);
+        }
         else
+        {
             SendEngine(Session.HostPeer!, EngineMessage.Sync, message.WrittenSpan);
+        }
     }
 
     private static bool WriteValue(NetWriter output, Component component, uint slot)
     {
         if (NetworkMembers.Of(component).Sync(slot) is not { } sync)
+        {
             return false;
+        }
 
         s_valueWriter.Reset();
         sync.Write(component, s_valueWriter);
@@ -79,11 +99,12 @@ public static partial class Networking
         output.WriteGuid(component.Identifier);
         output.WriteVarUInt32(slot);
         output.WriteBytesWithLength(s_valueWriter.WrittenSpan);
-        TraceMember("SyncVar", "Serialize", Session?.LocalPeer, component, slot, false, "Serialized", s_valueWriter.WrittenSpan);
+        TraceMember("SyncVar", "Serialize", Session?.LocalPeer, component, slot, false, "Serialized",
+            s_valueWriter.WrittenSpan);
         return true;
     }
 
-    /// <summary>Writes every [Sync] value of every component on <paramref name="objects"/>, for a snapshot or spawn.</summary>
+    /// <summary>Writes every [Sync] value of every component on <paramref name="objects" />, for a snapshot or spawn.</summary>
     private static void WriteSyncState(NetWriter output, IEnumerable<GameObject> objects)
     {
         using NetWriter values = new(1024);
@@ -91,14 +112,18 @@ public static partial class Networking
         foreach (GameObject go in objects)
         {
             if (go.IsNetworkExcluded)
+            {
                 continue;
+            }
 
             foreach (Component component in go.GetComponents<Component>())
             {
                 foreach (SyncMember sync in NetworkMembers.Of(component).Syncs)
                 {
                     if (WriteValue(values, component, sync.Slot))
+                    {
                         count++;
+                    }
                 }
             }
         }
@@ -110,7 +135,9 @@ public static partial class Networking
     private static void OnSync(NetPeer sender, ref NetReader reader, Delivery delivery)
     {
         if (!IsHost && !sender.IsHost)
+        {
             return;
+        }
 
         using NetWriter? relay = IsHost ? new NetWriter(1024) : null;
         int relayed = ApplySyncState(sender, ref reader, relay);
@@ -126,8 +153,8 @@ public static partial class Networking
     }
 
     /// <summary>
-    /// Applies a block of values from <paramref name="sender"/>. Values it may not change are skipped.
-    /// Accepted ones are copied to <paramref name="relay"/> when given; returns how many were.
+    ///     Applies a block of values from <paramref name="sender" />. Values it may not change are skipped.
+    ///     Accepted ones are copied to <paramref name="relay" /> when given; returns how many were.
     /// </summary>
     private static int ApplySyncState(NetPeer sender, ref NetReader reader, NetWriter? relay)
     {
@@ -145,7 +172,8 @@ public static partial class Networking
 
                 if (FindByIdentifier(id) is not Component component || component.GameObject.IsNetworkExcluded)
                 {
-                    NetworkDiagnostics.Record("SyncVar", "Rejected", sender, id, $"Unknown or excluded component, slot #{slot}", value);
+                    NetworkDiagnostics.Record("SyncVar", "Rejected", sender, id,
+                        $"Unknown or excluded component, slot #{slot}", value);
                     continue;
                 }
 
@@ -156,6 +184,7 @@ public static partial class Networking
                     NetReader valueReader = new(value);
                     sync!.Read(component, ref valueReader);
                 }
+
                 TraceMember("SyncVar", accepted ? "Apply" : "Rejected", sender, component, slot, false,
                     accepted ? "Applied" : "Unknown slot or unauthorized", value);
                 if (accepted && relay != null)
@@ -171,6 +200,7 @@ public static partial class Networking
         {
             s_syncSender = previous;
         }
+
         return relayed;
     }
 }
