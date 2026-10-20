@@ -1292,14 +1292,13 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
     private readonly List<IDisposable> _retired = new();
-    private readonly RenderPipeline _readbackPipeline = new() { Name = "Graphite.Readback" };
     private readonly RenderPipeline _fencePipeline = new() { Name = "Graphite.Fence" };
     private readonly FencePass _fence = new();
     private readonly List<int> _fenceAt = new();
     private readonly List<DeviceBuffer> _replaced = new();
     private readonly RenderPipeline _providerPipeline = new() { Name = "Graphite.Providers" };
     private readonly ProviderWork _providerWork = new();
-    private readonly ReadbackPass _readback;
+    private readonly ReadbackStaging _readback;
     private readonly List<int> _sortedViews = new();
     private bool[] _placed = [];
     private readonly HashSet<RenderFeature> _prepared = new();
@@ -1332,8 +1331,7 @@ internal sealed partial class FramePipeline : IDisposable
         _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry);
         _frameStart.Name = "Graphite.FrameStart";
         _frameStart.SetPasses([_upload, _probes, _deform]);
-        _readback = new ReadbackPass(device, report);
-        _readbackPipeline.SetPasses([_readback]);
+        _readback = new ReadbackStaging(device, report);
 
         const string present = InternalShaders.Present, decode = InternalShaders.Decode, encode = InternalShaders.Encode;
         BlendStateDescription over = new(default, BlendAttachmentDescription.AlphaBlend with { SourceColorFactor = BlendFactor.One, SourceAlphaFactor = BlendFactor.One });
@@ -1598,12 +1596,7 @@ internal sealed partial class FramePipeline : IDisposable
             _dispatches.Add(fence);
             _dispatches.AddRange(pipelines);
         }
-        if (readbacks.Count > 0)
-        {
-            _readback.Prepare(readbacks);
-            _readbackPipeline.SetPasses([_readback]);
-            _dispatches.Add(new GraphDispatch(_readbackPipeline, _frameStartViews));
-        }
+        _readback.Prepare(readbacks);
         ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches), profilers ?? []);
         foreach (Texture texture in _disposeAfterDispatch)
             texture.Dispose();
@@ -1692,6 +1685,12 @@ internal sealed partial class FramePipeline : IDisposable
             _worldInstances[world] = instances.Add(RenderKinds.World, world.World.Id, data: world, name: $"World {world.World.Id}");
         foreach (PlannedInstance planned in _planned)
             instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Camera, $"View {planned.Id}");
+        for (int i = 0; i < _readback.Requests.Count; i++)
+        {
+            ReadbackRequest request = _readback.Requests[i];
+            GraphImport import = request.Texture is { } texture ? GraphImport.Of(RenderKinds.ReadbackTexture, texture) : GraphImport.Of(RenderKinds.ReadbackBuffer, request.Buffer!);
+            instances.Add(RenderKinds.Readback, i, data: request, name: $"Readback {i}", imports: [import]);
+        }
         return instances;
     }
 
@@ -2281,7 +2280,6 @@ internal sealed partial class FramePipeline : IDisposable
         _shadowCameraPool.Clear();
         _providerProbe?.Dispose();
         _frameStart.Dispose();
-        _readbackPipeline.Dispose();
         _providerPipeline.Dispose();
         _shadowPipeline.Dispose();
         _shadowSampler?.Dispose();
@@ -2396,18 +2394,14 @@ internal sealed class ReadbackRequest
     public string? Error;
 }
 
-/// <summary>Copies the frame's readbacks into staging buffers, last in the execution.</summary>
-internal sealed class ReadbackPass(GraphicsDevice device, Action<RendererError> report) : IPass
+/// <summary>Makes the staging buffers of a frame's readbacks and drops the requests whose source was disposed.</summary>
+internal sealed class ReadbackStaging(GraphicsDevice device, Action<RendererError> report)
 {
-    private static readonly List<RenderResourceID> s_ids = new();
-    private readonly List<ReadbackRequest> _requests = new();
+    public readonly List<ReadbackRequest> Requests = new();
 
-    public string Name => "Graphite.Readback";
-
-    // Staging buffers are made now, and requests whose source was disposed fail
     public void Prepare(List<ReadbackRequest> requests)
     {
-        _requests.Clear();
+        Requests.Clear();
         for (int i = requests.Count - 1; i >= 0; i--)
         {
             ReadbackRequest request = requests[i];
@@ -2419,39 +2413,48 @@ internal sealed class ReadbackPass(GraphicsDevice device, Action<RendererError> 
             }
             uint bytes = request.Texture is { } texture ? request.Region.Width * request.Region.Height * request.Region.Depth * texture.Format.GetSizeInBytes() : request.Size;
             request.Staging ??= device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
-            _requests.Add(request);
+            Requests.Add(request);
         }
     }
+}
 
-    public void Setup(RenderContextBuilder builder)
+/// <summary>Copies the texture a readback instance binds into its staging buffer.</summary>
+internal sealed class ReadbackTexturePass : IInstancePass
+{
+    private TextureHandle _source;
+
+    public string Name => "Graphite.ReadbackTexture";
+
+    public GraphKind Kind => RenderKinds.Readback;
+
+    public bool IsEnabled(GraphInstance instance) => instance.Data is ReadbackRequest { Texture: not null };
+
+    public void Setup(InstanceContextBuilder builder) => _source = builder.DeclareImportSlotTexture(RenderKinds.ReadbackTexture, TextureState.TransferSrc);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
-        int id = 0;
-        foreach (ReadbackRequest request in _requests)
-        {
-            if (request.Buffer is { } buffer)
-                builder.DeclareImportedBuffer(Id(id++), buffer, BufferAccess.TransferRead);
-        }
+        ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
+        cmd.CopyTextureToBuffer(context.GetRenderTexture(_source).ColorTextures[0], request.Staging!, 0, request.Region);
     }
+}
 
-    public void Render(RenderContext context, CommandBuffer cmd)
-    {
-        foreach (ReadbackRequest request in _requests)
-        {
-            if (request.Texture is { } texture)
-                cmd.CopyTextureToBuffer(texture, request.Staging!, 0, request.Region);
-            else
-                cmd.CopyBuffer(request.Buffer!, request.Offset, request.Staging!, 0, request.Size);
-        }
-    }
+/// <summary>Copies the buffer a readback instance binds into its staging buffer.</summary>
+internal sealed class ReadbackBufferPass : IInstancePass
+{
+    private BufferHandle _source;
 
-    private static RenderResourceID Id(int index)
+    public string Name => "Graphite.ReadbackBuffer";
+
+    public GraphKind Kind => RenderKinds.Readback;
+
+    public bool IsEnabled(GraphInstance instance) => instance.Data is ReadbackRequest { Buffer: not null };
+
+    public void Setup(InstanceContextBuilder builder) => _source = builder.DeclareImportSlotBuffer(RenderKinds.ReadbackBuffer, BufferAccess.TransferRead);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
-        lock (s_ids)
-        {
-            while (s_ids.Count <= index)
-                s_ids.Add(RenderResourceID.Intern("Graphite.Readback" + s_ids.Count));
-            return s_ids[index];
-        }
+        ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
+        cmd.CopyBuffer(context.GetRenderBuffer(_source), request.Offset, request.Staging!, 0, request.Size);
     }
 }
 
