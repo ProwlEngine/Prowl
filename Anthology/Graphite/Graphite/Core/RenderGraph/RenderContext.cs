@@ -4,68 +4,46 @@ using System.Collections.Generic;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.
+/// Per instance context for passes. Resolves the instance's resources and those of its ancestors; states are shared by the whole execution.
 /// </summary>
-public sealed class RenderContext
+public class RenderContext
 {
-    private readonly GraphicsDevice _device;
-    private readonly ExecutionTask _task;
-    private readonly RenderGraph _graph;
-    private readonly IRenderView _view;
+    private readonly GraphExecution _execution;
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
-    private readonly Dictionary<Texture, TextureState> _textureStates = new();
-    private GraphTextureStates? _stateSnapshot;
-    private GraphTextureStates? _passStates;
-    private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
-    private readonly List<TextureBarrier> _barriers = new();
-    private readonly HashSet<RenderResourceID> _enteredTransients = new();
-    private readonly HashSet<Texture> _discardedTextures = new();
 
     private PassInfo? _currentPass;
     private ResourceAccess[]? _currentAccesses;
 
-    // The current pass's declared ids and texture outputs, so checking one is constant time however many it declares
     private readonly HashSet<RenderResourceID> _declared = new();
     private readonly HashSet<RenderResourceID> _textureOutputs = new();
     private string? _currentScopeName;
-    private BufferAccess _pendingBufferSrc;
-    private BufferAccess _pendingBufferDst;
 
-    private static long s_nextCommandBufferRentalId;
+    private bool[]? _enabled;
+    private Dictionary<RenderResourceID, RenderResourceID>? _aliases;
 
-    internal RenderContext(
-        GraphicsDevice device,
-        ExecutionTask task,
-        RenderGraph graph,
-        IRenderView view,
-        int viewIndex = 0)
+    internal RenderContext(GraphExecution execution, GraphInstance instance)
     {
-        ViewIndex = viewIndex;
-        _device = device;
-        _task = task;
-        _graph = graph;
-        _view = view;
+        _execution = execution;
+        GraphInstance = instance;
     }
 
-    internal int ViewIndex { get; }
-
     /// <summary>Execution this context records into.</summary>
-    public ExecutionTask Task => _task;
+    public ExecutionTask Task => _execution.Task;
 
-    internal Swapchain? PresentSwapchain => _graph.WritesViewTarget ? _view.Target?.OwningSwapchain : null;
+    internal GraphInstance GraphInstance { get; }
 
-    internal bool HasViewTarget => _view.Target != null;
+    internal GraphExecution Execution => _execution;
 
-    /// <summary>View being rendered.</summary>
-    public IRenderView View => _view;
+    internal GraphicsDevice Device => _execution.Device;
 
-    /// <summary>View being rendered as its concrete type.</summary>
-    public T ViewAs<T>() where T : IRenderView => (T)_view;
+    internal RenderGraph Graph => _execution.Graph;
 
-    internal IGraphProfiler? GraphProfiler => _task.Profilers.Graph;
+    internal bool HasInstanceTarget => GraphInstance.Target != null;
 
-    internal Prowl.Graphite.Debugging.ICaptureProfiler? CaptureHook => _task.Profilers.Capture;
+    internal ResourceAccess[]? CurrentAccesses => _currentAccesses;
+
+    internal GraphTextureStates? CurrentTextureStates => _execution.CurrentTextureStates;
 
     internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
@@ -84,37 +62,21 @@ public sealed class RenderContext
         }
     }
 
-    internal void TransitionForAccesses(ResourceAccess[] accesses)
+    internal bool IsTextureOutput(ResourceAccess[] accesses, RenderResourceID id)
     {
-        _barriers.Clear();
-        BufferAccess bufferSrc = BufferAccess.None;
-        BufferAccess bufferDst = BufferAccess.None;
+        if (ReferenceEquals(accesses, _currentAccesses))
+            return _textureOutputs.Contains(id);
 
-        for (int i = 0; i < accesses.Length; i++)
+        foreach (ResourceAccess access in accesses)
         {
-            ResourceAccess access = accesses[i];
-            if (access.IsTexture)
-            {
-                if (!access.IsOutput && (ReferenceEquals(accesses, _currentAccesses) ? _textureOutputs.Contains(access.Id) : HasTextureOutput(accesses, access.Id)))
-                    continue;
-
-                RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
-                bool fromUndefined = IsTransient(access.Id) && _enteredTransients.Add(access.Id);
-                foreach (Texture color in texture.ColorTextures)
-                    AddTextureTransition(color, access.Entry, fromUndefined);
-                if (texture.DepthTexture != null && access.DepthState(access.Entry) is TextureState depthTarget)
-                    AddTextureTransition(texture.DepthTexture, depthTarget, fromUndefined);
-            }
-            else
-            {
-                DeviceBuffer buffer = GetRenderBuffer(new BufferHandle(access.Id));
-                AddBufferAccess(buffer, access.BufferUsage, ref bufferSrc, ref bufferDst);
-            }
+            if (access.IsTexture && access.IsOutput && access.Id == id)
+                return true;
         }
-
-        _pendingBufferSrc = bufferSrc;
-        _pendingBufferDst = bufferDst;
+        return false;
     }
+
+    internal bool IsTransient(RenderResourceID id)
+        => Graph.Resources.TryGetValue(id, out GraphResource? resource) && resource is GraphTextureResource { Retained: false };
 
     internal void MarkAttachmentWrites(ResourceAccess[] accesses)
     {
@@ -135,101 +97,6 @@ public sealed class RenderContext
         }
     }
 
-    internal void RestoreRestingStates(string scopeName)
-    {
-        _barriers.Clear();
-        foreach ((Texture texture, TextureState state) in _textureStates)
-        {
-            if (!_discardedTextures.Contains(texture))
-                _barriers.Add(new TextureBarrier(texture, state, null));
-        }
-
-        _textureStates.Clear();
-        _discardedTextures.Clear();
-        _enteredTransients.Clear();
-        _stateSnapshot = null;
-        _pendingBufferSrc = BufferAccess.None;
-        _pendingBufferDst = BufferAccess.None;
-        if (_barriers.Count == 0)
-            return;
-
-        CommandBuffer cb = BeginCommandBuffer($"{scopeName} Barriers");
-        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), BufferAccess.None, BufferAccess.None);
-        _barriers.Clear();
-        EndCommandBuffer(cb);
-    }
-
-    private static bool HasTextureOutput(ResourceAccess[] accesses, RenderResourceID id)
-    {
-        foreach (ResourceAccess access in accesses)
-        {
-            if (access.IsTexture && access.IsOutput && access.Id == id)
-                return true;
-        }
-        return false;
-    }
-
-    private bool IsTransient(RenderResourceID id)
-        => _graph.Resources.TryGetValue(id, out GraphResource? resource) && resource is GraphTextureResource { HistoryDepth: 0 };
-
-    private void AddTextureTransition(Texture texture, TextureState target, bool fromUndefined)
-    {
-        TextureState? current = null;
-        if (fromUndefined)
-            _discardedTextures.Add(texture);
-        else if (_textureStates.TryGetValue(texture, out TextureState state))
-            current = state;
-
-        bool writes = target is TextureState.Storage or TextureState.Attachment or TextureState.TransferDst;
-        if (current == target && !writes)
-            return;
-
-        _barriers.Add(new TextureBarrier(texture, current, target, fromUndefined));
-    }
-
-    private void CommitBarrierStates()
-    {
-        foreach (TextureBarrier barrier in _barriers)
-        {
-            if (barrier.After is TextureState after)
-                _textureStates[barrier.Texture] = after;
-            else
-                _textureStates.Remove(barrier.Texture);
-        }
-        if (_barriers.Count > 0)
-            _stateSnapshot = null;
-        _barriers.Clear();
-    }
-
-    private void AddBufferAccess(DeviceBuffer buffer, BufferAccess access, ref BufferAccess src, ref BufferAccess dst)
-    {
-        if (!_bufferSyncs.TryGetValue(buffer, out BufferSync? sync))
-        {
-            sync = new BufferSync();
-            _bufferSyncs[buffer] = sync;
-        }
-
-        BufferAccess writes = access & BufferAccess.AllWrites;
-        BufferAccess reads = access & BufferAccess.AllReads;
-        if (writes != BufferAccess.None)
-        {
-            src |= sync.LastWrite | sync.ReadsSinceWrite;
-            dst |= access;
-            sync.LastWrite = writes;
-            sync.ReadsSinceWrite = reads;
-            sync.Visible = access;
-            return;
-        }
-
-        if (sync.LastWrite != BufferAccess.None && (reads & ~sync.Visible) != BufferAccess.None)
-        {
-            src |= sync.LastWrite;
-            dst |= reads;
-            sync.Visible |= reads;
-        }
-        sync.ReadsSinceWrite |= reads;
-    }
-
     private void CheckDeclared(RenderResourceID id)
     {
         if (_currentAccesses == null || _declared.Contains(id))
@@ -239,119 +106,13 @@ public sealed class RenderContext
             $"Pass '{_currentScopeName}' uses resource '{RenderResourceID.ToString(id)}' without declaring it in Setup.");
     }
 
-    private sealed class BufferSync
-    {
-        public BufferAccess LastWrite = BufferAccess.AllWrites;
-        public BufferAccess ReadsSinceWrite = BufferAccess.AllReads;
-        public BufferAccess Visible = BufferAccess.None;
-    }
+    internal CommandBuffer BeginCommandBuffer(string name) => _execution.BeginCommandBuffer(name, _currentPass);
 
-    internal GraphicsDevice Device => _device;
+    internal CommandBuffer BeginPassCommandBuffer(string passName) => _execution.BeginPassCommandBuffer(this, passName, _currentPass);
 
-    internal GraphTextureStates? CurrentTextureStates => _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
+    internal void EndCommandBuffer(CommandBuffer cmd) => _execution.EndCommandBuffer(cmd);
 
-    internal CommandBuffer BeginCommandBuffer(string name)
-    {
-        CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
-
-        cb.Execution = _task;
-        cb.Pass = _currentPass;
-        cb.PassSink = null;
-        cb.ResetStats();
-        cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
-        if (!string.IsNullOrEmpty(name))
-            cb.Name = name;
-
-        cb.Begin();
-        cb.GraphStates = CurrentTextureStates;
-        return cb;
-    }
-
-    internal CommandBuffer BeginPassCommandBuffer(string passName)
-    {
-        CommandBuffer cb = BeginCommandBuffer(passName);
-        if (_task.Profilers.CommandStream is { } profiler && cb.Pass is { } pass)
-            cb.PassSink = profiler.BeginPassCommands(in pass);
-
-        if (_barriers.Count > 0 || _pendingBufferSrc != BufferAccess.None)
-        {
-            uint emitted = cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), _pendingBufferSrc, _pendingBufferDst);
-            cb.AddBarrierStats(emitted);
-            _pendingBufferSrc = BufferAccess.None;
-            _pendingBufferDst = BufferAccess.None;
-            CommitBarrierStates();
-        }
-
-        cb.GraphStates = PassTextureStates();
-        _passStates = cb.GraphStates;
-        return cb;
-    }
-
-    private GraphTextureStates? PassTextureStates()
-    {
-        Dictionary<Texture, TextureState>? allowed = null;
-        if (_currentAccesses != null && HasSeveralStates(_currentAccesses))
-        {
-            foreach (ResourceAccess access in _currentAccesses)
-            {
-                if (!access.IsTexture || access.Id == GraphViewTargetResource.ViewTargetId)
-                    continue;
-
-                RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
-                foreach (Texture color in texture.ColorTextures)
-                    Allow(ref allowed, color, access.TextureUsage);
-                if (texture.DepthTexture != null && access.DepthAllowed != 0)
-                    Allow(ref allowed, texture.DepthTexture, access.DepthAllowed);
-            }
-        }
-
-        if (allowed == null)
-            return CurrentTextureStates;
-
-        foreach ((Texture texture, TextureState states) in allowed)
-        {
-            if ((states & (states - 1)) == 0)
-                allowed.Remove(texture);
-        }
-
-        return allowed.Count == 0 ? CurrentTextureStates : new GraphTextureStates(_textureStates, allowed);
-    }
-
-    private static bool HasSeveralStates(ResourceAccess[] accesses)
-    {
-        for (int i = 0; i < accesses.Length; i++)
-        {
-            ResourceAccess access = accesses[i];
-            if (!access.IsTexture)
-                continue;
-            if (access.TextureUsage != access.Entry || (access.DepthAllowed & (access.DepthAllowed - 1)) != 0)
-                return true;
-            for (int j = 0; j < i; j++)
-            {
-                if (accesses[j].IsTexture && accesses[j].Id == access.Id && accesses[j].TextureUsage != access.TextureUsage)
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    private static void Allow(ref Dictionary<Texture, TextureState>? allowed, Texture texture, TextureState states)
-    {
-        allowed ??= new Dictionary<Texture, TextureState>();
-        allowed[texture] = allowed.TryGetValue(texture, out TextureState existing) ? existing | states : states;
-    }
-
-    internal void AdoptPassStates(CommandBuffer cmd)
-    {
-        GraphTextureStates? final = cmd.GraphStates;
-        GraphTextureStates? begun = _passStates;
-        _passStates = null;
-        if (final == null || ReferenceEquals(final, begun))
-            return;
-
-        final.CopyTo(_textureStates);
-        _stateSnapshot = null;
-    }
+    internal void EndCommandBufferAhead(CommandBuffer cmd, CommandBuffer before) => _execution.EndCommandBufferAhead(cmd, before);
 
     internal void BindDeclaredTarget(CommandBuffer cmd, ResourceAccess[] accesses)
     {
@@ -375,22 +136,126 @@ public sealed class RenderContext
         cmd.SetFramebuffer(GetRenderTexture(new TextureHandle(target)).Framebuffer, GetTargetOps(target));
     }
 
-    internal void EndCommandBuffer(CommandBuffer cmd)
-    {
-        if (cmd.PassSink is { } sink)
-        {
-            cmd.PassSink = null;
-            sink.End();
-        }
-
-        _task.SubmitRecorded(cmd);
-    }
-
-    internal void EndCommandBufferAhead(CommandBuffer cmd, CommandBuffer before) => _task.SubmitRecordedAhead(cmd, before);
-
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>
-    public DeviceBufferRange AllocateTransient(uint sizeInBytes) => _task.AllocateTransientInternal(sizeInBytes);
+    public DeviceBufferRange AllocateTransient(uint sizeInBytes) => Task.AllocateTransientInternal(sizeInBytes);
+
+    private RenderContext OwnerOf(RenderResourceID id)
+    {
+        if (!Graph.TryGetOwner(id, out GraphKind owner) || owner == GraphInstance.Kind)
+            return this;
+
+        for (GraphInstance? ancestor = GraphInstance.Parent; ancestor != null; ancestor = ancestor.Parent)
+        {
+            if (ancestor.Kind == owner)
+                return _execution.ContextOf(ancestor);
+        }
+
+        throw new InvalidOperationException(
+            $"Instance '{GraphInstance.Name}' uses resource '{RenderResourceID.ToString(id)}', which kind '{owner.Name}' owns, but no instance above it has that kind.");
+    }
+
+    private RenderContext Resolve(ref RenderResourceID id)
+    {
+        RenderContext context = OwnerOf(id);
+        while (context._aliases != null && context._aliases.TryGetValue(id, out RenderResourceID source))
+        {
+            id = source;
+            context = context.OwnerOf(source);
+        }
+        return context;
+    }
+
+    internal void Prepare()
+    {
+        IReadOnlyList<RenderGraph.PassNode> nodes = Graph.PassesOf(GraphInstance.Kind);
+        _enabled = new bool[nodes.Count];
+        for (int i = 0; i < nodes.Count; i++)
+            _enabled[i] = nodes[i].Pass switch
+            {
+                IExecutionPass execution => execution.IsEnabled(),
+                IInstancePass instance => instance.IsEnabled(GraphInstance),
+                _ => true,
+            };
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (_enabled[i])
+                continue;
+
+            foreach (PassthroughLink link in nodes[i].Passthroughs)
+            {
+                if (HasEnabledWriter(link.Output))
+                    continue;
+
+                _aliases ??= new Dictionary<RenderResourceID, RenderResourceID>();
+                _aliases.TryAdd(link.Output, link.Input);
+            }
+        }
+    }
+
+    internal bool IsEnabled(RenderGraph.PassNode node) => _enabled![Graph.PositionOf(node.Index)];
+
+    private bool HasEnabledWriter(RenderResourceID id)
+    {
+        foreach (int writer in Graph.WritersOf(id))
+        {
+            if (_enabled![Graph.PositionOf(writer)])
+                return true;
+        }
+        return false;
+    }
+
+    internal void ValidateReads(IReadOnlyList<RenderGraph.PassNode> nodes)
+    {
+        foreach (RenderGraph.PassNode node in nodes)
+        {
+            if (!IsEnabled(node))
+                continue;
+
+            foreach (ResourceAccess access in node.Accesses)
+            {
+                if (!access.IsOutput || Graph.Resources[access.Id] is GraphTextureSlotResource or GraphBufferSlotResource)
+                    CheckRead(node, access.Id);
+            }
+        }
+    }
+
+    private void CheckRead(RenderGraph.PassNode node, RenderResourceID read)
+    {
+        RenderResourceID id = read;
+        RenderContext owner = OwnerOf(id);
+        while (true)
+        {
+            if (!Graph.TryGetOwner(id, out _))
+                return;
+
+            if (Graph.Resources[id] is GraphTextureSlotResource or GraphBufferSlotResource)
+            {
+                if (!owner.GraphInstance.TryGetImport(id, out _))
+                    throw new RenderGraphException(
+                        $"Pass '{node.Pass.Name}' in instance '{GraphInstance.Name}' reads import slot '{RenderResourceID.ToString(id)}', which instance '{owner.GraphInstance.Name}' does not bind.", node.Pass);
+                return;
+            }
+
+            if (owner.HasEnabledWriter(id))
+                return;
+
+            if (owner._aliases != null && owner._aliases.TryGetValue(id, out RenderResourceID source))
+            {
+                id = source;
+                owner = owner.OwnerOf(source);
+                continue;
+            }
+
+            List<string> disabled = new();
+            foreach (int writer in Graph.WritersOf(id))
+                disabled.Add($"'{Graph.NodeAt(writer).Pass.Name}'");
+            throw new RenderGraphException(
+                $"Pass '{node.Pass.Name}' in instance '{GraphInstance.Name}' reads resource '{RenderResourceID.ToString(read)}', but every pass that writes " +
+                $"'{RenderResourceID.ToString(id)}' is disabled in instance '{owner.GraphInstance.Name}' ({string.Join(", ", disabled)}) and none passes another resource through.", node.Pass);
+        }
+    }
 
     /// <summary>Resolves a declared texture handle to its allocated render target.</summary>
     /// <param name="handle">Handle from the builder.</param>
@@ -407,64 +272,79 @@ public sealed class RenderContext
             throw new ArgumentException("Cannot resolve a default texture handle.", nameof(handle));
 
         CheckDeclared(handle.Id);
+        RenderResourceID id = handle.Id;
+        return Resolve(ref id).ResolveTexture(id, framesAgo);
+    }
 
-        if (framesAgo == 0 && _resolved.TryGetValue(handle.Id, out RenderTexture? existing))
+    private RenderTexture ResolveTexture(RenderResourceID id, int framesAgo)
+    {
+        if (framesAgo == 0 && _resolved.TryGetValue(id, out RenderTexture? existing))
             return existing;
 
-        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
-            throw new InvalidOperationException($"Texture handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
+        if (!Graph.Resources.TryGetValue(id, out GraphResource? resource))
+            throw new InvalidOperationException($"Texture handle '{RenderResourceID.ToString(id)}' was not declared by any pass in this graph.");
 
         switch (resource)
         {
-            case GraphViewTargetResource viewTargetResource:
+            case GraphInstanceTargetResource targetResource:
                 if (framesAgo != 0)
-                    throw new ArgumentOutOfRangeException(nameof(framesAgo), "The view target has no history.");
-                Framebuffer viewTarget = _view.Target
-                    ?? throw new InvalidOperationException($"A pass resolved the view target, but view '{_view.Name}' has none.");
-                if (viewTargetResource.DepthFormat is PixelFormat requiredDepth)
-                    viewTarget.OwningSwapchain?.RequireDepth(requiredDepth);
-                if (viewTargetResource.DepthFormat != null && viewTarget.DepthTarget == null)
-                    throw new InvalidOperationException($"A pass declared a view target depth attachment, but view '{_view.Name}' has a Target without one.");
-                RenderTexture target = new(viewTarget);
-                _resolved[handle.Id] = target;
+                    throw new ArgumentOutOfRangeException(nameof(framesAgo), "The instance target has no history.");
+                Framebuffer instanceTarget = GraphInstance.Target
+                    ?? throw new InvalidOperationException($"A pass resolved the instance target, but instance '{GraphInstance.Name}' has none.");
+                if (targetResource.DepthFormat is PixelFormat requiredDepth)
+                    instanceTarget.OwningSwapchain?.RequireDepth(requiredDepth);
+                if (targetResource.DepthFormat != null && instanceTarget.DepthTarget == null)
+                    throw new InvalidOperationException($"A pass declared an instance target depth attachment, but instance '{GraphInstance.Name}' has a Target without one.");
+                RenderTexture target = new(instanceTarget);
+                _resolved[id] = target;
                 return target;
 
             case GraphImportedTextureResource imported:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), "An imported texture has no history.");
-                _resolved[handle.Id] = imported.Texture;
+                _resolved[id] = imported.Texture;
                 return imported.Texture;
 
-            case GraphTextureResource { HistoryDepth: 0 } textureResource:
+            case GraphTextureSlotResource:
                 if (framesAgo != 0)
-                    throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Resource '{RenderResourceID.ToString(handle.Id)}' was not declared with history.");
-                RenderTexture rented = _device.RentGraphTransientRenderTexture(_task, ToTransientDesc(textureResource));
-                _resolved[handle.Id] = rented;
+                    throw new ArgumentOutOfRangeException(nameof(framesAgo), "An import slot has no history.");
+                RenderTexture slotted = GraphInstance.TryGetImport(id, out GraphImport slotTexture) && slotTexture.Texture != null
+                    ? slotTexture.Texture
+                    : throw new InvalidOperationException($"Instance '{GraphInstance.Name}' binds no texture to import slot '{RenderResourceID.ToString(id)}'.");
+                _resolved[id] = slotted;
+                return slotted;
+
+            case GraphTextureResource { Retained: false } textureResource:
+                if (framesAgo != 0)
+                    throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Resource '{RenderResourceID.ToString(id)}' was not declared with history.");
+                RenderTexture rented = Device.RentGraphTransientRenderTexture(Task, textureResource.Allocation(GraphInstance));
+                _resolved[id] = rented;
                 return rented;
 
             case GraphTextureResource historyResource:
-                RenderTexture copy = historyResource.ResolveHistory(_device, _view.ViewId, _task.Id, framesAgo, ToTransientDesc(historyResource));
+                RenderTexture copy = historyResource.ResolveHistory(Device, GraphInstance.Key, Task.Id, framesAgo, historyResource.Allocation(GraphInstance));
                 if (framesAgo == 0)
-                    _resolved[handle.Id] = copy;
+                    _resolved[id] = copy;
                 return copy;
 
             default:
-                throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a texture. Resolve it with GetRenderBuffer.");
+                throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' is not a texture. Resolve it with GetRenderBuffer.");
         }
     }
 
-    /// <summary>True once this view's history ring holds an earlier execution. False on a view's first execution and after a resize reallocates its ring.</summary>
+    /// <summary>True once the history ring holds an earlier execution. False on an instance's first execution and after a resize reallocates its ring.</summary>
     /// <param name="handle">Handle from the builder.</param>
     public bool IsHistoryValid(TextureHandle handle)
     {
         if (!handle.IsValid)
             throw new ArgumentException("Cannot resolve a default texture handle.", nameof(handle));
 
-        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
+        if (!Graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
             throw new InvalidOperationException($"Texture handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
 
+        RenderContext owner = OwnerOf(handle.Id);
         return resource is GraphTextureResource texture
-            && texture.IsHistoryValid(_view.ViewId, _task.Id, ToTransientDesc(texture));
+            && texture.IsHistoryValid(owner.GraphInstance.Key, Task.Id, texture.Allocation(owner.GraphInstance));
     }
 
     /// <summary>Resolves a declared buffer handle to its allocated device buffer.</summary>
@@ -482,55 +362,71 @@ public sealed class RenderContext
             throw new ArgumentException("Cannot resolve a default buffer handle.", nameof(handle));
 
         CheckDeclared(handle.Id);
+        RenderResourceID id = handle.Id;
+        return Resolve(ref id).ResolveBuffer(id, framesAgo);
+    }
 
-        if (framesAgo == 0 && _resolvedBuffers.TryGetValue(handle.Id, out DeviceBuffer? existing))
+    private DeviceBuffer ResolveBuffer(RenderResourceID id, int framesAgo)
+    {
+        if (framesAgo == 0 && _resolvedBuffers.TryGetValue(id, out DeviceBuffer? existing))
             return existing;
 
-        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
-            throw new InvalidOperationException($"Buffer handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
+        if (!Graph.Resources.TryGetValue(id, out GraphResource? resource))
+            throw new InvalidOperationException($"Buffer handle '{RenderResourceID.ToString(id)}' was not declared by any pass in this graph.");
 
         if (resource is GraphImportedBufferResource imported)
         {
             if (framesAgo != 0)
-                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Imported buffer '{RenderResourceID.ToString(handle.Id)}' has no history.");
+                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Imported buffer '{RenderResourceID.ToString(id)}' has no history.");
             return imported.Buffer;
         }
 
-        if (resource is not GraphBufferResource bufferResource)
-            throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a buffer. Resolve it with GetRenderTexture.");
-
-        if (bufferResource.HistoryDepth == 0)
+        if (resource is GraphBufferSlotResource)
         {
             if (framesAgo != 0)
-                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Resource '{RenderResourceID.ToString(handle.Id)}' was not declared with history.");
-            DeviceBuffer rented = _device.RentTransientBuffer(_task, bufferResource.Description.ToBufferDescription());
-            _resolvedBuffers[handle.Id] = rented;
+                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Import slot '{RenderResourceID.ToString(id)}' has no history.");
+            return GraphInstance.TryGetImport(id, out GraphImport slotBuffer) && slotBuffer.Buffer != null
+                ? slotBuffer.Buffer
+                : throw new InvalidOperationException($"Instance '{GraphInstance.Name}' binds no buffer to import slot '{RenderResourceID.ToString(id)}'.");
+        }
+
+        if (resource is not GraphBufferResource bufferResource)
+            throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' is not a buffer. Resolve it with GetRenderTexture.");
+
+        if (!bufferResource.Retained)
+        {
+            if (framesAgo != 0)
+                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Resource '{RenderResourceID.ToString(id)}' was not declared with history.");
+            DeviceBuffer rented = Device.RentTransientBuffer(Task, bufferResource.Description.ToBufferDescription());
+            _resolvedBuffers[id] = rented;
             return rented;
         }
 
-        DeviceBuffer copy = bufferResource.ResolveHistory(_device, _view.ViewId, _task.Id, framesAgo, bufferResource.Description.ToBufferDescription());
+        DeviceBuffer copy = bufferResource.ResolveHistory(Device, GraphInstance.Key, Task.Id, framesAgo, bufferResource.Description.ToBufferDescription());
+        _execution.RecordResizes();
         if (framesAgo == 0)
-            _resolvedBuffers[handle.Id] = copy;
+            _resolvedBuffers[id] = copy;
         return copy;
     }
 
-    /// <summary>True once this view's history ring holds an earlier execution. False on a view's first execution and after a resize reallocates its ring.</summary>
+    /// <summary>True once the history ring holds an earlier execution. False on an instance's first execution and after a resize reallocates its ring.</summary>
     /// <param name="handle">Handle from the builder.</param>
     public bool IsHistoryValid(BufferHandle handle)
     {
         if (!handle.IsValid)
             throw new ArgumentException("Cannot resolve a default buffer handle.", nameof(handle));
 
-        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
+        if (!Graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
             throw new InvalidOperationException($"Buffer handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
 
+        RenderContext owner = OwnerOf(handle.Id);
         return resource is GraphBufferResource buffer
-            && buffer.IsHistoryValid(_view.ViewId, _task.Id, buffer.Description.ToBufferDescription());
+            && buffer.IsHistoryValid(owner.GraphInstance.Key, Task.Id, buffer.Description.ToBufferDescription());
     }
 
     internal bool IsTextureResource(RenderResourceID id)
-        => _graph.Resources.TryGetValue(id, out GraphResource? resource)
-            && resource is GraphTextureResource or GraphImportedTextureResource or GraphViewTargetResource;
+        => Graph.Resources.TryGetValue(id, out GraphResource? resource)
+            && resource is GraphTextureResource or GraphImportedTextureResource or GraphTextureSlotResource or GraphInstanceTargetResource;
 
     internal TargetLoadStoreOps GetTargetOps(RenderResourceID id)
     {
@@ -547,38 +443,33 @@ public sealed class RenderContext
                         return texture.Ops;
                     case GraphImportedTextureResource imported:
                         return imported.Ops;
-                    case GraphViewTargetResource viewTarget:
-                        return viewTarget.Ops;
+                    case GraphTextureSlotResource slot:
+                        return slot.Ops;
+                    case GraphInstanceTargetResource instanceTarget:
+                        return instanceTarget.Ops;
                 }
             }
         }
 
-        if (!_graph.Resources.TryGetValue(id, out GraphResource? resource))
+        if (!Graph.Resources.TryGetValue(id, out GraphResource? resource))
             throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' was not declared by any pass in this graph.");
 
         return resource switch
         {
             GraphTextureResource texture => texture.Ops,
             GraphImportedTextureResource imported => imported.Ops,
-            GraphViewTargetResource viewTarget => viewTarget.Ops,
+            GraphTextureSlotResource slot => slot.Ops,
+            GraphInstanceTargetResource instanceTarget => instanceTarget.Ops,
             _ => throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' is not a render target.")
         };
     }
+}
 
-    private RenderTextureDescription ToTransientDesc(GraphTextureResource resource)
-    {
-        GraphTextureDesc desc = resource.Description;
-        (int width, int height) = desc.Resolve(_view.PixelWidth, _view.PixelHeight);
-        PixelFormat[] colors = desc.ColorFormats ?? Array.Empty<PixelFormat>();
-        if (desc.EnableDepth && desc.DepthFormat is PixelFormat depthFormat)
-            return new RenderTextureDescription((uint)width, (uint)height, colors, depthFormat, desc.SampleCount, resource.Storage) { ArrayLayers = desc.ArrayLayers };
+/// <summary>The context an instance pass gets. Adds the instance being run to what an execution pass has.</summary>
+public sealed class InstanceContext : RenderContext
+{
+    internal InstanceContext(GraphExecution execution, GraphInstance instance) : base(execution, instance) { }
 
-        return new RenderTextureDescription(
-            (uint)width,
-            (uint)height,
-            colors,
-            desc.EnableDepth,
-            desc.SampleCount,
-            resource.Storage) { ArrayLayers = desc.ArrayLayers };
-    }
+    /// <summary>Instance being run.</summary>
+    public GraphInstance Instance => GraphInstance;
 }
