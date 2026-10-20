@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Prowl.Graphite;
 
@@ -13,6 +14,8 @@ public sealed class RenderGraph : IDisposable
         public readonly IPass Pass;
 
         internal readonly ResourceAccess[] Accesses;
+
+        internal readonly PassthroughLink[] Passthroughs;
 
         internal readonly int Index;
 
@@ -32,11 +35,12 @@ public sealed class RenderGraph : IDisposable
 
         internal readonly PassResourceAccess[] PublicAccesses;
 
-        internal PassNode(IPass pass, int index, ResourceAccess[] accesses)
+        internal PassNode(IPass pass, int index, ResourceAccess[] accesses, PassthroughLink[] passthroughs)
         {
             Pass = pass;
             Index = index;
             Accesses = accesses;
+            Passthroughs = passthroughs;
             PublicAccesses = ToPublic(accesses);
         }
 
@@ -65,6 +69,8 @@ public sealed class RenderGraph : IDisposable
     private readonly Dictionary<GraphKind, PassNode[]> _byKind;
     private readonly Dictionary<GraphKind, GraphKind> _parents;
     private readonly Dictionary<RenderResourceID, GraphKind> _owners;
+    private readonly Dictionary<RenderResourceID, int[]> _writers;
+    private readonly Dictionary<RenderResourceID, (int Node, RenderResourceID Input)[]> _passthroughs;
 
     /// <summary>Debug name reported to profilers of every execution of this graph.</summary>
     public string Name { get; }
@@ -86,7 +92,9 @@ public sealed class RenderGraph : IDisposable
         Dictionary<GraphKind, PassNode[]> byKind,
         Dictionary<GraphKind, GraphKind> parents,
         Dictionary<RenderResourceID, GraphResource> resources,
-        Dictionary<RenderResourceID, GraphKind> owners)
+        Dictionary<RenderResourceID, GraphKind> owners,
+        Dictionary<RenderResourceID, int[]> writers,
+        Dictionary<RenderResourceID, (int Node, RenderResourceID Input)[]> passthroughs)
     {
         Name = name;
         _nodes = nodes;
@@ -96,6 +104,8 @@ public sealed class RenderGraph : IDisposable
         _parents = parents;
         Resources = resources;
         _owners = owners;
+        _writers = writers;
+        _passthroughs = passthroughs;
         WritesInstanceTarget = resources.ContainsKey(GraphInstanceTargetResource.InstanceTargetId);
 
         List<GraphKind> kinds = [GraphKind.Root];
@@ -125,6 +135,11 @@ public sealed class RenderGraph : IDisposable
     internal PassNode NodeAt(int index) => _nodes[index];
 
     internal int PositionOf(int nodeIndex) => _positions[nodeIndex];
+
+    internal int[] WritersOf(RenderResourceID id) => _writers.TryGetValue(id, out int[]? writers) ? writers : [];
+
+    internal (int Node, RenderResourceID Input)[] PassthroughsTo(RenderResourceID id)
+        => _passthroughs.TryGetValue(id, out (int Node, RenderResourceID Input)[]? links) ? links : [];
 
     /// <summary>Disposes physical resources owned by any history resource here.</summary>
     public void Dispose()
@@ -169,11 +184,12 @@ public sealed class RenderGraph : IDisposable
             }
 
             accesses[i] = builder.Accesses.ToArray();
-            nodes[i] = new PassNode(pass, i, accesses[i]);
+            nodes[i] = new PassNode(pass, i, accesses[i], builder.Passthroughs.ToArray());
         }
 
         Dictionary<RenderResourceID, GraphKind> owners = AssignOwners(nodes, resources, parents);
         ValidateInputs(nodes, resources);
+        ValidatePassthroughs(nodes, resources);
         ApplyStorageUsage(nodes, resources);
 
         int[] order = GraphSorter.Sort(passes, accesses, resources);
@@ -196,6 +212,28 @@ public sealed class RenderGraph : IDisposable
                 positions[list[i].Index] = i;
         }
 
+        var writers = new Dictionary<RenderResourceID, List<int>>();
+        var links = new Dictionary<RenderResourceID, List<(int, RenderResourceID)>>();
+        foreach (PassNode node in nodes)
+        {
+            foreach (ResourceAccess access in node.Accesses)
+            {
+                if (!access.IsOutput)
+                    continue;
+                if (!writers.TryGetValue(access.Id, out List<int>? list))
+                    writers[access.Id] = list = [];
+                if (!list.Contains(node.Index))
+                    list.Add(node.Index);
+            }
+
+            foreach (PassthroughLink link in node.Passthroughs)
+            {
+                if (!links.TryGetValue(link.Output, out List<(int, RenderResourceID)>? list))
+                    links[link.Output] = list = [];
+                list.Add((node.Index, link.Input));
+            }
+        }
+
         return new RenderGraph(
             name,
             nodes,
@@ -204,7 +242,9 @@ public sealed class RenderGraph : IDisposable
             byKind,
             parents,
             resources,
-            owners);
+            owners,
+            writers.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray()),
+            links.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray()));
     }
 
     private static Dictionary<GraphKind, GraphKind> ValidateScopes(IReadOnlyList<GraphScope>? scopes)
@@ -419,5 +459,72 @@ public sealed class RenderGraph : IDisposable
                     "outputs it and it is not imported.", node.Pass);
             }
         }
+    }
+
+    private static void ValidatePassthroughs(PassNode[] nodes, Dictionary<RenderResourceID, GraphResource> resources)
+    {
+        var inputsOf = new Dictionary<RenderResourceID, List<RenderResourceID>>();
+        foreach (PassNode node in nodes)
+        {
+            foreach (PassthroughLink link in node.Passthroughs)
+            {
+                string pair = $"'{RenderResourceID.ToString(link.Input)}' to '{RenderResourceID.ToString(link.Output)}'";
+                if (!Reads(node, link.Input))
+                    throw new RenderGraphException($"Pass '{node.Pass.Name}' passes {pair} through but does not read the input.", node.Pass);
+                if (!Writes(node, link.Output))
+                    throw new RenderGraphException($"Pass '{node.Pass.Name}' passes {pair} through but does not write the output.", node.Pass);
+
+                GraphResource input = resources[link.Input], output = resources[link.Output];
+                bool matches = link.IsTexture
+                    ? input is GraphTextureResource { Retained: false } a && output is GraphTextureResource { Retained: false } b && SameDeclaration(a, b)
+                    : input is GraphBufferResource { Retained: false } c && output is GraphBufferResource { Retained: false } d && SameDeclaration(c, d);
+                if (!matches)
+                    throw new RenderGraphException(
+                        $"Pass '{node.Pass.Name}' passes {pair} through, which needs two transient {(link.IsTexture ? "textures" : "buffers")} with the same description.", node.Pass);
+
+                if (!inputsOf.TryGetValue(link.Output, out List<RenderResourceID>? list))
+                    inputsOf[link.Output] = list = [];
+                list.Add(link.Input);
+            }
+        }
+
+        foreach (RenderResourceID start in inputsOf.Keys)
+        {
+            if (Loops(start, start, inputsOf, new HashSet<RenderResourceID>()))
+                throw new RenderGraphException($"Passthroughs loop back to resource '{RenderResourceID.ToString(start)}'.", null);
+        }
+    }
+
+    private static bool Loops(RenderResourceID start, RenderResourceID at, Dictionary<RenderResourceID, List<RenderResourceID>> inputsOf, HashSet<RenderResourceID> seen)
+    {
+        if (!inputsOf.TryGetValue(at, out List<RenderResourceID>? inputs))
+            return false;
+
+        foreach (RenderResourceID input in inputs)
+        {
+            if (input == start || (seen.Add(input) && Loops(start, input, inputsOf, seen)))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool Reads(in PassNode node, RenderResourceID id)
+    {
+        foreach (ResourceAccess access in node.Accesses)
+        {
+            if (!access.IsOutput && access.Id == id)
+                return true;
+        }
+        return false;
+    }
+
+    private static bool Writes(in PassNode node, RenderResourceID id)
+    {
+        foreach (ResourceAccess access in node.Accesses)
+        {
+            if (access.IsOutput && access.Id == id)
+                return true;
+        }
+        return false;
     }
 }
