@@ -217,6 +217,8 @@ internal sealed class GraphCapture
             switch (resource)
             {
                 case GraphTextureResource transient:
+                    if (transient.Persistent)
+                        origin = GraphResourceOrigin.Persistent;
                     textureDesc = transient.Description;
                     historyDepth = transient.HistoryDepth;
                     historySlot = transient.HistorySlot(_context.GraphInstance.Key);
@@ -244,6 +246,8 @@ internal sealed class GraphCapture
 
             if (resource is GraphBufferResource bufferResource)
             {
+                if (bufferResource.Persistent)
+                    origin = GraphResourceOrigin.Persistent;
                 bufferDesc = bufferResource.Description;
                 historyDepth = bufferResource.HistoryDepth;
                 historySlot = bufferResource.HistorySlot(_context.GraphInstance.Key);

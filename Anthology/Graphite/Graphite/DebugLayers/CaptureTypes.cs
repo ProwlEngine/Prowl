@@ -20,6 +20,7 @@ public enum GraphResourceOrigin : byte
     Transient,
     Imported,
     InstanceTarget,
+    Persistent,
 }
 
 /// <summary>
