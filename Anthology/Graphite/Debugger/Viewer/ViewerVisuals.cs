@@ -294,7 +294,7 @@ internal sealed partial class ProfilerView
         int channels = Texels.Channels(region.Format);
         string value = Texels.IsDepth(region.Format)
             ? $"Depth {Style.F(v.X, "0.000000")}"
-            : $"{region.Format} ({string.Join(", ", new[] { v.X, v.Y, v.Z, v.W }.Take(channels).Select(c => Style.F(c, "0.####")))})";
+            : $"{Describe.Format(region.Format)} ({string.Join(", ", new[] { v.X, v.Y, v.Z, v.W }.Take(channels).Select(c => Style.F(c, "0.####")))})";
         return where + value;
     }
 

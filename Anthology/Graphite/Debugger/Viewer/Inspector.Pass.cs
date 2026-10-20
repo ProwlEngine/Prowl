@@ -53,8 +53,8 @@ internal sealed partial class ProfilerView
 
     private static string Format(RecordedResource? resource, RecordedGraphResource? graph)
     {
-        if (resource?.Texture is { } t) return t.Format.ToString();
-        if (graph?.Texture is { } g) return g.ColorFormats is { Length: > 0 } c ? c[0].ToString() : g.DepthFormat?.ToString() ?? "-";
+        if (resource?.Texture is { } t) return Describe.Format(t.Format);
+        if (graph?.Texture is { } g) return g.ColorFormats is { Length: > 0 } c ? Describe.Format(c[0]) : g.DepthFormat is { } d ? Describe.Format(d) : "-";
         if (resource?.Buffer is { } b) return b.Usage.ToString();
         return "-";
     }

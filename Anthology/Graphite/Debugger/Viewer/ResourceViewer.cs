@@ -123,11 +123,11 @@ internal sealed partial class ProfilerView
                     (a.IsOutput ? writers : readers).Add(p.Name);
             RecordedAccess? here = pass.Accesses.FirstOrDefault(a => a.Resource == name);
 
-            data.Summary = t is { } d ? $"{d.Format} / {d.Width}x{d.Height}{(d.ArrayLayers > 1 ? "x" + d.ArrayLayers : "")} / {Style.Bytes(SizeBytes(res))}" : name;
+            data.Summary = t is { } d ? $"{Describe.Format(d.Format)} / {d.Width}x{d.Height}{(d.ArrayLayers > 1 ? "x" + d.ArrayLayers : "")} / {Style.Bytes(SizeBytes(res))}" : name;
             data.Info = new List<Kv?>
             {
                 new("Name", name),
-                t != null ? new("Format", t.Value.Format.ToString()) : null,
+                t != null ? new("Format", Describe.Format(t.Value.Format)) : null,
                 t != null ? new("Dimensions", $"{t.Value.Width} x {t.Value.Height}{(t.Value.ArrayLayers > 1 ? " x " + t.Value.ArrayLayers : "")}{(t.Value.Type == TextureType.TextureCube ? " (cube)" : "")}") : null,
                 t != null ? new("Mip levels", t.Value.MipLevels.ToString()) : null,
                 t != null ? new("Samples", t.Value.SampleCount.ToString()) : null,
