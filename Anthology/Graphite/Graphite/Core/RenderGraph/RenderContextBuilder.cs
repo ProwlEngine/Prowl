@@ -27,8 +27,8 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
-    /// Declares a texture this pass writes, creating it if new. Non-zero history makes it a ring buffer
-    /// of history+1 copies, rotated each execution so reads can pull prior frames by age.
+    /// Declares a texture this pass writes, creating it if new. History keeps a ring of history+1 copies rotated each execution;
+    /// persistent keeps one copy whose contents carry across executions.
     /// </summary>
     public TextureHandle DeclareOutputTexture(
         RenderResourceID id,
@@ -36,9 +36,12 @@ public sealed class RenderContextBuilder
         int history = 0,
         TargetLoadStoreOps? ops = null,
         TextureState usage = TextureState.Attachment,
-        TextureState? depthUsage = null)
+        TextureState? depthUsage = null,
+        bool persistent = false)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true, new GraphTextureResource(id, desc, history, ops)));
+        if (persistent && history > 0)
+            throw new ArgumentException("A resource is persistent or has history, not both.", nameof(persistent));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true, new GraphTextureResource(id, desc, history, ops, persistent)));
         return new TextureHandle(id);
     }
 
@@ -74,12 +77,14 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
-    /// Declares a buffer this pass writes, creating it if new. Non-zero history makes it a ring buffer of
-    /// history+1 copies, rotated each execution so reads can pull prior frames by age.
+    /// Declares a buffer this pass writes, creating it if new. History keeps a ring of history+1 copies rotated each execution;
+    /// persistent keeps one copy whose contents carry across executions and survive a change of size.
     /// </summary>
-    public BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferAccess usage = BufferAccess.ShaderRead | BufferAccess.ShaderWrite)
+    public BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferAccess usage = BufferAccess.ShaderRead | BufferAccess.ShaderWrite, bool persistent = false)
     {
-        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true, new GraphBufferResource(id, desc, history)));
+        if (persistent && history > 0)
+            throw new ArgumentException("A resource is persistent or has history, not both.", nameof(persistent));
+        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true, new GraphBufferResource(id, desc, history, persistent)));
         return new BufferHandle(id);
     }
 
