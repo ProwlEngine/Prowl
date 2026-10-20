@@ -662,18 +662,24 @@ internal sealed class CameraFrame : IDisposable
     public readonly DrawList Prepass = new();
     public readonly DrawList Forward = new();
     public readonly DrawList Transparent = new();
-    public readonly RenderPipeline Pipeline = new();
     public readonly SceneDrawer Drawer;
-    public readonly FeatureChain Chain;
-    public readonly SetupPass Setup;
-    public readonly PresentPass Present;
 
-    /// <summary>The features the view's graph runs, and this frame's pick.</summary>
-    public readonly List<RenderFeature> Features = new();
+    /// <summary>The features this frame's pick runs on the view.</summary>
     public readonly List<RenderFeature> Selected = new();
 
-    /// <summary>Whether the view's graph rebuilds before it next draws.</summary>
-    public bool Rebuild = true;
+    /// <summary>The colours and scene a feature drew onto this frame, so the first to draw one clears it.</summary>
+    public readonly HashSet<RenderResourceID> Written = new();
+
+    /// <summary>Whether a feature before the one recording encoded the colour for display, as tonemappers do.</summary>
+    public bool DisplayEncoded;
+
+    /// <summary>
+    /// The opaque colour with its mips that passes tagged "SceneColor" = "Read" sample, made the first time the view's
+    /// transparent list holds one. Used says whether this frame's list holds one.
+    /// </summary>
+    public Texture? SceneColor;
+    public bool SceneColorUsed;
+    private TextureView? _sceneColorView;
 
     /// <summary>The host's buffers the view's graph declares, from the world's globals.</summary>
     public DeviceBuffer[] HostBuffers = [];
@@ -782,21 +788,14 @@ internal sealed class CameraFrame : IDisposable
 
     /// <summary>The view's buffers for a set's trees.</summary>
     public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_device, $"View {View.ViewId} set {slot}");
-    private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
-    private readonly List<IPass> _passList = new();
-    private RenderFeature[] _worldFeatures = [], _viewFeatures = [];
 
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
         _frame = frame;
         Drawer = new SceneDrawer(frame, this);
-        Chain = new FeatureChain(device, viewId, frame.Retired);
-        Setup = new SetupPass(frame, this);
-        Present = new PresentPass(frame, this);
         Views = [View];
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
-        Pipeline.Name = $"Graphite.Camera {viewId}";
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
         Instances = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Instances {viewId}");
         Records = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Draw records {viewId}");
@@ -810,7 +809,6 @@ internal sealed class CameraFrame : IDisposable
     /// <summary>Picks this frame's features.</summary>
     public void SelectFeatures(RenderFeature[] world, RenderFeature[] view)
     {
-        (_worldFeatures, _viewFeatures) = (world, view);
         FeatureSelection.Select(Selected, world, view, Info);
     }
 
@@ -826,70 +824,36 @@ internal sealed class CameraFrame : IDisposable
         }
     }
 
-    /// <summary>
-    /// Takes this frame's pick of features, rebuilding the graph when it or the graph's resources changed. A feature that
-    /// throws in Setup or breaks the graph fails the frame, and the next frame builds again.
-    /// </summary>
-    public void ApplyFeatures()
+    /// <summary>Makes the scene colour for the view's size. Returns whether it did.</summary>
+    public bool EnsureSceneColor(uint width, uint height, uint layers, PixelFormat format)
     {
-        if (EnsureScreenLighting())
-            Rebuild = true;
-        if (!Rebuild && Same(Features, Selected) && !Invalidated())
-            return;
-
-        Build(Selected);
-        Features.Clear();
-        Features.AddRange(Selected);
-        PruneFeatures();
-        Chain.ReleaseUnwritten();
-        Rebuild = false;
+        layers = Math.Max(layers, 1u);
+        if (SceneColor is { } existing && existing.Width == width && existing.Height == height && existing.ArrayLayers == layers && existing.Format == format)
+            return false;
+        ReleaseSceneColor();
+        uint mips = (uint)Math.Log2(Math.Max(width, height)) + 1;
+        SceneColor = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, mips, layers, format, TextureUsage.Sampled));
+        SceneColor.Name = $"Graphite.SceneColor {View.ViewId}";
+        return true;
     }
 
-    // The screen lighting textures, sized for the view's producer, or let go without one. Returns whether they changed.
-    private bool EnsureScreenLighting()
+    /// <summary>The scene colour viewed as an array whatever its layer count.</summary>
+    public TextureView SceneColorView()
+        => _sceneColorView ??= _device.ResourceFactory.CreateTextureView(new TextureViewDescription(SceneColor!) { Arrayed = true });
+
+    public void ReleaseSceneColor()
     {
-        foreach (RenderFeature feature in Selected)
-        {
-            if (feature is ScreenLightingFeature producer)
-            {
-                RenderTexture? visibility = Chain.ScreenVisibility.Texture, irradiance = Chain.ScreenIrradiance.Texture;
-                Chain.EnsureScreenLighting(producer.ScaleSnapshot, producer.IrradianceSnapshot);
-                return visibility != Chain.ScreenVisibility.Texture || irradiance != Chain.ScreenIrradiance.Texture;
-            }
-        }
-        bool had = Chain.ScreenVisibility.Texture != null || Chain.ScreenIrradiance.Texture != null;
-        Chain.ScreenVisibility.Release(Chain.Retired);
-        Chain.ScreenIrradiance.Release(Chain.Retired);
-        return had;
+        if (_sceneColorView != null)
+            _frame.Retired.Add(_sceneColorView);
+        if (SceneColor != null)
+            _frame.Retired.Add(SceneColor);
+        (SceneColor, _sceneColorView) = (null, null);
     }
 
-    private void Build(List<RenderFeature> features)
+    // States are kept while their feature is in the world's or view's set, so history survives toggles
+    public void PruneStates(RenderFeature[] world, RenderFeature[] view)
     {
-        _passList.Clear();
-        _passList.Add(Setup);
-        foreach (RenderFeature feature in features)
-        {
-            if (!_passes.TryGetValue(feature, out FeaturePass? pass))
-                _passes[feature] = pass = new FeaturePass(feature, this, _frame);
-            _passList.Add(pass);
-        }
-        _passList.Add(Present);
-        Pipeline.SetPasses(_passList);
-        _ = Pipeline.Graph;
-    }
-
-    // Passes and states are kept while their feature is in the world's or view's set, so ids and history survive toggles
-    private void PruneFeatures()
-    {
-        bool Known(RenderFeature feature) => Array.IndexOf(_worldFeatures, feature) >= 0 || Array.IndexOf(_viewFeatures, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
-        List<RenderFeature>? gone = null;
-        foreach (RenderFeature feature in _passes.Keys)
-        {
-            if (!Known(feature))
-                (gone ??= new()).Add(feature);
-        }
-        foreach (RenderFeature feature in gone ?? [])
-            _passes.Remove(feature);
+        bool Known(RenderFeature feature) => Array.IndexOf(world, feature) >= 0 || Array.IndexOf(view, feature) >= 0 || Array.IndexOf(FeatureSelection.BuiltIn, feature) >= 0;
         List<(RenderFeature, Type)>? stale = null;
         foreach ((RenderFeature feature, Type type) in States.Keys)
         {
@@ -908,28 +872,6 @@ internal sealed class CameraFrame : IDisposable
         if (!States.TryGetValue((feature, typeof(T)), out object? state))
             States[(feature, typeof(T))] = state = new T();
         return (T)state;
-    }
-
-    private bool Invalidated()
-    {
-        foreach (RenderFeature feature in Features)
-        {
-            if (_passes.TryGetValue(feature, out FeaturePass? pass) && pass.BuiltVersion != feature.Version)
-                return true;
-        }
-        return false;
-    }
-
-    private static bool Same(List<RenderFeature> a, List<RenderFeature> b)
-    {
-        if (a.Count != b.Count)
-            return false;
-        for (int i = 0; i < a.Count; i++)
-        {
-            if (a[i] != b[i])
-                return false;
-        }
-        return true;
     }
 
     public void AddBuffers(List<DeviceBuffer> buffers)
@@ -1045,8 +987,8 @@ internal sealed class CameraFrame : IDisposable
 
     public void Dispose()
     {
-        Pipeline.Dispose();
-        Chain.Dispose();
+        _sceneColorView?.Dispose();
+        SceneColor?.Dispose();
         foreach (object state in States.Values)
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
