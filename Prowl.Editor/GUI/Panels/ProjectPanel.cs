@@ -1074,24 +1074,7 @@ public class ProjectPanel : DockPanel
                 {
                     string absPath = Path.Combine(Project.Current!.AssetsPath, sel.RelativePath);
                     if (Directory.Exists(absPath))
-                    {
-                        // Delete every tracked asset (and nested folder entry) under this folder through
-                        // DeleteAsset so recompile triggers, instances get disposed, and the GUID index
-                        // stays consistent, then sweep any untracked leftovers off disk.
-                        string prefix = sel.RelativePath + "/";
-                        var toDelete = db.GetAllAssetPaths()
-                            .Where(p => p.Equals(sel.RelativePath, StringComparison.OrdinalIgnoreCase)
-                                     || p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                        foreach (string? path in toDelete)
-                            db.DeleteAsset(path);
-
-                        if (Directory.Exists(absPath))
-                            Directory.Delete(absPath, true);
-                        string metaPath = MetaFile.GetMetaPath(absPath);
-                        if (File.Exists(metaPath)) File.Delete(metaPath);
-                        db.InvalidateFolderIndex();
-                    }
+                        db.DeleteAssetFolder(sel.RelativePath);
                     if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
                         _currentFolder = "";
                 }
