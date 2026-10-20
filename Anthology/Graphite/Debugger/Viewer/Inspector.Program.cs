@@ -106,6 +106,7 @@ internal sealed partial class ProfilerView
                     new("SPIR-V", Style.Bytes(program.Stages.Sum(s => (double)s.Code.Length))),
                     program.IsCompute ? new("Thread group", $"{program.ThreadGroupX} x {program.ThreadGroupY} x {program.ThreadGroupZ}") : new("Topology", pipeline.Topology?.ToString() ?? "-"),
                     new("Outputs", pipeline.Outputs is { } outputs ? Describe.Outputs(outputs) : "-"),
+                    new("Specialization", program.Specializations.Length > 0 ? string.Join(", ", program.Specializations.Select(c => $"{c.Id}={c.Value}")) : "-"),
                     });
                     KvSection("Use in this pass", 420, new Kv?[]
                     {
