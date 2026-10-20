@@ -87,7 +87,7 @@ internal sealed partial class ProfilerView
                     });
                 });
 
-                Collapsible("Timing details", () => KvSection("Timing", 420, new Kv?[]
+                Accordion("Timing details", () => KvSection("Timing", 420, new Kv?[]
                 {
                     new("Submit -> GPU start", Style.Ms2(timing.SubmitLatencyMilliseconds)),
                     new("Command buffers", $"{passes.Count} passes + {outside.Count} outside"),
@@ -95,7 +95,7 @@ internal sealed partial class ProfilerView
                 }));
 
                 RecordedCounters? c = rec.Counters;
-                Collapsible("Counters", () => KvSection("Counters", 420, new Kv?[]
+                Accordion("Counters", () => KvSection("Counters", 420, new Kv?[]
                 {
                     new("Indirect draws", Style.Int(m.IndirectDraws)),
                     new("Dispatches", Style.Int(m.Dispatches)),
@@ -116,7 +116,7 @@ internal sealed partial class ProfilerView
                 }));
 
                 if (!Heavy)
-                    Collapsible("More history", () => FrameHistory(frames, CurrentIndex(frames, model)));
+                    Accordion("More history", () => FrameHistory(frames, CurrentIndex(frames, model)));
                 break;
             }
 
@@ -197,7 +197,7 @@ internal sealed partial class ProfilerView
                 Dim("hint", "Take a snapshot to split memory by resource category.");
         });
 
-        Collapsible("Live objects by bin", () => TableSection("Live objects by bin", 0, "Delta over this execution",
+        Accordion("Live objects by bin", () => TableSection("Live objects by bin", 0, "Delta over this execution",
             new[] { "Bin", "Live delta", "Bytes delta" }, new[] { 2f, 1f, 1f },
             FrameMetrics.AllocBins.Select((bin, i) => new Row
             {
@@ -205,11 +205,11 @@ internal sealed partial class ProfilerView
                 Colors = new Color?[] { null, c.Live[i] > 0 ? Style.Bad : null, c.LiveBytes[i] > 0 ? Style.Bad : null },
             }).ToList()));
 
-        Collapsible("Resident buffer bytes by role", () => TableSection("Resident buffer bytes by role", 420, "Multi-usage buffers count in every role",
+        Accordion("Resident buffer bytes by role", () => TableSection("Resident buffer bytes by role", 420, "Multi-usage buffers count in every role",
             new[] { "Role", "Resident delta" }, new[] { 2f, 1f },
             FrameMetrics.BufferRoleBins.Select((role, i) => R(role, Signed(c.ResidentBytes[i], Style.Bytes))).ToList()));
 
-        Collapsible("Transfers and events", () => KvSection("Transfers & events", 420, new Kv?[]
+        Accordion("Transfers and events", () => KvSection("Transfers & events", 420, new Kv?[]
         {
             new("Maps", Style.Int(c.BufferOps[FrameMetrics.Map])),
             new("Unmaps", Style.Int(c.BufferOps[FrameMetrics.Unmap])),
@@ -427,7 +427,7 @@ internal sealed partial class ProfilerView
                 });
 
                 if (!Heavy)
-                    Collapsible("More history", () => ChartsSection("View history", "Frames without this view plot as 0", current, new[]
+                    Accordion("More history", () => ChartsSection("View history", "Frames without this view plot as 0", current, new[]
                     {
                         new Sparkline("Draw calls", drawH, Style.KindDot(NodeKind.Draw), Style.Int),
                         new Sparkline("Visible renderers", visH, Style.Good, Style.Int),
@@ -450,7 +450,7 @@ internal sealed partial class ProfilerView
             new("GPU time", buffer.Milliseconds is { } ms ? Style.Ms2(ms) : "Not timed", "outside passes"),
             new("Vertices", buffer.VertexStats == null ? "-" : Style.Int(buffer.VertexStats.Value.InputAssemblyVertices), buffer.VertexStats == null ? "no draws" : "input assembly"),
         });
-        Collapsible("Details", () => KvSection("Command buffer", 420, new Kv?[]
+        Accordion("Details", () => KvSection("Command buffer", 420, new Kv?[]
         {
             new("Name", buffer.Name),
             new("Id", buffer.Id.ToString()),

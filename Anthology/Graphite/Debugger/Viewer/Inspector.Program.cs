@@ -100,7 +100,7 @@ internal sealed partial class ProfilerView
                         new("Kind", program.IsCompute ? "Compute" : "Graphics", shaderPass),
                         new("SPIR-V", Style.Bytes(program.Stages.Sum(s => (double)s.Code.Length)), $"{program.Stages.Length} stages"),
                     });
-                    Collapsible("Program details", () =>
+                    Accordion("Program details", () =>
                     {
                         KvSection("Program", 420, new Kv?[]
                         {
@@ -116,7 +116,7 @@ internal sealed partial class ProfilerView
                             new("Specialization", program.Specializations.Length > 0 ? string.Join(", ", program.Specializations.Select(c => $"{c.Id}={c.Value}")) : "-"),
                         });
                     });
-                    Collapsible("Vertex inputs", () => TableSection("Vertex inputs", 420, "",
+                    Accordion("Vertex inputs", () => TableSection("Vertex inputs", 420, "",
                         new[] { "Semantic", "Location", "Format", "Offset" }, new[] { 1.2f, 0.7f, 1.4f, 0.6f },
                         program.VertexLayouts.Length > 0
                             ? program.VertexLayouts.SelectMany(l => (l.Elements ?? []).Select(e => R(Describe.Name(e.Name), l.Location.ToString(), e.Format.ToString(), e.Offset.ToString()))).ToList()
@@ -209,7 +209,7 @@ internal sealed partial class ProfilerView
                     new("Draws", draws.Count.ToString(), "this program"),
                     new("Screen coverage", info != null ? Style.F(info.ScreenCoverage, "0.00") + "%" : "-", info != null ? Style.F(info.CameraDistance, "0.0") + " m from camera" : "no engine data"),
                 });
-                Collapsible("Renderer", () => KvSection("Renderer", 420, new Kv?[]
+                Accordion("Renderer", () => KvSection("Renderer", 420, new Kv?[]
                 {
                     new("Name", node.Name),
                     new("Source", "Debug marker (PushMarker / PopMarker)"),
@@ -224,7 +224,7 @@ internal sealed partial class ProfilerView
                     info != null ? new("Sorting order", info.SortingOrder.ToString()) : null,
                 }));
                 if (info != null)
-                    Collapsible("Transform and bounds", () => KvSection("Transform & bounds", 420, new Kv?[]
+                    Accordion("Transform and bounds", () => KvSection("Transform & bounds", 420, new Kv?[]
                     {
                         new("Position", $"{Style.F(info.Position.X, "0.00")}, {Style.F(info.Position.Y, "0.00")}, {Style.F(info.Position.Z, "0.00")}"),
                         new("Rotation", $"{Style.F(info.Rotation.X, "0.0")}, {Style.F(info.Rotation.Y, "0.0")}, {Style.F(info.Rotation.Z, "0.0")}"),
@@ -335,7 +335,7 @@ internal sealed partial class ProfilerView
                         new("Instances", instances.ToString(), $"{Style.Int(indexCount / 3.0 * instances)} primitives"),
                         new("Mesh", mesh, marker?.Name ?? "no marker"),
                     });
-                    Collapsible("Draw call", () => KvSection("Draw call", 0, new Kv?[]
+                    Accordion("Draw call", () => KvSection("Draw call", 0, new Kv?[]
                     {
                         new("Replay event index", node.DrawOrdinal.ToString()),
                         new("Arguments", CommandArgs(index, cmd)),

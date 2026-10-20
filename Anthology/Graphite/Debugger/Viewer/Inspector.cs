@@ -127,6 +127,16 @@ internal sealed partial class ProfilerView
     {
         OrigamiMetrics m = Style.Theme.Metrics;
         float width = SectionWidth(basis);
+        if (_inAccordion)
+        {
+            using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Gap(m.SpacingSmall).Enter())
+            {
+                if (note.Length > 0)
+                    Dim("n", note);
+                body(width);
+            }
+            return;
+        }
         float top = uniformPadding ? m.PaddingLarge : m.Padding;
         using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Gap(m.SpacingSmall).Enter())
         {
@@ -184,7 +194,13 @@ internal sealed partial class ProfilerView
         float width = SectionWidth(basis);
         using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Gap(Style.Theme.Metrics.SpacingSmall).Enter())
         {
-            SectionHeading(title, note);
+            if (_inAccordion)
+            {
+                if (note.Length > 0)
+                    Dim("n", note);
+            }
+            else
+                SectionHeading(title, note);
             Table(width, head, flex, rows, maxHeight);
         }
     }

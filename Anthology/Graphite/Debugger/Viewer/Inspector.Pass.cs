@@ -113,7 +113,7 @@ internal sealed partial class ProfilerView
                         new Sparkline("CPU record", cpu, Style.KindDot(NodeKind.CommandBuffer), Style.Ms2),
                     }, 420f, 180f);
 
-                Collapsible("Details", () => KvSection("Pass", 420, new Kv?[]
+                Accordion("Details", () => KvSection("Pass", 420, new Kv?[]
                 {
                     new("Name", pass.Name),
                     new("View", view),

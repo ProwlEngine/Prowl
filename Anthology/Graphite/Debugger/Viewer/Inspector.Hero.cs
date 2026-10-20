@@ -13,6 +13,7 @@ internal sealed partial class ProfilerView
 {
     private const float HeroTileMinWidth = 170f;
     private const float FoldInset = 28f;
+    private const float AccordionInset = 24f;
 
     private readonly record struct Stat(string Label, string Value, string Sub, Color? Color = null);
 
@@ -50,6 +51,53 @@ internal sealed partial class ProfilerView
             _contentWidth = (width ?? outer) - FoldInset;
             Origami.Foldout(_paper, "fold", title).DefaultExpanded(open).Body(body);
             _contentWidth = outer;
+        }
+    }
+
+    private readonly HashSet<string> _accordionOpen = new();
+    private readonly HashSet<string> _accordionSeen = new();
+    private bool _inAccordion;
+
+    private void Accordion(string title, Action body, bool open = false)
+    {
+        string key = $"{_selId}|{title}";
+        if (_accordionSeen.Add(key) && open)
+            _accordionOpen.Add(key);
+        bool isOpen = _accordionOpen.Contains(key);
+
+        float width = SectionWidth(0);
+        float outer = _contentWidth;
+        using (_paper.Column("sec", _sectionIndex++).Width(width).Height(UnitValue.Auto).Enter())
+        {
+            using (_paper.Row("ah").Width(UnitValue.Stretch()).Height(Metrics.CompactHeight + 4f).Gap(6).AlignItems(LayoutAlignment.Center).Cursor(PaperCursor.Pointer)
+                .Hovered.BackgroundColor(Style.Alpha(Style.Primary, 20)).End()
+                .OnClick(_ =>
+                {
+                    if (!_accordionOpen.Remove(key))
+                        _accordionOpen.Add(key);
+                }).Enter())
+            {
+                _paper.Box("caret").Width(12).Height(UnitValue.Stretch())
+                    .Text(isOpen ? OrigamiGlyphs.ChevronDown : OrigamiGlyphs.ChevronRight, OrigamiFonts.IconSolid!).FontSize(Style.Small).TextColor(Style.InkSoft)
+                    .Alignment(TextAlignment.MiddleCenter).IsNotInteractable();
+                Origami.Header(_paper, "t", title).Text().Show();
+            }
+
+            if (!isOpen)
+                return;
+
+            using (_paper.Row("ab").Width(UnitValue.Stretch()).Height(UnitValue.Auto).AlignItems(LayoutAlignment.Stretch).Enter())
+            {
+                _paper.Box("bar").Width(2).Margin(5, 5, 0, 4).BackgroundColor(Style.Alpha(Style.Primary, 140)).IsNotInteractable();
+                using (_paper.Column("body").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(0, 0, Metrics.SpacingSmall, Metrics.Spacing).Enter())
+                {
+                    _contentWidth = width - AccordionInset;
+                    _inAccordion = true;
+                    body();
+                    _inAccordion = false;
+                    _contentWidth = outer;
+                }
+            }
         }
     }
 }
