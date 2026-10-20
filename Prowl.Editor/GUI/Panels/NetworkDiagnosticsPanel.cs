@@ -226,11 +226,18 @@ public class NetworkDiagnosticsPanel : DockPanel
                     bool warning = e.Direction is "Rejected" or "Failed";
                     if (col == 1)
                     {
-                        IOrigamiIcon? icon = warning ? EditorIcons.TriangleExclamation_I : TrafficDirection(e) switch
+                        IOrigamiIcon? icon = e.Direction switch
                         {
                             "Out" => EditorIcons.ArrowUp_I,
                             "In" => EditorIcons.ArrowDown_I,
-                            _ => null,
+                            "Rejected" or "Failed" => EditorIcons.TriangleExclamation_I,
+                            "Serialize" => EditorIcons.FileExport_I,
+                            "Apply" => EditorIcons.Sliders_I,
+                            "Send" => EditorIcons.PaperPlane_I,
+                            "Receive" => EditorIcons.Inbox_I,
+                            "Invoke" => EditorIcons.Bolt_I,
+                            "Local" => EditorIcons.Plug_I,
+                            _ => EditorIcons.CircleInfo_I,
                         };
                         using (paper.Row($"net_event_{i}").Height(EditorTheme.RowHeight).Gap(4).Clip().Enter())
                         {
@@ -242,9 +249,16 @@ public class NetworkDiagnosticsPanel : DockPanel
                                     "In" => "Incoming",
                                     "Rejected" => "Rejected",
                                     "Failed" => "Failed to process incoming message",
+                                    "Serialize" => "Serialize a SyncVar value",
+                                    "Apply" => "Apply a received SyncVar value",
+                                    "Send" => "Send an RPC",
+                                    "Receive" => "Receive an RPC",
+                                    "Invoke" => "Invoke an RPC method",
+                                    "Local" => "Local session event",
                                     _ => e.Direction,
                                 }).Icon(paper, icon, warning ? EditorTheme.Amber400
-                                    : e.Direction == "Out" ? EditorTheme.Blue400 : EditorTheme.Green400, size: 16f);
+                                    : e.Direction == "Out" ? EditorTheme.Blue400
+                                    : e.Direction == "In" ? EditorTheme.Green400 : EditorTheme.Ink400, size: 16f);
                             using (paper.Box($"net_event_name_wrap_{i}").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).Enter())
                                 Label(paper, font, $"net_event_name_{i}", eventName, EditorTheme.RowHeight, warning);
                         }

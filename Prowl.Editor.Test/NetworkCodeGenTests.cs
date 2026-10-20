@@ -25,6 +25,7 @@ public class NetworkCodeGenTests : EditorTestHarness
     private const string ShipScript = """
         using System.Collections.Generic;
         using Prowl.Runtime;
+        using Prowl.Runtime.Networking;
         using Prowl.Vector;
 
         public class Ship : Component
@@ -82,10 +83,10 @@ public class NetworkCodeGenTests : EditorTestHarness
         WriteScript("StatsNames.cs", """
             public class StatsNames : Prowl.Runtime.Component
             {
-                [Prowl.Runtime.Rpc.Broadcast]
+                [Prowl.Runtime.Networking.Rpc.Broadcast]
                 public void WithParameter(int __rpc_stats) { }
 
-                [Prowl.Runtime.Rpc.Broadcast]
+                [Prowl.Runtime.Networking.Rpc.Broadcast]
                 public void WithLocal() { int __rpc_stats = 1; }
             }
             """);
@@ -207,6 +208,7 @@ public class NetworkCodeGenTests : EditorTestHarness
 
     private const string ShipPartA = """
         using Prowl.Runtime;
+        using Prowl.Runtime.Networking;
 
         namespace Fleet;
 
@@ -222,6 +224,7 @@ public class NetworkCodeGenTests : EditorTestHarness
 
     private const string ShipPartB = """
         using Prowl.Runtime;
+        using Prowl.Runtime.Networking;
 
         namespace Fleet
         {
@@ -287,6 +290,7 @@ public class NetworkCodeGenTests : EditorTestHarness
         WriteScript("ShipA.cs", ShipPartA);
         WriteScript("ShipZ.cs", """
             using Prowl.Runtime;
+            using Prowl.Runtime.Networking;
             using Fleet.Stats;
 
             namespace Fleet;
@@ -318,6 +322,7 @@ public class NetworkCodeGenTests : EditorTestHarness
     {
         WriteScript("Holder.cs", """
             using Prowl.Runtime;
+            using Prowl.Runtime.Networking;
 
             public class Holder<T> : Component
             {
@@ -391,14 +396,14 @@ public class NetworkCodeGenTests : EditorTestHarness
     }
 
     [Theory]
-    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Sync] public int X { get => 1; set { } } }", "PROWLNET001")]
-    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Sync] public static int X { get; set; } }", "PROWLNET001")]
-    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Rpc.Broadcast] public int F() => 1; }", "PROWLNET002")]
-    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Rpc.Host] public void F(ref int x) { } }", "PROWLNET002")]
-    [InlineData("public struct A { [Prowl.Runtime.Sync] public int X { get; set; } }", "PROWLNET003")]
-    [InlineData("public class A { [Prowl.Runtime.Sync] public int X { get; set; } }", "PROWLNET003")]
-    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Rpc.Broadcast] public void F(int[] x) { } }", "PROWLNET005")]
-    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Sync] public System.Collections.Generic.List<int> X { get; set; } }", "PROWLNET005")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public int X { get => 1; set { } } }", "PROWLNET001")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public static int X { get; set; } }", "PROWLNET001")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public int F() => 1; }", "PROWLNET002")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Host] public void F(ref int x) { } }", "PROWLNET002")]
+    [InlineData("public struct A { [Prowl.Runtime.Networking.Sync] public int X { get; set; } }", "PROWLNET003")]
+    [InlineData("public class A { [Prowl.Runtime.Networking.Sync] public int X { get; set; } }", "PROWLNET003")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public void F(int[] x) { } }", "PROWLNET005")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public System.Collections.Generic.List<int> X { get; set; } }", "PROWLNET005")]
     public void UnsupportedShapesAreCompileErrors(string script, string id)
     {
         WriteScript("Bad.cs", script);

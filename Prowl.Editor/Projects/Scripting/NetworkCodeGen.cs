@@ -63,10 +63,10 @@ internal static class NetworkCodeGen
         "'{0}' is a {1}, which can't be sent over the network. Use one of the types listed on NetSerializer<T>.",
         "Networking", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
-    private const string SyncFlagsType = "global::Prowl.Runtime.SyncFlags";
-    private const string RpcFlagsType = "global::Prowl.Runtime.RpcFlags";
-    private const string RpcModeType = "global::Prowl.Runtime.RpcMode";
-    private const string Serializer = "global::Prowl.Runtime.NetSerializer";
+    private const string SyncFlagsType = "global::Prowl.Runtime.Networking.SyncFlags";
+    private const string RpcFlagsType = "global::Prowl.Runtime.Networking.RpcFlags";
+    private const string RpcModeType = "global::Prowl.Runtime.Networking.RpcMode";
+    private const string Serializer = "global::Prowl.Runtime.Networking.NetSerializer";
     private const string WriterType = "global::Prowl.Warp.NetWriter";
     private const string ReaderType = "global::Prowl.Warp.NetReader";
 
@@ -394,7 +394,7 @@ internal static class NetworkCodeGen
                     when FindAttribute(property.AttributeLists, out string? kind) is { } attribute && kind == "Sync"
                     && AnalyzeSync(property, attribute, out _) is { } sync:
                     members.Add($"private {sync.Type} {sync.Field}{(sync.Initializer == null ? "" : " = " + sync.Initializer)};");
-                    members.Add($"{Descriptor} global::Prowl.Runtime.SyncMember<{self}, {sync.Type}> {sync.Descriptor} = new({sync.Slot}u, "
+                    members.Add($"{Descriptor} global::Prowl.Runtime.Networking.SyncMember<{self}, {sync.Type}> {sync.Descriptor} = new({sync.Slot}u, "
                         + $"{SymbolDisplay.FormatLiteral(sync.Name, true)}, {sync.Flags}, static __c => __c.{sync.Field}, static (__c, __v) => __c.{sync.Field} = __v);");
                     break;
 
@@ -405,7 +405,7 @@ internal static class NetworkCodeGen
                     for (int i = 0; i < rpc.ParameterTypes.Count; i++)
                         invoke.Append($"{rpc.ParameterTypes[i]} __a{i} = {Serializer}<{rpc.ParameterTypes[i]}>.Read(ref __r); ");
                     invoke.Append($"__Rpc_ArgumentsRead(); __c.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
-                    members.Add($"{Descriptor} global::Prowl.Runtime.RpcMember<{self}> {rpc.Descriptor} = new({rpc.Id}u, "
+                    members.Add($"{Descriptor} global::Prowl.Runtime.Networking.RpcMember<{self}> {rpc.Descriptor} = new({rpc.Id}u, "
                         + $"{SymbolDisplay.FormatLiteral(rpc.Signature, true)}, {rpc.Mode}, {rpc.Flags}, {invoke});");
                     break;
             }
@@ -422,12 +422,12 @@ internal static class NetworkCodeGen
         {
             foreach (AttributeSyntax attribute in list.Attributes)
             {
-                // Name segments, so [Sync], [SyncAttribute], [Prowl.Runtime.Sync] and [Rpc.Broadcast] all match.
+                // Name segments, so short and fully qualified Sync and Rpc attributes all match.
                 string[] parts = attribute.Name.ToString().Split('.');
                 string last = parts[^1].EndsWith("Attribute", StringComparison.Ordinal) ? parts[^1][..^"Attribute".Length] : parts[^1];
                 string? previous = parts.Length > 1 ? parts[^2] : null;
 
-                if (last == "Sync" && previous is null or "Runtime")
+                if (last == "Sync" && previous is null or "Networking")
                 {
                     kind = last;
                     return attribute;
