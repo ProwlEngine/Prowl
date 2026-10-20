@@ -64,6 +64,7 @@ internal static class NetworkPopover
 
         ElementBuilder trigger = paper.Box("gi_net_btn")
             .Width(26).Height(26).Rounded(EditorTheme.Roundness)
+            .Cursor(PaperCursor.Pointer)
             .BackgroundColor(EditorTheme.Ink100)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .OnClick(go, (g, _) => Toggle(g));
