@@ -1287,6 +1287,7 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
     private readonly List<GraphDispatch> _dispatches = new();
     private readonly List<PlannedInstance> _planned = new();
+    private readonly Dictionary<WorldFrame, GraphInstance> _worldInstances = new();
     private readonly List<DeviceBuffer> _buffers = new();
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
@@ -1682,6 +1683,17 @@ internal sealed partial class FramePipeline : IDisposable
 
     private void Plan(CameraFrame camera, in ViewDesc view, WorldFrame world, uint width, uint height)
         => _planned.Add(new PlannedInstance(KindOf(view.Kind), view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
+
+    private GraphInstances CreateInstances(RenderGraph graph)
+    {
+        GraphInstances instances = graph.CreateInstances(data: this);
+        _worldInstances.Clear();
+        foreach (WorldFrame world in _frameWorlds)
+            _worldInstances[world] = instances.Add(RenderKinds.World, world.World.Id, data: world, name: $"World {world.World.Id}");
+        foreach (PlannedInstance planned in _planned)
+            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Camera, $"View {planned.Id}");
+        return instances;
+    }
 
     private static GraphKind KindOf(ViewKind kind) => kind switch
     {
