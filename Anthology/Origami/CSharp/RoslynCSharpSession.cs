@@ -13,6 +13,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.Completion;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.QuickInfo;
@@ -236,7 +237,9 @@ public sealed class RoslynCSharpSession : CodeLanguageSession
             var tree = model.SyntaxTree;
             var seen = new HashSet<(string, TextSpan)>();
             var result = new List<CodeDiagnostic>();
-            foreach (var d in tree.GetDiagnostics(ct).Concat(model.GetDiagnostics(cancellationToken: ct)))
+            var all = tree.GetDiagnostics(ct).Concat(model.GetDiagnostics(cancellationToken: ct))
+                .Concat(await AnalyzerDiagnosticsAsync(model, ct).ConfigureAwait(false));
+            foreach (var d in all)
             {
                 if (d.Severity == DiagnosticSeverity.Hidden || d.IsSuppressed || d.Location.SourceTree != tree) continue;
                 var span = d.Location.SourceSpan;
@@ -257,6 +260,27 @@ public sealed class RoslynCSharpSession : CodeLanguageSession
             }
             return result;
         }, ct);
+
+    private async Task<IEnumerable<Diagnostic>> AnalyzerDiagnosticsAsync(SemanticModel model, CancellationToken ct)
+    {
+        var analyzers = _workspace.Analyzers;
+        if (analyzers.IsDefaultOrEmpty) return Array.Empty<Diagnostic>();
+
+        // A faulty analyzer must not take the compiler's own diagnostics down with it.
+        var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions(ImmutableArray<AdditionalText>.Empty),
+            onAnalyzerException: null, concurrentAnalysis: true, logAnalyzerExecutionTime: false, reportSuppressedDiagnostics: false);
+        var withAnalyzers = model.Compilation.WithAnalyzers(analyzers, options);
+        try
+        {
+            var syntax = await withAnalyzers.GetAnalyzerSyntaxDiagnosticsAsync(model.SyntaxTree, ct).ConfigureAwait(false);
+            var semantic = await withAnalyzers.GetAnalyzerSemanticDiagnosticsAsync(model, null, ct).ConfigureAwait(false);
+            return syntax.Concat(semantic);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return Array.Empty<Diagnostic>();
+        }
+    }
 
     public override Task<IReadOnlyList<CodeClassifiedSpan>> GetClassificationsAsync(int start, int length, CancellationToken ct)
         => Run<IReadOnlyList<CodeClassifiedSpan>>(Array.Empty<CodeClassifiedSpan>(), async (document, ct) =>

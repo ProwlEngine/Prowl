@@ -3,11 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.Text;
 
@@ -29,6 +31,10 @@ public sealed class CSharpWorkspace : IDisposable
     private int _untitledCount;
 
     public AdhocWorkspace Workspace { get; }
+
+    /// <summary>Analyzers whose diagnostics show in open editors next to the compiler's, such as a host's own script rules.</summary>
+    public ImmutableArray<DiagnosticAnalyzer> Analyzers { get; set; } = ImmutableArray<DiagnosticAnalyzer>.Empty;
+
     public ProjectId ProjectId { get; }
 
     /// <summary>Creates the workspace. With no <paramref name="references"/> the running app's trusted platform assemblies are referenced.</summary>
