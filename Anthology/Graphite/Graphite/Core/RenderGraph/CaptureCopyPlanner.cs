@@ -32,8 +32,9 @@ internal static class CaptureCopyPlanner
             {
                 if (depthStencil)
                 {
-                    Add(regions, ref offset, mip, layer, width, height, depth, description.Format, (ulong)width * height * depth * 4);
-                    Add(regions, ref offset, mip, layer, width, height, depth, PixelFormat.R8_UInt, (ulong)width * height * depth);
+                    Add(regions, ref offset, mip, layer, width, height, depth, description.Format, (ulong)width * height * depth * (description.Format == PixelFormat.D16_UNorm ? 2u : 4u));
+                    if (FormatHelpers.IsStencilFormat(description.Format))
+                        Add(regions, ref offset, mip, layer, width, height, depth, PixelFormat.R8_UInt, (ulong)width * height * depth);
                 }
                 else
                 {
