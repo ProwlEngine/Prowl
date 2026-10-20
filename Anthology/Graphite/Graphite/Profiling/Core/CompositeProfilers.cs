@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite;
@@ -13,16 +12,16 @@ internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphPro
 
     public void EndExecution() { }
 
-    public void BeginView(in ViewInfo view)
+    public void BeginInstance(in InstanceInfo instance)
     {
         foreach (IGraphProfiler sink in sinks)
-            sink.BeginView(in view);
+            sink.BeginInstance(in instance);
     }
 
-    public void EndView(in ViewInfo view)
+    public void EndInstance(in InstanceInfo instance)
     {
         foreach (IGraphProfiler sink in sinks)
-            sink.EndView(in view);
+            sink.EndInstance(in instance);
     }
 
     public void BeginPass(in PassInfo pass)
@@ -37,10 +36,10 @@ internal sealed class CompositeGraphProfiler(IGraphProfiler[] sinks) : IGraphPro
             sink.EndPass(in pass, in stats);
     }
 
-    public void SkipPass(string name, int viewIndex, PassSkipReason reason)
+    public void SkipPass(string name, int instanceIndex, PassSkipReason reason)
     {
         foreach (IGraphProfiler sink in sinks)
-            sink.SkipPass(name, viewIndex, reason);
+            sink.SkipPass(name, instanceIndex, reason);
     }
 }
 
@@ -69,10 +68,10 @@ internal sealed class CompositeCaptureProfiler(ICaptureProfiler[] sinks) : ICapt
 
     public void EndExecution() { }
 
-    public void DescribeView(in ViewCaptureInfo view)
+    public void DescribeInstance(in InstanceCaptureInfo instance)
     {
         foreach (ICaptureProfiler sink in sinks)
-            sink.DescribeView(in view);
+            sink.DescribeInstance(in instance);
     }
 
     public void OnPassEnd(in PassInfo pass, ReadOnlySpan<PassReference> references, ICaptureContext capture)

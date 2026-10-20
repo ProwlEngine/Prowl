@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+
 namespace Prowl.Graphite;
 
 /// <summary>Whether a graph resource is a texture or a buffer.</summary>
@@ -19,36 +20,26 @@ public readonly record struct PassResourceAccess(
     TextureState? DepthUsage,
     BufferAccess BufferUsage);
 
-public readonly struct ViewInfo
+/// <summary>One instance of a dispatch. The root is index 0 with parent -1; KindName names what it stands for.</summary>
+public readonly record struct InstanceInfo(string Name, int Index, int ParentIndex, GraphInstanceKey Key, uint PixelWidth, uint PixelHeight)
 {
-    public string Name { get; }
-    public int Index { get; }
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-
-    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight)
-    {
-        Name = name;
-        Index = index;
-        PixelWidth = pixelWidth;
-        PixelHeight = pixelHeight;
-    }
+    public string KindName => Key.Kind.Name;
 }
 
 public readonly struct PassInfo
 {
     public string Name { get; }
     public int Index { get; }
-    public int ViewIndex { get; }
+    public int InstanceIndex { get; }
 
     /// <summary>Every resource access the pass declared, inputs and outputs.</summary>
     public ReadOnlyMemory<PassResourceAccess> Accesses { get; }
 
-    public PassInfo(string name, int index, int viewIndex, ReadOnlyMemory<PassResourceAccess> accesses)
+    public PassInfo(string name, int index, int instanceIndex, ReadOnlyMemory<PassResourceAccess> accesses)
     {
         Name = name;
         Index = index;
-        ViewIndex = viewIndex;
+        InstanceIndex = instanceIndex;
         Accesses = accesses;
     }
 
@@ -69,11 +60,11 @@ public readonly struct PassInfo
     }
 }
 
-/// <summary>Why a pass of the graph did not run for a view.</summary>
+/// <summary>Why a pass of the graph did not run for an instance.</summary>
 public enum PassSkipReason : byte
 {
-    /// <summary>The pass writes the view target and the view has none.</summary>
-    NoViewTarget,
+    /// <summary>The pass writes the instance target and the instance has none.</summary>
+    NoTarget,
 }
 
 /// <summary>Work one pass command buffer recorded. Draws counts direct draw calls, IndirectDraws indirect ones.</summary>

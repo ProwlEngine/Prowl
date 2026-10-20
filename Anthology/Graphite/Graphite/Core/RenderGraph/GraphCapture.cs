@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 using Prowl.Graphite.Debugging;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 internal sealed class CaptureContext : ICaptureContext
 {
@@ -15,7 +15,7 @@ internal sealed class CaptureContext : ICaptureContext
     public CaptureCopy Copy(in PassReference reference, CopyPlacement placement) => _owner.Copy(in reference, placement);
 }
 
-/// <summary>Per view state that turns graph execution into capture hook callbacks.</summary>
+/// <summary>Per instance state that turns graph execution into capture hook callbacks.</summary>
 internal sealed class GraphCapture
 {
     private readonly ICaptureProfiler _hook;
@@ -29,7 +29,7 @@ internal sealed class GraphCapture
     private readonly HashSet<ResourceId> _listed = new();
     private readonly List<PassReference> _references = new();
     private readonly Dictionary<ResourceId, (Texture? Texture, DeviceBuffer? Buffer)> _live = new();
-    private readonly HashSet<ResourceId> _viewTargets = new();
+    private readonly HashSet<ResourceId> _instanceTargets = new();
     private readonly CaptureContext _captureContext;
     private GraphTextureStates? _preStates;
     private CommandBuffer? _passCommands;
@@ -44,7 +44,7 @@ internal sealed class GraphCapture
         _captureContext = new CaptureContext(this);
     }
 
-    public void DescribeView(int viewIndex)
+    public void DescribeInstance(int instanceIndex)
     {
         List<GraphResourceInfo> resources = new();
         HashSet<RenderResourceID> seen = new();
@@ -57,8 +57,8 @@ internal sealed class GraphCapture
             }
         }
 
-        ViewCaptureInfo info = new(viewIndex, resources.ToArray(), _passInfos);
-        _hook.DescribeView(in info);
+        InstanceCaptureInfo info = new(instanceIndex, resources.ToArray(), _passInfos);
+        _hook.DescribeInstance(in info);
     }
 
     public void BeginPass(int index)
@@ -134,8 +134,8 @@ internal sealed class GraphCapture
         if (_passCommands is not { } passCommands || !_live.TryGetValue(id, out (Texture? Texture, DeviceBuffer? Buffer) live))
             throw new ArgumentException("The reference does not belong to the pass being captured.", nameof(reference));
 
-        if (_viewTargets.Contains(id))
-            throw new InvalidOperationException("A view target backing cannot be copied.");
+        if (_instanceTargets.Contains(id))
+            throw new InvalidOperationException("An instance target backing cannot be copied.");
 
         ICaptureBackend backend = _context.Device.CaptureBackend;
         ResourceFactory factory = _context.Device.ResourceFactory;
@@ -219,13 +219,13 @@ internal sealed class GraphCapture
                 case GraphTextureResource transient:
                     textureDesc = transient.Description;
                     historyDepth = transient.HistoryDepth;
-                    historySlot = transient.HistorySlot(_context.View.ViewId);
+                    historySlot = transient.HistorySlot(_context.GraphInstance.Key);
                     historyValid = _context.IsHistoryValid(new TextureHandle(id));
                     break;
-                case GraphViewTargetResource:
-                    origin = GraphResourceOrigin.ViewTarget;
+                case GraphInstanceTargetResource:
+                    origin = GraphResourceOrigin.InstanceTarget;
                     foreach (GraphBacking backing in backings)
-                        _viewTargets.Add(backing.Id);
+                        _instanceTargets.Add(backing.Id);
                     break;
                 case GraphImportedTextureResource:
                     origin = GraphResourceOrigin.Imported;
@@ -246,7 +246,7 @@ internal sealed class GraphCapture
             {
                 bufferDesc = bufferResource.Description;
                 historyDepth = bufferResource.HistoryDepth;
-                historySlot = bufferResource.HistorySlot(_context.View.ViewId);
+                historySlot = bufferResource.HistorySlot(_context.GraphInstance.Key);
                 historyValid = _context.IsHistoryValid(new BufferHandle(id));
             }
         }
