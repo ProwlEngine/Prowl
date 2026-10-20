@@ -81,6 +81,19 @@ public abstract class PersistentResourceTests<T> : GraphicsDeviceTestBase<T> whe
 
         Assert.Same(early, store.ResolvePersistent(GD, FillOncePass.Id, desc, key));
     }
+
+    [Fact]
+    public void PersistentCube_ResolvedThroughTheStore_HasItsMipsAndAFramebufferOnEach()
+    {
+        using GraphStore store = new();
+        GraphTextureDesc desc = GraphTextureDesc.Sized(64, 64, false, PixelFormat.R8_G8_B8_A8_UNorm) with { Cube = true, MipLevels = 4 };
+        RenderTexture cube = store.ResolvePersistent(GD, RenderResourceID.Intern("persistent_cube"), desc, new GraphInstanceKey(TestViews.Kind, 0));
+
+        Assert.Equal(TextureType.TextureCube, cube.ColorTextures[0].Type);
+        Assert.Equal(4u, cube.ColorTextures[0].MipLevels);
+        Assert.Equal(8u, cube.MipFramebuffer(3).Width);
+        Assert.Same(cube.MipFramebuffer(2), cube.MipFramebuffer(2));
+    }
 }
 
 #if TEST_VULKAN
