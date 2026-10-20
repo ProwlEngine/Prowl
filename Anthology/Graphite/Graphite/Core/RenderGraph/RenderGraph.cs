@@ -436,6 +436,21 @@ public sealed class RenderGraph : IDisposable
             && a.SampleCount == b.SampleCount
             && (a.ColorFormats ?? []).AsSpan().SequenceEqual(b.ColorFormats ?? []);
 
+    private static bool LeadingAttachments(in GraphTextureDesc input, in GraphTextureDesc output)
+    {
+        PixelFormat[] inputColors = input.ColorFormats ?? [], outputColors = output.ColorFormats ?? [];
+        return !output.EnableDepth
+            && input.SizeMode == output.SizeMode
+            && input.Scale == output.Scale
+            && input.Width == output.Width
+            && input.Height == output.Height
+            && Math.Max(1, input.ArrayLayers) == Math.Max(1, output.ArrayLayers)
+            && input.SampleCount == output.SampleCount
+            && outputColors.Length > 0
+            && outputColors.Length <= inputColors.Length
+            && inputColors.AsSpan(0, outputColors.Length).SequenceEqual(outputColors);
+    }
+
     private static void ApplyStorageUsage(
         PassNode[] nodes,
         Dictionary<RenderResourceID, GraphResource> resources)
@@ -519,11 +534,11 @@ public sealed class RenderGraph : IDisposable
 
                 GraphResource input = resources[link.Input], output = resources[link.Output];
                 bool matches = link.IsTexture
-                    ? input is GraphTextureResource { Retained: false } a && output is GraphTextureResource { Retained: false } b && SameDeclaration(a, b)
+                    ? input is GraphTextureResource { Retained: false } a && output is GraphTextureResource { Retained: false } b && (SameDeclaration(a, b) || LeadingAttachments(a.Description, b.Description))
                     : input is GraphBufferResource { Retained: false } c && output is GraphBufferResource { Retained: false } d && SameDeclaration(c, d);
                 if (!matches)
                     throw new RenderGraphException(
-                        $"Pass '{node.Pass.Name}' passes {pair} through, which needs two transient {(link.IsTexture ? "textures" : "buffers")} with the same description.", node.Pass);
+                        $"Pass '{node.Pass.Name}' passes {pair} through, which needs two transient {(link.IsTexture ? "textures" : "buffers")} with the same description, or an output with no depth whose colors are the first colors of the input.", node.Pass);
 
                 if (!inputsOf.TryGetValue(link.Output, out List<RenderResourceID>? list))
                     inputsOf[link.Output] = list = [];

@@ -92,6 +92,34 @@ file sealed class FlagPass(string name, bool enabled, string? input, string? out
     }
 }
 
+file sealed class SceneLikePass(string output, bool enabled, string? input, List<string> log) : IInstancePass
+{
+    public RenderTexture? Seen { get; private set; }
+
+    public string Name => output;
+
+    public GraphKind Kind => TestViews.Kind;
+
+    public bool IsEnabled(GraphInstance instance) => enabled;
+
+    public void Setup(InstanceContextBuilder builder)
+    {
+        TextureHandle read = input == null ? default : builder.DeclareInputTexture(input);
+        GraphTextureDesc desc = input == null
+            ? GraphTextureDesc.Sized(4, 4, true, PixelFormat.R32_G32_B32_A32_Float, PixelFormat.R16_G16_Float)
+            : GraphTextureDesc.Sized(4, 4, false, PixelFormat.R32_G32_B32_A32_Float);
+        TextureHandle write = builder.DeclareOutputTexture(output, desc);
+        if (input != null)
+            builder.Passthrough(read, write);
+    }
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        log.Add(Name);
+        Seen = context.GetRenderTexture(new TextureHandle(RenderResourceID.Intern(input ?? output)));
+    }
+}
+
 file sealed class ClearSharedPass(Color color) : IExecutionPass
 {
     public static readonly RenderResourceID Id = RenderResourceID.Intern("Shared");
@@ -234,6 +262,22 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
 
         Assert.Equal(["Source", "Consumer"], log);
         Assert.Same(source.Seen, consumer.Seen);
+    }
+
+    [Fact]
+    public void Dispatch_ADisabledPassWithAPassthroughFromTheLeadingColorsOfADepthTarget_GivesItsConsumersTheInput()
+    {
+        List<string> log = new();
+        SceneLikePass scene = new("lead_scene", true, null, log);
+        SceneLikePass tint = new("lead_tint", false, "lead_scene", log);
+        FlagPass consumer = new("Consumer", true, "lead_tint", null, false, log);
+        using RenderGraph graph = TestViews.Build([scene, tint, consumer]);
+
+        GD.DispatchGraph(graph, TestViews.Single(graph));
+        GD.WaitForIdle();
+
+        Assert.Equal(["lead_scene", "Consumer"], log);
+        Assert.Same(scene.Seen, consumer.Seen);
     }
 
     [Fact]
