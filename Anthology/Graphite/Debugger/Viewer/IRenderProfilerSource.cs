@@ -12,6 +12,9 @@ public interface IRenderProfilerSource
 
     IReadOnlyList<Recording> Frames { get; }
 
+    /// <summary>How many frames Frames holds when full, or 0 when unknown.</summary>
+    int FrameCapacity => 0;
+
     Recording? Latest { get; }
 
     double TotalMilliseconds { get; }

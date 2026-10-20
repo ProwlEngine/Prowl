@@ -22,7 +22,7 @@ internal sealed partial class ProfilerView
     private static float PanelHeaderHeight => Metrics.HeaderHeight + Metrics.Padding;
     private const float FramesHeight = 200f;
     private const float HierarchyWidth = 330f;
-    private const float BarSlot = 4f;
+    private int _peakFrames;
     private const double BudgetMs = 16.7;
     private const double ScaleMs = 25;
 
@@ -399,9 +399,13 @@ internal sealed partial class ProfilerView
         double cumulative = _source.TotalFrames > 0 ? _source.TotalMilliseconds / _source.TotalFrames : 0;
         double[] ms = frames.Select((_, i) => _source.Timing(i).FrameMilliseconds).ToArray();
 
+        _peakFrames = Math.Max(_peakFrames, frames.Count);
+        int capacity = Math.Max(1, _source.FrameCapacity > 0 ? _source.FrameCapacity : _peakFrames);
+
         int Hit(float x, float width)
         {
-            int i = frames.Count - 1 - (int)((width - x) / BarSlot);
+            float slot = width / capacity;
+            int i = frames.Count - 1 - (int)((width - x) / slot);
             return x >= 0 && x < width && i >= 0 && i < frames.Count ? i : -1;
         }
 
@@ -446,13 +450,14 @@ internal sealed partial class ProfilerView
                 canvas.DrawText("8.3 ms", x0 + 6, Y(BudgetMs / 2) - 12, Style.Alpha(Style.Ink, 30), Style.Tiny, Style.Mono);
                 canvas.DrawText("25 ms", x0 + w - 6, y0 + 4, Style.InkDim, Style.Small, Style.Mono, 0f, new Prowl.Vector.Float2(1, 0));
 
-                float barW = BarSlot - 1f;
+                float slot = w / capacity;
+                float barW = slot > 3f ? slot - 1f : MathF.Max(1f, slot);
                 int hover = _barsHoverX >= 0 ? Hit(_barsHoverX, w) : -1;
-                int visible = Math.Min(frames.Count, (int)MathF.Ceiling(w / BarSlot));
+                int visible = Math.Min(frames.Count, capacity);
                 for (int ago = 0; ago < visible; ago++)
                 {
                     int i = frames.Count - 1 - ago;
-                    float bx = x0 + w - (ago + 1) * BarSlot;
+                    float bx = x0 + w - (ago + 1) * slot;
                     Color c = i == liveIndex ? Style.Selection : ms[i] > BudgetMs ? Style.OverBudget : Style.FrameBar;
                     float top = Y(ms[i]);
                     canvas.RectFilled(bx, top, barW, y0 + h - top, c);

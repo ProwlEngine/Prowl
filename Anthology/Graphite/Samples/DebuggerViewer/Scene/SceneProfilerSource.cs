@@ -35,6 +35,8 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
 
     public IReadOnlyList<Recording> Frames => _frames;
 
+    public int FrameCapacity => Window;
+
     public Recording? Latest { get; private set; }
 
     public double TotalMilliseconds { get; private set; }
