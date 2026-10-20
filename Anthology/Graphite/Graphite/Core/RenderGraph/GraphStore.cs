@@ -19,26 +19,55 @@ public sealed class GraphStore : IDisposable
         switch (resource)
         {
             case GraphTextureResource { Retained: true } texture:
-                int textureSlots = texture.HistoryDepth + 1;
-                if (!_textures.TryGetValue(texture.Id, out TextureRings? textures) || textures.Slots != textureSlots)
-                {
-                    textures?.DisposeAll();
-                    _textures[texture.Id] = textures = new TextureRings(texture.Id, textureSlots);
-                }
-                texture.Rings = textures;
+                texture.Rings = TexturesFor(texture.Id, texture.HistoryDepth + 1);
                 break;
 
             case GraphBufferResource { Retained: true } buffer:
-                int bufferSlots = buffer.HistoryDepth + 1;
-                bool keepsContents = buffer.HistoryDepth == 0;
-                if (!_buffers.TryGetValue(buffer.Id, out BufferRings? buffers) || buffers.Slots != bufferSlots || buffers.KeepsContents != keepsContents)
-                {
-                    buffers?.DisposeAll();
-                    _buffers[buffer.Id] = buffers = new BufferRings(buffer.Id, bufferSlots, keepsContents ? _resizes : null);
-                }
-                buffer.Rings = buffers;
+                buffer.Rings = BuffersFor(buffer.Id, buffer.HistoryDepth + 1);
                 break;
         }
+    }
+
+    /// <summary>Resolves a persistent texture by id before any graph declares it. A later graph that declares the same id, size and storage use binds to the same texture.</summary>
+    public RenderTexture ResolvePersistent(GraphicsDevice device, RenderResourceID id, in GraphTextureDesc description, GraphInstanceKey key, GraphExtent extent = default, bool storage = false)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (description.SizeMode == TextureSizeMode.InstanceRelative && !extent.IsValid)
+            throw new ArgumentException($"Resource '{RenderResourceID.ToString(id)}' is sized relative to its instance, so it needs an extent.", nameof(extent));
+
+        GraphTextureResource texture = new(id, description, persistent: true) { Storage = storage, Rings = TexturesFor(id, 1) };
+        return texture.ResolveHistory(device, key, device.LastBegunExecutionId + 1, 0, texture.Allocation(extent));
+    }
+
+    /// <summary>Resolves a persistent buffer by id before any graph declares it. A later graph that declares the same id binds to the same buffer.</summary>
+    public DeviceBuffer ResolvePersistent(GraphicsDevice device, RenderResourceID id, in GraphBufferDesc description, GraphInstanceKey key)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        GraphBufferResource buffer = new(id, description, persistent: true) { Rings = BuffersFor(id, 1) };
+        return buffer.ResolveHistory(device, key, device.LastBegunExecutionId + 1, 0, description.ToBufferDescription());
+    }
+
+    private TextureRings TexturesFor(RenderResourceID id, int slots)
+    {
+        if (!_textures.TryGetValue(id, out TextureRings? rings) || rings.Slots != slots)
+        {
+            rings?.DisposeAll();
+            _textures[id] = rings = new TextureRings(id, slots);
+        }
+        return rings;
+    }
+
+    private BufferRings BuffersFor(RenderResourceID id, int slots)
+    {
+        bool keepsContents = slots == 1;
+        if (!_buffers.TryGetValue(id, out BufferRings? rings) || rings.Slots != slots || rings.KeepsContents != keepsContents)
+        {
+            rings?.DisposeAll();
+            _buffers[id] = rings = new BufferRings(id, slots, keepsContents ? _resizes : null);
+        }
+        return rings;
     }
 
     internal void Sweep(ulong executionId)
