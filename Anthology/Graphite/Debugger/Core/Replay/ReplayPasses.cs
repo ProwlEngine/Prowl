@@ -289,20 +289,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
         switch (property.Kind)
         {
             case PropertyKind.Uniform:
-                switch (property.UniformType)
-                {
-                    case UniformScalarType.Float1: set.SetFloat(name, MemoryMarshal.Read<float>(bytes)); break;
-                    case UniformScalarType.Float2: set.SetFloat2(name, MemoryMarshal.Read<Float2>(bytes)); break;
-                    case UniformScalarType.Float3: set.SetFloat3(name, MemoryMarshal.Read<Float3>(bytes)); break;
-                    case UniformScalarType.Float4: set.SetFloat4(name, MemoryMarshal.Read<Float4>(bytes)); break;
-                    case UniformScalarType.Int1: set.SetInt(name, MemoryMarshal.Read<int>(bytes)); break;
-                    case UniformScalarType.Int2: set.SetInt2(name, MemoryMarshal.Read<Int2>(bytes)); break;
-                    case UniformScalarType.Int3: set.SetInt3(name, MemoryMarshal.Read<Int3>(bytes)); break;
-                    case UniformScalarType.Int4: set.SetInt4(name, MemoryMarshal.Read<Int4>(bytes)); break;
-                    case UniformScalarType.Float4x4: set.SetMatrix(name, MemoryMarshal.Read<Float4x4>(bytes)); break;
-                    default: throw new NotSupportedException($"Uniform type {property.UniformType} cannot be replayed.");
-                }
-
+                set.SetUniform(name, property.UniformType, bytes);
                 break;
             case PropertyKind.Buffer:
                 set.SetBuffer(name, BufferRange(property));
