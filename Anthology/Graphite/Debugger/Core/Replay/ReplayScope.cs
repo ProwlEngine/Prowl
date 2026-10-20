@@ -427,8 +427,8 @@ internal sealed unsafe class ReplayScope : IDisposable
         if (resource.Texture is not { } texture)
             return null;
 
-        if ((texture.Usage & TextureUsage.DepthStencil) != 0)
-            return $"{resource.Name} is a depth texture, which cannot be restored yet.";
+        if (texture.Format is PixelFormat.D24_UNorm_S8_UInt or PixelFormat.D32_Float_S8_UInt)
+            return $"{resource.Name} has a stencil plane, which cannot be restored yet.";
 
         if (texture.SampleCount != TextureSampleCount.Count1)
             return $"{resource.Name} is multisampled, which cannot be restored yet.";

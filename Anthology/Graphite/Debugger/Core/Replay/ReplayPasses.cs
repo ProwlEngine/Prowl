@@ -361,7 +361,7 @@ internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass
                 && (property.Range.BaseMipLevel != 0
                     || property.Range.MipLevels != texture.MipLevels
                     || property.Range.BaseArrayLayer != 0
-                    || property.Range.ArrayLayers != texture.ArrayLayers));
+                    || property.Range.ArrayLayers != texture.ArrayLayers * (texture.Type == TextureType.TextureCube ? 6u : 1u)));
 }
 
 internal static class ReplayEvents
