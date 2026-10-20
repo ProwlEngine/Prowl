@@ -97,8 +97,12 @@ Shader "Default/Water"
                 ivec2 sampleUV = ivec2(round(clamp(vTerrainUV, vec2(0.0), vec2(1.0)) * vec2(last)));
                 float level = texelFetch(_WaterLevelMap, sampleUV, 0).r;
                 float depth = max(level - terrainHeight(vTerrainUV), 0.0);
-                float depthMix = smoothstep(0.0, max(_WaterVisibilityDepth, 0.01), depth);
-                vec3 waterColor = mix(_ShallowWaterColor.rgb, _DeepWaterColor.rgb, depthMix);
+                float normalizedDepth = clamp(depth / max(_WaterVisibilityDepth, 0.01), 0.0, 1.0);
+                // Keep the shallow hue through the first part of the basin;
+                // opacity can still build with depth independently of the hue.
+                float colorMix = smoothstep(0.20, 1.0, normalizedDepth);
+                float opacityMix = smoothstep(0.0, 1.0, normalizedDepth);
+                vec3 waterColor = mix(_ShallowWaterColor.rgb, _DeepWaterColor.rgb, colorMix);
                 Graphite_ViewData view = Graphite_View();
                 float time = view.time.x;
                 float waveNumber = 6.2831853 / max(_RippleWavelength, 0.5);
@@ -107,8 +111,8 @@ Shader "Default/Water"
                 float ripple = 0.6 * sin(phaseA) + 0.4 * sin(phaseB);
                 waterColor = clamp(waterColor * (1.0 + _RippleStrength * 0.16 * ripple)
                                    + vec3(0.06) * _RippleStrength * pow(max(ripple, 0.0), 3.0), 0.0, 1.0);
-                float opacity = mix(0.12, 1.0, depthMix);
-                float edge = smoothstep(0.001, 0.25, coverage);
+                float opacity = mix(0.28, 1.0, opacityMix);
+                float edge = smoothstep(0.001, 0.18, coverage);
                 fragColor = vec4(waterColor, opacity * edge);
             }
         }
