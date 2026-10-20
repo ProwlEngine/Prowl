@@ -28,6 +28,7 @@ them lands in a single commit, no cross-repo version juggling, no publish chain.
 | `Recast`     | Prowl.Recast      | DotRecast fork for Navmesh generation and pathfinding |
 | `Aperture`   | Prowl.Aperture    | Image loading (BMP/DDS/EXR/GIF/HDR/ICO/JPEG/PNG/PNM/PSD/RAW/TGA/TIFF/WebP) |
 | `Motion`     | Prowl.Motion      | Skeletal animation, graphs, IK and humanoid retargeting |
+| `Warp`       | Prowl.Warp        | Base networking and transports (reliable UDP via KCP, local, Steam) |
 
 ## Versioning
 

@@ -1,0 +1,70 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+
+namespace Prowl.Warp;
+
+/// <summary>Settings for a <see cref="NetSession"/>.</summary>
+public sealed class NetSessionOptions
+{
+    /// <summary>
+    /// Your game's version. The host turns away clients whose version differs, with
+    /// <see cref="SessionEndReason.VersionMismatch"/>.
+    /// </summary>
+    public uint AppVersion { get; set; }
+
+    /// <summary>The most clients that may be joined at once, not counting the host.</summary>
+    public int MaxPeers { get; set; } = 64;
+
+    /// <summary>
+    /// How long a client may take to complete joining once connected. On the host this also bounds how
+    /// long a <see cref="PendingJoin"/> may wait for a decision before it is refused.
+    /// </summary>
+    public TimeSpan JoinTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// After the host kicks or refuses a client, how long it waits for the client to hang up before
+    /// closing the connection itself. Gives the reason time to arrive over a lossy link.
+    /// </summary>
+    public TimeSpan GoodbyeLinger { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The largest reliable message this side accepts, in bytes. Reliable messages bigger than the
+    /// transport allows are split into fragments and reassembled; a sender that announces more than this
+    /// is removed with <see cref="SessionEndReason.ProtocolError"/>. Bounds the memory a peer can make
+    /// this side allocate.
+    /// </summary>
+    public int MaxMessageSize { get; set; } = 16 * 1024 * 1024;
+}
+
+/// <summary>Why a session ended, or why a peer left it.</summary>
+public enum SessionEndReason : byte
+{
+    /// <summary>The peer left on purpose: <see cref="NetSession.Shutdown"/> locally, or a client closing its connection.</summary>
+    Left,
+
+    /// <summary>The host removed the peer with <see cref="NetSession.Kick"/>.</summary>
+    Kicked,
+
+    /// <summary>The host refused the join, through <see cref="PendingJoin.Reject"/> or a transport level refusal.</summary>
+    Rejected,
+
+    /// <summary>The client's <see cref="NetSessionOptions.AppVersion"/> differs from the host's.</summary>
+    VersionMismatch,
+
+    /// <summary>The host has no room for another peer.</summary>
+    ServerFull,
+
+    /// <summary>The host shut the session down.</summary>
+    HostShutdown,
+
+    /// <summary>The connection went silent, or joining took longer than <see cref="NetSessionOptions.JoinTimeout"/>.</summary>
+    Timeout,
+
+    /// <summary>The host could not be reached at all.</summary>
+    Unreachable,
+
+    /// <summary>The remote end sent something malformed.</summary>
+    ProtocolError,
+}
