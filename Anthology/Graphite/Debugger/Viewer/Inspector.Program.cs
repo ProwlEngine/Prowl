@@ -58,12 +58,18 @@ internal sealed partial class ProfilerView
     private static string UniformValue(RecordedProperty prop)
     {
         byte[] bytes = prop.Uniform.Items.ToArray();
-        int count = bytes.Length / 4;
+        bool wide = prop.UniformType is >= UniformScalarType.Double1 and <= UniformScalarType.Double4 or UniformScalarType.Double4x4;
+        int size = wide ? 8 : 4;
+        int count = bytes.Length / size;
         if (count == 0)
             return "-";
-        IEnumerable<string> values = Enumerable.Range(0, Math.Min(4, count)).Select(i => prop.UniformType is >= UniformScalarType.Int1 and <= UniformScalarType.Int4
-            ? BitConverter.ToInt32(bytes, i * 4).ToString()
-            : Style.F(BitConverter.ToSingle(bytes, i * 4), "0.###"));
+        IEnumerable<string> values = Enumerable.Range(0, Math.Min(4, count)).Select(i => prop.UniformType switch
+        {
+            >= UniformScalarType.Int1 and <= UniformScalarType.Int4 => BitConverter.ToInt32(bytes, i * 4).ToString(),
+            >= UniformScalarType.UInt1 and <= UniformScalarType.UInt4 => BitConverter.ToUInt32(bytes, i * 4).ToString(),
+            _ when wide => Style.F((float)BitConverter.ToDouble(bytes, i * 8), "0.###"),
+            _ => Style.F(BitConverter.ToSingle(bytes, i * 4), "0.###"),
+        });
         string joined = string.Join(", ", values);
         return count == 1 ? joined : count > 4 ? $"[{joined}, ...]" : $"({joined})";
     }
