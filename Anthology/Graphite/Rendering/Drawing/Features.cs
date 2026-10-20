@@ -87,6 +87,17 @@ public readonly struct FeatureView
         OutputHeight = desc.Target is { } output ? Math.Max(1u, (uint)MathF.Round(output.Height * desc.Viewport.W)) : height;
     }
 
+    internal FeatureView(ViewKind kind, in CameraShape shape)
+    {
+        Kind = kind;
+        LayerCount = shape.Layers;
+        RenderScale = 1;
+        OutputScale = shape.OutputScale;
+        World = null!;
+    }
+
+    internal float OutputScale { get; } = 1;
+
     /// <summary>The view as features after an upscale see it, its colour at the output resolution.</summary>
     internal FeatureView AtOutput() => this with { Width = OutputWidth, Height = OutputHeight, RenderScale = 1, Upscaled = true };
 
@@ -118,14 +129,9 @@ public readonly struct FeatureView
     /// <summary>Whether the view keeps an opaque colour copy, made once one of its transparent passes read it.</summary>
     internal bool SceneColor { get; }
 
-    /// <summary>A texture sized as a part of the colour's resolution, <see cref="Width"/> by <see cref="Height"/>, an array on layered views.</summary>
+    /// <summary>A texture sized as a part of the colour's resolution, an array on layered views. Width and Height are zero in Setup, so size by scale.</summary>
     public GraphTextureDesc Texture(PixelFormat format, float scale = 1)
-        => Upscaled
-            ? Texture(Math.Max(1, (int)(Width * scale)), Math.Max(1, (int)(Height * scale)), format)
-            : GraphTextureDesc.ViewSized(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
-
-    /// <summary>A texture of a fixed size, an array on layered views.</summary>
-    public GraphTextureDesc Texture(int width, int height, PixelFormat format) => GraphTextureDesc.Sized(width, height, false, format) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
+        => GraphTextureDesc.InstanceSized(format, scale * (Upscaled ? OutputScale : 1f)) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
 
     /// <summary>A texture of one layer whatever the view, for state the view's layers share.</summary>
     public static GraphTextureDesc Shared(int width, int height, PixelFormat format) => GraphTextureDesc.Sized(width, height, false, format);
