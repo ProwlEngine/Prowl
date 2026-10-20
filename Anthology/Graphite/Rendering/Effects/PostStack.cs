@@ -341,6 +341,7 @@ public sealed class Bloom : PostEffect
     public override void Render(FeatureContext context)
     {
         ViewState state = context.GetViewState<ViewState>();
+        _properties.Clear();
         _properties.SetFloat("_Threshold", _settings.Threshold);
         _properties.SetFloat("_SoftKnee", _settings.Knee);
         _properties.SetFloat("_Clamp", _settings.Clamp);
