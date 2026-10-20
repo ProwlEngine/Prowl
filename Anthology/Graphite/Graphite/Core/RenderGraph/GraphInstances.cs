@@ -24,6 +24,10 @@ public readonly struct GraphImport
     public static GraphImport Of(RenderResourceID id, RenderTexture texture)
         => new(id, texture ?? throw new ArgumentNullException(nameof(texture)), null);
 
+    /// <summary>Binds a texture to a slot. The graph can read or copy it, not draw into it.</summary>
+    public static GraphImport Of(RenderResourceID id, Texture texture)
+        => Of(id, new RenderTexture(texture ?? throw new ArgumentNullException(nameof(texture))));
+
     /// <summary>Binds a buffer to a slot.</summary>
     public static GraphImport Of(RenderResourceID id, DeviceBuffer buffer)
         => new(id, null, buffer ?? throw new ArgumentNullException(nameof(buffer)));

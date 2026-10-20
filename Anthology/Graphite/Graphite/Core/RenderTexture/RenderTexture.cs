@@ -15,16 +15,32 @@ public sealed class RenderTexture : GraphicsResource
     /// <summary>Depth attachment or null.</summary>
     public Texture? DepthTexture { get; }
 
-    /// <summary>Framebuffer for these attachments.</summary>
-    public Framebuffer Framebuffer { get; }
+    /// <summary>Framebuffer for these attachments. Throws for a wrapped texture that cannot be drawn into.</summary>
+    public Framebuffer Framebuffer => _framebuffer
+        ?? throw new InvalidOperationException("This render texture wraps a texture without a framebuffer, so it cannot be drawn into.");
 
+    private readonly Framebuffer? _framebuffer;
     private readonly bool _owned = true;
+
+    /// <summary>Wraps an existing texture, so a graph can read or copy it. The caller keeps owning the texture.</summary>
+    public RenderTexture(Texture texture)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+        _owned = false;
+
+        bool depth = (texture.Usage & TextureUsage.DepthStencil) != 0;
+        ColorTextures = depth ? Array.Empty<Texture>() : [texture];
+        DepthTexture = depth ? texture : null;
+        Desc = (depth
+            ? new RenderTextureDescription(texture.Width, texture.Height, Array.Empty<PixelFormat>(), texture.Format, texture.SampleCount)
+            : new RenderTextureDescription(texture.Width, texture.Height, [texture.Format], false, texture.SampleCount)) with { ArrayLayers = texture.ArrayLayers };
+    }
 
     /// <summary>Wraps an existing framebuffer, so a graph can import it. The caller keeps owning the framebuffer.</summary>
     public RenderTexture(Framebuffer framebuffer)
     {
         _owned = false;
-        Framebuffer = framebuffer;
+        _framebuffer = framebuffer;
 
         ColorTextures = new Texture[framebuffer.ColorTargets.Count];
         PixelFormat[] formats = new PixelFormat[ColorTextures.Length];
@@ -73,7 +89,7 @@ public sealed class RenderTexture : GraphicsResource
                 desc.SampleCount));
         }
 
-        Framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures) { ViewCount = layers > 1 ? layers : 0 });
+        _framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures) { ViewCount = layers > 1 ? layers : 0 });
     }
 
     /// <summary>Depth-stencil format render textures use: D24_UNorm_S8_UInt, or D32_Float_S8_UInt when the device lacks it.</summary>
@@ -92,7 +108,8 @@ public sealed class RenderTexture : GraphicsResource
 
     private protected override void NameChanged(string name)
     {
-        Framebuffer.Name = name;
+        if (_framebuffer != null)
+            _framebuffer.Name = name;
         for (int i = 0; i < ColorTextures.Length; i++)
             ColorTextures[i].Name = $"{name} Color[{i}]";
         if (DepthTexture != null)
@@ -104,7 +121,7 @@ public sealed class RenderTexture : GraphicsResource
         if (!_owned)
             return;
 
-        Framebuffer.Dispose();
+        _framebuffer?.Dispose();
         foreach (Texture texture in ColorTextures)
             texture.Dispose();
         DepthTexture?.Dispose();

@@ -72,6 +72,25 @@ file sealed class SlotWritePass(uint[] values) : IInstancePass
     public void Render(InstanceContext context, CommandBuffer cmd) => cmd.UpdateBuffer(context.GetRenderBuffer(_slot), 0, values);
 }
 
+file sealed class SlotCopyPass(DeviceBuffer readback) : IInstancePass
+{
+    public static readonly RenderResourceID Slot = RenderResourceID.Intern("CopySlot");
+
+    private TextureHandle _slot;
+
+    public string Name => "SlotCopy";
+
+    public GraphKind Kind => TestViews.Kind;
+
+    public void Setup(InstanceContextBuilder builder) => _slot = builder.DeclareImportSlotTexture(Slot, TextureState.TransferSrc);
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        Texture texture = context.GetRenderTexture(_slot).ColorTextures[0];
+        cmd.CopyTextureToBuffer(texture, readback, 0, TextureRegion.Whole(texture));
+    }
+}
+
 public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
@@ -131,6 +150,21 @@ public abstract class ImportedBufferTests<T> : GraphicsDeviceTestBase<T> where T
             Assert.Equal([1u, 2u, 3u, 4u], map[..4].ToArray());
             GD.Unmap(readback);
         }
+    }
+
+    [Fact]
+    public void ImportSlots_BindAPlainTexture()
+    {
+        Texture texture = RF.CreateTexture(TextureDescription.Texture2D(2, 2, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        DeviceBuffer readback = CreateTexelReadbackBuffer<uint>(2, 2);
+        GD.Record(cmd => cmd.UpdateTexture<uint>(texture, [0xFF00FF00, 0xFF00FF00, 0xFF00FF00, 0xFF00FF00]));
+        using RenderGraph graph = TestViews.Build([new SlotCopyPass(readback)]);
+        GraphInstances instances = new();
+        instances.Add(TestViews.Kind, 0, imports: [GraphImport.Of(SlotCopyPass.Slot, texture)]);
+
+        GD.WaitForExecution(GD.DispatchGraph(graph, instances));
+
+        Assert.Equal(0xFF00FF00u, ReadTexels<uint>(readback, 2, 2)[1, 1]);
     }
 
     [Fact]
