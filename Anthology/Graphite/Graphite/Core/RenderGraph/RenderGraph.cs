@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>Solved render graph: passes ordered readers-after-writers, plus merged resource table. Built from a pipeline's passes and centrally declared resources.</summary>
 public sealed class RenderGraph : IDisposable
@@ -14,14 +14,14 @@ public sealed class RenderGraph : IDisposable
 
         internal readonly ResourceAccess[] Accesses;
 
-        /// <summary>True if the pass writes the view target, so it only runs for views that have one.</summary>
-        public bool WritesViewTarget
+        /// <summary>True if the pass writes the instance target, so it only runs for instances that have one.</summary>
+        public bool WritesInstanceTarget
         {
             get
             {
                 foreach (ResourceAccess access in Accesses)
                 {
-                    if (access.IsOutput && access.Id == GraphViewTargetResource.ViewTargetId)
+                    if (access.IsOutput && access.Id == GraphInstanceTargetResource.InstanceTargetId)
                         return true;
                 }
                 return false;
@@ -65,8 +65,8 @@ public sealed class RenderGraph : IDisposable
     /// <summary>All declared resources by ID (first declaration wins).</summary>
     public IReadOnlyDictionary<RenderResourceID, GraphResource> Resources { get; }
 
-    /// <summary>True if any pass writes the view target, so views with a target draw and views targeting a swapchain present.</summary>
-    public bool WritesViewTarget { get; }
+    /// <summary>True if any pass writes the instance target.</summary>
+    public bool WritesInstanceTarget { get; }
 
     private RenderGraph(
         string name,
@@ -76,7 +76,7 @@ public sealed class RenderGraph : IDisposable
         Name = name;
         OrderedPasses = ordered;
         Resources = resources;
-        WritesViewTarget = resources.ContainsKey(GraphViewTargetResource.ViewTargetId);
+        WritesInstanceTarget = resources.ContainsKey(GraphInstanceTargetResource.InstanceTargetId);
     }
 
     /// <summary>Disposes physical resources owned by any history resource here.</summary>
@@ -123,7 +123,7 @@ public sealed class RenderGraph : IDisposable
             nodes[i] = new PassNode(pass, builder.Accesses.ToArray());
         }
 
-        ValidateInputsHaveProducers(nodes, resources);
+        ValidateInputs(nodes, resources);
         ApplyStorageUsage(nodes, resources);
 
         int[] ordered = TopologicalSort(nodes);
@@ -137,13 +137,15 @@ public sealed class RenderGraph : IDisposable
 
     private static bool SameDeclaration(GraphResource existing, GraphResource declared) => (existing, declared) switch
     {
-        (GraphTextureResource a, GraphTextureResource b) => a.HistoryDepth == b.HistoryDepth && SameTextureDesc(a.Description, b.Description),
-        (GraphBufferResource a, GraphBufferResource b) => a.HistoryDepth == b.HistoryDepth
+        (GraphTextureResource a, GraphTextureResource b) => a.HistoryDepth == b.HistoryDepth && a.Persistent == b.Persistent && SameTextureDesc(a.Description, b.Description),
+        (GraphBufferResource a, GraphBufferResource b) => a.HistoryDepth == b.HistoryDepth && a.Persistent == b.Persistent
             && a.Description.SizeInBytes == b.Description.SizeInBytes
             && a.Description.Usage == b.Description.Usage,
         (GraphImportedTextureResource a, GraphImportedTextureResource b) => ReferenceEquals(a.Texture, b.Texture),
         (GraphImportedBufferResource a, GraphImportedBufferResource b) => ReferenceEquals(a.Buffer, b.Buffer),
-        (GraphViewTargetResource a, GraphViewTargetResource b) => a.DepthFormat == b.DepthFormat,
+        (GraphTextureSlotResource, GraphTextureSlotResource) => true,
+        (GraphBufferSlotResource, GraphBufferSlotResource) => true,
+        (GraphInstanceTargetResource a, GraphInstanceTargetResource b) => a.DepthFormat == b.DepthFormat,
         _ => false,
     };
 
@@ -172,14 +174,14 @@ public sealed class RenderGraph : IDisposable
     {
         string passName = pass.Name;
         GraphResource resource = resources[access.Id];
-        if (resource is GraphViewTargetResource)
+        if (resource is GraphInstanceTargetResource)
         {
             if (!access.IsOutput)
-                throw new RenderGraphException($"Pass '{passName}' reads the view target; it can only be written.", pass);
+                throw new RenderGraphException($"Pass '{passName}' reads the instance target; it can only be written.", pass);
             return;
         }
 
-        if (access.IsTexture != (resource is GraphTextureResource or GraphImportedTextureResource))
+        if (access.IsTexture != (resource is GraphTextureResource or GraphImportedTextureResource or GraphTextureSlotResource))
             throw new RenderGraphException(
                 $"Pass '{passName}' declares resource '{RenderResourceID.ToString(access.Id)}' as a " +
                 $"{(access.IsTexture ? "texture" : "buffer")}, but it is a {(access.IsTexture ? "buffer" : "texture")}.", pass);
@@ -205,18 +207,22 @@ public sealed class RenderGraph : IDisposable
         }
     }
 
-    private static void ValidateInputsHaveProducers(
-        PassNode[] nodes,
-        Dictionary<RenderResourceID, GraphResource> resources)
+    private static void ValidateInputs(PassNode[] nodes, Dictionary<RenderResourceID, GraphResource> resources)
     {
         foreach (PassNode node in nodes)
         {
             foreach (ResourceAccess access in node.Accesses)
             {
-                if (!access.IsOutput && !resources.ContainsKey(access.Id))
+                if (resources.ContainsKey(access.Id))
+                    continue;
+
+                if (access.IsOutput)
                     throw new RenderGraphException(
-                        $"Pass '{node.Pass.Name}' reads resource '{RenderResourceID.ToString(access.Id)}' but no pass " +
-                        "outputs it and it is not declared centrally on the pipeline.", node.Pass);
+                        $"Pass '{node.Pass.Name}' writes resource '{RenderResourceID.ToString(access.Id)}' without describing it, and no pass declares it.", node.Pass);
+
+                throw new RenderGraphException(
+                    $"Pass '{node.Pass.Name}' reads resource '{RenderResourceID.ToString(access.Id)}' but no pass " +
+                    "outputs it and it is not imported.", node.Pass);
             }
         }
     }
