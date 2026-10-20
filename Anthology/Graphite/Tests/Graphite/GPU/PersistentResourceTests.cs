@@ -68,6 +68,19 @@ public abstract class PersistentResourceTests<T> : GraphicsDeviceTestBase<T> whe
 
         Assert.Equal([5u, 6u, 7u, 8u], RunAndRead(store, 64, null));
     }
+
+    [Fact]
+    public void PersistentBuffer_ResolvedThroughTheStore_IsTheOneALaterGraphUses()
+    {
+        using GraphStore store = new();
+        GraphInstanceKey key = new(TestViews.Kind, 0);
+        GraphBufferDesc desc = GraphBufferDesc.Of(16, BufferUsage.StructuredBufferReadWrite);
+        DeviceBuffer early = store.ResolvePersistent(GD, FillOncePass.Id, desc, key);
+
+        Assert.Equal([9u, 9u, 9u, 9u], RunAndRead(store, 16, [9, 9, 9, 9]));
+
+        Assert.Same(early, store.ResolvePersistent(GD, FillOncePass.Id, desc, key));
+    }
 }
 
 #if TEST_VULKAN
