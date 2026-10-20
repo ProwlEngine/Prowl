@@ -89,6 +89,31 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
+    /// Declares a texture the instance binds at dispatch under this id, for textures the caller owns and changes between executions.
+    /// A write usage makes it an output, otherwise an input.
+    /// </summary>
+    public TextureHandle DeclareImportSlotTexture(
+        RenderResourceID id,
+        TextureState usage = TextureState.Sampled,
+        TextureState? depthUsage = null,
+        TargetLoadStoreOps? ops = null)
+    {
+        bool isOutput = (usage & (TextureState.Attachment | TextureState.Storage | TextureState.TransferDst)) != 0;
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput, new GraphTextureSlotResource(id, ops)));
+        return new TextureHandle(id);
+    }
+
+    /// <summary>
+    /// Declares a buffer the instance binds at dispatch under this id, for buffers the caller owns and changes between executions.
+    /// Usage with a write flag makes it an output, otherwise an input.
+    /// </summary>
+    public BufferHandle DeclareImportSlotBuffer(RenderResourceID id, BufferAccess usage = BufferAccess.AllReads)
+    {
+        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: (usage & BufferAccess.AllWrites) != 0, new GraphBufferSlotResource(id)));
+        return new BufferHandle(id);
+    }
+
+    /// <summary>
     /// Declares a write to <see cref="GraphInstance.Target"/>, presented after dispatch when it is a swapchain's. Skipped for an instance with none.
     /// Clears by default. A depth format gives the target depth, made on demand for a swapchain; any other target must have it.
     /// </summary>

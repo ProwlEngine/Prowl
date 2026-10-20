@@ -313,6 +313,24 @@ public sealed class GraphImportedTextureResource : GraphResource
     }
 }
 
+/// <summary>A texture the instance binds at dispatch under the resource's id. Caller keeps ownership, graph never disposes it.</summary>
+public sealed class GraphTextureSlotResource : GraphResource
+{
+    /// <summary>Load/store ops applied when bound as a raster target. Loads by default.</summary>
+    public TargetLoadStoreOps Ops { get; }
+
+    internal GraphTextureSlotResource(RenderResourceID id, TargetLoadStoreOps? ops = null) : base(id)
+    {
+        Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: true);
+    }
+}
+
+/// <summary>A buffer the instance binds at dispatch under the resource's id. Caller keeps ownership, graph never disposes it.</summary>
+public sealed class GraphBufferSlotResource : GraphResource
+{
+    internal GraphBufferSlotResource(RenderResourceID id) : base(id) { }
+}
+
 /// <summary>
 /// The instance's target for this execution: its <see cref="GraphInstance.Target"/>. Write-only.
 /// Passes that write it are skipped for instances with no target.
