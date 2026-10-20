@@ -855,7 +855,7 @@ public sealed class FeatureContext
 
     internal FeatureContext(FeaturePass pass) => _pass = pass;
 
-    internal FeatureChain Chain => _pass.Chain;
+    internal CameraFrame Camera => _pass.Camera;
 
     /// <summary>The underlying graph, for resources the feature declared through <see cref="FeatureBuilder.Graph"/>.</summary>
     public RenderContext Graph { get; internal set; } = null!;
@@ -895,7 +895,7 @@ public sealed class FeatureContext
     public FrameTime Time => _pass.Camera.Time;
 
     /// <summary>Whether a feature before this one in the view encoded the colour for display, as tonemappers do.</summary>
-    public bool DisplayEncoded => _pass.Chain.DisplayEncoded;
+    public bool DisplayEncoded => _pass.Camera.DisplayEncoded;
 
     /// <summary>The renderer's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
     public Texture Noise => _pass.Frame.Noise;
@@ -923,6 +923,9 @@ public sealed class FeatureContext
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
     public T GetViewState<T>() where T : class, new() => _pass.Camera.State<T>(_pass.Feature);
 
+    /// <summary>The state the feature made in Setup, shared by the views of its shape.</summary>
+    public T GetSetupState<T>() where T : class, new() => _pass.Shape.State<T>(_pass.Feature);
+
     /// <summary>Draws the visible opaque renderables' depth prepass onto the current output.</summary>
     public void DrawPrepass() => Drawer.DrawList(Command, _pass.Camera.Prepass);
 
@@ -938,7 +941,7 @@ public sealed class FeatureContext
     /// <summary>Draws the visible renderables with a pass of a type asked for in Setup through <see cref="FeatureBuilder.DrawsPass"/>.</summary>
     public void DrawPass(PassType type)
     {
-        if (_pass.Camera.FindList(type) is not { } list || !_pass.Lists.Contains(list))
+        if (!_pass.Types.Contains(type) || _pass.Camera.FindList(type) is not { } list)
             throw new InvalidOperationException($"{_pass.Name} draws the {type.Name} pass without asking for it in Setup through DrawsPass.");
         Drawer.DrawList(Command, list);
     }
@@ -961,11 +964,12 @@ public sealed class FeatureContext
     /// </summary>
     public void BeginOutput()
     {
-        if (_pass.OutputId is not { } output)
+        if (_pass.Output is not { } output)
             throw new InvalidOperationException($"{_pass.Name} declared no colour to draw onto or write.");
         Framebuffer framebuffer = Graph.GetRenderTexture(output).Framebuffer;
-        bool scene = _pass.Output == _pass.Chain.Scene;
-        if (_pass.Clears)
+        bool scene = output.Id == _pass.Shape.SceneId;
+        bool clears = _pass.Input == null && _pass.CopyBack == null && _pass.Camera.Written.Add(output.Id);
+        if (clears)
         {
             Float4 clear = _pass.Camera.Desc.Overlay ? default : _pass.Camera.Desc.ClearColor with { W = 1 };
             AttachmentOps depth = scene ? AttachmentOps.Clear(0f) : AttachmentOps.Loaded;
@@ -1049,7 +1053,7 @@ public sealed class FeatureContext
     /// </summary>
     public void Fullscreen(FullscreenProgram program, PropertySet? properties = null)
     {
-        if (Color is not { } source || _pass.Output == _pass.Chain.Scene)
+        if (Color is not { } source || _pass.Output?.Id == _pass.Shape.SceneId)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program without writing a new colour, declare WriteColor.");
         BeginOutput();
         Command.SetShader(program.For(View.LayerCount));
@@ -1065,89 +1069,86 @@ public sealed class FeatureContext
 
 }
 
-/// <summary>Runs one feature as a pass of its view's graph.</summary>
-internal sealed class FeaturePass : IPass
+/// <summary>Runs one feature as a pass of the instances of a view shape that selected it.</summary>
+internal sealed class FeaturePass : IInstancePass
 {
-    private static int s_nextId;
     private readonly FeatureContext _context;
 
-    public FeaturePass(RenderFeature feature, CameraFrame camera, FramePipeline frame)
+    public FeaturePass(RenderFeature feature, FeatureShape shape)
     {
         Feature = feature;
-        Camera = camera;
-        Frame = frame;
+        Shape = shape;
         Name = feature.GetType().Name;
-        Id = Interlocked.Increment(ref s_nextId);
         _context = new FeatureContext(this);
     }
 
     public RenderFeature Feature { get; }
-    public CameraFrame Camera { get; }
-    public FramePipeline Frame { get; }
-    public FeatureChain Chain => Camera.Chain;
+    public FeatureShape Shape { get; }
+    public CameraFrame Camera { get; private set; } = null!;
+    public FramePipeline Frame => Shape.Frame;
     public string Name { get; }
-    public int Id { get; }
+    public GraphKind Kind => Shape.Kind;
 
-    /// <summary>The feature's version its declarations were made at.</summary>
     public int BuiltVersion = -1;
 
-    /// <summary>The view as the feature saw it at Setup, at the output resolution after an upscale.</summary>
-    public FeatureView View;
+    public bool AfterUpscale;
 
-    public readonly List<DrawList> Lists = new();
+    public readonly List<PassType> Types = new();
     public bool Draws;
+    public bool EncodesForDisplay;
     public TextureHandle? Input;
     public TextureHandle? SceneRead;
     public TextureHandle? CopyBack;
-    public ChainTexture? Output;
-    public TextureHandle? OutputId;
-    public bool Clears;
+    public TextureHandle? Output;
 
-    public void Setup(RenderContextBuilder builder)
+    public bool IsEnabled(GraphInstance instance) => ((CameraFrame)instance.Data!).Selected.Contains(Feature);
+
+    public void Setup(InstanceContextBuilder builder)
     {
         Input = null;
         SceneRead = null;
         CopyBack = null;
         Output = null;
-        OutputId = null;
-        Clears = false;
+        EncodesForDisplay = false;
         Draws = false;
-        Lists.Clear();
+        Types.Clear();
         BuiltVersion = Feature.Version;
-        View = Chain.Upscaled ? Camera.Info.AtOutput() : Camera.Info;
-        Feature.Setup(new FeatureBuilder(this, builder), View);
+        AfterUpscale = Shape.Upscaled;
+        Feature.Setup(new FeatureBuilder(this, builder), Shape.View);
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
+        Camera = (CameraFrame)context.Instance.Data!;
         _context.Graph = context;
         _context.Command = cmd;
-        _context.View = View;
+        _context.View = AfterUpscale ? Camera.Info.AtOutput() : Camera.Info;
+        if (EncodesForDisplay)
+            Camera.DisplayEncoded = true;
         Feature.Render(_context);
-        if (Feature is ScreenLightingFeature)
-        {
-            Chain.ScreenVisibility.Filled |= Chain.ScreenVisibility.Written;
-            Chain.ScreenIrradiance.Filled |= Chain.ScreenIrradiance.Written;
-        }
     }
 }
 
-/// <summary>A view's first pass: its tables for the frame. The frame's buffers are made ready for it by a fence before the views.</summary>
-internal sealed class SetupPass(FramePipeline frame, CameraFrame camera) : IPass
+/// <summary>A view's first pass: its tables for the frame.</summary>
+internal sealed class SetupPass(FeatureShape shape) : IInstancePass
 {
     public string Name => "Graphite.Setup";
 
-    public void Setup(RenderContextBuilder builder)
-    {
-        camera.Chain.Reset();
-        camera.ResetPassLists();
-    }
+    public GraphKind Kind => shape.Kind;
 
-    public void Render(RenderContext context, CommandBuffer cmd) => camera.Drawer.Prepare(context.Task.RingSlot);
+    public void Setup(InstanceContextBuilder builder) => shape.Begin();
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        CameraFrame camera = (CameraFrame)context.Instance.Data!;
+        camera.Written.Clear();
+        camera.DisplayEncoded = false;
+        camera.Drawer.Prepare(context.Task.RingSlot);
+    }
 }
 
 /// <summary>A view's last pass: the colour the features left, copied into the view's viewport of its target.</summary>
-internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPass
+internal sealed class PresentPass(FeatureShape shape) : IInstancePass
 {
     // sRGB targets encode what they are given and float targets hold linear light, so display encoded colour is decoded
     // for both. Other formats store display values, so linear colour is encoded for them.
@@ -1161,15 +1162,18 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
 
     public string Name => "Graphite.Present";
 
-    public void Setup(RenderContextBuilder builder)
+    public GraphKind Kind => shape.Kind;
+
+    public void Setup(InstanceContextBuilder builder)
     {
-        ChainTexture current = camera.Chain.Current;
-        _source = current.Written ? builder.DeclareInputTexture(current.Id) : null;
-        _target = builder.DeclareViewTarget(new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+        _source = shape.CurrentWritten ? builder.DeclareInputTexture(shape.Current) : null;
+        _target = builder.DeclareInstanceTarget(new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
     }
 
-    public void Render(RenderContext context, CommandBuffer cmd)
+    public void Render(InstanceContext context, CommandBuffer cmd)
     {
+        CameraFrame camera = (CameraFrame)context.Instance.Data!;
+        FramePipeline frame = shape.Frame;
         Framebuffer target = context.GetRenderTexture(_target).Framebuffer;
         Float4 rect = camera.Desc.Viewport;
         Float4 clear = camera.Desc.ClearColor with { W = 1 };
@@ -1186,8 +1190,8 @@ internal sealed class PresentPass(FramePipeline frame, CameraFrame camera) : IPa
         if (_source is { } source)
         {
             bool linearTarget = TakesLinear(target.ColorTargets[0].Target.Format);
-            bool decode = camera.Chain.DisplayEncoded && linearTarget;
-            bool encode = !camera.Chain.DisplayEncoded && !linearTarget;
+            bool decode = camera.DisplayEncoded && linearTarget;
+            bool encode = !camera.DisplayEncoded && !linearTarget;
             cmd.SetShader(frame.Present(decode, encode, overlay).For(camera.LayerCount));
             _properties.SetTexture("Graphite_Source", context.GetRenderTexture(source).ColorTextures[0], frame.LinearSampler);
         }
@@ -1312,8 +1316,8 @@ public sealed class SceneColorFeature : RenderFeature
 
     public override void Render(FeatureContext context)
     {
-        FeatureChain chain = context.Chain;
-        if (!chain.SceneColorUsed || chain.SceneColor is not { } target || context.Color is not { } source)
+        CameraFrame camera = context.Camera;
+        if (!camera.SceneColorUsed || camera.SceneColor is not { } target || context.Color is not { } source)
             return;
         context.Command.CopyTexture(source, 0, 0, 0, 0, 0, target, 0, 0, 0, 0, 0, target.Width, target.Height, 1, target.ArrayLayers);
         context.Command.GenerateMipmaps(target);

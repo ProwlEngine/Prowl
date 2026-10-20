@@ -42,6 +42,7 @@ internal sealed class FeatureShape
     public readonly List<RenderFeature> Features = new();
     public readonly List<PassType> PassTypes = new();
     public readonly Dictionary<string, TextureHandle> Published = new(StringComparer.Ordinal);
+    public readonly Dictionary<(RenderFeature Feature, Type Type), object> States = new();
 
     public RenderResourceID Current { get; set; }
     public bool CurrentIsScene => Current == SceneId;
@@ -85,6 +86,13 @@ internal sealed class FeatureShape
     }
 
     public void Upscale() => View = View.AtOutput();
+
+    public T State<T>(RenderFeature feature) where T : class, new()
+    {
+        if (!States.TryGetValue((feature, typeof(T)), out object? state))
+            States[(feature, typeof(T))] = state = new T();
+        return (T)state;
+    }
 
     public RenderResourceID IdOf(RenderFeature feature, string name)
         => RenderResourceID.Intern($"{Kind.Name}/{feature.GetType().Name}.{feature.Id}/{name}");
