@@ -172,6 +172,7 @@ internal sealed partial class ProfilerView
     {
         public required string[] Cells;
         public Color?[]? Colors;
+        public IOrigamiIcon?[]? Icons;
         public Action? Pick;
         public bool Selected;
     }
@@ -211,7 +212,10 @@ internal sealed partial class ProfilerView
             {
                 string text = c < row.Cells.Length ? row.Cells[c] : "";
                 Color color = row.Colors != null && c < row.Colors.Length && row.Colors[c] is { } custom ? custom : c == 0 ? Style.Ink : Style.InkSoft;
-                tr.Cell(text, color);
+                if (row.Icons != null && c < row.Icons.Length && row.Icons[c] is { } icon)
+                    tr.Cell(text, color, icon);
+                else
+                    tr.Cell(text, color);
             }
         }
 

@@ -20,6 +20,7 @@ public sealed class RenderProfilerWindows
         Live = new LiveProfilerPanel(new ProfilerView(source, false, "rp_live", ShowSnapshots));
         _snapshotView = new ProfilerView(source, true, "rp_snapshots", ShowSnapshots);
         Snapshots = new SnapshotViewerPanel(_snapshotView);
+        _snapshotView.PopOut = OpenPopout;
     }
 
     public DockPanel Live { get; }
@@ -34,6 +35,17 @@ public sealed class RenderProfilerWindows
 
     /// <summary>Asks for a saved snapshot file, opens it, and shows the snapshot viewer.</summary>
     public void LoadSnapshot() => _snapshotView.LoadSnapshot();
+
+    private void OpenPopout(PopoutRequest request)
+    {
+        Float2 position = new(120, 100), size = new(1100, 760);
+        if (_dock.TryGetPanelRect(typeof(SnapshotViewerPanel), out Rect anchor))
+        {
+            position = new Float2((float)anchor.Min.X + 80, (float)anchor.Min.Y + 60);
+            size = new Float2((float)anchor.Size.X * 0.8f, (float)anchor.Size.Y * 0.8f);
+        }
+        _dock.FloatingWindows.Add(new FloatingWindow(DockNode.Leaf(new ResourcePreviewPanel(_snapshotView, request)), position, size));
+    }
 
     private void Show(DockPanel panel)
     {
@@ -113,4 +125,23 @@ public sealed class SnapshotViewerPanel : DockPanel
     public override string Icon => Glyph.Camera;
 
     public override void OnGUI(Paper paper, float width, float height) => _view.Draw(paper, width, height);
+}
+
+/// <summary>A resource viewer popped out of the snapshot inspector into its own dockable window.</summary>
+public sealed class ResourcePreviewPanel : DockPanel
+{
+    private readonly ProfilerView _view;
+    private readonly PopoutRequest _request;
+
+    internal ResourcePreviewPanel(ProfilerView view, PopoutRequest request)
+    {
+        _view = view;
+        _request = request;
+    }
+
+    public override string Title => _request.Title;
+
+    public override string Icon => Glyph.Camera;
+
+    public override void OnGUI(Paper paper, float width, float height) => _view.DrawPopout(paper, width, height, _request);
 }

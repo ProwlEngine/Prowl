@@ -29,7 +29,6 @@ internal sealed partial class ProfilerView
 
         SetFramebufferCommand? fb = pass.Commands.OfType<SetFramebufferCommand>().FirstOrDefault();
         const string context = "draw:Targets";
-        _viewerSelection.TryGetValue(context, out string? current);
         List<ViewerItem> targets = new();
         List<Row> rows = new();
         int color = 0, output = 0;
@@ -46,13 +45,19 @@ internal sealed partial class ProfilerView
             {
                 Cells = new[] { depth ? "Depth" : "RT" + color++, a.Resource, Format(backing, graph), ops.Load, ops.Store },
                 Pick = () => { _viewerSelection[context] = key; _pixel = null; },
-                Selected = current == key || (current == null && rows.Count == 0),
             });
+            Mark(rows[^1], 1, key);
         }
-        TableSection("Render targets", 0, "Click to view", new[] { "Slot", "Resource", "Format", "Load", "Store" }, new[] { 0.6f, 1.6f, 1.6f, 0.8f, 0.8f }, rows);
+        if (targets.Count > 0)
+        {
+            string selectedKey = SelectedKey(context, targets);
+            for (int i = 0; i < rows.Count; i++)
+                rows[i].Selected = targets[i].Key == selectedKey;
+        }
 
         TargetStep targetStep = new(step - 1, node.DrawOrdinal);
-        Section("Target viewer", 0, "Magenta = pixels this draw changed", w => ResourceViewer(model, node, context, targets, targetStep, w));
+        ResourceTable(model, node, context, "Render targets", "Click to preview / magenta = pixels this draw changed",
+            new[] { "Slot", "Resource", "Format", "Load", "Store" }, new[] { 0.6f, 1.6f, 1.6f, 0.8f, 0.8f }, rows, targets, targetStep);
 
         if (_pixel is { } p && targets.Count > 0)
             PixelHistory(model, node, view, pass, passDraws, targets, step, p);

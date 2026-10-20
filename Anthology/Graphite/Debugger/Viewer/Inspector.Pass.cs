@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.OrigamiUI;
+
 using Color = System.Drawing.Color;
 
 namespace Prowl.Graphite.Debugger.Viewer;
@@ -212,60 +214,71 @@ internal sealed partial class ProfilerView
         DeepView view = model.ViewOf(node)!;
         DeepPass pass = model.PassOf(node)!;
         const string context = "pass:Resources";
-        _viewerSelection.TryGetValue(context, out string? current);
 
         Action Pick(string key) => () => { _viewerSelection[context] = key; _pixel = null; };
 
         List<RecordedAccess> inputs = pass.Accesses.Where(a => !a.IsOutput && a.Kind == GraphResourceKind.Texture).ToList();
         List<RecordedAccess> outputs = pass.Accesses.Where(a => a.IsOutput && a.Kind == GraphResourceKind.Texture).ToList();
         SetFramebufferCommand? fb = pass.Commands.OfType<SetFramebufferCommand>().FirstOrDefault();
-
-        TableSection("Inputs", 0, inputs.Count > 0 ? "Click to view" : "None",
-            new[] { "Resource", "Format", "Size", "State", "Barrier" }, new[] { 1.4f, 1.4f, 0.8f, 1.1f, 1.8f },
-            inputs.Select(a =>
-            {
-                RecordedGraphResource? g = GraphResource(view, a.Resource);
-                RecordedResource? r = g != null ? Backing(index, g) : null;
-                string key = "tex:" + a.Resource;
-                return new Row { Cells = new[] { a.Resource, Format(r, g), Style.Bytes(SizeBytes(r)), AccessState(a), Transition(view, pass, a) }, Pick = Pick(key), Selected = current == key };
-            }).ToList());
-
-        TableSection("Outputs", 0, "Click to view",
-            new[] { "Resource", "Format", "Size", "Load", "Store", "Transition" }, new[] { 1.4f, 1.4f, 0.8f, 0.7f, 0.7f, 1.8f },
-            outputs.Select((a, i) =>
-            {
-                RecordedGraphResource? g = GraphResource(view, a.Resource);
-                RecordedResource? r = g != null ? Backing(index, g) : null;
-                (string Load, string Store) ops = fb != null ? (fb.Ops.Color.Load.ToString(), fb.Ops.Color.Store.ToString()) : ("-", "-");
-                string key = "tex:" + a.Resource;
-                return new Row
-                {
-                    Cells = new[] { a.Resource, Format(r, g), Style.Bytes(SizeBytes(r)), ops.Load, ops.Store, Transition(view, pass, a) },
-                    Colors = new Color?[] { null, null, null, ops.Load == "Clear" ? Style.Good : ops.Load == "Load" ? Style.Bad : Style.InkDim },
-                    Pick = Pick(key),
-                    Selected = current == key || (current == null && i == 0),
-                };
-            }).ToList());
-
         List<RecordedResource> buffers = pass.References
             .Select(r => index.Resource(r.Resource))
             .Where(r => r is { Kind: GraphResourceKind.Buffer })
             .Select(r => r!)
             .ToList();
-        TableSection("Buffers referenced", 0, buffers.Count > 0 ? "Click to view / raw only, no shader layout at pass level" : "None",
-            new[] { "Buffer", "Usage", "Size", "Origin" }, new[] { 1.6f, 1.2f, 0.8f, 1.2f },
-            buffers.Select(b =>
-            {
-                string key = "buf:" + b.Id.Value;
-                return new Row { Cells = new[] { b.Name, b.Buffer?.Usage.ToString() ?? "-", Style.Bytes(b.Buffer?.SizeInBytes ?? 0), b.Origin.ToString() }, Pick = Pick(key), Selected = current == key };
-            }).ToList());
 
         List<ViewerItem> items = new();
-        items.AddRange(outputs.Select(a => new ViewerItem("tex:" + a.Resource, a.Resource + " (out)")));
-        items.AddRange(inputs.Select(a => new ViewerItem("tex:" + a.Resource, a.Resource + " (in)")));
-        items.AddRange(buffers.Select(b => new ViewerItem("buf:" + b.Id.Value, b.Name)));
+        List<Row> rows = new();
 
-        Section("Resource viewer", 0, "State shown at end of pass", w => ResourceViewer(model, node, context, items, null, w));
+        void Add(string key, string label, Row row)
+        {
+            items.Add(new ViewerItem(key, label));
+            row.Pick = Pick(key);
+            Mark(row, 0, key);
+            rows.Add(row);
+        }
+
+        Row Texture(RecordedAccess a, string role, Color roleColor, IOrigamiIcon roleIcon, string loadStore, Color? loadColor)
+        {
+            RecordedGraphResource? g = GraphResource(view, a.Resource);
+            RecordedResource? r = g != null ? Backing(index, g) : null;
+            Row row = new()
+            {
+                Cells = new[] { a.Resource, role, Format(r, g), Style.Bytes(SizeBytes(r)), loadStore, Transition(view, pass, a) },
+                Colors = new Color?[] { null, roleColor, null, null, loadColor },
+                Icons = new IOrigamiIcon?[] { null, roleIcon },
+            };
+            return row;
+        }
+
+        foreach (RecordedAccess a in outputs)
+        {
+            (string Load, string Store) ops = fb != null ? (fb.Ops.Color.Load.ToString(), fb.Ops.Color.Store.ToString()) : ("-", "-");
+            Color? loadColor = ops.Load == "Clear" ? Style.Good : ops.Load == "Load" ? Style.Bad : Style.InkDim;
+            Add("tex:" + a.Resource, a.Resource + " (out)", Texture(a, "Output", Style.Write, OrigamiGlyphs.ArrowRightFromBracket_I, $"{ops.Load} / {ops.Store}", loadColor));
+        }
+        foreach (RecordedAccess a in inputs)
+            Add("tex:" + a.Resource, a.Resource + " (in)", Texture(a, "Input", Style.Read, OrigamiGlyphs.ArrowRightToBracket_I, "-", null));
+        foreach (RecordedResource b in buffers)
+            Add("buf:" + b.Id.Value, b.Name, new Row
+            {
+                Cells = new[] { b.Name, "Buffer", b.Buffer?.Usage.ToString() ?? "-", Style.Bytes(b.Buffer?.SizeInBytes ?? 0), "-", b.Origin.ToString() },
+                Colors = new Color?[] { null, Style.Good },
+                Icons = new IOrigamiIcon?[] { null, OrigamiGlyphs.Database_I },
+            });
+
+        if (items.Count == 0)
+        {
+            TableSection("Resources", 0, "None", new[] { "Resource" }, new[] { 1f }, new List<Row> { R("-") });
+            return;
+        }
+
+        string selectedKey = SelectedKey(context, items);
+        for (int i = 0; i < rows.Count; i++)
+            rows[i].Selected = items[i].Key == selectedKey;
+
+        ResourceTable(model, node, context, "Resources", "Click to preview / out = written, in = read",
+            new[] { "Resource", "Role", "Format / usage", "Size", "Load / store", "Transition / origin" }, new[] { 1.5f, 0.9f, 1.4f, 0.8f, 1f, 1.8f },
+            rows, items);
     }
 
     private static string CommandName(RecordedCommand command)

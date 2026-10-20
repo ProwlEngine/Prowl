@@ -277,7 +277,6 @@ internal sealed partial class ProfilerView
                     });
 
                     const string context = "marker:Mesh";
-                    _viewerSelection.TryGetValue(context, out string? current);
                     List<ViewerItem> items = new();
                     List<Row> rows = new();
                     foreach ((RecordedResource? res, string kind, string prefix) in new[] { (vb, "Vertex", "vb:"), (ib, "Index", "ib:") })
@@ -290,11 +289,17 @@ internal sealed partial class ProfilerView
                         {
                             Cells = new[] { kind, res.Name, Style.Bytes(res.Buffer?.SizeInBytes ?? 0) },
                             Pick = () => _viewerSelection[context] = key,
-                            Selected = current == key || (current == null && rows.Count == 0),
                         });
+                        Mark(rows[^1], 1, key);
                     }
-                    TableSection("Buffers", 420, "Click to view", new[] { "Kind", "Buffer", "Size" }, new[] { 0.8f, 1.8f, 0.8f }, rows);
-                    Section("Mesh / buffer viewer", 0, "Drag the mesh to orbit", w => ResourceViewer(model, node, context, items, null, w));
+                    if (items.Count > 0)
+                    {
+                        string selectedKey = SelectedKey(context, items);
+                        for (int i = 0; i < rows.Count; i++)
+                            rows[i].Selected = items[i].Key == selectedKey;
+                    }
+                    ResourceTable(model, node, context, "Buffers", "Click to preview / drag the mesh to orbit",
+                        new[] { "Kind", "Buffer", "Size" }, new[] { 0.8f, 1.8f, 0.8f }, rows, items);
                     break;
                 }
         }
@@ -349,7 +354,6 @@ internal sealed partial class ProfilerView
             case "Geometry":
                 {
                     const string context = "draw:Geometry";
-                    _viewerSelection.TryGetValue(context, out string? current);
                     List<Row> rows = new();
                     List<ViewerItem> items = new();
                     foreach (RecordedVertexBinding binding in bound.Vertex.Values)
@@ -362,8 +366,8 @@ internal sealed partial class ProfilerView
                         {
                             Cells = new[] { $"VB {binding.Slot}", r?.Name ?? "-", binding.Offset.ToString(), $"{binding.Stride} B ({layout})", Style.Bytes(r?.Buffer?.SizeInBytes ?? 0) },
                             Pick = () => _viewerSelection[context] = key,
-                            Selected = current == key || (current == null && rows.Count == 0),
                         });
+                        Mark(rows[^1], 1, key);
                     }
                     if (bound.Index != null)
                     {
@@ -374,12 +378,17 @@ internal sealed partial class ProfilerView
                         {
                             Cells = new[] { "IB", ib?.Name ?? "-", (first * Describe.IndexSize(bound.Index.Format)).ToString(), bound.Index.Format.ToString(), Style.Bytes(ib?.Buffer?.SizeInBytes ?? 0) },
                             Pick = () => _viewerSelection[context] = key,
-                            Selected = current == key,
                         });
+                        Mark(rows[^1], 1, key);
                     }
-                    TableSection("Bound geometry", 0, "Click to view",
-                        new[] { "Slot", "Buffer", "Offset", "Stride / format", "Size" }, new[] { 0.6f, 1.6f, 0.6f, 1.2f, 0.7f }, rows);
-                    Section("Resource Viewer", 0, "Layout from the program vertex layouts", w => ResourceViewer(model, node, context, items, null, w));
+                    if (items.Count > 0)
+                    {
+                        string selectedKey = SelectedKey(context, items);
+                        for (int i = 0; i < rows.Count; i++)
+                            rows[i].Selected = items[i].Key == selectedKey;
+                    }
+                    ResourceTable(model, node, context, "Bound geometry", "Click to preview / layout from the program vertex layouts",
+                        new[] { "Slot", "Buffer", "Offset", "Stride / format", "Size" }, new[] { 0.6f, 1.6f, 0.6f, 1.2f, 0.7f }, rows, items);
                     break;
                 }
 
@@ -406,9 +415,14 @@ internal sealed partial class ProfilerView
                             };
                         })
                         .ToList();
-                    TableSection("Bound resources", 420, "Folded from SetProperties / click a buffer to view",
+                    List<ViewerItem> buffers = bound.Properties.Values
+                        .Where(p => p.Kind is PropertyKind.Buffer or PropertyKind.UniformBuffer)
+                        .Select(p => new ViewerItem("buf:" + p.Resource.Resource.Value, index.Resource(p.Resource.Resource)?.Name ?? p.Name))
+                        .DistinctBy(i => i.Key)
+                        .ToList();
+                    ResourceTable(model, node, context, "Bound resources", "Folded from SetProperties / click a buffer to preview",
                         new[] { "Name", "Kind", "Resource" }, new[] { 1.4f, 1f, 1.8f },
-                        resources.Count > 0 ? resources : new List<Row> { R("-", "None") });
+                        resources.Count > 0 ? resources : new List<Row> { R("-", "None") }, buffers);
 
                     List<Row> uniforms = bound.Properties.Values
                         .Where(p => p.Kind == PropertyKind.Uniform)
@@ -434,12 +448,6 @@ internal sealed partial class ProfilerView
                         });
                     }
 
-                    List<ViewerItem> buffers = bound.Properties.Values
-                        .Where(p => p.Kind is PropertyKind.Buffer or PropertyKind.UniformBuffer)
-                        .Select(p => new ViewerItem("buf:" + p.Resource.Resource.Value, index.Resource(p.Resource.Resource)?.Name ?? p.Name))
-                        .DistinctBy(i => i.Key)
-                        .ToList();
-                    Section("Bound buffer viewer", 0, "Structured and uniform buffers are raw at this level", w => ResourceViewer(model, node, context, buffers, null, w));
                     break;
                 }
         }
