@@ -71,6 +71,7 @@ public sealed class RenderGraph : IDisposable
     private readonly Dictionary<RenderResourceID, GraphKind> _owners;
     private readonly Dictionary<RenderResourceID, int[]> _writers;
     private readonly Dictionary<RenderResourceID, (int Node, RenderResourceID Input)[]> _passthroughs;
+    private readonly bool _ownsStore;
 
     /// <summary>Debug name reported to profilers of every execution of this graph.</summary>
     public string Name { get; }
@@ -84,6 +85,9 @@ public sealed class RenderGraph : IDisposable
     /// <summary>True if any pass writes the instance target.</summary>
     public bool WritesInstanceTarget { get; }
 
+    /// <summary>Where the graph keeps persistent and history resources.</summary>
+    public GraphStore Store { get; }
+
     private RenderGraph(
         string name,
         PassNode[] nodes,
@@ -94,9 +98,13 @@ public sealed class RenderGraph : IDisposable
         Dictionary<RenderResourceID, GraphResource> resources,
         Dictionary<RenderResourceID, GraphKind> owners,
         Dictionary<RenderResourceID, int[]> writers,
-        Dictionary<RenderResourceID, (int Node, RenderResourceID Input)[]> passthroughs)
+        Dictionary<RenderResourceID, (int Node, RenderResourceID Input)[]> passthroughs,
+        GraphStore store,
+        bool ownsStore)
     {
         Name = name;
+        Store = store;
+        _ownsStore = ownsStore;
         _nodes = nodes;
         _sorted = sorted;
         _positions = positions;
@@ -141,11 +149,34 @@ public sealed class RenderGraph : IDisposable
     internal (int Node, RenderResourceID Input)[] PassthroughsTo(RenderResourceID id)
         => _passthroughs.TryGetValue(id, out (int Node, RenderResourceID Input)[]? links) ? links : [];
 
-    /// <summary>Disposes physical resources owned by any history resource here.</summary>
+    /// <summary>Disposes the store when the graph made its own.</summary>
     public void Dispose()
     {
-        foreach (GraphResource resource in Resources.Values)
-            resource.DisposeOwned();
+        if (_ownsStore)
+            Store.Dispose();
+    }
+
+    /// <summary>Resolves a persistent texture before any execution, for CPU code that needs it. A new size reallocates it.</summary>
+    public RenderTexture ResolvePersistent(GraphicsDevice device, TextureHandle handle, GraphInstanceKey key, GraphExtent extent = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (!Resources.TryGetValue(handle.Id, out GraphResource? resource) || resource is not GraphTextureResource { Persistent: true } texture)
+            throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a persistent texture of graph '{Name}'.");
+
+        if (texture.Description.SizeMode == TextureSizeMode.InstanceRelative && !extent.IsValid)
+            throw new ArgumentException($"Resource '{RenderResourceID.ToString(handle.Id)}' is sized relative to its instance, so it needs an extent.", nameof(extent));
+
+        return texture.ResolveHistory(device, key, device.LastBegunExecutionId + 1, 0, texture.Allocation(extent));
+    }
+
+    /// <summary>Resolves a persistent buffer before any execution, for CPU code that needs it. A new size keeps its contents.</summary>
+    public DeviceBuffer ResolvePersistent(GraphicsDevice device, BufferHandle handle, GraphInstanceKey key)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (!Resources.TryGetValue(handle.Id, out GraphResource? resource) || resource is not GraphBufferResource { Persistent: true } buffer)
+            throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a persistent buffer of graph '{Name}'.");
+
+        return buffer.ResolveHistory(device, key, device.LastBegunExecutionId + 1, 0, buffer.Description.ToBufferDescription());
     }
 
     /// <summary>
@@ -155,10 +186,12 @@ public sealed class RenderGraph : IDisposable
     /// <param name="passes">Every pass, each an execution pass or an instance pass. Order breaks ties and orders writes of one resource.</param>
     /// <param name="scopes">The parent kind of each kind an instance pass runs in. Root is implicit.</param>
     /// <param name="name">Debug name reported to profilers.</param>
+    /// <param name="store">Keeps persistent and history resources across rebuilds. The graph makes and disposes its own when null.</param>
     public static RenderGraph Build(
         IReadOnlyList<IPass> passes,
         IReadOnlyList<GraphScope>? scopes = null,
-        string name = "")
+        string name = "",
+        GraphStore? store = null)
     {
         ArgumentNullException.ThrowIfNull(passes);
         ArgumentNullException.ThrowIfNull(name);
@@ -234,6 +267,10 @@ public sealed class RenderGraph : IDisposable
             }
         }
 
+        GraphStore bound = store ?? new GraphStore();
+        foreach (GraphResource resource in resources.Values)
+            bound.Bind(resource);
+
         return new RenderGraph(
             name,
             nodes,
@@ -244,7 +281,9 @@ public sealed class RenderGraph : IDisposable
             resources,
             owners,
             writers.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray()),
-            links.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray()));
+            links.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray()),
+            bound,
+            store == null);
     }
 
     private static Dictionary<GraphKind, GraphKind> ValidateScopes(IReadOnlyList<GraphScope>? scopes)
