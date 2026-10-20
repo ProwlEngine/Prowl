@@ -64,6 +64,7 @@ public sealed class RenderGraph : IDisposable
     private readonly int[] _positions;
     private readonly Dictionary<GraphKind, PassNode[]> _byKind;
     private readonly Dictionary<GraphKind, GraphKind> _parents;
+    private readonly Dictionary<RenderResourceID, GraphKind> _owners;
 
     /// <summary>Debug name reported to profilers of every execution of this graph.</summary>
     public string Name { get; }
@@ -84,7 +85,8 @@ public sealed class RenderGraph : IDisposable
         int[] positions,
         Dictionary<GraphKind, PassNode[]> byKind,
         Dictionary<GraphKind, GraphKind> parents,
-        Dictionary<RenderResourceID, GraphResource> resources)
+        Dictionary<RenderResourceID, GraphResource> resources,
+        Dictionary<RenderResourceID, GraphKind> owners)
     {
         Name = name;
         _nodes = nodes;
@@ -93,6 +95,7 @@ public sealed class RenderGraph : IDisposable
         _byKind = byKind;
         _parents = parents;
         Resources = resources;
+        _owners = owners;
         WritesInstanceTarget = resources.ContainsKey(GraphInstanceTargetResource.InstanceTargetId);
 
         List<GraphKind> kinds = [GraphKind.Root];
@@ -117,6 +120,8 @@ public sealed class RenderGraph : IDisposable
     public GraphKind ParentOf(GraphKind kind)
         => _parents.TryGetValue(kind, out GraphKind parent) ? parent : throw new ArgumentException($"Kind '{kind.Name}' is not declared by graph '{Name}'.", nameof(kind));
 
+    internal bool TryGetOwner(RenderResourceID id, out GraphKind owner) => _owners.TryGetValue(id, out owner);
+
     internal PassNode NodeAt(int index) => _nodes[index];
 
     internal int PositionOf(int nodeIndex) => _positions[nodeIndex];
@@ -129,8 +134,8 @@ public sealed class RenderGraph : IDisposable
     }
 
     /// <summary>
-    /// Builds the solved graph: runs pass setup and orders every pass by what it reads and writes.
-    /// Throws if an input has no producer or the dependencies loop.
+    /// Builds the solved graph: runs pass setup, checks ownership by kind, and orders every pass by what it reads and writes.
+    /// Throws if an input has no producer, a resource is written from two kinds, or the dependencies loop.
     /// </summary>
     /// <param name="passes">Every pass, each an execution pass or an instance pass. Order breaks ties and orders writes of one resource.</param>
     /// <param name="scopes">The parent kind of each kind an instance pass runs in. Root is implicit.</param>
@@ -167,6 +172,7 @@ public sealed class RenderGraph : IDisposable
             nodes[i] = new PassNode(pass, i, accesses[i]);
         }
 
+        Dictionary<RenderResourceID, GraphKind> owners = AssignOwners(nodes, resources, parents);
         ValidateInputs(nodes, resources);
         ApplyStorageUsage(nodes, resources);
 
@@ -197,7 +203,8 @@ public sealed class RenderGraph : IDisposable
             positions,
             byKind,
             parents,
-            resources);
+            resources,
+            owners);
     }
 
     private static Dictionary<GraphKind, GraphKind> ValidateScopes(IReadOnlyList<GraphScope>? scopes)
@@ -263,6 +270,64 @@ public sealed class RenderGraph : IDisposable
                 throw new RenderGraphException($"Pass '{pass.Name}' is neither an execution pass nor an instance pass.", pass);
         }
     }
+
+    private static Dictionary<RenderResourceID, GraphKind> AssignOwners(
+        PassNode[] nodes,
+        Dictionary<RenderResourceID, GraphResource> resources,
+        Dictionary<GraphKind, GraphKind> parents)
+    {
+        var owners = new Dictionary<RenderResourceID, GraphKind>();
+        var ownerPasses = new Dictionary<RenderResourceID, IPass>();
+        foreach (PassNode node in nodes)
+        {
+            foreach (ResourceAccess access in node.Accesses)
+            {
+                if (access.Description == null || !resources.TryGetValue(access.Id, out GraphResource? resource) || !IsScoped(resource))
+                    continue;
+
+                if (!owners.TryAdd(access.Id, node.Pass.Kind) && owners[access.Id] != node.Pass.Kind)
+                    throw new RenderGraphException(
+                        $"Resource '{RenderResourceID.ToString(access.Id)}' is written by pass '{ownerPasses[access.Id].Name}' in kind '{owners[access.Id].Name}' " +
+                        $"and by pass '{node.Pass.Name}' in kind '{node.Pass.Kind.Name}'. A resource is written from one kind.", node.Pass);
+                ownerPasses.TryAdd(access.Id, node.Pass);
+            }
+        }
+
+        foreach (PassNode node in nodes)
+        {
+            foreach (ResourceAccess access in node.Accesses)
+            {
+                if (!owners.TryGetValue(access.Id, out GraphKind owner))
+                    continue;
+
+                if (access.IsOutput && node.Pass.Kind != owner)
+                    throw new RenderGraphException(
+                        $"Resource '{RenderResourceID.ToString(access.Id)}' is written by pass '{ownerPasses[access.Id].Name}' in kind '{owner.Name}' " +
+                        $"and by pass '{node.Pass.Name}' in kind '{node.Pass.Kind.Name}'. A resource is written from one kind.", node.Pass);
+
+                if (IsSameOrBelow(node.Pass.Kind, owner, parents))
+                    continue;
+
+                throw new RenderGraphException(
+                    $"Pass '{node.Pass.Name}' in kind '{node.Pass.Kind.Name}' reads resource '{RenderResourceID.ToString(access.Id)}', " +
+                    $"which pass '{ownerPasses[access.Id].Name}' writes in kind '{owner.Name}'. A resource is read from its own kind or one below it.", node.Pass);
+            }
+        }
+
+        return owners;
+    }
+
+    private static bool IsSameOrBelow(GraphKind kind, GraphKind ancestor, Dictionary<GraphKind, GraphKind> parents)
+    {
+        while (kind != ancestor)
+        {
+            if (kind == GraphKind.Root || !parents.TryGetValue(kind, out kind))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool IsScoped(GraphResource resource) => resource is GraphTextureResource or GraphBufferResource or GraphTextureSlotResource or GraphBufferSlotResource;
 
     private static bool SameDeclaration(GraphResource existing, GraphResource declared) => (existing, declared) switch
     {
