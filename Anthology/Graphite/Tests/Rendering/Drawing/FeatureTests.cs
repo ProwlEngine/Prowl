@@ -682,6 +682,31 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(-0.125f, 0, 0), Frame(moved), i => i % Size < Size - 2);
     }
 
+    private sealed class ViewPosition(FullscreenProgram program) : RenderFeature
+    {
+        public Double3 Seen;
+        public override RenderSlot Slot => RenderSlot.HdrPost;
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
+        public override void Render(FeatureContext context)
+        {
+            Seen = context.View.Position;
+            context.Fullscreen(program);
+        }
+    }
+
+    [Fact]
+    public void FeatureView_FollowsTheCamera_WithoutARebuild()
+    {
+        ViewPosition feature = new(Program("void main() { outColor = Graphite_SampleSource(vUV); }"));
+        _world.Features.Add(feature);
+        Frame(View());
+
+        ViewDesc moved = View();
+        moved.Layers[0] = moved.Layers[0] with { Position = new Double3(5, 2, -3) };
+        Frame(moved);
+        Assert.Equal(new Double3(5, 2, -3), feature.Seen);
+    }
+
     [Fact]
     public void MotionVectors_FollowObjectsThatKeepThem_AndStopWhenTheyDo()
     {
