@@ -29,7 +29,7 @@ Prowl is an open-source, **[MIT-licensed](https://github.com/ProwlEngine/Prowl/b
 
 It aims to provide a seamless transition for developers familiar with _Unity_ by maintaining a similar API while also following KISS and staying as small and customizable as possible. Ideally, _Unity_ projects can port over with as little resistance as possible.
 
-Prowl is currently in **1.0-preview**, following a complete rewrite of the Editor, renderer, physics, audio, and UI. Projects made with older versions of Prowl are not compatible with 1.0-preview, there is no migration path. Until the final 1.0 release, further breaking changes are still possible.
+Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, animation, navigation, VR and a rewritten asset system. Projects from earlier 1.0 previews are backed up and migrated automatically when opened (However this migration isnt gauranteed during Preview Releases always backup!). Until the final 1.0 release, further breaking changes are expected.
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
@@ -46,122 +46,155 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 # <span align="center">✨ Features ✨</span>
 
 -   **General:**
-    - Cross-Platform! Windows, Linux & Mac, for both the Editor and exported builds
+    - Cross-Platform! Windows, Linux & Mac, for both the Editor and exported builds with Andriod under development!
     - Unity-like Editor & Scripting API
-    - C# Scripting with .NET 10
+    - C# Scripting with .NET 10, compiled in process with Roslyn
     - GameObject & Component Architecture
     - **Prowl.Runtime works fully standalone from the Editor** - reference it directly and ship a game with zero Editor dependency
     - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Anthology)), Editor built on top of [Origami](https://github.com/ProwlEngine/Anthology)
     - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Anthology)
-    - Full-Featured Editor
-        - Scene View, Hierarchy, Inspector, Project Browser, Console, Game View
-        - Custom Component Editors, Property Editors, and Scene View Editors
-        - Transform Gizmos (Move, Rotate, Scale)
-        - Undo/Redo System
-        - Dockable & Resizable Panels with Layout Persistence
-        - Drag & Drop (Assets, GameObjects, Components)
-        - Multi-Select & Search/Filtering in Editor Panels
-        - Asset Thumbnail Generation & 3D Previews
-        - Animation Curve & Gradient Editors
-        - Rebindable Shortcut/Hotkey System
-        - Editor Theming with Customizable Color Palettes and sizing
-        - Playtest directly in the Editor
-        - Hot-Reloading Scripts
-        - Localization - English, German, Spanish, French, Italian, Japanese, Korean, Polish, Portuguese, Russian, Turkish & Chinese
-        - Managed & Native Plugins with Assembly Definitions
-    - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
-        - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Hull, Mesh, Model, Terrain
-        - Wheel Collider (raycast-based vehicle wheel, with suspension & slip-based grip)
-        - Joints & Constraints: Ball Socket, Hinge Joint, Hinge Angle, Fixed Angle, Cone Limit, Distance Limit, Twist Angle, Prismatic, Universal, Point On Line, Point On Plane, Angular Motor, Linear Motor
-        - Character Controller
-        - Trigger Volumes (Box, Sphere, Capsule)
-        - Collision Layers & Filtering (LayerMask)
-        - Raycasting & Shape Query API
-    - Audio via MiniAudio
-        - Spatial 3D Audio with Attenuation & Doppler
-        - Supports WAV, MP3, OGG, FLAC
-        - Effect chain (Delay, Distortion, Biquad Filter, Reverb, Phaser) + custom `IAudioEffect`
+    - `GameTask` async API (`MainThread`, `WorkerThread`, `NextFrame`, `Delay`, `WaitUntil`) with per session cancellation
+    - Roslyn analyzers that catch common scripting mistakes (component constructors, blocking waits, `?.` on engine objects)
     - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Anthology)
     - Tags & Layers System
-    - Scene System with Fog & Ambient Lighting
-    - Prefabs with Nested Prefab Support
+    - Scenes with `Scene.Environment` (sky, ambient, fog), async loading and `DontDestroyOnLoad`
+    - Prefabs
         - Apply, Revert, Break Instance & Override Tracking
-    - Projects & Project Settings
-    - Script Compilation via dotnet build (Game & Editor Assemblies)
     - Input Action System with Composites & Processors
         - `.inputactions` assets with a dedicated editor
         - Action phases (Disabled / Started / Performed / Cancelled)
-        - Composite bindings (WASD → Float2, D-pad, etc.) for keyboard, mouse & gamepad
+        - Composite bindings (WASD to Float2, D-pad, etc.) for keyboard, mouse, gamepad & XR controllers
     - GameObject-Based UI, including World Space UI
-        - `RectTransform`-driven layout, Buttons, Sliders, layout groups, drag & drop event handlers
-    - Prowl Actions - persistent, inspector-configurable event callbacks
+        - `RectTransform`-driven layout, Buttons, Toggles, Sliders, Dropdowns, layout groups, drag & drop event handlers
     - Math via [Prowl.Vector](https://github.com/ProwlEngine/Anthology)
-        - Matrices (`Float4x4`), Quaternions, Transform2D
+        - SIMD backed vectors, Matrices (`Float4x4`), Quaternions, Transform2D
         - Shapes: AABB, Bounds, Frustum, Cone, Ray, Plane, LineSegment, Rect
-    - Build System - Build to Standalone Application
-        - Packed Asset Files (.prowlpak)
-        - Only exports used assets
-        - Per-platform build profiles
-        - Supports Windows, Mac & Linux
-    - Unit Tested - 450+ tests across the Runtime and Editor
+        - Mesh editing operators & Quadric mesh simplification
+    - Frame Stats profiler with custom scopes
+
+-   **Editor:**
+    - Scene View, Hierarchy, Inspector, Project Browser, Console, Game View, Frame Stats
+    - Custom Component Editors, Property Editors, and Scene View Editors
+    - Transform Gizmos (Move, Rotate, Scale), shift drag to duplicate
+    - Undo/Redo System
+    - Dockable & Resizable Panels with Layout Persistence and Panel Maximize
+    - Drag & Drop (Assets, GameObjects, Components)
+    - Multi-Select & Search/Filtering in Editor Panels
+    - Asset Thumbnail Generation & 3D Previews
+    - Animation Graph, Avatar, Animation Curve & Gradient Editors, plus a Ragdoll Generator
+    - Volume Profile, Input Action, Sprite and Terrain Editors
+    - Rebindable Shortcut/Hotkey System
+    - 12 built in Themes with Customizable Color Palettes, sizing and wallpapers
+    - Playtest directly in the Editor
+    - Hot-Reloading Scripts
+    - Localization - English, German, Spanish, French, Italian, Japanese, Korean, Polish, Portuguese, Russian, Turkish & Chinese
+    - Managed & Native Plugins with Assembly Definitions
+    - **Prowl CLI** - drive a running editor from scripts or AI agents, projects ship with agent skills
 
 -   **Graphics Rendering:**
-    - OpenGL Backend via [Silk.NET](https://github.com/dotnet/Silk.NET)
-	- Dedicated Render Thread
-    - Extensible Render Pipeline (Custom Pipelines Supported)
-    - Forward-Lit Pipeline with Thin G-Buffer Pre-Pass (Depth, Normals, Motion, Roughness, Metallic)
-	- UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Anthology)
-	- Baked Light Probes
-    - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
+    - Vulkan via [Prowl.Graphite](https://github.com/ProwlEngine/Anthology) (MoltenVK on macOS)
+    - GPU Driven Renderer: render graph, dedicated render thread, bindless textures, vertex pulling, multi draw indirect
+    - Camera relative rendering
+    - H-Forward Lighting and cached static shadows
+    - Render Features API and pluggable Camera Pipelines for custom passes and designs
+    - Prism, a fully managed GLSL to SPIR-V compiler, with async variant compiles, a SPIR-V cache and shaders precompiled into builds
+    - Lit & Unlit Shaders, Surface Shaders, Material Variants, Shader Keywords/Variants
     - HDR & PBR (Physically Based Rendering) - Metallic Workflow
-        - Albedo, Normal, Surface (AO / Roughness / Metallic), Emission Maps
-    - Mesh Renderer & Skinned Mesh Renderer with Bone Animation and Blendshapes
+        - Albedo, Normal, Surface (AO / Roughness / Metallic), Emission, Parallax, Translucency & Anisotropy
+    - Compute Shaders & Compute Buffers
+    - Mesh Renderer & Skinned Mesh Renderer with GPU Blendshapes
     - Line Renderer
     - Sprites, with Sprite Sheet slicing (Grid, Isometric & Automatic alpha-based slicing) and a dedicated Sprite Editor
-    - Render Textures & Texture3D
-    - GPU Instancing & Frustum Culling
-    - Point, Spot, and Directional Lights
-        - All light types support Shadow Mapping
+    - Render Textures, Texture3D & Cubemaps
+    - Lights: Directional, Point, Spot and Area (Rect, Disk, Tube)
+        - Sphere lights, sun disk, Light Cookies & IES Profiles
+        - Shadow Atlas with static caching and screen size driven resolution
         - Cascaded Shadow Maps for Directional Lights (up to 4 cascades)
-        - Cubemap Shadows for Point Lights
-        - Shadow Atlas with Dynamic Packing
-    - Post Processing
-        - HDR Tonemapping (ACES / Reinhard / Uncharted / Filmic / Melon / AgX)
-        - Bloom (dual-filter downsample/upsample)
-        - FXAA (Fast Approximate Anti-Aliasing)
-		- TAA (Temporal Anti-Aliasing)
-        - SMAA 
-        - Ground-Truth Ambient Occlusion (GTAO)
-		- Stochastic Screen Space Reflections (SSR)
-        - Bokeh Depth of Field
-        - Volumetric Fog
-        - Cinematic Effects (grain, vignette, chromatic aberration)
-    - Transparency
-    - Grab Pass (depth-aware) for refraction / heat-haze / frosted glass
-    - Procedural / Cubemap / Gradient Skybox
+        - Point Light Shadows
+        - Hard, Tent & Contact Hardening shadow filters
+    - Decals (Albedo, Normal & Mask)
+    - Reflection Probes (Baked & Realtime) with box projection and a Sky Probe
+    - UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Anthology)
+    - Baked Light Probes
+    - Skies: Procedural Atmosphere, Gradient, Cubemap, Panorama & Six Sided
+    - Volumetric Clouds & Volumetric Fog
+    - Camera Stacking, Camera Cuts & Debug View Modes
+    - Tonemapping (ACES, AgX, Reinhard, RomBinDaHouse, Uncharted 2)
+    - Anti Aliasing: FXAA, SMAA & TAA
+    - Volume based Post Processing with global & local volumes
+        - Auto Exposure, Bloom, GTAO, Screen Space Reflections, Motion Blur, Depth of Field, God Rays
+        - Vignette, Chromatic Aberration, Film Grain, Color Grading, Color Lookup (LUT), Sharpen, Edge Detection, Pixelation
+        - Custom Post Effects
+    - Transparency & Refraction
     - Terrain System
         - Quadtree LOD
         - Heightmap & Splatmap Painting
-        - GPU-Instanced Grass Rendering
-        - Tree Rendering with LOD Distance
-        - Dedicated Terrain Editor (Height, Paint, Grass, Trees, Settings)
-		- Holes
+        - Grass, Details & Trees
+        - Holes
     - Particle System
-        - GPU-Instanced Rendering
-        - Modules: Emission, Size/Color/Rotation/Velocity Over Lifetime, Collision, UV Animation
+        - Shape, Emission, Sub Emitters, Texture Sheet Animation, Trails, Collision, Forces, Over Lifetime and by Speed modules
         - Local & World Simulation Spaces
+
+-   **Animation:**
+    - `Animator` with Animation Graphs via [Prowl.Motion](https://github.com/ProwlEngine/Anthology), about 90 nodes
+    - State Machines, Blend Spaces, Layers & Masks, Inertial Blending
+    - Humanoid Avatars with Retargeting between rigs
+    - IK (Two Bone, Look At, Aim), Foot Grounding, Root Motion & Warping
+    - Active Ragdolls with muscles & pinning
+
+-   **Physics:**
+    - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
+    - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Mesh (Convex or Concave), Terrain
+    - Wheel Collider with friction curves, weight transfer, Anti Roll Bars & per surface grip
+    - Joints & Constraints: Ball Socket, Hinge Joint, Hinge Angle, Fixed Angle, Cone Limit, Distance Limit, Twist Angle, Prismatic, Universal, Point On Line, Point On Plane, Angular Motor, Linear Motor, Drive
+    - Character Controller with moving platforms, custom gravity, steps & slopes
+    - Trigger Volumes & Collision Callbacks
+    - Collision Layers & Filtering (LayerMask)
+    - Raycasting & Shape Query API
+
+-   **Navigation:**
+    - NavMesh via [Prowl.Recast](https://github.com/ProwlEngine/Anthology)
+    - NavMesh Surfaces, Agents, Obstacles (carving), Links & Modifiers
+    - Area costs, Crowd Steering, background baking & partial rebuilds
+
+-   **Audio:**
+    - Audio via miniaudio
+    - Spatial 3D Audio with Attenuation & Doppler
+    - Audio Mixers & Groups
+    - Effect chain (Delay, Distortion, Biquad Filter, Reverb, Phaser) + custom `IAudioEffect`
+
+-   **VR:**
+    - Desktop VR through OpenXR (SteamVR, Meta and other runtimes)
+    - Stereo rendering with multiview
+    - Controllers, Haptics, Hand Tracking & Eye Gaze
+    - World Space UI Pointers
 
 -   **Asset Pipeline:**
     - GUID-Based Asset References with Meta Files
+    - One object per asset, refilled in place on reimport
     - Import Caching & File Watching for Auto-Reimport
     - Custom Importers via Attributes
     - Sub-Assets with Deterministic GUIDs
     - Forward & Reverse Dependency Tracking
-	- Threaded Asset Loading
+    - Async Loading & Residency Management with a memory budget
+    - Runtime Asset Mounting (folders, zips, HTTP) and Runtime Importers for mods & user content
     - Supported Formats:
         - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](https://github.com/ProwlEngine/Anthology))
-        - Textures: PNG, JPG, BMP, TGA, PSD, HDR, DDS, EXR (via Magick.NET)
+        - Textures: PNG, JPG, BMP, GIF, TGA, TIFF, WEBP, PSD, DDS, EXR, HDR and more (via [Prowl.Aperture](https://github.com/ProwlEngine/Anthology))
         - Audio: WAV, MP3, OGG, FLAC
+        - Fonts: TTF, OTF
+
+-   **Build System:**
+    - Build to Standalone Application
+    - Packed Asset Files (.prowlpak)
+    - Only exports used assets
+    - Used Shader Variants precompiled into the build
+    - Per-platform build profiles
+    - Native AOT Player Builds (experimental)
+    - Supports Windows, Mac & Linux (Andriod under development)
+
+-   **Samples:**
+    - HelloProwl, Rendering, ManyLights, Physics, Controller, Vehicle, Particle, Scripting, VRBasics & VR Showcases under `Samples/Runtime`
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -172,19 +205,21 @@ Getting Prowl up and running is super easy!
 ### Prerequisites
 
 * [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+* A GPU with Vulkan 1.2 support (macOS runs through MoltenVK)
 
 ## Releases
 
-> **Note**: Prowl is now at **1.0-preview**, grab it from the [Releases page](https://github.com/ProwlEngine/Prowl/releases). Projects made with older, pre-1.0-preview versions of Prowl are not compatible and cannot be migrated.
+> **Note**: Prowl is now at **1.0 Preview 5**, grab it from the [Releases page](https://github.com/ProwlEngine/Prowl/releases).
 
 ## Build from source
 
 
 ### Installation
 
-1. Clone the repo (Including Submodules)
-2. Open `.slnx` with your editor ([Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/), [VSCode](https://code.visualstudio.com/), [Rider]((https://www.jetbrains.com/rider/)), etc.)
-3. That's it! 😄 🎉
+1. Clone the repo
+2. Open `Prowl.slnx` with your editor ([Visual Studio](https://visualstudio.microsoft.com/), [VSCode](https://code.visualstudio.com/), [Rider](https://www.jetbrains.com/rider/), etc.)
+3. Build and run `Prowl.Editor`
+4. That's it! 😄 🎉
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <span align="center">🤝 Contributing 🤝</span>
@@ -414,14 +449,21 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 
 ## Dependencies 📦
 
-- [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input, OpenGL & Audio Bindings
+- [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input & OpenXR Bindings
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2) - Physics Engine
-- [Magick.NET](https://github.com/dlemstra/Magick.NET) - Image Processing
+- [miniaudio](https://github.com/mackron/miniaudio) - Audio
+- [Prowl.Graphite](https://github.com/ProwlEngine/Anthology) - Vulkan Graphics & Renderer
+- [Prowl.Motion](https://github.com/ProwlEngine/Anthology) - Animation
+- [Prowl.Recast](https://github.com/ProwlEngine/Anthology) - Navigation
+- [Prowl.Aperture](https://github.com/ProwlEngine/Anthology) - Image Decoding
 - [Prowl.Echo](https://github.com/ProwlEngine/Anthology) - Serialization
 - [Prowl.Paper](https://github.com/ProwlEngine/Anthology) - UI Framework
 - [Prowl.Origami](https://github.com/ProwlEngine/Anthology) - Component Library for Paper
 - [Prowl.Quill](https://github.com/ProwlEngine/Anthology) - Vector Graphics & Text Rendering
-- [Prowl.Scribe](https://github.com/ProwlEngine/Anthology) - TrueType font parsing, glyph rasterization & markdown layout
+- [Prowl.Scribe](https://github.com/ProwlEngine/Anthology) - TrueType font parsing & glyph rasterization
+- [Prowl.Scaffold](https://github.com/ProwlEngine/Anthology) - Layout Engine for Paper
+- [Prowl.Quire](https://github.com/ProwlEngine/Anthology) - Markdown Parsing
+- [Prowl.Ember](https://github.com/ProwlEngine/Anthology) - Script Hot Reload
 - [Prowl.Rosetta](https://github.com/ProwlEngine/Anthology) - For Editor Localisation
 - [Prowl.Vector](https://github.com/ProwlEngine/Anthology) - 64-bit Math Library
 - [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology) - UV Unwrapper

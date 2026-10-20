@@ -40,7 +40,7 @@ public class VolumeMigrationTests
         go.AddComponent<Camera>();
         EchoObject echo = Serializer.Serialize(go);
         EchoObject camera = CameraComponent(echo);
-        foreach (string name in new[] { "Profile", "AntiAliasing", "Fxaa", "Smaa", "Taa", "PostProcessing", "VolumeMask", "VolumeTrigger" })
+        foreach (string name in new[] { "Profile", "AntiAliasing", "Fxaa", "Smaa", "Taa", "PostProcessing", "VolumeMask", "VolumeTrigger", "HDR", "Tonemapping" })
             camera.Remove(name);
         camera["Effects"] = EffectList(effects);
         return echo;
@@ -64,11 +64,8 @@ public class VolumeMigrationTests
 
         Assert.True(camera.Profile.IsValid());
         Assert.False(camera.Profile.IsFromDatabase);
-        Tonemapping tonemapping = camera.Profile.Get<Tonemapping>()!;
-        Assert.Equal(TonemappingMode.AgX, tonemapping.Mode.Value);
-        Assert.Equal(1.3f, tonemapping.Contrast.Value);
-        Assert.Equal(1.1f, tonemapping.Saturation.Value);
-        Assert.All(tonemapping.Parameters, p => Assert.True(p.Override));
+        Assert.True(camera.HDR);
+        Assert.Equal(TonemappingMode.AgXPunchy, camera.Tonemapping);
 
         Bloom bloom = camera.Profile.Get<Bloom>()!;
         Assert.Equal(2f, bloom.Intensity.Value);
@@ -101,6 +98,27 @@ public class VolumeMigrationTests
 
         Assert.Equal(AntiAliasingMode.None, camera.AntiAliasing);
         Assert.Equal(0.05f, camera.Smaa.EdgeThreshold);
+    }
+
+    [Theory]
+    [InlineData(1L, TonemappingMode.ACES)]
+    [InlineData(5L, TonemappingMode.Reinhard)]
+    [InlineData(8L, TonemappingMode.Uncharted2)]
+    public void TonemapperEffect_BecomesCameraTonemapping(long type, TonemappingMode expected)
+    {
+        Camera camera = Migrate(LegacyCamera(Effect("TonemapperEffect", true, ("Type", new EchoObject(type)))));
+
+        Assert.True(camera.HDR);
+        Assert.Equal(expected, camera.Tonemapping);
+        Assert.True(camera.Profile.IsNotValid());
+    }
+
+    [Fact]
+    public void DisabledTonemapperEffect_TurnsHdrOff()
+    {
+        Camera camera = Migrate(LegacyCamera(Effect("TonemapperEffect", false, ("Type", new EchoObject(1L)))));
+
+        Assert.False(camera.HDR);
     }
 
     [Fact]
