@@ -117,8 +117,47 @@ file sealed class SamplePass(RenderTexture target, GraphicsProgram program, Text
     }
 }
 
+file sealed class BlitPass(RenderTexture source, RenderTexture destination, string sourceId) : IPass
+{
+    private readonly RenderResourceID _destination = RenderResourceID.Intern("blit_destination");
+
+    public string Name => "Blit";
+
+    public void Setup(RenderContextBuilder builder)
+    {
+        builder.DeclareInputTexture(RenderResourceID.Intern(sourceId), TextureState.TransferSrc);
+        builder.DeclareImportedTexture(_destination, destination, TextureState.TransferDst);
+    }
+
+    public void Render(RenderContext context, CommandBuffer cmd)
+        => cmd.BlitTexture(source.ColorTextures[0], destination.ColorTextures[0], [new TextureBlit(0, 0, 8, 8, 0, 0, 8, 8)]);
+}
+
 public class ReplayTests
 {
+    [SkippableFact]
+    public void Replay_BlitIsRecordedAndReexecuted()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        ResourceFactory factory = device.ResourceFactory;
+        using GraphicsProgram program = SampleProgram(factory);
+        using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
+        using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
+        using RenderTexture drawn = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using RenderTexture blitted = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using RenderPipeline pipeline = new(new IPass[] { new SamplePass(drawn, program, source, sampler, "Drawn"), new BlitPass(drawn, blitted, "sample_target_Drawn") });
+        DeepRecording deep = Record(device, pipeline, DeepMode.Full);
+
+        DeepPass pass = deep.Views[0].Passes.Single(p => p.Name == "Blit");
+        Assert.Contains(pass.Commands, c => c is BlitTextureCommand);
+        ReplayResult result = new Replayer(device, deep).Replay(new ReplayRequest { ViewIndex = 0, PassIndex = pass.Index, EventIndex = 0 });
+
+        Assert.True(result.Status == ReplayStatus.Reexecuted, result.Reason);
+        RecordedCopy copy = pass.Copies.Single(c => c.Placement == CopyPlacement.AfterPass);
+        Assert.Equal(deep.Blobs.Single(b => b.Ref == copy.Blob).Data, result.Outputs.Single().Data);
+    }
+
     [SkippableFact]
     public void Replay_RebuildsProgramAndPropertiesForADraw()
     {
@@ -249,10 +288,8 @@ public class ReplayTests
     private static DeepRecording Edit(DeepRecording deep, Func<DeepResult, DeepResult> edit)
         => new(deep.Mode, deep.Recording, edit(deep.Result));
 
-    private static DeepRecording RecordSample(GraphicsDevice device)
-    {
-        ResourceFactory factory = device.ResourceFactory;
-        using GraphicsProgram program = factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.glsl"))
+    private static GraphicsProgram SampleProgram(ResourceFactory factory, SpecializationConstant[]? specializations = null)
+        => factory.CreateGraphicsProgram(new ShaderDescription(Compile("FullScreenTriSampleTexture2D.glsl"))
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
             DepthStencilState = DepthStencilStateDescription.Disabled,
@@ -263,7 +300,13 @@ public class ReplayTests
                     new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
                     new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)),
             ],
+            Specializations = specializations,
         });
+
+    private static DeepRecording RecordSample(GraphicsDevice device)
+    {
+        ResourceFactory factory = device.ResourceFactory;
+        using GraphicsProgram program = SampleProgram(factory);
         using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         device.UpdateTexture(source, Enumerable.Range(0, 64).Select(i => (byte)(i * 4)).ToArray());
         using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
