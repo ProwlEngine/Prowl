@@ -29,6 +29,7 @@
     <Project Path="../Anthology/Scribe/Scribe/Scribe.csproj" />
     <Project Path="../Anthology/Unwrapper/Unwrapper/Unwrapper.csproj" />
     <Project Path="../Anthology/Vector/Vector/Vector.csproj" />
+    <Project Path="../Anthology/Warp/Warp/Prowl.Warp.csproj" />
   </Folder>
   <Folder Name="/Players/" />
   <Folder Name="/Players/Desktop/">
