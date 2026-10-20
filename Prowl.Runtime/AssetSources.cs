@@ -265,6 +265,7 @@ public static class RuntimeImporters
         Register(new ShaderRuntimeImporter());
         Register(new ComputeShaderRuntimeImporter());
         Register(new AudioRuntimeImporter());
+        Register(new Video.VideoRuntimeImporter());
     }
 
     /// <summary>Makes <paramref name="importer"/> the one for each of its extensions, in place of any before it.</summary>

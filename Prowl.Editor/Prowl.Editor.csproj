@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
+    <PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="9.0.1.1" />
     <PackageReference Include="Prowl.Ember" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Ember.Analyzers" Version="$(ProwlPackageVersion)" />
     <!-- EngineObject null-safety analyzer: analyzes the editor's own source, and (as a normal reference) is
