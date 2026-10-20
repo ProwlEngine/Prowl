@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
@@ -116,6 +117,8 @@ internal sealed class NetworkMembers
 
     public RpcMember? Rpc(uint id) => _rpcs.GetValueOrDefault(id);
 
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Player builds preserve component assemblies and their network descriptor fields for reflection.")]
     private static NetworkMembers Build(Type type)
     {
         Stack<Type> hierarchy = new();
