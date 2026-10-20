@@ -23,7 +23,8 @@ public sealed record RecordedProperty(
     TraceVersion Resource,
     ResourceRange Range,
     PixelFormat? ViewFormat,
-    int Sampler);
+    int Sampler,
+    bool Arrayed = false);
 
 public sealed record SetFramebufferCommand(
     EquatableArray<RecordedAttachment> Colors,

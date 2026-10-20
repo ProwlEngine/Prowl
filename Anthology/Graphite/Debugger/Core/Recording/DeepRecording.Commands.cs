@@ -53,7 +53,8 @@ public sealed partial class DeepRecording
             Trace(state.Resource),
             state.Range,
             state.ViewFormat,
-            sampler);
+            sampler,
+            state.Arrayed);
     }
 
     private ProgramKey EnsureProgram(ShaderProgram program)
