@@ -526,11 +526,14 @@ public sealed partial class RenderWorld : IDisposable
     private readonly Renderer? _owner;
     private static int s_nextId;
 
+    internal int Id { get; }
+
     internal RenderWorld(GraphicsDevice device, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
     {
         _owner = owner;
         _device = device;
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
+        Id = id;
         Action<RendererError> report = owner != null ? error => owner.Report(error with { Source = error.Source ?? this, Key = $"{error.Key ?? error.Code}.world{id}" }) : _ => { };
         _report = report;
         Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, report);
