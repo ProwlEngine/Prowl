@@ -10,6 +10,9 @@ Shader "Default/Water"
         _ShallowWaterColor("Shallow Color", Color) = (0.13, 0.55, 0.62, 1.0)
         _DeepWaterColor("Deep Color", Color) = (0.02, 0.16, 0.30, 1.0)
         _WaterVisibilityDepth("Visibility Depth", Float) = 2.0
+        _RippleStrength("Ripple Strength", Float) = 0.35
+        _RippleWavelength("Ripple Wavelength", Float) = 3.0
+        _RippleSpeed("Ripple Speed", Float) = 0.25
         _TerrainSize("Terrain Size", Float) = 1024.0
         _TerrainHeight("Terrain Height", Float) = 100.0
     }
@@ -27,6 +30,7 @@ Shader "Default/Water"
             #include "Prowl/TerrainHeight.glsl"
             uniform sampler2D _WaterLevelMap;
             out vec2 vTerrainUV;
+            out vec2 vWorldXZ;
 
             void main()
             {
@@ -35,18 +39,25 @@ Shader "Default/Water"
                 ivec2 sampleUV = ivec2(round(clamp(vTerrainUV, vec2(0.0), vec2(1.0)) * vec2(last)));
                 local.y = texelFetch(_WaterLevelMap, sampleUV, 0).r + 0.08;
                 Graphite_SetPreviousPosition(local);
-                gl_Position = Graphite_RelativeToClip(Graphite_ObjectToWorld(local));
+                vec3 relative = Graphite_ObjectToWorld(local);
+                vWorldXZ = Graphite_AbsoluteFromRelative(relative).xz;
+                gl_Position = Graphite_RelativeToClip(relative);
             }
         }
         Fragment
         {
+            #include "Graphite/Core.glsl"
             #include "Prowl/TerrainHeight.glsl"
             uniform sampler2D _WaterMap;
             uniform sampler2D _WaterLevelMap;
             uniform vec4 _ShallowWaterColor;
             uniform vec4 _DeepWaterColor;
             uniform float _WaterVisibilityDepth;
+            uniform float _RippleStrength;
+            uniform float _RippleWavelength;
+            uniform float _RippleSpeed;
             in vec2 vTerrainUV;
+            in vec2 vWorldXZ;
             layout(location = 0) out vec4 fragColor;
 
             // Water values live on the height vertex grid, including both edges.
@@ -88,6 +99,14 @@ Shader "Default/Water"
                 float depth = max(level - terrainHeight(vTerrainUV), 0.0);
                 float depthMix = smoothstep(0.0, max(_WaterVisibilityDepth, 0.01), depth);
                 vec3 waterColor = mix(_ShallowWaterColor.rgb, _DeepWaterColor.rgb, depthMix);
+                Graphite_ViewData view = Graphite_View();
+                float time = view.time.x;
+                float waveNumber = 6.2831853 / max(_RippleWavelength, 0.5);
+                float phaseA = waveNumber * dot(vWorldXZ, vec2(0.87, 0.49)) - 6.2831853 * time * _RippleSpeed;
+                float phaseB = waveNumber * 1.37 * dot(vWorldXZ, vec2(-0.37, 0.93)) - 6.2831853 * time * _RippleSpeed * 0.73;
+                float ripple = 0.6 * sin(phaseA) + 0.4 * sin(phaseB);
+                waterColor = clamp(waterColor * (1.0 + _RippleStrength * 0.16 * ripple)
+                                   + vec3(0.06) * _RippleStrength * pow(max(ripple, 0.0), 3.0), 0.0, 1.0);
                 float opacity = mix(0.12, 1.0, depthMix);
                 float edge = smoothstep(0.001, 0.25, coverage);
                 fragColor = vec4(waterColor, opacity * edge);

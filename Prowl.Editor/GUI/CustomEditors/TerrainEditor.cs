@@ -323,6 +323,16 @@ public class TerrainEditor : CustomEditor
         EditorGUI.Row(paper, $"{id}_visibility", "Visibility Depth", () =>
             Origami.NumericField<float>(paper, $"{id}_visibility_v", data.WaterVisibilityDepth,
                 v => { data.WaterVisibilityDepth = v; _isDirty = true; }).Min(0.01f).Show());
+        EditorGUI.SectionHeader(paper, $"{id}_ripples", "Ripples");
+        EditorGUI.Row(paper, $"{id}_rstrength", "Strength", () =>
+            Origami.Slider(paper, $"{id}_rstrength_v", data.RippleStrength,
+                v => { data.RippleStrength = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
+        EditorGUI.Row(paper, $"{id}_rwavelength", "Wavelength", () =>
+            Origami.Slider(paper, $"{id}_rwavelength_v", data.RippleWavelength,
+                v => { data.RippleWavelength = v; _isDirty = true; }, 0.5f, 20f).Format("F1").Show());
+        EditorGUI.Row(paper, $"{id}_rspeed", "Speed", () =>
+            Origami.Slider(paper, $"{id}_rspeed_v", data.RippleSpeed,
+                v => { data.RippleSpeed = v; _isDirty = true; }, 0f, 2f).Format("F2").Show());
         DrawBrushBlock(paper, $"{id}_brush", font);
     }
 

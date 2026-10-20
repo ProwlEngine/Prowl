@@ -124,6 +124,9 @@ public sealed class TerrainData : Asset, ISerializable
     private Color _shallowWaterColor = new(0.13f, 0.55f, 0.62f, 1f);
     private Color _deepWaterColor = new(0.02f, 0.16f, 0.30f, 1f);
     private float _waterVisibilityDepth = 2f;
+    private float _rippleStrength = 0.35f;
+    private float _rippleWavelength = 3f;
+    private float _rippleSpeed = 0.25f;
     private float[]? _splatsField;
     private List<TerrainLayer> _layers = [new(), new(), new(), new()];
     private byte[]? _holesField;
@@ -177,6 +180,9 @@ public sealed class TerrainData : Asset, ISerializable
     public Color ShallowWaterColor { get { EnsureLoaded(); return _shallowWaterColor; } set { EnsureLoaded(); _shallowWaterColor = value; } }
     public Color DeepWaterColor { get { EnsureLoaded(); return _deepWaterColor; } set { EnsureLoaded(); _deepWaterColor = value; } }
     public float WaterVisibilityDepth { get { EnsureLoaded(); return _waterVisibilityDepth; } set { EnsureLoaded(); _waterVisibilityDepth = MathF.Max(0.01f, value); } }
+    public float RippleStrength { get { EnsureLoaded(); return _rippleStrength; } set { EnsureLoaded(); _rippleStrength = Math.Clamp(value, 0f, 1f); } }
+    public float RippleWavelength { get { EnsureLoaded(); return _rippleWavelength; } set { EnsureLoaded(); _rippleWavelength = MathF.Max(0.5f, value); } }
+    public float RippleSpeed { get { EnsureLoaded(); return _rippleSpeed; } set { EnsureLoaded(); _rippleSpeed = MathF.Max(0f, value); } }
     [NonSerialized] private bool? _hasWaterCache;
     public bool HasWater { get { EnsureLoaded(); return _hasWaterCache ??= _waterField != null && Array.Exists(_waterField, v => v > 0.001f); } }
     /// <summary>
@@ -1183,6 +1189,9 @@ public sealed class TerrainData : Asset, ISerializable
         value.Add("ShallowWaterColor", Serializer.Serialize(ShallowWaterColor, ctx));
         value.Add("DeepWaterColor", Serializer.Serialize(DeepWaterColor, ctx));
         value.Add("WaterVisibilityDepth", new EchoObject(WaterVisibilityDepth));
+        value.Add("RippleStrength", new EchoObject(RippleStrength));
+        value.Add("RippleWavelength", new EchoObject(RippleWavelength));
+        value.Add("RippleSpeed", new EchoObject(RippleSpeed));
         SerializeFloatArray(value, "Splats", Splats);
 
         // Holes (only serialize if any holes exist)
@@ -1314,6 +1323,9 @@ public sealed class TerrainData : Asset, ISerializable
         if (value.Get("DeepWaterColor") is { } deepWaterColor)
             _deepWaterColor = Serializer.Deserialize<Color>(deepWaterColor, ctx);
         _waterVisibilityDepth = MathF.Max(0.01f, value.Get("WaterVisibilityDepth")?.FloatValue ?? 2f);
+        _rippleStrength = Math.Clamp(value.Get("RippleStrength")?.FloatValue ?? 0.35f, 0f, 1f);
+        _rippleWavelength = MathF.Max(0.5f, value.Get("RippleWavelength")?.FloatValue ?? 3f);
+        _rippleSpeed = MathF.Max(0f, value.Get("RippleSpeed")?.FloatValue ?? 0.25f);
         float[]? water = DeserializeFloatArray(value, "Water");
         _waterField = water?.Length == heightCount ? water : null;
         float[]? levels = DeserializeFloatArray(value, "WaterLevels");

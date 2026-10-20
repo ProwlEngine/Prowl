@@ -249,6 +249,9 @@ public class TerrainComponent : Component, IRenderSync
                 _waterMaterial.SetTexture("_WaterMap", data.GetWaterTexture());
                 _waterMaterial.SetTexture("_WaterLevelMap", data.GetWaterLevelTexture());
                 _waterMaterial.SetFloat("_WaterVisibilityDepth", data.WaterVisibilityDepth);
+                _waterMaterial.SetFloat("_RippleStrength", data.RippleStrength);
+                _waterMaterial.SetFloat("_RippleWavelength", data.RippleWavelength);
+                _waterMaterial.SetFloat("_RippleSpeed", data.RippleSpeed);
                 _waterMaterial.SetColor("_ShallowWaterColor", data.ShallowWaterColor);
                 _waterMaterial.SetColor("_DeepWaterColor", data.DeepWaterColor);
             }
