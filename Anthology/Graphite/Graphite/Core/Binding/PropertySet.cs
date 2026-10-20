@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Prowl.Vector;
@@ -87,6 +88,17 @@ public sealed partial class PropertySet
     /// <summary>Sets float4x4 matrix uniform.</summary>
     public void SetMatrix(PropertyID name, Float4x4 v) => WriteUniform(name, v, UniformScalarType.Float4x4);
 
+    /// <summary>Sets a uniform of any type from its bytes, laid out as the type's components in order. At most 64 bytes.</summary>
+    public unsafe void SetUniform(PropertyID name, UniformScalarType type, ReadOnlySpan<byte> value)
+    {
+        if (value.Length > sizeof(PropertyEntry.UniformPayload))
+            throw new ArgumentException($"A uniform holds at most {sizeof(PropertyEntry.UniformPayload)} bytes.", nameof(value));
+
+        PropertyEntry.UniformPayload payload = default;
+        value.CopyTo(new Span<byte>(payload._e0, value.Length));
+        GetOrCreate(name).WriteUniform(payload, type);
+        unchecked { _version++; }
+    }
 
     /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange)"/>
     public void SetBuffer(PropertyID name, DeviceBuffer buffer)
