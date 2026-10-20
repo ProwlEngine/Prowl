@@ -196,13 +196,10 @@ internal sealed partial class ProfilerView
         using (_paper.Row("tools").Width(UnitValue.Stretch()).Height(UnitValue.Auto).WrapContent().Gap(Metrics.SpacingLarge).LineGap(Metrics.Spacing).AlignItems(LayoutAlignment.Center).Enter())
         {
             string[] names = { "R", "G", "B", "A" };
-            using (_paper.Row("chans").Width(UnitValue.Auto).Height(26).Rounded(Metrics.Rounding).BorderWidth(1).BorderColor(Style.Theme.Neutral.C200).Clip().Enter())
-                for (int c = 0; c < 4; c++)
-                {
-                    int ci = c;
-                    ButtonBuilder button = Origami.Button(_paper, "ch" + c, names[c], () => _channels[ci] = !_channels[ci]).Small().NotFocusable().Width(30).Rounding(0);
-                    (_channels[c] ? button.Variant(c switch { 0 => OrigamiVariant.Danger, 1 => OrigamiVariant.Success, 2 => OrigamiVariant.Info, _ => OrigamiVariant.Default }).Soft() : button.Subtle().Ghost()).Show();
-                }
+            ButtonGroupBuilder chans = Origami.ButtonGroup(_paper, "chans", -1, c => _channels[c] = !_channels[c]).Small().Selected(c => _channels[c]);
+            foreach (string name in new[] { "R", "G", "B", "A" })
+                chans.Item(name);
+            chans.Show();
 
             Dim("evl", "Exposure");
             using (_paper.Box("evs").Width(120).Height(Metrics.HeaderHeight).Enter())

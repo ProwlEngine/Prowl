@@ -42,6 +42,7 @@ public sealed class ButtonGroupBuilder
     private bool _stretch;
     private float? _roundingOverride;
     private bool _disabled;
+    private Func<int, bool>? _isSelected;
 
     private readonly List<ButtonGroupItem> _items = new();
 
@@ -78,6 +79,9 @@ public sealed class ButtonGroupBuilder
     public ButtonGroupBuilder Large() { _height = 36; return this; }
     public ButtonGroupBuilder FullWidth() { _stretch = true; _width = UnitValue.Stretch(); return this; }
     public ButtonGroupBuilder Rounding(float radius) { _roundingOverride = radius; return this; }
+
+    /// <summary>Lets any number of items read as selected; the setter then toggles rather than picks.</summary>
+    public ButtonGroupBuilder Selected(Func<int, bool> isSelected) { _isSelected = isSelected; return this; }
 
     public ButtonGroupBuilder Disabled(bool disabled = true) { _disabled = disabled; return this; }
 
@@ -138,7 +142,7 @@ public sealed class ButtonGroupBuilder
             for (int i = 0; i < count; i++)
             {
                 var item = _items[i];
-                bool isSelected = i == _selectedIndex;
+                bool isSelected = _isSelected?.Invoke(i) ?? i == _selectedIndex;
                 bool itemEnabled = !_disabled && item.Enabled;
 
                 int idx = i;
