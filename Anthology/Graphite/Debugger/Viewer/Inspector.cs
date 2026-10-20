@@ -18,8 +18,8 @@ internal sealed partial class ProfilerView
     
     private static readonly Dictionary<NodeKind, string[]> LiveTabs = new()
     {
-        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "History" },
-        [NodeKind.View] = new[] { "Overview", "History" },
+        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory" },
+        [NodeKind.View] = new[] { "Overview" },
         [NodeKind.Pass] = new[] { "Overview" },
         [NodeKind.CommandBuffer] = new[] { "Overview" },
     };

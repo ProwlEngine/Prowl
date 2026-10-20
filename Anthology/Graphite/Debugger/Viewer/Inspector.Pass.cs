@@ -111,7 +111,7 @@ internal sealed partial class ProfilerView
                         new Sparkline("CPU record", cpu, Style.KindDot(NodeKind.CommandBuffer), Style.Ms2),
                     }, 420f, 180f);
 
-                Fold("Details", () => KvSection("Pass", 420, new Kv?[]
+                Collapsible("Details", () => KvSection("Pass", 420, new Kv?[]
                 {
                     new("Name", pass.Name),
                     new("View", view),
@@ -127,7 +127,7 @@ internal sealed partial class ProfilerView
                 }));
 
                 if (Heavy && model.PassOf(node) is { } deep && model.ViewOf(node) is { } deepView)
-                    Fold("Replay, attachments and barriers", () => PassDeepOverview(model, deepView, deep));
+                    Collapsible("Replay, attachments and barriers", () => PassDeepOverview(model, deepView, deep));
                 break;
             }
 

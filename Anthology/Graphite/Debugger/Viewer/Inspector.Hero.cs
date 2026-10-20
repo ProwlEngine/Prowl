@@ -32,7 +32,7 @@ internal sealed partial class ProfilerView
                     _paper.Box("l").Height(UnitValue.Auto).Text(stat.Label, Style.Font).FontSize(Style.Body).TextColor(Style.InkSoft)
                         .Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
                     _paper.Box("v").Height(UnitValue.Auto).Text(stat.Value, Style.Strong).FontSize(Style.Title * 1.6f).TextColor(stat.Color ?? Style.Ink)
-                        .Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
+                        .Alignment(TextAlignment.MiddleLeft).TextTruncate().IsNotInteractable();
                     _paper.Box("s").Height(UnitValue.Auto).Text(stat.Sub, Style.Font).FontSize(Style.Small).TextColor(Style.InkDim)
                         .Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
                 }
@@ -42,7 +42,7 @@ internal sealed partial class ProfilerView
     private static Color? Versus(double value, double average)
         => average <= 0 ? null : value > average * 1.25 ? Style.Bad : value < average * 0.8 ? Style.Good : null;
 
-    private void Fold(string title, Action body, bool open = false)
+    private void Collapsible(string title, Action body, bool open = false)
     {
         float outer = _contentWidth;
         using (_paper.Column("sec", _sectionIndex++).Width(SectionWidth(0)).Height(UnitValue.Auto).Enter())
