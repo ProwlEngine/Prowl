@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Base graph resource tracker. Holds the interned ID passes use to order producers before consumers.
@@ -233,7 +233,7 @@ public sealed class GraphBufferResource : GraphResource
 
 /// <summary>
 /// Externally owned buffer imported into the graph. Caller keeps ownership, graph never disposes it. Its first
-/// access in a view gets a barrier against every earlier write, so a buffer another pipeline or execution wrote is
+/// access in an execution gets a barrier against every earlier write, so a buffer another execution wrote is
 /// safe to read once declared.
 /// </summary>
 public sealed class GraphImportedBufferResource : GraphResource
@@ -249,7 +249,7 @@ public sealed class GraphImportedBufferResource : GraphResource
 
 /// <summary>
 /// Externally-owned texture imported into the graph. Caller keeps ownership, graph never disposes it.
-/// Must be in its resting layout when the execution starts; the graph returns it there when the view ends.
+/// Must be in its resting layout when the execution starts; the graph returns it there when the execution ends.
 /// </summary>
 public sealed class GraphImportedTextureResource : GraphResource
 {
@@ -267,13 +267,13 @@ public sealed class GraphImportedTextureResource : GraphResource
 }
 
 /// <summary>
-/// The view's target for this execution: its <see cref="IRenderView.Target"/>. Write-only.
-/// Passes that write it are skipped for views with no target.
+/// The instance's target for this execution: its <see cref="GraphInstance.Target"/>. Write-only.
+/// Passes that write it are skipped for instances with no target.
 /// </summary>
-public sealed class GraphViewTargetResource : GraphResource
+public sealed class GraphInstanceTargetResource : GraphResource
 {
-    /// <summary>Reserved ID every view target declaration uses.</summary>
-    public static readonly RenderResourceID ViewTargetId = RenderResourceID.Intern("Graphite.ViewTarget");
+    /// <summary>Reserved ID every instance target declaration uses.</summary>
+    public static readonly RenderResourceID InstanceTargetId = RenderResourceID.Intern("Graphite.InstanceTarget");
 
     /// <summary>Load/store ops applied when bound as a raster target. Clears by default.</summary>
     public TargetLoadStoreOps Ops { get; }
@@ -281,7 +281,7 @@ public sealed class GraphViewTargetResource : GraphResource
     /// <summary>Depth format the target needs, null for color only.</summary>
     public PixelFormat? DepthFormat { get; }
 
-    internal GraphViewTargetResource(TargetLoadStoreOps? ops = null, PixelFormat? depthFormat = null) : base(ViewTargetId)
+    internal GraphInstanceTargetResource(TargetLoadStoreOps? ops = null, PixelFormat? depthFormat = null) : base(InstanceTargetId)
     {
         Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: false);
         DepthFormat = depthFormat;

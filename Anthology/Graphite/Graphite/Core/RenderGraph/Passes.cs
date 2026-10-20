@@ -1,4 +1,4 @@
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Minimal size info for view-relative render targets. Concrete views add richer data.

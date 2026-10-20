@@ -1,12 +1,12 @@
 using System;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>How a graph resource's pixel size gets decided at execution time.</summary>
 public enum TextureSizeMode
 {
-    /// <summary>Fraction of the view's pixel size.</summary>
-    ViewRelative,
+    /// <summary>Fraction of the instance's extent.</summary>
+    InstanceRelative,
 
     /// <summary>Fixed width x height.</summary>
     Explicit
@@ -20,7 +20,7 @@ public struct GraphTextureDesc
     /// <summary>How size gets decided at execution.</summary>
     public TextureSizeMode SizeMode;
 
-    /// <summary>Scale of view size, used when view-relative.</summary>
+    /// <summary>Scale of the instance's extent, used when instance relative.</summary>
     public float Scale;
 
     /// <summary>Fixed width, used when explicit.</summary>
@@ -52,16 +52,16 @@ public struct GraphTextureDesc
     private static PixelFormat[] DefaultFormats(PixelFormat[] formats)
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 
-    /// <summary>Resource sized as a scale of the view.</summary>
-    public static GraphTextureDesc ViewSized(PixelFormat format, float scale = 1f, bool depth = false) => new()
+    /// <summary>Resource sized as a scale of the instance's extent.</summary>
+    public static GraphTextureDesc InstanceSized(PixelFormat format, float scale = 1f, bool depth = false) => new()
     {
-        SizeMode = TextureSizeMode.ViewRelative,
+        SizeMode = TextureSizeMode.InstanceRelative,
         Scale = scale,
         ColorFormats = new[] { format },
         EnableDepth = depth
     };
 
-    /// <summary>Resource with fixed pixel size, view-independent.</summary>
+    /// <summary>Resource with fixed pixel size, independent of the instance.</summary>
     public static GraphTextureDesc Sized(int width, int height, bool depth = false, params PixelFormat[] formats) => new()
     {
         SizeMode = TextureSizeMode.Explicit,
@@ -72,13 +72,13 @@ public struct GraphTextureDesc
         EnableDepth = depth
     };
 
-    /// <summary>Resolves concrete pixel size for a view.</summary>
-    public readonly (int width, int height) Resolve(uint viewWidth, uint viewHeight)
+    /// <summary>Resolves concrete pixel size for an instance's extent.</summary>
+    public readonly (int width, int height) Resolve(uint instanceWidth, uint instanceHeight)
     {
         if (SizeMode == TextureSizeMode.Explicit)
             return (Math.Max(1, Width), Math.Max(1, Height));
 
         float s = Scale <= 0f ? 1f : Scale;
-        return (Math.Max(1, (int)(viewWidth * s)), Math.Max(1, (int)(viewHeight * s)));
+        return (Math.Max(1, (int)(instanceWidth * s)), Math.Max(1, (int)(instanceHeight * s)));
     }
 }

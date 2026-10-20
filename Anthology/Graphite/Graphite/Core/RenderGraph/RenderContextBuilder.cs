@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Lets a pass declare reads/writes during setup. Graph uses this to allocate resources, order passes
@@ -84,19 +84,18 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
-    /// Declares a write to the current view's target: <see cref="IRenderView.Target"/>, which presents after dispatch
-    /// when it is a swapchain framebuffer. The pass is skipped for a view with no target. Clears by default; pass Loaded ops for a pass that draws over an earlier view target pass.
-    /// A depth format gives the target a depth attachment, created for a swapchain on demand. Any other Target must already have one.
+    /// Declares a write to <see cref="GraphInstance.Target"/>, presented after dispatch when it is a swapchain's. Skipped for an instance with none.
+    /// Clears by default. A depth format gives the target depth, made on demand for a swapchain; any other target must have it.
     /// </summary>
-    public TextureHandle DeclareViewTarget(
+    public TextureHandle DeclareInstanceTarget(
         TargetLoadStoreOps? ops = null,
         TextureState usage = TextureState.Attachment,
         PixelFormat? depthFormat = null)
     {
         if (usage is not (TextureState.Attachment or TextureState.TransferDst))
-            throw new ArgumentException($"The view target only supports Attachment and TransferDst, not {usage}.", nameof(usage));
+            throw new ArgumentException($"The instance target only supports Attachment and TransferDst, not {usage}.", nameof(usage));
 
-        Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, null, isOutput: true, new GraphViewTargetResource(ops, depthFormat)));
-        return new TextureHandle(GraphViewTargetResource.ViewTargetId);
+        Accesses.Add(ResourceAccess.Texture(GraphInstanceTargetResource.InstanceTargetId, usage, null, isOutput: true, new GraphInstanceTargetResource(ops, depthFormat)));
+        return new TextureHandle(GraphInstanceTargetResource.InstanceTargetId);
     }
 }

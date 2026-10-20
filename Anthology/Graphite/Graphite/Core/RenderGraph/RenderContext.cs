@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.

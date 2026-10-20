@@ -1,6 +1,6 @@
 using System;
 
-namespace Prowl.Graphite.RenderGraph;
+namespace Prowl.Graphite;
 
 /// <summary>
 /// Base for a raster pass with one declared target: declare it in Setup and draw in Render.
