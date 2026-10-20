@@ -43,6 +43,8 @@ internal static class RoslynScriptBackend
 
     private sealed class UnitState
     {
+        // What each file parsed to, reused while its bytes are unchanged, and what it compiled as after the network rewrite.
+        public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Parsed = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Trees = new(StringComparer.OrdinalIgnoreCase);
         public CSharpCompilation? Compilation;
         public MetadataReference[] References = Array.Empty<MetadataReference>();
@@ -117,20 +119,29 @@ internal static class RoslynScriptBackend
             }
 
             // 3. Build the current tree set, reusing unchanged trees by content hash.
-            var newTrees = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
+            var parsed = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
             foreach (string file in unit.Scripts)
             {
                 ulong hash = currentHashes[file];
-                if (state != null && state.Trees.TryGetValue(file, out (ulong Hash, SyntaxTree Tree) prev) && prev.Hash == hash)
+                if (state != null && state.Parsed.TryGetValue(file, out (ulong Hash, SyntaxTree Tree) prev) && prev.Hash == hash)
                 {
-                    newTrees[file] = prev; // unchanged, reuse the exact tree
+                    parsed[file] = prev; // unchanged, reuse the exact tree
                 }
                 else
                 {
                     var text = SourceText.From(fileBytes[file], fileBytes[file].Length, Encoding.UTF8);
-                    newTrees[file] = (hash, CSharpSyntaxTree.ParseText(text, parseOptions, path: file));
+                    parsed[file] = (hash, CSharpSyntaxTree.ParseText(text, parseOptions, path: file));
                 }
             }
+
+            // 3b. Generate [Sync] and RPC networking. It looks at the whole unit at once, since a partial class can
+            //     spread its network members over several files, and hands back the same tree for any file whose
+            //     text and generated members are unchanged, so the reuse below still applies.
+            string[] files = [.. parsed.Keys];
+            NetworkCodeGen.Result network = NetworkCodeGen.Rewrite([.. files.Select(f => parsed[f].Tree)]);
+            var newTrees = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < files.Length; i++)
+                newTrees[files[i]] = (parsed[files[i]].Hash, network.Trees[i]);
 
             // 4. Reuse the prior compilation, swapping only changed trees; otherwise create fresh.
             CSharpCompilation compilation;
@@ -163,6 +174,8 @@ internal static class RoslynScriptBackend
                 .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning)
                 .ToList();
             diagnostics.AddRange(RunScriptAnalyzers(compilation));
+            diagnostics.AddRange(network.Diagnostics);
+            diagnostics.AddRange(NetworkCodeGen.Validate(compilation));
 
             // An analyzer reporting an error is describing something that will not survive being run,
             // so it fails the compile the way the compiler's own errors do. Loading the assembly anyway
@@ -175,6 +188,7 @@ internal static class RoslynScriptBackend
             //    get skipped and silently return the last good image).
             MetadataReference[] refArray = [.. references];
             state ??= new UnitState();
+            state.Parsed = parsed;
             state.Trees = newTrees;
             state.Compilation = compilation;
             state.References = refArray;

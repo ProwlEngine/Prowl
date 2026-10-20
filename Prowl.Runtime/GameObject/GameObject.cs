@@ -1156,6 +1156,10 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     protected override void OnDispose()
     {
+        // On the host, a networked object going away goes away everywhere.
+        if (NetworkMode == NetworkMode.Object)
+            Networking.OnGameObjectDisposed(this);
+
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();
 
@@ -1326,6 +1330,14 @@ public partial class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new EchoObject((int)HideFlags));
 
+        // Only written when set, so scenes that never touch networking are unchanged by it.
+        if (NetworkMode != NetworkMode.Snapshot)
+            compoundTag.Add("NetworkMode", new EchoObject((byte)NetworkMode));
+        if (NetworkOrphaned != NetworkOrphaned.Destroy)
+            compoundTag.Add("NetworkOrphaned", new EchoObject((byte)NetworkOrphaned));
+        if (!NetworkSyncTransform)
+            compoundTag.Add("NetworkSyncTransform", new EchoObject((byte)0));
+
         compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
         EchoObject components = EchoObject.NewList();
@@ -1335,7 +1347,11 @@ public partial class GameObject : EngineObject, ISerializable
 
         EchoObject children = EchoObject.NewList();
         foreach (GameObject child in Children)
+        {
+            if (WritingNetworkSnapshot && child.NetworkMode == NetworkMode.Never)
+                continue;
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
+        }
         compoundTag.Add("Children", children);
 
         // One block, absent entirely for an ordinary GameObject, and a build can drop the editor-only
@@ -1367,6 +1383,9 @@ public partial class GameObject : EngineObject, ISerializable
         TagIndex = value["TagIndex"]?.IntValue ?? 0;
         LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
         HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
+        NetworkMode = (NetworkMode)(value["NetworkMode"]?.ByteValue ?? (byte)NetworkMode.Snapshot);
+        NetworkOrphaned = (NetworkOrphaned)(value["NetworkOrphaned"]?.ByteValue ?? (byte)NetworkOrphaned.Destroy);
+        NetworkSyncTransform = value["NetworkSyncTransform"]?.ByteValue != 0;
 
         // Absent for an ordinary GameObject, which then allocates nothing for it.
         _prefabLink = value.TryGet("Prefab", out EchoObject? linkTag)

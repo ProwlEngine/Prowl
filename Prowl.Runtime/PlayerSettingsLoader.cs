@@ -35,6 +35,7 @@ public static class PlayerSettingsLoader
         ApplyNavigation(settingsDir);
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
+        ApplyNetworking(settingsDir);
         ApplyTagsAndLayers(settingsDir);
 
         // Physics needs to apply to each new scene's PhysicsWorld
@@ -64,6 +65,19 @@ public static class PlayerSettingsLoader
                 AssetDatabase.MemoryBudget = (long)budget!.IntValue * 1024 * 1024;
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply asset config: {ex.Message}"); }
+    }
+
+    private static void ApplyNetworking(string dir)
+    {
+        EchoObject? settings = Read(dir, PlayerSettingsFiles.Networking);
+        if (settings == null) return;
+        try
+        {
+            if (settings.TryGet("Configuration", out EchoObject? config)
+                && Serializer.Deserialize<NetworkConfiguration>(config) is { } configuration)
+                Networking.Configure(configuration);
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply networking settings: {ex.Message}"); }
     }
 
     private static void ApplyPhysics(string dir)

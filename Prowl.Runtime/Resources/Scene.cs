@@ -528,11 +528,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>
     /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
     /// and for anything under one: a child written out without its parent would load back as a stray root.
+    /// While writing a network snapshot, also false for anything <see cref="NetworkMode.Never"/>.
     /// </summary>
     private static bool IsSaveable(GameObject obj)
     {
         for (GameObject? go = obj; go.IsValid(); go = go.Parent)
-            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0)
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0
+                || (GameObject.WritingNetworkSnapshot && go.NetworkMode == NetworkMode.Never))
                 return false;
         return true;
     }

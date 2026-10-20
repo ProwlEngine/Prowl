@@ -54,7 +54,28 @@ public static class Program
 
         (["--xr", "-xr"], (args) => Runtime.XR.InitializeOnStartup = true, 0,
             "Makes the graphics device for a connected headset, so XR can start in play mode"),
+
+        (["--play-instance"], (args) => PlayInstanceProject = args[0], 1,
+            "Runs the project as a multiplayer client instance, with no editor UI (launched by multiplayer play)"),
+
+        (["--join"], (args) => PlayInstanceAddress = args[0], 1,
+            "The host a play instance joins, as host:port"),
+
+        (["--name"], (args) => PlayInstanceName = args[0], 1,
+            "The player name a play instance joins with"),
+
+        (["--instance"], (args) => PlayInstanceIndex = int.Parse(args[0]), 1,
+            "Which play instance this is, from 1, used to place its window"),
+
+        (["--headless"], (args) => PlayInstanceHeadless = true, 0,
+            "Runs a play instance without a window or rendering"),
     ];
+
+    private static string? PlayInstanceProject;
+    private static string PlayInstanceAddress = "127.0.0.1:7777";
+    private static string PlayInstanceName = "Client";
+    private static int PlayInstanceIndex = 1;
+    private static bool PlayInstanceHeadless;
 
 
     private static void ReadArguments(string[] args)
@@ -101,6 +122,12 @@ public static class Program
         RegisterMiniAudioExResolver();
 
         ReadArguments(args);
+
+        if (PlayInstanceProject != null)
+        {
+            MultiplayerPlay.RunInstance(PlayInstanceProject, PlayInstanceAddress, PlayInstanceName, PlayInstanceIndex, PlayInstanceHeadless);
+            return;
+        }
 
         if (BuildMode)
         {

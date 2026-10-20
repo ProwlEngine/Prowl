@@ -400,6 +400,16 @@ public class HierarchyPanel : DockPanel
                                 .Alignment(TextAlignment.MiddleLeft);
                         }
 
+                        // How it networks, when that's anything but the default: blue for a networked object
+                        // (green while this peer controls it, amber while it's a proxy), dim for never networked.
+                        if (Inspector.NetworkPopover.HierarchyMarker(go) is { } net)
+                        {
+                            paper.Box("hier_net")
+                                .Width(18).Height(EditorTheme.RowHeight)
+                                .Tooltip(net.Tooltip)
+                                .Icon(paper, net.Icon, go.EnabledInHierarchy ? net.Color : Color.FromArgb(120, net.Color), size: 11f);
+                        }
+
                         // Visibility eye
                         paper.Box("hier_vis")
                             .Width(18).Height(EditorTheme.RowHeight)

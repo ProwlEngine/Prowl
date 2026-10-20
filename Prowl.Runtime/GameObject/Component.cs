@@ -21,7 +21,7 @@ namespace Prowl.Runtime;
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
 /// <see cref="Component"/> provides lifecycle methods for game object behaviors.
 /// </summary>
-public abstract class Component : EngineObject, ISerializationCallbackReceiver
+public abstract partial class Component : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
     private Guid _identifier = Guid.NewGuid();

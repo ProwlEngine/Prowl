@@ -42,6 +42,10 @@
     <PackageReference Include="Prowl.Motion" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
+    <!-- Prowl.Warp isn't on NuGet yet, so it builds from a sibling Anthology checkout until the next
+         Anthology release; then swap the ProjectReference for the PackageReference below. -->
+    <ProjectReference Include="..\..\Anthology\Warp\Warp\Prowl.Warp.csproj" />
+    <!-- <PackageReference Include="Prowl.Warp" Version="$(ProwlPackageVersion)" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Graphite\Graphite\Prowl.Graphite.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" /> -->
