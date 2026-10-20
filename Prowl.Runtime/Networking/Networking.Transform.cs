@@ -6,7 +6,7 @@ using System;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 // Networked objects' transforms. Whoever controls an object sends its local position, rotation and
 // scale every tick it changes (and once a second regardless, since these go unreliably). Everyone

@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 // Prowl's script compiler gives each [Sync] property and RPC a static descriptor field, next to the member
 // it describes, with typed accessors. The runtime finds a component type's descriptors by reflection, once.

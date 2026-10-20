@@ -24,6 +24,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 

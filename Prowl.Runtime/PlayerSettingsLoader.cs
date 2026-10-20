@@ -4,6 +4,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
@@ -75,7 +76,7 @@ public static class PlayerSettingsLoader
         {
             if (settings.TryGet("Configuration", out EchoObject? config)
                 && Serializer.Deserialize<NetworkConfiguration>(config) is { } configuration)
-                Networking.Configure(configuration);
+                Networking.Networking.Configure(configuration);
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply networking settings: {ex.Message}"); }
     }

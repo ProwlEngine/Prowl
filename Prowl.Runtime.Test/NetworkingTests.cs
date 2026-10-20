@@ -3,6 +3,7 @@
 
 using Prowl.Echo;
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Warp;
@@ -73,7 +74,7 @@ public class NetTestComponent : Component
 /// </summary>
 public sealed class FakePeer : IDisposable
 {
-    public const ushort SceneSnapshot = Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
+    public const ushort SceneSnapshot = Networking.Networking.EngineMessageIds, Spawn = SceneSnapshot + 1, Despawn = SceneSnapshot + 2,
         Owner = SceneSnapshot + 3, Sync = SceneSnapshot + 4, Transform = SceneSnapshot + 5, RpcToHost = SceneSnapshot + 6, RpcFromHost = SceneSnapshot + 7;
 
     private FakePeer(NetSession session)
@@ -124,9 +125,9 @@ public class NetworkingTests : RuntimeTestBase
     private static Scene RoundTrip(Scene scene)
     {
         using NetWriter writer = new();
-        Networking.WriteSnapshot(scene, writer);
+        Networking.Networking.WriteSnapshot(scene, writer);
         NetReader reader = new(writer.WrittenSpan);
-        return Networking.ReadSnapshot(ref reader);
+        return Networking.Networking.ReadSnapshot(ref reader);
     }
 
     private static GameObject Find(Scene scene, Guid id) => scene.AllObjects.Single(o => o.Identifier == id);
@@ -150,8 +151,8 @@ public class NetworkingTests : RuntimeTestBase
 
     private static void Frame(FakePeer[] others)
     {
-        Networking.Receive();
-        Networking.Flush();
+        Networking.Networking.Receive();
+        Networking.Networking.Flush();
         foreach (FakePeer other in others)
             other.Session.Update();
         Scene.ProcessPendingLoad();
@@ -256,13 +257,13 @@ public class NetworkingTests : RuntimeTestBase
         MakeCurrent(first);
 
         LocalNetwork network = new();
-        Networking.Host(new LocalTransport(network, "host"));
+        Networking.Networking.Host(new LocalTransport(network, "host"));
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
             NetReader reader = new(alice.Last(FakePeer.SceneSnapshot));
-            using (Scene received = Networking.ReadSnapshot(ref reader))
+            using (Scene received = Networking.Networking.ReadSnapshot(ref reader))
                 Assert.Equal(level.Identifier, Find(received, "Level").Identifier);
 
             Scene second = CreateScene();
@@ -275,12 +276,12 @@ public class NetworkingTests : RuntimeTestBase
 
             Pump(() => alice.Received.Count(m => m.Id == FakePeer.SceneSnapshot) == 2, alice);
             reader = new NetReader(alice.Last(FakePeer.SceneSnapshot));
-            using (Scene received = Networking.ReadSnapshot(ref reader))
+            using (Scene received = Networking.Networking.ReadSnapshot(ref reader))
                 Assert.Contains(received.AllObjects, o => o.Name == "Arena");
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             alice.Dispose();
         }
     }
@@ -294,12 +295,12 @@ public class NetworkingTests : RuntimeTestBase
         MakeCurrent(scene);
 
         LocalNetwork network = new();
-        Networking.Host(new LocalTransport(network, "host"));
+        Networking.Networking.Host(new LocalTransport(network, "host"));
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
-            NetPeer aliceHere = Networking.Session!.Peers.Single(p => !p.IsLocal);
+            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
             GameObject ship = CreateGameObject("Ship");
             NetTestComponent component = ship.AddComponent<NetTestComponent>();
@@ -353,7 +354,7 @@ public class NetworkingTests : RuntimeTestBase
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             alice.Dispose();
         }
     }
@@ -365,7 +366,7 @@ public class NetworkingTests : RuntimeTestBase
         MakeCurrent(scene);
 
         LocalNetwork network = new();
-        Networking.Host(new LocalTransport(network, "host"));
+        Networking.Networking.Host(new LocalTransport(network, "host"));
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
@@ -403,7 +404,7 @@ public class NetworkingTests : RuntimeTestBase
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             alice.Dispose();
         }
     }
@@ -418,12 +419,12 @@ public class NetworkingTests : RuntimeTestBase
         MakeCurrent(scene);
 
         LocalNetwork network = new();
-        Networking.Host(new LocalTransport(network, "host"));
+        Networking.Networking.Host(new LocalTransport(network, "host"));
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
             Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
-            NetPeer aliceHere = Networking.Session!.Peers.Single(p => !p.IsLocal);
+            NetPeer aliceHere = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
 
             ship.NetworkSpawn(aliceHere, NetworkOrphaned.ClearOwner);
 
@@ -433,7 +434,7 @@ public class NetworkingTests : RuntimeTestBase
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             alice.Dispose();
         }
     }
@@ -445,7 +446,7 @@ public class NetworkingTests : RuntimeTestBase
         MakeCurrent(scene);
 
         LocalNetwork network = new();
-        Networking.Host(new LocalTransport(network, "host"));
+        Networking.Networking.Host(new LocalTransport(network, "host"));
         try
         {
             GameObject parent = CreateGameObject("Parent");
@@ -461,7 +462,7 @@ public class NetworkingTests : RuntimeTestBase
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
         }
     }
 
@@ -472,7 +473,7 @@ public class NetworkingTests : RuntimeTestBase
         MakeCurrent(scene);
 
         LocalNetwork network = new();
-        Networking.Host(new LocalTransport(network, "host"));
+        Networking.Networking.Host(new LocalTransport(network, "host"));
         FakePeer alice = FakePeer.Join(network, "alice");
         try
         {
@@ -485,11 +486,11 @@ public class NetworkingTests : RuntimeTestBase
             alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(component.Identifier); w.WriteUInt32(NetTestComponent.ExplodeId); });
             alice.Send(FakePeer.RpcToHost, w => { w.WriteGuid(component.Identifier); w.WriteUInt32(NetTestComponent.AskHostId); w.WriteVarInt32(3); });
             Pump(() => component.Asked.Count == 1, alice);
-            Assert.Equal(1, Networking.Session!.Peers.Count(p => !p.IsLocal));
+            Assert.Equal(1, Networking.Networking.Session!.Peers.Count(p => !p.IsLocal));
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             alice.Dispose();
         }
     }
@@ -505,18 +506,18 @@ public class NetworkingTests : RuntimeTestBase
         level.AddComponent<NetTestComponent>().Health = 3;
         hostScene.Add(level);
         using NetWriter snapshot = new();
-        Networking.WriteSnapshot(hostScene, snapshot);
+        Networking.Networking.WriteSnapshot(hostScene, snapshot);
 
         GameObject ship = CreateGameObject("Ship");
         ship.AddComponent<NetTestComponent>().Health = 9;
         ship.NetworkMode = NetworkMode.Object;
         using NetWriter shipSpawn = new();
-        Networking.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, shipSpawn); // the first client is peer 1
+        Networking.Networking.WriteSpawn(ship, owner: 1, NetworkOrphaned.Destroy, shipSpawn); // the first client is peer 1
 
         GameObject crate = CreateGameObject("Crate");
         crate.NetworkMode = NetworkMode.Object;
         using NetWriter crateSpawn = new();
-        Networking.WriteSpawn(crate, owner: -1, NetworkOrphaned.Destroy, crateSpawn);
+        Networking.Networking.WriteSpawn(crate, owner: -1, NetworkOrphaned.Destroy, crateSpawn);
 
         Guid levelId = level.Identifier, shipId = ship.Identifier, crateId = crate.Identifier;
 
@@ -529,7 +530,7 @@ public class NetworkingTests : RuntimeTestBase
             host.Session.SendRaw(peer, FakePeer.Spawn, crateSpawn.WrittenSpan);
         };
 
-        Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
+        Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         try
         {
             Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == crateId), host);
@@ -542,7 +543,7 @@ public class NetworkingTests : RuntimeTestBase
             Assert.Equal(3, levelHere.Health);
             Assert.Equal(9, shipComponent.Health);
 
-            Assert.Same(Networking.Session!.LocalPeer, shipHere.NetworkOwner);
+            Assert.Same(Networking.Networking.Session!.LocalPeer, shipHere.NetworkOwner);
             Assert.False(shipHere.IsProxy);
             Assert.True(crateHere.IsProxy);
             Assert.True(levelHere.IsProxy);
@@ -576,7 +577,7 @@ public class NetworkingTests : RuntimeTestBase
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             host.Dispose();
         }
     }
@@ -586,10 +587,10 @@ public class NetworkingTests : RuntimeTestBase
     [Fact]
     public void WithoutASessionNetworkingStaysOutOfTheWay()
     {
-        Assert.Null(Networking.Session);
-        Networking.Receive();
-        Networking.Flush();
-        Networking.Shutdown();
+        Assert.Null(Networking.Networking.Session);
+        Networking.Networking.Receive();
+        Networking.Networking.Flush();
+        Networking.Networking.Shutdown();
 
         GameObject go = CreateGameObject();
         NetTestComponent component = go.AddComponent<NetTestComponent>();
@@ -607,19 +608,19 @@ public class NetworkingTests : RuntimeTestBase
     [Fact]
     public void OnlyOneSessionRunsAtATime()
     {
-        Networking.Host(new LocalTransport(new LocalNetwork()));
+        Networking.Networking.Host(new LocalTransport(new LocalNetwork()));
         try
         {
-            Assert.True(Networking.IsHost && Networking.IsActive);
-            Assert.Throws<InvalidOperationException>(() => Networking.Host(new LocalTransport(new LocalNetwork())));
+            Assert.True(Networking.Networking.IsHost && Networking.Networking.IsActive);
+            Assert.Throws<InvalidOperationException>(() => Networking.Networking.Host(new LocalTransport(new LocalNetwork())));
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
         }
 
-        Assert.Null(Networking.Session);
-        Assert.False(Networking.IsActive);
+        Assert.Null(Networking.Networking.Session);
+        Assert.False(Networking.Networking.IsActive);
     }
 
     [Fact]
@@ -627,17 +628,17 @@ public class NetworkingTests : RuntimeTestBase
     {
         LocalNetwork network = new();
         FakePeer host = FakePeer.Host(network);
-        Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
+        Networking.Networking.Join(new LocalTransport(network, "bob"), "host", "bob");
         try
         {
-            Pump(() => Networking.IsActive, host);
+            Pump(() => Networking.Networking.IsActive, host);
             GameObject go = CreateGameObject();
             Scene.Current.Add(go);
             Assert.Throws<InvalidOperationException>(() => go.NetworkSpawn());
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             host.Dispose();
         }
     }

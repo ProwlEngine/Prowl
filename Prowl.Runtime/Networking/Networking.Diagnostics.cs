@@ -9,7 +9,7 @@ using System.Text;
 
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Main-thread network diagnostics. Capture is opt-in and retains no game object references.</summary>
 public static class NetworkDiagnostics

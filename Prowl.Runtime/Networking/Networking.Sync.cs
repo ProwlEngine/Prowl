@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 // [Sync] properties. Changes are collected as they happen and sent once per tick, reliably: from the
 // host to every client, or from a client to the host, which applies them and passes them on.

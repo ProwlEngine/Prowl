@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Runtime.Networking;
 using Prowl.Warp;
 
 namespace Prowl.Runtime;
@@ -25,20 +26,20 @@ public partial class GameObject
     public bool NetworkSyncTransform { get; set; } = true;
 
     /// <summary>True while a session runs and this object is part of a networked object everyone shares.</summary>
-    public bool IsNetworked => Networking.IsNetworked(this);
+    public bool IsNetworked => Networking.Networking.IsNetworked(this);
 
     /// <summary>
     /// True when this runs on a peer that doesn't control the object: it's driven from elsewhere (its
     /// owner, or the host), so don't move it or change its [Sync] properties here. False without a session.
     /// </summary>
-    public bool IsProxy => Networking.IsActive && !Networking.HasControl(this);
+    public bool IsProxy => Networking.Networking.IsActive && !Networking.Networking.HasControl(this);
 
     /// <summary>
     /// The peer that owns this networked object, or null if it has no owner (the host controls it then),
     /// it isn't networked, or there is no session. Ownership belongs to the nearest
     /// <see cref="NetworkMode.Object"/> object at or above this one.
     /// </summary>
-    public NetPeer? NetworkOwner => Networking.GetOwner(this);
+    public NetPeer? NetworkOwner => Networking.Networking.GetOwner(this);
 
     /// <summary>
     /// Host: makes this object a networked object (<see cref="NetworkMode.Object"/>) and creates it on
@@ -53,11 +54,11 @@ public partial class GameObject
     /// This is a client (only the host spawns objects), or the object can't be networked here. Nothing is changed then.
     /// </exception>
     public void NetworkSpawn(NetPeer? owner = null, NetworkOrphaned? orphaned = null) =>
-        Networking.Spawn(this, owner, orphaned ?? NetworkOrphaned);
+        Networking.Networking.Spawn(this, owner, orphaned ?? NetworkOrphaned);
 
     /// <summary>Host: hands control of this networked object to another peer, or back to the host with null.</summary>
     /// <exception cref="InvalidOperationException">This is a client, or the object was not spawned.</exception>
-    public void SetNetworkOwner(NetPeer? owner) => Networking.SetOwner(this, owner);
+    public void SetNetworkOwner(NetPeer? owner) => Networking.Networking.SetOwner(this, owner);
 
     /// <summary>True if this object, or anything above it, is <see cref="NetworkMode.Never"/>.</summary>
     internal bool IsNetworkExcluded

@@ -10,7 +10,7 @@ using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 // Sharing the host's scene with clients.
 public static partial class Networking

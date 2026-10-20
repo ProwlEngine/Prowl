@@ -5,7 +5,7 @@ using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
 using Prowl.Warp.Transports.Steam;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 public enum NetworkTransport { Kcp, Local, Steam }
 

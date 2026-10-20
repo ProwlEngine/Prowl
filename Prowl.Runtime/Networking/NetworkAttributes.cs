@@ -5,7 +5,7 @@ using System;
 
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>Describes how a <see cref="SyncAttribute"/> property is synchronized.</summary>
 [Flags]

@@ -9,7 +9,7 @@ using Prowl.Runtime.Diagnostics;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 // Networked objects: which exist, who controls them, spawning and despawning.
 public static partial class Networking

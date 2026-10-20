@@ -8,7 +8,7 @@ using System.IO;
 using Prowl.Runtime.Diagnostics;
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 // RPCs. A call is [guid component][u32 method id][arguments]. Clients send theirs to the host, which
 // checks it against the method's own RpcMode and RpcFlags (never trusting the caller about them), runs

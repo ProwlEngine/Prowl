@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 
 using Prowl.Runtime.Diagnostics;
+using Prowl.Runtime.Networking;
 using Prowl.Warp;
 
 namespace Prowl.Runtime;
@@ -26,7 +27,7 @@ public abstract partial class Component
         if (EqualityComparer<T>.Default.Equals(field, value))
             return;
 
-        if (!Networking.IsActive)
+        if (!Networking.Networking.IsActive)
         {
             field = value;
             return;
@@ -34,11 +35,11 @@ public abstract partial class Component
 
         // A proxy's value belongs to whoever controls it, and the next update would undo the change anyway.
         using FrameStatScope stats = FrameStats.Network.Scope();
-        if (!Networking.HasControl(this, member.Flags))
+        if (!Networking.Networking.HasControl(this, member.Flags))
             return;
 
         field = value;
-        Networking.MarkSyncDirty(this, member.Slot);
+        Networking.Networking.MarkSyncDirty(this, member.Slot);
     }
 
     /// <summary>
@@ -47,13 +48,13 @@ public abstract partial class Component
     /// the only one meant to run it).
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    protected bool __Rpc_Begin(RpcMember member, out NetWriter writer) => Networking.BeginRpc(this, member, out writer);
+    protected bool __Rpc_Begin(RpcMember member, out NetWriter writer) => Networking.Networking.BeginRpc(this, member, out writer);
 
     /// <summary>Generated: sends the call. True if the body should also run here.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    protected bool __Rpc_Send(RpcMember member, NetWriter writer) => Networking.SendRpc(this, member, writer);
+    protected bool __Rpc_Send(RpcMember member, NetWriter writer) => Networking.Networking.SendRpc(this, member, writer);
 
     /// <summary>Generated: an incoming RPC's arguments are read, so what throws from here on is the body's.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    protected static void __Rpc_ArgumentsRead() => Networking.RpcArgumentsRead();
+    protected static void __Rpc_ArgumentsRead() => Networking.Networking.RpcArgumentsRead();
 }

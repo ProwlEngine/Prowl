@@ -11,6 +11,8 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Networking;
+
 using FontFile = Prowl.Scribe.FontFile;
 using TextWrapMode = Prowl.Scribe.TextWrapMode;
 using Color = System.Drawing.Color;

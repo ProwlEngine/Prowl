@@ -9,7 +9,7 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>
 /// Multiplayer, built on <see cref="NetSession"/> from Prowl.Warp. Host or join a session here and the

@@ -1,3 +1,4 @@
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Local;
@@ -71,7 +72,7 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
         NetworkDiagnostics.Enabled = true;
         try
         {
-            Networking.Host(new LocalTransport(network, "host"));
+            Networking.Networking.Host(new LocalTransport(network, "host"));
             using FakePeer client = FakePeer.Join(network, "client");
             Pump(() => client.Has(FakePeer.SceneSnapshot), client);
             client.SendSync(component.Identifier, NetTestComponent.HealthSlot, 1);
@@ -96,10 +97,10 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
             Assert.Contains("Value: 1", syncMessage.Context);
             Assert.Contains(entries, e => e.Kind == "RPC" && e.Direction == "Invoke" && e.Target == component.Identifier);
             Assert.Contains(entries, e => e.Kind == "SyncVar" && e.Direction == "Rejected" && e.Target == component.Identifier);
-            var objects = new List<Networking.ObjectDiagnostic>();
-            Networking.GetObjectDiagnostics(objects);
+            var objects = new List<Networking.Networking.ObjectDiagnostic>();
+            Networking.Networking.GetObjectDiagnostics(objects);
             Assert.Contains(objects, o => o.Identifier == go.Identifier && o.Controlled && o.OwnerId == -1);
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             Assert.True(NetworkDiagnostics.Count > 0);
             Assert.Contains(Enumerable.Range(0, NetworkDiagnostics.Count).Select(NetworkDiagnostics.GetEntry),
                 e => e.Sequence == rpcMessage.Sequence && e.Context!.Contains("AskHost"));
@@ -108,7 +109,7 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
         }
         finally
         {
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             NetworkDiagnostics.Enabled = false;
             NetworkDiagnostics.Clear();
         }
@@ -118,8 +119,8 @@ public class NetworkDiagnosticsTests : RuntimeTestBase
     {
         for (int i = 0; i < 1000 && !condition(); i++)
         {
-            Networking.Receive();
-            Networking.Flush();
+            Networking.Networking.Receive();
+            Networking.Networking.Flush();
             peer.Session.Update();
             Thread.Sleep(1);
         }

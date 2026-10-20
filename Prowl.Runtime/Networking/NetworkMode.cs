@@ -1,7 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>How a <see cref="GameObject"/> takes part in a networked session. See <see cref="Networking"/>.</summary>
 public enum NetworkMode : byte

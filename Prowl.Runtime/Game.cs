@@ -236,7 +236,7 @@ public abstract class Game
             Closing();
 
             XR.Stop();
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
 
             // Before anything shuts down, so work blocked on the main thread runs while it still can and
             // worker loops watching the session token stop. Workers asking for the main thread from here
@@ -340,7 +340,7 @@ public abstract class Game
         {
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
-            Networking.Shutdown();
+            Networking.Networking.Shutdown();
             Tasks.MainThreadContext.Stop();
             Scene.Shutdown();
             AssetDatabase.Shutdown();
@@ -370,7 +370,7 @@ public abstract class Game
         AssetDatabase.Pump();
 
         // Network messages too, so this frame simulates on what arrived. Nothing without a session.
-        Networking.Receive();
+        Networking.Networking.Receive();
 
         // Pausing play mode has to stop the sound as well as the simulation, or the music carries on
         // over a frozen game. Only in the editor: pausing there is a debugging tool that freezes
@@ -406,7 +406,7 @@ public abstract class Game
         OnUpdate(currentScene);
 
         // Send what this frame produced.
-        Networking.Flush();
+        Networking.Networking.Flush();
 
         // Consume step request re-pause after one frame
         if (Application.StepRequested)

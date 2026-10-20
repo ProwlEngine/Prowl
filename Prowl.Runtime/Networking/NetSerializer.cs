@@ -8,7 +8,7 @@ using Prowl.Ember;
 using Prowl.Vector;
 using Prowl.Warp;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Networking;
 
 /// <summary>
 /// Writes and reads values of type <typeparamref name="T"/> for <see cref="SyncAttribute"/> properties

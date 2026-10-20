@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
 using Prowl.Echo;
+using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Tasks;
 using Prowl.Vector;
@@ -1158,7 +1159,7 @@ public partial class GameObject : EngineObject, ISerializable
     {
         // On the host, a networked object going away goes away everywhere.
         if (NetworkMode == NetworkMode.Object)
-            Networking.OnGameObjectDisposed(this);
+            Networking.Networking.OnGameObjectDisposed(this);
 
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();

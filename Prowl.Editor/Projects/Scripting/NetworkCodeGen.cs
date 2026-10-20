@@ -11,6 +11,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using Prowl.Runtime.Networking;
+
 namespace Prowl.Editor.Projects.Scripting;
 
 /// <summary>
@@ -181,8 +183,8 @@ internal static class NetworkCodeGen
 
         string name = named.ToDisplayString(s_runtimeName);
         Type? runtime = Type.GetType($"{name}, {assembly.Identity.Name}") ?? Type.GetType(name);
-        return runtime != null && (bool)typeof(Runtime.NetSerializer<>).MakeGenericType(runtime)
-            .GetProperty(nameof(Runtime.NetSerializer<int>.IsSupported))!.GetValue(null)!;
+        return runtime != null && (bool)typeof(NetSerializer<>).MakeGenericType(runtime)
+            .GetProperty(nameof(NetSerializer<int>.IsSupported))!.GetValue(null)!;
     }
 
     private static bool DerivesFrom(ITypeSymbol? type, INamedTypeSymbol baseType)
