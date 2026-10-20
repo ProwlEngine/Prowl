@@ -128,6 +128,10 @@ public readonly struct FeatureView
     public GraphTextureDesc Texture(PixelFormat format, float scale = 1)
         => GraphTextureDesc.InstanceSized(format, scale * (Upscaled ? OutputScale : 1f)) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
 
+    /// <summary>A texture of one layer whatever the view, sized by a scale like <see cref="Texture"/>, for state the view's layers share.</summary>
+    public GraphTextureDesc SharedTexture(PixelFormat format, float scale = 1)
+        => GraphTextureDesc.InstanceSized(format, scale * (Upscaled ? OutputScale : 1f));
+
     /// <summary>A texture of one layer whatever the view, for state the view's layers share.</summary>
     public static GraphTextureDesc Shared(int width, int height, PixelFormat format) => GraphTextureDesc.Sized(width, height, false, format);
 }
