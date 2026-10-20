@@ -1292,9 +1292,6 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
     private readonly List<IDisposable> _retired = new();
-    private readonly RenderPipeline _fencePipeline = new() { Name = "Graphite.Fence" };
-    private readonly FencePass _fence = new();
-    private readonly List<int> _fenceAt = new();
     private readonly List<DeviceBuffer> _replaced = new();
     private readonly RenderPipeline _providerPipeline = new() { Name = "Graphite.Providers" };
     private readonly ProviderWork _providerWork = new();
@@ -1501,8 +1498,6 @@ internal sealed partial class FramePipeline : IDisposable
         _dispatches.Clear();
         _planned.Clear();
         _dispatches.Add(new GraphDispatch(_frameStart, _frameStartViews));
-        _fenceAt.Clear();
-        _fenceAt.Add(_dispatches.Count);
         _frameWorlds.Clear();
         _prepared.Clear();
         foreach (WorldFrame world in allWorlds)
@@ -1580,22 +1575,13 @@ internal sealed partial class FramePipeline : IDisposable
 
         bool providers = _providerWork.Update(_frameWorlds, Active(), _frame, _providerPipeline, Report);
         CollectBuffers(allWorlds);
-        _fence.Update(Buffers, Active(), _frame, _fencePipeline);
-        GraphDispatch fence = new(_fencePipeline, _frameStartViews);
-        for (int i = _fenceAt.Count - 1; i >= 0; i--)
-            _dispatches.Insert(_fenceAt[i], fence);
 
-        // Providers' compute and the counts it wrote, after the uploads and before the fence every view follows
-        int firstFence = _fenceAt[0];
+        int first = 1;
         if (providers)
-            _dispatches.Insert(firstFence++, new GraphDispatch(_providerPipeline, _frameStartViews));
+            _dispatches.Insert(first++, new GraphDispatch(_providerPipeline, _frameStartViews));
         if (shadows)
-            _dispatches.Insert(firstFence + 1, new GraphDispatch(_shadowPipeline, _frameStartViews));
-        if (pipelines.Length > 0)
-        {
-            _dispatches.Add(fence);
-            _dispatches.AddRange(pipelines);
-        }
+            _dispatches.Insert(first + 1, new GraphDispatch(_shadowPipeline, _frameStartViews));
+        _dispatches.AddRange(pipelines);
         _readback.Prepare(readbacks);
         ExecutionTask task = _device.DispatchGraph(CollectionsMarshal.AsSpan(_dispatches), profilers ?? []);
         foreach (Texture texture in _disposeAfterDispatch)
@@ -1883,7 +1869,6 @@ internal sealed partial class FramePipeline : IDisposable
         world.SkyAmbientPass!.Source = scratch.Cube;
         world.SkyAmbientPass.Output = reflections.SkyAmbient;
         _dispatches.Add(new GraphDispatch(world.SkyAmbient, _frameStartViews));
-        _fenceAt.Add(_dispatches.Count);
     }
 
     // Filters a captured cube into every mip of a prefiltered one
@@ -2285,7 +2270,6 @@ internal sealed partial class FramePipeline : IDisposable
         _shadowSampler?.Dispose();
         _shrinkScratch?.Dispose();
         _tileClear?.Dispose();
-        _fencePipeline.Dispose();
         _probes.Dispose();
         _deform.Dispose();
         Programs.Dispose();
@@ -2456,46 +2440,6 @@ internal sealed class ReadbackBufferPass : IInstancePass
         ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
         cmd.CopyBuffer(context.GetRenderBuffer(_source), request.Offset, request.Staging!, 0, request.Size);
     }
-}
-
-/// <summary>
-/// Reads every buffer draws may read, after the passes that write them and before the views and host pipelines, so their
-/// first use in this graph waits for every earlier write. Views then import nothing and never rebuild when a buffer grows.
-/// </summary>
-internal sealed class FencePass : IPass
-{
-    private DeviceBuffer[] _buffers = [];
-    private readonly List<DeviceBuffer> _wanted = new();
-
-    public string Name => "Graphite.Fence";
-
-    public void Update(DeviceBuffer[] frameBuffers, IEnumerable<CameraFrame> cameras, int frame, RenderPipeline pipeline)
-    {
-        _wanted.Clear();
-        _wanted.AddRange(frameBuffers);
-        foreach (CameraFrame camera in cameras)
-        {
-            if (camera.LastFrame != frame)
-                continue;
-            foreach (DeviceBuffer buffer in camera.HostBuffers)
-            {
-                if (!_wanted.Contains(buffer))
-                    _wanted.Add(buffer);
-            }
-        }
-        if (CollectionsMarshal.AsSpan(_wanted).SequenceEqual(_buffers))
-            return;
-        _buffers = [.. _wanted];
-        pipeline.SetPasses([this]);
-    }
-
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < _buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), _buffers[i], BufferAccess.AllReads);
-    }
-
-    public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
 /// <summary>
