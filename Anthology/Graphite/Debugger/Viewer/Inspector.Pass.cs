@@ -286,6 +286,7 @@ internal sealed partial class ProfilerView
             PushMarkerCommand c => c.Name,
             UpdateBufferCommand c => $"{Res(c.After)} @ {c.Offset} / {Style.Bytes(c.Data.Length)}",
             CopyBufferCommand c => $"{Res(c.Source)} -> {Res(c.DestinationAfter)} / {Style.Bytes(c.SizeInBytes)}",
+            BlitTextureCommand c => $"{Res(c.Source)} -> {Res(c.DestinationAfter)} / {c.Regions.Length} regions",
             _ => "",
         };
     }
