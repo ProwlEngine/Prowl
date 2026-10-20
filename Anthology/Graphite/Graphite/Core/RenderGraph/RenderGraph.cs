@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite;
 
-/// <summary>Solved render graph: passes ordered readers-after-writers, plus merged resource table. Built from a pipeline's passes and centrally declared resources.</summary>
+/// <summary>Solved render graph: every pass in one dependency order, run per execution or per instance of its kind, plus the merged resource table.</summary>
 public sealed class RenderGraph : IDisposable
 {
     /// <summary>A pass plus its declared resource accesses.</summary>
@@ -13,6 +13,8 @@ public sealed class RenderGraph : IDisposable
         public readonly IPass Pass;
 
         internal readonly ResourceAccess[] Accesses;
+
+        internal readonly int Index;
 
         /// <summary>True if the pass writes the instance target, so it only runs for instances that have one.</summary>
         public bool WritesInstanceTarget
@@ -30,9 +32,10 @@ public sealed class RenderGraph : IDisposable
 
         internal readonly PassResourceAccess[] PublicAccesses;
 
-        internal PassNode(IPass pass, ResourceAccess[] accesses)
+        internal PassNode(IPass pass, int index, ResourceAccess[] accesses)
         {
             Pass = pass;
+            Index = index;
             Accesses = accesses;
             PublicAccesses = ToPublic(accesses);
         }
@@ -56,11 +59,17 @@ public sealed class RenderGraph : IDisposable
         }
     }
 
+    private readonly PassNode[] _nodes;
+    private readonly PassNode[] _sorted;
+    private readonly int[] _positions;
+    private readonly Dictionary<GraphKind, PassNode[]> _byKind;
+    private readonly Dictionary<GraphKind, GraphKind> _parents;
+
     /// <summary>Debug name reported to profilers of every execution of this graph.</summary>
     public string Name { get; }
 
-    /// <summary>Passes in exec order (topo sorted, ties by insertion order).</summary>
-    public IReadOnlyList<PassNode> OrderedPasses { get; }
+    /// <summary>The kinds of the root and every declared scope, each once.</summary>
+    public IReadOnlyList<GraphKind> Kinds { get; }
 
     /// <summary>All declared resources by ID (first declaration wins).</summary>
     public IReadOnlyDictionary<RenderResourceID, GraphResource> Resources { get; }
@@ -70,14 +79,47 @@ public sealed class RenderGraph : IDisposable
 
     private RenderGraph(
         string name,
-        PassNode[] ordered,
+        PassNode[] nodes,
+        PassNode[] sorted,
+        int[] positions,
+        Dictionary<GraphKind, PassNode[]> byKind,
+        Dictionary<GraphKind, GraphKind> parents,
         Dictionary<RenderResourceID, GraphResource> resources)
     {
         Name = name;
-        OrderedPasses = ordered;
+        _nodes = nodes;
+        _sorted = sorted;
+        _positions = positions;
+        _byKind = byKind;
+        _parents = parents;
         Resources = resources;
         WritesInstanceTarget = resources.ContainsKey(GraphInstanceTargetResource.InstanceTargetId);
+
+        List<GraphKind> kinds = [GraphKind.Root];
+        foreach (GraphKind kind in parents.Keys)
+            kinds.Add(kind);
+        Kinds = kinds;
     }
+
+    /// <summary>The root kind's passes in execution order.</summary>
+    public IReadOnlyList<PassNode> OrderedPasses => PassesOf(GraphKind.Root);
+
+    /// <summary>Every pass of every kind in the one dependency order.</summary>
+    public IReadOnlyList<PassNode> Passes => _sorted;
+
+    /// <summary>A kind's passes in execution order. Empty for a kind with none.</summary>
+    public IReadOnlyList<PassNode> PassesOf(GraphKind kind) => _byKind.TryGetValue(kind, out PassNode[]? nodes) ? nodes : [];
+
+    /// <summary>True if the kind is the root or a declared scope.</summary>
+    public bool Contains(GraphKind kind) => kind == GraphKind.Root || _parents.ContainsKey(kind);
+
+    /// <summary>The kind an instance of the given kind runs under.</summary>
+    public GraphKind ParentOf(GraphKind kind)
+        => _parents.TryGetValue(kind, out GraphKind parent) ? parent : throw new ArgumentException($"Kind '{kind.Name}' is not declared by graph '{Name}'.", nameof(kind));
+
+    internal PassNode NodeAt(int index) => _nodes[index];
+
+    internal int PositionOf(int nodeIndex) => _positions[nodeIndex];
 
     /// <summary>Disposes physical resources owned by any history resource here.</summary>
     public void Dispose()
@@ -87,52 +129,139 @@ public sealed class RenderGraph : IDisposable
     }
 
     /// <summary>
-    /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Throws if an input has no producer, or on a dependency cycle.
+    /// Builds the solved graph: runs pass setup and orders every pass by what it reads and writes.
+    /// Throws if an input has no producer or the dependencies loop.
     /// </summary>
-    /// <param name="passes">Passes to solve.</param>
+    /// <param name="passes">Every pass, each an execution pass or an instance pass. Order breaks ties and orders writes of one resource.</param>
+    /// <param name="scopes">The parent kind of each kind an instance pass runs in. Root is implicit.</param>
     /// <param name="name">Debug name reported to profilers.</param>
     public static RenderGraph Build(
         IReadOnlyList<IPass> passes,
+        IReadOnlyList<GraphScope>? scopes = null,
         string name = "")
     {
+        ArgumentNullException.ThrowIfNull(passes);
         ArgumentNullException.ThrowIfNull(name);
 
-        int count = passes.Count;
-        var nodes = new PassNode[count];
-        var resources = new Dictionary<RenderResourceID, GraphResource>();
+        Dictionary<GraphKind, GraphKind> parents = ValidateScopes(scopes);
 
-        var builder = new RenderContextBuilder();
+        int count = passes.Count;
+        var resources = new Dictionary<RenderResourceID, GraphResource>();
+        var nodes = new PassNode[count];
+        var accesses = new ResourceAccess[count][];
+        var executionBuilder = new RenderContextBuilder();
+        var instanceBuilder = new InstanceContextBuilder();
         for (int i = 0; i < count; i++)
         {
-            IPass pass = passes[i];
-
-            builder.Reset();
-            pass.Setup(builder);
-
+            IPass pass = passes[i] ?? throw new ArgumentException("Pass list contains null.", nameof(passes));
+            RenderContextBuilder builder = SetupPass(pass, parents, executionBuilder, instanceBuilder);
             foreach (ResourceAccess access in builder.Accesses)
             {
-                GraphResource? output = access.Description;
-                if (output == null)
-                    continue;
-
-                if (!resources.TryAdd(output.Id, output) && !SameDeclaration(resources[output.Id], output))
+                GraphResource? declared = access.Description;
+                if (declared != null && !resources.TryAdd(declared.Id, declared) && !SameDeclaration(resources[declared.Id], declared))
                     throw new RenderGraphException(
-                        $"Pass '{pass.Name}' declares resource '{RenderResourceID.ToString(output.Id)}' with a different description than an earlier declaration.", pass);
+                        $"Pass '{pass.Name}' declares resource '{RenderResourceID.ToString(declared.Id)}' with a different description than an earlier declaration.", pass);
             }
 
-            nodes[i] = new PassNode(pass, builder.Accesses.ToArray());
+            accesses[i] = builder.Accesses.ToArray();
+            nodes[i] = new PassNode(pass, i, accesses[i]);
         }
 
         ValidateInputs(nodes, resources);
         ApplyStorageUsage(nodes, resources);
 
-        int[] ordered = TopologicalSort(nodes);
+        int[] order = GraphSorter.Sort(passes, accesses, resources);
+        var sorted = new PassNode[count];
+        var lists = new Dictionary<GraphKind, List<PassNode>> { [GraphKind.Root] = [] };
+        foreach (GraphKind kind in parents.Keys)
+            lists[kind] = [];
+        for (int i = 0; i < count; i++)
+        {
+            sorted[i] = nodes[order[i]];
+            lists[sorted[i].Pass.Kind].Add(sorted[i]);
+        }
 
-        var orderedNodes = new PassNode[ordered.Length];
-        for (int i = 0; i < ordered.Length; i++)
-            orderedNodes[i] = nodes[ordered[i]];
+        var byKind = new Dictionary<GraphKind, PassNode[]>();
+        var positions = new int[count];
+        foreach ((GraphKind kind, List<PassNode> list) in lists)
+        {
+            byKind[kind] = list.ToArray();
+            for (int i = 0; i < list.Count; i++)
+                positions[list[i].Index] = i;
+        }
 
-        return new RenderGraph(name, orderedNodes, resources);
+        return new RenderGraph(
+            name,
+            nodes,
+            sorted,
+            positions,
+            byKind,
+            parents,
+            resources);
+    }
+
+    private static Dictionary<GraphKind, GraphKind> ValidateScopes(IReadOnlyList<GraphScope>? scopes)
+    {
+        var parents = new Dictionary<GraphKind, GraphKind>();
+        if (scopes == null)
+            return parents;
+
+        foreach (GraphScope scope in scopes)
+        {
+            if (!scope.Kind.IsValid || scope.Kind == GraphKind.Root)
+                throw new ArgumentException("A scope needs a kind of its own, not the default or root kind.", nameof(scopes));
+            if (!scope.Parent.IsValid)
+                throw new ArgumentException($"Scope '{scope.Kind.Name}' has no parent kind.", nameof(scopes));
+            if (parents.TryGetValue(scope.Kind, out GraphKind existing) && existing != scope.Parent)
+                throw new ArgumentException($"Kind '{scope.Kind.Name}' names two parents, '{existing.Name}' and '{scope.Parent.Name}'.", nameof(scopes));
+            parents[scope.Kind] = scope.Parent;
+        }
+
+        foreach ((GraphKind kind, GraphKind parent) in parents)
+        {
+            GraphKind walk = parent;
+            int steps = 0;
+            while (walk != GraphKind.Root)
+            {
+                if (!parents.TryGetValue(walk, out GraphKind up))
+                    throw new ArgumentException($"Kind '{kind.Name}' has parent '{walk.Name}', which no scope declares.", nameof(scopes));
+                if (walk == kind || ++steps > parents.Count)
+                    throw new ArgumentException($"Kind '{kind.Name}' is its own ancestor.", nameof(scopes));
+                walk = up;
+            }
+        }
+
+        return parents;
+    }
+
+    private static RenderContextBuilder SetupPass(
+        IPass pass,
+        Dictionary<GraphKind, GraphKind> parents,
+        RenderContextBuilder executionBuilder,
+        InstanceContextBuilder instanceBuilder)
+    {
+        switch (pass)
+        {
+            case IExecutionPass and IInstancePass:
+                throw new RenderGraphException($"Pass '{pass.Name}' is both an execution pass and an instance pass.", pass);
+
+            case IExecutionPass execution:
+                executionBuilder.Reset();
+                execution.Setup(executionBuilder);
+                return executionBuilder;
+
+            case IInstancePass instance:
+                if (!pass.Kind.IsValid || pass.Kind == GraphKind.Root)
+                    throw new RenderGraphException($"Instance pass '{pass.Name}' needs a kind of its own, not the default or root kind.", pass);
+                if (!parents.ContainsKey(pass.Kind))
+                    throw new RenderGraphException($"Pass '{pass.Name}' has kind '{pass.Kind.Name}', which no scope declares.", pass);
+                instanceBuilder.Reset();
+                instance.Setup(instanceBuilder);
+                return instanceBuilder;
+
+            default:
+                throw new RenderGraphException($"Pass '{pass.Name}' is neither an execution pass nor an instance pass.", pass);
+        }
     }
 
     private static bool SameDeclaration(GraphResource existing, GraphResource declared) => (existing, declared) switch
@@ -225,75 +354,5 @@ public sealed class RenderGraph : IDisposable
                     "outputs it and it is not imported.", node.Pass);
             }
         }
-    }
-
-    private static int[] TopologicalSort(PassNode[] nodes)
-    {
-        int count = nodes.Length;
-
-        var writersOf = new Dictionary<RenderResourceID, List<int>>();
-        for (int i = 0; i < count; i++)
-        {
-            foreach (ResourceAccess access in nodes[i].Accesses)
-            {
-                if (!access.IsOutput)
-                    continue;
-
-                if (!writersOf.TryGetValue(access.Id, out List<int>? list))
-                    writersOf[access.Id] = list = new List<int>();
-                list.Add(i);
-            }
-        }
-
-        var adjacency = new List<int>[count];
-        var indegree = new int[count];
-        for (int i = 0; i < count; i++)
-            adjacency[i] = new List<int>();
-
-        for (int reader = 0; reader < count; reader++)
-        {
-            foreach (ResourceAccess access in nodes[reader].Accesses)
-            {
-                if (access.IsOutput || !writersOf.TryGetValue(access.Id, out List<int>? writers))
-                    continue;
-
-                foreach (int writer in writers)
-                {
-                    if (writer == reader || adjacency[writer].Contains(reader))
-                        continue;
-
-                    adjacency[writer].Add(reader);
-                    indegree[reader]++;
-                }
-            }
-        }
-
-        var order = new int[count];
-        int emitted = 0;
-        var scheduled = new bool[count];
-
-        while (emitted < count)
-        {
-            int next = -1;
-            for (int i = 0; i < count; i++)
-            {
-                if (!scheduled[i] && indegree[i] == 0)
-                {
-                    next = i;
-                    break;
-                }
-            }
-
-            if (next < 0)
-                throw new RenderGraphException("Render graph has a cyclic resource dependency and cannot be ordered.", null);
-
-            scheduled[next] = true;
-            order[emitted++] = next;
-
-            foreach (int dependent in adjacency[next])
-                indegree[dependent]--;
-        }
-
-        return order;
     }
 }
