@@ -336,6 +336,8 @@ internal unsafe sealed partial class VkDescriptorBinder
                 case ResourceKind.TextureReadWrite:
                     dst[n++] = r.View.DescriptorId;
                     dst[n++] = (ulong)r.Layout;
+                    if (r.Combined)
+                        dst[n++] = r.Sampler.DescriptorId;
                     break;
 
                 case ResourceKind.Sampler:
