@@ -18,6 +18,18 @@ public abstract partial class CommandBuffer
         throw new RenderException($"{use} is '{resource.Name}', which was disposed{reason} before command buffer '{Name}' recorded a command using it.");
     }
 
+    private void SetFramebuffer_CheckNotDisposed(Framebuffer fb)
+    {
+        if (fb == null || !Device.ValidationEnabled)
+            return;
+
+        CheckNotDisposed(fb, "The framebuffer");
+        foreach (FramebufferAttachment attachment in fb.ColorTargets)
+            CheckNotDisposed(attachment.Target, "A color target");
+        if (fb.DepthTarget is { } depth)
+            CheckNotDisposed(depth.Target, "The depth target");
+    }
+
     private void SetVertexSource_CheckNonNull(IVertexSource source)
     {
         if (!Device.ValidationEnabled)

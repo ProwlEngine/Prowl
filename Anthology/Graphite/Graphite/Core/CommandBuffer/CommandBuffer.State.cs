@@ -165,6 +165,7 @@ public abstract partial class CommandBuffer
     public void SetFramebuffer(Framebuffer fb, TargetLoadStoreOps? ops = null)
     {
         RequireGraphExecution(nameof(SetFramebuffer));
+        SetFramebuffer_CheckNotDisposed(fb);
         bool changed = _framebuffer != fb;
         if (!changed && !ops.HasValue)
             return;
