@@ -171,6 +171,25 @@ public sealed class RendererTests : IDisposable
     private static Color32 At(Color32[] pixels, int x, int y) => pixels[y * Size + x];
 
     [Fact]
+    public void DrawCallGroups_NameTheRenderableAndMaterialTheyDraw()
+    {
+        Material material = Colored(1, 0, 0);
+        material.Name = "Red";
+        RenderableHandle handle = _world.Add(new RenderableDesc { Mesh = _quad, Name = "Quad", Transform = Double4x4.CreateScale(new Double3(2, 2, 2)) }, [material]);
+        PayloadSink sink = new();
+        ViewDesc view = new() { World = _world, ViewId = 1, Target = _framebuffer, ClearColor = new Float4(0, 0, 0, 1) };
+        view.Layers[0] = new ViewLayer { View = Float4x4.Identity, Projection = s_projection };
+
+        _renderer.SubmitFrame(new FrameDesc { Views = new[] { view }, Profilers = [sink] });
+        _renderer.WaitForRenderThread();
+        _device.WaitForIdle();
+
+        DrawnRenderable[] drawn = sink.Payloads.OfType<DrawCallGroup>().SelectMany(g => g.Commands).SelectMany(c => c.Renderables).ToArray();
+        Assert.NotEmpty(drawn);
+        Assert.All(drawn, r => Assert.Equal((handle, "Quad", "Red"), (r.Handle, r.Name, r.Material)));
+    }
+
+    [Fact]
     public void Frames_DrawEveryMaterial_InTheFirstFrame()
     {
         Add(Colored(1, 0, 0), new Double3(-2, 0, 10));
