@@ -62,7 +62,7 @@ public sealed class KcpTransport : Transport
     public override bool IsListening => _listening;
 
     /// <summary>The port the socket is bound to, or 0 if it isn't bound yet.</summary>
-    public int LocalPort => (_socket?.LocalEndPoint as IPEndPoint)?.Port ?? 0;
+    public override int LocalPort => (_socket?.LocalEndPoint as IPEndPoint)?.Port ?? 0;
 
     internal long NowMs => _clock.ElapsedMilliseconds;
 

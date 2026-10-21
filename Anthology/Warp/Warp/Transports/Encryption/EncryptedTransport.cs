@@ -25,6 +25,7 @@ public sealed class EncryptedTransport : Transport
     private bool _disposed;
     public Transport Inner { get; }
     public override bool IsListening => Inner.IsListening;
+    public override int LocalPort => Inner.LocalPort;
     public override bool IsEncrypted => true;
 
     public EncryptedTransport(Transport inner, byte[] key, TimeSpan? handshakeTimeout = null)

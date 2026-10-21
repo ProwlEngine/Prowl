@@ -24,6 +24,7 @@ public sealed class BatchingTransport : Transport
     }
 
     public override bool IsListening => _inner.IsListening;
+    public override int LocalPort => _inner.LocalPort;
     public override bool IsEncrypted => _inner.IsEncrypted;
     public override void Listen() { ThrowIfDisposed(); _inner.Listen(); }
     public override Connection Connect(string address)
