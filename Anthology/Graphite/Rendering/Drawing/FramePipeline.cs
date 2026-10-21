@@ -419,12 +419,26 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 }
 
 /// <summary>
-/// A device local buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
-/// commands. It grows by doubling, and a grown buffer changes the frame's buffer set.
+/// A persistent graph buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
+/// commands. It grows by doubling.
 /// </summary>
-internal sealed class GpuArray(GraphicsDevice device, BufferUsage usage, string name) : IDisposable
+internal sealed class GpuArray
 {
-    public DeviceBuffer Buffer { get; private set; } = Create(device, usage, name, 256);
+    private readonly GraphicsDevice _device;
+    private readonly GraphStore _store;
+    private readonly PersistentBuffer _persistent;
+
+    public GpuArray(GraphicsDevice device, GraphStore store, RenderResourceID id, BufferUsage usage, GraphInstanceKey key)
+    {
+        _device = device;
+        _store = store;
+        _persistent = new PersistentBuffer(id, usage | BufferUsage.StructuredBufferReadWrite, key);
+        Buffer = _persistent.Resolve(device, store, 256);
+    }
+
+    public DeviceBuffer Buffer { get; private set; }
+
+    public PersistentBuffer Persistent => _persistent;
 
     public void Write<T>(Uploader uploader, ReadOnlySpan<T> data) where T : unmanaged
     {
@@ -432,22 +446,12 @@ internal sealed class GpuArray(GraphicsDevice device, BufferUsage usage, string 
         if (bytes > Buffer.SizeInBytes)
         {
             uint size = Buffer.SizeInBytes;
-            Buffer.Dispose();
             while (size < bytes)
                 size *= 2;
-            Buffer = Create(device, usage, name, size);
+            Buffer = _persistent.Resolve(_device, _store, size);
         }
         if (bytes > 0)
             uploader.Write(Buffer, 0, MemoryMarshal.Cast<T, uint>(data));
-    }
-
-    public void Dispose() => Buffer.Dispose();
-
-    private static DeviceBuffer Create(GraphicsDevice device, BufferUsage usage, string name, uint size)
-    {
-        DeviceBuffer buffer = device.ResourceFactory.CreateBuffer(new BufferDescription(size, usage | BufferUsage.StructuredBufferReadWrite));
-        buffer.Name = name;
-        return buffer;
     }
 }
 
