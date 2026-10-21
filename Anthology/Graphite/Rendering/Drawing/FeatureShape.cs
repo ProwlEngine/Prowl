@@ -13,6 +13,7 @@ internal sealed class FeatureShape : IDisposable
         => (targets & (SceneTargets.Normals | SceneTargets.Material)) != 0 ? 4 : (targets & SceneTargets.Motion) != 0 ? 2 : 1;
 
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
+    private readonly Dictionary<RenderFeature, int> _used = new();
     private bool _sceneDescribed;
 
     public FeatureShape(GraphKind kind, ViewKind viewKind, CameraShape shape, CascadeSlot[] cascades)
@@ -84,8 +85,25 @@ internal sealed class FeatureShape : IDisposable
         return pass;
     }
 
-    public bool Add(RenderFeature feature)
+    public bool Prune(int frame)
     {
+        bool removed = false;
+        for (int i = Features.Count - 1; i >= 0; i--)
+        {
+            RenderFeature feature = Features[i];
+            if (_used.GetValueOrDefault(feature, -1) == frame)
+                continue;
+            Features.RemoveAt(i);
+            _passes.Remove(feature);
+            _used.Remove(feature);
+            removed = true;
+        }
+        return removed;
+    }
+
+    public bool Add(RenderFeature feature, int frame)
+    {
+        _used[feature] = frame;
         if (Features.Contains(feature))
             return false;
         int at = Features.Count;

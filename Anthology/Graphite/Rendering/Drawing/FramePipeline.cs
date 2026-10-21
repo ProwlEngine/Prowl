@@ -1513,6 +1513,11 @@ internal sealed partial class FramePipeline : IDisposable
         PlanCounts();
 
         _readback.Prepare(readbacks);
+        foreach (FeatureShape shape in _shapes.Values)
+        {
+            if (shape.LastFrame == _frame && shape.Prune(_frame))
+                _graphDirty = true;
+        }
         if (_graphDirty)
             BuildGraph();
         ExecutionTask task = _device.DispatchGraph(_graph!, CreateInstances(_graph!), profilers ?? []);
@@ -1587,20 +1592,24 @@ internal sealed partial class FramePipeline : IDisposable
         (CascadeSlot[] cascades, string cascadeKey) = CascadesOf(camera, view, camera.World);
         CameraShape key = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, cascadeKey);
         GraphKind kind = RenderKinds.Of(view.Kind, key);
+        bool changed = false;
         if (!_shapes.TryGetValue(kind, out FeatureShape? shape))
         {
             _shapes[kind] = shape = new FeatureShape(kind, view.Kind, key, cascades) { Frame = this };
-            _graphDirty = true;
+            changed = true;
         }
         shape.LastFrame = _frame;
         camera.Shape = shape;
         foreach (RenderFeature feature in camera.Selected)
         {
-            if (shape.Add(feature) || shape.PassOf(feature).BuiltVersion != feature.Version)
-                _graphDirty = true;
+            if (shape.Add(feature, _frame) || shape.PassOf(feature).BuiltVersion != feature.Version)
+                changed = true;
         }
-        if (_graphDirty)
+        if (changed)
+        {
+            _graphDirty = true;
             BuildGraph();
+        }
         return shape;
     }
 

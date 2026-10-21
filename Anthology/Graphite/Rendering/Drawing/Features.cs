@@ -456,6 +456,8 @@ public sealed class FeatureBuilder
         _pass.SceneRead = _graph.DeclareInputTexture(Shape.SceneId, TextureState.Sampled, TextureState.Sampled);
     }
 
+    internal bool ColorWritten => Shape.CurrentWritten;
+
     /// <summary>Reads the current colour.</summary>
     public void ReadColor()
     {
@@ -695,9 +697,9 @@ public sealed class FeatureContext
     /// <summary>The view's layers as shaders read them this frame, jittered when the view jitters.</summary>
     public ReadOnlySpan<ViewBlock> Blocks => _pass.Camera.Blocks.AsSpan(0, View.LayerCount);
 
-    /// <summary>A history texture as it was some frames ago, or null before it holds one.</summary>
+    /// <summary>A history texture as it was some frames ago, or null before it holds one or after a cut.</summary>
     public RenderTexture? History(TextureHandle texture, int framesAgo = 1)
-        => Graph.IsHistoryValid(texture) ? Graph.GetRenderTexture(texture, framesAgo) : null;
+        => _pass.Camera.HadPrevious && Graph.IsHistoryValid(texture) ? Graph.GetRenderTexture(texture, framesAgo) : null;
 
     /// <summary>State this feature keeps for this view, made the first time it is asked for and disposed with the view.</summary>
     public T GetViewState<T>() where T : class, new() => _pass.Camera.State<T>(_pass.Feature);
@@ -1099,7 +1101,11 @@ public sealed class SceneColorFeature : RenderFeature
     public override string? ExclusiveGroup => "SceneColor";
     public override ViewKinds RunsOn => ViewKinds.All;
 
-    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadColor();
+    public override void Setup(FeatureBuilder builder, in FeatureView view)
+    {
+        if (builder.ColorWritten)
+            builder.ReadColor();
+    }
 
     public override void Render(FeatureContext context)
     {
