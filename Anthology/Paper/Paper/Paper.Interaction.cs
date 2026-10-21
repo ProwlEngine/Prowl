@@ -329,13 +329,13 @@ namespace Prowl.PaperUI
             UpdateCursor();
 
             // Process scroll events
-            if (_theHoveredElementId != 0 && PointerWheel != 0)
+            if (_theHoveredElementId != 0 && (PointerWheel != 0 || PointerWheelX != 0))
             {
                 ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
                 if (hoveredElement.IsValid)
                 {
                     ref ElementData data = ref hoveredElement.Data;
-                    var scrollEvt = new ScrollEvent(hoveredElement, data.LayoutRect, PointerPos, PointerWheel);
+                    var scrollEvt = new ScrollEvent(hoveredElement, data.LayoutRect, PointerPos, PointerWheel, PointerWheelX);
                     data.OnScroll?.Invoke(scrollEvt);
                     BubbleEventToParents(hoveredElement, scrollEvt);
                 }

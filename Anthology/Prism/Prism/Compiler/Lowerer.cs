@@ -2918,6 +2918,7 @@ public sealed partial class Lowerer
         if (++_exprDepth > Parser.MaxNestingDepth) { _exprDepth--; throw new GlslParseException($"expression nesting is too deep (limit {Parser.MaxNestingDepth})", _lowerLine); }
         CVal? result;
         try { result = EvalConstCore(e); }
+        catch (GlslParseException ex) when (Unplaced(ex, e)) { throw Place(ex, e); }
         finally { _exprDepth--; }
         e.ConstResult = result;
         e.ConstEvaluated = true;
@@ -4854,8 +4855,14 @@ public sealed partial class Lowerer
         if (expr.Line > 0) _lowerLine = expr.Line;
         if (++_exprDepth > Parser.MaxNestingDepth) { _exprDepth--; throw new GlslParseException($"expression nesting is too deep (limit {Parser.MaxNestingDepth})", _lowerLine); }
         try { return LowerExprCore(expr); }
+        catch (GlslParseException ex) when (Unplaced(ex, expr)) { throw Place(ex, expr); }
         finally { _exprDepth--; }
     }
+
+    // A line-less error raised while handling a node points at the node's anchor token, when that is on the line being lowered.
+    bool Unplaced(GlslParseException ex, Expr expr) => ex.Code == 0 && expr.Column > 0 && expr.AnchorLine == _lowerLine;
+
+    GlslParseException Place(GlslParseException ex, Expr expr) => ex.WithLocation(_lowerLine, expr.Column, expr.Length);
 
     Value LowerExprCore(Expr expr) => expr switch
     {
@@ -10891,6 +10898,7 @@ public sealed partial class Lowerer
     {
         if (++_exprDepth > Parser.MaxNestingDepth) { _exprDepth--; throw new GlslParseException($"expression nesting is too deep (limit {Parser.MaxNestingDepth})", _lowerLine); }
         try { return InferTypeCore(e); }
+        catch (GlslParseException ex) when (Unplaced(ex, e)) { throw Place(ex, e); }
         finally { _exprDepth--; }
     }
 

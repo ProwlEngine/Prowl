@@ -103,12 +103,16 @@ public class NebulaEditor
     // Editor layout: hierarchy | (Scene/Shader/Visual/Widgets tabs) | inspector, with an
     // asset browser + console strip beneath the left+center columns. A real Origami dock tree,
     // so every divider is a live splitter and every tab drags out into a floating window.
+    /// <summary>Open on the Code Editor tab (the --code flag).</summary>
+    public static bool ShowCode;
+
     private DockSpace BuildDock()
     {
         var scene = new EmptyPanel("Scene", "Scene viewport", _geistSemi, _geist);
         var shader = new NodeGraphPanel();
         var visual = new EmptyPanel("Visual Scripts", "Block canvas", _geistSemi, _geist);
         var charts = new ChartsPanel();
+        var code = new CodeEditorPanel();
         _widgets = new WidgetPlaygroundPanel(_geist, _geistMed, _geistSemi, _mono);
         var widgets = _widgets;
 
@@ -117,8 +121,8 @@ public class NebulaEditor
         var assets = new EmptyPanel("Assets", "Project browser", _geistSemi, _geist);
         var console = new EmptyPanel("Console", "Log output", _geistSemi, _geist);
 
-        _centerLeaf = DockNode.Leaf(scene, shader, visual, charts, widgets);
-        _centerLeaf.ActiveTabIndex = 4; // show the Widget Playground
+        _centerLeaf = DockNode.Leaf(scene, shader, visual, charts, widgets, code);
+        _centerLeaf.ActiveTabIndex = ShowCode ? 5 : 4;
 
         var mainRow = DockNode.Split(SplitDirection.Horizontal, 0.23f, DockNode.Leaf(hierarchy), _centerLeaf);
         var bottomRow = DockNode.Split(SplitDirection.Horizontal, 0.5f, DockNode.Leaf(assets), DockNode.Leaf(console));

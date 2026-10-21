@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <PackageId>Prowl.Origami.Graphite</PackageId>
+    <Title>Prowl.Origami.Graphite</Title>
+    <Description>Graphite shader language services for the Origami CodeEditor: highlighting, completion, hover, signature help, navigation, references and compiler diagnostics for .shader, .glsl and .compute files.</Description>
+    <RootNamespace>Prowl.OrigamiUI.Graphite</RootNamespace>
+    <PackageTags>GLSL;shader;Graphite;code editor;intellisense;completion;Prowl;Origami</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Origami.Graphite.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Origami\Origami.csproj" />
+    <ProjectReference Include="..\..\Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+    <ProjectReference Include="..\..\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+  </ItemGroup>
+
+</Project>

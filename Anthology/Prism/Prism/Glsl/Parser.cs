@@ -695,6 +695,18 @@ public sealed class Parser
     // Stamps a node with the source line it started on (used to attribute lowering errors).
     static E At<E>(E node, int line) where E : Expr { if (node.Line == 0) node.Line = line; return node; }
 
+    // Stamps a node with the token its errors point at. Macro output has no source column, so it keeps none.
+    static E Mark<E>(E node, Token token) where E : Expr
+    {
+        if (node.Column == 0 && !token.Macro && token.Column > 0)
+        {
+            node.AnchorLine = token.Line;
+            node.Column = token.Column;
+            node.Length = Math.Max(1, token.Text.Length);
+        }
+        return node;
+    }
+
     Expr ParseAssignment()
     {
         if (++_depth > MaxNestingDepth) { _depth--; throw new GlslParseException($"expression nesting is too deep (limit {MaxNestingDepth})", Cur.Line); }
@@ -708,8 +720,8 @@ public sealed class Parser
         var left = ParseConditional();
         if (Cur.Kind == TokenKind.Operator && IsAssignOp(Cur.Text))
         {
-            string op = Advance().Text;
-            return At(new Binary(op, left, ParseAssignment()), ln);   // right-associative
+            var opToken = Advance();
+            return At(Mark(new Binary(opToken.Text, left, ParseAssignment()), opToken), ln);   // right-associative
         }
         return left;
     }
@@ -718,10 +730,11 @@ public sealed class Parser
     {
         int ln = Cur.Line;
         var cond = ParseBinary(1);
+        var question = Cur;
         if (!AcceptKind(TokenKind.Question)) return cond;
         var then = ParseExpression();
         Expect(TokenKind.Colon);
-        return At(new Conditional(cond, then, ParseAssignment()), ln);
+        return At(Mark(new Conditional(cond, then, ParseAssignment()), question), ln);
     }
 
     Expr ParseBinary(int minPrec)
@@ -736,8 +749,8 @@ public sealed class Parser
             int prec = BinPrec(Cur.Text);
             if (prec < minPrec || prec == 0) break;
             if (_depth + chain >= MaxNestingDepth) throw new GlslParseException($"expression nesting is too deep (limit {MaxNestingDepth})", ln);
-            string op = Advance().Text;
-            left = At(new Binary(op, left, ParseBinary(prec + 1)), ln);   // left-associative
+            var opToken = Advance();
+            left = At(Mark(new Binary(opToken.Text, left, ParseBinary(prec + 1)), opToken), ln);   // left-associative
         }
         return left;
     }
@@ -751,8 +764,8 @@ public sealed class Parser
             if (++_depth > MaxNestingDepth) { _depth--; throw new GlslParseException($"expression nesting is too deep (limit {MaxNestingDepth})", ln); }
             try
             {
-                string op = Advance().Text;
-                return At(new Unary(op, ParseUnary(), Prefix: true), ln);
+                var opToken = Advance();
+                return At(Mark(new Unary(opToken.Text, ParseUnary(), Prefix: true), opToken), ln);
             }
             finally { _depth--; }
         }
@@ -767,20 +780,21 @@ public sealed class Parser
         for (int chain = 0; ; chain++)
         {
             if (_depth + chain >= MaxNestingDepth) throw new GlslParseException($"expression nesting is too deep (limit {MaxNestingDepth})", ln);
+            var suffix = Cur;
             if (AcceptKind(TokenKind.LBracket))
             {
                 var idx = ParseExpression();
                 Expect(TokenKind.RBracket);
-                e = new Index(e, idx);
+                e = Mark(new Index(e, idx), suffix);
             }
             else if (AcceptKind(TokenKind.Dot))
             {
-                string member = Expect(TokenKind.Identifier, "member").Text;
-                e = IsKind(TokenKind.LParen) ? new Method(e, member, ParseArgs()) : new Member(e, member);
+                var member = Expect(TokenKind.Identifier, "member");
+                e = IsKind(TokenKind.LParen) ? Mark(new Method(e, member.Text, ParseArgs()), member) : Mark(new Member(e, member.Text), member);
             }
             else if (Cur.Kind == TokenKind.Operator && Cur.Text is "++" or "--")
             {
-                e = new Unary(Advance().Text, e, Prefix: false);
+                e = Mark(new Unary(Advance().Text, e, Prefix: false), suffix);
             }
             else return At(e, ln);
             e = At(e, ln);
@@ -794,7 +808,7 @@ public sealed class Parser
             case TokenKind.IntConst or TokenKind.UintConst or TokenKind.Int64Const or TokenKind.Uint64Const or TokenKind.Int16Const or TokenKind.Uint16Const
                 or TokenKind.FloatConst or TokenKind.DoubleConst or TokenKind.HalfConst or TokenKind.BoolConst or TokenKind.StringConst:
                 var lit = Advance();
-                return new Literal(lit.Kind, lit.Text);
+                return Mark(new Literal(lit.Kind, lit.Text), lit);
 
             case TokenKind.LParen:
                 Advance();
@@ -803,12 +817,13 @@ public sealed class Parser
                 return inner;
 
             case TokenKind.Identifier:
-                string name = Advance().Text;
-                if (IsKind(TokenKind.LParen)) return new Call(name, ParseArgs());
+                var nameToken = Advance();
+                string name = nameToken.Text;
+                if (IsKind(TokenKind.LParen)) return Mark(new Call(name, ParseArgs()), nameToken);
                 if (name == "coopmat" && IsOp("<"))
                 {
                     var templateArgs = ParseTemplateArgs();
-                    return new Call(name, ParseArgs(), TemplateArgs: templateArgs);
+                    return Mark(new Call(name, ParseArgs(), TemplateArgs: templateArgs), nameToken);
                 }
                 if (IsKind(TokenKind.LBracket))
                 {
@@ -823,12 +838,12 @@ public sealed class Parser
                         Expect(TokenKind.RBracket);
                     }
                     // T[N](...) / T[](...) / T[A][B](...) is an array constructor; otherwise it is indexing.
-                    if (IsKind(TokenKind.LParen)) return new Call(name, ParseArgs(), dims[0], IsArray: true, ArrayDims: dims);
-                    Expr indexed = new Ident(name);
+                    if (IsKind(TokenKind.LParen)) return Mark(new Call(name, ParseArgs(), dims[0], IsArray: true, ArrayDims: dims), nameToken);
+                    Expr indexed = Mark(new Ident(name), nameToken);
                     foreach (var d in dims) indexed = new Index(indexed, d ?? throw Error("array index expected"));
                     return indexed;
                 }
-                return new Ident(name);
+                return Mark(new Ident(name), nameToken);
 
             default:
                 if (Cur.Kind == TokenKind.End)
@@ -1010,5 +1025,5 @@ public sealed class Parser
         if (!AcceptText(text)) throw Error($"expected '{text}' but found '{Cur.Text}'");
     }
 
-    GlslParseException Error(string message) => new(message, Cur.Line);
+    GlslParseException Error(string message) => new(message, Cur.Line, Cur.Macro ? 0 : Cur.Column, Cur.Text.Length);
 }

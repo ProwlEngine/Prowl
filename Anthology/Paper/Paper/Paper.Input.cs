@@ -120,6 +120,9 @@ namespace Prowl.PaperUI
         /// <summary> Cumulative mouse wheel scroll value since the last reset. Positive values indicate forward/up scrolling, negative indicates backward/down. </summary>
         public float PointerWheel { get; private set; } = 0;
 
+        /// <summary> Horizontal wheel or trackpad scroll this frame. Positive scrolls toward the start (left), matching <see cref="PointerWheel"/> where positive scrolls up. </summary>
+        public float PointerWheelX { get; private set; } = 0;
+
         // Derived properties
         /// <summary>
         /// The change in pointer position since the last update. Continuous across any wrap the host
@@ -423,6 +426,7 @@ namespace Prowl.PaperUI
 
             // Reset transient values
             PointerWheel = 0;
+            PointerWheelX = 0;
             PreviousPointerPos = PointerPos;
             _pointerWrap = Float2.Zero;
             InputString.Clear();
@@ -461,6 +465,7 @@ namespace Prowl.PaperUI
             PreviousPointerPos = _pointerPos;
             _pointerPos = Float2.Zero;
             PointerWheel = 0;
+            PointerWheelX = 0;
         }
 
         #endregion
@@ -529,6 +534,12 @@ namespace Prowl.PaperUI
         public void SetPointerWheel(float wheel)
         {
             PointerWheel = wheel;
+        }
+
+        /// <summary> Sets the horizontal wheel scroll delta for the current frame, from a tilting wheel or a trackpad. Positive scrolls toward the start (left). </summary>
+        public void SetPointerWheelX(float wheel)
+        {
+            PointerWheelX = wheel;
         }
 
         /// <summary> Adds each character of the text to the input queue, converting carriage returns to newlines. </summary>

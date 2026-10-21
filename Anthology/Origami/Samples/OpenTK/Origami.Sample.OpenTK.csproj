@@ -18,12 +18,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Origami\Origami.csproj" />
+    <ProjectReference Include="..\..\CSharp\Prowl.Origami.CSharp.csproj" />
     <ProjectReference Include="..\..\..\Paper\Paper\Paper.csproj" />
     <ProjectReference Include="..\..\..\Quill\Quill\Quill.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="Fonts\**\*.ttf" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Scripts\*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

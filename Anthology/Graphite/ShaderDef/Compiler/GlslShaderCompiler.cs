@@ -18,7 +18,20 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 /// <summary>
 /// A shader failed to compile. The message lists every diagnostic as file:line: error: text.
 /// </summary>
-public sealed class ShaderCompileException(string message) : Exception(message);
+public sealed class ShaderCompileException(string message) : Exception(message)
+{
+    /// <summary>The file the error is in, as its #line directive or include named it, when known.</summary>
+    public string? File { get; init; }
+
+    /// <summary>1-based line of the error in <see cref="File"/>, 0 when unknown.</summary>
+    public int Line { get; init; }
+
+    /// <summary>1-based column of the error on <see cref="Line"/>, 0 when only the line is known.</summary>
+    public int Column { get; init; }
+
+    /// <summary>Length of the source text the error points at, 0 when unknown.</summary>
+    public int Length { get; init; }
+}
 
 
 /// <summary>
@@ -386,7 +399,13 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
         {
             // Prism reports the file and line its #line directives and includes gave the error; the pass is the fallback.
             string where = e.File ?? file;
-            throw new ShaderCompileException(e.Line > 0 ? $"{where}:{e.Line}: error: {e.Text}" : $"{where}: error: {e.Text}");
+            throw new ShaderCompileException(e.Line > 0 ? $"{where}:{e.Line}: error: {e.Text}" : $"{where}: error: {e.Text}")
+            {
+                File = where,
+                Line = e.Line,
+                Column = e.Column,
+                Length = e.Length,
+            };
         }
     }
 }

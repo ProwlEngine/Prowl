@@ -116,4 +116,64 @@ public sealed class LocationTests
 
         Assert.StartsWith("Test:17: ", ex.Message);
     }
+
+    [Fact]
+    public void UnresolvedNameErrorsPointAtTheName()
+    {
+        const string src = "#version 450\nvoid main()\n{\n    float y = 1.0 + nope;\n}\n";
+
+        var ex = Assert.Throws<GlslParseException>(() => GlslCompiler.CompileToBytes(src, ShaderStage.Fragment));
+
+        Assert.Equal(4, ex.Line);
+        Assert.Equal(21, ex.Column);
+        Assert.Equal(4, ex.Length);
+    }
+
+    [Fact]
+    public void MemberErrorsPointAtTheMember()
+    {
+        const string src = "#version 450\nstruct S { vec4 color; };\nvoid main()\n{\n    S s;\n    vec4 c = s.colour;\n}\n";
+
+        var ex = Assert.Throws<GlslParseException>(() => GlslCompiler.CompileToBytes(src, ShaderStage.Fragment));
+
+        Assert.Equal(6, ex.Line);
+        Assert.Equal(16, ex.Column);
+        Assert.Equal(6, ex.Length);
+    }
+
+    [Fact]
+    public void SyntaxErrorsPointAtTheToken()
+    {
+        const string src = "#version 450\nvoid main()\n{\n    float x = ;\n}\n";
+
+        var ex = Assert.Throws<GlslParseException>(() => GlslCompiler.CompileToBytes(src, ShaderStage.Fragment));
+
+        Assert.Equal(4, ex.Line);
+        Assert.Equal(15, ex.Column);
+    }
+
+    [Fact]
+    public void IncludedFileErrorsKeepTheirColumn()
+    {
+        var files = new Dictionary<string, string> { ["Broken.glsl"] = "float helper()\n{\n    return nope;\n}\n" };
+        const string src = "#version 450\n#include \"Broken.glsl\"\nlayout(location = 0) out vec4 color;\nvoid main() { color = vec4(helper()); }\n";
+
+        var ex = Assert.Throws<GlslParseException>(() =>
+            GlslCompiler.CompileToBytes(src, ShaderStage.Fragment, includes: (name, _, _) => files.TryGetValue(name, out var text) ? new IncludeResult(name, text) : null));
+
+        Assert.Equal("Broken.glsl", ex.File);
+        Assert.Equal(3, ex.Line);
+        Assert.Equal(12, ex.Column);
+    }
+
+    [Fact]
+    public void MacroErrorsHaveNoColumn()
+    {
+        const string src = "#version 450\n#define BAD nope\nvoid main()\n{\n    float y = BAD;\n}\n";
+
+        var ex = Assert.Throws<GlslParseException>(() => GlslCompiler.CompileToBytes(src, ShaderStage.Fragment));
+
+        Assert.Equal(5, ex.Line);
+        Assert.Equal(0, ex.Column);
+    }
 }

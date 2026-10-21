@@ -9,21 +9,32 @@ public sealed class GlslParseException : Exception
     public int Line { get; }
     public string? File { get; }
     public string Text { get; }
+
+    /// <summary>1-based column on <see cref="Line"/> the error points at, 0 when only the line is known.</summary>
+    public int Column { get; }
+
+    /// <summary>Length of the source text the error points at, 0 when only the line is known.</summary>
+    public int Length { get; }
+
     internal int Code { get; }
     internal bool Located { get; }
 
-    public GlslParseException(string message, int line = 0) : base(message)
+    public GlslParseException(string message, int line = 0, int column = 0, int length = 0) : base(message)
     {
         Text = message;
         Code = line;
+        Column = line > 0 ? column : 0;
+        Length = line > 0 ? length : 0;
     }
 
-    private GlslParseException(string text, int line, string? file) : base(Format(text, line, file))
+    private GlslParseException(string text, int line, string? file, int column, int length) : base(Format(text, line, file))
     {
         Text = text;
         Line = line;
         File = file;
         Code = line;
+        Column = column;
+        Length = length;
         Located = true;
     }
 
@@ -33,7 +44,9 @@ public sealed class GlslParseException : Exception
     // Re-attach a line to an error raised deeper down without one.
     public GlslParseException WithLine(int line) => Code > 0 || line <= 0 ? this : new GlslParseException(Text, line);
 
-    internal GlslParseException WithCode(int code) => Located ? this : new GlslParseException(Text, code);
+    internal GlslParseException WithLocation(int line, int column, int length) => Code > 0 || line <= 0 ? this : new GlslParseException(Text, line, column, length);
+
+    internal GlslParseException WithCode(int code) => Located ? this : new GlslParseException(Text, code, Column, Length);
 
     internal GlslParseException Resolve(IReadOnlyList<string?> segmentNames)
     {
@@ -41,7 +54,7 @@ public sealed class GlslParseException : Exception
         int segment = Code / Preprocessor.SegmentStride;
         int line = Code % Preprocessor.SegmentStride;
         string? file = segment < segmentNames.Count ? segmentNames[segment] : null;
-        return new GlslParseException(Text, line, file);
+        return new GlslParseException(Text, line, file, Column, Length);
     }
 }
 
@@ -54,6 +67,10 @@ public sealed class GlslParseException : Exception
 public abstract record Expr
 {
     public int Line { get; set; }
+    // The token a lowering error in this node points at: an operator, a name or a literal. AnchorLine is its location code.
+    public int AnchorLine { get; set; }
+    public int Column { get; set; }
+    public int Length { get; set; }
     // Per-node memo of the lowerer's constant-fold result (an opaque CVal, or null = "folds to nothing").
     // The lowerer speculatively const-evaluates every operator node, so without this a nested expression is
     // re-folded once per ancestor -- O(n^2), and each literal re-parsed. Fresh per compile (the AST is
