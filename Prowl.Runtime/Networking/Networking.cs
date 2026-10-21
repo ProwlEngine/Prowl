@@ -52,10 +52,10 @@ public static partial class Networking
 
     /// <summary>The running session, or null when there is none.</summary>
     public static NetSession? Session { get; private set; }
-    private static NetworkingThread? s_networkingThread;
+    private static NetworkingContext? s_context;
 
     /// <summary>The session's bound IP port, or zero when it has no IP listener.</summary>
-    public static int LocalPort => s_networkingThread?.LocalPort ?? Session?.Transport.LocalPort ?? 0;
+    public static int LocalPort => s_context?.LocalPort ?? Session?.Transport.LocalPort ?? 0;
 
     /// <summary>True while hosting, or joined to a host.</summary>
     public static bool IsActive => Session?.State == SessionState.Active;
@@ -80,19 +80,11 @@ public static partial class Networking
     {
         BeginSession();
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetworkingThread? thread = CreateNetworkingThread(transport);
+        NetworkingContext context = new(s_configuration);
         NetSession session;
-        try
-        {
-            if (thread == null) session = NetSession.Host(transport, name, options ?? s_configuration.CreateSessionOptions());
-            else
-            {
-                thread.Listen();
-                session = NetSession.CreateHost(transport, name, options ?? s_configuration.CreateSessionOptions());
-            }
-        }
-        catch { thread?.Dispose(); throw; }
-        Attach(session, thread);
+        try { session = context.Host(transport, name, options); }
+        catch { context.Dispose(); throw; }
+        Attach(session, context);
 
         s_scene = Scene.Current;
         RegisterSceneObjects(s_scene);
@@ -113,16 +105,11 @@ public static partial class Networking
     {
         BeginSession();
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetworkingThread? thread = CreateNetworkingThread(transport);
+        NetworkingContext context = new(s_configuration);
         NetSession session;
-        try
-        {
-            session = thread == null
-                ? NetSession.Join(transport, address, name, token, options ?? s_configuration.CreateSessionOptions())
-                : NetSession.CreateClient(thread.Connect(address), name, token, options ?? s_configuration.CreateSessionOptions());
-        }
-        catch { thread?.Dispose(); throw; }
-        Attach(session, thread);
+        try { session = context.Join(transport, address, name, token, options); }
+        catch { context.Dispose(); throw; }
+        Attach(session, context);
         return session;
     }
 
@@ -135,14 +122,7 @@ public static partial class Networking
         }
 
         using FrameStatScope stats = FrameStats.Network.Scope();
-        session.Shutdown(message);
-    }
-
-    private static NetworkingThread? CreateNetworkingThread(Transport transport)
-    {
-        ArgumentNullException.ThrowIfNull(transport);
-        return s_configuration.UsesWorker(transport)
-            ? new NetworkingThread(transport) : null;
+        s_context!.Shutdown(message);
     }
 
     // --- Called by the game loop -------------------------------------------------------------
@@ -158,10 +138,7 @@ public static partial class Networking
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         s_frame++;
-        NetworkingThread? thread = s_networkingThread;
-        if (thread != null)
-            while (session.State != SessionState.Ended && thread.TryReadEvent(out TransportEvent ev)) session.ProcessEvent(ev);
-        session.Receive();
+        s_context!.Receive();
 
         if (IsActive)
         {
@@ -189,8 +166,7 @@ public static partial class Networking
             SendTransforms();
         }
 
-        session.Flush();
-        if (Session == session) s_networkingThread?.RequestFlush();
+        s_context!.Flush();
     }
 
     // --- Session bookkeeping -------------------------------------------------------------------
@@ -205,10 +181,10 @@ public static partial class Networking
         }
     }
 
-    private static void Attach(NetSession session, NetworkingThread? thread)
+    private static void Attach(NetSession session, NetworkingContext context)
     {
         Session = session;
-        s_networkingThread = thread;
+        s_context = context;
         s_nextTick = Now;
         NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty,
             session.IsHost ? "Hosting" : "Joining");
@@ -235,8 +211,8 @@ public static partial class Networking
 
             NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, $"Ended: {reason}: {message}");
             Session = null;
-            s_networkingThread = null;
-            thread?.Dispose();
+            s_context = null;
+            context.Dispose();
             Scene.OnSceneLoaded -= OnHostSceneLoaded;
             ResetState();
             Debug.Log(message == null
