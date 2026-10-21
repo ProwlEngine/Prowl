@@ -13,10 +13,10 @@ namespace Prowl.Runtime.Networking;
 // scale every tick it changes (and once a second regardless, since these go unreliably). Everyone
 // else buffers them and shows the object InterpolationDelay in the past, blending between updates.
 //
-// A Transform message is a run of [guid][u32 tick][float3 position][quaternion rotation][float3 scale].
+// A Transform message is a run of [guid][u32 generation][u32 tick][float3 position][quaternion rotation][float3 scale].
 public static partial class Networking
 {
-    private const int TransformRecordSize = 16 + 4 + 12 + 16 + 12;
+    private const int TransformRecordSize = 16 + 4 + 4 + 12 + 16 + 12;
     private const int MaxSamples = 32;
     private const double TransformRefreshSeconds = 1;
 
@@ -55,6 +55,7 @@ public static partial class Networking
             entry.SentScale = scale;
 
             message.WriteGuid(go.Identifier);
+            message.WriteUInt32(entry.Generation);
             message.WriteUInt32(s_tick);
             NetSerializers.WriteFloat3(message, position);
             NetSerializers.WriteQuaternion(message, rotation);
@@ -100,13 +101,14 @@ public static partial class Networking
         while (!reader.IsAtEnd)
         {
             Guid id = reader.ReadGuid();
+            uint generation = reader.ReadUInt32();
             uint tick = reader.ReadUInt32();
             Float3 position = NetSerializers.ReadFloat3(ref reader);
             Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
             Float3 scale = NetSerializers.ReadFloat3(ref reader);
 
             if (!s_entries.TryGetValue(id, out NetworkEntry? entry) || !entry.GameObject.IsValid() ||
-                HasControl(entry.GameObject))
+                HasControl(entry.GameObject) || entry.Generation != generation)
             {
                 continue;
             }
@@ -135,6 +137,7 @@ public static partial class Networking
             if (relay != null)
             {
                 relay.WriteGuid(id);
+                relay.WriteUInt32(generation);
                 relay.WriteUInt32(tick);
                 NetSerializers.WriteFloat3(relay, position);
                 NetSerializers.WriteQuaternion(relay, rotation);

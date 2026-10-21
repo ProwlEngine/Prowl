@@ -16,7 +16,7 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     // Bumped whenever the snapshot layout changes, so a mismatched client fails clearly.
-    private const byte SnapshotFormat = 2;
+    private const byte SnapshotFormat = 3;
 
     private static void OnHostSceneLoaded()
     {
@@ -83,6 +83,7 @@ public static partial class Networking
             output.WriteGuid(entry.GameObject.Identifier);
             output.WriteVarUInt32((uint)(entry.Owner + 1));
             output.WriteByte((byte)entry.Orphaned);
+            output.WriteUInt32(entry.Generation);
         }
 
         WriteSyncState(output, scene.AllObjects);
@@ -134,9 +135,10 @@ public static partial class Networking
             Guid id = reader.ReadGuid();
             int owner = (int)reader.ReadVarUInt32() - 1;
             NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
+            uint generation = reader.ReadUInt32();
             if (FindByIdentifier(id) is GameObject go)
             {
-                s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned });
+                s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
             }
         }
 
@@ -152,7 +154,7 @@ public static partial class Networking
             if (go.NetworkMode == NetworkMode.Object && go.NetworkRoot == go && !go.IsNetworkExcluded &&
                 !s_entries.Contains(go.Identifier))
             {
-                s_entries.Add(new NetworkEntry(go) { Orphaned = go.NetworkOrphaned });
+                s_entries.Add(new NetworkEntry(go) { Orphaned = go.NetworkOrphaned, Generation = NextGeneration() });
             }
         }
     }

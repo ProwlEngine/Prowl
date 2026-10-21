@@ -341,6 +341,9 @@ public class NetworkingTests : RuntimeTestBase
             alice.Send(FakePeer.Transform, w =>
             {
                 w.WriteGuid(ship.Identifier);
+                NetReader spawned = new(alice.Last(FakePeer.Spawn));
+                spawned.ReadGuid(); spawned.ReadGuid(); spawned.ReadVarUInt32(); spawned.ReadByte();
+                w.WriteUInt32(spawned.ReadUInt32());
                 w.WriteUInt32(1);
                 w.WriteSingle(3); w.WriteSingle(4); w.WriteSingle(5);
                 w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
@@ -539,6 +542,106 @@ public class NetworkingTests : RuntimeTestBase
         finally { Networking.Networking.Shutdown(); }
     }
 
+    private GameObject JoinTransformProxy(out FakePeer host, out NetPeer client)
+    {
+        Scene scene = CreateScene();
+        using NetWriter snapshot = new();
+        Networking.Networking.WriteSnapshot(scene, snapshot);
+        GameObject original = CreateGameObject("Proxy");
+        original.NetworkMode = NetworkMode.Object;
+        using NetWriter spawn = new();
+        Networking.Networking.WriteSpawn(original, -1, NetworkOrphaned.ClearOwner, spawn);
+        LocalNetwork network = new();
+        host = FakePeer.Host(network);
+        FakePeer remote = host;
+        host.Session.PeerJoined += peer =>
+        {
+            remote.Session.SendRaw(peer, FakePeer.SceneSnapshot, snapshot.WrittenSpan);
+            remote.Session.SendRaw(peer, FakePeer.Spawn, spawn.WrittenSpan);
+        };
+        Networking.Networking.Join(new LocalTransport(network, "client"), "host", "client");
+        Pump(() => Scene.Current.AllObjects.Any(o => o.Identifier == original.Identifier), remote);
+        client = host.Session.Peers.Single(p => !p.IsLocal);
+        return Find(Scene.Current, original.Identifier);
+    }
+
+    private static void SendProxyTransform(FakePeer host, NetPeer client, Guid id, uint tick, float position, uint generation = 0)
+    {
+        host.Send(FakePeer.Transform, w =>
+        {
+            w.WriteGuid(id); w.WriteUInt32(generation); w.WriteUInt32(tick);
+            w.WriteSingle(position); w.WriteSingle(0); w.WriteSingle(0);
+            w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
+            w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
+        }, client);
+    }
+
+    [Fact]
+    public void DelayedTransformsCannotCrossOwnershipChanges()
+    {
+        GameObject proxy = JoinTransformProxy(out FakePeer host, out NetPeer client);
+        TimeSpan delay = Networking.Networking.InterpolationDelay;
+        using (host)
+        try
+        {
+            Networking.Networking.InterpolationDelay = TimeSpan.Zero;
+            host.Send(FakePeer.Owner, w => { w.WriteGuid(proxy.Identifier); w.WriteVarUInt32(3); w.WriteUInt32(1); }, client);
+            SendProxyTransform(host, client, proxy.Identifier, 100, 100, generation: 1);
+            Frame([host]);
+            host.Send(FakePeer.Owner, w => { w.WriteGuid(proxy.Identifier); w.WriteVarUInt32(4); w.WriteUInt32(2); }, client);
+            // The previous owner's packet arrives after the reliable ownership change.
+            SendProxyTransform(host, client, proxy.Identifier, 101, 999, generation: 1);
+            SendProxyTransform(host, client, proxy.Identifier, 1, 5, generation: 2);
+            Frame([host]);
+            Assert.Equal(5f, proxy.Transform.LocalPosition.X);
+        }
+        finally
+        {
+            Networking.Networking.InterpolationDelay = delay;
+            Networking.Networking.Shutdown();
+        }
+    }
+
+    [Fact]
+    public void HostRejectsAnOldGenerationWhenOwnershipReturnsToTheSamePeer()
+    {
+        Scene scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        TimeSpan delay = Networking.Networking.InterpolationDelay;
+        try
+        {
+            Networking.Networking.InterpolationDelay = TimeSpan.Zero;
+            Pump(() => alice.Has(FakePeer.SceneSnapshot), alice);
+            GameObject ship = CreateGameObject("Ship");
+            scene.Add(ship);
+            NetPeer owner = Networking.Networking.Session!.Peers.Single(p => !p.IsLocal);
+            ship.NetworkSpawn(owner);
+            Pump(() => alice.Has(FakePeer.Spawn), alice);
+            NetReader spawn = new(alice.Last(FakePeer.Spawn));
+            spawn.ReadGuid(); spawn.ReadGuid(); spawn.ReadVarUInt32(); spawn.ReadByte();
+            uint oldGeneration = spawn.ReadUInt32();
+            ship.SetNetworkOwner(null);
+            ship.SetNetworkOwner(owner);
+            Pump(() => alice.Has(FakePeer.Owner), alice);
+            NetReader change = new(alice.Last(FakePeer.Owner));
+            change.ReadGuid(); change.ReadVarUInt32();
+            uint generation = change.ReadUInt32();
+            Assert.NotEqual(oldGeneration, generation);
+            SendProxyTransform(alice, alice.Session.HostPeer!, ship.Identifier, 500, 999, oldGeneration);
+            SendProxyTransform(alice, alice.Session.HostPeer!, ship.Identifier, 1, 5, generation);
+            Frame([alice]);
+            Assert.Equal(5f, ship.Transform.LocalPosition.X);
+        }
+        finally
+        {
+            Networking.Networking.InterpolationDelay = delay;
+            Networking.Networking.Shutdown();
+        }
+    }
+
     // --- Client side -----------------------------------------------------------------------------
 
     [Fact]
@@ -608,6 +711,7 @@ public class NetworkingTests : RuntimeTestBase
             host.Send(FakePeer.Transform, w =>
             {
                 w.WriteGuid(crateId);
+                w.WriteUInt32(0);
                 w.WriteUInt32(1);
                 w.WriteSingle(7); w.WriteSingle(8); w.WriteSingle(9);
                 w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);

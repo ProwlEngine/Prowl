@@ -16,6 +16,9 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     private const int NoOwner = -1;
+    private static uint s_nextGeneration;
+
+    private static uint NextGeneration() => checked(++s_nextGeneration);
 
     private static readonly EntryTable s_entries = new();
 
@@ -168,17 +171,17 @@ public static partial class Networking
             return;
         }
 
-        NetworkEntry entry = new(go) { Owner = owner?.Id ?? NoOwner, Orphaned = orphaned };
+        NetworkEntry entry = new(go) { Owner = owner?.Id ?? NoOwner, Orphaned = orphaned, Generation = NextGeneration() };
         s_entries.Add(entry);
         IndexTree(go);
 
         using NetWriter message = new(4096);
-        WriteSpawn(go, entry.Owner, entry.Orphaned, message);
+        WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation);
         BroadcastEngine(EngineMessage.Spawn, message.WrittenSpan);
     }
 
     /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
-    internal static void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output)
+    internal static void WriteSpawn(GameObject go, int owner, NetworkOrphaned orphaned, NetWriter output, uint generation = 0)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
         EchoObject echo;
@@ -197,6 +200,7 @@ public static partial class Networking
         output.WriteGuid(go.Parent.IsValid() ? go.Parent!.Identifier : Guid.Empty);
         output.WriteVarUInt32((uint)(owner + 1));
         output.WriteByte((byte)orphaned);
+        output.WriteUInt32(generation);
         output.WriteBytesWithLength(Compress(echo));
 
         List<GameObject> tree = [go, .. go.GetChildrenDeep()];
@@ -214,6 +218,7 @@ public static partial class Networking
         Guid parentId = reader.ReadGuid();
         int owner = (int)reader.ReadVarUInt32() - 1;
         NetworkOrphaned orphaned = (NetworkOrphaned)reader.ReadByte();
+        uint generation = reader.ReadUInt32();
         EchoObject echo = Decompress(reader.ReadBytesWithLength());
 
         GameObject? go =
@@ -237,7 +242,7 @@ public static partial class Networking
             s_scene.Add(go);
         }
 
-        s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned });
+        s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
         IndexTree(go);
         ApplySyncState(sender, ref reader, null);
     }
@@ -309,6 +314,7 @@ public static partial class Networking
         }
 
         entry.Owner = owner;
+        entry.Generation = NextGeneration();
         entry.HasSent = false;
         entry.HasReceived = false;
         entry.Samples.Clear();
@@ -316,6 +322,7 @@ public static partial class Networking
         using NetWriter message = new(32);
         message.WriteGuid(entry.GameObject.Identifier);
         message.WriteVarUInt32((uint)(owner + 1));
+        message.WriteUInt32(entry.Generation);
         BroadcastEngine(EngineMessage.Owner, message.WrittenSpan);
     }
 
@@ -328,9 +335,11 @@ public static partial class Networking
 
         Guid id = reader.ReadGuid();
         int owner = (int)reader.ReadVarUInt32() - 1;
+        uint generation = reader.ReadUInt32();
         if (s_entries.TryGetValue(id, out NetworkEntry? entry))
         {
             entry.Owner = owner;
+            entry.Generation = generation;
             entry.HasSent = false;
             entry.HasReceived = false;
             entry.Samples.Clear();
@@ -369,6 +378,7 @@ public static partial class Networking
 
         // Transform sync: what this side last sent, and what it has received from whoever controls it.
         public bool HasSent;
+        public uint Generation;
         public uint LastReceivedTick;
         public double LastSentTime;
         public NetworkOrphaned Orphaned;
