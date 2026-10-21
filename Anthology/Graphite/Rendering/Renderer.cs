@@ -145,6 +145,9 @@ public struct ViewDesc
 
     /// <summary>Unique per renderer, keys per view state.</summary>
     public int ViewId;
+
+    /// <summary>Name debug tools show for the view's instance, or null.</summary>
+    public string? Name;
     public ViewLayers Layers;
 
     /// <summary>1 for mono. Stereo and cube layers draw through multiview.</summary>

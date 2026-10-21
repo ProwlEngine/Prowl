@@ -1202,7 +1202,7 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     }
 }
 
-internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, object Data);
+internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, object Data, string Name);
 
 /// <summary>
 /// The frame: the root passes uploading every change, then the instances of every world and view, all in
@@ -1573,7 +1573,7 @@ internal sealed partial class FramePipeline : IDisposable
         UpdateSceneColor(camera, shape, width, height);
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
-        _planned.Add(new PlannedInstance(shape.Kind, view.ViewId, world, new GraphExtent(width, height), shape.Captures ? null : view.Target, camera));
+        _planned.Add(new PlannedInstance(shape.Kind, view.ViewId, world, new GraphExtent(width, height), shape.Captures ? null : view.Target, camera, view.Name ?? (shape.Captures ? $"Capture {view.ViewId}" : $"Camera {view.ViewId}")));
     }
 
     private void ReleaseStaleShapes()
@@ -1671,7 +1671,7 @@ internal sealed partial class FramePipeline : IDisposable
                 if (fill.SkyAmbient != null)
                     _imports.Add(GraphImport.Of(RenderKinds.FillAmbient, fill.SkyAmbient));
             }
-            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Data, $"{planned.Kind.Name} {planned.Id}", _imports);
+            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Data, planned.Name, _imports);
         }
         for (int i = 0; i < _readback.Requests.Count; i++)
         {
@@ -1933,7 +1933,7 @@ internal sealed partial class FramePipeline : IDisposable
     private void Fill(WorldFrame world, WorldReflections.Target target, WorldReflections.Scratch scratch, DeviceBuffer? readback, DeviceBuffer? ambient)
     {
         CaptureFill fill = new() { Source = scratch.AllTexture, Target = target, Samples = world.World.Reflections.PrefilterSamples, Readback = readback, SkyAmbient = ambient };
-        _planned.Add(new PlannedInstance(RenderKinds.CaptureFill, _planned.Count, world, new GraphExtent(target.Resolution, target.Resolution), null, fill));
+        _planned.Add(new PlannedInstance(RenderKinds.CaptureFill, _planned.Count, world, new GraphExtent(target.Resolution, target.Resolution), null, fill, $"Capture fill {_planned.Count}"));
     }
 
     private void CaptureProbe(WorldFrame world, ProbeCapture work, in FrameTime time)

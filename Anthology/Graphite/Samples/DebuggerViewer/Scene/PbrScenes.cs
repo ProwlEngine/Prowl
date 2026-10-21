@@ -59,6 +59,7 @@ internal sealed class PbrScenes : IDisposable
         {
             World = _scene.World,
             ViewId = 0,
+            Name = "Main camera",
             Target = Target.Framebuffer,
             ClearColor = new Float4(0.01f, 0.012f, 0.02f, 1),
             Near = FlyCamera.Near,
