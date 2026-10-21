@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Graphite.Debugging;
+using Prowl.Graphite.Rendering;
 
 using Prowl.Graphite.Debugger.Trace;
 
@@ -189,7 +190,6 @@ internal sealed partial class ProfilerView
 
     private void MarkerTab(FrameModel model, ProfileNode node, string tab)
     {
-        RendererInfo? info = _source.Renderer(node.Name);
         DeepPass pass = model.PassOf(node)!;
         List<ProfileNode> draws = new();
         node.CollectDraws(draws);
@@ -202,61 +202,71 @@ internal sealed partial class ProfilerView
         switch (tab)
         {
             case "Overview":
-                HeroStrip(new Stat[]
-                {
-                    new("Mesh", mesh, $"{draws.Count} submeshes"),
-                    new("Triangles", bound.Index != null ? Style.Int(bound.Index.IndexCount / 3.0) : "-", "first submesh"),
-                    new("Draws", draws.Count.ToString(), "this program"),
-                    new("Screen coverage", info != null ? Style.F(info.ScreenCoverage, "0.00") + "%" : "-", info != null ? Style.F(info.CameraDistance, "0.0") + " m from camera" : "no engine data"),
-                });
-                Accordion("Renderer", () => KvSection("Renderer", 420, new Kv?[]
-                {
-                    new("Name", node.Name),
-                    new("Source", "Debug marker (PushMarker / PopMarker)"),
-                    new("Payload", Describe.Payload(node.Meta)),
-                    new("Payload value", Describe.PayloadValue(node.Meta), node.Meta == null ? Style.InkDim : null),
-                    info != null ? new("Instance ID", info.InstanceId.ToString()) : null,
-                    info != null ? new("Renderer type", info.RendererType) : null,
-                    info != null ? new("Layer", info.Layer) : null,
-                    info != null ? new("Static", info.StaticFlags) : null,
-                    info != null ? new("Cast shadows", info.CastShadows ? "On" : "Off") : null,
-                    info != null ? new("Receive shadows", info.ReceiveShadows ? "On" : "Off") : null,
-                    info != null ? new("Light probes", info.LightProbes) : null,
-                    info != null ? new("Lightmap index", info.LightmapIndex >= 0 ? info.LightmapIndex.ToString() : "-") : null,
-                    info != null ? new("Sorting order", info.SortingOrder.ToString()) : null,
-                }));
-                if (info != null)
-                    Accordion("Transform and bounds", () => KvSection("Transform & bounds", 420, new Kv?[]
+                HeroStrip(node.Meta is DrawCallGroup counted
+                    ? new Stat[]
                     {
-                        new("Position", $"{Style.F(info.Position.X, "0.00")}, {Style.F(info.Position.Y, "0.00")}, {Style.F(info.Position.Z, "0.00")}"),
-                        new("Rotation", $"{Style.F(info.Rotation.X, "0.0")}, {Style.F(info.Rotation.Y, "0.0")}, {Style.F(info.Rotation.Z, "0.0")}"),
-                        new("Scale", $"{Style.F(info.Scale.X, "0.##")}, {Style.F(info.Scale.Y, "0.##")}, {Style.F(info.Scale.Z, "0.##")}"),
-                    }));
+                        new("Commands", counted.Commands.Length.ToString(), "indirect commands"),
+                        new("Renderables", counted.Commands.Sum(c => c.Renderables.Length).ToString(), "across its commands"),
+                        new("Materials", counted.Commands.SelectMany(c => c.Renderables).Select(r => r.Material).Distinct().Count().ToString(), counted.Shader),
+                        new("Draws", draws.Count.ToString(), "in this group"),
+                    }
+                    : new Stat[]
+                    {
+                        new("Mesh", mesh, $"{draws.Count} submeshes"),
+                        new("Triangles", bound.Index != null ? Style.Int(bound.Index.IndexCount / 3.0) : "-", "first submesh"),
+                        new("Draws", draws.Count.ToString(), "in this group"),
+                    });
+                switch (node.Meta)
+                {
+                    case DrawCallGroup call:
+                        KvSection("Draw call", 420, new Kv?[]
+                        {
+                            new("World", call.World),
+                            new("Shader", call.Shader),
+                            new("Program", call.Program),
+                            new("Commands", call.Commands.Length.ToString()),
+                        });
+                        TableSection("Renderables", 0, "One row per instance of each indirect command",
+                            new[] { "Command", "Renderable", "Handle", "Material", "Position" }, new[] { 0.6f, 1.4f, 0.8f, 1.2f, 1.6f },
+                            call.Commands.SelectMany((c, i) => c.Renderables.Select(r => R(i.ToString(), Describe.Renderable(r), Describe.Handle(r.Handle.Index, r.Handle.Generation), r.Material ?? "-", Describe.Position(r.Transform)))).ToList());
+                        break;
+                    case ShadowFaceGroup face:
+                        KvSection("Shadow tile", 420, new Kv?[]
+                        {
+                            new("World", face.World),
+                            new("Light", face.LightName ?? "Unnamed light"),
+                            new("Handle", Describe.Handle(face.Light.Index, face.Light.Generation)),
+                            new("Type", face.Type.ToString()),
+                            new(face.Cascade ? "Cascade" : "Face", face.Face.ToString()),
+                            new("Tile", $"{face.Size} x {face.Size} at {face.X}, {face.Y}"),
+                        });
+                        break;
+                    default:
+                        KvSection("Group", 420, new Kv?[]
+                        {
+                            new("Name", node.Name),
+                            new("Payload", Describe.Payload(node.Meta)),
+                            new("Payload value", Describe.PayloadValue(node.Meta), node.Meta == null ? Style.InkDim : null),
+                        });
+                        break;
+                }
                 break;
 
             case "Material":
-                if (info == null)
+                if (node.Meta is not DrawCallGroup materials)
                 {
-                    KvSection("Material", 420, new Kv?[] { new("Material", "No engine data for this marker", Style.InkDim) });
+                    KvSection("Material", 420, new Kv?[] { new("Material", "This group's payload names no materials", Style.InkDim) });
                     break;
                 }
-                MaterialInfo mat = info.Material;
                 KvSection("Material", 420, new Kv?[]
                 {
-                    new("Name", mat.Name),
-                    new("Shader", program != null ? ParseProgramName(program.Name).Shader : "-"),
-                    new("Render queue", mat.RenderQueue),
-                    new("GPU instancing", mat.Instancing ? "On" : "Off"),
-                    new("Double sided", mat.DoubleSided ? "On" : "Off"),
-                    new("Material CB", Style.Bytes(mat.ConstantBufferBytes)),
+                    new("Shader", materials.Shader),
+                    new("Program", materials.Program),
                     new("Keywords", program != null ? string.Join(" ", ParseProgramName(program.Name).Keywords) : "-"),
                 });
-                TableSection("Properties", 420, "",
-                    new[] { "Property", "Type", "Value" }, new[] { 1.4f, 0.8f, 1.6f },
-                    mat.Properties.Select(p => R(p.Name, p.Type, p.Value)).ToList());
-                TableSection("Textures", 0, "",
-                    new[] { "Slot", "Texture", "Size", "Format", "Mips", "Memory" }, new[] { 1f, 1.4f, 0.7f, 0.6f, 0.5f, 0.7f },
-                    mat.Textures.Select(t => R(t.Slot, t.Texture, t.Size.ToString(), t.Format, t.Mips.ToString(), Style.Bytes(t.Bytes))).ToList());
+                TableSection("Materials", 420, "Materials the draw call's renderables draw with",
+                    new[] { "Material", "Renderables" }, new[] { 1.6f, 0.8f },
+                    materials.Commands.SelectMany(c => c.Renderables).GroupBy(r => r.Material ?? "-").Select(g => R(g.Key, g.Count().ToString())).ToList());
                 break;
 
             default:

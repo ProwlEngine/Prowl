@@ -86,17 +86,24 @@ internal sealed class FrameModel
     {
         ProfileNode? program = null;
         Stack<ProfileNode> markers = new();
+        bool passGroup = false;
         string boundMesh = "";
         int programCount = 0, markerCount = 0, drawOrdinal = 0;
 
         for (int i = 0; i < pass.Commands.Length; i++)
         {
             RecordedCommand command = pass.Commands[i];
+            ProfileNode scope = markers.Count > 0 ? markers.Peek() : passNode;
             switch (command)
             {
                 case SetPipelineCommand pipeline:
+                    if (scope.Kind == NodeKind.Marker && scope.Parent is { Kind: NodeKind.Program, Parent: { } above } && scope.CountDraws() == 0)
+                    {
+                        scope.Parent.Children.Remove(scope);
+                        above.Add(scope);
+                    }
                     RecordedProgram? recorded = index.Program(pipeline.Program);
-                    program = passNode.Add(new ProfileNode
+                    program = scope.Add(new ProfileNode
                     {
                         Id = $"{passNode.Id}s{programCount++}",
                         Kind = NodeKind.Program,
@@ -106,18 +113,14 @@ internal sealed class FrameModel
                         CommandIndex = i,
                         Command = command,
                     });
-                    ProfileNode? open = markers.Count > 0 ? markers.Last() : null;
-                    if (open != null && open.CountDraws() == 0)
-                    {
-                        open.Parent!.Children.Remove(open);
-                        program.Add(open);
-                    }
-                    else
-                        markers.Clear();
+                    break;
+
+                case PushMarkerCommand push when markers.Count == 0 && !passGroup && push.Meta == null && push.Name == pass.Name:
+                    passGroup = true;
                     break;
 
                 case PushMarkerCommand push:
-                    ProfileNode parent = markers.Count > 0 ? markers.Peek() : program ?? passNode;
+                    ProfileNode parent = program != null && program.Parent == scope ? program : scope;
                     markers.Push(parent.Add(new ProfileNode
                     {
                         Id = $"{passNode.Id}o{markerCount++}",
@@ -132,6 +135,8 @@ internal sealed class FrameModel
                 case PopMarkerCommand:
                     if (markers.Count > 0)
                         markers.Pop();
+                    else
+                        passGroup = false;
                     break;
 
                 case BindVertexBuffersCommand bind when bind.Changed.Length > 0:
@@ -140,7 +145,7 @@ internal sealed class FrameModel
 
                 case DrawCommand or DrawIndexedCommand or DrawIndirectCommand or DrawIndexedIndirectCommand
                     or DrawIndirectCountCommand or DrawIndexedIndirectCountCommand or DispatchCommand or DispatchIndirectCommand:
-                    ProfileNode owner = markers.Count > 0 ? markers.Peek() : program ?? passNode;
+                    ProfileNode owner = program != null && program.Parent == scope ? program : scope;
                     bool dispatch = command is DispatchCommand or DispatchIndirectCommand;
                     int sub = owner.Children.Count(c => c.Kind == NodeKind.Draw);
                     string name = dispatch ? $"Dispatch {sub}"

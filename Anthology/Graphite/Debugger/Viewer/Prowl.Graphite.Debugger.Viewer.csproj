@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Core\Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="..\..\Rendering\Prowl.Graphite.Rendering.csproj" />
         <ProjectReference Include="..\..\..\Origami\Origami\Origami.csproj" />
         <ProjectReference Include="..\..\..\Paper\Paper\Paper.csproj" />
         <ProjectReference Include="..\..\..\Quill\Quill\Quill.csproj" />

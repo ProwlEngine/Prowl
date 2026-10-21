@@ -129,8 +129,6 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
         return _replayer.Replay(request);
     }
 
-    public RendererInfo? Renderer(string marker) => null;
-
     public void SaveSnapshot(string path)
     {
         if (Snapshot == null)

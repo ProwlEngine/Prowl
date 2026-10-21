@@ -72,6 +72,14 @@ internal static class Describe
 
     public static string Key(GraphInstanceKey key) => key.Kind == GraphKind.Root ? key.Kind.Name : $"{key.Kind.Name} #{key.Id}";
 
+    public static string Handle(int index, int generation) => generation > 0 ? $"{index}:{generation}" : "-";
+
+    public static string Renderable(Prowl.Graphite.Rendering.DrawnRenderable renderable)
+        => renderable.Name ?? (renderable.Handle.IsValid ? $"Renderable {renderable.Handle.Index}" : "Provider or batch item");
+
+    public static string Position(Prowl.Vector.Double4x4 transform)
+        => $"{transform.c3.X:0.##}, {transform.c3.Y:0.##}, {transform.c3.Z:0.##}";
+
     public static string Payload(object? payload) => payload == null ? "-" : payload.GetType().Name;
 
     public static string PayloadValue(object? payload) => payload?.ToString() ?? "None, or dropped when the snapshot was saved";
