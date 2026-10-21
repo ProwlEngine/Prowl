@@ -86,12 +86,13 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
     private FrameTiming Measure(Recording recording, double dispatchMilliseconds, double frameMilliseconds)
     {
         List<CpuStage> stages = [new CpuStage("DispatchGraph", dispatchMilliseconds, "Main")];
-        foreach (RecordedView view in recording.Views)
-            foreach (RecordedPass pass in view.Passes)
-                stages.Add(new CpuStage($"{view.Name}/{pass.Name}", pass.Stats.CpuMilliseconds, "Main"));
+        foreach (RecordedInstance instance in recording.Instances)
+            foreach (RecordedPass pass in instance.Passes)
+                stages.Add(new CpuStage($"{instance.Name}/{pass.Name}", pass.Stats.CpuMilliseconds, "Main"));
 
-        List<ViewVisibility> visibility = recording.Views
-            .Select(v => new ViewVisibility(v.Name, _scene.Cubes.Count, 0, 0, 1, 0, 0))
+        List<ViewVisibility> visibility = recording.Instances
+            .Where(i => i.Key.Kind == OffscreenScene.Camera)
+            .Select(i => new ViewVisibility(i.Name, _scene.Cubes.Count, 0, 0, 1, 0, 0))
             .ToList();
 
         return new FrameTiming(
@@ -178,6 +179,6 @@ internal sealed class SceneProfilerSource : IRenderProfilerSource
         using (BinaryReader reader = new(File.OpenRead(path)))
             recording = Serializer.Deserialize<DeepRecording>(EchoObject.ReadFromBinary(reader))
                 ?? throw new InvalidDataException($"{path} is not a Graphite debugger recording.");
-        Open(recording, Measure(recording.Recording, recording.Recording.Views.Sum(v => v.Passes.Sum(p => p.Stats.CpuMilliseconds)), 0), _scene.Time);
+        Open(recording, Measure(recording.Recording, recording.Recording.Instances.Sum(i => i.Passes.Sum(p => p.Stats.CpuMilliseconds)), 0), _scene.Time);
     }
 }

@@ -3,22 +3,10 @@ using System.Runtime.InteropServices;
 using DebuggerViewer.Rendering;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
 
 namespace DebuggerViewer.Scene;
-
-internal readonly struct OffscreenView(uint width, uint height) : IRenderView
-{
-    public uint PixelWidth => width;
-
-    public uint PixelHeight => height;
-
-    public int ViewId => 1;
-
-    public string Name => "Offscreen";
-}
 
 internal sealed record SceneCube(string Name, Float3 Position, Float3 Axis, float Speed, float Phase, Float3 Scale, Float4 Color);
 
@@ -33,6 +21,7 @@ internal sealed class OffscreenScene : IDisposable
     public static readonly Float3 LightDirection = Float3.Normalize(new Float3(-0.4f, -1f, -0.6f));
     public static readonly Float4 LightColor = new(1.4f, 1.3f, 1.15f, 1f);
     public static readonly Float4 Ambient = new(0.08f, 0.09f, 0.13f, 1f);
+    public static readonly GraphKind Camera = GraphKind.Intern("Sample.Camera");
 
     private readonly GraphicsDevice _device;
     private readonly DeviceBuffer _vertices;
@@ -41,7 +30,7 @@ internal sealed class OffscreenScene : IDisposable
     private readonly GraphicsProgram _lit;
     private readonly ShaderPass _tonemap;
     private readonly Sampler _sampler;
-    private readonly OffscreenView[] _views = [new(Width, Height)];
+    private readonly GraphInstances _instances;
 
     public OffscreenScene(GraphicsDevice device)
     {
@@ -70,18 +59,20 @@ internal sealed class OffscreenScene : IDisposable
         _sampler = device.ResourceFactory.CreateSampler(SamplerDescription.Linear);
 
         Cubes = CreateCubes();
-        Pipeline = new RenderPipeline([new ForwardPass(this), new PostPass(this)]);
+        Graph = RenderGraph.Build([new ForwardPass(this), new PostPass(this)], [new GraphScope(Camera, GraphKind.Root)], "Offscreen scene");
+        _instances = Graph.CreateInstances();
+        _instances.Add(Camera, 1, extent: new GraphExtent(Width, Height), name: "Offscreen");
     }
 
     public IReadOnlyList<SceneCube> Cubes { get; }
 
-    public RenderPipeline Pipeline { get; }
+    public RenderGraph Graph { get; }
 
     public float Time { get; private set; }
 
     public void Advance(float dt) => Time += dt;
 
-    public ExecutionTask Dispatch(params IProfiler[] profilers) => _device.DispatchGraph(Pipeline, _views, profilers);
+    public ExecutionTask Dispatch(params IProfiler[] profilers) => _device.DispatchGraph(Graph, _instances, profilers);
 
     public Float4x4 Model(SceneCube cube)
         => Float4x4.CreateTRS(cube.Position, Quaternion.AngleAxis(cube.Phase + Time * cube.Speed, cube.Axis), cube.Scale);
@@ -96,7 +87,7 @@ internal sealed class OffscreenScene : IDisposable
 
     public void Dispose()
     {
-        Pipeline.Dispose();
+        Graph.Dispose();
         _lit.Dispose();
         _tonemap.Dispose();
         _sampler.Dispose();
@@ -152,16 +143,18 @@ internal sealed class OffscreenScene : IDisposable
         public const uint Size = 32;
     }
 
-    private sealed class ForwardPass(OffscreenScene scene) : RasterPass
+    private sealed class ForwardPass(OffscreenScene scene) : InstanceRasterPass
     {
         private readonly PropertySet _properties = new();
 
         public override string Name => "Forward";
 
-        public override void Setup(RenderContextBuilder builder)
-            => SetTarget(builder, "SceneColor", GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.02f, 0.025f, 0.04f, 1f)));
+        public override GraphKind Kind => Camera;
 
-        public override void Render(RenderContext context, CommandBuffer cmd)
+        public override void Setup(InstanceContextBuilder builder)
+            => SetTarget(builder, "SceneColor", GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float, depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.02f, 0.025f, 0.04f, 1f)));
+
+        public override void Render(InstanceContext context, CommandBuffer cmd)
         {
             Float4x4 viewProjection = scene.ViewProjection();
             VertexSource source = new VertexSource()
@@ -189,20 +182,22 @@ internal sealed class OffscreenScene : IDisposable
         }
     }
 
-    private sealed class PostPass(OffscreenScene scene) : RasterPass
+    private sealed class PostPass(OffscreenScene scene) : InstanceRasterPass
     {
         private readonly PropertySet _properties = new();
         private TextureHandle _source;
 
         public override string Name => "Tonemap";
 
-        public override void Setup(RenderContextBuilder builder)
+        public override GraphKind Kind => Camera;
+
+        public override void Setup(InstanceContextBuilder builder)
         {
             _source = builder.DeclareInputTexture("SceneColor");
-            SetTarget(builder, "Final", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm));
+            SetTarget(builder, "Final", GraphTextureDesc.InstanceSized(PixelFormat.R8_G8_B8_A8_UNorm));
         }
 
-        public override void Render(RenderContext context, CommandBuffer cmd)
+        public override void Render(InstanceContext context, CommandBuffer cmd)
         {
             _properties.SetTexture("Source", context.GetRenderTexture(_source).ColorTextures[0], scene._sampler);
             _properties.SetFloat("Exposure", Exposure);
