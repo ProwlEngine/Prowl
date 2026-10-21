@@ -19,12 +19,12 @@ internal sealed class PbrScenes : IDisposable
     private DemoScene _scene = null!;
     private ulong _frame;
 
-    public PbrScenes(GraphicsDevice device)
+    public PbrScenes(GraphicsDevice device, int scene)
     {
         _demo = new Demo(device);
         PixelFormat format = device.MainSwapchain.Framebuffer.OutputDescription.ColorFormats[0];
         Target = device.ResourceFactory.CreateRenderTexture(new RenderTextureDescription(Width, Height, [format], depth: false));
-        Select(0);
+        Select(Math.Clamp(scene, 0, Names.Length - 1));
     }
 
     public RenderTexture Target { get; }

@@ -84,7 +84,7 @@ internal sealed class ViewerWindow : IDisposable
         SetupInput();
         LoadFonts();
 
-        _scene = new PbrScenes(_device);
+        _scene = new PbrScenes(_device, _options.Scene);
         _source = new SceneProfilerSource(_device, _scene) { IsRecording = !_options.Paused };
         _dock = new DockSpace(DockNode.Leaf());
         _windows = new RenderProfilerWindows(_source, _dock);
