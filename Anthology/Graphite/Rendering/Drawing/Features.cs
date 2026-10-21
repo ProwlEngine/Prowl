@@ -456,8 +456,6 @@ public sealed class FeatureBuilder
         _pass.SceneRead = _graph.DeclareInputTexture(Shape.SceneId, TextureState.Sampled, TextureState.Sampled);
     }
 
-    internal bool ColorWritten => Shape.CurrentWritten;
-
     /// <summary>Reads the current colour.</summary>
     public void ReadColor()
     {
@@ -937,6 +935,35 @@ internal sealed class SetupPass(FeatureShape shape) : IInstancePass
     }
 }
 
+/// <summary>Clears the scene's colour, depth and G-buffer first, so a view whose features draw nothing still presents its clear colour.</summary>
+internal sealed class SceneClearPass(FeatureShape shape) : IInstancePass
+{
+    private TextureHandle _scene;
+
+    public string Name => "Graphite.SceneClear";
+
+    public GraphKind Kind => shape.Kind;
+
+    public void Setup(InstanceContextBuilder builder)
+    {
+        _scene = shape.DeclareScene(builder);
+        shape.SceneWritten = true;
+        shape.CurrentWritten = true;
+    }
+
+    public void Render(InstanceContext context, CommandBuffer cmd)
+    {
+        CameraFrame camera = (CameraFrame)context.Instance.Data!;
+        Float4 clear = camera.Desc.Overlay ? default : camera.Desc.ClearColor with { W = 1 };
+        Framebuffer framebuffer = context.GetRenderTexture(_scene).Framebuffer;
+        cmd.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(clear.X, clear.Y, clear.Z, clear.W)), AttachmentOps.Clear(0f)));
+        cmd.SetFullViewport();
+        for (uint target = 1; target < framebuffer.ColorTargets.Count; target++)
+            cmd.ClearColorTarget(target, new Color(0, 0, 0, 0));
+        camera.Written.Add(shape.SceneId);
+    }
+}
+
 /// <summary>A view's last pass: the colour the features left, copied into the view's viewport of its target.</summary>
 internal sealed class PresentPass(FeatureShape shape) : IInstancePass
 {
@@ -1101,11 +1128,7 @@ public sealed class SceneColorFeature : RenderFeature
     public override string? ExclusiveGroup => "SceneColor";
     public override ViewKinds RunsOn => ViewKinds.All;
 
-    public override void Setup(FeatureBuilder builder, in FeatureView view)
-    {
-        if (builder.ColorWritten)
-            builder.ReadColor();
-    }
+    public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.ReadColor();
 
     public override void Render(FeatureContext context)
     {

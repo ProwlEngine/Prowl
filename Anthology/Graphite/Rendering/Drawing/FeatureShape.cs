@@ -72,6 +72,7 @@ internal sealed class FeatureShape : IDisposable
             passes.Add(new CascadePass(this));
             passes.Add(new CascadePublishPass(this));
         }
+        passes.Add(new SceneClearPass(this));
         foreach (RenderFeature feature in Features)
             passes.Add(PassOf(feature));
         passes.Add(Present);

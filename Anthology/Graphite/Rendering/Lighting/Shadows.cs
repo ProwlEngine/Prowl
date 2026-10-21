@@ -469,7 +469,10 @@ internal sealed class ShadowDrawPass(FramePipeline frame, WorldFrame world, Shad
     public bool IsEnabled(GraphInstance instance) => instance.Data == world;
 
     public void Setup(InstanceContextBuilder builder)
-        => _page = builder.DeclareOutputTexture(page.Id, ShadowRecorder.Desc(world.Shadows!.PageSize, frame.ShadowFormat), ops: ShadowRecorder.Loaded, persistent: true);
+    {
+        frame.Buffers.Read(builder);
+        _page = builder.DeclareOutputTexture(page.Id, ShadowRecorder.Desc(world.Shadows!.PageSize, frame.ShadowFormat), ops: ShadowRecorder.Loaded, persistent: true);
+    }
 
     public void Render(InstanceContext context, CommandBuffer cmd)
         => ShadowRecorder.Record(cmd, context.GetRenderTexture(_page), page.Draws, frame.TileClearProgram, context.Task.RingSlot);
