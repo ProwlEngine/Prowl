@@ -40,6 +40,7 @@ public abstract partial class CommandBuffer
             throw new RenderException(
                 $"IVertexSource.ResolveSlot returned a null Buffer for layout slot {layoutSlot}.");
         }
+        CheckNotDisposed(binding.Buffer, $"The vertex buffer of layout slot {layoutSlot}");
         if ((binding.Buffer.Usage & BufferUsage.VertexBuffer) == 0)
         {
             throw new RenderException(
@@ -57,6 +58,7 @@ public abstract partial class CommandBuffer
             throw new RenderException(
                 "IVertexSource.TryGetIndexBuffer returned true but the index buffer is null.");
         }
+        CheckNotDisposed(buffer, "The index buffer");
         if ((buffer.Usage & BufferUsage.IndexBuffer) == 0)
         {
             throw new RenderException(
