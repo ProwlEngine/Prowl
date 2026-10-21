@@ -1341,6 +1341,14 @@ internal sealed class SpatialView(TableHost tables)
     public readonly LightTreeBuilder Tree = new();
     public readonly LightTreeBuilder RegionTree = new();
 
+    public void Refresh()
+    {
+        Records.Refresh();
+        Nodes.Refresh();
+        RegionEntries.Refresh();
+        RegionNodes.Refresh();
+    }
+
     public void AddBuffers(List<PersistentBuffer> buffers)
     {
         buffers.Add(Records.Persistent);
