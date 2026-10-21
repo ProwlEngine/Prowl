@@ -5,9 +5,11 @@ using System;
 
 namespace Prowl.Warp;
 
-/// <summary>Settings for a <see cref="NetSession"/>.</summary>
-public sealed class NetSessionOptions
+/// <summary>Value settings for a <see cref="NetSession"/>. Use <c>new()</c> to initialize the defaults.</summary>
+public struct NetSessionOptions
 {
+    public NetSessionOptions() { }
+
     /// <summary>
     /// Your game's version. The host turns away clients whose version differs, with
     /// <see cref="SessionEndReason.VersionMismatch"/>.
@@ -57,7 +59,7 @@ public sealed class NetSessionOptions
         ValidateDuration(ReassemblyTimeout, nameof(ReassemblyTimeout));
         ValidateDuration(JoinTimeout, nameof(JoinTimeout));
         ValidateDuration(GoodbyeLinger, nameof(GoodbyeLinger));
-        return (NetSessionOptions)MemberwiseClone();
+        return this;
     }
 
     internal static void ValidateDuration(TimeSpan value, string name)

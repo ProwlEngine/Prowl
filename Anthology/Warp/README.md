@@ -118,6 +118,8 @@ the sender removed with `ProtocolError`.
   and copied, including nested reliability/simulation options. Their `Options` getters return detached
   copies; editing those copies does not change a running transport. Queue limits exposed directly on
   transports can be adjusted and must stay positive.
+  `NetSessionOptions` is a value type: initialize defaults with `new()`. Reading `session.Options`
+  allocates nothing; to edit a detached copy, assign it to a local variable first.
 - Admission bounds UTF-8 peer names to 256 bytes and join tokens to 4096 bytes. Admission/version
   checks do not constitute application authentication: validate tokens in `JoinRequested`.
 - `MaxReassemblyBytes` caps actual pooled storage across both reliable channels (64 MiB by default).

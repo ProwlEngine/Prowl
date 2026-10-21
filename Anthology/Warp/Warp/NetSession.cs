@@ -182,8 +182,8 @@ public sealed class NetSession : IDisposable
 
     private readonly NetSessionOptions _options;
 
-    /// <summary>A detached copy of the settings captured when this session was created.</summary>
-    public NetSessionOptions Options => _options.CopyValidated();
+    /// <summary>A value copy of the settings captured when this session was created. Does not allocate.</summary>
+    public NetSessionOptions Options => _options;
 
     public bool IsHost { get; }
 

@@ -17,8 +17,23 @@ public class OptionsTests
         NetSessionOptions options = new() { MaxPeers = 3 };
         using NetSession host = NetSession.Host(transport, options: options);
         options.MaxPeers = 1;
-        host.Options.MaxPeers = 2;
+        var snapshot = host.Options;
+        snapshot.MaxPeers = 2;
         Assert.Equal(3, host.Options.MaxPeers);
+    }
+
+    [Fact]
+    public void ReadingSessionOptionsDoesNotAllocate()
+    {
+        using LocalTransport transport = new(new LocalNetwork(), "host");
+        using NetSession host = NetSession.Host(transport);
+        int total = 0;
+        for (int i = 0; i < 100; i++) total += host.Options.MaxPeers;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++) total += host.Options.MaxPeers;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(1100 * 64, total);
+        Assert.Equal(0, allocated);
     }
 
     [Fact]
