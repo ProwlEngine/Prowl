@@ -21,6 +21,8 @@ internal abstract class HistoryRings<TResource, TDesc>
 {
     public const int RetentionExecutions = 120;
 
+    private static readonly string s_expired = $"its GraphStore freed it after {RetentionExecutions} executions without a resolve; resolve persistent resources again each frame they are used";
+
     private sealed class Ring
     {
         public TResource[] Slots = null!;
@@ -116,7 +118,7 @@ internal abstract class HistoryRings<TResource, TDesc>
 
         foreach (GraphInstanceKey key in _expired)
         {
-            DisposeRing(_rings[key]);
+            DisposeRing(_rings[key], s_expired);
             _rings.Remove(key);
         }
         _expired.Clear();
