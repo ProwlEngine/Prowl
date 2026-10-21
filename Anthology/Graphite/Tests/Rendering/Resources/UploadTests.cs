@@ -339,6 +339,25 @@ public sealed class UploadTests : IDisposable
         Assert.Equal(chunk, second.Placement!.FirstChunk);
         Flush(pool.Pages[0].Vertices, pool.Pages[0].Indices, pool.Chunks.Buffer, pool.Meshes.Buffer);
     }
+
+    [Fact]
+    public void AnArrayIdlePastTheStoresRetention_WritesToALiveBuffer()
+    {
+        GpuArray array = new TableHost(_device, _store, "Test").Array("Idle");
+        DeviceBuffer idle = array.Buffer;
+        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, [])], store: _store);
+        GraphInstances instances = graph.CreateInstances();
+        for (int i = 0; i < 130; i++)
+            _device.DispatchGraph(graph, instances);
+        _device.WaitForIdle();
+        Assert.True(idle.IsDisposed);
+
+        array.Write<uint>(_uploader, [7]);
+        Flush(array.Buffer);
+
+        Assert.False(array.Buffer.IsDisposed);
+        Assert.Equal(7u, Read(array.Buffer)[0]);
+    }
 }
 
 file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IExecutionPass
