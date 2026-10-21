@@ -327,6 +327,42 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         }
     }
 
+    [Theory]
+    [InlineData(PixelFormat.BC1_Rgba_UNorm)]
+    [InlineData(PixelFormat.BC5_UNorm)]
+    [InlineData(PixelFormat.ASTC_4x4_UNorm)]
+    [InlineData(PixelFormat.ASTC_6x6_UNorm_SRgb)]
+    [InlineData(PixelFormat.ASTC_12x10_UNorm)]
+    public void Compressed_MipChain_RoundTrips_Through_Partial_Blocks(PixelFormat format)
+    {
+        if (!GD.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.Sampled))
+        {
+            return;
+        }
+
+        // Odd sizes leave partial blocks at every level and mips smaller than one block.
+        const uint width = 37, height = 21, mips = 6;
+        Texture texture = RF.CreateTexture(TextureDescription.Texture2D(width, height, mips, 1, format, TextureUsage.Sampled));
+
+        byte[][] levels = new byte[mips][];
+        for (uint mip = 0; mip < mips; mip++)
+        {
+            uint w = Math.Max(1, width >> (int)mip), h = Math.Max(1, height >> (int)mip);
+            uint size = FormatHelpers.GetRegionSize(w, h, 1, format);
+            levels[mip] = Enumerable.Range(0, (int)size).Select(i => (byte)((i * 7) + mip)).ToArray();
+            GD.UpdateTexture(texture, levels[mip], new TextureRegion(0, 0, 0, w, h, 1, mip, 0));
+        }
+
+        GD.WaitForIdle();
+
+        for (uint mip = 0; mip < mips; mip++)
+        {
+            uint w = Math.Max(1, width >> (int)mip), h = Math.Max(1, height >> (int)mip);
+            byte[] back = ReadTextureBytes(texture, new TextureRegion(0, 0, 0, w, h, 1, mip, 0), (uint)levels[mip].Length);
+            Assert.Equal(levels[mip], back[..levels[mip].Length]);
+        }
+    }
+
     [InlineData(true)]
     [InlineData(false)]
     [Theory]

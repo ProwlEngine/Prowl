@@ -314,9 +314,8 @@ public sealed class Renderer : IDisposable
         Device = device;
         _compiler = compiler;
         _options = options ?? new RendererOptions();
-        GraphicsDeviceFeatures features = device.Features;
-        if (!features.MultiDrawIndirect || !features.DrawIndirectBaseInstance || !features.DescriptorIndexing)
-            throw new NotSupportedException("The renderer needs multi draw indirect, a first instance in indirect draws, and descriptor indexing.");
+        if (Unsupported(device) is { } unsupported)
+            throw new NotSupportedException($"The renderer cannot run on '{device.DeviceName}': {unsupported}.");
         if (_options.PrefilterSamples < 1)
             throw new ArgumentException($"PrefilterSamples is {_options.PrefilterSamples}, it must be at least 1.", nameof(options));
         if (_options.SmallestProbeMip is < 1 or > 2048 || !uint.IsPow2(_options.SmallestProbeMip))
@@ -343,6 +342,32 @@ public sealed class Renderer : IDisposable
             _thread = new Thread(RenderLoop) { Name = "Graphite Render", IsBackground = true };
             _thread.Start();
         }
+    }
+
+    private static string? Unsupported(GraphicsDevice device)
+        => Unsupported(device.Features.DrawIndirectBaseInstance, device.Features.DescriptorIndexing, device.Limits);
+
+    /// <summary>Why the renderer cannot run on a device with these features and limits, or null when it can.</summary>
+    internal static string? Unsupported(bool drawIndirectBaseInstance, bool descriptorIndexing, GraphicsDeviceLimits limits)
+    {
+        if (!drawIndirectBaseInstance)
+            return "indirect draws need a first instance, which carries each draw's record";
+        if (!descriptorIndexing)
+            return "the bindless tables need descriptor indexing";
+
+        uint varyings = (GraphiteBindings.MaterialSlotLocation + 1) * 4;
+        if (limits.MaxVertexOutputComponents < varyings || limits.MaxFragmentInputComponents < varyings)
+            return $"material varyings reach location {GraphiteBindings.MaterialSlotLocation}, which needs {varyings} vertex output and fragment input components, the device has {limits.MaxVertexOutputComponents} and {limits.MaxFragmentInputComponents}";
+
+        const ShaderStages Graphics = ShaderStages.Vertex | ShaderStages.Fragment;
+        ResourceLayoutDescription pass = new(GraphiteBindings.PassSet,
+            new ResourceLayoutElementDescription(GraphiteBindings.MaterialsName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.Materials),
+            new ResourceLayoutElementDescription(GraphiteBindings.InstancesName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.Instances),
+            new ResourceLayoutElementDescription(GraphiteBindings.DrawRecordsName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.DrawRecords),
+            new ResourceLayoutElementDescription(GraphiteBindings.VerticesName, ResourceKind.StructuredBufferReadOnly, Graphics, GraphiteBindings.Vertices));
+        return limits.Exceeded([ProgramCache.FrameLayout, ProgramCache.ViewLayout, pass]) is { } exceeded
+            ? $"a material program exceeds the descriptor limits, {exceeded}"
+            : null;
     }
 
     public GraphicsDevice Device { get; }

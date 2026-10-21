@@ -1192,6 +1192,9 @@ internal sealed partial class FramePipeline
 
     // Whether the device blits the shadow format, else shrinking lights draw again
     private bool BlitShadows => _blitShadows ??= _device.SupportsBlit(ShadowFormat, depthFormat: true);
+
+    // The largest power of two shadow map up to a cap that the device can make, at least the smallest one asked for
+    private uint LargestShadowMap(uint cap) => Math.Max(256u, Math.Min(cap, 1u << BitOperations.Log2(Math.Max(_device.Limits.MaxTextureDimension2D, 1u))));
     private readonly List<IDisposable> _shadowRetired = new();
     private Sampler? _shadowSampler;
 
@@ -1275,7 +1278,7 @@ internal sealed partial class FramePipeline
         WorldShadows shadows = world.Shadows ??= new WorldShadows(new TableHost(_device, _store, $"Graphite.World{world.World.Id}.Shadows"), world.World.Id);
         ShadowSettings settings = world.World.ShadowSnapshot;
         WorldLighting lighting = world.World.Lighting;
-        int pageSize = (int)Math.Clamp(BitOperations.RoundUpToPowerOf2((uint)Math.Max(settings.PageSize, 256)), 256u, 16384u);
+        int pageSize = (int)Math.Clamp(BitOperations.RoundUpToPowerOf2((uint)Math.Max(settings.PageSize, 256)), 256u, LargestShadowMap(16384u));
         shadows.Shrinks.Clear();
         shadows.Copies.Clear();
         shadows.ScratchTiles?.Reset(shadows.ScratchTiles.Size);
@@ -2154,7 +2157,7 @@ internal sealed partial class FramePipeline
 
     private static int CascadeCount(in LightDesc light) => Math.Clamp((int)light.Shadow.Cascades, 1, ViewShadows.MaxCascades);
 
-    private static uint CascadeResolution(in LightDesc light) => Math.Clamp(BitOperations.RoundUpToPowerOf2(Math.Max(light.Shadow.Resolution, 1u)), 256u, 8192u);
+    private uint CascadeResolution(in LightDesc light) => Math.Clamp(BitOperations.RoundUpToPowerOf2(Math.Max(light.Shadow.Resolution, 1u)), 256u, LargestShadowMap(8192u));
 
     private static CascadeFit FitOf(in ViewDesc view) => Casts(view) ? CascadeFit.View : view.Kind == ViewKind.ReflectionProbe ? CascadeFit.Around : CascadeFit.None;
 

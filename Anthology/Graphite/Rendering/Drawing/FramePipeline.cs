@@ -1151,6 +1151,7 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
     private void Draw(CommandBuffer cmd, DrawList list, int commandBase)
     {
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
+        bool multiDraw = frame.Device.Features.MultiDrawIndirect;
         bool shadow = camera.Desc.Kind == ViewKind.Shadow;
         foreach (DrawCall call in list.Calls)
         {
@@ -1175,7 +1176,14 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
             _properties.SetBuffer(GraphiteBindings.VerticesName, page.Vertices);
             cmd.SetProperties(_properties);
             cmd.SetPushConstants(new FramePipeline.Push { DrawRecordBase = (uint)(commandBase + call.FirstCommand) });
-            cmd.DrawIndexedIndirect(camera.Commands.Buffer, (uint)(commandBase + call.FirstCommand) * stride, (uint)call.CommandCount, stride);
+            uint offset = (uint)(commandBase + call.FirstCommand) * stride;
+            if (multiDraw)
+                cmd.DrawIndexedIndirect(camera.Commands.Buffer, offset, (uint)call.CommandCount, stride);
+            else
+            {
+                for (int c = 0; c < call.CommandCount; c++)
+                    cmd.DrawIndexedIndirect(camera.Commands.Buffer, offset + (uint)c * stride, 1, stride);
+            }
             if (group)
                 cmd.PopDebugGroup();
         }

@@ -5,7 +5,11 @@ namespace Prowl.Graphite.Rendering;
 
 internal sealed class FeatureShape : IDisposable
 {
-    public static readonly PixelFormat[] SceneFormats = [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, PixelFormat.R16_G16_SNorm, PixelFormat.R8_G8_UNorm];
+    internal static PixelFormat[] SceneFormats(Func<PixelFormat, bool> drawable)
+        => [PixelFormat.R16_G16_B16_A16_Float, PixelFormat.R16_G16_Float, drawable(PixelFormat.R16_G16_SNorm) ? PixelFormat.R16_G16_SNorm : PixelFormat.R16_G16_Float, PixelFormat.R8_G8_UNorm];
+
+    internal static PixelFormat SceneDepth(Func<PixelFormat, bool> drawable)
+        => drawable(PixelFormat.D32_Float) ? PixelFormat.D32_Float : PixelFormat.D16_UNorm;
 
     public const PixelFormat LdrColorFormat = PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
 
@@ -62,7 +66,11 @@ internal sealed class FeatureShape : IDisposable
     public bool Upscaled { get; set; }
     public FeatureView View { get; private set; }
 
-    public PixelFormat ColorFormat => Shape.Ldr ? LdrColorFormat : SceneFormats[0];
+    private bool ColorDrawable(PixelFormat format) => Frame.Device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled);
+
+    private bool DepthDrawable(PixelFormat format) => Frame.Device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled);
+
+    public PixelFormat ColorFormat => Shape.Ldr ? LdrColorFormat : SceneFormats(ColorDrawable)[0];
 
     public IReadOnlyList<IInstancePass> Passes()
     {
@@ -147,7 +155,7 @@ internal sealed class FeatureShape : IDisposable
 
     public GraphTextureDesc SceneDesc()
     {
-        PixelFormat[] formats = SceneFormats[..SceneTargetCount(Shape.Targets)];
+        PixelFormat[] formats = SceneFormats(ColorDrawable)[..SceneTargetCount(Shape.Targets)];
         formats[0] = ColorFormat;
         return new GraphTextureDesc
         {
@@ -155,7 +163,7 @@ internal sealed class FeatureShape : IDisposable
             Scale = 1,
             ColorFormats = formats,
             EnableDepth = true,
-            DepthFormat = PixelFormat.D32_Float,
+            DepthFormat = SceneDepth(DepthDrawable),
             ArrayLayers = Layers,
         };
     }

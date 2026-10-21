@@ -270,6 +270,44 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         AssertUniform(staging, size, size, Color.Red);
     }
 
+    // One block of a single colour per format: BC1 with both endpoints red, BC5 with red at full and green at none,
+    // and an ASTC void extent block of opaque green.
+    public static TheoryData<PixelFormat, byte[], Color> CompressedBlocks() => new()
+    {
+        { PixelFormat.BC1_Rgba_UNorm, [0x00, 0xF8, 0x00, 0xF8, 0, 0, 0, 0], new Color(1f, 0f, 0f, 1f) },
+        { PixelFormat.BC5_UNorm, [255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], new Color(1f, 0f, 0f, 1f) },
+        { PixelFormat.ASTC_4x4_UNorm, [0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF], new Color(0f, 1f, 0f, 1f) },
+        { PixelFormat.ASTC_6x6_UNorm_SRgb, [0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF], new Color(0f, 1f, 0f, 1f) },
+    };
+
+    [SkippableTheory]
+    [MemberData(nameof(CompressedBlocks))]
+    public void CompressedTexture_IsSampledDirectly(PixelFormat format, byte[] block, Color expected)
+    {
+        Skip.IfNot(GD.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.Sampled), $"{format} cannot be sampled here.");
+
+        (uint blockWidth, uint blockHeight) = format.GetBlockDimensions();
+        Texture source = RF.CreateTexture(TextureDescription.Texture2D(blockWidth, blockHeight, 1, 1, format, TextureUsage.Sampled));
+        GD.UpdateTexture(source, block, new TextureRegion(0, 0, 0, blockWidth, blockHeight, 1));
+
+        DeviceBuffer staging = CreateStaging(4, 4);
+        GraphicsProgram program = CreateSampleProgram();
+        RenderResourceID outputId = RenderResourceID.Intern("compressed_sample_output");
+        GraphTextureDesc desc = GraphTextureDesc.Sized(4, 4, false, Format);
+
+        TextureHandle outputHandle = default;
+        LambdaPass sample = new(
+            "Sample",
+            builder => outputHandle = builder.DeclareOutputTexture(outputId, desc),
+            (context, cmd) => DrawSampled(cmd, program, context.GetRenderTexture(outputHandle).Framebuffer, source, PointSampler));
+
+        using RenderPipeline pipeline = new([sample, BarrierPasses.Readback(outputId, staging)]);
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
+        GD.WaitForIdle();
+
+        AssertUniform(staging, 4, 4, expected);
+    }
+
     [SkippableFact]
     public void ComputeStorageWrite_ThenFragmentSample_ReadsComputedTexels()
     {

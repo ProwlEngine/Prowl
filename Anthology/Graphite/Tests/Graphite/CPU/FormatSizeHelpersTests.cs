@@ -36,6 +36,8 @@ public class FormatSizeHelpersTests : IDisposable
     }
 
     private static HashSet<PixelFormat> CompressedPixelFormats = [
+        .. System.Enum.GetValues<PixelFormat>().Where(format => format.ToString().StartsWith("ASTC_")),
+
         PixelFormat.BC1_Rgba_UNorm,
         PixelFormat.BC1_Rgba_UNorm_SRgb,
         PixelFormat.BC1_Rgb_UNorm,
@@ -78,5 +80,34 @@ public class FormatSizeHelpersTests : IDisposable
     public void GetSizeInBytes_ThrowsForAllCompressedPixelFormats(PixelFormat format)
     {
         Assert.ThrowsAny<RenderException>(() => format.GetSizeInBytes());
+    }
+
+    [Theory]
+    [InlineData(PixelFormat.BC1_Rgba_UNorm, 2u, 1u, 8u)]
+    [InlineData(PixelFormat.BC1_Rgba_UNorm, 13u, 7u, 4u * 2u * 8u)]
+    [InlineData(PixelFormat.BC7_UNorm, 16u, 16u, 16u * 16u)]
+    [InlineData(PixelFormat.ASTC_4x4_UNorm, 1u, 1u, 16u)]
+    [InlineData(PixelFormat.ASTC_6x6_UNorm_SRgb, 13u, 7u, 3u * 2u * 16u)]
+    [InlineData(PixelFormat.ASTC_12x10_UNorm, 25u, 21u, 3u * 3u * 16u)]
+    public void GetRegionSize_CountsPartialEdgeBlocks(PixelFormat format, uint width, uint height, uint expected)
+    {
+        Assert.Equal(expected, FormatHelpers.GetRegionSize(width, height, 1, format));
+    }
+
+    [Fact]
+    public void EveryAstcFormatHasBlockDimensionsAndAnSrgbPartner()
+    {
+        foreach (PixelFormat format in System.Enum.GetValues<PixelFormat>().Where(format => format.ToString().StartsWith("ASTC_")))
+        {
+            string[] size = format.ToString().Split('_')[1].Split('x');
+            Assert.Equal((uint.Parse(size[0]), uint.Parse(size[1])), FormatHelpers.GetBlockDimensions(format));
+            Assert.Equal(16u, FormatHelpers.GetBlockSizeInBytes(format));
+
+            PixelFormat partner = format.ToString().EndsWith("_SRgb")
+                ? System.Enum.Parse<PixelFormat>(format.ToString()[..^5])
+                : System.Enum.Parse<PixelFormat>(format + "_SRgb");
+            Assert.True(FormatHelpers.IsFormatViewCompatible(partner, format));
+            Assert.Equal(FormatHelpers.GetViewFamilyFormat(format), FormatHelpers.GetViewFamilyFormat(partner));
+        }
     }
 }
