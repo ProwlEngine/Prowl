@@ -13,7 +13,7 @@ public sealed class CodeEditorOptions
 {
     /// <summary>Monospace font. Null uses the theme's mono font.</summary>
     public FontFile? Font;
-    public float FontSize = 14f;
+    public float FontSize = 15f;
     public float MinFontSize = 6f;
     public float MaxFontSize = 48f;
 
@@ -37,6 +37,9 @@ public sealed class CodeEditorOptions
     public bool ShowStatusBar = true;
     public bool HighlightCurrentLine = true;
     public bool HighlightMatchingBrackets = true;
+
+    /// <summary>Shows notes such as reference counts after declarations, when the language provides them.</summary>
+    public bool ShowCodeLens = true;
 
     /// <summary>Marks other occurrences of the word under the caret.</summary>
     public bool HighlightOccurrences = true;

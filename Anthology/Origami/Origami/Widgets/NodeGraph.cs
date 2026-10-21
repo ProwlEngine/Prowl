@@ -654,8 +654,11 @@ public sealed class NodeGraphBuilder
         // Cursor-anchored zoom (on the container so wheel bubbling up from a node still zooms).
         container.OnScroll(st, (s, e) =>
         {
-            float nz = Math.Clamp(s.Zoom * MathF.Exp(e.Delta * 0.14f), _minZoom, _maxZoom);
             e.StopPropagation();
+            // Sideways scrolling, from a tilting wheel or a trackpad, pans instead of zooming.
+            s.PanX += e.DeltaX * 40f;
+            if (e.Delta == 0f) return;
+            float nz = Math.Clamp(s.Zoom * MathF.Exp(e.Delta * 0.14f), _minZoom, _maxZoom);
             if (nz == s.Zoom) return;
             float lx = (float)e.PointerPosition.X - s.ScreenX;
             float ly = (float)e.PointerPosition.Y - s.ScreenY;

@@ -280,9 +280,17 @@ public sealed class CodeLocation
     public int Line { get; init; }
     public int Column { get; init; }
 
-    /// <summary>What to call it in a list, such as the symbol's full name or the line's text.</summary>
+    /// <summary>What to call it in a list: the symbol's full name, or for a reference the whole source line it is on.</summary>
     public string Display { get; init; } = "";
     public CodeSymbolKind Kind { get; init; }
+}
+
+/// <summary>A note drawn after a declaration, such as how many references it has. Clicking it lists them.</summary>
+public sealed class CodeLens
+{
+    /// <summary>Offset of the declared name. The note sits on its line and clicking it finds references from here.</summary>
+    public int Offset { get; init; }
+    public string Text { get; init; } = "";
 }
 
 public sealed class CodeAction
@@ -293,8 +301,15 @@ public sealed class CodeAction
     public bool IsQuickFix { get; init; }
 
     public IReadOnlyList<CodeTextEdit> Edits { get; init; } = Array.Empty<CodeTextEdit>();
+
+    /// <summary>
+    /// Computes the action's edits when it is picked, for actions too costly to compute for every entry in the
+    /// list or that change other documents. When set it is used instead of <see cref="Edits"/>.
+    /// </summary>
+    public Func<CancellationToken, Task<CodeRenameResult?>>? Resolve { get; init; }
 }
 
+/// <summary>Edits to the current document and to other documents, keyed by their path.</summary>
 public sealed class CodeRenameResult
 {
     public IReadOnlyList<CodeTextEdit> Edits { get; init; } = Array.Empty<CodeTextEdit>();
@@ -406,6 +421,22 @@ public abstract class CodeLanguageSession : IDisposable
 
     public virtual Task<IReadOnlyList<CodeLocation>> FindReferencesAsync(int offset, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>());
+
+    /// <summary>Types implementing or deriving from the symbol, or members implementing or overriding it.</summary>
+    public virtual Task<IReadOnlyList<CodeLocation>> GetImplementationsAsync(int offset, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>());
+
+    /// <summary>The base types and interfaces of a type, or the members a member overrides or implements.</summary>
+    public virtual Task<IReadOnlyList<CodeLocation>> GetBaseDefinitionsAsync(int offset, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>());
+
+    /// <summary>The declaration of the type of the symbol, such as the class of a variable.</summary>
+    public virtual Task<IReadOnlyList<CodeLocation>> GetTypeDefinitionAsync(int offset, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>());
+
+    /// <summary>Notes for the declarations within the span, such as reference counts.</summary>
+    public virtual Task<IReadOnlyList<CodeLens>> GetCodeLensesAsync(int start, int length, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CodeLens>>(Array.Empty<CodeLens>());
 
     /// <summary>Spans of the symbol under the caret and its other uses in this document.</summary>
     public virtual Task<IReadOnlyList<CodeClassifiedSpan>> GetHighlightsAsync(int offset, CancellationToken ct)

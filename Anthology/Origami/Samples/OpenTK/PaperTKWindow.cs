@@ -86,8 +86,9 @@ public class PaperTKWindow : GameWindow
             var cp = clickEnv.Split(',');
             if (cp.Length == 2 && float.TryParse(cp[0], out var qx) && float.TryParse(cp[1], out var qy))
             {
-                if (_frame == 3) _paper.SetPointerState(PaperMouseBtn.Left, qx, qy, true, false);
-                else if (_frame == 4) _paper.SetPointerState(PaperMouseBtn.Left, qx, qy, false, false);
+                int clickFrame = int.TryParse(Environment.GetEnvironmentVariable("PROWL_CLICK_FRAME"), out int cf) ? cf : 3;
+                if (_frame == clickFrame) _paper.SetPointerState(PaperMouseBtn.Left, qx, qy, true, false);
+                else if (_frame == clickFrame + 1) _paper.SetPointerState(PaperMouseBtn.Left, qx, qy, false, false);
                 else if (hoverEnv == null) _paper.SetPointerState(PaperMouseBtn.Unknown, qx, qy, false, true);
                 // else: after the click, let PROWL_HOVER own the pointer (click-then-hover testing).
             }
@@ -214,6 +215,7 @@ public class PaperTKWindow : GameWindow
     {
         base.OnMouseWheel(e);
         _paper.SetPointerWheel(e.OffsetY);
+        _paper.SetPointerWheelX(e.OffsetX);
     }
 
     // ── Keyboard + text input ────────────────────────────────────────────

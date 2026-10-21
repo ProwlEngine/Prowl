@@ -115,7 +115,7 @@ public sealed partial class CodeEditor
         if (_drag == DragKind.Text || _drag == DragKind.Box) return PaperCursor.Text;
         if (_drag != DragKind.None) return PaperCursor.Default;
         var p = _pointer;
-        if (_linkRange != null) return PaperCursor.Pointer;
+        if (_linkRange != null || CodeLensAt(_pointer) != null) return PaperCursor.Pointer;
         if (p.X < _view.X + _view.GutterW || p.X >= _view.MinimapX || p.Y >= _view.StatusY) return PaperCursor.Default;
         return PaperCursor.Text;
     }
@@ -156,8 +156,8 @@ public sealed partial class CodeEditor
     {
         double yy = y - _view.TextY + _scrollY;
         int row = (int)Math.Floor(yy / _view.LineH);
-        if (row < 0 || row >= VisibleLineCount) return -1;
-        return RowToLine(row);
+        if (row < 0 || row >= DisplayRowCount) return -1;
+        return DisplayRowToLine(row);
     }
 
     private bool InTextArea(Float2 p)
@@ -216,6 +216,12 @@ public sealed partial class CodeEditor
         }
 
         ClosePopups();
+        if (CodeLensAt(p) is { } lens)
+        {
+            SetCaret(lens);
+            FindReferences();
+            return;
+        }
         bool shift = Shift(paper), alt = Alt(paper), ctrl = Ctrl(paper);
 
         if (p.X < v.X + v.GutterW)
@@ -458,8 +464,10 @@ public sealed partial class CodeEditor
             return;
         }
         float lh = LineHeightPx;
-        if (Shift(paper)) _scrollXTarget = Math.Clamp(_scrollXTarget - e.Delta * _view.CharW * 8, 0, MaxScrollX());
-        else _scrollYTarget = Math.Clamp(_scrollYTarget - e.Delta * lh * 3, 0, MaxScrollY());
+        float dx = e.DeltaX, dy = e.Delta;
+        if (Shift(paper)) { dx += dy; dy = 0; }
+        if (dx != 0) _scrollXTarget = Math.Clamp(_scrollXTarget - dx * _view.CharW * 8, 0, MaxScrollX());
+        if (dy != 0) _scrollYTarget = Math.Clamp(_scrollYTarget - dy * lh * 3, 0, MaxScrollY());
     }
 
     private void HandleRightClick(ClickEvent e)
@@ -567,7 +575,9 @@ public sealed partial class CodeEditor
                 else FindNextMatch(!shift);
                 return;
             case PaperKey.F12:
-                if (shift) FindReferences(); else GoToDefinition();
+                if (shift) FindReferences();
+                else if (ctrl) GoToImplementation();
+                else GoToDefinition();
                 return;
         }
 

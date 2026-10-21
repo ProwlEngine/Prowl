@@ -110,11 +110,11 @@ public sealed partial class CodeEditor
     /// <summary>Scrolls so <paramref name="line"/> is the top visible row.</summary>
     public void ScrollToLine(int line)
     {
-        _scrollYTarget = Math.Clamp(LineToRow(Math.Clamp(line, 0, Document.LineCount - 1)) * (double)LineHeightPx, 0, MaxScrollY());
+        _scrollYTarget = Math.Clamp(LineToDisplayRow(Math.Clamp(line, 0, Document.LineCount - 1)) * (double)LineHeightPx, 0, MaxScrollY());
         _scrollY = _scrollYTarget;
     }
 
-    public int FirstVisibleLine => RowToLine((int)(_scrollY / LineHeightPx));
+    public int FirstVisibleLine => DisplayRowToLine((int)(_scrollY / LineHeightPx));
 
     public void CenterOnCaret(bool onlyIfOffscreen = false)
     {
@@ -125,7 +125,7 @@ public sealed partial class CodeEditor
     private double MaxScrollY()
     {
         float lh = LineHeightPx;
-        double content = VisibleLineCount * (double)lh;
+        double content = DisplayRowCount * (double)lh;
         double view = _view.Valid ? _view.TextH : 0;
         if (Options.ScrollBeyondLastLine) return Math.Max(0, content - lh);
         return Math.Max(0, content - view);
@@ -242,7 +242,7 @@ public sealed partial class CodeEditor
         if (_centerCaret)
         {
             _centerCaret = false;
-            double caretY = LineToRow(Caret.Line) * (double)lh;
+            double caretY = LineToDisplayRow(Caret.Line) * (double)lh;
             bool offscreen = caretY < _scrollYTarget || caretY + lh > _scrollYTarget + v.TextH;
             if (!_centerOnlyIfOffscreen || offscreen)
                 _scrollYTarget = _scrollY = Math.Clamp(caretY - v.TextH * 0.4, 0, MaxScrollY());
@@ -252,7 +252,7 @@ public sealed partial class CodeEditor
         if (_revealCaret)
         {
             _revealCaret = false;
-            double caretY = LineToRow(Caret.Line) * (double)lh;
+            double caretY = LineToDisplayRow(Caret.Line) * (double)lh;
             double margin = Math.Min(Options.ScrollMargin * lh, Math.Max(0, (v.TextH - lh) / 2));
             if (caretY - margin < _scrollYTarget) _scrollYTarget = caretY - margin;
             else if (caretY + lh + margin > _scrollYTarget + v.TextH) _scrollYTarget = caretY + lh + margin - v.TextH;
@@ -295,8 +295,8 @@ public sealed partial class CodeEditor
         double y = point.Y - v.TextY + _scrollY;
         int row = (int)Math.Floor(y / v.LineH);
         if (row < 0) return TextPosition.Zero;
-        if (row >= VisibleLineCount) return Document.EndPosition;
-        int line = RowToLine(row);
+        if (row >= DisplayRowCount) return Document.EndPosition;
+        int line = DisplayRowToLine(row);
         float x = point.X - v.TextX + _scrollX;
         float visual = x / v.CharW;
         int col = round ? ColumnFromVisual(line, (int)MathF.Round(visual), false) : ColumnFromVisual(line, (int)MathF.Floor(visual));
@@ -307,7 +307,7 @@ public sealed partial class CodeEditor
     {
         var v = _view;
         float x = v.TextX - _scrollX + VisualColumn(p.Line, p.Column) * v.CharW;
-        float y = (float)(v.TextY + LineToRow(p.Line) * (double)v.LineH - _scrollY);
+        float y = (float)(v.TextY + LineToDisplayRow(p.Line) * (double)v.LineH - _scrollY);
         return new Float2(x, y);
     }
 
@@ -331,11 +331,13 @@ public sealed partial class CodeEditor
 
         int firstRow = Math.Max(0, (int)Math.Floor(_scrollY / v.LineH));
         int rowCount = (int)Math.Ceiling(v.TextH / v.LineH) + 1;
-        int lastRow = Math.Min(VisibleLineCount - 1, firstRow + rowCount);
-        int firstLine = RowToLine(firstRow);
-        int lastLine = RowToLine(Math.Max(firstRow, lastRow));
+        int lastRow = Math.Min(DisplayRowCount - 1, firstRow + rowCount);
+        int firstLine = DisplayRowToLine(firstRow);
+        int lastLine = DisplayRowToLine(Math.Max(firstRow, lastRow));
         GetLineState(Math.Min(lastLine + 1, Document.LineCount - 1));
         TickSemantic(firstLine, lastLine);
+        TickCodeLens(firstLine, lastLine);
+        _lensHits.Clear();
 
         canvas.SaveState();
         canvas.IntersectScissor(v.X, v.Y, v.W, v.TextH);
@@ -377,7 +379,7 @@ public sealed partial class CodeEditor
             foreach (var s in _selections)
             {
                 if (!s.IsEmpty || !seen.Add(s.Caret.Line) || IsLineHidden(s.Caret.Line)) continue;
-                int row = LineToRow(s.Caret.Line);
+                int row = LineToDisplayRow(s.Caret.Line);
                 if (row < firstRow || row > lastRow) continue;
                 canvas.RectFilled(v.X, RowY(row), v.MinimapX - v.X, v.LineH, pal.CurrentLine);
             }
@@ -387,7 +389,7 @@ public sealed partial class CodeEditor
         {
             if (m.Kind != CodeLineMarkerKind.Execution && m.Kind != CodeLineMarkerKind.LineHighlight) continue;
             if (m.Line < 0 || m.Line >= Document.LineCount || IsLineHidden(m.Line)) continue;
-            int row = LineToRow(m.Line);
+            int row = LineToDisplayRow(m.Line);
             if (row < firstRow || row > lastRow) continue;
             var c = m.Color ?? (m.Kind == CodeLineMarkerKind.Execution ? new Color32(255, 214, 102, 40) : new Color32(255, 255, 255, 18));
             canvas.RectFilled(v.TextX - 4, RowY(row), v.MinimapX - v.TextX + 4, v.LineH, c);
@@ -409,7 +411,8 @@ public sealed partial class CodeEditor
             var sel = Selection.Range;
             for (int row = firstRow; row <= lastRow; row++)
             {
-                int line = RowToLine(row);
+                int line = DisplayRowToLine(row, out bool lensRow);
+                if (lensRow) continue;
                 LineMatches(line, _matches);
                 foreach (var (start, len) in _matches)
                 {
@@ -425,7 +428,7 @@ public sealed partial class CodeEditor
             if (h.Start.Line != h.End.Line) continue;
             int line = h.Start.Line;
             if (line >= Document.LineCount || IsLineHidden(line)) continue;
-            int row = LineToRow(line);
+            int row = LineToDisplayRow(line);
             if (row < firstRow || row > lastRow) continue;
             float x0 = ColX(VisualColumn(line, h.Start.Column)), x1 = ColX(VisualColumn(line, h.End.Column));
             canvas.RoundedRectFilled(x0, RowY(row) + 1, x1 - x0, v.LineH - 2, 2, pal.OccurrenceHighlight);
@@ -436,7 +439,7 @@ public sealed partial class CodeEditor
             foreach (var p in new[] { open, close })
             {
                 if (IsLineHidden(p.Line)) continue;
-                int row = LineToRow(p.Line);
+                int row = LineToDisplayRow(p.Line);
                 if (row < firstRow || row > lastRow) continue;
                 float x0 = ColX(VisualColumn(p.Line, p.Column));
                 canvas.RoundedRectFilled(x0, RowY(row) + 1, v.CharW, v.LineH - 2, 2, pal.BracketMatch);
@@ -469,11 +472,12 @@ public sealed partial class CodeEditor
         foreach (var s in _selections)
         {
             if (s.IsEmpty) continue;
-            int startRow = Math.Max(firstRow, LineToRow(s.Start.Line));
-            int endRow = Math.Min(lastRow, LineToRow(s.End.Line));
+            int startRow = Math.Max(firstRow, LineToDisplayRow(s.Start.Line));
+            int endRow = Math.Min(lastRow, LineToDisplayRow(s.End.Line));
             for (int row = startRow; row <= endRow; row++)
             {
-                int line = RowToLine(row);
+                int line = DisplayRowToLine(row, out bool lensRow);
+                if (lensRow) continue;
                 int c0 = line == s.Start.Line ? VisualColumn(line, s.Start.Column) : 0;
                 int c1 = line == s.End.Line ? VisualColumn(line, s.End.Column) : VisualColumn(line, Document.GetLineLength(line));
                 float x0 = ColX(c0);
@@ -491,10 +495,12 @@ public sealed partial class CodeEditor
         int prevIndent = 0;
         for (int row = firstRow; row <= lastRow; row++)
         {
-            int line = RowToLine(row);
+            int line = DisplayRowToLine(row, out bool lensRow);
             string s = Document[line];
             int indent;
-            if (s.Trim().Length == 0)
+            // A lens row continues the guides of the declaration below it, like a blank line would.
+            if (lensRow) indent = VisualColumn(line, FirstNonBlank(s));
+            else if (s.Trim().Length == 0)
             {
                 int next = NextNonBlankIndent(line);
                 indent = Math.Max(Math.Min(prevIndent, next), 0);
@@ -534,7 +540,12 @@ public sealed partial class CodeEditor
 
         for (int row = firstRow; row <= lastRow; row++)
         {
-            int line = RowToLine(row);
+            int line = DisplayRowToLine(row, out bool lensRow);
+            if (lensRow)
+            {
+                DrawLensRow(canvas, pal, font, line, RowY(row));
+                continue;
+            }
             var r = GetRowRender(canvas, pal, font, line);
             float y = MathF.Round((RowY(row) + (v.LineH - v.GlyphH) * 0.5f) * scale);
 
@@ -788,7 +799,7 @@ public sealed partial class CodeEditor
                 x0 = MathF.Max(x0, clipX0);
                 x1 = MathF.Min(x1, clipX1);
                 if (x1 <= x0) continue;
-                float y = RowY(LineToRow(line)) + v.LineH - 3;
+                float y = RowY(LineToDisplayRow(line)) + v.LineH - 3;
 
                 if (d.Severity == CodeDiagnosticSeverity.Info)
                 {
@@ -820,7 +831,7 @@ public sealed partial class CodeEditor
         foreach (var s in _selections)
         {
             if (IsLineHidden(s.Caret.Line)) continue;
-            int row = LineToRow(s.Caret.Line);
+            int row = LineToDisplayRow(s.Caret.Line);
             if (row < firstRow || row > lastRow) continue;
             float x = MathF.Round(ColX(VisualColumn(s.Caret.Line, s.Caret.Column)));
             canvas.RectFilled(x - 1, RowY(row) + 1, 2, v.LineH - 2, pal.Caret);
@@ -839,7 +850,8 @@ public sealed partial class CodeEditor
         bool gutterHover = _pointerInGutter;
         for (int row = firstRow; row <= lastRow; row++)
         {
-            int line = RowToLine(row);
+            int line = DisplayRowToLine(row, out bool lensRow);
+            if (lensRow) continue;
             float y = RowY(row);
             float ty = y + (v.LineH - v.GlyphH) * 0.5f;
 
@@ -913,7 +925,7 @@ public sealed partial class CodeEditor
         foreach (var m in _markers)
         {
             if (m.Line < 0 || m.Line >= Document.LineCount || IsLineHidden(m.Line)) continue;
-            int row = LineToRow(m.Line);
+            int row = LineToDisplayRow(m.Line);
             if (row < firstRow || row > lastRow) continue;
             float cy = RowY(row) + v.LineH * 0.5f;
             var color = m.Color ?? pal.Breakpoint;
@@ -948,7 +960,7 @@ public sealed partial class CodeEditor
         {
             bool has = false;
             foreach (var m in _markers) if (m.Line == _hoverGlyphLine && m.Kind != CodeLineMarkerKind.LineHighlight) has = true;
-            int row = LineToRow(_hoverGlyphLine);
+            int row = LineToDisplayRow(_hoverGlyphLine);
             if (!has && row >= firstRow && row <= lastRow)
                 canvas.CircleFilled(cx, RowY(row) + v.LineH * 0.5f, r, new Color32(pal.Breakpoint.R, pal.Breakpoint.G, pal.Breakpoint.B, 90));
         }
@@ -963,7 +975,7 @@ public sealed partial class CodeEditor
         {
             if (d.Severity < CodeDiagnosticSeverity.Warning || d.Range.Start.Line == lastLine) continue;
             lastLine = d.Range.Start.Line;
-            int row = LineToRow(lastLine);
+            int row = LineToDisplayRow(lastLine);
             if (row < firstRow || row > lastRow) continue;
             canvas.RectFilled(v.GlyphX + 1, RowY(row) + 2, 2, v.LineH - 4, d.Severity == CodeDiagnosticSeverity.Error ? pal.Error : pal.Warning);
         }
@@ -977,7 +989,7 @@ public sealed partial class CodeEditor
         var v = _view;
         float rowH = 2f * MinimapScale;
         double rows = v.TextH / rowH;
-        double total = VisibleLineCount;
+        double total = DisplayRowCount;
         if (total <= rows) return 0;
         double maxScroll = MaxScrollY();
         double t = maxScroll > 0 ? _scrollY / maxScroll : 0;
@@ -1001,8 +1013,9 @@ public sealed partial class CodeEditor
         for (int i = 0; i < rows; i++)
         {
             int row = startRow + i;
-            if (row >= VisibleLineCount) break;
-            int line = RowToLine(row);
+            if (row >= DisplayRowCount) break;
+            int line = DisplayRowToLine(row, out bool lensRow);
+            if (lensRow) continue;
             string text = Document[line];
             if (text.Length == 0) continue;
             float y = v.Y + i * rowH - yOffset;
@@ -1064,7 +1077,7 @@ public sealed partial class CodeEditor
     internal (float Y, float H) VerticalThumb()
     {
         var v = _view;
-        double content = VisibleLineCount * (double)v.LineH + (Options.ScrollBeyondLastLine ? v.TextH - v.LineH : 0);
+        double content = DisplayRowCount * (double)v.LineH + (Options.ScrollBeyondLastLine ? v.TextH - v.LineH : 0);
         double max = MaxScrollY();
         float h = (float)Math.Max(24, v.TextH * Math.Min(1, v.TextH / Math.Max(1, content)));
         float y = max > 0 ? (float)(_scrollY / max * (v.TextH - h)) : 0;
@@ -1086,20 +1099,20 @@ public sealed partial class CodeEditor
         var v = _view;
 
         // Overview ruler: where errors, warnings and carets are in the whole file.
-        int total = Math.Max(1, VisibleLineCount);
+        int total = Math.Max(1, DisplayRowCount);
         float trackH = v.TextH;
         int lastRow = -1;
         foreach (var d in _diagnostics)
         {
             if (d.Severity < CodeDiagnosticSeverity.Warning) continue;
-            int row = LineToRow(d.Range.Start.Line);
+            int row = LineToDisplayRow(d.Range.Start.Line);
             if (row == lastRow) continue;
             lastRow = row;
             float y = v.Y + row / (float)total * trackH;
             canvas.RectFilled(v.VBarX + (d.Severity == CodeDiagnosticSeverity.Error ? 6 : 2), y, 4, 3, d.Severity == CodeDiagnosticSeverity.Error ? pal.Error : pal.Warning);
         }
         foreach (var s in _selections)
-            canvas.RectFilled(v.VBarX, v.Y + LineToRow(s.Caret.Line) / (float)total * trackH, v.VBarW, 2, new Color32(pal.Caret.R, pal.Caret.G, pal.Caret.B, 160));
+            canvas.RectFilled(v.VBarX, v.Y + LineToDisplayRow(s.Caret.Line) / (float)total * trackH, v.VBarW, 2, new Color32(pal.Caret.R, pal.Caret.G, pal.Caret.B, 160));
 
         if (MaxScrollY() > 0)
         {
@@ -1130,7 +1143,7 @@ public sealed partial class CodeEditor
         int selected = 0;
         foreach (var s in _selections) if (!s.IsEmpty) selected += Document.PositionToOffset(s.End) - Document.PositionToOffset(s.Start);
 
-        int key = HashCode.Combine(Caret, selected, _selections.Count, errors, warnings, Options.TabSize, Options.InsertSpaces, HashCode.Combine(Document.LineEnding, _language.Name, IsDirty));
+        int key = HashCode.Combine(Caret, selected, _selections.Count, errors, warnings, Options.TabSize, Options.InsertSpaces, HashCode.Combine(Document.LineEnding, _language.Name, IsDirty, FontSize));
         if (key != _statusKey)
         {
             _statusKey = key;
@@ -1139,7 +1152,8 @@ public sealed partial class CodeEditor
                 + (_selections.Count > 1 ? $"  {_selections.Count} carets" : "");
             string eol = Document.LineEnding == "\r\n" ? "CRLF" : "LF";
             string indent = Options.InsertSpaces ? $"Spaces: {Options.TabSize}" : $"Tab Size: {Options.TabSize}";
-            _statusRight = $"{errors} errors   {warnings} warnings   {indent}   {eol}   {_language.Name}";
+            int zoom = (int)MathF.Round(FontSize / Options.FontSize * 100f);
+            _statusRight = $"{errors} errors   {warnings} warnings   {zoom}%   {indent}   {eol}   {_language.Name}";
         }
 
         float size = MathF.Max(9, FontSize * 0.85f);

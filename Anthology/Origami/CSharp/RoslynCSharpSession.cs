@@ -25,7 +25,7 @@ using RoslynTextChange = Microsoft.CodeAnalysis.Text.TextChange;
 namespace Prowl.OrigamiUI.CSharp;
 
 /// <summary>Roslyn features for one open editor. Its document lives in a <see cref="CSharpWorkspace"/> until disposed.</summary>
-public sealed class RoslynCSharpSession : CodeLanguageSession
+public sealed partial class RoslynCSharpSession : CodeLanguageSession
 {
     private sealed record CompletionState(Document Document, TextSpan Span, int TextLength);
 
@@ -351,7 +351,10 @@ public sealed class RoslynCSharpSession : CodeLanguageSession
 
             foreach (var referenced in references)
             {
-                foreach (var location in referenced.Definition.Locations) Add(location, referenced.Definition);
+                // A property's accessors come back as symbols of their own, declared at the get and set keywords.
+                bool accessor = referenced.Definition is IMethodSymbol { AssociatedSymbol: not null };
+                if (!accessor)
+                    foreach (var location in referenced.Definition.Locations) Add(location, referenced.Definition);
                 foreach (var reference in referenced.Locations) Add(reference.Location, referenced.Definition);
             }
             return result;
@@ -382,7 +385,14 @@ public sealed class RoslynCSharpSession : CodeLanguageSession
         => Run<IReadOnlyList<CodeAction>>(Array.Empty<CodeAction>(), async (document, ct) =>
         {
             var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-            return model == null ? Array.Empty<CodeAction>() : AddImportProvider.GetActions(model, new TextSpan(start, Math.Max(0, length)), ct);
+            if (model == null) return Array.Empty<CodeAction>();
+
+            var span = new TextSpan(start, Math.Max(0, length));
+            var actions = new List<CodeAction>(AddImportProvider.GetActions(model, span, ct));
+            var titles = new HashSet<string>(actions.Select(a => a.Title), StringComparer.Ordinal);
+            foreach (var action in await RoslynCodeActions.GetAsync(document, span, ct).ConfigureAwait(false))
+                if (titles.Add(action.Title)) actions.Add(action);
+            return actions;
         }, ct);
 
     public override Task<IReadOnlyList<CodeTextEdit>> FormatAsync(int start, int length, CancellationToken ct)
@@ -459,7 +469,7 @@ public sealed class RoslynCSharpSession : CodeLanguageSession
     {
         var text = location.SourceTree!.GetText();
         int line = location.GetLineSpan().StartLinePosition.Line;
-        return text.Lines[line].ToString().Trim();
+        return text.Lines[line].ToString();
     }
 
     public override void Dispose()

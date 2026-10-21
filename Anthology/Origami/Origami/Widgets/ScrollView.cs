@@ -188,21 +188,26 @@ public sealed class ScrollViewBuilder
                 if (!outerHandle.IsValid) return;
                 bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
 
-                if (_horizontal && (shift || !_vertical))
+                // A tilting wheel or trackpad scrolls sideways directly. Shift+wheel, or the wheel on a
+                // horizontal only view, turns vertical scrolling sideways too.
+                float dx = e.DeltaX, dy = e.Delta;
+                if (shift || !_vertical) { dx += dy; dy = 0f; }
+
+                if (_horizontal && dx != 0f)
                 {
                     float prev = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
                     float contentW = _paper.GetElementStorage(outerHandle, "contentW", _width);
                     float maxScroll = MathF.Max(0f, contentW - _width);
-                    float scroll = Clamp(prev - (float)e.Delta * _wheelStep, 0f, maxScroll);
+                    float scroll = Clamp(prev - dx * _wheelStep, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollX", scroll);
                     e.StopPropagation();
                 }
-                else if (_vertical)
+                if (_vertical && dy != 0f)
                 {
                     float prev = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
                     float contentH = _paper.GetElementStorage(outerHandle, "contentH", _height);
                     float maxScroll = MathF.Max(0f, contentH - _height);
-                    float scroll = Clamp(prev - (float)e.Delta * _wheelStep, 0f, maxScroll);
+                    float scroll = Clamp(prev - dy * _wheelStep, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollY", scroll);
                     e.StopPropagation();
                 }
