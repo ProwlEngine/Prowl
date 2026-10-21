@@ -419,6 +419,7 @@ public sealed class NetSession : IDisposable
             case TransportEventType.Disconnected:
                 if (_remotes.Remove(ev.Connection, out Remote? remote))
                 {
+                    ReleaseReassembly(ref remote.Incoming);
                     if (remote.Pending != null)
                         remote.Pending.IsResolved = true;
                     if (remote.Peer != null)
@@ -428,7 +429,7 @@ public sealed class NetSession : IDisposable
         }
     }
 
-    private void HostReceive(Connection connection, ReadOnlySpan<byte> data, Delivery delivery)
+    private void HostReceive(Connection connection, ReadOnlySpan<byte> data, Delivery delivery, bool reassembled = false)
     {
         if (!_remotes.TryGetValue(connection, out Remote? remote))
             return;
@@ -442,12 +443,14 @@ public sealed class NetSession : IDisposable
             ushort id = reader.ReadUInt16();
             if (id == (ushort)InternalMessage.Fragment)
             {
+                if (reassembled)
+                    throw new InvalidDataException("Nested message fragments are not allowed.");
                 if (delivery == Delivery.Reliable && remote.Stage != RemoteStage.Lingering
                     && Reassemble(ref remote.Incoming, ref reader, out int length) is { } whole)
                 {
                     try
                     {
-                        HostReceive(connection, whole.AsSpan(0, length), delivery);
+                        HostReceive(connection, whole.AsSpan(0, length), delivery, reassembled: true);
                     }
                     finally
                     {
@@ -575,6 +578,7 @@ public sealed class NetSession : IDisposable
             remote.Pending = null;
         }
 
+        ReleaseReassembly(ref remote.Incoming);
         NetPeer? peer = remote.Peer;
         remote.Peer = null;
         remote.Stage = RemoteStage.Lingering;
@@ -637,7 +641,7 @@ public sealed class NetSession : IDisposable
         }
     }
 
-    private void ClientReceive(ReadOnlySpan<byte> data, Delivery delivery)
+    private void ClientReceive(ReadOnlySpan<byte> data, Delivery delivery, bool reassembled = false)
     {
         NetReader reader = new(data);
         try
@@ -649,11 +653,13 @@ public sealed class NetSession : IDisposable
             switch (id)
             {
                 case (ushort)InternalMessage.Fragment:
+                    if (reassembled)
+                        throw new InvalidDataException("Nested message fragments are not allowed.");
                     if (delivery == Delivery.Reliable && Reassemble(ref _incomingFromHost, ref reader, out int length) is { } whole)
                     {
                         try
                         {
-                            ClientReceive(whole.AsSpan(0, length), delivery);
+                            ClientReceive(whole.AsSpan(0, length), delivery, reassembled: true);
                         }
                         finally
                         {
@@ -810,7 +816,7 @@ public sealed class NetSession : IDisposable
                 throw new InvalidDataException("A fragmented message started before the previous one finished.");
 
             uint total = reader.ReadVarUInt32();
-            if (total > (uint)Options.MaxMessageSize)
+            if (total < 2 || total > (uint)Options.MaxMessageSize)
                 throw new InvalidDataException($"A {total} byte message exceeds the {Options.MaxMessageSize} byte limit.");
 
             state = new Reassembly { Buffer = ArrayPool<byte>.Shared.Rent((int)total), Total = (int)total };
@@ -833,6 +839,15 @@ public sealed class NetSession : IDisposable
         length = state.Total;
         state = null;
         return whole;
+    }
+
+    private static void ReleaseReassembly(ref Reassembly? state)
+    {
+        if (state == null)
+            return;
+        ArrayPool<byte>.Shared.Return(state.Buffer);
+        state.Buffer = Array.Empty<byte>();
+        state = null;
     }
 
     private void BroadcastWritten(Delivery delivery, NetPeer? except, bool includeLocal)
@@ -879,8 +894,10 @@ public sealed class NetSession : IDisposable
             return;
         State = SessionState.Ended;
 
+        ReleaseReassembly(ref _incomingFromHost);
         foreach (Remote remote in _remotes.Values)
         {
+            ReleaseReassembly(ref remote.Incoming);
             if (remote.Pending != null)
                 remote.Pending.IsResolved = true;
         }

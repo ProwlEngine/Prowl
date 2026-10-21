@@ -358,6 +358,68 @@ public abstract class NetSessionTests : IDisposable
         Assert.Equal(SessionEndReason.ProtocolError, host.PeersLeft.Single().Reason);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NestedFragmentsAreRejected(bool toClient)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        using NetWriter chat = new();
+        chat.WriteUInt16(ChatMessage.Id);
+        chat.WriteString("nested");
+        using NetWriter inner = Fragment(chat.WrittenSpan);
+        using NetWriter outer = Fragment(inner.WrittenSpan);
+        Connection connection = toClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!;
+        connection.Send(outer.WrittenSpan, Delivery.Reliable);
+        SessionProbe.PumpFor(100, host, alice);
+        Assert.Empty(toClient ? alice.Chat : host.Chat);
+        Assert.Equal(SessionState.Ended, alice.Session.State);
+    }
+
+    private static NetWriter Fragment(ReadOnlySpan<byte> payload)
+    {
+        NetWriter writer = new();
+        writer.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        writer.WriteBool(true);
+        writer.WriteVarUInt32((uint)payload.Length);
+        writer.WriteBytes(payload);
+        return writer;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IncompleteFragmentsAreReleasedOnShutdown(bool toClient)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        Connection connection = toClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!;
+        using NetWriter fragment = new();
+        fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        fragment.WriteBool(true);
+        fragment.WriteVarUInt32(100_000);
+        fragment.WriteByte(1);
+        connection.Send(fragment.WrittenSpan, Delivery.Reliable);
+        SessionProbe.PumpFor(30, host, alice);
+        NetSession receiver = toClient ? alice.Session : host.Session;
+        object? incoming;
+        object? remote = null;
+        if (toClient)
+            incoming = typeof(NetSession).GetField("_incomingFromHost", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(receiver);
+        else
+        {
+            var remotes = (System.Collections.IDictionary)typeof(NetSession).GetField("_remotes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(receiver)!;
+            remote = remotes.Values.Cast<object>().Single();
+            incoming = remote.GetType().GetField("Incoming")!.GetValue(remote);
+        }
+        Assert.NotNull(incoming);
+        receiver.Shutdown();
+        Assert.Empty((byte[])incoming!.GetType().GetField("Buffer")!.GetValue(incoming)!);
+    }
+
     [Fact]
     public void LargeReliableMessagesArriveWhole()
     {
