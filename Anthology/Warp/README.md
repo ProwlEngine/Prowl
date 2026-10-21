@@ -13,6 +13,7 @@ object ownership belong to the layer above (the Prowl engine), which only ever t
 | ---------------- | --------------------------------- | ------ | ---------- |
 | `KcpTransport`   | `Prowl.Warp.Transports.Kcp`       | Ready  | Dedicated servers, LAN, anything over plain UDP |
 | `LocalTransport` | `Prowl.Warp.Transports.Local`     | Ready  | Host and clients in one process: editor play mode, tests |
+| `BatchingTransport` | `Prowl.Warp.Transports.Batching` | Optional | Combine small messages; both ends must use the wrapper |
 | `EncryptedTransport` | `Prowl.Warp.Transports.Encryption` | Optional | Authenticated encryption over another transport using a provisioned shared key |
 | `SteamTransport` | `Prowl.Warp.Transports.Steam`     | Stub   | Steam P2P through Valve's relays (planned) |
 
@@ -65,6 +66,10 @@ Rules worth knowing:
   and `Poll`, on the calling thread. A transport is not thread safe.
 - `TransportEvent.Data` is only valid until the next `Poll`. Copy it to keep it.
 - Every connection gets exactly one `Disconnected` event, including when you close it yourself.
+
+Wrap a transport in `BatchingTransport` to group small messages until `Flush`; message boundaries are
+preserved. Use `SendFlags.Immediate` on a connection or session send to flush without waiting for the
+next regular flush. Reliable ordering still applies. Both ends must agree on whether batching is enabled.
 
 KCP limits each `Receive` call to `MaxDatagramsPerReceive` (1024 by default), including malformed
 packets. `MaxPendingReliableBytes` bounds each peer's reliable send backlog (32 MB by default);
