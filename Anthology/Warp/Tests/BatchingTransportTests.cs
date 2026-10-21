@@ -9,6 +9,30 @@ public class BatchingTransportTests
 {
     private static Transport Wrap(Transport inner) => new Prowl.Warp.Transports.Batching.BatchingTransport(inner, 128);
 
+    private static void Immediate(Connection connection, byte[] data) => connection.Send(data, Delivery.Reliable, SendFlags.Immediate);
+
+    [Fact]
+    public void ImmediateSendFlushesEarlierMessagesInOrder()
+    {
+        LocalNetwork network = new();
+        using Transport host = Wrap(new LocalTransport(network, "host"));
+        LocalTransport inner = new(network, "client");
+        using Transport client = Wrap(inner);
+        host.Listen();
+        Connection connection = client.Connect("host");
+        Pump pump = new(host, client);
+        pump.Until(() => connection.IsConnected);
+        connection.Send(new byte[] { 1 }, Delivery.Reliable);
+        Immediate(connection, new byte[] { 2 });
+        Assert.Equal(1, inner.Connections.Single().Stats.PacketsSent);
+        host.Receive();
+        Assert.True(host.Poll(out TransportEvent first));
+        // Pump consumed the connection event during setup.
+        Assert.Equal(new byte[] { 1 }, first.Data.ToArray());
+        Assert.True(host.Poll(out TransportEvent second));
+        Assert.Equal(new byte[] { 2 }, second.Data.ToArray());
+    }
+
     [Theory]
     [InlineData(Delivery.Reliable)]
     [InlineData(Delivery.Unreliable)]

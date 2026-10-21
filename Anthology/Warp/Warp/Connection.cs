@@ -69,6 +69,14 @@ public abstract class Connection
     /// <exception cref="ArgumentException">The message is larger than <see cref="GetMaxMessageSize"/>.</exception>
     public abstract void Send(ReadOnlySpan<byte> data, Delivery delivery);
 
+    /// <summary>Sends with an explicit timing policy. Immediate preserves ordering with earlier queued messages.</summary>
+    public virtual void Send(ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)
+    {
+        if ((flags & ~SendFlags.Immediate) != 0) throw new ArgumentOutOfRangeException(nameof(flags));
+        Send(data, delivery);
+        if ((flags & SendFlags.Immediate) != 0) Transport.Flush();
+    }
+
     /// <summary>
     /// Closes the connection and tells the remote end. A <see cref="TransportEventType.Disconnected"/>
     /// event with <see cref="DisconnectReason.Requested"/> follows. Does nothing if already disconnected.

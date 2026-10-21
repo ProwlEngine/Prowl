@@ -264,48 +264,48 @@ public sealed class NetSession : IDisposable
     /// ones the transport can't carry whole are split and reassembled. Unreliable ones must fit the transport.
     /// </remarks>
     /// <exception cref="InvalidOperationException">The session is not <see cref="SessionState.Active"/>, or a client targets another client.</exception>
-    public void Send<T>(NetPeer to, T message, Delivery delivery = Delivery.Reliable) where T : INetMessage
+    public void Send<T>(NetPeer to, T message, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None) where T : INetMessage
     {
         ArgumentNullException.ThrowIfNull(to);
         BeginUserMessage(T.Id);
         message.Write(_writer);
-        SendWritten(to, delivery);
+        SendWritten(to, delivery, flags);
     }
 
     /// <summary>Sends a message to the host. On the host, delivers it to itself.</summary>
-    public void SendToHost<T>(T message, Delivery delivery = Delivery.Reliable) where T : INetMessage
+    public void SendToHost<T>(T message, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None) where T : INetMessage
     {
         EnsureActive();
-        Send(HostPeer!, message, delivery);
+        Send(HostPeer!, message, delivery, flags);
     }
 
     /// <summary>Host: sends a message to every client, except <paramref name="except"/>, and to itself if <paramref name="includeLocal"/>.</summary>
-    public void Broadcast<T>(T message, Delivery delivery = Delivery.Reliable, NetPeer? except = null, bool includeLocal = false) where T : INetMessage
+    public void Broadcast<T>(T message, Delivery delivery = Delivery.Reliable, NetPeer? except = null, bool includeLocal = false, SendFlags flags = SendFlags.None) where T : INetMessage
     {
         EnsureHost();
         BeginUserMessage(T.Id);
         message.Write(_writer);
-        BroadcastWritten(delivery, except, includeLocal);
+        BroadcastWritten(delivery, except, includeLocal, flags);
     }
 
     /// <summary>Like <see cref="Send{T}"/>, with a payload you have already serialized.</summary>
-    public void SendRaw(NetPeer to, ushort id, ReadOnlySpan<byte> payload, Delivery delivery = Delivery.Reliable)
+    public void SendRaw(NetPeer to, ushort id, ReadOnlySpan<byte> payload, Delivery delivery = Delivery.Reliable, SendFlags flags = SendFlags.None)
     {
         ArgumentNullException.ThrowIfNull(to);
         ValidateUserId(id);
         BeginUserMessage(id);
         _writer.WriteBytes(payload);
-        SendWritten(to, delivery);
+        SendWritten(to, delivery, flags);
     }
 
     /// <summary>Like <see cref="Broadcast{T}"/>, with a payload you have already serialized.</summary>
-    public void BroadcastRaw(ushort id, ReadOnlySpan<byte> payload, Delivery delivery = Delivery.Reliable, NetPeer? except = null, bool includeLocal = false)
+    public void BroadcastRaw(ushort id, ReadOnlySpan<byte> payload, Delivery delivery = Delivery.Reliable, NetPeer? except = null, bool includeLocal = false, SendFlags flags = SendFlags.None)
     {
         EnsureHost();
         ValidateUserId(id);
         BeginUserMessage(id);
         _writer.WriteBytes(payload);
-        BroadcastWritten(delivery, except, includeLocal);
+        BroadcastWritten(delivery, except, includeLocal, flags);
     }
 
     // --- Membership ------------------------------------------------------------------------------
@@ -843,9 +843,10 @@ public sealed class NetSession : IDisposable
         _writer.WriteUInt16(id);
     }
 
-    private void SendWritten(NetPeer to, Delivery delivery)
+    private void SendWritten(NetPeer to, Delivery delivery, SendFlags flags = SendFlags.None)
     {
         if (!Enum.IsDefined(delivery)) throw new ArgumentOutOfRangeException(nameof(delivery));
+        if ((flags & ~SendFlags.Immediate) != 0) throw new ArgumentOutOfRangeException(nameof(flags));
         if (to.IsLocal)
         {
             if (to != LocalPeer) return;
@@ -868,18 +869,18 @@ public sealed class NetSession : IDisposable
 
         // A peer that already left (its NetPeer can outlive it) is skipped: that race is normal, not an error.
         if (to.Connection is { IsConnected: true } connection && _peers.TryGetValue(to.Id, out NetPeer? current) && current == to)
-            SendToConnection(connection, _writer.WrittenSpan, delivery);
+            SendToConnection(connection, _writer.WrittenSpan, delivery, flags);
     }
 
     /// <summary>Sends a message, splitting a reliable one into fragments if the transport can't take it whole.</summary>
-    private void SendToConnection(Connection connection, ReadOnlySpan<byte> message, Delivery delivery)
+    private void SendToConnection(Connection connection, ReadOnlySpan<byte> message, Delivery delivery, SendFlags flags = SendFlags.None)
     {
         if (!connection.IsConnected)
             return;
         int max = connection.GetMaxMessageSize(delivery);
         if (delivery == Delivery.Unreliable || message.Length <= max)
         {
-            connection.Send(message, delivery);
+            connection.Send(message, delivery, flags);
             return;
         }
 
@@ -896,6 +897,7 @@ public sealed class NetSession : IDisposable
             _fragmentWriter.WriteBytes(message.Slice(offset, length));
             connection.Send(_fragmentWriter.WrittenSpan, delivery);
         }
+        if ((flags & SendFlags.Immediate) != 0) connection.Transport.Flush();
     }
 
     /// <summary>
@@ -962,13 +964,15 @@ public sealed class NetSession : IDisposable
         state = null;
     }
 
-    private void BroadcastWritten(Delivery delivery, NetPeer? except, bool includeLocal)
+    private void BroadcastWritten(Delivery delivery, NetPeer? except, bool includeLocal, SendFlags flags = SendFlags.None)
     {
+        if (!Enum.IsDefined(delivery)) throw new ArgumentOutOfRangeException(nameof(delivery));
+        if ((flags & ~SendFlags.Immediate) != 0) throw new ArgumentOutOfRangeException(nameof(flags));
         foreach (NetPeer peer in _peers.Values)
         {
             if (peer == except || (peer.IsLocal && !includeLocal))
                 continue;
-            SendWritten(peer, delivery);
+            SendWritten(peer, delivery, flags);
         }
     }
 
