@@ -11,6 +11,39 @@ namespace Prowl.Runtime.Test;
 
 public class NetworkingThreadTests
 {
+    [Fact]
+    public void ShutdownTimeoutRetainsTransportUntilWorkerExits()
+    {
+        using BlockingTransport transport = new();
+        using NetworkingThread thread = new(transport);
+        try
+        {
+            thread.Listen();
+            Assert.True(transport.Entered.Wait(TimeSpan.FromSeconds(2)));
+            Assert.Throws<TimeoutException>(() => thread.Shutdown(TimeSpan.FromMilliseconds(20)));
+            Assert.False(transport.Disposed);
+            Assert.True(thread.IsWorkerRunning);
+        }
+        finally { transport.Release.Set(); }
+        thread.Shutdown();
+        Assert.False(thread.IsWorkerRunning);
+        thread.Dispose();
+        Assert.True(transport.Disposed);
+    }
+
+    private sealed class BlockingTransport : Transport
+    {
+        public readonly ManualResetEventSlim Entered = new(false), Release = new(false);
+        public bool Disposed;
+        public override bool IsListening => true;
+        public override void Listen() { }
+        public override Connection Connect(string address) => throw new NotSupportedException();
+        public override void Receive() { Entered.Set(); Release.Wait(); }
+        public override void Flush() { }
+        public override void Shutdown() { }
+        protected override void DisposeCore() { Disposed = true; Entered.Dispose(); Release.Dispose(); }
+    }
+
     private static NetworkingThread CreateThread(Transport inner) => new NetworkingThread(inner);
 
 

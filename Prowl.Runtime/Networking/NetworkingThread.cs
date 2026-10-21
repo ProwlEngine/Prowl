@@ -77,7 +77,8 @@ internal sealed class NetworkingThread : IDisposable
         _listenDone.Reset();
         Start();
         Post(new(CommandKind.Listen));
-        _listenDone.Wait();
+        if (!_listenDone.Wait(TimeSpan.FromSeconds(5)))
+            throw new TimeoutException("The networking worker did not finish starting within five seconds.");
         CheckFailure();
     }
 
@@ -325,13 +326,20 @@ internal sealed class NetworkingThread : IDisposable
         _closing.Clear();
     }
 
-    public void Shutdown()
+    public void Shutdown() => Shutdown(TimeSpan.FromSeconds(5));
+
+    // On timeout ownership is retained: callers may retry once a faulty backend unblocks.
+    // Never dispose a transport or its synchronization handles while its worker is alive.
+    public void Shutdown(TimeSpan timeout)
     {
+        if (timeout < TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue) throw new ArgumentOutOfRangeException(nameof(timeout));
         if (_worker != null)
         {
             // Drain prior sends, then flush them before the inner shutdown sends its disconnect.
             lock (_gate) _commands.Enqueue(new(CommandKind.Stop));
-            _wake.Set(); _worker.Join(); _worker = null;
+            _wake.Set();
+            if (!_worker.Join(timeout)) throw new TimeoutException("The networking worker did not stop within the shutdown timeout.");
+            _worker = null;
             lock (_gate)
             {
                 while (_commands.TryDequeue(out Command pending))
@@ -358,14 +366,12 @@ internal sealed class NetworkingThread : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+        Shutdown();
         _disposed = true;
-        try { Shutdown(); }
-        finally
-        {
-            ReleasePolledBuffer();
-            _closedEvents.Clear();
-            _transport.Dispose(); _wake.Dispose(); _listenDone.Dispose();
-        }
+        ReleasePolledBuffer();
+        _closedEvents.Clear();
+        try { _transport.Dispose(); }
+        finally { _wake.Dispose(); _listenDone.Dispose(); }
     }
 
     private enum CommandKind : byte { Listen, Connect, Send, Stop }
