@@ -210,6 +210,14 @@ internal sealed partial class ProfilerView
                         new("Materials", counted.Commands.SelectMany(c => c.Renderables).Select(r => r.Material).Distinct().Count().ToString(), counted.Shader),
                         new("Draws", draws.Count.ToString(), "in this group"),
                     }
+                    : node.Meta is ShadowFaceGroup tile
+                    ? new Stat[]
+                    {
+                        new("Light", tile.LightName ?? "Unnamed light", tile.Type.ToString()),
+                        new(tile.Cascade ? "Cascade" : "Face", tile.Face.ToString(), tile.World),
+                        new("Tile", $"{tile.Size} x {tile.Size}", $"at {tile.X}, {tile.Y}"),
+                        new("Draws", draws.Count.ToString(), "in this group"),
+                    }
                     : new Stat[]
                     {
                         new("Mesh", mesh, $"{draws.Count} submeshes"),
