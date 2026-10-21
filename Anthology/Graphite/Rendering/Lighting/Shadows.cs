@@ -830,11 +830,11 @@ internal sealed class ShadowPlanner
 }
 
 /// <summary>A world's local light shadows on the render thread: its pages, every shadowed light's cache, the grid finding them.</summary>
-internal sealed class WorldShadows(GraphicsDevice device) : IDisposable
+internal sealed class WorldShadows(TableHost tables) : IDisposable
 {
     public const int FacesPerLight = 6;
 
-    public GpuTable Faces { get; } = GpuTable.Of<ShadowFace>(device, "Shadow faces", 64 * FacesPerLight);
+    public GpuTable Faces { get; } = tables.Of<ShadowFace>("Faces", 64 * FacesPerLight);
     public readonly List<ShadowPage> Pages = new();
     public readonly List<ShadowPage> StaticPages = new();
     public readonly ShadowLights Lights = new();
@@ -850,7 +850,6 @@ internal sealed class WorldShadows(GraphicsDevice device) : IDisposable
 
     public void Dispose()
     {
-        Faces.Dispose();
         foreach (ShadowPage page in Pages)
             page.Dispose();
         foreach (ShadowPage page in StaticPages)
@@ -1132,7 +1131,7 @@ internal sealed partial class FramePipeline
 
     private void PrepareLocalShadows(WorldFrame world)
     {
-        WorldShadows shadows = world.Shadows ??= new WorldShadows(_device);
+        WorldShadows shadows = world.Shadows ??= new WorldShadows(new TableHost(_device, _store, $"Graphite.World{world.World.Id}.Shadows"));
         ShadowSettings settings = world.World.ShadowSnapshot;
         WorldLighting lighting = world.World.Lighting;
         int pageSize = (int)Math.Clamp(BitOperations.RoundUpToPowerOf2((uint)Math.Max(settings.PageSize, 256)), 256u, 16384u);

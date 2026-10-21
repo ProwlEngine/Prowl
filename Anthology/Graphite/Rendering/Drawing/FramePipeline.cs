@@ -1252,7 +1252,6 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
     private readonly List<IDisposable> _retired = new();
-    private readonly List<DeviceBuffer> _replaced = new();
     private readonly RenderPipeline _providerPipeline = new() { Name = "Graphite.Providers" };
     private readonly ProviderWork _providerWork = new();
     private readonly ReadbackStaging _readback;
@@ -1515,11 +1514,8 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in _frameWorlds)
         {
             world.World.Render.PrepareDeformation();
-            _replaced.Clear();
-            world.World.Render.Flush(_uploader, _replaced);
-            _retired.AddRange(_replaced);
-            if (world.Shadows!.Faces.Flush(_uploader) is { } faces)
-                _retired.Add(faces);
+            world.World.Render.Flush(_uploader);
+            world.Shadows!.Faces.Flush(_uploader);
         }
 
         ResolvePrograms();
