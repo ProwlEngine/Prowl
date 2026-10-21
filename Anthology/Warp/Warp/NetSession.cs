@@ -209,6 +209,9 @@ public sealed class NetSession : IDisposable
     /// <summary>The session is over, with a reason and, when the other side gave one, a message. Raised once.</summary>
     public event Action<SessionEndReason, string?>? Ended;
 
+    /// <summary>A message handler threw after decoding. The sender remains connected.</summary>
+    public event Action<NetPeer, ushort, Exception>? HandlerFailed;
+
     public bool TryGetPeer(int id, [MaybeNullWhen(false)] out NetPeer peer) => _peers.TryGetValue(id, out peer);
 
     // --- Handlers ------------------------------------------------------------------------------
@@ -221,8 +224,11 @@ public sealed class NetSession : IDisposable
         OnRaw(T.Id, (NetPeer sender, ref NetReader reader, Delivery _) =>
         {
             T message = new();
-            message.Read(ref reader);
-            handler(sender, message);
+            try { message.Read(ref reader); }
+            catch (Exception e) when (e is OverflowException or FormatException or ArgumentException)
+            { throw new InvalidDataException("Typed message contains an invalid value.", e); }
+            try { handler(sender, message); }
+            catch (Exception e) { ReportHandlerFailure(sender, T.Id, e); }
         });
     }
 
@@ -800,11 +806,27 @@ public sealed class NetSession : IDisposable
     {
         // Messages nobody registered for are dropped; a peer on a newer build may know more messages.
         if (_handlers.TryGetValue(id, out RawMessageHandler? handler))
-            handler(sender, ref reader, delivery);
+        {
+            try { handler(sender, ref reader, delivery); }
+            catch (Exception e) when (e is not (EndOfStreamException or InvalidDataException))
+            { ReportHandlerFailure(sender, id, e); }
+        }
+    }
+
+    private void ReportHandlerFailure(NetPeer sender, ushort id, Exception error)
+    {
+        Trace.TraceError($"Warp message {id} handler failed: {error}");
+        if (HandlerFailed == null) return;
+        foreach (Action<NetPeer, ushort, Exception> listener in HandlerFailed.GetInvocationList())
+        {
+            try { listener(sender, id, error); }
+            catch (Exception e) { Trace.TraceError($"Warp HandlerFailed listener failed: {e}"); }
+        }
     }
 
     private void BeginUserMessage(ushort id)
     {
+        ValidateUserId(id);
         EnsureActive();
         _writer.Reset();
         _writer.WriteUInt16(id);

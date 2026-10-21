@@ -502,6 +502,26 @@ public abstract class NetSessionTests : IDisposable
         Assert.All(remotes.Values.Cast<object>(), remote => Assert.Null(remote.GetType().GetField("Incoming")!.GetValue(remote)));
     }
 
+    [Fact]
+    public void ApplicationHandlerFailuresDoNotDisconnectTheSender()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        host.Session.Off<ChatMessage>();
+        int calls = 0;
+        host.Session.On<ChatMessage>((sender, message) =>
+        {
+            calls++;
+            if (message.Text == "throw") throw new System.IO.InvalidDataException("application failure");
+        });
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        alice.Session.SendToHost(new ChatMessage("throw"));
+        alice.Session.SendToHost(new ChatMessage("continue"));
+        SessionProbe.PumpFor(100, host, alice);
+        Assert.Equal(2, calls);
+        Assert.Equal(SessionState.Active, alice.Session.State);
+    }
+
     [Theory]
     [InlineData(Delivery.Reliable)]
     [InlineData(Delivery.Bulk)]
