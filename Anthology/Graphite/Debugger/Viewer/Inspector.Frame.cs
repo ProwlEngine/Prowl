@@ -429,6 +429,8 @@ internal sealed partial class ProfilerView
                         new("Id", instance.Key.Id.ToString()),
                         new("Index", instance.Index.ToString()),
                         new("Parent", node.Parent is { Kind: NodeKind.Instance } parent ? parent.Name : "-"),
+                        new("Data", Describe.Payload(instance.Data)),
+                        new("Data value", Describe.PayloadValue(instance.Data), instance.Data == null ? Style.InkDim : null),
                         new("Pixel size", $"{instance.PixelWidth} x {instance.PixelHeight}"),
                         new("Passes", instance.Passes.Length.ToString()),
                         new("Skipped passes", instance.Skipped.Length.ToString(), instance.Skipped.Length > 0 ? Style.Bad : null),

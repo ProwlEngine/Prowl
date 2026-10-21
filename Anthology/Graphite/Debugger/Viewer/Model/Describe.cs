@@ -72,6 +72,10 @@ internal static class Describe
 
     public static string Key(GraphInstanceKey key) => key.Kind == GraphKind.Root ? key.Kind.Name : $"{key.Kind.Name} #{key.Id}";
 
+    public static string Payload(object? payload) => payload == null ? "-" : payload.GetType().Name;
+
+    public static string PayloadValue(object? payload) => payload?.ToString() ?? "None, or dropped when the snapshot was saved";
+
     public static string Name(VertexAttributeID id) => VertexAttributeID.ToString(id) ?? id.ToString();
 
     public static string Name(PropertyID id) => PropertyID.ToString(id) ?? id.ToString();

@@ -125,6 +125,7 @@ internal sealed class FrameModel
                         Name = push.Name,
                         CommandIndex = i,
                         Command = command,
+                        Meta = push.Meta,
                     }));
                     break;
 

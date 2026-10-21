@@ -171,7 +171,7 @@ internal sealed class OffscreenScene : IDisposable
             {
                 Float4x4 model = scene.Model(cube);
 
-                cmd.PushDebugGroup(cube.Name);
+                cmd.PushDebugGroup(cube.Name, cmd.WantsDebugMeta ? cube : null);
                 _properties.SetMatrix("MatrixMVP", viewProjection * model);
                 _properties.SetMatrix("MatrixModel", model);
                 _properties.SetFloat4("Color", cube.Color);

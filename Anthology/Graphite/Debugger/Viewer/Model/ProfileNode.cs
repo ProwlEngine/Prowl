@@ -38,6 +38,7 @@ internal sealed class ProfileNode
     public int DrawOrdinal = -1;
     public int SubIndex;
     public RecordedCommand? Command;
+    public object? Meta;
 
     public bool IsTimed => Kind is NodeKind.Frame or NodeKind.Instance or NodeKind.Pass or NodeKind.CommandBuffer;
 

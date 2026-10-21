@@ -213,6 +213,8 @@ internal sealed partial class ProfilerView
                 {
                     new("Name", node.Name),
                     new("Source", "Debug marker (PushMarker / PopMarker)"),
+                    new("Payload", Describe.Payload(node.Meta)),
+                    new("Payload value", Describe.PayloadValue(node.Meta), node.Meta == null ? Style.InkDim : null),
                     info != null ? new("Instance ID", info.InstanceId.ToString()) : null,
                     info != null ? new("Renderer type", info.RendererType) : null,
                     info != null ? new("Layer", info.Layer) : null,
