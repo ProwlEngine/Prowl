@@ -16,7 +16,7 @@ public abstract class GraphResource
 }
 
 internal abstract class HistoryRings<TResource, TDesc>
-    where TResource : class, IDisposable
+    where TResource : GraphicsResource
     where TDesc : struct, IEquatable<TDesc>
 {
     public const int RetentionExecutions = 120;
@@ -90,13 +90,13 @@ internal abstract class HistoryRings<TResource, TDesc>
     public void Release(GraphInstanceKey key)
     {
         if (_rings.Remove(key, out Ring? ring))
-            DisposeRing(ring);
+            DisposeRing(ring, "its GraphStore released it");
     }
 
     public void DisposeAll()
     {
         foreach (Ring ring in _rings.Values)
-            DisposeRing(ring);
+            DisposeRing(ring, "its GraphStore was disposed");
         _rings.Clear();
     }
 
@@ -128,10 +128,10 @@ internal abstract class HistoryRings<TResource, TDesc>
             resource.Dispose();
     }
 
-    private static void DisposeRing(Ring ring)
+    private static void DisposeRing(Ring ring, string reason)
     {
         foreach (TResource resource in ring.Slots)
-            resource.Dispose();
+            resource.Dispose(reason);
     }
 }
 
