@@ -15,13 +15,13 @@ public class CodeActionTests
 
     public CodeActionTests(ITestOutputHelper output) => _output = output;
 
-    private static readonly Lazy<CSharpWorkspace> s_workspace = new(() => new CSharpWorkspace(CSharpWorkspace.GetPlatformReferences()));
+    private static readonly Lazy<IReadOnlyList<Microsoft.CodeAnalysis.MetadataReference>> s_references = new(CSharpWorkspace.GetPlatformReferences);
 
     private async Task<(string Code, IReadOnlyList<CodeAction> Actions)> ActionsAt(string markedCode)
     {
         int caret = markedCode.IndexOf("$$", StringComparison.Ordinal);
         string code = markedCode.Replace("$$", "");
-        var session = new RoslynCSharpSession(s_workspace.Value, $"Test{Guid.NewGuid():N}.cs", code);
+        var session = new RoslynCSharpSession(new CSharpWorkspace(s_references.Value), "Test.cs", code);
         var actions = await session.GetCodeActionsAsync(caret, 0, default);
         _output.WriteLine(string.Join("\n", actions.Select(a => (a.IsQuickFix ? "[fix] " : "") + a.Title)));
         return (code, actions);
@@ -69,5 +69,22 @@ public class CodeActionTests
         var action = actions.First(a => !a.IsQuickFix && a.Title.Contains("expression body", StringComparison.OrdinalIgnoreCase));
         string refactored = await Apply(code, action);
         Assert.Contains("=> 1;", refactored);
+    }
+
+    // Actions that need a Visual Studio dialog would throw on resolve, so none may be listed.
+    [Theory]
+    [InlineData("class $$C { int a; }")]
+    [InlineData("class C { int $$a; string b; }")]
+    [InlineData("class C : System.$$IDisposable { int a; }")]
+    public async Task EveryListedActionResolves(string markedCode)
+    {
+        var (_, actions) = await ActionsAt(markedCode);
+        var failures = new List<string>();
+        foreach (var action in actions)
+        {
+            try { if (action.Resolve != null) await action.Resolve(default); }
+            catch (Exception e) { failures.Add(action.Title + ": " + e.Message); }
+        }
+        Assert.Empty(failures);
     }
 }

@@ -282,6 +282,36 @@ public class RoslynSessionTests
     }
 
     [Fact]
+    public async Task FormatOnSemicolonFormatsOnlyThatStatement()
+    {
+        string code = "class C\n{\n    void M()\n    {\n        int a=1;\n        int b=2;$$\n    }\n}";
+        var (session, caret) = Open(code);
+        code = code.Replace("$$", "");
+        var edits = await session.FormatOnTypeAsync(caret, ';', default);
+
+        Assert.Equal("class C\n{\n    void M()\n    {\n        int a=1;\n        int b = 2;\n    }\n}", Apply(code, edits));
+    }
+
+    [Fact]
+    public async Task FormatOnBraceFormatsTheWholeStatement()
+    {
+        string code = "class C\n{\n    int f=0;\n    void M()\n    {\n        if(f>0){\nf=1;\n        }$$\n    }\n}";
+        var (session, caret) = Open(code);
+        code = code.Replace("$$", "");
+        var edits = await session.FormatOnTypeAsync(caret, '}', default);
+
+        Assert.Equal("class C\n{\n    int f=0;\n    void M()\n    {\n        if (f > 0)\n        {\n            f = 1;\n        }\n    }\n}", Apply(code, edits));
+    }
+
+    [Fact]
+    public async Task FormatOnTypeIgnoresSemicolonsInStrings()
+    {
+        string code = "class C\n{\n    string s = \"a;$$\";\n}";
+        var (session, caret) = Open(code);
+        Assert.Empty(await session.FormatOnTypeAsync(caret, ';', default));
+    }
+
+    [Fact]
     public async Task EditsKeepOffsetsInSync()
     {
         var document = new CodeDocument("using System;\nclass C\n{\n    void M()\n    {\n        \n    }\n}");

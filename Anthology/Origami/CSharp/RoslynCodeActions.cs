@@ -15,6 +15,7 @@ using Microsoft.CodeAnalysis.Text;
 
 using RoslynCodeAction = Microsoft.CodeAnalysis.CodeActions.CodeAction;
 using ApplyChangesOperation = Microsoft.CodeAnalysis.CodeActions.ApplyChangesOperation;
+using CodeActionWithOptions = Microsoft.CodeAnalysis.CodeActions.CodeActionWithOptions;
 
 namespace Prowl.OrigamiUI.CSharp;
 
@@ -112,6 +113,8 @@ internal static class RoslynCodeActions
         // Grouped actions, such as the variants of "Generate method", become "Group: Variant" entries.
         void Add(RoslynCodeAction action, string prefix, bool isFix)
         {
+            // These ask the user through a Visual Studio dialog, such as picking members, which a plain workspace cannot show.
+            if (action is CodeActionWithOptions) return;
             string title = prefix + action.Title;
             if (!action.NestedActions.IsDefaultOrEmpty)
             {

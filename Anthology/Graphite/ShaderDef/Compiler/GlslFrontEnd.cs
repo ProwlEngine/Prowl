@@ -566,7 +566,8 @@ internal sealed class GlslStageSource
     public ShaderCompileException Error(int offset, string message)
     {
         (string file, int line) = Locate(offset);
-        return new ShaderCompileException($"{file}:{line}: error: {message}");
+        int column = offset - (offset > 0 ? Text.LastIndexOf('\n', Math.Min(offset, Text.Length) - 1) + 1 : 0) + 1;
+        return new ShaderCompileException($"{file}:{line}: error: {message}") { File = file, Line = line, Column = column };
     }
 
 

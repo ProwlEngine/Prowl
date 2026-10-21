@@ -8,6 +8,7 @@
     <Project Path="Quire/Quire/Quire.csproj" />
     <Project Path="Origami/Origami/Origami.csproj" />
     <Project Path="Origami/CSharp/Prowl.Origami.CSharp.csproj" />
+    <Project Path="Origami/Graphite/Prowl.Origami.Graphite.csproj" />
     <Project Path="Echo/Echo/Echo.csproj" />
     <Project Path="Clay/Clay/Clay.csproj" />
     <Project Path="Crumb/Crumb/Prowl.Crumb.csproj" />
@@ -90,6 +91,7 @@
     <Project Path="Paper/Tests/Paper.Tests.csproj" />
     <Project Path="Origami/Tests/Origami.Tests.csproj" />
     <Project Path="Origami/CSharpTests/Prowl.Origami.CSharp.Tests.csproj" />
+    <Project Path="Origami/GraphiteTests/Prowl.Origami.Graphite.Tests.csproj" />
     <Project Path="Scaffold/Tests/Scaffold.Tests.csproj" />
     <Project Path="Quire/Tests/Quire.Tests.csproj" />
     <Project Path="Slang/Tests/Prowl.Slang.Tests.csproj" />
