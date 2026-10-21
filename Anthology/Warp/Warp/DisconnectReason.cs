@@ -32,4 +32,7 @@ public enum DisconnectReason : byte
 
     /// <summary>The peer exceeded a local traffic or queue budget.</summary>
     ResourceLimit,
+
+    /// <summary>The secure transport could not authenticate its peer.</summary>
+    AuthenticationFailed,
 }

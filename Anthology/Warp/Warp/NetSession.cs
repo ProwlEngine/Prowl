@@ -461,6 +461,7 @@ public sealed class NetSession : IDisposable
                         {
                             DisconnectReason.Timeout => SessionEndReason.Timeout,
                             DisconnectReason.ResourceLimit => SessionEndReason.ResourceLimit,
+                            DisconnectReason.AuthenticationFailed => SessionEndReason.AuthenticationFailed,
                             _ => SessionEndReason.Left,
                         });
                 }
@@ -682,6 +683,7 @@ public sealed class NetSession : IDisposable
                     DisconnectReason.Unreachable => SessionEndReason.Unreachable,
                     DisconnectReason.ServerFull => SessionEndReason.ServerFull,
                     DisconnectReason.ResourceLimit => SessionEndReason.ResourceLimit,
+                            DisconnectReason.AuthenticationFailed => SessionEndReason.AuthenticationFailed,
                     _ => SessionEndReason.Rejected,
                 }, _goodbyeMessage);
                 break;
@@ -797,7 +799,7 @@ public sealed class NetSession : IDisposable
     private static SessionEndReason ReadReason(ref NetReader reader)
     {
         byte value = reader.ReadByte();
-        return value <= (byte)SessionEndReason.ResourceLimit ? (SessionEndReason)value : SessionEndReason.Left;
+        return value <= (byte)SessionEndReason.AuthenticationFailed ? (SessionEndReason)value : SessionEndReason.Left;
     }
 
     // --- Shared --------------------------------------------------------------------------------

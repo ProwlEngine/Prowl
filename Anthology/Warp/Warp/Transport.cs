@@ -62,6 +62,9 @@ public abstract class Transport : IDisposable
     /// <summary>True between <see cref="Listen"/> and <see cref="Shutdown"/>.</summary>
     public abstract bool IsListening { get; }
 
+    /// <summary>Whether application messages use authenticated encryption on this transport.</summary>
+    public virtual bool IsEncrypted => false;
+
     /// <summary>Starts accepting incoming connections, at the address the transport was configured with.</summary>
     public abstract void Listen();
 
@@ -132,8 +135,11 @@ public abstract class Transport : IDisposable
 
         Shutdown();
         while (Poll(out _)) { }
+        DisposeCore();
         GC.SuppressFinalize(this);
     }
+
+    protected virtual void DisposeCore() { }
 
     // --- Helpers for transport implementations ---------------------------------------------
 

@@ -93,4 +93,7 @@ public enum SessionEndReason : byte
 
     /// <summary>A transport or session resource budget was exceeded.</summary>
     ResourceLimit,
+
+    /// <summary>The secure transport could not authenticate its peer.</summary>
+    AuthenticationFailed,
 }
