@@ -103,6 +103,7 @@ public sealed class NetSession : IDisposable
     private readonly NetWriter _fragmentWriter = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private long _reassemblyBytes;
+    private long _loopbackBytes;
     private sealed class ResourceLimitException(string message) : Exception(message);
     private sealed class ReassemblyTimeoutException() : Exception("Fragmented message timed out.");
 
@@ -852,7 +853,16 @@ public sealed class NetSession : IDisposable
         if (!Enum.IsDefined(delivery)) throw new ArgumentOutOfRangeException(nameof(delivery));
         if (to.IsLocal)
         {
+            if (to != LocalPeer) return;
+            if (_loopback.Count >= _options.MaxLoopbackMessages || _writer.Length > _options.MaxLoopbackBytes - _loopbackBytes)
+                throw new InvalidOperationException("Local message queue budget exceeded. Pump Receive before sending more.");
             byte[] buffer = ArrayPool<byte>.Shared.Rent(_writer.Length);
+            if (buffer.Length > _options.MaxLoopbackBytes - _loopbackBytes)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                throw new InvalidOperationException("Local message queue budget exceeded. Pump Receive before sending more.");
+            }
+            _loopbackBytes += buffer.Length;
             _writer.WrittenSpan.CopyTo(buffer);
             _loopback.Enqueue(new Loopback(buffer, _writer.Length, delivery));
             return;
@@ -971,6 +981,7 @@ public sealed class NetSession : IDisposable
         for (int i = 0; i < count && State == SessionState.Active; i++)
         {
             Loopback message = _loopback.Dequeue();
+            _loopbackBytes -= message.Buffer.Length;
             try
             {
                 NetReader reader = new(message.Buffer.AsSpan(0, message.Length));
@@ -1011,6 +1022,7 @@ public sealed class NetSession : IDisposable
         _peers.Clear();
         while (_loopback.TryDequeue(out Loopback pending))
             ArrayPool<byte>.Shared.Return(pending.Buffer);
+        _loopbackBytes = 0;
 
         Transport.Shutdown();
         while (Transport.Poll(out _)) { }

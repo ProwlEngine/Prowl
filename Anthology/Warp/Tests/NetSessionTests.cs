@@ -530,6 +530,21 @@ public abstract class NetSessionTests : IDisposable
     }
 
     [Fact]
+    public void LoopbackMessagesCannotGrowWithoutBound()
+    {
+        NetSessionOptions options = new();
+        options.MaxLoopbackBytes = 2048;
+        SessionProbe host = Host(options);
+        host.Session.SendToHost(new ChatMessage(new string('x', 1000)));
+        host.Session.SendToHost(new ChatMessage(new string('x', 1000)));
+        Assert.Throws<InvalidOperationException>(() => host.Session.SendToHost(new ChatMessage(new string('x', 1000))));
+        host.Session.Receive();
+        host.Session.SendToHost(new ChatMessage("capacity reclaimed"));
+        host.Session.Receive();
+        Assert.Equal(3, host.Chat.Count);
+    }
+
+    [Fact]
     public void ApplicationHandlerFailuresDoNotDisconnectTheSender()
     {
         SessionProbe host = Host();

@@ -43,10 +43,16 @@ public sealed class NetSessionOptions
     /// <summary>Absolute deadline for a fragmented message, unaffected by keepalives or trickled fragments.</summary>
     public TimeSpan ReassemblyTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>Maximum pooled bytes queued for messages sent to the local peer.</summary>
+    public long MaxLoopbackBytes { get; set; } = 16 * 1024 * 1024;
+    public int MaxLoopbackMessages { get; set; } = 4096;
+
     internal NetSessionOptions CopyValidated()
     {
         if (MaxPeers < 0 || MaxPeers > 65534) throw new ArgumentOutOfRangeException(nameof(MaxPeers));
         if (MaxMessageSize < 64 || MaxMessageSize > 1024 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(MaxMessageSize));
+        if (MaxLoopbackBytes <= 0) throw new ArgumentOutOfRangeException(nameof(MaxLoopbackBytes));
+        if (MaxLoopbackMessages <= 0) throw new ArgumentOutOfRangeException(nameof(MaxLoopbackMessages));
         if (MaxReassemblyBytes < 64) throw new ArgumentOutOfRangeException(nameof(MaxReassemblyBytes));
         ValidateDuration(ReassemblyTimeout, nameof(ReassemblyTimeout));
         ValidateDuration(JoinTimeout, nameof(JoinTimeout));
