@@ -89,7 +89,6 @@ public sealed class NetSession : IDisposable
         public NetPeer? Peer;
         public PendingJoin? Pending;
         public Reassembly? Incoming;
-        public Reassembly? BulkIncoming;
     }
 
     private readonly record struct Loopback(byte[] Buffer, int Length, Delivery Delivery);
@@ -119,7 +118,6 @@ public sealed class NetSession : IDisposable
     private SessionEndReason? _goodbyeReason;
     private string? _goodbyeMessage;
     private Reassembly? _incomingFromHost;
-    private Reassembly? _bulkIncomingFromHost;
 
     // Host only.
     private int _nextPeerId = NetPeer.HostId + 1;
@@ -389,8 +387,7 @@ public sealed class NetSession : IDisposable
             _scratch.AddRange(_remotes);
             foreach ((Connection connection, Remote remote) in _scratch)
             {
-                if ((remote.Incoming is { } incoming && now >= incoming.DeadlineMs) ||
-                    (remote.BulkIncoming is { } bulk && now >= bulk.DeadlineMs))
+                if (remote.Incoming is { } incoming && now >= incoming.DeadlineMs)
                 {
                     Goodbye(connection, remote, SessionEndReason.Timeout, "Fragmented message timed out.");
                     continue;
@@ -412,11 +409,9 @@ public sealed class NetSession : IDisposable
             }
             _scratch.Clear();
         }
-        else if ((_incomingFromHost is { } incoming && now >= incoming.DeadlineMs) ||
-                 (_bulkIncomingFromHost is { } bulk && now >= bulk.DeadlineMs))
+        else if (_incomingFromHost is { } incoming && now >= incoming.DeadlineMs)
         {
             ReleaseReassembly(ref _incomingFromHost);
-            ReleaseReassembly(ref _bulkIncomingFromHost);
             _goodbyeReason = SessionEndReason.Timeout;
             _goodbyeMessage = "Fragmented message timed out.";
             _hostConnection!.Disconnect();
@@ -462,7 +457,6 @@ public sealed class NetSession : IDisposable
                 if (_remotes.Remove(ev.Connection, out Remote? remote))
                 {
                     ReleaseReassembly(ref remote.Incoming);
-                    ReleaseReassembly(ref remote.BulkIncoming);
                     if (remote.Pending != null)
                         remote.Pending.IsResolved = true;
                     if (remote.Peer != null)
@@ -494,9 +488,8 @@ public sealed class NetSession : IDisposable
             {
                 if (reassembled)
                     throw new InvalidDataException("Nested message fragments are not allowed.");
-                if ((delivery == Delivery.Reliable && remote.Stage is RemoteStage.AwaitingRequest or RemoteStage.Joined ||
-                     delivery == Delivery.Bulk && remote.Stage == RemoteStage.Joined)
-                    && Reassemble(ref (delivery == Delivery.Bulk ? ref remote.BulkIncoming : ref remote.Incoming), ref reader, out int length,
+                if ((delivery == Delivery.Reliable && remote.Stage is RemoteStage.AwaitingRequest or RemoteStage.Joined)
+                    && Reassemble(ref remote.Incoming, ref reader, out int length,
                         remote.Stage == RemoteStage.Joined ? _options.MaxMessageSize : 8192) is { } whole)
                 {
                     try
@@ -634,7 +627,6 @@ public sealed class NetSession : IDisposable
         }
 
         ReleaseReassembly(ref remote.Incoming);
-        ReleaseReassembly(ref remote.BulkIncoming);
         NetPeer? peer = remote.Peer;
         remote.Peer = null;
         remote.Stage = RemoteStage.Lingering;
@@ -713,8 +705,8 @@ public sealed class NetSession : IDisposable
                 case (ushort)InternalMessage.Fragment:
                     if (reassembled)
                         throw new InvalidDataException("Nested message fragments are not allowed.");
-                    if ((delivery == Delivery.Reliable || delivery == Delivery.Bulk && State == SessionState.Active)
-                        && Reassemble(ref (delivery == Delivery.Bulk ? ref _bulkIncomingFromHost : ref _incomingFromHost), ref reader, out int length) is { } whole)
+                    if (delivery == Delivery.Reliable
+                        && Reassemble(ref _incomingFromHost, ref reader, out int length) is { } whole)
                     {
                         try
                         {
@@ -766,7 +758,6 @@ public sealed class NetSession : IDisposable
         catch (Exception e) when (e is ResourceLimitException or ReassemblyTimeoutException)
         {
             ReleaseReassembly(ref _incomingFromHost);
-            ReleaseReassembly(ref _bulkIncomingFromHost);
             _goodbyeReason = e is ResourceLimitException ? SessionEndReason.ResourceLimit : SessionEndReason.Timeout;
             _goodbyeMessage = e.Message;
             _hostConnection!.Disconnect();
@@ -1015,11 +1006,9 @@ public sealed class NetSession : IDisposable
         State = SessionState.Ended;
 
         ReleaseReassembly(ref _incomingFromHost);
-        ReleaseReassembly(ref _bulkIncomingFromHost);
         foreach (Remote remote in _remotes.Values)
         {
             ReleaseReassembly(ref remote.Incoming);
-            ReleaseReassembly(ref remote.BulkIncoming);
             if (remote.Pending != null)
                 remote.Pending.IsResolved = true;
         }

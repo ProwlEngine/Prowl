@@ -15,7 +15,6 @@ public sealed class KcpConnection : Connection
     private readonly KcpTransportOptions _options;
     private readonly byte[] _cookie = new byte[KcpPacket.CookieSize];
     private Protocol.Kcp? _kcp;
-    private Protocol.Kcp? _bulkKcp;
     private byte[] _sendScratch = Array.Empty<byte>();
     private bool _hasCookie;
     private long _connectStartMs;
@@ -56,7 +55,7 @@ public sealed class KcpConnection : Connection
         // KCP numbers a message's fragments in one byte, and the receiver must be able to hold them all
         // in its window. kcp2k raises any window below its default up to that default.
         int segmentSize = payload - Protocol.Kcp.OVERHEAD;
-        int window = (int)Math.Max(delivery == Delivery.Bulk ? _options.BulkReceiveWindow : _options.Reliability.ReceiveWindow, Protocol.Kcp.WND_RCV);
+        int window = (int)Math.Max(_options.Reliability.ReceiveWindow, Protocol.Kcp.WND_RCV);
         int fragments = Math.Min(Protocol.Kcp.FRG_MAX, window - 1);
         return segmentSize * fragments;
     }
@@ -74,7 +73,7 @@ public sealed class KcpConnection : Connection
         int segmentSize = _options.Mtu - KcpPacket.SessionHeaderSize - Protocol.Kcp.OVERHEAD;
         long segments = Math.Max(1L, ((long)data.Length + segmentSize - 1) / segmentSize);
         long segmentBytes = Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
-        if (((long)_kcp!.WaitSnd + _bulkKcp!.WaitSnd + segments) * segmentBytes > _options.MaxPendingReliableBytes)
+        if (((long)_kcp!.WaitSnd + segments) * segmentBytes > _options.MaxPendingReliableBytes)
         {
             _transport.Close(this, DisconnectReason.ResourceLimit, notifyRemote: true);
             return;
@@ -85,7 +84,7 @@ public sealed class KcpConnection : Connection
             _sendScratch = new byte[Math.Max(data.Length, _sendScratch.Length * 2)];
         data.CopyTo(_sendScratch);
 
-        int result = (delivery == Delivery.Bulk ? _bulkKcp! : _kcp!).Send(_sendScratch, 0, data.Length);
+        int result = _kcp!.Send(_sendScratch, 0, data.Length);
         if (result < 0)
             throw new InvalidOperationException($"KCP refused a {data.Length} byte message (error {result}).");
     }
@@ -103,12 +102,6 @@ public sealed class KcpConnection : Connection
         kcp.SetMtu((uint)(_options.Mtu - KcpPacket.SessionHeaderSize));
         kcp.dead_link = reliability.MaxRetransmits;
         _kcp = kcp;
-        Protocol.Kcp bulk = new(SessionId, (buffer, length) => _transport.SendSession(this, KcpPacketType.BulkReliable, buffer.AsSpan(0, length)));
-        bulk.SetNoDelay(reliability.NoDelay ? 1u : 0u, reliability.Interval, reliability.FastResend, !reliability.CongestionControl);
-        bulk.SetWindowSize(_options.BulkSendWindow, _options.BulkReceiveWindow);
-        bulk.SetMtu((uint)(_options.Mtu - KcpPacket.SessionHeaderSize));
-        bulk.dead_link = reliability.MaxRetransmits;
-        _bulkKcp = bulk;
 
         _lastReceiveMs = now;
         _nextPingMs = now;
@@ -174,11 +167,6 @@ public sealed class KcpConnection : Connection
                     DrainReliable(_kcp, Delivery.Reliable);
                 break;
 
-            case KcpPacketType.BulkReliable:
-                if (_bulkKcp!.Input(buffer, KcpPacket.SessionHeaderSize, body.Length) >= 0)
-                    DrainReliable(_bulkKcp, Delivery.Bulk);
-                break;
-
             case KcpPacketType.Unreliable:
                 _transport.OnData(this, body, Delivery.Unreliable);
                 break;
@@ -240,7 +228,7 @@ public sealed class KcpConnection : Connection
         FlushReliable(now);
 
         // kcp2k flags the link as dead once a segment has been resent dead_link times without an ack.
-        if (_kcp!.state == -1 || _bulkKcp!.state == -1)
+        if (_kcp!.state == -1)
             _transport.Close(this, DisconnectReason.Timeout, notifyRemote: false);
     }
 
@@ -254,14 +242,11 @@ public sealed class KcpConnection : Connection
         // and acks on this tick instead of up to an interval later; retransmits are still timer driven.
         _kcp.Update((uint)now);
         _kcp.Flush();
-        _bulkKcp!.Update((uint)now);
-        _bulkKcp.Flush();
     }
 
     internal void ReleaseBuffers()
     {
         _kcp = null;
-        _bulkKcp = null;
         _sendScratch = Array.Empty<byte>();
     }
 

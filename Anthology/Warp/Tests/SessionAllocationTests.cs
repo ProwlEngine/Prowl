@@ -27,7 +27,6 @@ public class SessionAllocationTests
     [InlineData(Delivery.Unreliable, 16)]
     [InlineData(Delivery.Reliable, 16)]
     [InlineData(Delivery.Reliable, 512)]
-    [InlineData(Delivery.Bulk, 512)]
     public void MessageRoutingDoesNotAllocateAfterWarmup(Delivery delivery, int size)
     {
         using DirectTransport server = new();

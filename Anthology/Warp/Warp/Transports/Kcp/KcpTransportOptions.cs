@@ -63,12 +63,6 @@ public sealed class KcpTransportOptions
     /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
     public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
 
-    /// <summary>Maximum outstanding bulk segments; gameplay has a separate reliable stream.</summary>
-    public uint BulkSendWindow { get; set; } = 32;
-
-    /// <summary>Bulk reassembly window, in segments. Must agree between peers.</summary>
-    public uint BulkReceiveWindow { get; set; } = 128;
-
     internal KcpTransportOptions CopyValidated()
     {
         Validate();
@@ -96,8 +90,6 @@ public sealed class KcpTransportOptions
         NetSessionOptions.ValidateDuration(PingInterval, nameof(PingInterval));
         NetSessionOptions.ValidateDuration(HandshakeResendInterval, nameof(HandshakeResendInterval));
         if (SocketBufferSize < Mtu) throw new ArgumentOutOfRangeException(nameof(SocketBufferSize));
-        if (BulkSendWindow < 1 || BulkSendWindow > 65535) throw new ArgumentOutOfRangeException(nameof(BulkSendWindow));
-        if (BulkReceiveWindow < 128 || BulkReceiveWindow > 65535) throw new ArgumentOutOfRangeException(nameof(BulkReceiveWindow));
         Reliability.Validate();
         Simulation?.Validate();
     }

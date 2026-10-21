@@ -19,7 +19,4 @@ public enum Delivery : byte
     /// in a single packet (see <see cref="Connection.GetMaxMessageSize"/>). Cheapest and lowest latency.
     /// </summary>
     Unreliable = 1,
-
-    /// <summary>Reliable, ordered bulk transfers on an independent channel. No ordering with Reliable.</summary>
-    Bulk = 2,
 }

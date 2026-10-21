@@ -570,7 +570,6 @@ public abstract class NetSessionTests : IDisposable
 
     [Theory]
     [InlineData(Delivery.Reliable)]
-    [InlineData(Delivery.Bulk)]
     public void LargeReliableMessagesArriveWhole(Delivery delivery)
     {
         SessionProbe host = Host();

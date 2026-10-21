@@ -44,7 +44,6 @@ internal enum KcpPacketType : byte
     Ping = 18,
     Pong = 19,
     Disconnect = 20,
-    BulkReliable = 21,
 }
 
 internal static class KcpPacket

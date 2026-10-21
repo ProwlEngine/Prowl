@@ -21,9 +21,6 @@ object ownership belong to the layer above (the Prowl engine), which only ever t
 - **Reliable** messages over an embedded copy of [kcp2k](https://github.com/MirrorNetworking/kcp2k)'s
   KCP implementation (see `Transports/Kcp/Protocol`): ordered, retransmitted, fragmented and
   reassembled, up to about 290 KB per message by default.
-- **Bulk** messages on a separate reliable, ordered KCP stream. Its default 32-segment send window
-  bounds in-flight bulk traffic while gameplay uses its own stream. A lost bulk segment does not
-  block `Reliable` delivery. There is no ordering between the two streams.
 - **Unreliable** messages as single datagrams, up to `Mtu - 5` bytes (1195 by default).
 
 Connections are set up by a stateless cookie handshake, so a host allocates nothing for a client
@@ -122,7 +119,7 @@ the sender removed with `ProtocolError`.
   allocates nothing; to edit a detached copy, assign it to a local variable first.
 - Admission bounds UTF-8 peer names to 256 bytes and join tokens to 4096 bytes. Admission/version
   checks do not constitute application authentication: validate tokens in `JoinRequested`.
-- `MaxReassemblyBytes` caps actual pooled storage across both reliable channels (64 MiB by default).
+- `MaxReassemblyBytes` caps actual pooled storage for reliable messages (64 MiB by default).
   `ReassemblyTimeout` is an absolute deadline (10 seconds), not extended by keepalives or trickled
   fragments. Pending approvals cannot allocate fragment buffers; pre-admission requests are limited
   to 8 KiB. Completed, rejected, expired, disconnected, and shut-down transfers release their buffers.
@@ -137,26 +134,6 @@ the sender removed with `ProtocolError`.
   `InvalidDataException` or `EndOfStreamException` for malformed input; other exceptions are reported
   as application failures. Failure-notification listeners cannot break the receive loop.
 - `Shutdown` allows reuse; `Dispose` is terminal. Dispose sessions/transports to return pooled storage.
-
-## Bulk transfers
-
-Use `Delivery.Bulk` for large, noninteractive transfers:
-
-```csharp
-session.SendRaw(peer, snapshotMessageId, snapshotBytes, Delivery.Bulk);
-session.SendRaw(peer, gameplayMessageId, gameplayBytes, Delivery.Reliable);
-```
-
-`NetSession` fragments/reassembles large messages independently per reliable channel. `BulkSendWindow`
-and `BulkReceiveWindow` tune bulk KCP behavior. `MaxPendingReliableBytes` accounts for both streams.
-The bulk window limits outstanding data; it is not a fixed bandwidth cap or a general congestion scheduler.
-
-Independent streams deliberately remove cross-stream ordering. A scene loader must establish a baseline,
-catch up ordered changes, and acknowledge readiness before allowing gameplay that depends on the baseline.
-Adding bulk transport alone does not provide that engine-level join protocol.
-
-New bulk packet types require matching Warp builds. Use distinct `ProtocolId` / `AppVersion` values for
-incompatible application releases, and deploy host/client upgrades together.
 
 ## Optional encryption
 
@@ -173,7 +150,7 @@ NetSession host = NetSession.Host(transport);
 
 `EncryptedTransport` uses .NET cryptography: HMAC-SHA256 authenticates a four-message nonce handshake,
 HKDF-SHA256 derives independent directional session keys, and AES-256-GCM encrypts application messages.
-Each delivery channel has its own sequence numbers; unreliable traffic has a 64-message replay window.
+Each delivery mode has its own sequence numbers; unreliable traffic has a 64-message replay window.
 The underlying transport is not exposed as connected until key confirmation. Invalid reliable ciphertext
 ends the connection; invalid unreliable ciphertext and replays are discarded. Keys are copied at
 construction and erased from wrapper-owned storage on disposal.
@@ -193,14 +170,14 @@ policies. Warp does not depend on Mirror or its cryptographic implementation.
 dotnet test Tests/Prowl.Warp.Tests.csproj -c Release
 dotnet build Warp/Prowl.Warp.csproj
 
-# Longer reconnect/bulk-transfer churn; each plain/encrypted test runs this many cycles.
+# Longer reconnect/large-transfer churn; each plain/encrypted test runs this many cycles.
 $env:WARP_STRESS_ROUNDS = '100'
 dotnet test Tests/Prowl.Warp.Tests.csproj -c Release --filter FullyQualifiedName~RobustnessTests
 ```
 
 The suite includes deterministic reader fuzzing against a big-integer oracle (100,000 inputs), malformed
 KCP input fuzzing (50,000 inputs), admission/fragment/parser regressions, queue reclamation, encryption
-and replay/tamper tests, lossy independent channels, and 32-client slow-peer isolation. These checks are
+and replay/tamper tests, lossy reliable transfers, and 32-client slow-peer isolation. These checks are
 repeatable regression coverage, not a substitute for deployment-specific WAN and long-duration soak tests.
 
 ## Installation

@@ -94,21 +94,21 @@ public class KcpTransportTests
     }
 
     [Fact]
-    public void BulkTrafficDoesNotBlockGameplayMessages()
+    public void LargeReliableMessagesPreserveOrdering()
     {
         var (host, client, pump, connection) = Connect();
         using (host)
         using (client)
         {
             byte[] bulk = TestData.Pattern(100_000, 42);
-            connection.Send(bulk, Delivery.Bulk);
+            connection.Send(bulk, Delivery.Reliable);
             connection.Send(new byte[] { 7 }, Delivery.Reliable);
-            pump.Until(() => pump.EventsOf(host).Any(e => e.Type == TransportEventType.Data), what: "gameplay before bulk");
-            Assert.Equal(new byte[] { 7 }, pump.EventsOf(host).First(e => e.Type == TransportEventType.Data).Data);
             pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 2, what: "bulk completion");
             Received received = pump.EventsOf(host).Single(e => e.Type == TransportEventType.Data && e.Data.Length > 1);
-            Assert.Equal(Delivery.Bulk, received.Delivery);
+            Assert.Equal(Delivery.Reliable, received.Delivery);
             Assert.Equal(bulk, received.Data);
+            Assert.Equal(bulk, pump.EventsOf(host).First(e => e.Type == TransportEventType.Data).Data);
+            Assert.Equal(new byte[] { 7 }, pump.EventsOf(host).Last(e => e.Type == TransportEventType.Data).Data);
         }
     }
 

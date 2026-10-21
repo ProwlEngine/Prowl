@@ -28,7 +28,6 @@ public class EncryptedTransportTests
     [Theory]
     [InlineData(Delivery.Reliable)]
     [InlineData(Delivery.Unreliable)]
-    [InlineData(Delivery.Bulk)]
     public void PayloadIsEncryptedAndReplaysAreIgnored(Delivery delivery)
     {
         LocalNetwork network = new();
@@ -54,7 +53,6 @@ public class EncryptedTransportTests
     [Theory]
     [InlineData(Delivery.Reliable)]
     [InlineData(Delivery.Unreliable)]
-    [InlineData(Delivery.Bulk)]
     public void AlteredCiphertextNeverReachesApplicationCode(Delivery delivery)
     {
         LocalNetwork network = new();

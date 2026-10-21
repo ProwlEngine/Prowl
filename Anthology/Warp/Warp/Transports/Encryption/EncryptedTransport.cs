@@ -108,7 +108,7 @@ public sealed class EncryptedTransport : Transport
         private readonly EncryptedTransport _owner;
         private readonly byte[] _clientNonce = new byte[32];
         private readonly byte[] _serverNonce = new byte[32];
-        private readonly ulong[] _sent = new ulong[3], _received = new ulong[3];
+        private readonly ulong[] _sent = new ulong[2], _received = new ulong[2];
         private ulong _unreliableWindow;
         private AesGcm? _encrypt, _decrypt;
         private int _stage;

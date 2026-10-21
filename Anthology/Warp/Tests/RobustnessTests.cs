@@ -84,7 +84,7 @@ public class RobustnessTests
             SessionProbe[] everyone = new[] { hostProbe }.Concat(clients).ToArray();
             SessionProbe.PumpUntil(() => clients.All(c => c.Session.State == SessionState.Active), everyone);
             NetPeer stalled = host.Peers.Single(p => p.Name == "client31");
-            for (int i = 0; i < 40; i++) host.SendRaw(stalled, 20, new byte[32_000], Delivery.Bulk);
+            for (int i = 0; i < 40; i++) host.SendRaw(stalled, 20, new byte[32_000], Delivery.Reliable);
             host.Broadcast(new ChatMessage("still responsive"));
             SessionProbe[] healthy = new[] { hostProbe }.Concat(clients.Take(31)).ToArray();
             SessionProbe.PumpUntil(() => clients.Take(31).All(c => c.Chat.Count == 1) && host.Peers.Count == 32, healthy);
@@ -97,7 +97,7 @@ public class RobustnessTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void BulkAndGameplaySurviveLossOnIndependentChannels(bool encrypted)
+    public void LargeAndSmallReliableMessagesSurviveLoss(bool encrypted)
     {
         KcpTransportOptions Options() => new()
         {
@@ -112,17 +112,17 @@ public class RobustnessTests
         Pump pump = new(host, client);
         pump.Until(() => connection.IsConnected && pump.EventsOf(host).Any(e => e.Type == TransportEventType.Connected), 10_000, "lossy handshake");
         byte[] bulk = TestData.Pattern(50_000, 20);
-        connection.Send(bulk, Delivery.Bulk);
+        connection.Send(bulk, Delivery.Reliable);
         for (int i = 0; i < 20; i++) connection.Send(BitConverter.GetBytes(i), Delivery.Reliable);
         pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 21, 10_000, "lossy channels");
-        Assert.Equal(bulk, pump.EventsOf(host).Single(e => e.Delivery == Delivery.Bulk && e.Type == TransportEventType.Data).Data);
-        Assert.Equal(Enumerable.Range(0, 20), pump.EventsOf(host).Where(e => e.Delivery == Delivery.Reliable && e.Type == TransportEventType.Data).Select(e => BitConverter.ToInt32(e.Data)));
+        Assert.Equal(bulk, pump.EventsOf(host).Single(e => e.Delivery == Delivery.Reliable && e.Type == TransportEventType.Data && e.Data.Length > 4).Data);
+        Assert.Equal(Enumerable.Range(0, 20), pump.EventsOf(host).Where(e => e.Delivery == Delivery.Reliable && e.Type == TransportEventType.Data && e.Data.Length == 4).Select(e => BitConverter.ToInt32(e.Data)));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void RepeatedSessionsAndBulkTransfersReleaseAllState(bool encrypted)
+    public void RepeatedSessionsAndLargeTransfersReleaseAllState(bool encrypted)
     {
         int rounds = int.TryParse(Environment.GetEnvironmentVariable("WARP_STRESS_ROUNDS"), out int configured) ? configured : 20;
         using KcpTransport rawHost = new(new() { Port = 0 });
@@ -140,7 +140,7 @@ public class RobustnessTests
             byte[] bulk = TestData.Pattern(350_000, round);
             byte[]? received = null;
             client.OnRaw(20, (NetPeer sender, ref NetReader reader, Delivery delivery) => received = reader.ReadBytes(reader.Remaining).ToArray());
-            host.SendRaw(host.Peers.Single(p => !p.IsLocal), 20, bulk, Delivery.Bulk);
+            host.SendRaw(host.Peers.Single(p => !p.IsLocal), 20, bulk, Delivery.Reliable);
             client.SendToHost(new ChatMessage("alive"));
             SessionProbe.PumpUntil(() => received != null && hostProbe.Chat.Count == 1, hostProbe, clientProbe);
             Assert.Equal(bulk, received);
