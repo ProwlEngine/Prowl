@@ -207,7 +207,7 @@ public class RoslynSessionTests
 
         var references = await session.FindReferencesAsync(offset, default);
         Assert.Equal(3, references.Count);
-        Assert.Contains(references, r => r.Display == "int value;");
+        Assert.Contains(references, r => r.Display == "    int value;");
 
         var highlights = await session.GetHighlightsAsync(offset, default);
         Assert.Equal(3, highlights.Count);

@@ -175,6 +175,7 @@ public sealed partial class CodeEditor : IDisposable
         Session?.OnTextReset(Document.GetText("\n"));
         ResetLineStates();
         _semantic.Clear();
+        ClearLenses();
         _diagnostics.Clear();
         ScheduleAnalysis();
         _foldsPending = true;
@@ -228,6 +229,7 @@ public sealed partial class CodeEditor : IDisposable
         _diagnostics.Clear();
         _errorCount = _warningCount = 0;
         _semantic.Clear();
+        ClearLenses();
         ResetLineStates();
         Session?.OnTextReset(Document.GetText("\n"));
         _scrollY = _scrollYTarget = 0;
@@ -260,6 +262,7 @@ public sealed partial class CodeEditor : IDisposable
         ShiftFolds(change);
         ShiftDiagnostics(change);
         ShiftMarkers(change);
+        ShiftLenses(change);
         Session?.OnTextChanged(change);
         OnEditForPopups(change);
 
@@ -747,6 +750,7 @@ public sealed partial class CodeEditor : IDisposable
             total += ends[i] - starts[i] + 1;
         }
         _hiddenTotal = total;
+        RebuildDisplayRows();
     }
 
     private int HiddenIntervalAtOrBefore(int line)

@@ -4,8 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.Events;
@@ -145,7 +147,7 @@ public sealed partial class CodeEditor
 
         if (_completion != null) BuildCompletion(paper, id, font);
         if (_signature != null && _completion == null) BuildSignature(paper, id, font);
-        if (_hoverLines != null && _completion == null) BuildHover(paper, id, font);
+        if (_hoverLines != null && _completion == null && _list == null) BuildHover(paper, id, font);
         if (_list != null) BuildList(paper, id, font);
         if (_findBarOpen) BuildFindBar(paper, id, font);
         if (_gotoOpen) BuildGoToLine(paper, id, font);
@@ -170,6 +172,7 @@ public sealed partial class CodeEditor
         _hoverCts?.Cancel();
         _highlightCts?.Cancel();
         _semanticCts?.Cancel();
+        _lensCts?.Cancel();
     }
 
     private bool IsPopupFocused(Paper paper)
@@ -223,14 +226,14 @@ public sealed partial class CodeEditor
             switch (key)
             {
                 case PaperKey.Escape: _list = null; return true;
-                case PaperKey.Up: _list.Selected = Math.Max(0, _list.Selected - 1); return true;
-                case PaperKey.Down: _list.Selected = Math.Min(_list.Items.Count - 1, _list.Selected + 1); return true;
+                case PaperKey.Up: MoveListSelection(-1); return true;
+                case PaperKey.Down: MoveListSelection(1); return true;
+                case PaperKey.PageUp: MoveListSelection(-(ListRows - 1)); return true;
+                case PaperKey.PageDown: MoveListSelection(ListRows - 1); return true;
                 case PaperKey.Enter:
                 case PaperKey.KeypadEnter:
                 case PaperKey.Tab:
-                    var item = _list.Items.Count > 0 ? _list.Items[_list.Selected] : null;
-                    _list = null;
-                    item?.Invoke();
+                    InvokeListSelection();
                     return true;
             }
             _list = null;
@@ -868,7 +871,7 @@ public sealed partial class CodeEditor
         bool overPopup = _hoverLines != null && _hoverHandle.IsValid && paper.IsElementHovered(_hoverHandle.Data.ID);
         if (overPopup) return;
 
-        if (!_pointerInside || !InTextArea(_pointer) || _drag != DragKind.None || _completion != null)
+        if (!_pointerInside || !InTextArea(_pointer) || _drag != DragKind.None || _completion != null || _list != null)
         {
             if (_hoverLines != null && !overPopup) CloseHover();
             _hoverPos = new TextPosition(-1, -1);
@@ -1017,15 +1020,25 @@ public sealed partial class CodeEditor
 
     #region Navigation and refactoring
 
-    public void GoToDefinition()
+    public void GoToDefinition() => GoToLocations("Definitions", s => s.GetDefinitionAsync);
+
+    /// <summary>Ctrl+F12: the types implementing or deriving from the symbol, or the members overriding it.</summary>
+    public void GoToImplementation() => GoToLocations("Implementations", s => s.GetImplementationsAsync);
+
+    public void GoToBase() => GoToLocations("Bases", s => s.GetBaseDefinitionsAsync);
+
+    public void GoToTypeDefinition() => GoToLocations("Type definitions", s => s.GetTypeDefinitionAsync);
+
+    // Jumps straight to a single result, otherwise lists them.
+    private void GoToLocations(string title, Func<CodeLanguageSession, Func<int, CancellationToken, Task<IReadOnlyList<CodeLocation>>>> query)
     {
         if (Session == null) return;
         int offset = Document.PositionToOffset(Caret);
-        Continue(Session.GetDefinitionAsync(offset, CancellationToken.None), Document.Version, locations =>
+        Continue(query(Session)(offset, CancellationToken.None), Document.Version, locations =>
         {
-            if (locations.Count == 0) return;
+            if (locations.Count == 0) { OpenList($"No {title.ToLowerInvariant()} found", new List<ListItem>()); return; }
             if (locations.Count == 1) { Navigate(locations[0]); return; }
-            ShowLocations("Definitions", locations);
+            ShowLocations(title, locations, lineText: false);
         });
     }
 
@@ -1033,10 +1046,12 @@ public sealed partial class CodeEditor
     {
         if (Session == null) return;
         int offset = Document.PositionToOffset(Caret);
+        var word = WordAt(Caret);
+        string name = word.IsEmpty ? "symbol" : Document.GetText(word);
         Continue(Session.FindReferencesAsync(offset, CancellationToken.None), Document.Version, locations =>
         {
             ReferencesFound?.Invoke(locations);
-            if (locations.Count > 0) ShowLocations($"{locations.Count} references", locations);
+            ShowLocations(locations.Count == 1 ? $"1 reference to {name}" : $"{locations.Count} references to {name}", locations, lineText: true);
         });
     }
 
@@ -1053,15 +1068,46 @@ public sealed partial class CodeEditor
         NavigateRequested?.Invoke(location);
     }
 
-    private void ShowLocations(string title, IReadOnlyList<CodeLocation> locations)
+    // Results grouped under a header per file, this file first. With lineText each entry previews its source
+    // line with the match highlighted, otherwise it shows the location's display name.
+    private void ShowLocations(string title, IReadOnlyList<CodeLocation> locations, bool lineText)
     {
+        string thisFile = System.IO.Path.GetFileName(FilePath ?? "this file");
+        var groups = locations
+            .GroupBy(l => l.IsCurrentDocument ? "" : l.Path ?? "?")
+            .OrderBy(g => g.Key.Length == 0 ? 0 : 1).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
         var items = new List<ListItem>();
-        foreach (var loc in locations)
+        foreach (var group in groups)
         {
-            int line = loc.IsCurrentDocument ? Document.OffsetToPosition(loc.Start).Line : loc.Line;
-            string file = loc.IsCurrentDocument ? System.IO.Path.GetFileName(FilePath ?? "this file") : System.IO.Path.GetFileName(loc.Path ?? "metadata");
-            var target = loc;
-            items.Add(new ListItem($"{file}:{line + 1}", loc.Display.Trim(), () => Navigate(target)));
+            var first = group.First();
+            string file = first.IsCurrentDocument ? thisFile : first.Path != null ? System.IO.Path.GetFileName(first.Path) : "assemblies";
+            int count = group.Count();
+            items.Add(new ListItem(file, count == 1 ? "1" : count.ToString(), null, Header: true));
+
+            foreach (var loc in group.OrderBy(l => l.IsCurrentDocument ? Document.OffsetToPosition(l.Start).Line : l.Line))
+            {
+                var target = loc;
+                int line = loc.IsCurrentDocument ? Document.OffsetToPosition(loc.Start).Line : loc.Line;
+                int column = loc.IsCurrentDocument ? Document.OffsetToPosition(loc.Start).Column : loc.Column;
+                bool hasSource = loc.IsCurrentDocument || loc.Path != null;
+
+                string detail = loc.Display;
+                int matchStart = -1, matchLength = 0;
+                if (lineText && hasSource)
+                {
+                    string source = loc.IsCurrentDocument && line < Document.LineCount ? Document[line] : loc.Display;
+                    int indent = FirstNonBlank(source);
+                    detail = source.Substring(indent).TrimEnd();
+                    if (column >= indent && column - indent + loc.Length <= detail.Length)
+                    {
+                        matchStart = column - indent;
+                        matchLength = loc.Length;
+                    }
+                }
+                string label = hasSource ? (line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+                items.Add(new ListItem(label, detail, () => Navigate(target), MatchStart: matchStart, MatchLength: matchLength));
+            }
         }
         OpenList(title, items);
     }
@@ -1087,9 +1133,24 @@ public sealed partial class CodeEditor
             foreach (var a in actions)
             {
                 var action = a;
-                items.Add(new ListItem(a.Title, a.IsQuickFix ? "fix" : "", () => ApplyEdits(action.Edits)));
+                items.Add(new ListItem(a.Title, a.IsQuickFix ? "fix" : "", () => ApplyCodeAction(action)));
             }
             OpenList("Code actions", items);
+        });
+    }
+
+    private void ApplyCodeAction(CodeAction action)
+    {
+        if (action.Resolve == null)
+        {
+            ApplyEdits(action.Edits);
+            return;
+        }
+        Continue(action.Resolve(CancellationToken.None), Document.Version, result =>
+        {
+            if (result == null) return;
+            ApplyEdits(result.Edits);
+            if (result.OtherDocuments.Count > 0) ExternalEditsRequested?.Invoke(result.OtherDocuments);
         });
     }
 
@@ -1103,6 +1164,9 @@ public sealed partial class CodeEditor
             if (hasSession)
             {
                 menu.Item("Go to Definition", GoToDefinition);
+                menu.Item("Go to Implementation", GoToImplementation);
+                menu.Item("Go to Base", GoToBase);
+                menu.Item("Go to Type Definition", GoToTypeDefinition);
                 menu.Item("Find All References", FindReferences);
                 menu.Item("Rename Symbol", StartRename, !ro);
                 menu.Item("Quick Actions", OpenCodeActions);
@@ -1126,21 +1190,54 @@ public sealed partial class CodeEditor
 
     #region List popup
 
-    private sealed record ListItem(string Label, string Detail, Action Invoke);
+    private sealed record ListItem(string Label, string Detail, Action? Invoke, bool Header = false, int MatchStart = -1, int MatchLength = 0);
 
     private sealed class ListState
     {
         public string Title = "";
         public List<ListItem> Items = new();
         public int Selected;
+        public int Scroll;
         public Float2 Anchor;
     }
 
     private ListState? _list;
+    private const int ListRows = 16;
 
     private void OpenList(string title, List<ListItem> items)
     {
-        _list = new ListState { Title = title, Items = items, Anchor = PointFromPosition(Caret) };
+        var list = new ListState { Title = title, Items = items, Anchor = PointFromPosition(Caret) };
+        list.Selected = NextSelectable(list, -1, 1);
+        _list = list;
+    }
+
+    // The nearest entry that is not a file header, stepping from <paramref name="from"/> in <paramref name="step"/>.
+    private static int NextSelectable(ListState list, int from, int step)
+    {
+        for (int i = from + step; i >= 0 && i < list.Items.Count; i += step)
+            if (!list.Items[i].Header) return i;
+        return from >= 0 && from < list.Items.Count && !list.Items[from].Header ? from : -1;
+    }
+
+    private void MoveListSelection(int delta)
+    {
+        var list = _list!;
+        int target = list.Selected;
+        int step = Math.Sign(delta);
+        for (int n = 0; n < Math.Abs(delta); n++)
+        {
+            int next = NextSelectable(list, target, step);
+            if (next == target || next < 0) break;
+            target = next;
+        }
+        list.Selected = target;
+    }
+
+    private void InvokeListSelection()
+    {
+        var list = _list;
+        _list = null;
+        if (list != null && list.Selected >= 0 && list.Selected < list.Items.Count) list.Items[list.Selected].Invoke?.Invoke();
     }
 
     private void BuildList(Paper paper, string id, FontFile font)
@@ -1149,22 +1246,36 @@ public sealed partial class CodeEditor
         var pal = Palette();
         float cw = PopupCharW;
         float rowH = MathF.Round(PopupLineH * 1.1f);
-        int rows = Math.Min(12, list.Items.Count);
-        int chars = list.Title.Length;
-        foreach (var it in list.Items) chars = Math.Max(chars, Math.Min(90, it.Label.Length + it.Detail.Length + 3));
-        float w = Math.Max(220, chars * cw + 24);
+        int rows = Math.Min(ListRows, list.Items.Count);
+
+        int labelChars = 0, chars = list.Title.Length;
+        foreach (var it in list.Items) if (!it.Header) labelChars = Math.Max(labelChars, it.Label.Length);
+        foreach (var it in list.Items)
+            chars = Math.Max(chars, Math.Min(110, (it.Header ? it.Label.Length + it.Detail.Length + 2 : labelChars + it.Detail.Length + 2)));
+        float w = Math.Max(260, chars * cw + 40);
         float h = (rows + 1) * rowH + 6;
-        int scroll = Math.Clamp(list.Selected - rows + 1, 0, Math.Max(0, list.Items.Count - rows));
+
+        if (list.Selected >= 0)
+        {
+            if (list.Selected < list.Scroll) list.Scroll = list.Selected > 0 && list.Items[list.Selected - 1].Header ? list.Selected - 1 : list.Selected;
+            if (list.Selected >= list.Scroll + rows) list.Scroll = list.Selected - rows + 1;
+        }
+        list.Scroll = Math.Clamp(list.Scroll, 0, Math.Max(0, list.Items.Count - rows));
 
         ElementHandle popup = default;
         var box = PopupBox(paper, id + "_list", list.Anchor.X, list.Anchor.Y + _view.LineH + 2, w, h)
+            .OnScroll(e =>
+            {
+                list.Scroll = Math.Clamp(list.Scroll - (int)MathF.Round(e.Delta * 3), 0, Math.Max(0, list.Items.Count - rows));
+                e.StopPropagation();
+            })
             .OnPress(e =>
             {
                 int row = (int)((e.LocalPosition.Y - popup.Data.LayoutRect.Min.Y - 3) / rowH) - 1;
-                int index = scroll + row;
-                if (index < 0 || index >= list.Items.Count) return;
-                _list = null;
-                list.Items[index].Invoke();
+                int index = list.Scroll + row;
+                if (index < 0 || index >= list.Items.Count || list.Items[index].Header) return;
+                list.Selected = index;
+                InvokeListSelection();
             });
 
         using (box.Enter())
@@ -1173,20 +1284,46 @@ public sealed partial class CodeEditor
             paper.Draw((canvas, r) =>
             {
                 float glyphH = _glyphH * (PopupFontSize / FontSize);
-                DrawPlain(canvas, font, list.Title, r.Min.X + 10, r.Min.Y + 3 + (rowH - glyphH) * 0.5f, pal.PopupTextDim, PopupFontSize);
+                float x0 = r.Min.X + 10;
+                DrawPlain(canvas, font, list.Title, x0, r.Min.Y + 3 + (rowH - glyphH) * 0.5f, pal.PopupTextDim, PopupFontSize);
+                int maxDetail = Math.Max(8, (int)((r.Size.X - 30) / cw) - labelChars - 2);
+
                 for (int i = 0; i < rows; i++)
                 {
-                    int index = scroll + i;
+                    int index = list.Scroll + i;
+                    if (index >= list.Items.Count) break;
                     var item = list.Items[index];
                     float ry = r.Min.Y + 3 + (i + 1) * rowH;
-                    if (index == list.Selected) canvas.RoundedRectFilled(r.Min.X + 3, ry, r.Size.X - 6, rowH, 4, pal.PopupSelection);
                     float ty = ry + (rowH - glyphH) * 0.5f;
-                    DrawPlain(canvas, font, item.Label, r.Min.X + 10, ty, pal.PopupText, PopupFontSize);
-                    if (item.Detail.Length > 0)
+
+                    if (item.Header)
                     {
-                        string d = item.Detail.Length > 60 ? item.Detail.Substring(0, 59) + "..." : item.Detail;
-                        DrawPlain(canvas, font, d, r.Min.X + 10 + (item.Label.Length + 2) * cw, ty, pal.PopupTextDim, PopupFontSize);
+                        canvas.RectFilled(r.Min.X + 3, ry, r.Size.X - 6, rowH, new Color32(255, 255, 255, 8));
+                        DrawPlain(canvas, font, item.Label, x0, ty, pal.PopupText, PopupFontSize);
+                        DrawPlain(canvas, font, item.Detail, x0 + (item.Label.Length + 2) * cw, ty, pal.PopupTextDim, PopupFontSize);
+                        continue;
                     }
+
+                    if (index == list.Selected) canvas.RoundedRectFilled(r.Min.X + 3, ry, r.Size.X - 6, rowH, 4, pal.PopupSelection);
+                    float lx = x0 + cw * 2;
+                    DrawPlain(canvas, font, item.Label.PadLeft(labelChars), lx, ty, pal.PopupTextDim, PopupFontSize);
+
+                    float dx = lx + (labelChars + 2) * cw;
+                    string detail = item.Detail.Length > maxDetail ? item.Detail.Substring(0, maxDetail - 3) + "..." : item.Detail;
+                    if (item.MatchStart >= 0 && item.MatchStart + item.MatchLength <= detail.Length)
+                    {
+                        canvas.RoundedRectFilled(dx + item.MatchStart * cw - 1, ry + 2, item.MatchLength * cw + 2, rowH - 4, 2, pal.FindMatch);
+                        DrawPlain(canvas, font, detail, dx, ty, pal.PopupText, PopupFontSize);
+                    }
+                    else DrawPlain(canvas, font, detail, dx, ty, pal.PopupText, PopupFontSize);
+                }
+
+                if (list.Items.Count > rows)
+                {
+                    float trackH = r.Size.Y - rowH - 6;
+                    float th = MathF.Max(16, trackH * rows / list.Items.Count);
+                    float t = list.Scroll / (float)Math.Max(1, list.Items.Count - rows);
+                    canvas.RectFilled(r.Max.X - 5, r.Min.Y + 3 + rowH + t * (trackH - th), 3, th, pal.Scrollbar);
                 }
             });
         }
