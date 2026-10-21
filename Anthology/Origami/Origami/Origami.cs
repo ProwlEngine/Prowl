@@ -210,6 +210,14 @@ public static partial class Origami
         ScrollViewBuilder.s_pendingScrollTo[scrollViewId] = offset;
     }
 
+    /// <summary>Programmatically scroll a scroll view by a delta in pixels on its next render, such as to bring an item into view.</summary>
+    public static void ScrollBy(string scrollViewId, Prowl.Vector.Float2 delta)
+    {
+        ArgumentNullException.ThrowIfNull(scrollViewId);
+        var pending = ScrollViewBuilder.s_pendingScrollBy;
+        pending[scrollViewId] = pending.TryGetValue(scrollViewId, out var existing) ? existing + delta : delta;
+    }
+
     // ── Dropdown factories ───────────────────────────────────────
 
     /// <summary>
