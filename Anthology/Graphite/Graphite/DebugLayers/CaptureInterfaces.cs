@@ -96,7 +96,7 @@ public interface IPassCommandSink
 
     void GenerateMips(in ResourceVersion textureAfter);
 
-    void PushMarker(string name);
+    void PushMarker(string name, object? meta);
 
     void PopMarker();
 }

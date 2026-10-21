@@ -113,7 +113,7 @@ internal sealed class SinkRecorder : ICommandStreamProfiler, IPassCommandSink
 
     public void ResolveTexture(in ResourceVersion source, in ResourceVersion destinationAfter) => Log.Add("ResolveTexture");
     public void GenerateMips(in ResourceVersion textureAfter) => Log.Add("GenerateMips");
-    public void PushMarker(string name) => Log.Add("PushMarker:" + name);
+    public void PushMarker(string name, object? meta) => Log.Add(meta == null ? "PushMarker:" + name : "PushMarker:" + name + ":" + meta);
     public void PopMarker() => Log.Add("PopMarker");
 }
 
@@ -257,6 +257,19 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         Assert.Equal(expected, sink.Log);
         Assert.Same(program, sink.Pipelines[0].Program);
         Assert.Same(compute, sink.Pipelines[1].Program);
+    }
+
+    [SkippableFact]
+    public void DebugGroupMeta_ReachesTheSink()
+    {
+        SinkRecorder sink = Record(cl =>
+        {
+            Assert.True(cl.WantsDebugMeta);
+            cl.PushDebugGroup("Group", "payload");
+            cl.PopDebugGroup();
+        });
+
+        Assert.Contains("PushMarker:Group:payload", sink.Log);
     }
 
     [SkippableFact]

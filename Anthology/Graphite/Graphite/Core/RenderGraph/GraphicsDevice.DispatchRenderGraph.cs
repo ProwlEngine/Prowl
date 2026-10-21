@@ -50,7 +50,7 @@ public abstract partial class GraphicsDevice
     {
         RenderContext context = execution.ContextOf(instance);
         IGraphProfiler? profiler = execution.Task.Profilers.Graph;
-        var info = new InstanceInfo(instance.Name, instance.Index, instance.Parent?.Index ?? -1, instance.Key, instance.Extent.Width, instance.Extent.Height);
+        var info = new InstanceInfo(instance.Name, instance.Index, instance.Parent?.Index ?? -1, instance.Key, instance.Extent.Width, instance.Extent.Height, instance.Data);
 
         bool wroteTarget;
         profiler?.BeginInstance(info);

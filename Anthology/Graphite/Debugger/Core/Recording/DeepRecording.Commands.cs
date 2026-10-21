@@ -277,7 +277,7 @@ public sealed partial class DeepRecording
             pass.Commands.Add(new GenerateMipsCommand(owner.Trace(textureAfter)));
         }
 
-        public void PushMarker(string name) => pass.Commands.Add(new PushMarkerCommand(name));
+        public void PushMarker(string name, object? meta) => pass.Commands.Add(new PushMarkerCommand(name, meta));
 
         public void PopMarker() => pass.Commands.Add(new PopMarkerCommand());
     }

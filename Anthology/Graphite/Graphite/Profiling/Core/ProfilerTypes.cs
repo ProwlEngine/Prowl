@@ -20,8 +20,8 @@ public readonly record struct PassResourceAccess(
     TextureState? DepthUsage,
     BufferAccess BufferUsage);
 
-/// <summary>One instance of a dispatch. The root is index 0 with parent -1; KindName names what it stands for.</summary>
-public readonly record struct InstanceInfo(string Name, int Index, int ParentIndex, GraphInstanceKey Key, uint PixelWidth, uint PixelHeight)
+/// <summary>One instance of a dispatch. The root is index 0 with parent -1; KindName names what it stands for and Data is what the host gave it.</summary>
+public readonly record struct InstanceInfo(string Name, int Index, int ParentIndex, GraphInstanceKey Key, uint PixelWidth, uint PixelHeight, object? Data = null)
 {
     public string KindName => Key.Kind.Name;
 }

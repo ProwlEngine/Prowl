@@ -98,6 +98,6 @@ public sealed record ResolveTextureCommand(TraceVersion Source, TraceVersion Des
 
 public sealed record GenerateMipsCommand(TraceVersion TextureAfter) : RecordedCommand;
 
-public sealed record PushMarkerCommand(string Name) : RecordedCommand;
+public sealed record PushMarkerCommand(string Name, object? Meta = null) : RecordedCommand;
 
 public sealed record PopMarkerCommand() : RecordedCommand;

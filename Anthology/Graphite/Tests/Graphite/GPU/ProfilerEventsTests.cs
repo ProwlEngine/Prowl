@@ -45,10 +45,11 @@ file sealed class GraphRecorder : ExecutionRecorder, IGraphProfiler
 
 file sealed class LifecycleRecorder : ExecutionRecorder, IGraphProfiler
 {
+    public readonly List<InstanceInfo> InstancesBegun = new();
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
 
-    public void BeginInstance(in InstanceInfo instance) { }
+    public void BeginInstance(in InstanceInfo instance) => InstancesBegun.Add(instance);
     public void EndInstance(in InstanceInfo instance) { }
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
     public void SkipPass(string name, int instanceIndex, PassSkipReason reason) { }
@@ -358,6 +359,22 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(new[] { "ProfilerClear", "ProfilerCopy" }, profiler.PassesBegun.ConvertAll(p => p.Name));
 
         Assert.True(device.Counters.Snapshot().Barriers(BarrierBin.TextureTransition) > 0);
+    }
+
+    [Fact]
+    public void InstanceInfo_CarriesTheInstanceData()
+    {
+        LifecycleRecorder profiler = new();
+        using GraphicsDevice device = CreateDevice();
+        using RenderGraph graph = TestViews.Build([]);
+        object data = new();
+        GraphInstances instances = graph.CreateInstances();
+        instances.Add(TestViews.Kind, 0, data: data);
+
+        device.DispatchGraph(graph, instances, profiler);
+        device.WaitForIdle();
+
+        Assert.Same(data, profiler.InstancesBegun[1].Data);
     }
 
     [Fact]
