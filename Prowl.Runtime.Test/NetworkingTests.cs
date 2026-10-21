@@ -345,6 +345,7 @@ public class NetworkingTests : RuntimeTestBase
                 spawned.ReadGuid(); spawned.ReadGuid(); spawned.ReadVarUInt32(); spawned.ReadByte();
                 w.WriteUInt32(spawned.ReadUInt32());
                 w.WriteUInt32(1);
+                w.WriteDouble(1);
                 w.WriteSingle(3); w.WriteSingle(4); w.WriteSingle(5);
                 w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
                 w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
@@ -569,7 +570,7 @@ public class NetworkingTests : RuntimeTestBase
     {
         host.Send(FakePeer.Transform, w =>
         {
-            w.WriteGuid(id); w.WriteUInt32(generation); w.WriteUInt32(tick);
+            w.WriteGuid(id); w.WriteUInt32(generation); w.WriteUInt32(tick); w.WriteDouble(tick / 30.0);
             w.WriteSingle(position); w.WriteSingle(0); w.WriteSingle(0);
             w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
             w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
@@ -640,6 +641,53 @@ public class NetworkingTests : RuntimeTestBase
             Networking.Networking.InterpolationDelay = delay;
             Networking.Networking.Shutdown();
         }
+    }
+
+    [Fact]
+    public void BunchedTransformsKeepTheirSenderSpacing()
+    {
+        GameObject proxy = JoinTransformProxy(out FakePeer host, out NetPeer client);
+        using (host)
+        try
+        {
+            SendProxyTransform(host, client, proxy.Identifier, 1, 1);
+            SendProxyTransform(host, client, proxy.Identifier, 2, 2);
+            SendProxyTransform(host, client, proxy.Identifier, 3, 3);
+            // Receive all three at once, before interpolation can discard samples.
+            Networking.Networking.Receive();
+            var entries = (System.Collections.IDictionary)typeof(Networking.Networking).GetField("s_entries", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+            object entry = entries[proxy.Identifier]!;
+            var samples = (System.Collections.IEnumerable)entry.GetType().GetField("Samples")!.GetValue(entry)!;
+            double[] times = samples.Cast<object>().Select(sample => (double)sample.GetType().GetProperty("Time")!.GetValue(sample)!).ToArray();
+            Assert.Equal(3, times.Length);
+            Assert.InRange(times[2] - times[0], 0.06, 0.07);
+        }
+        finally { Networking.Networking.Shutdown(); }
+    }
+
+    [Theory]
+    [InlineData(float.NaN, false)]
+    [InlineData(float.PositiveInfinity, false)]
+    [InlineData(0, true)]
+    public void InvalidTransformsNeverReachTheScene(float position, bool zeroRotation)
+    {
+        GameObject proxy = JoinTransformProxy(out FakePeer host, out NetPeer client);
+        using (host)
+        try
+        {
+            host.Send(FakePeer.Transform, w =>
+            {
+                w.WriteGuid(proxy.Identifier); w.WriteUInt32(0); w.WriteUInt32(1); w.WriteDouble(1);
+                w.WriteSingle(position); w.WriteSingle(0); w.WriteSingle(0);
+                w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(zeroRotation ? 0 : 1);
+                w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);
+            }, client);
+            Frame([host]);
+            Assert.False(Networking.Networking.IsActive);
+            Assert.True(float.IsFinite(proxy.Transform.LocalPosition.X));
+            Assert.Equal(Quaternion.Identity, proxy.Transform.LocalRotation);
+        }
+        finally { Networking.Networking.Shutdown(); }
     }
 
     // --- Client side -----------------------------------------------------------------------------
@@ -713,6 +761,7 @@ public class NetworkingTests : RuntimeTestBase
                 w.WriteGuid(crateId);
                 w.WriteUInt32(0);
                 w.WriteUInt32(1);
+                w.WriteDouble(1);
                 w.WriteSingle(7); w.WriteSingle(8); w.WriteSingle(9);
                 w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(0); w.WriteSingle(1);
                 w.WriteSingle(1); w.WriteSingle(1); w.WriteSingle(1);

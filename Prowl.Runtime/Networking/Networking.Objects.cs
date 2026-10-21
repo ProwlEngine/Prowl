@@ -318,6 +318,7 @@ public static partial class Networking
         entry.HasSent = false;
         entry.HasReceived = false;
         entry.Samples.Clear();
+        entry.Timeline.Clear();
 
         using NetWriter message = new(32);
         message.WriteGuid(entry.GameObject.Identifier);
@@ -343,6 +344,7 @@ public static partial class Networking
             entry.HasSent = false;
             entry.HasReceived = false;
             entry.Samples.Clear();
+            entry.Timeline.Clear();
         }
     }
 
@@ -374,6 +376,7 @@ public static partial class Networking
     private sealed class NetworkEntry(GameObject gameObject)
     {
         public readonly List<TransformSample> Samples = new();
+        public readonly TransformTimeline Timeline = new();
         public bool HasReceived;
 
         // Transform sync: what this side last sent, and what it has received from whoever controls it.

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 using Prowl.Vector;
 using Prowl.Warp;
@@ -13,10 +14,10 @@ namespace Prowl.Runtime.Networking;
 // scale every tick it changes (and once a second regardless, since these go unreliably). Everyone
 // else buffers them and shows the object InterpolationDelay in the past, blending between updates.
 //
-// A Transform message is a run of [guid][u32 generation][u32 tick][float3 position][quaternion rotation][float3 scale].
+// A Transform message is a run of [guid][u32 generation][u32 tick][f64 sender time][float3 position][quaternion rotation][float3 scale].
 public static partial class Networking
 {
-    private const int TransformRecordSize = 16 + 4 + 4 + 12 + 16 + 12;
+    private const int TransformRecordSize = 16 + 4 + 4 + 8 + 12 + 16 + 12;
     private const int MaxSamples = 32;
     private const double TransformRefreshSeconds = 1;
 
@@ -57,6 +58,7 @@ public static partial class Networking
             message.WriteGuid(go.Identifier);
             message.WriteUInt32(entry.Generation);
             message.WriteUInt32(s_tick);
+            message.WriteDouble(now);
             NetSerializers.WriteFloat3(message, position);
             NetSerializers.WriteQuaternion(message, rotation);
             NetSerializers.WriteFloat3(message, scale);
@@ -103,6 +105,7 @@ public static partial class Networking
             Guid id = reader.ReadGuid();
             uint generation = reader.ReadUInt32();
             uint tick = reader.ReadUInt32();
+            double sentAt = reader.ReadDouble();
             Float3 position = NetSerializers.ReadFloat3(ref reader);
             Quaternion rotation = NetSerializers.ReadQuaternion(ref reader);
             Float3 scale = NetSerializers.ReadFloat3(ref reader);
@@ -125,6 +128,14 @@ public static partial class Networking
                 continue;
             }
 
+            float rotationLength = Quaternion.LengthSquared(rotation);
+            if (!double.IsFinite(sentAt) || sentAt < 0 || !Finite(position) || !Finite(scale) ||
+                !float.IsFinite(rotationLength) || rotationLength < 1e-12f)
+                throw new InvalidDataException("A transform contains invalid coordinates, rotation or time.");
+            rotation = Quaternion.Normalize(rotation);
+            if (!entry.Timeline.Observe(sentAt, now))
+                continue;
+
             entry.HasReceived = true;
             entry.LastReceivedTick = tick;
             if (entry.Samples.Count == MaxSamples)
@@ -132,13 +143,14 @@ public static partial class Networking
                 entry.Samples.RemoveAt(0);
             }
 
-            entry.Samples.Add(new TransformSample(now, position, rotation, scale));
+            entry.Samples.Add(new TransformSample(sentAt, position, rotation, scale));
 
             if (relay != null)
             {
                 relay.WriteGuid(id);
                 relay.WriteUInt32(generation);
                 relay.WriteUInt32(tick);
+                relay.WriteDouble(sentAt);
                 NetSerializers.WriteFloat3(relay, position);
                 NetSerializers.WriteQuaternion(relay, rotation);
                 NetSerializers.WriteFloat3(relay, scale);
@@ -154,7 +166,7 @@ public static partial class Networking
     /// <summary>Moves every object this peer doesn't control to where its controller had it, InterpolationDelay ago.</summary>
     private static void ApplyInterpolation()
     {
-        double renderTime = Now - InterpolationDelay.TotalSeconds;
+        double now = Now;
 
         foreach (NetworkEntry entry in s_entries.Values)
         {
@@ -163,6 +175,7 @@ public static partial class Networking
                 continue;
             }
 
+            double renderTime = entry.Timeline.RenderTime(now, InterpolationDelay.TotalSeconds);
             List<TransformSample> samples = entry.Samples;
 
             // Drop samples nothing will blend from again: everything before the last one at or before renderTime.
@@ -190,6 +203,9 @@ public static partial class Networking
             transform.LocalScale = Maths.Lerp(from.Scale, to.Scale, t);
         }
     }
+
+    private static bool Finite(Float3 value) =>
+        float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
 
     private readonly record struct TransformSample(double Time, Float3 Position, Quaternion Rotation, Float3 Scale);
 }
