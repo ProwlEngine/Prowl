@@ -11,6 +11,8 @@ using Prowl.Runtime;
 using Prowl.Runtime.Networking;
 using Prowl.Runtime.Resources;
 using Prowl.Warp.Transports.Kcp;
+using Prowl.Warp;
+using Prowl.Warp.Transports.Batching;
 
 using Xunit;
 
@@ -58,8 +60,10 @@ public class MultiplayerPlayTests : EditorTestHarness
         Scene.Load(scene);
         Scene.ProcessPendingLoad();
 
-        Networking.Host(new KcpTransport(new KcpTransportOptions { Port = 0 }), "Host");
-        int port = ((KcpTransport)Networking.Session!.Transport).LocalPort;
+        Transport transport = new KcpTransport(new KcpTransportOptions { Port = 0 });
+        if (Networking.Configuration.BatchMessages) transport = new BatchingTransport(transport);
+        Networking.Host(transport, "Host");
+        int port = Networking.Session!.Transport.LocalPort;
 
         ConcurrentQueue<string> logs = new();
         ConcurrentQueue<string> output = new();

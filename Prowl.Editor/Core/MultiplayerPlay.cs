@@ -13,6 +13,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Networking;
 using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
+using Prowl.Warp.Transports.Batching;
 
 using Debug = Prowl.Runtime.Debug;
 
@@ -41,7 +42,7 @@ public static class MultiplayerPlay
     private static int s_launched;
 
     /// <summary>True while another client can be launched: playing, and hosting.</summary>
-    public static bool CanLaunchClient => Application.IsPlaying && Networking.IsHost && Networking.Session?.Transport is KcpTransport;
+    public static bool CanLaunchClient => Application.IsPlaying && Networking.IsHost && Networking.Session?.Transport.LocalPort > 0;
 
     /// <summary>Launches one more client instance into the session the editor is hosting.</summary>
     public static void LaunchClient()
@@ -49,7 +50,7 @@ public static class MultiplayerPlay
         if (!CanLaunchClient || Project.Current is not { } project)
             return;
 
-        int port = ((KcpTransport)Networking.Session!.Transport).LocalPort;
+        int port = Networking.Session!.Transport.LocalPort;
         int index = ++s_launched;
         string name = $"Client {index}";
 
@@ -217,7 +218,10 @@ public static class MultiplayerPlay
 
             assets.InitializeReadOnly();
 
-            NetSession session = Networking.Join(new KcpTransport(Networking.Configuration.CreateKcpOptions()), address, name);
+            NetworkConfiguration configuration = Networking.Configuration;
+            Transport transport = new KcpTransport(configuration.CreateKcpOptions());
+            if (configuration.BatchMessages) transport = new BatchingTransport(transport, configuration.Mtu);
+            NetSession session = Networking.Join(transport, address, name);
             session.Ended += (reason, message) =>
             {
                 Debug.Log($"[Multiplayer] {name} left the session ({reason}).");
