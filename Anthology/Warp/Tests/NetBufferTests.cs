@@ -125,6 +125,16 @@ public class NetBufferTests
         Assert.Throws<InvalidDataException>(() => new NetReader(data).ReadVarUInt32());
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(127)]
+    public void VarUInt64RejectsOverflowInTheTenthByte(byte last)
+    {
+        byte[] data = { 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, last };
+        Assert.Throws<InvalidDataException>(() => new NetReader(data).ReadVarUInt64());
+        Assert.Throws<InvalidDataException>(() => new NetReader(data).ReadVarUInt32());
+    }
+
     [Fact]
     public void ResetReusesTheWriter()
     {

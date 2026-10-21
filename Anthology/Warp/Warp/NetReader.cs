@@ -67,6 +67,8 @@ public ref struct NetReader
         for (int shift = 0; shift < 64; shift += 7)
         {
             byte b = ReadByte();
+            if (shift == 63 && (b & 0xFE) != 0)
+                throw new InvalidDataException("Var-uint exceeds 64 bits.");
             result |= (ulong)(b & 0x7F) << shift;
             if ((b & 0x80) == 0)
                 return result;
