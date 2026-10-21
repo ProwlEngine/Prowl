@@ -19,7 +19,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
             using Transport transport = Networking.Networking.CreateTransport(true);
             Assert.IsType<Prowl.Warp.Transports.Batching.BatchingTransport>(transport);
             using NetSession session = Networking.Networking.Host(transport);
-            Assert.IsType<NetworkWorker>(session.Transport);
+            Assert.IsType<NetworkingThread>(session.Transport);
             Assert.NotEqual(0, session.Transport.LocalPort);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }

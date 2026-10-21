@@ -79,7 +79,7 @@ public static partial class Networking
         Transport sessionTransport = PrepareSessionTransport(transport);
         NetSession session;
         try { session = NetSession.Host(sessionTransport, name, options ?? s_configuration.CreateSessionOptions()); }
-        catch { if (sessionTransport is NetworkWorker worker) worker.Dispose(); throw; }
+        catch { if (sessionTransport is NetworkingThread worker) worker.Dispose(); throw; }
         Attach(session);
 
         s_scene = Scene.Current;
@@ -104,7 +104,7 @@ public static partial class Networking
         Transport sessionTransport = PrepareSessionTransport(transport);
         NetSession session;
         try { session = NetSession.Join(sessionTransport, address, name, token, options ?? s_configuration.CreateSessionOptions()); }
-        catch { if (sessionTransport is NetworkWorker worker) worker.Dispose(); throw; }
+        catch { if (sessionTransport is NetworkingThread worker) worker.Dispose(); throw; }
         Attach(session);
         return session;
     }
@@ -126,8 +126,8 @@ public static partial class Networking
     private static Transport PrepareSessionTransport(Transport transport)
     {
         ArgumentNullException.ThrowIfNull(transport);
-        return s_configuration.UseNetworkThread && transport is not (Prowl.Warp.Transports.Local.LocalTransport or NetworkWorker)
-            ? new NetworkWorker(transport) : transport;
+        return s_configuration.UseNetworkThread && transport is not (Prowl.Warp.Transports.Local.LocalTransport or NetworkingThread)
+            ? new NetworkingThread(transport) : transport;
     }
 
     // --- Called by the game loop -------------------------------------------------------------
@@ -215,7 +215,7 @@ public static partial class Networking
 
             NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, $"Ended: {reason}: {message}");
             Session = null;
-            if (session.Transport is NetworkWorker worker) worker.Dispose();
+            if (session.Transport is NetworkingThread worker) worker.Dispose();
             Scene.OnSceneLoaded -= OnHostSceneLoaded;
             ResetState();
             Debug.Log(message == null

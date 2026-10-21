@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Networking;
 
 /// <summary>Pumps an owned transport on a dedicated worker. Public operations and event polling remain on the caller's thread.</summary>
 /// <remarks>Do not access the inner transport while this wrapper is running. Shutdown joins the worker and permits reuse.</remarks>
-internal sealed class NetworkWorker : Transport
+internal sealed class NetworkingThread : Transport
 {
     private readonly Transport _inner;
     private readonly object _gate = new();
@@ -31,7 +31,7 @@ internal sealed class NetworkWorker : Transport
     private int _localPort;
     private long _outgoingBytes, _incomingBytes;
 
-    public NetworkWorker(Transport inner, int intervalMilliseconds = 2, int maxQueuedMessages = 4096,
+    public NetworkingThread(Transport inner, int intervalMilliseconds = 2, int maxQueuedMessages = 4096,
         long maxQueuedBytes = 64 * 1024 * 1024)
     {
         ArgumentNullException.ThrowIfNull(inner);
@@ -55,7 +55,7 @@ internal sealed class NetworkWorker : Transport
         CheckFailure();
         if (_worker != null) return;
         _stop = false;
-        _worker = new Thread(Run) { IsBackground = true, Name = "Warp networking" };
+        _worker = new Thread(Run) { IsBackground = true, Name = "Prowl networking" };
         _worker.Start();
     }
 
@@ -329,7 +329,7 @@ internal sealed class NetworkWorker : Transport
     private readonly record struct Notice(TransportEventType Type, ThreadedConnection Peer, byte[]? Buffer = null,
         int Length = 0, Delivery Delivery = default, DisconnectReason Reason = default);
 
-    private sealed class ThreadedConnection(NetworkWorker owner, int id, string address, bool outgoing)
+    private sealed class ThreadedConnection(NetworkingThread owner, int id, string address, bool outgoing)
         : Connection(owner, id, address, outgoing)
     {
         public Connection? Inner; // Worker only.

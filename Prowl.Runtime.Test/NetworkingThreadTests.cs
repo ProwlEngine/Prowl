@@ -9,9 +9,9 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-public class NetworkWorkerTests
+public class NetworkingThreadTests
 {
-    private static Transport Wrap(Transport inner) => new NetworkWorker(inner);
+    private static Transport Wrap(Transport inner) => new NetworkingThread(inner);
 
     [Theory]
     [InlineData(false)]
@@ -24,7 +24,7 @@ public class NetworkWorkerTests
             if (encrypted) transport = new Prowl.Warp.Transports.Encryption.EncryptedTransport(transport, new byte[32]);
             return new Prowl.Warp.Transports.Batching.BatchingTransport(transport);
         }
-        using NetworkWorker hostTransport = new(Stack()), clientTransport = new(Stack());
+        using NetworkingThread hostTransport = new(Stack()), clientTransport = new(Stack());
         using NetSession host = NetSession.Host(hostTransport);
         using NetSession client = NetSession.Join(clientTransport, $"127.0.0.1:{hostTransport.LocalPort}", "client");
         WorkerSessionProbe hostProbe = new(host), clientProbe = new(client);
@@ -97,8 +97,8 @@ public class NetworkWorkerTests
     public void ShutdownJoinsWorkerReclaimsQueuesAndAllowsReuse()
     {
         LocalNetwork network = new();
-        using NetworkWorker host = new(new LocalTransport(network, "host"));
-        using NetworkWorker client = new(new LocalTransport(network, "client"));
+        using NetworkingThread host = new(new LocalTransport(network, "host"));
+        using NetworkingThread client = new(new LocalTransport(network, "client"));
         Connection? last = null;
         for (int round = 0; round < 3; round++)
         {
@@ -130,8 +130,8 @@ public class NetworkWorkerTests
     public void OutgoingBudgetClosesConnectionWithoutStoppingWorker()
     {
         LocalNetwork network = new();
-        using NetworkWorker host = new(new LocalTransport(network, "host"));
-        using NetworkWorker client = new(new LocalTransport(network, "client"), maxQueuedBytes: 64);
+        using NetworkingThread host = new(new LocalTransport(network, "host"));
+        using NetworkingThread client = new(new LocalTransport(network, "client"), maxQueuedBytes: 64);
         host.Listen();
         Connection connection = client.Connect("host");
         WorkerPump pump = new(host, client);
@@ -147,7 +147,7 @@ public class NetworkWorkerTests
     public void StalledGameThreadHasBoundedIncomingStorageAndHealthyPeersSurvive()
     {
         LocalNetwork network = new();
-        using NetworkWorker host = new(new LocalTransport(network, "host"), maxQueuedBytes: 64);
+        using NetworkingThread host = new(new LocalTransport(network, "host"), maxQueuedBytes: 64);
         using Transport badClient = Wrap(new LocalTransport(network, "bad"));
         using Transport healthyClient = Wrap(new LocalTransport(network, "healthy"));
         host.Listen();
@@ -169,7 +169,7 @@ public class NetworkWorkerTests
     public void WorkerOwnsTransportPumpingAndFailuresAreReportedToCaller()
     {
         ProbeTransport inner = new();
-        using NetworkWorker transport = new(inner);
+        using NetworkingThread transport = new(inner);
         int caller = Environment.CurrentManagedThreadId;
         transport.Listen();
         Assert.NotEqual(caller, inner.ListenThread);
