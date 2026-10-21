@@ -37,10 +37,18 @@ public sealed class NetSessionOptions
     /// </summary>
     public int MaxMessageSize { get; set; } = 16 * 1024 * 1024;
 
+    /// <summary>Maximum pooled bytes retained by all incomplete incoming messages in this session.</summary>
+    public long MaxReassemblyBytes { get; set; } = 64 * 1024 * 1024;
+
+    /// <summary>Absolute deadline for a fragmented message, unaffected by keepalives or trickled fragments.</summary>
+    public TimeSpan ReassemblyTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
     internal NetSessionOptions CopyValidated()
     {
         if (MaxPeers < 0 || MaxPeers > 65534) throw new ArgumentOutOfRangeException(nameof(MaxPeers));
         if (MaxMessageSize < 64 || MaxMessageSize > 1024 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(MaxMessageSize));
+        if (MaxReassemblyBytes < 64) throw new ArgumentOutOfRangeException(nameof(MaxReassemblyBytes));
+        ValidateDuration(ReassemblyTimeout, nameof(ReassemblyTimeout));
         ValidateDuration(JoinTimeout, nameof(JoinTimeout));
         ValidateDuration(GoodbyeLinger, nameof(GoodbyeLinger));
         return (NetSessionOptions)MemberwiseClone();

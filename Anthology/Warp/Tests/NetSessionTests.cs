@@ -446,6 +446,62 @@ public abstract class NetSessionTests : IDisposable
         Assert.Equal("ResourceLimit", reason);
     }
 
+    private static void SendPartial(Connection connection, int total)
+    {
+        using NetWriter fragment = new();
+        fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        fragment.WriteBool(true);
+        fragment.WriteVarUInt32((uint)total);
+        fragment.WriteByte(1);
+        connection.Send(fragment.WrittenSpan, Delivery.Reliable);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PartialMessagesExpireEvenWhileTheConnectionIsAlive(bool atClient)
+    {
+        NetSessionOptions options = new();
+        options.ReassemblyTimeout = TimeSpan.FromMilliseconds(30);
+        SessionProbe host = Host(options);
+        SessionProbe alice = Join("alice", options);
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        SendPartial(atClient ? host.Session.Peers.Single(p => !p.IsLocal).Connection! : alice.Session.HostPeer!.Connection!, 100_000);
+        SessionProbe.PumpFor(150, host, alice);
+        Assert.Equal(SessionState.Ended, alice.Session.State);
+        Assert.Equal(SessionEndReason.Timeout, atClient ? alice.EndedWith!.Value.Reason : host.PeersLeft.Single().Reason);
+    }
+
+    [Fact]
+    public void ReassemblyHasAnAggregateMemoryBudget()
+    {
+        NetSessionOptions options = new();
+        options.MaxReassemblyBytes = 131072;
+        SessionProbe host = Host(options);
+        SessionProbe alice = Join("alice");
+        SessionProbe bob = Join("bob");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active && bob.Session.State == SessionState.Active, host, alice, bob);
+        SendPartial(alice.Session.HostPeer!.Connection!, 100_000);
+        SendPartial(bob.Session.HostPeer!.Connection!, 100_000);
+        SessionProbe.PumpFor(100, host, alice, bob);
+        Assert.Equal(2, host.Session.Peers.Count);
+        Assert.Equal(SessionEndReason.ResourceLimit, host.PeersLeft.Single().Reason);
+    }
+
+    [Fact]
+    public void PendingJoinsCannotAllocateFragmentBuffers()
+    {
+        SessionProbe host = Host();
+        bool pending = false;
+        host.Session.JoinRequested += _ => pending = true;
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => pending, host, alice);
+        SendPartial(alice.Session.Transport.Connections.Single(), 100_000);
+        SessionProbe.PumpFor(30, host, alice);
+        var remotes = (System.Collections.IDictionary)typeof(NetSession).GetField("_remotes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host.Session)!;
+        Assert.All(remotes.Values.Cast<object>(), remote => Assert.Null(remote.GetType().GetField("Incoming")!.GetValue(remote)));
+    }
+
     [Fact]
     public void LargeReliableMessagesArriveWhole()
     {

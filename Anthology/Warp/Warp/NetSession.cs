@@ -67,6 +67,7 @@ public sealed class NetSession : IDisposable
         public required byte[] Buffer;
         public required int Total;
         public int Filled;
+        public long DeadlineMs;
     }
 
     private enum RemoteStage : byte
@@ -97,6 +98,12 @@ public sealed class NetSession : IDisposable
     private readonly NetWriter _writer = new();
     private readonly NetWriter _fragmentWriter = new();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private long _reassemblyBytes;
+    private sealed class ResourceLimitException(string message) : Exception(message);
+    private sealed class ReassemblyTimeoutException() : Exception("Fragmented message timed out.");
+
+    /// <summary>Pooled bytes currently retained by incomplete incoming messages.</summary>
+    public long PendingReassemblyBytes => _reassemblyBytes;
 
     // Client only.
     private readonly Connection? _hostConnection;
@@ -365,6 +372,11 @@ public sealed class NetSession : IDisposable
             _scratch.AddRange(_remotes);
             foreach ((Connection connection, Remote remote) in _scratch)
             {
+                if (remote.Incoming is { } incoming && now >= incoming.DeadlineMs)
+                {
+                    Goodbye(connection, remote, SessionEndReason.Timeout, "Fragmented message timed out.");
+                    continue;
+                }
                 if (now < remote.DeadlineMs)
                     continue;
 
@@ -381,6 +393,13 @@ public sealed class NetSession : IDisposable
                 }
             }
             _scratch.Clear();
+        }
+        else if (_incomingFromHost is { } incoming && now >= incoming.DeadlineMs)
+        {
+            ReleaseReassembly(ref _incomingFromHost);
+            _goodbyeReason = SessionEndReason.Timeout;
+            _goodbyeMessage = "Fragmented message timed out.";
+            _hostConnection!.Disconnect();
         }
         else if (State == SessionState.Joining && now >= _joinDeadlineMs)
         {
@@ -453,8 +472,9 @@ public sealed class NetSession : IDisposable
             {
                 if (reassembled)
                     throw new InvalidDataException("Nested message fragments are not allowed.");
-                if (delivery == Delivery.Reliable && remote.Stage != RemoteStage.Lingering
-                    && Reassemble(ref remote.Incoming, ref reader, out int length) is { } whole)
+                if (delivery == Delivery.Reliable && remote.Stage is RemoteStage.AwaitingRequest or RemoteStage.Joined
+                    && Reassemble(ref remote.Incoming, ref reader, out int length,
+                        remote.Stage == RemoteStage.Joined ? _options.MaxMessageSize : 8192) is { } whole)
                 {
                     try
                     {
@@ -483,6 +503,10 @@ public sealed class NetSession : IDisposable
 
                 // Pending and lingering clients aren't in the session; drop what they send.
             }
+        }
+        catch (Exception e) when (e is ResourceLimitException or ReassemblyTimeoutException)
+        {
+            Goodbye(connection, remote, e is ResourceLimitException ? SessionEndReason.ResourceLimit : SessionEndReason.Timeout, e.Message);
         }
         catch (Exception e) when (e is EndOfStreamException or InvalidDataException)
         {
@@ -713,6 +737,13 @@ public sealed class NetSession : IDisposable
                     break;
             }
         }
+        catch (Exception e) when (e is ResourceLimitException or ReassemblyTimeoutException)
+        {
+            ReleaseReassembly(ref _incomingFromHost);
+            _goodbyeReason = e is ResourceLimitException ? SessionEndReason.ResourceLimit : SessionEndReason.Timeout;
+            _goodbyeMessage = e.Message;
+            _hostConnection!.Disconnect();
+        }
         catch (Exception e) when (e is EndOfStreamException or InvalidDataException)
         {
             _goodbyeReason ??= SessionEndReason.ProtocolError;
@@ -818,7 +849,7 @@ public sealed class NetSession : IDisposable
     /// Adds a fragment to <paramref name="state"/>. Returns the whole message, rented from
     /// <see cref="ArrayPool{T}.Shared"/>, once its last fragment arrives; null until then.
     /// </summary>
-    private byte[]? Reassemble(ref Reassembly? state, ref NetReader reader, out int length)
+    private byte[]? Reassemble(ref Reassembly? state, ref NetReader reader, out int length, int? maximum = null)
     {
         length = 0;
         if (reader.ReadBool())
@@ -827,16 +858,28 @@ public sealed class NetSession : IDisposable
                 throw new InvalidDataException("A fragmented message started before the previous one finished.");
 
             uint total = reader.ReadVarUInt32();
-            if (total < 2 || total > (uint)_options.MaxMessageSize)
+            if (total < 2 || total > (uint)(maximum ?? _options.MaxMessageSize))
                 throw new InvalidDataException($"A {total} byte message exceeds the {_options.MaxMessageSize} byte limit.");
 
-            state = new Reassembly { Buffer = ArrayPool<byte>.Shared.Rent((int)total), Total = (int)total };
+            if (total > _options.MaxReassemblyBytes - _reassemblyBytes)
+                throw new ResourceLimitException("Session reassembly budget exceeded.");
+            byte[] buffer = ArrayPool<byte>.Shared.Rent((int)total);
+            if (buffer.Length > _options.MaxReassemblyBytes - _reassemblyBytes)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                throw new ResourceLimitException("Session reassembly budget exceeded.");
+            }
+            _reassemblyBytes += buffer.Length;
+            state = new Reassembly { Buffer = buffer, Total = (int)total,
+                DeadlineMs = NowMs + (long)_options.ReassemblyTimeout.TotalMilliseconds };
         }
         else if (state == null)
         {
             throw new InvalidDataException("A message fragment arrived without its start.");
         }
 
+        if (NowMs >= state.DeadlineMs)
+            throw new ReassemblyTimeoutException();
         ReadOnlySpan<byte> chunk = reader.ReadBytes(reader.Remaining);
         if (chunk.Length > state.Total - state.Filled)
             throw new InvalidDataException("Message fragments add up to more than their announced length.");
@@ -847,15 +890,17 @@ public sealed class NetSession : IDisposable
             return null;
 
         byte[] whole = state.Buffer;
+        _reassemblyBytes -= whole.Length;
         length = state.Total;
         state = null;
         return whole;
     }
 
-    private static void ReleaseReassembly(ref Reassembly? state)
+    private void ReleaseReassembly(ref Reassembly? state)
     {
         if (state == null)
             return;
+        _reassemblyBytes -= state.Buffer.Length;
         ArrayPool<byte>.Shared.Return(state.Buffer);
         state.Buffer = Array.Empty<byte>();
         state = null;
