@@ -1647,7 +1647,7 @@ internal sealed partial class FramePipeline : IDisposable
         GraphInstances instances = graph.CreateInstances(data: this);
         _worldInstances.Clear();
         foreach (WorldFrame world in _frameWorlds)
-            _worldInstances[world] = instances.Add(RenderKinds.World, world.World.Id, data: world, name: $"World {world.World.Id}");
+            _worldInstances[world] = instances.Add(RenderKinds.World, world.World.Id, data: world, name: world.World.Name);
         foreach (PlannedInstance planned in _planned)
         {
             _imports.Clear();

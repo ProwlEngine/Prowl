@@ -128,6 +128,9 @@ public struct RenderableDesc
 {
     public GpuMesh Mesh;
 
+    /// <summary>Name debug tools show, or null.</summary>
+    public string? Name;
+
     /// <summary>World transform in double precision, so objects far from the origin keep their precision. Float matrices convert explicitly.</summary>
     public Double4x4 Transform;
 
@@ -504,6 +507,7 @@ public sealed partial class RenderWorld : IDisposable
     private int _count;
     private readonly Stack<int> _free = new();
     private int[] _generation = [];
+    private string?[] _name = [];
     private bool[] _alive = [];
     private GpuMesh?[] _mesh = [];
     private RangeAllocation[] _slice = [];
@@ -533,6 +537,9 @@ public sealed partial class RenderWorld : IDisposable
 
     internal int Id { get; }
 
+    /// <summary>Name debug tools show for the world and its instance.</summary>
+    public string Name { get; set; }
+
     internal RenderWorld(GraphicsDevice device, GraphStore store, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
     {
         _owner = owner;
@@ -540,6 +547,7 @@ public sealed partial class RenderWorld : IDisposable
         FrameFeatures = new FrameFeatureSet(this);
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;
+        Name = $"World {id}";
         Action<RendererError> report = owner != null ? error => owner.Report(error with { Source = error.Source ?? this, Key = $"{error.Key ?? error.Code}.world{id}" }) : _ => { };
         _report = report;
         _tables = new TableHost(device, store, $"Graphite.World{id}");
@@ -573,6 +581,7 @@ public sealed partial class RenderWorld : IDisposable
 
         _generation[index]++;
         _alive[index] = true;
+        _name[index] = desc.Name;
         _mesh[index] = desc.Mesh;
         _transform[index] = desc.Transform;
         _layerMask[index] = desc.LayerMask;
@@ -669,6 +678,15 @@ public sealed partial class RenderWorld : IDisposable
         _custom1[index] = custom1;
         MarkDirty(index, Dirt.Attributes);
     }
+
+    public void SetName(RenderableHandle handle, string? name)
+    {
+        int index = Check(handle);
+        _name[index] = name;
+        MarkDirty(index, Dirt.Attributes);
+    }
+
+    public string? GetName(RenderableHandle handle) => _name[Check(handle)];
 
     public void SetObjectId(RenderableHandle handle, uint objectId)
     {
@@ -908,6 +926,7 @@ public sealed partial class RenderWorld : IDisposable
     {
         _capacity = capacity;
         Array.Resize(ref _generation, capacity);
+        Array.Resize(ref _name, capacity);
         Array.Resize(ref _alive, capacity);
         Array.Resize(ref _mesh, capacity);
         Array.Resize(ref _slice, capacity);
@@ -1013,6 +1032,8 @@ public sealed partial class RenderWorld : IDisposable
 
         public int Capacity { get; private set; }
         public bool[] Alive = [];
+        public int[] Generation = [];
+        public string?[] Name = [];
         public GpuMesh?[] Mesh = [];
         public Double4x4[] Transform = [];
         public uint[] LayerMask = [];
@@ -1150,6 +1171,8 @@ public sealed partial class RenderWorld : IDisposable
 
             bool added = (dirt & Dirt.Added) != 0;
             Alive[index] = true;
+            Generation[index] = host._generation[index];
+            Name[index] = host._name[index];
             Flags[index] = host._flags[index];
             LayerMask[index] = host._layerMask[index];
             SortBias[index] = host._sortBias[index];
@@ -1606,6 +1629,8 @@ public sealed partial class RenderWorld : IDisposable
         {
             Capacity = capacity;
             Array.Resize(ref Alive, capacity);
+            Array.Resize(ref Generation, capacity);
+            Array.Resize(ref Name, capacity);
             Array.Resize(ref Mesh, capacity);
             Array.Resize(ref Transform, capacity);
             Array.Resize(ref LayerMask, capacity);

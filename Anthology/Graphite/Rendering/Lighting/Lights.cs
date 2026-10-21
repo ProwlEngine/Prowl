@@ -72,6 +72,9 @@ public struct LightDesc
 {
     public LightType Type;
 
+    /// <summary>Name debug tools show, or null.</summary>
+    public string? Name;
+
     /// <summary>World position, double so lights far from the origin keep their place.</summary>
     public Double3 Position;
 

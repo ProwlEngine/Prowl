@@ -43,6 +43,9 @@ public sealed class Material : IDisposable
     /// <summary>Dense id, stable for the material's life.</summary>
     public int Id { get; }
 
+    /// <summary>Name debug tools show, or null.</summary>
+    public string? Name { get; set; }
+
     public uint Version { get; private set; }
 
     public bool IsDisposed { get; private set; }
