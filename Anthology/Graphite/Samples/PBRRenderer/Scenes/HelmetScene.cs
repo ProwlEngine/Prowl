@@ -24,6 +24,12 @@ internal sealed class HelmetScene : DemoScene
     private LightDesc _orbitDesc;
     private bool _spotOn = true;
 
+    public bool SpotOn
+    {
+        get => _spotOn;
+        set => _spotOn = value;
+    }
+
     public HelmetScene(Demo demo) : base(demo)
     {
         _model = ModelAsset.Load(demo.Device, Path.Combine(AppContext.BaseDirectory, "Assets", "Models", "DamagedHelmet.glb"), unwrapLightmapUVs: false);

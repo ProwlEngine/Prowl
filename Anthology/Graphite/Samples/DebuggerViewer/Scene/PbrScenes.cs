@@ -31,6 +31,8 @@ internal sealed class PbrScenes : IDisposable
 
     public int Selected { get; private set; }
 
+    public HelmetScene? Helmet => _scene as HelmetScene;
+
     public double Time { get; private set; }
 
     public void Select(int index)
