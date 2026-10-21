@@ -13,10 +13,14 @@ public class ScrollEvent : ElementEvent
     /// <summary> Gets the scroll delta, in logical units. Positive values indicate scrolling down or right; negative values indicate up or left, depending on the scroll direction. </summary>
     public float Delta { get; }
 
+    /// <summary> Horizontal scroll from a tilting wheel or a trackpad. Positive scrolls toward the start (left), like a positive <see cref="Delta"/> scrolls up. Zero for a plain vertical wheel. </summary>
+    public float DeltaX { get; }
+
     /// <summary> Initializes a new ScrollEvent with the specified source element, element rectangle, pointer position, and scroll delta (positive for upward/forward scrolling, negative for downward/backward). </summary>
-    public ScrollEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, float delta)
+    public ScrollEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, float delta, float deltaX = 0f)
         : base(source, elementRect, pointerPos)
     {
         Delta = delta;
+        DeltaX = deltaX;
     }
 }
