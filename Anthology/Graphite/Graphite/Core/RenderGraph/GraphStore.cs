@@ -101,7 +101,7 @@ public sealed class GraphStore : IDisposable
             cmd.CopyBuffer(from, 0, to, 0, Math.Min(from.SizeInBytes, to.SizeInBytes));
         cmd.RecordFullBarrier();
         foreach ((DeviceBuffer from, _) in _resizes)
-            from.Dispose();
+            from.Dispose("its GraphStore copied it into a larger buffer");
         _resizes.Clear();
     }
 

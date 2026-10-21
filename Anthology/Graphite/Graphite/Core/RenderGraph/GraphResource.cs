@@ -22,6 +22,7 @@ internal abstract class HistoryRings<TResource, TDesc>
     public const int RetentionExecutions = 120;
 
     private static readonly string s_expired = $"its GraphStore freed it after {RetentionExecutions} executions without a resolve; resolve persistent resources again each frame they are used";
+    private const string Resized = "its GraphStore replaced it when its description changed";
 
     private sealed class Ring
     {
@@ -127,7 +128,7 @@ internal abstract class HistoryRings<TResource, TDesc>
     protected virtual void Replaced(TResource[] old, TResource[] fresh)
     {
         foreach (TResource resource in old)
-            resource.Dispose();
+            resource.Dispose(Resized);
     }
 
     private static void DisposeRing(Ring ring, string reason)
