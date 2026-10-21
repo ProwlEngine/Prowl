@@ -27,6 +27,9 @@ public abstract class GraphicsResource : IDisposable
     /// </summary>
     public bool IsDisposed { get; private set; }
 
+    /// <summary>Why the resource was disposed when something other than its owner did it, for validation messages.</summary>
+    internal string? DisposeReason { get; private set; }
+
     /// <summary>
     /// Frees device resources. Idempotent.
     /// </summary>
@@ -38,6 +41,15 @@ public abstract class GraphicsResource : IDisposable
         IsDisposed = true;
         OnDisposing();
         DisposeCore();
+    }
+
+    internal void Dispose(string? reason)
+    {
+        if (IsDisposed)
+            return;
+
+        DisposeReason = reason;
+        Dispose();
     }
 
     private protected virtual void NameChanged(string name) { }
