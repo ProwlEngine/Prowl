@@ -121,6 +121,7 @@ public sealed class EncryptedTransport : Transport
             : base(owner, id, inner.Address, inner.IsOutgoing)
         { _owner = owner; InnerConnection = inner; Created = created; }
 
+        public override int GetBatchThreshold(Delivery delivery) => Math.Max(0, InnerConnection.GetBatchThreshold(delivery) - Overhead);
         public override int GetMaxMessageSize(Delivery delivery) => Math.Max(0, InnerConnection.GetMaxMessageSize(delivery) - Overhead);
         public override void Disconnect() => _owner.Close(this, DisconnectReason.Requested);
         public void Start()

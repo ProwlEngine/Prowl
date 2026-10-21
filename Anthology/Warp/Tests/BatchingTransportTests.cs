@@ -7,6 +7,43 @@ namespace Prowl.Warp.Tests;
 
 public class BatchingTransportTests
 {
+    [Fact]
+    public void ReliableBatchingDoesNotQueryUnreliableLimits()
+    {
+        using ReliableOnlyTransport inner = new();
+        using Transport batching = new Prowl.Warp.Transports.Batching.BatchingTransport(inner, 128);
+        Connection peer = batching.Connect("peer");
+        batching.Receive();
+        peer.Send(new byte[] { 42 }, Delivery.Reliable);
+        batching.Flush();
+        Assert.Equal(1, inner.Sends);
+    }
+
+    private sealed class ReliableOnlyTransport : Transport
+    {
+        public int Sends;
+        public override bool IsListening => false;
+        public override void Listen() { }
+        public override Connection Connect(string address)
+        {
+            Connection peer = new ReliableConnection(this);
+            AddConnection(peer);
+            RaiseConnected(peer);
+            return peer;
+        }
+        public override void Receive() { }
+        public override void Flush() { }
+        public override void Shutdown() { }
+        private sealed class ReliableConnection(ReliableOnlyTransport owner) : Connection(owner, 1, "peer", true)
+        {
+            public override TimeSpan RoundTripTime => default;
+            public override int GetMaxMessageSize(Delivery delivery) => delivery == Delivery.Reliable
+                ? 65536 : throw new NotSupportedException();
+            public override void Send(ReadOnlySpan<byte> data, Delivery delivery) { ValidateSend(data, delivery); owner.Sends++; }
+            public override void Disconnect() { }
+        }
+    }
+
     private static Transport Wrap(Transport inner) => new Prowl.Warp.Transports.Batching.BatchingTransport(inner, 128);
 
     private static void Immediate(Connection connection, byte[] data) => connection.Send(data, Delivery.Reliable, SendFlags.Immediate);

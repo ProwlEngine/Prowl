@@ -149,13 +149,14 @@ public sealed class BatchingTransport : Transport
         public override TimeSpan RoundTripTime => Inner.RoundTripTime;
         public override ConnectionStats Stats => Inner.Stats;
         public override int GetMaxMessageSize(Delivery delivery) => Math.Max(0, Inner.GetMaxMessageSize(delivery) - 4);
+        public override int GetBatchThreshold(Delivery delivery) => Math.Max(0, Math.Min(_owner._batchSize, Inner.GetBatchThreshold(delivery)) - 4);
         public override void Disconnect() => Inner.Disconnect();
         public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
         {
             ValidateSend(data, delivery);
             NetWriter batch = delivery == Delivery.Reliable ? _reliable : _unreliable;
             // Stay near a single datagram even when reliable messages may be much larger.
-            int threshold = Math.Min(_owner._batchSize, Inner.GetMaxMessageSize(Delivery.Unreliable));
+            int threshold = Math.Min(_owner._batchSize, Inner.GetBatchThreshold(delivery));
             threshold = Math.Min(threshold, Inner.GetMaxMessageSize(delivery));
             if (batch.Length != 0 && data.Length + 4 > threshold - batch.Length) Flush(delivery);
             if (!Inner.IsConnected) return;

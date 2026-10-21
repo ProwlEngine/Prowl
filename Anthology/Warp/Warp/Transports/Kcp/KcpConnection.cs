@@ -60,6 +60,9 @@ public sealed class KcpConnection : Connection
         return segmentSize * fragments;
     }
 
+    public override int GetBatchThreshold(Delivery delivery) => Math.Min(GetMaxMessageSize(delivery),
+        _options.Mtu - KcpPacket.SessionHeaderSize - (delivery == Delivery.Reliable ? Protocol.Kcp.OVERHEAD : 0));
+
     public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
     {
         ValidateSend(data, delivery);

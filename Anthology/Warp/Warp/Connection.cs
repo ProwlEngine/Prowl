@@ -60,6 +60,9 @@ public abstract class Connection
     /// <summary>The largest message, in bytes, that can be sent with the given <paramref name="delivery"/>.</summary>
     public abstract int GetMaxMessageSize(Delivery delivery);
 
+    /// <summary>Preferred wire batch size, independent of the largest supported message.</summary>
+    public virtual int GetBatchThreshold(Delivery delivery) => Math.Min(1200, GetMaxMessageSize(delivery));
+
     /// <summary>
     /// Sends a message to the remote end. Data is copied, so the span can be reused immediately.
     /// Reliable messages are queued and go out on the transport's next <see cref="Transport.Flush"/>;
