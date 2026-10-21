@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 using Prowl.Runtime.Diagnostics;
 using Prowl.Runtime.Resources;
@@ -223,6 +225,7 @@ public static partial class Networking
 
     private static void ResetState()
     {
+        List<GameObject> networked = s_entries.Values.Select(e => e.GameObject).ToList();
         s_scene = null;
         s_entries.Clear();
         s_index.Clear();
@@ -231,6 +234,11 @@ public static partial class Networking
         s_incoming = null;
         s_incomingRead = false;
         CurrentCaller = null;
+
+        foreach (GameObject go in networked)
+        {
+            ControlChanged(go);
+        }
     }
 
     private enum EngineMessage : ushort

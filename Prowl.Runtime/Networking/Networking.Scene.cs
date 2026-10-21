@@ -62,11 +62,11 @@ public static partial class Networking
     internal static void WriteSnapshot(Scene scene, NetWriter output)
     {
         using FrameStatScope stats = FrameStats.Network.Scope();
-        EchoObject echo;
+        EchoObject echo = null!;
         GameObject.WritingNetworkSnapshot = true;
         try
         {
-            echo = Serializer.Serialize(scene);
+            AsSetUp(() => echo = Serializer.Serialize(scene));
         }
         finally
         {
@@ -139,6 +139,7 @@ public static partial class Networking
             if (FindByIdentifier(id) is GameObject go)
             {
                 s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
+                ControlChanged(go);
             }
         }
 

@@ -186,6 +186,7 @@ public static partial class Networking
         using NetWriter message = new(4096);
         WriteSpawn(go, entry.Owner, entry.Orphaned, message, entry.Generation);
         BroadcastEngine(EngineMessage.Spawn, message.WrittenSpan);
+        ControlChanged(go);
     }
 
     /// <summary>A Spawn message: where the object goes, who owns it, the object itself and its [Sync] values.</summary>
@@ -273,6 +274,7 @@ public static partial class Networking
 
         s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
         IndexTree(go);
+        ControlChanged(go);
     }
 
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>
@@ -341,12 +343,14 @@ public static partial class Networking
             return;
         }
 
+        Float3 velocity = SampledVelocity(entry);
         entry.Owner = owner;
         entry.Generation = NextGeneration();
         entry.HasSent = false;
         entry.HasReceived = false;
         entry.Samples.Clear();
         entry.Timeline.Clear();
+        ControlChanged(entry.GameObject, velocity);
 
         using NetWriter message = new(32);
         message.WriteGuid(entry.GameObject.Identifier);
@@ -367,12 +371,14 @@ public static partial class Networking
         uint generation = reader.ReadUInt32();
         if (s_entries.TryGetValue(id, out NetworkEntry? entry))
         {
+            Float3 velocity = SampledVelocity(entry);
             entry.Owner = owner;
             entry.Generation = generation;
             entry.HasSent = false;
             entry.HasReceived = false;
             entry.Samples.Clear();
             entry.Timeline.Clear();
+            ControlChanged(entry.GameObject, velocity);
         }
     }
 
