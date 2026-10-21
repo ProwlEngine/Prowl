@@ -62,14 +62,18 @@ transport.Flush();                       // send queued data, run timers
 
 Rules worth knowing:
 
-- Nothing happens in the background. Transports do all their work inside `Receive`, `Flush`
-  and `Poll`, on the calling thread. A transport is not thread safe.
+- Transport I/O runs inside `Receive`, `Flush` and `Poll`, on the calling thread. A transport is
+  not thread safe. KCP resolves hostnames asynchronously; pumping applies the result. Disconnect,
+  connection timeout and shutdown cancel pending resolution without waiting for DNS.
 - `TransportEvent.Data` is only valid until the next `Poll`. Copy it to keep it.
 - Every connection gets exactly one `Disconnected` event, including when you close it yourself.
 
 Wrap a transport in `BatchingTransport` to group small messages until `Flush`; message boundaries are
 preserved. Use `SendFlags.Immediate` on a connection or session send to flush without waiting for the
 next regular flush. Reliable ordering still applies. Both ends must agree on whether batching is enabled.
+`Connection.GetBatchThreshold(delivery)` is the preferred batch size, separate from
+`GetMaxMessageSize(delivery)`. Wrappers account for their framing overhead. Reliable batching does
+not require an unreliable channel.
 
 KCP limits each `Receive` call to `MaxDatagramsPerReceive` (1024 by default), including malformed
 packets. `MaxPendingReliableBytes` bounds each peer's reliable send backlog (32 MB by default);
@@ -116,6 +120,13 @@ the sender removed with `ProtocolError`.
 
 ## Foundation contracts
 
+- `Transport.Capabilities` declares availability, supported deliveries and execution requirements.
+  Wrappers preserve backend requirements. Sessions require reliable delivery; callers must check
+  support before choosing other deliveries. Local prefers inline execution; KCP prefers a worker.
+  A backend declaring `CreatingThreadRequired` cannot be moved onto a worker.
+- `NetSession.Host` / `Join` pump the transport inline. `CreateHost` / `CreateClient` leave transport
+  I/O and lifetime to an external driver; feed its events through `ProcessEvent` on the session thread.
+  The Prowl runtime supplies independent `NetworkingContext` instances for concurrent sessions.
 - Configure `KcpTransportOptions` and `NetSessionOptions` before construction. Settings are validated
   and copied, including nested reliability/simulation options. Their `Options` getters return detached
   copies; editing those copies does not change a running transport. Queue limits exposed directly on
@@ -179,6 +190,9 @@ dotnet build Warp/Prowl.Warp.csproj
 $env:WARP_STRESS_ROUNDS = '100'
 dotnet test Tests/Prowl.Warp.Tests.csproj -c Release --filter FullyQualifiedName~RobustnessTests
 ```
+
+Tests run on .NET 8, 9 and 10. The Warp pull-request workflow checks Windows, Linux and macOS and
+builds the package without publishing it.
 
 The suite includes deterministic reader fuzzing against a big-integer oracle (100,000 inputs), malformed
 KCP input fuzzing (50,000 inputs), admission/fragment/parser regressions, queue reclamation, encryption
