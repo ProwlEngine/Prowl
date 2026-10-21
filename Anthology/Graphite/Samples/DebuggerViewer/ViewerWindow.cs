@@ -41,7 +41,7 @@ internal sealed class ViewerWindow : IDisposable
     private DockSpace _dock = null!;
     private RenderProfilerWindows _windows = null!;
     private FontFile _wordmark = null!;
-    private bool _showPreview = true;
+    private ScenePreviewPanel _preview = null!;
     private float _fps;
     private int _frame;
 
@@ -89,6 +89,8 @@ internal sealed class ViewerWindow : IDisposable
         _dock = new DockSpace(DockNode.Leaf());
         _windows = new RenderProfilerWindows(_source, _dock);
         _dock.Root = DockNode.Leaf(_windows.Live);
+        _preview = new ScenePreviewPanel(_renderer, _scene);
+        ShowPreview();
     }
 
     private void LoadFonts()
@@ -158,8 +160,6 @@ internal sealed class ViewerWindow : IDisposable
         {
             TopBar(width);
             _dock.Draw(_paper, gap, top, width - gap * 2, height - top - gap);
-            if (_showPreview)
-                ScenePreview(width, height);
         }
         Origami.EndFrame(_paper);
 
@@ -202,11 +202,11 @@ internal sealed class ViewerWindow : IDisposable
                         int index = i;
                         m.Item((_scene.Selected == i ? "> " : "") + PbrScenes.Names[i], () => _scene.Select(index));
                     }
-                    m.Separator().Item(_showPreview ? "Hide preview" : "Show preview", () => _showPreview = !_showPreview);
                 })
                 .Menu("Window", m => m
                     .Item("Render Profiler", _windows.ShowLive)
-                    .Item("Snapshots", _windows.ShowSnapshots))
+                    .Item("Snapshots", _windows.ShowSnapshots)
+                    .Item("Scene Preview", ShowPreview))
                 .Transparent()
                 .Show();
 
@@ -216,26 +216,37 @@ internal sealed class ViewerWindow : IDisposable
         }
     }
 
-    private void ScenePreview(float width, float height)
+    private void ShowPreview()
     {
-        const float previewWidth = 320f, previewHeight = previewWidth * PbrScenes.Height / PbrScenes.Width, margin = 20f, header = 26f;
-        OrigamiTheme theme = Origami.Current;
-        object? image = _renderer.Preview(_scene.Target.ColorTextures[0]);
-        using (_paper.Column("preview").PositionType(PositionType.SelfDirected)
-            .Position(width - previewWidth - margin, height - previewHeight - header - margin)
-            .Width(previewWidth).Height(previewHeight + header).Rounded(8).BackgroundColor(Color.FromArgb(230, 24, 24, 28)).Enter())
+        FloatingWindow? window = _dock.FloatingWindows.FirstOrDefault(w => Activate(w.Node, _preview));
+        if (window != null)
         {
-            _paper.Box("title").Width(UnitValue.Stretch()).Height(header).Margin(10, 0, 0, 0)
-                .Text($"Scene / {PbrScenes.Names[_scene.Selected]}", theme.Mono!).FontSize(13).TextColor(theme.Ink.C300).IsNotInteractable();
-            using (_paper.Box("image").Width(previewWidth).Height(previewHeight).IsNotInteractable().Enter())
-            {
-                _paper.Draw((canvas, r) =>
-                {
-                    if (image != null)
-                        canvas.DrawImage(image, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, (float)r.Size.Y);
-                });
-            }
+            _dock.FloatingWindows.Remove(window);
+            _dock.FloatingWindows.Add(window);
+            return;
         }
+        if (Activate(_dock.Root, _preview))
+            return;
+
+        const float previewWidth = 480f, margin = 20f;
+        float previewHeight = previewWidth * PbrScenes.Height / PbrScenes.Width + 60f;
+        _dock.FloatingWindows.Add(new FloatingWindow(DockNode.Leaf(_preview),
+            new Float2(_window.Size.X - previewWidth - margin, _window.Size.Y - previewHeight - margin), new Float2(previewWidth, previewHeight)));
+    }
+
+    private static bool Activate(DockNode? node, DockPanel panel)
+    {
+        if (node == null)
+            return false;
+        if (node.IsLeaf)
+        {
+            int index = node.Tabs!.IndexOf(panel);
+            if (index < 0)
+                return false;
+            node.ActiveTabIndex = index;
+            return true;
+        }
+        return Activate(node.ChildA, panel) || Activate(node.ChildB, panel);
     }
 
     private void OnResize(Vector2D<int> size)
