@@ -1244,6 +1244,8 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly Dictionary<WorldFrame, GraphInstance> _worldInstances = new();
     private readonly Dictionary<GraphKind, FeatureShape> _shapes = new();
     private readonly GraphStore _store = new();
+
+    internal GraphStore Store => _store;
     private readonly ReadbackTexturePass _readbackTexture = new();
     private readonly ReadbackBufferPass _readbackBuffer = new();
     private readonly List<GraphImport> _imports = new();

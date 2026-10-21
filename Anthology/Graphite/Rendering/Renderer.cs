@@ -890,7 +890,7 @@ public sealed class Renderer : IDisposable
                 if (_views[v].World == world.World)
                     _cameras.Add(_views[v].Layers[0].Position);
             }
-            world.World.Reflections.Plan(_frameCount, world.World.Lighting, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cameras));
+            world.World.Reflections.Plan(_frameCount, world.World.Lighting, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cameras), _frame.Store, world.World.Id);
             world.World.Reflections.Flush(_uploader, _replaced);
             world.World.Lighting.Update();
             world.World.Lighting.Flush(_uploader, _replaced);

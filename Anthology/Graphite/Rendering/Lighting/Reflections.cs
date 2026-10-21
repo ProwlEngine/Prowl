@@ -264,20 +264,14 @@ internal sealed class WorldReflections : IDisposable
         }
     }
 
-    /// <summary>A prefiltered cube: the sky's or a probe's, its slot and the views filling its mips.</summary>
-    public sealed class Target(Texture cube, uint slot, PrefilterView[] views) : IDisposable
+    /// <summary>A prefiltered cube: the sky's or a probe's, a persistent graph texture with a mip chain, found through its slot.</summary>
+    public sealed class Target(PersistentTexture texture, uint resolution, uint mips)
     {
-        public Texture Cube { get; } = cube;
-        public uint Slot { get; } = slot;
-        public PrefilterView[] Views { get; } = views;
-        public uint Mips => Cube.MipLevels;
-
-        public void Dispose()
-        {
-            foreach (PrefilterView view in Views)
-                view.Target.Dispose();
-            Cube.Dispose();
-        }
+        public PersistentTexture Persistent { get; } = texture;
+        public uint Resolution { get; } = resolution;
+        public uint Mips { get; } = mips;
+        public uint Slot => Persistent.Slot;
+        public Texture Cube => Persistent.Texture!.ColorTextures[0];
     }
 
     // A probe capture in progress: the faces it drew so far into its own scratch cube
@@ -293,6 +287,8 @@ internal sealed class WorldReflections : IDisposable
     private readonly IMaterialResources _resources;
     private readonly Action<RendererError> _report;
     private readonly ReflectionSettings _settings;
+    private GraphStore _store = null!;
+    private int _worldId;
     private bool _skyCaptured;
     private int _capturedFrame;
     private Material? _capturedSky;
@@ -493,8 +489,10 @@ internal sealed class WorldReflections : IDisposable
     /// Decides this frame's sky capture, baked probes and probe captures, and marks what they make ready. cameras are the
     /// positions this world is seen from this frame. Render thread, before the lighting records flush.
     /// </summary>
-    public void Plan(int frame, WorldLighting lighting, ReadOnlySpan<Double3> cameras)
+    public void Plan(int frame, WorldLighting lighting, ReadOnlySpan<Double3> cameras, GraphStore store, int worldId)
     {
+        _store = store;
+        _worldId = worldId;
         if (_views.Length < cameras.Length)
             _views = new Double3[cameras.Length];
         cameras.CopyTo(_views);
@@ -519,14 +517,20 @@ internal sealed class WorldReflections : IDisposable
 
         EnvironmentDesc environment = lighting.Environment;
         uint skyResolution = Pow2(environment.SkyProbeResolution, "sky probe");
-        if (Sky == null || Sky.Cube.Width != skyResolution)
+        if (Sky == null || Sky.Resolution != skyResolution)
         {
-            Sky?.Dispose();
             SamplerSlot = _resources.SamplerSlot(s_sampler);
-            Sky = CreateTarget(skyResolution, MipsFor(skyResolution), "Sky probe");
+            Sky = CreateTarget(skyResolution, MipsFor(skyResolution), SkyId);
             lighting.SetReflections(Sky.Slot, SamplerSlot, Sky.Mips);
             _skyCaptured = false;
         }
+        else
+        {
+            Sky.Persistent.Resolve(_device, _store, _resources, out bool moved);
+            if (moved)
+                lighting.SetReflections(Sky.Slot, SamplerSlot, Sky.Mips);
+        }
+        ResolveProbeTargets();
         PlanSky(frame, lighting);
         PlanBaked();
         PlanCaptures(frame);
@@ -548,10 +552,10 @@ internal sealed class WorldReflections : IDisposable
     {
         uint bytes = 0;
         for (int mip = 0; mip < target.Mips; mip++)
-            bytes += 6 * FaceBytes(target.Cube.Width, mip, target.Cube.Format);
+            bytes += 6 * FaceBytes(target.Resolution, mip, _settings.Format);
         DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(bytes, BufferUsage.Staging));
         buffer.Name = "Reflection probe bake";
-        _pendingBakes.Add(new PendingBake { Index = index, Generation = _generations[index], Buffer = buffer, Done = done, Size = (int)target.Cube.Width, Mips = (int)target.Mips });
+        _pendingBakes.Add(new PendingBake { Index = index, Generation = _generations[index], Buffer = buffer, Done = done, Size = (int)target.Resolution, Mips = (int)target.Mips });
         return buffer;
     }
 
@@ -601,9 +605,6 @@ internal sealed class WorldReflections : IDisposable
 
     public void Dispose()
     {
-        Sky?.Dispose();
-        foreach (Target? target in _targets)
-            target?.Dispose();
         foreach (Scratch scratch in _scratchAll)
             scratch.Dispose();
         foreach (PendingBake bake in _pendingBakes)
@@ -629,7 +630,7 @@ internal sealed class WorldReflections : IDisposable
             return;
         }
 
-        SkyScratch = RentScratch(Sky!.Cube.Width);
+        SkyScratch = RentScratch(Sky!.Resolution);
         _scratchUsed.Add(SkyScratch);
         _skyCaptured = true;
         _capturedFrame = frame;
@@ -769,7 +770,7 @@ internal sealed class WorldReflections : IDisposable
     private Job StartJob(int index)
     {
         EnsureRealtimeTarget(index);
-        Job job = new() { Index = index, Scratch = RentScratch(_targets[index]!.Cube.Width) };
+        Job job = new() { Index = index, Scratch = RentScratch(_targets[index]!.Resolution) };
         _jobs.Add(job);
         _working[index] = true;
         return job;
@@ -844,30 +845,36 @@ internal sealed class WorldReflections : IDisposable
     private void EnsureRealtimeTarget(int index)
     {
         uint resolution = Pow2(_probes[index].Resolution, "reflection probe");
-        if (_targets[index] is { } target && target.Cube.Width == resolution)
+        if (_targets[index] is { } target && target.Resolution == resolution)
             return;
         ReleaseTarget(index);
-        _targets[index] = CreateTarget(resolution, MipsFor(resolution), "Reflection probe");
+        _targets[index] = CreateTarget(resolution, MipsFor(resolution), RenderResourceID.Intern($"Graphite.World{_worldId}/Probe{index}"));
     }
 
-    private Target CreateTarget(uint resolution, uint mips, string name)
+    private RenderResourceID SkyId => RenderResourceID.Intern($"Graphite.World{_worldId}/Sky");
+
+    private Target CreateTarget(uint resolution, uint mips, RenderResourceID id)
     {
-        Texture cube = _device.ResourceFactory.CreateTexture(TextureDescription.CreateCube(resolution, mips, 1, _settings.Format, TextureUsage.Sampled | TextureUsage.RenderTarget));
-        cube.Name = name;
-        PrefilterView[] views = new PrefilterView[mips];
-        for (uint mip = 0; mip < mips; mip++)
+        GraphTextureDesc description = GraphTextureDesc.Sized((int)resolution, (int)resolution, false, _settings.Format) with { Cube = true, MipLevels = mips };
+        PersistentTexture texture = new(id, description, new GraphInstanceKey(RenderKinds.World, _worldId), MaterialPropertyType.TextureCube);
+        texture.Resolve(_device, _store, _resources, out _);
+        return new Target(texture, resolution, mips);
+    }
+
+    // A texture the store replaced shows its new slot, and a captured probe repacks so its record holds it
+    private void ResolveProbeTargets()
+    {
+        for (int i = 0; i < _targets.Length; i++)
         {
-            FramebufferDescription description = new(null, [new FramebufferAttachment(cube, 0, mip)]) { ViewCount = 6 };
-            views[mip] = new PrefilterView(_device.ResourceFactory.CreateFramebuffer(description), (int)mip, (int)mips, Math.Max(resolution >> (int)mip, 1));
+            if (_targets[i] is not { } target)
+                continue;
+            target.Persistent.Resolve(_device, _store, _resources, out bool moved);
+            if (moved && _captured[i])
+                Regions.Set(i, _probes[i].Position, Radius(_probes[i]), true);
         }
-        return new Target(cube, _resources.TextureSlot(cube, MaterialPropertyType.TextureCube, "black"), views);
     }
 
-    private void ReleaseTarget(int index)
-    {
-        _targets[index]?.Dispose();
-        _targets[index] = null;
-    }
+    private void ReleaseTarget(int index) => _targets[index] = null;
 
     private void MarkCaptured(int index, int frame)
     {
