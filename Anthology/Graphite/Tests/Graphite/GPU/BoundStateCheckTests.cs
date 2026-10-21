@@ -114,6 +114,20 @@ public abstract class BoundStateCheckTests<T> : GraphicsDeviceTestBase<T> where 
         DeviceBuffer indirect = RF.CreateBuffer(new BufferDescription(16, BufferUsage.IndirectBuffer));
         AssertThrowsWithValidationDisabled(new LambdaComputePass(cmd => cmd.DispatchIndirect(indirect, 0)), "ComputeProgram must be set");
     }
+
+    [Fact]
+    public void Commands_UsingADisposedBuffer_Throw_NamingIt()
+    {
+        DeviceBuffer source = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        source.Name = "DisposedSource";
+        using DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        source.Dispose();
+
+        using RenderGraph graph = TestViews.Build([new LambdaComputePass(cmd => cmd.CopyBuffer(source, 0, destination, 0, 16))]);
+        RenderException ex = Assert.Throws<RenderException>(() => GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(4, 4))));
+        Assert.Contains("'DisposedSource', which was disposed", ex.Message);
+        GD.WaitForIdle();
+    }
 }
 
 #if TEST_VULKAN
