@@ -416,8 +416,12 @@ public abstract class NetSessionTests : IDisposable
             incoming = remote.GetType().GetField("Incoming")!.GetValue(remote);
         }
         Assert.NotNull(incoming);
+        Assert.True(receiver.PendingReassemblyBytes >= 100_000);
         receiver.Shutdown();
-        Assert.Empty((byte[])incoming!.GetType().GetField("Buffer")!.GetValue(incoming)!);
+        Assert.Equal(0, receiver.PendingReassemblyBytes);
+        Assert.Null(toClient
+            ? typeof(NetSession).GetField("_incomingFromHost", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(receiver)
+            : remote!.GetType().GetField("Incoming")!.GetValue(remote));
     }
 
     [Theory]

@@ -65,7 +65,7 @@ public sealed class NetSession : IDisposable
     }
 
     /// <summary>A fragmented message being put back together.</summary>
-    private sealed class Reassembly
+    private struct Reassembly
     {
         public required byte[] Buffer;
         public required int Total;
@@ -936,20 +936,24 @@ public sealed class NetSession : IDisposable
             throw new InvalidDataException("A message fragment arrived without its start.");
         }
 
-        if (NowMs >= state.DeadlineMs)
+        Reassembly current = state.Value;
+        if (NowMs >= current.DeadlineMs)
             throw new ReassemblyTimeoutException();
         ReadOnlySpan<byte> chunk = reader.ReadBytes(reader.Remaining);
-        if (chunk.Length > state.Total - state.Filled)
+        if (chunk.Length > current.Total - current.Filled)
             throw new InvalidDataException("Message fragments add up to more than their announced length.");
 
-        chunk.CopyTo(state.Buffer.AsSpan(state.Filled));
-        state.Filled += chunk.Length;
-        if (state.Filled < state.Total)
+        chunk.CopyTo(current.Buffer.AsSpan(current.Filled));
+        current.Filled += chunk.Length;
+        if (current.Filled < current.Total)
+        {
+            state = current;
             return null;
+        }
 
-        byte[] whole = state.Buffer;
+        byte[] whole = current.Buffer;
         _reassemblyBytes -= whole.Length;
-        length = state.Total;
+        length = current.Total;
         state = null;
         return whole;
     }
@@ -958,9 +962,8 @@ public sealed class NetSession : IDisposable
     {
         if (state == null)
             return;
-        _reassemblyBytes -= state.Buffer.Length;
-        ArrayPool<byte>.Shared.Return(state.Buffer);
-        state.Buffer = Array.Empty<byte>();
+        _reassemblyBytes -= state.Value.Buffer.Length;
+        ArrayPool<byte>.Shared.Return(state.Value.Buffer);
         state = null;
     }
 
