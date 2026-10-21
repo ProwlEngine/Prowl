@@ -679,6 +679,9 @@ internal sealed class CameraFrame : IDisposable
     public bool SceneColorUsed;
     private TextureView? _sceneColorView;
 
+    /// <summary>The cube a capture view presents into.</summary>
+    public RenderTexture? CaptureCube;
+
     /// <summary>The persistent screen lighting a producer in the view's shape writes, resolved before the graph runs.</summary>
     public RenderTexture? ScreenVisibility, ScreenIrradiance;
     private (RenderTexture? Texture, TextureView? View) _visibilityView, _irradianceView;
@@ -1181,14 +1184,6 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     public readonly List<CameraFrame> ProbeFaceCameras = new();
     public int ProbeCamerasUsed, ProbeFaceCamerasUsed;
 
-    /// <summary>The pipeline projecting the sky onto harmonics for the sky ambient mode.</summary>
-    public RenderPipeline? SkyAmbient;
-    public SkyAmbientPass? SkyAmbientPass;
-
-    /// <summary>Filter pipelines, one per filling of a probe layer this frame, reused across frames.</summary>
-    public readonly List<(RenderPipeline Pipeline, PrefilterPass Pass)> Filters = new();
-    public int FiltersUsed;
-
     /// <summary>A new capture view id, below any a host may use.</summary>
     public static int NextCaptureViewId() => int.MinValue + Interlocked.Increment(ref s_nextCapture);
 
@@ -1206,14 +1201,11 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     {
         foreach (CameraFrame camera in Captures())
             camera.Dispose();
-        foreach ((RenderPipeline pipeline, _) in Filters)
-            pipeline.Dispose();
-        SkyAmbient?.Dispose();
         Shadows?.Dispose();
     }
 }
 
-internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, CameraFrame Camera);
+internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, object Data);
 
 /// <summary>
 /// The frame's pipelines: the FrameStart pipeline uploading every change, then one camera pipeline per view, all in
@@ -1244,6 +1236,7 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly Dictionary<WorldFrame, GraphInstance> _worldInstances = new();
     private readonly Dictionary<GraphKind, FeatureShape> _shapes = new();
     private readonly GraphStore _store = new();
+    private readonly IPass[] _fillPasses;
 
     internal GraphStore Store => _store;
     private readonly ReadbackTexturePass _readbackTexture = new();
@@ -1320,6 +1313,7 @@ internal sealed partial class FramePipeline : IDisposable
         BlendAttachmentDescription untouched = BlendAttachmentDescription.OverrideBlend with { ColorWriteMask = ColorWriteMask.None };
         CopyBackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.CopyBack, "Graphite/CopyBack",
             blend: new BlendStateDescription(default, BlendAttachmentDescription.OverrideBlend, untouched, untouched));
+        _fillPasses = CaptureFillPasses.Of(this);
         PrefilterProgram = Fullscreen(device, compiler, "Internal/Prefilter.glsl");
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl");
         TrilinearClamp = device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
@@ -1474,7 +1468,6 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in allWorlds)
         {
             _frameWorlds.Add(world);
-            world.FiltersUsed = 0;
             world.ProbeCamerasUsed = 0;
             world.ProbeFaceCamerasUsed = 0;
             UpdateSkyProgram(world);
@@ -1595,7 +1588,7 @@ internal sealed partial class FramePipeline : IDisposable
         UpdateSceneColor(camera, shape, width, height);
         camera.View.PixelWidth = width;
         camera.View.PixelHeight = height;
-        _planned.Add(new PlannedInstance(shape.Kind, view.ViewId, world, new GraphExtent(width, height), view.Target, camera));
+        _planned.Add(new PlannedInstance(shape.Kind, view.ViewId, world, new GraphExtent(width, height), shape.Captures ? null : view.Target, camera));
     }
 
     private void ReleaseStaleShapes()
@@ -1636,7 +1629,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private void BuildGraph()
     {
-        List<IPass> passes = [_upload, _probes, _deform, _readbackTexture, _readbackBuffer];
+        List<IPass> passes = [_upload, _probes, _deform, _readbackTexture, _readbackBuffer, .. _fillPasses];
         List<GraphKind> kinds = [];
         foreach (FeatureShape shape in _shapes.Values)
         {
@@ -1670,11 +1663,23 @@ internal sealed partial class FramePipeline : IDisposable
             _worldInstances[world] = instances.Add(RenderKinds.World, world.World.Id, data: world, name: $"World {world.World.Id}");
         foreach (PlannedInstance planned in _planned)
         {
-            FeatureShape shape = _shapes[planned.Kind];
             _imports.Clear();
-            for (int i = 0; i < planned.Camera.HostBuffers.Length; i++)
-                _imports.Add(GraphImport.Of(shape.HostId(i), planned.Camera.HostBuffers[i]));
-            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Camera, $"View {planned.Id}", _imports);
+            if (planned.Data is CameraFrame camera)
+            {
+                FeatureShape shape = _shapes[planned.Kind];
+                for (int i = 0; i < camera.HostBuffers.Length; i++)
+                    _imports.Add(GraphImport.Of(shape.HostId(i), camera.HostBuffers[i]));
+                if (camera.CaptureCube != null)
+                    _imports.Add(GraphImport.Of(shape.CaptureId, camera.CaptureCube));
+            }
+            else if (planned.Data is CaptureFill fill)
+            {
+                _imports.Add(GraphImport.Of(RenderKinds.FillSource, fill.Source));
+                _imports.Add(GraphImport.Of(RenderKinds.FillTarget, fill.Target.Persistent.Texture!));
+                if (fill.SkyAmbient != null)
+                    _imports.Add(GraphImport.Of(RenderKinds.FillAmbient, fill.SkyAmbient));
+            }
+            instances.Add(planned.Kind, planned.Id, _worldInstances[planned.World], planned.Extent, planned.Target, planned.Data, $"{planned.Kind.Name} {planned.Id}", _imports);
         }
         for (int i = 0; i < _readback.Requests.Count; i++)
         {
@@ -1833,7 +1838,6 @@ internal sealed partial class FramePipeline : IDisposable
         world.SkyProgram = program;
     }
 
-    // Draws only the sky into the six faces of the world's capture cube, then filters it into the sky probe's mips
     private void CaptureSky(WorldFrame world, in FrameTime time)
     {
         WorldReflections reflections = world.World.Reflections;
@@ -1855,39 +1859,17 @@ internal sealed partial class FramePipeline : IDisposable
         };
         for (int face = 0; face < 6; face++)
             capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = WorldReflections.FaceProjection };
+        world.SkyCamera.CaptureCube = scratch.AllTexture;
         Draw(world.SkyCamera, capture, [], world, time);
-        Fill(world, reflections.Sky!, scratch.Cube, null);
-
-        if (world.SkyAmbient == null)
-        {
-            world.SkyAmbientPass = new SkyAmbientPass(SkyAmbientProgram, TrilinearClamp);
-            world.SkyAmbient = new RenderPipeline { Name = "Graphite.SkyAmbient" };
-            world.SkyAmbient.SetPasses([world.SkyAmbientPass]);
-        }
-        world.SkyAmbientPass!.Source = scratch.Cube;
-        world.SkyAmbientPass.Output = reflections.SkyAmbient;
-        _dispatches.Add(new GraphDispatch(world.SkyAmbient, _frameStartViews));
+        Fill(world, reflections.Sky!, scratch, null, reflections.SkyAmbient);
     }
 
-    // Filters a captured cube into every mip of a prefiltered one
-    private void Fill(WorldFrame world, WorldReflections.Target target, Texture source, DeviceBuffer? readback)
+    private void Fill(WorldFrame world, WorldReflections.Target target, WorldReflections.Scratch scratch, DeviceBuffer? readback, DeviceBuffer? ambient)
     {
-        if (world.FiltersUsed == world.Filters.Count)
-        {
-            PrefilterPass created = new(PrefilterProgram, TrilinearClamp, world.World.Reflections.PrefilterSamples);
-            RenderPipeline pipeline = new() { Name = "Graphite.Prefilter" };
-            pipeline.SetPasses([created]);
-            world.Filters.Add((pipeline, created));
-        }
-        (RenderPipeline filter, PrefilterPass pass) = world.Filters[world.FiltersUsed++];
-        WorldReflections reflections = world.World.Reflections;
-        pass.Source = source;
-        pass.Destination = target.Cube;
-        pass.Readback = readback;
-        _dispatches.Add(new GraphDispatch(filter, target.Views));
+        CaptureFill fill = new() { Source = scratch.AllTexture, Target = target, Samples = world.World.Reflections.PrefilterSamples, Readback = readback, SkyAmbient = ambient };
+        _planned.Add(new PlannedInstance(RenderKinds.CaptureFill, _planned.Count, world, new GraphExtent(target.Resolution, target.Resolution), null, fill));
     }
 
-    // Draws the world around a probe into its capture cube, all faces or the next one, then fills its layer
     private void CaptureProbe(WorldFrame world, ProbeCapture work, in FrameTime time)
     {
         WorldReflections reflections = world.World.Reflections;
@@ -1900,7 +1882,7 @@ internal sealed partial class FramePipeline : IDisposable
         int faces = work.EndFace - work.FirstFace;
         if (faces == 6)
         {
-            CameraFrame camera = Pooled(world.ProbeCameras, ref world.ProbeCamerasUsed, scratch.Cube.Width);
+            CameraFrame camera = Pooled(world.ProbeCameras, ref world.ProbeCamerasUsed);
             ViewDesc capture = new()
             {
                 World = world.World,
@@ -1915,11 +1897,12 @@ internal sealed partial class FramePipeline : IDisposable
             };
             for (int face = 0; face < 6; face++)
                 capture.Layers[face] = new ViewLayer { View = WorldReflections.FaceView(face), Projection = projection, Position = probe.Position };
+            camera.CaptureCube = scratch.AllTexture;
             Draw(camera, capture, [], world, time);
         }
         else if (faces == 1)
         {
-            CameraFrame camera = Pooled(world.ProbeFaceCameras, ref world.ProbeFaceCamerasUsed, scratch.Cube.Width);
+            CameraFrame camera = Pooled(world.ProbeFaceCameras, ref world.ProbeFaceCamerasUsed);
             ViewDesc capture = new()
             {
                 World = world.World,
@@ -1932,11 +1915,12 @@ internal sealed partial class FramePipeline : IDisposable
                 FarDistance = probe.FarClip,
             };
             capture.Layers[0] = new ViewLayer { View = WorldReflections.FaceView(work.FirstFace), Projection = projection, Position = probe.Position };
+            camera.CaptureCube = scratch.FaceTextures[work.FirstFace];
             Draw(camera, capture, [], world, time);
         }
 
         if (work.Prefilter)
-            Fill(world, target, scratch.Cube, work.Readback);
+            Fill(world, target, scratch, work.Readback, null);
     }
 
     private CameraFrame Capturing()
@@ -1946,26 +1930,10 @@ internal sealed partial class FramePipeline : IDisposable
         return camera;
     }
 
-    // The next capture camera of a pool this frame, one last drawing at this resolution if any so its textures stay
-    private CameraFrame Pooled(List<CameraFrame> pool, ref int used, uint resolution)
+    private CameraFrame Pooled(List<CameraFrame> pool, ref int used)
     {
-        int pick = -1;
-        for (int i = used; i < pool.Count && pick < 0; i++)
-        {
-            if (pool[i].Chain.Scene.Texture?.Desc.Width == resolution)
-                pick = i;
-        }
-        for (int i = used; i < pool.Count && pick < 0; i++)
-        {
-            if (pool[i].Chain.Scene.Texture == null)
-                pick = i;
-        }
-        if (pick < 0)
-        {
+        if (used == pool.Count)
             pool.Add(Capturing());
-            pick = pool.Count - 1;
-        }
-        (pool[used], pool[pick]) = (pool[pick], pool[used]);
         return pool[used++];
     }
 
@@ -1976,11 +1944,8 @@ internal sealed partial class FramePipeline : IDisposable
         {
             foreach (CameraFrame camera in world.Captures())
             {
-                if (_frame - camera.LastFrame > StaleViewFrames && camera.Chain.Scene.Texture != null)
-                {
-                    camera.Chain.Release();
-                    camera.Rebuild = true;
-                }
+                if (_frame - camera.LastFrame > StaleViewFrames)
+                    camera.ReleaseSceneColor();
             }
         }
     }
