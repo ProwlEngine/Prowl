@@ -25,6 +25,9 @@ namespace Prowl.Runtime.Networking;
 ///     object really is, with references and cycles kept (see <see cref="NetTypeSerializer" />). Any other type can be given one with
 ///     <see cref="Register" />. Anything else throws <see cref="NotSupportedException" /> on first use.
 /// </remarks>
+[BuiltInTypes(typeof(bool), typeof(byte), typeof(sbyte), typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long),
+    typeof(ulong), typeof(float), typeof(double), typeof(string), typeof(Guid), typeof(Float2), typeof(Float3), typeof(Float4),
+    typeof(Double2), typeof(Double3), typeof(Int2), typeof(Int3), typeof(Quaternion), typeof(Color))]
 public static class NetSerializer<T>
 {
     public delegate T Reader(ref NetReader reader);
@@ -86,6 +89,17 @@ public static class NetSerializer<T>
             $"{typeof(T)} can't be sent over the network. Sync and RPC values must be one of the types listed on NetSerializer<T>, or a game script's own struct or class.");
 }
 
+/// <summary>
+///     The types <see cref="NetSerializer{T}" /> writes itself, besides enums and engine objects. The script
+///     compiler reads it to tell what scripts may send without loading the engine; keep it the switch below.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class)]
+internal sealed class BuiltInTypesAttribute(params Type[] types) : Attribute
+{
+    public Type[] Types { get; } = types;
+}
+
+// Each type here is listed in [BuiltInTypes] on NetSerializer<T>.
 internal static class NetSerializers
 {
     public static (NetSerializer<T>.Writer?, NetSerializer<T>.Reader?) Create<T>()

@@ -16,6 +16,7 @@
     <InternalsVisibleTo Include="Prowl.Runtime.Test" />
     <InternalsVisibleTo Include="Prowl.Editor" />
     <InternalsVisibleTo Include="Prowl.Editor.Test" />
+    <InternalsVisibleTo Include="Prowl.CodeGen.Test" />
   </ItemGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

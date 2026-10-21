@@ -14,6 +14,7 @@ using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.Text;
 
 using Prowl.Analyzers;
+using Prowl.CodeGen;
 using Prowl.Ember.Analyzers;
 
 using CompilationUnit = Prowl.Editor.Projects.Scripting.ScriptCompiler.CompilationUnit;
@@ -136,20 +137,21 @@ internal static class RoslynScriptBackend
                 }
             }
 
-            // 4. Bind the scripts as written, reusing the prior binding, and generate their networking from it:
-            //    [Sync] and RPC members rewritten in place, plus one file of serializers for the game's own types
-            //    they send. A file whose rewrite is unchanged comes back as the very same tree.
+            // 4. Bind the scripts as written, reusing the prior binding, and run script code generation over them
+            //    (Prowl.CodeGen, which dotnet build runs too): scripts rewritten in place, plus files of its own.
+            //    A file whose result is unchanged comes back as the very same tree.
             string[] files = [.. parsed.Keys];
             CSharpCompilation source = Reuse(state?.Source, state?.Parsed, parsed, state, references, unit);
-            NetworkCodeGen.Result network = NetworkCodeGen.Generate(source, [.. files.Select(f => parsed[f].Tree)]);
+            ScriptCodeGen.Result generated = ScriptCodeGen.Run(source, [.. files.Select(f => parsed[f].Tree)]);
             var newTrees = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < files.Length; i++)
-                newTrees[files[i]] = (parsed[files[i]].Hash, network.Trees[i]);
-            if (network.Serializers is { } serializers)
+                newTrees[files[i]] = (parsed[files[i]].Hash, generated.Trees[i]);
+            for (int i = 0; i < generated.Added.Count; i++)
             {
-                bool same = state != null && state.Trees.TryGetValue(SerializersPath, out (ulong Hash, SyntaxTree Tree) previous)
-                    && previous.Tree.GetText().ContentEquals(serializers.GetText());
-                newTrees[SerializersPath] = same ? state!.Trees[SerializersPath] : (0, serializers);
+                string key = $"<ProwlCodeGen {i}: {generated.Added[i].FilePath}>";
+                bool same = state != null && state.Trees.TryGetValue(key, out (ulong Hash, SyntaxTree Tree) previous)
+                    && previous.Tree.GetText().ContentEquals(generated.Added[i].GetText());
+                newTrees[key] = same ? state!.Trees[key] : (0, generated.Added[i]);
             }
 
             // 5. What compiles is the rewrite, again swapping only the trees that changed.
@@ -164,7 +166,7 @@ internal static class RoslynScriptBackend
                 .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning)
                 .ToList();
             diagnostics.AddRange(RunScriptAnalyzers(compilation));
-            diagnostics.AddRange(network.Diagnostics);
+            diagnostics.AddRange(generated.Diagnostics);
 
             // An analyzer reporting an error is describing something that will not survive being run,
             // so it fails the compile the way the compiler's own errors do. Loading the assembly anyway
@@ -203,9 +205,6 @@ internal static class RoslynScriptBackend
             };
         }
     }
-
-    // Where the generated network serializers sit among a unit's trees. Not a file on disk.
-    private const string SerializersPath = "<ProwlNetSerializers>";
 
     /// <summary>
     /// <paramref name="previous"/> with its trees swapped for <paramref name="trees"/> where they differ, so Roslyn

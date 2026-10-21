@@ -75,6 +75,16 @@ public class NetTypeSerializerTests
         return back;
     }
 
+    /// <summary>The script compiler judges what scripts may send by [BuiltInTypes], so each type it lists must really be built in.</summary>
+    [Fact]
+    public void EveryTypeListedAsBuiltInIsSupported()
+    {
+        Type[] listed = typeof(NetSerializer<>).GetCustomAttributes(typeof(BuiltInTypesAttribute), false).Cast<BuiltInTypesAttribute>().Single().Types;
+        Assert.NotEmpty(listed);
+        foreach (Type type in listed)
+            Assert.True((bool)typeof(NetSerializer<>).MakeGenericType(type).GetProperty("IsSupported")!.GetValue(null)!, type.Name);
+    }
+
     [Fact]
     public void AValueArrivesAsWhatItReallyIs()
     {
