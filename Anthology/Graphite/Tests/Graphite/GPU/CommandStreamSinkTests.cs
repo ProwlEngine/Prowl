@@ -247,12 +247,12 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
 
         string[] expected =
         [
-            "BeginPass:SinkPass",
+            "BeginPass:SinkPass", "PushMarker:SinkPass",
             "SetFramebuffer:1:False:Clear", "SetViewport", "SetScissor",
             "SetStencilReference", "SetBlendConstants",
             "Props:2", "SetPipeline:Graphics", "BindVertexBuffers", "Draw:4:1:0:0",
             "SetPipeline:Compute", "Props:1", "Dispatch:1:1:1",
-            "EndPass",
+            "PopMarker", "EndPass",
         ];
         Assert.Equal(expected, sink.Log);
         Assert.Same(program, sink.Pipelines[0].Program);
@@ -482,7 +482,7 @@ public abstract class CommandStreamSinkTests<T> : GraphicsDeviceTestBase<T> wher
         GD.DispatchGraph(graph, TestViews.Single(graph, new GraphExtent(32, 32)), sink);
         GD.WaitForIdle();
 
-        Assert.Equal(["BeginPass:SinkPass", "EndPass"], sink.Log);
+        Assert.Equal(["BeginPass:SinkPass", "PushMarker:SinkPass", "PopMarker", "EndPass"], sink.Log);
     }
 
     [SkippableFact]
