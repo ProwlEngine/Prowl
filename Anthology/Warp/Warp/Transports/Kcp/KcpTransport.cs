@@ -70,6 +70,7 @@ public sealed class KcpTransport : Transport
     /// <exception cref="SocketException">The port is in use.</exception>
     public override void Listen()
     {
+        ThrowIfDisposed();
         if (_listening)
             return;
 
@@ -83,6 +84,7 @@ public sealed class KcpTransport : Transport
 
     public override Connection Connect(string address)
     {
+        ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(address);
         _options.Validate();
 
@@ -113,6 +115,7 @@ public sealed class KcpTransport : Transport
 
     public override void Receive()
     {
+        ThrowIfDisposed();
         foreach (KcpConnection connection in _unreachable)
             RaiseDisconnected(connection, DisconnectReason.Unreachable);
         _unreachable.Clear();
@@ -150,6 +153,7 @@ public sealed class KcpTransport : Transport
 
     public override void Flush()
     {
+        ThrowIfDisposed();
         long now = NowMs;
 
         _scratch.AddRange(_byAddress.Values);

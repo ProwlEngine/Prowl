@@ -57,6 +57,7 @@ public sealed class LocalTransport : Transport
     /// <exception cref="InvalidOperationException">Another transport already listens at <see cref="Address"/>.</exception>
     public override void Listen()
     {
+        ThrowIfDisposed();
         if (_listening)
             return;
 
@@ -70,6 +71,7 @@ public sealed class LocalTransport : Transport
 
     public override Connection Connect(string address)
     {
+        ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(address);
         ValidateOptions();
         if (Connections.Count >= MaxConnections) throw new InvalidOperationException("Local connection limit reached.");
@@ -95,6 +97,7 @@ public sealed class LocalTransport : Transport
 
     public override void Receive()
     {
+        ThrowIfDisposed();
         for (int processed = 0; processed < MaxPacketsPerReceive && Take(out Packet packet); processed++)
         {
             switch (packet.Kind)
@@ -142,6 +145,7 @@ public sealed class LocalTransport : Transport
 
     public override void Flush()
     {
+        ThrowIfDisposed();
         // Messages are handed to the peer as soon as they are sent; there is nothing to flush.
     }
 

@@ -141,6 +141,8 @@ public abstract class Transport : IDisposable
 
     protected virtual void DisposeCore() { }
 
+    protected void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
+
     // --- Helpers for transport implementations ---------------------------------------------
 
     /// <summary>A fresh id for a new <see cref="Connection"/>.</summary>

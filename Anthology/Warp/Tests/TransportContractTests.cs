@@ -79,6 +79,15 @@ public abstract class TransportContractTests : IDisposable
     }
 
     [Fact]
+    public void DisposedTransportsCannotReopenSocketsOrQueues()
+    {
+        Transport host = CreateHost();
+        host.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => host.Listen());
+        Assert.Throws<ObjectDisposedException>(() => host.Connect("127.0.0.1:7777"));
+    }
+
+    [Fact]
     public void ConnectsBothSides()
     {
         (Transport host, Transport client, Pump pump, Connection toHost) = Connect();
