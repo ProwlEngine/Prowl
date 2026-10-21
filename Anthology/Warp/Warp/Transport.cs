@@ -33,13 +33,28 @@ public abstract class Transport : IDisposable
     private long _queuedDataBytes;
 
     /// <summary>Maximum unpolled data events from one connection; overflow disconnects that peer.</summary>
-    public int MaxQueuedDataEventsPerConnection { get; set; } = 4096;
+    private int _maxQueuedDataEventsPerConnection = 4096;
+    public int MaxQueuedDataEventsPerConnection
+    {
+        get => _maxQueuedDataEventsPerConnection;
+        set { ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value); _maxQueuedDataEventsPerConnection = value; }
+    }
 
     /// <summary>Maximum pooled data buffer bytes queued by one connection.</summary>
-    public long MaxQueuedDataBytesPerConnection { get; set; } = 32 * 1024 * 1024;
+    private long _maxQueuedDataBytesPerConnection = 32 * 1024 * 1024;
+    public long MaxQueuedDataBytesPerConnection
+    {
+        get => _maxQueuedDataBytesPerConnection;
+        set { ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value); _maxQueuedDataBytesPerConnection = value; }
+    }
 
     /// <summary>Maximum pooled data buffer bytes queued by the whole transport.</summary>
-    public long MaxQueuedDataBytes { get; set; } = 64 * 1024 * 1024;
+    private long _maxQueuedDataBytes = 64 * 1024 * 1024;
+    public long MaxQueuedDataBytes
+    {
+        get => _maxQueuedDataBytes;
+        set { ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value); _maxQueuedDataBytes = value; }
+    }
 
     /// <summary>Every connection that is not yet <see cref="ConnectionState.Disconnected"/>, incoming and outgoing.</summary>
     public IReadOnlyCollection<Connection> Connections => _connections.Values;

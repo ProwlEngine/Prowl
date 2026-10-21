@@ -36,6 +36,21 @@ public sealed class NetSessionOptions
     /// this side allocate.
     /// </summary>
     public int MaxMessageSize { get; set; } = 16 * 1024 * 1024;
+
+    internal NetSessionOptions CopyValidated()
+    {
+        if (MaxPeers < 0 || MaxPeers > 65534) throw new ArgumentOutOfRangeException(nameof(MaxPeers));
+        if (MaxMessageSize < 64 || MaxMessageSize > 1024 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(MaxMessageSize));
+        ValidateDuration(JoinTimeout, nameof(JoinTimeout));
+        ValidateDuration(GoodbyeLinger, nameof(GoodbyeLinger));
+        return (NetSessionOptions)MemberwiseClone();
+    }
+
+    internal static void ValidateDuration(TimeSpan value, string name)
+    {
+        if (value <= TimeSpan.Zero || value > TimeSpan.FromDays(1))
+            throw new ArgumentOutOfRangeException(name, "Duration must be positive and at most one day.");
+    }
 }
 
 /// <summary>Why a session ended, or why a peer left it.</summary>

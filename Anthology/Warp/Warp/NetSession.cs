@@ -114,7 +114,7 @@ public sealed class NetSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(transport);
         Transport = transport;
-        Options = options ?? new NetSessionOptions();
+        _options = (options ?? new NetSessionOptions()).CopyValidated();
         IsHost = isHost;
     }
 
@@ -164,7 +164,10 @@ public sealed class NetSession : IDisposable
 
     public Transport Transport { get; }
 
-    public NetSessionOptions Options { get; }
+    private readonly NetSessionOptions _options;
+
+    /// <summary>A detached copy of the settings captured when this session was created.</summary>
+    public NetSessionOptions Options => _options.CopyValidated();
 
     public bool IsHost { get; }
 
@@ -408,7 +411,7 @@ public sealed class NetSession : IDisposable
                 _remotes[ev.Connection] = new Remote
                 {
                     Stage = RemoteStage.AwaitingRequest,
-                    DeadlineMs = NowMs + (long)Options.JoinTimeout.TotalMilliseconds,
+                    DeadlineMs = NowMs + (long)_options.JoinTimeout.TotalMilliseconds,
                 };
                 break;
 
@@ -437,8 +440,8 @@ public sealed class NetSession : IDisposable
         NetReader reader = new(data);
         try
         {
-            if (data.Length > Options.MaxMessageSize)
-                throw new InvalidDataException($"A {data.Length} byte message exceeds the {Options.MaxMessageSize} byte limit.");
+            if (data.Length > _options.MaxMessageSize)
+                throw new InvalidDataException($"A {data.Length} byte message exceeds the {_options.MaxMessageSize} byte limit.");
 
             ushort id = reader.ReadUInt16();
             if (id == (ushort)InternalMessage.Fragment)
@@ -489,13 +492,13 @@ public sealed class NetSession : IDisposable
         string name = reader.ReadString();
         byte[] token = reader.ReadBytesWithLength().ToArray();
 
-        if (version != Options.AppVersion)
+        if (version != _options.AppVersion)
         {
-            Goodbye(connection, remote, SessionEndReason.VersionMismatch, $"The host runs version {Options.AppVersion}, but you have {version}.");
+            Goodbye(connection, remote, SessionEndReason.VersionMismatch, $"The host runs version {_options.AppVersion}, but you have {version}.");
             return;
         }
 
-        if (JoinedClientCount >= Options.MaxPeers)
+        if (JoinedClientCount >= _options.MaxPeers)
         {
             Goodbye(connection, remote, SessionEndReason.ServerFull, "The session is full.");
             return;
@@ -504,7 +507,7 @@ public sealed class NetSession : IDisposable
         PendingJoin pending = new(this, connection, new JoinRequest(version, name, token));
         remote.Stage = RemoteStage.Pending;
         remote.Pending = pending;
-        remote.DeadlineMs = NowMs + (long)Options.JoinTimeout.TotalMilliseconds;
+        remote.DeadlineMs = NowMs + (long)_options.JoinTimeout.TotalMilliseconds;
 
         if (JoinRequested == null)
             pending.Accept();
@@ -530,7 +533,7 @@ public sealed class NetSession : IDisposable
         }
 
         // Checked again: several joins may have been pending at once.
-        if (JoinedClientCount >= Options.MaxPeers)
+        if (JoinedClientCount >= _options.MaxPeers)
         {
             Goodbye(connection, remote, SessionEndReason.ServerFull, "The session is full.");
             return;
@@ -582,7 +585,7 @@ public sealed class NetSession : IDisposable
         NetPeer? peer = remote.Peer;
         remote.Peer = null;
         remote.Stage = RemoteStage.Lingering;
-        remote.DeadlineMs = NowMs + (long)Options.GoodbyeLinger.TotalMilliseconds;
+        remote.DeadlineMs = NowMs + (long)_options.GoodbyeLinger.TotalMilliseconds;
 
         if (peer != null)
             RemovePeer(peer, reason);
@@ -616,11 +619,11 @@ public sealed class NetSession : IDisposable
             case TransportEventType.Connected:
                 _writer.Reset();
                 _writer.WriteUInt16((ushort)InternalMessage.JoinRequest);
-                _writer.WriteUInt32(Options.AppVersion);
+                _writer.WriteUInt32(_options.AppVersion);
                 _writer.WriteString(_joinName);
                 _writer.WriteBytesWithLength(_joinToken);
                 _hostConnection.Send(_writer.WrittenSpan, Delivery.Reliable);
-                _joinDeadlineMs = NowMs + (long)Options.JoinTimeout.TotalMilliseconds;
+                _joinDeadlineMs = NowMs + (long)_options.JoinTimeout.TotalMilliseconds;
                 break;
 
             case TransportEventType.Data:
@@ -646,8 +649,8 @@ public sealed class NetSession : IDisposable
         NetReader reader = new(data);
         try
         {
-            if (data.Length > Options.MaxMessageSize)
-                throw new InvalidDataException($"A {data.Length} byte message exceeds the {Options.MaxMessageSize} byte limit.");
+            if (data.Length > _options.MaxMessageSize)
+                throw new InvalidDataException($"A {data.Length} byte message exceeds the {_options.MaxMessageSize} byte limit.");
 
             ushort id = reader.ReadUInt16();
             switch (id)
@@ -818,8 +821,8 @@ public sealed class NetSession : IDisposable
                 throw new InvalidDataException("A fragmented message started before the previous one finished.");
 
             uint total = reader.ReadVarUInt32();
-            if (total < 2 || total > (uint)Options.MaxMessageSize)
-                throw new InvalidDataException($"A {total} byte message exceeds the {Options.MaxMessageSize} byte limit.");
+            if (total < 2 || total > (uint)_options.MaxMessageSize)
+                throw new InvalidDataException($"A {total} byte message exceeds the {_options.MaxMessageSize} byte limit.");
 
             state = new Reassembly { Buffer = ArrayPool<byte>.Shared.Rent((int)total), Total = (int)total };
         }

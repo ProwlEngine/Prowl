@@ -43,11 +43,12 @@ public class KcpTransportTests
     [Fact]
     public void ReceiveWorkIsBoundedPerCall()
     {
-        var (host, client, pump, toHost) = Connect();
+        KcpTransportOptions options = FastOptions();
+        options.MaxDatagramsPerReceive = 4;
+        var (host, client, pump, toHost) = Connect(hostOptions: options);
         using (host)
         using (client)
         {
-            host.Options.MaxDatagramsPerReceive = 4;
             for (int i = 0; i < 20; i++) toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
             System.Threading.Thread.Sleep(20);
             host.Receive();
@@ -61,11 +62,12 @@ public class KcpTransportTests
     [Fact]
     public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
     {
-        var (host, client, pump, toHost) = Connect();
+        KcpTransportOptions options = FastOptions();
+        options.MaxPendingReliableBytes = 4096;
+        var (host, client, pump, toHost) = Connect(clientOptions: options);
         using (host)
         using (client)
         {
-            client.Options.MaxPendingReliableBytes = 4096;
             // No receiver pumps or acknowledges these sends.
             for (int i = 0; i < 100 && toHost.IsConnected; i++)
                 toHost.Send(new byte[1000], Delivery.Reliable);

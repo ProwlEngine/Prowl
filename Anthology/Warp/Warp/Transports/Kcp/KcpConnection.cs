@@ -28,7 +28,7 @@ public sealed class KcpConnection : Connection
         : base(transport, id, address, isOutgoing)
     {
         _transport = transport;
-        _options = transport.Options;
+        _options = transport.Settings;
         RemoteAddress = remote;
         _connectStartMs = now;
         _nextHandshakeMs = now;

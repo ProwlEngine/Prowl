@@ -50,12 +50,14 @@ public sealed class KcpTransport : Transport
 
     public KcpTransport(KcpTransportOptions? options = null)
     {
-        Options = options ?? new KcpTransportOptions();
-        Options.Validate();
+        _options = (options ?? new KcpTransportOptions()).CopyValidated();
     }
 
-    /// <summary>The settings this transport uses. Changes apply to sockets and connections created afterwards.</summary>
-    public KcpTransportOptions Options { get; }
+    private readonly KcpTransportOptions _options;
+    internal KcpTransportOptions Settings => _options;
+
+    /// <summary>A detached copy of the settings captured when this transport was created.</summary>
+    public KcpTransportOptions Options => _options.CopyValidated();
 
     public override bool IsListening => _listening;
 
@@ -74,20 +76,20 @@ public sealed class KcpTransport : Transport
         if (_socket != null)
             throw new InvalidOperationException("The socket is already bound for outgoing connections. Call Listen before Connect.");
 
-        Options.Validate();
-        OpenSocket(Options.Port);
+        _options.Validate();
+        OpenSocket(_options.Port);
         _listening = true;
     }
 
     public override Connection Connect(string address)
     {
         ArgumentNullException.ThrowIfNull(address);
-        Options.Validate();
+        _options.Validate();
 
         if (_socket == null)
             OpenSocket(0);
 
-        SocketAddress? remote = TryResolve(address, Options.Port, _socket!.AddressFamily);
+        SocketAddress? remote = TryResolve(address, _options.Port, _socket!.AddressFamily);
         if (remote == null)
         {
             // Reported on the next Receive, like every other way a connection attempt can fail.
@@ -119,7 +121,7 @@ public sealed class KcpTransport : Transport
             return;
 
         long now = NowMs;
-        for (int processed = 0; processed < Options.MaxDatagramsPerReceive; processed++)
+        for (int processed = 0; processed < _options.MaxDatagramsPerReceive; processed++)
         {
             int length;
             try
@@ -139,7 +141,7 @@ public sealed class KcpTransport : Transport
                 continue;
             }
 
-            if (length == 0 || length > Options.Mtu)
+            if (length == 0 || length > _options.Mtu)
                 continue;
 
             HandleDatagram(_receiveAddress!, length, now);
@@ -210,7 +212,7 @@ public sealed class KcpTransport : Transport
 
     private void HandleConnectRequest(SocketAddress from, ReadOnlySpan<byte> packet)
     {
-        if (packet.Length != KcpPacket.HandshakeRequestSize || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Options.ProtocolId)
+        if (packet.Length != KcpPacket.HandshakeRequestSize || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != _options.ProtocolId)
             return;
 
         uint nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
@@ -227,7 +229,7 @@ public sealed class KcpTransport : Transport
         if (!TryReadChallengeResponse(from, packet, out uint nonce))
             return;
 
-        if (_incomingCount >= Options.MaxConnections)
+        if (_incomingCount >= _options.MaxConnections)
         {
             Span<byte> reject = stackalloc byte[KcpPacket.RejectSize];
             reject[0] = (byte)KcpPacketType.Reject;
@@ -287,7 +289,7 @@ public sealed class KcpTransport : Transport
     private bool TryReadChallengeResponse(SocketAddress from, ReadOnlySpan<byte> packet, out uint nonce)
     {
         nonce = 0;
-        if (packet.Length != KcpPacket.HandshakeRequestSize || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != Options.ProtocolId)
+        if (packet.Length != KcpPacket.HandshakeRequestSize || BinaryPrimitives.ReadUInt32LittleEndian(packet[1..]) != _options.ProtocolId)
             return false;
 
         nonce = BinaryPrimitives.ReadUInt32LittleEndian(packet[5..]);
@@ -324,7 +326,7 @@ public sealed class KcpTransport : Transport
         Span<byte> packet = stackalloc byte[KcpPacket.HandshakeRequestSize];
         packet.Clear();
         packet[0] = (byte)KcpPacketType.ConnectRequest;
-        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Options.ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], _options.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
         SendRaw(connection, connection.RemoteAddress!, packet);
     }
@@ -334,7 +336,7 @@ public sealed class KcpTransport : Transport
         Span<byte> packet = stackalloc byte[KcpPacket.HandshakeRequestSize];
         packet.Clear();
         packet[0] = (byte)KcpPacketType.ChallengeResponse;
-        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], Options.ProtocolId);
+        BinaryPrimitives.WriteUInt32LittleEndian(packet[1..], _options.ProtocolId);
         BinaryPrimitives.WriteUInt32LittleEndian(packet[5..], connection.ClientNonce);
         cookie.CopyTo(packet[9..]);
         SendRaw(connection, connection.RemoteAddress!, packet);
@@ -354,7 +356,7 @@ public sealed class KcpTransport : Transport
     {
         int length = KcpPacket.SessionHeaderSize + body.Length;
         if (_sendBuffer.Length < length)
-            _sendBuffer = new byte[Math.Max(length, Options.Mtu)];
+            _sendBuffer = new byte[Math.Max(length, _options.Mtu)];
 
         Span<byte> packet = _sendBuffer.AsSpan(0, length);
         packet[0] = (byte)type;
@@ -370,7 +372,7 @@ public sealed class KcpTransport : Transport
 
         connection?.RecordSent(datagram.Length);
 
-        if (Options.Simulation is { } simulation && Simulate(simulation, to, datagram))
+        if (_options.Simulation is { } simulation && Simulate(simulation, to, datagram))
             return;
 
         SendNow(to, datagram);
@@ -476,8 +478,8 @@ public sealed class KcpTransport : Transport
             IPAddress any = socket.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
             socket.Bind(new IPEndPoint(any, port));
             socket.Blocking = false;
-            socket.ReceiveBufferSize = Options.SocketBufferSize;
-            socket.SendBufferSize = Options.SocketBufferSize;
+            socket.ReceiveBufferSize = _options.SocketBufferSize;
+            socket.SendBufferSize = _options.SocketBufferSize;
 
             if (OperatingSystem.IsWindows())
                 socket.IOControl(SioUdpConnReset, new byte[4], null);
@@ -490,7 +492,7 @@ public sealed class KcpTransport : Transport
 
         _socket = socket;
         _receiveAddress = new SocketAddress(socket.AddressFamily, SocketAddress.GetMaximumAddressSize(socket.AddressFamily));
-        _sendBuffer = new byte[Options.Mtu];
+        _sendBuffer = new byte[_options.Mtu];
     }
 
     private static Socket? CreateDualModeSocket()

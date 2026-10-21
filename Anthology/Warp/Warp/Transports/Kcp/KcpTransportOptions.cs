@@ -63,6 +63,15 @@ public sealed class KcpTransportOptions
     /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
     public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
 
+    internal KcpTransportOptions CopyValidated()
+    {
+        Validate();
+        KcpTransportOptions copy = (KcpTransportOptions)MemberwiseClone();
+        copy.Reliability = Reliability.Copy();
+        copy.Simulation = Simulation?.Copy();
+        return copy;
+    }
+
     internal void Validate()
     {
         if (Port < 0 || Port > 65535)
@@ -76,6 +85,13 @@ public sealed class KcpTransportOptions
         if (MaxPendingReliableBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaxPendingReliableBytes));
         ArgumentNullException.ThrowIfNull(Reliability);
+        NetSessionOptions.ValidateDuration(ConnectTimeout, nameof(ConnectTimeout));
+        NetSessionOptions.ValidateDuration(Timeout, nameof(Timeout));
+        NetSessionOptions.ValidateDuration(PingInterval, nameof(PingInterval));
+        NetSessionOptions.ValidateDuration(HandshakeResendInterval, nameof(HandshakeResendInterval));
+        if (SocketBufferSize < Mtu) throw new ArgumentOutOfRangeException(nameof(SocketBufferSize));
+        Reliability.Validate();
+        Simulation?.Validate();
     }
 }
 
@@ -111,6 +127,17 @@ public sealed class KcpReliabilityOptions
 
     /// <summary>How many times one segment may be resent without being acknowledged before the connection is considered dead.</summary>
     public uint MaxRetransmits { get; set; } = 40;
+
+    internal KcpReliabilityOptions Copy() => (KcpReliabilityOptions)MemberwiseClone();
+
+    internal void Validate()
+    {
+        if (Interval < 10 || Interval > 5000) throw new ArgumentOutOfRangeException(nameof(Interval));
+        if (FastResend < 0 || FastResend > 255) throw new ArgumentOutOfRangeException(nameof(FastResend));
+        if (SendWindow < 1 || SendWindow > 65535) throw new ArgumentOutOfRangeException(nameof(SendWindow));
+        if (ReceiveWindow < 1 || ReceiveWindow > 65535) throw new ArgumentOutOfRangeException(nameof(ReceiveWindow));
+        if (MaxRetransmits == 0) throw new ArgumentOutOfRangeException(nameof(MaxRetransmits));
+    }
 }
 
 /// <summary>
@@ -129,4 +156,14 @@ public sealed class LinkSimulation
 
     /// <summary>Seed for the random drops and jitter, for reproducible runs. Null picks one at random.</summary>
     public int? Seed { get; set; }
+
+    internal LinkSimulation Copy() => (LinkSimulation)MemberwiseClone();
+
+    internal void Validate()
+    {
+        if (!double.IsFinite(PacketLoss) || PacketLoss < 0 || PacketLoss > 1)
+            throw new ArgumentOutOfRangeException(nameof(PacketLoss));
+        if (Latency < TimeSpan.Zero || Latency > TimeSpan.FromDays(1)) throw new ArgumentOutOfRangeException(nameof(Latency));
+        if (Jitter < TimeSpan.Zero || Jitter > TimeSpan.FromDays(1)) throw new ArgumentOutOfRangeException(nameof(Jitter));
+    }
 }
