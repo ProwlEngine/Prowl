@@ -13,6 +13,46 @@ namespace Prowl.Warp.Tests;
 /// <summary>Local-only behaviour. The shared transport behaviour is in <see cref="LocalTransportContractTests"/>.</summary>
 public class LocalTransportTests
 {
+    private static int InboxCount(LocalTransport transport)
+    {
+        object inbox = typeof(LocalTransport).GetField("_inbox", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(transport)!;
+        return (int)inbox.GetType().GetProperty("Count")!.GetValue(inbox)!;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShutdownReleasesInboxAndRejectsFurtherData(bool sendAfterShutdown)
+    {
+        LocalNetwork network = new();
+        using LocalTransport host = new(network, "host");
+        using LocalTransport client = new(network, "client");
+        host.Listen();
+        Connection connection = client.Connect("host");
+        Pump pump = new(host, client);
+        pump.Until(() => connection.IsConnected, what: "connect");
+        connection.Send(new byte[1000], Delivery.Reliable);
+        host.Shutdown();
+        if (sendAfterShutdown) connection.Send(new byte[1000], Delivery.Reliable);
+        Assert.Equal(0, InboxCount(host));
+    }
+
+    [Fact]
+    public void InboxIsBoundedBeforeReceiveRuns()
+    {
+        LocalNetwork network = new();
+        using LocalTransport host = new(network, "host");
+        using LocalTransport client = new(network, "client");
+        host.MaxInboxBytes = 4096;
+        host.Listen();
+        Connection connection = client.Connect("host");
+        Pump pump = new(host, client);
+        pump.Until(() => connection.IsConnected, what: "connect");
+        for (int i = 0; i < 20 && connection.IsConnected; i++) connection.Send(new byte[1000], Delivery.Reliable);
+        Assert.Equal(ConnectionState.Disconnected, connection.State);
+        Assert.InRange(InboxCount(host), 0, 5);
+    }
+
     [Fact]
     public void TwoListenersCannotShareAnAddress()
     {

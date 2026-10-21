@@ -22,6 +22,21 @@ public sealed class LocalTransport : Transport
     private readonly ConcurrentQueue<Packet> _inbox = new();
     private readonly List<Connection> _closing = new();
     private bool _listening;
+    private bool _accepting = true;
+    private readonly object _inboxGate = new();
+    private long _inboxBytes;
+    private long _maxInboxBytes = 64 * 1024 * 1024;
+
+    /// <summary>Maximum pooled payload bytes waiting for Receive; overflow disconnects the sender.</summary>
+    public long MaxInboxBytes
+    {
+        get => _maxInboxBytes;
+        set { ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value); _maxInboxBytes = value; }
+    }
+    public int MaxInboxPackets { get; init; } = 4096;
+    public int MaxPacketsPerReceive { get; init; } = 1024;
+    public int MaxConnections { get; init; } = 64;
+    public long PendingInboxBytes { get { lock (_inboxGate) return _inboxBytes; } }
 
     /// <param name="network">The network to listen and connect on.</param>
     /// <param name="address">The address <see cref="Listen"/> registers, which others pass to <see cref="Connect"/>.</param>
@@ -45,6 +60,8 @@ public sealed class LocalTransport : Transport
         if (_listening)
             return;
 
+        ValidateOptions();
+        lock (_inboxGate) _accepting = true;
         if (!Network.TryRegister(Address, this))
             throw new InvalidOperationException($"Another transport is already listening at local address '{Address}'.");
 
@@ -54,6 +71,9 @@ public sealed class LocalTransport : Transport
     public override Connection Connect(string address)
     {
         ArgumentNullException.ThrowIfNull(address);
+        ValidateOptions();
+        if (Connections.Count >= MaxConnections) throw new InvalidOperationException("Local connection limit reached.");
+        lock (_inboxGate) _accepting = true;
 
         LocalConnection connection = new(this, NextConnectionId(), address, isOutgoing: true);
         AddConnection(connection);
@@ -62,11 +82,12 @@ public sealed class LocalTransport : Transport
         if (host == null)
         {
             // Reported on the next Receive, the same as a real transport discovering it.
-            _inbox.Enqueue(new Packet(PacketKind.Reject, connection, null, null, 0, default, DisconnectReason.Unreachable));
+            Post(new Packet(PacketKind.Reject, connection, null, null, 0, default, DisconnectReason.Unreachable));
         }
         else
         {
-            host._inbox.Enqueue(new Packet(PacketKind.ConnectRequest, null, connection, null, 0, default, default));
+            if (!host.Post(new Packet(PacketKind.ConnectRequest, null, connection, null, 0, default, default)))
+                RaiseDisconnected(connection, DisconnectReason.ResourceLimit);
         }
 
         return connection;
@@ -74,7 +95,7 @@ public sealed class LocalTransport : Transport
 
     public override void Receive()
     {
-        while (_inbox.TryDequeue(out Packet packet))
+        for (int processed = 0; processed < MaxPacketsPerReceive && Take(out Packet packet); processed++)
         {
             switch (packet.Kind)
             {
@@ -136,6 +157,21 @@ public sealed class LocalTransport : Transport
         foreach (Connection connection in _closing)
             Close((LocalConnection)connection, DisconnectReason.Requested);
         _closing.Clear();
+        List<Packet> abandoned = new();
+        lock (_inboxGate)
+        {
+            _accepting = false;
+            while (_inbox.TryDequeue(out Packet packet)) abandoned.Add(packet);
+            _inboxBytes = 0;
+        }
+        foreach (Packet packet in abandoned)
+        {
+            if (packet.Buffer != null) ArrayPool<byte>.Shared.Return(packet.Buffer);
+            if (packet.Kind == PacketKind.ConnectRequest)
+                packet.Sender!.Post(new Packet(PacketKind.Reject, packet.Sender, null, null, 0, default, DisconnectReason.RemoteClosed));
+            else if (packet.Kind == PacketKind.Accept)
+                packet.Sender!.Post(new Packet(PacketKind.Disconnect, packet.Sender, null, null, 0, default, DisconnectReason.RemoteClosed));
+        }
     }
 
     protected override void OnReceiveQueueOverflow(Connection connection) =>
@@ -151,15 +187,48 @@ public sealed class LocalTransport : Transport
         RaiseDisconnected(connection, reason);
     }
 
-    internal void Post(Packet packet) => _inbox.Enqueue(packet);
+    internal bool Post(Packet packet)
+    {
+        lock (_inboxGate)
+        {
+            int reserve = packet.Kind is PacketKind.Disconnect or PacketKind.Accept or PacketKind.Reject ? MaxConnections * 2 : 0;
+            if (!_accepting || _inbox.Count >= MaxInboxPackets + reserve ||
+                (packet.Buffer?.Length ?? 0) > MaxInboxBytes - _inboxBytes)
+            {
+                if (packet.Buffer != null) ArrayPool<byte>.Shared.Return(packet.Buffer);
+                return false;
+            }
+            _inboxBytes += packet.Buffer?.Length ?? 0;
+            _inbox.Enqueue(packet);
+            return true;
+        }
+    }
+
+    private bool Take(out Packet packet)
+    {
+        lock (_inboxGate)
+        {
+            if (!_inbox.TryDequeue(out packet)) return false;
+            _inboxBytes -= packet.Buffer?.Length ?? 0;
+            return true;
+        }
+    }
+
+    private void ValidateOptions()
+    {
+        if (MaxInboxPackets <= 0) throw new ArgumentOutOfRangeException(nameof(MaxInboxPackets));
+        if (MaxPacketsPerReceive <= 0) throw new ArgumentOutOfRangeException(nameof(MaxPacketsPerReceive));
+        if (MaxConnections <= 0 || MaxConnections > 65535) throw new ArgumentOutOfRangeException(nameof(MaxConnections));
+    }
 
     private void OnConnectRequest(LocalConnection client)
     {
         LocalTransport clientTransport = (LocalTransport)client.Transport;
 
-        if (!_listening)
+        if (!_listening || client.State != ConnectionState.Connecting || Connections.Count >= MaxConnections)
         {
-            clientTransport.Post(new Packet(PacketKind.Reject, client, null, null, 0, default, DisconnectReason.Unreachable));
+            clientTransport.Post(new Packet(PacketKind.Reject, client, null, null, 0, default,
+                !_listening ? DisconnectReason.Unreachable : DisconnectReason.ServerFull));
             return;
         }
 
@@ -219,14 +288,18 @@ public sealed class LocalConnection : Connection
 
         byte[] buffer = ArrayPool<byte>.Shared.Rent(data.Length);
         data.CopyTo(buffer);
-        peer.Post(new LocalTransport.Packet(LocalTransport.PacketKind.Data, peer, this, buffer, data.Length, delivery, default));
+        if (!peer.Post(new LocalTransport.Packet(LocalTransport.PacketKind.Data, peer, this, buffer, data.Length, delivery, default)))
+        {
+            ((LocalTransport)Transport).Close(this, DisconnectReason.ResourceLimit);
+            return;
+        }
 
         RecordPacketSent(data.Length);
     }
 
     public override void Disconnect() => ((LocalTransport)Transport).Close(this, DisconnectReason.Requested);
 
-    internal void Post(LocalTransport.Packet packet) => ((LocalTransport)Transport).Post(packet);
+    internal bool Post(LocalTransport.Packet packet) => ((LocalTransport)Transport).Post(packet);
 
     internal void RecordReceived(int bytes) => RecordPacketReceived(bytes);
 }
