@@ -71,6 +71,54 @@ public class RobustnessTests
         }
     }
 
+    [Fact]
+    public void ThirtyTwoClientsRemainResponsiveWhenOneStopsReading()
+    {
+        using KcpTransport transport = new(new() { Port = 0, MaxPendingReliableBytes = 1024 * 1024 });
+        using NetSession host = NetSession.Host(transport);
+        SessionProbe hostProbe = new(host);
+        var clients = Enumerable.Range(0, 32).Select(i => new SessionProbe(NetSession.Join(
+            new KcpTransport(new() { Port = 0 }), $"127.0.0.1:{transport.LocalPort}", $"client{i}"))).ToArray();
+        try
+        {
+            SessionProbe[] everyone = new[] { hostProbe }.Concat(clients).ToArray();
+            SessionProbe.PumpUntil(() => clients.All(c => c.Session.State == SessionState.Active), everyone);
+            NetPeer stalled = host.Peers.Single(p => p.Name == "client31");
+            for (int i = 0; i < 40; i++) host.SendRaw(stalled, 20, new byte[32_000], Delivery.Bulk);
+            host.Broadcast(new ChatMessage("still responsive"));
+            SessionProbe[] healthy = new[] { hostProbe }.Concat(clients.Take(31)).ToArray();
+            SessionProbe.PumpUntil(() => clients.Take(31).All(c => c.Chat.Count == 1) && host.Peers.Count == 32, healthy);
+            Assert.Equal(SessionEndReason.ResourceLimit, hostProbe.PeersLeft.Single().Reason);
+            Assert.All(clients.Take(31), c => Assert.Equal(SessionState.Active, c.Session.State));
+        }
+        finally { foreach (SessionProbe client in clients) client.Session.Dispose(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BulkAndGameplaySurviveLossOnIndependentChannels(bool encrypted)
+    {
+        KcpTransportOptions Options() => new()
+        {
+            Port = 0,
+            Simulation = new() { PacketLoss = 0.1, Latency = TimeSpan.FromMilliseconds(3), Jitter = TimeSpan.FromMilliseconds(3), Seed = 9182 },
+        };
+        using KcpTransport rawHost = new(Options());
+        using Transport host = encrypted ? new EncryptedTransport(rawHost, new byte[32]) : rawHost;
+        using Transport client = encrypted ? new EncryptedTransport(new KcpTransport(Options()), new byte[32]) : new KcpTransport(Options());
+        host.Listen();
+        Connection connection = client.Connect($"127.0.0.1:{rawHost.LocalPort}");
+        Pump pump = new(host, client);
+        pump.Until(() => connection.IsConnected && pump.EventsOf(host).Any(e => e.Type == TransportEventType.Connected), 10_000, "lossy handshake");
+        byte[] bulk = TestData.Pattern(50_000, 20);
+        connection.Send(bulk, Delivery.Bulk);
+        for (int i = 0; i < 20; i++) connection.Send(BitConverter.GetBytes(i), Delivery.Reliable);
+        pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 21, 10_000, "lossy channels");
+        Assert.Equal(bulk, pump.EventsOf(host).Single(e => e.Delivery == Delivery.Bulk && e.Type == TransportEventType.Data).Data);
+        Assert.Equal(Enumerable.Range(0, 20), pump.EventsOf(host).Where(e => e.Delivery == Delivery.Reliable && e.Type == TransportEventType.Data).Select(e => BitConverter.ToInt32(e.Data)));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
