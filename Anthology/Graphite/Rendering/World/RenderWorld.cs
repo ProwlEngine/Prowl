@@ -270,7 +270,7 @@ public sealed partial class RenderWorld : IDisposable
         if (!_hostSetNames.Add(name))
             throw new InvalidOperationException($"The world already has a spatial set named {name}.");
         int slot = SpatialSlots.Slot(_owner?.SpatialSlots, name, typeof(T));
-        SpatialSet<T> set = new(_device, slot, name, _report);
+        SpatialSet<T> set = new(_tables.Scope($"Set{slot}"), slot, _report);
         _newHostSets.Add(set.Render);
         _hostSetExtracts.Add(set.Extract);
         return set;
@@ -522,13 +522,14 @@ public sealed partial class RenderWorld : IDisposable
     private Material?[] _sliceMaterials = new Material?[256];
 
     private readonly RenderSide _render;
+    private readonly TableHost _tables;
 
     private readonly Renderer? _owner;
     private static int s_nextId;
 
     internal int Id { get; }
 
-    internal RenderWorld(GraphicsDevice device, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
+    internal RenderWorld(GraphicsDevice device, GraphStore store, Renderer? owner = null, IMaterialResources? resources = null, ReflectionSettings? reflections = null)
     {
         _owner = owner;
         _device = device;
@@ -536,10 +537,11 @@ public sealed partial class RenderWorld : IDisposable
         Id = id;
         Action<RendererError> report = owner != null ? error => owner.Report(error with { Source = error.Source ?? this, Key = $"{error.Key ?? error.Code}.world{id}" }) : _ => { };
         _report = report;
-        Lighting = new WorldLighting(device, resources ?? NoMaterialResources.Instance, report);
-        Probes = new WorldProbes(device);
-        Reflections = new WorldReflections(device, resources ?? NoMaterialResources.Instance, report, reflections ?? ReflectionSettings.Default);
-        _render = new RenderSide(device, Probes, report);
+        _tables = new TableHost(device, store, $"Graphite.World{id}");
+        Lighting = new WorldLighting(_tables.Scope("Lighting"), resources ?? NoMaterialResources.Instance, report);
+        Probes = new WorldProbes(_tables.Scope("Probes"));
+        Reflections = new WorldReflections(_tables.Scope("Reflections"), resources ?? NoMaterialResources.Instance, report, reflections ?? ReflectionSettings.Default);
+        _render = new RenderSide(_tables.Scope("Render"), Probes, report);
         Grow(64);
     }
 
@@ -821,15 +823,13 @@ public sealed partial class RenderWorld : IDisposable
     }
 
     /// <summary>Rebuilds the host's sets' static regions and queues their tables. Render thread.</summary>
-    internal void FlushHostSets(Uploader uploader, List<DeviceBuffer> replaced)
+    internal void FlushHostSets(Uploader uploader)
     {
         foreach (SpatialIndex set in _hostSets)
         {
             set.Update();
-            if (set.StaticRecords.Flush(uploader) is { } records)
-                replaced.Add(records);
-            if (set.StaticNodes.Flush(uploader) is { } nodes)
-                replaced.Add(nodes);
+            set.StaticRecords.Flush(uploader);
+            set.StaticNodes.Flush(uploader);
         }
     }
 
@@ -856,14 +856,7 @@ public sealed partial class RenderWorld : IDisposable
 
     internal void DisposeRender()
     {
-        _render.Dispose();
-        Lighting.Dispose();
-        Probes.Dispose();
         Reflections.Dispose();
-        foreach (SpatialIndex set in _hostSets)
-            set.Dispose();
-        foreach (SpatialIndex set in _newHostSets)
-            set.Dispose();
         foreach (string name in _hostSetNames)
             SpatialSlots.Release(_owner?.SpatialSlots, name);
         _hostSetNames.Clear();
@@ -933,7 +926,7 @@ public sealed partial class RenderWorld : IDisposable
     /// The render thread's copy of a world: what culling and bucket building read, and the per object GPU tables.
     /// Extraction writes it while the render thread is idle, then the render thread owns it until the next extraction.
     /// </summary>
-    internal sealed class RenderSide : IDisposable
+    internal sealed class RenderSide
     {
         private readonly HashSet<int> _drawChangedSet = new();
         private readonly Dictionary<GpuMesh, HashSet<int>> _meshUsers = new();
@@ -954,16 +947,16 @@ public sealed partial class RenderWorld : IDisposable
         private MeshPlacement?[] _deformSource = [];
         private readonly HashSet<int> _deformDirty = new();
 
-        public RenderSide(GraphicsDevice device, WorldProbes probes, Action<RendererError> report)
+        public RenderSide(TableHost tables, WorldProbes probes, Action<RendererError> report)
         {
             _probes = probes;
             _report = report;
-            Transforms = GpuTable.Of<ObjectTransform>(device, "Object transforms");
-            PreviousTransforms = GpuTable.Of<ObjectTransform>(device, "Object previous transforms", 64);
-            Bounds = GpuTable.Of<ObjectBounds>(device, "Object bounds");
-            Attributes = GpuTable.Of<ObjectAttributes>(device, "Object attributes");
-            MaterialSlots = new GpuTable(device, "Material slots", 1);
-            SkinMatrices = GpuTable.Of<Float4x4>(device, "Skin matrices", 64);
+            Transforms = tables.Of<ObjectTransform>("Transforms");
+            PreviousTransforms = tables.Of<ObjectTransform>("PreviousTransforms", 64);
+            Bounds = tables.Of<ObjectBounds>("Bounds");
+            Attributes = tables.Of<ObjectAttributes>("Attributes");
+            MaterialSlots = tables.Table("MaterialSlots", 1);
+            SkinMatrices = tables.Of<Float4x4>("SkinMatrices", 64);
             Tables = [Transforms, PreviousTransforms, Bounds, Attributes, MaterialSlots, SkinMatrices];
         }
 
@@ -1389,22 +1382,13 @@ public sealed partial class RenderWorld : IDisposable
             }
         }
 
-        /// <summary>Queues the dirty records, adding tables that moved to a new buffer to <paramref name="replaced"/>. Render thread.</summary>
-        public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
+        /// <summary>Queues the dirty records. Returns true when a table outgrew its buffer. Render thread.</summary>
+        public bool Flush(Uploader uploader)
         {
-            int before = replaced.Count;
+            bool resized = false;
             foreach (GpuTable table in Tables)
-            {
-                if (table.Flush(uploader) is { } old)
-                    replaced.Add(old);
-            }
-            return replaced.Count != before;
-        }
-
-        public void Dispose()
-        {
-            foreach (GpuTable table in Tables)
-                table.Dispose();
+                resized |= table.Flush(uploader);
+            return resized;
         }
 
         private static uint SlotOf(Material material) => material.IsDisposed || material.Table == null ? uint.MaxValue : material.Slot;

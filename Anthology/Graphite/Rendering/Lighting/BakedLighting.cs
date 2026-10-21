@@ -216,11 +216,11 @@ public sealed partial class RenderWorld
 /// probes change: each finds the tetrahedron holding its bounds center, starting from the one it was in last, and
 /// blends its corners, or blends the nearest probes outside the probe hull.
 /// </summary>
-internal sealed class WorldProbes : IDisposable
+internal sealed class WorldProbes
 {
     public const uint NoSlot = uint.MaxValue;
 
-    private readonly GraphicsDevice _device;
+    private readonly TableHost _tables;
     private readonly Stack<uint> _freeSlots = new();
     private uint _nextSlot;
     private uint[] _slotObject = new uint[64];
@@ -236,14 +236,17 @@ internal sealed class WorldProbes : IDisposable
     private LightProbeData? _pending;
     private bool _probesChanged;
 
-    public WorldProbes(GraphicsDevice device)
+    public WorldProbes(TableHost tables)
     {
-        _device = device;
-        ProbeRecords = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, "Light probes");
-        TetRecords = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, "Light probe tetrahedra");
-        Requests = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, "Light probe requests");
-        ObjectSh = CreateSh(64);
+        _tables = tables;
+        ProbeRecords = tables.Array("Records");
+        TetRecords = tables.Array("Tetrahedra");
+        Requests = tables.Array("Requests");
+        ObjectShBuffer = new PersistentBuffer(RenderResourceID.Intern($"{tables.Prefix}.ObjectSh"), BufferUsage.StructuredBufferReadWrite, new GraphInstanceKey(GraphKind.Root, 0));
+        ObjectSh = ResolveSh(64);
     }
+
+    public PersistentBuffer ObjectShBuffer { get; }
 
     public GpuArray ProbeRecords { get; }
     public GpuArray TetRecords { get; }
@@ -342,9 +345,9 @@ internal sealed class WorldProbes : IDisposable
 
     /// <summary>
     /// Uploads changed probes and this frame's requests, growing the harmonics buffer to the slots in use and adding
-    /// a replaced one to <paramref name="replaced"/>. Render thread, after the world's render side updated.
+    /// the persistent buffer. Render thread, after the world's render side updated.
     /// </summary>
-    public void Update(RenderWorld.RenderSide render, Uploader uploader, List<DeviceBuffer> replaced)
+    public void Update(RenderWorld.RenderSide render, Uploader uploader)
     {
         if (_probesChanged)
         {
@@ -355,11 +358,10 @@ internal sealed class WorldProbes : IDisposable
 
         if (ObjectSh.SizeInBytes < Math.Max(_nextSlot, 1) * (uint)Marshal.SizeOf<ProbeShRecord>())
         {
-            replaced.Add(ObjectSh);
             uint capacity = ObjectSh.SizeInBytes / (uint)Marshal.SizeOf<ProbeShRecord>();
             while (capacity < _nextSlot)
                 capacity *= 2;
-            ObjectSh = CreateSh(capacity);
+            ObjectSh = ResolveSh(capacity);
             _requestAll = true;
         }
 
@@ -394,14 +396,6 @@ internal sealed class WorldProbes : IDisposable
         foreach (int slot in _requests)
             _requested[slot] = false;
         _requests.Clear();
-    }
-
-    public void Dispose()
-    {
-        ProbeRecords.Dispose();
-        TetRecords.Dispose();
-        Requests.Dispose();
-        ObjectSh.Dispose();
     }
 
     private void UploadProbes(Uploader uploader)
@@ -482,12 +476,7 @@ internal sealed class WorldProbes : IDisposable
 
     private static Double3 Cross(Double3 a, Double3 b) => new(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
 
-    private DeviceBuffer CreateSh(uint capacity)
-    {
-        DeviceBuffer buffer = _device.ResourceFactory.CreateBuffer(new BufferDescription(capacity * (uint)Marshal.SizeOf<ProbeShRecord>(), BufferUsage.StructuredBufferReadWrite));
-        buffer.Name = "Object light probes";
-        return buffer;
-    }
+    private DeviceBuffer ResolveSh(uint capacity) => ObjectShBuffer.Resolve(_tables.Device, _tables.Store, capacity * (uint)Marshal.SizeOf<ProbeShRecord>());
 }
 
 /// <summary>Samples the light probes for every world's requests, after the upload and before any camera reads them.</summary>

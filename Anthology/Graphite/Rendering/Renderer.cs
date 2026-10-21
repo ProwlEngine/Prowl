@@ -310,8 +310,6 @@ public sealed class Renderer : IDisposable
     private readonly List<Material> _shadowMaterials = new();
     private readonly List<GpuMesh> _changedMeshes = new();
     private readonly GraphStore _store;
-    private readonly List<DeviceBuffer> _replaced = new();
-    private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiring = new();
     private ViewDesc[] _views = [];
     private FrameTime _time;
     private int _viewCount;
@@ -375,7 +373,7 @@ public sealed class Renderer : IDisposable
         _frameDone.Wait();
         try
         {
-            RenderWorld world = new(Device, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
+            RenderWorld world = new(Device, _store, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
             _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs), region, _programs);
@@ -764,8 +762,6 @@ public sealed class Renderer : IDisposable
             world.Dispose();
         }
         _worlds.Clear();
-        foreach ((_, DeviceBuffer buffer) in _retiring)
-            buffer.Dispose();
         _frame.Dispose();
         _effects?.Dispose();
         _uploader.Dispose();
@@ -859,13 +855,6 @@ public sealed class Renderer : IDisposable
         _geometry.Reclaim(completed);
         _materials.Reclaim(completed);
         _globals.Reclaim(completed);
-        for (int i = _retiring.Count - 1; i >= 0; i--)
-        {
-            if (_retiring[i].Execution > completed)
-                continue;
-            _retiring[i].Buffer.Dispose();
-            _retiring.RemoveAt(i);
-        }
 
         _changedMeshes.Clear();
         _geometry.Apply(_uploader, _lastDispatched, _options.UploadBudgetPerFrame, _changedMeshes);
@@ -879,26 +868,23 @@ public sealed class Renderer : IDisposable
 
         _materials.Flush(_uploader, _lastDispatched);
         _globals.Flush(_uploader, _lastDispatched);
-        _replaced.Clear();
         _frameCount++;
         foreach (WorldFrame world in _worlds.Values)
         {
-            world.World.Render.Flush(_uploader, _replaced);
+            world.World.Render.Flush(_uploader);
             _cameras.Clear();
             for (int v = 0; v < _viewCount; v++)
             {
                 if (_views[v].World == world.World)
                     _cameras.Add(_views[v].Layers[0].Position);
             }
-            world.World.Reflections.Plan(_frameCount, world.World.Lighting, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cameras), _frame.Store, world.World.Id);
-            world.World.Reflections.Flush(_uploader, _replaced);
+            world.World.Reflections.Plan(_frameCount, world.World.Lighting, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_cameras), world.World.Id);
+            world.World.Reflections.Flush(_uploader);
             world.World.Lighting.Update();
-            world.World.Lighting.Flush(_uploader, _replaced);
-            world.World.FlushHostSets(_uploader, _replaced);
-            world.World.Probes.Update(world.World.Render, _uploader, _replaced);
+            world.World.Lighting.Flush(_uploader);
+            world.World.FlushHostSets(_uploader);
+            world.World.Probes.Update(world.World.Render, _uploader);
         }
-        foreach (DeviceBuffer buffer in _replaced)
-            _retiring.Add((_lastDispatched, buffer));
 
         ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _pipelines, _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
         _lastDispatched = task.Id;

@@ -289,7 +289,7 @@ internal sealed class WorldReflections : IDisposable
     private readonly IMaterialResources _resources;
     private readonly Action<RendererError> _report;
     private readonly ReflectionSettings _settings;
-    private GraphStore _store = null!;
+    private readonly GraphStore _store;
     private int _worldId;
     private bool _skyCaptured;
     private int _capturedFrame;
@@ -331,13 +331,15 @@ internal sealed class WorldReflections : IDisposable
         public ulong Execution;
     }
 
-    public WorldReflections(GraphicsDevice device, IMaterialResources resources, Action<RendererError> report, ReflectionSettings settings)
+    public WorldReflections(TableHost tables, IMaterialResources resources, Action<RendererError> report, ReflectionSettings settings)
     {
+        GraphicsDevice device = tables.Device;
         _device = device;
+        _store = tables.Store;
         _resources = resources;
         _report = report;
         _settings = settings;
-        Regions = new SpatialIndex<ReflectionProbeRecord>(device, "Reflection probes", SpatialIndex.ProbesSet, Pack, report);
+        Regions = new SpatialIndex<ReflectionProbeRecord>(tables, SpatialIndex.ProbesSet, Pack, report);
         SkyAmbient = device.ResourceFactory.CreateBuffer(new BufferDescription(112, BufferUsage.StructuredBufferReadWrite));
         SkyAmbient.Name = "Sky ambient";
     }
@@ -491,9 +493,8 @@ internal sealed class WorldReflections : IDisposable
     /// Decides this frame's sky capture, baked probes and probe captures, and marks what they make ready. cameras are the
     /// positions this world is seen from this frame. Render thread, before the lighting records flush.
     /// </summary>
-    public void Plan(int frame, WorldLighting lighting, ReadOnlySpan<Double3> cameras, GraphStore store, int worldId)
+    public void Plan(int frame, WorldLighting lighting, ReadOnlySpan<Double3> cameras, int worldId)
     {
-        _store = store;
         _worldId = worldId;
         if (_views.Length < cameras.Length)
             _views = new Double3[cameras.Length];
@@ -539,15 +540,7 @@ internal sealed class WorldReflections : IDisposable
         Regions.Update();
     }
 
-    public bool Flush(Uploader uploader, List<DeviceBuffer> replaced)
-    {
-        int before = replaced.Count;
-        if (Regions.StaticRecords.Flush(uploader) is { } records)
-            replaced.Add(records);
-        if (Regions.StaticNodes.Flush(uploader) is { } nodes)
-            replaced.Add(nodes);
-        return replaced.Count != before;
-    }
+    public bool Flush(Uploader uploader) => Regions.StaticRecords.Flush(uploader) | Regions.StaticNodes.Flush(uploader);
 
     /// <summary>A buffer a bake reads a probe's cube back into, collected once its frame completes. Render thread.</summary>
     private DeviceBuffer BakeBuffer(int index, Target target, Action<BakedReflectionProbe> done)
@@ -612,7 +605,6 @@ internal sealed class WorldReflections : IDisposable
         foreach (PendingBake bake in _pendingBakes)
             bake.Buffer.Dispose();
         SkyAmbient.Dispose();
-        Regions.Dispose();
     }
 
     private void PlanSky(int frame, WorldLighting lighting)
