@@ -264,7 +264,7 @@ public sealed class GlobalProperties
 /// never move, a new global appends. Holds one region per world in a storage buffer: the renderer's values with the
 /// world's overrides, rewritten only when a value changes. Thread safe, so shaders can declare globals while they load.
 /// </summary>
-internal sealed class GlobalRegistry : IDisposable
+internal sealed class GlobalRegistry
 {
     private const uint InitialRegionWords = 64;
 
@@ -279,17 +279,18 @@ internal sealed class GlobalRegistry : IDisposable
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
     private readonly List<int> _pendingFree = new();
     private readonly List<(ulong Execution, int Region)> _retiringRegions = new();
-    private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiringBuffers = new();
+    private readonly GraphStore _store;
     private GpuTable _table;
-    private GpuTable? _replaced;
+    private bool _grown;
     private uint _usedWords;
     private bool _allDirty = true;
 
-    public GlobalRegistry(GraphicsDevice device, IMaterialResources resources)
+    public GlobalRegistry(GraphicsDevice device, GraphStore store, IMaterialResources resources)
     {
         _device = device;
+        _store = store;
         _resources = resources;
-        _table = new GpuTable(device, "Globals", InitialRegionWords, 4);
+        _table = new GpuTable(device, store, "Graphite.Globals", InitialRegionWords, 4);
         Renderer = new GlobalProperties(this, null);
         _regions.Add(null);
     }
@@ -437,11 +438,8 @@ internal sealed class GlobalRegistry : IDisposable
                 uint words = _table.StrideWords;
                 while (words < _usedWords)
                     words *= 2;
-                if (_replaced == null)
-                    _replaced = _table;
-                else
-                    _table.Dispose();
-                _table = new GpuTable(_device, "Globals", words, (uint)_regions.Count);
+                _table = new GpuTable(_device, _store, "Graphite.Globals", words, (uint)_regions.Count);
+                _grown = true;
             }
 
             Renderer.SnapshotKeywords();
@@ -452,7 +450,7 @@ internal sealed class GlobalRegistry : IDisposable
                 world?.SnapshotBuffers();
             }
 
-            if (_allDirty || _replaced != null)
+            if (_allDirty || _grown)
             {
                 for (int region = 0; region < _regions.Count; region++)
                     Pack(region, region == 0 ? Renderer : _regions[region]);
@@ -477,20 +475,9 @@ internal sealed class GlobalRegistry : IDisposable
                 _retiringRegions.Add((lastDispatched, region));
             _pendingFree.Clear();
 
-            bool changed = false;
-            if (_replaced != null)
-            {
-                _retiringBuffers.Add((lastDispatched, _replaced.Buffer));
-                _replaced = null;
-                changed = true;
-            }
-
-            if (_table.Flush(uploader) is { } grown)
-            {
-                _retiringBuffers.Add((lastDispatched, grown));
-                changed = true;
-            }
-            return changed;
+            bool changed = _grown;
+            _grown = false;
+            return _table.Flush(uploader) | changed;
         }
     }
 
@@ -505,23 +492,7 @@ internal sealed class GlobalRegistry : IDisposable
                 _freeRegions.Push(_retiringRegions[i].Region);
                 _retiringRegions.RemoveAt(i);
             }
-
-            for (int i = _retiringBuffers.Count - 1; i >= 0; i--)
-            {
-                if (_retiringBuffers[i].Execution > completedExecution)
-                    continue;
-                _retiringBuffers[i].Buffer.Dispose();
-                _retiringBuffers.RemoveAt(i);
-            }
         }
-    }
-
-    public void Dispose()
-    {
-        _table.Dispose();
-        foreach ((_, DeviceBuffer buffer) in _retiringBuffers)
-            buffer.Dispose();
-        _retiringBuffers.Clear();
     }
 
     private void Pack(int region, GlobalProperties? globals)

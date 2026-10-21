@@ -1235,7 +1235,7 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<PlannedInstance> _planned = new();
     private readonly Dictionary<WorldFrame, GraphInstance> _worldInstances = new();
     private readonly Dictionary<GraphKind, FeatureShape> _shapes = new();
-    private readonly GraphStore _store = new();
+    private readonly GraphStore _store;
     private readonly IPass[] _fillPasses;
 
     internal GraphStore Store => _store;
@@ -1264,12 +1264,13 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
+    public FramePipeline(GraphicsDevice device, GraphStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererTextures textures, bool deterministic, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
     {
         Report = report;
         _device = device;
         _compiler = compiler;
         _textures = textures;
+        _store = store;
         _uploader = uploader;
         _deterministic = deterministic;
         Geometry = geometry;
@@ -2228,7 +2229,6 @@ internal sealed partial class FramePipeline : IDisposable
         _shadowCameraPool.Clear();
         _providerProbe?.Dispose();
         _graph?.Dispose();
-        _store.Dispose();
         foreach (FeatureShape shape in _shapes.Values)
             shape.Dispose();
         _providerPipeline.Dispose();

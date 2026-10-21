@@ -309,6 +309,7 @@ public sealed class Renderer : IDisposable
     private readonly List<Material> _changedMaterials = new();
     private readonly List<Material> _shadowMaterials = new();
     private readonly List<GpuMesh> _changedMeshes = new();
+    private readonly GraphStore _store;
     private readonly List<DeviceBuffer> _replaced = new();
     private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiring = new();
     private ViewDesc[] _views = [];
@@ -338,11 +339,12 @@ public sealed class Renderer : IDisposable
 
         Textures = new RendererTextures(device) { Reporter = Report };
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
-        _geometry = new GeometryPool(device, _options.PageVertexWords, _options.PageIndices);
+        _store = new GraphStore();
+        _geometry = new GeometryPool(device, _store, _options.PageVertexWords, _options.PageIndices);
         _materials = new MaterialSystem(device, Textures) { Reporter = Report };
-        _globals = new GlobalRegistry(device, Textures) { Reporter = Report };
+        _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
         _frame.ChangedMaterials = _shadowMaterials;
         Skies = new BuiltInSkies(this);
@@ -766,10 +768,9 @@ public sealed class Renderer : IDisposable
             buffer.Dispose();
         _frame.Dispose();
         _effects?.Dispose();
-        _globals.Dispose();
         _materials.Dispose();
-        _geometry.Dispose();
         _uploader.Dispose();
+        _store.Dispose();
         Textures.Dispose();
         _frameQueued.Dispose();
         _frameDone.Dispose();
@@ -875,7 +876,7 @@ public sealed class Renderer : IDisposable
             world.World.Render.UpdateDeformation(_geometry, _lastDispatched);
             world.Buckets.Update(world.World.Render.DrawChanged, world.World.Render.BoundsChanged, _changedMaterials);
         }
-        _geometry.FlushCopies(_uploader, _lastDispatched);
+        _geometry.FlushCopies(_uploader);
 
         _materials.Flush(_uploader, _lastDispatched);
         _globals.Flush(_uploader, _lastDispatched);
