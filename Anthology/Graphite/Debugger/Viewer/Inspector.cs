@@ -26,7 +26,7 @@ internal sealed partial class ProfilerView
 
     private static readonly Dictionary<NodeKind, string[]> SnapshotTabs = new()
     {
-        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "Capture" },
+        [NodeKind.Frame] = new[] { "Overview", "Timing", "Memory", "Render Graph", "Capture" },
         [NodeKind.Instance] = new[] { "Overview", "Render Graph" },
         [NodeKind.Pass] = new[] { "Overview", "Resources", "Commands" },
         [NodeKind.CommandBuffer] = new[] { "Overview" },

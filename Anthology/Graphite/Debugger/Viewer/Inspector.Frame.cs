@@ -162,6 +162,10 @@ internal sealed partial class ProfilerView
             case "Capture":
                 CaptureTab(model);
                 break;
+
+            case "Render Graph":
+                FrameGraphTab(model);
+                break;
         }
     }
 
