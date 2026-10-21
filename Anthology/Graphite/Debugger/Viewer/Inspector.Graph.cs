@@ -23,7 +23,7 @@ internal sealed partial class ProfilerView
     private string? _graphSelection;
     private readonly Dictionary<string, NodeGraphController> _graphControllers = new();
 
-    private void TargetsTab(FrameModel model, ProfileNode node, DeepView view, DeepPass pass, List<ProfileNode> passDraws, int position)
+    private void TargetsTab(FrameModel model, ProfileNode node, DeepInstance view, DeepPass pass, List<ProfileNode> passDraws, int position)
     {
         int step = position + 1;
 
@@ -63,7 +63,7 @@ internal sealed partial class ProfilerView
             PixelHistory(model, node, view, pass, passDraws, targets, step, p);
     }
 
-    private void PixelHistory(FrameModel model, ProfileNode node, DeepView view, DeepPass pass, List<ProfileNode> passDraws, List<ViewerItem> targets, int step, (float U, float V) pixel)
+    private void PixelHistory(FrameModel model, ProfileNode node, DeepInstance view, DeepPass pass, List<ProfileNode> passDraws, List<ViewerItem> targets, int step, (float U, float V) pixel)
     {
         string key = _viewerSelection.TryGetValue("draw:Targets", out string? chosen) && targets.Any(t => t.Key == chosen) ? chosen : targets[0].Key;
         RecordedGraphResource? graph = GraphResource(view, key[4..]);
@@ -122,9 +122,9 @@ internal sealed partial class ProfilerView
         public bool Above;
     }
 
-    private void RenderGraphTab(FrameModel model, ProfileNode node, RecordedView recordedView)
+    private void RenderGraphTab(FrameModel model, ProfileNode node, RecordedInstance recordedInstance)
     {
-        DeepView? view = model.ViewOf(node);
+        DeepInstance? view = model.InstanceOf(node);
         if (view == null)
             return;
         DeepIndex index = model.Index!;
@@ -250,7 +250,7 @@ internal sealed partial class ProfilerView
             controller.SetView(new Float2(Metrics.PaddingLarge, GraphHeight / 2f), 0.6f);
         }
 
-        Section("Render graph / " + view.Name, 0, "Passes run left to right / imported resources in green / click a node to trace it", w =>
+        Section("Render graph / " + view.Name, 0, "Passes run left to right / imported or outer instance resources in green / click a node to trace it", w =>
         {
             using (_paper.Row("legend").Height(Metrics.CompactHeight).Gap(Metrics.PaddingLarge).AlignItems(LayoutAlignment.Center).Enter())
             {
@@ -258,7 +258,7 @@ internal sealed partial class ProfilerView
                 LegendItem("r", Style.Read, "Read");
                 LegendItem("p", Style.KindDot(NodeKind.Pass), "Pass");
                 LegendItem("t", Style.KindDot(NodeKind.CommandBuffer), "Transient resource");
-                LegendItem("i", Style.Good, "Imported");
+                LegendItem("i", Style.Good, "Imported or outer");
             }
 
             List<Kv> detail = new();
@@ -292,7 +292,7 @@ internal sealed partial class ProfilerView
             else
             {
                 detail.Add(new("Passes", passes.Count.ToString()));
-                detail.Add(new("Skipped", recordedView.Skipped.Length.ToString()));
+                detail.Add(new("Skipped", recordedInstance.Skipped.Length.ToString()));
                 detail.Add(new("Resources", resources.Count.ToString()));
                 detail.Add(new("Imported", resources.Values.Count(r => r.Imported).ToString()));
                 detail.Add(new("Selection", "None - click a node"));
@@ -321,9 +321,9 @@ internal sealed partial class ProfilerView
             }
         });
 
-        if (recordedView.Skipped.Length > 0)
+        if (recordedInstance.Skipped.Length > 0)
             TableSection("Skipped passes", 420, "Not in the graph this frame",
                 new[] { "Pass", "Reason" }, new[] { 1.4f, 1.4f },
-                recordedView.Skipped.Select(s => R(s.Name, s.Reason.ToString())).ToList());
+                recordedInstance.Skipped.Select(s => R(s.Name, s.Reason.ToString())).ToList());
     }
 }

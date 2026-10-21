@@ -309,7 +309,7 @@ internal sealed partial class ProfilerView
     {
         DeepIndex index = model.Index!;
         DeepPass pass = model.PassOf(node)!;
-        DeepView view = model.ViewOf(node)!;
+        DeepInstance view = model.InstanceOf(node)!;
         ProfileNode passNode = node.Ancestor(NodeKind.Pass)!;
         ProfileNode? program = node.Ancestor(NodeKind.Program);
         ProfileNode? marker = node.Ancestor(NodeKind.Marker);

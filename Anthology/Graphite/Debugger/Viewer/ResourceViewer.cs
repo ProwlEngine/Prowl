@@ -117,7 +117,7 @@ internal sealed partial class ProfilerView
     private ViewerData ResolveViewerData(FrameModel model, ProfileNode node, string key, TargetStep? step)
     {
         DeepIndex index = model.Index!;
-        DeepView view = model.ViewOf(node)!;
+        DeepInstance view = model.InstanceOf(node)!;
         DeepPass pass = model.PassOf(node)!;
         string kind = key[..key.IndexOf(':')];
         string name = key[(key.IndexOf(':') + 1)..];

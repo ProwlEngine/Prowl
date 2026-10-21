@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Prowl.Graphite.Debugger.Trace;
-using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Debugger.Viewer;
 
@@ -70,6 +69,8 @@ internal static class Describe
             name.Append(' ').Append(type);
         return name.ToString();
     }
+
+    public static string Key(GraphInstanceKey key) => key.Kind == GraphKind.Root ? key.Kind.Name : $"{key.Kind.Name} #{key.Id}";
 
     public static string Name(VertexAttributeID id) => VertexAttributeID.ToString(id) ?? id.ToString();
 

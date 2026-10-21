@@ -55,7 +55,7 @@ internal static class Style
     private static OrigamiRamp KindRamp(NodeKind kind) => kind switch
     {
         NodeKind.Frame => Theme.Blue,
-        NodeKind.View => Theme.Red,
+        NodeKind.Instance => Theme.Red,
         NodeKind.Pass => Theme.Amber,
         NodeKind.CommandBuffer => Theme.Primary,
         NodeKind.Program => Theme.Green,
@@ -70,7 +70,7 @@ internal static class Style
     public static string KindLabel(NodeKind kind) => kind switch
     {
         NodeKind.Frame => "Frame",
-        NodeKind.View => "View",
+        NodeKind.Instance => "Instance",
         NodeKind.Pass => "Render Pass",
         NodeKind.CommandBuffer => "Command Buffer (outside passes)",
         NodeKind.Program => "Program",

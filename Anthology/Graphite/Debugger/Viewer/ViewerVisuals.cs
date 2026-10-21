@@ -34,12 +34,12 @@ internal sealed partial class ProfilerView
     private int _meshOverlay;
     private float _yaw = -35f, _pitch = 22f;
 
-    private ReplayResult Replay(FrameModel model, int view, int pass, int? eventIndex)
+    private ReplayResult Replay(FrameModel model, int instance, int pass, int? eventIndex)
     {
-        var key = (view, pass, eventIndex);
+        var key = (instance, pass, eventIndex);
         if (!_replays.TryGetValue(key, out ReplayResult? result))
         {
-            result = _source.Replay(new ReplayRequest { ViewIndex = view, PassIndex = pass, EventIndex = eventIndex });
+            result = _source.Replay(new ReplayRequest { InstanceIndex = instance, PassIndex = pass, EventIndex = eventIndex });
             _replays[key] = result;
         }
         return result;
@@ -48,7 +48,7 @@ internal sealed partial class ProfilerView
     private static ReplayOutput? Output(ReplayResult result, TraceResourceId id)
         => result.Outputs.FirstOrDefault(o => o.Resource == id);
 
-    private void ResolveTexture(FrameModel model, DeepView view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
+    private void ResolveTexture(FrameModel model, DeepInstance view, DeepPass pass, RecordedResource? res, TargetStep? step, ViewerData data)
     {
         if (res == null)
         {
@@ -59,7 +59,7 @@ internal sealed partial class ProfilerView
         TraceResourceId id = res.Id;
         DeepIndex index = model.Index!;
 
-        bool Writes(DeepView v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
+        bool Writes(DeepInstance v, DeepPass p) => p.Accesses.Any(a => a.IsOutput && GraphResource(v, a.Resource) is { } g && Backing(index, g)?.Id == res.Id);
 
         ReplayOutput? output = null;
         if (Writes(view, pass))
@@ -75,8 +75,8 @@ internal sealed partial class ProfilerView
         }
         else
         {
-            (DeepView, DeepPass)? writer = null;
-            foreach (DeepView v in model.Deep!.Views.OrderBy(v => v.Index))
+            (DeepInstance, DeepPass)? writer = null;
+            foreach (DeepInstance v in model.Deep!.Instances.OrderBy(v => v.Index))
                 foreach (DeepPass p in v.Passes)
                 {
                     bool earlier = v.Index < view.Index || (v.Index == view.Index && p.Index < pass.Index);

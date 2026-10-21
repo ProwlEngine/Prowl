@@ -26,7 +26,7 @@ internal sealed partial class ProfilerView
         return "Raster";
     }
 
-    private static string? PreviousState(DeepView view, DeepPass pass, string resource)
+    private static string? PreviousState(DeepInstance view, DeepPass pass, string resource)
     {
         string? state = null;
         foreach (DeepPass earlier in view.Passes)
@@ -40,14 +40,14 @@ internal sealed partial class ProfilerView
         return state;
     }
 
-    private static string Transition(DeepView view, DeepPass pass, RecordedAccess access)
+    private static string Transition(DeepInstance view, DeepPass pass, RecordedAccess access)
     {
         string to = AccessState(access);
         string from = PreviousState(view, pass, access.Resource) ?? "Undefined";
         return from == to ? "No barrier" : $"{from} -> {to}";
     }
 
-    private static RecordedGraphResource? GraphResource(DeepView view, string name)
+    private static RecordedGraphResource? GraphResource(DeepInstance view, string name)
         => view.Resources.FirstOrDefault(r => r.Name == name);
 
     private static RecordedResource? Backing(DeepIndex index, RecordedGraphResource graph)
@@ -76,19 +76,19 @@ internal sealed partial class ProfilerView
         RecordedPass pass = node.Pass!;
         var stats = pass.Stats;
         var vertex = node.CommandBuffer?.VertexStats;
-        string view = node.Parent!.Name;
+        RecordedInstance instance = node.Parent!.Instance!;
 
         switch (tab)
         {
             case "Overview":
             {
-                RecordedPass? Find(Recording f) => f.Views.FirstOrDefault(v => v.Name == view)?.Passes.FirstOrDefault(p => p.Name == pass.Name);
+                RecordedPass? Find(Recording f) => f.Instances.FirstOrDefault(i => i.Key == instance.Key)?.Passes.FirstOrDefault(p => p.Name == pass.Name);
                 double Gpu(Recording f)
                 {
-                    RecordedView? v = f.Views.FirstOrDefault(x => x.Name == view);
+                    RecordedInstance? i = f.Instances.FirstOrDefault(x => x.Key == instance.Key);
                     RecordedPass? p = Find(f);
-                    if (v == null || p == null) return 0;
-                    return f.CommandBuffers.FirstOrDefault(b => b.ViewIndex == v.Index && b.PassIndex == p.Index)?.Milliseconds ?? 0;
+                    if (i == null || p == null) return 0;
+                    return f.CommandBuffers.FirstOrDefault(b => b.InstanceIndex == i.Index && b.PassIndex == p.Index)?.Milliseconds ?? 0;
                 }
 
                 double[] gpu = Heavy ? [] : frames.Select(Gpu).ToArray();
@@ -96,14 +96,14 @@ internal sealed partial class ProfilerView
                 double[] draws = Heavy ? [] : frames.Select(f => (double)(Find(f)?.Stats.Draws ?? 0)).ToArray();
                 double Avg(double[] v) => v.Length > 0 ? v.Average() : 0;
                 string Sub(double[] v, Func<double, string> format) => Heavy ? "this snapshot" : $"avg {format(Avg(v))}";
-                double viewMs = node.Parent!.Milliseconds;
+                double instanceMs = node.Parent!.OwnMilliseconds;
 
                 HeroStrip(new Stat[]
                 {
                     new("GPU time", Style.Ms2(node.Milliseconds), Sub(gpu, Style.Ms2), Heavy ? null : Versus(node.Milliseconds, Avg(gpu))),
                     new("CPU record", Style.Ms2(stats.CpuMilliseconds), Sub(cpu, Style.Ms2), Heavy ? null : Versus(stats.CpuMilliseconds, Avg(cpu))),
                     new("Draw calls", Style.Int(stats.Draws), Sub(draws, Style.Int)),
-                    new("Share of view", viewMs > 0 ? Style.F(node.Milliseconds / viewMs * 100.0, "0.0") + "%" : "-", $"of {view}"),
+                    new("Share of instance", instanceMs > 0 ? Style.F(node.Milliseconds / instanceMs * 100.0, "0.0") + "%" : "-", $"of {instance.Name}"),
                 });
 
                 if (!Heavy)
@@ -116,7 +116,7 @@ internal sealed partial class ProfilerView
                 Accordion("Details", () => KvSection("Pass", 420, new Kv?[]
                 {
                     new("Name", pass.Name),
-                    new("View", view),
+                    new("Instance", instance.Name),
                     new("Indirect draws", Style.Int(stats.IndirectDraws)),
                     new("Dispatches", stats.Dispatches.ToString()),
                     new("Shader switches", Style.Int(stats.ShaderSwitches)),
@@ -128,8 +128,8 @@ internal sealed partial class ProfilerView
                     vertex != null ? new("Fragment invocations", Style.F(vertex.Value.FragmentShaderInvocations / 1e6, "0.00") + " M") : null,
                 }));
 
-                if (Heavy && model.PassOf(node) is { } deep && model.ViewOf(node) is { } deepView)
-                    Collapsible("Replay, attachments and barriers", () => PassDeepOverview(model, deepView, deep));
+                if (Heavy && model.PassOf(node) is { } deep && model.InstanceOf(node) is { } deepInstance)
+                    Collapsible("Replay, attachments and barriers", () => PassDeepOverview(model, deepInstance, deep));
                 break;
             }
 
@@ -144,7 +144,7 @@ internal sealed partial class ProfilerView
         }
     }
 
-    private void PassDeepOverview(FrameModel model, DeepView view, DeepPass pass)
+    private void PassDeepOverview(FrameModel model, DeepInstance view, DeepPass pass)
     {
         DeepIndex index = model.Index!;
         SetFramebufferCommand? fb = pass.Commands.OfType<SetFramebufferCommand>().FirstOrDefault();
@@ -199,7 +199,7 @@ internal sealed partial class ProfilerView
                 string[] parts = x.t.Split(" -> ");
                 return R(x.a.Resource, parts[0], parts[1]);
             }).ToList();
-        TableSection("Barriers", 420, "From previous declared use in this view",
+        TableSection("Barriers", 420, "From previous declared use in this instance",
             new[] { "Resource", "From", "To" }, new[] { 1.4f, 1.2f, 1.2f },
             barriers.Count > 0 ? barriers : new List<Row> { R("-", "No barriers", "") });
 
@@ -211,7 +211,7 @@ internal sealed partial class ProfilerView
     private void PassResources(FrameModel model, ProfileNode node)
     {
         DeepIndex index = model.Index!;
-        DeepView view = model.ViewOf(node)!;
+        DeepInstance view = model.InstanceOf(node)!;
         DeepPass pass = model.PassOf(node)!;
         const string context = "pass:Resources";
 
