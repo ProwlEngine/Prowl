@@ -83,6 +83,21 @@ public abstract class PersistentResourceTests<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Fact]
+    public void ReleasedPersistentTexture_IsDisposedAndMadeAgainOnTheNextResolve()
+    {
+        using GraphStore store = new();
+        RenderResourceID id = RenderResourceID.Intern("persistent_released");
+        GraphInstanceKey key = new(TestViews.Kind, 0);
+        GraphTextureDesc desc = GraphTextureDesc.Sized(16, 16, false, PixelFormat.R8_G8_B8_A8_UNorm);
+        RenderTexture first = store.ResolvePersistent(GD, id, desc, key);
+
+        store.ReleasePersistent(id, key);
+
+        Assert.True(first.ColorTextures[0].IsDisposed);
+        Assert.NotSame(first, store.ResolvePersistent(GD, id, desc, key));
+    }
+
+    [Fact]
     public void PersistentCube_ResolvedThroughTheStore_HasItsMipsAndAFramebufferOnEach()
     {
         using GraphStore store = new();

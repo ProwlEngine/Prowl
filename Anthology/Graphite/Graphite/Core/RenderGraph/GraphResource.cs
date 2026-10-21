@@ -87,6 +87,12 @@ internal abstract class HistoryRings<TResource, TDesc>
             && ring.AllocationExecutionId != executionId;
     }
 
+    public void Release(GraphInstanceKey key)
+    {
+        if (_rings.Remove(key, out Ring? ring))
+            DisposeRing(ring);
+    }
+
     public void DisposeAll()
     {
         foreach (Ring ring in _rings.Values)

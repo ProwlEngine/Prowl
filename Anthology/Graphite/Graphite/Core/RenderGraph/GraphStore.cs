@@ -49,6 +49,20 @@ public sealed class GraphStore : IDisposable
         return buffer.ResolveHistory(device, key, device.LastBegunExecutionId + 1, 0, description.ToBufferDescription());
     }
 
+    /// <summary>Frees a persistent texture now instead of waiting for it to expire. A later resolve makes it again.</summary>
+    public void ReleasePersistent(RenderResourceID id, GraphInstanceKey key)
+    {
+        if (_textures.TryGetValue(id, out TextureRings? rings))
+            rings.Release(key);
+    }
+
+    /// <summary>Frees a persistent buffer now instead of waiting for it to expire. A later resolve makes it again.</summary>
+    public void ReleasePersistentBuffer(RenderResourceID id, GraphInstanceKey key)
+    {
+        if (_buffers.TryGetValue(id, out BufferRings? rings))
+            rings.Release(key);
+    }
+
     private TextureRings TexturesFor(RenderResourceID id, int slots)
     {
         if (!_textures.TryGetValue(id, out TextureRings? rings) || rings.Slots != slots)
