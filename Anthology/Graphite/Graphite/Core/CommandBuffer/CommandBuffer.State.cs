@@ -78,6 +78,8 @@ public abstract partial class CommandBuffer
     public void SetDescriptorTable(uint set, DescriptorTable? table)
     {
         RequireGraphExecution(nameof(SetDescriptorTable));
+        if (table != null)
+            SetDescriptorTable_CheckNotDisposed(set, table);
         if (set >= _descriptorTables.Length)
         {
             if (table == null)

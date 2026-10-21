@@ -4,6 +4,8 @@ namespace Prowl.Graphite;
 
 public abstract partial class CommandBuffer
 {
+    private (DescriptorTable? Table, uint Version)[] _checkedTables = [];
+
     internal void CheckNotDisposed(GraphicsResource? resource, string use)
     {
         if (resource is { IsDisposed: true } && Device.ValidationEnabled)
@@ -27,6 +29,32 @@ public abstract partial class CommandBuffer
     {
         string reason = resource.DisposeReason is { } why ? $" ({why})" : "";
         throw new RenderException($"{use} is '{resource.Name}', which was disposed{reason} before command buffer '{Name}' recorded a command using it.");
+    }
+
+    private void SetDescriptorTable_CheckNotDisposed(uint set, DescriptorTable table)
+    {
+        if (!Device.ValidationEnabled)
+            return;
+
+        CheckNotDisposed(table, "The descriptor table");
+        if (_checkedTables.Length <= set)
+            Array.Resize(ref _checkedTables, (int)set + 1);
+        if (ReferenceEquals(_checkedTables[set].Table, table) && _checkedTables[set].Version == table.Version)
+            return;
+
+        _checkedTables[set] = (table, table.Version);
+        for (int element = 0; element < table.ElementCount; element++)
+        {
+            ref readonly ResourceLayoutElementDescription description = ref table.Layout.Elements[element];
+            if (description.Count != 1)
+                continue;
+
+            DescriptorTableEntry entry = table.EntriesOf(element)[0];
+            GraphicsResource? disposed = Disposed(entry.Buffer?.Buffer) ?? Disposed(entry.Texture) ?? Disposed(entry.View)
+                ?? Disposed(entry.View?.Target) ?? Disposed(entry.Sampler);
+            if (disposed != null)
+                ThrowDisposed(disposed, $"The resource bound to '{PropertyID.ToString(description.Name)}' in descriptor table '{table.Name}'");
+        }
     }
 
     private void SetFramebuffer_CheckNotDisposed(Framebuffer fb)
