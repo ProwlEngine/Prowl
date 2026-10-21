@@ -254,6 +254,8 @@ internal sealed class WorldReflections : IDisposable
         public Texture Cube { get; } = cube;
         public Framebuffer All { get; } = all;
         public Framebuffer[] Faces { get; } = faces;
+        public RenderTexture AllTexture { get; } = new(all);
+        public RenderTexture[] FaceTextures { get; } = Array.ConvertAll(faces, face => new RenderTexture(face));
 
         public void Dispose()
         {
