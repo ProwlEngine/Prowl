@@ -4,6 +4,7 @@ using Prowl.Warp;
 using Prowl.Warp.Transports.Kcp;
 using Prowl.Warp.Transports.Local;
 using Prowl.Warp.Transports.Steam;
+using Prowl.Warp.Transports.Batching;
 
 namespace Prowl.Runtime.Networking;
 
@@ -18,6 +19,8 @@ public enum NetworkTransport
 public sealed class NetworkConfiguration
 {
     public uint AppVersion;
+    public bool BatchMessages = true;
+    public bool UseNetworkThread = true;
     public bool CongestionControl;
     public float ConnectTimeoutSeconds = 5;
     public int FastResend = 2;
@@ -147,13 +150,15 @@ public static partial class Networking
     }
 
     /// <summary>Creates a transport using project defaults. Local transports share a network within this process only.</summary>
-    public static Transport CreateTransport(bool hosting) => s_configuration.Transport switch
+    public static Transport CreateTransport(bool hosting)
     {
-        NetworkTransport.Local => new LocalTransport(s_localNetwork,
-            hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString()),
-        NetworkTransport.Steam => new SteamTransport(),
-        _ => new KcpTransport(s_configuration.CreateKcpOptions())
-    };
+        if (s_configuration.Transport == NetworkTransport.Local)
+            return new LocalTransport(s_localNetwork, hosting ? s_configuration.LocalAddress : Guid.NewGuid().ToString());
+        if (s_configuration.Transport == NetworkTransport.Steam) return new SteamTransport();
+        Transport transport = new KcpTransport(s_configuration.CreateKcpOptions());
+        if (s_configuration.BatchMessages) transport = new BatchingTransport(transport, s_configuration.Mtu);
+        return transport;
+    }
 
     /// <summary>Hosts using the project's transport and session defaults.</summary>
     public static NetSession Host(string name = "Host")

@@ -76,7 +76,10 @@ public static partial class Networking
     {
         BeginSession();
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetSession session = NetSession.Host(transport, name, options ?? s_configuration.CreateSessionOptions());
+        Transport sessionTransport = PrepareSessionTransport(transport);
+        NetSession session;
+        try { session = NetSession.Host(sessionTransport, name, options ?? s_configuration.CreateSessionOptions()); }
+        catch { if (sessionTransport is NetworkWorker worker) worker.Dispose(); throw; }
         Attach(session);
 
         s_scene = Scene.Current;
@@ -98,8 +101,10 @@ public static partial class Networking
     {
         BeginSession();
         using FrameStatScope stats = FrameStats.Network.Scope();
-        NetSession session = NetSession.Join(transport, address, name, token,
-            options ?? s_configuration.CreateSessionOptions());
+        Transport sessionTransport = PrepareSessionTransport(transport);
+        NetSession session;
+        try { session = NetSession.Join(sessionTransport, address, name, token, options ?? s_configuration.CreateSessionOptions()); }
+        catch { if (sessionTransport is NetworkWorker worker) worker.Dispose(); throw; }
         Attach(session);
         return session;
     }
@@ -114,6 +119,15 @@ public static partial class Networking
 
         using FrameStatScope stats = FrameStats.Network.Scope();
         session.Shutdown(message);
+    }
+
+    // Warp transports stay single-threaded. The runtime owns the worker and the mailbox
+    // presented to the main-thread session; local in-process sessions need no worker.
+    private static Transport PrepareSessionTransport(Transport transport)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        return s_configuration.UseNetworkThread && transport is not (Prowl.Warp.Transports.Local.LocalTransport or NetworkWorker)
+            ? new NetworkWorker(transport) : transport;
     }
 
     // --- Called by the game loop -------------------------------------------------------------
@@ -201,6 +215,7 @@ public static partial class Networking
 
             NetworkDiagnostics.Record("Session", "Local", session.LocalPeer, Guid.Empty, $"Ended: {reason}: {message}");
             Session = null;
+            if (session.Transport is NetworkWorker worker) worker.Dispose();
             Scene.OnSceneLoaded -= OnHostSceneLoaded;
             ResetState();
             Debug.Log(message == null

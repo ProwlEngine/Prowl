@@ -45,6 +45,8 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         }
         else if (Configuration.Transport == NetworkTransport.Kcp)
         {
+            Toggle(paper, "batchmessages", "Batch Messages", Configuration.BatchMessages, v => Configuration.BatchMessages = v);
+            Toggle(paper, "networkthread", "Networking Thread", Configuration.UseNetworkThread, v => Configuration.UseNetworkThread = v);
             Integer(paper, "port", "Port (0 = automatic)", Configuration.Port, v => Configuration.Port = v, 0, 65535);
             Unsigned(paper, "protocol", "Protocol ID", Configuration.ProtocolId, v => Configuration.ProtocolId = v);
             Integer(paper, "mtu", "MTU (bytes)", Configuration.Mtu, v => Configuration.Mtu = v, 1200, 65507);
@@ -65,7 +67,7 @@ public sealed class NetworkingSettings : ProjectSettingsBase
 
         if (Configuration.Transport != NetworkTransport.Kcp) return;
         Header(paper, "reliability", "KCP Reliability");
-        Origami.Label(paper, "netsettings_agreement", "Peers must use matching protocol IDs, MTUs, and send/receive windows.").Show();
+        Origami.Label(paper, "netsettings_agreement", "Peers must use matching batching settings, protocol IDs, MTUs, and send/receive windows.").Show();
         Toggle(paper, "nodelay", "No Delay", Configuration.NoDelay, v => Configuration.NoDelay = v);
         Toggle(paper, "congestion", "Congestion Control", Configuration.CongestionControl, v => Configuration.CongestionControl = v);
         Integer(paper, "interval", "Update Interval (ms)", Configuration.UpdateIntervalMilliseconds, v => Configuration.UpdateIntervalMilliseconds = v, 10, 5000);

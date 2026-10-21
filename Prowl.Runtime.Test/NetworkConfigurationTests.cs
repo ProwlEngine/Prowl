@@ -10,6 +10,22 @@ namespace Prowl.Runtime.Test;
 public class NetworkConfigurationTests : RuntimeTestBase
 {
     [Fact]
+    public void DefaultUdpTransportUsesNetworkingWorker()
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        try
+        {
+            Networking.Networking.Configure(new() { Port = 0 });
+            using Transport transport = Networking.Networking.CreateTransport(true);
+            Assert.IsType<Prowl.Warp.Transports.Batching.BatchingTransport>(transport);
+            using NetSession session = Networking.Networking.Host(transport);
+            Assert.IsType<NetworkWorker>(session.Transport);
+            Assert.NotEqual(0, session.Transport.LocalPort);
+        }
+        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
+    }
+
+    [Fact]
     public void ConfigurationNormalizesInvalidValuesAndCreatesIndependentOptions()
     {
         var config = new NetworkConfiguration { TickRate = float.NaN, InterpolationMilliseconds = -1,
@@ -59,7 +75,8 @@ public class NetworkConfigurationTests : RuntimeTestBase
     public void ConfiguredClientUsesDefaultDestinationPortAndMatchingProtocolAndVersion()
     {
         NetworkConfiguration previous = Networking.Networking.Configuration;
-        var config = new NetworkConfiguration { Port = 0, ProtocolId = 1234, AppVersion = 12 };
+        var config = new NetworkConfiguration { Port = 0, ProtocolId = 1234, AppVersion = 12,
+            BatchMessages = false, UseNetworkThread = false };
         using var transport = new KcpTransport(config.CreateKcpOptions());
         using NetSession host = NetSession.Host(transport, options: config.CreateSessionOptions());
         config.Port = transport.LocalPort;
@@ -77,6 +94,40 @@ public class NetworkConfigurationTests : RuntimeTestBase
             Assert.True(Networking.Networking.IsActive);
             Assert.Equal(12u, client.Options.AppVersion);
             Assert.NotEqual(transport.LocalPort, ((KcpTransport)client.Transport).LocalPort);
+        }
+        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ConfiguredUdpModesCanJoinAndExchangeMessages(bool batching, bool threaded)
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        try
+        {
+            var config = new NetworkConfiguration { Port = 0, BatchMessages = batching, UseNetworkThread = threaded };
+            Networking.Networking.Configure(config);
+            using Transport transport = Networking.Networking.CreateTransport(true);
+            using NetSession host = NetSession.Host(transport);
+            config.Port = transport.LocalPort;
+            Networking.Networking.Configure(config);
+            NetSession client = Networking.Networking.Join("127.0.0.1", "client");
+            bool received = false;
+            host.OnRaw(20, (NetPeer peer, ref NetReader reader, Delivery delivery) => received = reader.ReadByte() == 42);
+            for (int i = 0; i < 2000 && client.State != SessionState.Active; i++)
+            {
+                host.Update(); Networking.Networking.Receive(); Networking.Networking.Flush(); Thread.Sleep(1);
+            }
+            Assert.Equal(SessionState.Active, client.State);
+            client.SendRaw(client.HostPeer!, 20, new byte[] { 42 }, flags: SendFlags.Immediate);
+            for (int i = 0; i < 2000 && !received; i++)
+            {
+                host.Update(); Networking.Networking.Receive(); Networking.Networking.Flush(); Thread.Sleep(1);
+            }
+            Assert.True(received);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
     }
