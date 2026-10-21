@@ -420,7 +420,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
 /// <summary>
 /// A persistent graph buffer the CPU fills every frame through the frame's scatter, like instance lists and indirect
-/// commands. It grows by doubling.
+/// commands. It grows by doubling. The store frees it when unused, so owners refresh it each frame they use it.
 /// </summary>
 internal sealed class GpuArray
 {
@@ -439,6 +439,9 @@ internal sealed class GpuArray
     public DeviceBuffer Buffer { get; private set; }
 
     public PersistentBuffer Persistent => _persistent;
+
+    /// <summary>Resolves the buffer again, so one the store freed while unused is replaced before it is bound.</summary>
+    public void Refresh() => Buffer = _persistent.Resolve(_device, _store, Buffer.SizeInBytes);
 
     public void Write<T>(Uploader uploader, ReadOnlySpan<T> data) where T : unmanaged
     {
