@@ -4,6 +4,20 @@ namespace Prowl.Graphite;
 
 public abstract partial class CommandBuffer
 {
+    internal void CheckNotDisposed(GraphicsResource? resource, string use)
+    {
+        if (resource is { IsDisposed: true } && Device.ValidationEnabled)
+            ThrowDisposed(resource, use);
+    }
+
+    private static GraphicsResource? Disposed(GraphicsResource? resource) => resource is { IsDisposed: true } ? resource : null;
+
+    private void ThrowDisposed(GraphicsResource resource, string use)
+    {
+        string reason = resource.DisposeReason is { } why ? $" ({why})" : "";
+        throw new RenderException($"{use} is '{resource.Name}', which was disposed{reason} before command buffer '{Name}' recorded a command using it.");
+    }
+
     private void SetVertexSource_CheckNonNull(IVertexSource source)
     {
         if (!Device.ValidationEnabled)
