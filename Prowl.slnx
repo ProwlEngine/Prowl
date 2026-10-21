@@ -41,6 +41,7 @@
     <Project Path="Samples/Runtime/ManyLights/ManyLights.csproj" />
     <Project Path="Samples/Runtime/ControllerShowcase/ControllerShowcase.csproj" />
     <Project Path="Samples/Runtime/ParticleShowcase/ParticleShowcase.csproj" />
+    <Project Path="Samples/Runtime/NetworkingShowcase/NetworkingShowcase.csproj" />
     <Project Path="Samples/Runtime/PhysicsShowcase/PhysicsShowcase.csproj" />
     <Project Path="Samples/Runtime/RenderingShowcase/RenderingShowcase.csproj" />
     <Project Path="Samples/Runtime/ScriptingShowcase/ScriptingShowcase.csproj" />
