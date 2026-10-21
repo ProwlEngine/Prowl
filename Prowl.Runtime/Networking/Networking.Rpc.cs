@@ -142,6 +142,10 @@ public static partial class Networking
 
         TraceMember("RPC", "Receive", sender, component, method, true, $"{mode}, {delivery}", arguments);
 
+        // Validate on the host even when only another owner will execute the call.
+        NetReader validation = new(arguments);
+        rpc.ValidateArguments(component, ref validation);
+
         Delivery relayDelivery = (flags & RpcFlags.Unreliable) != 0 ? Delivery.Unreliable : Delivery.Reliable;
         switch (mode)
         {

@@ -401,10 +401,10 @@ internal static class NetworkCodeGen
                 case MethodDeclarationSyntax method
                     when FindAttribute(method.AttributeLists, out string? kind) is { } attribute && kind is "Broadcast" or "Host" or "Owner"
                     && AnalyzeRpc(method, attribute, kind, out _) is { } rpc:
-                    StringBuilder invoke = new($"static ({self} __c, ref {ReaderType} __r) => {{ ");
+                    StringBuilder invoke = new($"static ({self} __c, ref {ReaderType} __r, bool __execute) => {{ ");
                     for (int i = 0; i < rpc.ParameterTypes.Count; i++)
                         invoke.Append($"{rpc.ParameterTypes[i]} __a{i} = {Serializer}<{rpc.ParameterTypes[i]}>.Read(ref __r); ");
-                    invoke.Append($"__Rpc_ArgumentsRead(); __c.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
+                    invoke.Append($"if (!__execute) return; __Rpc_ArgumentsRead(); __c.{rpc.Name}({string.Join(", ", Enumerable.Range(0, rpc.ParameterTypes.Count).Select(i => "__a" + i))}); }}");
                     members.Add($"{Descriptor} global::Prowl.Runtime.Networking.RpcMember<{self}> {rpc.Descriptor} = new({rpc.Id}u, "
                         + $"{SymbolDisplay.FormatLiteral(rpc.Signature, true)}, {rpc.Mode}, {rpc.Flags}, {invoke});");
                     break;

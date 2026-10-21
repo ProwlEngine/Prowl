@@ -40,7 +40,7 @@ public class NetTestComponent : Component
     public int Score { get => __sync_Score; set => __Sync_Set(ref __sync_Score, value, __syncnet_Score); }
 
     private static readonly RpcMember<NetTestComponent> __rpc_201 = new(ShoutId, "Shout(string)", RpcMode.Broadcast, RpcFlags.None,
-        static (NetTestComponent s, ref NetReader r) => { string a0 = NetSerializer<string>.Read(ref r); __Rpc_ArgumentsRead(); s.Shout(a0); });
+        static (NetTestComponent s, ref NetReader r, bool execute) => { string a0 = NetSerializer<string>.Read(ref r); if (!execute) return; __Rpc_ArgumentsRead(); s.Shout(a0); });
 
     public void Shout(string text)
     {
@@ -48,8 +48,17 @@ public class NetTestComponent : Component
         Shouts.Add((text, Rpc.Caller));
     }
 
+    private static readonly RpcMember<NetTestComponent> __rpc_204 = new(204, "TellOwner(string)", RpcMode.Owner, RpcFlags.None,
+        static (NetTestComponent s, ref NetReader r, bool execute) => { string value = NetSerializer<string>.Read(ref r); if (!execute) return; __Rpc_ArgumentsRead(); s.TellOwner(value); });
+
+    public void TellOwner(string value)
+    {
+        if (__Rpc_Begin(__rpc_204, out NetWriter w)) { w.WriteString(value); if (!__Rpc_Send(__rpc_204, w)) return; }
+        Shouts.Add((value, Rpc.Caller));
+    }
+
     private static readonly RpcMember<NetTestComponent> __rpc_202 = new(AskHostId, "AskHost(int)", RpcMode.Host, RpcFlags.None,
-        static (NetTestComponent s, ref NetReader r) => { int a0 = NetSerializer<int>.Read(ref r); __Rpc_ArgumentsRead(); s.AskHost(a0); });
+        static (NetTestComponent s, ref NetReader r, bool execute) => { int a0 = NetSerializer<int>.Read(ref r); if (!execute) return; __Rpc_ArgumentsRead(); s.AskHost(a0); });
 
     public void AskHost(int value)
     {
@@ -58,7 +67,7 @@ public class NetTestComponent : Component
     }
 
     private static readonly RpcMember<NetTestComponent> __rpc_203 = new(ExplodeId, "Explode()", RpcMode.Host, RpcFlags.None,
-        static (NetTestComponent s, ref NetReader r) => { __Rpc_ArgumentsRead(); s.Explode(); });
+        static (NetTestComponent s, ref NetReader r, bool execute) => { if (!execute) return; __Rpc_ArgumentsRead(); s.Explode(); });
 
     public void Explode()
     {
@@ -493,6 +502,41 @@ public class NetworkingTests : RuntimeTestBase
             Networking.Networking.Shutdown();
             alice.Dispose();
         }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void MalformedRpcsAreRejectedBeforeRelay(bool ownerRpc, bool trailingBytes)
+    {
+        Scene scene = CreateScene();
+        MakeCurrent(scene);
+        LocalNetwork network = new();
+        Networking.Networking.Host(new LocalTransport(network, "host"));
+        using FakePeer alice = FakePeer.Join(network, "alice");
+        using FakePeer bob = FakePeer.Join(network, "bob");
+        try
+        {
+            Pump(() => alice.Has(FakePeer.SceneSnapshot) && bob.Has(FakePeer.SceneSnapshot), alice, bob);
+            GameObject crate = CreateGameObject("Crate");
+            NetTestComponent component = crate.AddComponent<NetTestComponent>();
+            scene.Add(crate);
+            crate.NetworkSpawn(Networking.Networking.Session!.Peers.Single(p => p.Name == "bob"));
+            alice.Send(FakePeer.RpcToHost, w =>
+            {
+                w.WriteGuid(component.Identifier);
+                w.WriteUInt32(ownerRpc ? 204u : NetTestComponent.ShoutId);
+                if (trailingBytes) { w.WriteString("hello"); w.WriteByte(42); }
+            });
+            for (int i = 0; i < 10; i++) Frame([alice, bob]);
+            Assert.False(bob.Has(FakePeer.RpcFromHost));
+            Assert.Empty(component.Shouts);
+            Assert.Equal(SessionState.Ended, alice.Session.State);
+            Assert.Equal(SessionState.Active, bob.Session.State);
+        }
+        finally { Networking.Networking.Shutdown(); }
     }
 
     // --- Client side -----------------------------------------------------------------------------

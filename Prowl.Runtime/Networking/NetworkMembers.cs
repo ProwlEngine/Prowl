@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.IO;
 using System.Runtime.CompilerServices;
 
 using Prowl.Warp;
@@ -74,11 +75,13 @@ public abstract class RpcMember(uint id, string signature, RpcMode mode, RpcFlag
 
     /// <summary>Reads the arguments and calls the method.</summary>
     internal abstract void Invoke(Component component, ref NetReader reader);
+
+    internal abstract void ValidateArguments(Component component, ref NetReader reader);
 }
 
-/// <summary>Reads an RPC's arguments and calls it. Generated; marks the arguments read before the call.</summary>
+/// <summary>Reads arguments, then optionally executes the RPC. Validation never runs game code.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public delegate void RpcInvoker<in TComponent>(TComponent component, ref NetReader reader);
+public delegate void RpcInvoker<in TComponent>(TComponent component, ref NetReader reader, bool execute);
 
 /// <inheritdoc />
 [EditorBrowsable(EditorBrowsableState.Never)]
@@ -91,7 +94,14 @@ public sealed class RpcMember<TComponent>(
     : RpcMember(id, signature, mode, flags) where TComponent : Component
 {
     internal override void Invoke(Component component, ref NetReader reader) =>
-        invoke((TComponent)component, ref reader);
+        invoke((TComponent)component, ref reader, true);
+
+    internal override void ValidateArguments(Component component, ref NetReader reader)
+    {
+        invoke((TComponent)component, ref reader, false);
+        if (!reader.IsAtEnd)
+            throw new InvalidDataException("RPC arguments contain trailing bytes.");
+    }
 }
 
 /// <summary>The [Sync] properties and RPCs of a component type, its base types' included.</summary>
