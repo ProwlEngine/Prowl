@@ -15,9 +15,10 @@ internal sealed class FeatureShape : IDisposable
     private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
     private bool _sceneDescribed;
 
-    public FeatureShape(GraphKind kind, ViewKind viewKind, CameraShape shape)
+    public FeatureShape(GraphKind kind, ViewKind viewKind, CameraShape shape, CascadeSlot[] cascades)
     {
         Kind = kind;
+        Cascades = cascades;
         ViewKind = viewKind;
         Shape = shape;
         SceneId = RenderResourceID.Intern($"{kind.Name}/Scene");
@@ -32,6 +33,7 @@ internal sealed class FeatureShape : IDisposable
     public GraphKind Kind { get; }
     public ViewKind ViewKind { get; }
     public CameraShape Shape { get; }
+    public CascadeSlot[] Cascades { get; }
     public RenderResourceID SceneId { get; }
     public RenderResourceID ScreenVisibilityId { get; }
     public RenderResourceID ScreenIrradianceId { get; }
@@ -64,6 +66,11 @@ internal sealed class FeatureShape : IDisposable
     public IReadOnlyList<IInstancePass> Passes()
     {
         List<IInstancePass> passes = [Setup];
+        if (Cascades.Length > 0)
+        {
+            passes.Add(new CascadePass(this));
+            passes.Add(new CascadePublishPass(this));
+        }
         foreach (RenderFeature feature in Features)
             passes.Add(PassOf(feature));
         passes.Add(Present);
@@ -114,6 +121,8 @@ internal sealed class FeatureShape : IDisposable
 
     public RenderResourceID IdOf(RenderFeature feature, string name)
         => RenderResourceID.Intern($"{Kind.Name}/{feature.GetType().Name}.{feature.Id}/{name}");
+
+    public RenderResourceID CascadeId(int slot, int cascade) => RenderResourceID.Intern($"{Kind.Name}/Cascade{slot}.{cascade}");
 
     public RenderResourceID HostId(int index) => RenderResourceID.Intern($"{Kind.Name}/Host{index}");
 

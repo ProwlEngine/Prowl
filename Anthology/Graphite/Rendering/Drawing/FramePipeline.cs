@@ -734,6 +734,11 @@ internal sealed class CameraFrame : IDisposable
     public ViewDraws? Draws;
     public FeatureView Info;
 
+    /// <summary>The graph shape the view drew with, and the directional cascades it fits, which the shape was made for.</summary>
+    public FeatureShape? Shape;
+    public CascadeSlot[] CascadeSlots = [];
+    public string CascadeKey = "";
+
     /// <summary>This frame's time as the host gave it.</summary>
     public FrameTime Time;
     public readonly TableRing ViewTable;
@@ -1191,7 +1196,6 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     {
         foreach (CameraFrame camera in Captures())
             camera.Dispose();
-        Shadows?.Dispose();
     }
 }
 
@@ -1483,7 +1487,7 @@ internal sealed partial class FramePipeline : IDisposable
             Draw(camera, view, viewFeatures[index], world, time);
         }
 
-        bool shadows = PrepareShadows();
+        PrepareShadows();
 
         // Providers' objects, written while the views were prepared, the deforming copies' poses, and the shadows' faces,
         // after the frame's earlier writes, as they can rewrite a record those wrote
@@ -1509,8 +1513,6 @@ internal sealed partial class FramePipeline : IDisposable
         int first = 1;
         if (providers)
             _dispatches.Insert(first++, new GraphDispatch(_providerPipeline, _frameStartViews));
-        if (shadows)
-            _dispatches.Insert(first + 1, new GraphDispatch(_shadowPipeline, _frameStartViews));
         _dispatches.AddRange(pipelines);
         _readback.Prepare(readbacks);
         if (_graphDirty)
@@ -1523,9 +1525,6 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (IDisposable retired in _shadowRetired)
             retired.Dispose();
         _shadowRetired.Clear();
-        foreach (ShadowTarget target in _shadowRetiredTargets)
-            target.Release();
-        _shadowRetiredTargets.Clear();
         foreach (IDisposable retired in _retired)
             retired.Dispose();
         _retired.Clear();
@@ -1587,14 +1586,16 @@ internal sealed partial class FramePipeline : IDisposable
 
     private FeatureShape ShapeOf(CameraFrame camera, in ViewDesc view)
     {
-        CameraShape key = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length);
+        (CascadeSlot[] cascades, string cascadeKey) = CascadesOf(camera, view, camera.World);
+        CameraShape key = CameraShape.Of(view, camera.Selected, camera.HostBuffers.Length, cascadeKey);
         GraphKind kind = RenderKinds.Of(view.Kind, key);
         if (!_shapes.TryGetValue(kind, out FeatureShape? shape))
         {
-            _shapes[kind] = shape = new FeatureShape(kind, view.Kind, key) { Frame = this };
+            _shapes[kind] = shape = new FeatureShape(kind, view.Kind, key, cascades) { Frame = this };
             _graphDirty = true;
         }
         shape.LastFrame = _frame;
+        camera.Shape = shape;
         foreach (RenderFeature feature in camera.Selected)
         {
             if (shape.Add(feature) || shape.PassOf(feature).BuiltVersion != feature.Version)
@@ -1607,7 +1608,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private void BuildGraph()
     {
-        List<IPass> passes = [_upload, _probes, _deform, _readbackTexture, _readbackBuffer, .. _fillPasses];
+        List<IPass> passes = [_upload, _probes, _deform, _readbackTexture, _readbackBuffer, .. _fillPasses, .. ShadowPasses()];
         List<GraphKind> kinds = [];
         foreach (FeatureShape shape in _shapes.Values)
         {
@@ -1943,9 +1944,9 @@ internal sealed partial class FramePipeline : IDisposable
     private void Untrack(CameraFrame camera)
     {
         _textures.Untrack(camera.ViewTable);
-        foreach ((_, _, ViewShadows.Cascade[] cascades) in camera.Shadows.Lights)
+        foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
-            foreach (ViewShadows.Cascade cascade in cascades)
+            foreach (ViewShadows.Cascade cascade in light.Cascades)
             {
                 if (cascade.Camera != null)
                     _textures.Untrack(cascade.Camera.ViewTable);
@@ -2021,7 +2022,7 @@ internal sealed partial class FramePipeline : IDisposable
         // A feature asking for jitter offsets the projection by under a pixel, through Halton(2, 3)
         int phases = 0;
         float mipBias = 0;
-        foreach (RenderFeature feature in camera.Features)
+        foreach (RenderFeature feature in camera.Selected)
         {
             if (feature.JitterPhasesSnapshot > phases)
                 (phases, mipBias) = (feature.JitterPhasesSnapshot, feature.JitterMipBiasSnapshot);
@@ -2215,9 +2216,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (FeatureShape shape in _shapes.Values)
             shape.Dispose();
         _providerPipeline.Dispose();
-        _shadowPipeline.Dispose();
         _shadowSampler?.Dispose();
-        _shrinkScratch?.Dispose();
         _tileClear?.Dispose();
         _probes.Dispose();
         _deform.Dispose();
