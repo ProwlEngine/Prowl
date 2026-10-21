@@ -19,4 +19,36 @@ public class TransportCapabilitiesTests
         using Transport steam = new BatchingTransport(new SteamTransport());
         Assert.False(steam.Capabilities.IsAvailable);
     }
+
+    [Fact]
+    public void UnsupportedDeliveryIsRejectedBeforeBackendSend()
+    {
+        using Transport transport = new ReliableBackend();
+        Connection peer = transport.Connect("peer");
+        Assert.Throws<System.NotSupportedException>(() => peer.Send(new byte[0], Delivery.Unreliable));
+    }
+
+    private sealed class ReliableBackend : Transport
+    {
+        public override TransportCapabilities Capabilities => new(true, DeliverySupport.Reliable, TransportExecution.WorkerPreferred);
+        public override bool IsListening => false;
+        public override void Listen() { }
+        public override Connection Connect(string address)
+        {
+            Connection peer = new Peer(this);
+            AddConnection(peer);
+            RaiseConnected(peer);
+            return peer;
+        }
+        public override void Receive() { }
+        public override void Flush() { }
+        public override void Shutdown() { }
+        private sealed class Peer(Transport transport) : Connection(transport, 1, "peer", true)
+        {
+            public override System.TimeSpan RoundTripTime => default;
+            public override int GetMaxMessageSize(Delivery delivery) => 65536;
+            public override void Send(System.ReadOnlySpan<byte> data, Delivery delivery) => ValidateSend(data, delivery);
+            public override void Disconnect() { }
+        }
+    }
 }
