@@ -63,7 +63,7 @@ public class MultiplayerPlayTests : EditorTestHarness
         Transport transport = new KcpTransport(new KcpTransportOptions { Port = 0 });
         if (Networking.Configuration.BatchMessages) transport = new BatchingTransport(transport);
         Networking.Host(transport, "Host");
-        int port = Networking.Session!.Transport.LocalPort;
+        int port = Networking.LocalPort;
 
         ConcurrentQueue<string> logs = new();
         ConcurrentQueue<string> output = new();

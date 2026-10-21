@@ -11,7 +11,23 @@ namespace Prowl.Runtime.Test;
 
 public class NetworkingThreadTests
 {
-    private static Transport Wrap(Transport inner) => new NetworkingThread(inner);
+    private static NetworkingThread CreateThread(Transport inner) => new NetworkingThread(inner);
+
+
+    private static NetSession CreateHostSession(NetworkingThread thread)
+    {
+        thread.Listen();
+        NetSession session = NetSession.CreateHost(thread.Transport);
+        session.Ended += (_, _) => thread.Shutdown();
+        return session;
+    }
+
+    private static NetSession CreateClientSession(NetworkingThread thread, string address, string name)
+    {
+        NetSession session = NetSession.CreateClient(thread.Connect(address), name);
+        session.Ended += (_, _) => thread.Shutdown();
+        return session;
+    }
 
     [Theory]
     [InlineData(false)]
@@ -24,10 +40,10 @@ public class NetworkingThreadTests
             if (encrypted) transport = new Prowl.Warp.Transports.Encryption.EncryptedTransport(transport, new byte[32]);
             return new Prowl.Warp.Transports.Batching.BatchingTransport(transport);
         }
-        using NetworkingThread hostTransport = new(Stack()), clientTransport = new(Stack());
-        using NetSession host = NetSession.Host(hostTransport);
-        using NetSession client = NetSession.Join(clientTransport, $"127.0.0.1:{hostTransport.LocalPort}", "client");
-        WorkerSessionProbe hostProbe = new(host), clientProbe = new(client);
+        using NetworkingThread hostThread = new(Stack()), clientThread = new(Stack());
+        using NetSession host = CreateHostSession(hostThread);
+        using NetSession client = CreateClientSession(clientThread, $"127.0.0.1:{hostThread.LocalPort}", "client");
+        WorkerSessionProbe hostProbe = new(host, hostThread), clientProbe = new(client, clientThread);
         WorkerSessionProbe.PumpUntil(() => client.State == SessionState.Active, hostProbe, clientProbe);
         byte[] payload = new byte[350_000];
         new Random(42).NextBytes(payload);
@@ -42,8 +58,8 @@ public class NetworkingThreadTests
         host.Shutdown("restarting");
         WorkerSessionProbe.PumpUntil(() => ended != null, hostProbe, clientProbe);
         Assert.Equal((SessionEndReason.HostShutdown, "restarting"), ended);
-        Assert.False(hostTransport.IsWorkerRunning);
-        Assert.False(clientTransport.IsWorkerRunning);
+        Assert.False(hostThread.IsWorkerRunning);
+        Assert.False(clientThread.IsWorkerRunning);
     }
 
     [Fact]
@@ -51,8 +67,8 @@ public class NetworkingThreadTests
     {
         KcpTransportOptions Options() => new() { Port = 0, Timeout = TimeSpan.FromMilliseconds(300), PingInterval = TimeSpan.FromMilliseconds(20) };
         KcpTransport rawHost = new(Options());
-        using Transport host = Wrap(rawHost);
-        using Transport client = Wrap(new KcpTransport(Options()));
+        using NetworkingThread host = CreateThread(rawHost);
+        using NetworkingThread client = CreateThread(new KcpTransport(Options()));
         host.Listen();
         Assert.NotEqual(0, host.LocalPort);
         Connection connection = client.Connect($"127.0.0.1:{host.LocalPort}");
@@ -70,11 +86,11 @@ public class NetworkingThreadTests
     public void SendsCopyBorrowedDataAndCallbacksStayOnTheCallerThread()
     {
         LocalNetwork network = new();
-        using Transport hostTransport = Wrap(new LocalTransport(network, "host"));
-        using Transport clientTransport = Wrap(new LocalTransport(network, "client"));
-        using NetSession host = NetSession.Host(hostTransport);
-        using NetSession client = NetSession.Join(clientTransport, "host", "client");
-        WorkerSessionProbe hostProbe = new(host), clientProbe = new(client);
+        using NetworkingThread hostThread = CreateThread(new LocalTransport(network, "host"));
+        using NetworkingThread clientThread = CreateThread(new LocalTransport(network, "client"));
+        using NetSession host = CreateHostSession(hostThread);
+        using NetSession client = CreateClientSession(clientThread, "host", "client");
+        WorkerSessionProbe hostProbe = new(host, hostThread), clientProbe = new(client, clientThread);
         WorkerSessionProbe.PumpUntil(() => client.State == SessionState.Active, hostProbe, clientProbe);
         int callerThread = Environment.CurrentManagedThreadId, callbackThread = 0;
         byte[]? received = null;
@@ -115,8 +131,8 @@ public class NetworkingThreadTests
             Assert.Equal(0, host.PendingReceiveBytes);
             Assert.Empty(host.Connections);
             Assert.Empty(client.Connections);
-            while (host.Poll(out _)) { }
-            while (client.Poll(out _)) { }
+            while (host.TryReadEvent(out _)) { }
+            while (client.TryReadEvent(out _)) { }
         }
         host.Dispose();
         client.Dispose();
@@ -148,8 +164,8 @@ public class NetworkingThreadTests
     {
         LocalNetwork network = new();
         using NetworkingThread host = new(new LocalTransport(network, "host"), maxQueuedBytes: 64);
-        using Transport badClient = Wrap(new LocalTransport(network, "bad"));
-        using Transport healthyClient = Wrap(new LocalTransport(network, "healthy"));
+        using NetworkingThread badClient = CreateThread(new LocalTransport(network, "bad"));
+        using NetworkingThread healthyClient = CreateThread(new LocalTransport(network, "healthy"));
         host.Listen();
         Connection bad = badClient.Connect("host"), healthy = healthyClient.Connect("host");
         WorkerPump pump = new(host, badClient, healthyClient);
@@ -177,7 +193,7 @@ public class NetworkingThreadTests
         Assert.Equal(inner.ListenThread, inner.ReceiveThread);
         inner.Fail = true;
         Assert.True(SpinWait.SpinUntil(() => !transport.IsWorkerRunning, 1000));
-        Assert.Throws<InvalidOperationException>(transport.Receive);
+        Assert.Throws<InvalidOperationException>(() => transport.TryReadEvent(out _));
         Assert.Throws<InvalidOperationException>(transport.Listen);
         transport.Shutdown();
         inner.Fail = false;
@@ -185,19 +201,62 @@ public class NetworkingThreadTests
         Assert.True(transport.IsWorkerRunning);
     }
 
+    [Fact]
+    public void QueuedConnectionSendsAndFlushesStayOnTheNetworkingThread()
+    {
+        ProbeTransport transport = new();
+        using NetworkingThread thread = new(transport);
+        thread.Listen();
+        Connection connection = thread.Connect("probe");
+        WorkerPump pump = new(thread);
+        pump.Until(() => connection.IsConnected);
+        Assert.Same(transport, connection.Transport);
+        connection.Send(new byte[] { 42 }, Delivery.Reliable, SendFlags.Immediate);
+        connection.Flush();
+        pump.Until(() => Volatile.Read(ref transport.SendThread) != 0);
+        Assert.Equal(transport.ListenThread, transport.SendThread);
+        Assert.NotEqual(Environment.CurrentManagedThreadId, transport.SendThread);
+    }
+
     private sealed class ProbeTransport : Transport
     {
-        public int ListenThread, ReceiveThread;
+        public int ListenThread, ReceiveThread, SendThread;
         public volatile bool Fail;
         public override bool IsListening => true;
         public override void Listen() => ListenThread = Environment.CurrentManagedThreadId;
-        public override Connection Connect(string address) => throw new NotSupportedException();
+        public override Connection Connect(string address)
+        {
+            AssertWorkerThread();
+            ProbeConnection connection = new(this, NextConnectionId());
+            AddConnection(connection);
+            RaiseConnected(connection);
+            return connection;
+        }
         public override void Receive()
         {
+            AssertWorkerThread();
             Volatile.Write(ref ReceiveThread, Environment.CurrentManagedThreadId);
             if (Fail) throw new InvalidOperationException("Injected worker failure.");
         }
-        public override void Flush() { }
-        public override void Shutdown() { }
+        public override void Flush() => AssertWorkerThread();
+        public override void Shutdown() { ListenThread = 0; ReceiveThread = 0; }
+
+        private void AssertWorkerThread()
+        {
+            if (ListenThread != 0 && ListenThread != Environment.CurrentManagedThreadId)
+                throw new InvalidOperationException("Transport I/O escaped the networking thread.");
+        }
+
+        private sealed class ProbeConnection(ProbeTransport owner, int id) : Connection(owner, id, "probe", true)
+        {
+            public override TimeSpan RoundTripTime => TimeSpan.Zero;
+            public override int GetMaxMessageSize(Delivery delivery) => 128;
+            public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
+            {
+                owner.AssertWorkerThread();
+                Volatile.Write(ref owner.SendThread, Environment.CurrentManagedThreadId);
+            }
+            public override void Disconnect() { }
+        }
     }
 }

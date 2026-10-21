@@ -19,8 +19,9 @@ public class NetworkConfigurationTests : RuntimeTestBase
             using Transport transport = Networking.Networking.CreateTransport(true);
             Assert.IsType<Prowl.Warp.Transports.Batching.BatchingTransport>(transport);
             using NetSession session = Networking.Networking.Host(transport);
-            Assert.IsType<NetworkingThread>(session.Transport);
-            Assert.NotEqual(0, session.Transport.LocalPort);
+            Assert.Same(transport, session.Transport);
+            Assert.True(session.IsExternallyPumped);
+            Assert.NotEqual(0, Networking.Networking.LocalPort);
         }
         finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
     }
@@ -122,6 +123,7 @@ public class NetworkConfigurationTests : RuntimeTestBase
                 host.Update(); Networking.Networking.Receive(); Networking.Networking.Flush(); Thread.Sleep(1);
             }
             Assert.Equal(SessionState.Active, client.State);
+            Assert.Equal(threaded, client.IsExternallyPumped);
             client.SendRaw(client.HostPeer!, 20, new byte[] { 42 }, flags: SendFlags.Immediate);
             for (int i = 0; i < 2000 && !received; i++)
             {

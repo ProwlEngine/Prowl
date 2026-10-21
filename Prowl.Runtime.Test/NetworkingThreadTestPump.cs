@@ -7,42 +7,42 @@ using System.Diagnostics;
 using System.Threading;
 
 using Prowl.Warp;
+using Prowl.Runtime.Networking;
 
 namespace Prowl.Runtime.Test;
 
 /// <summary>An event with its data copied out, so it outlives the next Poll.</summary>
 internal readonly record struct WorkerReceived(TransportEventType Type, Connection Connection, byte[] Data, Delivery Delivery, DisconnectReason Reason);
 
-/// <summary>Pumps a set of transports like a game loop would, recording every event.</summary>
+/// <summary>Drains runtime networking inboxes like a game loop would, recording every event.</summary>
 internal sealed class WorkerPump
 {
-    private readonly Transport[] _transports;
-    private readonly Dictionary<Transport, List<WorkerReceived>> _events = new();
+    private readonly NetworkingThread[] _threads;
+    private readonly Dictionary<NetworkingThread, List<WorkerReceived>> _events = new();
 
-    public WorkerPump(params Transport[] transports)
+    public WorkerPump(params NetworkingThread[] threads)
     {
-        _transports = transports;
-        foreach (Transport transport in transports)
+        _threads = threads;
+        foreach (NetworkingThread transport in threads)
             _events[transport] = new List<WorkerReceived>();
     }
 
-    public List<WorkerReceived> EventsOf(Transport transport) => _events[transport];
+    public List<WorkerReceived> EventsOf(NetworkingThread transport) => _events[transport];
 
     public void Step()
     {
-        foreach (Transport transport in _transports)
+        foreach (NetworkingThread transport in _threads)
         {
-            transport.Receive();
             Drain(transport);
-            // Flush raises events too (timeouts), so drain again to see them this step.
-            transport.Flush();
+            // Request an early worker tick, then collect events it has already published.
+            transport.RequestFlush();
             Drain(transport);
         }
     }
 
-    private void Drain(Transport transport)
+    private void Drain(NetworkingThread transport)
     {
-        while (transport.Poll(out TransportEvent ev))
+        while (transport.TryReadEvent(out TransportEvent ev))
             _events[transport].Add(new WorkerReceived(ev.Type, ev.Connection, ev.Data.ToArray(), ev.Delivery, ev.Reason));
     }
 
@@ -71,16 +71,23 @@ internal sealed class WorkerPump
     }
 }
 
-internal sealed class WorkerSessionProbe(NetSession session)
+internal sealed class WorkerSessionProbe(NetSession session, NetworkingThread thread)
 {
     public NetSession Session { get; } = session;
+    public NetworkingThread Driver { get; } = thread;
     public static void PumpUntil(Func<bool> condition, params WorkerSessionProbe[] probes)
     {
         Stopwatch watch = Stopwatch.StartNew();
         while (!condition())
         {
             if (watch.ElapsedMilliseconds > 5000) throw new TimeoutException("Sessions did not reach the expected state.");
-            foreach (WorkerSessionProbe probe in probes) probe.Session.Update();
+            foreach (WorkerSessionProbe probe in probes)
+            {
+                while (probe.Session.State != SessionState.Ended && probe.Driver.TryReadEvent(out TransportEvent ev))
+                    probe.Session.ProcessEvent(ev);
+                probe.Session.Update();
+                probe.Driver.RequestFlush();
+            }
             Thread.Sleep(1);
         }
     }

@@ -42,7 +42,7 @@ public static class MultiplayerPlay
     private static int s_launched;
 
     /// <summary>True while another client can be launched: playing, and hosting.</summary>
-    public static bool CanLaunchClient => Application.IsPlaying && Networking.IsHost && Networking.Session?.Transport.LocalPort > 0;
+    public static bool CanLaunchClient => Application.IsPlaying && Networking.IsHost && Networking.LocalPort > 0;
 
     /// <summary>Launches one more client instance into the session the editor is hosting.</summary>
     public static void LaunchClient()
@@ -50,7 +50,7 @@ public static class MultiplayerPlay
         if (!CanLaunchClient || Project.Current is not { } project)
             return;
 
-        int port = Networking.Session!.Transport.LocalPort;
+        int port = Networking.LocalPort;
         int index = ++s_launched;
         string name = $"Client {index}";
 
