@@ -60,6 +60,7 @@ public sealed class MaterialTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Shader _shader;
     private readonly MaterialSystem _system;
@@ -68,13 +69,13 @@ public sealed class MaterialTests : IDisposable
     public MaterialTests()
     {
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
-        _system = new MaterialSystem(_device, new FakeResources()) { Reporter = _reports.Add };
+        _system = new MaterialSystem(_device, _store, new FakeResources()) { Reporter = _reports.Add };
     }
 
     public void Dispose()
     {
-        _system.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 

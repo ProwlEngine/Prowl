@@ -78,6 +78,7 @@ public sealed class ProgramCacheTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _glsl = new();
     private readonly GatedCompiler _compiler;
     private readonly MaterialSystem _materials;
@@ -91,8 +92,8 @@ public sealed class ProgramCacheTests : IDisposable
     {
         InternalShaders.Register();
         _compiler = new GatedCompiler(_glsl);
-        _materials = new MaterialSystem(_device, new NoResources());
-        _globals = new GlobalRegistry(_device, new NoResources());
+        _materials = new MaterialSystem(_device, _store, new NoResources());
+        _globals = new GlobalRegistry(_device, _store, new NoResources());
         _cache = new ProgramCache(_device, _compiler, _globals, _programs, deterministic: false, error => _reports.Add(error.Message));
         _shader = new Shader(ShaderParser.Parse(Source), _compiler);
     }
@@ -101,9 +102,8 @@ public sealed class ProgramCacheTests : IDisposable
     {
         _compiler.Gate.Set();
         _cache.Dispose();
-        _globals.Dispose();
-        _materials.Dispose();
         _glsl.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 

@@ -33,6 +33,7 @@ public sealed class BucketTests : IDisposable
     private const int Prepass = 0, Forward = 1, Shadows = 2;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Uploader _uploader;
     private readonly GeometryPool _geometry;
@@ -53,9 +54,9 @@ public sealed class BucketTests : IDisposable
     {
         InternalShaders.Register();
         _uploader = new Uploader(_device, InternalShaders.Compute(_device, _compiler, "Internal/Scatter.glsl"));
-        _geometry = new GeometryPool(_device, 1 << 18, 1 << 18);
-        _materials = new MaterialSystem(_device, new NoResources());
-        _world = new RenderWorld(_device);
+        _geometry = new GeometryPool(_device, _store, 1 << 18, 1 << 18);
+        _materials = new MaterialSystem(_device, _store, new NoResources());
+        _world = new RenderWorld(_device, _store);
         _buckets = new BucketSet(_world.Render, _programs);
         _lit = new Shader(ShaderParser.Parse(Lit), _compiler);
         _unlit = new Shader(ShaderParser.Parse("""Shader "Test/Unlit" { Pass { Tags { "LightMode" = "Forward" } GLSLPROGRAM ENDGLSL } }"""), _compiler);
@@ -66,10 +67,9 @@ public sealed class BucketTests : IDisposable
     public void Dispose()
     {
         _world.Dispose();
-        _materials.Dispose();
-        _geometry.Dispose();
         _uploader.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 

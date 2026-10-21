@@ -72,6 +72,7 @@ file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IPa
 public sealed class GlobalsTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly GlobalRegistry _registry;
     private readonly Uploader _uploader;
@@ -80,15 +81,15 @@ public sealed class GlobalsTests : IDisposable
     public GlobalsTests()
     {
         InternalShaders.Register();
-        _registry = new GlobalRegistry(_device, new FakeResources()) { Reporter = _reports.Add };
+        _registry = new GlobalRegistry(_device, _store, new FakeResources()) { Reporter = _reports.Add };
         _uploader = new Uploader(_device, InternalShaders.Compute(_device, _compiler, "Internal/Scatter.glsl"));
     }
 
     public void Dispose()
     {
         _uploader.Dispose();
-        _registry.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 

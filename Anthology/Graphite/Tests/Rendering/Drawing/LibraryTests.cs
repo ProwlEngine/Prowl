@@ -93,6 +93,7 @@ public sealed class LibraryTests : IDisposable
         """;
 
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly List<IDisposable> _owned = new();
 
@@ -102,6 +103,7 @@ public sealed class LibraryTests : IDisposable
         for (int i = _owned.Count - 1; i >= 0; i--)
             _owned[i].Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 
@@ -128,10 +130,10 @@ public sealed class LibraryTests : IDisposable
     {
         InternalShaders.Register();
         Uploader uploader = Own(new Uploader(_device, InternalShaders.Compute(_device, _compiler, "Internal/Scatter.glsl")));
-        GeometryPool geometry = Own(new GeometryPool(_device, 1 << 16, 1 << 16));
-        MaterialSystem materials = Own(new MaterialSystem(_device, new NoResources()));
-        GlobalRegistry globals = Own(new GlobalRegistry(_device, new NoResources()));
-        RenderWorld world = Own(new RenderWorld(_device));
+        GeometryPool geometry = new GeometryPool(_device, _store, 1 << 16, 1 << 16);
+        MaterialSystem materials = new MaterialSystem(_device, _store, new NoResources());
+        GlobalRegistry globals = new GlobalRegistry(_device, _store, new NoResources());
+        RenderWorld world = Own(new RenderWorld(_device, _store));
         DrawPrograms programs = new();
         BucketSet buckets = new(world.Render, programs);
 
@@ -194,7 +196,7 @@ public sealed class LibraryTests : IDisposable
         DeviceBuffer[] tables = [geometry.Chunks.Buffer, geometry.Meshes.Buffer, page.Vertices, page.Indices, render.Transforms.Buffer, render.PreviousTransforms.Buffer,
             render.Attributes.Buffer, render.Bounds.Buffer, render.MaterialSlots.Buffer, materialTable.Buffer];
         materials.Flush(uploader, 0);
-        render.Flush(uploader, new List<DeviceBuffer>());
+        render.Flush(uploader);
         geometry.Apply(uploader, 0, long.MaxValue, new List<GpuMesh>());
 
         DescriptorTable frame = Own(_device.ResourceFactory.CreateDescriptorTable(frameLayout));

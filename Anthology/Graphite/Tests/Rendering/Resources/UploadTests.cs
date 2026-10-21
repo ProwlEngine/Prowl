@@ -36,6 +36,7 @@ file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : I
 public sealed class UploadTests : IDisposable
 {
     private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly GraphStore _store = new();
     private readonly GlslShaderCompiler _compiler = new();
     private readonly Uploader _uploader;
 
@@ -49,6 +50,7 @@ public sealed class UploadTests : IDisposable
     {
         _uploader.Dispose();
         _compiler.Dispose();
+        _store.Dispose();
         _device.Dispose();
     }
 
@@ -146,7 +148,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void Meshes_UploadIntoAPage_AndFreedRangesReturnOnceRetired()
     {
-        using GeometryPool pool = new(_device, 1024, 1024);
+        GeometryPool pool = new(_device, _store, 1024, 1024);
         Float3[] positions = [new(1, 2, 3), new(4, 5, 6), new(7, 8, 9)];
         MeshData data = new()
         {
@@ -183,7 +185,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void MeshesBiggerThanAPage_GetADedicatedPage()
     {
-        using GeometryPool pool = new(_device, 16, 16);
+        GeometryPool pool = new(_device, _store, 16, 16);
         Float3[] positions = Enumerable.Range(0, 30).Select(i => new Float3(i, 0, 0)).ToArray();
         GpuMesh mesh = pool.Create(new MeshData
         {
@@ -218,7 +220,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void ChunkRecords_ReadBackInGlsl_FieldForField()
     {
-        using GeometryPool pool = new(_device, 1 << 16, 1 << 16);
+        GeometryPool pool = new(_device, _store, 1 << 16, 1 << 16);
         pool.Create(Positions(3));
         GpuMesh mesh = pool.Create(Positions(3 * 2048 + 6));
         pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
@@ -290,19 +292,18 @@ public sealed class UploadTests : IDisposable
     }
 
     [Fact]
-    public void Tables_GrowIntoANewBuffer_KeepingEveryRecord_AndHandTheOldOneBack()
+    public void Tables_GrowIntoANewBuffer_KeepingEveryRecord()
     {
-        using GpuTable table = new(_device, "Test table", 1, 4);
+        GpuTable table = new(_device, _store, "Test.GrowTable", 1, 4);
         for (uint i = 0; i < 4; i++)
             table.Set(i, i + 10);
-        Assert.Null(table.Flush(_uploader));
+        Assert.False(table.Flush(_uploader));
         DeviceBuffer first = table.Buffer;
 
         table.Set(9, 99u);
-        DeviceBuffer? replaced = table.Flush(_uploader);
-        Assert.Same(first, replaced);
+        Assert.True(table.Flush(_uploader));
+        Assert.NotSame(first, table.Buffer);
         Flush(table.Buffer);
-        first.Dispose();
 
         uint[] words = Read(table.Buffer);
         Assert.Equal([10u, 11u, 12u, 13u, 0u, 0u, 0u, 0u, 0u, 99u], words[..10]);
@@ -311,7 +312,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void Tables_OnlyUploadDirtyRecords()
     {
-        using GpuTable table = new(_device, "Test table", 1, 16);
+        GpuTable table = new(_device, _store, "Test.DirtyTable", 1, 16);
         for (uint i = 0; i < 16; i++)
             table.Set(i, i);
         table.Flush(_uploader);
@@ -331,7 +332,7 @@ public sealed class UploadTests : IDisposable
     [Fact]
     public void DisposedMeshes_ClearTheirMeshRecord_AndTheirChunksAreReused()
     {
-        using GeometryPool pool = new(_device, 1 << 16, 1 << 16);
+        GeometryPool pool = new(_device, _store, 1 << 16, 1 << 16);
         GpuMesh first = pool.Create(Positions(3));
         pool.Apply(_uploader, 0, long.MaxValue, new List<GpuMesh>());
         uint chunk = first.Placement!.FirstChunk;
