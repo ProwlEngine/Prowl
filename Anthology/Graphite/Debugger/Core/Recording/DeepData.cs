@@ -1,7 +1,6 @@
 using System;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Debugger;
 
@@ -10,7 +9,8 @@ public enum ResourceOrigin : byte
 {
     Transient,
     Imported,
-    ViewTarget,
+    InstanceTarget,
+    Persistent,
     External,
 }
 
@@ -69,10 +69,10 @@ public sealed record RecordedProgram(
 /// <summary>Content keyed by hash.</summary>
 public sealed record RecordedBlob(BlobRef Ref, EquatableArray<byte> Data);
 
-/// <summary>One backing of a graph resource in a view.</summary>
+/// <summary>One backing of a graph resource in an instance.</summary>
 public sealed record RecordedBacking(TraceResourceId Id, uint EntryVersion, BackingRole Role, uint Index);
 
-/// <summary>A graph resource as a view saw it. HistorySlot is the ring slot it resolved, or -1 without history.</summary>
+/// <summary>A graph resource as an instance saw it. HistorySlot is the ring slot it resolved, or -1 without history.</summary>
 public sealed record RecordedGraphResource(
     string Name,
     GraphResourceKind Kind,
@@ -109,10 +109,12 @@ public sealed record DeepPass(
     EquatableArray<RecordedCopy> Copies,
     string? NotReplayable);
 
-/// <summary>A view of the deep recorded execution.</summary>
-public sealed record DeepView(
+/// <summary>An instance of the deep recorded execution. The root is index 0 with parent -1.</summary>
+public sealed record DeepInstance(
     string Name,
     int Index,
+    int ParentIndex,
+    GraphInstanceKey Key,
     uint PixelWidth,
     uint PixelHeight,
     EquatableArray<RecordedGraphResource> Resources,

@@ -6,18 +6,18 @@ using Prowl.Graphite.Debugger.Trace;
 
 namespace Prowl.Graphite.Debugger;
 
-/// <summary>Views, passes, and GPU timings of one execution. Pass it to the execution, then read it once done.</summary>
+/// <summary>Instances, passes, and GPU timings of one execution. Pass it to the execution, then read it once done.</summary>
 public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
 {
     private readonly GraphicsDevice? _device;
     private readonly object _gate = new();
-    private readonly SortedDictionary<int, ViewBuilder> _views = new();
+    private readonly SortedDictionary<int, InstanceBuilder> _instances = new();
     private readonly Dictionary<ulong, CommandBufferBuilder> _commandBuffers = new();
     private ulong _executionId;
     private string _graphName = "";
     private bool _resolved;
     private volatile bool _done;
-    private EquatableArray<RecordedView> _builtViews = EquatableArray<RecordedView>.Empty;
+    private EquatableArray<RecordedInstance> _builtInstances = EquatableArray<RecordedInstance>.Empty;
     private EquatableArray<RecordedCommandBuffer> _builtCommandBuffers = EquatableArray<RecordedCommandBuffer>.Empty;
     private GraphicsCountersSnapshot _startCounters;
     private RecordedCounters? _counters;
@@ -39,7 +39,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         RecordedFeatures features,
         ulong executionId,
         string graphName,
-        EquatableArray<RecordedView> views,
+        EquatableArray<RecordedInstance> instances,
         EquatableArray<RecordedCommandBuffer> commandBuffers,
         RecordedCounters? counters)
     {
@@ -48,7 +48,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         Features = features;
         _executionId = executionId;
         _graphName = graphName;
-        _builtViews = views;
+        _builtInstances = instances;
         _builtCommandBuffers = commandBuffers;
         _counters = counters;
         _done = true;
@@ -69,13 +69,13 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
     /// <summary>Debug name of the recorded execution's graph, or empty before it is passed to one.</summary>
     public string GraphName => Volatile.Read(ref _graphName);
 
-    /// <summary>The views of the execution in order.</summary>
-    public EquatableArray<RecordedView> Views
+    /// <summary>The instances of the execution in order, the root first.</summary>
+    public EquatableArray<RecordedInstance> Instances
     {
         get
         {
             RequireDone();
-            return _builtViews;
+            return _builtInstances;
         }
     }
 
@@ -89,8 +89,8 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         }
     }
 
-    /// <summary>Counter deltas from the execution start to the end of its last view, or null if it had no views.</summary>
-    /// <remarks>Work after the last view, such as submission and present, is not included.</remarks>
+    /// <summary>Counter deltas from the execution start to the end of its last instance, or null if it had none.</summary>
+    /// <remarks>Work after the last instance, such as submission and present, is not included.</remarks>
     public RecordedCounters? Counters
     {
         get
@@ -170,13 +170,13 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
             _resolved = true;
     }
 
-    void IGraphProfiler.BeginView(in ViewInfo view)
+    void IGraphProfiler.BeginInstance(in InstanceInfo instance)
     {
         lock (_gate)
-            _views[view.Index] = new ViewBuilder(view.Name, view.Index, view.PixelWidth, view.PixelHeight);
+            _instances[instance.Index] = new InstanceBuilder(instance);
     }
 
-    void IGraphProfiler.EndView(in ViewInfo view)
+    void IGraphProfiler.EndInstance(in InstanceInfo instance)
     {
         GraphicsCountersSnapshot end = _device!.Counters.Snapshot();
         MemoryBudgetInfo budget = _device.GetMemoryBudget();
@@ -186,12 +186,12 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
 
     void IGraphProfiler.BeginPass(in PassInfo pass) { }
 
-    void IGraphProfiler.SkipPass(string name, int viewIndex, PassSkipReason reason)
+    void IGraphProfiler.SkipPass(string name, int instanceIndex, PassSkipReason reason)
     {
         lock (_gate)
         {
-            if (_views.TryGetValue(viewIndex, out ViewBuilder? view))
-                view.Skipped.Add(new RecordedSkippedPass(name, reason));
+            if (_instances.TryGetValue(instanceIndex, out InstanceBuilder? instance))
+                instance.Skipped.Add(new RecordedSkippedPass(name, reason));
         }
     }
 
@@ -199,8 +199,8 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
     {
         lock (_gate)
         {
-            if (_views.TryGetValue(pass.ViewIndex, out ViewBuilder? view))
-                view.Passes.Add(new RecordedPass(pass.Name, pass.Index, stats));
+            if (_instances.TryGetValue(pass.InstanceIndex, out InstanceBuilder? instance))
+                instance.Passes.Add(new RecordedPass(pass.Name, pass.Index, stats));
         }
     }
 
@@ -225,33 +225,33 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
 
     private void Build()
     {
-        _builtViews = _views.Values.Select(v => new RecordedView(v.Name, v.Index, v.PixelWidth, v.PixelHeight, v.Passes.ToEquatableArray(), v.Skipped.ToEquatableArray())).ToEquatableArray();
+        _builtInstances = _instances.Values.Select(i => i.Build()).ToEquatableArray();
         _builtCommandBuffers = _commandBuffers.OrderBy(c => c.Key).Select(c => c.Value.Build()).ToEquatableArray();
-        _views.Clear();
+        _instances.Clear();
         _commandBuffers.Clear();
     }
 
-    private sealed class ViewBuilder(string name, int index, uint pixelWidth, uint pixelHeight)
+    private sealed class InstanceBuilder(in InstanceInfo info)
     {
-        public readonly string Name = name;
-        public readonly int Index = index;
-        public readonly uint PixelWidth = pixelWidth;
-        public readonly uint PixelHeight = pixelHeight;
+        private readonly InstanceInfo _info = info;
         public readonly List<RecordedPass> Passes = new();
         public readonly List<RecordedSkippedPass> Skipped = new();
+
+        public RecordedInstance Build()
+            => new(_info.Name, _info.Index, _info.ParentIndex, _info.Key, _info.PixelWidth, _info.PixelHeight, Passes.ToEquatableArray(), Skipped.ToEquatableArray());
     }
 
     private sealed class CommandBufferBuilder(in CommandBufferInfo info)
     {
         private readonly ulong _id = info.Id;
         private readonly string _name = info.Name;
-        private readonly int _viewIndex = info.Pass?.ViewIndex ?? -1;
+        private readonly int _instanceIndex = info.Pass?.InstanceIndex ?? -1;
         private readonly int _passIndex = info.Pass?.Index ?? -1;
 
         public double? Milliseconds;
         public GpuVertexStats? VertexStats;
 
         public RecordedCommandBuffer Build()
-            => new(_id, _name, _viewIndex, _passIndex, Milliseconds, VertexStats);
+            => new(_id, _name, _instanceIndex, _passIndex, Milliseconds, VertexStats);
     }
 }

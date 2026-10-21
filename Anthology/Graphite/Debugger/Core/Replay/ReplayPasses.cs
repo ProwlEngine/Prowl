@@ -4,12 +4,11 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
 
-internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step) : IPass
+internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step) : IExecutionPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
 
@@ -64,7 +63,7 @@ internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPas
     }
 }
 
-internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null, IndirectSlice? slice = null) : IPass
+internal sealed unsafe class ReplayPass(string name, ReplayScope scope, DeepPass pass, int? lastEvent = null, IndirectSlice? slice = null) : IExecutionPass
 {
     private readonly Dictionary<string, BufferHandle> _handles = new();
     private readonly Dictionary<string, RecordedProperty> _properties = new();

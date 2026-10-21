@@ -4,26 +4,29 @@ using Prowl.Graphite.Debugger.Trace;
 
 namespace Prowl.Graphite.Debugger;
 
-/// <summary>A pass of a recorded view, with the work its command buffer recorded.</summary>
+/// <summary>A pass of a recorded instance, with the work its command buffer recorded.</summary>
 public sealed record RecordedPass(string Name, int Index, PassStats Stats);
 
-/// <summary>A pass of the graph that did not run for a view.</summary>
+/// <summary>A pass of the graph that did not run for an instance.</summary>
 public sealed record RecordedSkippedPass(string Name, PassSkipReason Reason);
 
-/// <summary>A view of the recorded execution, with its passes in order and the graph passes it skipped.</summary>
-public sealed record RecordedView(
+/// <summary>An instance of the recorded execution, with its passes in order and the graph passes it skipped.</summary>
+/// <remarks>The root is index 0 with parent -1. Key names the kind and the id the instance was added with.</remarks>
+public sealed record RecordedInstance(
     string Name,
     int Index,
+    int ParentIndex,
+    GraphInstanceKey Key,
     uint PixelWidth,
     uint PixelHeight,
     EquatableArray<RecordedPass> Passes,
     EquatableArray<RecordedSkippedPass> Skipped);
 
-/// <summary>GPU results for one command buffer. View and pass indices are -1 for work outside a pass.</summary>
+/// <summary>GPU results for one command buffer. Instance and pass indices are -1 for work outside a pass.</summary>
 public sealed record RecordedCommandBuffer(
     ulong Id,
     string Name,
-    int ViewIndex,
+    int InstanceIndex,
     int PassIndex,
     double? Milliseconds,
     GpuVertexStats? VertexStats);

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
@@ -16,7 +15,7 @@ public sealed partial class DeepRecording
     private uint _nextTraceId;
 
     IPassCommandSink? ICommandStreamProfiler.BeginPassCommands(in PassInfo pass)
-        => _views.TryGetValue(pass.ViewIndex, out ViewState? view) ? new PassRecorder(this, view.Pass(pass.Index)) : null;
+        => _instances.TryGetValue(pass.InstanceIndex, out InstanceState? instance) ? new PassRecorder(this, instance.Pass(pass.Index)) : null;
 
     private TraceResourceId Trace(ResourceId id)
         => id.Value == 0 ? default : Builder(id).Id;
@@ -284,12 +283,9 @@ public sealed partial class DeepRecording
 
     private sealed record PendingCopy(TraceVersion Version, CopyPlacement Placement, CaptureCopy Copy);
 
-    private sealed class ViewState(string name, int index, uint pixelWidth, uint pixelHeight)
+    private sealed class InstanceState(in InstanceInfo info)
     {
-        public readonly string Name = name;
-        public readonly int Index = index;
-        public readonly uint PixelWidth = pixelWidth;
-        public readonly uint PixelHeight = pixelHeight;
+        public readonly InstanceInfo Info = info;
         public readonly List<RecordedGraphResource> Resources = new();
         public readonly Dictionary<ResourceId, GraphResourceOrigin> Origins = new();
         public readonly HashSet<(ResourceId, uint)> Known = new();
