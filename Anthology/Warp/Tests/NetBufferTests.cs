@@ -13,6 +13,60 @@ namespace Prowl.Warp.Tests;
 public class NetBufferTests
 {
     [Fact]
+    public void TextDecodingDoesNotAllocate()
+    {
+        const string text = "héllo 世界 🌍";
+        using NetWriter writer = new();
+        writer.WriteString(text);
+        Span<char> destination = stackalloc char[text.Length];
+        for (int i = 0; i < 100; i++)
+        {
+            NetReader warmup = new(writer.WrittenSpan);
+            warmup.ReadString(destination);
+        }
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++)
+        {
+            NetReader reader = new(writer.WrittenSpan);
+            reader.ReadString(destination);
+        }
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(destination.SequenceEqual(text));
+        Assert.Equal(0, allocated);
+    }
+
+    [Fact]
+    public void TextDecodingCanRetryWithLargerStorage()
+    {
+        using NetWriter writer = new();
+        writer.WriteString("hé🌍");
+        writer.WriteString("");
+        NetReader reader = new(writer.WrittenSpan);
+        Span<char> small = stackalloc char[1];
+        bool rejected = false;
+        try { reader.ReadString(small); }
+        catch (ArgumentException) { rejected = true; }
+        Assert.True(rejected);
+        Assert.Equal(0, reader.Position);
+        Span<char> destination = stackalloc char[4];
+        Assert.Equal(4, reader.ReadString(destination));
+        Assert.True(destination.SequenceEqual("hé🌍"));
+        Assert.Equal(0, reader.ReadString(Span<char>.Empty));
+        Assert.True(reader.IsAtEnd);
+    }
+
+    [Fact]
+    public void TextDecodingEnforcesByteLimitsAndBounds()
+    {
+        using NetWriter writer = new();
+        writer.WriteString("🌍");
+        byte[] data = writer.ToArray();
+        Assert.Throws<InvalidDataException>(() => new NetReader(data).ReadString(new char[2], 3));
+        Assert.Throws<EndOfStreamException>(() => new NetReader(data.AsSpan(0, data.Length - 1)).ReadString(new char[2]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new NetReader(data).ReadString(new char[2], -1));
+    }
+
+    [Fact]
     public void RoundTripsEveryType()
     {
         Guid guid = Guid.NewGuid();

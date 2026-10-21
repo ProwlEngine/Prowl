@@ -99,6 +99,17 @@ public ref struct NetReader
         return length == 0 ? string.Empty : Encoding.UTF8.GetString(Take(length));
     }
 
+    /// <summary>Decodes UTF-8 into caller-owned storage and returns the character count, without allocating.</summary>
+    /// <remarks>On failure the reader position is unchanged. The destination may have been partially written.</remarks>
+    public int ReadString(scoped Span<char> destination, int maximumBytes = int.MaxValue)
+    {
+        NetReader cursor = this;
+        int length = cursor.ReadLength(maximumBytes);
+        int written = Encoding.UTF8.GetChars(cursor.Take(length), destination);
+        _position = cursor._position;
+        return written;
+    }
+
     /// <summary>Reads bytes written by <see cref="NetWriter.WriteBytesWithLength"/>. The span points into the source data.</summary>
     public ReadOnlySpan<byte> ReadBytesWithLength() => Take(ReadLength());
 
