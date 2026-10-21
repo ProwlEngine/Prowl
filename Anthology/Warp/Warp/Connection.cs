@@ -52,7 +52,7 @@ public abstract class Connection
     /// <summary>Smoothed round trip time to the remote end. Zero until it has been measured.</summary>
     public abstract TimeSpan RoundTripTime { get; }
 
-    public ConnectionStats Stats => new(_packetsSent, _packetsReceived, _bytesSent, _bytesReceived);
+    public virtual ConnectionStats Stats => new(_packetsSent, _packetsReceived, _bytesSent, _bytesReceived);
 
     /// <summary>Free slot for whoever is using the transport, such as a higher level session or player object.</summary>
     public object? UserData { get; set; }

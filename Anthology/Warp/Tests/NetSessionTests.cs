@@ -642,6 +642,15 @@ public sealed class LocalNetSessionTests : NetSessionTests
     protected override string UnreachableAddress => "nobody";
 }
 
+public sealed class BatchedNetSessionTests : NetSessionTests
+{
+    private readonly LocalNetwork _network = new();
+    protected override Transport CreateHostTransport() => new Prowl.Warp.Transports.Batching.BatchingTransport(new LocalTransport(_network, "host"));
+    protected override Transport CreateClientTransport(string name) => new Prowl.Warp.Transports.Batching.BatchingTransport(new LocalTransport(_network, name));
+    protected override string AddressOf(Transport host) => "host";
+    protected override string UnreachableAddress => "nobody";
+}
+
 public sealed class KcpNetSessionTests : NetSessionTests
 {
     protected override Transport CreateHostTransport() => new KcpTransport(KcpTransportContractTests.Options());

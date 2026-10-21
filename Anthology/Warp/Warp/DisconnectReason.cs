@@ -35,4 +35,7 @@ public enum DisconnectReason : byte
 
     /// <summary>The secure transport could not authenticate its peer.</summary>
     AuthenticationFailed,
+
+    /// <summary>The remote end sent malformed transport framing.</summary>
+    ProtocolError,
 }

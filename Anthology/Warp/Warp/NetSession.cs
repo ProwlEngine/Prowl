@@ -465,6 +465,7 @@ public sealed class NetSession : IDisposable
                             DisconnectReason.Timeout => SessionEndReason.Timeout,
                             DisconnectReason.ResourceLimit => SessionEndReason.ResourceLimit,
                             DisconnectReason.AuthenticationFailed => SessionEndReason.AuthenticationFailed,
+                            DisconnectReason.ProtocolError => SessionEndReason.ProtocolError,
                             _ => SessionEndReason.Left,
                         });
                 }
@@ -685,6 +686,7 @@ public sealed class NetSession : IDisposable
                     DisconnectReason.ServerFull => SessionEndReason.ServerFull,
                     DisconnectReason.ResourceLimit => SessionEndReason.ResourceLimit,
                             DisconnectReason.AuthenticationFailed => SessionEndReason.AuthenticationFailed,
+                            DisconnectReason.ProtocolError => SessionEndReason.ProtocolError,
                     _ => SessionEndReason.Rejected,
                 }, _goodbyeMessage);
                 break;
