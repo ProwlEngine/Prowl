@@ -154,6 +154,7 @@ public sealed class MultiDropdownBuilder<T>
             {
                 bool cur = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyOpen, false);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyOpen, !cur);
+                if (!cur) _paper.SetElementStorage(trigHandle, DropdownInternal.KeySearch, string.Empty);
             });
 
         using (trigger.Enter())

@@ -37,7 +37,7 @@ public class DoubleDrawer : FieldDrawer
 public class StringDrawer : FieldDrawer
 {
     public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
-        => Origami.TextField(paper, id, (string?)value ?? "", v => onChange(v)).Show();
+        => Origami.TextField(paper, id, (string?)value ?? "", v => onChange(v)).CommitOnEnter().Show();
 }
 
 public class ByteDrawer : FieldDrawer

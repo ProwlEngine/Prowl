@@ -176,6 +176,7 @@ public static partial class Origami
     /// <param name="paper">Paper instance for this frame.</param>
     public static void EndFrame(PaperUI.Paper paper)
     {
+        TextFieldCommits.EndFrame();
         DragDrop.Update(paper);
         DragDrop.DrawVisual(paper);
         OrigamiUI.ContextMenu.Tick();
