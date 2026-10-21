@@ -8,6 +8,9 @@ using Prowl.Warp.Transports.Batching;
 
 namespace Prowl.Runtime.Networking;
 
+/// <summary>Where transport I/O runs. Session callbacks always run on the caller.</summary>
+public enum NetworkExecution { Auto, Inline, DedicatedThread }
+
 public enum NetworkTransport
 {
     Kcp,
@@ -20,7 +23,9 @@ public sealed class NetworkConfiguration
 {
     public uint AppVersion;
     public bool BatchMessages = true;
+    // Retained for existing serialized projects. False selects inline execution in Auto mode.
     public bool UseNetworkThread = true;
+    public NetworkExecution Execution = NetworkExecution.Auto;
     public bool CongestionControl;
     public float ConnectTimeoutSeconds = 5;
     public int FastResend = 2;
@@ -55,6 +60,8 @@ public sealed class NetworkConfiguration
             copy.Transport = NetworkTransport.Kcp;
         }
 
+        if (!Enum.IsDefined(copy.Execution)) copy.Execution = NetworkExecution.Auto;
+
         copy.Port = Math.Clamp(copy.Port, 0, 65535);
         if (string.IsNullOrWhiteSpace(copy.LocalAddress))
         {
@@ -80,6 +87,17 @@ public sealed class NetworkConfiguration
         copy.LatencyMilliseconds = Limit(copy.LatencyMilliseconds, 0, 10000, 0);
         copy.JitterMilliseconds = Limit(copy.JitterMilliseconds, 0, 10000, 0);
         return copy;
+    }
+
+    internal bool UsesWorker(Transport transport)
+    {
+        TransportCapabilities capabilities = transport.Capabilities;
+        if (!capabilities.IsAvailable) throw new NotSupportedException("The selected transport is unavailable on this platform.");
+        if (!capabilities.Supports(Delivery.Reliable)) throw new NotSupportedException("Sessions require reliable delivery.");
+        if (Execution == NetworkExecution.DedicatedThread && capabilities.Execution == TransportExecution.CreatingThreadRequired)
+            throw new NotSupportedException("The selected transport must run on its creating thread.");
+        return Execution == NetworkExecution.DedicatedThread ||
+            (Execution == NetworkExecution.Auto && UseNetworkThread && capabilities.Execution == TransportExecution.WorkerPreferred);
     }
 
     private static float Limit(float value, float min, float max, float fallback) =>

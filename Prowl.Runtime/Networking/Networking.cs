@@ -141,7 +141,7 @@ public static partial class Networking
     private static NetworkingThread? CreateNetworkingThread(Transport transport)
     {
         ArgumentNullException.ThrowIfNull(transport);
-        return s_configuration.UseNetworkThread && transport is not Prowl.Warp.Transports.Local.LocalTransport
+        return s_configuration.UsesWorker(transport)
             ? new NetworkingThread(transport) : null;
     }
 

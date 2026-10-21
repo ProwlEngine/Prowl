@@ -46,7 +46,11 @@ public sealed class NetworkingSettings : ProjectSettingsBase
         else if (Configuration.Transport == NetworkTransport.Kcp)
         {
             Toggle(paper, "batchmessages", "Batch Messages", Configuration.BatchMessages, v => Configuration.BatchMessages = v);
-            Toggle(paper, "networkthread", "Networking Thread", Configuration.UseNetworkThread, v => Configuration.UseNetworkThread = v);
+            EditorGUI.SettingsRow(paper, "netsettings_execution", "Execution", () =>
+                Origami.Dropdown(paper, "netsettings_execution_v",
+                    (int)(Configuration.Execution == NetworkExecution.Auto && !Configuration.UseNetworkThread ? NetworkExecution.Inline : Configuration.Execution),
+                    v => { Configuration.Execution = (NetworkExecution)v; Configuration.UseNetworkThread = true; Changed(); },
+                    ["Automatic", "Inline", "Dedicated Thread"]).Show());
             Integer(paper, "port", "Port (0 = automatic)", Configuration.Port, v => Configuration.Port = v, 0, 65535);
             Unsigned(paper, "protocol", "Protocol ID", Configuration.ProtocolId, v => Configuration.ProtocolId = v);
             Integer(paper, "mtu", "MTU (bytes)", Configuration.Mtu, v => Configuration.Mtu = v, 1200, 65507);

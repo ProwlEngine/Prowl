@@ -43,6 +43,8 @@ internal sealed class NetworkingThread : IDisposable
         if (intervalMilliseconds < 1 || intervalMilliseconds > 1000) throw new ArgumentOutOfRangeException(nameof(intervalMilliseconds));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxQueuedMessages);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxQueuedBytes);
+        if (!transport.Capabilities.IsAvailable || transport.Capabilities.Execution == TransportExecution.CreatingThreadRequired)
+            throw new NotSupportedException("This transport cannot run on a networking worker.");
         _transport = transport; _interval = intervalMilliseconds; _maxMessages = maxQueuedMessages; _maxBytes = maxQueuedBytes;
         _encrypted = transport.IsEncrypted;
         _maxPeerMessages = transport.MaxQueuedDataEventsPerConnection;
@@ -388,7 +390,7 @@ internal sealed class NetworkingThread : IDisposable
         public void Refresh()
         {
             _reliableMax = Inner!.GetMaxMessageSize(Delivery.Reliable);
-            _unreliableMax = Inner.GetMaxMessageSize(Delivery.Unreliable);
+            _unreliableMax = owner._transport.Capabilities.Supports(Delivery.Unreliable) ? Inner.GetMaxMessageSize(Delivery.Unreliable) : 0;
             _rttTicks = Inner.RoundTripTime.Ticks;
             _stats = Inner.Stats;
         }

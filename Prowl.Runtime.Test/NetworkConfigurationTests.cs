@@ -9,6 +9,65 @@ namespace Prowl.Runtime.Test;
 
 public class NetworkConfigurationTests : RuntimeTestBase
 {
+    [Theory]
+    [InlineData(NetworkExecution.Auto, false)]
+    [InlineData(NetworkExecution.Inline, false)]
+    [InlineData(NetworkExecution.DedicatedThread, true)]
+    public void ExecutionPolicyCanOverrideBackendPreference(NetworkExecution execution, bool externallyPumped)
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        try
+        {
+            Networking.Networking.Configure(new() { Execution = execution });
+            using Transport transport = new LocalTransport(new(), "host");
+            using NetSession session = Networking.Networking.Host(transport);
+            Assert.Equal(externallyPumped, session.IsExternallyPumped);
+        }
+        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
+    }
+
+    [Fact]
+    public void UnavailableTransportFailsBeforeStartingWorker()
+    {
+        using Transport transport = new Prowl.Warp.Transports.Steam.SteamTransport();
+        Assert.Throws<NotSupportedException>(() => Networking.Networking.Host(transport));
+        Assert.Null(Networking.Networking.Session);
+    }
+
+    [Fact]
+    public void CreatingThreadRequirementCannotBeOverridden()
+    {
+        using Transport transport = new ThreadAffineTransport();
+        Assert.False(new NetworkConfiguration().UsesWorker(transport));
+        Assert.Throws<NotSupportedException>(() => new NetworkConfiguration { Execution = NetworkExecution.DedicatedThread }.UsesWorker(transport));
+        Assert.Throws<NotSupportedException>(() => new NetworkingThread(transport));
+    }
+
+    private sealed class ThreadAffineTransport : Transport
+    {
+        public override TransportCapabilities Capabilities => new(true, DeliverySupport.All, TransportExecution.CreatingThreadRequired);
+        public override bool IsListening => false;
+        public override void Listen() => throw new InvalidOperationException("Must not start I/O during policy validation.");
+        public override Connection Connect(string address) => throw new InvalidOperationException();
+        public override void Receive() { }
+        public override void Flush() { }
+        public override void Shutdown() { }
+    }
+
+    [Fact]
+    public void WrappedLocalTransportKeepsInlineExecution()
+    {
+        NetworkConfiguration previous = Networking.Networking.Configuration;
+        try
+        {
+            Networking.Networking.Configure(new());
+            using Transport transport = new Prowl.Warp.Transports.Batching.BatchingTransport(new LocalTransport(new(), "host"));
+            using NetSession session = Networking.Networking.Host(transport);
+            Assert.False(session.IsExternallyPumped);
+        }
+        finally { Networking.Networking.Shutdown(); Networking.Networking.Configure(previous); }
+    }
+
     [Fact]
     public void DefaultUdpTransportUsesNetworkingWorker()
     {
