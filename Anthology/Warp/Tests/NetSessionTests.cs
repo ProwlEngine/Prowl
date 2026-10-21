@@ -502,8 +502,10 @@ public abstract class NetSessionTests : IDisposable
         Assert.All(remotes.Values.Cast<object>(), remote => Assert.Null(remote.GetType().GetField("Incoming")!.GetValue(remote)));
     }
 
-    [Fact]
-    public void LargeReliableMessagesArriveWhole()
+    [Theory]
+    [InlineData(Delivery.Reliable)]
+    [InlineData(Delivery.Bulk)]
+    public void LargeReliableMessagesArriveWhole(Delivery delivery)
     {
         SessionProbe host = Host();
         SessionProbe alice = Join("alice");
@@ -512,7 +514,7 @@ public abstract class NetSessionTests : IDisposable
         SessionProbe.PumpUntil(() => host.Session.Peers.Count == 2 && alice.Session.State == SessionState.Active, host, alice);
 
         byte[] large = TestData.Pattern(1_500_000, seed: 3);
-        host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), 20, large);
+        host.Session.SendRaw(host.Session.Peers.Single(p => !p.IsLocal), 20, large, delivery);
         host.Session.SendToHost(new ChatMessage("still in order after"));
         alice.Session.SendToHost(new ChatMessage("and the other way"));
         SessionProbe.PumpUntil(() => received != null && host.Chat.Count == 2, 10_000, host, alice);
