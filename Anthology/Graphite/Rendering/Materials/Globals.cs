@@ -309,6 +309,8 @@ internal sealed class GlobalRegistry
 
     public DeviceBuffer Buffer => _table.Buffer;
 
+    public PersistentBuffer Persistent => _table.Persistent;
+
     /// <summary>Words per region. A view finds its world's globals at region times this.</summary>
     public uint RegionWords => _table.StrideWords;
 

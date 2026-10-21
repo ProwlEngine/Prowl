@@ -493,16 +493,12 @@ internal sealed class ProbePass(ComputeProgram program) : IExecutionPass, IDispo
 
     private readonly PropertySet _properties = new();
 
-    public DeviceBuffer[] Buffers = [];
+    public FrameBuffers Buffers = null!;
     public readonly List<WorldProbes> Worlds = new();
 
     public string Name => "Graphite.LightProbes";
 
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < Buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), Buffers[i], BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-    }
+    public void Setup(RenderContextBuilder builder) => Buffers.Write(builder, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
 
     public void Render(RenderContext context, CommandBuffer cmd)
     {

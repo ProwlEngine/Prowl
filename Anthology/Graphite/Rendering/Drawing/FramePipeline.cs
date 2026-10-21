@@ -488,16 +488,12 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
     private readonly PropertySet _properties = new();
     private readonly List<(RenderWorld.RenderSide World, int Index)> _jobs = new();
 
-    public DeviceBuffer[] Buffers = [];
+    public FrameBuffers Buffers = null!;
     public readonly List<RenderWorld.RenderSide> Worlds = new();
 
     public string Name => "Graphite.Deform";
 
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < Buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), Buffers[i], BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-    }
+    public void Setup(RenderContextBuilder builder) => Buffers.Write(builder, BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
 
     public void Render(RenderContext context, CommandBuffer cmd)
     {
@@ -645,15 +641,11 @@ internal sealed class DeformPass(ComputeProgram program, GeometryPool geometry) 
 /// <summary>The FrameStart pass: the frame's single scatter into every persistent buffer, with each declared as written.</summary>
 internal sealed class UploadPass(Uploader uploader) : IExecutionPass
 {
-    public DeviceBuffer[] Buffers = [];
+    public FrameBuffers Buffers = null!;
 
     public string Name => "Graphite.FrameStart";
 
-    public void Setup(RenderContextBuilder builder)
-    {
-        for (int i = 0; i < Buffers.Length; i++)
-            builder.DeclareImportedBuffer(FramePipeline.BufferId(i), Buffers[i], BufferAccess.ShaderWrite);
-    }
+    public void Setup(RenderContextBuilder builder) => Buffers.Describe(builder, BufferAccess.ShaderWrite);
 
     public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
 }
@@ -807,9 +799,10 @@ internal sealed class CameraFrame : IDisposable
     private uint[] _instances = new uint[256];
     private readonly FramePipeline _frame;
     private readonly GraphicsDevice _device;
+    private readonly TableHost _tables;
 
     /// <summary>The view's buffers for a set's trees.</summary>
-    public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_device, $"View {View.ViewId} set {slot}");
+    public SpatialView SpatialFor(int slot) => Spatial[slot] ??= new SpatialView(_tables.Scope($"Set{slot}"));
 
     public CameraFrame(GraphicsDevice device, FramePipeline frame, int viewId)
     {
@@ -818,12 +811,13 @@ internal sealed class CameraFrame : IDisposable
         View.ViewId = viewId;
         Lists = [Prepass, Forward, Transparent];
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
-        Instances = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Instances {viewId}");
-        Records = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Draw records {viewId}");
-        Commands = new GpuArray(device, BufferUsage.IndirectBuffer, $"Indirect commands {viewId}");
-        ViewBlocks = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"View blocks {viewId}");
-        SpatialRoots = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Spatial roots {viewId}");
-        Cascades = new GpuArray(device, BufferUsage.StructuredBufferReadOnly, $"Cascades {viewId}");
+        _tables = new TableHost(device, frame.Store, $"Graphite.Camera{viewId}");
+        Instances = _tables.Array("Instances");
+        Records = _tables.Array("Records");
+        Commands = _tables.Array("Commands", BufferUsage.IndirectBuffer);
+        ViewBlocks = _tables.Array("ViewBlocks");
+        SpatialRoots = _tables.Array("SpatialRoots");
+        Cascades = _tables.Array("Cascades");
         _device = device;
     }
 
@@ -895,14 +889,14 @@ internal sealed class CameraFrame : IDisposable
         return (T)state;
     }
 
-    public void AddBuffers(List<DeviceBuffer> buffers)
+    public void AddBuffers(List<PersistentBuffer> buffers)
     {
-        buffers.Add(Instances.Buffer);
-        buffers.Add(Records.Buffer);
-        buffers.Add(Commands.Buffer);
-        buffers.Add(ViewBlocks.Buffer);
-        buffers.Add(SpatialRoots.Buffer);
-        buffers.Add(Cascades.Buffer);
+        buffers.Add(Instances.Persistent);
+        buffers.Add(Records.Persistent);
+        buffers.Add(Commands.Persistent);
+        buffers.Add(ViewBlocks.Persistent);
+        buffers.Add(SpatialRoots.Persistent);
+        buffers.Add(Cascades.Persistent);
         foreach (SpatialView? view in Spatial)
             view?.AddBuffers(buffers);
     }
@@ -1013,15 +1007,7 @@ internal sealed class CameraFrame : IDisposable
         foreach (object state in States.Values)
             (state as IDisposable)?.Dispose();
         ViewTable.Dispose();
-        Instances.Dispose();
-        Records.Dispose();
-        Commands.Dispose();
-        ViewBlocks.Dispose();
-        SpatialRoots.Dispose();
-        Cascades.Dispose();
         Shadows.Dispose();
-        foreach (SpatialView? view in Spatial)
-            view?.Dispose();
     }
 }
 
@@ -1248,7 +1234,8 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<GraphImport> _imports = new();
     private RenderGraph? _graph;
     private bool _graphDirty = true;
-    private readonly List<DeviceBuffer> _buffers = new();
+    private readonly List<PersistentBuffer> _buffers = new();
+    private readonly List<DeviceBuffer> _importedBuffers = new();
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
     private readonly List<IDisposable> _retired = new();
@@ -1282,9 +1269,9 @@ internal sealed partial class FramePipeline : IDisposable
         DrawPrograms = programs;
         Programs = new ProgramCache(device, compiler, globals, programs, deterministic, report, policy, _retired.Add);
         programs.Freed += Programs.Drop;
-        _upload = new UploadPass(uploader);
-        _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl"));
-        _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry);
+        _upload = new UploadPass(uploader) { Buffers = Buffers };
+        _probes = new ProbePass(InternalShaders.Compute(device, compiler, "Internal/Probes.glsl")) { Buffers = Buffers };
+        _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl"), geometry) { Buffers = Buffers };
         _readback = new ReadbackStaging(device, report);
 
         const string present = InternalShaders.Present, decode = InternalShaders.Decode, encode = InternalShaders.Encode;
@@ -1412,17 +1399,7 @@ internal sealed partial class FramePipeline : IDisposable
     public Sampler LinearSampler { get; }
 
     /// <summary>Every persistent buffer the frame writes and its cameras read, in a stable order.</summary>
-    public DeviceBuffer[] Buffers { get; private set; } = [];
-
-    public static RenderResourceID BufferId(int index)
-    {
-        lock (s_bufferIds)
-        {
-            while (s_bufferIds.Count <= index)
-                s_bufferIds.Add(RenderResourceID.Intern("Graphite.Buffer" + s_bufferIds.Count));
-            return s_bufferIds[index];
-        }
-    }
+    public FrameBuffers Buffers { get; } = new();
 
     public VertexSource VertexSource(int page, PrimitiveTopology topology)
     {
@@ -2126,16 +2103,17 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (WorldFrame world in worlds)
             _captures.AddRange(world.Captures());
         _buffers.Clear();
-        _buffers.Add(Geometry.Chunks.Buffer);
-        _buffers.Add(Geometry.Meshes.Buffer);
+        _importedBuffers.Clear();
+        _buffers.Add(Geometry.Chunks.Persistent);
+        _buffers.Add(Geometry.Meshes.Persistent);
         foreach (GeometryPage page in Geometry.Pages)
         {
-            _buffers.Add(page.Vertices);
-            _buffers.Add(page.Indices);
+            _buffers.Add(page.VertexBuffer);
+            _buffers.Add(page.IndexBuffer);
         }
         foreach (MaterialTable table in Materials.Tables.Values)
-            _buffers.Add(table.Records.Buffer);
-        _buffers.Add(Globals.Buffer);
+            _buffers.Add(table.Records.Persistent);
+        _buffers.Add(Globals.Persistent);
         _probes.Worlds.Clear();
         _deform.Worlds.Clear();
         foreach (WorldFrame world in worlds)
@@ -2144,56 +2122,61 @@ internal sealed partial class FramePipeline : IDisposable
             _deform.Worlds.Add(render);
             WorldProbes probes = world.World.Probes;
             _probes.Worlds.Add(probes);
-            _buffers.Add(probes.ProbeRecords.Buffer);
-            _buffers.Add(probes.TetRecords.Buffer);
-            _buffers.Add(probes.Requests.Buffer);
-            _buffers.Add(probes.ObjectSh);
+            _buffers.Add(probes.ProbeRecords.Persistent);
+            _buffers.Add(probes.TetRecords.Persistent);
+            _buffers.Add(probes.Requests.Persistent);
+            _buffers.Add(probes.ObjectShBuffer);
             foreach (SpatialIndex set in world.World.SpatialSets)
             {
                 if (set.Slot < SpatialIndex.ProbesSet)
                     continue;
-                _buffers.Add(set.StaticRecords.Buffer);
-                _buffers.Add(set.StaticNodes.Buffer);
+                _buffers.Add(set.StaticRecords.Persistent);
+                _buffers.Add(set.StaticNodes.Persistent);
             }
-            _buffers.Add(world.World.Reflections.SkyAmbient);
+            _importedBuffers.Add(world.World.Reflections.SkyAmbient);
 
             foreach (GpuTable table in render.Tables)
-                _buffers.Add(table.Buffer);
+                _buffers.Add(table.Persistent);
             WorldLighting lighting = world.World.Lighting;
             foreach (GpuTable table in lighting.Tables)
-                _buffers.Add(table.Buffer);
-
+                _buffers.Add(table.Persistent);
         }
         foreach (WorldFrame world in worlds)
         {
             if (world.Shadows != null)
-                _buffers.Add(world.Shadows.Faces.Buffer);
+                _buffers.Add(world.Shadows.Faces.Persistent);
         }
         foreach (DeviceBuffer buffer in _providerWork.ComputeBuffers)
         {
-            if (!_buffers.Contains(buffer))
-                _buffers.Add(buffer);
+            if (!_importedBuffers.Contains(buffer))
+                _importedBuffers.Add(buffer);
         }
         foreach (CameraFrame camera in Active())
             camera.AddBuffers(_buffers);
 
-        if (Same(Buffers, _buffers))
+        if (Same(Buffers, _buffers, _importedBuffers))
             return;
 
-        Buffers = [.. _buffers];
+        Buffers.Persistent = [.. _buffers];
+        Buffers.Sizes = new uint[_buffers.Count];
+        for (int i = 0; i < _buffers.Count; i++)
+            Buffers.Sizes[i] = _buffers[i].Description.SizeInBytes;
+        Buffers.Imported = [.. _importedBuffers];
         _graphDirty = true;
-        _upload.Buffers = Buffers;
-        _probes.Buffers = Buffers;
-        _deform.Buffers = Buffers;
     }
 
-    private static bool Same(DeviceBuffer[] a, List<DeviceBuffer> b)
+    private static bool Same(FrameBuffers current, List<PersistentBuffer> buffers, List<DeviceBuffer> imports)
     {
-        if (a.Length != b.Count)
+        if (current.Persistent.Length != buffers.Count || current.Imported.Length != imports.Count)
             return false;
-        for (int i = 0; i < a.Length; i++)
+        for (int i = 0; i < buffers.Count; i++)
         {
-            if (a[i] != b[i])
+            if (current.Persistent[i] != buffers[i] || buffers[i].Description.SizeInBytes != current.Sizes[i])
+                return false;
+        }
+        for (int i = 0; i < imports.Count; i++)
+        {
+            if (current.Imported[i] != imports[i])
                 return false;
         }
         return true;

@@ -505,7 +505,7 @@ internal sealed class HandleStore<T> where T : struct
 /// are culled to each view and built into a fresh tree per view every frame. Directional lights, ambient light and fog
 /// live in one world record.
 /// </summary>
-internal sealed class WorldLighting : IDisposable
+internal sealed class WorldLighting
 {
     private readonly IMaterialResources _resources;
     private readonly Action<RendererError> _report;
@@ -1326,29 +1326,21 @@ internal struct SpatialRoots
 }
 
 /// <summary>The buffers a view builds a set's trees into each frame.</summary>
-internal sealed class SpatialView(GraphicsDevice device, string name) : IDisposable
+internal sealed class SpatialView(TableHost tables)
 {
-    public readonly GpuArray Records = new(device, BufferUsage.StructuredBufferReadOnly, name + " records");
-    public readonly GpuArray Nodes = new(device, BufferUsage.StructuredBufferReadOnly, name + " nodes");
-    public readonly GpuArray RegionEntries = new(device, BufferUsage.StructuredBufferReadOnly, name + " regions");
-    public readonly GpuArray RegionNodes = new(device, BufferUsage.StructuredBufferReadOnly, name + " region nodes");
+    public readonly GpuArray Records = tables.Array("Records");
+    public readonly GpuArray Nodes = tables.Array("Nodes");
+    public readonly GpuArray RegionEntries = tables.Array("RegionEntries");
+    public readonly GpuArray RegionNodes = tables.Array("RegionNodes");
     public readonly LightTreeBuilder Tree = new();
     public readonly LightTreeBuilder RegionTree = new();
 
-    public void AddBuffers(List<DeviceBuffer> buffers)
+    public void AddBuffers(List<PersistentBuffer> buffers)
     {
-        buffers.Add(Records.Buffer);
-        buffers.Add(Nodes.Buffer);
-        buffers.Add(RegionEntries.Buffer);
-        buffers.Add(RegionNodes.Buffer);
-    }
-
-    public void Dispose()
-    {
-        Records.Dispose();
-        Nodes.Dispose();
-        RegionEntries.Dispose();
-        RegionNodes.Dispose();
+        buffers.Add(Records.Persistent);
+        buffers.Add(Nodes.Persistent);
+        buffers.Add(RegionEntries.Persistent);
+        buffers.Add(RegionNodes.Persistent);
     }
 }
 

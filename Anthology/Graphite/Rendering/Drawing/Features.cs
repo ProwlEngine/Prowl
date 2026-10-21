@@ -900,7 +900,11 @@ internal sealed class SetupPass(FeatureShape shape) : IInstancePass
 
     public GraphKind Kind => shape.Kind;
 
-    public void Setup(InstanceContextBuilder builder) => shape.Begin();
+    public void Setup(InstanceContextBuilder builder)
+    {
+        shape.Begin();
+        shape.Frame.Buffers.Read(builder);
+    }
 
     public void Render(InstanceContext context, CommandBuffer cmd)
     {
