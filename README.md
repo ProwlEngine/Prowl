@@ -297,6 +297,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
+                <a href="https://github.com/Tryibion">
+                    <img src="https://avatars.githubusercontent.com/u/71274967?v=4" width="100;" alt="Tryibion"/>
+                    <br />
+                    <sub><b>Chandler Cox</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/Kuvrot">
                     <img src="https://avatars.githubusercontent.com/u/23508114?v=4" width="100;" alt="Kuvrot"/>
                     <br />
@@ -311,13 +318,6 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/10xJosh">
-                    <img src="https://avatars.githubusercontent.com/u/55113224?v=4" width="100;" alt="10xJosh"/>
-                    <br />
-                    <sub><b>Josh Davis</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/ZeppelinGames">
                     <img src="https://avatars.githubusercontent.com/u/31507417?v=4" width="100;" alt="ZeppelinGames"/>
                     <br />
@@ -327,6 +327,13 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 		</tr>
 		<tr>
             <td align="center">
+                <a href="https://github.com/10xJosh">
+                    <img src="https://avatars.githubusercontent.com/u/55113224?v=4" width="100;" alt="10xJosh"/>
+                    <br />
+                    <sub><b>Josh Davis</b></sub>
+                </a>
+            </td>
+            <td align="center">
                 <a href="https://github.com/ZedDevStuff">
                     <img src="https://avatars.githubusercontent.com/u/98429642?v=4" width="100;" alt="ZedDevStuff"/>
                     <br />
@@ -334,24 +341,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/keithwill">
-                    <img src="https://avatars.githubusercontent.com/u/33398353?v=4" width="100;" alt="keithwill"/>
-                    <br />
-                    <sub><b>Keith Williams</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/Tryibion">
-                    <img src="https://avatars.githubusercontent.com/u/71274967?v=4" width="100;" alt="Tryibion"/>
-                    <br />
-                    <sub><b>Chandler Cox</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/ArtemkaKun">
                     <img src="https://avatars.githubusercontent.com/u/36485221?v=4" width="100;" alt="ArtemkaKun"/>
                     <br />
                     <sub><b>Artem Yurchenko</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/keithwill">
+                    <img src="https://avatars.githubusercontent.com/u/33398353?v=4" width="100;" alt="keithwill"/>
+                    <br />
+                    <sub><b>Keith Williams</b></sub>
                 </a>
             </td>
             <td align="center">

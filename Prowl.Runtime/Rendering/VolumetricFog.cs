@@ -35,7 +35,7 @@ public sealed class VolumetricFog : VolumeComponent<VolumetricFogFeature>
     /// <summary>Multiplier on density for the light the fog absorbs along the view ray. Lower is brighter, longer range fog.</summary>
     [Range(0f, 5f)] public VolumeParameter<float> Extinction = new(1.0f);
 
-    /// <summary>Per pixel random color shift to break up banding. 0 is none.</summary>
+    /// <summary>Per pixel fixed pattern color shift to break up banding. 0 is none.</summary>
     [Range(0f, 0.2f)] public VolumeParameter<float> Dithering = new(0.02f);
 
     /// <summary>Ambient light added to every fog sample, whatever the shadows or light coverage, so dense fog in shadow keeps some color.</summary>
@@ -63,11 +63,11 @@ public sealed class VolumetricFog : VolumeComponent<VolumetricFogFeature>
     /// <summary>Bilateral upsample depth similarity threshold.</summary>
     [Range(0.001f, 1f)] public VolumeParameter<float> UpsampleDepthThreshold = new(0.1f);
 
-    /// <summary>Blends the previous frame's fog into this frame, removing march noise at the cost of slight ghosting.</summary>
+    /// <summary>Blends each fog cell with where it was last frame, averaging the jittered samples at the cost of lag on moving lights.</summary>
     public VolumeParameter<bool> EnableTemporalReprojection = new(true);
 
-    /// <summary>How much of the reprojected history to keep.</summary>
-    [Range(0f, 0.99f)] public VolumeParameter<float> TemporalBlendWeight = new(0.9f);
+    /// <summary>How much of the reprojected cells to keep.</summary>
+    [Range(0f, 0.99f)] public VolumeParameter<float> TemporalBlendWeight = new(0.95f);
 
     public override bool IsActive => Enabled.Value;
 
@@ -124,8 +124,8 @@ public sealed class VolumetricFog : VolumeComponent<VolumetricFogFeature>
 
 /// <summary>
 /// The volumetric fog of a <see cref="VolumetricFog"/>: the world's lights and shadows lit once per cell of a grid fitted
-/// to the view, then marched through per pixel at a reduced resolution, blended over frames and upsampled over the
-/// colour by depth, after the transparents.
+/// to the view and blended with the cells reprojected from last frame, then marched through per pixel at a reduced
+/// resolution and upsampled over the colour by depth, after the transparents.
 /// </summary>
 public sealed class VolumetricFogFeature : RenderFeature, IDisposable
 {
@@ -145,7 +145,7 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
 
     private sealed class ViewState
     {
-        public TextureHandle Froxels, March, History;
+        public TextureHandle Froxels, March;
         public Float4 Grid;
         public Float2 Atlas;
     }
@@ -166,7 +166,7 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
     private readonly SharedPrograms _programs;
     private const int CellPixels = 8;
 
-    private readonly FullscreenProgram _froxel, _march, _temporal, _composite;
+    private readonly FullscreenProgram _froxel, _march, _composite;
     private bool _disposed;
     private readonly Sampler _linearClamp, _pointClamp;
     private readonly PropertySet _properties = new();
@@ -184,7 +184,7 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
     public VolumetricFogFeature(Renderer renderer)
     {
         _programs = SharedPrograms.Acquire(renderer);
-        (_froxel, _march, _temporal, _composite) = (_programs.Froxel, _programs.March, _programs.Temporal, _programs.Composite);
+        (_froxel, _march, _composite) = (_programs.Froxel, _programs.March, _programs.Composite);
         SamplerDescription clamp = SamplerDescription.Linear with
         {
             AddressModeU = SamplerAddressMode.Clamp,
@@ -223,10 +223,11 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         int slices = _declared.Slices, perRow = (int)MathF.Ceiling(MathF.Sqrt(slices)), rows = (slices + perRow - 1) / perRow;
         state.Grid = new Float4(cellsX, cellsY, slices, perRow);
         state.Atlas = new Float2(cellsX * perRow, cellsY * rows);
-        state.Froxels = builder.Temporary("Froxels", view.Texture(cellsX * perRow, cellsY * rows, PixelFormat.R16_G16_B16_A16_Float));
+        GraphTextureDesc froxels = view.Texture(cellsX * perRow, cellsY * rows, PixelFormat.R16_G16_B16_A16_Float);
+        state.Froxels = _declared.Temporal
+            ? builder.History("Froxels", froxels, usage: TextureState.Attachment | TextureState.Sampled)
+            : builder.Temporary("Froxels", froxels);
         state.March = builder.Temporary("March", view.Texture(width, height, PixelFormat.R16_G16_B16_A16_Float));
-        if (_declared.Temporal)
-            state.History = builder.History("History", view.Texture(width, height, PixelFormat.R16_G16_B16_A16_Float), usage: TextureState.Attachment | TextureState.Sampled);
     }
 
     public override void Render(FeatureContext context)
@@ -248,29 +249,22 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         _properties.SetFloat("_FogDithering", s.Dithering);
         _properties.SetFloat4("_FogAmbientColor", s.AmbientColor);
         _properties.SetFloat("_FogAmbientIntensity", s.AmbientIntensity);
-        _properties.SetFloat("_FogTime", (float)context.Time.Time);
         _properties.SetFloat("_FogUpsampleThreshold", s.UpsampleThreshold);
         _properties.SetFloat3("_FogLightTypes", s.LightTypes);
         SetVolumes(context.View.Position);
+
+        // Without a history the march target stands in, never sampled while the valid flag is off
+        RenderTexture? previous = _declared.Temporal ? context.History(state.Froxels) : null;
+        _properties.SetTexture("_FroxelHistoryTex", (previous ?? march).ColorTextures[0], _linearClamp);
+        _properties.SetFloat("_FogHistoryValid", previous != null && context.HasPreviousFrame ? 1f : 0f);
+        _properties.SetFloat("_FogTemporalBlend", s.TemporalBlend);
         RenderTexture froxels = context.Get(state.Froxels);
         context.Fullscreen(_froxel, froxels, _properties);
+
         _properties.SetTexture("_FroxelTex", froxels.ColorTextures[0], _linearClamp);
         context.Fullscreen(_march, march, _properties);
 
-        Texture fog = marchColor;
-        if (_declared.Temporal)
-        {
-            RenderTexture history = context.Get(state.History);
-            RenderTexture? previous = context.History(state.History);
-            _properties.SetTexture("_FogCurrentTex", marchColor, _linearClamp);
-            _properties.SetTexture("_FogHistoryTex", (previous ?? march).ColorTextures[0], _linearClamp);
-            _properties.SetFloat("_FogHistoryValid", previous != null && context.HasPreviousFrame ? 1f : 0f);
-            _properties.SetFloat("_FogTemporalBlend", s.TemporalBlend);
-            context.Fullscreen(_temporal, history, _properties);
-            fog = history.ColorTextures[0];
-        }
-
-        _properties.SetTexture("_FogTex", fog, _linearClamp);
+        _properties.SetTexture("_FogTex", marchColor, _linearClamp);
         context.Fullscreen(_composite, _properties);
     }
 
@@ -307,14 +301,13 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
         private readonly Renderer _renderer;
         private int _users;
 
-        public readonly FullscreenProgram Froxel, March, Temporal, Composite;
+        public readonly FullscreenProgram Froxel, March, Composite;
 
         private SharedPrograms(Renderer renderer)
         {
             _renderer = renderer;
             Froxel = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogFroxel", source: false, lit: true, variant: "#define FOG_FROXEL 1\n");
             March = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogMarch", source: false, variant: "#define FOG_MARCH 1\n");
-            Temporal = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogTemporal", source: false, variant: "#define FOG_TEMPORAL 1\n");
             Composite = renderer.CreateFullscreenProgram(VolumetricFogFeature.Fog, "Prowl/VolumetricFogComposite");
         }
 
@@ -335,7 +328,6 @@ public sealed class VolumetricFogFeature : RenderFeature, IDisposable
             s_shared.Remove(_renderer);
             Froxel.Dispose();
             March.Dispose();
-            Temporal.Dispose();
             Composite.Dispose();
         }
     }
