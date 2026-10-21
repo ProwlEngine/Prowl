@@ -732,7 +732,7 @@ public sealed class NetSession : IDisposable
                 case (ushort)InternalMessage.PeerJoined:
                     if (State == SessionState.Active)
                     {
-                        NetPeer peer = new(checked((int)reader.ReadVarUInt32()), reader.ReadString(MaxNameBytes), isLocal: false, connection: null);
+                        NetPeer peer = new(ReadPeerId(ref reader), reader.ReadString(MaxNameBytes), isLocal: false, connection: null);
                         if (_peers.TryAdd(peer.Id, peer))
                             PeerJoined?.Invoke(peer);
                     }
@@ -741,7 +741,7 @@ public sealed class NetSession : IDisposable
                 case (ushort)InternalMessage.PeerLeft:
                     if (State == SessionState.Active)
                     {
-                        int peerId = (int)reader.ReadVarUInt32();
+                        int peerId = ReadPeerId(ref reader);
                         SessionEndReason reason = ReadReason(ref reader);
                         if (peerId != LocalPeer!.Id && _peers.Remove(peerId, out NetPeer? peer))
                             PeerLeft?.Invoke(peer, reason);
@@ -778,14 +778,14 @@ public sealed class NetSession : IDisposable
 
     private void HandleJoinAccepted(ref NetReader reader)
     {
-        int localId = (int)reader.ReadVarUInt32();
+        int localId = ReadPeerId(ref reader);
         uint count = reader.ReadVarUInt32();
         if (count > (uint)reader.Remaining)
             throw new InvalidDataException("Peer count exceeds the message size.");
 
         for (uint i = 0; i < count; i++)
         {
-            int id = (int)reader.ReadVarUInt32();
+            int id = ReadPeerId(ref reader);
             string name = reader.ReadString(MaxNameBytes);
             Connection? connection = id == NetPeer.HostId ? _hostConnection : null;
             if (!_peers.TryAdd(id, new NetPeer(id, name, isLocal: id == localId, connection)))
@@ -800,6 +800,13 @@ public sealed class NetSession : IDisposable
         State = SessionState.Active;
         _joinDeadlineMs = long.MaxValue;
         Joined?.Invoke();
+    }
+
+    private static int ReadPeerId(ref NetReader reader)
+    {
+        uint id = reader.ReadVarUInt32();
+        if (id > int.MaxValue) throw new InvalidDataException("Peer id exceeds the supported range.");
+        return (int)id;
     }
 
     private static SessionEndReason ReadReason(ref NetReader reader)

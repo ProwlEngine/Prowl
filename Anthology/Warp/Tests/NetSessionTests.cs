@@ -515,6 +515,21 @@ public abstract class NetSessionTests : IDisposable
     }
 
     [Fact]
+    public void MalformedPeerIdentifiersCannotEscapeTheReceiveLoop()
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        using NetWriter forged = new();
+        forged.WriteUInt16(NetSession.ReservedMessageIds + 2);
+        forged.WriteVarUInt32(uint.MaxValue);
+        forged.WriteString("bad");
+        host.Session.Peers.Single(p => !p.IsLocal).Connection!.Send(forged.WrittenSpan, Delivery.Reliable);
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Ended, host, alice);
+        Assert.Equal(SessionEndReason.ProtocolError, alice.EndedWith!.Value.Reason);
+    }
+
+    [Fact]
     public void ApplicationHandlerFailuresDoNotDisconnectTheSender()
     {
         SessionProbe host = Host();
