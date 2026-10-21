@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Text;
 
 namespace Prowl.Warp;
 
@@ -45,6 +46,8 @@ public sealed class NetSession : IDisposable
 {
     /// <summary>Message ids from here up belong to Warp. Your <see cref="INetMessage.Id"/>s must be below it.</summary>
     public const ushort ReservedMessageIds = 0xFF00;
+    public const int MaxNameBytes = 256;
+    public const int MaxJoinTokenBytes = 4096;
 
     private enum InternalMessage : ushort
     {
@@ -130,6 +133,8 @@ public sealed class NetSession : IDisposable
     private NetSession(Transport transport, NetSessionOptions? options, string address, string name, byte[] token)
         : this(transport, options, isHost: false)
     {
+        if (Encoding.UTF8.GetByteCount(name) > MaxNameBytes) throw new ArgumentException("Peer name is too long.", nameof(name));
+        if (token.Length > MaxJoinTokenBytes) throw new ArgumentException("Join token is too long.", nameof(token));
         _joinName = name;
         _joinToken = token;
         State = SessionState.Joining;
@@ -143,6 +148,7 @@ public sealed class NetSession : IDisposable
     public static NetSession Host(Transport transport, string name = "Host", NetSessionOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(name);
+        if (Encoding.UTF8.GetByteCount(name) > MaxNameBytes) throw new ArgumentException("Peer name is too long.", nameof(name));
 
         NetSession session = new(transport, options, isHost: true);
         transport.Listen();
@@ -532,8 +538,8 @@ public sealed class NetSession : IDisposable
     private void HandleJoinRequest(Connection connection, Remote remote, ref NetReader reader)
     {
         uint version = reader.ReadUInt32();
-        string name = reader.ReadString();
-        byte[] token = reader.ReadBytesWithLength().ToArray();
+        string name = reader.ReadString(MaxNameBytes);
+        byte[] token = reader.ReadBytesWithLength(MaxJoinTokenBytes).ToArray();
 
         if (version != _options.AppVersion)
         {
@@ -726,7 +732,7 @@ public sealed class NetSession : IDisposable
                 case (ushort)InternalMessage.PeerJoined:
                     if (State == SessionState.Active)
                     {
-                        NetPeer peer = new((int)reader.ReadVarUInt32(), reader.ReadString(), isLocal: false, connection: null);
+                        NetPeer peer = new(checked((int)reader.ReadVarUInt32()), reader.ReadString(MaxNameBytes), isLocal: false, connection: null);
                         if (_peers.TryAdd(peer.Id, peer))
                             PeerJoined?.Invoke(peer);
                     }
@@ -780,7 +786,7 @@ public sealed class NetSession : IDisposable
         for (uint i = 0; i < count; i++)
         {
             int id = (int)reader.ReadVarUInt32();
-            string name = reader.ReadString();
+            string name = reader.ReadString(MaxNameBytes);
             Connection? connection = id == NetPeer.HostId ? _hostConnection : null;
             if (!_peers.TryAdd(id, new NetPeer(id, name, isLocal: id == localId, connection)))
                 throw new InvalidDataException($"Peer id {id} listed twice.");

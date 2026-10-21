@@ -502,6 +502,18 @@ public abstract class NetSessionTests : IDisposable
         Assert.All(remotes.Values.Cast<object>(), remote => Assert.Null(remote.GetType().GetField("Incoming")!.GetValue(remote)));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AdmissionMetadataIsBounded(bool token)
+    {
+        Host();
+        using Transport transport = CreateClientTransport("oversized");
+        Assert.Throws<ArgumentException>(() => NetSession.Join(transport, _hostAddress!,
+            token ? "alice" : new string('x', 257), token ? new byte[4097] : Array.Empty<byte>()));
+        Assert.Empty(transport.Connections);
+    }
+
     [Fact]
     public void ApplicationHandlerFailuresDoNotDisconnectTheSender()
     {

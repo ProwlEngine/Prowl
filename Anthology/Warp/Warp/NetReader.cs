@@ -90,14 +90,19 @@ public ref struct NetReader
 
     public Guid ReadGuid() => new(Take(16));
 
-    public string ReadString()
+    public string ReadString() => ReadString(int.MaxValue);
+
+    /// <summary>Reads a string without allocating if its encoded length exceeds the given limit.</summary>
+    public string ReadString(int maximumBytes)
     {
-        int length = ReadLength();
+        int length = ReadLength(maximumBytes);
         return length == 0 ? string.Empty : Encoding.UTF8.GetString(Take(length));
     }
 
     /// <summary>Reads bytes written by <see cref="NetWriter.WriteBytesWithLength"/>. The span points into the source data.</summary>
     public ReadOnlySpan<byte> ReadBytesWithLength() => Take(ReadLength());
+
+    public ReadOnlySpan<byte> ReadBytesWithLength(int maximumBytes) => Take(ReadLength(maximumBytes));
 
     /// <summary>Reads <paramref name="count"/> raw bytes. The span points into the source data.</summary>
     public ReadOnlySpan<byte> ReadBytes(int count)
@@ -107,9 +112,11 @@ public ref struct NetReader
         return Take(count);
     }
 
-    private int ReadLength()
+    private int ReadLength(int maximumBytes = int.MaxValue)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumBytes);
         uint length = ReadVarUInt32();
+        if (length > maximumBytes) throw new InvalidDataException("Length exceeds the field limit.");
         if (length > (uint)Remaining)
             throw new EndOfStreamException($"Length prefix of {length} bytes runs past the end of the data ({Remaining} left).");
         return (int)length;
