@@ -13,6 +13,7 @@ object ownership belong to the layer above (the Prowl engine), which only ever t
 | ---------------- | --------------------------------- | ------ | ---------- |
 | `KcpTransport`   | `Prowl.Warp.Transports.Kcp`       | Ready  | Dedicated servers, LAN, anything over plain UDP |
 | `LocalTransport` | `Prowl.Warp.Transports.Local`     | Ready  | Host and clients in one process: editor play mode, tests |
+| `EncryptedTransport` | `Prowl.Warp.Transports.Encryption` | Optional | Authenticated encryption over another transport using a provisioned shared key |
 | `SteamTransport` | `Prowl.Warp.Transports.Steam`     | Stub   | Steam P2P through Valve's relays (planned) |
 
 `KcpTransport` runs on one UDP socket (dual-stack IPv6 where available) and carries:
@@ -20,6 +21,9 @@ object ownership belong to the layer above (the Prowl engine), which only ever t
 - **Reliable** messages over an embedded copy of [kcp2k](https://github.com/MirrorNetworking/kcp2k)'s
   KCP implementation (see `Transports/Kcp/Protocol`): ordered, retransmitted, fragmented and
   reassembled, up to about 290 KB per message by default.
+- **Bulk** messages on a separate reliable, ordered KCP stream. Its default 32-segment send window
+  bounds in-flight bulk traffic while gameplay uses its own stream. A lost bulk segment does not
+  block `Reliable` delivery. There is no ordering between the two streams.
 - **Unreliable** messages as single datagrams, up to `Mtu - 5` bytes (1195 by default).
 
 Connections are set up by a stateless cookie handshake, so a host allocates nothing for a client
@@ -107,6 +111,95 @@ session.Update();
 Joining checks the app version, capacity and your optional approval, with a timeout. The host can
 `Kick` with a message; clients learn why they were turned away or removed. Malformed messages get
 the sender removed with `ProtocolError`.
+
+## Foundation contracts
+
+- Configure `KcpTransportOptions` and `NetSessionOptions` before construction. Settings are validated
+  and copied, including nested reliability/simulation options. Their `Options` getters return detached
+  copies; editing those copies does not change a running transport. Queue limits exposed directly on
+  transports can be adjusted and must stay positive.
+- Admission bounds UTF-8 peer names to 256 bytes and join tokens to 4096 bytes. Admission/version
+  checks do not constitute application authentication: validate tokens in `JoinRequested`.
+- `MaxReassemblyBytes` caps actual pooled storage across both reliable channels (64 MiB by default).
+  `ReassemblyTimeout` is an absolute deadline (10 seconds), not extended by keepalives or trickled
+  fragments. Pending approvals cannot allocate fragment buffers; pre-admission requests are limited
+  to 8 KiB. Completed, rejected, expired, disconnected, and shut-down transfers release their buffers.
+- Loopback messages have independent count/byte budgets (`MaxLoopbackMessages`, `MaxLoopbackBytes`).
+  Queue exhaustion throws locally; pump `Receive` before sending more. Local transport inboxes are
+  bounded before `Receive` runs, and shutdown drains queued payloads and refuses late data.
+- `ResourceLimit` distinguishes exhausted budgets from normal departures and timeouts at the session
+  layer. The remote side of a transport disconnect may only know the link closed; application-level
+  goodbye reasons are best effort during shutdown or packet loss.
+- Typed message decoding errors reject malformed data. Exceptions in the typed application handler
+  report through `HandlerFailed` without disconnecting the sender. Raw handlers should throw
+  `InvalidDataException` or `EndOfStreamException` for malformed input; other exceptions are reported
+  as application failures. Failure-notification listeners cannot break the receive loop.
+- `Shutdown` allows reuse; `Dispose` is terminal. Dispose sessions/transports to return pooled storage.
+
+## Bulk transfers
+
+Use `Delivery.Bulk` for large, noninteractive transfers:
+
+```csharp
+session.SendRaw(peer, snapshotMessageId, snapshotBytes, Delivery.Bulk);
+session.SendRaw(peer, gameplayMessageId, gameplayBytes, Delivery.Reliable);
+```
+
+`NetSession` fragments/reassembles large messages independently per reliable channel. `BulkSendWindow`
+and `BulkReceiveWindow` tune bulk KCP behavior. `MaxPendingReliableBytes` accounts for both streams.
+The bulk window limits outstanding data; it is not a fixed bandwidth cap or a general congestion scheduler.
+
+Independent streams deliberately remove cross-stream ordering. A scene loader must establish a baseline,
+catch up ordered changes, and acknowledge readiness before allowing gameplay that depends on the baseline.
+Adding bulk transport alone does not provide that engine-level join protocol.
+
+New bulk packet types require matching Warp builds. Use distinct `ProtocolId` / `AppVersion` values for
+incompatible application releases, and deploy host/client upgrades together.
+
+## Optional encryption
+
+Plain KCP remains available for LAN/trusted deployments. Encryption is an optional wrapper:
+
+```csharp
+using Prowl.Warp.Transports.Encryption;
+
+// Load a cryptographically random 32-byte secret provisioned securely to both peers.
+byte[] sharedKey = LoadProvisionedKey();
+Transport transport = new EncryptedTransport(new KcpTransport(), sharedKey);
+NetSession host = NetSession.Host(transport);
+```
+
+`EncryptedTransport` uses .NET cryptography: HMAC-SHA256 authenticates a four-message nonce handshake,
+HKDF-SHA256 derives independent directional session keys, and AES-256-GCM encrypts application messages.
+Each delivery channel has its own sequence numbers; unreliable traffic has a 64-message replay window.
+The underlying transport is not exposed as connected until key confirmation. Invalid reliable ciphertext
+ends the connection; invalid unreliable ciphertext and replays are discarded. Keys are copied at
+construction and erased from wrapper-owned storage on disposal.
+
+This is pre-shared-key authentication, not account authentication or public-key infrastructure. Provision
+keys out of band. A common key embedded in a downloadable game can be extracted by any player and must
+not be treated as a trusted player/server identity. The mode has no forward secrecy, does not hide
+transport metadata, and does not prevent denial of service against the underlying transport. The wrapper
+is covered by tests, not an independent cryptographic audit. Steam transport remains a separate stub.
+
+Mirror's separate encryption middleware and KCP queue protections informed the layering and failure
+policies. Warp does not depend on Mirror or its cryptographic implementation.
+
+## Verification
+
+```powershell
+dotnet test Tests/Prowl.Warp.Tests.csproj -c Release
+dotnet build Warp/Prowl.Warp.csproj
+
+# Longer reconnect/bulk-transfer churn; each plain/encrypted test runs this many cycles.
+$env:WARP_STRESS_ROUNDS = '100'
+dotnet test Tests/Prowl.Warp.Tests.csproj -c Release --filter FullyQualifiedName~RobustnessTests
+```
+
+The suite includes deterministic reader fuzzing against a big-integer oracle (100,000 inputs), malformed
+KCP input fuzzing (50,000 inputs), admission/fragment/parser regressions, queue reclamation, encryption
+and replay/tamper tests, lossy independent channels, and 32-client slow-peer isolation. These checks are
+repeatable regression coverage, not a substitute for deployment-specific WAN and long-duration soak tests.
 
 ## Installation
 
