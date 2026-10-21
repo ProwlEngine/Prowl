@@ -892,6 +892,19 @@ internal sealed class CameraFrame : IDisposable
         return (T)state;
     }
 
+    /// <summary>Refreshes every array of the view, so none it binds this frame was freed while it sat unused.</summary>
+    public void RefreshBuffers()
+    {
+        Instances.Refresh();
+        Records.Refresh();
+        Commands.Refresh();
+        ViewBlocks.Refresh();
+        SpatialRoots.Refresh();
+        Cascades.Refresh();
+        foreach (SpatialView? view in Spatial)
+            view?.Refresh();
+    }
+
     public void AddBuffers(List<PersistentBuffer> buffers)
     {
         buffers.Add(Instances.Persistent);
