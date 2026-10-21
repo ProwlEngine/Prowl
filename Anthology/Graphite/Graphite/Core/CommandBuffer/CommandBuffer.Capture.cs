@@ -30,13 +30,18 @@ public abstract partial class CommandBuffer
 
     internal override void TrackBuffer(DeviceBuffer buffer)
     {
+        CheckNotDisposed(buffer, "The buffer");
         if (!CaptureActive || !_referencedIds.Add(buffer.ResourceId))
             return;
 
         _referenced.Add(new ReferencedResource(buffer, null, buffer.CurrentVersion, false));
     }
 
-    internal override void TrackTexture(Texture texture) => TrackTexture(texture, false);
+    internal override void TrackTexture(Texture texture)
+    {
+        CheckNotDisposed(texture, "The texture");
+        TrackTexture(texture, false);
+    }
 
     private void TrackTexture(Texture texture, bool overwritten)
     {
