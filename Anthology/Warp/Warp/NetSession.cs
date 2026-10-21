@@ -127,6 +127,9 @@ public sealed class NetSession : IDisposable
     private NetSession(Transport transport, NetSessionOptions? options, bool isHost, bool pumpTransport = true)
     {
         ArgumentNullException.ThrowIfNull(transport);
+        TransportCapabilities capabilities = transport.Capabilities;
+        if (!capabilities.IsAvailable) throw new NotSupportedException("The selected transport is unavailable on this platform.");
+        if (!capabilities.Supports(Delivery.Reliable)) throw new NotSupportedException("Sessions require reliable delivery.");
         Transport = transport;
         _peerView = new NetPeerCollection(_peers.Values);
         _options = (options ?? new NetSessionOptions()).CopyValidated();

@@ -28,9 +28,24 @@ public class TransportCapabilitiesTests
         Assert.Throws<System.NotSupportedException>(() => peer.Send(new byte[0], Delivery.Unreliable));
     }
 
-    private sealed class ReliableBackend : Transport
+    [Fact]
+    public void SessionRejectsUnavailableBackendBeforeStartup()
     {
-        public override TransportCapabilities Capabilities => new(true, DeliverySupport.Reliable, TransportExecution.WorkerPreferred);
+        using Transport transport = new SteamTransport();
+        Assert.Throws<System.NotSupportedException>(() => NetSession.CreateHost(transport));
+        Assert.Throws<System.NotSupportedException>(() => NetSession.Host(transport));
+    }
+
+    [Fact]
+    public void SessionRequiresReliableDelivery()
+    {
+        using Transport transport = new ReliableBackend(DeliverySupport.Unreliable);
+        Assert.Throws<System.NotSupportedException>(() => NetSession.CreateHost(transport));
+    }
+
+    private sealed class ReliableBackend(DeliverySupport deliveries = DeliverySupport.Reliable) : Transport
+    {
+        public override TransportCapabilities Capabilities => new(true, deliveries, TransportExecution.WorkerPreferred);
         public override bool IsListening => false;
         public override void Listen() { }
         public override Connection Connect(string address)
