@@ -10,6 +10,17 @@ public abstract partial class CommandBuffer
             ThrowDisposed(resource, use);
     }
 
+    internal void CheckNotDisposed(PropertyEntry entry, PropertyID name)
+    {
+        if (!Device.ValidationEnabled)
+            return;
+
+        GraphicsResource? disposed = Disposed(entry.Buffer?.Buffer) ?? Disposed(entry.Texture) ?? Disposed(entry.TextureView)
+            ?? Disposed(entry.TextureView?.Target) ?? Disposed(entry.Sampler);
+        if (disposed != null)
+            ThrowDisposed(disposed, $"The resource of property '{PropertyID.ToString(name)}'");
+    }
+
     private static GraphicsResource? Disposed(GraphicsResource? resource) => resource is { IsDisposed: true } ? resource : null;
 
     private void ThrowDisposed(GraphicsResource resource, string use)
