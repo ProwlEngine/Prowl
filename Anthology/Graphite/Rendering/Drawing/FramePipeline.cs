@@ -1140,6 +1140,9 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
                 continue;
 
             GeometryPage page = frame.Geometry.Pages[call.Page];
+            bool group = cmd.WantsDebugMeta;
+            if (group)
+                cmd.PushDebugGroup(shader.Name, DebugGroups.DrawCall(camera.World.World, shader, program, list, call));
             cmd.SetShader(program);
             cmd.SetVertexSource(frame.VertexSource(call.Page, call.Topology));
             cmd.SetDescriptorTable(GraphiteBindings.FrameSet, frame.TextureTable);
@@ -1149,6 +1152,8 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
             cmd.SetProperties(_properties);
             cmd.SetPushConstants(new FramePipeline.Push { DrawRecordBase = (uint)(commandBase + call.FirstCommand) });
             cmd.DrawIndexedIndirect(camera.Commands.Buffer, (uint)(commandBase + call.FirstCommand) * stride, (uint)call.CommandCount, stride);
+            if (group)
+                cmd.PopDebugGroup();
         }
     }
 }

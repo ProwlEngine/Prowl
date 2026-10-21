@@ -299,7 +299,7 @@ internal sealed class ShadowPage(PersistentTexture persistent, bool isStatic, in
 }
 
 /// <summary>A shadow view drawn into a tile this frame, the tile cleared first unless a static copy already fills it.</summary>
-internal readonly record struct ShadowDraw(CameraFrame Camera, ShadowTile Tile, bool Clear);
+internal readonly record struct ShadowDraw(CameraFrame Camera, ShadowTile Tile, bool Clear, int Light = -1, int Face = 0, bool Cascade = false);
 
 /// <summary>A tile read down through the scratch page into its smaller place.</summary>
 internal readonly record struct ShadowShrink(ShadowPage From, ShadowTile FromTile, ShadowTile Scratch, ShadowPage To, ShadowTile ToTile);
@@ -330,8 +330,11 @@ internal static class ShadowRecorder
         if (draws.Count == 0)
             return;
         cmd.SetFramebuffer(texture.Framebuffer, Loaded);
-        foreach ((CameraFrame camera, ShadowTile tile, bool clearFirst) in draws)
+        foreach ((CameraFrame camera, ShadowTile tile, bool clearFirst, int light, int face, bool cascade) in draws)
         {
+            bool group = light >= 0 && cmd.WantsDebugMeta;
+            if (group)
+                cmd.PushDebugGroup(cascade ? $"Cascade {face}" : $"Shadow face {face}", DebugGroups.ShadowFace(camera.World.World, light, face, cascade, tile));
             cmd.SetViewport(new Viewport(tile.X, tile.Y, tile.Size, tile.Size, 0, 1));
             cmd.SetScissor((uint)tile.X, (uint)tile.Y, (uint)tile.Size, (uint)tile.Size);
             if (clearFirst)
@@ -343,6 +346,8 @@ internal static class ShadowRecorder
             camera.Drawer.Prepare(ring);
             if (camera.FindList(PassType.ShadowCaster) is { } list)
                 camera.Drawer.DrawList(cmd, list);
+            if (group)
+                cmd.PopDebugGroup();
         }
     }
 
@@ -1518,7 +1523,7 @@ internal sealed partial class FramePipeline
             }
             light.Waited = 0;
             light.Drawn = true;
-            RedrawShadow(world, shadows, lighting.Light(index), light, pageSize);
+            RedrawShadow(world, shadows, index, lighting.Light(index), light, pageSize);
         }
 
         foreach ((int index, LightShadow light) in shadows.Lights)
@@ -1652,7 +1657,7 @@ internal sealed partial class FramePipeline
         return true;
     }
 
-    private void RedrawShadow(WorldFrame world, WorldShadows shadows, in LightDesc desc, LightShadow light, int pageSize)
+    private void RedrawShadow(WorldFrame world, WorldShadows shadows, int index, in LightDesc desc, LightShadow light, int pageSize)
     {
         if (light.StaticDirty)
         {
@@ -1691,19 +1696,19 @@ internal sealed partial class FramePipeline
                 {
                     CameraFrame statics = RentShadowCamera();
                     DrawShadowView(statics, world, light.StaticTiles[f].Size, layer, cull, near, far, CasterFilter.StaticOnly);
-                    light.StaticPages[f]!.Draws.Add(new ShadowDraw(statics, light.StaticTiles[f], Clear: true));
+                    light.StaticPages[f]!.Draws.Add(new ShadowDraw(statics, light.StaticTiles[f], Clear: true, index, f));
                     staticEveryFrame |= EveryFrameCasters(statics);
                     staticComplete &= ShadowReady(statics);
                     CollectShaders(statics, light.StaticShaders);
                 }
                 shadows.Copies.Add(new ShadowCopy(light.StaticPages[f]!, light.StaticTiles[f], light.Pages[f]!, light.Tiles[f]));
                 DrawShadowView(camera, world, light.Tiles[f].Size, layer, cull, near, far, CasterFilter.MovingOnly);
-                light.Pages[f]!.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: false));
+                light.Pages[f]!.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: false, index, f));
             }
             else
             {
                 DrawShadowView(camera, world, light.Tiles[f].Size, layer, cull, near, far, CasterFilter.All);
-                light.Pages[f]!.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: true));
+                light.Pages[f]!.Draws.Add(new ShadowDraw(camera, light.Tiles[f], Clear: true, index, f));
             }
             everyFrame |= EveryFrameCasters(camera);
             providerCasts |= camera.FindList(PassType.ShadowCaster) is { } list && camera.Sink.For(list) != null;
@@ -2298,7 +2303,7 @@ internal sealed partial class FramePipeline
                 ShadowTile whole = new(0, 0, (int)resolution);
                 ViewLayer layer = new() { View = rotation, Projection = projection, Position = cascade.Center };
                 DrawShadowView(cascade.Camera!, camera.World, (int)resolution, layer, new CullFrustum(cascade.Shape, cascade.Center, nearPlane: false), -reach, radius, CasterFilter.All);
-                cascade.Draws.Add(new ShadowDraw(cascade.Camera!, whole, Clear: true));
+                cascade.Draws.Add(new ShadowDraw(cascade.Camera!, whole, Clear: true, cascadeLight.Light, c, Cascade: true));
             }
 
             Double3 r = cascade.Center - first.Position;

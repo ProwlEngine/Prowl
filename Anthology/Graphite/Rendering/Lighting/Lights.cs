@@ -144,6 +144,7 @@ public struct LightDesc
 }
 
 /// <summary>A light in a world. Generation checked, so a handle of a removed light stays invalid.</summary>
+[Serializable]
 public readonly record struct LightHandle(int Index, int Generation)
 {
     public bool IsValid => Generation > 0;
@@ -587,6 +588,8 @@ internal sealed class WorldLighting
 
     /// <summary>A light as of the last extraction, normalized. Render thread.</summary>
     public ref readonly LightDesc Light(int index) => ref _lights[index];
+
+    public LightHandle Handle(int index) => new(index, _lightGeneration[index]);
 
     /// <summary>The directional lights' indices in the order shaders read them, the sun first.</summary>
     public IReadOnlyList<int> DirectionalOrder => _shaderOrder;

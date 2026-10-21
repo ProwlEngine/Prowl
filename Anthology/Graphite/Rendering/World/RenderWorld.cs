@@ -8,6 +8,7 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>A renderable in a world. Generation checked, so a handle of a removed renderable stays invalid.</summary>
+[Serializable]
 public readonly record struct RenderableHandle(int Index, int Generation)
 {
     public bool IsValid => Generation > 0;
