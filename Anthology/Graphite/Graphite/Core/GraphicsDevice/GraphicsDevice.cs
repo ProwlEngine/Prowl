@@ -66,6 +66,11 @@ public abstract partial class GraphicsDevice : IDisposable
     public abstract GraphicsDeviceFeatures Features { get; }
 
     /// <summary>
+    /// Limits of this device, like the largest texture or the descriptors a program can hold.
+    /// </summary>
+    public abstract GraphicsDeviceLimits Limits { get; }
+
+    /// <summary>
     /// Vsync on the main swapchain. Setter needs a main swapchain.
     /// </summary>
     public virtual bool SyncToVerticalBlank

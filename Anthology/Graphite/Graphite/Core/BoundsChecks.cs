@@ -39,18 +39,18 @@ internal static class BoundsChecks
         }
 
         Util.GetMipDimensions(source, srcMipLevel, out uint srcWidth, out uint srcHeight, out uint srcDepth);
-        uint srcBlockSize = FormatHelpers.IsCompressedFormat(source.Format) ? 4u : 1u;
-        uint roundedSrcWidth = (srcWidth + srcBlockSize - 1) / srcBlockSize * srcBlockSize;
-        uint roundedSrcHeight = (srcHeight + srcBlockSize - 1) / srcBlockSize * srcBlockSize;
+        (uint srcBlockWidth, uint srcBlockHeight) = FormatHelpers.GetBlockDimensions(source.Format);
+        uint roundedSrcWidth = (srcWidth + srcBlockWidth - 1) / srcBlockWidth * srcBlockWidth;
+        uint roundedSrcHeight = (srcHeight + srcBlockHeight - 1) / srcBlockHeight * srcBlockHeight;
         if ((ulong)srcX + width > roundedSrcWidth || (ulong)srcY + height > roundedSrcHeight || (ulong)srcZ + depth > srcDepth)
         {
             throw new RenderException("The given copy region is not valid for the source Texture.");
         }
 
         Util.GetMipDimensions(destination, dstMipLevel, out uint dstWidth, out uint dstHeight, out uint dstDepth);
-        uint dstBlockSize = FormatHelpers.IsCompressedFormat(destination.Format) ? 4u : 1u;
-        uint roundedDstWidth = (dstWidth + dstBlockSize - 1) / dstBlockSize * dstBlockSize;
-        uint roundedDstHeight = (dstHeight + dstBlockSize - 1) / dstBlockSize * dstBlockSize;
+        (uint dstBlockWidth, uint dstBlockHeight) = FormatHelpers.GetBlockDimensions(destination.Format);
+        uint roundedDstWidth = (dstWidth + dstBlockWidth - 1) / dstBlockWidth * dstBlockWidth;
+        uint roundedDstHeight = (dstHeight + dstBlockHeight - 1) / dstBlockHeight * dstBlockHeight;
         if ((ulong)dstX + width > roundedDstWidth || (ulong)dstY + height > roundedDstHeight || (ulong)dstZ + depth > dstDepth)
         {
             throw new RenderException("The given copy region is not valid for the destination Texture.");
@@ -111,17 +111,10 @@ internal static class BoundsChecks
                 $"The data size is less than expected for the given update region. At least {expectedSize} bytes must be provided, but only {sizeInBytes} were.");
         }
 
-        uint roundedTextureWidth, roundedTextureHeight;
-        if (FormatHelpers.IsCompressedFormat(texture.Format))
-        {
-            roundedTextureWidth = (texture.Width + 3) / 4 * 4;
-            roundedTextureHeight = (texture.Height + 3) / 4 * 4;
-        }
-        else
-        {
-            roundedTextureWidth = texture.Width;
-            roundedTextureHeight = texture.Height;
-        }
+        Util.GetMipDimensions(texture, region.MipLevel, out uint mipWidth, out uint mipHeight, out _);
+        (uint blockWidth, uint blockHeight) = FormatHelpers.GetBlockDimensions(texture.Format);
+        uint roundedTextureWidth = (mipWidth + blockWidth - 1) / blockWidth * blockWidth;
+        uint roundedTextureHeight = (mipHeight + blockHeight - 1) / blockHeight * blockHeight;
 
         if ((ulong)region.X + region.Width > roundedTextureWidth
             || (ulong)region.Y + region.Height > roundedTextureHeight

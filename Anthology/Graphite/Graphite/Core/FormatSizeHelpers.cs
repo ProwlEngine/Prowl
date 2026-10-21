@@ -7,6 +7,16 @@ namespace Prowl.Graphite;
 /// </summary>
 public static class FormatSizeHelpers
 {
+    /// <summary>Whether the format stores blocks of pixels rather than one pixel at a time.</summary>
+    public static bool IsCompressed(this PixelFormat format) => FormatHelpers.IsCompressedFormat(format);
+
+    /// <summary>Pixels one block covers across and down, one by one for an uncompressed format.</summary>
+    public static (uint Width, uint Height) GetBlockDimensions(this PixelFormat format) => FormatHelpers.GetBlockDimensions(format);
+
+    /// <summary>Bytes a tightly packed region of the format takes, partial edge blocks counted whole.</summary>
+    public static uint GetRegionSizeInBytes(this PixelFormat format, uint width, uint height, uint depth = 1)
+        => FormatHelpers.GetRegionSize(width, height, depth, format);
+
     /// <summary>
     /// Bytes per uncompressed pixel.
     /// </summary>
@@ -91,6 +101,7 @@ public static class FormatSizeHelpers
             case PixelFormat.ETC2_R8_G8_B8_UNorm:
             case PixelFormat.ETC2_R8_G8_B8_A1_UNorm:
             case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
+            case var astc when FormatHelpers.IsAstcFormat(astc):
                 Debug.Fail("GetSizeInBytes should not be used on a compressed format.");
                 throw Illegal.Value<PixelFormat>();
             default: throw Illegal.Value<PixelFormat>();

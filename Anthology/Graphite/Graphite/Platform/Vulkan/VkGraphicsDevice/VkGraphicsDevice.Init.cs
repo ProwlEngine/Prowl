@@ -240,7 +240,6 @@ internal unsafe partial class VkGraphicsDevice
 
         HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
 
-        bool hasMaintenance1 = false;
         bool pipelineStatistics = false;
         IntPtr[] activeExtensions = new IntPtr[props.Length];
         uint activeExtensionCount = 0;
@@ -257,12 +256,6 @@ internal unsafe partial class VkGraphicsDevice
 
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
-                }
-                else if (extensionName == "VK_KHR_maintenance1")
-                {
-                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
-                    requiredInstanceExtensions.Remove(extensionName);
-                    hasMaintenance1 = true;
                 }
                 else if (extensionName == "VK_KHR_pipeline_executable_properties" && Environment.GetEnvironmentVariable("GRAPHITE_SHADER_STATS") == "1")
                 {
@@ -287,11 +280,6 @@ internal unsafe partial class VkGraphicsDevice
             }
         }
 
-        if (!hasMaintenance1)
-        {
-            throw new RenderException("VK_KHR_maintenance1 is required for the fixed clip space Y direction.");
-        }
-
         if (requiredInstanceExtensions.Count != 0)
         {
             string missingList = string.Join(", ", requiredInstanceExtensions);
@@ -305,16 +293,18 @@ internal unsafe partial class VkGraphicsDevice
         Vk.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures);
         if (!supported12.TimelineSemaphore)
             throw new RenderException($"The Vulkan device '{_deviceName}' does not support timeline semaphores.");
+        if (!supported11.ShaderDrawParameters)
+            throw new RenderException($"The Vulkan device '{_deviceName}' does not support shaderDrawParameters, which shaders need for gl_BaseInstance.");
 
-        // Bindless texture tables need every one of these, so descriptor indexing is all or nothing.
-        bool descriptorIndexing = supported12.RuntimeDescriptorArray
+        // Descriptor tables need every one of these. Storage images in a table update after bind only where supported.
+        bool descriptorIndexing = _physicalDeviceFeatures.ShaderSampledImageArrayDynamicIndexing
+            && _physicalDeviceFeatures.ShaderStorageBufferArrayDynamicIndexing
             && supported12.DescriptorBindingPartiallyBound
-            && supported12.DescriptorBindingVariableDescriptorCount
-            && supported12.DescriptorBindingSampledImageUpdateAfterBind
-            && supported12.DescriptorBindingStorageImageUpdateAfterBind
-            && supported12.DescriptorBindingStorageBufferUpdateAfterBind
             && supported12.DescriptorBindingUpdateUnusedWhilePending
-            && supported12.ShaderSampledImageArrayNonUniformIndexing;
+            && supported12.DescriptorBindingSampledImageUpdateAfterBind
+            && supported12.DescriptorBindingStorageBufferUpdateAfterBind
+            && supported12.ShaderSampledImageArrayNonUniformIndexing
+            && supported12.ShaderStorageBufferArrayNonUniformIndexing;
 
         PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features)
         {
@@ -323,15 +313,14 @@ internal unsafe partial class VkGraphicsDevice
             SamplerFilterMinmax = supported12.SamplerFilterMinmax,
             ShaderOutputViewportIndex = supported12.ShaderOutputViewportIndex,
             ShaderOutputLayer = supported12.ShaderOutputLayer,
-            RuntimeDescriptorArray = descriptorIndexing,
+            RuntimeDescriptorArray = descriptorIndexing && supported12.RuntimeDescriptorArray,
             DescriptorBindingPartiallyBound = descriptorIndexing,
-            DescriptorBindingVariableDescriptorCount = descriptorIndexing,
             DescriptorBindingSampledImageUpdateAfterBind = descriptorIndexing,
-            DescriptorBindingStorageImageUpdateAfterBind = descriptorIndexing,
+            DescriptorBindingStorageImageUpdateAfterBind = descriptorIndexing && supported12.DescriptorBindingStorageImageUpdateAfterBind,
             DescriptorBindingStorageBufferUpdateAfterBind = descriptorIndexing,
             DescriptorBindingUpdateUnusedWhilePending = descriptorIndexing,
             ShaderSampledImageArrayNonUniformIndexing = descriptorIndexing,
-            ShaderStorageBufferArrayNonUniformIndexing = descriptorIndexing && supported12.ShaderStorageBufferArrayNonUniformIndexing,
+            ShaderStorageBufferArrayNonUniformIndexing = descriptorIndexing,
         };
         PhysicalDeviceVulkan11Features vulkan11Features = new(sType: StructureType.PhysicalDeviceVulkan11Features, pNext: &vulkan12Features, shaderDrawParameters: true)
         {
@@ -380,6 +369,7 @@ internal unsafe partial class VkGraphicsDevice
         PhysicalDeviceVulkan12Properties driverProps = new(sType: StructureType.PhysicalDeviceVulkan12Properties);
         PhysicalDeviceProperties2 deviceProps = new(sType: StructureType.PhysicalDeviceProperties2, pNext: &driverProps);
         Vk.GetPhysicalDeviceProperties2(PhysicalDevice, &deviceProps);
+        _vulkan12Properties = driverProps with { PNext = null };
 
         ConformanceVersion conforming = driverProps.ConformanceVersion;
         _apiVersion = new GraphicsApiVersion(conforming.Major, conforming.Minor, conforming.Subminor, conforming.Patch);
@@ -397,34 +387,50 @@ internal unsafe partial class VkGraphicsDevice
             Vk.GetPhysicalDeviceQueueFamilyProperties(PhysicalDevice, ref queueFamilyCount, qfpPtr);
         }
 
-        bool foundGraphics = false;
-        bool foundPresent = surface.Handle == 0;
-
-        for (uint idx = 0; idx < qfp.Length; idx++)
+        bool[] presents = new bool[qfp.Length];
+        if (surface.Handle != 0 && Vk.TryGetInstanceExtension(Instance, out KhrSurface khrSurface))
         {
-            if ((qfp[idx].QueueFlags & QueueFlags.GraphicsBit) != 0)
+            for (uint idx = 0; idx < qfp.Length; idx++)
             {
-                GraphicsQueueIndex = idx;
-                foundGraphics = true;
-            }
-
-            if (!foundPresent)
-            {
-                if (Vk.TryGetInstanceExtension(Instance, out KhrSurface khrSurface))
-                {
-                    khrSurface.GetPhysicalDeviceSurfaceSupport(PhysicalDevice, idx, surface, out Bool32 presentSupported);
-                    if (presentSupported)
-                    {
-                        PresentQueueIndex = idx;
-                        foundPresent = true;
-                    }
-                }
-            }
-
-            if (foundGraphics && foundPresent)
-            {
-                return;
+                khrSurface.GetPhysicalDeviceSurfaceSupport(PhysicalDevice, idx, surface, out Bool32 presentSupported);
+                presents[idx] = presentSupported;
             }
         }
+
+        QueueFlags[] flags = Array.ConvertAll(qfp, family => family.QueueFlags);
+        (int graphics, int present) = ChooseQueueFamilies(flags, presents, surface.Handle != 0);
+        if (graphics < 0)
+            throw new RenderException($"The Vulkan device '{_deviceName}' has no queue family that does both graphics and compute.");
+        if (present < 0)
+            throw new RenderException($"The Vulkan device '{_deviceName}' has no queue family that can present to the surface.");
+
+        GraphicsQueueIndex = (uint)graphics;
+        PresentQueueIndex = (uint)present;
+        _timestampValidBits = qfp[graphics].TimestampValidBits;
+    }
+
+    /// <summary>
+    /// The graphics and compute family, preferring one that also presents so no image moves between queues, and the
+    /// family presenting. Without a surface the graphics family stands in for present. -1 when none fits.
+    /// </summary>
+    internal static (int Graphics, int Present) ChooseQueueFamilies(ReadOnlySpan<QueueFlags> families, ReadOnlySpan<bool> presents, bool needsPresent)
+    {
+        const QueueFlags GraphicsAndCompute = QueueFlags.GraphicsBit | QueueFlags.ComputeBit;
+        int graphics = -1, present = -1;
+        for (int i = 0; i < families.Length; i++)
+        {
+            if ((families[i] & GraphicsAndCompute) != GraphicsAndCompute)
+                continue;
+            if (!needsPresent || presents[i])
+                return (i, i);
+            if (graphics < 0)
+                graphics = i;
+        }
+        for (int i = 0; i < presents.Length && present < 0; i++)
+        {
+            if (presents[i])
+                present = i;
+        }
+        return (graphics, present);
     }
 }

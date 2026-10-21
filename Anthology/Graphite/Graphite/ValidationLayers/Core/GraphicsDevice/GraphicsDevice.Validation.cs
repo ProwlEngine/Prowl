@@ -80,13 +80,15 @@ public abstract partial class GraphicsDevice
 
         if (FormatHelpers.IsCompressedFormat(texture.Format))
         {
-            if (region.X % 4 != 0 || region.Y % 4 != 0 || region.Height % 4 != 0 || region.Width % 4 != 0)
+            // A region may end short of a whole block only where it meets the edge of the mip.
+            (uint blockWidth, uint blockHeight) = FormatHelpers.GetBlockDimensions(texture.Format);
+            Util.GetMipDimensions(texture, region.MipLevel, out uint mipWidth, out uint mipHeight, out _);
+
+            bool alignedX = region.X % blockWidth == 0 && (region.Width % blockWidth == 0 || region.X + region.Width == mipWidth);
+            bool alignedY = region.Y % blockHeight == 0 && (region.Height % blockHeight == 0 || region.Y + region.Height == mipHeight);
+            if (!alignedX || !alignedY)
             {
-                Util.GetMipDimensions(texture, region.MipLevel, out uint mipWidth, out uint mipHeight, out _);
-                if (region.Width != mipWidth && region.Height != mipHeight)
-                {
-                    throw new RenderException($"Updates to block-compressed textures must use a region that is block-size aligned and sized.");
-                }
+                throw new RenderException($"Updates to block-compressed textures must use a region that is block-size aligned and sized.");
             }
         }
     }

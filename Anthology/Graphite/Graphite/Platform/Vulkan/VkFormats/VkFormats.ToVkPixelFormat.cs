@@ -131,6 +131,63 @@ internal static partial class VkFormats
             case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
                 return Format.Etc2R8G8B8A8UnormBlock;
 
+            case PixelFormat.ASTC_4x4_UNorm:
+                return Format.Astc4x4UnormBlock;
+            case PixelFormat.ASTC_4x4_UNorm_SRgb:
+                return Format.Astc4x4SrgbBlock;
+            case PixelFormat.ASTC_5x4_UNorm:
+                return Format.Astc5x4UnormBlock;
+            case PixelFormat.ASTC_5x4_UNorm_SRgb:
+                return Format.Astc5x4SrgbBlock;
+            case PixelFormat.ASTC_5x5_UNorm:
+                return Format.Astc5x5UnormBlock;
+            case PixelFormat.ASTC_5x5_UNorm_SRgb:
+                return Format.Astc5x5SrgbBlock;
+            case PixelFormat.ASTC_6x5_UNorm:
+                return Format.Astc6x5UnormBlock;
+            case PixelFormat.ASTC_6x5_UNorm_SRgb:
+                return Format.Astc6x5SrgbBlock;
+            case PixelFormat.ASTC_6x6_UNorm:
+                return Format.Astc6x6UnormBlock;
+            case PixelFormat.ASTC_6x6_UNorm_SRgb:
+                return Format.Astc6x6SrgbBlock;
+            case PixelFormat.ASTC_8x5_UNorm:
+                return Format.Astc8x5UnormBlock;
+            case PixelFormat.ASTC_8x5_UNorm_SRgb:
+                return Format.Astc8x5SrgbBlock;
+            case PixelFormat.ASTC_8x6_UNorm:
+                return Format.Astc8x6UnormBlock;
+            case PixelFormat.ASTC_8x6_UNorm_SRgb:
+                return Format.Astc8x6SrgbBlock;
+            case PixelFormat.ASTC_8x8_UNorm:
+                return Format.Astc8x8UnormBlock;
+            case PixelFormat.ASTC_8x8_UNorm_SRgb:
+                return Format.Astc8x8SrgbBlock;
+            case PixelFormat.ASTC_10x5_UNorm:
+                return Format.Astc10x5UnormBlock;
+            case PixelFormat.ASTC_10x5_UNorm_SRgb:
+                return Format.Astc10x5SrgbBlock;
+            case PixelFormat.ASTC_10x6_UNorm:
+                return Format.Astc10x6UnormBlock;
+            case PixelFormat.ASTC_10x6_UNorm_SRgb:
+                return Format.Astc10x6SrgbBlock;
+            case PixelFormat.ASTC_10x8_UNorm:
+                return Format.Astc10x8UnormBlock;
+            case PixelFormat.ASTC_10x8_UNorm_SRgb:
+                return Format.Astc10x8SrgbBlock;
+            case PixelFormat.ASTC_10x10_UNorm:
+                return Format.Astc10x10UnormBlock;
+            case PixelFormat.ASTC_10x10_UNorm_SRgb:
+                return Format.Astc10x10SrgbBlock;
+            case PixelFormat.ASTC_12x10_UNorm:
+                return Format.Astc12x10UnormBlock;
+            case PixelFormat.ASTC_12x10_UNorm_SRgb:
+                return Format.Astc12x10SrgbBlock;
+            case PixelFormat.ASTC_12x12_UNorm:
+                return Format.Astc12x12UnormBlock;
+            case PixelFormat.ASTC_12x12_UNorm_SRgb:
+                return Format.Astc12x12SrgbBlock;
+
             case PixelFormat.D32_Float_S8_UInt:
                 return Format.D32SfloatS8Uint;
             case PixelFormat.D32_Float:

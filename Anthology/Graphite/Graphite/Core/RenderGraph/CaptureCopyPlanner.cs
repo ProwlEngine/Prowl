@@ -61,7 +61,8 @@ internal static class CaptureCopyPlanner
         if (!FormatHelpers.IsCompressedFormat(format))
             return (ulong)width * height * depth * format.GetSizeInBytes();
 
-        ulong blocks = (ulong)((width + 3) / 4) * ((height + 3) / 4) * depth;
+        (uint blockWidth, uint blockHeight) = FormatHelpers.GetBlockDimensions(format);
+        ulong blocks = (ulong)((width + blockWidth - 1) / blockWidth) * ((height + blockHeight - 1) / blockHeight) * depth;
         return blocks * FormatHelpers.GetBlockSizeInBytes(format);
     }
 }

@@ -20,6 +20,9 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         DescriptorSetLayout EmptyDescriptorSetLayout)
         Build(VkGraphicsDevice gd, ResourceLayoutDescription[] descs, PushConstantRange pushConstants)
     {
+        if (gd.Limits.Exceeded(descs) is { } exceeded)
+            throw new RenderException($"The program's resources exceed the limits of '{gd.DeviceName}': {exceeded}.");
+
         uint maxSet = 0;
         bool any = false;
         for (int i = 0; i < descs.Length; i++)
@@ -112,7 +115,9 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
                 DescriptorCount = elem.Count,
                 StageFlags = VkFormats.ToVkShaderStages(elem.Stages),
             };
-            bindingFlags[i] = DescriptorBindingFlags.PartiallyBoundBit | DescriptorBindingFlags.UpdateAfterBindBit | DescriptorBindingFlags.UpdateUnusedWhilePendingBit;
+            bindingFlags[i] = DescriptorBindingFlags.PartiallyBoundBit | DescriptorBindingFlags.UpdateUnusedWhilePendingBit;
+            if (descType != DescriptorType.StorageImage || gd.StorageImageUpdateAfterBind)
+                bindingFlags[i] |= DescriptorBindingFlags.UpdateAfterBindBit;
             switch (descType)
             {
                 case DescriptorType.UniformBufferDynamic: uniformBufferDynamic++; break;

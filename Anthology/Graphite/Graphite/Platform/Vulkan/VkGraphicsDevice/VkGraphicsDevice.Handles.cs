@@ -31,6 +31,8 @@ internal unsafe partial class VkGraphicsDevice
     private PhysicalDeviceFeatures _physicalDeviceFeatures;
     private PhysicalDeviceVulkan11Features _enabledVulkan11Features;
     private PhysicalDeviceVulkan12Features _enabledVulkan12Features;
+    private PhysicalDeviceVulkan12Properties _vulkan12Properties;
+    private uint _timestampValidBits;
     private string _deviceName;
     private string _vendorName;
     private GraphicsApiVersion _apiVersion;
@@ -50,6 +52,11 @@ internal unsafe partial class VkGraphicsDevice
     public override Swapchain MainSwapchain => _mainSwapchain;
 
     public override GraphicsDeviceFeatures Features { get; }
+
+    public override GraphicsDeviceLimits Limits { get; }
+
+    /// <summary>Whether storage images in a descriptor table can be written while the table is bound.</summary>
+    internal bool StorageImageUpdateAfterBind => _enabledVulkan12Features.DescriptorBindingStorageImageUpdateAfterBind;
 
     // The cache can grow between the size query and the copy when another thread builds a pipeline, so retry.
     public override byte[] GetPipelineCacheData()

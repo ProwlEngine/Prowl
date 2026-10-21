@@ -30,10 +30,13 @@ internal unsafe partial class VkGraphicsDevice
         if (!enabled)
             return queries;
 
-        QueryPool timing = GetPool(_availableTimingPools, QueryType.Timestamp, 2, 0);
-        Vk.CmdResetQueryPool(cb, timing, 0, 2);
-        Vk.CmdWriteTimestamp(cb, PipelineStageFlags.TopOfPipeBit, timing, 0);
-        queries.Timing = timing;
+        if (_timestampValidBits != 0)
+        {
+            QueryPool timing = GetPool(_availableTimingPools, QueryType.Timestamp, 2, 0);
+            Vk.CmdResetQueryPool(cb, timing, 0, 2);
+            Vk.CmdWriteTimestamp(cb, PipelineStageFlags.TopOfPipeBit, timing, 0);
+            queries.Timing = timing;
+        }
 
         if (_physicalDeviceFeatures.PipelineStatisticsQuery)
         {
@@ -69,8 +72,7 @@ internal unsafe partial class VkGraphicsDevice
                 QueryResultFlags.ResultWaitBit | QueryResultFlags.Result64Bit).CheckResult();
             _availableTimingPools.Enqueue(timing);
 
-            double ticks = timestamps[1] > timestamps[0] ? timestamps[1] - timestamps[0] : 0;
-            milliseconds = ticks * _physicalDeviceProperties.Limits.TimestampPeriod / 1_000_000.0;
+            milliseconds = TimestampTicks(timestamps[0], timestamps[1], _timestampValidBits) * _physicalDeviceProperties.Limits.TimestampPeriod / 1_000_000.0;
         }
 
         if (queries.Stats is { } stats)
@@ -84,6 +86,13 @@ internal unsafe partial class VkGraphicsDevice
 
             vertexStats = new GpuVertexStats(results[0], results[1], results[2], results[3], results[4]);
         }
+    }
+
+    /// <summary>Ticks from one timestamp to a later one when only the low valid bits count, across a wrap of the counter.</summary>
+    internal static ulong TimestampTicks(ulong start, ulong end, uint validBits)
+    {
+        ulong mask = validBits >= 64 ? ulong.MaxValue : (1UL << (int)validBits) - 1;
+        return ((end & mask) - (start & mask)) & mask;
     }
 
     private void DestroyQueryPools()

@@ -59,7 +59,11 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             multiview: _enabledVulkan11Features.Multiview,
             shaderOutputLayer: _enabledVulkan12Features.ShaderOutputLayer,
             shaderOutputViewportIndex: _enabledVulkan12Features.ShaderOutputViewportIndex,
-            samplerFilterMinmax: _enabledVulkan12Features.SamplerFilterMinmax);
+            samplerFilterMinmax: _enabledVulkan12Features.SamplerFilterMinmax,
+            textureCompressionBC: _physicalDeviceFeatures.TextureCompressionBC,
+            textureCompressionEtc2: _physicalDeviceFeatures.TextureCompressionEtc2,
+            textureCompressionAstc: _physicalDeviceFeatures.TextureCompressionAstcLdr);
+        Limits = CreateLimits();
 
         ResourceFactory = new VkResourceFactory(this);
 
@@ -89,6 +93,28 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     }
 
     public override ResourceFactory ResourceFactory { get; }
+
+    private GraphicsDeviceLimits CreateLimits()
+    {
+        PhysicalDeviceLimits l = _physicalDeviceProperties.Limits;
+        PhysicalDeviceVulkan12Properties p = _vulkan12Properties;
+        return new GraphicsDeviceLimits
+        {
+            MaxTextureDimension2D = l.MaxImageDimension2D,
+            MaxVertexOutputComponents = l.MaxVertexOutputComponents,
+            MaxFragmentInputComponents = l.MaxFragmentInputComponents,
+            MaxColorAttachments = l.MaxColorAttachments,
+            MaxBoundDescriptorSets = l.MaxBoundDescriptorSets,
+            PerStage = new DescriptorCounts(l.MaxPerStageDescriptorSamplers, l.MaxPerStageDescriptorUniformBuffers, uint.MaxValue,
+                l.MaxPerStageDescriptorStorageBuffers, l.MaxPerStageDescriptorSampledImages, l.MaxPerStageDescriptorStorageImages, l.MaxPerStageResources),
+            PerStageWithTables = new DescriptorCounts(p.MaxPerStageDescriptorUpdateAfterBindSamplers, p.MaxPerStageDescriptorUpdateAfterBindUniformBuffers, uint.MaxValue,
+                p.MaxPerStageDescriptorUpdateAfterBindStorageBuffers, p.MaxPerStageDescriptorUpdateAfterBindSampledImages, p.MaxPerStageDescriptorUpdateAfterBindStorageImages, p.MaxPerStageUpdateAfterBindResources),
+            PerProgram = new DescriptorCounts(l.MaxDescriptorSetSamplers, l.MaxDescriptorSetUniformBuffers, l.MaxDescriptorSetUniformBuffersDynamic,
+                l.MaxDescriptorSetStorageBuffers, l.MaxDescriptorSetSampledImages, l.MaxDescriptorSetStorageImages, uint.MaxValue),
+            PerProgramWithTables = new DescriptorCounts(p.MaxDescriptorSetUpdateAfterBindSamplers, p.MaxDescriptorSetUpdateAfterBindUniformBuffers, p.MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic,
+                p.MaxDescriptorSetUpdateAfterBindStorageBuffers, p.MaxDescriptorSetUpdateAfterBindSampledImages, p.MaxDescriptorSetUpdateAfterBindStorageImages, uint.MaxValue),
+        };
+    }
 
     internal void RegisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Register(cache);
 
@@ -157,7 +183,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         lock (presentLock)
             presentResult = KhrSwapchain.QueuePresent(vkSC.PresentQueue, &presentInfo);
 
-        if (presentResult != Result.Success && presentResult != Result.SuboptimalKhr && presentResult != Result.ErrorOutOfDateKhr)
+        if (presentResult is not (Result.Success or Result.SuboptimalKhr or Result.ErrorOutOfDateKhr or Result.ErrorSurfaceLostKhr))
             throw new RenderException($"Could not present the Vulkan swapchain: {presentResult}.");
 
         vkSC.MarkPresented(presentResult);
