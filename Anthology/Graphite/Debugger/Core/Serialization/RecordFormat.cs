@@ -25,7 +25,7 @@ internal sealed class RecordFormat : ISerializationFormat
         EchoObject compound = EchoObject.NewCompound();
         for (int i = 0; i < layout.Parameters.Length; i++)
         {
-            object? member = layout.Properties[i].GetValue(value);
+            object? member = layout.Parameters[i].ParameterType == typeof(object) ? null : layout.Properties[i].GetValue(value);
             compound.Add(layout.Properties[i].Name, member == null ? new EchoObject(EchoType.Null, null) : Serializer.Serialize(layout.Parameters[i].ParameterType, member, context));
         }
 

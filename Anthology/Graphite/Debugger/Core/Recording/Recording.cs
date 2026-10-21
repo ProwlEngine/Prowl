@@ -238,7 +238,7 @@ public sealed class Recording : IGraphProfiler, IGpuStatsProfiler
         public readonly List<RecordedSkippedPass> Skipped = new();
 
         public RecordedInstance Build()
-            => new(_info.Name, _info.Index, _info.ParentIndex, _info.Key, _info.PixelWidth, _info.PixelHeight, Passes.ToEquatableArray(), Skipped.ToEquatableArray());
+            => new(_info.Name, _info.Index, _info.ParentIndex, _info.Key, _info.PixelWidth, _info.PixelHeight, Passes.ToEquatableArray(), Skipped.ToEquatableArray(), _info.Data);
     }
 
     private sealed class CommandBufferBuilder(in CommandBufferInfo info)

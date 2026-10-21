@@ -11,7 +11,7 @@ public sealed record RecordedPass(string Name, int Index, PassStats Stats);
 public sealed record RecordedSkippedPass(string Name, PassSkipReason Reason);
 
 /// <summary>An instance of the recorded execution, with its passes in order and the graph passes it skipped.</summary>
-/// <remarks>The root is index 0 with parent -1. Key names the kind and the id the instance was added with.</remarks>
+/// <remarks>The root is index 0 with parent -1. Data is the host object of the instance, never saved, so null once loaded.</remarks>
 public sealed record RecordedInstance(
     string Name,
     int Index,
@@ -20,7 +20,8 @@ public sealed record RecordedInstance(
     uint PixelWidth,
     uint PixelHeight,
     EquatableArray<RecordedPass> Passes,
-    EquatableArray<RecordedSkippedPass> Skipped);
+    EquatableArray<RecordedSkippedPass> Skipped,
+    object? Data = null);
 
 /// <summary>GPU results for one command buffer. Instance and pass indices are -1 for work outside a pass.</summary>
 public sealed record RecordedCommandBuffer(
