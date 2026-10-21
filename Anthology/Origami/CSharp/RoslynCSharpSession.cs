@@ -402,11 +402,32 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
             if (root == null) return Array.Empty<CodeTextEdit>();
 
             var span = length < 0 ? root.FullSpan : TextSpan.FromBounds(Math.Clamp(start, 0, root.FullSpan.End), Math.Clamp(start + length, 0, root.FullSpan.End));
-            var workspace = document.Project.Solution.Workspace;
-            var options = document.Project.Solution.Options.WithChangedOption(FormattingOptions.NewLine, LanguageNames.CSharp, "\n");
-            var changes = Formatter.GetFormattedTextChanges(root, span, workspace, options, ct);
-            return changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
+            return FormatSpan(document, root, span, ct);
         }, ct);
+
+    public override Task<IReadOnlyList<CodeTextEdit>> FormatOnTypeAsync(int offset, char typed, CancellationToken ct)
+        => Run<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>(), async (document, ct) =>
+        {
+            var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            if (root == null || offset <= 0 || offset > root.FullSpan.End) return Array.Empty<CodeTextEdit>();
+
+            var token = root.FindToken(offset - 1);
+            var kind = typed == ';' ? SyntaxKind.SemicolonToken : SyntaxKind.CloseBraceToken;
+            if (!token.IsKind(kind) || token.IsMissing || token.Span.End != offset || token.Parent == null) return Array.Empty<CodeTextEdit>();
+
+            // A '}' formats the whole statement or member its block belongs to, a ';' the statement it ends.
+            var node = token.Parent;
+            if (node is Microsoft.CodeAnalysis.CSharp.Syntax.BlockSyntax { Parent: { } owner and not Microsoft.CodeAnalysis.CSharp.Syntax.BlockSyntax }) node = owner;
+            return FormatSpan(document, root, TextSpan.FromBounds(node.FullSpan.Start, token.Span.End), ct);
+        }, ct);
+
+    private static IReadOnlyList<CodeTextEdit> FormatSpan(Document document, SyntaxNode root, TextSpan span, CancellationToken ct)
+    {
+        var workspace = document.Project.Solution.Workspace;
+        var options = document.Project.Solution.Options.WithChangedOption(FormattingOptions.NewLine, LanguageNames.CSharp, "\n");
+        var changes = Formatter.GetFormattedTextChanges(root, span, workspace, options, ct);
+        return changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
+    }
 
     public override Task<CodeRenameResult?> RenameAsync(int offset, string newName, CancellationToken ct)
         => Run<CodeRenameResult?>(null, async (document, ct) =>

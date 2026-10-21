@@ -18,6 +18,7 @@ public class RoslynCSharpLanguage : CSharpLanguage
     }
 
     public override bool IsCompletionTrigger(char c) => c == '.';
+    public override bool IsFormatOnTypeTrigger(char c) => c is ';' or '}';
 
     public override CodeLanguageSession? CreateSession(CodeDocument document)
         => new RoslynCSharpSession(Workspace, DocumentPath, document.GetText("\n"));

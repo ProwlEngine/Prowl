@@ -361,6 +361,9 @@ public class CodeLanguage
     /// <summary>Characters that open signature help while typing.</summary>
     public virtual bool IsSignatureHelpTrigger(char c) => false;
 
+    /// <summary>Characters that format what they close as they are typed, see <see cref="CodeLanguageSession.FormatOnTypeAsync"/>.</summary>
+    public virtual bool IsFormatOnTypeTrigger(char c) => false;
+
     public virtual bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     /// <summary>True when a new line after <paramref name="lineBeforeCaret"/> should be indented one level deeper.</summary>
@@ -447,6 +450,10 @@ public abstract class CodeLanguageSession : IDisposable
 
     /// <summary>Edits that format the given span, or the whole document when <paramref name="length"/> is negative.</summary>
     public virtual Task<IReadOnlyList<CodeTextEdit>> FormatAsync(int start, int length, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>());
+
+    /// <summary>Edits that format the statement or block closed by <paramref name="typed"/>, which was just typed before <paramref name="offset"/>.</summary>
+    public virtual Task<IReadOnlyList<CodeTextEdit>> FormatOnTypeAsync(int offset, char typed, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>());
 
     public virtual Task<CodeRenameResult?> RenameAsync(int offset, string newName, CancellationToken ct)

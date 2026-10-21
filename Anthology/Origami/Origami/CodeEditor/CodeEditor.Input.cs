@@ -724,6 +724,7 @@ public sealed partial class CodeEditor
 
         TypeChar(c);
         AfterTypeForPopups(c);
+        FormatOnType(c);
     }
 
     #endregion

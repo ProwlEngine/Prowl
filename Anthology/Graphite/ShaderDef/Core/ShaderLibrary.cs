@@ -41,4 +41,7 @@ public static class ShaderLibrary
 
     /// <summary>Source of a library file, or null when no registered assembly has it.</summary>
     public static string? Get(string name) => s_files.TryGetValue(name, out string? source) ? source : null;
+
+    /// <summary>Name of every registered library file, such as "Graphite/Core.glsl".</summary>
+    public static IEnumerable<string> Names => s_files.Keys;
 }

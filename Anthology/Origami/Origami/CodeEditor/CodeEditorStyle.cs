@@ -45,6 +45,9 @@ public sealed class CodeEditorOptions
     public bool HighlightOccurrences = true;
     public bool AutoClosePairs = true;
     public bool AutoIndent = true;
+
+    /// <summary>Formats the statement or block a typed ';' or '}' closes, for languages that support it.</summary>
+    public bool FormatOnType = true;
     public bool ScrollBeyondLastLine = true;
     public bool SmoothScrolling = true;
     public bool CaretBlink = true;

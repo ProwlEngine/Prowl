@@ -1121,6 +1121,13 @@ public sealed partial class CodeEditor
         Continue(Session.FormatAsync(start, length, CancellationToken.None), Document.Version, edits => ApplyEdits(edits));
     }
 
+    private void FormatOnType(char c)
+    {
+        if (!Options.FormatOnType || Session == null || IsReadOnly || _selections.Count != 1 || !_language.IsFormatOnTypeTrigger(c)) return;
+        int offset = Document.PositionToOffset(Caret);
+        Continue(Session.FormatOnTypeAsync(offset, c, CancellationToken.None), Document.Version, edits => ApplyEdits(edits));
+    }
+
     public void OpenCodeActions()
     {
         if (Session == null) return;
@@ -1146,12 +1153,23 @@ public sealed partial class CodeEditor
             ApplyEdits(action.Edits);
             return;
         }
-        Continue(action.Resolve(CancellationToken.None), Document.Version, result =>
+        var task = action.Resolve(CancellationToken.None);
+        task.ContinueWith(t => Post(() =>
         {
-            if (result == null) return;
+            if (t.IsFaulted)
+            {
+                OpenList($"'{action.Title}' failed: {t.Exception?.GetBaseException().Message}", new List<ListItem>());
+                return;
+            }
+            var result = t.IsCompletedSuccessfully ? t.Result : null;
+            if (result == null || (result.Edits.Count == 0 && result.OtherDocuments.Count == 0))
+            {
+                OpenList($"'{action.Title}' made no text changes", new List<ListItem>());
+                return;
+            }
             ApplyEdits(result.Edits);
             if (result.OtherDocuments.Count > 0) ExternalEditsRequested?.Invoke(result.OtherDocuments);
-        });
+        }), TaskScheduler.Default);
     }
 
     private void OpenContextMenu(Float2 p)
