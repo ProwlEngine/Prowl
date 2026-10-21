@@ -36,7 +36,7 @@ public sealed class KcpConnection : Connection
     }
 
     /// <summary>Where packets for this connection go, and come from. Null if the address never resolved.</summary>
-    internal SocketAddress? RemoteAddress { get; }
+    internal SocketAddress? RemoteAddress { get; set; }
 
     /// <summary>Picked by the client, echoed through the handshake so both sides know which attempt a packet belongs to.</summary>
     internal uint ClientNonce { get; init; }

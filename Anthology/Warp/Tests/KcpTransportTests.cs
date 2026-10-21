@@ -272,12 +272,12 @@ public class KcpTransportTests
     }
 
     [Fact]
-    public void ResolvesHostNamesAndIpv6Literals()
+    public async System.Threading.Tasks.Task ResolvesHostNamesAndIpv6Literals()
     {
-        Assert.NotNull(KcpTransport.TryResolve("localhost:7777", 0, System.Net.Sockets.AddressFamily.InterNetworkV6));
-        Assert.NotNull(KcpTransport.TryResolve("[::1]:7777", 0, System.Net.Sockets.AddressFamily.InterNetworkV6));
-        Assert.NotNull(KcpTransport.TryResolve("127.0.0.1", 7777, System.Net.Sockets.AddressFamily.InterNetwork));
-        Assert.Null(KcpTransport.TryResolve("[::1]:7777", 0, System.Net.Sockets.AddressFamily.InterNetwork));
-        Assert.Null(KcpTransport.TryResolve("localhost:notaport", 0, System.Net.Sockets.AddressFamily.InterNetworkV6));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, System.Net.Sockets.AddressFamily.InterNetworkV6, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, System.Net.Sockets.AddressFamily.InterNetworkV6, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("127.0.0.1", 7777, System.Net.Sockets.AddressFamily.InterNetwork, default));
+        Assert.Null(await KcpTransport.TryResolveAsync("[::1]:7777", 0, System.Net.Sockets.AddressFamily.InterNetwork, default));
+        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, System.Net.Sockets.AddressFamily.InterNetworkV6, default));
     }
 }

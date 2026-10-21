@@ -9,6 +9,8 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Prowl.Warp.Transports.Kcp;
 
@@ -20,7 +22,7 @@ namespace Prowl.Warp.Transports.Kcp;
 /// </summary>
 /// <remarks>
 /// If the OS supports it, the socket is dual-mode IPv6, so it reaches IPv4 and IPv6 peers alike.
-/// Host names passed to <see cref="Connect"/> are resolved synchronously.
+/// Host names resolve asynchronously; completions are applied by the next pump. Disconnect and shutdown cancel pending resolution.
 /// </remarks>
 public sealed class KcpTransport : Transport
 {
@@ -37,6 +39,10 @@ public sealed class KcpTransport : Transport
     private readonly Dictionary<SocketAddress, KcpConnection> _byAddress = new();
     private readonly List<KcpConnection> _scratch = new();
     private readonly List<KcpConnection> _unreachable = new();
+    private readonly Dictionary<KcpConnection, Resolution> _resolving = new();
+    private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolver;
+    private readonly record struct Resolution(Task<SocketAddress?> Task, CancellationTokenSource Cancellation, long Started);
+
     private readonly List<DelayedPacket> _delayed = new();
     private readonly byte[] _receiveBuffer = new byte[KcpPacket.MaxDatagramSize];
     private readonly byte[] _cookieKey = RandomNumberGenerator.GetBytes(32);
@@ -49,8 +55,12 @@ public sealed class KcpTransport : Transport
     private int _incomingCount;
 
     public KcpTransport(KcpTransportOptions? options = null)
+        : this(options, static (host, cancellation) => Dns.GetHostAddressesAsync(host, cancellation)) { }
+
+    internal KcpTransport(KcpTransportOptions? options, Func<string, CancellationToken, Task<IPAddress[]>> resolver)
     {
         _options = (options ?? new KcpTransportOptions()).CopyValidated();
+        _resolver = resolver;
     }
 
     private readonly KcpTransportOptions _options;
@@ -91,31 +101,34 @@ public sealed class KcpTransport : Transport
         if (_socket == null)
             OpenSocket(0);
 
-        SocketAddress? remote = TryResolve(address, _options.Port, _socket!.AddressFamily);
-        if (remote == null)
+        CancellationTokenSource cancellation = new();
+        ValueTask<SocketAddress?> resolution = TryResolveAsync(address, _options.Port, _socket!.AddressFamily, cancellation.Token, _resolver);
+        SocketAddress? remote = resolution.IsCompletedSuccessfully ? resolution.Result : null;
+        if (remote != null && _byAddress.ContainsKey(remote))
         {
-            // Reported on the next Receive, like every other way a connection attempt can fail.
-            KcpConnection unreachable = new(this, NextConnectionId(), address, isOutgoing: true, remote: null, NowMs);
-            AddConnection(unreachable);
-            _unreachable.Add(unreachable);
-            return unreachable;
-        }
-
-        if (_byAddress.ContainsKey(remote))
+            cancellation.Dispose();
             throw new InvalidOperationException($"Already connected to {address}.");
-
+        }
         KcpConnection connection = new(this, NextConnectionId(), address, isOutgoing: true, remote, NowMs)
         {
             ClientNonce = RandomUInt32(),
         };
         AddConnection(connection);
-        _byAddress.Add(remote, connection);
+        if (!resolution.IsCompletedSuccessfully)
+            _resolving.Add(connection, new(resolution.AsTask(), cancellation, NowMs));
+        else
+        {
+            cancellation.Dispose();
+            if (remote == null) _unreachable.Add(connection);
+            else _byAddress.Add(remote, connection);
+        }
         return connection;
     }
 
     public override void Receive()
     {
         ThrowIfDisposed();
+        ProcessResolutions();
         foreach (KcpConnection connection in _unreachable)
             RaiseDisconnected(connection, DisconnectReason.Unreachable);
         _unreachable.Clear();
@@ -154,6 +167,7 @@ public sealed class KcpTransport : Transport
     public override void Flush()
     {
         ThrowIfDisposed();
+        ProcessResolutions();
         long now = NowMs;
 
         _scratch.AddRange(_byAddress.Values);
@@ -167,8 +181,38 @@ public sealed class KcpTransport : Transport
         SendDelayed(now, all: false);
     }
 
+    private void ProcessResolutions()
+    {
+        _scratch.AddRange(_resolving.Keys);
+        foreach (KcpConnection connection in _scratch)
+        {
+            Resolution pending = _resolving[connection];
+            if (NowMs - pending.Started >= _options.ConnectTimeout.TotalMilliseconds)
+            {
+                Close(connection, DisconnectReason.Timeout, notifyRemote: false);
+                continue;
+            }
+            if (!pending.Task.IsCompleted) continue;
+            _resolving.Remove(connection);
+            pending.Cancellation.Dispose();
+            SocketAddress? remote = pending.Task.GetAwaiter().GetResult();
+            if (remote == null || _byAddress.ContainsKey(remote))
+                Close(connection, DisconnectReason.Unreachable, notifyRemote: false);
+            else
+            {
+                connection.RemoteAddress = remote;
+                _byAddress.Add(remote, connection);
+            }
+        }
+        _scratch.Clear();
+    }
+
     public override void Shutdown()
     {
+        _scratch.AddRange(_resolving.Keys);
+        foreach (KcpConnection connection in _scratch)
+            Close(connection, DisconnectReason.Requested, notifyRemote: false);
+        _scratch.Clear();
         foreach (KcpConnection connection in _unreachable)
             RaiseDisconnected(connection, DisconnectReason.Unreachable);
         _unreachable.Clear();
@@ -410,6 +454,12 @@ public sealed class KcpTransport : Transport
                 SendSession(connection, KcpPacketType.Disconnect, ReadOnlySpan<byte>.Empty);
         }
 
+        if (_resolving.Remove(connection, out Resolution resolution))
+        {
+            resolution.Cancellation.Cancel();
+            resolution.Cancellation.Dispose();
+        }
+        _unreachable.Remove(connection);
         if (connection.RemoteAddress != null && _byAddress.Remove(connection.RemoteAddress) && !connection.IsOutgoing)
             _incomingCount--;
 
@@ -518,7 +568,8 @@ public sealed class KcpTransport : Transport
     }
 
     /// <summary>Resolves an address to the form the socket sends to and receives from, or null if it can't.</summary>
-    internal static SocketAddress? TryResolve(string address, int defaultPort, AddressFamily socketFamily)
+    internal static async ValueTask<SocketAddress?> TryResolveAsync(string address, int defaultPort, AddressFamily socketFamily,
+        CancellationToken cancellation, Func<string, CancellationToken, Task<IPAddress[]>>? resolver = null)
     {
         IPAddress? ip;
         int port;
@@ -541,7 +592,7 @@ public sealed class KcpTransport : Transport
                 host = address[..colon];
             }
 
-            ip = ResolveHost(host, socketFamily);
+            ip = await ResolveHostAsync(host, socketFamily, cancellation, resolver).ConfigureAwait(false);
             if (ip == null)
                 return null;
         }
@@ -557,14 +608,15 @@ public sealed class KcpTransport : Transport
         return new IPEndPoint(ip, port).Serialize();
     }
 
-    private static IPAddress? ResolveHost(string host, AddressFamily socketFamily)
+    private static async ValueTask<IPAddress?> ResolveHostAsync(string host, AddressFamily socketFamily,
+        CancellationToken cancellation, Func<string, CancellationToken, Task<IPAddress[]>>? resolver)
     {
         IPAddress[] candidates;
         try
         {
-            candidates = Dns.GetHostAddresses(host);
+            candidates = await (resolver == null ? Dns.GetHostAddressesAsync(host, cancellation) : resolver(host, cancellation)).ConfigureAwait(false);
         }
-        catch (Exception e) when (e is SocketException or ArgumentException)
+        catch (Exception e) when (e is SocketException or ArgumentException or OperationCanceledException)
         {
             return null;
         }
