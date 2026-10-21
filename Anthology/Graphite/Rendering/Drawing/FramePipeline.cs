@@ -2076,6 +2076,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private void Prepare(CameraFrame camera, in ViewDesc view, WorldFrame world, in FrameTime time, uint width, uint height)
     {
+        camera.RefreshBuffers();
         camera.Time = time;
         int layers = view.LayerCount;
         bool shadow = camera.IsShadowView;
