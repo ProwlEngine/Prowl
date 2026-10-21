@@ -1,4 +1,3 @@
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Silk.NET.Windowing;
@@ -7,26 +6,9 @@ using Silk.NET.Windowing;
 namespace Prowl.Graphite.Samples.TexturedQuad;
 
 
-internal readonly struct SceneView : IRenderView
-{
-    public Framebuffer Target { get; }
-
-    public SceneView(uint width, uint height, Swapchain swapchain)
-    {
-        Target = swapchain.Framebuffer;
-        PixelWidth = width;
-        PixelHeight = height;
-    }
-
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-
 // Three draws sharing one shader but switching PropertySets, no dependencies between passes: the pass
 // clears and draws straight into the backbuffer.
-internal sealed class TexturedQuadPass : RasterPass
+internal sealed class TexturedQuadPass : InstanceRasterPass
 {
     private readonly GraphicsProgram _shader;
     private readonly Mesh _leftQuad;
@@ -52,9 +34,11 @@ internal sealed class TexturedQuadPass : RasterPass
 
     public override string Name => "Backbuffer";
 
-    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
+    public override GraphKind Kind => SampleView.Kind;
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Setup(InstanceContextBuilder builder) => SetInstanceTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
+
+    public override void Render(InstanceContext context, CommandBuffer cmd)
     {
         cmd.SetShader(_shader);
 
@@ -91,8 +75,8 @@ public static class Program
     static Sampler rightSampler;
     static Sampler midSampler;
     static RenderMSTracker tracker;
-    static RenderPipeline pipeline;
-    static SceneView[] views;
+    static RenderGraph graph;
+    static GraphInstances instances;
 
 
     private static void Main()
@@ -136,9 +120,9 @@ public static class Program
         midProperties = new();
         midProperties.SetTexture("MainTexture", midTexture, midSampler);
 
-        pipeline = new([new TexturedQuadPass(
-            shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties)]);
-        views = new[] { new SceneView(600, 600, device.MainSwapchain) };
+        graph = SampleView.Build(new TexturedQuadPass(
+            shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties));
+        instances = SampleView.Instances(graph, 600, 600, device.MainSwapchain);
     }
 
 
@@ -146,14 +130,14 @@ public static class Program
     {
         tracker.Begin();
 
-        device.DispatchGraph(pipeline, views);
+        device.DispatchGraph(graph, instances);
         tracker.End(dt);
     }
 
 
     public static void Close()
     {
-        pipeline.Dispose();
+        graph.Dispose();
         leftQuad.Dispose();
         rightQuad.Dispose();
         leftTexture.Dispose();

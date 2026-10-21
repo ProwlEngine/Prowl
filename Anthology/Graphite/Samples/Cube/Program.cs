@@ -1,35 +1,19 @@
-using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 
 namespace Prowl.Graphite.Samples.Cube;
 
 
-internal readonly struct SceneView : IRenderView
-{
-    public Framebuffer Target { get; }
-
-    public SceneView(uint width, uint height, Swapchain swapchain)
-    {
-        Target = swapchain.Framebuffer;
-        PixelWidth = width;
-        PixelHeight = height;
-    }
-
-    public uint PixelWidth { get; }
-    public uint PixelHeight { get; }
-    public int ViewId => 0;
-}
-
-
 // One draw, no dependencies between passes: the pass clears and draws straight into the backbuffer.
-internal sealed class CubePass : RasterPass
+internal sealed class CubePass : InstanceRasterPass
 {
     public override string Name => "Backbuffer";
 
-    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
+    public override GraphKind Kind => SampleView.Kind;
 
-    public override void Render(RenderContext context, CommandBuffer cmd)
+    public override void Setup(InstanceContextBuilder builder) => SetInstanceTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)), PixelFormat.D24_UNorm_S8_UInt);
+
+    public override void Render(InstanceContext context, CommandBuffer cmd)
     {
         Cube.Draw(cmd);
     }
@@ -40,8 +24,8 @@ public static class Program
 {
     static GraphicsDevice device;
     static RenderMSTracker tracker;
-    static RenderPipeline pipeline;
-    static SceneView[] views;
+    static RenderGraph graph;
+    static GraphInstances instances;
 
 
     private static void Main()
@@ -66,8 +50,8 @@ public static class Program
         tracker = new(newDevice);
         Cube.Create(device);
 
-        pipeline = new([new CubePass()]);
-        views = new[] { new SceneView(600, 600, device.MainSwapchain) };
+        graph = SampleView.Build(new CubePass());
+        instances = SampleView.Instances(graph, 600, 600, device.MainSwapchain);
     }
 
 
@@ -75,14 +59,14 @@ public static class Program
     {
         tracker.Begin();
 
-        device.DispatchGraph(pipeline, views);
+        device.DispatchGraph(graph, instances);
         tracker.End(dt);
     }
 
 
     public static void Close()
     {
-        pipeline.Dispose();
+        graph.Dispose();
         Cube.Dispose();
         device.Dispose();
     }

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Rendering;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Vector;
@@ -69,7 +68,7 @@ internal sealed class BloomStage(BloomSettings settings, GraphicsProgram program
         if (add != null)
             _add = builder.Read(add);
 
-        _output = builder.Temporary(output, GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float, scale));
+        _output = builder.Temporary(output, GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float, scale));
         builder.Publish(output, _output);
     }
 
