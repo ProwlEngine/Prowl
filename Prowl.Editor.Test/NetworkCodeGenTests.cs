@@ -68,6 +68,15 @@ public class NetworkCodeGenTests : EditorTestHarness
         public class After { } // MARKER-AFTER
         """;
 
+    private static readonly Lazy<MetadataReference[]> s_references = new(() =>
+        ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+        .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path)).ToArray());
+
+    /// <summary>Generates the networking of <paramref name="trees"/>, bound the way the script compiler binds them.</summary>
+    private static NetworkCodeGen.Result Generate(params SyntaxTree[] trees) =>
+        NetworkCodeGen.Generate(CSharpCompilation.Create("Game", trees, s_references.Value,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)), trees);
+
     private Assembly CompileGame()
     {
         ScriptCompiler.CompileResult result = ScriptCompiler.CompileAll(Project);
@@ -175,7 +184,7 @@ public class NetworkCodeGenTests : EditorTestHarness
     public void RewriteKeepsEveryLineWhereItWas()
     {
         SyntaxTree original = CSharpSyntaxTree.ParseText(ShipScript);
-        SyntaxTree rewritten = NetworkCodeGen.Rewrite([original]).Trees[0];
+        SyntaxTree rewritten = Generate(original).Trees[0];
 
         Assert.NotSame(original, rewritten);
         string[] before = original.GetText().ToString().Split('\n');
@@ -203,7 +212,7 @@ public class NetworkCodeGenTests : EditorTestHarness
     public void FilesWithoutNetworkingAreLeftAlone()
     {
         SyntaxTree tree = CSharpSyntaxTree.ParseText("public class Plain { public int Value { get; set; } }");
-        Assert.Same(tree, NetworkCodeGen.Rewrite([tree]).Trees[0]);
+        Assert.Same(tree, Generate(tree).Trees[0]);
     }
 
     private const string ShipPartA = """
@@ -370,7 +379,7 @@ public class NetworkCodeGenTests : EditorTestHarness
     {
         SyntaxTree a = CSharpSyntaxTree.ParseText(ShipPartA, path: "A.cs");
         SyntaxTree b = CSharpSyntaxTree.ParseText(ShipPartB, path: "B.cs");
-        NetworkCodeGen.Result result = NetworkCodeGen.Rewrite([b, a]);
+        NetworkCodeGen.Result result = Generate(b, a);
 
         Assert.Empty(result.Diagnostics);
         Assert.Equal(ShipPartB.Split('\n').Length, result.Trees[0].GetText().ToString().Split('\n').Length);
@@ -387,12 +396,213 @@ public class NetworkCodeGenTests : EditorTestHarness
     {
         SyntaxTree a = CSharpSyntaxTree.ParseText(ShipPartA, path: "A.cs");
         SyntaxTree b = CSharpSyntaxTree.ParseText(ShipPartB, path: "B.cs");
-        SyntaxTree first = NetworkCodeGen.Rewrite([a, b]).Trees[0];
-        Assert.Same(first, NetworkCodeGen.Rewrite([a, b]).Trees[0]);
+        SyntaxTree first = Generate(a, b).Trees[0];
+        Assert.Same(first, Generate(a, b).Trees[0]);
 
         // A file's rewrite depends on nothing else, so a new [Sync] in another part leaves it alone.
         SyntaxTree b2 = CSharpSyntaxTree.ParseText(ShipPartB.Replace("public int Ammo", "public int Ammo2 { get; set; } [Sync] public int Ammo"), path: "B.cs");
-        Assert.Same(first, NetworkCodeGen.Rewrite([a, b2]).Trees[0]);
+        Assert.Same(first, Generate(a, b2).Trees[0]);
+    }
+
+    private const string FleetScript = """
+        using System.Collections.Generic;
+        using System.Linq;
+        using Prowl.Echo;
+        using Prowl.Runtime;
+        using Prowl.Runtime.Networking;
+        using Prowl.Warp;
+
+        public struct Loadout
+        {
+            public int Ammo;
+            [SerializeField] private string _weapon;
+            [SerializeIgnore] public int Local;
+
+            public string Weapon { get => _weapon; set => _weapon = value; }
+        }
+
+        public class Person
+        {
+            public string Name;
+            protected Person() { }
+        }
+
+        public class Crew : Person
+        {
+            public Loadout Kit;
+            public int Rank { get; init; }
+            public Crew Mentor;
+            public string Note => "not sent";
+        }
+
+        public readonly record struct Badge(string Title, int Level);
+
+        public abstract class Weapon { public string Name; }
+        public class Sword : Weapon { public int Edge; }
+        public class Bow : Weapon { public int Range; }
+
+        public interface ITrinket { }
+        public class Ring : ITrinket { public int Power; }
+
+        public struct Packed : INetSerializable<Packed>
+        {
+            public byte Value;
+            public static void Write(NetWriter writer, Packed value) => writer.WriteByte((byte)(value.Value + 1));
+            public static Packed Read(ref NetReader reader) => new() { Value = (byte)(reader.ReadByte() - 1) };
+        }
+
+        public class Fleet : Component
+        {
+            [Sync, Change(nameof(OnHealthChanged))] public int Health { get; set; } = 100;
+
+            [Sync, Change("Ping")] public int Shield { get; set; }
+
+            [Sync] public NetList<Crew> Crew { get; }
+                = new(); // MARKER-CREW
+
+            [Sync(SyncFlags.FromHost)] public NetDictionary<string, Loadout> Kits { get; } = new();
+
+            [Sync] public NetSet<Packed> Codes { get; } = new();
+
+            [Sync] public Loadout Kit { get; set; }
+
+            [Sync] public Badge Badge { get; set; }
+
+            [Sync] public Weapon Gear { get; set; }
+
+            [Sync] public NetList<ITrinket> Trinkets { get; } = new();
+
+            public List<string> Log = new();
+
+            private void OnHealthChanged(int oldValue, int newValue) => Log.Add($"{oldValue}->{newValue}");
+
+            private void Ping() => Log.Add("ping");
+
+            [Rpc.Broadcast] public void Hire(Crew who) => Crew.Add(who);
+
+            public void Fill()
+            {
+                Kit = new Loadout { Ammo = 3, Weapon = "rifle", Local = 9 };
+                Crew ada = new() { Name = "Ada", Kit = Kit, Rank = 2 };
+                Crew bo = new() { Name = "Bo", Kit = Kit, Rank = 1, Mentor = ada };
+                ada.Mentor = bo;
+                Hire(bo);
+                Crew.Add(null);
+                Kits["main"] = Kit;
+                Codes.Add(new Packed { Value = 7 });
+                Badge = new Badge("Ace", 4);
+                Gear = new Bow { Name = "Longbow", Range = 30 };
+                Trinkets.Add(new Ring { Power = 2 });
+            }
+
+            public string Describe() =>
+                $"{Kit.Ammo} {Kit.Weapon} {Kit.Local} | {string.Join(",", Crew.Select(c => c == null ? "null" : $"{c.Name}:{c.Kit.Weapon}:{c.Rank}<{c.Mentor?.Name}{(ReferenceEquals(c.Mentor?.Mentor, c) ? "<loop" : "")}"))}"
+                + $" | {string.Join(",", Kits.Select(k => k.Key + "=" + k.Value.Ammo))} | {string.Join(",", Codes.Select(c => c.Value))} | {Badge.Title} {Badge.Level}"
+                + $" | {Gear?.GetType().Name}:{Gear?.Name}:{(Gear as Bow)?.Range} | {string.Join(",", Trinkets.Select(t => t.GetType().Name + ((Ring)t).Power))}";
+        }
+        """;
+
+    [Fact]
+    public void CollectionsHooksAndTheGamesOwnTypesNetwork()
+    {
+        WriteScript("Fleet.cs", FleetScript);
+        Type fleetType = CompileGame().GetType("Fleet")!;
+
+        GameObject go = new("Fleet");
+        try
+        {
+            Component fleet = (Component)go.AddComponent(fleetType)!;
+            Component copy = (Component)go.AddComponent(fleetType)!;
+            List<string> log = (List<string>)fleetType.GetField("Log")!.GetValue(fleet)!;
+
+            // Hooks run on a change, with or without the values, and not for the same value.
+            fleetType.GetProperty("Health")!.SetValue(fleet, 5);
+            fleetType.GetProperty("Health")!.SetValue(fleet, 5);
+            fleetType.GetProperty("Shield")!.SetValue(fleet, 1);
+            Assert.Equal(new[] { "100->5", "ping" }, log);
+
+            NetworkMembers members = NetworkMembers.Of(fleet);
+            Assert.Equal(typeof(SyncCollectionMember<,>), members.Sync(NetworkCodeGen.NetworkId("Crew"))!.GetType().GetGenericTypeDefinition());
+            Assert.Equal(SyncFlags.FromHost, members.Sync(NetworkCodeGen.NetworkId("Kits"))!.Flags);
+
+            // Everything, generated serializers and the hand-written one alike, goes across as it was.
+            fleetType.GetMethod("Fill")!.Invoke(fleet, []);
+            foreach (SyncMember sync in members.Syncs)
+            {
+                using NetWriter writer = new();
+                sync.Write(fleet, writer);
+                NetReader reader = new(writer.WrittenSpan);
+                sync.Read(copy, ref reader, initial: true);
+                Assert.True(reader.IsAtEnd, sync.Name);
+            }
+
+            Assert.Equal("3 rifle 9 | Bo:rifle:1<Ada<loop,null | main=3 | 7 | Ace 4 | Bow:Longbow:30 | Ring2", fleetType.GetMethod("Describe")!.Invoke(fleet, []));
+            Assert.Equal("3 rifle 0 | Bo:rifle:1<Ada<loop,null | main=3 | 7 | Ace 4 | Bow:Longbow:30 | Ring2", fleetType.GetMethod("Describe")!.Invoke(copy, []));
+        }
+        finally
+        {
+            go.Dispose();
+        }
+    }
+
+    [Fact]
+    public void CollectionRewriteKeepsEveryLineWhereItWas()
+    {
+        SyntaxTree original = CSharpSyntaxTree.ParseText(FleetScript);
+        NetworkCodeGen.Result result = Generate(original);
+        Assert.Empty(result.Diagnostics);
+
+        string[] before = original.GetText().ToString().Split('\n');
+        string[] after = result.Trees[0].GetText().ToString().Split('\n');
+        Assert.Equal(before.Length, after.Length);
+        for (int i = 0; i < before.Length; i++)
+        {
+            if (before[i].Contains("public int Ammo;") || before[i].Contains("Log.Add("))
+                Assert.Equal(before[i].Trim(), after[i].Trim());
+            if (before[i].Contains("MARKER"))
+                Assert.Contains("MARKER", after[i]);
+        }
+        Assert.Contains(after, line => line.Contains("__Sync_Collection(this.__sync_Crew, __syncnet_Crew)"));
+    }
+
+    [Theory]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public int X { get; } = 1; }", "PROWLNET007")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public Prowl.Runtime.Networking.NetList<int> X { get; set; } }", "PROWLNET007")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public Prowl.Runtime.Networking.NetList<int[]> X { get; } = new(); }", "PROWLNET005")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync, Prowl.Runtime.Networking.Change(\"F\")] public int X { get; set; } void F(string a, string b) { } }", "PROWLNET006")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync, Prowl.Runtime.Networking.Change(\"Missing\")] public int X { get; set; } }", "PROWLNET006")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync, Prowl.Runtime.Networking.Change(\"F\")] public Prowl.Runtime.Networking.NetList<int> X { get; } = new(); void F() { } }", "PROWLNET006")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Change(nameof(F))] public int X { get; set; } void F() { } }", "PROWLNET006")]
+    [InlineData("public struct S { public int[] A; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public S X { get; set; } }", "PROWLNET005")]
+    [InlineData("public class C { public C(int x) { } public int A; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Rpc.Broadcast] public void F(C c) { } }", "PROWLNET005")]
+    [InlineData("public struct S<T> { public T A; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public S<int> X { get; set; } }", "PROWLNET005")]
+    [InlineData("public class A : Prowl.Runtime.Component { private struct S { public int A; } [Prowl.Runtime.Networking.Sync] private S X { get; set; } }", "PROWLNET005")]
+    [InlineData("public struct S { private int _a; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public Prowl.Runtime.Networking.NetList<S> X { get; } = new(); }", "PROWLNET005")]
+    [InlineData("public abstract class B { public int A; } public class C : B { public System.Action F; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public B X { get; set; } }", "PROWLNET005")]
+    [InlineData("public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public object X { get; set; } }", "PROWLNET005")]
+    [InlineData("public struct Outer { public Inner I; } public struct Inner { public System.Action A; } public class A : Prowl.Runtime.Component { [Prowl.Runtime.Networking.Sync] public Outer X { get; set; } }", "PROWLNET005")]
+    public void UnsupportedNetworkTypesAreCompileErrors(string script, string id) => UnsupportedShapesAreCompileErrors(script, id);
+
+    [Fact]
+    public void UnsendableTypesSayWhy()
+    {
+        WriteScript("Bad.cs", """
+            public struct Outer { public Inner I; }
+            public struct Inner { public System.Action A; }
+            public struct Hidden { private int _a; }
+            public class A : Prowl.Runtime.Component
+            {
+                [Prowl.Runtime.Networking.Sync] public Outer X { get; set; }
+                [Prowl.Runtime.Networking.Rpc.Broadcast] public void F(Hidden h) { }
+            }
+            """);
+
+        ScriptCompiler.CompileResult result = ScriptCompiler.CompileAll(Project);
+
+        Assert.False(result.Success);
+        string errors = result.Errors + result.Output;
+        Assert.Contains("'X' can't be sent over the network: X.I.A is a System.Action, which isn't a type the network can send", errors);
+        Assert.Contains("'h' can't be sent over the network: h is a Hidden, which has nothing to send", errors);
     }
 
     [Theory]

@@ -28,13 +28,34 @@ public abstract class SyncMember(uint slot, string name, SyncFlags flags)
 
     public SyncFlags Flags { get; } = flags;
 
+    /// <summary>Writes the whole value, for a snapshot or spawn.</summary>
     internal abstract void Write(Component component, NetWriter writer);
 
-    internal abstract void Read(Component component, ref NetReader reader);
+    /// <summary>Writes what changed since the last send. For most values, that's the value.</summary>
+    internal virtual void WriteChanges(Component component, NetWriter writer) => Write(component, writer);
+
+    /// <summary>What <see cref="WriteChanges" /> wrote has been sent.</summary>
+    internal virtual void ChangesSent(Component component)
+    {
+    }
+
+    /// <summary>
+    ///     Applies a value that came over the network; <paramref name="initial" /> when it came with a snapshot
+    ///     or spawn, which runs no [Change] hook.
+    /// </summary>
+    internal abstract void Read(Component component, ref NetReader reader, bool initial);
 
     internal abstract string FormatValue(Component component);
 
     internal virtual string FormatPayload(ref NetReader reader) => "Value unavailable";
+}
+
+/// <inheritdoc />
+[EditorBrowsable(EditorBrowsableState.Never)]
+public abstract class SyncMember<T>(uint slot, string name, SyncFlags flags) : SyncMember(slot, name, flags)
+{
+    /// <summary>Runs the property's [Change] hook, if it has one.</summary>
+    internal abstract void Changed(Component component, T oldValue, T newValue);
 }
 
 /// <inheritdoc />
@@ -44,20 +65,69 @@ public sealed class SyncMember<TComponent, T>(
     string name,
     SyncFlags flags,
     Func<TComponent, T> get,
-    Action<TComponent, T> set)
-    : SyncMember(slot, name, flags) where TComponent : Component
+    Action<TComponent, T> set,
+    Action<TComponent, T, T>? changed = null)
+    : SyncMember<T>(slot, name, flags) where TComponent : Component
 {
     internal override void Write(Component component, NetWriter writer) =>
         NetSerializer<T>.Write(writer, get((TComponent)component));
 
-    internal override void Read(Component component, ref NetReader reader) =>
-        set((TComponent)component, NetSerializer<T>.Read(ref reader));
+    internal override void Read(Component component, ref NetReader reader, bool initial)
+    {
+        TComponent c = (TComponent)component;
+        T value = NetSerializer<T>.Read(ref reader);
+        if (changed == null || initial)
+        {
+            set(c, value);
+            return;
+        }
+
+        T old = get(c);
+        set(c, value);
+        if (!EqualityComparer<T>.Default.Equals(old, value))
+        {
+            Networking.Notify(() => changed(c, old, value));
+        }
+    }
+
+    internal override void Changed(Component component, T oldValue, T newValue) =>
+        changed?.Invoke((TComponent)component, oldValue, newValue);
 
     internal override string FormatValue(Component component) =>
         NetworkDiagnostics.FormatValue(get((TComponent)component));
 
     internal override string FormatPayload(ref NetReader reader) =>
         NetworkDiagnostics.FormatValue(NetSerializer<T>.Read(ref reader));
+}
+
+/// <summary>A [Sync] network collection: a <see cref="NetList{T}" />, <see cref="NetDictionary{TKey,TValue}" /> or <see cref="NetSet{T}" />.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class SyncCollectionMember<TComponent, TCollection>(
+    uint slot,
+    string name,
+    SyncFlags flags,
+    Func<TComponent, TCollection> get)
+    : SyncMember(slot, name, flags) where TComponent : Component where TCollection : NetCollection
+{
+    internal override void Write(Component component, NetWriter writer) => Bound(component).WriteAll(writer);
+
+    internal override void WriteChanges(Component component, NetWriter writer) => Bound(component).WriteChanges(writer);
+
+    internal override void ChangesSent(Component component) => Bound(component).ClearChanges();
+
+    internal override void Read(Component component, ref NetReader reader, bool initial) => Bound(component).Read(ref reader, initial);
+
+    internal override string FormatValue(Component component) => Bound(component).Describe();
+
+    internal override string FormatPayload(ref NetReader reader) => NetCollection.DescribePayload(ref reader);
+
+    /// <summary>The component's collection, which from now on reports its changes as this property's.</summary>
+    internal TCollection Bound(Component component)
+    {
+        TCollection collection = get((TComponent)component);
+        collection.Bind(component, this);
+        return collection;
+    }
 }
 
 /// <summary>An RPC, as the script compiler describes it. Not meant to be created by hand.</summary>

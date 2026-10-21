@@ -43,8 +43,10 @@ internal static class RoslynScriptBackend
 
     private sealed class UnitState
     {
-        // What each file parsed to, reused while its bytes are unchanged, and what it compiled as after the network rewrite.
+        // What each file parsed to, reused while its bytes are unchanged, bound as written for the network code
+        // generation; and what the unit compiled as after it, the generated serializers included.
         public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Parsed = new(StringComparer.OrdinalIgnoreCase);
+        public CSharpCompilation? Source;
         public Dictionary<string, (ulong Hash, SyntaxTree Tree)> Trees = new(StringComparer.OrdinalIgnoreCase);
         public CSharpCompilation? Compilation;
         public MetadataReference[] References = Array.Empty<MetadataReference>();
@@ -134,38 +136,26 @@ internal static class RoslynScriptBackend
                 }
             }
 
-            // 3b. Generate [Sync] and RPC networking. It looks at the whole unit at once, since a partial class can
-            //     spread its network members over several files, and hands back the same tree for any file whose
-            //     text and generated members are unchanged, so the reuse below still applies.
+            // 4. Bind the scripts as written, reusing the prior binding, and generate their networking from it:
+            //    [Sync] and RPC members rewritten in place, plus one file of serializers for the game's own types
+            //    they send. A file whose rewrite is unchanged comes back as the very same tree.
             string[] files = [.. parsed.Keys];
-            NetworkCodeGen.Result network = NetworkCodeGen.Rewrite([.. files.Select(f => parsed[f].Tree)]);
+            CSharpCompilation source = Reuse(state?.Source, state?.Parsed, parsed, state, references, unit);
+            NetworkCodeGen.Result network = NetworkCodeGen.Generate(source, [.. files.Select(f => parsed[f].Tree)]);
             var newTrees = new Dictionary<string, (ulong Hash, SyntaxTree Tree)>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < files.Length; i++)
                 newTrees[files[i]] = (parsed[files[i]].Hash, network.Trees[i]);
-
-            // 4. Reuse the prior compilation, swapping only changed trees; otherwise create fresh.
-            CSharpCompilation compilation;
-            if (state?.Compilation != null && state.AllowUnsafe == unit.AllowUnsafe)
+            if (network.Serializers is { } serializers)
             {
-                compilation = state.Compilation;
-
-                foreach ((string? path, (ulong Hash, SyntaxTree Tree) entry) in state.Trees)
-                    if (!newTrees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) ne) || !ReferenceEquals(ne.Tree, entry.Tree))
-                        compilation = compilation.RemoveSyntaxTrees(entry.Tree);
-
-                foreach ((string? path, (ulong Hash, SyntaxTree Tree) entry) in newTrees)
-                    if (!state.Trees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) oe) || !ReferenceEquals(oe.Tree, entry.Tree))
-                        compilation = compilation.AddSyntaxTrees(entry.Tree);
-
-                if (!SameReferences(state.References, references))
-                    compilation = compilation.WithReferences(references);
-            }
-            else
-            {
-                compilation = CSharpCompilation.Create(unit.Name, newTrees.Values.Select(t => t.Tree), references, BuildOptions(unit));
+                bool same = state != null && state.Trees.TryGetValue(SerializersPath, out (ulong Hash, SyntaxTree Tree) previous)
+                    && previous.Tree.GetText().ContentEquals(serializers.GetText());
+                newTrees[SerializersPath] = same ? state!.Trees[SerializersPath] : (0, serializers);
             }
 
-            // 5. Emit with an embedded PDB.
+            // 5. What compiles is the rewrite, again swapping only the trees that changed.
+            CSharpCompilation compilation = Reuse(state?.Compilation, state?.Trees, newTrees, state, references, unit);
+
+            // 6. Emit with an embedded PDB.
             using var peStream = new MemoryStream();
             EmitResult result = compilation.Emit(peStream,
                 options: new EmitOptions().WithDebugInformationFormat(DebugInformationFormat.Embedded));
@@ -175,7 +165,6 @@ internal static class RoslynScriptBackend
                 .ToList();
             diagnostics.AddRange(RunScriptAnalyzers(compilation));
             diagnostics.AddRange(network.Diagnostics);
-            diagnostics.AddRange(NetworkCodeGen.Validate(compilation));
 
             // An analyzer reporting an error is describing something that will not survive being run,
             // so it fails the compile the way the compiler's own errors do. Loading the assembly anyway
@@ -183,13 +172,14 @@ internal static class RoslynScriptBackend
             bool blocked = diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
             byte[]? image = result.Success && !blocked ? peStream.ToArray() : null;
 
-            // 6. Update state. Compilation/trees/refs reflect what we just built; the success snapshot
+            // 7. Update state. Compilation/trees/refs reflect what we just built; the success snapshot
             //    only advances when the emit actually succeeded (so a repeat of failing source does not
             //    get skipped and silently return the last good image).
             MetadataReference[] refArray = [.. references];
             state ??= new UnitState();
             state.Parsed = parsed;
             state.Trees = newTrees;
+            state.Source = source;
             state.Compilation = compilation;
             state.References = refArray;
             state.AllowUnsafe = unit.AllowUnsafe;
@@ -212,6 +202,31 @@ internal static class RoslynScriptBackend
                 Recompiled = true
             };
         }
+    }
+
+    // Where the generated network serializers sit among a unit's trees. Not a file on disk.
+    private const string SerializersPath = "<ProwlNetSerializers>";
+
+    /// <summary>
+    /// <paramref name="previous"/> with its trees swapped for <paramref name="trees"/> where they differ, so Roslyn
+    /// keeps the binding of the rest; or a new compilation when there's nothing to build on.
+    /// </summary>
+    private static CSharpCompilation Reuse(CSharpCompilation? previous, Dictionary<string, (ulong Hash, SyntaxTree Tree)>? previousTrees,
+        Dictionary<string, (ulong Hash, SyntaxTree Tree)> trees, UnitState? state, List<MetadataReference> references, CompilationUnit unit)
+    {
+        if (previous == null || previousTrees == null || state == null || state.AllowUnsafe != unit.AllowUnsafe)
+            return CSharpCompilation.Create(unit.Name, trees.Values.Select(t => t.Tree), references, BuildOptions(unit));
+
+        CSharpCompilation compilation = previous;
+        foreach ((string path, (ulong Hash, SyntaxTree Tree) entry) in previousTrees)
+            if (!trees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) now) || !ReferenceEquals(now.Tree, entry.Tree))
+                compilation = compilation.RemoveSyntaxTrees(entry.Tree);
+
+        foreach ((string path, (ulong Hash, SyntaxTree Tree) entry) in trees)
+            if (!previousTrees.TryGetValue(path, out (ulong Hash, SyntaxTree Tree) before) || !ReferenceEquals(before.Tree, entry.Tree))
+                compilation = compilation.AddSyntaxTrees(entry.Tree);
+
+        return SameReferences(state.References, references) ? compilation : compilation.WithReferences(references);
     }
 
     private static readonly ImmutableArray<DiagnosticAnalyzer> s_scriptAnalyzers =

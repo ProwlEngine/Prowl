@@ -25,7 +25,12 @@ public enum SyncFlags : uint
 /// <remarks>
 ///     Write it on an auto-property, as in <c>[Sync] public int Health { get; set; } = 100;</c>. Prowl's
 ///     script compiler generates the networking around it, so it only works in game scripts. Without a
-///     network session the property behaves like any other.
+///     network session the property behaves like any other. The value must be a type
+///     <see cref="NetSerializer{T}" /> supports, which includes your own structs and classes: they're sent
+///     by their public fields and auto-properties. For a collection, use a get-only <see cref="NetList{T}" />,
+///     <see cref="NetDictionary{TKey,TValue}" /> or <see cref="NetSet{T}" />, as in
+///     <c>[Sync] public NetList&lt;int&gt; Scores { get; } = new();</c>, which sends each change rather than the
+///     whole collection. To react to changes, add <see cref="ChangeAttribute" />.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class SyncAttribute : Attribute
@@ -37,6 +42,26 @@ public sealed class SyncAttribute : Attribute
     public SyncAttribute(SyncFlags flags) => Flags = flags;
 
     public SyncFlags Flags { get; set; }
+}
+
+/// <summary>
+///     Calls a method of the component whenever a <see cref="SyncAttribute" /> property's value changes, as in
+///     <c>[Sync, Change(nameof(OnHealthChanged))] public int Health { get; set; }</c>. The method takes the old
+///     and new values, <c>void OnHealthChanged(int oldValue, int newValue)</c>, or nothing.
+/// </summary>
+/// <remarks>
+///     It runs where the change happens: on the peer that set it, right away, and on every peer that receives
+///     it, once the whole update it came in is applied, so it sees the other values that changed with it. It
+///     doesn't run for values that come with a scene snapshot or spawn. Those are in place before the component
+///     starts, so read them in <c>OnEnable</c> or <c>Start</c>. Setting the value it already has calls nothing. For
+///     <see cref="NetList{T}" />, <see cref="NetDictionary{TKey,TValue}" /> and <see cref="NetSet{T}" />,
+///     use their <c>Changed</c> event instead.
+/// </remarks>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class ChangeAttribute(string method) : Attribute
+{
+    /// <summary>The name of the method to call.</summary>
+    public string Method { get; } = method;
 }
 
 /// <summary>Who runs an RPC.</summary>

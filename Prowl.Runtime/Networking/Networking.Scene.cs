@@ -16,7 +16,7 @@ namespace Prowl.Runtime.Networking;
 public static partial class Networking
 {
     // Bumped whenever the snapshot layout changes, so a mismatched client fails clearly.
-    private const byte SnapshotFormat = 4;
+    private const byte SnapshotFormat = 5;
 
     private static void OnHostSceneLoaded()
     {
@@ -142,7 +142,7 @@ public static partial class Networking
             }
         }
 
-        ApplySyncState(sender, ref reader, null);
+        ApplySyncState(sender, ref reader, null, initial: true);
         Scene.Load(scene);
     }
 

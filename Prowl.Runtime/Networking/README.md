@@ -24,6 +24,34 @@ lobby.Flush();
 - Workers drive transport I/O; session callbacks stay on the context thread. Backends must return
   promptly. If shutdown times out after five seconds, ownership is retained so disposal can be retried.
 
+## Replicated state
+
+```csharp
+public struct Loadout { public int Ammo; public string Weapon; }
+
+public class Player : Component
+{
+    [Sync, Change(nameof(OnHealthChanged))] public int Health { get; set; } = 100;
+    [Sync] public Loadout Loadout { get; set; }
+    [Sync] public NetList<string> Inventory { get; } = new();
+
+    void OnHealthChanged(int oldValue, int newValue) { /* runs here and on every receiver */ }
+}
+```
+
+- `[Change]` hooks and the collections' `Changed` events run for changes made locally and received, never
+  for state that arrives with a snapshot or spawn: that is in place before `OnEnable`. Received `[Change]`
+  hooks run once the whole tick's block of values is applied.
+- `NetList`, `NetDictionary` and `NetSet` send operations, numbered so a late joiner's full copy never
+  applies a pending one twice. Changes on a peer without control are dropped with a one-time warning.
+- Your own structs and classes just work: the script compiler writes serializers for the ones `[Sync]`
+  values, RPC arguments and collections use, sending public fields, `[SerializeField]` fields and public
+  auto-properties (base class first, `[SerializeIgnore]` skipped). Implement `INetSerializable<T>` to
+  write the bytes yourself, or call `NetSerializer<T>.Register` for types you don't own.
+- Classes and interfaces are polymorphic: a `Weapon` property holding a `Bow` arrives as a `Bow`, for any
+  non-generic class declared in the game's scripts. Within one value (a property, an RPC argument or a
+  collection item), an object referenced twice arrives once, and cycles arrive as cycles.
+
 ```powershell
 dotnet test Prowl.Runtime.Test/Prowl.Runtime.Test.csproj --filter 'FullyQualifiedName~Network|FullyQualifiedName~TransformTimeline'
 ```

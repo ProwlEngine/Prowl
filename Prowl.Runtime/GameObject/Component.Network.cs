@@ -20,26 +20,41 @@ public abstract partial class Component
     /// </summary>
     public bool IsProxy => GameObject.IsProxy;
 
-    /// <summary>Generated [Sync] setter: stores the value if this peer may change it, and queues it to be sent.</summary>
+    /// <summary>
+    /// Generated [Sync] setter: stores the value if this peer may change it, queues it to be sent, and runs
+    /// the property's [Change] hook.
+    /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    protected void __Sync_Set<T>(ref T field, T value, SyncMember member)
+    protected void __Sync_Set<T>(ref T field, T value, SyncMember<T> member)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
             return;
 
-        if (!Networking.Networking.IsActive)
+        T old = field;
+        if (Networking.Networking.IsActive)
+        {
+            // A proxy's value belongs to whoever controls it, and the next update would undo the change anyway.
+            using FrameStatScope stats = FrameStats.Network.Scope();
+            if (!Networking.Networking.HasControl(this, member.Flags))
+                return;
+
+            field = value;
+            Networking.Networking.MarkSyncDirty(this, member.Slot);
+        }
+        else
         {
             field = value;
-            return;
         }
 
-        // A proxy's value belongs to whoever controls it, and the next update would undo the change anyway.
-        using FrameStatScope stats = FrameStats.Network.Scope();
-        if (!Networking.Networking.HasControl(this, member.Flags))
-            return;
+        member.Changed(this, old, value);
+    }
 
-        field = value;
-        Networking.Networking.MarkSyncDirty(this, member.Slot);
+    /// <summary>Generated getter of a [Sync] network collection: ties the collection to this component's property.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    protected TCollection __Sync_Collection<TCollection>(TCollection collection, SyncMember member) where TCollection : NetCollection
+    {
+        collection.Bind(this, member);
+        return collection;
     }
 
     /// <summary>

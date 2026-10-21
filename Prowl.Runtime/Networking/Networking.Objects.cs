@@ -27,12 +27,20 @@ public static partial class Networking
     private static readonly Dictionary<Guid, EngineObject> s_index = new();
     private static int s_indexFrame = -1;
 
+    // The object a spawn is building, by identifier, until it joins the scene.
+    private static Dictionary<Guid, EngineObject>? s_spawning;
+
     /// <summary>The GameObject or Component with this identifier in the replicated scene, or null.</summary>
     internal static EngineObject? FindByIdentifier(Guid id)
     {
         if (id == Guid.Empty || s_scene == null)
         {
             return null;
+        }
+
+        if (s_spawning != null && s_spawning.TryGetValue(id, out EngineObject? spawning))
+        {
+            return spawning;
         }
 
         if (s_index.TryGetValue(id, out EngineObject? found) && IsLive(found, id))
@@ -233,6 +241,27 @@ public static partial class Networking
             throw new InvalidDataException("A spawned object's identifier doesn't match its message.");
         }
 
+        // Its [Sync] values go in before it joins the scene, so its components are enabled with them. Until
+        // then, what it's made of is found by identifier from here, for values that refer to its own parts.
+        s_spawning = new Dictionary<Guid, EngineObject>();
+        foreach (GameObject part in (List<GameObject>)[go, .. go.GetChildrenDeep()])
+        {
+            s_spawning[part.Identifier] = part;
+            foreach (Component component in part.GetComponents<Component>())
+            {
+                s_spawning[component.Identifier] = component;
+            }
+        }
+
+        try
+        {
+            ApplySyncState(sender, ref reader, null, initial: true);
+        }
+        finally
+        {
+            s_spawning = null;
+        }
+
         if (FindByIdentifier(parentId) is GameObject parent)
         {
             go.SetParent(parent, false);
@@ -244,7 +273,6 @@ public static partial class Networking
 
         s_entries.Add(new NetworkEntry(go) { Owner = owner, Orphaned = orphaned, Generation = generation });
         IndexTree(go);
-        ApplySyncState(sender, ref reader, null);
     }
 
     /// <summary>A GameObject was disposed. On the host, a networked object going away goes away everywhere.</summary>

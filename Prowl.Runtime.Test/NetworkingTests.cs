@@ -129,7 +129,7 @@ public sealed class FakePeer : IDisposable
     public void Dispose() => Session.Dispose();
 }
 
-public class NetworkingTests : RuntimeTestBase
+public partial class NetworkingTests : RuntimeTestBase
 {
     private static Scene RoundTrip(Scene scene)
     {

@@ -227,6 +227,7 @@ public static partial class Networking
         s_entries.Clear();
         s_index.Clear();
         s_dirty.Clear();
+        SessionNumber++;
         s_incoming = null;
         s_incomingRead = false;
         CurrentCaller = null;

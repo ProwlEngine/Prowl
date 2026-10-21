@@ -18,8 +18,12 @@ namespace Prowl.Runtime.Networking;
 ///     Supported: <see cref="bool" />, the integer types, <see cref="float" />, <see cref="double" />,
 ///     <see cref="string" />, <see cref="Guid" />, enums, the <c>Float</c>/<c>Double</c>/<c>Int</c> vectors,
 ///     <see cref="Quaternion" />, <see cref="Color" />, and references to a <see cref="GameObject" /> or
-///     <see cref="Component" /> (sent by identifier, null if the receiver doesn't have it). Anything else
-///     throws <see cref="NotSupportedException" /> on first use.
+///     <see cref="Component" /> (sent by identifier, null if the receiver doesn't have it). A game script's
+///     own structs and classes get serializers from the script compiler when its [Sync] values and RPCs use
+///     them: member by member (public fields, [SerializeField] fields and public auto-properties), or through
+///     <see cref="INetSerializable{TSelf}" /> if they implement it. Classes and interfaces are sent as what the
+///     object really is, with references and cycles kept (see <see cref="NetTypeSerializer" />). Any other type can be given one with
+///     <see cref="Register" />. Anything else throws <see cref="NotSupportedException" /> on first use.
 /// </remarks>
 public static class NetSerializer<T>
 {
@@ -28,12 +32,34 @@ public static class NetSerializer<T>
     public delegate void Writer(NetWriter writer, T value);
 
     // Rebuilt for each type rather than carried over a hot reload.
-    [ReloadIgnore] private static readonly Writer? s_write;
-    [ReloadIgnore] private static readonly Reader? s_read;
+    [ReloadIgnore] private static Writer? s_write;
+    [ReloadIgnore] private static Reader? s_read;
+    [ReloadIgnore] private static readonly bool s_builtIn;
 
-    static NetSerializer() => (s_write, s_read) = NetSerializers.Create<T>();
+    static NetSerializer()
+    {
+        (s_write, s_read) = NetSerializers.Create<T>();
+        s_builtIn = s_write != null;
+    }
 
     public static bool IsSupported => s_write != null;
+
+    /// <summary>
+    ///     Gives <typeparamref name="T" /> a serializer, for a type the engine doesn't know. Register before the
+    ///     first value is sent, from a <see cref="ModuleInitializerAttribute" /> say; registering again replaces it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException"><typeparamref name="T" /> already has a built-in serializer.</exception>
+    public static void Register(Writer write, Reader read)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        ArgumentNullException.ThrowIfNull(read);
+        if (s_builtIn)
+        {
+            throw new InvalidOperationException($"{typeof(T)} is sent by the engine's own serializer, which can't be replaced.");
+        }
+
+        (s_write, s_read) = (write, read);
+    }
 
     public static void Write(NetWriter writer, T value)
     {
@@ -57,7 +83,7 @@ public static class NetSerializer<T>
 
     private static NotSupportedException Unsupported() =>
         new(
-            $"{typeof(T)} can't be sent over the network. Sync and RPC values must be one of the types listed on NetSerializer<T>.");
+            $"{typeof(T)} can't be sent over the network. Sync and RPC values must be one of the types listed on NetSerializer<T>, or a game script's own struct or class.");
 }
 
 internal static class NetSerializers
