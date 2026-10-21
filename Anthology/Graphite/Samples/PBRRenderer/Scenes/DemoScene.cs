@@ -18,6 +18,7 @@ internal abstract class DemoScene : IDisposable
     {
         Demo = demo;
         World = demo.Renderer.CreateWorld();
+        World.Name = Name;
     }
 
     protected Demo Demo { get; }
@@ -45,6 +46,7 @@ internal abstract class DemoScene : IDisposable
     protected Material Lit(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f)
     {
         Material material = Demo.CreateLit(color, metallic, roughness, emission, grid);
+        material.Name = $"Lit {_materials.Count}";
         _materials.Add(material);
         return material;
     }
@@ -55,16 +57,20 @@ internal abstract class DemoScene : IDisposable
         return material;
     }
 
-    protected RenderableHandle Add(GpuMesh mesh, Material material, Double3 position, Double3 scale, Quaternion? rotation = null, RenderableFlags flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows)
+    protected RenderableHandle Add(GpuMesh mesh, Material material, Double3 position, Double3 scale, Quaternion? rotation = null, RenderableFlags flags = RenderableFlags.CastShadows | RenderableFlags.ReceiveShadows, string? name = null)
     {
         RenderableDesc desc = new()
         {
             Mesh = mesh,
+            Name = name ?? $"{MeshName(mesh)} {World.Count}",
             Transform = Double4x4.CreateTRS(position, rotation ?? Quaternion.Identity, scale),
             Flags = flags,
         };
         return World.Add(desc, [material]);
     }
+
+    private string MeshName(GpuMesh mesh)
+        => mesh == Demo.Cube ? "Cube" : mesh == Demo.Sphere ? "Sphere" : mesh == Demo.Cylinder ? "Cylinder" : "Mesh";
 
     public virtual void Dispose()
     {

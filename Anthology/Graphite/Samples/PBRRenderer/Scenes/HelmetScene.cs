@@ -31,6 +31,7 @@ internal sealed class HelmetScene : DemoScene
 
         MaterialInfo info = _model.Materials.Length > 0 ? _model.Materials[0] : default;
         Material helmetMaterial = Track(demo.Renderer.CreateMaterial(demo.Lit));
+        helmetMaterial.Name = "Damaged helmet";
         helmetMaterial.SetFloat("_Metallic", 1f);
         helmetMaterial.SetFloat("_Roughness", 1f);
         if (info.AlbedoTexture != null)
@@ -48,7 +49,7 @@ internal sealed class HelmetScene : DemoScene
         Float3 extents = _model.Bounds.Extents;
         _center = _model.Bounds.Center;
         _scale = 2.4f / (MathF.Max(extents.X, MathF.Max(extents.Y, extents.Z)) * 2f);
-        _helmet = World.Add(new RenderableDesc { Mesh = _mesh, Transform = HelmetTransform(0f) }, [helmetMaterial]);
+        _helmet = World.Add(new RenderableDesc { Mesh = _mesh, Name = "Damaged helmet", Transform = HelmetTransform(0f) }, [helmetMaterial]);
 
         Add(Demo.Cube, Lit(new Float3(0.5f, 0.5f, 0.52f), 0f, 0.85f, grid: 1f), new Double3(0, -0.2, 0), new Double3(80, 0.4, 80));
         Add(Demo.Cylinder, Lit(new Float3(0.12f, 0.12f, 0.14f), 0.9f, 0.35f), new Double3(0, 0.15, 0), new Double3(3.4, 0.3, 3.4));
@@ -61,6 +62,7 @@ internal sealed class HelmetScene : DemoScene
 
         LightHandle sun = World.AddLight(new LightDesc
         {
+            Name = "Sun",
             Type = LightType.Directional,
             Direction = Float3.Normalize(new Float3(0.55f, -0.65f, 0.35f)),
             Color = new Float3(1f, 0.93f, 0.82f),
@@ -71,6 +73,7 @@ internal sealed class HelmetScene : DemoScene
 
         _spotDesc = new LightDesc
         {
+            Name = "Warm spot",
             Type = LightType.Spot,
             Position = new Double3(-4, 4.5, -4.5),
             Direction = Float3.Normalize(new Float3(4, -2.9f, 4.5f)),
@@ -86,6 +89,7 @@ internal sealed class HelmetScene : DemoScene
 
         _orbitDesc = new LightDesc
         {
+            Name = "Orbiting point",
             Type = LightType.Point,
             Color = new Float3(0.25f, 0.65f, 1f),
             Intensity = 0.6f,

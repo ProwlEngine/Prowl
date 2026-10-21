@@ -54,6 +54,7 @@ internal sealed class LightsScene : DemoScene
             _motion[i] = new Float3(1.5f + (float)_random.NextDouble() * 2.5f, (float)(_random.NextDouble() * Math.PI * 2), 0.3f + (float)_random.NextDouble() * 0.9f);
             _descs[i] = new LightDesc
             {
+                Name = $"Point {i}",
                 Type = LightType.Point,
                 Position = _base[i],
                 Color = Hsv((float)_random.NextDouble(), 0.75f, 1f),
@@ -67,6 +68,7 @@ internal sealed class LightsScene : DemoScene
 
         World.AddLight(new LightDesc
         {
+            Name = "Rect",
             Type = LightType.Rect,
             Position = new Double3(0, 7, 0),
             Direction = new Float3(0, -1, 0),
@@ -81,6 +83,7 @@ internal sealed class LightsScene : DemoScene
 
         World.AddLight(new LightDesc
         {
+            Name = "Tube",
             Type = LightType.Tube,
             Position = new Double3(-24, 1.5, -24),
             Direction = new Float3(1, 0, 0),
@@ -95,6 +98,7 @@ internal sealed class LightsScene : DemoScene
 
         World.AddLight(new LightDesc
         {
+            Name = "Disk",
             Type = LightType.Disk,
             Position = new Double3(24, 6, 12),
             Direction = new Float3(0, -1, 0),
@@ -111,6 +115,7 @@ internal sealed class LightsScene : DemoScene
         {
             _spotDescs[i] = new LightDesc
             {
+                Name = $"Spot {i}",
                 Type = LightType.Spot,
                 Position = corners[i],
                 Direction = Float3.Normalize(new Float3((float)-corners[i].X, (float)-corners[i].Y, (float)-corners[i].Z)),
@@ -127,6 +132,7 @@ internal sealed class LightsScene : DemoScene
 
         LightHandle moon = World.AddLight(new LightDesc
         {
+            Name = "Moon",
             Type = LightType.Directional,
             Direction = Float3.Normalize(new Float3(-0.3f, -1f, -0.4f)),
             Color = new Float3(0.55f, 0.65f, 1f),

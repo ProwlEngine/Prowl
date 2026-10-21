@@ -66,6 +66,7 @@ internal sealed class ShadowsScene : DemoScene
             _bulbs.Add(Add(Demo.Sphere, _bulbMaterial, head, new Double3(0.5, 0.5, 0.5), flags: RenderableFlags.None));
             _lanternDescs[i] = new LightDesc
             {
+                Name = $"Lantern {i}",
                 Type = LightType.Spot,
                 Position = head - new Double3(0, 0.3, 0),
                 Direction = new Float3(0, -1, 0),
@@ -83,6 +84,7 @@ internal sealed class ShadowsScene : DemoScene
 
         _sunDesc = new LightDesc
         {
+            Name = "Sun",
             Type = LightType.Directional,
             Color = new Float3(1f, 0.95f, 0.85f),
             Intensity = 0.6f,
