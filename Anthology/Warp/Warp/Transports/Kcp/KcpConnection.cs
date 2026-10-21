@@ -70,6 +70,15 @@ public sealed class KcpConnection : Connection
             return;
         }
 
+        int segmentSize = _options.Mtu - KcpPacket.SessionHeaderSize - Protocol.Kcp.OVERHEAD;
+        long segments = Math.Max(1L, ((long)data.Length + segmentSize - 1) / segmentSize);
+        long segmentBytes = Math.Max(_options.Mtu, Protocol.Kcp.MTU_DEF);
+        if ((_kcp!.WaitSnd + segments) * segmentBytes > _options.MaxPendingReliableBytes)
+        {
+            _transport.Close(this, DisconnectReason.ResourceLimit, notifyRemote: true);
+            return;
+        }
+
         // kcp2k takes arrays, not spans.
         if (_sendScratch.Length < data.Length)
             _sendScratch = new byte[Math.Max(data.Length, _sendScratch.Length * 2)];
@@ -235,12 +244,18 @@ public sealed class KcpConnection : Connection
         _kcp.Flush();
     }
 
+    internal void ReleaseBuffers()
+    {
+        _kcp = null;
+        _sendScratch = Array.Empty<byte>();
+    }
+
     internal void RecordSent(int bytes) => RecordPacketSent(bytes);
 
     private void DrainReliable()
     {
         int size;
-        while ((size = _kcp!.PeekSize()) >= 0)
+        while (IsConnected && (size = _kcp!.PeekSize()) >= 0)
         {
             byte[] message = ArrayPool<byte>.Shared.Rent(size);
             int received = _kcp.Receive(message, size);

@@ -781,6 +781,8 @@ public sealed class NetSession : IDisposable
     /// <summary>Sends a message, splitting a reliable one into fragments if the transport can't take it whole.</summary>
     private void SendToConnection(Connection connection, ReadOnlySpan<byte> message, Delivery delivery)
     {
+        if (!connection.IsConnected)
+            return;
         int max = connection.GetMaxMessageSize(delivery);
         if (delivery == Delivery.Unreliable || message.Length <= max)
         {
@@ -790,7 +792,7 @@ public sealed class NetSession : IDisposable
 
         // Fragment id, first flag and a total length of up to 5 bytes.
         int chunkSize = max - 8;
-        for (int offset = 0; offset < message.Length; offset += chunkSize)
+        for (int offset = 0; offset < message.Length && connection.IsConnected; offset += chunkSize)
         {
             int length = Math.Min(chunkSize, message.Length - offset);
             _fragmentWriter.Reset();

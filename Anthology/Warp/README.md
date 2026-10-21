@@ -65,6 +65,14 @@ Rules worth knowing:
 - `TransportEvent.Data` is only valid until the next `Poll`. Copy it to keep it.
 - Every connection gets exactly one `Disconnected` event, including when you close it yourself.
 
+KCP limits each `Receive` call to `MaxDatagramsPerReceive` (1024 by default), including malformed
+packets. `MaxPendingReliableBytes` bounds each peer's reliable send backlog (32 MB by default);
+exceeding it disconnects the slow peer with `ResourceLimit` instead of growing indefinitely.
+Transports also cap unpolled data by event count and pooled buffer bytes per connection, plus a
+transport-wide byte limit (`MaxQueuedDataEventsPerConnection`, `MaxQueuedDataBytesPerConnection`,
+`MaxQueuedDataBytes`). Receive overflow drops that peer's queued data and disconnects it. Poll
+regularly and tune these budgets for your game's largest bursts.
+
 `NetWriter` and `NetReader` build and parse messages: little-endian primitives, var-ints, strings
 and GUIDs, with every read bounds checked because network data is untrusted.
 

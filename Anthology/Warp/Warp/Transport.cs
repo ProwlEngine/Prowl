@@ -29,6 +29,17 @@ public abstract class Transport : IDisposable
     private byte[]? _polledBuffer;
     private int _nextConnectionId = 1;
     private bool _disposed;
+    private readonly Dictionary<Connection, (int Count, long Bytes)> _queuedData = new();
+    private long _queuedDataBytes;
+
+    /// <summary>Maximum unpolled data events from one connection; overflow disconnects that peer.</summary>
+    public int MaxQueuedDataEventsPerConnection { get; set; } = 4096;
+
+    /// <summary>Maximum pooled data buffer bytes queued by one connection.</summary>
+    public long MaxQueuedDataBytesPerConnection { get; set; } = 32 * 1024 * 1024;
+
+    /// <summary>Maximum pooled data buffer bytes queued by the whole transport.</summary>
+    public long MaxQueuedDataBytes { get; set; } = 64 * 1024 * 1024;
 
     /// <summary>Every connection that is not yet <see cref="ConnectionState.Disconnected"/>, incoming and outgoing.</summary>
     public IReadOnlyCollection<Connection> Connections => _connections.Values;
@@ -82,6 +93,7 @@ public abstract class Transport : IDisposable
         ReadOnlyMemory<byte> data = ReadOnlyMemory<byte>.Empty;
         if (pending.Buffer != null)
         {
+            RemoveQueuedData(pending);
             _polledBuffer = pending.Buffer;
             data = new ReadOnlyMemory<byte>(pending.Buffer, 0, pending.Length);
         }
@@ -154,7 +166,47 @@ public abstract class Transport : IDisposable
     /// </summary>
     protected void RaiseDataPooled(Connection connection, byte[] rentedBuffer, int length, Delivery delivery)
     {
+        (int count, long bytes) = _queuedData.GetValueOrDefault(connection);
+        if (!connection.IsConnected || count >= MaxQueuedDataEventsPerConnection ||
+            rentedBuffer.Length > MaxQueuedDataBytesPerConnection - bytes ||
+            rentedBuffer.Length > MaxQueuedDataBytes - _queuedDataBytes)
+        {
+            ArrayPool<byte>.Shared.Return(rentedBuffer);
+            if (connection.IsConnected)
+            {
+                OnReceiveQueueOverflow(connection);
+                // Release the offending peer's queued buffers immediately, preserving other peers' events.
+                int pendingCount = _events.Count;
+                for (int i = 0; i < pendingCount; i++)
+                {
+                    PendingEvent pending = _events.Dequeue();
+                    if (pending.Connection == connection && pending.Buffer != null)
+                    {
+                        RemoveQueuedData(pending);
+                        ArrayPool<byte>.Shared.Return(pending.Buffer);
+                    }
+                    else
+                        _events.Enqueue(pending);
+                }
+            }
+            return;
+        }
+        _queuedData[connection] = (count + 1, bytes + rentedBuffer.Length);
+        _queuedDataBytes += rentedBuffer.Length;
         _events.Enqueue(new PendingEvent(TransportEventType.Data, connection, rentedBuffer, length, delivery, default));
+    }
+
+    /// <summary>Closes a peer that exhausted the receive queue budget.</summary>
+    protected virtual void OnReceiveQueueOverflow(Connection connection) => connection.Disconnect();
+
+    private void RemoveQueuedData(PendingEvent pending)
+    {
+        (int count, long bytes) = _queuedData[pending.Connection];
+        if (count == 1)
+            _queuedData.Remove(pending.Connection);
+        else
+            _queuedData[pending.Connection] = (count - 1, bytes - pending.Buffer!.Length);
+        _queuedDataBytes -= pending.Buffer!.Length;
     }
 
     private readonly record struct PendingEvent(

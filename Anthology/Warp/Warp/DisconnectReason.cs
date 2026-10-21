@@ -29,4 +29,7 @@ public enum DisconnectReason : byte
 
     /// <summary>The host refused the connection because it has no free slots.</summary>
     ServerFull,
+
+    /// <summary>The peer exceeded a local traffic or queue budget.</summary>
+    ResourceLimit,
 }

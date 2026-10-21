@@ -57,6 +57,12 @@ public sealed class KcpTransportOptions
     /// <summary>OS send and receive buffer size for the socket, in bytes.</summary>
     public int SocketBufferSize { get; set; } = 1024 * 1024;
 
+    /// <summary>Maximum UDP datagrams processed by one Receive call, including invalid packets.</summary>
+    public int MaxDatagramsPerReceive { get; set; } = 1024;
+
+    /// <summary>Conservative memory budget for queued and unacknowledged reliable segments per peer.</summary>
+    public long MaxPendingReliableBytes { get; set; } = 32 * 1024 * 1024;
+
     internal void Validate()
     {
         if (Port < 0 || Port > 65535)
@@ -65,6 +71,10 @@ public sealed class KcpTransportOptions
             throw new ArgumentOutOfRangeException(nameof(Mtu), Mtu, $"MTU must be between {KcpPacket.SessionHeaderSize + 64} and {KcpPacket.MaxDatagramSize}.");
         if (MaxConnections < 0)
             throw new ArgumentOutOfRangeException(nameof(MaxConnections), MaxConnections, "MaxConnections cannot be negative.");
+        if (MaxDatagramsPerReceive <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxDatagramsPerReceive));
+        if (MaxPendingReliableBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxPendingReliableBytes));
         ArgumentNullException.ThrowIfNull(Reliability);
     }
 }

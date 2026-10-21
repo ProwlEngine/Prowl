@@ -56,6 +56,28 @@ public abstract class TransportContractTests : IDisposable
         return (host, client, pump, toHost);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void QueueByteBudgetsReleaseMemoryAfterOverflow(bool global)
+    {
+        var (host, client, pump, toHost) = Connect();
+        if (global) host.MaxQueuedDataBytes = 512;
+        else host.MaxQueuedDataBytesPerConnection = 512;
+        toHost.Send(new byte[400], Delivery.Unreliable);
+        toHost.Send(new byte[400], Delivery.Unreliable);
+        pump.Until(() => !host.Connections.Any(), what: "queue budget disconnect");
+        Assert.Single(pump.EventsOf(host), e => e.Type == TransportEventType.Disconnected);
+        Assert.DoesNotContain(pump.EventsOf(host), e => e.Type == TransportEventType.Data);
+
+        // A new connection can use the memory released by the offending peer.
+        Connection second = client.Connect(AddressOf(host));
+        pump.Until(() => second.IsConnected && host.Connections.Count == 1, what: "reconnect after overflow");
+        second.Send(new byte[400], Delivery.Unreliable);
+        pump.Until(() => pump.EventsOf(host).Any(e => e.Type == TransportEventType.Data), what: "reclaimed queue capacity");
+        Assert.True(second.IsConnected);
+    }
+
     [Fact]
     public void ConnectsBothSides()
     {

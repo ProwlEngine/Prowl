@@ -119,7 +119,7 @@ public sealed class KcpTransport : Transport
             return;
 
         long now = NowMs;
-        while (true)
+        for (int processed = 0; processed < Options.MaxDatagramsPerReceive; processed++)
         {
             int length;
             try
@@ -398,7 +398,8 @@ public sealed class KcpTransport : Transport
         if (notifyRemote && connection.State == ConnectionState.Connected)
         {
             // Last chance for queued reliable messages to go out, then say goodbye.
-            connection.FlushReliable(NowMs);
+            if (reason != DisconnectReason.ResourceLimit)
+                connection.FlushReliable(NowMs);
             for (int i = 0; i < DisconnectRepeats; i++)
                 SendSession(connection, KcpPacketType.Disconnect, ReadOnlySpan<byte>.Empty);
         }
@@ -407,7 +408,11 @@ public sealed class KcpTransport : Transport
             _incomingCount--;
 
         RaiseDisconnected(connection, reason);
+        connection.ReleaseBuffers();
     }
+
+    protected override void OnReceiveQueueOverflow(Connection connection) =>
+        Close((KcpConnection)connection, DisconnectReason.ResourceLimit, notifyRemote: true);
 
     internal void OnConnected(KcpConnection connection) => RaiseConnected(connection);
 

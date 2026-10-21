@@ -41,6 +41,57 @@ public class KcpTransportTests
     }
 
     [Fact]
+    public void ReceiveWorkIsBoundedPerCall()
+    {
+        var (host, client, pump, toHost) = Connect();
+        using (host)
+        using (client)
+        {
+            host.Options.MaxDatagramsPerReceive = 4;
+            for (int i = 0; i < 20; i++) toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
+            System.Threading.Thread.Sleep(20);
+            host.Receive();
+            int count = 0;
+            while (host.Poll(out TransportEvent ev)) if (ev.Type == TransportEventType.Data) count++;
+            Assert.InRange(count, 1, 4);
+            pump.Until(() => pump.EventsOf(host).Count(e => e.Type == TransportEventType.Data) == 20 - count, what: "remaining budgeted packets");
+        }
+    }
+
+    [Fact]
+    public void SlowReceiverIsDisconnectedBeforeReliableQueueGrows()
+    {
+        var (host, client, pump, toHost) = Connect();
+        using (host)
+        using (client)
+        {
+            client.Options.MaxPendingReliableBytes = 4096;
+            // No receiver pumps or acknowledges these sends.
+            for (int i = 0; i < 100 && toHost.IsConnected; i++)
+                toHost.Send(new byte[1000], Delivery.Reliable);
+            Assert.Equal(ConnectionState.Disconnected, toHost.State);
+        }
+    }
+
+    [Fact]
+    public void UnpolledDataIsBoundedPerConnection()
+    {
+        var (host, client, pump, toHost) = Connect();
+        using (host)
+        using (client)
+        {
+            host.MaxQueuedDataEventsPerConnection = 4;
+            for (int i = 0; i < 20; i++) toHost.Send(new byte[] { 1 }, Delivery.Unreliable);
+            System.Threading.Thread.Sleep(20);
+            host.Receive();
+            Assert.Empty(host.Connections);
+            int count = 0;
+            while (host.Poll(out TransportEvent ev)) if (ev.Type == TransportEventType.Data) count++;
+            Assert.InRange(count, 0, 4);
+        }
+    }
+
+    [Fact]
     public void LargeReliableMessagesAreReassembled()
     {
         (KcpTransport host, KcpTransport client, Pump pump, Connection toHost) = Connect();
