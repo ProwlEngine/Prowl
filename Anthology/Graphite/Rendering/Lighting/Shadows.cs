@@ -1969,6 +1969,7 @@ internal sealed partial class FramePipeline
             if (!all && (page.Tiles.UsedTexels > 0 || _frame - page.LastUsed <= StaleViewFrames))
                 continue;
             pages.RemoveAt(i);
+            page.Persistent.Release(_store);
             shadows.Version++;
             retired = true;
         }

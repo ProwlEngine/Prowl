@@ -11,6 +11,12 @@ internal sealed class PersistentTexture(RenderResourceID id, GraphTextureDesc de
 
     public uint Slot { get; private set; }
 
+    public void Release(GraphStore store)
+    {
+        store.ReleasePersistent(id, key);
+        Texture = null;
+    }
+
     public RenderTexture Resolve(GraphicsDevice device, GraphStore store, IMaterialResources resources, out bool changed)
         => Resolve(device, store, texture => resources.TextureSlot(texture.ColorTextures[0], type, "black"), out changed);
 
