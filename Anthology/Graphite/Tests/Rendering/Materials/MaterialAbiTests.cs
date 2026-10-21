@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -20,15 +19,7 @@ internal sealed class SlotResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 1u;
 }
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 4;
-    public uint PixelHeight => 4;
-    public int ViewId => 0;
-}
-
-file sealed class DrawPass(Action<CommandBuffer> draw) : IPass
+file sealed class DrawPass(Action<CommandBuffer> draw) : IExecutionPass
 {
     public string Name => "Draw";
 
@@ -213,7 +204,7 @@ public sealed class MaterialAbiTests : IDisposable
         Framebuffer framebuffer = Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, target)));
         DeviceBuffer readback = Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(4 * 4 * 16, BufferUsage.Staging)));
 
-        using RenderPipeline pipeline = new([new DrawPass(cmd =>
+        using RenderGraph graph = RenderGraph.Build([new DrawPass(cmd =>
         {
             cmd.SetFramebuffer(framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cmd.SetFullViewport();
@@ -225,7 +216,7 @@ public sealed class MaterialAbiTests : IDisposable
             cmd.SetPushConstants(slot);
             cmd.Draw(3);
         })]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
         _device.Record(cmd => cmd.CopyTextureToBuffer(target, readback, 0, TextureRegion.Whole(target, 0, 0))).Wait();
 

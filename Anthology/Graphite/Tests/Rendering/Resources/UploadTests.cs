@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
 
@@ -11,15 +10,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Rendering.Tests;
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 1;
-    public uint PixelHeight => 1;
-    public int ViewId => 0;
-}
-
-file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : IPass
+file sealed class UploadPass(Uploader uploader, DeviceBuffer[] destinations) : IExecutionPass
 {
     public string Name => "Upload";
 
@@ -58,16 +49,16 @@ public sealed class UploadTests : IDisposable
 
     private void Flush(params DeviceBuffer[] destinations)
     {
-        using RenderPipeline pipeline = new([new UploadPass(_uploader, destinations)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, destinations)]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
     }
 
     private uint[] Read(DeviceBuffer buffer)
     {
         using DeviceBuffer readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-        using RenderPipeline pipeline = new([new CopyPass(buffer, readback)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        using RenderGraph graph = RenderGraph.Build([new CopyPass(buffer, readback)]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
         uint[] words = _device.Map<uint>(readback).ToArray();
         _device.Unmap(readback);
@@ -134,11 +125,11 @@ public sealed class UploadTests : IDisposable
     public void FramesInFlight_EachUseTheirOwnUploadBuffers()
     {
         using DeviceBuffer buffer = Buffer(4);
-        using RenderPipeline pipeline = new([new UploadPass(_uploader, [buffer])]);
+        using RenderGraph graph = RenderGraph.Build([new UploadPass(_uploader, [buffer])]);
         for (uint frame = 0; frame < 8; frame++)
         {
             _uploader.Write(buffer, frame % 4, [frame + 100]);
-            _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+            _device.DispatchGraph(graph, graph.CreateInstances());
         }
         _device.WaitForIdle();
 
@@ -277,8 +268,8 @@ public sealed class UploadTests : IDisposable
         properties.SetBuffer("Graphite_Chunks", pool.Chunks.Buffer);
         properties.SetBuffer("Graphite_Meshes", pool.Meshes.Buffer);
         properties.SetBuffer("Output", output);
-        using RenderPipeline pipeline = new([new DispatchPass(program, properties, (uint)mesh.Id, [pool.Chunks.Buffer, pool.Meshes.Buffer], output)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        using RenderGraph graph = RenderGraph.Build([new DispatchPass(program, properties, (uint)mesh.Id, [pool.Chunks.Buffer, pool.Meshes.Buffer], output)]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
 
         MeshPlacement placement = mesh.Placement!;
@@ -350,7 +341,7 @@ public sealed class UploadTests : IDisposable
     }
 }
 
-file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IPass
+file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IExecutionPass
 {
     public string Name => "Copy";
 
@@ -363,7 +354,7 @@ file sealed class CopyPass(DeviceBuffer source, DeviceBuffer destination) : IPas
     public void Render(RenderContext context, CommandBuffer cmd) => cmd.CopyBuffer(source, 0, destination, 0, source.SizeInBytes);
 }
 
-file sealed class DispatchPass(ComputeProgram program, PropertySet properties, uint push, DeviceBuffer[] inputs, DeviceBuffer output) : IPass
+file sealed class DispatchPass(ComputeProgram program, PropertySet properties, uint push, DeviceBuffer[] inputs, DeviceBuffer output) : IExecutionPass
 {
     public string Name => "Dispatch";
 

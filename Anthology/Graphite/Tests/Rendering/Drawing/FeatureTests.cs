@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -1211,7 +1210,7 @@ public sealed class FeatureTests : IDisposable
     public void TheScene_HasOnlyTheTargetsItsFeaturesRead()
     {
         AddQuad(new Float3(1, 1, 1));
-        int Targets() => _renderer.Frame.Camera(1)!.Chain.Scene.Texture!.ColorTextures.Length;
+        int Targets() => FeatureShape.SceneTargetCount(_renderer.Frame.Camera(1)!.Shape!.Shape.Targets);
         Frame(View());
         Assert.Equal(1, Targets());
 
@@ -1645,7 +1644,7 @@ public sealed class FeatureTests : IDisposable
         public override void Setup(FeatureBuilder builder, in FeatureView view)
         {
             builder.ReadColor();
-            _total = builder.History("Total", GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float));
+            _total = builder.History("Total", GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float));
             builder.Publish("Total", _total);
         }
 
@@ -1767,82 +1766,6 @@ public sealed class FeatureTests : IDisposable
         Assert.Throws<ArgumentOutOfRangeException>(() => _renderer.Readback(buffer, _ => { }, offset: 8, size: uint.MaxValue - 4));
     }
 
-    // A host's own pass drawing an external view's opaque renderables into a target
-    private sealed class HostDraw(Renderer renderer, Framebuffer target, int viewId) : IPass
-    {
-
-        public string Name => "Host draw";
-
-        public void Setup(RenderContextBuilder builder) => builder.DeclareViewTarget();
-
-        public void Render(RenderContext context, CommandBuffer cmd)
-        {
-            cmd.SetFramebuffer(target, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0, 0, 0, 1)), AttachmentOps.Clear(0f)));
-            cmd.SetFullViewport();
-            renderer.Draws(viewId).Record(context, cmd, PassType.Forward);
-        }
-    }
-
-    [Fact]
-    public void ExternalViews_DrawThroughTheHostsOwnPipeline()
-    {
-        AddQuad(new Float3(1, 0, 0), scale: 0.5);
-        using Texture depth = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.D32_Float, TextureUsage.DepthStencil));
-        using Framebuffer target = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(depth, _target));
-        using RenderPipeline host = new([new HostDraw(_renderer, target, 9)]);
-        ViewDesc external = View(9);
-        external.External = true;
-        external.Target = target;
-
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { external }, Pipelines = new[] { new GraphDispatch(host, [new HostView(target)]) } });
-        _device.WaitForIdle();
-        Assert.Empty(_errors);
-        Float4[] pixels = ReadTarget();
-        AssertAll(new Float3(1, 0, 0), pixels, Centre);
-        AssertAll(new Float3(0, 0, 0), pixels, i => !Centre(i));
-    }
-
-    [Fact]
-    public void ExternalViews_DrawLitFullscreenPrograms_AsADeferredLightingPassWould()
-    {
-        _world.AddLight(new LightDesc { Type = LightType.Directional, Direction = new Float3(0, 0, 1), Intensity = 1f });
-        FullscreenProgram lit = _renderer.CreateFullscreenProgram("""
-            #include "Graphite/Lighting.glsl"
-            void main() { outColor = vec4(float(Graphite_DirectionalCount()) * 0.5, Graphite_GetDirectional(0u).direction.z * 0.5 + 0.5, 1.0, 1.0); }
-            """, "HostLit", source: false, lit: true);
-        _owned.Add(lit);
-        using RenderPipeline host = new([new HostLight(_renderer, _framebuffer, 9, lit)]);
-        ViewDesc external = View(9);
-        external.External = true;
-
-        _renderer.SubmitFrame(new FrameDesc { Views = new[] { external }, Pipelines = new[] { new GraphDispatch(host, [new HostView(_framebuffer)]) } });
-        _device.WaitForIdle();
-        Assert.Empty(_errors);
-        AssertAll(new Float3(0.5f, 0f, 1f), ReadTarget());
-    }
-
-    private sealed class HostLight(Renderer renderer, Framebuffer target, int viewId, FullscreenProgram program) : IPass
-    {
-        public string Name => "HostLight";
-
-        public void Setup(RenderContextBuilder builder) => builder.DeclareViewTarget();
-
-        public void Render(RenderContext context, CommandBuffer cmd)
-        {
-            cmd.SetFramebuffer(target, new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0, 0, 0, 1)), AttachmentOps.Loaded));
-            cmd.SetFullViewport();
-            renderer.Draws(viewId).DrawFullscreen(context, cmd, program);
-        }
-    }
-
-    private sealed class HostView(Framebuffer target) : IRenderView
-    {
-        public Framebuffer? Target => target;
-        public uint PixelWidth => target.Width;
-        public uint PixelHeight => target.Height;
-        public int ViewId => 100;
-    }
-
     private Float4[] ReadTarget()
     {
         _device.Record(cmd => cmd.CopyTextureToBuffer(_target, _readback, 0, TextureRegion.Whole(_target, 0, 0))).Wait();
@@ -1920,7 +1843,7 @@ public sealed class FeatureTests : IDisposable
         public override bool IsActive(in FeatureView view) => On;
 
         public override void Setup(FeatureBuilder builder, in FeatureView view)
-            => builder.Publish("Inverted", builder.Temporary("Copy", GraphTextureDesc.ViewSized(PixelFormat.R16_G16_B16_A16_Float)));
+            => builder.Publish("Inverted", builder.Temporary("Copy", GraphTextureDesc.InstanceSized(PixelFormat.R16_G16_B16_A16_Float)));
 
         public override void Render(FeatureContext context) { }
     }
@@ -2027,7 +1950,6 @@ public sealed class FeatureTests : IDisposable
     private sealed class Items(GpuMesh mesh, Material material) : RenderProvider
     {
         public readonly List<(Double4x4 Transform, Float4 Color, uint Instances)> Draws = new();
-        public DeviceBuffer? Count;
         public Material Material = material;
         public int Culls;
 
@@ -2037,9 +1959,7 @@ public sealed class FeatureTests : IDisposable
             foreach ((Double4x4 transform, Float4 color, uint instances) in Draws)
             {
                 DrawItem item = new() { Transform = transform, Custom0 = color };
-                if (Count != null)
-                    sink.AddIndirect(mesh, 0, Material, item, Count, 4);
-                else if (instances > 1)
+                if (instances > 1)
                     sink.AddInstanced(mesh, 0, Material, item, instances);
                 else
                     sink.Add(mesh, 0, Material, item);
@@ -2064,17 +1984,6 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0, 1, 0), pixels, Inside(-2, -2));
         AssertAll(new Float3(0, 1, 0), pixels, Inside(2, -2));
 
-        // The instance count the GPU holds: one, then two
-        using DeviceBuffer count = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
-        _device.UpdateBuffer<uint>(count, 0, [0, 1, 0, 0]);
-        items.Count = count;
-        pixels = Frame(View());
-        AssertAll(new Float3(0, 1, 0), pixels, Inside(-2, -2));
-        AssertAll(new Float3(0, 0, 0), pixels, Inside(2, -2));
-        _device.UpdateBuffer<uint>(count, 0, [0, 2, 0, 0]);
-        pixels = Frame(View());
-        AssertAll(new Float3(0, 1, 0), pixels, Inside(2, -2));
-
         items.Enabled = false;
         AssertAll(new Float3(0, 0, 0), Frame(View()));
     }
@@ -2096,25 +2005,34 @@ public sealed class FeatureTests : IDisposable
         AssertAll(new Float3(0.5f, 0.25f, 0), Frame(View()));
     }
 
-    // Writes its count on the GPU each frame through a compute pass of its own
-    private sealed class ComputedItems(GraphicsDevice device, GpuMesh mesh, Material material, ComputeProgram program) : RenderProvider
+    private sealed class ComputedItems(GpuMesh mesh, Material material) : RenderProvider
     {
-        public readonly DeviceBuffer Count = device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
-        public uint Instances;
-        private readonly PropertySet _properties = new();
-
         public override void Cull(in ProviderView view, DrawItemSink sink)
-            => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(-2, -2, 10)) * Double4x4.CreateScale(0.25), Custom0 = new Float4(1, 0, 0, 1) }, Count, 4);
+            => sink.AddIndirect(mesh, 0, material, new DrawItem { Transform = Double4x4.CreateTranslation(new Double3(-2, -2, 10)) * Double4x4.CreateScale(0.25), Custom0 = new Float4(1, 0, 0, 1) }, "Test.ComputedCount", 4);
+    }
 
-        public override void ComputeBuffers(List<DeviceBuffer> buffers) => buffers.Add(Count);
+    // Writes its count on the GPU each frame through a compute dispatch of its own
+    private sealed class ComputedCount(ComputeProgram program) : FrameFeature
+    {
+        private readonly PropertySet _properties = new();
+        private BufferHandle _count;
+        public uint Instances;
 
-        public override void Compute(CommandBuffer command)
+        public override FrameSlot Slot => FrameSlot.BeforeViews;
+
+        public override void Setup(FrameBuilder builder)
         {
-            _properties.SetBuffer("Counts", Count);
-            command.SetComputeShader(program);
-            command.SetProperties(_properties);
-            command.SetPushConstants(Instances);
-            command.Dispatch(1, 1, 1);
+            _count = builder.Buffer("Test.ComputedCount", GraphBufferDesc.Structured(4, 4));
+            builder.Export(_count);
+        }
+
+        public override void Render(FrameContext context)
+        {
+            _properties.SetBuffer("Counts", context.Get(_count));
+            context.Command.SetComputeShader(program);
+            context.Command.SetProperties(_properties);
+            context.Command.SetPushConstants(Instances);
+            context.Command.Dispatch(1, 1, 1);
         }
     }
 
@@ -2135,19 +2053,19 @@ public sealed class FeatureTests : IDisposable
 
         // A world object draws first, so the provider's commands are not the view's first
         _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(new Double3(2, 2, 10)) * Double4x4.CreateScale(0.25), Custom0 = new Float4(0, 0, 1, 1) }, [ObjectColor()]);
-        ComputedItems items = new(_device, _quad, ObjectColor(shift: 16), program) { Instances = 1 };
-        _owned.Add(items.Count);
-        _world.Providers.Add(items);
+        ComputedCount count = new(program) { Instances = 1 };
+        _world.FrameFeatures.Add(count);
+        _world.Providers.Add(new ComputedItems(_quad, ObjectColor(shift: 16)));
 
         Float4[] pixels = Frame(View());
         AssertAll(new Float3(1, 0, 0), pixels, Inside(-2, -2));
         AssertAll(new Float3(0, 0, 0), pixels, Inside(2, -2));
         AssertAll(new Float3(0, 0, 1), pixels, Inside(2, 2));
 
-        items.Instances = 2;
+        count.Instances = 2;
         pixels = Frame(View());
         AssertAll(new Float3(1, 0, 0), pixels, Inside(2, -2));
-        items.Instances = 0;
+        count.Instances = 0;
         pixels = Frame(View());
         AssertAll(new Float3(0, 0, 0), pixels, Inside(-2, -2));
         AssertAll(new Float3(0, 0, 1), pixels, Inside(2, 2));

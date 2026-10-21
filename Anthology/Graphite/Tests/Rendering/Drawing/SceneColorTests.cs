@@ -220,20 +220,20 @@ public sealed class SceneColorTests : IDisposable
 
         RenderableHandle other = AddGlass(plain);
         Frame();
-        Assert.Null(Camera().Chain.SceneColor);
-        Assert.DoesNotContain(Camera().Features, f => f is SceneColorFeature);
+        Assert.Null(Camera().SceneColor);
+        Assert.DoesNotContain(Camera().Selected, f => f is SceneColorFeature);
 
         _world.Remove(other);
         RenderableHandle reader = AddGlass(_glass);
         Frame();
-        Assert.NotNull(Camera().Chain.SceneColor);
-        Assert.True(Camera().Chain.SceneColorUsed);
-        Assert.Contains(Camera().Features, f => f is SceneColorFeature);
+        Assert.NotNull(Camera().SceneColor);
+        Assert.True(Camera().SceneColorUsed);
+        Assert.Contains(Camera().Selected, f => f is SceneColorFeature);
 
         // Once the reader is gone the view keeps its graph but records no copy
         _world.Remove(reader);
         Frame();
-        Assert.False(Camera().Chain.SceneColorUsed);
+        Assert.False(Camera().SceneColorUsed);
     }
 
     [Fact]

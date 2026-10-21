@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -19,15 +18,7 @@ file sealed class FakeResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => sampler == null ? 0u : 3u;
 }
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 1;
-    public uint PixelHeight => 1;
-    public int ViewId => 0;
-}
-
-file sealed class UploadPass(Uploader uploader, DeviceBuffer buffer) : IPass
+file sealed class UploadPass(Uploader uploader, DeviceBuffer buffer) : IExecutionPass
 {
     public string Name => "UploadGlobals";
 
@@ -36,7 +27,7 @@ file sealed class UploadPass(Uploader uploader, DeviceBuffer buffer) : IPass
     public void Render(RenderContext context, CommandBuffer cmd) => uploader.Record(cmd, context.Task);
 }
 
-file sealed class ReadPass(ComputeProgram program, PropertySet properties, uint regionBase, DeviceBuffer globals, DeviceBuffer output) : IPass
+file sealed class ReadPass(ComputeProgram program, PropertySet properties, uint regionBase, DeviceBuffer globals, DeviceBuffer output) : IExecutionPass
 {
     public string Name => "ReadGlobals";
 
@@ -55,7 +46,7 @@ file sealed class ReadPass(ComputeProgram program, PropertySet properties, uint 
     }
 }
 
-file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IPass
+file sealed class ReadbackPass(DeviceBuffer output, DeviceBuffer readback) : IExecutionPass
 {
     public string Name => "ReadbackGlobals";
 
@@ -291,11 +282,11 @@ public sealed class GlobalsTests : IDisposable
         PropertySet properties = new();
         properties.SetBuffer("Graphite_Globals", _registry.Buffer);
         properties.SetBuffer("Output", output);
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = RenderGraph.Build([
             new UploadPass(_uploader, _registry.Buffer),
             new ReadPass(program, properties, (uint)region * _registry.RegionWords, _registry.Buffer, output),
             new ReadbackPass(output, readback)]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
 
         float[] values = _device.Map<float>(readback).ToArray();

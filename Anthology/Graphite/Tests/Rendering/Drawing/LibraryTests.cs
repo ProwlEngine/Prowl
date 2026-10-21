@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Vector;
@@ -19,15 +18,7 @@ file sealed class NoResources : IMaterialResources
     public uint SamplerSlot(SamplerDescription? sampler) => 0;
 }
 
-file readonly struct NoView : IRenderView
-{
-    public Framebuffer? Target => null;
-    public uint PixelWidth => 8;
-    public uint PixelHeight => 8;
-    public int ViewId => 0;
-}
-
-file sealed class LambdaPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext, CommandBuffer> render) : IPass
+file sealed class LambdaPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext, CommandBuffer> render) : IExecutionPass
 {
     public string Name => name;
 
@@ -219,7 +210,7 @@ public sealed class LibraryTests : IDisposable
         Framebuffer framebuffer = Own(_device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, target)));
         VertexSource vertexSource = new VertexSource(PrimitiveTopology.TriangleList).SetIndexBuffer(page.Indices, IndexFormat.UInt32, page.Indices.SizeInBytes / 4);
 
-        using RenderPipeline pipeline = new([
+        using RenderGraph graph = RenderGraph.Build([
             new LambdaPass("Upload", b =>
             {
                 for (int i = 0; i < tables.Length; i++)
@@ -241,7 +232,7 @@ public sealed class LibraryTests : IDisposable
                 cmd.SetPushConstants(new Push { DrawRecordBase = (uint)call.FirstCommand });
                 cmd.DrawIndexedIndirect(commands, (uint)(call.FirstCommand * Marshal.SizeOf<IndirectDrawIndexedArguments>()), (uint)call.CommandCount, (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>());
             })]);
-        _device.DispatchGraph([new GraphDispatch(pipeline, [new NoView()])]);
+        _device.DispatchGraph(graph, graph.CreateInstances());
         _device.WaitForIdle();
 
         DeviceBuffer readback = Own(_device.ResourceFactory.CreateBuffer(new BufferDescription(8 * 8 * 16, BufferUsage.Staging)));
