@@ -1310,13 +1310,9 @@ public sealed class FeatureTests : IDisposable
 
         public override RenderSlot Slot => RenderSlot.Overlay;
 
-        public override void Setup(FeatureBuilder builder, in FeatureView view)
-        {
-            Width = view.Width;
-            Height = view.Height;
-        }
+        public override void Setup(FeatureBuilder builder, in FeatureView view) { }
 
-        public override void Render(FeatureContext context) { }
+        public override void Render(FeatureContext context) => (Width, Height) = (context.View.Width, context.View.Height);
     }
 
     [Fact]
@@ -1341,13 +1337,13 @@ public sealed class FeatureTests : IDisposable
 
         public override RenderSlot Slot => RenderSlot.Upscale;
 
-        public override void Setup(FeatureBuilder builder, in FeatureView view)
-        {
-            builder.WriteOutputColor();
-            (Input, Output) = ((view.Width, view.Height), (view.OutputWidth, view.OutputHeight));
-        }
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteOutputColor();
 
-        public override void Render(FeatureContext context) => context.Fullscreen(program);
+        public override void Render(FeatureContext context)
+        {
+            (Input, Output) = ((context.View.Width, context.View.Height), (context.View.OutputWidth, context.View.OutputHeight));
+            context.Fullscreen(program);
+        }
     }
 
     // Records the size of the colour it writes and the view it was given
@@ -1358,14 +1354,11 @@ public sealed class FeatureTests : IDisposable
 
         public override RenderSlot Slot => RenderSlot.HdrPost;
 
-        public override void Setup(FeatureBuilder builder, in FeatureView view)
-        {
-            builder.WriteColor();
-            (View, Upscaled) = ((view.Width, view.Height), view.Upscaled);
-        }
+        public override void Setup(FeatureBuilder builder, in FeatureView view) => builder.WriteColor();
 
         public override void Render(FeatureContext context)
         {
+            (View, Upscaled) = ((context.View.Width, context.View.Height), context.View.Upscaled);
             Written = (context.Color!.Width, context.Color.Height);
             context.Fullscreen(program);
         }
@@ -2196,7 +2189,7 @@ public sealed class FeatureTests : IDisposable
         Named world = new("world", RenderSlot.Opaque);
         Named early = new("early", RenderSlot.Opaque, -1);
         Named post = new("post", RenderSlot.HdrPost);
-        Assert.Equal(["PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "TransparentFeature", "post"], Select([post, world, early], [view]));
+        Assert.Equal(["PrepassFeature", "early", "OpaqueFeature", "world", "view", "SkyFeature", "SceneColorFeature", "TransparentFeature", "post"], Select([post, world, early], [view]));
     }
 
     [Fact]
@@ -2222,7 +2215,7 @@ public sealed class FeatureTests : IDisposable
         Named probes = new("probes", RenderSlot.HdrPost, runsOn: ViewKinds.ReflectionProbe);
         Named off = new("off", RenderSlot.HdrPost, runsOn: ViewKinds.All) { Enabled = false };
 
-        Assert.Equal(["PrepassFeature", "OpaqueFeature", "SkyFeature", "TransparentFeature", "cameras"], Select([cameras, probes, off], []));
-        Assert.Equal(["PrepassFeature", "OpaqueFeature", "SkyFeature", "TransparentFeature", "probes"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
+        Assert.Equal(["PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "cameras"], Select([cameras, probes, off], []));
+        Assert.Equal(["PrepassFeature", "OpaqueFeature", "SkyFeature", "SceneColorFeature", "TransparentFeature", "probes"], Select([cameras, probes, off], [], ViewKind.ReflectionProbe));
     }
 }
