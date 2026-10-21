@@ -23,6 +23,7 @@ internal sealed class FeatureShape : IDisposable
         SceneId = RenderResourceID.Intern($"{kind.Name}/Scene");
         ScreenVisibilityId = RenderResourceID.Intern($"{kind.Name}/ScreenVisibility");
         ScreenIrradianceId = RenderResourceID.Intern($"{kind.Name}/ScreenIrradiance");
+        CaptureId = RenderResourceID.Intern($"{kind.Name}/Capture");
         Setup = new SetupPass(this);
         Present = new PresentPass(this);
         View = StartView();
@@ -34,6 +35,9 @@ internal sealed class FeatureShape : IDisposable
     public RenderResourceID SceneId { get; }
     public RenderResourceID ScreenVisibilityId { get; }
     public RenderResourceID ScreenIrradianceId { get; }
+    public RenderResourceID CaptureId { get; }
+
+    public bool Captures => ViewKind is ViewKind.SkyCapture or ViewKind.ReflectionProbe;
     public SetupPass Setup { get; }
     public PresentPass Present { get; }
 

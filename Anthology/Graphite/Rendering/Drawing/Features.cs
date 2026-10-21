@@ -931,7 +931,8 @@ internal sealed class PresentPass(FeatureShape shape) : IInstancePass
     public void Setup(InstanceContextBuilder builder)
     {
         _source = shape.CurrentWritten ? builder.DeclareInputTexture(shape.Current) : null;
-        _target = builder.DeclareInstanceTarget(new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+        TargetLoadStoreOps ops = new(AttachmentOps.Loaded, AttachmentOps.Loaded);
+        _target = shape.Captures ? builder.DeclareImportSlotTexture(shape.CaptureId, TextureState.Attachment, ops: ops) : builder.DeclareInstanceTarget(ops);
     }
 
     public void Render(InstanceContext context, CommandBuffer cmd)
