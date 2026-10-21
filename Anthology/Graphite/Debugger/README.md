@@ -95,3 +95,5 @@ A loaded recording works with `Replayer` the same as a fresh one. A full runnabl
 If something cannot be replayed (an undeclared GPU write, a depth or multisampled input that cannot be restored yet, a format the replay device does not support), `Replay` returns `NotReplayable` with a reason instead of throwing.
 
 **Saving.** Everything in a deep recording is plain data (records, ids, and blobs), so Echo can write it to a file and read it back with no GPU.
+
+**Payloads.** A pass can attach an object to a debug group with `PushDebugGroup(name, meta)`, and a host can give an instance `Data`. Both are kept on `PushMarkerCommand.Meta` and `RecordedInstance.Data`. A saved recording keeps a payload only when it is a `[Serializable]` record, such as the renderer's `DrawCallGroup` and `ShadowFaceGroup`. Any other object is dropped, so it is null once loaded.
