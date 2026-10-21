@@ -48,6 +48,7 @@ file sealed class HistoryPass : IExecutionPass
     public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
+[Collection("GPU Tests")]
 public class DeepRecordingTests
 {
     private static GraphicsDevice CreateDevice() => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));

@@ -171,6 +171,7 @@ file sealed class ViewBlitPass(RenderTexture source, RenderTexture destination, 
         => cmd.BlitTexture(source.ColorTextures[0], destination.ColorTextures[0], [new TextureBlit(0, 0, 8, 8, 0, 0, 8, 8)]);
 }
 
+[Collection("GPU Tests")]
 public class ReplayTests
 {
     [SkippableFact]

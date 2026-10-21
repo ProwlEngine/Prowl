@@ -37,6 +37,7 @@ file sealed class InstanceTargetPass : IInstancePass
     public void Render(InstanceContext context, CommandBuffer cmd) { }
 }
 
+[Collection("GPU Tests")]
 public class RecordingTests
 {
     private static GraphicsDevice CreateDevice() => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
