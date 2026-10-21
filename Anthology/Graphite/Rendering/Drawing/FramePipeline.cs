@@ -443,13 +443,10 @@ internal sealed class GpuArray
     public void Write<T>(Uploader uploader, ReadOnlySpan<T> data) where T : unmanaged
     {
         uint bytes = (uint)(data.Length * Unsafe.SizeOf<T>());
-        if (bytes > Buffer.SizeInBytes)
-        {
-            uint size = Buffer.SizeInBytes;
-            while (size < bytes)
-                size *= 2;
-            Buffer = _persistent.Resolve(_device, _store, size);
-        }
+        uint size = Buffer.SizeInBytes;
+        while (size < bytes)
+            size *= 2;
+        Buffer = _persistent.Resolve(_device, _store, size);
         if (bytes > 0)
             uploader.Write(Buffer, 0, MemoryMarshal.Cast<T, uint>(data));
     }
