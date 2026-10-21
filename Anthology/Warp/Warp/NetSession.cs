@@ -96,6 +96,7 @@ public sealed class NetSession : IDisposable
 
     private readonly Dictionary<ushort, RawMessageHandler> _handlers = new();
     private readonly Dictionary<int, NetPeer> _peers = new();
+    private readonly NetPeerCollection _peerView;
     private readonly Dictionary<Connection, Remote> _remotes = new();
     private readonly List<KeyValuePair<Connection, Remote>> _scratch = new();
     private readonly Queue<Loopback> _loopback = new();
@@ -127,6 +128,7 @@ public sealed class NetSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(transport);
         Transport = transport;
+        _peerView = new NetPeerCollection(_peers.Values);
         _options = (options ?? new NetSessionOptions()).CopyValidated();
         IsHost = isHost;
     }
@@ -196,7 +198,7 @@ public sealed class NetSession : IDisposable
     public NetPeer? HostPeer { get; private set; }
 
     /// <summary>Everyone in the session, including the host and this process.</summary>
-    public IReadOnlyCollection<NetPeer> Peers => _peers.Values;
+    public NetPeerCollection Peers => _peerView;
 
     /// <summary>Client: the host let us in. <see cref="LocalPeer"/>, <see cref="HostPeer"/> and <see cref="Peers"/> are now set.</summary>
     public event Action? Joined;

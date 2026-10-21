@@ -5,6 +5,20 @@ namespace Prowl.Warp.Tests;
 
 public class SessionAllocationTests
 {
+    [Fact]
+    public void EnumeratingPeersDoesNotAllocate()
+    {
+        using DirectTransport transport = new();
+        using NetSession host = NetSession.Host(transport);
+        int count = 0;
+        for (int i = 0; i < 100; i++) foreach (NetPeer peer in host.Peers) count++;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++) foreach (NetPeer peer in host.Peers) count++;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(1100, count);
+        Assert.Equal(0, allocated);
+    }
+
     [Theory]
     [InlineData(Delivery.Reliable, 16)]
     [InlineData(Delivery.Reliable, 512)]
