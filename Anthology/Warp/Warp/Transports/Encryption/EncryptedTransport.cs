@@ -24,6 +24,7 @@ public sealed class EncryptedTransport : Transport
     private readonly Dictionary<Connection, EncryptedConnection> _peers = new();
     private bool _disposed;
     public Transport Inner { get; }
+    public override TransportCapabilities Capabilities => Inner.Capabilities;
     public override bool IsListening => Inner.IsListening;
     public override int LocalPort => Inner.LocalPort;
     public override bool IsEncrypted => true;

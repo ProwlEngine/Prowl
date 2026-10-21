@@ -23,6 +23,7 @@ public sealed class BatchingTransport : Transport
         _batchSize = batchSize;
     }
 
+    public override TransportCapabilities Capabilities => _inner.Capabilities;
     public override bool IsListening => _inner.IsListening;
     public override int LocalPort => _inner.LocalPort;
     public override bool IsEncrypted => _inner.IsEncrypted;

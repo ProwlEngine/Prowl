@@ -26,6 +26,7 @@ namespace Prowl.Warp.Transports.Steam;
 /// </remarks>
 public sealed class SteamTransport : Transport
 {
+    public override TransportCapabilities Capabilities => new(false, DeliverySupport.None, TransportExecution.CreatingThreadRequired);
     public override bool IsListening => false;
 
     public override void Listen() => throw NotImplemented();

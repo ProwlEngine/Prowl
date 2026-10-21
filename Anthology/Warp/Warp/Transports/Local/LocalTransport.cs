@@ -52,6 +52,7 @@ public sealed class LocalTransport : Transport
 
     public string Address { get; }
 
+    public override TransportCapabilities Capabilities => new(true, DeliverySupport.All, TransportExecution.InlinePreferred);
     public override bool IsListening => _listening;
 
     /// <exception cref="InvalidOperationException">Another transport already listens at <see cref="Address"/>.</exception>

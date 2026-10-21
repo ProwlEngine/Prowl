@@ -62,6 +62,9 @@ public abstract class Transport : IDisposable
     /// <summary>True between <see cref="Listen"/> and <see cref="Shutdown"/>.</summary>
     public abstract bool IsListening { get; }
 
+    /// <summary>Backend availability, delivery modes and execution requirements. Safe to read before starting I/O.</summary>
+    public virtual TransportCapabilities Capabilities => new(true, DeliverySupport.All, TransportExecution.WorkerPreferred);
+
     /// <summary>The bound IP port, or zero for unbound transports and transports without ports.</summary>
     public virtual int LocalPort => 0;
 

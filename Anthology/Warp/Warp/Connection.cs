@@ -96,6 +96,7 @@ public abstract class Connection
             throw new InvalidOperationException($"Cannot send on {this}: it is {State}.");
 
         if (!Enum.IsDefined(delivery)) throw new ArgumentOutOfRangeException(nameof(delivery));
+        if (!Transport.Capabilities.Supports(delivery)) throw new NotSupportedException($"Transport does not support {delivery} delivery.");
         int max = GetMaxMessageSize(delivery);
         if (data.Length > max)
             throw new ArgumentException($"A {delivery} message can be at most {max} bytes, but this one is {data.Length}.", nameof(data));
