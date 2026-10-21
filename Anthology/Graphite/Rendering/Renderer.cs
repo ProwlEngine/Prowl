@@ -210,15 +210,6 @@ public struct ViewDesc
     /// <summary>ViewIds of views that draw before this one, such as ones whose targets it samples.</summary>
     public int[]? DependsOn;
 
-    /// <summary>
-    /// The renderer culls the view and prepares its draws but runs no features and presents nothing. Host pipelines in
-    /// <see cref="FrameDesc.Pipelines"/> record them through <see cref="Renderer.Draws"/>.
-    /// </summary>
-    public bool External;
-
-    /// <summary>Pass types an external view prepares draws for, beyond the prepass, opaque and transparent lists.</summary>
-    public PassType[]? Passes;
-
     public ViewDesc()
     {
         World = null!;
@@ -244,12 +235,6 @@ public struct FrameDesc
 {
     public ReadOnlyMemory<ViewDesc> Views;
     public FrameTime Time;
-
-    /// <summary>
-    /// Host pipelines run in the frame's execution after its views, on the render thread. Their passes draw external
-    /// views through <see cref="Renderer.Draws"/>.
-    /// </summary>
-    public ReadOnlyMemory<GraphDispatch> Pipelines;
 
     /// <summary>Runs on the render thread before the frame is prepared, for host work its submission has to follow.</summary>
     public Action? Started;
@@ -504,7 +489,6 @@ public sealed class Renderer : IDisposable
                     _views[v].Keywords = (Keyword[])keywords.Clone();
             }
             ExtractFeatures(views);
-            _pipelines = frame.Pipelines.ToArray();
             _started = frame.Started;
             _submitted = frame.Submitted;
             _profilers = frame.Profilers ?? [];
@@ -535,7 +519,6 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The slots of host spatial sets by name, the same in every world.</summary>
     internal SpatialSlots SpatialSlots { get; } = new();
-    private GraphDispatch[] _pipelines = [];
     private Action? _started;
     private Action<bool>? _submitted;
     private IProfiler[] _profilers = [];
@@ -578,12 +561,6 @@ public sealed class Renderer : IDisposable
             throw new ArgumentOutOfRangeException(nameof(size), $"The buffer holds {buffer.SizeInBytes} bytes.");
         _readbacks.Enqueue(new ReadbackRequest { Buffer = buffer, Offset = offset, Size = size, BufferDone = done });
     }
-
-    /// <summary>
-    /// The draws prepared this frame for an external view, for host pipelines to record. Render thread, inside a pass of
-    /// <see cref="FrameDesc.Pipelines"/>.
-    /// </summary>
-    public ViewDraws Draws(int viewId) => _frame.Draws(viewId);
 
     /// <summary>
     /// The GPU execution of the last frame dispatched, for hosts tracking their own readbacks or staging against it.
@@ -893,7 +870,7 @@ public sealed class Renderer : IDisposable
             world.World.Probes.Update(world.World.Render, _uploader);
         }
 
-        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _pipelines, _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
+        ExecutionTask task = _frame.Run(_views.AsSpan(0, _viewCount), _viewFeatures.AsSpan(0, _viewCount), _frameReadbacks, _worlds, _worlds.Values, _lastDispatched, _time, _profilers);
         _lastDispatched = task.Id;
         LastExecution = task;
         foreach (ReadbackRequest request in _frameReadbacks)

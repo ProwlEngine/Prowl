@@ -730,8 +730,6 @@ internal sealed class CameraFrame : IDisposable
         }
     }
 
-    /// <summary>What host pipelines draw an external view through.</summary>
-    public ViewDraws? Draws;
     public FeatureView Info;
 
     /// <summary>The graph shape the view drew with, and the directional cascades it fits, which the shape was made for.</summary>
@@ -1202,7 +1200,7 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
 internal readonly record struct PlannedInstance(GraphKind Kind, int Id, WorldFrame World, GraphExtent Extent, Framebuffer? Target, object Data);
 
 /// <summary>
-/// The frame's pipelines: the FrameStart pipeline uploading every change, then one camera pipeline per view, all in
+/// The frame: the root passes uploading every change, then the instances of every world and view, all in
 /// one execution. Graphs rebuild only when the set of persistent buffers changes.
 /// </summary>
 internal sealed partial class FramePipeline : IDisposable
@@ -1225,7 +1223,6 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly DeformPass _deform;
     private readonly Dictionary<int, CameraFrame> _cameras = new();
     private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
-    private readonly List<GraphDispatch> _dispatches = new();
     private readonly List<PlannedInstance> _planned = new();
     private readonly Dictionary<WorldFrame, GraphInstance> _worldInstances = new();
     private readonly Dictionary<GraphKind, FeatureShape> _shapes = new();
@@ -1433,13 +1430,12 @@ internal sealed partial class FramePipeline : IDisposable
         else { _drawCalls++; _drawCommands += commands; }
     }
 
-    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, GraphDispatch[] pipelines, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
+    public ExecutionTask Run(ReadOnlySpan<ViewDesc> views, ReadOnlySpan<RenderFeature[]> viewFeatures, List<ReadbackRequest> readbacks, IReadOnlyDictionary<RenderWorld, WorldFrame> worlds, IEnumerable<WorldFrame> allWorlds, ulong lastDispatched, in FrameTime time, IProfiler[]? profilers = null)
     {
         LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk);
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
         _currentTime = time;
-        _dispatches.Clear();
         _planned.Clear();
         _frameWorlds.Clear();
         _prepared.Clear();
@@ -1516,7 +1512,6 @@ internal sealed partial class FramePipeline : IDisposable
         CollectBuffers(allWorlds);
         PlanCounts();
 
-        _dispatches.AddRange(pipelines);
         _readback.Prepare(readbacks);
         if (_graphDirty)
             BuildGraph();
@@ -1690,14 +1685,6 @@ internal sealed partial class FramePipeline : IDisposable
         camera.SceneColorUsed = used;
         if (used)
             camera.EnsureSceneColor(width, height, (uint)shape.Shape.Layers, shape.ColorFormat);
-    }
-
-    /// <summary>The draws of an external view this frame. Render thread.</summary>
-    public ViewDraws Draws(int viewId)
-    {
-        if (!_cameras.TryGetValue(viewId, out CameraFrame? camera) || camera.LastFrame != _frame || !camera.Desc.External)
-            throw new InvalidOperationException($"No external view {viewId} was submitted this frame.");
-        return camera.Draws ??= new ViewDraws(this, camera);
     }
 
     internal FrameTime CurrentTime => _currentTime;
@@ -2319,75 +2306,6 @@ internal sealed partial class FramePipeline : IDisposable
         SkyAmbientProgram.Dispose();
         TrilinearClamp.Dispose();
         LinearSampler.Dispose();
-    }
-}
-
-/// <summary>
-/// The draws the renderer prepared this frame for an external view: its culled lists, its tables and the frame's
-/// buffers, which a pass before the host pipelines makes ready for them. Host passes bind a target and record. Render thread.
-/// </summary>
-public sealed class ViewDraws
-{
-    private readonly FramePipeline _frame;
-    private readonly CameraFrame _camera;
-    private readonly PropertySet _properties = new();
-    private ulong _preparedExecution;
-
-    internal ViewDraws(FramePipeline frame, CameraFrame camera)
-    {
-        _frame = frame;
-        _camera = camera;
-    }
-
-    /// <summary>The view as submitted.</summary>
-    public ViewDesc Desc => _camera.Desc;
-
-    /// <summary>Records the visible renderables of a pass type onto the bound target: the prepass, opaque forward, or one in ViewDesc.Passes.</summary>
-    public void Record(RenderContext context, CommandBuffer cmd, PassType pass)
-    {
-        DrawList list = _camera.FindList(pass) ?? throw new InvalidOperationException($"View {_camera.Desc.ViewId} did not prepare the {pass.Name} pass, list it in ViewDesc.Passes.");
-        Prepare(context);
-        _camera.Drawer.DrawList(cmd, list);
-    }
-
-    /// <summary>Records the visible transparent renderables back to front onto the bound target.</summary>
-    public void RecordTransparent(RenderContext context, CommandBuffer cmd)
-    {
-        Prepare(context);
-        _camera.Drawer.DrawList(cmd, _camera.Transparent);
-    }
-
-    /// <summary>Records the world's sky onto the bound target.</summary>
-    public void RecordSky(RenderContext context, CommandBuffer cmd)
-    {
-        Prepare(context);
-        _camera.Drawer.DrawSky(cmd);
-    }
-
-    /// <summary>
-    /// Draws a fullscreen program onto the bound target with the view's layers, and the view's lights, shadows and probes
-    /// when it is lit, such as the lighting pass of a deferred pipeline. Its properties bind last.
-    /// </summary>
-    public void DrawFullscreen(RenderContext context, CommandBuffer cmd, FullscreenProgram program, PropertySet? properties = null)
-    {
-        Prepare(context);
-        cmd.SetShader(program.For(_camera.LayerCount));
-        cmd.SetVertexSource(VertexSource.None);
-        if (program.Lit)
-            _camera.Drawer.BindTables(cmd);
-        _properties.SetBuffer("Graphite_PostViews", _camera.ViewBlocks.Buffer);
-        cmd.SetProperties(_properties);
-        if (properties != null)
-            cmd.SetProperties(properties);
-        cmd.Draw(3);
-    }
-
-    private void Prepare(RenderContext context)
-    {
-        if (_preparedExecution == context.Task.Id)
-            return;
-        _camera.Drawer.Prepare(context.Task.RingSlot);
-        _preparedExecution = context.Task.Id;
     }
 }
 
