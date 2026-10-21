@@ -26,6 +26,7 @@ public class MultiplayerPlayTests : EditorTestHarness
     // A partial class with its network members in both parts.
     private const string BeaconState = """
         using Prowl.Runtime;
+        using Prowl.Runtime.Networking;
 
         public partial class Beacon : Component
         {
@@ -35,6 +36,7 @@ public class MultiplayerPlayTests : EditorTestHarness
 
     private const string BeaconCalls = """
         using Prowl.Runtime;
+        using Prowl.Runtime.Networking;
 
         public partial class Beacon
         {
