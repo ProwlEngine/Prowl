@@ -16,6 +16,7 @@ public abstract partial class CommandBuffer
     {
         RequireGraphExecution(nameof(SetShader));
         ValidationHelpers.RequireNotNullRender(Device, program, nameof(GraphicsProgram), nameof(SetShader));
+        CheckNotDisposed(program, "The graphics program");
         bool changed = !ReferenceEquals(_shaderProgram, program);
         if (!changed) return;
 
@@ -33,6 +34,7 @@ public abstract partial class CommandBuffer
     {
         RequireGraphExecution(nameof(SetComputeShader));
         ValidationHelpers.RequireNotNullRender(Device, program, nameof(ComputeProgram), nameof(SetComputeShader));
+        CheckNotDisposed(program, "The compute program");
         if (ReferenceEquals(_computeProgram, program)) return;
 
         _statShaderSwitches++;
