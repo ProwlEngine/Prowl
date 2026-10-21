@@ -341,7 +341,7 @@ public sealed class Renderer : IDisposable
         _uploader = new Uploader(device, InternalShaders.Compute(device, compiler, "Internal/Scatter.glsl"));
         _store = new GraphStore();
         _geometry = new GeometryPool(device, _store, _options.PageVertexWords, _options.PageIndices);
-        _materials = new MaterialSystem(device, Textures) { Reporter = Report };
+        _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
         _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Textures, _options.Deterministic, Report, _options.Compile) { StaleViewFrames = _options.StaleViewFrames, ShadowFormat = _options.ShadowFormat };
@@ -768,7 +768,6 @@ public sealed class Renderer : IDisposable
             buffer.Dispose();
         _frame.Dispose();
         _effects?.Dispose();
-        _materials.Dispose();
         _uploader.Dispose();
         _store.Dispose();
         Textures.Dispose();

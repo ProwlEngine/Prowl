@@ -429,14 +429,14 @@ public sealed class Material : IDisposable
 }
 
 /// <summary>The GPU table holding the record of every material of one shader. Slots are reused only after GPU retire.</summary>
-internal sealed class MaterialTable(GraphicsDevice device, Shader shader) : IDisposable
+internal sealed class MaterialTable(GraphicsDevice device, GraphStore store, Shader shader, int index)
 {
     private readonly Stack<uint> _free = new();
     private uint _next;
 
     public Shader Shader { get; } = shader;
 
-    public GpuTable Records { get; } = new(device, $"Materials {shader.Name}", shader.Schema.StrideWords, 64);
+    public GpuTable Records { get; } = new(device, store, $"Graphite.Materials{index}", shader.Schema.StrideWords, 64);
 
     /// <summary>Slots held by live materials or still retiring. The table goes when this reaches zero.</summary>
     public int Used { get; private set; }
@@ -452,15 +452,13 @@ internal sealed class MaterialTable(GraphicsDevice device, Shader shader) : IDis
         Used--;
         _free.Push(slot);
     }
-
-    public void Dispose() => Records.Dispose();
 }
 
 /// <summary>
 /// Owns materials, their ids and the per shader tables. Dirty materials are packed into their table at extraction on
 /// the host thread, and the tables reach the GPU when the render thread flushes them.
 /// </summary>
-internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources resources) : IDisposable
+internal sealed class MaterialSystem(GraphicsDevice device, GraphStore store, IMaterialResources resources)
 {
     private readonly object _lock = new();
     private readonly Stack<int> _freeIds = new();
@@ -472,7 +470,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
     private readonly List<(ulong Execution, MaterialTable Table, uint Slot)> _retiringSlots = new();
     private readonly List<(ulong Execution, int Id)> _retiringIds = new();
     private readonly List<int> _pendingIds = new();
-    private readonly List<(ulong Execution, DeviceBuffer Buffer)> _retiringBuffers = new();
+    private int _tableCount;
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
     private readonly HashSet<Material> _live = new();
     private MaterialValue[] _resolved = new MaterialValue[64];
@@ -611,11 +609,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
         _tablesChanged = false;
         foreach (MaterialTable table in _tables.Values)
         {
-            if (table.Records.Flush(uploader) is { } replaced)
-            {
-                _retiringBuffers.Add((lastDispatched, replaced));
-                changed = true;
-            }
+            changed |= table.Records.Flush(uploader);
         }
         return changed;
     }
@@ -641,18 +635,9 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
         {
             foreach (Shader shader in empty)
             {
-                _tables[shader].Dispose();
                 _tables.Remove(shader);
             }
             _tablesChanged = true;
-        }
-
-        for (int i = _retiringBuffers.Count - 1; i >= 0; i--)
-        {
-            if (_retiringBuffers[i].Execution > completedExecution)
-                continue;
-            _retiringBuffers[i].Buffer.Dispose();
-            _retiringBuffers.RemoveAt(i);
         }
 
         for (int i = _retiringIds.Count - 1; i >= 0; i--)
@@ -665,21 +650,11 @@ internal sealed class MaterialSystem(GraphicsDevice device, IMaterialResources r
         }
     }
 
-    public void Dispose()
-    {
-        foreach (MaterialTable table in _tables.Values)
-            table.Dispose();
-        _tables.Clear();
-        foreach ((_, DeviceBuffer buffer) in _retiringBuffers)
-            buffer.Dispose();
-        _retiringBuffers.Clear();
-    }
-
     private MaterialTable Table(Shader shader)
     {
         if (!_tables.TryGetValue(shader, out MaterialTable? table))
         {
-            table = new MaterialTable(device, shader);
+            table = new MaterialTable(device, store, shader, _tableCount++);
             _tables[shader] = table;
             _tablesChanged = true;
         }
