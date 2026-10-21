@@ -48,6 +48,12 @@ file sealed class HistoryPass : IExecutionPass
     public void Render(RenderContext context, CommandBuffer cmd) { }
 }
 
+[System.Serializable]
+public readonly record struct TestHandle(int Index, int Generation);
+
+[System.Serializable]
+public sealed record TestPayload(string Name, TestHandle Handle, TestHandle[] Others);
+
 [Collection("GPU Tests")]
 public class DeepRecordingTests
 {
@@ -191,17 +197,19 @@ public class DeepRecordingTests
     }
 
     [Fact]
-    public void EchoRoundTrip_DropsLivePayloads()
+    public void EchoRoundTrip_KeepsSerializablePayloadsAndDropsLiveOnes()
     {
         DebuggerSerialization.Register();
-        PushMarkerCommand marker = new("Group", new System.Threading.SemaphoreSlim(1));
+        PushMarkerCommand marker = new("Group", new TestPayload("Cube", new TestHandle(3, 1), [new TestHandle(4, 2)]));
         RecordedInstance instance = new("Camera", 1, 0, new GraphInstanceKey(GraphKind.Intern("Test.Payload"), 4), 8, 8,
             EquatableArray<RecordedPass>.Empty, EquatableArray<RecordedSkippedPass>.Empty, new System.Threading.SemaphoreSlim(1));
 
         PushMarkerCommand loadedMarker = Serializer.Deserialize<PushMarkerCommand>(ReadBinary(WriteBinary(Serializer.Serialize(marker))))!;
         RecordedInstance loadedInstance = Serializer.Deserialize<RecordedInstance>(ReadBinary(WriteBinary(Serializer.Serialize(instance))))!;
 
-        Assert.Equal(marker with { Meta = null }, loadedMarker);
+        TestPayload payload = Assert.IsType<TestPayload>(loadedMarker.Meta);
+        Assert.Equal(("Cube", new TestHandle(3, 1)), (payload.Name, payload.Handle));
+        Assert.Equal([new TestHandle(4, 2)], payload.Others);
         Assert.Equal(instance with { Data = null }, loadedInstance);
     }
 

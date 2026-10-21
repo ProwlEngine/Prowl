@@ -97,7 +97,7 @@ public sealed record ResolveTextureCommand(TraceVersion Source, TraceVersion Des
 
 public sealed record GenerateMipsCommand(TraceVersion TextureAfter) : RecordedCommand;
 
-/// <summary>Opens a debug group. Meta is the payload the pass gave it, never saved, so null once loaded.</summary>
+/// <summary>Opens a debug group. Meta is the payload the pass gave it, saved only when it is a [Serializable] record.</summary>
 public sealed record PushMarkerCommand(string Name, object? Meta = null) : RecordedCommand;
 
 public sealed record PopMarkerCommand() : RecordedCommand;
