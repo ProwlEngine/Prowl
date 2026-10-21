@@ -138,6 +138,9 @@ public sealed class LocalTransport : Transport
         _closing.Clear();
     }
 
+    protected override void OnReceiveQueueOverflow(Connection connection) =>
+        Close((LocalConnection)connection, DisconnectReason.ResourceLimit);
+
     internal void Close(LocalConnection connection, DisconnectReason reason)
     {
         if (connection.State == ConnectionState.Disconnected)

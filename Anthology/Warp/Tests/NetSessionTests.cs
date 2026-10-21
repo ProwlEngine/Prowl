@@ -420,6 +420,32 @@ public abstract class NetSessionTests : IDisposable
         Assert.Empty((byte[])incoming!.GetType().GetField("Buffer")!.GetValue(incoming)!);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResourceLimitReasonSurvivesTheSessionLayer(bool atClient)
+    {
+        SessionProbe host = Host();
+        SessionProbe alice = Join("alice");
+        SessionProbe.PumpUntil(() => alice.Session.State == SessionState.Active, host, alice);
+        NetSession receiver = atClient ? alice.Session : host.Session;
+        receiver.Transport.MaxQueuedDataEventsPerConnection = 1;
+        if (atClient)
+        {
+            NetPeer peer = host.Session.Peers.Single(p => !p.IsLocal);
+            host.Session.SendRaw(peer, 20, new byte[] { 1 });
+            host.Session.SendRaw(peer, 20, new byte[] { 2 });
+        }
+        else
+        {
+            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 1 });
+            alice.Session.SendRaw(alice.Session.HostPeer!, 20, new byte[] { 2 });
+        }
+        SessionProbe.PumpFor(100, host, alice);
+        string reason = atClient ? alice.EndedWith!.Value.Reason.ToString() : host.PeersLeft.Single().Reason.ToString();
+        Assert.Equal("ResourceLimit", reason);
+    }
+
     [Fact]
     public void LargeReliableMessagesArriveWhole()
     {

@@ -426,7 +426,12 @@ public sealed class NetSession : IDisposable
                     if (remote.Pending != null)
                         remote.Pending.IsResolved = true;
                     if (remote.Peer != null)
-                        RemovePeer(remote.Peer, ev.Reason == DisconnectReason.Timeout ? SessionEndReason.Timeout : SessionEndReason.Left);
+                        RemovePeer(remote.Peer, ev.Reason switch
+                        {
+                            DisconnectReason.Timeout => SessionEndReason.Timeout,
+                            DisconnectReason.ResourceLimit => SessionEndReason.ResourceLimit,
+                            _ => SessionEndReason.Left,
+                        });
                 }
                 break;
         }
@@ -638,6 +643,7 @@ public sealed class NetSession : IDisposable
                     DisconnectReason.Timeout => SessionEndReason.Timeout,
                     DisconnectReason.Unreachable => SessionEndReason.Unreachable,
                     DisconnectReason.ServerFull => SessionEndReason.ServerFull,
+                    DisconnectReason.ResourceLimit => SessionEndReason.ResourceLimit,
                     _ => SessionEndReason.Rejected,
                 }, _goodbyeMessage);
                 break;
@@ -744,7 +750,7 @@ public sealed class NetSession : IDisposable
     private static SessionEndReason ReadReason(ref NetReader reader)
     {
         byte value = reader.ReadByte();
-        return value <= (byte)SessionEndReason.ProtocolError ? (SessionEndReason)value : SessionEndReason.Left;
+        return value <= (byte)SessionEndReason.ResourceLimit ? (SessionEndReason)value : SessionEndReason.Left;
     }
 
     // --- Shared --------------------------------------------------------------------------------

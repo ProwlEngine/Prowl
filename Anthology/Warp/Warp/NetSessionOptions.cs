@@ -82,4 +82,7 @@ public enum SessionEndReason : byte
 
     /// <summary>The remote end sent something malformed.</summary>
     ProtocolError,
+
+    /// <summary>A transport or session resource budget was exceeded.</summary>
+    ResourceLimit,
 }
