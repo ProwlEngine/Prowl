@@ -142,11 +142,11 @@ public sealed class RenderTexture : GraphicsResource
         if (_mips != null)
         {
             foreach (Framebuffer? mip in _mips)
-                mip?.Dispose();
+                mip?.Dispose(DisposeReason);
         }
-        _framebuffer?.Dispose();
+        _framebuffer?.Dispose(DisposeReason);
         foreach (Texture texture in ColorTextures)
-            texture.Dispose();
-        DepthTexture?.Dispose();
+            texture.Dispose(DisposeReason);
+        DepthTexture?.Dispose(DisposeReason);
     }
 }
