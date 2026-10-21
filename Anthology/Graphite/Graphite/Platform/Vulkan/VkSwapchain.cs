@@ -13,7 +13,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkSwapchain : Swapchain
 {
     private readonly VkGraphicsDevice _gd;
-    private readonly SurfaceKHR _surface;
+    private SurfaceKHR _surface;
     private SwapchainKHR _deviceSwapchain;
     private readonly VkSwapchainFramebuffer _framebuffer;
     private readonly Stack<VkSemaphore> _freeAcquireSemaphores = new();
@@ -22,11 +22,15 @@ internal unsafe partial class VkSwapchain : Swapchain
     private ulong _pendingAcquire;
     private bool _imageAcquired;
     private bool _recreatePending;
+    private bool _suboptimal;
+    private Extent2D _createdExtent;
+    private SurfaceTransformFlagsKHR _createdTransform;
+    private SwapchainTransform _transform;
     private readonly uint _presentQueueIndex;
     private readonly Queue _presentQueue;
     private bool _syncToVBlank;
-    private readonly SwapchainSource _swapchainSource;
     private readonly bool _colorSrgb;
+    private readonly bool _preRotate;
     private bool? _newSyncToVBlank;
     private uint _currentImageIndex;
 
@@ -51,6 +55,8 @@ internal unsafe partial class VkSwapchain : Swapchain
     public VkSemaphore PresentSemaphore => _presentSemaphores[_currentImageIndex];
     internal VkSemaphore TakePendingAcquire() => new(System.Threading.Interlocked.Exchange(ref _pendingAcquire, 0));
     public SurfaceKHR Surface => _surface;
+    public override SwapchainTransform Transform => _transform;
+    public override bool HasSurface => _surface.Handle != 0;
     public Queue PresentQueue => _presentQueue;
     public uint PresentQueueIndex => _presentQueueIndex;
 
@@ -60,8 +66,8 @@ internal unsafe partial class VkSwapchain : Swapchain
     {
         _gd = gd;
         _syncToVBlank = description.SyncToVerticalBlank;
-        _swapchainSource = description.Source;
         _colorSrgb = description.ColorSrgb;
+        _preRotate = description.PreRotate;
 
         if (existingSurface.Handle == default)
         {
@@ -92,8 +98,60 @@ internal unsafe partial class VkSwapchain : Swapchain
         RecreateAndReacquire(width, height);
     }
 
+    public override void DetachSurface()
+    {
+        if (_surface.Handle != 0)
+            ReleaseSurface();
+    }
+
+    public override void AttachSurface(SwapchainSource source, uint width, uint height)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        DetachSurface();
+        SurfaceKHR surface = source.GetSurface(_gd.Instance);
+        if (!QueueSupportsPresent(_presentQueueIndex, surface))
+        {
+            _gd.KhrSurface.DestroySurface(_gd.Instance, surface, null);
+            throw new RenderException("The swapchain's present queue cannot present to the new surface.");
+        }
+        _surface = surface;
+        if (CreateSwapchain(width, height))
+            AcquireNextImage();
+    }
+
+    // Waits for the images to go out of use, then lets the swapchain, its images and the surface go
+    private void ReleaseSurface()
+    {
+        _gd.ConsumePendingAcquires(this);
+        _imageAcquired = false;
+        _recreatePending = false;
+        _suboptimal = false;
+        _gd.WaitForIdle();
+        if (_presentQueueIndex != _gd.GraphicsQueueIndex)
+        {
+            lock (this)
+                _gd.Vk.QueueWaitIdle(_presentQueue);
+        }
+
+        _framebuffer.ReleaseSwapchain();
+        if (_deviceSwapchain.Handle != default)
+            _gd.KhrSwapchain.DestroySwapchain(_gd.Device, _deviceSwapchain, null);
+        _deviceSwapchain = default;
+        _gd.KhrSurface.DestroySurface(_gd.Instance, _surface, null);
+        _surface = default;
+    }
+
     public void AcquireNextImage()
     {
+        if (_surface.Handle == 0)
+            return;
+
+        if (_suboptimal && !_recreatePending)
+        {
+            _suboptimal = false;
+            _recreatePending = SurfaceChanged();
+        }
+
         if (_newSyncToVBlank != null)
         {
             _syncToVBlank = _newSyncToVBlank.Value;
@@ -118,6 +176,13 @@ internal unsafe partial class VkSwapchain : Swapchain
                 semaphore,
                 default,
                 &imageIndex);
+
+            if (result == Result.ErrorSurfaceLostKhr)
+            {
+                _freeAcquireSemaphores.Push(semaphore);
+                ReleaseSurface();
+                return;
+            }
 
             if (result == Result.ErrorOutOfDateKhr)
             {
@@ -145,7 +210,7 @@ internal unsafe partial class VkSwapchain : Swapchain
             System.Threading.Interlocked.Exchange(ref _pendingAcquire, semaphore.Handle);
 
             _imageAcquired = true;
-            _recreatePending = result == Result.SuboptimalKhr;
+            _suboptimal = result == Result.SuboptimalKhr;
             _gd.Counters.RecordSwap(SwapBin.Acquire);
             return;
         }
@@ -154,8 +219,23 @@ internal unsafe partial class VkSwapchain : Swapchain
     internal void MarkPresented(Result presentResult)
     {
         _imageAcquired = false;
-        if (presentResult == Result.ErrorOutOfDateKhr || presentResult == Result.SuboptimalKhr)
+        if (presentResult == Result.ErrorSurfaceLostKhr)
+            ReleaseSurface();
+        else if (presentResult == Result.ErrorOutOfDateKhr)
             _recreatePending = true;
+        else if (presentResult == Result.SuboptimalKhr)
+            _suboptimal = true;
+    }
+
+    // A suboptimal swapchain is remade only when the surface changed since, so one the compositor keeps turning is not remade every frame
+    private bool SurfaceChanged()
+    {
+        Result result = _gd.KhrSurface.GetPhysicalDeviceSurfaceCapabilities(_gd.PhysicalDevice, _surface, out SurfaceCapabilitiesKHR capabilities);
+        if (result != Result.Success)
+            return true;
+        return capabilities.CurrentTransform != _createdTransform
+            || capabilities.CurrentExtent.Width != _createdExtent.Width
+            || capabilities.CurrentExtent.Height != _createdExtent.Height;
     }
 
     private VkSemaphore RentAcquireSemaphore()
@@ -201,12 +281,16 @@ internal unsafe partial class VkSwapchain : Swapchain
 
     private bool CreateSwapchain(uint width, uint height)
     {
-        // Obtain the surface capabilities first -- this will indicate whether the surface has been lost.
+        if (_surface.Handle == 0)
+            return false;
+
         Result result = _gd.KhrSurface.GetPhysicalDeviceSurfaceCapabilities(_gd.PhysicalDevice, _surface, out SurfaceCapabilitiesKHR surfaceCapabilities);
         if (result == Result.ErrorSurfaceLostKhr)
         {
-            throw new RenderException("The Swapchain's underlying surface has been lost.");
+            ReleaseSurface();
+            return false;
         }
+        result.CheckResult();
 
         if (surfaceCapabilities.MinImageExtent.Width == 0 && surfaceCapabilities.MinImageExtent.Height == 0
             && surfaceCapabilities.MaxImageExtent.Width == 0 && surfaceCapabilities.MaxImageExtent.Height == 0)
@@ -242,6 +326,10 @@ internal unsafe partial class VkSwapchain : Swapchain
                 Height = Math.Clamp(height, surfaceCapabilities.MinImageExtent.Height, surfaceCapabilities.MaxImageExtent.Height)
             };
 
+        (SurfaceTransformFlagsKHR preTransform, SwapchainTransform transform) = ChooseTransform(surfaceCapabilities.SupportedTransforms, surfaceCapabilities.CurrentTransform, _preRotate);
+        if (transform is SwapchainTransform.Rotate90 or SwapchainTransform.Rotate270)
+            imageExtent = new Extent2D(imageExtent.Height, imageExtent.Width);
+
         SwapchainCreateInfoKHR swapchainCI = new()
         {
             SType = StructureType.SwapchainCreateInfoKhr,
@@ -252,7 +340,7 @@ internal unsafe partial class VkSwapchain : Swapchain
             ImageExtent = imageExtent,
             MinImageCount = imageCount,
             ImageArrayLayers = 1,
-            ImageUsage = ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferDstBit
+            ImageUsage = ImageUsageFlags.ColorAttachmentBit | (surfaceCapabilities.SupportedUsageFlags & ImageUsageFlags.TransferDstBit)
         };
 
         uint* queueFamilyIndices = stackalloc uint[2] { _gd.GraphicsQueueIndex, _gd.PresentQueueIndex };
@@ -269,8 +357,8 @@ internal unsafe partial class VkSwapchain : Swapchain
             swapchainCI.QueueFamilyIndexCount = 0;
         }
 
-        swapchainCI.PreTransform = SurfaceTransformFlagsKHR.IdentityBitKhr;
-        swapchainCI.CompositeAlpha = CompositeAlphaFlagsKHR.OpaqueBitKhr;
+        swapchainCI.PreTransform = preTransform;
+        swapchainCI.CompositeAlpha = ChooseCompositeAlpha(surfaceCapabilities.SupportedCompositeAlpha);
         swapchainCI.Clipped = true;
 
         SwapchainKHR oldSwapchain = _deviceSwapchain;
@@ -284,7 +372,42 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         _framebuffer.SetNewSwapchain(_deviceSwapchain, surfaceFormat, swapchainCI.ImageExtent);
         ResetSemaphores();
+        _createdExtent = surfaceCapabilities.CurrentExtent;
+        _createdTransform = surfaceCapabilities.CurrentTransform;
+        _transform = transform;
+        _suboptimal = false;
         return true;
+    }
+
+    /// <summary>
+    /// The pre transform to create with and the turn the host draws for. Without pre rotation the identity when the
+    /// surface allows it, the compositor turning the images, else the surface's current transform as it must be.
+    /// </summary>
+    internal static (SurfaceTransformFlagsKHR PreTransform, SwapchainTransform Transform) ChooseTransform(SurfaceTransformFlagsKHR supported, SurfaceTransformFlagsKHR current, bool preRotate)
+    {
+        if (!preRotate && (supported & SurfaceTransformFlagsKHR.IdentityBitKhr) != 0)
+            return (SurfaceTransformFlagsKHR.IdentityBitKhr, SwapchainTransform.Identity);
+
+        SwapchainTransform transform = current switch
+        {
+            SurfaceTransformFlagsKHR.Rotate90BitKhr => SwapchainTransform.Rotate90,
+            SurfaceTransformFlagsKHR.Rotate180BitKhr => SwapchainTransform.Rotate180,
+            SurfaceTransformFlagsKHR.Rotate270BitKhr => SwapchainTransform.Rotate270,
+            _ => SwapchainTransform.Identity,
+        };
+        return (current, transform);
+    }
+
+    /// <summary>The first of opaque, inherit, premultiplied and postmultiplied the surface supports. Android surfaces often allow only inherit.</summary>
+    internal static CompositeAlphaFlagsKHR ChooseCompositeAlpha(CompositeAlphaFlagsKHR supported)
+    {
+        ReadOnlySpan<CompositeAlphaFlagsKHR> modes = [CompositeAlphaFlagsKHR.OpaqueBitKhr, CompositeAlphaFlagsKHR.InheritBitKhr, CompositeAlphaFlagsKHR.PreMultipliedBitKhr, CompositeAlphaFlagsKHR.PostMultipliedBitKhr];
+        foreach (CompositeAlphaFlagsKHR mode in modes)
+        {
+            if ((supported & mode) != 0)
+                return mode;
+        }
+        return CompositeAlphaFlagsKHR.OpaqueBitKhr;
     }
 
     private SurfaceFormatKHR ChooseSurfaceFormat()
@@ -294,29 +417,30 @@ internal unsafe partial class VkSwapchain : Swapchain
         SurfaceFormatKHR[] formats = new SurfaceFormatKHR[surfaceFormatCount];
         _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, out formats[0]).CheckResult();
 
-        Format desiredFormat = _colorSrgb
-            ? Format.B8G8R8A8Srgb
-            : Format.B8G8R8A8Unorm;
+        return ChooseSurfaceFormat(formats, _colorSrgb)
+            ?? throw new RenderException("Unable to create an sRGB Swapchain for this surface.");
+    }
 
+    /// <summary>
+    /// An 8 bit BGRA or RGBA format of the wanted encoding in the sRGB colour space, BGRA first as desktops prefer it and
+    /// Android has only RGBA. Without sRGB any other format will do, with it null when none matches.
+    /// </summary>
+    internal static SurfaceFormatKHR? ChooseSurfaceFormat(ReadOnlySpan<SurfaceFormatKHR> formats, bool srgb)
+    {
+        ReadOnlySpan<Format> wanted = srgb ? [Format.B8G8R8A8Srgb, Format.R8G8B8A8Srgb] : [Format.B8G8R8A8Unorm, Format.R8G8B8A8Unorm];
         if (formats.Length == 1 && formats[0].Format == Format.Undefined)
-        {
-            return new SurfaceFormatKHR { ColorSpace = ColorSpaceKHR.SpaceSrgbNonlinearKhr, Format = desiredFormat };
-        }
+            return new SurfaceFormatKHR { ColorSpace = ColorSpaceKHR.SpaceSrgbNonlinearKhr, Format = wanted[0] };
 
-        foreach (SurfaceFormatKHR format in formats)
+        foreach (Format format in wanted)
         {
-            if (format.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr && format.Format == desiredFormat)
+            foreach (SurfaceFormatKHR candidate in formats)
             {
-                return format;
+                if (candidate.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr && candidate.Format == format)
+                    return candidate;
             }
         }
 
-        if (_colorSrgb)
-        {
-            throw new RenderException("Unable to create an sRGB Swapchain for this surface.");
-        }
-
-        return formats[0];
+        return srgb || formats.Length == 0 ? null : formats[0];
     }
 
     private PresentModeKHR ChoosePresentMode()
@@ -396,7 +520,9 @@ internal unsafe partial class VkSwapchain : Swapchain
             _gd.Vk.DestroySemaphore(_gd.Device, semaphore, null);
 
         _framebuffer.Dispose();
-        _gd.KhrSwapchain.DestroySwapchain(_gd.Device, _deviceSwapchain, null);
-        _gd.KhrSurface.DestroySurface(_gd.Instance, _surface, null);
+        if (_deviceSwapchain.Handle != default)
+            _gd.KhrSwapchain.DestroySwapchain(_gd.Device, _deviceSwapchain, null);
+        if (_surface.Handle != 0)
+            _gd.KhrSurface.DestroySurface(_gd.Instance, _surface, null);
     }
 }
