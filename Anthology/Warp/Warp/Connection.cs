@@ -45,7 +45,7 @@ public abstract class Connection
     /// <summary>True if this side initiated the connection with <see cref="Transport.Connect"/>.</summary>
     public bool IsOutgoing { get; }
 
-    public ConnectionState State { get; internal set; } = ConnectionState.Connecting;
+    public ConnectionState State { get; protected internal set; } = ConnectionState.Connecting;
 
     public bool IsConnected => State == ConnectionState.Connected;
 
@@ -74,8 +74,11 @@ public abstract class Connection
     {
         if ((flags & ~SendFlags.Immediate) != 0) throw new ArgumentOutOfRangeException(nameof(flags));
         Send(data, delivery);
-        if ((flags & SendFlags.Immediate) != 0) Transport.Flush();
+        if ((flags & SendFlags.Immediate) != 0) Flush();
     }
+
+    /// <summary>Submits queued sends. An externally driven connection may forward this as a queued request.</summary>
+    public virtual void Flush() => Transport.Flush();
 
     /// <summary>
     /// Closes the connection and tells the remote end. A <see cref="TransportEventType.Disconnected"/>

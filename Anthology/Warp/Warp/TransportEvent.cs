@@ -42,8 +42,12 @@ public readonly struct TransportEvent
     /// <summary>Why the connection closed, for a <see cref="TransportEventType.Disconnected"/> event.</summary>
     public DisconnectReason Reason { get; }
 
-    internal TransportEvent(TransportEventType type, Connection connection, ReadOnlyMemory<byte> data, Delivery delivery, DisconnectReason reason)
+    public TransportEvent(TransportEventType type, Connection connection, ReadOnlyMemory<byte> data = default,
+        Delivery delivery = default, DisconnectReason reason = default)
     {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (!Enum.IsDefined(type)) throw new ArgumentOutOfRangeException(nameof(type));
+        if (!Enum.IsDefined(delivery)) throw new ArgumentOutOfRangeException(nameof(delivery));
         Type = type;
         Connection = connection;
         Data = data;

@@ -39,7 +39,8 @@ public enum SessionState : byte
 /// <para>
 /// Like transports, a session does nothing in the background. Pump it with <see cref="Receive"/> and
 /// <see cref="Flush"/> (or <see cref="Update"/>); events and message handlers run inside
-/// <see cref="Receive"/>, on the calling thread. The session drives its transport and shuts it down when it ends.
+/// <see cref="Receive"/>, on the calling thread. Host/Join attach a single-threaded transport pump.
+/// CreateHost/CreateClient leave transport I/O and lifetime to the caller, which supplies events through ProcessEvent.
 /// </para>
 /// </remarks>
 public sealed class NetSession : IDisposable
@@ -121,25 +122,28 @@ public sealed class NetSession : IDisposable
 
     // Host only.
     private int _nextPeerId = NetPeer.HostId + 1;
+    private readonly SessionPump? _pump;
 
-    private NetSession(Transport transport, NetSessionOptions? options, bool isHost)
+    private NetSession(Transport transport, NetSessionOptions? options, bool isHost, bool pumpTransport = true)
     {
         ArgumentNullException.ThrowIfNull(transport);
         Transport = transport;
         _peerView = new NetPeerCollection(_peers.Values);
         _options = (options ?? new NetSessionOptions()).CopyValidated();
         IsHost = isHost;
+        _pump = pumpTransport ? new SessionPump(transport) : null;
     }
 
-    private NetSession(Transport transport, NetSessionOptions? options, string address, string name, byte[] token)
-        : this(transport, options, isHost: false)
+    private NetSession(Transport transport, NetSessionOptions? options, string address, string name, byte[] token,
+        Connection? connection = null, bool pumpTransport = true)
+        : this(transport, options, isHost: false, pumpTransport)
     {
         if (Encoding.UTF8.GetByteCount(name) > MaxNameBytes) throw new ArgumentException("Peer name is too long.", nameof(name));
         if (token.Length > MaxJoinTokenBytes) throw new ArgumentException("Join token is too long.", nameof(token));
         _joinName = name;
         _joinToken = token;
         State = SessionState.Joining;
-        _hostConnection = transport.Connect(address);
+        _hostConnection = connection ?? _pump!.Connect(address);
     }
 
     /// <summary>Starts listening on <paramref name="transport"/> and hosts a session, with this process as the host peer.</summary>
@@ -147,12 +151,21 @@ public sealed class NetSession : IDisposable
     /// <param name="name">The host peer's name, as other peers see it.</param>
     /// <param name="options">Session settings; defaults if null.</param>
     public static NetSession Host(Transport transport, string name = "Host", NetSessionOptions? options = null)
+        => CreateHostCore(transport, name, options, pumpTransport: true);
+
+    /// <summary>Creates a host whose transport is owned and pumped by the caller.</summary>
+    /// <remarks>The caller listens, feeds events to ProcessEvent, and shuts down the transport after the session ends.
+    /// Receive handles loopback messages and Flush advances session timers; neither pumps transport I/O.</remarks>
+    public static NetSession CreateHost(Transport transport, string name = "Host", NetSessionOptions? options = null)
+        => CreateHostCore(transport, name, options, pumpTransport: false);
+
+    private static NetSession CreateHostCore(Transport transport, string name, NetSessionOptions? options, bool pumpTransport)
     {
         ArgumentNullException.ThrowIfNull(name);
         if (Encoding.UTF8.GetByteCount(name) > MaxNameBytes) throw new ArgumentException("Peer name is too long.", nameof(name));
 
-        NetSession session = new(transport, options, isHost: true);
-        transport.Listen();
+        NetSession session = new(transport, options, isHost: true, pumpTransport);
+        session._pump?.Listen();
 
         NetPeer host = new(NetPeer.HostId, name, isLocal: true, connection: null);
         session._peers.Add(host.Id, host);
@@ -178,6 +191,19 @@ public sealed class NetSession : IDisposable
         return new NetSession(transport, options, address, name, token.ToArray());
     }
 
+    /// <summary>Creates a client using a connection supplied by an external transport driver.</summary>
+    /// <remarks>Feed the connection's Connected event and subsequent events through ProcessEvent.
+    /// The caller owns transport I/O and shutdown. Session callbacks run on the thread processing events.</remarks>
+    public static NetSession CreateClient(Connection connection, string name, ReadOnlySpan<byte> token = default, NetSessionOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(name);
+        return new NetSession(connection.Transport, options, connection.Address, name, token.ToArray(), connection, pumpTransport: false);
+    }
+
+    public bool IsExternallyPumped => _pump == null;
+
+    /// <summary>The actual backing transport. An external driver exclusively owns its I/O when IsExternallyPumped is true.</summary>
     public Transport Transport { get; }
 
     private readonly NetSessionOptions _options;
@@ -342,7 +368,7 @@ public sealed class NetSession : IDisposable
                 if (connection.IsConnected)
                     connection.Send(_writer.WrittenSpan, Delivery.Reliable);
             }
-            Transport.Flush();
+            _pump?.Flush();
         }
 
         End(SessionEndReason.Left, message);
@@ -363,16 +389,20 @@ public sealed class NetSession : IDisposable
         if (State == SessionState.Ended)
             return;
 
-        Transport.Receive();
-        while (State != SessionState.Ended && Transport.Poll(out TransportEvent ev))
-        {
-            if (IsHost)
-                HostEvent(ev);
-            else
-                ClientEvent(ev);
-        }
+        _pump?.Receive(this);
 
         DispatchLoopback();
+    }
+
+    /// <summary>Processes one incoming event without polling or pumping the transport.</summary>
+    /// <remarks>Call on the session's owning thread. The payload only needs to remain valid for this call.</remarks>
+    public void ProcessEvent(in TransportEvent ev)
+    {
+        if (State == SessionState.Ended) return;
+        if (ev.Connection == null || ev.Connection.Transport != Transport)
+            throw new ArgumentException("The event belongs to another transport.", nameof(ev));
+        if (IsHost) HostEvent(ev);
+        else ClientEvent(ev);
     }
 
     /// <summary>Runs the session's timers, then flushes the transport.</summary>
@@ -423,7 +453,7 @@ public sealed class NetSession : IDisposable
             _hostConnection!.Disconnect();
         }
 
-        Transport.Flush();
+        _pump?.Flush();
     }
 
     /// <summary><see cref="Receive"/> followed by <see cref="Flush"/>.</summary>
@@ -897,7 +927,7 @@ public sealed class NetSession : IDisposable
             _fragmentWriter.WriteBytes(message.Slice(offset, length));
             connection.Send(_fragmentWriter.WrittenSpan, delivery);
         }
-        if ((flags & SendFlags.Immediate) != 0) connection.Transport.Flush();
+        if ((flags & SendFlags.Immediate) != 0) connection.Flush();
     }
 
     /// <summary>
@@ -1024,8 +1054,7 @@ public sealed class NetSession : IDisposable
             ArrayPool<byte>.Shared.Return(pending.Buffer);
         _loopbackBytes = 0;
 
-        Transport.Shutdown();
-        while (Transport.Poll(out _)) { }
+        _pump?.Shutdown();
 
         Ended?.Invoke(reason, message);
     }
