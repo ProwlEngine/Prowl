@@ -167,6 +167,8 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     private protected override void WaitForIdleCore()
     {
         FlushPendingInitCommands();
+        if (GpuHangCheckEnabled)
+            WaitForSerial(LastSubmitSerial, ulong.MaxValue);
         lock (_graphicsQueueLock)
         {
             Vk.QueueWaitIdle(GraphicsQueue);
