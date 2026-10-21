@@ -388,22 +388,27 @@ internal sealed class NetworkingThread : IDisposable
         public int CloseRequested;
         public long IncomingBytes;
         public int IncomingCount;
-        private int _reliableMax, _unreliableMax;
+        private int _reliableMax, _unreliableMax, _reliableThreshold, _unreliableThreshold;
         private long _rttTicks;
         private ConnectionStats _stats;
         public void MarkConnected() => State = ConnectionState.Connected;
         public void MarkDisconnected() => State = ConnectionState.Disconnected;
         public void Refresh()
         {
-            _reliableMax = Inner!.GetMaxMessageSize(Delivery.Reliable);
-            _unreliableMax = owner._transport.Capabilities.Supports(Delivery.Unreliable) ? Inner.GetMaxMessageSize(Delivery.Unreliable) : 0;
-            _rttTicks = Inner.RoundTripTime.Ticks;
+            TransportCapabilities capabilities = owner._transport.Capabilities;
+            _reliableMax = capabilities.Supports(Delivery.Reliable) ? Inner!.GetMaxMessageSize(Delivery.Reliable) : 0;
+            _unreliableMax = capabilities.Supports(Delivery.Unreliable) ? Inner!.GetMaxMessageSize(Delivery.Unreliable) : 0;
+            _reliableThreshold = capabilities.Supports(Delivery.Reliable) ? Inner!.GetBatchThreshold(Delivery.Reliable) : 0;
+            _unreliableThreshold = capabilities.Supports(Delivery.Unreliable) ? Inner!.GetBatchThreshold(Delivery.Unreliable) : 0;
+            _rttTicks = Inner!.RoundTripTime.Ticks;
             _stats = Inner.Stats;
         }
         public override TimeSpan RoundTripTime { get { lock (owner._gate) return TimeSpan.FromTicks(_rttTicks); } }
         public override ConnectionStats Stats { get { lock (owner._gate) return _stats; } }
         public override int GetMaxMessageSize(Delivery delivery)
         { lock (owner._gate) return delivery == Delivery.Reliable ? _reliableMax : _unreliableMax; }
+        public override int GetBatchThreshold(Delivery delivery)
+        { lock (owner._gate) return delivery == Delivery.Reliable ? _reliableThreshold : _unreliableThreshold; }
         public override void Send(ReadOnlySpan<byte> data, Delivery delivery) => Send(data, delivery, SendFlags.None);
         public override void Flush() => owner.RequestFlush();
         public override void Send(ReadOnlySpan<byte> data, Delivery delivery, SendFlags flags)

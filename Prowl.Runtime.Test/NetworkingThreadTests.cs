@@ -244,6 +244,7 @@ public class NetworkingThreadTests
         WorkerPump pump = new(thread);
         pump.Until(() => connection.IsConnected);
         Assert.Same(transport, connection.Transport);
+        Assert.Equal(64, connection.GetBatchThreshold(Delivery.Reliable));
         connection.Send(new byte[] { 42 }, Delivery.Reliable, SendFlags.Immediate);
         connection.Flush();
         pump.Until(() => Volatile.Read(ref transport.SendThread) != 0);
@@ -284,6 +285,7 @@ public class NetworkingThreadTests
         {
             public override TimeSpan RoundTripTime => TimeSpan.Zero;
             public override int GetMaxMessageSize(Delivery delivery) => 128;
+            public override int GetBatchThreshold(Delivery delivery) => 64;
             public override void Send(ReadOnlySpan<byte> data, Delivery delivery)
             {
                 owner.AssertWorkerThread();
