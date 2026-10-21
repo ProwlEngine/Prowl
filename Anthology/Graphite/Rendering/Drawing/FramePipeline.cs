@@ -714,13 +714,13 @@ internal sealed class CameraFrame : IDisposable
     public bool IsShadowView { get; init; }
 
     /// <summary>This frame's instance counts copied from providers' buffers into the view's commands, as byte offsets.</summary>
-    public readonly List<(DeviceBuffer Source, uint Offset, uint Destination)> Counts = new();
+    public readonly List<(RenderResourceID Source, uint Offset, uint Destination)> Counts = new();
 
     public void PlanCounts()
     {
         Counts.Clear();
         uint stride = (uint)Marshal.SizeOf<IndirectDrawIndexedArguments>();
-        foreach ((BucketSet.TransparentItem item, DrawList list, DeviceBuffer source, uint offset) in Sink.Counts)
+        foreach ((BucketSet.TransparentItem item, DrawList list, RenderResourceID source, uint offset) in Sink.Counts)
         {
             int at = Lists.IndexOf(list);
             if (at < 0 || item.FirstCommand < 0)
@@ -1048,8 +1048,8 @@ internal sealed class SceneDrawer(FramePipeline frame, CameraFrame camera)
         camera.ViewTable.Set("Graphite_ShadowSampler", 0, frame.ShadowSampler);
         camera.ViewTable.Set("Graphite_ShadowFaces", 0, camera.World.Shadows!.Faces.Buffer);
         camera.ViewTable.Set("Graphite_Cascades", 0, camera.Cascades.Buffer);
-        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, camera.ScreenVisibilityView() ?? frame.NoScreenVisibility);
-        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, camera.ScreenIrradianceView() ?? frame.NoScreenIrradiance);
+        camera.ViewTable.Set("Graphite_ScreenVisibility", 0, (object?)camera.ScreenVisibilityView() ?? frame.NoScreenVisibility);
+        camera.ViewTable.Set("Graphite_ScreenIrradiance", 0, (object?)camera.ScreenIrradianceView() ?? frame.NoScreenIrradiance);
         camera.ViewTable.Set("Graphite_ScreenSampler", 0, frame.TrilinearClamp);
         camera.ViewTable.Set("Graphite_SceneColor", 0, camera.SceneColor != null ? camera.SceneColorView() : frame.NoSceneColor);
         camera.ViewTable.Set("Graphite_SceneColorSampler", 0, frame.TrilinearClamp);
@@ -1243,8 +1243,12 @@ internal sealed partial class FramePipeline : IDisposable
     private readonly List<CameraFrame> _captures = new();
     private readonly List<Texture> _disposeAfterDispatch = new();
     private readonly List<IDisposable> _retired = new();
-    private readonly RenderPipeline _providerPipeline = new() { Name = "Graphite.Providers" };
-    private readonly ProviderWork _providerWork = new();
+    private readonly ProviderCountsPass _counts = new();
+    private readonly FrameExports _exports = new();
+    private readonly Dictionary<FrameFeature, FrameFeaturePass> _frameFeaturePasses = new();
+    private readonly List<FrameFeaturePass> _frameFeatures = new();
+    private readonly List<FrameFeaturePass> _activeFrameFeatures = new();
+    private FrameTime _currentTime;
     private readonly ReadbackStaging _readback;
     private readonly List<int> _sortedViews = new();
     private bool[] _placed = [];
@@ -1434,6 +1438,7 @@ internal sealed partial class FramePipeline : IDisposable
         LastStats = new FrameStats(views.Length, _drawCalls, _drawCommands, _shadowDrawCalls, _shadowDrawCommands, ShadowsAdded, ShadowsGrown, ShadowsShrunk);
         _drawCalls = _drawCommands = _shadowDrawCalls = _shadowDrawCommands = 0;
         _frame++;
+        _currentTime = time;
         _dispatches.Clear();
         _planned.Clear();
         _frameWorlds.Clear();
@@ -1443,6 +1448,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (RenderFeature[] features in viewFeatures)
             PrepareFeatures(features);
 
+        PrepareFrameFeatures(allWorlds);
         DrawPrograms.Sweep();
         foreach (WorldFrame world in allWorlds)
         {
@@ -1507,12 +1513,9 @@ internal sealed partial class FramePipeline : IDisposable
             ResolvePrograms();
         }
 
-        bool providers = _providerWork.Update(_frameWorlds, Active(), _frame, _providerPipeline, Report);
         CollectBuffers(allWorlds);
+        PlanCounts();
 
-        int first = 1;
-        if (providers)
-            _dispatches.Insert(first++, new GraphDispatch(_providerPipeline, _frameStartViews));
         _dispatches.AddRange(pipelines);
         _readback.Prepare(readbacks);
         if (_graphDirty)
@@ -1608,7 +1611,8 @@ internal sealed partial class FramePipeline : IDisposable
 
     private void BuildGraph()
     {
-        List<IPass> passes = [_upload, _probes, _deform, _readbackTexture, _readbackBuffer, .. _fillPasses, .. ShadowPasses()];
+        _exports.Clear();
+        List<IPass> passes = [_upload, _probes, _deform, .. _frameFeatures, _counts, _readbackTexture, _readbackBuffer, .. _fillPasses, .. ShadowPasses()];
         List<GraphKind> kinds = [];
         foreach (FeatureShape shape in _shapes.Values)
         {
@@ -1694,6 +1698,88 @@ internal sealed partial class FramePipeline : IDisposable
         if (!_cameras.TryGetValue(viewId, out CameraFrame? camera) || camera.LastFrame != _frame || !camera.Desc.External)
             throw new InvalidOperationException($"No external view {viewId} was submitted this frame.");
         return camera.Draws ??= new ViewDraws(this, camera);
+    }
+
+    internal FrameTime CurrentTime => _currentTime;
+
+    internal FrameExports Exports => _exports;
+
+    // The frame features that run this frame, in order. A change in who runs or in what a feature declares rebuilds the graph.
+    private void PrepareFrameFeatures(IEnumerable<WorldFrame> worlds)
+    {
+        _activeFrameFeatures.Clear();
+        foreach (WorldFrame world in worlds)
+        {
+            foreach (FrameFeature feature in world.World.FrameFeatureSnapshot)
+            {
+                if (!feature.EnabledSnapshot || !IsActive(feature))
+                    continue;
+                if (!_frameFeaturePasses.TryGetValue(feature, out FrameFeaturePass? pass))
+                    _frameFeaturePasses[feature] = pass = new FrameFeaturePass(this, feature) { BuiltVersion = -1 };
+                _activeFrameFeatures.Add(pass);
+            }
+        }
+        _activeFrameFeatures.Sort((a, b) => a.Feature.OrderSnapshot != b.Feature.OrderSnapshot ? a.Feature.OrderSnapshot.CompareTo(b.Feature.OrderSnapshot) : a.Feature.Id.CompareTo(b.Feature.Id));
+        bool changed = _activeFrameFeatures.Count != _frameFeatures.Count;
+        for (int i = 0; !changed && i < _activeFrameFeatures.Count; i++)
+            changed = _activeFrameFeatures[i] != _frameFeatures[i] || _activeFrameFeatures[i].BuiltVersion != _activeFrameFeatures[i].Feature.Version;
+        if (!changed)
+            return;
+        _frameFeatures.Clear();
+        _frameFeatures.AddRange(_activeFrameFeatures);
+        _graphDirty = true;
+        List<FrameFeature>? gone = null;
+        foreach (FrameFeature feature in _frameFeaturePasses.Keys)
+        {
+            if (!_activeFrameFeatures.Exists(pass => pass.Feature == feature))
+                (gone ??= new()).Add(feature);
+        }
+        foreach (FrameFeature feature in gone ?? [])
+            _frameFeaturePasses.Remove(feature);
+    }
+
+    private bool IsActive(FrameFeature feature)
+    {
+        try
+        {
+            return feature.IsActive();
+        }
+        catch (Exception e)
+        {
+            Report(new RendererError("frame.feature", $"{feature.GetType().Name}.IsActive threw: {e}", RendererErrorSeverity.Error, feature) { Key = $"frame.feature.active.{feature.GetType().FullName}" });
+            return false;
+        }
+    }
+
+    // The copies of indirect items' instance counts into the views' commands, the graph built again when what they touch changes
+    private void PlanCounts()
+    {
+        _counts.Copies.Clear();
+        foreach (CameraFrame camera in Active())
+        {
+            if (camera.LastFrame != _frame)
+                continue;
+            foreach ((RenderResourceID source, uint offset, uint destination) in camera.Counts)
+                _counts.Copies.Add((source, offset, camera.Commands.Persistent, destination));
+        }
+        _counts.Plan();
+        if (_counts.Changed())
+            _graphDirty = true;
+    }
+
+    internal void BindWorld(PropertySet properties, RenderWorld world)
+    {
+        RenderWorld.RenderSide render = world.Render;
+        WorldLighting lighting = world.Lighting;
+        properties.SetBuffer("Graphite_Chunks", Geometry.Chunks.Buffer);
+        properties.SetBuffer("Graphite_Transforms", render.Transforms.Buffer);
+        properties.SetBuffer("Graphite_PreviousTransforms", render.PreviousTransforms.Buffer);
+        properties.SetBuffer("Graphite_Objects", render.Attributes.Buffer);
+        properties.SetBuffer("Graphite_MaterialSlots", render.MaterialSlots.Buffer);
+        properties.SetBuffer("Graphite_WorldLighting", lighting.World.Buffer);
+        properties.SetBuffer("Graphite_ObjectProbes", world.Probes.ObjectSh);
+        properties.SetBuffer("Graphite_SkyAmbientSH", world.Reflections.SkyAmbient);
+        properties.SetBuffer("Graphite_Directionals", lighting.Directionals.Buffer);
     }
 
     private void PrepareFeatures(RenderFeature[] features)
@@ -2147,11 +2233,6 @@ internal sealed partial class FramePipeline : IDisposable
             if (world.Shadows != null)
                 _buffers.Add(world.Shadows.Faces.Persistent);
         }
-        foreach (DeviceBuffer buffer in _providerWork.ComputeBuffers)
-        {
-            if (!_importedBuffers.Contains(buffer))
-                _importedBuffers.Add(buffer);
-        }
         foreach (CameraFrame camera in Active())
             camera.AddBuffers(_buffers);
 
@@ -2215,7 +2296,6 @@ internal sealed partial class FramePipeline : IDisposable
         _graph?.Dispose();
         foreach (FeatureShape shape in _shapes.Values)
             shape.Dispose();
-        _providerPipeline.Dispose();
         _shadowSampler?.Dispose();
         _tileClear?.Dispose();
         _probes.Dispose();
@@ -2387,172 +2467,6 @@ internal sealed class ReadbackBufferPass : IInstancePass
     {
         ReadbackRequest request = (ReadbackRequest)context.Instance.Data!;
         cmd.CopyBuffer(context.GetRenderBuffer(_source), request.Offset, request.Staging!, 0, request.Size);
-    }
-}
-
-/// <summary>
-/// Providers' GPU work once a frame, after FrameStart and before the fence every view follows: their compute, then the
-/// instance counts it wrote copied into every view's commands, so indirect items draw what this frame made.
-/// </summary>
-internal sealed class ProviderWork
-{
-    private static readonly List<RenderResourceID> s_ids = new();
-    private readonly List<RenderProvider> _computing = new();
-    private readonly List<DeviceBuffer> _computeBuffers = new();
-
-    /// <summary>This frame's buffers providers' compute writes, which the fence orders before every reader.</summary>
-    public IReadOnlyList<DeviceBuffer> ComputeBuffers => _computeBuffers;
-    private readonly List<(DeviceBuffer Source, uint Offset, DeviceBuffer Target, uint Destination)> _copies = new();
-    private readonly List<DeviceBuffer> _buffers = new();
-    private readonly List<DeviceBuffer> _scratch = new();
-    private DeviceBuffer[] _declared = [];
-    private RenderProvider[] _declaredProviders = [];
-    private readonly ComputeStep _compute;
-    private readonly CopyStep _copy;
-    private Action<RendererError> _report = _ => { };
-
-    public ProviderWork()
-    {
-        _compute = new ComputeStep(this);
-        _copy = new CopyStep(this);
-    }
-
-    /// <summary>Gathers this frame's compute and copies, rebuilding the pipeline when what they touch changes. Returns whether there is any.</summary>
-    public bool Update(IEnumerable<WorldFrame> worlds, IEnumerable<CameraFrame> cameras, int frame, RenderPipeline pipeline, Action<RendererError> report)
-    {
-        _report = report;
-        _computing.Clear();
-        _computeBuffers.Clear();
-        _copies.Clear();
-        _buffers.Clear();
-        foreach (WorldFrame world in worlds)
-        {
-            foreach (RenderProvider provider in world.World.ProviderSnapshot)
-            {
-                if (!provider.EnabledSnapshot)
-                    continue;
-                _scratch.Clear();
-                try
-                {
-                    provider.ComputeBuffers(_scratch);
-                }
-                catch (Exception e)
-                {
-                    Report(provider, "ComputeBuffers", e);
-                    continue;
-                }
-                foreach (DeviceBuffer buffer in _scratch)
-                {
-                    if (buffer != null && !buffer.IsDisposed && !_computeBuffers.Contains(buffer))
-                        _computeBuffers.Add(buffer);
-                }
-                if (_scratch.Count > 0)
-                    _computing.Add(provider);
-            }
-        }
-        foreach (CameraFrame camera in cameras)
-        {
-            if (camera.LastFrame != frame)
-                continue;
-            foreach ((DeviceBuffer source, uint offset, uint destination) in camera.Counts)
-            {
-                if (source.IsDisposed)
-                {
-                    report(new RendererError("provider.count", "An indirect item's instance count buffer was disposed before its frame drew, so it draws its last count.", RendererErrorSeverity.Warning) { Key = "provider.count.disposed" });
-                    continue;
-                }
-                _copies.Add((source, offset, camera.Commands.Buffer, destination));
-            }
-        }
-        if (_computing.Count == 0 && _copies.Count == 0)
-            return false;
-
-        _buffers.AddRange(_computeBuffers);
-        foreach ((DeviceBuffer source, _, DeviceBuffer target, _) in _copies)
-        {
-            if (!_buffers.Contains(source))
-                _buffers.Add(source);
-            if (!_buffers.Contains(target))
-                _buffers.Add(target);
-        }
-        if (!CollectionsMarshal.AsSpan(_buffers).SequenceEqual(_declared) || !CollectionsMarshal.AsSpan(_computing).SequenceEqual(_declaredProviders))
-        {
-            _declared = [.. _buffers];
-            _declaredProviders = [.. _computing];
-            pipeline.SetPasses([_compute, _copy]);
-        }
-        return true;
-    }
-
-    private void Report(RenderProvider provider, string method, Exception e)
-        => _report(new RendererError("provider.compute", $"{provider.GetType().Name}.{method} threw: {e}", RendererErrorSeverity.Error, provider) { Key = $"provider.compute.{provider.GetType().FullName}" });
-
-    private static RenderResourceID Id(int index)
-    {
-        lock (s_ids)
-        {
-            while (s_ids.Count <= index)
-                s_ids.Add(RenderResourceID.Intern("Graphite.Provider" + s_ids.Count));
-            return s_ids[index];
-        }
-    }
-
-    private sealed class ComputeStep(ProviderWork work) : IPass
-    {
-        public string Name => "Graphite.ProviderCompute";
-
-        public void Setup(RenderContextBuilder builder)
-        {
-            for (int i = 0; i < work._declared.Length; i++)
-            {
-                if (work._computeBuffers.Contains(work._declared[i]))
-                    builder.DeclareImportedBuffer(Id(i), work._declared[i], BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
-            }
-        }
-
-        public void Render(RenderContext context, CommandBuffer cmd)
-        {
-            foreach (RenderProvider provider in work._computing)
-            {
-                try
-                {
-                    provider.Compute(cmd);
-                }
-                catch (Exception e)
-                {
-                    work.Report(provider, "Compute", e);
-                }
-            }
-        }
-    }
-
-    private sealed class CopyStep(ProviderWork work) : IPass
-    {
-        public string Name => "Graphite.ProviderCounts";
-
-        public void Setup(RenderContextBuilder builder)
-        {
-            for (int i = 0; i < work._declared.Length; i++)
-            {
-                DeviceBuffer buffer = work._declared[i];
-                BufferAccess access = BufferAccess.None;
-                foreach ((DeviceBuffer source, _, DeviceBuffer target, _) in work._copies)
-                {
-                    if (source == buffer)
-                        access |= BufferAccess.TransferRead;
-                    if (target == buffer)
-                        access |= BufferAccess.TransferWrite;
-                }
-                if (access != BufferAccess.None)
-                    builder.DeclareImportedBuffer(Id(i), buffer, access);
-            }
-        }
-
-        public void Render(RenderContext context, CommandBuffer cmd)
-        {
-            foreach ((DeviceBuffer source, uint offset, DeviceBuffer target, uint destination) in work._copies)
-                cmd.CopyBuffer(source, offset, target, destination, 4);
-        }
     }
 }
 

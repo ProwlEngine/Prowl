@@ -430,6 +430,22 @@ public sealed class FeatureBuilder
     /// <summary>The underlying graph builder, for resources the methods here do not cover.</summary>
     public InstanceContextBuilder Graph => _graph;
 
+    /// <summary>Reads a buffer a frame feature exported.</summary>
+    public BufferHandle ReadFrame(BufferHandle handle, BufferAccess usage = BufferAccess.AllReads)
+    {
+        if (!Shape.Frame.Exports.Buffers.Contains(handle.Id))
+            throw new InvalidOperationException($"{_pass.Name} reads a frame buffer that no active frame feature exported.");
+        return _graph.DeclareInputBuffer(handle.Id, usage);
+    }
+
+    /// <summary>Reads a texture a frame feature exported.</summary>
+    public TextureHandle ReadFrame(TextureHandle handle, TextureState usage = TextureState.Sampled)
+    {
+        if (!Shape.Frame.Exports.Textures.Contains(handle.Id))
+            throw new InvalidOperationException($"{_pass.Name} reads a frame texture that no active frame feature exported.");
+        return _graph.DeclareInputTexture(handle.Id, usage);
+    }
+
     /// <summary>Reads the scene's depth, normals, and roughness and metallic.</summary>
     public void ReadScene()
     {
@@ -644,6 +660,9 @@ public sealed class FeatureContext
 
     /// <summary>A texture the feature declared.</summary>
     public RenderTexture Get(TextureHandle texture) => Graph.GetRenderTexture(texture);
+
+    /// <summary>A buffer the feature declared or read from a frame feature.</summary>
+    public DeviceBuffer Get(BufferHandle buffer) => Graph.GetRenderBuffer(buffer);
 
     /// <summary>The view's first layer as shaders read it this frame, jittered when the view jitters.</summary>
     public ViewBlock Block => _pass.Camera.Blocks[0];
@@ -904,6 +923,7 @@ internal sealed class SetupPass(FeatureShape shape) : IInstancePass
     {
         shape.Begin();
         shape.Frame.Buffers.Read(builder);
+        shape.Frame.Exports.Read(builder);
     }
 
     public void Render(InstanceContext context, CommandBuffer cmd)
@@ -1217,15 +1237,6 @@ public abstract class RenderProvider
     /// <summary>Adds this view's items to the sink. Render thread.</summary>
     public abstract void Cull(in ProviderView view, DrawItemSink sink);
 
-    /// <summary>The buffers <see cref="Compute"/> reads and writes, so the frame orders it before what reads them. Compute runs only for providers naming some. Render thread.</summary>
-    public virtual void ComputeBuffers(List<DeviceBuffer> buffers) { }
-
-    /// <summary>
-    /// GPU work recorded once a frame, after the frame's uploads and before any view draws: the instance counts
-    /// <see cref="DrawItemSink.AddIndirect"/> reads, instance data. Render thread.
-    /// </summary>
-    public virtual void Compute(CommandBuffer command) { }
-
     internal bool EnabledSnapshot;
     internal ViewKinds RunsOnSnapshot;
 }
@@ -1295,7 +1306,7 @@ public sealed class DrawItemSink
     private bool _shadowView;
 
     /// <summary>Indirect items whose instance count is copied from the provider's buffer into the view's commands.</summary>
-    internal readonly List<(BucketSet.TransparentItem Item, DrawList List, DeviceBuffer Source, uint Offset)> Counts = new();
+    internal readonly List<(BucketSet.TransparentItem Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = new();
 
     internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask, bool shadowView = false)
     {
@@ -1318,28 +1329,29 @@ public sealed class DrawItemSink
         => _lists.TryGetValue(list, out ProvidedItems? items) && (items.Opaque.Count > 0 || items.Sorted.Count > 0) ? items : null;
 
     /// <summary>One submesh of a mesh with a material, for one object.</summary>
-    public void Add(GpuMesh mesh, int subMesh, Material material, in DrawItem item) => Emit(mesh, subMesh, material, item, 1, false, null, 0);
+    public void Add(GpuMesh mesh, int subMesh, Material material, in DrawItem item) => Emit(mesh, subMesh, material, item, 1, false, default, 0);
 
     /// <summary>Instances of one submesh sharing one object, shaders telling them apart by Graphite_InstanceIndex.</summary>
     public void AddInstanced(GpuMesh mesh, int subMesh, Material material, in DrawItem item, uint count)
     {
         if (count > 0)
-            Emit(mesh, subMesh, material, item, count, true, null, 0);
+            Emit(mesh, subMesh, material, item, count, true, default, 0);
     }
 
     /// <summary>
-    /// Instances of one submesh sharing one object, as many as a 32 bit count the GPU wrote at offset in instanceCount
-    /// before the view draws, by a compute pass of the host's.
+    /// Instances of one submesh sharing one object, as many as a 32 bit count at offset in the frame feature buffer
+    /// named by instanceCount, written before the view draws.
     /// </summary>
-    public void AddIndirect(GpuMesh mesh, int subMesh, Material material, in DrawItem item, DeviceBuffer instanceCount, uint offset)
+    public void AddIndirect(GpuMesh mesh, int subMesh, Material material, in DrawItem item, RenderResourceID instanceCount, uint offset)
     {
-        ArgumentNullException.ThrowIfNull(instanceCount);
-        if (offset % 4 != 0 || offset + 4 > instanceCount.SizeInBytes)
-            throw new ArgumentOutOfRangeException(nameof(offset), "The instance count is a 32 bit word inside the buffer.");
+        if (!instanceCount.IsValid)
+            throw new ArgumentException("The instance count names a frame feature buffer.", nameof(instanceCount));
+        if (offset % 4 != 0)
+            throw new ArgumentOutOfRangeException(nameof(offset), "The instance count is a 32 bit word.");
         Emit(mesh, subMesh, material, item, 0, true, instanceCount, offset);
     }
 
-    private void Emit(GpuMesh mesh, int subMesh, Material material, in DrawItem item, uint count, bool shared, DeviceBuffer? source, uint offset)
+    private void Emit(GpuMesh mesh, int subMesh, Material material, in DrawItem item, uint count, bool shared, RenderResourceID source, uint offset)
     {
         ArgumentNullException.ThrowIfNull(mesh);
         ArgumentNullException.ThrowIfNull(material);
@@ -1395,7 +1407,7 @@ public sealed class DrawItemSink
             if (!_lists.TryGetValue(list, out ProvidedItems? items))
                 _lists[list] = items = new ProvidedItems();
             (sorted ? items.Sorted : items.Opaque).Add(entry);
-            if (source != null)
+            if (source.IsValid)
                 Counts.Add((entry, list, source, offset));
         }
 
