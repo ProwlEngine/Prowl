@@ -35,12 +35,13 @@ internal sealed class ViewerWindow : IDisposable
     private IInputContext _input = null!;
     private GraphicsDevice _device = null!;
     private GraphiteRenderer _renderer = null!;
-    private OffscreenScene _scene = null!;
+    private PbrScenes _scene = null!;
     private SceneProfilerSource _source = null!;
     private Paper _paper = null!;
     private DockSpace _dock = null!;
     private RenderProfilerWindows _windows = null!;
     private FontFile _wordmark = null!;
+    private bool _showPreview = true;
     private float _fps;
     private int _frame;
 
@@ -83,7 +84,7 @@ internal sealed class ViewerWindow : IDisposable
         SetupInput();
         LoadFonts();
 
-        _scene = new OffscreenScene(_device);
+        _scene = new PbrScenes(_device);
         _source = new SceneProfilerSource(_device, _scene) { IsRecording = !_options.Paused };
         _dock = new DockSpace(DockNode.Leaf());
         _windows = new RenderProfilerWindows(_source, _dock);
@@ -157,6 +158,8 @@ internal sealed class ViewerWindow : IDisposable
         {
             TopBar(width);
             _dock.Draw(_paper, gap, top, width - gap * 2, height - top - gap);
+            if (_showPreview)
+                ScenePreview(width, height);
         }
         Origami.EndFrame(_paper);
 
@@ -192,6 +195,15 @@ internal sealed class ViewerWindow : IDisposable
                     .Item("Exit", _window.Close))
                 .Menu("Capture", m => m
                     .Item(_source.IsRecording ? "Stop recording" : "Start recording", () => _source.IsRecording = !_source.IsRecording))
+                .Menu("Scene", m =>
+                {
+                    for (int i = 0; i < PbrScenes.Names.Length; i++)
+                    {
+                        int index = i;
+                        m.Item((_scene.Selected == i ? "> " : "") + PbrScenes.Names[i], () => _scene.Select(index));
+                    }
+                    m.Separator().Item(_showPreview ? "Hide preview" : "Show preview", () => _showPreview = !_showPreview);
+                })
                 .Menu("Window", m => m
                     .Item("Render Profiler", _windows.ShowLive)
                     .Item("Snapshots", _windows.ShowSnapshots))
@@ -201,6 +213,28 @@ internal sealed class ViewerWindow : IDisposable
             _paper.Box("spacer").Width(UnitValue.Stretch()).Height(1);
             _paper.Box("fps").Width(UnitValue.Auto).Height(UnitValue.Auto)
                 .Text($"{_fps:F0} FPS", theme.Mono!).FontSize(15).TextColor(theme.Ink.C200).IsNotInteractable();
+        }
+    }
+
+    private void ScenePreview(float width, float height)
+    {
+        const float previewWidth = 320f, previewHeight = previewWidth * PbrScenes.Height / PbrScenes.Width, margin = 20f, header = 26f;
+        OrigamiTheme theme = Origami.Current;
+        object? image = _renderer.Preview(_scene.Target.ColorTextures[0]);
+        using (_paper.Column("preview").PositionType(PositionType.SelfDirected)
+            .Position(width - previewWidth - margin, height - previewHeight - header - margin)
+            .Width(previewWidth).Height(previewHeight + header).Rounded(8).BackgroundColor(Color.FromArgb(230, 24, 24, 28)).Enter())
+        {
+            _paper.Box("title").Width(UnitValue.Stretch()).Height(header).Margin(10, 0, 0, 0)
+                .Text($"Scene / {PbrScenes.Names[_scene.Selected]}", theme.Mono!).FontSize(13).TextColor(theme.Ink.C300).IsNotInteractable();
+            using (_paper.Box("image").Width(previewWidth).Height(previewHeight).IsNotInteractable().Enter())
+            {
+                _paper.Draw((canvas, r) =>
+                {
+                    if (image != null)
+                        canvas.DrawImage(image, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, (float)r.Size.Y);
+                });
+            }
         }
     }
 

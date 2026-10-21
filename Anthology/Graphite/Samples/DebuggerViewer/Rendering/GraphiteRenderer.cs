@@ -18,6 +18,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     private static readonly Keyword UpsampleOn = new("Upsample", "true");
     private static readonly Keyword UpsampleOff = new("Upsample", "false");
     private static readonly GraphKind Canvas = GraphKind.Intern("Sample.Canvas");
+    private static readonly RenderResourceID PreviewSlot = "Preview";
 
     private readonly GraphicsDevice _device;
     private readonly ScenePass _scenePass;
@@ -32,6 +33,7 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     private int _fbWidth;
     private int _fbHeight;
     private string? _screenshot;
+    private TextureGraphite? _preview;
 
     public GraphiteRenderer(GraphicsDevice device)
     {
@@ -79,6 +81,14 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
     }
 
+    /// <summary>A texture rendered before the UI that the canvas may draw, or null. The UI graph reads it through an import.</summary>
+    public object? Preview(Texture? texture)
+    {
+        if (_preview?.Texture != texture)
+            _preview = texture != null ? TextureGraphite.Wrap(texture, _sampler) : null;
+        return _preview;
+    }
+
     /// <summary>Writes the next rendered UI frame to a PNG at the path.</summary>
     public void Screenshot(string path) => _screenshot = path;
 
@@ -109,7 +119,8 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
     {
         _scenePass.SetFrame(canvas, drawCalls);
         _instances.Reset();
-        _instances.Add(Canvas, 0, extent: new GraphExtent((uint)_fbWidth, (uint)_fbHeight), target: _device.MainSwapchain.Framebuffer, name: "Canvas");
+        _instances.Add(Canvas, 0, extent: new GraphExtent((uint)_fbWidth, (uint)_fbHeight), target: _device.MainSwapchain.Framebuffer, name: "Canvas",
+            imports: [GraphImport.Of(PreviewSlot, (_preview ?? _defaultTexture).Texture)]);
         if (_screenshot == null)
         {
             _device.DispatchGraph(_graph, _instances);
@@ -180,7 +191,10 @@ internal sealed class GraphiteRenderer : ICanvasRenderer, IDisposable
         }
 
         public void Setup(InstanceContextBuilder builder)
-            => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.InstanceSized(TargetFormat), usage: TextureState.Attachment | TextureState.Sampled);
+        {
+            builder.DeclareImportSlotTexture(PreviewSlot, TextureState.Sampled);
+            _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.InstanceSized(TargetFormat), usage: TextureState.Attachment | TextureState.Sampled);
+        }
 
         public void Render(InstanceContext context, CommandBuffer cmd)
         {
