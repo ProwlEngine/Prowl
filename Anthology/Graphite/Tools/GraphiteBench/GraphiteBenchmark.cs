@@ -4,24 +4,23 @@ using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 
 using Prowl.Graphite;
-using Prowl.Graphite.RenderGraph;
 
 using Prowl.Vector;
 
 namespace Prowl.Graphite.Bench;
 
-public readonly struct BenchView(uint width, uint height, int viewId) : IRenderView
+public static class BenchViews
 {
-    public uint PixelWidth { get; } = width;
-    public uint PixelHeight { get; } = height;
-    public int ViewId { get; } = viewId;
+    public static readonly GraphKind Kind = GraphKind.Intern("Bench.View");
+    public static readonly GraphScope[] Scopes = [new GraphScope(Kind, GraphKind.Root)];
 }
 
-public sealed class BenchPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext, CommandBuffer> render) : IPass
+public sealed class BenchPass(string name, Action<InstanceContextBuilder> setup, Action<InstanceContext, CommandBuffer> render) : IInstancePass
 {
     public string Name { get; } = name;
-    public void Setup(RenderContextBuilder builder) => setup(builder);
-    public void Render(RenderContext context, CommandBuffer cmd) => render(context, cmd);
+    public GraphKind Kind => BenchViews.Kind;
+    public void Setup(InstanceContextBuilder builder) => setup(builder);
+    public void Render(InstanceContext context, CommandBuffer cmd) => render(context, cmd);
 }
 
 public abstract class GraphiteBenchmark
@@ -29,14 +28,14 @@ public abstract class GraphiteBenchmark
     public const uint DefaultSize = 64;
     public const PixelFormat ColorFormat = PixelFormat.R8_G8_B8_A8_UNorm;
 
-    protected static readonly GraphTextureDesc ColorDesc = GraphTextureDesc.ViewSized(ColorFormat);
+    protected static readonly GraphTextureDesc ColorDesc = GraphTextureDesc.InstanceSized(ColorFormat);
     protected static readonly TargetLoadStoreOps ClearOps = new(AttachmentOps.Clear(Color.Black), AttachmentOps.Discard);
     protected static readonly TargetLoadStoreOps LoadOps = new(AttachmentOps.Loaded, AttachmentOps.Discard);
 
     private readonly List<IDisposable> _owned = new();
     private BenchProfiler _profiler = null!;
-    private RenderPipeline _pipeline = null!;
-    private IRenderView[] _views = null!;
+    private RenderGraph _graph = null!;
+    private GraphInstances _instances = null!;
 
     protected GraphicsDevice Device { get; private set; } = null!;
     internal BenchMesh Cube { get; private set; } = null!;
@@ -66,8 +65,11 @@ public abstract class GraphiteBenchmark
         ViewProperties.SetMatrix("MatrixViewProjection", projection * view);
         ViewProperties.SetFloat4("ViewTint", new Float4(1, 1, 1, 1));
 
-        _views = CreateViews();
-        _pipeline = new RenderPipeline(CreatePasses()) { Name = GetType().Name };
+        _graph = RenderGraph.Build([.. CreatePasses()], BenchViews.Scopes, GetType().Name);
+        _instances = _graph.CreateInstances();
+        GraphExtent[] views = CreateViews();
+        for (int i = 0; i < views.Length; i++)
+            _instances.Add(BenchViews.Kind, i, extent: views[i]);
 
         for (int i = 0; i < WarmupFrames; i++)
             Frame();
@@ -79,7 +81,7 @@ public abstract class GraphiteBenchmark
     [Benchmark]
     public void Frame()
     {
-        ExecutionTask task = Device.DispatchGraph(_pipeline, _views);
+        ExecutionTask task = Device.DispatchGraph(_graph, _instances);
         Device.WaitForExecution(task);
     }
 
@@ -89,7 +91,7 @@ public abstract class GraphiteBenchmark
         Device.WaitForIdle();
         BenchMetrics.Store(this, _profiler.Snapshot());
 
-        _pipeline.Dispose();
+        _graph.Dispose();
         for (int i = _owned.Count - 1; i >= 0; i--)
             _owned[i].Dispose();
         _owned.Clear();
@@ -99,7 +101,7 @@ public abstract class GraphiteBenchmark
 
     protected abstract IEnumerable<IPass> CreatePasses();
 
-    protected virtual IRenderView[] CreateViews() => [new BenchView(DefaultSize, DefaultSize, 0)];
+    protected virtual GraphExtent[] CreateViews() => [new GraphExtent(DefaultSize, DefaultSize)];
 
     protected T Own<T>(T resource) where T : IDisposable
     {
