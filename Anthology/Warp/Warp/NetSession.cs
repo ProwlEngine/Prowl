@@ -418,29 +418,33 @@ public sealed class NetSession : IDisposable
         if (IsHost)
         {
             _scratch.AddRange(_remotes);
-            foreach ((Connection connection, Remote remote) in _scratch)
+            try
             {
-                if (remote.Incoming is { } incoming && now >= incoming.DeadlineMs)
+                foreach ((Connection connection, Remote remote) in _scratch)
                 {
-                    Goodbye(connection, remote, SessionEndReason.Timeout, "Fragmented message timed out.");
-                    continue;
-                }
-                if (now < remote.DeadlineMs)
-                    continue;
+                    if (State == SessionState.Ended) break;
+                    if (remote.Incoming is { } incoming && now >= incoming.DeadlineMs)
+                    {
+                        Goodbye(connection, remote, SessionEndReason.Timeout, "Fragmented message timed out.");
+                        continue;
+                    }
+                    if (now < remote.DeadlineMs)
+                        continue;
 
-                switch (remote.Stage)
-                {
-                    case RemoteStage.AwaitingRequest:
-                    case RemoteStage.Lingering:
-                        connection.Disconnect();
-                        break;
+                    switch (remote.Stage)
+                    {
+                        case RemoteStage.AwaitingRequest:
+                        case RemoteStage.Lingering:
+                            connection.Disconnect();
+                            break;
 
-                    case RemoteStage.Pending:
-                        Goodbye(connection, remote, SessionEndReason.Timeout, "The host took too long to let you in.");
-                        break;
+                        case RemoteStage.Pending:
+                            Goodbye(connection, remote, SessionEndReason.Timeout, "The host took too long to let you in.");
+                            break;
+                    }
                 }
             }
-            _scratch.Clear();
+            finally { _scratch.Clear(); }
         }
         else if (_incomingFromHost is { } incoming && now >= incoming.DeadlineMs)
         {

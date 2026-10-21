@@ -6,6 +6,49 @@ namespace Prowl.Warp.Tests;
 
 public class SessionProcessingTests
 {
+    [Fact]
+    public void TimerIterationRecoversAfterMembershipHandlerThrows()
+    {
+        using ProbeTransport transport = new();
+        using NetSession host = NetSession.CreateHost(transport, options: new()
+        { ReassemblyTimeout = TimeSpan.FromMilliseconds(20), GoodbyeLinger = TimeSpan.FromMilliseconds(20) });
+        ProbeConnection connection = JoinPeer(transport, host);
+        BeginPartialMessage(host, connection);
+        Action<NetPeer, SessionEndReason> handler = (_, _) => throw new InvalidOperationException("Application failure");
+        host.PeerLeft += handler;
+        System.Threading.Thread.Sleep(30);
+        Assert.Throws<InvalidOperationException>(host.Flush);
+        host.PeerLeft -= handler;
+        System.Threading.Thread.Sleep(30);
+        host.Flush();
+        Assert.Equal(1, connection.DisconnectCalls);
+    }
+
+    [Fact]
+    public void MembershipHandlerCanDisposeSessionDuringTimerIteration()
+    {
+        using ProbeTransport transport = new();
+        using NetSession host = NetSession.CreateHost(transport, options: new() { ReassemblyTimeout = TimeSpan.FromMilliseconds(20) });
+        ProbeConnection first = JoinPeer(transport, host), second = JoinPeer(transport, host);
+        BeginPartialMessage(host, first);
+        BeginPartialMessage(host, second);
+        host.PeerLeft += (_, _) => host.Dispose();
+        System.Threading.Thread.Sleep(30);
+        host.Flush();
+        Assert.Equal(SessionState.Ended, host.State);
+        Assert.Equal(0, host.PendingReassemblyBytes);
+    }
+
+    private static void BeginPartialMessage(NetSession host, Connection peer)
+    {
+        using NetWriter fragment = new();
+        fragment.WriteUInt16(NetSession.ReservedMessageIds + 5);
+        fragment.WriteBool(true);
+        fragment.WriteVarUInt32(1024);
+        fragment.WriteByte(1);
+        host.ProcessEvent(new(TransportEventType.Data, peer, fragment.WrittenMemory));
+    }
+
     private static NetSession CreateHost(Transport transport) => NetSession.CreateHost(transport);
     private static NetSession CreateClient(Connection connection) => NetSession.CreateClient(connection, "client");
 
@@ -108,11 +151,11 @@ public class SessionProcessingTests
 
     private sealed class ProbeConnection(Transport transport, int id) : Connection(transport, id, "host", true)
     {
-        public int FlushCalls;
+        public int FlushCalls, DisconnectCalls;
         public override TimeSpan RoundTripTime => TimeSpan.Zero;
         public override int GetMaxMessageSize(Delivery delivery) => 128;
         public override void Send(ReadOnlySpan<byte> data, Delivery delivery) { }
-        public override void Disconnect() { }
+        public override void Disconnect() => DisconnectCalls++;
         public override void Flush() => FlushCalls++;
     }
 }
