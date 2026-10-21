@@ -10,8 +10,37 @@ using Xunit;
 
 namespace Prowl.Warp.Tests;
 
+[Collection("Allocations")]
 public class NetBufferTests
 {
+    [Fact]
+    public void ReusedSerializationDoesNotAllocate()
+    {
+        using NetWriter writer = new();
+        char[] text = new char[16];
+        long total = 0;
+        void Round()
+        {
+            writer.Reset();
+            writer.WriteVarInt64(-12345);
+            writer.WriteGuid(Guid.Empty);
+            writer.WriteDouble(1.25);
+            writer.WriteString("héllo");
+            NetReader reader = new(writer.WrittenSpan);
+            total += reader.ReadVarInt64();
+            reader.ReadGuid();
+            reader.ReadDouble();
+            total += reader.ReadString(text);
+        }
+        for (int i = 0; i < 100; i++) Round();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++) Round();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(1100L * (-12345 + 5), total);
+        Assert.True(text.AsSpan(0, 5).SequenceEqual("héllo"));
+        Assert.Equal(0, allocated);
+    }
+
     [Fact]
     public void TextDecodingDoesNotAllocate()
     {

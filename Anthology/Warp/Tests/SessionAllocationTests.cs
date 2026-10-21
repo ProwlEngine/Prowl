@@ -1,8 +1,12 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using Xunit;
 
 namespace Prowl.Warp.Tests;
 
+[Collection("Allocations")]
 public class SessionAllocationTests
 {
     [Fact]
@@ -20,6 +24,7 @@ public class SessionAllocationTests
     }
 
     [Theory]
+    [InlineData(Delivery.Unreliable, 16)]
     [InlineData(Delivery.Reliable, 16)]
     [InlineData(Delivery.Reliable, 512)]
     [InlineData(Delivery.Bulk, 512)]

@@ -35,6 +35,7 @@ public sealed class NetWriter : IDisposable
     /// <summary>Clears the contents, keeping the buffer for reuse.</summary>
     public void Reset() => _length = 0;
 
+    /// <summary>Allocates an owned copy. Use WrittenSpan or WrittenMemory to avoid the copy.</summary>
     public byte[] ToArray() => WrittenSpan.ToArray();
 
     public void WriteBool(bool value) => WriteByte(value ? (byte)1 : (byte)0);

@@ -92,7 +92,8 @@ public ref struct NetReader
 
     public string ReadString() => ReadString(int.MaxValue);
 
-    /// <summary>Reads a string without allocating if its encoded length exceeds the given limit.</summary>
+    /// <summary>Reads a string, rejecting encoded lengths above the limit before allocation.
+    /// Nonempty results allocate; use the Span overload for caller-owned storage.</summary>
     public string ReadString(int maximumBytes)
     {
         int length = ReadLength(maximumBytes);

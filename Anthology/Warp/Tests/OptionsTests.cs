@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Prowl.Warp.Tests;
 
+[Collection("Allocations")]
 public class OptionsTests
 {
     [Fact]
