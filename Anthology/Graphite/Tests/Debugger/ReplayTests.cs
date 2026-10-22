@@ -118,6 +118,28 @@ file static class Passes
         });
     }
 
+    public static void IndirectIndexed(FrameGraph graph, RenderTexture target, GraphicsProgram program, Texture source, Sampler sampler, DeviceBuffer arguments, DeviceBuffer indices)
+    {
+        TextureHandle handle = graph.Import(target);
+        BufferHandle argumentsHandle = graph.Import(arguments);
+        graph.AddPass("IndirectIndexed", pass =>
+        {
+            pass.Write(handle);
+            pass.Read(argumentsHandle, BufferAccess.Indirect);
+        }, context =>
+        {
+            CommandBuffer cmd = context.Command;
+            PropertySet properties = new();
+            properties.SetTexture("Tex", source);
+            properties.SetSampler("Smp", sampler);
+            cmd.SetFramebuffer(target, TargetLoadStoreOps.Clear(Black));
+            cmd.SetShader(program);
+            cmd.SetVertexSource(new VertexSource().SetIndexBuffer(indices, IndexFormat.UInt32, 3));
+            cmd.SetProperties(properties);
+            cmd.DrawIndexedIndirect(arguments, 0, 2, 20);
+        });
+    }
+
     public static void Blit(FrameGraph graph, string name, RenderTexture source, RenderTexture destination)
     {
         TextureHandle sourceHandle = graph.Import(source);
@@ -223,6 +245,36 @@ public class ReplayTests
         Assert.True(Drawn(second));
         Assert.True(emptied.Status == ReplayStatus.Reexecuted, emptied.Reason);
         Assert.False(Drawn(emptied));
+    }
+
+    [SkippableFact]
+    public void Replay_IndexedIndirectSlicesAndPatchesChangeWhatIsDrawn()
+    {
+        using GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+        ResourceFactory factory = device.ResourceFactory;
+        using GraphicsProgram program = SampleProgram(factory);
+        using Texture source = factory.CreateTexture(TextureDescription.Texture2D(4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        device.UpdateTexture(source, Enumerable.Repeat((byte)200, 64).ToArray());
+        using Sampler sampler = factory.CreateSampler(SamplerDescription.Linear);
+        using RenderTexture target = factory.CreateRenderTexture(new RenderTextureDescription(8, 8, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, depth: false));
+        using DeviceBuffer arguments = factory.CreateBuffer(new BufferDescription(40, BufferUsage.IndirectBuffer));
+        using DeviceBuffer indices = factory.CreateBuffer(new BufferDescription(12, BufferUsage.IndexBuffer));
+        device.UpdateBuffer(arguments, 0, new uint[] { 3, 1, 0, 0, 0, 3, 1, 0, 0, 0 });
+        device.UpdateBuffer(indices, 0, new uint[] { 0, 1, 2 });
+        DeepRecording deep = Record(device, DeepMode.Full, graph => Passes.IndirectIndexed(graph, target, program, source, sampler, arguments, indices));
+        DeepPass pass = deep.Groups[0].Passes[0];
+        Replayer replayer = new(device, deep);
+
+        static bool Drawn(ReplayResult result) => result.Outputs.Single().Data.Where((b, i) => i % 4 != 3).Any(b => b != 0);
+        ReplayResult whole = replayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0 });
+        ReplayResult none = replayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(0, 0) });
+        ReplayResult second = replayer.Replay(new ReplayRequest { GroupIndex = -1, PassIndex = pass.Index, EventIndex = 0, Indirect = new IndirectSlice(1, 1) });
+
+        Assert.True(whole.Status == ReplayStatus.Reexecuted, whole.Reason);
+        Assert.True(Drawn(whole));
+        Assert.True(none.Status == ReplayStatus.Reexecuted, none.Reason);
+        Assert.False(Drawn(none));
+        Assert.True(Drawn(second));
     }
 
     [SkippableFact]
