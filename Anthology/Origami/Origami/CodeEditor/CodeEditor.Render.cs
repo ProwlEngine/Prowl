@@ -38,6 +38,7 @@ public sealed partial class CodeEditor
     private FontFile? _measuredFont;
     private float _measuredSize;
     private float _measuredScale;
+    private bool _measuredLigatures;
     private float _charW = 8f;
     private float _glyphH = 14f;
     private float _fontSize = -1f;
@@ -81,6 +82,7 @@ public sealed partial class CodeEditor
         public string Text;
         public TextLayout? Layout;
         public FontColor Color;
+        public CodeTokenStyle Style;
     }
 
     private sealed class MinimapLine
@@ -157,10 +159,11 @@ public sealed partial class CodeEditor
 
     #region Layout
 
-    private TextLayoutSettings TextSettings(Canvas canvas, FontFile font, float size)
+    private TextLayoutSettings TextSettings(Canvas canvas, FontFile font, float size, CodeTokenStyle style = CodeTokenStyle.None)
     {
         var s = TextLayoutSettings.Default;
-        s.Font = font;
+        s.Font = FontFor(font, style);
+        s.Underline = (style & CodeTokenStyle.Underline) != 0;
         s.PixelSize = size * canvas.FramebufferScale;
         s.Quality = FontQuality.High;
         s.TabSize = Math.Max(1, Options.TabSize);
@@ -168,21 +171,31 @@ public sealed partial class CodeEditor
         return s;
     }
 
-    private TextLayout CreateLayout(Canvas canvas, string text, FontFile font, float size)
+    private TextLayout CreateLayout(Canvas canvas, string text, FontFile font, float size, CodeTokenStyle style = CodeTokenStyle.None)
     {
         var layout = new TextLayout();
-        canvas.Text.FontEngine.UpdateLayout(layout, text, TextSettings(canvas, font, size));
+        canvas.Text.FontEngine.UpdateLayout(layout, text, TextSettings(canvas, font, size, style));
         return layout;
+    }
+
+    private FontFile FontFor(FontFile regular, CodeTokenStyle style)
+    {
+        bool bold = (style & CodeTokenStyle.Bold) != 0, italic = (style & CodeTokenStyle.Italic) != 0;
+        if (bold && italic) return Options.BoldItalicFont ?? Options.BoldFont ?? Options.ItalicFont ?? regular;
+        if (bold) return Options.BoldFont ?? regular;
+        if (italic) return Options.ItalicFont ?? regular;
+        return regular;
     }
 
     private void Measure(Canvas canvas, FontFile font)
     {
         float size = FontSize;
         float scale = canvas.FramebufferScale;
-        if (ReferenceEquals(font, _measuredFont) && size == _measuredSize && scale == _measuredScale) return;
+        if (ReferenceEquals(font, _measuredFont) && size == _measuredSize && scale == _measuredScale && _measuredLigatures == Options.Ligatures) return;
         _measuredFont = font;
         _measuredSize = size;
         _measuredScale = scale;
+        _measuredLigatures = Options.Ligatures;
 
         var probe = CreateLayout(canvas, "MMMMMMMMMMMMMMMMMMMM", font, size);
         _charW = probe.Size.X / 20f / scale;
@@ -586,7 +599,7 @@ public sealed partial class CodeEditor
                 for (int k = 0; k < run.Text.Length; k++)
                 {
                     float gx = MathF.Round((baseX + (run.Column + k) * v.CharW) * scale);
-                    engine.DrawLayout(GlyphLayout(canvas, font, run.Text[k]), new Float2(gx, y), run.Color);
+                    engine.DrawLayout(GlyphLayout(canvas, font, run.Text[k], run.Style), new Float2(gx, y), run.Color);
                 }
             }
 
@@ -759,9 +772,10 @@ public sealed partial class CodeEditor
                 while (i1 < text.Length && i1 - i0 < MaxRun && text[i1] != ' ' && text[i1] != '\t' && kinds[i1] == kinds[i0]
                        && !(depth >= 0 && kinds[i1] == CodeTokenKind.Punctuation && IsBracket(text[i1], out _))) i1++;
             string word = text.Substring(i0, i1 - i0);
-            var layout = WordLayout(canvas, font, word);
+            CodeTokenStyle style = pal.Styles[(int)kinds[i0]];
+            var layout = WordLayout(canvas, font, word, style);
             if (layout == null) pending = true;
-            _runScratch.Add(new Run { Column = vis, Text = word, Layout = layout, Color = ToFont(color) });
+            _runScratch.Add(new Run { Column = vis, Text = word, Layout = layout, Color = ToFont(color), Style = style });
             vis += i1 - i0;
             i0 = i1;
         }
@@ -769,36 +783,36 @@ public sealed partial class CodeEditor
     }
 
     // One layout per distinct word, shared across every row, so scrolling and typing rarely lay out new text.
-    private readonly Dictionary<string, TextLayout> _layoutCache = new();
+    private readonly Dictionary<(string, CodeTokenStyle), TextLayout> _layoutCache = new();
 
-    private readonly Dictionary<char, TextLayout> _glyphLayouts = new();
+    private readonly Dictionary<(char, CodeTokenStyle), TextLayout> _glyphLayouts = new();
     private double _layoutBudget;
     private double _layoutCostPerChar = 0.01;
     private const double LayoutBudgetMs = 1.5;
 
     // Null when laying the word out now would blow the frame budget while the user is typing. The run is then
     // drawn from single glyph layouts and laid out properly on a later, quieter frame.
-    private TextLayout? WordLayout(Canvas canvas, FontFile font, string word)
+    private TextLayout? WordLayout(Canvas canvas, FontFile font, string word, CodeTokenStyle style)
     {
-        if (_layoutCache.TryGetValue(word, out var layout)) return layout;
+        if (_layoutCache.TryGetValue((word, style), out var layout)) return layout;
         bool typing = _time - _lastEditTime < 0.3;
         if (word.Length > 1 && typing && word.Length * _layoutCostPerChar > _layoutBudget) return null;
 
         if (_layoutCache.Count > 50000) _layoutCache.Clear();
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
-        layout = CreateLayout(canvas, word, font, FontSize);
+        layout = CreateLayout(canvas, word, font, FontSize, style);
         double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         _layoutBudget -= ms;
         _layoutCostPerChar = _layoutCostPerChar * 0.8 + ms / word.Length * 0.2;
-        _layoutCache[word] = layout;
+        _layoutCache[(word, style)] = layout;
         return layout;
     }
 
-    private TextLayout GlyphLayout(Canvas canvas, FontFile font, char c)
+    private TextLayout GlyphLayout(Canvas canvas, FontFile font, char c, CodeTokenStyle style = CodeTokenStyle.None)
     {
-        if (_glyphLayouts.TryGetValue(c, out var layout)) return layout;
-        layout = CreateLayout(canvas, c.ToString(), font, FontSize);
-        _glyphLayouts[c] = layout;
+        if (_glyphLayouts.TryGetValue((c, style), out var layout)) return layout;
+        layout = CreateLayout(canvas, c.ToString(), font, FontSize, style);
+        _glyphLayouts[(c, style)] = layout;
         return layout;
     }
 

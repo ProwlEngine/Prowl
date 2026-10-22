@@ -8,6 +8,16 @@ using Prowl.Vector;
 
 namespace Prowl.OrigamiUI;
 
+/// <summary>Font style of a token kind.</summary>
+[Flags]
+public enum CodeTokenStyle : byte
+{
+    None = 0,
+    Bold = 1,
+    Italic = 2,
+    Underline = 4,
+}
+
 /// <summary>How the caret is drawn.</summary>
 public enum CaretStyle { Line, Block, Underline }
 
@@ -19,6 +29,11 @@ public sealed class CodeEditorOptions
 {
     /// <summary>Monospace font. Null uses the theme's mono font.</summary>
     public FontFile? Font;
+
+    /// <summary>Faces for bold, italic and bold italic tokens. A missing face falls back to the closest one there is.</summary>
+    public FontFile? BoldFont;
+    public FontFile? ItalicFont;
+    public FontFile? BoldItalicFont;
     public float FontSize = 15f;
     public float MinFontSize = 6f;
     public float MaxFontSize = 48f;
@@ -146,6 +161,9 @@ public sealed class CodeEditorColors
     public Color32[] RainbowGuides = Array.Empty<Color32>();
 
     public readonly Color32[] Token = new Color32[Enum.GetValues<CodeTokenKind>().Length];
+
+    /// <summary>Font style per token kind, indexed by <see cref="CodeTokenKind"/>.</summary>
+    public readonly CodeTokenStyle[] Styles = new CodeTokenStyle[Enum.GetValues<CodeTokenKind>().Length];
 
     public Color32 this[CodeTokenKind kind]
     {
