@@ -515,7 +515,7 @@ internal sealed partial class FramePipeline : IDisposable
         AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, rendererOnly: true);
         foreach (WorldFrame world in _frameWorlds)
         {
-            using (_graph.Group(world.World.Name ?? $"World {world.World.Id}"))
+            using (_graph.Group(WorldName(world)))
             {
                 AddFrameFeatures(FrameSlot.Shadows, FrameSlot.Shadows, world);
                 foreach (PlannedInstance planned in _planned)
@@ -546,9 +546,19 @@ internal sealed partial class FramePipeline : IDisposable
             FrameSlot slot = entry.Feature.SlotSnapshot;
             if (slot < first || slot > last || (world != null && entry.World != world) || (rendererOnly && entry.World != null))
                 continue;
-            AddFrameFeature(entry);
+            if (entry.World is { } owner && slot is not (FrameSlot.Shadows or FrameSlot.Captures))
+            {
+                using (_graph.Group(WorldName(owner)))
+                    AddFrameFeature(entry);
+            }
+            else
+            {
+                AddFrameFeature(entry);
+            }
         }
     }
+
+    private static string WorldName(WorldFrame world) => world.World.Name ?? $"World {world.World.Id}";
 
     private void AddFrameFeature(in FrameEntry entry)
     {
