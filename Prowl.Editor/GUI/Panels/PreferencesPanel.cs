@@ -32,7 +32,10 @@ public class PreferencesPanel : DockPanel
     public override string Icon => EditorIcons.Sliders;
 
     private string _tab = "general";
-    private string _shortcutSearch = "";
+    private string _search = "";
+
+    // Matches per result group last frame, so a group's header only shows when something in it matched.
+    private readonly Dictionary<string, int> _searchHits = [];
     private string? _rebindingId;
     private string _themeCat = "presets";
 
@@ -69,6 +72,21 @@ public class PreferencesPanel : DockPanel
 
         EditorSettings settings = EditorSettings.Instance;
 
+        OrigamiMetrics m = Origami.Current.Metrics;
+        float searchH = EditorTheme.RowHeight + m.Padding * 2;
+
+        using (paper.Column("pref_outer").Width(width).Height(height).Clip().Enter())
+        {
+            using (paper.Box("pref_search_w").Width(width).Height(searchH).Padding(m.PaddingLarge, m.PaddingLarge, m.Padding, m.Padding).Enter())
+                Origami.SearchField(paper, "pref_search", _search, v => _search = v, Loc.Get("pref.search_all")).Show();
+            paper.Box("pref_hdiv").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+
+            DrawBody(paper, font, settings, width, height - searchH - 1);
+        }
+    }
+
+    private void DrawBody(Paper paper, Scribe.FontFile font, EditorSettings settings, float width, float height)
+    {
         using (paper.Row("pref_root").Width(width).Height(height).Clip().Enter())
         {
             (string id, string, string icon)[] cats =
@@ -76,14 +94,22 @@ public class PreferencesPanel : DockPanel
                 .. Cats.Select(c => (c.id, Loc.Get(c.label), c.icon)),
                 .. Preferences.Sections.Select(p => (SectionTabId(p), p.Name, string.IsNullOrEmpty(p.Icon) ? EditorIcons.Gear : p.Icon)),
             ];
-            float side = EditorGUI.Sidebar(paper, "pref_side", cats, _tab, c => _tab = c);
+            float side = EditorGUI.Sidebar(paper, "pref_side", cats, _tab, c => { _tab = c; _search = ""; });
             paper.Box("pref_vdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
             float contentW = width - side - 1;
 
+            if (_search.Length > 0)
+            {
+                Origami.ScrollView(paper, "pref_results", contentW, height).Body(() =>
+                {
+                    using (paper.Column("pref_results_col").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
+                        DrawSearchResults(paper, font, settings, contentW);
+                });
+            }
             // The Theme tab owns a fixed 3-column layout (rail | controls | live preview) with its own
             // inner scroll, so it bypasses the shared vertical scroll view.
-            if (_tab == "theme")
+            else if (_tab == "theme")
             {
                 DrawTheme(paper, font, settings, contentW, height);
             }
@@ -102,6 +128,67 @@ public class PreferencesPanel : DockPanel
             }
         }
     }
+
+    // ================================================================
+    //  Search
+    // ================================================================
+
+    // Every tab drawn one after another with only the matching rows. A group whose name matches shows in full.
+    private void DrawSearchResults(Paper paper, Scribe.FontFile font, EditorSettings s, float w)
+    {
+        HandleRebinding();
+        int shown = 0;
+
+        Group("general", Loc.Get("pref.general"), () => DrawGeneral(paper, s));
+        Group("theme", Loc.Get("pref.theme"), () =>
+        {
+            using (paper.Column("pref_res_theme").Height(UnitValue.Auto).PaddingLeft(Origami.Current.Metrics.PaddingLarge).PaddingRight(Origami.Current.Metrics.PaddingLarge).Enter())
+            {
+                EditorThemeData theme = s.Theme;
+                DrawThemeColors(paper, s, theme);
+                DrawThemeType(paper, s, theme);
+                DrawThemeLayout(paper, s, theme);
+                DrawThemeEffects(paper, s, theme);
+            }
+        });
+        Group("shortcuts", Loc.Get("pref.shortcuts"), () => EditorGUI.RowFilterMatches += DrawShortcutRows(paper, font, w, EditorGUI.RowFilter));
+        foreach (PreferencesSection section in Preferences.Sections)
+        {
+            PreferencesSection current = section;
+            Group(SectionTabId(section), section.Name, () =>
+            {
+                Func<FieldInfo, bool>? filter = EditorGUI.RowFilter is { } text ? f => FieldMatches(f, text) : null;
+                EditorGUI.RowFilterMatches += PropertyGridUtils.GetSerializableFields(current.Type).Count(f => filter == null || filter(f));
+                DrawSectionFields(paper, $"pref_res_{current.Type.Name}", current, filter);
+            });
+        }
+
+        if (shown == 0)
+            EditorGUI.EmptyState(paper, "pref_res_none", Loc.Get("pref.search_none"), font);
+
+        void Group(string key, string title, Action draw)
+        {
+            if (_searchHits.GetValueOrDefault(key) > 0)
+            {
+                EditorGUI.SectionHeader(paper, $"pref_res_hdr_{key}", title);
+                shown++;
+            }
+
+            bool titleMatches = title.Contains(_search, StringComparison.OrdinalIgnoreCase);
+            EditorGUI.RowFilter = titleMatches ? null : _search;
+            EditorGUI.RowFilterMatches = 0;
+            try { draw(); }
+            finally
+            {
+                _searchHits[key] = titleMatches ? 1 : EditorGUI.RowFilterMatches;
+                EditorGUI.RowFilter = null;
+            }
+        }
+    }
+
+    private static bool FieldMatches(FieldInfo field, string text)
+        => PropertyGridUtils.NicifyName(field.Name).Contains(text, StringComparison.OrdinalIgnoreCase)
+           || (field.GetCustomAttribute<TooltipAttribute>()?.Text.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false);
 
     // ================================================================
     //  Registered sections
@@ -759,7 +846,22 @@ public class PreferencesPanel : DockPanel
     private void DrawShortcuts(Paper paper, Scribe.FontFile font, float w)
     {
         OrigamiMetrics m = Origami.Current.Metrics;
+        HandleRebinding();
 
+        EditorGUI.SectionHeader(paper, "pref_sc_hdr", Loc.Get("pref.shortcuts"), first: true);
+
+        using (paper.Row("pref_sc_actions").Height(EditorTheme.RowHeight).PaddingLeft(m.PaddingLarge).Enter())
+        {
+            Origami.Button(paper, "pref_sc_reset_all", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_all")}", () => ShortcutManager.ClearAllOverrides()).Width(200).Show();
+        }
+
+        paper.Box("pref_sc_sp2").Height(EditorTheme.Padding * 2);
+
+        DrawShortcutRows(paper, font, w, null);
+    }
+
+    private void HandleRebinding()
+    {
         // Handle rebinding input each frame
         if (_rebindingId != null)
         {
@@ -793,33 +895,22 @@ public class PreferencesPanel : DockPanel
                 }
             }
         }
+    }
 
-        EditorGUI.SectionHeader(paper, "pref_sc_hdr", Loc.Get("pref.shortcuts"), first: true);
-
-        // Search bar
-        using (paper.Box("pref_sc_search_w").Height(UnitValue.Auto)
-            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 4).Enter())
-            Origami.SearchField(paper, "pref_sc_search", _shortcutSearch,
-                v => _shortcutSearch = v, Loc.Get("pref.search_shortcuts")).Show();
-
-        paper.Box("pref_sc_sp1").Height(EditorTheme.Spacing * 2);
-
-        // Reset All button
-        using (paper.Row("pref_sc_actions").Height(EditorTheme.RowHeight).PaddingLeft(m.PaddingLarge).Enter())
-        {
-            Origami.Button(paper, "pref_sc_reset_all", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_all")}", () => ShortcutManager.ClearAllOverrides()).Width(200).Show();
-        }
-
-        paper.Box("pref_sc_sp2").Height(EditorTheme.Padding * 2);
-
+    // Draws the shortcuts matching filter by name, category or key, grouped by category, and returns how many matched.
+    private int DrawShortcutRows(Paper paper, Scribe.FontFile font, float w, string? filter)
+    {
+        OrigamiMetrics m = Origami.Current.Metrics;
+        int count = 0;
         // Group by category
         string? lastCategory = null;
         foreach (ShortcutDefinition shortcut in ShortcutManager.GetAllShortcuts())
         {
-            // Filter by search
-            if (!EditorUtils.MatchesSearch(shortcut.DisplayName, _shortcutSearch) &&
-                !EditorUtils.MatchesSearch(shortcut.Id, _shortcutSearch))
+            if (!EditorUtils.MatchesSearch(shortcut.DisplayName, filter) &&
+                !EditorUtils.MatchesSearch(shortcut.Category, filter) &&
+                !EditorUtils.MatchesSearch(ShortcutManager.GetDisplayString(shortcut.Binding), filter))
                 continue;
+            count++;
 
             // Category header
             if (shortcut.Category != lastCategory)
@@ -885,5 +976,6 @@ public class PreferencesPanel : DockPanel
                 }
             }
         }
+        return count;
     }
 }
