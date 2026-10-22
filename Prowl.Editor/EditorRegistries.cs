@@ -137,6 +137,7 @@ public static class EditorRegistries
         _dropHandlers.Clear();
 
         _settingsEntries.Clear();
+        Preferences.Clear();
         Build.TargetRegistry.Shared.ResetToBuiltIns();
 
         MenuItemAttribute.Clear();
@@ -183,6 +184,7 @@ public static class EditorRegistries
                 ScanSceneTool(type);
                 ScanSceneDropHandler(type);
                 ScanProjectSettings(type);
+                Preferences.Scan(type);
                 ScanAssetMenuEntry(type);
                 ScanBuildTargetProvider(type);
 

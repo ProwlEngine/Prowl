@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
@@ -30,8 +31,7 @@ public class PreferencesPanel : DockPanel
     public override string Title => Loc.Get("panel.preferences");
     public override string Icon => EditorIcons.Sliders;
 
-    private enum Tab { General, Theme, Shortcuts }
-    private Tab _tab = Tab.General;
+    private string _tab = "general";
     private string _shortcutSearch = "";
     private string? _rebindingId;
     private string _themeCat = "presets";
@@ -58,10 +58,9 @@ public class PreferencesPanel : DockPanel
     ];
 
     /// <summary>Switch this Preferences window to the Theme tab (used by the header quick-access button).</summary>
-    public void ShowTheme() => _tab = Tab.Theme;
+    public void ShowTheme() => _tab = "theme";
 
-    private static string TabId(Tab t) => t switch { Tab.Theme => "theme", Tab.Shortcuts => "shortcuts", _ => "general" };
-    private static Tab ParseTab(string id) => id switch { "theme" => Tab.Theme, "shortcuts" => Tab.Shortcuts, _ => Tab.General };
+    private static string SectionTabId(PreferencesSection section) => "section:" + section.Type.FullName;
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -72,15 +71,19 @@ public class PreferencesPanel : DockPanel
 
         using (paper.Row("pref_root").Width(width).Height(height).Clip().Enter())
         {
-            (string id, string, string icon)[] cats = [.. Cats.Select(c => (c.id, Loc.Get(c.label), c.icon))];
-            float side = EditorGUI.Sidebar(paper, "pref_side", cats, TabId(_tab), c => _tab = ParseTab(c));
+            (string id, string, string icon)[] cats =
+            [
+                .. Cats.Select(c => (c.id, Loc.Get(c.label), c.icon)),
+                .. Preferences.Sections.Select(p => (SectionTabId(p), p.Name, string.IsNullOrEmpty(p.Icon) ? EditorIcons.Gear : p.Icon)),
+            ];
+            float side = EditorGUI.Sidebar(paper, "pref_side", cats, _tab, c => _tab = c);
             paper.Box("pref_vdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
             float contentW = width - side - 1;
 
             // The Theme tab owns a fixed 3-column layout (rail | controls | live preview) with its own
             // inner scroll, so it bypasses the shared vertical scroll view.
-            if (_tab == Tab.Theme)
+            if (_tab == "theme")
             {
                 DrawTheme(paper, font, settings, contentW, height);
             }
@@ -90,14 +93,49 @@ public class PreferencesPanel : DockPanel
                 {
                     using (paper.Column("pref_content_col").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
                     {
-                        switch (_tab)
-                        {
-                            case Tab.Shortcuts: DrawShortcuts(paper, font, contentW); break;
-                            default: DrawGeneral(paper, settings); break;
-                        }
+                        PreferencesSection? section = Preferences.Sections.FirstOrDefault(p => SectionTabId(p) == _tab);
+                        if (section != null) DrawSection(paper, section, contentW);
+                        else if (_tab == "shortcuts") DrawShortcuts(paper, font, contentW);
+                        else DrawGeneral(paper, settings);
                     }
                 });
             }
+        }
+    }
+
+    // ================================================================
+    //  Registered sections
+    // ================================================================
+
+    private static void DrawSection(Paper paper, PreferencesSection section, float width)
+    {
+        EditorGUI.SectionHeader(paper, "pref_sec_hdr", section.Name, first: true);
+
+        using (paper.Row("pref_sec_actions").Height(EditorTheme.RowHeight).PaddingLeft(Origami.Current.Metrics.PaddingLarge).Enter())
+            Origami.Button(paper, "pref_sec_reset", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_section")}", () => Preferences.Reset(section)).Show();
+
+        section.Instance.OnGUI(paper, width);
+        DrawSectionFields(paper, "pref_sec_grid", section, null);
+    }
+
+    // Preferences are not scene data, so the grid runs without the inspector's undo snapshot (which would also mark the scene dirty).
+    private static void DrawSectionFields(Paper paper, string id, PreferencesSection section, Func<FieldInfo, bool>? filter)
+    {
+        PropertyGridConfig config = EditorApplication.PropertyGridConfig;
+        Action<object>? snapshot = config.OnBeginRoot;
+        config.OnBeginRoot = null;
+        try
+        {
+            Origami.PropertyGrid(paper, id, section.Instance, config)
+                .OnChanged(_ => Preferences.Changed(section))
+                .Overrides(Preferences.ChangedFields(section))
+                .OnOverrideClicked(name => Preferences.ResetField(section, name), Loc.Get("pref.reset_to_default"))
+                .FieldFilter(filter)
+                .Show();
+        }
+        finally
+        {
+            config.OnBeginRoot = snapshot;
         }
     }
 

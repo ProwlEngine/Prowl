@@ -1,0 +1,198 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+
+using Prowl.Echo;
+using Prowl.Editor.GUI;
+using Prowl.PaperUI;
+using Prowl.Runtime;
+
+namespace Prowl.Editor.Theming;
+
+/// <summary>Registers a class as a section of the Preferences window. The class must derive from <see cref="EditorPreferences"/>.</summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class EditorPreferencesAttribute(string name, string icon = "", int order = 100) : Attribute
+{
+    public string Name { get; } = name;
+    public string Icon { get; } = icon;
+    public int Order { get; } = order;
+}
+
+/// <summary>
+/// A section of per user editor preferences. Public fields are the settings: they are drawn with the inspector's
+/// property grid, so [Header], [Range], [Tooltip] and the rest work, and saved to their own file in the user's
+/// Prowl folder. Read the live values with <see cref="Preferences.Get{T}"/>.
+/// </summary>
+public abstract class EditorPreferences
+{
+    /// <summary>Pushes the values into the editor. Runs after loading and after every change.</summary>
+    public virtual void Apply() { }
+
+    /// <summary>Draws extra controls above the section's fields.</summary>
+    public virtual void OnGUI(Paper paper, float width) { }
+}
+
+/// <summary>One registered preferences section.</summary>
+public sealed class PreferencesSection
+{
+    public required Type Type { get; init; }
+    public required string Name { get; init; }
+    public required string Icon { get; init; }
+    public required int Order { get; init; }
+    public required EditorPreferences Instance { get; init; }
+
+    /// <summary>A fresh instance, for reading the default values.</summary>
+    public required EditorPreferences Defaults { get; init; }
+
+    public string FileName => Type.Name + ".yaml";
+}
+
+/// <summary>The registry and store of every <see cref="EditorPreferences"/> section.</summary>
+public static class Preferences
+{
+    private static readonly List<PreferencesSection> _sections = [];
+
+    /// <summary>Every section, in display order.</summary>
+    public static IReadOnlyList<PreferencesSection> Sections => _sections;
+
+    /// <summary>The folder the section files are saved in.</summary>
+    public static string FolderPath { get; internal set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "Preferences");
+
+    /// <summary>The live instance of a section.</summary>
+    public static T Get<T>() where T : EditorPreferences
+    {
+        foreach (PreferencesSection section in _sections)
+            if (section.Instance is T t) return t;
+
+        EditorRegistries.Initialize();
+        foreach (PreferencesSection section in _sections)
+            if (section.Instance is T t) return t;
+
+        throw new InvalidOperationException($"{typeof(T).Name} has no [EditorPreferences] attribute.");
+    }
+
+    internal static void Clear() => _sections.Clear();
+
+    internal static void Scan(Type type)
+    {
+        if (type.IsAbstract || !typeof(EditorPreferences).IsAssignableFrom(type)) return;
+        if (type.GetCustomAttribute<EditorPreferencesAttribute>() == null) return;
+
+        try
+        {
+            PreferencesSection section = Create(type);
+            int index = _sections.FindIndex(s => s.Order > section.Order);
+            _sections.Insert(index < 0 ? _sections.Count : index, section);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Preferences] '{type.Name}' could not be created: {ex.Message}");
+        }
+    }
+
+    /// <summary>Builds a section for an [EditorPreferences] type and loads its saved values.</summary>
+    internal static PreferencesSection Create(Type type)
+    {
+        EditorPreferencesAttribute attr = type.GetCustomAttribute<EditorPreferencesAttribute>()!;
+        var section = new PreferencesSection
+        {
+            Type = type,
+            Name = attr.Name,
+            Icon = attr.Icon,
+            Order = attr.Order,
+            Instance = (EditorPreferences)Activator.CreateInstance(type)!,
+            Defaults = (EditorPreferences)Activator.CreateInstance(type)!,
+        };
+        Load(section);
+        return section;
+    }
+
+    /// <summary>Saves and applies a section after one of its values changed.</summary>
+    public static void Changed(PreferencesSection section)
+    {
+        Save(section);
+        ApplySafely(section);
+    }
+
+    /// <summary>The names of the fields whose value differs from the default.</summary>
+    public static HashSet<string> ChangedFields(PreferencesSection section)
+    {
+        var changed = new HashSet<string>();
+        foreach (FieldInfo field in PropertyGridUtils.GetSerializableFields(section.Type))
+            if (!SameValue(field.GetValue(section.Instance), field.GetValue(section.Defaults)))
+                changed.Add(field.Name);
+        return changed;
+    }
+
+    /// <summary>Puts one field back to its default value.</summary>
+    public static void ResetField(PreferencesSection section, string fieldName)
+    {
+        FieldInfo? field = section.Type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        if (field == null) return;
+        field.SetValue(section.Instance, Copy(field.GetValue(section.Defaults), field.FieldType));
+        Changed(section);
+    }
+
+    /// <summary>Puts every field of a section back to its default value.</summary>
+    public static void Reset(PreferencesSection section)
+    {
+        foreach (FieldInfo field in PropertyGridUtils.GetSerializableFields(section.Type))
+            field.SetValue(section.Instance, Copy(field.GetValue(section.Defaults), field.FieldType));
+        Changed(section);
+    }
+
+    private static void Load(PreferencesSection section)
+    {
+        string path = Path.Combine(FolderPath, section.FileName);
+        if (File.Exists(path))
+        {
+            try
+            {
+                EchoObject echo = EchoObject.ReadFromYaml(File.ReadAllText(path));
+                if (Serializer.Deserialize(echo, section.Type) is EditorPreferences loaded)
+                    EditorRegistries.CopySettingsFields(loaded, section.Instance);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Preferences] Could not read '{path}', using defaults: {ex.Message}");
+            }
+        }
+        ApplySafely(section);
+    }
+
+    private static void Save(PreferencesSection section)
+    {
+        string path = Path.Combine(FolderPath, section.FileName);
+        try
+        {
+            Directory.CreateDirectory(FolderPath);
+            File.WriteAllText(path, Serializer.Serialize(section.Instance, TypeMode.Auto).WriteToYaml());
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Preferences] Could not save '{path}': {ex.Message}");
+        }
+    }
+
+    private static void ApplySafely(PreferencesSection section)
+    {
+        try { section.Instance.Apply(); }
+        catch (Exception ex) { Debug.LogError($"[Preferences] {section.Type.Name}.Apply threw: {ex}"); }
+    }
+
+    private static bool SameValue(object? a, object? b)
+    {
+        if (Equals(a, b)) return true;
+        if (a == null || b == null) return false;
+        return Serializer.Serialize(a).WriteToString() == Serializer.Serialize(b).WriteToString();
+    }
+
+    private static object? Copy(object? value, Type type)
+        => value == null || type.IsValueType || value is string ? value : Serializer.Deserialize(Serializer.Serialize(value), type);
+}
