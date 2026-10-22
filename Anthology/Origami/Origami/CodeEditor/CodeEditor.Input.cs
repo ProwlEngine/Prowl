@@ -13,7 +13,12 @@ namespace Prowl.OrigamiUI;
 
 public sealed partial class CodeEditor
 {
-    private enum DragKind { None, Text, Lines, Box, VScroll, HScroll, Minimap }
+    private enum DragKind { None, Text, Lines, Box, VScroll, HScroll, Minimap, Move }
+
+    // Dragging a selection to move or copy it.
+    private TextRange _moveRange;
+    private TextPosition _movePress, _moveDrop;
+    private bool _moveMoved;
 
     private Paper? _paper;
     private ElementHandle _handle;
@@ -142,9 +147,9 @@ public sealed partial class CodeEditor
             }
         }
 
-        bool ctrl = Ctrl(paper);
+        bool goToKey = GoToDefinitionKey(paper);
         _linkRange = null;
-        if (ctrl && _pointerInside && InTextArea(_pointer) && Session != null && _drag == DragKind.None)
+        if (goToKey && _pointerInside && InTextArea(_pointer) && Session != null && _drag == DragKind.None)
         {
             var pos = PositionFromPoint(_pointer, false);
             var word = WordAt(pos);
@@ -169,6 +174,8 @@ public sealed partial class CodeEditor
     private static bool Ctrl(Paper p) => p.IsKeyDown(PaperKey.LeftControl) || p.IsKeyDown(PaperKey.RightControl);
     private static bool Shift(Paper p) => p.IsKeyDown(PaperKey.LeftShift) || p.IsKeyDown(PaperKey.RightShift);
     private static bool Alt(Paper p) => p.IsKeyDown(PaperKey.LeftAlt) || p.IsKeyDown(PaperKey.RightAlt);
+    private bool AddCaretKey(Paper p) => Options.MultiCaretModifier == MultiCaretModifier.Ctrl ? Ctrl(p) : Alt(p);
+    private bool GoToDefinitionKey(Paper p) => Options.MultiCaretModifier == MultiCaretModifier.Ctrl ? Alt(p) : Ctrl(p);
 
     #region Mouse
 
@@ -222,7 +229,7 @@ public sealed partial class CodeEditor
             FindReferences();
             return;
         }
-        bool shift = Shift(paper), alt = Alt(paper), ctrl = Ctrl(paper);
+        bool shift = Shift(paper), add = AddCaretKey(paper), goTo = GoToDefinitionKey(paper);
 
         if (p.X < v.X + v.GutterW)
         {
@@ -265,14 +272,14 @@ public sealed partial class CodeEditor
             }
         }
 
-        if (ctrl && !alt && Session != null && _clickCount == 1)
+        if (goTo && !add && Session != null && _clickCount == 1)
         {
             SetCaret(pos);
             GoToDefinition();
             return;
         }
 
-        if (alt && shift)
+        if (add && shift)
         {
             _dragOrigin = new CodeSelection(Caret);
             _drag = DragKind.Box;
@@ -284,7 +291,7 @@ public sealed partial class CodeEditor
         {
             var w = WordAt(pos);
             if (w.IsEmpty) w = new TextRange(pos, pos);
-            ReplacePrimary(new CodeSelection(w.Start, w.End), alt);
+            ReplacePrimary(new CodeSelection(w.Start, w.End), add);
             _dragOrigin = new CodeSelection(w.Start, w.End);
             _drag = DragKind.Text;
             return;
@@ -293,18 +300,55 @@ public sealed partial class CodeEditor
         if (_clickCount >= 3)
         {
             var sel = new CodeSelection(new TextPosition(pos.Line, 0), LineEndOrNext(pos.Line));
-            ReplacePrimary(sel, alt);
+            ReplacePrimary(sel, add);
             _dragOrigin = sel;
             _drag = DragKind.Lines;
             return;
         }
 
+        if (Options.DragAndDropText && !shift && !add && !Options.ReadOnly && SelectionContaining(pos) is { } moving)
+        {
+            _moveRange = moving;
+            _movePress = _moveDrop = pos;
+            _moveMoved = false;
+            _drag = DragKind.Move;
+            return;
+        }
+
         if (shift) ReplacePrimary(new CodeSelection(Selection.Anchor, pos), false);
-        else if (alt) AddSelection(new CodeSelection(pos));
+        else if (add) AddSelection(new CodeSelection(pos));
         else SetCaret(pos);
 
         _dragOrigin = new CodeSelection(shift ? Selection.Anchor : pos, pos);
         _drag = DragKind.Text;
+    }
+
+    private TextRange? SelectionContaining(TextPosition pos)
+    {
+        foreach (var s in _selections)
+            if (!s.IsEmpty && s.Start <= pos && pos < s.End) return s.Range;
+        return null;
+    }
+
+    // Moves the text to drop, or copies it there, as one undo step, and selects it in its new place.
+    private void MoveText(TextRange range, TextPosition drop, bool copy)
+    {
+        string text = Document.GetText(range);
+        int dropOffset = Document.PositionToOffset(drop);
+        int start = Document.PositionToOffset(range.Start), end = Document.PositionToOffset(range.End);
+        Edit(CodeEditKind.Other, () =>
+        {
+            if (!copy)
+            {
+                Document.Delete(range);
+                if (dropOffset > end) dropOffset -= end - start;
+            }
+            var at = Document.OffsetToPosition(dropOffset);
+            var change = Document.Insert(at, text);
+            _selections.Clear();
+            _selections.Add(new CodeSelection(at, change.NewEnd));
+            _primary = 0;
+        });
     }
 
     private TextPosition LineEndOrNext(int line)
@@ -358,6 +402,10 @@ public sealed partial class CodeEditor
             case DragKind.Box:
                 BoxSelect(_dragOrigin.Caret, PositionFromPoint(p));
                 break;
+            case DragKind.Move:
+                _moveDrop = PositionFromPoint(p);
+                _moveMoved |= _moveDrop != _movePress;
+                break;
         }
     }
 
@@ -391,6 +439,16 @@ public sealed partial class CodeEditor
 
     private void HandleRelease(ClickEvent e)
     {
+        if (_drag == DragKind.Move)
+        {
+            // A drop inside the dragged text, or no drag at all, is a plain click.
+            bool inside = _moveRange.Start <= _moveDrop && _moveDrop <= _moveRange.End;
+            if (!_moveMoved || inside) SetCaret(_movePress);
+            else MoveText(_moveRange, _moveDrop, Ctrl(_paper!));
+            _drag = DragKind.None;
+            return;
+        }
+
         if (_drag == DragKind.Text || _drag == DragKind.Lines || _drag == DragKind.Box)
         {
             NormalizeSelections();
@@ -407,7 +465,7 @@ public sealed partial class CodeEditor
             _drag = DragKind.None;
             return;
         }
-        if (_drag != DragKind.Text && _drag != DragKind.Lines && _drag != DragKind.Box) return;
+        if (_drag != DragKind.Text && _drag != DragKind.Lines && _drag != DragKind.Box && _drag != DragKind.Move) return;
 
         var v = _view;
         float speed = 0;

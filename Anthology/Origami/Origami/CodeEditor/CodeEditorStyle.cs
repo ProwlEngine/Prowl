@@ -8,6 +8,12 @@ using Prowl.Vector;
 
 namespace Prowl.OrigamiUI;
 
+/// <summary>How the caret is drawn.</summary>
+public enum CaretStyle { Line, Block, Underline }
+
+/// <summary>The key held while clicking to add a caret. The other of the two goes to the definition under the pointer.</summary>
+public enum MultiCaretModifier { Alt, Ctrl }
+
 /// <summary>Behaviour and layout switches for a <see cref="CodeEditor"/>. Safe to change at any time.</summary>
 public sealed class CodeEditorOptions
 {
@@ -71,6 +77,28 @@ public sealed class CodeEditorOptions
 
     /// <summary>Columns with a vertical ruler, such as 120.</summary>
     public int[] Rulers = Array.Empty<int>();
+
+    public CaretStyle CaretStyle = CaretStyle.Line;
+
+    /// <summary>Width of the line caret in pixels.</summary>
+    public float CaretWidth = 2f;
+
+    public MultiCaretModifier MultiCaretModifier = MultiCaretModifier.Alt;
+
+    /// <summary>Selected text can be dragged to a new place, or copied there with Ctrl held.</summary>
+    public bool DragAndDropText = true;
+
+    /// <summary>Marks spaces and tabs at the end of lines.</summary>
+    public bool ShowTrailingWhitespace;
+
+    /// <summary>Colours brackets by how deeply they are nested.</summary>
+    public bool BracketPairColors;
+
+    /// <summary>Colours indent guides by their level.</summary>
+    public bool RainbowIndentGuides;
+
+    /// <summary>Shows the parameter list while typing a call. Ctrl+Shift+Space still opens it when off.</summary>
+    public bool ParameterHints = true;
 }
 
 /// <summary>Colours of a <see cref="CodeEditor"/>. <see cref="Token"/> is indexed by <see cref="CodeTokenKind"/>.</summary>
@@ -109,6 +137,13 @@ public sealed class CodeEditorColors
     public Color32 StatusBar;
     public Color32 StatusText;
     public Color32 Breakpoint;
+    public Color32 TrailingWhitespace;
+
+    /// <summary>Bracket colours by nesting depth, cycled.</summary>
+    public Color32[] BracketPairs = Array.Empty<Color32>();
+
+    /// <summary>Indent guide colours by level, cycled.</summary>
+    public Color32[] RainbowGuides = Array.Empty<Color32>();
 
     public readonly Color32[] Token = new Color32[Enum.GetValues<CodeTokenKind>().Length];
 
@@ -184,6 +219,9 @@ public sealed class CodeEditorColors
             StatusBar = Hex(0x1A1624),
             StatusText = Hex(0x8F88A6),
             Breakpoint = Hex(0xE5484D),
+            TrailingWhitespace = Hex(0xFF5370, 45),
+            BracketPairs = [Hex(0xFFD479), Hex(0xDA70D6), Hex(0x4FB3FF)],
+            RainbowGuides = [Hex(0xFFD479, 60), Hex(0x9CC9FF, 60), Hex(0xB98AFF, 60), Hex(0x7EE8A7, 60), Hex(0xFF7AC6, 60), Hex(0xF2B482, 60)],
         };
 
         c[CodeTokenKind.Plain] = Hex(0xD6D2E4);

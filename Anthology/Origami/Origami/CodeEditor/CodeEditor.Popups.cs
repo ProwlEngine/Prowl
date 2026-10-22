@@ -769,7 +769,7 @@ public sealed partial class CodeEditor
 
     public void RequestSignatureHelp(bool explicitly, char typed = '\0')
     {
-        if (Session == null) return;
+        if (Session == null || (!explicitly && !Options.ParameterHints)) return;
         _sigCts?.Cancel();
         _sigCts = new CancellationTokenSource();
         int offset = Document.PositionToOffset(Caret);
